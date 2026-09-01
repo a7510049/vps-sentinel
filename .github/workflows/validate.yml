@@ -45,7 +45,7 @@ jobs:
           dashboard = source.match(/cat > "\$\{DASHBOARD_FILE\}" <<YAML\n(.*?)\nYAML/m).captures.first;
           YAML.parse(dashboard.gsub("${vps_id}", "demo"))'
 
-      - uses: actions/setup-go@0778a10ce47b5d450cf60fb94fafad4330008a35 # v7.0.0
+      - uses: actions/setup-go@fba3fb4ead8c8e09a06f1d32ae5436e5818eff15 # v7.0.0
         with:
           go-version-file: go-agent/go.mod
           cache: false
