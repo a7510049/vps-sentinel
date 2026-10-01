@@ -79,7 +79,7 @@ jobs:
           govulncheck -mode binary go-agent-arm64
 
       - name: Generate amd64 SPDX SBOM
-        uses: anchore/sbom-action@4a30bbadbe35d73a1729ee95a9196544192d905e
+        uses: anchore/sbom-action@6b31fa7e2d592e47d95d2a5e0520a7352d47ead5
         with:
           file: go-agent-amd64
           format: spdx-json
@@ -89,7 +89,7 @@ jobs:
           upload-release-assets: false
 
       - name: Generate arm64 SPDX SBOM
-        uses: anchore/sbom-action@4a30bbadbe35d73a1729ee95a9196544192d905e
+        uses: anchore/sbom-action@6b31fa7e2d592e47d95d2a5e0520a7352d47ead5
         with:
           file: go-agent-arm64
           format: spdx-json
