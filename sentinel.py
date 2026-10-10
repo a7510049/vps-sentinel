@@ -23,12 +23,15 @@ import urllib.request
 from concurrent.futures import ThreadPoolExecutor
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
-VERSION = "1.1"
+VERSION = "1.2"
 
 # ───────────────────────── 設定 ─────────────────────────
 
+CONF_PATH = os.environ.get("SENTINEL_CONF", "/etc/vps-sentinel-lite.conf")
+
+
 def load_config():
-    path = os.environ.get("SENTINEL_CONF", "/etc/vps-sentinel-lite.conf")
+    path = CONF_PATH
     conf = {}
     if os.path.exists(path):
         with open(path, encoding="utf-8") as f:
@@ -194,6 +197,39 @@ def apt_updates():
         return None
     lines = [l for l in out.splitlines() if l.startswith("Inst ")]
     return {"total": len(lines), "security": sum("-security" in l for l in lines)}
+
+
+# ───────────────────────── 改名 ─────────────────────────
+
+def set_name(new):
+    """把新名稱寫回設定檔，並立刻生效"""
+    global NAME
+    new = re.sub(r"[\x00-\x1f\x7f]", "", str(new or "")).strip().strip('"').strip("'")
+    if not new:
+        return False, "名稱不能是空白"
+    if len(new) > 40:
+        return False, "名稱太長了（最多 40 個字）"
+    try:
+        with open(CONF_PATH, encoding="utf-8") as f:
+            text = f.read()
+    except OSError:
+        text = ""
+    line = f"NAME={new}"
+    if re.search(r"(?m)^NAME=.*$", text):
+        text = re.sub(r"(?m)^NAME=.*$", lambda _: line, text, count=1)
+    else:
+        text = text.rstrip("\n") + "\n" + line + "\n"
+    try:
+        tmp = CONF_PATH + ".tmp"
+        with open(tmp, "w", encoding="utf-8") as f:
+            f.write(text)
+        os.chmod(tmp, 0o600)
+        os.replace(tmp, CONF_PATH)
+    except OSError as e:
+        return False, f"無法寫入設定檔：{e}"
+    log(f"名稱改為：{new}")
+    NAME = new
+    return True, "已改名"
 
 
 # ───────────────────────── IP 所在國家 ─────────────────────────
@@ -380,7 +416,7 @@ class Collector:
             notices.append(f"{updates['security']} 個安全更新")
 
         return {
-            "name": NAME, "online": True, "version": VERSION, "time": time.time(),
+            "name": NAME, "node": "", "online": True, "version": VERSION, "time": time.time(),
             "os": os_name(), "kernel": os.uname().release,
             "uptime": float(read("/proc/uptime", "0").split()[0] or 0),
             "cores": os.cpu_count() or 1, "cpu": cpu, "load": [round(x, 2) for x in load],
@@ -402,10 +438,11 @@ def fetch_peer(p):
         req = urllib.request.Request(p["url"] + "/api/status", headers={"X-Token": p["token"]})
         with urllib.request.urlopen(req, timeout=5) as r:
             data = json.loads(r.read())
-        data["name"] = p["name"] or data.get("name")
+        data["node"] = p["name"]                  # 代號：用來把指令轉給這台
+        data["name"] = data.get("name") or p["name"]   # 顯示：用那台自己的名稱
         return data
     except Exception as e:  # noqa: BLE001
-        return {"name": p["name"], "online": False, "level": "bad",
+        return {"name": p["name"], "node": p["name"], "online": False, "level": "bad",
                 "problems": ["連不上"], "error": str(e)[:120]}
 
 
@@ -509,19 +546,25 @@ class Handler(BaseHTTPRequestHandler):
 
     def do_POST(self):
         u = urllib.parse.urlsplit(self.path)
-        if u.path != "/api/update":
+        if u.path not in ("/api/update", "/api/rename"):
             return self.send(404, '{"error":"找不到"}')
         if not self.authed():
             time.sleep(1)
             return self.send(401, '{"error":"密碼錯誤"}')
+        try:
+            size = min(int(self.headers.get("Content-Length") or 0), 4096)
+            body = self.rfile.read(size) if size else b""
+        except (ValueError, OSError):
+            body = b""
         node = urllib.parse.parse_qs(u.query).get("node", [""])[0]
-        if node and node != NAME:                 # 轉給其他 VPS
+        if node:                                  # 轉給其他 VPS
             peer = next((p for p in PEERS if p["name"] == node), None)
             if not peer:
                 return self.send(404, '{"ok":false,"message":"找不到這台主機"}')
             try:
-                req = urllib.request.Request(peer["url"] + "/api/update", data=b"", method="POST",
-                                             headers={"X-Token": peer["token"]})
+                req = urllib.request.Request(peer["url"] + u.path, data=body, method="POST",
+                                             headers={"X-Token": peer["token"],
+                                                      "Content-Type": "application/json"})
                 with urllib.request.urlopen(req, timeout=20) as r:
                     return self.send(r.status, r.read())
             except urllib.error.HTTPError as e:
@@ -529,10 +572,17 @@ class Handler(BaseHTTPRequestHandler):
             except Exception as e:  # noqa: BLE001
                 return self.send(502, json.dumps({"ok": False, "message": f"連不上：{e}"[:150]},
                                                   ensure_ascii=False))
-        ok, msg = start_update()
-        if ok:
-            COL.upd_running = True
-        self.send(200 if ok else 409, json.dumps({"ok": ok, "message": msg}, ensure_ascii=False))
+        if u.path == "/api/rename":
+            try:
+                new = json.loads(body or b"{}").get("name", "")
+            except (ValueError, AttributeError):
+                new = ""
+            ok, msg = set_name(new)
+        else:
+            ok, msg = start_update()
+            if ok:
+                COL.upd_running = True
+        self.send(200 if ok else 400, json.dumps({"ok": ok, "message": msg}, ensure_ascii=False))
 
 
 PAGE = r"""<!doctype html>
@@ -598,6 +648,9 @@ background:var(--card);color:var(--text);margin:16px 0 10px}
 .btn{padding:6px 12px;font-size:13px;background:var(--card);color:var(--sub)}
 .flag{width:24px;height:18px;object-fit:cover;border-radius:4px;flex:none;box-shadow:0 0 0 1px rgba(127,127,127,.25)}
 .emoji{font-size:20px;line-height:1}
+.edit{border:0;background:transparent;color:var(--sub);cursor:pointer;padding:4px;margin:-4px 0 -4px -4px;border-radius:8px;
+display:inline-flex;opacity:.7}.edit:hover{opacity:1;background:var(--bg)}.edit svg{width:15px;height:15px}
+.top h2{flex:0 1 auto}.top .grow{flex:1}
 .foot{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;margin-top:12px;
 border-top:1px solid var(--line);padding-top:12px}
 .ubtn{font:inherit;font-size:13.5px;font-weight:600;padding:8px 14px;border-radius:11px;cursor:pointer;
@@ -647,6 +700,9 @@ function when(t){ const d=new Date(t*1000), now=new Date();
 function card(s){
   const lv = s.level || (s.online ? "ok" : "bad");
   let h = `<div class="card ${lv==="ok"?"":lv}"><div class="top"><span class="dot ${lv}"></span>${flag(s.geo&&s.geo.cc)}<h2>${esc(s.name)}</h2>`;
+  if (s.online) h += `<button class="edit" title="改名稱" data-rename="${esc(s.node||"")}" data-name="${esc(s.name)}">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg></button>`;
+  h += `<span class="grow"></span>`;
   if (!s.online) return h + `</div><div class="offline">⚠️ 連不上這台主機<br><span class="sub">${esc(s.error||"")}</span></div></div>`;
   h += `<span class="sub">開機 ${up(s.uptime)}</span></div><div class="sub">${s.geo ? esc([(REGION&&s.geo.cc)?REGION.of(s.geo.cc):s.geo.cc, s.geo.city].filter(Boolean).join(" "))+"・" : ""}${esc(s.os)}</div>`;
   const al = (s.problems||[]).map(p=>`<div class="alert bad">${esc(p)}</div>`).concat((s.notices||[]).map(p=>`<div class="alert warn">${esc(p)}</div>`));
@@ -678,7 +734,7 @@ function card(s){
   let btn = "";
   if (u && u.supported) btn = u.running
     ? `<button class="ubtn" disabled><span class="spin"></span>更新中…</button>`
-    : `<button class="ubtn" data-update="${esc(s.name)}" data-n="${n}">${n?`更新系統（${n}）`:"檢查更新"}</button>`;
+    : `<button class="ubtn" data-update="${esc(s.node||"")}" data-label="${esc(s.name)}" data-n="${n}">${n?`更新系統（${n}）`:"檢查更新"}</button>`;
   if (info || btn) h += `<div class="foot"><div class="sub">${info}</div>${btn}</div>`;
   return h + `</div>`;
 }
@@ -701,10 +757,23 @@ function login(msg){
 function logout(){ setTok(""); login(); }
 
 document.addEventListener("click", async e => {
+  const b = e.target.closest("[data-rename]"); if (!b) return;
+  const old = b.dataset.name, name = prompt("輸入新的名稱：", old);
+  if (name === null || name.trim() === "" || name.trim() === old) return;
+  try {
+    const r = await fetch("/api/rename?node="+encodeURIComponent(b.dataset.rename),
+      {method:"POST", headers:{"X-Token":getTok(), "Content-Type":"application/json"}, body:JSON.stringify({name:name.trim()})});
+    const d = await r.json().catch(()=>({}));
+    if (!r.ok || !d.ok) alert(d.message || d.error || "改名失敗");
+  } catch(err) { alert("連線失敗，請稍後再試"); }
+  tick();
+});
+
+document.addEventListener("click", async e => {
   const b = e.target.closest("[data-update]"); if (!b) return;
-  const node = b.dataset.update, n = +b.dataset.n;
-  const msg = n ? `確定要更新「${node}」嗎？\n\n會在背景安裝 ${n} 個套件更新，大約 1～5 分鐘。\n期間部分服務可能會短暫重新啟動。`
-                : `「${node}」目前沒有偵測到更新。\n要重新檢查並安裝最新更新嗎？`;
+  const node = b.dataset.update, label = b.dataset.label, n = +b.dataset.n;
+  const msg = n ? `確定要更新「${label}」嗎？\n\n會在背景安裝 ${n} 個套件更新，大約 1～5 分鐘。\n期間部分服務可能會短暫重新啟動。`
+                : `「${label}」目前沒有偵測到更新。\n要重新檢查並安裝最新更新嗎？`;
   if (!confirm(msg)) return;
   b.disabled = true; b.innerHTML = `<span class="spin"></span>開始中…`;
   try {
