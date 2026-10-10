@@ -428,7 +428,7 @@ h1{font-size:26px;font-weight:700;letter-spacing:.5px}
 .summary{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:16px}
 .pill{background:var(--card);border-radius:999px;padding:6px 12px;font-size:13px;display:flex;align-items:center;gap:6px}
 .dot{width:9px;height:9px;border-radius:50%;flex:none}
-.ok{background:var(--ok)}.warn{background:var(--warn)}.bad{background:var(--bad)}
+.ok{background:var(--ok)}.warn{background:var(--warn)}.bad{background:var(--bad)}.off{background:var(--sub);opacity:.6}
 .grid{display:grid;gap:14px;grid-template-columns:repeat(auto-fill,minmax(300px,1fr))}
 .card{background:var(--card);border-radius:18px;padding:16px;box-shadow:0 1px 2px rgba(0,0,0,.05)}
 .card.bad{box-shadow:0 0 0 2px var(--bad)}.card.warn{box-shadow:0 0 0 1.5px var(--warn)}
@@ -504,12 +504,19 @@ function card(s){
         <div class="stat"><div class="k">下載</div><div class="v">${rate(s.net.rx)}</div></div>
         <div class="stat"><div class="k">上傳</div><div class="v">${rate(s.net.tx)}</div></div></div>`;
   const items = [];
-  (s.containers||[]).forEach(c=>items.push({n:c.name, ok:c.state==="running"&&!/unhealthy/.test(c.status), s:STATE[c.state]||c.state, t:"容器"}));
-  (s.services||[]).forEach(v=>items.push({n:v.name, ok:v.state==="active", s:STATE[v.state]||v.state, t:"服務"}));
+  // 狀態：ok 正常（綠）、off 沒在用（灰，不算異常）、bad 異常（紅）
+  (s.containers||[]).forEach(c=>{
+    const st = /unhealthy/.test(c.status) ? "bad"
+      : c.state==="running" ? "ok"
+      : (c.state==="created" || c.state==="paused" || /Exited \(0\)/.test(c.status)) ? "off" : "bad";
+    items.push({n:c.name, st, s:STATE[c.state]||c.state, t:"容器"});
+  });
+  (s.services||[]).forEach(v=>items.push({n:v.name, st:v.state==="active"?"ok":"bad", s:STATE[v.state]||v.state, t:"服務"}));
   if (items.length){
-    const bad = items.filter(i=>!i.ok).length, id = s.name;
-    h += `<details data-id="${esc(id)}" ${open[id]?"open":""}><summary><span>容器與服務：${items.length-bad} 正常${bad?`，<b style="color:var(--bad);font-weight:600">${bad} 異常</b>`:""}</span></summary><div class="list">` +
-      items.map(i=>`<div class="item"><span class="dot ${i.ok?"ok":"bad"}"></span><span class="n">${esc(i.n)}</span><span class="s">${i.t}・${esc(i.s)}</span></div>`).join("") + `</div></details>`;
+    const bad = items.filter(i=>i.st==="bad").length, okn = items.filter(i=>i.st==="ok").length,
+          off = items.length-bad-okn, id = s.name;
+    h += `<details data-id="${esc(id)}" ${open[id]?"open":""}><summary><span>容器與服務：${okn} 正常${off?`，${off} 未使用`:""}${bad?`，<b style="color:var(--bad);font-weight:600">${bad} 異常</b>`:""}</span></summary><div class="list">` +
+      items.map(i=>`<div class="item"><span class="dot ${i.st}"></span><span class="n">${esc(i.n)}</span><span class="s">${i.t}・${esc(i.s)}</span></div>`).join("") + `</div></details>`;
   }
   if (s.updates) h += `<div class="sub" style="margin-top:10px">可更新套件 ${s.updates.total} 個（安全更新 ${s.updates.security} 個）・核心 ${esc(s.kernel)}</div>`;
   return h + `</div>`;
