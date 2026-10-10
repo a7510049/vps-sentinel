@@ -143,7 +143,33 @@ fi
 
 # ── 3. 加密連線（有給網域才做） ──
 if [ -n "$DOMAIN" ]; then
-  echo "▶ 設定加密連線：https://$DOMAIN"
+  # 先檢查連接埠，絕對不去搶別的服務（例如翻牆服務）正在用的連接埠
+  port_owner() {   # port_owner tcp|udp 連接埠 → 印出使用中的程式名稱
+    ss -lnpH -A "$1" "( sport = :$2 )" 2>/dev/null | grep -o 'users:(("[^"]*"' | head -1 | cut -d'"' -f2 || true
+  }
+  if [ -z "${HTTPS_PORT:-}" ]; then
+    OWNER="$(port_owner tcp 443)"
+    if [ -z "$OWNER" ] || [ "$OWNER" = caddy ]; then
+      HTTPS_PORT=443
+    else
+      HTTPS_PORT=9443
+      echo "ℹ️ 443 已經被「$OWNER」使用中，不會去動它；加密連線改用 $HTTPS_PORT"
+    fi
+  fi
+  OWNER="$(port_owner tcp "$HTTPS_PORT")"
+  if [ -n "$OWNER" ] && [ "$OWNER" != caddy ]; then
+    echo "❌ 連接埠 $HTTPS_PORT 被「$OWNER」使用中。可以換一個號碼，例如："
+    echo "   sudo HTTPS_PORT=10443 bash install.sh $DOMAIN"
+    exit 1
+  fi
+  OWNER="$(port_owner tcp 80)"
+  if [ -n "$OWNER" ] && [ "$OWNER" != caddy ]; then
+    echo "❌ 申請加密憑證需要用到 80 連接埠，但它被「$OWNER」使用中，無法自動設定"
+    exit 1
+  fi
+
+  if [ "$HTTPS_PORT" = 443 ]; then SHOWURL="https://$DOMAIN"; else SHOWURL="https://$DOMAIN:$HTTPS_PORT"; fi
+  echo "▶ 設定加密連線：$SHOWURL"
   if ! command -v caddy >/dev/null; then
     echo "  安裝 Caddy（自動申請免費加密憑證的小程式）…"
     install_caddy || { echo "❌ Caddy 安裝失敗，請把上面的訊息截圖給我"; exit 1; }
@@ -151,18 +177,29 @@ if [ -n "$DOMAIN" ]; then
 
   install -d /etc/caddy/sites
   PORT_NOW="$(grep -E '^PORT=' "$CONF" | cut -d= -f2)"
+  if [ "$HTTPS_PORT" = 443 ]; then SITE="$DOMAIN"; else SITE="$DOMAIN:$HTTPS_PORT"; fi
   cat > /etc/caddy/sites/vps-sentinel.caddy <<EOF
 # VPS 哨兵（由安裝腳本產生）
-$DOMAIN {
+$SITE {
 	encode gzip
 	reverse_proxy 127.0.0.1:${PORT_NOW:-8787}
 }
 EOF
   touch /etc/caddy/Caddyfile
+  # 關掉 HTTP/3：它會佔用 UDP 連接埠，可能跟 Hysteria2 之類的服務衝突
+  if ! grep -q 'protocols h1 h2' /etc/caddy/Caddyfile; then
+    if grep -qE '^\{' /etc/caddy/Caddyfile; then
+      echo "⚠️ 你的 Caddyfile 已經有全域設定，請自己在裡面加上：servers { protocols h1 h2 }"
+    else
+      { printf '{\n\tservers {\n\t\tprotocols h1 h2\n\t}\n}\n\n'; cat /etc/caddy/Caddyfile; } > /etc/caddy/Caddyfile.new
+      mv /etc/caddy/Caddyfile.new /etc/caddy/Caddyfile
+    fi
+  fi
   grep -q 'import sites/\*.caddy' /etc/caddy/Caddyfile || printf '\nimport sites/*.caddy\n' >> /etc/caddy/Caddyfile
 
   set_conf BIND 127.0.0.1      # 只讓 Caddy 從本機連，外面一律走 https
   set_conf DOMAIN "$DOMAIN"
+  set_conf HTTPS_PORT "$HTTPS_PORT"
 
   if ! caddy validate --config /etc/caddy/Caddyfile --adapter caddyfile >/dev/null 2>&1; then
     echo "❌ Caddy 設定有問題，請看：caddy validate --config /etc/caddy/Caddyfile"
@@ -180,13 +217,20 @@ EOF
   fi
 fi
 
-# ── 4. 防火牆（有開 ufw 才處理） ──
+# ── 4. VPS 內的防火牆：打開需要的連接埠 ──
+if [ "$(grep -E '^BIND=' "$CONF" | cut -d= -f2)" = "127.0.0.1" ]; then
+  OPEN_PORTS="80 $(grep -E '^HTTPS_PORT=' "$CONF" | cut -d= -f2 || echo 443)"
+else
+  OPEN_PORTS="$(grep -E '^PORT=' "$CONF" | cut -d= -f2)"
+fi
 if command -v ufw >/dev/null && ufw status | grep -q "Status: active"; then
-  if [ "$(grep -E '^BIND=' "$CONF" | cut -d= -f2)" = "127.0.0.1" ]; then
-    ufw allow 80/tcp >/dev/null; ufw allow 443/tcp >/dev/null
-  else
-    ufw allow "$(grep -E '^PORT=' "$CONF" | cut -d= -f2)/tcp" >/dev/null
-  fi
+  for p in $OPEN_PORTS; do ufw allow "$p/tcp" >/dev/null; done
+elif command -v netfilter-persistent >/dev/null && command -v iptables >/dev/null; then
+  # 甲骨文雲端的 Ubuntu 用 iptables
+  for p in $OPEN_PORTS; do
+    iptables -C INPUT -p tcp --dport "$p" -j ACCEPT 2>/dev/null || iptables -I INPUT -p tcp --dport "$p" -j ACCEPT
+  done
+  netfilter-persistent save >/dev/null 2>&1 || true
 fi
 
 # ── 5. 開機自動啟動 ──
@@ -221,8 +265,14 @@ PORT="$(grep -E '^PORT=' "$CONF" | cut -d= -f2)"
 TOKEN="$(grep -E '^TOKEN=' "$CONF" | cut -d= -f2)"
 SAVED_DOMAIN="$(grep -E '^DOMAIN=' "$CONF" | cut -d= -f2 || true)"
 
+SAVED_HTTPS="$(grep -E '^HTTPS_PORT=' "$CONF" | cut -d= -f2 || true)"
 if [ "$BIND" = "127.0.0.1" ] && [ -n "$SAVED_DOMAIN" ]; then
-  URL="https://$SAVED_DOMAIN/?t=$TOKEN"
+  if [ -z "$SAVED_HTTPS" ] || [ "$SAVED_HTTPS" = 443 ]; then
+    URL="https://$SAVED_DOMAIN/?t=$TOKEN"
+  else
+    URL="https://$SAVED_DOMAIN:$SAVED_HTTPS/?t=$TOKEN"
+    CLOUD_NOTE="⚠️ 記得到雲端主機網站的防火牆（安全清單）新增 TCP $SAVED_HTTPS"
+  fi
 else
   IP="$(curl -s4 --max-time 4 https://ifconfig.me || hostname -I | awk '{print $1}')"
   URL="http://$IP:$PORT/?t=$TOKEN"
@@ -236,6 +286,7 @@ echo "   $URL"
 echo
 echo "   設定檔：$CONF"
 echo "   改完設定：sudo systemctl restart vps-sentinel-lite"
+[ -n "${CLOUD_NOTE:-}" ] && { echo; echo "   $CLOUD_NOTE"; }
 if [ "$BIND" = "0.0.0.0" ]; then
   echo
   echo "   💡 目前是一般連線（http）。有網域的話可以改成加密連線："
