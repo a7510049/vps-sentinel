@@ -21,6 +21,72 @@ set_conf() {   # set_conf 名稱 值
   if grep -q "^$1=" "$CONF"; then sed -i "s|^$1=.*|$1=$2|" "$CONF"; else echo "$1=$2" >> "$CONF"; fi
 }
 
+# 安裝 Caddy：依序嘗試 ①官方來源 ②Ubuntu 內建 ③直接從 GitHub 下載
+install_caddy() {
+  export DEBIAN_FRONTEND=noninteractive
+  apt-get install -y -qq curl gnupg debian-keyring debian-archive-keyring apt-transport-https >/dev/null 2>&1 || true
+
+  if curl -1sLf 'https://dl.cloudsmith.io/public/caddy/stable/gpg.key' \
+       | gpg --dearmor --yes -o /usr/share/keyrings/caddy-stable-archive-keyring.gpg 2>/dev/null \
+     && curl -1sLf -o /etc/apt/sources.list.d/caddy-stable.list \
+       'https://dl.cloudsmith.io/public/caddy/stable/debian.deb.txt' \
+     && chmod o+r /usr/share/keyrings/caddy-stable-archive-keyring.gpg /etc/apt/sources.list.d/caddy-stable.list \
+     && apt-get update -qq >/dev/null 2>&1 \
+     && apt-get install -y -qq caddy >/dev/null 2>&1; then
+    return 0
+  fi
+  rm -f /etc/apt/sources.list.d/caddy-stable.list   # 壞掉的來源要拿掉，不然以後 apt 都會報錯
+
+  echo "  官方來源暫時無法使用，改用 Ubuntu 內建版本…"
+  apt-get update -qq >/dev/null 2>&1 || true
+  if apt-get install -y -qq caddy >/dev/null 2>&1; then
+    return 0
+  fi
+
+  echo "  改從 GitHub 直接下載…"
+  local arch ver tmp
+  case "$(uname -m)" in
+    x86_64) arch=amd64 ;; aarch64|arm64) arch=arm64 ;; armv7l) arch=armv7 ;; *) return 1 ;;
+  esac
+  ver="$(curl -fsSLI -o /dev/null -w '%{url_effective}' https://github.com/caddyserver/caddy/releases/latest \
+         | sed -E 's#.*/tag/v##')"
+  [[ "$ver" =~ ^[0-9][0-9.]*$ ]] || return 1
+  tmp="$(mktemp -d)"
+  curl -fsSL "https://github.com/caddyserver/caddy/releases/download/v${ver}/caddy_${ver}_linux_${arch}.tar.gz" \
+    | tar -xz -C "$tmp" caddy || { rm -rf "$tmp"; return 1; }
+  install -m 755 "$tmp/caddy" /usr/bin/caddy
+  rm -rf "$tmp"
+  id caddy >/dev/null 2>&1 || useradd --system --home /var/lib/caddy --create-home --shell /usr/sbin/nologin caddy
+  install -d /etc/caddy
+  cat > /etc/systemd/system/caddy.service <<'EOF'
+[Unit]
+Description=Caddy
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=notify
+User=caddy
+Group=caddy
+ExecStart=/usr/bin/caddy run --environ --config /etc/caddy/Caddyfile
+ExecReload=/usr/bin/caddy reload --config /etc/caddy/Caddyfile --force
+TimeoutStopSec=5s
+LimitNOFILE=1048576
+PrivateTmp=true
+ProtectSystem=full
+AmbientCapabilities=CAP_NET_ADMIN CAP_NET_BIND_SERVICE
+
+[Install]
+WantedBy=multi-user.target
+EOF
+  systemctl daemon-reload
+}
+
+# 之前失敗留下的 Caddy 來源會讓 apt 一直報錯，先清掉
+if ! command -v caddy >/dev/null && [ -f /etc/apt/sources.list.d/caddy-stable.list ]; then
+  rm -f /etc/apt/sources.list.d/caddy-stable.list
+fi
+
 # ── 1. 安裝主程式 ──
 install -d "$DIR"
 install -m 755 "$HERE/sentinel.py" "$DIR/sentinel.py"
@@ -80,15 +146,7 @@ if [ -n "$DOMAIN" ]; then
   echo "▶ 設定加密連線：https://$DOMAIN"
   if ! command -v caddy >/dev/null; then
     echo "  安裝 Caddy（自動申請免費加密憑證的小程式）…"
-    apt-get update -qq
-    apt-get install -y -qq debian-keyring debian-archive-keyring apt-transport-https curl gnupg >/dev/null
-    curl -1sLf 'https://dl.cloudsmith.io/public/caddy/stable/gpg.key' \
-      | gpg --dearmor --yes -o /usr/share/keyrings/caddy-stable-archive-keyring.gpg
-    curl -1sLf 'https://dl.cloudsmith.io/public/caddy/stable/debian.deb.txt' \
-      > /etc/apt/sources.list.d/caddy-stable.list
-    chmod o+r /usr/share/keyrings/caddy-stable-archive-keyring.gpg /etc/apt/sources.list.d/caddy-stable.list
-    apt-get update -qq
-    apt-get install -y -qq caddy >/dev/null
+    install_caddy || { echo "❌ Caddy 安裝失敗，請把上面的訊息截圖給我"; exit 1; }
   fi
 
   install -d /etc/caddy/sites
