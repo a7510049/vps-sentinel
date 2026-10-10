@@ -803,16 +803,23 @@ button{font:inherit;color:inherit}
 .card.bad{box-shadow:inset 0 1px 0 var(--spec),inset 0 0 0 1.5px color-mix(in srgb,var(--bad) 65%,transparent),0 0 0 1px var(--edge),0 0 42px -14px var(--bad),var(--shadow)}
 .card.warn{box-shadow:inset 0 1px 0 var(--spec),inset 0 0 0 1.5px color-mix(in srgb,var(--warn) 55%,transparent),0 0 0 1px var(--edge),0 0 38px -16px var(--warn),var(--shadow)}
 .head{display:flex;align-items:center;gap:10px}
-.avatar{width:42px;height:42px;border-radius:14px;display:grid;place-items:center;flex:none;position:relative;
-  background:var(--glass2);box-shadow:inset 0 0 0 1px var(--line),inset 0 1px 0 var(--rim)}
-.avatar .flag{width:26px;height:19px}
-/* 狀態：頭像邊緣發光（綠＝正常、黃＝注意、紅＝異常） */
-.avatar{--st:var(--ok);box-shadow:inset 0 0 0 1.5px color-mix(in srgb,var(--st) 75%,transparent),0 0 12px -3px color-mix(in srgb,var(--st) 60%,transparent);
-  animation:glow 3.2s ease-in-out infinite}
-.avatar.warn{--st:var(--warn)}.avatar.bad{--st:var(--bad);animation-duration:1.3s}
-.avatar .flag{box-shadow:0 0 0 1px rgba(127,127,127,.2),0 0 10px -2px color-mix(in srgb,var(--st) 70%,transparent)}
-@keyframes glow{50%{box-shadow:inset 0 0 0 2px var(--st),0 0 22px 1px color-mix(in srgb,var(--st) 65%,transparent)}}
-.avatar .letter{font-weight:900;font-size:17px;color:var(--sub)}
+/* 狀態：國旗本身邊緣發光（綠＝正常、黃＝注意、紅＝異常），不加框 */
+.avatar{--st:var(--ok);display:grid;place-items:center;flex:none;width:34px;height:34px}
+.avatar.warn{--st:var(--warn)}.avatar.bad{--st:var(--bad)}
+.avatar .flag,.avatar .emoji,.avatar .letter{animation:glow 3.2s ease-in-out infinite}
+.avatar.bad .flag,.avatar.bad .emoji,.avatar.bad .letter{animation-duration:1.3s}
+.avatar .flag{width:30px;height:22px;border-radius:6px;
+  box-shadow:0 0 0 1.5px color-mix(in srgb,var(--st) 70%,transparent),0 0 12px -1px color-mix(in srgb,var(--st) 60%,transparent)}
+.avatar .emoji{display:grid;place-items:center;width:30px;height:22px;font-size:19px;border-radius:6px;
+  box-shadow:0 0 0 1.5px color-mix(in srgb,var(--st) 70%,transparent),0 0 12px -1px color-mix(in srgb,var(--st) 60%,transparent)}
+@keyframes glow{50%{box-shadow:0 0 0 2px var(--st),0 0 20px 2px color-mix(in srgb,var(--st) 70%,transparent)}}
+.avatar .letter{width:30px;height:30px;border-radius:50%;display:grid;place-items:center;font-weight:900;font-size:14px;color:var(--st);
+  background:color-mix(in srgb,var(--st) 14%,transparent);box-shadow:0 0 0 1.5px color-mix(in srgb,var(--st) 70%,transparent),0 0 12px -1px color-mix(in srgb,var(--st) 60%,transparent)}
+/* 大標題旁的狀態標籤 */
+.stchip{--st:var(--ok);display:inline-flex;align-items:center;gap:7px;padding:6px 13px 6px 11px;border-radius:99px;font-size:12.5px;font-weight:800;
+  color:var(--st);background:color-mix(in srgb,var(--st) 14%,transparent);box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--st) 35%,transparent);white-space:nowrap}
+.stchip.warn{--st:var(--warn)}.stchip.bad{--st:var(--bad)}
+.stchip .dot{background:var(--st);color:var(--st)}
 .head .nm{min-width:0;flex:1}
 .head h2{font-size:18px;font-weight:800;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;line-height:1.25;display:flex;align-items:center;gap:4px}
 .head h2 span{overflow:hidden;text-overflow:ellipsis}
@@ -884,7 +891,7 @@ button{font:inherit;color:inherit}
   transition:background .3s,box-shadow .3s,transform .3s cubic-bezier(.34,1.56,.64,1)}
 .host:hover{background:var(--track)}.host:active{transform:scale(.98)}
 .host.on{background:var(--glass);box-shadow:inset 0 1px 0 var(--spec),inset 0 0 0 1px var(--rim),0 10px 26px -14px rgba(0,0,0,.5)}
-.host .head{gap:10px}.host .avatar{width:36px;height:36px;border-radius:12px}.host .avatar .flag{width:22px;height:16px}
+.host .head{gap:11px}.host .avatar .flag{width:26px;height:19px;border-radius:5px}
 .host h2{font-size:14.5px}
 .minis{display:grid;grid-template-columns:1fr 1fr;gap:10px}
 .minis .k{display:flex;justify-content:space-between;font-size:11px;color:var(--sub);margin-bottom:4px;font-weight:700}
@@ -896,7 +903,6 @@ button{font:inherit;color:inherit}
 .detail{display:flex;flex-direction:column;gap:18px;min-width:0}
 .panel{border-radius:30px;padding:20px 22px;animation:rise .8s cubic-bezier(.22,1,.36,1) both;animation-delay:calc(var(--i,0) * 70ms)}
 .dhead{display:flex;align-items:center;gap:18px;flex-wrap:wrap}
-.dhead .avatar{width:56px;height:56px;border-radius:18px}.dhead .avatar .flag{width:34px;height:25px;border-radius:7px}.dhead .avatar .emoji{font-size:28px}
 .dhead h2{font-size:27px;font-weight:900}
 .dhead .sub{font-size:13px;margin-top:2px}
 .dhead .act{display:flex;align-items:center;gap:14px;text-align:right;margin-left:auto}
@@ -1112,6 +1118,10 @@ function avatar(s){
   const lv = lvOf(s), tip = {ok:"運作正常", warn:"需要留意", bad:"出問題了"}[lv];
   return `<div class="avatar ${lv}" title="${tip}">${f || `<span class="letter">${esc([...(s.name||"?")][0])}</span>`}</div>`;
 }
+function stchip(s){
+  const lv = lvOf(s), t = s.online ? {ok:"運作正常", warn:"需要留意", bad:"出問題了"}[lv] : "連不上";
+  return `<span class="stchip ${lv}"><span class="dot pulse ${lv}"></span>${t}</span>`;
+}
 const editBtn = s => s.online ? `<button class="iconbtn" title="改名稱" data-rename="${esc(s.node||"")}" data-name="${esc(s.name)}">${I("edit")}</button>` : "";
 function alerts(s){
   const al = (s.problems||[]).map(p=>`<div class="alert bad">${I("warn")}${esc(p)}</div>`)
@@ -1233,8 +1243,8 @@ function ring(icon, label, pct, sub, i){
 }
 function detail(s){
   const key = keyOf(s), where = place(s);
-  let h = `<div class="detail" data-key="d-${esc(key)}"><div class="panel glass dhead" style="--i:0">${avatar(s)}
-      <div style="min-width:0"><h2 class="nmh" style="display:flex;align-items:center;gap:6px"><span>${esc(s.name)}</span>${editBtn(s)}</h2>
+  let h = `<div class="detail" data-key="d-${esc(key)}"><div class="panel glass dhead" style="--i:0">
+      <div style="min-width:0"><h2 class="nmh" style="display:flex;align-items:center;gap:10px;flex-wrap:wrap"><span>${esc(s.name)}</span>${stchip(s)}${editBtn(s)}</h2>
       <div class="sub">${s.online ? `${where?esc(where)+"・":""}${esc(s.os)}・開機 ${up(s.uptime)}` : "連不上這台主機"}</div></div>
       ${s.online ? `<div class="act"><div class="sub" style="line-height:1.6;font-weight:600">${updateInfo(s)}</div>${updateBtn(s)}</div>` : ""}</div>`;
   if (!s.online) return h + `<div class="panel glass bigoff" style="--i:1"><b>連不上這台主機</b>${esc(s.error||"")}</div></div>`;
