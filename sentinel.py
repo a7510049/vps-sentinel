@@ -806,7 +806,12 @@ button{font:inherit;color:inherit}
 .avatar{width:42px;height:42px;border-radius:14px;display:grid;place-items:center;flex:none;position:relative;
   background:var(--glass2);box-shadow:inset 0 0 0 1px var(--line),inset 0 1px 0 var(--rim)}
 .avatar .flag{width:26px;height:19px}
-.avatar .dot{position:absolute;right:-2px;bottom:-2px;width:11px;height:11px;box-shadow:0 0 0 2.5px var(--bg)}
+/* 狀態：頭像邊緣發光（綠＝正常、黃＝注意、紅＝異常） */
+.avatar{--st:var(--ok);box-shadow:inset 0 0 0 1.5px color-mix(in srgb,var(--st) 75%,transparent),0 0 12px -3px color-mix(in srgb,var(--st) 60%,transparent);
+  animation:glow 3.2s ease-in-out infinite}
+.avatar.warn{--st:var(--warn)}.avatar.bad{--st:var(--bad);animation-duration:1.3s}
+.avatar .flag{box-shadow:0 0 0 1px rgba(127,127,127,.2),0 0 10px -2px color-mix(in srgb,var(--st) 70%,transparent)}
+@keyframes glow{50%{box-shadow:inset 0 0 0 2px var(--st),0 0 22px 1px color-mix(in srgb,var(--st) 65%,transparent)}}
 .avatar .letter{font-weight:900;font-size:17px;color:var(--sub)}
 .head .nm{min-width:0;flex:1}
 .head h2{font-size:18px;font-weight:800;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;line-height:1.25;display:flex;align-items:center;gap:4px}
@@ -892,7 +897,6 @@ button{font:inherit;color:inherit}
 .panel{border-radius:30px;padding:20px 22px;animation:rise .8s cubic-bezier(.22,1,.36,1) both;animation-delay:calc(var(--i,0) * 70ms)}
 .dhead{display:flex;align-items:center;gap:18px;flex-wrap:wrap}
 .dhead .avatar{width:56px;height:56px;border-radius:18px}.dhead .avatar .flag{width:34px;height:25px;border-radius:7px}.dhead .avatar .emoji{font-size:28px}
-.dhead .avatar .dot{width:13px;height:13px}
 .dhead h2{font-size:27px;font-weight:900}
 .dhead .sub{font-size:13px;margin-top:2px}
 .dhead .act{display:flex;align-items:center;gap:14px;text-align:right;margin-left:auto}
@@ -1105,7 +1109,8 @@ function when(t){ const d=new Date(t*1000), now=new Date();
   return d.toDateString()===now.toDateString() ? `今天 ${hm}` : `${d.getMonth()+1}/${d.getDate()} ${hm}`; }
 function avatar(s){
   const f = PREF.show.flag && s.geo ? flag(s.geo.cc) : "";
-  return `<div class="avatar">${f || `<span class="letter">${esc([...(s.name||"?")][0])}</span>`}<span class="dot pulse ${lvOf(s)}"></span></div>`;
+  const lv = lvOf(s), tip = {ok:"運作正常", warn:"需要留意", bad:"出問題了"}[lv];
+  return `<div class="avatar ${lv}" title="${tip}">${f || `<span class="letter">${esc([...(s.name||"?")][0])}</span>`}</div>`;
 }
 const editBtn = s => s.online ? `<button class="iconbtn" title="改名稱" data-rename="${esc(s.node||"")}" data-name="${esc(s.name)}">${I("edit")}</button>` : "";
 function alerts(s){
@@ -1152,12 +1157,7 @@ function greet(n, total){
 function pathOf(vals, W, H, max){
   if (!vals || vals.length < 2) return null;
   const n = vals.length, y = v => H - Math.max(0, Math.min(v/max, 1)) * (H-4) - 2;
-  const Q = vals.map((v,i)=>[i/(n-1)*W, y(v)]), cl = v => Math.max(0, Math.min(H, v)).toFixed(1);
-  let d = `M${Q[0][0].toFixed(1)},${Q[0][1].toFixed(1)}`;
-  for (let i=0;i<n-1;i++){
-    const p0=Q[i-1]||Q[i], p1=Q[i], p2=Q[i+1], p3=Q[i+2]||p2;
-    d += ` C${(p1[0]+(p2[0]-p0[0])/6).toFixed(1)},${cl(p1[1]+(p2[1]-p0[1])/6)} ${(p2[0]-(p3[0]-p1[0])/6).toFixed(1)},${cl(p2[1]-(p3[1]-p1[1])/6)} ${p2[0].toFixed(1)},${p2[1].toFixed(1)}`;
-  }
+  const d = vals.map((v,i)=>`${i?"L":"M"}${(i/(n-1)*W).toFixed(1)},${y(v).toFixed(1)}`).join(" ");
   return {line:d, area:`${d} L${W},${H} L0,${H} Z`};
 }
 function chart(id, series, o={}){
@@ -1168,7 +1168,7 @@ function chart(id, series, o={}){
   if (o.grid) for (const f of [.25,.5,.75]) g += `<line class="gl" x1="0" x2="${W}" y1="${(H*f).toFixed(1)}" y2="${(H*f).toFixed(1)}"/>`;
   const defs = series.map((s,i)=>`<linearGradient id="${id}${i}" x1="0" y1="0" x2="0" y2="1"><stop offset="0" style="stop-color:${s.color};stop-opacity:${o.fade??.3}"/><stop offset="1" style="stop-color:${s.color};stop-opacity:0"/></linearGradient>`).join("");
   const body = series.map((s,i)=>{ const p = pathOf(s.data, W, H, max); if (!p) return "";
-    return `<path d="${p.area}" fill="url(#${id}${i})"/><path d="${p.line}" fill="none" style="stroke:${s.color}" stroke-width="${o.sw||2.4}" vector-effect="non-scaling-stroke" stroke-linecap="round" stroke-linejoin="round"/>`; }).join("");
+    return `<path d="${p.area}" fill="url(#${id}${i})"/><path d="${p.line}" fill="none" style="stroke:${s.color}" stroke-width="${o.sw||2.4}" vector-effect="non-scaling-stroke" stroke-linecap="round" stroke-linejoin="miter"/>`; }).join("");
   return `<svg class="chart" viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" style="height:${H}px"><defs>${defs}</defs>${g}${body}</svg>`;
 }
 const minutes = h => (h && h.t && h.t.length > 1) ? Math.max(1, Math.round((h.t[h.t.length-1]-h.t[0])/60)) : 30;
