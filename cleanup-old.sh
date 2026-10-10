@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # 清除「舊版 VPS 哨兵」留在 VPS 上的東西
-# 不會動到：新精簡版（vps-sentinel-lite）、Docker 本身與其他容器（例如 n8n）、Tailscale
-# 用法：sudo bash 清除舊版VPS哨兵.sh
+# 不會動到：新版 VPS 哨兵（vps-sentinel-lite）、Docker 本身與其他容器（例如 n8n）、Tailscale
+# 用法：sudo bash cleanup-old.sh
 set -uo pipefail
 
 [ "$(id -u)" = 0 ] || { echo "請用 sudo 執行：sudo bash $0"; exit 1; }
@@ -42,7 +42,7 @@ fi
 [ "$found" = 0 ] && { echo "  ✅ 沒找到任何舊版殘留，VPS 很乾淨。"; exit 0; }
 
 echo
-echo "以下會保留不動：新精簡版、Docker 與其他容器、Tailscale 連線"
+echo "以下會保留不動：新版 VPS 哨兵、Docker 與其他容器、Tailscale 連線"
 $HAS_DOCKER && { echo "目前其他容器："; docker ps -a --format '    - {{.Names}}' | grep -vx '    - homeassistant' || echo "    （無）"; }
 echo
 read -r -p "確定要刪除上面列出的東西嗎？輸入 y 確認：" ans
@@ -74,5 +74,5 @@ DEBIAN_FRONTEND=noninteractive apt-get autoremove -y -qq >/dev/null 2>&1 && echo
 
 echo
 echo "═══ 完成 ═══"
-systemctl is-active --quiet vps-sentinel-lite && echo "✓ 新精簡版仍正常運作中" || echo "ⓘ 新精簡版目前沒在跑（如果還沒裝可忽略）"
+systemctl is-active --quiet vps-sentinel-lite && echo "✓ 新版 VPS 哨兵仍正常運作中" || echo "ⓘ 新版 VPS 哨兵目前沒在跑（如果還沒裝可忽略）"
 df -h / | awk 'NR==2{print "目前磁碟剩餘空間：" $4}'

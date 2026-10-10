@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# VPS 哨兵 精簡版：安裝／更新
+# VPS 哨兵：安裝／更新
 #
 # 用法：
 #   sudo bash install.sh              一般安裝（http://IP:8787）
@@ -236,7 +236,7 @@ fi
 # ── 5. 開機自動啟動 ──
 cat > "$UNIT" <<'EOF'
 [Unit]
-Description=VPS 哨兵 精簡版
+Description=VPS 哨兵
 After=network-online.target docker.service
 Wants=network-online.target
 

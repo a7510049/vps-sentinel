@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
 """
-VPS 哨兵 精簡版
+VPS 哨兵：用手機或電腦隨時查看 VPS 狀態
 - 單一檔案，只用 Python 內建模組（不用另外安裝任何套件）
-- VPS 上直接跑，手機打開網頁就能看狀態，可加到主畫面當 App 用
-- 可選：異常時直接推 Telegram
-- 可選：一台當「總覽」，順便顯示其他 VPS
+- 網頁儀表板：電腦版、手機版各自設計，可加到手機主畫面當 App 用
+- 即時狀態、30 分鐘歷史曲線、Docker 容器與系統服務、一鍵更新系統
+- 可選：Telegram 通知、多台 VPS 一起看
 設定檔：/etc/vps-sentinel-lite.conf（可用環境變數 SENTINEL_CONF 指定別的位置）
 """
 import hmac
