@@ -10,6 +10,7 @@ VPS 哨兵 精簡版
 import hmac
 import json
 import os
+import re
 import shutil
 import socket
 import subprocess
@@ -17,11 +18,12 @@ import sys
 import threading
 import time
 import urllib.parse
+import urllib.error
 import urllib.request
 from concurrent.futures import ThreadPoolExecutor
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
-VERSION = "1.0"
+VERSION = "1.1"
 
 # ───────────────────────── 設定 ─────────────────────────
 
@@ -194,6 +196,89 @@ def apt_updates():
     return {"total": len(lines), "security": sum("-security" in l for l in lines)}
 
 
+# ───────────────────────── IP 所在國家 ─────────────────────────
+
+def lookup_geo():
+    if C.get("COUNTRY"):                       # 設定檔可以手動指定
+        return {"cc": C["COUNTRY"].upper(), "city": C.get("CITY", ""), "org": ""}
+    for url in ("https://ipinfo.io/json", "https://api.country.is/"):
+        try:
+            req = urllib.request.Request(url, headers={"User-Agent": "vps-sentinel-lite",
+                                                       "Accept": "application/json"})
+            with urllib.request.urlopen(req, timeout=8) as r:
+                d = json.loads(r.read())
+            cc = (d.get("country") or "").upper()
+            if len(cc) == 2:
+                return {"cc": cc, "city": d.get("city", ""),
+                        "org": re.sub(r"^AS\d+\s+", "", d.get("org", ""))}
+        except Exception:  # noqa: BLE001
+            pass
+    return None
+
+
+# ───────────────────────── 系統更新 ─────────────────────────
+
+UPDATE_UNIT = "vps-sentinel-update"
+UPDATE_LOG = "/var/log/vps-sentinel-update.log"
+UPDATE_SCRIPT = r"""set -u
+export DEBIAN_FRONTEND=noninteractive NEEDRESTART_SUSPEND=1
+echo "=== 開始更新 $(date '+%F %T') ==="
+if apt-get update \
+   && apt-get -y -o Dpkg::Options::=--force-confdef -o Dpkg::Options::=--force-confold upgrade \
+   && apt-get -y autoremove; then
+  echo "__RESULT__ ok $(date +%s)"
+else
+  echo "__RESULT__ fail $(date +%s)"
+fi"""
+
+
+def update_supported():
+    return bool(shutil.which("apt-get") and shutil.which("systemd-run"))
+
+
+def update_running():
+    _, out = run(["systemctl", "is-active", UPDATE_UNIT], 5)
+    return out.strip() in ("active", "activating")
+
+
+def update_last():
+    try:
+        with open(UPDATE_LOG, encoding="utf-8", errors="replace") as f:
+            lines = f.read().splitlines()[-500:]
+    except OSError:
+        return None
+    for line in reversed(lines):
+        if line.startswith("__RESULT__"):
+            parts = line.split()
+            try:
+                return {"ok": parts[1] == "ok", "time": float(parts[2])}
+            except (IndexError, ValueError):
+                return None
+    return None
+
+
+def start_update():
+    if not update_supported():
+        return False, "這台主機不支援一鍵更新"
+    if update_running():
+        return False, "已經在更新中了"
+    try:                                       # 記錄檔太大就清掉
+        if os.path.getsize(UPDATE_LOG) > 2_000_000:
+            open(UPDATE_LOG, "w").close()
+    except OSError:
+        pass
+    run(["systemctl", "reset-failed", UPDATE_UNIT], 5)
+    # 交給 systemd 在背景跑：就算哨兵本身被更新重啟，更新也不會中斷
+    code, _ = run(["systemd-run", f"--unit={UPDATE_UNIT}", "--collect",
+                   f"--property=StandardOutput=append:{UPDATE_LOG}",
+                   f"--property=StandardError=append:{UPDATE_LOG}",
+                   "/bin/bash", "-c", UPDATE_SCRIPT], 15)
+    if code != 0:
+        return False, "無法開始更新"
+    log("已開始系統更新")
+    return True, "已開始更新"
+
+
 # ───────────────────────── 背景收集 ─────────────────────────
 
 class Collector:
@@ -206,6 +291,9 @@ class Collector:
         self.updates = None
         self.cpu_high_since = None
         self.started = time.time()
+        self.geo = None
+        self.upd_running = False
+        self.upd_last = update_last()
 
     def loop(self):
         last_cpu = cpu_times()
@@ -232,10 +320,28 @@ class Collector:
                 c, s = docker_containers(), service_states()
                 with self.lock:
                     self.containers, self.services = c, s
-            if tick % 900 == 0:       # 每 30 分鐘：系統更新
+            recheck = False
+            if self.upd_running or tick % 15 == 0:    # 更新中每 2 秒看一次，平常 30 秒
+                was, now = self.upd_running, update_running()
+                if was and not now:                   # 剛更新完
+                    last = update_last()
+                    with self.lock:
+                        self.upd_last = last
+                    recheck = True
+                    ok = bool(last and last["ok"])
+                    log("系統更新完成" if ok else "系統更新失敗")
+                    threading.Thread(target=tg_send, daemon=True, args=(
+                        f"{'✅' if ok else '❌'} {NAME} 系統更新{'完成' if ok else '失敗'}",)).start()
+                self.upd_running = now
+            if tick % 900 == 0 or recheck:            # 每 30 分鐘：可更新套件數
                 u = apt_updates()
                 with self.lock:
                     self.updates = u
+            if tick % 10800 == 0:                     # 每 6 小時：IP 所在國家
+                g = lookup_geo()
+                if g:
+                    with self.lock:
+                        self.geo = g
             tick += 1
 
     def snapshot(self):
@@ -243,6 +349,8 @@ class Collector:
             cpu, net = self.cpu_pct, dict(self.net)
             containers, services, updates = self.containers, list(self.services), self.updates
             high_since = self.cpu_high_since
+            geo, upd = self.geo, {"supported": update_supported(),
+                                  "running": self.upd_running, "last": self.upd_last}
         mem = meminfo()
         disks = [d for d in (disk(p) for p in DISKS) if d]
         load = os.getloadavg()
@@ -278,7 +386,7 @@ class Collector:
             "cores": os.cpu_count() or 1, "cpu": cpu, "load": [round(x, 2) for x in load],
             "mem": mem, "disks": disks, "net": net,
             "containers": containers, "services": services,
-            "updates": updates, "reboot": reboot,
+            "updates": updates, "reboot": reboot, "geo": geo, "update": upd,
             "problems": problems, "notices": notices,
             "level": "bad" if problems else ("warn" if notices else "ok"),
         }
@@ -399,6 +507,33 @@ class Handler(BaseHTTPRequestHandler):
             return self.send(200, json.dumps(data, ensure_ascii=False))
         self.send(404, '{"error":"找不到"}')
 
+    def do_POST(self):
+        u = urllib.parse.urlsplit(self.path)
+        if u.path != "/api/update":
+            return self.send(404, '{"error":"找不到"}')
+        if not self.authed():
+            time.sleep(1)
+            return self.send(401, '{"error":"密碼錯誤"}')
+        node = urllib.parse.parse_qs(u.query).get("node", [""])[0]
+        if node and node != NAME:                 # 轉給其他 VPS
+            peer = next((p for p in PEERS if p["name"] == node), None)
+            if not peer:
+                return self.send(404, '{"ok":false,"message":"找不到這台主機"}')
+            try:
+                req = urllib.request.Request(peer["url"] + "/api/update", data=b"", method="POST",
+                                             headers={"X-Token": peer["token"]})
+                with urllib.request.urlopen(req, timeout=20) as r:
+                    return self.send(r.status, r.read())
+            except urllib.error.HTTPError as e:
+                return self.send(e.code, e.read())
+            except Exception as e:  # noqa: BLE001
+                return self.send(502, json.dumps({"ok": False, "message": f"連不上：{e}"[:150]},
+                                                  ensure_ascii=False))
+        ok, msg = start_update()
+        if ok:
+            COL.upd_running = True
+        self.send(200 if ok else 409, json.dumps({"ok": ok, "message": msg}, ensure_ascii=False))
+
 
 PAGE = r"""<!doctype html>
 <html lang="zh-Hant-TW">
@@ -461,6 +596,15 @@ summary::after{content:"展開";font-size:12px}details[open] summary::after{cont
 background:var(--card);color:var(--text);margin:16px 0 10px}
 .login button,.btn{font-size:15px;padding:11px 18px;border-radius:12px;border:0;background:var(--accent);color:#fff;cursor:pointer}
 .btn{padding:6px 12px;font-size:13px;background:var(--card);color:var(--sub)}
+.flag{width:24px;height:18px;object-fit:cover;border-radius:4px;flex:none;box-shadow:0 0 0 1px rgba(127,127,127,.25)}
+.emoji{font-size:20px;line-height:1}
+.foot{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;margin-top:12px;
+border-top:1px solid var(--line);padding-top:12px}
+.ubtn{font:inherit;font-size:13.5px;font-weight:600;padding:8px 14px;border-radius:11px;cursor:pointer;
+border:1.5px solid var(--accent);background:transparent;color:var(--accent);display:inline-flex;align-items:center;gap:7px}
+.ubtn:active{transform:scale(.97)}.ubtn[disabled]{opacity:.7;cursor:default}
+.spin{width:13px;height:13px;border:2px solid currentColor;border-right-color:transparent;border-radius:50%;
+animation:sp .8s linear infinite}@keyframes sp{to{transform:rotate(360deg)}}
 .err{color:var(--bad);font-size:13px;min-height:20px}
 .offline{color:var(--sub);font-size:13px;margin-top:10px}
 </style>
@@ -490,11 +634,21 @@ const STATE = {running:"執行中",exited:"已停止",restarting:"重啟中",pau
   active:"執行中",inactive:"未執行",failed:"失敗",activating:"啟動中",unknown:"未知"};
 
 const open = {};
+let REGION; try { REGION = new Intl.DisplayNames(["zh-TW"], {type:"region"}); } catch(e) {}
+function flag(cc){
+  if (!/^[A-Z]{2}$/.test(cc||"")) return "";
+  const emo = String.fromCodePoint(...[...cc].map(c=>127397+c.charCodeAt(0)));
+  return `<img class="flag" src="https://flagcdn.com/w80/${cc.toLowerCase()}.png" alt="${emo}" title="${esc(REGION?REGION.of(cc):cc)}"
+    onerror="this.outerHTML='<span class=emoji>${emo}</span>'">`;
+}
+function when(t){ const d=new Date(t*1000), now=new Date();
+  const hm=d.toLocaleTimeString("zh-TW",{hour:"2-digit",minute:"2-digit",hour12:false});
+  return d.toDateString()===now.toDateString() ? `今天 ${hm}` : `${d.getMonth()+1}/${d.getDate()} ${hm}`; }
 function card(s){
   const lv = s.level || (s.online ? "ok" : "bad");
-  let h = `<div class="card ${lv==="ok"?"":lv}"><div class="top"><span class="dot ${lv}"></span><h2>${esc(s.name)}</h2>`;
+  let h = `<div class="card ${lv==="ok"?"":lv}"><div class="top"><span class="dot ${lv}"></span>${flag(s.geo&&s.geo.cc)}<h2>${esc(s.name)}</h2>`;
   if (!s.online) return h + `</div><div class="offline">⚠️ 連不上這台主機<br><span class="sub">${esc(s.error||"")}</span></div></div>`;
-  h += `<span class="sub">開機 ${up(s.uptime)}</span></div><div class="sub">${esc(s.os)}</div>`;
+  h += `<span class="sub">開機 ${up(s.uptime)}</span></div><div class="sub">${s.geo ? esc([(REGION&&s.geo.cc)?REGION.of(s.geo.cc):s.geo.cc, s.geo.city].filter(Boolean).join(" "))+"・" : ""}${esc(s.os)}</div>`;
   const al = (s.problems||[]).map(p=>`<div class="alert bad">${esc(p)}</div>`).concat((s.notices||[]).map(p=>`<div class="alert warn">${esc(p)}</div>`));
   if (al.length) h += `<div class="alerts">${al.join("")}</div>`;
   h += `<div class="bars">` + bar("處理器", s.cpu, `${s.cores} 核`) +
@@ -518,7 +672,14 @@ function card(s){
     h += `<details data-id="${esc(id)}" ${open[id]?"open":""}><summary><span>容器與服務：${okn} 正常${off?`，${off} 未使用`:""}${bad?`，<b style="color:var(--bad);font-weight:600">${bad} 異常</b>`:""}</span></summary><div class="list">` +
       items.map(i=>`<div class="item"><span class="dot ${i.st}"></span><span class="n">${esc(i.n)}</span><span class="s">${i.t}・${esc(i.s)}</span></div>`).join("") + `</div></details>`;
   }
-  if (s.updates) h += `<div class="sub" style="margin-top:10px">可更新套件 ${s.updates.total} 個（安全更新 ${s.updates.security} 個）・核心 ${esc(s.kernel)}</div>`;
+  const u = s.update, n = s.updates ? s.updates.total : 0;
+  let info = s.updates ? `可更新套件 ${n} 個${s.updates.security?`（安全更新 ${s.updates.security} 個）`:""}` : "";
+  if (u && u.last) info += `${info?"<br>":""}上次更新：${u.last.ok?"成功":`<span style="color:var(--bad)">失敗</span>`}・${when(u.last.time)}`;
+  let btn = "";
+  if (u && u.supported) btn = u.running
+    ? `<button class="ubtn" disabled><span class="spin"></span>更新中…</button>`
+    : `<button class="ubtn" data-update="${esc(s.name)}" data-n="${n}">${n?`更新系統（${n}）`:"檢查更新"}</button>`;
+  if (info || btn) h += `<div class="foot"><div class="sub">${info}</div>${btn}</div>`;
   return h + `</div>`;
 }
 
@@ -538,6 +699,21 @@ function login(msg){
   $("#tok").addEventListener("keydown",e=>{ if(e.key==="Enter"){ setTok(e.target.value.trim()); tick(); }});
 }
 function logout(){ setTok(""); login(); }
+
+document.addEventListener("click", async e => {
+  const b = e.target.closest("[data-update]"); if (!b) return;
+  const node = b.dataset.update, n = +b.dataset.n;
+  const msg = n ? `確定要更新「${node}」嗎？\n\n會在背景安裝 ${n} 個套件更新，大約 1～5 分鐘。\n期間部分服務可能會短暫重新啟動。`
+                : `「${node}」目前沒有偵測到更新。\n要重新檢查並安裝最新更新嗎？`;
+  if (!confirm(msg)) return;
+  b.disabled = true; b.innerHTML = `<span class="spin"></span>開始中…`;
+  try {
+    const r = await fetch("/api/update?node="+encodeURIComponent(node), {method:"POST", headers:{"X-Token":getTok()}});
+    const d = await r.json().catch(()=>({}));
+    if (!r.ok || !d.ok) alert(d.message || d.error || "無法開始更新");
+  } catch(err) { alert("連線失敗，請稍後再試"); }
+  tick();
+});
 
 let timer;
 async function tick(){
