@@ -1,9 +1,0 @@
-{
-  "install_version": 1,
-  "role": "combined",
-  "node": {
-    "id": "taipei-controller-01",
-    "display_name": "台北主控 VPS",
-    "profile": "balanced"
-  }
-}

@@ -1,4 +1,0 @@
-#!/usr/bin/env bash
-set -Eeuo pipefail
-
-exec /opt/vps-sentinel-controller/venv/bin/python   /opt/vps-sentinel-controller/enroll_cli.py "$@"

@@ -1,8 +1,0 @@
-- name: Home Assistant VPS
-  filter:
-    include_entities:
-      - binary_sensor.my_vps_offline
-      - binary_sensor.my_vps_resource_overload
-      - binary_sensor.my_vps_disk_low
-      - binary_sensor.my_vps_service_problem
-      - binary_sensor.my_vps_reboot_required

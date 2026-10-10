@@ -1,26 +1,2 @@
 __pycache__/
-*.py[cod]
-.venv/
-venv/
-
-# Never commit local credentials or environment overrides.
-.env
-.env.*
-vps-monitor.env
-vps-monitor.env.local
-
-# Home Assistant and local service secrets.
-secrets.yaml
-**/secrets.yaml
-credentials.json
-**/credentials.json
-
-# Private keys and exported certificates.
-*.key
-*.pem
-*.p12
-*.pfx
-
-# Runtime output.
-*.log
-.codex-tmp/
+*.pyc
