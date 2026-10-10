@@ -20,10 +20,11 @@ import time
 import urllib.parse
 import urllib.error
 import urllib.request
+from collections import deque
 from concurrent.futures import ThreadPoolExecutor
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
-VERSION = "1.3"
+VERSION = "1.4"
 
 # ───────────────────────── 設定 ─────────────────────────
 
@@ -328,6 +329,7 @@ class Collector:
         self.cpu_high_since = None
         self.started = time.time()
         self.geo = None
+        self.hist = deque(maxlen=180)          # 最近 30 分鐘，每 10 秒一筆
         self.upd_running = False
         self.upd_last = update_last()
 
@@ -351,6 +353,11 @@ class Collector:
                 else:
                     self.cpu_high_since = None
             last_cpu, last_net, last_t = now_cpu, now_net, now_t
+            if tick % 5 == 0:                         # 每 10 秒記一筆歷史
+                m = meminfo()
+                with self.lock:
+                    self.hist.append((round(now_t), self.cpu_pct, m["pct"],
+                                      round(self.net["rx"]), round(self.net["tx"])))
 
             if tick % 15 == 0:        # 每 30 秒：容器與服務
                 c, s = docker_containers(), service_states()
@@ -385,6 +392,7 @@ class Collector:
             cpu, net = self.cpu_pct, dict(self.net)
             containers, services, updates = self.containers, list(self.services), self.updates
             high_since = self.cpu_high_since
+            hist = list(self.hist)
             geo, upd = self.geo, {"supported": update_supported(),
                                   "running": self.upd_running, "last": self.upd_last}
         mem = meminfo()
@@ -423,6 +431,8 @@ class Collector:
             "mem": mem, "disks": disks, "net": net,
             "containers": containers, "services": services,
             "updates": updates, "reboot": reboot, "geo": geo, "update": upd,
+            "hist": {"t": [h[0] for h in hist], "cpu": [h[1] for h in hist], "mem": [h[2] for h in hist],
+                     "rx": [h[3] for h in hist], "tx": [h[4] for h in hist]},
             "problems": problems, "notices": notices,
             "level": "bad" if problems else ("warn" if notices else "ok"),
         }
@@ -764,6 +774,98 @@ body{color:var(--text);min-height:100vh;font:15px/1.5 -apple-system,BlinkMacSyst
 .shake{animation:shake .45s}
 @keyframes shake{20%,60%{transform:translateX(-8px)}40%,80%{transform:translateX(8px)}}
 
+/* ───── 手機版：迷你曲線、篩選 ───── */
+.spark{margin-top:14px}
+.spark .lbl{display:flex;justify-content:space-between;font-size:11.5px;color:var(--sub);margin-bottom:4px}
+.spark .lbl i{display:inline-block;width:7px;height:7px;border-radius:50%;margin:0 4px 0 8px;vertical-align:1px}
+.pill{cursor:pointer;font:inherit;font-size:13.5px;color:var(--text);border:0;transition:transform .25s cubic-bezier(.34,1.56,.64,1),opacity .3s}
+.pill:active{transform:scale(.94)}
+.summary.filtering .pill{opacity:.5}.summary.filtering .pill.on{opacity:1;box-shadow:inset 0 1px 0 var(--spec),inset 0 0 0 1.5px var(--accent),0 0 0 1px var(--edge),var(--shadow)}
+.empty{text-align:center;color:var(--sub);padding:40px 0;font-size:14px}
+
+/* ───── 圖表（兩版共用） ───── */
+.chart{width:100%;display:block;overflow:visible}
+.chart path{transition:d .9s cubic-bezier(.22,1,.36,1)}
+.gl{stroke:var(--line);stroke-width:1;vector-effect:non-scaling-stroke;stroke-dasharray:3 5}
+.xl{display:flex;justify-content:space-between;color:var(--sub);font-size:11.5px;margin-top:6px}
+.wait{height:100%;display:grid;place-items:center;color:var(--sub);font-size:12.5px}
+
+/* ───── 電腦版 ───── */
+@media (min-width:1024px){ body{padding:0 24px} .wrap{max-width:1480px} }
+.dash.d{display:grid;grid-template-columns:300px minmax(0,1fr);gap:22px;padding:24px 0 34px;align-items:start}
+.side{position:sticky;top:24px;border-radius:30px;padding:20px 14px 16px;display:flex;flex-direction:column;gap:16px;
+  max-height:calc(100vh - 48px);animation:rise .8s cubic-bezier(.22,1,.36,1) both}
+.brand{display:flex;align-items:center;gap:11px;padding:0 6px}
+.brand img{width:36px;height:36px;border-radius:11px;box-shadow:0 6px 18px -6px rgba(56,189,248,.7)}
+.brand h1{font-size:19px;font-weight:750;line-height:1.2}
+.brand .meta{font-size:11.5px;color:var(--sub);display:flex;align-items:center;gap:5px}
+.side .summary{margin:0;padding:0 4px;gap:6px}
+.side .pill{padding:6px 11px 6px 10px;font-size:12.5px;gap:6px}
+.hosts{display:flex;flex-direction:column;gap:6px;overflow:auto;padding:2px;margin:0 -2px}
+.host{font:inherit;color:inherit;border:0;background:transparent;text-align:left;cursor:pointer;border-radius:20px;
+  padding:12px 13px;display:flex;flex-direction:column;gap:8px;transition:background .3s,box-shadow .3s,transform .25s cubic-bezier(.34,1.56,.64,1)}
+.host:hover{background:var(--track)}.host:active{transform:scale(.98)}
+.host.on{background:var(--glass);box-shadow:inset 0 1px 0 var(--spec),inset 0 0 0 1px var(--rim),0 8px 24px -14px rgba(0,0,0,.6)}
+.host .hn{display:flex;align-items:center;gap:8px;font-weight:650;font-size:14.5px;min-width:0}
+.host .hn span.nm{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.host .flag{width:20px;height:15px;border-radius:4px}
+.host .hs{font-size:11.5px;color:var(--sub);margin-top:-4px}
+.minis{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.minis .k{display:flex;justify-content:space-between;font-size:11px;color:var(--sub);margin-bottom:3px}
+.minis .k b{color:var(--text);font-weight:650;font-variant-numeric:tabular-nums}
+.minis .track{height:4px}.minis .fill{box-shadow:none}
+.side-foot{margin-top:auto;display:flex;justify-content:space-between;align-items:center;padding:6px 6px 0;color:var(--sub);font-size:12px;
+  border-top:1px solid var(--line);padding-top:12px}
+
+.detail{display:flex;flex-direction:column;gap:18px;min-width:0}
+.panel{border-radius:28px;padding:20px 22px;animation:rise .8s cubic-bezier(.22,1,.36,1) both;animation-delay:calc(var(--i,0) * 70ms)}
+.dhead{display:flex;align-items:center;gap:18px;flex-wrap:wrap}
+.dhead .who{display:flex;align-items:center;gap:12px;min-width:0;flex:1}
+.dhead .flag{width:38px;height:28px;border-radius:8px}.dhead .emoji{font-size:30px}
+.dhead h2{font-size:28px;font-weight:750;letter-spacing:.2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.dhead .sub{font-size:13px;margin-top:1px}
+.dhead .act{display:flex;align-items:center;gap:14px;text-align:right}
+.detail .alerts{margin:0;flex-direction:row;flex-wrap:wrap}
+.detail .alert{padding:9px 14px}
+
+.gauges{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:18px}
+.gauge{border-radius:28px;padding:20px 16px 18px;display:flex;flex-direction:column;align-items:center}
+.gwrap{position:relative;width:150px;height:150px}
+.gwrap::before{content:"";position:absolute;inset:18px;border-radius:50%;background:radial-gradient(circle,rgba(99,102,241,.16),transparent 70%)}
+.gwrap svg{width:100%;height:100%;transform:rotate(-90deg)}
+.rt{fill:none;stroke:var(--track);stroke-width:11}
+.rv{fill:none;stroke:url(#rgN);stroke-width:11;stroke-linecap:round;
+  transition:stroke-dashoffset 1.2s cubic-bezier(.22,1,.36,1);animation:ringin 1.6s cubic-bezier(.22,1,.36,1) both}
+.rv.w{stroke:url(#rgW)}
+.rv.b{stroke:url(#rgB)}
+@keyframes ringin{from{stroke-dashoffset:var(--c)}}
+.gin{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center}
+.gin b{font-size:34px;font-weight:750;font-variant-numeric:tabular-nums;line-height:1.1}
+.gin b small{font-size:16px;opacity:.55;margin-left:1px}
+.gin>span{font-size:12.5px;color:var(--sub);font-weight:550}
+.gsub{margin-top:10px;font-size:12.5px;color:var(--sub);text-align:center}
+
+.charts{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:18px}
+.ph{display:flex;justify-content:space-between;align-items:center;gap:10px;margin-bottom:14px;flex-wrap:wrap}
+.ph h3{font-size:15px;font-weight:700}
+.legend{display:flex;gap:14px;font-size:12.5px;color:var(--sub)}
+.legend i{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:6px;vertical-align:0}
+.legend b{color:var(--text);font-weight:650;margin-left:4px;font-variant-numeric:tabular-nums}
+.cbox{height:170px}
+
+.lower{display:grid;grid-template-columns:minmax(0,1.35fr) minmax(0,1fr);gap:18px;align-items:start}
+.tbl{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:4px 18px}
+.tbl .item{opacity:1;transform:none;padding:8px 10px;border-radius:12px;transition:background .25s}
+.tbl .item:hover{background:var(--track)}
+.kv{display:grid;grid-template-columns:auto 1fr;gap:10px 18px;font-size:13.5px;margin:0}
+.kv dt{color:var(--sub)}.kv dd{text-align:right;margin:0;font-variant-numeric:tabular-nums;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.panel .foot{margin-top:16px}
+.bigoff{text-align:center;padding:60px 20px;color:var(--sub)}
+.bigoff b{display:block;font-size:20px;color:var(--text);margin-bottom:6px}
+@media (max-width:1300px){.charts{grid-template-columns:1fr}.lower{grid-template-columns:1fr}}
+@media (max-width:1180px){.gwrap{width:124px;height:124px}.gin b{font-size:28px}}
+
+.pill:not([data-filter]){cursor:default}
 /* ───── 無障礙：減少動態／減少透明度 ───── */
 @media (prefers-reduced-motion:reduce){*,*::before,*::after{animation:none!important;transition:none!important}}
 @media (prefers-reduced-transparency:reduce){
@@ -772,31 +874,45 @@ body{color:var(--text);min-height:100vh;font:15px/1.5 -apple-system,BlinkMacSyst
 </head>
 <body>
 <div class="aurora"><i></i><i></i><i></i><i></i></div><div class="grain"></div>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs>
+<linearGradient id="rgN" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#38bdf8"/><stop offset="1" stop-color="#818cf8"/></linearGradient>
+<linearGradient id="rgW" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#fbbf24"/><stop offset="1" stop-color="#f97316"/></linearGradient>
+<linearGradient id="rgB" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#fb7185"/><stop offset="1" stop-color="#e11d48"/></linearGradient>
+</defs></svg>
 <div class="wrap" id="app"></div>
 <script>
 const $ = s => document.querySelector(s);
 const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
 const KEY = "vps-sentinel-token";
-function getTok(){ try { return localStorage.getItem(KEY) || window._tok || ""; } catch(e){ return window._tok || ""; } }
-function setTok(t){ try { t ? localStorage.setItem(KEY,t) : localStorage.removeItem(KEY); } catch(e){} window._tok = t; }
+function store(k, v){ try { if (v === undefined) return localStorage.getItem(k) || ""; v ? localStorage.setItem(k, v) : localStorage.removeItem(k); } catch(e){ return ""; } }
+function getTok(){ return store(KEY) || window._tok || ""; }
+function setTok(t){ store(KEY, t); window._tok = t; }
 
 const u0 = new URL(location.href);
 if (u0.searchParams.get("t")) { setTok(u0.searchParams.get("t")); history.replaceState(null, "", "/"); }
 
+const DESK = matchMedia("(min-width: 1024px)");
+let LIST = [], SEL = store("vps-sel"), FILTER = "", LAST = "";
+const open = {};
+
+/* ───────── 小工具 ───────── */
 function size(b){ if(!b) return "0 B"; const u=["B","KB","MB","GB","TB"]; let i=0; while(b>=1024&&i<4){b/=1024;i++} return (b<10&&i?b.toFixed(1):Math.round(b))+" "+u[i]; }
 function rate(b){ return size(b)+"/s"; }
 function up(s){ const d=Math.floor(s/86400), h=Math.floor(s%86400/3600), m=Math.floor(s%3600/60);
   return d ? `${d} 天 ${h} 小時` : h ? `${h} 小時 ${m} 分` : `${m} 分鐘`; }
 function num(v, d=0){ return `<span data-v="${(+v).toFixed(d)}" data-d="${d}">${(+v).toFixed(d)}</span>`; }
+const keyOf = s => s.node || s.name || "";
+const lvOf = s => s.level || (s.online ? "ok" : "bad");
+const tier = p => p>=90 ? "b" : p>=75 ? "w" : "";
+function track(pct){ return `<div class="track"><div class="fill ${tier(pct)}" style="width:${Math.max(0,Math.min(pct,100))}%"></div></div>`; }
 function bar(label, pct, detail){
-  const c = pct>=90 ? "b" : pct>=75 ? "w" : "";
-  return `<div><div class="bar-row"><span>${label}</span><span><b>${num(pct)}%</b><span class="sub">${detail}</span></span></div>
-  <div class="track"><div class="fill ${c}" style="width:${Math.max(0,Math.min(pct,100))}%"></div></div></div>`;
+  return `<div><div class="bar-row"><span>${label}</span><span><b>${num(pct)}%</b><span class="sub">${detail}</span></span></div>${track(pct)}</div>`;
 }
 const STATE = {running:"執行中",exited:"已停止",restarting:"重啟中",paused:"暫停",created:"未啟動",dead:"故障",
   active:"執行中",inactive:"未執行",failed:"失敗",activating:"啟動中",unknown:"未知"};
 const ICON_EDIT = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>`;
 const ICON_CHEV = `<svg class="chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>`;
+const C = {cpu:"#38bdf8", mem:"#a78bfa", rx:"#22d3ee", tx:"#f472b6"};
 
 let REGION; try { REGION = new Intl.DisplayNames(["zh-TW"], {type:"region"}); } catch(e) {}
 const FLAGFAIL = {};
@@ -807,28 +923,16 @@ function flag(cc){
   return `<img class="flag" src="https://flagcdn.com/w80/${cc.toLowerCase()}.png" alt="${emo}" title="${esc(REGION?REGION.of(cc):cc)}"
     onerror="FLAGFAIL['${cc}']=1;this.outerHTML='<span class=emoji>${emo}</span>'">`;
 }
+const place = s => s.geo ? [(REGION&&s.geo.cc)?REGION.of(s.geo.cc):s.geo.cc, s.geo.city].filter(Boolean).join(" ") : "";
 function when(t){ const d=new Date(t*1000), now=new Date();
   const hm=d.toLocaleTimeString("zh-TW",{hour:"2-digit",minute:"2-digit",hour12:false});
   return d.toDateString()===now.toDateString() ? `今天 ${hm}` : `${d.getMonth()+1}/${d.getDate()} ${hm}`; }
-
-const open = {};
-function card(s, i){
-  const lv = s.level || (s.online ? "ok" : "bad"), key = s.node || s.name || "";
-  let h = `<div class="card glass ${lv==="ok"?"":lv}" data-key="${esc(key)}" style="--i:${i}"><div class="top"><span class="dot ${lv}"></span>${flag(s.geo&&s.geo.cc)}<h2>${esc(s.name)}</h2>`;
-  if (s.online) h += `<button class="edit" title="改名稱" data-rename="${esc(s.node||"")}" data-name="${esc(s.name)}">${ICON_EDIT}</button>`;
-  h += `<span class="grow"></span>`;
-  if (!s.online) return h + `</div><div class="offline">⚠️ 連不上這台主機<br><span class="sub">${esc(s.error||"")}</span></div></div>`;
-  h += `<span class="sub">開機 ${up(s.uptime)}</span></div>`;
-  const where = s.geo ? [(REGION&&s.geo.cc)?REGION.of(s.geo.cc):s.geo.cc, s.geo.city].filter(Boolean).join(" ") : "";
-  h += `<div class="sub loc">${where ? esc(where)+"・" : ""}${esc(s.os)}</div>`;
+const editBtn = s => s.online ? `<button class="edit" title="改名稱" data-rename="${esc(s.node||"")}" data-name="${esc(s.name)}">${ICON_EDIT}</button>` : "";
+function alerts(s){
   const al = (s.problems||[]).map(p=>`<div class="alert bad">${esc(p)}</div>`).concat((s.notices||[]).map(p=>`<div class="alert warn">${esc(p)}</div>`));
-  if (al.length) h += `<div class="alerts">${al.join("")}</div>`;
-  h += `<div class="bars">` + bar("處理器", s.cpu, `${s.cores} 核`) +
-       bar("記憶體", s.mem.pct, `${size(s.mem.used)} / ${size(s.mem.total)}`) +
-       s.disks.map(d=>bar("磁碟 "+(d.path==="/"?"":esc(d.path)), d.pct, `${size(d.used)} / ${size(d.total)}`)).join("") + `</div>`;
-  h += `<div class="stats"><div class="stat"><div class="k">負載</div><div class="v">${num(s.load[0],2)}</div></div>
-        <div class="stat"><div class="k">下載</div><div class="v">${rate(s.net.rx)}</div></div>
-        <div class="stat"><div class="k">上傳</div><div class="v">${rate(s.net.tx)}</div></div></div>`;
+  return al.length ? `<div class="alerts">${al.join("")}</div>` : "";
+}
+function itemsOf(s){
   const items = [];
   (s.containers||[]).forEach(c=>{
     const st = /unhealthy/.test(c.status) ? "bad" : c.state==="running" ? "ok"
@@ -836,13 +940,14 @@ function card(s, i){
     items.push({n:c.name, st, s:STATE[c.state]||c.state, t:"容器"});
   });
   (s.services||[]).forEach(v=>items.push({n:v.name, st:v.state==="active"?"ok":"bad", s:STATE[v.state]||v.state, t:"服務"}));
-  if (items.length){
-    const bad = items.filter(x=>x.st==="bad").length, okn = items.filter(x=>x.st==="ok").length, off = items.length-bad-okn;
-    h += `<div class="more ${open[key]?"open":""}"><button class="more-head" data-toggle="${esc(key)}"><span>容器與服務：${okn} 正常${off?`，${off} 未使用`:""}${bad?`，<b>${bad} 異常</b>`:""}</span>${ICON_CHEV}</button>
-      <div class="collapse"><div><div class="list">` +
-      items.map((x,j)=>`<div class="item" style="transition-delay:${j*35}ms"><span class="dot ${x.st}"></span><span class="n">${esc(x.n)}</span><span class="s">${x.t}・${esc(x.s)}</span></div>`).join("") +
-      `</div></div></div></div>`;
-  }
+  return items;
+}
+function itemsSummary(items){
+  const bad = items.filter(x=>x.st==="bad").length, okn = items.filter(x=>x.st==="ok").length, off = items.length-bad-okn;
+  return `${okn} 正常${off?`，${off} 未使用`:""}${bad?`，<b>${bad} 異常</b>`:""}`;
+}
+const itemRow = (x,j) => `<div class="item" style="transition-delay:${j*35}ms"><span class="dot ${x.st}"></span><span class="n">${esc(x.n)}</span><span class="s">${x.t}・${esc(x.s)}</span></div>`;
+function updateFoot(s){
   const u = s.update, n = s.updates ? s.updates.total : 0;
   let info = s.updates ? `可更新套件 ${n} 個${s.updates.security?`（安全更新 ${s.updates.security} 個）`:""}` : "";
   if (u && u.last) info += `${info?"<br>":""}上次更新：${u.last.ok?"成功":`<span style="color:var(--bad)">失敗</span>`}・${when(u.last.time)}`;
@@ -850,11 +955,140 @@ function card(s, i){
   if (u && u.supported) btn = u.running
     ? `<button class="ubtn" disabled><span class="spin"></span>更新中…</button>`
     : `<button class="ubtn" data-update="${esc(s.node||"")}" data-label="${esc(s.name)}" data-n="${n}">${n?`更新系統（${n}）`:"檢查更新"}</button>`;
-  if (info || btn) h += `<div class="foot"><div class="sub">${info}</div>${btn}</div>`;
-  return h + `</div>`;
+  return (info || btn) ? `<div class="foot"><div class="sub">${info}</div>${btn}</div>` : "";
 }
 
-/* 只更新有變動的地方：讓進度條、數字能平順地動，不會整頁閃一下 */
+/* ───────── 曲線圖 ───────── */
+function pathOf(vals, W, H, max){
+  if (!vals || vals.length < 2) return null;
+  const n = vals.length, y = v => H - Math.max(0, Math.min(v/max, 1)) * (H-4) - 2;
+  const P = vals.map((v,i)=>[i/(n-1)*W, y(v)]), cl = v => Math.max(0, Math.min(H, v)).toFixed(1);
+  let d = `M${P[0][0].toFixed(1)},${P[0][1].toFixed(1)}`;
+  for (let i=0;i<n-1;i++){
+    const p0=P[i-1]||P[i], p1=P[i], p2=P[i+1], p3=P[i+2]||p2;
+    d += ` C${(p1[0]+(p2[0]-p0[0])/6).toFixed(1)},${cl(p1[1]+(p2[1]-p0[1])/6)} ${(p2[0]-(p3[0]-p1[0])/6).toFixed(1)},${cl(p2[1]-(p3[1]-p1[1])/6)} ${p2[0].toFixed(1)},${p2[1].toFixed(1)}`;
+  }
+  return {line:d, area:`${d} L${W},${H} L0,${H} Z`};
+}
+function chart(id, series, o={}){
+  const W = 600, H = o.h || 170;
+  const all = series.flatMap(s=>s.data||[]);
+  if (all.length < 4) return `<div class="wait" style="height:${H}px">收集資料中，約 1 分鐘後出現…</div>`;
+  const max = o.max || Math.max(1, ...all) * 1.2;
+  let g = "";
+  if (o.grid) for (const f of [.25,.5,.75]) g += `<line class="gl" x1="0" x2="${W}" y1="${(H*f).toFixed(1)}" y2="${(H*f).toFixed(1)}"/>`;
+  const defs = series.map((s,i)=>`<linearGradient id="${id}${i}" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="${s.color}" stop-opacity="${o.fade??.32}"/><stop offset="1" stop-color="${s.color}" stop-opacity="0"/></linearGradient>`).join("");
+  const body = series.map((s,i)=>{ const p = pathOf(s.data, W, H, max); if (!p) return "";
+    return `<path d="${p.area}" fill="url(#${id}${i})"/><path d="${p.line}" fill="none" stroke="${s.color}" stroke-width="${o.sw||2.2}" vector-effect="non-scaling-stroke" stroke-linecap="round" stroke-linejoin="round"/>`; }).join("");
+  return `<svg class="chart" viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" style="height:${H}px"><defs>${defs}</defs>${g}${body}</svg>`;
+}
+function span(h){ const t = h && h.t; if (!t || t.length < 2) return "";
+  const m = Math.round((t[t.length-1]-t[0])/60); return m >= 1 ? `${m} 分鐘前` : "剛剛"; }
+const cid = (s, k) => "g" + Math.abs([...keyOf(s)].reduce((a,c)=>(a*31+c.charCodeAt(0))|0, 7)) + k;
+
+/* ───────── 環形儀表（電腦版） ───────── */
+function ring(label, pct, sub, i){
+  const r = 52, Cc = 2*Math.PI*r, off = Cc*(1-Math.max(0,Math.min(pct,100))/100);
+  return `<div class="gauge glass panel" style="--i:${i}"><div class="gwrap"><svg viewBox="0 0 120 120">
+    <circle class="rt" cx="60" cy="60" r="${r}"/>
+    <circle class="rv ${tier(pct)}" cx="60" cy="60" r="${r}" style="--c:${Cc.toFixed(1)};stroke-dasharray:${Cc.toFixed(1)};stroke-dashoffset:${off.toFixed(1)}"/></svg>
+    <div class="gin"><b>${num(pct)}<small>%</small></b><span>${label}</span></div></div><div class="gsub">${sub}</div></div>`;
+}
+
+/* ═════════ 手機版 ═════════ */
+function mcard(s, i){
+  const lv = lvOf(s), key = keyOf(s);
+  let h = `<div class="card glass ${lv==="ok"?"":lv}" data-key="${esc(key)}" style="--i:${i}"><div class="top"><span class="dot ${lv}"></span>${flag(s.geo&&s.geo.cc)}<h2>${esc(s.name)}</h2>${editBtn(s)}<span class="grow"></span>`;
+  if (!s.online) return h + `</div><div class="offline">⚠️ 連不上這台主機<br><span class="sub">${esc(s.error||"")}</span></div></div>`;
+  h += `<span class="sub">開機 ${up(s.uptime)}</span></div>`;
+  const where = place(s);
+  h += `<div class="sub loc">${where ? esc(where)+"・" : ""}${esc(s.os)}</div>` + alerts(s);
+  h += `<div class="bars">` + bar("處理器", s.cpu, `${s.cores} 核`) +
+       bar("記憶體", s.mem.pct, `${size(s.mem.used)} / ${size(s.mem.total)}`) +
+       s.disks.map(d=>bar("磁碟 "+(d.path==="/"?"":esc(d.path)), d.pct, `${size(d.used)} / ${size(d.total)}`)).join("") + `</div>`;
+  if (s.hist) h += `<div class="spark"><div class="lbl"><span>最近 ${(span(s.hist)||"30 分鐘前").replace("前","")}</span><span><i style="background:${C.cpu}"></i>處理器<i style="background:${C.mem}"></i>記憶體</span></div>
+      ${chart(cid(s,"m"), [{data:s.hist.cpu,color:C.cpu},{data:s.hist.mem,color:C.mem}], {max:100, h:58, fade:.22, sw:1.8})}</div>`;
+  h += `<div class="stats"><div class="stat"><div class="k">負載</div><div class="v">${num(s.load[0],2)}</div></div>
+        <div class="stat"><div class="k">下載</div><div class="v">${rate(s.net.rx)}</div></div>
+        <div class="stat"><div class="k">上傳</div><div class="v">${rate(s.net.tx)}</div></div></div>`;
+  const items = itemsOf(s);
+  if (items.length) h += `<div class="more ${open[key]?"open":""}"><button class="more-head" data-toggle="${esc(key)}"><span>容器與服務：${itemsSummary(items)}</span>${ICON_CHEV}</button>
+      <div class="collapse"><div><div class="list">${items.map(itemRow).join("")}</div></div></div></div>`;
+  return h + updateFoot(s) + `</div>`;
+}
+function summary(n, clickable){
+  const p = (k, label) => `<button class="pill glass ${FILTER===k?"on":""}" ${clickable?`data-filter="${k}"`:""}><span class="dot ${k}"></span>${label} <b>${n[k]}</b></button>`;
+  return `<div class="summary ${FILTER&&clickable?"filtering":""}">${p("ok","正常")}${p("warn","注意")}${p("bad","異常")}</div>`;
+}
+function renderMobile(list, n, time){
+  const many = list.length > 1;
+  if (!many) FILTER = "";
+  const shown = FILTER ? list.filter(s=>lvOf(s)===FILTER) : list;
+  return `<div class="dash m" data-key="m"><header class="bar"><span class="mini">VPS 哨兵</span><span class="grow"></span>
+    <button class="cap glass" data-logout>登出</button></header>
+    <div class="hero"><h1>VPS 哨兵</h1><div class="meta"><span class="live"></span>更新於 ${time}</div></div>
+    ${summary(n, many)}
+    <div class="grid">${shown.length ? shown.map(mcard).join("") : `<div class="empty">這個分類目前沒有主機 👍</div>`}</div></div>`;
+}
+
+/* ═════════ 電腦版 ═════════ */
+function hostItem(s, on){
+  const lv = lvOf(s);
+  let h = `<button class="host ${on?"on":""}" data-sel="${esc(keyOf(s))}" data-key="${esc(keyOf(s))}"><div class="hn"><span class="dot ${lv}"></span>${flag(s.geo&&s.geo.cc)}<span class="nm">${esc(s.name)}</span></div>`;
+  if (!s.online) return h + `<div class="hs">連不上</div></button>`;
+  h += `<div class="hs">${esc(place(s) || s.os)}</div><div class="minis">
+    <div><div class="k">處理器<b>${num(s.cpu)}%</b></div>${track(s.cpu)}</div>
+    <div><div class="k">記憶體<b>${num(s.mem.pct)}%</b></div>${track(s.mem.pct)}</div></div>`;
+  return h + `</button>`;
+}
+function detail(s){
+  const key = keyOf(s);
+  let h = `<div class="detail" data-key="d-${esc(key)}">`;
+  const where = place(s);
+  h += `<div class="panel glass dhead" style="--i:0"><div class="who"><span class="dot ${lvOf(s)}"></span>${flag(s.geo&&s.geo.cc)}
+      <div style="min-width:0"><div style="display:flex;align-items:center;gap:8px"><h2>${esc(s.name)}</h2>${editBtn(s)}</div>
+      <div class="sub">${s.online ? `${where?esc(where)+"・":""}${esc(s.os)}・開機 ${up(s.uptime)}` : "連不上這台主機"}</div></div></div>
+      ${s.online ? `<div class="act">${updateFoot(s).replace('class="foot"','class="foot-in" style="display:flex;align-items:center;gap:14px"')}</div>` : ""}</div>`;
+  if (!s.online) return h + `<div class="panel glass bigoff" style="--i:1"><b>⚠️ 連不上這台主機</b>${esc(s.error||"")}</div></div>`;
+  h += alerts(s);
+  const d0 = s.disks[0] || {pct:0, used:0, total:0};
+  h += `<div class="gauges">${ring("處理器", s.cpu, `${s.cores} 核・負載 ${s.load.map(x=>x.toFixed(2)).join(" / ")}`, 1)}
+        ${ring("記憶體", s.mem.pct, `${size(s.mem.used)} / ${size(s.mem.total)}`, 2)}
+        ${ring("磁碟", d0.pct, `${size(d0.used)} / ${size(d0.total)}`, 3)}</div>`;
+  const hs = s.hist || {}, from = span(hs);
+  h += `<div class="charts">
+    <div class="panel glass" style="--i:4"><div class="ph"><h3>處理器與記憶體</h3><div class="legend">
+      <span><i style="background:${C.cpu}"></i>處理器<b>${num(s.cpu)}%</b></span><span><i style="background:${C.mem}"></i>記憶體<b>${num(s.mem.pct)}%</b></span></div></div>
+      <div class="cbox">${chart(cid(s,"a"), [{data:hs.cpu,color:C.cpu},{data:hs.mem,color:C.mem}], {max:100, grid:1})}</div>
+      ${from?`<div class="xl"><span>${from}</span><span>現在</span></div>`:""}</div>
+    <div class="panel glass" style="--i:5"><div class="ph"><h3>網路流量</h3><div class="legend">
+      <span><i style="background:${C.rx}"></i>下載<b>${rate(s.net.rx)}</b></span><span><i style="background:${C.tx}"></i>上傳<b>${rate(s.net.tx)}</b></span></div></div>
+      <div class="cbox">${chart(cid(s,"b"), [{data:hs.rx,color:C.rx},{data:hs.tx,color:C.tx}], {grid:1})}</div>
+      ${from?`<div class="xl"><span>${from}</span><span>現在</span></div>`:""}</div></div>`;
+  const items = itemsOf(s);
+  h += `<div class="lower"><div class="panel glass" style="--i:6"><div class="ph"><h3>容器與服務</h3><span class="sub">${items.length?itemsSummary(items).replace(/<b>/,'<b style="color:var(--bad)">'):""}</span></div>
+      ${items.length ? `<div class="tbl">${items.map(itemRow).join("")}</div>` : `<div class="sub">沒有偵測到容器或服務</div>`}</div>
+    <div class="panel glass" style="--i:7"><div class="ph"><h3>系統資訊</h3></div><dl class="kv">
+      <dt>作業系統</dt><dd>${esc(s.os)}</dd><dt>核心版本</dt><dd>${esc(s.kernel)}</dd>
+      ${where?`<dt>位置</dt><dd>${esc(where)}</dd>`:""}${s.geo&&s.geo.org?`<dt>供應商</dt><dd>${esc(s.geo.org)}</dd>`:""}
+      <dt>處理器</dt><dd>${s.cores} 核</dd><dt>負載</dt><dd>${s.load.map(x=>x.toFixed(2)).join(" / ")}</dd>
+      <dt>開機時間</dt><dd>${up(s.uptime)}</dd>
+      ${s.disks.map(d=>`<dt>磁碟 ${esc(d.path)}</dt><dd>${size(d.used)} / ${size(d.total)}</dd>`).join("")}
+      ${s.mem.swap_total?`<dt>虛擬記憶體</dt><dd>${size(s.mem.swap_used)} / ${size(s.mem.swap_total)}</dd>`:""}
+    </dl></div></div>`;
+  return h + `</div>`;
+}
+function renderDesk(list, n, time){
+  const sel = list.find(s=>keyOf(s)===SEL) || list[0];
+  return `<div class="dash d" data-key="d"><aside class="side glass">
+      <div class="brand"><img src="/icon.svg" alt=""><div><h1>VPS 哨兵</h1><div class="meta"><span class="live"></span>更新於 ${time}</div></div></div>
+      ${summary(n, false)}
+      <div class="hosts">${list.map(s=>hostItem(s, s===sel)).join("")}</div>
+      <div class="side-foot"><span>${list.length} 台主機</span><button class="cap glass" data-logout>登出</button></div>
+    </aside>${sel ? detail(sel) : ""}</div>`;
+}
+
+/* ───────── 只更新有變動的地方 ───────── */
 function tween(el, from, to, d){
   const t0 = performance.now(), dur = 700;
   cancelAnimationFrame(el._raf);
@@ -879,18 +1113,15 @@ function morph(a, b){
 }
 
 function render(list){
-  const n = {ok:0,warn:0,bad:0}; list.forEach(s=>n[s.level||(s.online?"ok":"bad")]++);
-  const time = new Date().toLocaleTimeString("zh-TW",{hour12:false});
-  const html = `<div class="dash"><header class="bar"><span class="mini">VPS 哨兵</span><span class="grow"></span>
-    <button class="cap glass" data-logout>登出</button></header>
-    <div class="hero"><h1>VPS 哨兵</h1><div class="meta"><span class="live"></span>更新於 ${time}</div></div>
-    <div class="summary"><span class="pill glass"><span class="dot ok"></span>正常 <b>${n.ok}</b></span>
-    <span class="pill glass"><span class="dot warn"></span>注意 <b>${n.warn}</b></span><span class="pill glass"><span class="dot bad"></span>異常 <b>${n.bad}</b></span></div>
-    <div class="grid">${list.map(card).join("")}</div></div>`;
+  LIST = list;
+  const n = {ok:0,warn:0,bad:0}; list.forEach(s=>n[lvOf(s)]++);
+  if (!LAST || list.length) LAST = new Date().toLocaleTimeString("zh-TW",{hour12:false});
+  const html = DESK.matches ? renderDesk(list, n, LAST) : renderMobile(list, n, LAST);
   const tpl = document.createElement("template"); tpl.innerHTML = html.trim();
   const cur = $("#app .dash");
   if (cur) morph(cur, tpl.content.firstElementChild); else { $("#app").innerHTML = ""; $("#app").appendChild(tpl.content.firstElementChild); }
 }
+DESK.addEventListener("change", () => { if (LIST.length) render(LIST); });
 
 function login(msg){
   $("#app").innerHTML = `<div class="login glass ${msg?"shake":""}"><img class="logo" src="/icon.svg" alt=""><h1>VPS 哨兵</h1>
@@ -905,6 +1136,11 @@ document.addEventListener("click", async e => {
   if (t.closest("[data-logout]")) { setTok(""); clearTimeout(timer); return login(); }
   const tg = t.closest("[data-toggle]");
   if (tg) { const k = tg.dataset.toggle; open[k] = !open[k]; tg.parentElement.classList.toggle("open", open[k]); return; }
+  const fl = t.closest("[data-filter]");
+  if (fl) { FILTER = FILTER===fl.dataset.filter ? "" : fl.dataset.filter; return render(LIST); }
+  if (t.closest(".edit")) { /* 交給下面的改名 */ }
+  else { const hs = t.closest("[data-sel]");
+    if (hs) { SEL = hs.dataset.sel; store("vps-sel", SEL); scrollTo({top:0, behavior:"smooth"}); return render(LIST); } }
 
   const rn = t.closest("[data-rename]");
   if (rn) {
@@ -946,7 +1182,7 @@ async function tick(){
     if (r.status === 401) { setTok(""); return login("密碼錯誤"); }
     render(await r.json());
   } catch(e) {
-    const m = document.querySelector(".hero .meta"); if (m) m.innerHTML = `<span class="live off"></span>連線中斷，重試中…`;
+    const m = document.querySelector(".hero .meta, .brand .meta"); if (m) m.innerHTML = `<span class="live off"></span>連線中斷，重試中…`;
   }
   timer = setTimeout(tick, 5000);
 }
