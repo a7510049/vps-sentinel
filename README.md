@@ -17,7 +17,19 @@ cd vps-sentinel && sudo bash install.sh
 最後會印出一個網址，用手機打開就好（第一次會自動記住密碼）。
 在 iPhone Safari 按「分享 → 加入主畫面」，就會變成一個 App 圖示。
 
-> 如果 VPS 有裝 Tailscale，程式會自動只開在 Tailscale 內網，外人連不到。
+## 加密連線（建議，需要一個網域）
+
+一般安裝是 `http://IP:8787`，沒有加密。如果你有網域，可以改成 `https://你的網域`：
+
+1. 到網域商新增一筆 **A 紀錄**，指向這台 VPS 的 IP
+2. 在 VPS 上執行：
+
+```bash
+cd vps-sentinel && sudo bash install.sh 你的網域
+```
+
+腳本會自動安裝 Caddy（一個會自動申請免費加密憑證的小程式），
+並把哨兵改成只能透過 https 連線。之後更新只要 `sudo bash install.sh`，不用再打網域。
 
 ## 會看到什麼
 
