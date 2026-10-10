@@ -72,8 +72,18 @@ def parse_peers(raw):
             continue
         name, rest = item.split("=", 1)
         url, _, tok = rest.partition("|")
-        peers.append({"name": name.strip(), "url": url.strip().rstrip("/"),
-                      "token": tok.strip() or TOKEN})
+        url = url.strip()
+        if "://" not in url:
+            url = "http://" + url
+        # 容錯：直接貼上手機用的網址（含 ?t=密碼）也可以
+        u = urllib.parse.urlsplit(url)
+        qtok = urllib.parse.parse_qs(u.query).get("t", [""])[0]
+        path = u.path.rstrip("/")
+        for tail in ("/api/status", "/api/all", "/index.html"):
+            if path.endswith(tail):
+                path = path[: -len(tail)]
+        peers.append({"name": name.strip(), "url": f"{u.scheme}://{u.netloc}{path}",
+                      "token": tok.strip() or qtok or TOKEN})
     return peers
 
 
@@ -453,7 +463,29 @@ def fetch_peer(p):
         return data
     except Exception as e:  # noqa: BLE001
         return {"name": p["name"], "node": p["name"], "online": False, "level": "bad",
-                "problems": ["連不上"], "error": str(e)[:120]}
+                "problems": ["連不上"], "error": peer_error(e, p["url"])}
+
+
+def peer_error(e, url):
+    """把連線錯誤翻成看得懂的中文"""
+    text = str(e)
+    if isinstance(e, urllib.error.HTTPError):
+        if e.code == 401:
+            return "密碼不對：請在 PEERS 網址後面加上「|那台的密碼」"
+        if e.code == 404:
+            return f"這個網址不是 VPS 哨兵（{url}），請確認網址和連接埠"
+        return f"對方回應錯誤（代碼 {e.code}）"
+    if isinstance(e, ValueError):          # 回傳的不是哨兵的資料
+        return f"這個網址打得開，但不是 VPS 哨兵（{url}）。請確認網址後面的連接埠，例如 https://網域:9443"
+    if "timed out" in text or "timeout" in text.lower():
+        return "等太久沒有回應：請確認對方開著，防火牆有開放這個連接埠"
+    if "refused" in text:
+        return "對方拒絕連線：請確認對方有安裝哨兵，或連接埠打錯了"
+    if "Name or service not known" in text or "getaddrinfo" in text or "nodename" in text:
+        return "找不到這個網域：請確認網址有沒有打錯"
+    if "CERTIFICATE" in text.upper() or "SSL" in text.upper():
+        return "加密憑證有問題：對方可能還在申請憑證，等幾分鐘再看看"
+    return text[:150]
 
 
 POOL = ThreadPoolExecutor(max_workers=8)
