@@ -1115,7 +1115,6 @@ button{font:inherit;color:inherit}
 
 /* ═════════ 圖表 ═════════ */
 .chart{width:100%;display:block;overflow:visible}
-.chart path{transition:d .9s cubic-bezier(.22,1,.36,1)}
 .gl{stroke:var(--line);stroke-width:1;vector-effect:non-scaling-stroke;stroke-dasharray:3 5}
 .wait{display:grid;place-items:center;color:var(--sub);font-size:12.5px}
 .xl{display:flex;justify-content:space-between;color:var(--faint);font-size:11.5px;margin-top:6px;font-weight:600}
@@ -1536,7 +1535,6 @@ html::-webkit-scrollbar-thumb{background:color-mix(in srgb,var(--text) 22%,trans
 [data-lite="on"] .sheet,[data-lite="on"] .dialog,[data-lite="on"] .toast{background:color-mix(in srgb,var(--bg) 92%,var(--glass))}
 [data-lite="on"][data-mode="dark"] .sheet,[data-lite="on"][data-mode="dark"] .dialog,[data-lite="on"][data-mode="dark"] .toast{background:color-mix(in srgb,#1a1f2e 94%,var(--a2))}
 [data-lite="on"] .card,[data-lite="on"] .panel{transform:translateZ(0)}
-[data-lite="on"] .chart path{transition:none}
 .xfade{position:fixed;inset:0;z-index:45;pointer-events:none;animation:fadeOut .45s cubic-bezier(.4,0,.2,1) forwards}
 /* ═════════ 無障礙／關閉動畫 ═════════ */
 [data-motion="off"] *,[data-motion="off"] *::before,[data-motion="off"] *::after{animation:none!important;transition:none!important}
@@ -1776,7 +1774,30 @@ function pathOf(vals, W, H, max){
   const d = vals.map((v,i)=>`${i?"L":"M"}${(i/(n-1)*W).toFixed(1)},${y(v).toFixed(1)}`).join(" ");
   return {line:d, area:`${d} L${W},${H} L0,${H} Z`};
 }
+/* 換算成固定點數：點多就每段取平均（保留尖峰的一半高度），點少就線性補 */
+function resample(v, n){
+  if (!v || v.length < 2) return v;
+  if (v.length === n) return v;
+  const out = new Array(n);
+  if (v.length > n) {
+    const step = v.length / n;
+    for (let i = 0; i < n; i++) {
+      const a = Math.floor(i * step), b = Math.max(a + 1, Math.floor((i + 1) * step));
+      let sum = 0, mx = -Infinity;
+      for (let j = a; j < b; j++) { sum += v[j]; if (v[j] > mx) mx = v[j]; }
+      out[i] = (sum / (b - a) + mx) / 2;
+    }
+  } else {
+    for (let i = 0; i < n; i++) {
+      const p = i * (v.length - 1) / (n - 1), a = Math.floor(p), f = p - a;
+      out[i] = v[a] + ((v[a + 1] ?? v[a]) - v[a]) * f;
+    }
+  }
+  return out;
+}
 function chart(id, series, o={}){
+  const N = o.n || 150;
+  series = series.map(s => ({...s, data: resample(s.data, N)}));
   const W = 600, H = o.h || 170, all = series.flatMap(s=>s.data||[]);
   if (all.length < 4) return `<div class="wait" style="height:${H}px">收集資料中，約 1 分鐘後出現…</div>`;
   const max = o.max || Math.max(1, ...all) * 1.2;
@@ -1850,7 +1871,7 @@ function mcard(s, i){
        s.disks.map(d=>metric("disk", "磁碟"+(d.path==="/"?"":" "+esc(d.path)), d.pct, `${size(d.used)} / ${size(d.total)}`)).join("") + `</div>`;
   if (PREF.show.chart && s.hist) { const hh = histFor(s);
     h += `<div class="spark" data-key="sp"><div class="lbl"><span><i style="background:${COL.cpu};margin-left:0"></i>處理器<i style="background:${COL.mem}"></i>記憶體</span>${rangeSeg()}</div>
-      ${chartOr(hh, cid(s,"m"), x => [{data:x.cpu,color:COL.cpu},{data:x.mem,color:COL.mem}], {max:100, h:64, fade:.25, sw:2})}</div>`; }
+      ${chartOr(hh, cid(s,"m"), x => [{data:x.cpu,color:COL.cpu},{data:x.mem,color:COL.mem}], {max:100, h:64, fade:.25, sw:2, n:100})}</div>`; }
   h += `<div class="stats" data-key="st" data-keyed><div class="stat" data-key="load"><div class="k">${IC("load")}負載</div><div class="v">${num(s.load[0],2)}</div></div>` +
        (PREF.show.net ? `<div class="stat" data-key="down"><div class="k">${IC("down")}下載</div><div class="v num">${rate(s.net.rx)}</div></div>
         <div class="stat" data-key="up"><div class="k">${IC("up")}上傳</div><div class="v num">${rate(s.net.tx)}</div></div>` : "") + `</div>`;
@@ -2037,6 +2058,26 @@ function skeleton(){
 }
 
 /* ═════════ 只更新有變動的地方 ═════════ */
+/* 曲線變形：兩條路徑的數字一一對應，每一格畫面算一次中間值（iPhone 也能動） */
+const NUM = /-?\d+(?:\.\d+)?/g;
+function morphPath(el, from, to){
+  cancelAnimationFrame(el._praf);
+  const cur = el._pcur || from;                 // 上一次還沒變完的話，從目前的樣子接著變
+  const a = cur.match(NUM), parts = to.split(NUM), b = to.match(NUM);
+  if (!canAnim() || !a || !b || a.length !== b.length) { el._pcur = null; return false; }
+  const A = a.map(Number), B = b.map(Number), dur = el.closest(".spark") ? 520 : 650;
+  let t0 = null;
+  const step = now => {
+    if (t0 === null) t0 = now;
+    const k = Math.min(1, (now - t0) / dur), e = 1 - Math.pow(1 - k, 3);
+    let d = parts[0];
+    for (let i = 0; i < B.length; i++) d += (A[i] + (B[i] - A[i]) * e).toFixed(1) + parts[i + 1];
+    el.setAttribute("d", d); el._pcur = d;
+    if (k < 1) el._praf = requestAnimationFrame(step); else { el.setAttribute("d", to); el._pcur = null; }
+  };
+  el._praf = requestAnimationFrame(step);
+  return true;
+}
 function tween(el, from, to, d){
   cancelAnimationFrame(el._raf);
   if (!isFinite(from) || !isFinite(to) || !canAnim()) { el.textContent = (+to).toFixed(d); return; }
@@ -2164,6 +2205,7 @@ function patch(a, b){
   for (const at of [...a.attributes]) if (!b.hasAttribute(at.name)) a.removeAttribute(at.name);
   for (const at of [...b.attributes]) if (a.getAttribute(at.name)!==at.value){
     if (at.name==="data-v") tween(a, parseFloat(a.getAttribute("data-v"))||0, parseFloat(at.value)||0, +b.getAttribute("data-d")||0);
+    if (at.name==="d" && a.tagName==="path" && morphPath(a, a.getAttribute("d"), at.value)) continue;
     a.setAttribute(at.name, at.value);
   }
   if (a.hasAttribute("data-v")) return;
