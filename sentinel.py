@@ -750,7 +750,8 @@ button{font:inherit;color:inherit}
 .spin{width:13px;height:13px;border:2px solid currentColor;border-right-color:transparent;border-radius:50%;animation:sp .8s linear infinite}
 @keyframes sp{to{transform:rotate(360deg)}}
 @keyframes rise{from{opacity:0;transform:translateY(18px) scale(.975);filter:blur(5px)}}
-@keyframes fade{from{opacity:0}}
+@keyframes fadeIn{from{opacity:0}}
+@keyframes fadeOut{to{opacity:0}}
 
 /* ═════════ 進度條 ═════════ */
 .track{height:8px;background:var(--track);border-radius:99px;overflow:hidden}
@@ -837,7 +838,7 @@ button{font:inherit;color:inherit}
 .metric .row b{font-size:16px;font-weight:900}
 .metric .row b small{font-size:12px;opacity:.6;margin-left:1px}
 .metric .row .sub{font-weight:600;margin-left:6px;font-size:12px}
-.spark{margin-top:16px;padding:12px 12px 6px;border-radius:18px;background:var(--glass2);box-shadow:inset 0 0 0 1px var(--line)}
+.spark{animation:rise .6s cubic-bezier(.22,1,.36,1) both;margin-top:16px;padding:12px 12px 6px;border-radius:18px;background:var(--glass2);box-shadow:inset 0 0 0 1px var(--line)}
 .spark .lbl{display:flex;justify-content:space-between;font-size:11.5px;color:var(--sub);margin-bottom:6px;font-weight:700}
 .spark .lbl i{display:inline-block;width:7px;height:7px;border-radius:50%;margin:0 4px 0 9px}
 .stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(90px,1fr));gap:8px;margin-top:12px}
@@ -960,10 +961,11 @@ button{font:inherit;color:inherit}
 
 /* ═════════ 對話框、設定面板、通知 ═════════ */
 .veil{position:fixed;inset:0;z-index:50;background:var(--veil);-webkit-backdrop-filter:blur(6px);backdrop-filter:blur(6px);
-  display:flex;align-items:center;justify-content:center;padding:20px;animation:fade .3s both}
-.veil.closing{animation:fade .25s reverse both}
+  display:flex;align-items:center;justify-content:center;padding:20px;animation:fadeIn .35s ease both}
+.veil.closing{animation:fadeOut .32s ease forwards;pointer-events:none}
 .dialog{width:100%;max-width:360px;border-radius:30px;padding:24px 22px 18px;text-align:center;animation:pop .45s cubic-bezier(.34,1.4,.64,1) both}
-.closing .dialog{animation:pop .25s reverse both}
+.closing .dialog{animation:popOut .26s cubic-bezier(.4,0,1,1) forwards}
+@keyframes popOut{to{opacity:0;transform:scale(.93) translateY(8px)}}
 @keyframes pop{from{opacity:0;transform:scale(.9) translateY(10px)}}
 .dialog .big{width:52px;height:52px;border-radius:16px;margin:0 auto 12px}
 .dialog .big svg{width:26px;height:26px}
@@ -975,15 +977,22 @@ button{font:inherit;color:inherit}
 
 .veil.sheetv{align-items:flex-end;justify-content:flex-end;padding:0}
 .sheet{width:100%;max-height:88vh;overflow:auto;border-radius:30px 30px 0 0;padding:10px 18px calc(env(safe-area-inset-bottom) + 22px);
-  animation:slideup .55s cubic-bezier(.22,1,.36,1) both}
-.closing .sheet{animation:slideup .3s reverse both}
+  animation:slideup .6s cubic-bezier(.22,1,.36,1) both;will-change:transform}
+.sheet.ready{animation:none}
+.closing .sheet{animation:sheetDown .38s cubic-bezier(.4,0,.6,1) forwards}
+.sheet.back{transition:transform .5s cubic-bezier(.34,1.3,.64,1)}
 @keyframes slideup{from{transform:translateY(100%)}}
+@keyframes sheetDown{to{transform:translateY(105%)}}
 @media (min-width:1024px){
   .veil.sheetv{align-items:stretch;padding:16px}
   .sheet{width:400px;max-height:none;border-radius:30px;padding:10px 22px 22px;animation-name:slidein}
+  .closing .sheet{animation-name:sheetRight}
+  .grab{visibility:hidden}
   @keyframes slidein{from{transform:translateX(110%)}}
+  @keyframes sheetRight{to{transform:translateX(110%)}}
 }
-.grab{width:40px;height:5px;border-radius:9px;background:var(--faint);margin:2px auto 10px}
+.grab{width:40px;height:5px;border-radius:9px;background:var(--faint);margin:2px auto 10px;touch-action:none;cursor:grab}
+.sheet .top{touch-action:none}
 .sheet .top{display:flex;align-items:center;justify-content:space-between;margin:6px 0 10px}
 .sheet h3{font-size:22px;font-weight:900}
 .sec{margin-top:18px}
@@ -993,15 +1002,22 @@ button{font:inherit;color:inherit}
 .opt+.opt{border-top:1px solid var(--line)}
 .opt .lab{flex:1}
 .opt .lab small{display:block;font-size:11.5px;color:var(--sub);font-weight:600}
-.seg{display:flex;background:var(--track);border-radius:12px;padding:3px;gap:2px}
+.seg{display:flex;background:var(--track);border-radius:12px;padding:3px;gap:2px;position:relative;isolation:isolate}
+.seg .ind{position:absolute;top:3px;bottom:3px;left:0;width:0;border-radius:9px;z-index:-1;background:var(--glass);
+  box-shadow:0 2px 8px -2px rgba(0,0,0,.28),inset 0 0 0 1px var(--rim);
+  transition:transform .5s cubic-bezier(.34,1.25,.64,1),width .5s cubic-bezier(.34,1.25,.64,1)}
+.seg.noanim .ind{transition:none}
+[data-mode="light"] .seg .ind{background:#fff}
 .seg button{border:0;background:transparent;cursor:pointer;border-radius:9px;padding:6px 11px;font-size:12.5px;font-weight:800;color:var(--sub);
-  transition:background .3s,color .3s,box-shadow .3s}
-.seg button.on{background:var(--glass);color:var(--text);box-shadow:0 2px 8px -2px rgba(0,0,0,.25),inset 0 0 0 1px var(--rim)}
-[data-mode="light"] .seg button.on{background:#fff}
+  transition:color .35s,transform .3s cubic-bezier(.34,1.56,.64,1)}
+.seg button:active{transform:scale(.92)}
+.seg button.on{color:var(--text)}
 .sw{display:flex;gap:10px}
 .sw button{width:28px;height:28px;border-radius:50%;border:0;cursor:pointer;position:relative;transition:transform .3s cubic-bezier(.34,1.56,.64,1)}
 .sw button:active{transform:scale(.85)}
-.sw button.on::after{content:"";position:absolute;inset:-5px;border-radius:50%;border:2.5px solid var(--text);opacity:.85}
+.sw button::after{content:"";position:absolute;inset:-5px;border-radius:50%;border:2.5px solid var(--text);opacity:0;transform:scale(.7);
+  transition:opacity .3s,transform .45s cubic-bezier(.34,1.56,.64,1)}
+.sw button.on::after{opacity:.85;transform:none}
 .tog{appearance:none;-webkit-appearance:none;width:50px;height:30px;border-radius:99px;background:var(--track);position:relative;cursor:pointer;flex:none;
   transition:background .3s;box-shadow:inset 0 0 0 1px var(--line)}
 .tog::after{content:"";position:absolute;top:3px;left:3px;width:24px;height:24px;border-radius:50%;background:#fff;
@@ -1015,11 +1031,13 @@ button{font:inherit;color:inherit}
   display:flex;flex-direction:column;align-items:center;gap:8px;pointer-events:none;width:max-content;max-width:92vw}
 .toast{border-radius:999px;padding:11px 18px 11px 14px;font-size:13.5px;font-weight:700;display:flex;align-items:center;gap:9px;
   animation:toastin .55s cubic-bezier(.34,1.4,.64,1) both}
-.toast.out{animation:toastin .3s reverse both}
+.toast.out{animation:toastOut .32s cubic-bezier(.4,0,1,1) forwards}
+@keyframes toastOut{to{opacity:0;transform:translateY(12px) scale(.94)}}
 .toast svg{width:18px;height:18px;flex:none}
 .toast.ok svg{color:var(--ok)}.toast.bad svg{color:var(--bad)}
 @keyframes toastin{from{opacity:0;transform:translateY(16px) scale(.92)}}
 
+::view-transition-old(root),::view-transition-new(root){animation-duration:.5s;animation-timing-function:cubic-bezier(.22,1,.36,1)}
 /* ═════════ 無障礙／關閉動畫 ═════════ */
 [data-motion="off"] *,[data-motion="off"] *::before,[data-motion="off"] *::after{animation:none!important;transition:none!important}
 @media (prefers-reduced-motion:reduce){*,*::before,*::after{animation:none!important;transition:none!important}}
@@ -1337,21 +1355,27 @@ function modal({icon, cls="box", title, text, input, ok="確定", cancel="取消
       <div class="btns"><button class="ubtn ghost" data-r="0">${cancel}</button><button class="ubtn" data-r="1">${ok}</button></div></div>`;
     $("#layer").appendChild(v);
     const inp = v.querySelector("input");
-    const done = r => { if (v._d) return; v._d = 1; v.classList.add("closing"); setTimeout(()=>v.remove(), 260); res(r ? (inp ? inp.value : true) : null); };
+    const done = r => { if (v._d) return; v._d = 1; v.classList.add("closing"); setTimeout(()=>v.remove(), 340); res(r ? (inp ? inp.value : true) : null); };
+    v._esc = () => done(0);
     if (inp) { setTimeout(()=>{ inp.focus(); inp.select(); }, 60); inp.addEventListener("keydown", e => { if (e.key==="Enter") done(1); if (e.key==="Escape") done(0); }); }
     v.addEventListener("click", e => { if (e.target === v) return done(0); const b = e.target.closest("[data-r]"); if (b) done(+b.dataset.r); });
   });
+}
+/* 整頁平順切換：支援的瀏覽器會淡入淡出，不支援就直接換 */
+function smooth(fn){
+  const ok = document.startViewTransition && PREF.motion && !matchMedia("(prefers-reduced-motion: reduce)").matches;
+  ok ? document.startViewTransition(fn) : fn();
 }
 function toast(msg, type="ok"){
   const t = document.createElement("div"); t.className = `toast glass ${type}`;
   t.innerHTML = `${I(type==="ok"?"ok":"warn")}<span>${esc(msg)}</span>`;
   $("#toasts").appendChild(t);
-  setTimeout(()=>{ t.classList.add("out"); setTimeout(()=>t.remove(), 300); }, 2600);
+  setTimeout(()=>{ t.classList.add("out"); setTimeout(()=>t.remove(), 340); }, 2600);
 }
 
 /* ═════════ 設定面板 ═════════ */
 function settingsBody(){
-  const seg = (k, opts) => `<div class="seg">${opts.map(([v,l])=>`<button class="${String(getP(k))===String(v)?"on":""}" data-pref="${k}" data-val="${v}">${l}</button>`).join("")}</div>`;
+  const seg = (k, opts) => `<div class="seg"><span class="ind"></span>${opts.map(([v,l])=>`<button class="${String(getP(k))===String(v)?"on":""}" data-pref="${k}" data-val="${v}">${l}</button>`).join("")}</div>`;
   const tog = k => `<input type="checkbox" class="tog" data-pref="${k}" ${getP(k)?"checked":""}>`;
   const sw = [["blue","#38bdf8,#6366f1"],["purple","#a78bfa,#d946ef"],["green","#34d399,#14b8a6"],["orange","#fbbf24,#f97316"],["pink","#f472b6,#f43f5e"]]
     .map(([v,c])=>`<button class="${PREF.accent===v?"on":""}" data-pref="accent" data-val="${v}" style="background:linear-gradient(135deg,${c})" title="${v}"></button>`).join("");
@@ -1381,27 +1405,69 @@ function settingsBody(){
   <button class="ubtn ghost reset" data-reset>恢復預設值</button>
   <p class="sub" style="text-align:center;margin-top:12px">這些設定只會存在這台裝置上</p>`;
 }
+function moveInd(seg){
+  const on = seg.querySelector("button.on"), ind = seg.querySelector(".ind");
+  if (!on || !ind) return;
+  ind.style.width = on.offsetWidth + "px"; ind.style.transform = `translateX(${on.offsetLeft}px)`;
+}
+function initSegs(root){
+  root.querySelectorAll(".seg").forEach(sg => { sg.classList.add("noanim"); moveInd(sg); });
+  requestAnimationFrame(() => requestAnimationFrame(() => root.querySelectorAll(".seg").forEach(sg => sg.classList.remove("noanim"))));
+}
 function openSettings(){
   if ($(".sheetv")) return;
   const v = document.createElement("div"); v.className = "veil sheetv";
   v.innerHTML = `<div class="sheet glass"><div class="grab"></div><div class="top"><h3>外觀與設定</h3><button class="iconbtn" data-close>${I("x")}</button></div><div class="sbody">${settingsBody()}</div></div>`;
   $("#layer").appendChild(v);
-  const close = () => { if (v._d) return; v._d = 1; v.classList.add("closing"); setTimeout(()=>v.remove(), 300); };
+  const sheet = v.querySelector(".sheet"), body = v.querySelector(".sbody");
+  initSegs(body);
+  sheet.addEventListener("animationend", e => { if (e.target === sheet && !v._d) sheet.classList.add("ready"); });
+  const close = () => { if (v._d) return; v._d = 1; sheet.classList.remove("back"); v.classList.add("closing"); setTimeout(()=>v.remove(), 380); };
+  v._esc = close;
+
   v.addEventListener("click", e => {
     if (e.target === v || e.target.closest("[data-close]")) return close();
     const b = e.target.closest("[data-val]");
-    if (b) { const raw = b.dataset.val; setP(b.dataset.pref, /^\d+$/.test(raw) ? +raw : raw); changed(b.dataset.pref); }
-    if (e.target.closest("[data-reset]")) { PREF = JSON.parse(JSON.stringify(DEF)); store("vps-prefs", JSON.stringify(PREF)); changed("all"); toast("已恢復預設值"); }
+    if (b) {
+      const raw = b.dataset.val, k = b.dataset.pref;
+      if (String(getP(k)) === raw) return;
+      setP(k, /^\d+$/.test(raw) ? +raw : raw);
+      const box = b.parentElement;                 // 原地切換，不重畫整個面板
+      box.querySelectorAll("button").forEach(x => x.classList.toggle("on", x === b));
+      if (box.classList.contains("seg")) moveInd(box);
+      changed(k);
+    }
+    if (e.target.closest("[data-reset]")) {
+      PREF = JSON.parse(JSON.stringify(DEF)); store("vps-prefs", JSON.stringify(PREF));
+      smooth(() => { body.innerHTML = settingsBody(); initSegs(body); applyPrefs(); if (LIST.length) render(LIST); });
+      restart(); toast("已恢復預設值");
+    }
   });
-  v.addEventListener("change", e => { const t = e.target; if (t.classList.contains("tog")) { setP(t.dataset.pref, t.checked); changed(t.dataset.pref); } });
+  v.addEventListener("change", e => { const t = e.target; if (t.classList.contains("tog")) { setP(t.dataset.pref, t.checked); setTimeout(() => changed(t.dataset.pref), 180); } });
   v.addEventListener("input", e => { const t = e.target; if (t.type === "range") { setP("glass", +t.value); applyPrefs(); } });
+
+  // 手機：往下滑關閉
+  let y0 = null, dy = 0, t0 = 0;
+  const startDrag = e => { if (DESK.matches || e.target.closest("button")) return; y0 = e.clientY; dy = 0; t0 = performance.now();
+    sheet.classList.add("ready"); sheet.classList.remove("back"); sheet.style.transition = "none"; sheet.setPointerCapture?.(e.pointerId); };
+  const moveDrag = e => { if (y0 === null) return; dy = Math.max(0, e.clientY - y0); sheet.style.transform = `translateY(${dy}px)`;
+    v.style.opacity = String(1 - Math.min(dy / 600, .5)); };
+  const endDrag = () => { if (y0 === null) return; y0 = null; sheet.style.transition = "";
+    const fast = dy / Math.max(1, performance.now() - t0) > .6;
+    if (dy > 120 || (fast && dy > 30)) { v.style.opacity = ""; close(); }
+    else { sheet.classList.add("back"); sheet.style.transform = ""; v.style.opacity = ""; } };
+  [".grab", ".top"].forEach(sel => sheet.querySelector(sel).addEventListener("pointerdown", startDrag));
+  sheet.addEventListener("pointermove", moveDrag); sheet.addEventListener("pointerup", endDrag); sheet.addEventListener("pointercancel", endDrag);
+
   function changed(k){
-    applyPrefs();
-    v.querySelector(".sbody").innerHTML = settingsBody();
-    if (k === "refresh" || k === "all") { clearTimeout(timer); timer = setTimeout(tick, PREF.refresh*1000); }
-    if (LIST.length) render(LIST);
+    const big = ["theme","accent","bg","size","density"].includes(k) || k.startsWith("show.");
+    const run = () => { applyPrefs(); if (LIST.length) render(LIST); };
+    big ? smooth(run) : run();
+    if (k === "refresh") restart();
   }
 }
+function restart(){ clearTimeout(timer); timer = setTimeout(tick, (PREF.refresh || 5) * 1000); }
+addEventListener("keydown", e => { if (e.key === "Escape") { const v = [...document.querySelectorAll("#layer .veil")].pop(); if (v && v._esc) v._esc(); } });
 
 /* ═════════ 登入 ═════════ */
 function login(msg){
@@ -1424,7 +1490,7 @@ document.addEventListener("click", async e => {
   const tg = t.closest("[data-toggle]");
   if (tg) { const k = tg.dataset.toggle; open[k] = !open[k]; tg.parentElement.classList.toggle("open", open[k]); return; }
   const fl = t.closest("[data-filter]");
-  if (fl) { FILTER = FILTER===fl.dataset.filter ? "" : fl.dataset.filter; return render(LIST); }
+  if (fl) { FILTER = FILTER===fl.dataset.filter ? "" : fl.dataset.filter; return smooth(() => render(LIST)); }
 
   const rn = t.closest("[data-rename]");
   if (rn) {
