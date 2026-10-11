@@ -657,7 +657,8 @@ PAGE = r"""<!doctype html>
   --bg:#eef1f7; --text:#101828; --sub:rgba(16,24,40,.55); --faint:rgba(16,24,40,.35); --line:rgba(16,24,40,.08);
   --ga:.56; --glass:rgba(255,255,255,var(--ga)); --glass2:rgba(255,255,255,calc(var(--ga) * .7));
   --blur:28px; --spec:rgba(255,255,255,.95); --rim:rgba(255,255,255,.6); --edge:rgba(16,24,60,.07);
-  --shadow:0 1px 2px rgba(16,24,60,.04),0 12px 32px -14px rgba(30,50,110,.22);
+  --shadow:0 1px 3px rgba(16,24,60,.05),0 14px 36px -16px rgba(30,50,110,.26);
+  --hi1:rgba(255,255,255,.95); --hi2:rgba(255,255,255,.55); --hi3:rgba(255,255,255,.22); --hi4:rgba(255,255,255,.6);
   --track:rgba(16,24,60,.07); --veil:rgba(240,243,250,.5);
   --ok:#12b76a; --warn:#f79009; --bad:#f04438;
   --zoom:1; --pad:18px; --gap:16px;
@@ -667,7 +668,8 @@ PAGE = r"""<!doctype html>
   --bg:#06080f; --text:#f1f4fa; --sub:rgba(226,232,245,.58); --faint:rgba(226,232,245,.32); --line:rgba(255,255,255,.075);
   --ga:.07; --glass:rgba(255,255,255,var(--ga)); --glass2:rgba(255,255,255,calc(var(--ga) * .75));
   --spec:rgba(255,255,255,.26); --rim:rgba(255,255,255,.09); --edge:rgba(0,0,0,.5);
-  --shadow:0 1px 2px rgba(0,0,0,.3),0 22px 48px -22px rgba(0,0,0,.9);
+  --shadow:0 2px 6px -2px rgba(0,0,0,.35),0 24px 50px -24px rgba(0,0,0,.9);
+  --hi1:rgba(255,255,255,.34); --hi2:rgba(255,255,255,.09); --hi3:rgba(255,255,255,.03); --hi4:rgba(255,255,255,.13);
   --track:rgba(255,255,255,.07); --veil:rgba(4,6,12,.55);
   --ok:#32d583; --warn:#fdb022; --bad:#f97066;
 }
@@ -677,6 +679,7 @@ PAGE = r"""<!doctype html>
 [data-accent="green"] {--a1:#34d399; --a2:#14b8a6; --a3:#a3e635}
 [data-accent="orange"]{--a1:#fbbf24; --a2:#f97316; --a3:#fb7185}
 [data-accent="pink"]  {--a1:#f472b6; --a2:#f43f5e; --a3:#c084fc}
+[data-accent="flag"]  {--a1:#38bdf8; --a2:#6366f1; --a3:#22d3ee}
 :root{--accent:var(--a2); --grad:linear-gradient(135deg,var(--a1),var(--a2))}
 
 *{box-sizing:border-box;margin:0;-webkit-tap-highlight-color:transparent}
@@ -708,9 +711,14 @@ button{font:inherit;color:inherit}
 /* ═════════ 液態玻璃 ═════════ */
 .glass{position:relative;background:var(--glass);
   -webkit-backdrop-filter:blur(var(--blur)) saturate(170%);backdrop-filter:blur(var(--blur)) saturate(170%);
-  box-shadow:inset 0 1px 0 var(--spec),inset 0 0 0 1px var(--rim),0 0 0 1px var(--edge),var(--shadow)}
+  box-shadow:var(--shadow)}
 .glass::before{content:"";position:absolute;inset:0;border-radius:inherit;pointer-events:none;
-  background:linear-gradient(150deg,rgba(255,255,255,.2) 0%,rgba(255,255,255,0) 30%,rgba(255,255,255,0) 72%,rgba(255,255,255,.06) 100%);mix-blend-mode:overlay}
+  background:linear-gradient(150deg,rgba(255,255,255,.14) 0%,rgba(255,255,255,0) 32%,rgba(255,255,255,0) 72%,rgba(255,255,255,.05) 100%)}
+/* 光邊：上亮下淡的漸層，用遮罩只留 1px 邊，轉角會平滑反鋸齒 */
+.glass::after,.host.on::after{content:"";position:absolute;inset:0;border-radius:inherit;padding:1px;pointer-events:none;
+  background:linear-gradient(165deg,var(--hi1) 0%,var(--hi2) 28%,var(--hi3) 68%,var(--hi4) 100%);
+  -webkit-mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);-webkit-mask-composite:xor;
+  mask:linear-gradient(#000 0 0) content-box exclude,linear-gradient(#000 0 0)}
 
 /* ═════════ 共用小元件 ═════════ */
 .sub{color:var(--sub);font-size:12.5px}
@@ -795,14 +803,16 @@ button{font:inherit;color:inherit}
 .pill[data-filter]{cursor:pointer}.pill[data-filter]:active{transform:scale(.93)}
 .pill b{font-weight:900}
 .summary.filtering .pill{opacity:.45}
-.summary.filtering .pill.on{opacity:1;box-shadow:inset 0 1px 0 var(--spec),inset 0 0 0 1.5px var(--accent),0 0 0 1px var(--edge),var(--shadow)}
+.summary.filtering .pill.on{opacity:1;--hi1:var(--accent);--hi2:color-mix(in srgb,var(--accent) 70%,transparent);--hi3:color-mix(in srgb,var(--accent) 50%,transparent);--hi4:var(--accent);
+  box-shadow:0 0 18px -6px var(--accent),var(--shadow)}
 .empty{text-align:center;color:var(--sub);padding:50px 0;font-size:14px;grid-column:1/-1}
 
 /* ═════════ 卡片（手機） ═════════ */
 .grid{display:grid;gap:var(--gap);grid-template-columns:repeat(auto-fill,minmax(310px,1fr))}
 .card{border-radius:30px;padding:var(--pad);animation:rise .8s cubic-bezier(.22,1,.36,1) both;animation-delay:calc(var(--i,0) * 90ms)}
-.card.bad{box-shadow:inset 0 1px 0 var(--spec),inset 0 0 0 1.5px color-mix(in srgb,var(--bad) 65%,transparent),0 0 0 1px var(--edge),0 0 42px -14px var(--bad),var(--shadow)}
-.card.warn{box-shadow:inset 0 1px 0 var(--spec),inset 0 0 0 1.5px color-mix(in srgb,var(--warn) 55%,transparent),0 0 0 1px var(--edge),0 0 38px -16px var(--warn),var(--shadow)}
+.card.bad,.card.warn{--sc:var(--bad);--hi1:color-mix(in srgb,var(--sc) 95%,transparent);--hi2:color-mix(in srgb,var(--sc) 50%,transparent);
+  --hi3:color-mix(in srgb,var(--sc) 28%,transparent);--hi4:color-mix(in srgb,var(--sc) 60%,transparent);box-shadow:0 0 44px -16px var(--sc),var(--shadow)}
+.card.warn{--sc:var(--warn)}
 .head{display:flex;align-items:center;gap:10px}
 /* 狀態：國旗本身邊緣發光（綠＝正常、黃＝注意、紅＝異常），不加框 */
 .avatar{--st:var(--ok);display:grid;place-items:center;flex:none;width:34px;height:34px}
@@ -891,7 +901,7 @@ button{font:inherit;color:inherit}
 .host{border:0;background:transparent;text-align:left;cursor:pointer;border-radius:22px;padding:11px 12px;display:flex;flex-direction:column;gap:9px;
   transition:background .3s,box-shadow .3s,transform .3s cubic-bezier(.34,1.56,.64,1)}
 .host:hover{background:var(--track)}.host:active{transform:scale(.98)}
-.host.on{background:var(--glass);box-shadow:inset 0 1px 0 var(--spec),inset 0 0 0 1px var(--rim),0 10px 26px -14px rgba(0,0,0,.5)}
+.host.on{background:var(--glass);position:relative;box-shadow:0 10px 26px -14px rgba(0,0,0,.5)}
 .host .head{gap:11px}.host .avatar .flag{width:26px;height:19px;border-radius:5px}
 .host h2{font-size:14.5px}
 .minis{display:grid;grid-template-columns:1fr 1fr;gap:10px}
@@ -943,6 +953,7 @@ button{font:inherit;color:inherit}
 .skel{border-radius:30px;height:420px;overflow:hidden}
 .skel::after{content:"";position:absolute;inset:0;background:linear-gradient(100deg,transparent 30%,rgba(255,255,255,.08) 50%,transparent 70%);
   animation:shim 1.6s linear infinite;background-size:200% 100%}
+.skel::after{padding:0;-webkit-mask:none;mask:none}
 @keyframes shim{from{background-position:150% 0}to{background-position:-50% 0}}
 
 /* ═════════ 登入 ═════════ */
@@ -1012,7 +1023,8 @@ button{font:inherit;color:inherit}
   transition:color .35s,transform .3s cubic-bezier(.34,1.56,.64,1)}
 .seg button:active{transform:scale(.92)}
 .seg button.on{color:var(--text)}
-.sw{display:flex;gap:10px}
+.sw{display:flex;gap:10px;flex-wrap:wrap}
+.flagsw span{position:absolute;inset:0;display:grid;place-items:center;font-size:11px;font-weight:900;color:#fff;text-shadow:0 1px 3px rgba(0,0,0,.6)}
 .sw button{width:28px;height:28px;border-radius:50%;border:0;cursor:pointer;position:relative;transition:transform .3s cubic-bezier(.34,1.56,.64,1)}
 .sw button:active{transform:scale(.85)}
 .sw button::after{content:"";position:absolute;inset:-5px;border-radius:50%;border:2.5px solid var(--text);opacity:0;transform:scale(.7);
@@ -1091,6 +1103,34 @@ let PREF = (() => { try { const p = JSON.parse(store("vps-prefs") || "{}"); retu
 const getP = k => k.split(".").reduce((o,x)=>o && o[x], PREF);
 function setP(k, v){ const ks = k.split("."); let o = PREF; while (ks.length > 1) o = o[ks.shift()]; o[ks[0]] = v; store("vps-prefs", JSON.stringify(PREF)); }
 const DARKQ = matchMedia("(prefers-color-scheme: dark)");
+/* 各國國旗配色：[亮色, 主色, 輔助色] */
+const FLAGPAL = {
+  JP:["#ff7a8a","#d3002d","#ffb3c1"], HK:["#ff7b6e","#de2910","#ffc4bd"], SG:["#ff6b7a","#ef3340","#ffc2c9"],
+  TW:["#ff5a5a","#1f3fbf","#6b8cff"], CN:["#ffde00","#de2910","#ff8a3d"], KR:["#5b9bff","#cd2e3a","#0047a0"],
+  US:["#6b8cff","#b22234","#3c3b6e"], GB:["#5b7cff","#c8102e","#012169"], CA:["#ff6b6b","#d80621","#ffb3b3"],
+  AU:["#5b7cff","#e4002b","#012169"], NZ:["#5b7cff","#c8102e","#012169"], DE:["#ffce00","#dd0000","#ff8a00"],
+  FR:["#5b8cff","#ef4135","#0055a4"], NL:["#ff8a3d","#21468b","#ae1c28"], BE:["#fdda24","#ef3340","#ff9a3d"],
+  LU:["#00a1de","#ef3340","#7fd3f5"], CH:["#ff6b5e","#da291c","#ffc2bd"], AT:["#ff6b7a","#ed2939","#ffc2c9"],
+  IT:["#4ccf86","#ce2b37","#009246"], ES:["#f1bf00","#aa151b","#ff7a45"], PT:["#ffcc00","#da291c","#046a38"],
+  IE:["#ff883e","#169b62","#7fd6a8"], SE:["#fecc00","#006aa7","#4dabff"], NO:["#ff6b7a","#ba0c2f","#00205b"],
+  FI:["#7fb2ff","#002f6c","#cfe0ff"], DK:["#ff6b7a","#c8102e","#ffc2cc"], PL:["#ff6b8a","#dc143c","#ffc2cf"],
+  CZ:["#5b8cff","#d7141a","#11457e"], UA:["#ffd500","#0057b7","#4d9bff"], RU:["#5b8cff","#d52b1e","#0039a6"],
+  TR:["#ff5a63","#e30a17","#ffc2c5"], IL:["#6b9bff","#0038b8","#a8c8ff"], AE:["#4cc38a","#ff0000","#00732f"],
+  IN:["#ff9933","#138808","#4dd0a0"], VN:["#ffcd00","#da251d","#ff7a3d"], TH:["#6b7bff","#a51931","#2d2a4a"],
+  MY:["#ffcc00","#cc0001","#2b4bd9"], ID:["#ff6b6b","#ce1126","#ffc2c2"], PH:["#fcd116","#0038a8","#ce1126"],
+  BR:["#ffdf00","#009c3b","#3e7bff"], MX:["#4cc38a","#ce1126","#006847"], AR:["#74acdf","#2f6fb5","#f6b40e"],
+  CL:["#5b8cff","#d52b1e","#0039a6"], ZA:["#ffb612","#007749","#de3831"],
+};
+const FLAGDEF = ["#38bdf8","#6366f1","#22d3ee"];
+let FLAGCC = null;
+function flagCC(){ const s = LIST.find(x=>keyOf(x)===SEL) || LIST[0]; return (s && s.geo && s.geo.cc) || ""; }
+function flagAccent(){
+  const h = document.documentElement;
+  if (PREF.accent !== "flag") { if (FLAGCC !== null) { ["--a1","--a2","--a3"].forEach(k=>h.style.removeProperty(k)); FLAGCC = null; } return; }
+  const cc = flagCC(); if (cc === FLAGCC) return;
+  FLAGCC = cc; const p = FLAGPAL[cc] || FLAGDEF;
+  h.style.setProperty("--a1", p[0]); h.style.setProperty("--a2", p[1]); h.style.setProperty("--a3", p[2]);
+}
 function applyPrefs(){
   const h = document.documentElement, dark = PREF.theme === "dark" || (PREF.theme === "auto" && DARKQ.matches), g = PREF.glass / 100;
   h.dataset.mode = dark ? "dark" : "light"; h.dataset.accent = PREF.accent; h.dataset.bg = PREF.bg;
@@ -1099,6 +1139,7 @@ function applyPrefs(){
   h.style.setProperty("--blur", Math.round(14 + g * 26) + "px");
   h.style.setProperty("--zoom", {s:.92, m:1, l:1.1}[PREF.size] || 1);
   document.querySelector('meta[name="theme-color"]').content = dark ? "#06080f" : "#eef1f7";
+  try { flagAccent(); } catch(e) {}   /* 第一次執行時主機清單還沒準備好 */
 }
 DARKQ.addEventListener("change", applyPrefs);
 applyPrefs();
@@ -1339,7 +1380,7 @@ function paint(html){
   if (cur) morph(cur, tpl.content.firstElementChild); else { $("#app").innerHTML = ""; $("#app").appendChild(tpl.content.firstElementChild); }
 }
 function render(list){
-  LIST = list;
+  LIST = list; flagAccent();
   const n = {ok:0,warn:0,bad:0}; list.forEach(s=>n[lvOf(s)]++);
   const time = new Date().toLocaleTimeString("zh-TW",{hour12:false});
   paint(DESK.matches ? renderDesk(list, n, time) : renderMobile(list, n, time));
@@ -1378,11 +1419,13 @@ function settingsBody(){
   const seg = (k, opts) => `<div class="seg"><span class="ind"></span>${opts.map(([v,l])=>`<button class="${String(getP(k))===String(v)?"on":""}" data-pref="${k}" data-val="${v}">${l}</button>`).join("")}</div>`;
   const tog = k => `<input type="checkbox" class="tog" data-pref="${k}" ${getP(k)?"checked":""}>`;
   const sw = [["blue","#38bdf8,#6366f1"],["purple","#a78bfa,#d946ef"],["green","#34d399,#14b8a6"],["orange","#fbbf24,#f97316"],["pink","#f472b6,#f43f5e"]]
-    .map(([v,c])=>`<button class="${PREF.accent===v?"on":""}" data-pref="accent" data-val="${v}" style="background:linear-gradient(135deg,${c})" title="${v}"></button>`).join("");
+    .map(([v,c])=>`<button class="${PREF.accent===v?"on":""}" data-pref="accent" data-val="${v}" style="background:linear-gradient(135deg,${c})"></button>`).join("")
+    + (() => { const p = FLAGPAL[flagCC()] || FLAGDEF;
+      return `<button class="flagsw ${PREF.accent==="flag"?"on":""}" data-pref="accent" data-val="flag" title="跟著國旗" style="background:conic-gradient(${p[1]} 0 33%,${p[0]} 0 66%,${p[2]} 0)"><span>旗</span></button>`; })();
   return `
   <div class="sec"><h4>外觀</h4><div class="group">
     <div class="opt"><span class="lab">主題</span>${seg("theme",[["auto","自動"],["light","淺色"],["dark","深色"]])}</div>
-    <div class="opt"><span class="lab">主題色</span><div class="sw">${sw}</div></div>
+    <div class="opt" style="flex-wrap:wrap"><span class="lab">主題色<small>選「旗」會跟著主機的國旗變色</small></span><div class="sw" style="flex-basis:100%;padding:4px 2px 2px">${sw}</div></div>
     <div class="opt" style="flex-wrap:wrap"><span class="lab">玻璃效果<small>往左越透明、往右越霧面</small></span>
       <div class="slider" style="flex-basis:100%"><span>清透</span><input type="range" min="0" max="100" value="${PREF.glass}" data-pref="glass"><span>霧面</span></div></div>
     <div class="opt"><span class="lab">背景</span>${seg("bg",[["aurora","流光"],["mesh","漸層"],["plain","純色"]])}</div>
@@ -1507,7 +1550,8 @@ document.addEventListener("click", async e => {
     return tick();
   }
   const hs = t.closest("[data-sel]");
-  if (hs) { SEL = hs.dataset.sel; store("vps-sel", SEL); scrollTo({top:0, behavior:"smooth"}); return render(LIST); }
+  if (hs) { SEL = hs.dataset.sel; store("vps-sel", SEL); scrollTo({top:0, behavior:"smooth"});
+    return PREF.accent === "flag" && flagCC() !== FLAGCC ? smooth(() => render(LIST)) : render(LIST); }
 
   const ub = t.closest("[data-update]");
   if (ub) {
