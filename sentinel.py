@@ -1354,7 +1354,8 @@ button{font:inherit;color:inherit}
 .dialog .form .seg button.on{background:var(--glass);color:var(--text);box-shadow:0 2px 8px -2px rgba(0,0,0,.28),inset 0 0 0 1px var(--rim)}
 [data-mode="light"] .dialog .form .seg button.on{background:#fff}
 .dialog .form small{font-weight:600;color:var(--faint);font-size:11.5px;line-height:1.5}
-.evs{display:flex;flex-direction:column;gap:2px;max-height:330px;overflow:auto;margin:0 -6px;padding:0 6px}
+.evs{display:flex;flex-direction:column;gap:2px;max-height:330px;overflow-x:hidden;overflow-y:auto;margin:-8px -6px 0;padding:8px 6px 14px;
+  -webkit-mask:linear-gradient(transparent,#000 12px,#000 calc(100% - 26px),transparent);mask:linear-gradient(transparent,#000 12px,#000 calc(100% - 26px),transparent)}
 .ev{animation:rise .5s cubic-bezier(.22,1,.36,1) both;display:flex;gap:11px;align-items:flex-start;padding:8px 6px;border-radius:12px;font-size:13.5px;font-weight:700}
 .ev:hover{background:var(--track)}
 .ev .dot{margin-top:6px}
@@ -1502,6 +1503,15 @@ body{overscroll-behavior-y:contain}
 #ptr.done{color:var(--ok)}
 .iconbtn.spinning svg{animation:sp .8s linear infinite}
 
+/* ═════════ 捲軸 ═════════ */
+/* 內部的捲動區塊不顯示捲軸（滾輪、手指一樣可以捲），動畫時就不會閃出拉條 */
+.evs,.sheet,.hosts,.tbl,.list{scrollbar-width:none}
+.evs::-webkit-scrollbar,.sheet::-webkit-scrollbar,.hosts::-webkit-scrollbar,.tbl::-webkit-scrollbar,.list::-webkit-scrollbar{display:none}
+/* 整個頁面：先保留捲軸的位置，內容變長變短時寬度不會跳；捲軸本身改成細細淡淡的 */
+html{scrollbar-gutter:stable;scrollbar-width:thin;scrollbar-color:color-mix(in srgb,var(--text) 22%,transparent) transparent}
+html::-webkit-scrollbar{width:8px}
+html::-webkit-scrollbar-track{background:transparent}
+html::-webkit-scrollbar-thumb{background:color-mix(in srgb,var(--text) 22%,transparent);border-radius:8px;border:2px solid transparent;background-clip:padding-box}
 /* ═════════ 流暢優先（手機預設） ═════════ */
 [data-lite="on"] .aurora i{animation:none}
 [data-lite="on"] .grain{display:none}
