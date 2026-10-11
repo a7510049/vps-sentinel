@@ -844,9 +844,19 @@ button{font:inherit;color:inherit}
 .pill b{font-weight:900}
 .pill{transition:transform .4s cubic-bezier(.34,1.56,.64,1),opacity .4s cubic-bezier(.22,1,.36,1),box-shadow .45s cubic-bezier(.22,1,.36,1)}
 .pill b{transition:color .4s}
-.summary.filtering .pill{opacity:.42}
-.summary.filtering .pill.on{opacity:1;box-shadow:0 0 0 2px var(--accent),0 0 22px -4px var(--accent),var(--shadow)}
-.summary.filtering .pill.on b{color:var(--accent)}
+.summary{position:relative}
+.summary.filtering .pill{opacity:.5}
+.summary.filtering .pill.on{opacity:1}
+.pill.on.ok b,.pill.on.ok{color:var(--ok)}.pill.on.warn,.pill.on.warn b{color:var(--warn)}.pill.on.bad,.pill.on.bad b{color:var(--bad)}
+.pill{transition:transform .4s cubic-bezier(.34,1.56,.64,1),opacity .45s cubic-bezier(.22,1,.36,1),color .4s}
+/* 會在三個按鈕之間滑動的光圈 */
+.pind{--st:var(--ok);position:absolute;left:0;top:0;width:0;height:0;border-radius:999px;pointer-events:none;z-index:2;opacity:0;
+  background:color-mix(in srgb,var(--st) 14%,transparent);
+  box-shadow:inset 0 0 0 1.5px color-mix(in srgb,var(--st) 80%,transparent),0 0 20px -3px color-mix(in srgb,var(--st) 70%,transparent);
+  transition:transform .55s cubic-bezier(.34,1.25,.64,1),width .55s cubic-bezier(.34,1.25,.64,1),opacity .35s,background .45s,box-shadow .45s}
+.pind.warn{--st:var(--warn)}.pind.bad{--st:var(--bad)}
+.pind.show{opacity:1}
+.pind.noanim{transition:none}
 .empty{text-align:center;color:var(--sub);padding:50px 0;font-size:14px;grid-column:1/-1}
 
 /* ═════════ 卡片（手機） ═════════ */
@@ -857,19 +867,20 @@ button{font:inherit;color:inherit}
 .card.warn{--sc:var(--warn)}
 .head{display:flex;align-items:center;gap:10px}
 /* 狀態：國旗本身邊緣發光（綠＝正常、黃＝注意、紅＝異常），不加框 */
-.avatar{--st:var(--ok);display:grid;place-items:center;flex:none;width:34px;height:34px;position:relative}
+.avatar{--st:var(--ok);display:grid;place-items:center;flex:none;width:34px;height:34px}
 .avatar.warn{--st:var(--warn)}.avatar.bad{--st:var(--bad)}
-.avatar::before{content:"";position:absolute;left:50%;top:50%;width:30px;height:22px;margin:-11px 0 0 -15px;border-radius:7px;pointer-events:none;
-  box-shadow:0 0 0 2px var(--st),0 0 18px 3px color-mix(in srgb,var(--st) 70%,transparent);opacity:.25;animation:glow 3.2s ease-in-out infinite;will-change:opacity}
-.avatar.round::before{width:30px;height:30px;margin:-15px 0 0 -15px;border-radius:50%}
-.avatar.bad::before{animation-duration:1.3s}
-.avatar .flag{width:30px;height:22px;border-radius:6px;
-  box-shadow:0 0 0 1.5px color-mix(in srgb,var(--st) 70%,transparent),0 0 12px -1px color-mix(in srgb,var(--st) 60%,transparent)}
-.avatar .emoji{display:grid;place-items:center;width:30px;height:22px;font-size:19px;border-radius:6px;
-  box-shadow:0 0 0 1.5px color-mix(in srgb,var(--st) 70%,transparent),0 0 12px -1px color-mix(in srgb,var(--st) 60%,transparent)}
+/* 發光貼著國旗本身：大小永遠吻合 */
+.fw{position:relative;display:grid;place-items:center;border-radius:6px;line-height:0}
+.fw.round{border-radius:50%}
+.fw::after{content:"";position:absolute;inset:0;border-radius:inherit;pointer-events:none;
+  box-shadow:0 0 0 1px color-mix(in srgb,var(--st) 70%,transparent),0 0 10px 1px color-mix(in srgb,var(--st) 50%,transparent),0 0 22px 2px color-mix(in srgb,var(--st) 22%,transparent);
+  opacity:.5;animation:glow 3.6s ease-in-out infinite;will-change:opacity}
+.avatar.bad .fw::after{animation-duration:1.4s}
 @keyframes glow{50%{opacity:1}}
-.avatar .letter{width:30px;height:30px;border-radius:50%;display:grid;place-items:center;font-weight:900;font-size:14px;color:var(--st);
-  background:color-mix(in srgb,var(--st) 14%,transparent);box-shadow:0 0 0 1.5px color-mix(in srgb,var(--st) 70%,transparent),0 0 12px -1px color-mix(in srgb,var(--st) 60%,transparent)}
+.avatar .flag{width:30px;height:22px;border-radius:6px;box-shadow:0 1px 3px rgba(0,0,0,.25)}
+.avatar .emoji{display:grid;place-items:center;width:30px;height:22px;font-size:19px;border-radius:6px}
+.avatar .letter{width:30px;height:30px;border-radius:50%;display:grid;place-items:center;font-weight:900;font-size:14px;line-height:1;color:var(--st);
+  background:color-mix(in srgb,var(--st) 16%,transparent)}
 /* 大標題旁的狀態標籤 */
 .stchip{--st:var(--ok);display:inline-flex;align-items:center;gap:7px;padding:6px 13px 6px 11px;border-radius:99px;font-size:12.5px;font-weight:800;
   color:var(--st);background:color-mix(in srgb,var(--st) 14%,transparent);box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--st) 35%,transparent);white-space:nowrap}
@@ -947,7 +958,7 @@ button{font:inherit;color:inherit}
   transition:background .3s,box-shadow .3s,transform .3s cubic-bezier(.34,1.56,.64,1)}
 .host:hover{background:var(--track)}.host:active{transform:scale(.98)}
 .host.on{background:var(--glass);position:relative;box-shadow:0 10px 26px -14px rgba(0,0,0,.5)}
-.host .head{gap:11px}.host .avatar .flag{width:26px;height:19px;border-radius:5px}
+.host .head{gap:11px}.host .avatar .flag{width:26px;height:19px;border-radius:5px}.host .fw{border-radius:5px}.host .fw.round{border-radius:50%}
 .host h2{font-size:14.5px}
 .minis{display:grid;grid-template-columns:1fr 1fr;gap:10px}
 .minis .k{display:flex;justify-content:space-between;font-size:11px;color:var(--sub);margin-bottom:4px;font-weight:700}
@@ -1310,7 +1321,7 @@ function flag(cc){
   const emo = String.fromCodePoint(...[...cc].map(c=>127397+c.charCodeAt(0)));
   if (FLAGFAIL[cc]) return `<span class="emoji">${emo}</span>`;
   return `<img class="flag" src="https://flagcdn.com/w80/${cc.toLowerCase()}.png" alt="${emo}" title="${esc(REGION?REGION.of(cc):cc)}"
-    onerror="FLAGFAIL['${cc}']=1;this.outerHTML='<span class=emoji>${emo}</span>'">`;
+    onerror="FLAGFAIL['${cc}']=1;this.outerHTML='<span class=emoji>${emo}</span>'">`;  /* 外層 .fw 會留著，發光不會跑掉 */
 }
 const place = s => s.geo ? [(REGION&&s.geo.cc)?REGION.of(s.geo.cc):s.geo.cc, s.geo.city].filter(Boolean).join(" ") : "";
 function when(t){ const d=new Date(t*1000), now=new Date();
@@ -1319,7 +1330,8 @@ function when(t){ const d=new Date(t*1000), now=new Date();
 function avatar(s){
   const f = PREF.show.flag && s.geo ? flag(s.geo.cc) : "";
   const lv = lvOf(s), tip = {ok:"運作正常", warn:"需要留意", bad:"出問題了"}[lv];
-  return `<div class="avatar ${lv} ${f?"":"round"}" title="${tip}">${f || `<span class="letter">${esc([...(s.name||"?")][0])}</span>`}</div>`;
+  const inner = f ? `<span class="fw">${f}</span>` : `<span class="fw round"><span class="letter">${esc([...(s.name||"?")][0])}</span></span>`;
+  return `<div class="avatar ${lv}" title="${tip}">${inner}</div>`;
 }
 function stchip(s){
   const lv = lvOf(s), t = s.online ? {ok:"運作正常", warn:"需要留意", bad:"出問題了"}[lv] : "連不上";
@@ -1415,8 +1427,8 @@ function mcard(s, i){
   return h + `</div>`;
 }
 function summary(n, clickable){
-  const p = (k, label) => `<button class="pill glass ${FILTER===k?"on":""}" ${clickable?`data-filter="${k}"`:""}><span class="dot ${k}"></span>${label} <b class="num">${n[k]}</b></button>`;
-  return `<div class="summary ${FILTER&&clickable?"filtering":""}">${p("ok","正常")}${p("warn","注意")}${p("bad","異常")}</div>`;
+  const p = (k, label) => `<button class="pill glass ${k} ${FILTER===k?"on":""}" ${clickable?`data-filter="${k}"`:""}><span class="dot ${k}"></span>${label} <b class="num">${n[k]}</b></button>`;
+  return `<div class="summary ${FILTER&&clickable?"filtering":""}"><span class="pind" data-keep></span>${p("ok","正常")}${p("warn","注意")}${p("bad","異常")}</div>`;
 }
 function renderMobile(list, n, time){
   const many = true;
@@ -1590,6 +1602,7 @@ function keyedPatch(a, b){
   });
 }
 function patch(a, b){
+  if (a.hasAttribute("data-keep")) return;     /* 由程式自己控制的元素（例如滑動光圈），不要被重畫蓋掉 */
   for (const at of [...a.attributes]) if (!b.hasAttribute(at.name)) a.removeAttribute(at.name);
   for (const at of [...b.attributes]) if (a.getAttribute(at.name)!==at.value){
     if (at.name==="data-v") tween(a, parseFloat(a.getAttribute("data-v"))||0, parseFloat(at.value)||0, +b.getAttribute("data-d")||0);
@@ -1606,6 +1619,26 @@ function paint(html){
   const cur = $("#app .dash");
   if (cur) morph(cur, tpl.content.firstElementChild); else { $("#app").innerHTML = ""; $("#app").appendChild(tpl.content.firstElementChild); }
 }
+function placePind(){
+  document.querySelectorAll("#app .summary").forEach(sm => {
+    const ind = sm.querySelector(".pind"), on = sm.querySelector(".pill.on");
+    if (!ind) return;
+    const st = c => ["ok","warn","bad"].find(x => ind.classList.contains(x)) || "";
+    if (on) {
+      const pos = `translate(${on.offsetLeft}px,${on.offsetTop}px)`;
+      if (!ind.classList.contains("show")) {         // 第一次出現：直接在原地放大浮現，不要從左邊拉過來
+        ind.classList.add("noanim");
+        ind.style.width = on.offsetWidth + "px"; ind.style.height = on.offsetHeight + "px";
+        ind.style.transform = pos + " scale(.82)"; ind.className = "pind noanim " + on.dataset.filter;
+        void ind.offsetWidth; ind.classList.remove("noanim");
+      }
+      ind.style.width = on.offsetWidth + "px"; ind.style.height = on.offsetHeight + "px";
+      ind.style.transform = pos + " scale(1)"; ind.className = "pind show " + on.dataset.filter;
+    } else if (ind.classList.contains("show")) {    // 取消篩選：原地縮小淡出
+      ind.style.transform = ind.style.transform.replace("scale(1)", "scale(.82)"); ind.className = "pind " + st();
+    }
+  });
+}
 function render(list){
   // 更新剛完成：跳通知
   for (const s of list) {
@@ -1619,6 +1652,7 @@ function render(list){
   const n = {ok:0,warn:0,bad:0}; list.forEach(s=>n[lvOf(s)]++);
   const time = new Date().toLocaleTimeString("zh-TW",{hour12:false});
   paint(DESK.matches ? renderDesk(list, n, time) : renderMobile(list, n, time));
+  placePind();
   trackCenter();
 }
 DESK.addEventListener("change", () => { applyPrefs(); if (LIST.length) render(LIST); });
