@@ -681,6 +681,11 @@ PAGE = r"""<!doctype html>
 [data-accent="pink"]  {--a1:#f472b6; --a2:#f43f5e; --a3:#c084fc}
 [data-accent="flag"]  {--a1:#38bdf8; --a2:#6366f1; --a3:#22d3ee}
 :root{--accent:var(--a2); --grad:linear-gradient(135deg,var(--a1),var(--a2))}
+@property --a1{syntax:"<color>";inherits:true;initial-value:#38bdf8}
+@property --a2{syntax:"<color>";inherits:true;initial-value:#6366f1}
+@property --a3{syntax:"<color>";inherits:true;initial-value:#22d3ee}
+:root{transition:--a1 .9s cubic-bezier(.22,1,.36,1),--a2 .9s cubic-bezier(.22,1,.36,1),--a3 .9s cubic-bezier(.22,1,.36,1)}
+[data-motion="off"]{transition:none}
 
 *{box-sizing:border-box;margin:0;-webkit-tap-highlight-color:transparent}
 html{background:var(--bg);transition:background .5s}
@@ -1135,8 +1140,25 @@ const FLAGPAL = {
   CL:["#5b8cff","#d52b1e","#0039a6"], ZA:["#ffb612","#007749","#de3831"],
 };
 const FLAGDEF = ["#38bdf8","#6366f1","#22d3ee"];
-let FLAGCC = null;
-function flagCC(){ const s = LIST.find(x=>keyOf(x)===SEL) || LIST[0]; return (s && s.geo && s.geo.cc) || ""; }
+let FLAGCC = null, MSEL = "";
+function flagCC(){
+  const k = DESK.matches ? SEL : (MSEL || SEL);
+  const s = LIST.find(x=>keyOf(x)===k) || LIST[0]; return (s && s.geo && s.geo.cc) || "";
+}
+/* 手機：找出畫面中間的那張卡片 */
+let scrollRaf = 0;
+function trackCenter(){
+  if (DESK.matches || PREF.accent !== "flag") return;
+  const mid = innerHeight * 0.45; let best = null, bestD = 1e9;
+  document.querySelectorAll("#app .grid > .card").forEach(c => {
+    const r = c.getBoundingClientRect();
+    const d = (r.top <= mid && r.bottom >= mid) ? 0 : Math.min(Math.abs(r.top - mid), Math.abs(r.bottom - mid));
+    if (d < bestD) { bestD = d; best = c; }
+  });
+  const k = best ? best.getAttribute("data-key") : "";
+  if (k && k !== MSEL) { MSEL = k; flagAccent(); }
+}
+addEventListener("scroll", () => { if (!scrollRaf) scrollRaf = requestAnimationFrame(() => { scrollRaf = 0; trackCenter(); }); }, {passive:true});
 function flagAccent(){
   const h = document.documentElement;
   if (PREF.accent !== "flag") { if (FLAGCC !== null) { ["--a1","--a2","--a3"].forEach(k=>h.style.removeProperty(k)); FLAGCC = null; } return; }
@@ -1398,6 +1420,7 @@ function render(list){
   const n = {ok:0,warn:0,bad:0}; list.forEach(s=>n[lvOf(s)]++);
   const time = new Date().toLocaleTimeString("zh-TW",{hour12:false});
   paint(DESK.matches ? renderDesk(list, n, time) : renderMobile(list, n, time));
+  trackCenter();
 }
 DESK.addEventListener("change", () => { applyPrefs(); if (LIST.length) render(LIST); });
 
@@ -1448,7 +1471,7 @@ function settingsBody(){
   return `
   <div class="sec"><h4>外觀</h4><div class="group">
     <div class="opt"><span class="lab">主題</span>${seg("theme",[["auto","自動"],["light","淺色"],["dark","深色"]])}</div>
-    <div class="opt" style="flex-wrap:wrap"><span class="lab">主題色<small>選「旗」會跟著主機的國旗變色</small></span><div class="sw" style="flex-basis:100%;padding:4px 2px 2px">${sw}</div></div>
+    <div class="opt" style="flex-wrap:wrap"><span class="lab">主題色<small>選「旗」會跟著主機的國旗變色（手機跟著畫面中間的卡片）</small></span><div class="sw" style="flex-basis:100%;padding:4px 2px 2px">${sw}</div></div>
     <div class="opt" style="flex-wrap:wrap"><span class="lab">玻璃效果<small>往左越透明、往右越霧面</small></span>
       <div class="slider" style="flex-basis:100%"><span>清透</span><input type="range" min="0" max="100" value="${PREF.glass}" data-pref="glass"><span>霧面</span></div></div>
     <div class="opt"><span class="lab">背景</span>${seg("bg",[["aurora","流光"],["mesh","漸層"],["plain","純色"]])}</div>
@@ -1530,7 +1553,7 @@ function openSettings(){
   function changed(k){
     const big = ["theme","accent","bg","size","density","perf"].includes(k) || k.startsWith("show.");
     const run = () => { applyPrefs(); if (LIST.length) render(LIST); };
-    big ? smooth(run, ["theme","accent","bg"].includes(k)) : run();
+    big && k !== "accent" ? smooth(run, ["theme","bg"].includes(k)) : run();
     if (k === "refresh") restart();
   }
 }
@@ -1576,7 +1599,7 @@ document.addEventListener("click", async e => {
   }
   const hs = t.closest("[data-sel]");
   if (hs) { SEL = hs.dataset.sel; store("vps-sel", SEL); scrollTo({top:0, behavior:"smooth"});
-    return PREF.accent === "flag" && flagCC() !== FLAGCC ? smooth(() => render(LIST), true) : render(LIST); }
+    return render(LIST); }
 
   const ub = t.closest("[data-update]");
   if (ub) {
