@@ -24,7 +24,7 @@ from collections import deque
 from concurrent.futures import ThreadPoolExecutor
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
-VERSION = "1.5"
+VERSION = "1.6"
 
 # ───────────────────────── 設定 ─────────────────────────
 
@@ -340,6 +340,8 @@ class Collector:
         self.started = time.time()
         self.geo = None
         self.hist = deque(maxlen=180)          # 最近 30 分鐘，每 10 秒一筆
+        self.events = deque(maxlen=40)         # 事件紀錄
+        self.prev_keys = None
         self.upd_running = False
         self.upd_last = update_last()
 
@@ -383,9 +385,12 @@ class Collector:
                     recheck = True
                     ok = bool(last and last["ok"])
                     log("系統更新完成" if ok else "系統更新失敗")
+                    self.add_event("ok" if ok else "bad", "系統更新完成" if ok else "系統更新失敗")
                     threading.Thread(target=tg_send, daemon=True, args=(
                         f"{'✅' if ok else '❌'} {NAME} 系統更新{'完成' if ok else '失敗'}",)).start()
                 self.upd_running = now
+            if tick % 15 == 0 and tick > 0:
+                self.track_events()
             if tick % 900 == 0 or recheck:            # 每 30 分鐘：可更新套件數
                 u = apt_updates()
                 with self.lock:
@@ -397,12 +402,38 @@ class Collector:
                         self.geo = g
             tick += 1
 
+    def add_event(self, kind, text):
+        with self.lock:
+            self.events.append((round(time.time()), kind, text))
+
+    def track_events(self):
+        """比較這次和上次的問題，記錄「發生」與「恢復」"""
+        snap = self.snapshot()
+        cur = {}
+        for t in snap["problems"]:
+            cur[re.sub(r"[\s（(]*[\d.]+\s*%?[）)]?", "", t)] = ("bad", t)
+        for t in snap["notices"]:
+            cur[re.sub(r"[\d.]+\s*", "", t)] = ("warn", t)
+        if self.prev_keys is None:
+            self.add_event("info", "哨兵開始監看這台主機")
+            for k, (kind, t) in cur.items():
+                self.add_event(kind, t)
+        else:
+            for k, (kind, t) in cur.items():
+                if k not in self.prev_keys:
+                    self.add_event(kind, t)
+            for k, (kind, t) in self.prev_keys.items():
+                if k not in cur:
+                    self.add_event("ok", f"已恢復：{t}")
+        self.prev_keys = cur
+
     def snapshot(self):
         with self.lock:
             cpu, net = self.cpu_pct, dict(self.net)
             containers, services, updates = self.containers, list(self.services), self.updates
             high_since = self.cpu_high_since
             hist = list(self.hist)
+            events = [{"t": e[0], "kind": e[1], "text": e[2]} for e in reversed(self.events)][:20]
             geo, upd = self.geo, {"supported": update_supported(),
                                   "running": self.upd_running, "last": self.upd_last}
         mem = meminfo()
@@ -440,7 +471,7 @@ class Collector:
             "cores": os.cpu_count() or 1, "cpu": cpu, "load": [round(x, 2) for x in load],
             "mem": mem, "disks": disks, "net": net,
             "containers": containers, "services": services,
-            "updates": updates, "reboot": reboot, "geo": geo, "update": upd,
+            "updates": updates, "reboot": reboot, "geo": geo, "update": upd, "events": events,
             "hist": {"t": [h[0] for h in hist], "cpu": [h[1] for h in hist], "mem": [h[2] for h in hist],
                      "rx": [h[3] for h in hist], "tx": [h[4] for h in hist]},
             "problems": problems, "notices": notices,
@@ -624,6 +655,7 @@ class Handler(BaseHTTPRequestHandler):
             ok, msg = start_update()
             if ok:
                 COL.upd_running = True
+                COL.add_event("info", "開始系統更新")
         self.send(200 if ok else 400, json.dumps({"ok": ok, "message": msg}, ensure_ascii=False))
 
 
@@ -950,8 +982,37 @@ button{font:inherit;color:inherit}
 .gin>span{font-size:12px;color:var(--sub);font-weight:700;margin-top:4px}
 .charts{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:18px}
 .cbox{height:170px}
-.lower{display:grid;grid-template-columns:minmax(0,1.35fr) minmax(0,1fr);gap:18px;align-items:start}
-.tbl{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:2px 16px}
+.lower{display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:18px;align-items:stretch}
+/* 側邊欄填滿整個高度 */
+.dash.d .side{height:calc(100vh - 48px)}
+.hosts{flex:0 1 auto;min-height:0}
+.ovw{margin-top:auto;border-radius:22px;padding:14px;background:var(--glass2);box-shadow:inset 0 0 0 1px var(--line)}
+.ovw h4{font-size:12px;font-weight:800;color:var(--sub);letter-spacing:.5px;margin-bottom:10px;display:flex;align-items:center;gap:8px}
+.ovg{display:grid;grid-template-columns:1fr 1fr;gap:12px 10px}
+.ovg .k{font-size:11px;color:var(--sub);font-weight:700}
+.ovg b{display:block;font-size:17px;font-weight:900;line-height:1.3;white-space:nowrap}
+.ovg b small{font-size:11px;opacity:.55;margin-left:1px}
+.ovw .bar2{display:flex;height:6px;border-radius:9px;overflow:hidden;margin-top:12px;background:var(--track)}
+.ovw .bar2 i{display:block;height:100%;transition:width .8s cubic-bezier(.22,1,.36,1)}
+.ovw .cap2{display:flex;justify-content:space-between;font-size:11px;color:var(--sub);font-weight:700;margin-top:6px}
+.side-foot{margin-top:0}
+.side .empty{padding:18px 0;font-size:13px}
+/* 快速資訊列 */
+.strip{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:14px}
+.tile{border-radius:24px;padding:14px 16px;display:flex;align-items:center;gap:12px;animation:rise .8s cubic-bezier(.22,1,.36,1) both;animation-delay:calc(var(--i,0) * 50ms)}
+.tile .k{font-size:11.5px;color:var(--sub);font-weight:700}
+.tile .v{font-size:16px;font-weight:900;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.tile .s{font-size:11.5px;color:var(--sub);font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.tile>div{min-width:0}
+/* 事件紀錄 */
+.evs{display:flex;flex-direction:column;gap:2px;max-height:330px;overflow:auto;margin:0 -6px;padding:0 6px}
+.ev{display:flex;gap:11px;align-items:flex-start;padding:8px 6px;border-radius:12px;font-size:13.5px;font-weight:700}
+.ev:hover{background:var(--track)}
+.ev .dot{margin-top:6px}
+.ev .dot.info{background:var(--a1)}
+.ev .sub{font-size:11.5px;margin-top:1px}
+.calm{color:var(--sub);font-size:13.5px;font-weight:600;padding:20px 0;text-align:center}
+.tbl{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:2px 16px}
 .tbl .item{padding:8px 10px}
 .kv{display:grid;grid-template-columns:auto 1fr;gap:11px 18px;font-size:13.5px;margin:0}
 .kv dt{color:var(--sub);font-weight:600}.kv dd{text-align:right;margin:0;font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
@@ -1356,8 +1417,7 @@ function summary(n, clickable){
   return `<div class="summary ${FILTER&&clickable?"filtering":""}">${p("ok","正常")}${p("warn","注意")}${p("bad","異常")}</div>`;
 }
 function renderMobile(list, n, time){
-  const many = list.length > 1;
-  if (!many) FILTER = "";
+  const many = true;
   const shown = FILTER ? list.filter(s=>lvOf(s)===FILTER) : list, g = greet(n, list.length);
   return `<div class="dash m" data-key="m"><header class="bar"><span class="mini">VPS 哨兵</span><span class="grow"></span>
     <button class="cap glass" data-settings title="設定">${I("gear")}</button><button class="cap glass" data-logout title="登出">${I("logout")}</button></header>
@@ -1388,7 +1448,7 @@ function detail(s){
       <div class="sub">${s.online ? `${where?esc(where)+"・":""}${esc(s.os)}・開機 ${up(s.uptime)}` : "連不上這台主機"}</div></div>
       ${s.online ? `<div class="act"><div class="sub" data-x style="line-height:1.6;font-weight:600">${updateInfo(s)}</div>${updateBtn(s)}</div>` : ""}</div>`;
   if (!s.online) return h + `<div class="panel glass bigoff" style="--i:1"><b>連不上這台主機</b>${esc(s.error||"")}</div></div>`;
-  h += alerts(s);
+  h += alerts(s) + strip(s);
   const d0 = s.disks[0] || {pct:0, used:0, total:0};
   h += `<div class="gauges">${ring("cpu", "處理器", s.cpu, `${s.cores} 核心`, 1)}
         ${ring("mem", "記憶體", s.mem.pct, `${size(s.mem.used)} / ${size(s.mem.total)}`, 2)}
@@ -1412,16 +1472,51 @@ function detail(s){
       ${s.disks.map(d=>`<dt>磁碟 ${esc(d.path)}</dt><dd class="num">${size(d.used)} / ${size(d.total)}</dd>`).join("")}
       ${s.mem.swap_total?`<dt>虛擬記憶體</dt><dd class="num">${size(s.mem.swap_used)} / ${size(s.mem.swap_total)}</dd>`:""}
     </dl></div>` : "";
-  if (ip || fp) h += `<div class="lower" style="${ip&&fp?"":"grid-template-columns:1fr"}">${ip}${fp}</div>`;
+  const ep = eventsPanel(s);
+  if (ip || fp || ep) h += `<div class="lower">${ip}${ep}${fp}</div>`;
   return h + `</div>`;
+}
+function overview(list){
+  const on = list.filter(s => s.online);
+  if (!on.length) return "";
+  const avg = k => on.reduce((a,s) => a + (k === "cpu" ? s.cpu : s.mem.pct), 0) / on.length;
+  const rx = on.reduce((a,s) => a + s.net.rx, 0), tx = on.reduce((a,s) => a + s.net.tx, 0);
+  const items = on.flatMap(itemsOf), ok = items.filter(x=>x.st==="ok").length, bad = items.filter(x=>x.st==="bad").length, off = items.length-ok-bad;
+  const pc = v => items.length ? (v / items.length * 100).toFixed(1) : 0;
+  return `<div class="ovw"><h4><span class="ico sm load">${I("load")}</span>全部主機總覽</h4><div class="ovg">
+    <div><div class="k">平均處理器</div><b>${num(avg("cpu"))}<small>%</small></b></div>
+    <div><div class="k">平均記憶體</div><b>${num(avg("mem"))}<small>%</small></b></div>
+    <div><div class="k">總下載</div><b class="num">${rate(rx)}</b></div>
+    <div><div class="k">總上傳</div><b class="num">${rate(tx)}</b></div></div>
+    ${items.length ? `<div class="bar2"><i style="width:${pc(ok)}%;background:var(--ok)"></i><i style="width:${pc(off)}%;background:var(--faint)"></i><i style="width:${pc(bad)}%;background:var(--bad)"></i></div>
+    <div class="cap2"><span>容器與服務</span><span>${ok} 正常${bad?`・${bad} 異常`:""}</span></div>` : ""}</div>`;
+}
+function strip(s){
+  const items = itemsOf(s), run = items.filter(x=>x.st==="ok").length, n = s.updates ? s.updates.total : 0;
+  const t = (i, ico, k, v, sub) => `<div class="tile glass" style="--i:${i}"><span class="ico ${ico}">${I(ico)}</span><div><div class="k">${k}</div><div class="v">${v}</div>${sub?`<div class="s">${sub}</div>`:""}</div></div>`;
+  const [l1, l5, l15] = s.load.map(x => x.toFixed(2));
+  return `<div class="strip">${t(1,"load","負載", num(s.load[0],2), `5 分 ${l5}・15 分 ${l15}`)}
+    ${t(2,"down","下載", `<span class="num">${rate(s.net.rx)}</span>`, `上傳 ${rate(s.net.tx)}`)}
+    ${t(3,"box","容器與服務", items.length ? `${run} / ${items.length}` : "—", items.length ? "正在執行" : "沒有偵測到")}
+    ${t(4,"info","系統更新", s.updates ? (n ? `${n} 個` : "最新") : "—", s.updates ? (n ? "可以更新" : "不用更新") : "")}
+    ${t(5,"cpu","開機時間", up(s.uptime), s.reboot ? "需要重新開機" : "")}</div>`;
+}
+function eventsPanel(s){
+  const ev = s.events;
+  if (!ev) return "";
+  const word = {bad:"異常", warn:"注意", ok:"恢復", info:"通知"};
+  return `<div class="panel glass" style="--i:8"><div class="ph"><span class="ico sm up">${I("load")}</span><h3>事件紀錄</h3><span class="sub" style="margin-left:auto;font-weight:700">最近 ${ev.length} 筆</span></div>
+    ${ev.length ? `<div class="evs">${ev.map(e=>`<div class="ev"><span class="dot ${e.kind}"></span><div><div>${esc(e.text)}</div><div class="sub">${word[e.kind]||""}・${when(e.t)}</div></div></div>`).join("")}</div>`
+      : `<div class="calm">目前沒有事件，一切平靜 ☕</div>`}</div>`;
 }
 function renderDesk(list, n, time){
   const sel = list.find(s=>keyOf(s)===SEL) || list[0], g = greet(n, list.length);
   return `<div class="dash d" data-key="d"><aside class="side glass">
       <div class="brand"><img src="/icon.svg" alt=""><div><h1>VPS 哨兵</h1><div class="meta"><span class="live"></span>更新於 ${time}</div></div></div>
       <div class="greet">${g.hi}<br><b>${g.line.replace(/<\/?em>/g,"")}</b></div>
-      ${summary(n, false)}
-      <div class="hosts">${list.map(s=>hostItem(s, s===sel)).join("")}</div>
+      ${summary(n, true)}
+      <div class="hosts">${(FILTER ? list.filter(s=>lvOf(s)===FILTER) : list).map(s=>hostItem(s, s===sel)).join("") || `<div class="empty">這個分類目前沒有主機 👍</div>`}</div>
+      ${overview(list)}
       <div class="side-foot"><span class="sub">${list.length} 台主機</span>
         <button class="iconbtn ${REFRESHING?"spinning":""}" data-refresh title="重新整理">${I("upd")}</button>
         <button class="iconbtn" data-settings title="設定">${I("gear")}</button><button class="iconbtn" data-logout title="登出">${I("logout")}</button></div>
