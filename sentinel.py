@@ -1014,6 +1014,7 @@ document.documentElement.classList.add("booting");
 @property --a2{syntax:"<color>";inherits:true;initial-value:#6366f1}
 @property --a3{syntax:"<color>";inherits:true;initial-value:#22d3ee}
 :root{transition:--a1 .9s cubic-bezier(.22,1,.36,1),--a2 .9s cubic-bezier(.22,1,.36,1),--a3 .9s cubic-bezier(.22,1,.36,1)}
+:root.qacc{transition-duration:.24s;transition-timing-function:cubic-bezier(.3,0,.2,1)}  /* 切換主機：顏色在舊內容淡出時就換好 */
 [data-motion="off"]{transition:none}
 
 *{box-sizing:border-box;margin:0;-webkit-tap-highlight-color:transparent}
@@ -2286,6 +2287,8 @@ async function switchHost(){
   const id = ++SWID, old = $("#app .detail");
   if (!old || !DESK.matches || !canAnim()) return render(LIST);
   old.setAttribute("data-keep", "");               // 淡出期間左邊選單照常更新，右邊先不動
+  const R = document.documentElement; R.classList.add("qacc");
+  clearTimeout(R._qacc); R._qacc = setTimeout(() => R.classList.remove("qacc"), 400);
   render(LIST);
   const t0 = performance.now();
   const o0 = +getComputedStyle(old).opacity;       // 連點時從目前的透明度接著淡，不要閃回來
