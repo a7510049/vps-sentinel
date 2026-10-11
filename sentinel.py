@@ -842,9 +842,11 @@ button{font:inherit;color:inherit}
   transition:transform .3s cubic-bezier(.34,1.56,.64,1),opacity .3s}
 .pill[data-filter]{cursor:pointer}.pill[data-filter]:active{transform:scale(.93)}
 .pill b{font-weight:900}
-.summary.filtering .pill{opacity:.45}
-.summary.filtering .pill.on{opacity:1;--hi1:var(--accent);--hi2:color-mix(in srgb,var(--accent) 70%,transparent);--hi3:color-mix(in srgb,var(--accent) 50%,transparent);--hi4:var(--accent);
-  box-shadow:0 0 18px -6px var(--accent),var(--shadow)}
+.pill{transition:transform .4s cubic-bezier(.34,1.56,.64,1),opacity .4s cubic-bezier(.22,1,.36,1),box-shadow .45s cubic-bezier(.22,1,.36,1)}
+.pill b{transition:color .4s}
+.summary.filtering .pill{opacity:.42}
+.summary.filtering .pill.on{opacity:1;box-shadow:0 0 0 2px var(--accent),0 0 22px -4px var(--accent),var(--shadow)}
+.summary.filtering .pill.on b{color:var(--accent)}
 .empty{text-align:center;color:var(--sub);padding:50px 0;font-size:14px;grid-column:1/-1}
 
 /* ═════════ 卡片（手機） ═════════ */
@@ -1423,7 +1425,7 @@ function renderMobile(list, n, time){
     <button class="cap glass" data-settings title="設定">${I("gear")}</button><button class="cap glass" data-logout title="登出">${I("logout")}</button></header>
     <div class="hero"><div class="hello">${g.hi}</div><h1 data-x>${g.line}</h1><div class="meta"><span class="live"></span>更新於 ${time}</div></div>
     ${summary(n, many)}
-    <div class="grid">${shown.length ? shown.map(mcard).join("") : `<div class="empty">這個分類目前沒有主機 👍</div>`}</div></div>`;
+    <div class="grid" data-keyed>${shown.length ? shown.map(mcard).join("") : `<div class="empty" data-key="empty">這個分類目前沒有主機 👍</div>`}</div></div>`;
 }
 
 /* ═════════ 電腦版 ═════════ */
@@ -1515,7 +1517,7 @@ function renderDesk(list, n, time){
       <div class="brand"><img src="/icon.svg" alt=""><div><h1>VPS 哨兵</h1><div class="meta"><span class="live"></span>更新於 ${time}</div></div></div>
       <div class="greet">${g.hi}<br><b>${g.line.replace(/<\/?em>/g,"")}</b></div>
       ${summary(n, true)}
-      <div class="hosts">${(FILTER ? list.filter(s=>lvOf(s)===FILTER) : list).map(s=>hostItem(s, s===sel)).join("") || `<div class="empty">這個分類目前沒有主機 👍</div>`}</div>
+      <div class="hosts" data-keyed>${(FILTER ? list.filter(s=>lvOf(s)===FILTER) : list).map(s=>hostItem(s, s===sel)).join("") || `<div class="empty" data-key="empty">這個分類目前沒有主機 👍</div>`}</div>
       ${overview(list)}
       <div class="side-foot"><span class="sub">${list.length} 台主機</span>
         <button class="iconbtn ${REFRESHING?"spinning":""}" data-refresh title="重新整理">${I("upd")}</button>
@@ -1540,7 +1542,7 @@ const EASE = "cubic-bezier(.22,1,.36,1)";
 const canAnim = () => PREF.motion && !matchMedia("(prefers-reduced-motion: reduce)").matches;
 /* 讓元素平順地離開：先淡出、收起高度，再移除 */
 function leave(n){
-  if (n.nodeType !== 1 || !canAnim() || !n.isConnected || !n.matches(".alert,.item,.card,.host")) return n.remove();
+  if (n.nodeType !== 1 || !canAnim() || !n.isConnected || !n.matches(".alert,.item,.card,.host,.empty")) return n.remove();
   if (n._leaving) return; n._leaving = 1;
   const h = n.offsetHeight;
   n.style.overflow = "hidden"; n.style.pointerEvents = "none";
@@ -1566,6 +1568,27 @@ function morph(a, b){
   }
   patch(a, b);
 }
+function keyedPatch(a, b){
+  const old = new Map();
+  [...a.children].forEach(c => { if (!c._leaving) old.set(c.getAttribute("data-key") || "", c); });
+  const anim = canAnim(), first = new Map();
+  if (anim) old.forEach((c, k) => first.set(k, c.getBoundingClientRect()));
+  const keep = []; let prev = null;
+  [...b.children].forEach((nb, i) => {
+    const k = nb.getAttribute("data-key") || "";
+    let el = old.get(k);
+    if (el) { old.delete(k); morph(el, nb); el = el.isConnected ? el : nb; if (el !== nb) keep.push([k, el]); }
+    else { el = nb; el.style.setProperty("--i", i); }
+    const ref = prev ? prev.nextSibling : a.firstChild;
+    if (el !== ref) a.insertBefore(el, ref);
+    prev = el;
+  });
+  old.forEach(c => leave(c));
+  if (anim) keep.forEach(([k, el]) => {          // 留下來的：從舊位置平滑移到新位置
+    const f = first.get(k), l = el.getBoundingClientRect(), dx = f.left - l.left, dy = f.top - l.top;
+    if (Math.abs(dx) > 1 || Math.abs(dy) > 1) el.animate([{transform:`translate(${dx}px,${dy}px)`}, {transform:"none"}], {duration:480, easing:EASE});
+  });
+}
 function patch(a, b){
   for (const at of [...a.attributes]) if (!b.hasAttribute(at.name)) a.removeAttribute(at.name);
   for (const at of [...b.attributes]) if (a.getAttribute(at.name)!==at.value){
@@ -1573,6 +1596,7 @@ function patch(a, b){
     a.setAttribute(at.name, at.value);
   }
   if (a.hasAttribute("data-v")) return;
+  if (a.hasAttribute("data-keyed")) return keyedPatch(a, b);
   const ac=[...a.childNodes].filter(n=>!n._leaving), bc=[...b.childNodes];
   bc.forEach((n,i)=>{ if (ac[i]) morph(ac[i], n); else a.appendChild(n); });
   for (let i=bc.length;i<ac.length;i++) leave(ac[i]);
@@ -1760,11 +1784,9 @@ document.addEventListener("click", async e => {
   const fl = t.closest("[data-filter]");
   if (fl) {
     FILTER = FILTER===fl.dataset.filter ? "" : fl.dataset.filter;
-    const g = $("#app .grid");
-    if (!g || !canAnim()) return render(LIST);
-    g.animate([{opacity:1}, {opacity:0, transform:"translateY(8px)"}], {duration:160, easing:"ease-in"}).onfinish = () => {
-      $("#app .grid").replaceChildren(); render(LIST); };
-    return;
+    if (canAnim()) fl.animate([{transform:"scale(1)"}, {transform:"scale(.9)"}, {transform:"scale(1.05)"}, {transform:"scale(1)"}],
+                              {duration:480, easing:"cubic-bezier(.34,1.3,.64,1)"});
+    return render(LIST);
   }
 
   const rn = t.closest("[data-rename]");
