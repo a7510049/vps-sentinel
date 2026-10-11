@@ -767,7 +767,7 @@ button{font:inherit;color:inherit}
 @keyframes fadeOut{to{opacity:0}}
 
 /* ═════════ 進度條 ═════════ */
-.track{height:8px;background:var(--track);border-radius:99px;overflow:hidden}
+.track{height:8px;background:var(--track);border-radius:99px;overflow:hidden;contain:strict;width:100%}
 .fill{height:100%;border-radius:99px;background:var(--grad);position:relative;overflow:hidden;min-width:8px;
   transition:width 1.1s cubic-bezier(.22,1,.36,1);animation:grow 1.3s cubic-bezier(.22,1,.36,1) both;transform-origin:left}
 .fill.w{background:linear-gradient(90deg,#fbbf24,#f97316)}.fill.b{background:linear-gradient(90deg,#fb7185,#e11d48)}
@@ -846,6 +846,7 @@ button{font:inherit;color:inherit}
 .head .sub{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-weight:600}
 .uptime{font-size:11.5px;font-weight:700;color:var(--sub);background:var(--track);border-radius:99px;padding:4px 10px;white-space:nowrap}
 .alerts{margin:14px 0 0;display:flex;flex-direction:column;gap:6px}
+.alerts:empty{display:none}
 .alert{font-size:13px;font-weight:700;padding:9px 12px;border-radius:14px;display:flex;align-items:center;gap:9px;animation:rise .5s cubic-bezier(.22,1,.36,1) both}
 .alert svg{width:16px;height:16px;flex:none}
 .alert.bad{background:color-mix(in srgb,var(--bad) 14%,transparent);color:var(--bad)}
@@ -1064,6 +1065,11 @@ button{font:inherit;color:inherit}
 [data-lite="on"] .grain{display:none}
 [data-lite="on"] .fill::after{display:none}
 [data-lite="on"] .veil{-webkit-backdrop-filter:none;backdrop-filter:none}
+[data-lite="on"] .glass,[data-lite="on"] .scrolled .bar{-webkit-backdrop-filter:none;backdrop-filter:none}
+[data-lite="on"] .scrolled .bar{background:color-mix(in srgb,var(--bg) 90%,transparent)}
+[data-lite="on"] .sheet,[data-lite="on"] .dialog,[data-lite="on"] .toast{background:color-mix(in srgb,var(--bg) 92%,var(--glass))}
+[data-lite="on"][data-mode="dark"] .sheet,[data-lite="on"][data-mode="dark"] .dialog,[data-lite="on"][data-mode="dark"] .toast{background:color-mix(in srgb,#1a1f2e 94%,var(--a2))}
+[data-lite="on"] .card,[data-lite="on"] .panel{transform:translateZ(0)}
 [data-lite="on"] .chart path{transition:none}
 .xfade{position:fixed;inset:0;z-index:45;pointer-events:none;animation:fadeOut .45s cubic-bezier(.4,0,.2,1) forwards}
 /* ═════════ 無障礙／關閉動畫 ═════════ */
@@ -1158,7 +1164,11 @@ function trackCenter(){
   const k = best ? best.getAttribute("data-key") : "";
   if (k && k !== MSEL) { MSEL = k; flagAccent(); }
 }
-addEventListener("scroll", () => { if (!scrollRaf) scrollRaf = requestAnimationFrame(() => { scrollRaf = 0; trackCenter(); }); }, {passive:true});
+let scrollStop = 0;
+addEventListener("scroll", () => {
+  if (isLite()) { clearTimeout(scrollStop); scrollStop = setTimeout(trackCenter, 140); return; }
+  if (!scrollRaf) scrollRaf = requestAnimationFrame(() => { scrollRaf = 0; trackCenter(); });
+}, {passive:true});
 function flagAccent(){
   const h = document.documentElement;
   if (PREF.accent !== "flag") { if (FLAGCC !== null) { ["--a1","--a2","--a3"].forEach(k=>h.style.removeProperty(k)); FLAGCC = null; } return; }
@@ -1215,13 +1225,13 @@ function avatar(s){
 }
 function stchip(s){
   const lv = lvOf(s), t = s.online ? {ok:"運作正常", warn:"需要留意", bad:"出問題了"}[lv] : "連不上";
-  return `<span class="stchip ${lv}"><span class="dot pulse ${lv}"></span>${t}</span>`;
+  return `<span class="stchip ${lv}" data-x><span class="dot pulse ${lv}"></span>${t}</span>`;
 }
 const editBtn = s => s.online ? `<button class="iconbtn" title="改名稱" data-rename="${esc(s.node||"")}" data-name="${esc(s.name)}">${I("edit")}</button>` : "";
 function alerts(s){
   const al = (s.problems||[]).map(p=>`<div class="alert bad">${I("warn")}${esc(p)}</div>`)
     .concat((s.notices||[]).map(p=>`<div class="alert warn">${I("info")}${esc(p)}</div>`));
-  return al.length ? `<div class="alerts">${al.join("")}</div>` : "";
+  return `<div class="alerts">${al.join("")}</div>`;
 }
 function itemsOf(s){
   const items = [];
@@ -1303,7 +1313,7 @@ function mcard(s, i){
   if (PREF.show.items && items.length) h += `<div class="more ${open[key]?"open":""}"><button class="more-head" data-toggle="${esc(key)}"><span class="ico sm box">${I("box")}</span><span>容器與服務：${itemsSummary(items)}</span><span class="chev">${I("chev")}</span></button>
       <div class="collapse"><div><div class="list">${items.map(itemRow).join("")}</div></div></div></div>`;
   const info = updateInfo(s), btn = updateBtn(s);
-  if (info || btn) h += `<div class="foot"><div class="sub">${info}</div>${btn}</div>`;
+  if (info || btn) h += `<div class="foot"><div class="sub" data-x>${info}</div>${btn}</div>`;
   return h + `</div>`;
 }
 function summary(n, clickable){
@@ -1316,7 +1326,7 @@ function renderMobile(list, n, time){
   const shown = FILTER ? list.filter(s=>lvOf(s)===FILTER) : list, g = greet(n, list.length);
   return `<div class="dash m" data-key="m"><header class="bar"><span class="mini">VPS 哨兵</span><span class="grow"></span>
     <button class="cap glass" data-settings title="設定">${I("gear")}</button><button class="cap glass" data-logout title="登出">${I("logout")}</button></header>
-    <div class="hero"><div class="hello">${g.hi}</div><h1>${g.line}</h1><div class="meta"><span class="live"></span>更新於 ${time}</div></div>
+    <div class="hero"><div class="hello">${g.hi}</div><h1 data-x>${g.line}</h1><div class="meta"><span class="live"></span>更新於 ${time}</div></div>
     ${summary(n, many)}
     <div class="grid">${shown.length ? shown.map(mcard).join("") : `<div class="empty">這個分類目前沒有主機 👍</div>`}</div></div>`;
 }
@@ -1341,7 +1351,7 @@ function detail(s){
   let h = `<div class="detail" data-key="d-${esc(key)}"><div class="panel glass dhead" style="--i:0">
       <div style="min-width:0"><h2 class="nmh" style="display:flex;align-items:center;gap:10px;flex-wrap:wrap"><span>${esc(s.name)}</span>${stchip(s)}${editBtn(s)}</h2>
       <div class="sub">${s.online ? `${where?esc(where)+"・":""}${esc(s.os)}・開機 ${up(s.uptime)}` : "連不上這台主機"}</div></div>
-      ${s.online ? `<div class="act"><div class="sub" style="line-height:1.6;font-weight:600">${updateInfo(s)}</div>${updateBtn(s)}</div>` : ""}</div>`;
+      ${s.online ? `<div class="act"><div class="sub" data-x style="line-height:1.6;font-weight:600">${updateInfo(s)}</div>${updateBtn(s)}</div>` : ""}</div>`;
   if (!s.online) return h + `<div class="panel glass bigoff" style="--i:1"><b>連不上這台主機</b>${esc(s.error||"")}</div></div>`;
   h += alerts(s);
   const d0 = s.disks[0] || {pct:0, used:0, total:0};
@@ -1395,20 +1405,46 @@ function tween(el, from, to, d){
     el.textContent = (from+(to-from)*e).toFixed(d); if (k<1) el._raf = requestAnimationFrame(stepf); };
   el._raf = requestAnimationFrame(stepf);
 }
+const EASE = "cubic-bezier(.22,1,.36,1)";
+const canAnim = () => PREF.motion && !matchMedia("(prefers-reduced-motion: reduce)").matches;
+/* 讓元素平順地離開：先淡出、收起高度，再移除 */
+function leave(n){
+  if (n.nodeType !== 1 || !canAnim() || !n.isConnected || !n.matches(".alert,.item,.card,.host")) return n.remove();
+  if (n._leaving) return; n._leaving = 1;
+  const h = n.offsetHeight;
+  n.style.overflow = "hidden"; n.style.pointerEvents = "none";
+  n.animate([{opacity:1, height:h+"px"}, {opacity:0, height:"0px", marginTop:"0px", marginBottom:"0px", paddingTop:"0px", paddingBottom:"0px"}],
+            {duration:300, easing:EASE}).onfinish = () => n.remove();
+}
+/* 按鈕內容換掉時，寬度平滑變化 */
+function flipWidth(el, change){
+  const w0 = el.offsetWidth; change(); const w1 = el.offsetWidth;
+  if (canAnim() && Math.abs(w1 - w0) > 1) el.animate([{width:w0+"px"}, {width:w1+"px"}], {duration:420, easing:EASE});
+}
 function morph(a, b){
   if (a.nodeType!==b.nodeType || a.nodeName!==b.nodeName ||
       (a.nodeType===1 && (a.getAttribute("data-key")||"")!==(b.getAttribute("data-key")||""))) { a.replaceWith(b); return; }
   if (a.nodeType===3 || a.nodeType===8){ if (a.nodeValue!==b.nodeValue) a.nodeValue=b.nodeValue; return; }
   if (a.nodeType!==1) return;
+  if (a.classList.contains("ubtn") && a.innerHTML !== b.innerHTML) {
+    return flipWidth(a, () => { patch(a, b); a.animate([{opacity:.35}, {opacity:1}], {duration:320, easing:EASE}); });
+  }
+  if (a.hasAttribute("data-x") && a.innerHTML !== b.innerHTML) {
+    patch(a, b); if (canAnim()) a.animate([{opacity:0, transform:"translateY(4px)"}, {opacity:1, transform:"none"}], {duration:380, easing:EASE});
+    return;
+  }
+  patch(a, b);
+}
+function patch(a, b){
   for (const at of [...a.attributes]) if (!b.hasAttribute(at.name)) a.removeAttribute(at.name);
   for (const at of [...b.attributes]) if (a.getAttribute(at.name)!==at.value){
     if (at.name==="data-v") tween(a, parseFloat(a.getAttribute("data-v"))||0, parseFloat(at.value)||0, +b.getAttribute("data-d")||0);
     a.setAttribute(at.name, at.value);
   }
   if (a.hasAttribute("data-v")) return;
-  const ac=[...a.childNodes], bc=[...b.childNodes];
+  const ac=[...a.childNodes].filter(n=>!n._leaving), bc=[...b.childNodes];
   bc.forEach((n,i)=>{ if (ac[i]) morph(ac[i], n); else a.appendChild(n); });
-  for (let i=bc.length;i<ac.length;i++) ac[i].remove();
+  for (let i=bc.length;i<ac.length;i++) leave(ac[i]);
 }
 function paint(html){
   const tpl = document.createElement("template"); tpl.innerHTML = html.trim();
@@ -1416,6 +1452,14 @@ function paint(html){
   if (cur) morph(cur, tpl.content.firstElementChild); else { $("#app").innerHTML = ""; $("#app").appendChild(tpl.content.firstElementChild); }
 }
 function render(list){
+  // 更新剛完成：跳通知
+  for (const s of list) {
+    const old = LIST.find(x => keyOf(x) === keyOf(s));
+    if (old && old.update && old.update.running && s.update && !s.update.running) {
+      const ok = s.update.last && s.update.last.ok;
+      setTimeout(() => toast(ok ? `「${s.name}」更新完成 ✨` : `「${s.name}」更新失敗，可以再試一次`, ok ? "ok" : "bad"), 400);
+    }
+  }
   LIST = list; flagAccent();
   const n = {ok:0,warn:0,bad:0}; list.forEach(s=>n[lvOf(s)]++);
   const time = new Date().toLocaleTimeString("zh-TW",{hour12:false});
@@ -1433,7 +1477,8 @@ function modal({icon, cls="box", title, text, input, ok="確定", cancel="取消
       <div class="btns"><button class="ubtn ghost" data-r="0">${cancel}</button><button class="ubtn" data-r="1">${ok}</button></div></div>`;
     $("#layer").appendChild(v);
     const inp = v.querySelector("input");
-    const done = r => { if (v._d) return; v._d = 1; v.classList.add("closing"); setTimeout(()=>v.remove(), 340); res(r ? (inp ? inp.value : true) : null); };
+    const done = r => { if (v._d) return; v._d = 1; v.classList.add("closing"); const val = r ? (inp ? inp.value : true) : null;
+      setTimeout(()=>{ v.remove(); res(val); }, 300); };
     v._esc = () => done(0);
     if (inp) { setTimeout(()=>{ inp.focus(); inp.select(); }, 60); inp.addEventListener("keydown", e => { if (e.key==="Enter") done(1); if (e.key==="Escape") done(0); }); }
     v.addEventListener("click", e => { if (e.target === v) return done(0); const b = e.target.closest("[data-r]"); if (b) done(+b.dataset.r); });
@@ -1581,7 +1626,14 @@ document.addEventListener("click", async e => {
   const tg = t.closest("[data-toggle]");
   if (tg) { const k = tg.dataset.toggle; open[k] = !open[k]; tg.parentElement.classList.toggle("open", open[k]); return; }
   const fl = t.closest("[data-filter]");
-  if (fl) { FILTER = FILTER===fl.dataset.filter ? "" : fl.dataset.filter; return smooth(() => render(LIST)); }
+  if (fl) {
+    FILTER = FILTER===fl.dataset.filter ? "" : fl.dataset.filter;
+    const g = $("#app .grid");
+    if (!g || !canAnim()) return render(LIST);
+    g.animate([{opacity:1}, {opacity:0, transform:"translateY(8px)"}], {duration:160, easing:"ease-in"}).onfinish = () => {
+      $("#app .grid").replaceChildren(); render(LIST); };
+    return;
+  }
 
   const rn = t.closest("[data-rename]");
   if (rn) {
@@ -1607,11 +1659,11 @@ document.addEventListener("click", async e => {
     const ok = await modal({icon:"upd", cls:"cpu", title: n ? `更新「${label}」？` : `檢查「${label}」的更新？`,
       text: n ? `會在背景安裝 ${n} 個套件更新，大約 1～5 分鐘。\n期間部分服務可能會短暫重新啟動。` : "目前沒有偵測到更新，\n要重新檢查並安裝最新的更新嗎？", ok: n ? "開始更新" : "檢查"});
     if (!ok) return;
-    ub.disabled = true; ub.innerHTML = `<span class="spin"></span>開始中…`;
+    flipWidth(ub, () => { ub.disabled = true; ub.innerHTML = `<span class="spin"></span>開始中…`; });
     try {
       const r = await fetch("/api/update?node="+encodeURIComponent(node), {method:"POST", headers:{"X-Token":getTok()}});
       const d = await r.json().catch(()=>({}));
-      (r.ok && d.ok) ? toast("已開始更新，完成後畫面會顯示結果") : toast(d.message || d.error || "無法開始更新", "bad");
+      (r.ok && d.ok) ? toast("已開始更新，好了會通知你") : toast(d.message || d.error || "無法開始更新", "bad");
     } catch(err) { toast("連線失敗，請稍後再試", "bad"); }
     return tick();
   }
@@ -1631,7 +1683,8 @@ async function tick(){
   } catch(e) {
     const m = document.querySelector(".meta"); if (m) m.innerHTML = `<span class="live off"></span>連線中斷，重試中…`;
   }
-  timer = setTimeout(tick, (PREF.refresh || 5) * 1000);
+  const busy = LIST.some(s => s.update && s.update.running);   // 更新中就看得勤一點
+  timer = setTimeout(tick, busy ? 2000 : (PREF.refresh || 5) * 1000);
 }
 document.addEventListener("visibilitychange",()=>{ if(!document.hidden) tick(); });
 tick();
