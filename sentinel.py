@@ -943,6 +943,7 @@ button{font:inherit;color:inherit}
 .offline svg{width:22px;height:22px;flex:none}
 .offline .sub{color:var(--sub);font-weight:600;margin-top:2px}
 
+@media (max-width:700px){.grid{display:flex;flex-direction:column}}
 /* 緊湊 */
 [data-density="compact"]{--pad:14px;--gap:12px}
 [data-density="compact"] .metrics{gap:9px;margin-top:12px}
@@ -963,7 +964,8 @@ button{font:inherit;color:inherit}
 .greet b{color:var(--text)}
 .side .summary{margin:0;padding:0 4px;gap:6px}
 .side .pill{padding:6px 11px 6px 10px;font-size:12.5px;gap:6px}
-.hosts{display:flex;flex-direction:column;gap:6px;overflow:auto;padding:2px;margin:0 -2px}
+.hosts{display:flex;flex-direction:column;gap:6px;overflow-x:hidden;overflow-y:auto;padding:2px;margin:0 -2px;scrollbar-width:none}
+.hosts::-webkit-scrollbar{display:none}
 .host{border:0;background:transparent;text-align:left;cursor:pointer;border-radius:22px;padding:11px 12px;display:flex;flex-direction:column;gap:9px;
   transition:background .3s,box-shadow .3s,transform .3s cubic-bezier(.34,1.56,.64,1)}
 .host:hover{background:var(--track)}.host:active{transform:scale(.98)}
@@ -1559,10 +1561,15 @@ function skeleton(){
 
 /* ═════════ 只更新有變動的地方 ═════════ */
 function tween(el, from, to, d){
-  const t0 = performance.now(), dur = 750;
   cancelAnimationFrame(el._raf);
-  const stepf = now => { const k = Math.min(1,(now-t0)/dur), e = 1-Math.pow(1-k,3);
-    el.textContent = (from+(to-from)*e).toFixed(d); if (k<1) el._raf = requestAnimationFrame(stepf); };
+  if (!isFinite(from) || !isFinite(to) || !canAnim()) { el.textContent = (+to).toFixed(d); return; }
+  let t0 = null; const dur = 750;
+  const stepf = now => {
+    if (t0 === null) t0 = now;                                   // 用第一格畫面當起點，時間不會倒退
+    const k = Math.min(1, Math.max(0, (now - t0) / dur)), e = 1 - Math.pow(1 - k, 3);
+    el.textContent = (from + (to - from) * e).toFixed(d);
+    if (k < 1) el._raf = requestAnimationFrame(stepf); else el.textContent = (+to).toFixed(d);
+  };
   el._raf = requestAnimationFrame(stepf);
 }
 const EASE = "cubic-bezier(.22,1,.36,1)";
@@ -1576,6 +1583,41 @@ function flipSiblings(parent, change){
   kids.forEach((c, i) => { if (!c.isConnected) return; const r = c.getBoundingClientRect(), dx = r0[i].left - r.left, dy = r0[i].top - r.top;
     if (Math.abs(dx) > 1 || Math.abs(dy) > 1) c.animate([{transform:`translate(${dx}px,${dy}px)`}, {transform:"none"}], {duration:450, easing:EASE}); });
 }
+const gapOf = el => parseFloat(getComputedStyle(el).rowGap) || 0;
+/* 前後有沒有「真正留著」的鄰居，決定要收哪一邊的間距 */
+function gapSide(n){
+  const live = x => x && x.nodeType === 1 && !x._leaving;
+  let p = n.previousElementSibling; while (p && !live(p)) p = p.previousElementSibling;
+  let q = n.nextElementSibling; while (q && !live(q)) q = q.nextElementSibling;
+  return p ? "marginTop" : q ? "marginBottom" : null;
+}
+/* 消失：先淡出，再把空間（含間距）收起來 */
+function leaveBlock(n){
+  const h = n.offsetHeight, cs = getComputedStyle(n), side = gapSide(n), g = side ? gapOf(n.parentElement) : 0;
+  const pt = cs.paddingTop, pb = cs.paddingBottom, m0 = {}, m1 = {};
+  if (side) { m0[side] = "0px"; m1[side] = -g + "px"; }
+  n.style.overflow = "hidden"; n.style.pointerEvents = "none"; n.style.animation = "none";
+  const dur = Math.min(720, 380 + h * .45);
+  n.animate([
+    {height:h+"px", opacity:1, transform:"none", paddingTop:pt, paddingBottom:pb, ...m0, easing:"cubic-bezier(.4,0,1,1)"},
+    {height:h+"px", opacity:0, transform:"scale(.97)", paddingTop:pt, paddingBottom:pb, ...m0, offset:.35, easing:"cubic-bezier(.45,0,.2,1)"},
+    {height:"0px", opacity:0, transform:"scale(.97)", paddingTop:"0px", paddingBottom:"0px", ...m1}],
+    {duration:dur, easing:"linear", fill:"forwards"}).onfinish = () => n.remove();
+}
+/* 出現：先把空間撐開，再淡入 */
+function enterBlock(el, delay){
+  const h = el.offsetHeight, cs = getComputedStyle(el), side = gapSide(el), g = side ? gapOf(el.parentElement) : 0;
+  const pt = cs.paddingTop, pb = cs.paddingBottom, m0 = {}, m1 = {};
+  if (side) { m0[side] = -g + "px"; m1[side] = "0px"; }
+  el.style.overflow = "hidden";
+  el.getAnimations().forEach(x => { if (x.animationName) x.finish(); });   // 原本的進場動畫直接跳到結尾，之後也不會再重播
+  const dur = Math.min(820, 460 + h * .45);
+  el.animate([
+    {height:"0px", opacity:0, transform:"scale(.97)", paddingTop:"0px", paddingBottom:"0px", ...m0, easing:"cubic-bezier(.45,0,.2,1)"},
+    {height:h+"px", opacity:0, transform:"scale(.97)", paddingTop:pt, paddingBottom:pb, ...m1, offset:.5, easing:"cubic-bezier(.22,1,.36,1)"},
+    {height:h+"px", opacity:1, transform:"none", paddingTop:pt, paddingBottom:pb, ...m1}],
+    {duration:dur, delay, easing:"linear", fill:"backwards"}).onfinish = () => { el.style.overflow = ""; };
+}
 function leave(n){
   if (n.nodeType !== 1 || !canAnim() || !n.isConnected) return n.remove();
   if (n._leaving) return;
@@ -1587,10 +1629,7 @@ function leave(n){
   }
   if (!n.matches(BLOCK)) return n.remove();
   n._leaving = 1;
-  const h = n.offsetHeight;
-  n.style.overflow = "hidden"; n.style.pointerEvents = "none";
-  n.animate([{opacity:1, height:h+"px"}, {opacity:0, height:"0px", marginTop:"0px", marginBottom:"0px", paddingTop:"0px", paddingBottom:"0px"}],
-            {duration:320, easing:EASE}).onfinish = () => n.remove();
+  leaveBlock(n);
 }
 /* 按鈕內容換掉時，寬度平滑變化 */
 function flipWidth(el, change){
@@ -1629,12 +1668,16 @@ function keyedPatch(a, b){
     if (el !== ref) a.insertBefore(el, ref || null);
     prev = el;
   });
-  old.forEach(c => leave(c));
-  if (anim) fresh.forEach((el, j) => {           // 新出現的：浮現
-    if (el.nodeType === 1) el.animate([{opacity:0, transform:"translateY(10px) scale(.98)"}, {opacity:1, transform:"none"}],
-                                      {duration:480, delay:j*50, easing:EASE, fill:"backwards"});
+  const leaving = [...old.values()];
+  // 會撐開／收起空間的進出場，留下的項目會跟著空間自然移動，不另外移位
+  const flowing = anim && [...leaving, ...fresh].some(x => x.nodeType === 1 && !x.matches(TILE));
+  leaving.forEach(c => leave(c));
+  if (anim) fresh.forEach((el, j) => {
+    if (el.nodeType !== 1) return;
+    if (el.matches(TILE)) el.animate([{opacity:0, transform:"scale(.95)"}, {opacity:1, transform:"none"}], {duration:420, delay:j*50, easing:EASE, fill:"backwards"});
+    else enterBlock(el, (leaving.length ? 200 : 0) + j*90);   // 有東西要離開時，等它先淡出再進來
   });
-  if (anim) keep.forEach(([k, el]) => {          // 留下來的：從舊位置平滑移到新位置
+  if (anim && !flowing) keep.forEach(([k, el]) => {   // 只有單純換位置時才平滑移位
     const f = first.get(k), l = el.getBoundingClientRect(), dx = f.left - l.left, dy = f.top - l.top;
     if (Math.abs(dx) > 1 || Math.abs(dy) > 1) el.animate([{transform:`translate(${dx}px,${dy}px)`}, {transform:"none"}], {duration:480, easing:EASE});
   });
