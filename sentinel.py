@@ -1917,7 +1917,7 @@ function detail(s){
   const key = keyOf(s), where = place(s);
   let h = `<div class="detail" data-key="detail" data-keyed><div class="panel glass dhead" data-key="dh" style="--i:0">
       <div style="min-width:0"><h2 class="nmh" style="display:flex;align-items:center;gap:8px;flex-wrap:wrap"><span>${esc(s.name)}</span>${editBtn(s)}</h2>
-      <div class="sub dsub">${stline(s)}${s.online ? `<span>・${where?esc(where)+"・":""}${esc(s.os)}・開機 ${up(s.uptime)}</span>` : ""}</div></div>
+      <div class="sub dsub">${s.online ? `<span>${where?esc(where)+"・":""}${esc(s.os)}・開機 ${up(s.uptime)}</span>` : `<span>目前沒有回應</span>`}</div></div>
       ${s.online ? `<div class="act"><div class="sub" data-x style="line-height:1.6;font-weight:600">${updateInfo(s)}</div>${updateBtn(s)}</div>` : ""}</div>`;
   if (!s.online) return h + `<div class="panel glass bigoff" data-key="off" style="--i:1"><b>連不上這台主機</b>${esc(s.error||"")}</div></div>`;
   h += alerts(s);
