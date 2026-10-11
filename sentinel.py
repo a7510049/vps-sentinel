@@ -692,12 +692,12 @@ button{font:inherit;color:inherit}
 
 /* ═════════ 背景 ═════════ */
 .bgfx{position:fixed;inset:0;z-index:0;pointer-events:none;overflow:hidden}
-.aurora{position:absolute;inset:-20vmax;filter:blur(80px) saturate(135%);transition:opacity .8s}
-.aurora i{position:absolute;width:55vmax;height:55vmax;border-radius:50%}
-.aurora i:nth-child(1){background:radial-gradient(circle,var(--a1),transparent 62%);left:2%;top:-2%;animation:d1 26s ease-in-out infinite alternate}
-.aurora i:nth-child(2){background:radial-gradient(circle,var(--a2),transparent 62%);right:-4%;top:18%;animation:d2 32s ease-in-out infinite alternate}
-.aurora i:nth-child(3){background:radial-gradient(circle,var(--a3),transparent 62%);left:18%;bottom:-8%;animation:d3 24s ease-in-out infinite alternate}
-.aurora i:nth-child(4){background:radial-gradient(circle,var(--a1),transparent 62%);right:14%;bottom:8%;animation:d1 38s ease-in-out infinite alternate-reverse}
+.aurora{position:absolute;inset:-20vmax;transition:opacity .8s}
+.aurora i{position:absolute;width:60vmax;height:60vmax;border-radius:50%;will-change:transform}
+.aurora i:nth-child(1){background:radial-gradient(circle,var(--a1) 0%,color-mix(in srgb,var(--a1) 45%,transparent) 30%,transparent 68%);left:2%;top:-2%;animation:d1 26s ease-in-out infinite alternate}
+.aurora i:nth-child(2){background:radial-gradient(circle,var(--a2) 0%,color-mix(in srgb,var(--a2) 45%,transparent) 30%,transparent 68%);right:-4%;top:18%;animation:d2 32s ease-in-out infinite alternate}
+.aurora i:nth-child(3){background:radial-gradient(circle,var(--a3) 0%,color-mix(in srgb,var(--a3) 45%,transparent) 30%,transparent 68%);left:18%;bottom:-8%;animation:d3 24s ease-in-out infinite alternate}
+.aurora i:nth-child(4){background:radial-gradient(circle,var(--a1) 0%,color-mix(in srgb,var(--a1) 45%,transparent) 30%,transparent 68%);right:14%;bottom:8%;animation:d1 38s ease-in-out infinite alternate-reverse}
 [data-mode="dark"] .aurora{opacity:.42}
 [data-mode="light"] .aurora{opacity:.38}
 @keyframes d1{to{transform:translate(18vmax,12vmax) scale(1.15)}}
@@ -757,7 +757,7 @@ button{font:inherit;color:inherit}
 .ubtn.ghost{background:var(--glass2);color:var(--text);box-shadow:inset 0 0 0 1px var(--line)}
 .spin{width:13px;height:13px;border:2px solid currentColor;border-right-color:transparent;border-radius:50%;animation:sp .8s linear infinite}
 @keyframes sp{to{transform:rotate(360deg)}}
-@keyframes rise{from{opacity:0;transform:translateY(18px) scale(.975);filter:blur(5px)}}
+@keyframes rise{from{opacity:0;transform:translateY(18px) scale(.975)}}
 @keyframes fadeIn{from{opacity:0}}
 @keyframes fadeOut{to{opacity:0}}
 
@@ -792,9 +792,11 @@ button{font:inherit;color:inherit}
 .hero h1{font-size:30px;font-weight:900;letter-spacing:.2px;line-height:1.2;margin-top:2px}
 .hero h1 em{font-style:normal;background:var(--grad);-webkit-background-clip:text;background-clip:text;color:transparent}
 .meta{color:var(--faint);font-size:12px;margin-top:6px;display:flex;align-items:center;gap:6px;font-weight:600}
-.live{width:6px;height:6px;border-radius:50%;background:var(--ok);animation:live 2.4s ease-out infinite}
+.live{width:6px;height:6px;border-radius:50%;background:var(--ok);position:relative;flex:none}
+.live::after{content:"";position:absolute;inset:0;border-radius:50%;background:var(--ok);animation:live 2.4s ease-out infinite}
 .live.off{background:var(--faint);animation:none}
-@keyframes live{0%{box-shadow:0 0 0 0 color-mix(in srgb,var(--ok) 60%,transparent)}100%{box-shadow:0 0 0 8px transparent}}
+@keyframes live{from{transform:scale(1);opacity:.6}to{transform:scale(3.2);opacity:0}}
+.live.off::after{display:none}
 
 /* ═════════ 摘要膠囊 ═════════ */
 .summary{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:18px}
@@ -815,15 +817,17 @@ button{font:inherit;color:inherit}
 .card.warn{--sc:var(--warn)}
 .head{display:flex;align-items:center;gap:10px}
 /* 狀態：國旗本身邊緣發光（綠＝正常、黃＝注意、紅＝異常），不加框 */
-.avatar{--st:var(--ok);display:grid;place-items:center;flex:none;width:34px;height:34px}
+.avatar{--st:var(--ok);display:grid;place-items:center;flex:none;width:34px;height:34px;position:relative}
 .avatar.warn{--st:var(--warn)}.avatar.bad{--st:var(--bad)}
-.avatar .flag,.avatar .emoji,.avatar .letter{animation:glow 3.2s ease-in-out infinite}
-.avatar.bad .flag,.avatar.bad .emoji,.avatar.bad .letter{animation-duration:1.3s}
+.avatar::before{content:"";position:absolute;left:50%;top:50%;width:30px;height:22px;margin:-11px 0 0 -15px;border-radius:7px;pointer-events:none;
+  box-shadow:0 0 0 2px var(--st),0 0 18px 3px color-mix(in srgb,var(--st) 70%,transparent);opacity:.25;animation:glow 3.2s ease-in-out infinite;will-change:opacity}
+.avatar.round::before{width:30px;height:30px;margin:-15px 0 0 -15px;border-radius:50%}
+.avatar.bad::before{animation-duration:1.3s}
 .avatar .flag{width:30px;height:22px;border-radius:6px;
   box-shadow:0 0 0 1.5px color-mix(in srgb,var(--st) 70%,transparent),0 0 12px -1px color-mix(in srgb,var(--st) 60%,transparent)}
 .avatar .emoji{display:grid;place-items:center;width:30px;height:22px;font-size:19px;border-radius:6px;
   box-shadow:0 0 0 1.5px color-mix(in srgb,var(--st) 70%,transparent),0 0 12px -1px color-mix(in srgb,var(--st) 60%,transparent)}
-@keyframes glow{50%{box-shadow:0 0 0 2px var(--st),0 0 20px 2px color-mix(in srgb,var(--st) 70%,transparent)}}
+@keyframes glow{50%{opacity:1}}
 .avatar .letter{width:30px;height:30px;border-radius:50%;display:grid;place-items:center;font-weight:900;font-size:14px;color:var(--st);
   background:color-mix(in srgb,var(--st) 14%,transparent);box-shadow:0 0 0 1.5px color-mix(in srgb,var(--st) 70%,transparent),0 0 12px -1px color-mix(in srgb,var(--st) 60%,transparent)}
 /* 大標題旁的狀態標籤 */
@@ -1050,6 +1054,13 @@ button{font:inherit;color:inherit}
 @keyframes toastin{from{opacity:0;transform:translateY(16px) scale(.92)}}
 
 ::view-transition-old(root),::view-transition-new(root){animation-duration:.5s;animation-timing-function:cubic-bezier(.22,1,.36,1)}
+/* ═════════ 流暢優先（手機預設） ═════════ */
+[data-lite="on"] .aurora i{animation:none}
+[data-lite="on"] .grain{display:none}
+[data-lite="on"] .fill::after{display:none}
+[data-lite="on"] .veil{-webkit-backdrop-filter:none;backdrop-filter:none}
+[data-lite="on"] .chart path{transition:none}
+.xfade{position:fixed;inset:0;z-index:45;pointer-events:none;animation:fadeOut .45s cubic-bezier(.4,0,.2,1) forwards}
 /* ═════════ 無障礙／關閉動畫 ═════════ */
 [data-motion="off"] *,[data-motion="off"] *::before,[data-motion="off"] *::after{animation:none!important;transition:none!important}
 @media (prefers-reduced-motion:reduce){*,*::before,*::after{animation:none!important;transition:none!important}}
@@ -1097,12 +1108,14 @@ const P = {
 const I = n => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${P[n]}</svg>`;
 
 /* ═════════ 個人設定（存在這台裝置） ═════════ */
-const DEF = {theme:"auto", accent:"blue", glass:50, bg:"aurora", motion:true, density:"cozy", size:"m", refresh:5,
+const DEF = {theme:"auto", accent:"blue", glass:50, bg:"aurora", motion:true, perf:"auto", density:"cozy", size:"m", refresh:5,
   show:{chart:true, net:true, items:true, info:true, flag:true}};
 let PREF = (() => { try { const p = JSON.parse(store("vps-prefs") || "{}"); return {...DEF, ...p, show:{...DEF.show, ...(p.show||{})}}; } catch(e){ return JSON.parse(JSON.stringify(DEF)); } })();
 const getP = k => k.split(".").reduce((o,x)=>o && o[x], PREF);
 function setP(k, v){ const ks = k.split("."); let o = PREF; while (ks.length > 1) o = o[ks.shift()]; o[ks[0]] = v; store("vps-prefs", JSON.stringify(PREF)); }
 const DARKQ = matchMedia("(prefers-color-scheme: dark)");
+const TOUCH = matchMedia("(pointer: coarse)");
+function isLite(){ return PREF.perf === "lite" || (PREF.perf === "auto" && (TOUCH.matches || innerWidth < 1024)); }
 /* 各國國旗配色：[亮色, 主色, 輔助色] */
 const FLAGPAL = {
   JP:["#ff7a8a","#d3002d","#ffb3c1"], HK:["#ff7b6e","#de2910","#ffc4bd"], SG:["#ff6b7a","#ef3340","#ffc2c9"],
@@ -1136,7 +1149,8 @@ function applyPrefs(){
   h.dataset.mode = dark ? "dark" : "light"; h.dataset.accent = PREF.accent; h.dataset.bg = PREF.bg;
   h.dataset.motion = PREF.motion ? "on" : "off"; h.dataset.density = PREF.density;
   h.style.setProperty("--ga", (dark ? .02 + g * .17 : .22 + g * .62).toFixed(3));
-  h.style.setProperty("--blur", Math.round(14 + g * 26) + "px");
+  const lite = isLite(); h.dataset.lite = lite ? "on" : "off";
+  h.style.setProperty("--blur", Math.round(lite ? 10 + g * 12 : 14 + g * 26) + "px");
   h.style.setProperty("--zoom", {s:.92, m:1, l:1.1}[PREF.size] || 1);
   document.querySelector('meta[name="theme-color"]').content = dark ? "#06080f" : "#eef1f7";
   try { flagAccent(); } catch(e) {}   /* 第一次執行時主機清單還沒準備好 */
@@ -1175,7 +1189,7 @@ function when(t){ const d=new Date(t*1000), now=new Date();
 function avatar(s){
   const f = PREF.show.flag && s.geo ? flag(s.geo.cc) : "";
   const lv = lvOf(s), tip = {ok:"運作正常", warn:"需要留意", bad:"出問題了"}[lv];
-  return `<div class="avatar ${lv}" title="${tip}">${f || `<span class="letter">${esc([...(s.name||"?")][0])}</span>`}</div>`;
+  return `<div class="avatar ${lv} ${f?"":"round"}" title="${tip}">${f || `<span class="letter">${esc([...(s.name||"?")][0])}</span>`}</div>`;
 }
 function stchip(s){
   const lv = lvOf(s), t = s.online ? {ok:"運作正常", warn:"需要留意", bad:"出問題了"}[lv] : "連不上";
@@ -1385,7 +1399,7 @@ function render(list){
   const time = new Date().toLocaleTimeString("zh-TW",{hour12:false});
   paint(DESK.matches ? renderDesk(list, n, time) : renderMobile(list, n, time));
 }
-DESK.addEventListener("change", () => LIST.length ? render(LIST) : null);
+DESK.addEventListener("change", () => { applyPrefs(); if (LIST.length) render(LIST); });
 
 /* ═════════ 對話框、通知 ═════════ */
 function modal({icon, cls="box", title, text, input, ok="確定", cancel="取消"}){
@@ -1403,9 +1417,18 @@ function modal({icon, cls="box", title, text, input, ok="確定", cancel="取消
   });
 }
 /* 整頁平順切換：支援的瀏覽器會淡入淡出，不支援就直接換 */
-function smooth(fn){
-  const ok = document.startViewTransition && PREF.motion && !matchMedia("(prefers-reduced-motion: reduce)").matches;
-  ok ? document.startViewTransition(fn) : fn();
+function smooth(fn, theme){
+  const motion = PREF.motion && !matchMedia("(prefers-reduced-motion: reduce)").matches;
+  if (!motion) return fn();
+  if (isLite()) {                       // 手機：蓋一層舊底色再淡出，便宜又順
+    if (theme) {
+      const x = document.createElement("div"); x.className = "xfade";
+      x.style.background = getComputedStyle(document.documentElement).backgroundColor;
+      document.body.appendChild(x); setTimeout(() => x.remove(), 500);
+    }
+    return requestAnimationFrame(fn);
+  }
+  document.startViewTransition ? document.startViewTransition(fn) : fn();
 }
 function toast(msg, type="ok"){
   const t = document.createElement("div"); t.className = `toast glass ${type}`;
@@ -1434,6 +1457,8 @@ function settingsBody(){
     <div class="opt"><span class="lab">文字大小</span>${seg("size",[["s","小"],["m","中"],["l","大"]])}</div>
     <div class="opt"><span class="lab">卡片</span>${seg("density",[["cozy","寬鬆"],["compact","緊湊"]])}</div>
     <div class="opt"><span class="lab">動畫效果</span>${tog("motion")}</div>
+    <div class="opt" style="flex-wrap:wrap"><span class="lab">效能模式<small>「自動」在手機上會關掉比較耗電的效果，讓畫面更順</small></span>
+      <div style="flex-basis:100%">${seg("perf",[["auto","自動"],["lite","流暢優先"],["full","完整效果"]])}</div></div>
   </div></div>
   <div class="sec"><h4>要顯示的內容</h4><div class="group">
     <div class="opt"><span class="ico sm cpu">${I("load")}</span><span class="lab">歷史曲線圖</span>${tog("show.chart")}</div>
@@ -1482,7 +1507,7 @@ function openSettings(){
     }
     if (e.target.closest("[data-reset]")) {
       PREF = JSON.parse(JSON.stringify(DEF)); store("vps-prefs", JSON.stringify(PREF));
-      smooth(() => { body.innerHTML = settingsBody(); initSegs(body); applyPrefs(); if (LIST.length) render(LIST); });
+      smooth(() => { body.innerHTML = settingsBody(); initSegs(body); applyPrefs(); if (LIST.length) render(LIST); }, true);
       restart(); toast("已恢復預設值");
     }
   });
@@ -1503,9 +1528,9 @@ function openSettings(){
   sheet.addEventListener("pointermove", moveDrag); sheet.addEventListener("pointerup", endDrag); sheet.addEventListener("pointercancel", endDrag);
 
   function changed(k){
-    const big = ["theme","accent","bg","size","density"].includes(k) || k.startsWith("show.");
+    const big = ["theme","accent","bg","size","density","perf"].includes(k) || k.startsWith("show.");
     const run = () => { applyPrefs(); if (LIST.length) render(LIST); };
-    big ? smooth(run) : run();
+    big ? smooth(run, ["theme","accent","bg"].includes(k)) : run();
     if (k === "refresh") restart();
   }
 }
@@ -1551,7 +1576,7 @@ document.addEventListener("click", async e => {
   }
   const hs = t.closest("[data-sel]");
   if (hs) { SEL = hs.dataset.sel; store("vps-sel", SEL); scrollTo({top:0, behavior:"smooth"});
-    return PREF.accent === "flag" && flagCC() !== FLAGCC ? smooth(() => render(LIST)) : render(LIST); }
+    return PREF.accent === "flag" && flagCC() !== FLAGCC ? smooth(() => render(LIST), true) : render(LIST); }
 
   const ub = t.closest("[data-update]");
   if (ub) {
