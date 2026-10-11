@@ -888,8 +888,9 @@ button{font:inherit;color:inherit}
 .avatar .letter{width:30px;height:30px;border-radius:50%;display:grid;place-items:center;font-weight:900;font-size:14px;line-height:1;color:var(--st);
   background:color-mix(in srgb,var(--st) 16%,transparent)}
 /* 大標題旁的狀態標籤 */
-.stx{display:inline-flex;align-items:center;gap:7px;font-weight:700;vertical-align:-1px}
-.stx .dot{width:7px;height:7px}
+.dsub{display:flex;align-items:center;flex-wrap:wrap;gap:0 6px}
+.stx{display:inline-flex;align-items:center;gap:7px;font-weight:700;line-height:1}
+.stx .dot{width:7px;height:7px;flex:none}
 .stx.warn{color:var(--warn)}.stx.bad{color:var(--bad)}
 .stchip{--st:var(--ok);display:inline-flex;align-items:center;gap:7px;padding:6px 13px 6px 11px;border-radius:99px;font-size:12.5px;font-weight:800;
   color:var(--st);background:color-mix(in srgb,var(--st) 14%,transparent);box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--st) 35%,transparent);white-space:nowrap}
@@ -913,7 +914,7 @@ button{font:inherit;color:inherit}
 .metric .row b{font-size:16px;font-weight:900}
 .metric .row b small{font-size:12px;opacity:.6;margin-left:1px}
 .metric .row .sub{font-weight:600;margin-left:6px;font-size:12px}
-.spark{animation:rise .6s cubic-bezier(.22,1,.36,1) both;margin-top:16px;padding:12px 12px 6px;border-radius:18px;background:var(--glass2);box-shadow:inset 0 0 0 1px var(--line)}
+.spark{margin-top:16px;padding:12px 12px 6px;border-radius:18px;background:var(--glass2);box-shadow:inset 0 0 0 1px var(--line)}
 .spark .lbl{display:flex;justify-content:space-between;font-size:11.5px;color:var(--sub);margin-bottom:6px;font-weight:700}
 .spark .lbl i{display:inline-block;width:7px;height:7px;border-radius:50%;margin:0 4px 0 9px}
 .stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(90px,1fr));gap:8px;margin-top:12px}
@@ -1028,7 +1029,7 @@ button{font:inherit;color:inherit}
 .tile>div{min-width:0}
 /* 事件紀錄 */
 .evs{display:flex;flex-direction:column;gap:2px;max-height:330px;overflow:auto;margin:0 -6px;padding:0 6px}
-.ev{display:flex;gap:11px;align-items:flex-start;padding:8px 6px;border-radius:12px;font-size:13.5px;font-weight:700}
+.ev{animation:rise .5s cubic-bezier(.22,1,.36,1) both;display:flex;gap:11px;align-items:flex-start;padding:8px 6px;border-radius:12px;font-size:13.5px;font-weight:700}
 .ev:hover{background:var(--track)}
 .ev .dot{margin-top:6px}
 .ev .dot.info{background:var(--a1)}
@@ -1352,9 +1353,10 @@ function stchip(s){
 }
 const editBtn = s => s.online ? `<button class="iconbtn" title="改名稱" data-rename="${esc(s.node||"")}" data-name="${esc(s.name)}">${I("edit")}</button>` : "";
 function alerts(s){
-  const al = (s.problems||[]).map(p=>`<div class="alert bad">${I("warn")}${esc(p)}</div>`)
-    .concat((s.notices||[]).map(p=>`<div class="alert warn">${I("info")}${esc(p)}</div>`));
-  return `<div class="alerts">${al.join("")}</div>`;
+  const k = t => esc(String(t).replace(/[\d.]+/g, ""));
+  const al = (s.problems||[]).map(p=>`<div class="alert bad" data-key="b:${k(p)}">${I("warn")}${esc(p)}</div>`)
+    .concat((s.notices||[]).map(p=>`<div class="alert warn" data-key="w:${k(p)}">${I("info")}${esc(p)}</div>`));
+  return `<div class="alerts" data-key="al" data-keyed>${al.join("")}</div>`;
 }
 function itemsOf(s){
   const items = [];
@@ -1370,7 +1372,7 @@ function itemsSummary(items){
   const bad = items.filter(x=>x.st==="bad").length, okn = items.filter(x=>x.st==="ok").length, off = items.length-bad-okn;
   return `${okn} 個正常${off?`・${off} 個沒在用`:""}${bad?`・<b>${bad} 個異常</b>`:""}`;
 }
-const itemRow = (x,j) => `<div class="item" style="transition-delay:${j*35}ms"><span class="dot ${x.st}"></span><span class="n">${esc(x.n)}</span><span class="tag">${x.t}・${esc(x.s)}</span></div>`;
+const itemRow = (x,j) => `<div class="item" data-key="${x.t}:${esc(x.n)}" style="transition-delay:${j*35}ms"><span class="dot ${x.st}"></span><span class="n">${esc(x.n)}</span><span class="tag">${x.t}・${esc(x.s)}</span></div>`;
 function updateInfo(s){
   const n = s.updates ? s.updates.total : 0, u = s.update;
   let info = s.updates ? (n ? `有 ${n} 個套件可以更新${s.updates.security?`（含 ${s.updates.security} 個安全更新）`:""}` : "系統已經是最新的 ✨") : "";
@@ -1420,23 +1422,23 @@ function metric(icon, label, pct, detail){
 }
 function mcard(s, i){
   const lv = lvOf(s), key = keyOf(s);
-  let h = `<div class="card glass ${lv==="ok"?"":lv}" data-key="${esc(key)}" style="--i:${i}"><div class="head">${avatar(s)}
+  let h = `<div class="card glass ${lv==="ok"?"":lv}" data-key="${esc(key)}" data-keyed style="--i:${i}"><div class="head" data-key="hd">${avatar(s)}
     <div class="nm"><h2><span>${esc(s.name)}</span>${editBtn(s)}</h2><div class="sub">${s.online ? esc(place(s) || s.os) : "目前連不上"}</div></div>`;
-  if (!s.online) return h + `</div><div class="offline">${I("off")}<div>連不上這台主機<div class="sub">${esc(s.error||"")}</div></div></div></div>`;
+  if (!s.online) return h + `</div><div class="offline" data-key="off">${I("off")}<div>連不上這台主機<div class="sub">${esc(s.error||"")}</div></div></div></div>`;
   h += `<span class="uptime">開機 ${up(s.uptime)}</span></div>` + alerts(s);
-  h += `<div class="metrics">` + metric("cpu", "處理器", s.cpu, `${s.cores} 核`) +
+  h += `<div class="metrics" data-key="mt">` + metric("cpu", "處理器", s.cpu, `${s.cores} 核`) +
        metric("mem", "記憶體", s.mem.pct, `${size(s.mem.used)} / ${size(s.mem.total)}`) +
        s.disks.map(d=>metric("disk", "磁碟"+(d.path==="/"?"":" "+esc(d.path)), d.pct, `${size(d.used)} / ${size(d.total)}`)).join("") + `</div>`;
-  if (PREF.show.chart && s.hist) h += `<div class="spark"><div class="lbl"><span>最近 ${minutes(s.hist)} 分鐘</span><span><i style="background:${COL.cpu}"></i>處理器<i style="background:${COL.mem}"></i>記憶體</span></div>
+  if (PREF.show.chart && s.hist) h += `<div class="spark" data-key="sp"><div class="lbl"><span>最近 ${minutes(s.hist)} 分鐘</span><span><i style="background:${COL.cpu}"></i>處理器<i style="background:${COL.mem}"></i>記憶體</span></div>
       ${chart(cid(s,"m"), [{data:s.hist.cpu,color:COL.cpu},{data:s.hist.mem,color:COL.mem}], {max:100, h:64, fade:.25, sw:2})}</div>`;
-  h += `<div class="stats"><div class="stat"><div class="k"><span class="ico sm load">${I("load")}</span>負載</div><div class="v">${num(s.load[0],2)}</div></div>` +
-       (PREF.show.net ? `<div class="stat"><div class="k"><span class="ico sm down">${I("down")}</span>下載</div><div class="v num">${rate(s.net.rx)}</div></div>
-        <div class="stat"><div class="k"><span class="ico sm up">${I("up")}</span>上傳</div><div class="v num">${rate(s.net.tx)}</div></div>` : "") + `</div>`;
+  h += `<div class="stats" data-key="st" data-keyed><div class="stat" data-key="load"><div class="k"><span class="ico sm load">${I("load")}</span>負載</div><div class="v">${num(s.load[0],2)}</div></div>` +
+       (PREF.show.net ? `<div class="stat" data-key="down"><div class="k"><span class="ico sm down">${I("down")}</span>下載</div><div class="v num">${rate(s.net.rx)}</div></div>
+        <div class="stat" data-key="up"><div class="k"><span class="ico sm up">${I("up")}</span>上傳</div><div class="v num">${rate(s.net.tx)}</div></div>` : "") + `</div>`;
   const items = itemsOf(s);
-  if (PREF.show.items && items.length) h += `<div class="more ${open[key]?"open":""}"><button class="more-head" data-toggle="${esc(key)}"><span class="ico sm box">${I("box")}</span><span>容器與服務：${itemsSummary(items)}</span><span class="chev">${I("chev")}</span></button>
-      <div class="collapse"><div><div class="list">${items.map(itemRow).join("")}</div></div></div></div>`;
+  if (PREF.show.items && items.length) h += `<div class="more ${open[key]?"open":""}" data-key="mo"><button class="more-head" data-toggle="${esc(key)}"><span class="ico sm box">${I("box")}</span><span>容器與服務：${itemsSummary(items)}</span><span class="chev">${I("chev")}</span></button>
+      <div class="collapse"><div><div class="list" data-keyed>${items.map(itemRow).join("")}</div></div></div></div>`;
   const info = updateInfo(s), btn = updateBtn(s);
-  if (info || btn) h += `<div class="foot"><div class="sub" data-x>${info}</div>${btn}</div>`;
+  if (info || btn) h += `<div class="foot" data-key="ft"><div class="sub" data-x>${info}</div>${btn}</div>`;
   return h + `</div>`;
 }
 function summary(n, clickable){
@@ -1470,28 +1472,28 @@ function ring(icon, label, pct, sub, i){
 }
 function detail(s){
   const key = keyOf(s), where = place(s);
-  let h = `<div class="detail" data-key="d-${esc(key)}"><div class="panel glass dhead" style="--i:0">
+  let h = `<div class="detail" data-key="detail" data-keyed><div class="panel glass dhead" data-key="dh" style="--i:0">
       <div style="min-width:0"><h2 class="nmh" style="display:flex;align-items:center;gap:8px;flex-wrap:wrap"><span>${esc(s.name)}</span>${editBtn(s)}</h2>
-      <div class="sub">${stline(s)}${s.online ? `・${where?esc(where)+"・":""}${esc(s.os)}・開機 ${up(s.uptime)}` : ""}</div></div>
+      <div class="sub dsub">${stline(s)}${s.online ? `<span>・${where?esc(where)+"・":""}${esc(s.os)}・開機 ${up(s.uptime)}</span>` : ""}</div></div>
       ${s.online ? `<div class="act"><div class="sub" data-x style="line-height:1.6;font-weight:600">${updateInfo(s)}</div>${updateBtn(s)}</div>` : ""}</div>`;
-  if (!s.online) return h + `<div class="panel glass bigoff" style="--i:1"><b>連不上這台主機</b>${esc(s.error||"")}</div></div>`;
+  if (!s.online) return h + `<div class="panel glass bigoff" data-key="off" style="--i:1"><b>連不上這台主機</b>${esc(s.error||"")}</div></div>`;
   h += alerts(s) + strip(s);
   const d0 = s.disks[0] || {pct:0, used:0, total:0};
-  h += `<div class="gauges">${ring("cpu", "處理器", s.cpu, `${s.cores} 核心`, 1)}
+  h += `<div class="gauges" data-key="gg">${ring("cpu", "處理器", s.cpu, `${s.cores} 核心`, 1)}
         ${ring("mem", "記憶體", s.mem.pct, `${size(s.mem.used)} / ${size(s.mem.total)}`, 2)}
         ${ring("disk", "磁碟", d0.pct, `${size(d0.used)} / ${size(d0.total)}`, 3)}</div>`;
   const hs = s.hist || {}, mins = minutes(hs), xl = `<div class="xl"><span>${mins} 分鐘前</span><span>現在</span></div>`;
-  const cp = PREF.show.chart ? `<div class="panel glass" style="--i:4"><div class="ph"><span class="ico sm cpu">${I("load")}</span><h3>處理器與記憶體</h3><div class="legend">
+  const cp = PREF.show.chart ? `<div class="panel glass" data-key="cp" style="--i:4"><div class="ph"><span class="ico sm cpu">${I("load")}</span><h3>處理器與記憶體</h3><div class="legend">
       <span><i style="background:${COL.cpu}"></i>處理器<b>${num(s.cpu)}%</b></span><span><i style="background:${COL.mem}"></i>記憶體<b>${num(s.mem.pct)}%</b></span></div></div>
       <div class="cbox">${chart(cid(s,"a"), [{data:hs.cpu,color:COL.cpu},{data:hs.mem,color:COL.mem}], {max:100, grid:1})}</div>${xl}</div>` : "";
-  const np = PREF.show.net ? `<div class="panel glass" style="--i:5"><div class="ph"><span class="ico sm down">${I("down")}</span><h3>網路流量</h3><div class="legend">
+  const np = PREF.show.net ? `<div class="panel glass" data-key="np" style="--i:5"><div class="ph"><span class="ico sm down">${I("down")}</span><h3>網路流量</h3><div class="legend">
       <span><i style="background:${COL.rx}"></i>下載<b class="num">${rate(s.net.rx)}</b></span><span><i style="background:${COL.tx}"></i>上傳<b class="num">${rate(s.net.tx)}</b></span></div></div>
       <div class="cbox">${chart(cid(s,"b"), [{data:hs.rx,color:COL.rx},{data:hs.tx,color:COL.tx}], {grid:1})}</div>${xl}</div>` : "";
-  if (cp || np) h += `<div class="charts" style="${cp&&np?"":"grid-template-columns:1fr"}">${cp}${np}</div>`;
+  if (cp || np) h += `<div class="charts" data-key="ch" data-keyed style="${cp&&np?"":"grid-template-columns:1fr"}">${cp}${np}</div>`;
   const items = itemsOf(s);
-  const ip = PREF.show.items ? `<div class="panel glass" style="--i:6"><div class="ph"><span class="ico sm box">${I("box")}</span><h3>容器與服務</h3><span class="sub" style="margin-left:auto;font-weight:700">${items.length?itemsSummary(items).replace("<b>",'<b style="color:var(--bad)">'):""}</span></div>
-      ${items.length ? `<div class="tbl">${items.map(itemRow).join("")}</div>` : `<div class="sub">沒有偵測到容器或服務</div>`}</div>` : "";
-  const fp = PREF.show.info ? `<div class="panel glass" style="--i:7"><div class="ph"><span class="ico sm info">${I("info")}</span><h3>系統資訊</h3></div><dl class="kv">
+  const ip = PREF.show.items ? `<div class="panel glass" data-key="ip" style="--i:6"><div class="ph"><span class="ico sm box">${I("box")}</span><h3>容器與服務</h3><span class="sub" style="margin-left:auto;font-weight:700">${items.length?itemsSummary(items).replace("<b>",'<b style="color:var(--bad)">'):""}</span></div>
+      ${items.length ? `<div class="tbl" data-keyed>${items.map(itemRow).join("")}</div>` : `<div class="sub">沒有偵測到容器或服務</div>`}</div>` : "";
+  const fp = PREF.show.info ? `<div class="panel glass" data-key="fp" style="--i:7"><div class="ph"><span class="ico sm info">${I("info")}</span><h3>系統資訊</h3></div><dl class="kv">
       <dt>作業系統</dt><dd>${esc(s.os)}</dd><dt>核心版本</dt><dd>${esc(s.kernel)}</dd>
       ${where?`<dt>位置</dt><dd>${esc(where)}</dd>`:""}${s.geo&&s.geo.org?`<dt>供應商</dt><dd>${esc(s.geo.org)}</dd>`:""}
       <dt>負載（1／5／15 分）</dt><dd class="num">${s.load.map(x=>x.toFixed(2)).join(" / ")}</dd>
@@ -1500,7 +1502,7 @@ function detail(s){
       ${s.mem.swap_total?`<dt>虛擬記憶體</dt><dd class="num">${size(s.mem.swap_used)} / ${size(s.mem.swap_total)}</dd>`:""}
     </dl></div>` : "";
   const ep = eventsPanel(s);
-  if (ip || fp || ep) h += `<div class="lower">${ip}${ep}${fp}</div>`;
+  if (ip || fp || ep) h += `<div class="lower" data-key="lw" data-keyed>${ip}${ep}${fp}</div>`;
   return h + `</div>`;
 }
 function overview(list){
@@ -1522,7 +1524,7 @@ function strip(s){
   const items = itemsOf(s), run = items.filter(x=>x.st==="ok").length, n = s.updates ? s.updates.total : 0;
   const t = (i, ico, k, v, sub) => `<div class="tile glass" style="--i:${i}"><span class="ico ${ico}">${I(ico)}</span><div><div class="k">${k}</div><div class="v">${v}</div>${sub?`<div class="s">${sub}</div>`:""}</div></div>`;
   const [l1, l5, l15] = s.load.map(x => x.toFixed(2));
-  return `<div class="strip">${t(1,"load","負載", num(s.load[0],2), `5 分 ${l5}・15 分 ${l15}`)}
+  return `<div class="strip" data-key="sr">${t(1,"load","負載", num(s.load[0],2), `5 分 ${l5}・15 分 ${l15}`)}
     ${t(2,"down","下載", `<span class="num">${rate(s.net.rx)}</span>`, `上傳 ${rate(s.net.tx)}`)}
     ${t(3,"box","容器與服務", items.length ? `${run} / ${items.length}` : "—", items.length ? "正在執行" : "沒有偵測到")}
     ${t(4,"info","系統更新", s.updates ? (n ? `${n} 個` : "最新") : "—", s.updates ? (n ? "可以更新" : "不用更新") : "")}
@@ -1532,8 +1534,8 @@ function eventsPanel(s){
   const ev = s.events;
   if (!ev) return "";
   const word = {bad:"異常", warn:"注意", ok:"恢復", info:"通知"};
-  return `<div class="panel glass" style="--i:8"><div class="ph"><span class="ico sm up">${I("load")}</span><h3>事件紀錄</h3><span class="sub" style="margin-left:auto;font-weight:700">最近 ${ev.length} 筆</span></div>
-    ${ev.length ? `<div class="evs">${ev.map(e=>`<div class="ev"><span class="dot ${e.kind}"></span><div><div>${esc(e.text)}</div><div class="sub">${word[e.kind]||""}・${when(e.t)}</div></div></div>`).join("")}</div>`
+  return `<div class="panel glass" data-key="ep" style="--i:8"><div class="ph"><span class="ico sm up">${I("load")}</span><h3>事件紀錄</h3><span class="sub" style="margin-left:auto;font-weight:700">最近 ${ev.length} 筆</span></div>
+    ${ev.length ? `<div class="evs" data-keyed>${ev.map(e=>`<div class="ev" data-key="${e.t}:${esc(e.text)}"><span class="dot ${e.kind}"></span><div><div>${esc(e.text)}</div><div class="sub">${word[e.kind]||""}・${when(e.t)}</div></div></div>`).join("")}</div>`
       : `<div class="calm">目前沒有事件，一切平靜 ☕</div>`}</div>`;
 }
 function renderDesk(list, n, time){
@@ -1566,13 +1568,29 @@ function tween(el, from, to, d){
 const EASE = "cubic-bezier(.22,1,.36,1)";
 const canAnim = () => PREF.motion && !matchMedia("(prefers-reduced-motion: reduce)").matches;
 /* 讓元素平順地離開：先淡出、收起高度，再移除 */
+const BLOCK = ".alert,.item,.card,.host,.empty,.spark,.ev,.more,.foot,.alerts,.offline,.strip,.charts,.lower,.gauges";
+const TILE = ".panel,.stat,.tile,.gauge";
+function flipSiblings(parent, change){
+  const kids = [...parent.children].filter(c => !c._leaving), r0 = kids.map(c => c.getBoundingClientRect());
+  change();
+  kids.forEach((c, i) => { if (!c.isConnected) return; const r = c.getBoundingClientRect(), dx = r0[i].left - r.left, dy = r0[i].top - r.top;
+    if (Math.abs(dx) > 1 || Math.abs(dy) > 1) c.animate([{transform:`translate(${dx}px,${dy}px)`}, {transform:"none"}], {duration:450, easing:EASE}); });
+}
 function leave(n){
-  if (n.nodeType !== 1 || !canAnim() || !n.isConnected || !n.matches(".alert,.item,.card,.host,.empty")) return n.remove();
-  if (n._leaving) return; n._leaving = 1;
+  if (n.nodeType !== 1 || !canAnim() || !n.isConnected) return n.remove();
+  if (n._leaving) return;
+  if (n.matches(TILE)) {
+    n._leaving = 1; n.style.pointerEvents = "none";
+    n.animate([{opacity:1, transform:"none"}, {opacity:0, transform:"scale(.94)"}], {duration:220, easing:"ease-in"})
+      .onfinish = () => { const par = n.parentElement; par ? flipSiblings(par, () => n.remove()) : n.remove(); };
+    return;
+  }
+  if (!n.matches(BLOCK)) return n.remove();
+  n._leaving = 1;
   const h = n.offsetHeight;
   n.style.overflow = "hidden"; n.style.pointerEvents = "none";
   n.animate([{opacity:1, height:h+"px"}, {opacity:0, height:"0px", marginTop:"0px", marginBottom:"0px", paddingTop:"0px", paddingBottom:"0px"}],
-            {duration:300, easing:EASE}).onfinish = () => n.remove();
+            {duration:320, easing:EASE}).onfinish = () => n.remove();
 }
 /* 按鈕內容換掉時，寬度平滑變化 */
 function flipWidth(el, change){
@@ -1598,17 +1616,24 @@ function keyedPatch(a, b){
   [...a.children].forEach(c => { if (!c._leaving) old.set(c.getAttribute("data-key") || "", c); });
   const anim = canAnim(), first = new Map();
   if (anim) old.forEach((c, k) => first.set(k, c.getBoundingClientRect()));
-  const keep = []; let prev = null;
+  const keep = [], fresh = []; let prev = null;
+  const want = new Set([...b.children].map(c => c.getAttribute("data-key") || ""));
+  // 找下一個「真正要留下的」元素：跳過空白、正在離開的、等一下要移除的
+  const nextReal = n => { while (n && (n.nodeType !== 1 || n._leaving || !want.has(n.getAttribute("data-key") || ""))) n = n.nextSibling; return n; };
   [...b.children].forEach((nb, i) => {
     const k = nb.getAttribute("data-key") || "";
     let el = old.get(k);
     if (el) { old.delete(k); morph(el, nb); el = el.isConnected ? el : nb; if (el !== nb) keep.push([k, el]); }
-    else { el = nb; el.style.setProperty("--i", i); }
-    const ref = prev ? prev.nextSibling : a.firstChild;
-    if (el !== ref) a.insertBefore(el, ref);
+    else { el = nb; el.style.setProperty("--i", i); fresh.push(el); }
+    const ref = nextReal(prev ? prev.nextSibling : a.firstChild);
+    if (el !== ref) a.insertBefore(el, ref || null);
     prev = el;
   });
   old.forEach(c => leave(c));
+  if (anim) fresh.forEach((el, j) => {           // 新出現的：浮現
+    if (el.nodeType === 1) el.animate([{opacity:0, transform:"translateY(10px) scale(.98)"}, {opacity:1, transform:"none"}],
+                                      {duration:480, delay:j*50, easing:EASE, fill:"backwards"});
+  });
   if (anim) keep.forEach(([k, el]) => {          // 留下來的：從舊位置平滑移到新位置
     const f = first.get(k), l = el.getBoundingClientRect(), dx = f.left - l.left, dy = f.top - l.top;
     if (Math.abs(dx) > 1 || Math.abs(dy) > 1) el.animate([{transform:`translate(${dx}px,${dy}px)`}, {transform:"none"}], {duration:480, easing:EASE});
@@ -1851,8 +1876,14 @@ document.addEventListener("click", async e => {
     return tick();
   }
   const hs = t.closest("[data-sel]");
-  if (hs) { SEL = hs.dataset.sel; store("vps-sel", SEL); scrollTo({top:0, behavior:"smooth"});
-    return render(LIST); }
+  if (hs) {
+    if (hs.dataset.sel === SEL) return;
+    SEL = hs.dataset.sel; store("vps-sel", SEL); scrollTo({top:0, behavior:"smooth"});
+    render(LIST);                                   // 詳細頁原地更新：數字、圓環、曲線直接動到新主機的數值
+    const d = $("#app .detail");
+    if (d && canAnim()) d.animate([{opacity:.55, transform:"translateY(6px)"}, {opacity:1, transform:"none"}], {duration:420, easing:EASE});
+    return;
+  }
 
   const ub = t.closest("[data-update]");
   if (ub) {
