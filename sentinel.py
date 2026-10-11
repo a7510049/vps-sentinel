@@ -1234,7 +1234,8 @@ button{font:inherit;color:inherit}
   opacity:0;transform:translateY(-4px);transition:opacity .4s,transform .45s cubic-bezier(.22,1,.36,1),background .2s}
 .more.open .item,.tbl .item{opacity:1;transform:none}
 .item:hover{background:var(--track)}
-.item .n{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.item .n{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.item .tag{flex:none}
 .tag{color:var(--sub);font-size:11.5px;white-space:nowrap;font-weight:700;padding:3px 8px;border-radius:99px;background:var(--track)}
 .foot{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-top:14px;border-top:1px solid var(--line);padding-top:14px}
 .foot .sub{font-weight:600;line-height:1.6}
@@ -1306,7 +1307,36 @@ button{font:inherit;color:inherit}
 .gin>span{font-size:12px;color:var(--sub);font-weight:700;margin-top:4px}
 .charts{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:18px}
 .cbox{height:170px}
-.lower{display:grid;grid-template-columns:repeat(auto-fit,minmax(380px,1fr));gap:18px;align-items:stretch}
+.lower{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:18px;align-items:stretch}
+/* 一頁看完：右邊撐滿整個螢幕高度，曲線和下面的清單自動分配剩下的空間；螢幕太矮時才往下捲 */
+.dash.d .detail{min-height:calc(100vh - 58px)}
+.dash.d .charts{flex:1 1 auto}
+.dash.d .lower{flex:1.25 1 auto;min-height:250px}
+.charts>.panel{display:flex;flex-direction:column}
+.charts .cbox{flex:1 1 auto;height:auto;min-height:100px;position:relative}
+.charts .cbox>*{position:absolute;inset:0;height:100%!important;width:100%}
+.lower>.panel{display:flex;flex-direction:column;min-height:0}
+.lower .trf{grid-column:span 2;container-type:inline-size}
+.lower .evs,.lower .tbl{flex:1 1 0;min-height:60px;max-height:none;overflow-y:auto;overflow-x:hidden}
+.lower .tbl{grid-template-columns:minmax(0,1fr);align-content:start;margin:-6px -6px 0;padding:6px 6px 10px}
+.tgrid{display:grid;gap:4px 26px}
+.lower .trf .tgrid{flex:1 1 auto}
+.tr{display:flex;flex-direction:column;justify-content:flex-end}
+@container (min-width:360px){.tgrid{grid-template-columns:minmax(0,1fr) minmax(0,1fr)}.tr .bars{flex:1 1 0;height:auto;min-height:84px}}
+/* 螢幕比較矮：卡片收緊一點，盡量一頁放得下 */
+@media (min-width:1024px) and (max-height:1000px){
+  .dash.d .detail{gap:14px}.charts,.lower,.gauges{gap:14px}
+  .dhead{padding-top:16px;padding-bottom:16px}
+  .gauge{padding:14px 16px 16px}.gauge .ph{margin-bottom:2px}
+  .gwrap{width:120px;height:120px}.gin b{font-size:29px}.gin b small{font-size:14px}
+  .charts .ph,.lower .ph{margin-bottom:10px}
+  .dash.d .lower{min-height:230px}
+}
+.gauges{grid-template-columns:repeat(4,minmax(0,1fr))}
+.sysp{display:flex;flex-direction:column;min-height:0;border-radius:30px;padding:18px 18px 16px}
+.sysp .ph{margin-bottom:10px}
+.sysp .kv{gap:7px 12px;font-size:12.5px;flex:1 1 0;min-height:0;overflow-y:auto;align-content:start;margin:-4px -2px 0;padding:4px 2px 8px}
+.gauges>.sysp{min-height:100%}
 /* 側邊欄填滿整個高度 */
 .dash.d .side{height:auto}
 .hosts{flex:0 1 auto;min-height:0}
@@ -1375,8 +1405,9 @@ button{font:inherit;color:inherit}
 .kv dt{color:var(--sub);font-weight:600}.kv dd{text-align:right;margin:0;font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .bigoff{text-align:center;padding:60px 20px;color:var(--sub)}
 .bigoff b{display:block;font-size:20px;color:var(--text);margin-bottom:6px}
-@media (max-width:1300px){.charts{grid-template-columns:1fr}.lower{grid-template-columns:1fr}}
-@media (max-width:1180px){.gwrap{width:124px;height:124px}.gin b{font-size:30px}}
+@media (max-width:1300px){.gwrap{width:118px;height:118px}.gin b{font-size:28px}}
+@media (max-width:1180px){.gauges{grid-template-columns:repeat(2,minmax(0,1fr))!important}.charts{grid-template-columns:1fr!important}}
+
 
 /* ═════════ 骨架（第一次載入） ═════════ */
 .skel{border-radius:30px;height:420px;overflow:hidden}
@@ -1519,8 +1550,8 @@ body{overscroll-behavior-y:contain}
 
 /* ═════════ 捲軸 ═════════ */
 /* 內部的捲動區塊不顯示捲軸（滾輪、手指一樣可以捲），動畫時就不會閃出拉條 */
-.evs,.sbody,.hosts,.tbl,.list{scrollbar-width:none}
-.evs::-webkit-scrollbar,.sbody::-webkit-scrollbar,.hosts::-webkit-scrollbar,.tbl::-webkit-scrollbar,.list::-webkit-scrollbar{display:none}
+.evs,.sbody,.hosts,.tbl,.list,.kv{scrollbar-width:none}
+.evs::-webkit-scrollbar,.kv::-webkit-scrollbar,.sbody::-webkit-scrollbar,.hosts::-webkit-scrollbar,.tbl::-webkit-scrollbar,.list::-webkit-scrollbar{display:none}
 /* 整個頁面：先保留捲軸的位置，內容變長變短時寬度不會跳；捲軸本身改成細細淡淡的 */
 html{scrollbar-gutter:stable;scrollbar-width:thin;scrollbar-color:color-mix(in srgb,var(--text) 22%,transparent) transparent}
 html::-webkit-scrollbar{width:8px}
@@ -1747,7 +1778,7 @@ function itemsSummary(items){
   const bad = items.filter(x=>x.st==="bad").length, okn = items.filter(x=>x.st==="ok").length, off = items.length-bad-okn;
   return `${okn} 個正常${off?`・${off} 個沒在用`:""}${bad?`・<b>${bad} 個異常</b>`:""}`;
 }
-const itemRow = (x,j) => `<div class="item" data-key="${x.t}:${esc(x.n)}" style="transition-delay:${j*35}ms"><span class="dot ${x.st}"></span><span class="n">${esc(x.n)}</span><span class="tag">${x.t}・${esc(x.s)}</span></div>`;
+const itemRow = (x,j) => `<div class="item" data-key="${x.t}:${esc(x.n)}" style="transition-delay:${j*35}ms"><span class="dot ${x.st}"></span><span class="n" title="${x.t}：${esc(x.n)}">${esc(x.n)}</span><span class="tag">${x.t==="容器"?"":x.t+"・"}${esc(x.s)}</span></div>`;
 function updateInfo(s){
   const n = s.updates ? s.updates.total : 0, u = s.update;
   let info = s.updates ? (n ? `有 ${n} 個套件可以更新${s.updates.security?`（含 ${s.updates.security} 個安全更新）`:""}` : "系統已經是最新的 ✨") : "";
@@ -1921,10 +1952,18 @@ function detail(s){
       ${s.online ? `<div class="act"><div class="sub" data-x style="line-height:1.6;font-weight:600">${updateInfo(s)}</div>${updateBtn(s)}</div>` : ""}</div>`;
   if (!s.online) return h + `<div class="panel glass bigoff" data-key="off" style="--i:1"><b>連不上這台主機</b>${esc(s.error||"")}</div></div>`;
   h += alerts(s);
+  const fp = PREF.show.info ? `<div class="panel glass sysp" data-key="fp" style="--i:4"><div class="ph">${IC("info")}<h3>系統資訊</h3></div><dl class="kv">
+      <dt>作業系統</dt><dd>${esc(s.os)}</dd><dt>核心版本</dt><dd>${esc(s.kernel)}</dd>
+      ${where?`<dt>位置</dt><dd>${esc(where)}</dd>`:""}${s.geo&&s.geo.org?`<dt>供應商</dt><dd>${esc(s.geo.org)}</dd>`:""}
+      <dt title="1／5／15 分鐘平均">平均負載</dt><dd class="num">${s.load.map(x=>x.toFixed(2)).join(" / ")}</dd>
+      <dt>開機時間</dt><dd>${up(s.uptime)}</dd>
+      ${s.disks.map(d=>`<dt>磁碟 ${esc(d.path)}</dt><dd class="num">${size(d.used)} / ${size(d.total)}</dd>`).join("")}
+      ${s.mem.swap_total?`<dt>虛擬記憶體</dt><dd class="num">${size(s.mem.swap_used)} / ${size(s.mem.swap_total)}</dd>`:""}
+    </dl></div>` : "";
   const d0 = s.disks[0] || {pct:0, used:0, total:0};
-  h += `<div class="gauges" data-key="gg">${ring("cpu", "處理器", s.cpu, `${s.cores} 核心`, 1)}
+  h += `<div class="gauges" data-key="gg" style="${fp?"":"grid-template-columns:repeat(3,minmax(0,1fr))"}">${ring("cpu", "處理器", s.cpu, `${s.cores} 核心`, 1)}
         ${ring("mem", "記憶體", s.mem.pct, `${size(s.mem.used)} / ${size(s.mem.total)}`, 2)}
-        ${ring("disk", "磁碟", d0.pct, `${size(d0.used)} / ${size(d0.total)}`, 3)}</div>`;
+        ${ring("disk", "磁碟", d0.pct, `${size(d0.used)} / ${size(d0.total)}`, 3)}${fp}</div>`;
   const hs = histFor(s), xl = `<div class="xl" style="align-items:center"><span>${xlabel(hs)}</span>${rangeSeg()}<span>現在</span></div>`;
   const cp = PREF.show.chart ? `<div class="panel glass" data-key="cp" style="--i:4"><div class="ph">${IC("trend")}<h3>處理器與記憶體</h3><div class="legend">
       <span><i style="background:${COL.cpu}"></i>處理器<b>${num(s.cpu)}%</b></span><span><i style="background:${COL.mem}"></i>記憶體<b>${num(s.mem.pct)}%</b></span></div></div>
@@ -1936,16 +1975,8 @@ function detail(s){
   const items = itemsOf(s);
   const ip = PREF.show.items ? `<div class="panel glass" data-key="ip" style="--i:6"><div class="ph">${IC("box")}<h3>容器與服務</h3><span class="sub" style="margin-left:auto;font-weight:700">${items.length?itemsSummary(items).replace("<b>",'<b style="color:var(--bad)">'):""}</span></div>
       ${items.length ? `<div class="tbl" data-keyed>${items.map(itemRow).join("")}</div>` : `<div class="sub">沒有偵測到容器或服務</div>`}</div>` : "";
-  const fp = PREF.show.info ? `<div class="panel glass" data-key="fp" style="--i:7"><div class="ph">${IC("info")}<h3>系統資訊</h3></div><dl class="kv">
-      <dt>作業系統</dt><dd>${esc(s.os)}</dd><dt>核心版本</dt><dd>${esc(s.kernel)}</dd>
-      ${where?`<dt>位置</dt><dd>${esc(where)}</dd>`:""}${s.geo&&s.geo.org?`<dt>供應商</dt><dd>${esc(s.geo.org)}</dd>`:""}
-      <dt>負載（1／5／15 分）</dt><dd class="num">${s.load.map(x=>x.toFixed(2)).join(" / ")}</dd>
-      <dt>開機時間</dt><dd>${up(s.uptime)}</dd>
-      ${s.disks.map(d=>`<dt>磁碟 ${esc(d.path)}</dt><dd class="num">${size(d.used)} / ${size(d.total)}</dd>`).join("")}
-      ${s.mem.swap_total?`<dt>虛擬記憶體</dt><dd class="num">${size(s.mem.swap_used)} / ${size(s.mem.swap_total)}</dd>`:""}
-    </dl></div>` : "";
   const ep = eventsPanel(s), tp = trafficPanel(s);
-  if (ip || fp || ep || tp) h += `<div class="lower" data-key="lw" data-keyed>${tp}${ep}${ip}${fp}</div>`;
+  if (ip || ep || tp) h += `<div class="lower" data-key="lw" data-keyed>${tp}${ep}${ip}</div>`;
   return h + `</div>`;
 }
 function overview(list){
@@ -1983,13 +2014,13 @@ function trafficPanel(s){
   const proj = t.projected ? `${size(t.projected)}${pp != null ? `<div class="sub" style="font-weight:700;${pp>100?"color:var(--warn)":""}">上限的 ${pp}%</div>` : ""}` : "累積中";
   return `<div class="panel glass trf" data-key="tp" style="--i:9"><div class="ph">${IC("month")}<h3>本月流量</h3>
       <span class="sub" style="margin-left:auto;font-weight:700">${CNT[t.count]}</span><button class="iconbtn" data-traffic="${esc(s.node||"")}" data-label="${esc(s.name)}" title="流量設定">${I("gear")}</button></div>
-    <div class="big"><b class="num">${size(t.used)}</b><span>${lim ? `／ ${size(lim)}` : "沒有設定上限"}</span>${pct!=null?`<span style="margin-left:auto;color:var(--text)">${num(pct,1)}%</span>`:""}</div>
+    <div class="tgrid"><div class="tl"><div class="big"><b class="num">${size(t.used)}</b><span>${lim ? `／ ${size(lim)}` : "沒有設定上限"}</span>${pct!=null?`<span style="margin-left:auto;color:var(--text)">${num(pct,1)}%</span>`:""}</div>
     ${lim ? track(pct) : ""}
     <div class="rows"><div><div class="k"><i class="kd" style="background:${COL.rx}"></i>下載</div><b class="num">${size(t.rx)}</b></div><div><div class="k"><i class="kd" style="background:${COL.tx}"></i>上傳</div><b class="num">${size(t.tx)}</b></div>
-      <div><div class="k">預估月底</div><b>${proj}</b></div><div><div class="k">${t.reset_day} 號重置</div><b>還有 ${t.days_left} 天</b></div></div>
-    ${trafficBars(t)}
+      <div><div class="k">預估月底</div><b>${proj}</b></div><div><div class="k">${t.reset_day} 號重置</div><b>還有 ${t.days_left} 天</b></div></div></div>
+    <div class="tr">${trafficBars(t)}
     <div class="xl"><span>${t.start.slice(5).replace("-","/")}</span><span>${t.prev!=null?`上個週期 ${size(t.prev)}`:""}</span><span>${t.end.slice(5).replace("-","/")}</span></div>
-    ${t.partial ? `<div class="note">從 ${new Date(t.since*1000).toLocaleDateString("zh-TW",{month:"numeric",day:"numeric"})} 開始統計，之前的流量沒有算進去</div>` : ""}</div>`;
+    ${t.partial ? `<div class="note">從 ${new Date(t.since*1000).toLocaleDateString("zh-TW",{month:"numeric",day:"numeric"})} 開始統計，之前的流量沒有算進去</div>` : ""}</div></div></div>`;
 }
 function trafficLine(s){
   const t = s.traffic; if (!t || !PREF.show.traffic) return "";
@@ -2225,7 +2256,7 @@ function edgeFades(el){
   if (el.classList.contains("ft") !== t) el.classList.toggle("ft", t);
   if (el.classList.contains("fb") !== b) el.classList.toggle("fb", b);
 }
-document.addEventListener("scroll", e => { const el = e.target; if (el.matches && el.matches(".hosts,.evs")) edgeFades(el); }, {capture:true, passive:true});
+document.addEventListener("scroll", e => { const el = e.target; if (el.matches && el.matches(".hosts,.evs,.tbl,.kv")) edgeFades(el); }, {capture:true, passive:true});
 function placePind(){
   document.querySelectorAll("#app .summary").forEach(sm => {
     const ind = sm.querySelector(".pind"), on = sm.querySelector(".pill.on");
@@ -2260,7 +2291,7 @@ function render(list){
   const time = new Date().toLocaleTimeString("zh-TW",{hour12:false});
   paint(DESK.matches ? renderDesk(list, n, time) : renderMobile(list, n, time));
   placePind();
-  document.querySelectorAll("#app .hosts,#app .evs").forEach(edgeFades);
+  document.querySelectorAll("#app .hosts,#app .evs,#app .tbl,#app .kv").forEach(edgeFades);
   trackCenter();
 }
 DESK.addEventListener("change", () => { applyPrefs(); if (LIST.length) render(LIST); });
