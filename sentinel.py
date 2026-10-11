@@ -644,6 +644,7 @@ PAGE = r"""<!doctype html>
 <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@500;600;700;800;900&display=swap" rel="stylesheet">
 <script>
 /* 先套用設定，避免畫面閃一下 */
+document.documentElement.classList.add("booting");
 (function(){ try {
   var p = JSON.parse(localStorage.getItem("vps-prefs") || "{}"), h = document.documentElement;
   var t = p.theme || "auto", dark = t === "dark" || (t === "auto" && matchMedia("(prefers-color-scheme: dark)").matches);
@@ -1060,6 +1061,37 @@ button{font:inherit;color:inherit}
 @keyframes toastin{from{opacity:0;transform:translateY(16px) scale(.92)}}
 
 ::view-transition-old(root),::view-transition-new(root){animation-duration:.5s;animation-timing-function:cubic-bezier(.22,1,.36,1)}
+/* ═════════ 啟動畫面 ═════════ */
+body{overscroll-behavior-y:contain}
+.booting #app{opacity:0}
+#app{transition:opacity .35s ease}
+#splash{position:fixed;inset:0;z-index:70;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px;pointer-events:none}
+#splash.out{animation:spOut .55s cubic-bezier(.4,0,.2,1) forwards}
+@keyframes spOut{to{opacity:0;transform:scale(1.08)}}
+.sp-logo{position:relative;width:96px;height:96px;display:grid;place-items:center;animation:spIn .7s cubic-bezier(.34,1.4,.64,1) both}
+@keyframes spIn{from{opacity:0;transform:scale(.7)}}
+.sp-logo img{width:64px;height:64px;border-radius:19px;position:relative;z-index:1;box-shadow:0 14px 34px -10px var(--a1)}
+.sp-ring{position:absolute;inset:0;border-radius:50%;
+  background:conic-gradient(from 0deg,transparent 0 55%,var(--a1) 80%,var(--a2) 100%);
+  -webkit-mask:radial-gradient(circle,transparent 60%,#000 61%,#000 66%,transparent 67%);mask:radial-gradient(circle,transparent 60%,#000 61%,#000 66%,transparent 67%);
+  animation:sp 1.1s linear infinite}
+.sp-glow{position:absolute;inset:-30px;border-radius:50%;background:radial-gradient(circle,color-mix(in srgb,var(--a2) 35%,transparent),transparent 65%);
+  animation:breathe 2.2s ease-in-out infinite}
+@keyframes breathe{50%{opacity:.45;transform:scale(.92)}}
+.sp-title{font-weight:900;font-size:20px;letter-spacing:.5px;animation:rise .7s .1s cubic-bezier(.22,1,.36,1) both}
+.sp-msg{font-size:13px;font-weight:700;color:var(--sub);min-height:20px;animation:rise .7s .2s cubic-bezier(.22,1,.36,1) both}
+.sp-msg span{display:inline-block;animation:msgIn .4s cubic-bezier(.22,1,.36,1) both}
+@keyframes msgIn{from{opacity:0;transform:translateY(6px)}}
+
+/* ═════════ 下拉重新整理 ═════════ */
+#ptr{position:fixed;left:50%;top:calc(env(safe-area-inset-top) + 8px);z-index:30;width:40px;height:40px;margin-left:-20px;border-radius:50%;
+  display:grid;place-items:center;color:var(--text);transform:translateY(-70px);opacity:0;pointer-events:none}
+#ptr svg{width:19px;height:19px}
+#ptr.back{transition:transform .45s cubic-bezier(.34,1.3,.64,1),opacity .3s}
+#ptr.spin svg{animation:sp .8s linear infinite}
+#ptr.done{color:var(--ok)}
+.iconbtn.spinning svg{animation:sp .8s linear infinite}
+
 /* ═════════ 流暢優先（手機預設） ═════════ */
 [data-lite="on"] .aurora i{animation:none}
 [data-lite="on"] .grain{display:none}
@@ -1085,6 +1117,9 @@ button{font:inherit;color:inherit}
 <linearGradient id="rgW" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#fbbf24"/><stop offset="1" stop-color="#f97316"/></linearGradient>
 <linearGradient id="rgB" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#fb7185"/><stop offset="1" stop-color="#e11d48"/></linearGradient>
 </defs></svg>
+<div id="splash"><div class="sp-logo"><span class="sp-glow"></span><span class="sp-ring"></span><img src="/icon.svg" alt=""></div>
+<div class="sp-title">VPS 哨兵</div><div class="sp-msg"><span>正在連線…</span></div></div>
+<div id="ptr" class="glass"></div>
 <div class="wrap" id="app"></div>
 <div id="layer"></div>
 <div class="toasts" id="toasts"></div>
@@ -1388,6 +1423,7 @@ function renderDesk(list, n, time){
       ${summary(n, false)}
       <div class="hosts">${list.map(s=>hostItem(s, s===sel)).join("")}</div>
       <div class="side-foot"><span class="sub">${list.length} 台主機</span>
+        <button class="iconbtn ${REFRESHING?"spinning":""}" data-refresh title="重新整理">${I("upd")}</button>
         <button class="iconbtn" data-settings title="設定">${I("gear")}</button><button class="iconbtn" data-logout title="登出">${I("logout")}</button></div>
     </aside>${sel ? detail(sel) : ""}</div>`;
 }
@@ -1619,6 +1655,7 @@ document.addEventListener("click", async e => {
   const t = e.target;
   if (t.closest("[data-login]")) { setTok($("#tok").value.trim()); return tick(); }
   if (t.closest("[data-settings]")) return openSettings();
+  if (t.closest("[data-refresh]")) return refreshNow(t.closest("[data-refresh]"));
   if (t.closest("[data-logout]")) {
     if (await modal({icon:"logout", cls:"info", title:"要登出嗎？", text:"登出後要重新輸入密碼才能看到主機。", ok:"登出"})) { setTok(""); LIST = []; clearTimeout(timer); login(); }
     return;
@@ -1672,20 +1709,87 @@ addEventListener("scroll", () => document.body.classList.toggle("scrolled", scro
 
 /* ═════════ 定時抓資料 ═════════ */
 let timer;
+const T0 = performance.now(), sleep = ms => new Promise(r => setTimeout(r, ms));
+let BOOTED = false, REFRESHING = false;
+function splashMsg(t){ const m = document.querySelector(".sp-msg"); if (m && m.textContent !== t) m.innerHTML = `<span>${esc(t)}</span>`; }
+function endSplash(){
+  if (BOOTED) return; BOOTED = true;
+  const sp = $("#splash"); document.documentElement.classList.remove("booting");
+  if (!sp) return;
+  if (!canAnim()) return sp.remove();
+  sp.classList.add("out"); setTimeout(() => sp.remove(), 600);
+}
+/* 預先載入國旗圖片，避免畫面出來後才一個個冒出來 */
+function preloadFlags(list){
+  if (!PREF.show.flag) return Promise.resolve();
+  const ccs = [...new Set(list.map(s => s.geo && s.geo.cc).filter(c => /^[A-Z]{2}$/.test(c || "")))];
+  return Promise.all(ccs.map(cc => new Promise(res => {
+    const im = new Image(); im.onload = () => (im.decode ? im.decode().catch(()=>{}) : Promise.resolve()).then(res);
+    im.onerror = () => { FLAGFAIL[cc] = 1; res(); }; im.src = `https://flagcdn.com/w80/${cc.toLowerCase()}.png`;
+  })));
+}
 async function tick(){
   clearTimeout(timer);
-  if (!getTok()) return login();
-  if (!LIST.length && !$("#app .dash")) paint(skeleton());
+  if (!getTok()) { endSplash(); return login(); }
   try {
+    if (!BOOTED) splashMsg("讀取主機狀態…");
     const r = await fetch("/api/all", {headers:{"X-Token":getTok()}, cache:"no-store"});
-    if (r.status === 401) { setTok(""); LIST = []; return login("密碼不對，再試一次"); }
-    render(await r.json());
+    if (r.status === 401) { setTok(""); LIST = []; endSplash(); return login("密碼不對，再試一次"); }
+    const data = await r.json();
+    if (!BOOTED) {
+      splashMsg("準備畫面…");
+      // 字型和國旗最多等 1.5 秒；啟動畫面至少顯示 0.7 秒，避免一閃而過
+      await Promise.race([Promise.all([document.fonts ? document.fonts.ready : null, preloadFlags(data)]), sleep(1500)]);
+      const wait = 700 - (performance.now() - T0); if (wait > 0) await sleep(wait);
+      endSplash();
+    }
+    render(data);
   } catch(e) {
+    if (!BOOTED) splashMsg("連線不上，正在重試…");
     const m = document.querySelector(".meta"); if (m) m.innerHTML = `<span class="live off"></span>連線中斷，重試中…`;
+    timer = setTimeout(tick, 3000); return false;
   }
   const busy = LIST.some(s => s.update && s.update.running);   // 更新中就看得勤一點
   timer = setTimeout(tick, busy ? 2000 : (PREF.refresh || 5) * 1000);
+  return true;
 }
+/* 手動重新整理（按鈕或下拉） */
+async function refreshNow(btn){
+  if (REFRESHING) return; REFRESHING = true;
+  btn && btn.classList.add("spinning");
+  const [ok] = await Promise.all([tick(), sleep(600)]);
+  REFRESHING = false; btn && btn.classList.remove("spinning");
+  document.querySelectorAll("[data-refresh]").forEach(b => b.classList.remove("spinning"));
+  return ok;
+}
+/* 手機：下拉重新整理 */
+(function(){
+  const ptr = $("#ptr"); ptr.innerHTML = I("down");
+  let y0 = null, d = 0, armed = false;
+  const show = (y, rot) => { ptr.style.transform = `translateY(${y}px) rotate(${rot}deg)`; ptr.style.opacity = String(Math.min(1, (y + 70) / 60)); };
+  addEventListener("touchstart", e => {
+    if (DESK.matches || scrollY > 0 || REFRESHING || document.querySelector("#layer .veil") || !LIST.length) return;
+    y0 = e.touches[0].clientY; d = 0; armed = false; ptr.classList.remove("back","spin","done"); ptr.innerHTML = I("down");
+  }, {passive:true});
+  addEventListener("touchmove", e => {
+    if (y0 === null) return;
+    d = Math.max(0, e.touches[0].clientY - y0);
+    if (scrollY > 0) { y0 = null; return; }
+    const pull = Math.min(110, d * .5);
+    armed = pull >= 64;
+    show(pull - 70, armed ? 180 : pull * 2.6);
+  }, {passive:true});
+  addEventListener("touchend", async () => {
+    if (y0 === null) return; y0 = null;
+    ptr.classList.add("back");
+    if (!armed) { show(-70, 0); return; }
+    ptr.innerHTML = I("upd"); ptr.classList.add("spin"); show(10, 0);
+    const ok = await refreshNow();
+    ptr.classList.remove("spin"); if (ok) ptr.classList.add("done");
+    ptr.innerHTML = I(ok ? "ok" : "warn");
+    setTimeout(() => show(-70, 0), 550);
+  });
+})();
 document.addEventListener("visibilitychange",()=>{ if(!document.hidden) tick(); });
 tick();
 </script>
