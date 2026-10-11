@@ -1066,14 +1066,22 @@ button{font:inherit;color:inherit}
 .ico{width:30px;height:30px;border-radius:9px;display:grid;place-items:center;flex:none;color:#fff;
   box-shadow:inset 0 1px 0 rgba(255,255,255,.35),0 4px 10px -4px rgba(0,0,0,.35)}
 .ico svg{width:17px;height:17px}
-.ico.cpu{background:linear-gradient(135deg,#38bdf8,#2563eb)}
-.ico.mem{background:linear-gradient(135deg,#c084fc,#7c3aed)}
-.ico.disk{background:linear-gradient(135deg,#fbbf24,#f97316)}
-.ico.down{background:linear-gradient(135deg,#2dd4bf,#0891b2)}
-.ico.up{background:linear-gradient(135deg,#f472b6,#db2777)}
-.ico.load{background:linear-gradient(135deg,#4ade80,#16a34a)}
-.ico.box{background:linear-gradient(135deg,#60a5fa,#4f46e5)}
-.ico.info{background:linear-gradient(135deg,#94a3b8,#475569)}
+/* 一個概念＝一個圖示＋一個顏色，曲線、圖例、長條都用同一個顏色 */
+:root{--c-cpu:#0a84ff;--c-mem:#bf5af2;--c-disk:#ff9f0a;--c-load:#30d158;--c-rx:#32c5e6;--c-tx:#ff375f;
+  --c-month:#ffcc00;--c-box:#5e5ce6;--c-bell:#ff453a;--c-info:#8e8e93}
+.ico.cpu{background:linear-gradient(160deg,#5ac8fa,var(--c-cpu))}
+.ico.mem{background:linear-gradient(160deg,#da8fff,var(--c-mem))}
+.ico.disk{background:linear-gradient(160deg,#ffc04d,var(--c-disk))}
+.ico.load{background:linear-gradient(160deg,#6ee68a,var(--c-load))}
+.ico.down{background:linear-gradient(160deg,#7fe0f5,var(--c-rx))}
+.ico.up{background:linear-gradient(160deg,#ff7a95,var(--c-tx))}
+.ico.net{background:linear-gradient(135deg,var(--c-rx) 15%,var(--c-tx) 85%)}
+.ico.trend{background:linear-gradient(135deg,var(--c-cpu) 15%,var(--c-mem) 85%)}
+.ico.month{background:linear-gradient(160deg,#ffe066,#ffb300);color:#3a2a00}
+.ico.box{background:linear-gradient(160deg,#8e8cff,var(--c-box))}
+.ico.bell{background:linear-gradient(160deg,#ff7a70,var(--c-bell))}
+.ico.info{background:linear-gradient(160deg,#aeaeb2,#636366)}
+.ico.theme{background:var(--grad)}
 .ico.sm{width:24px;height:24px;border-radius:7px}.ico.sm svg{width:14px;height:14px}
 .flag{width:24px;height:18px;object-fit:cover;border-radius:5px;flex:none;box-shadow:0 0 0 1px rgba(127,127,127,.25),0 3px 8px -3px rgba(0,0,0,.4)}
 .emoji{font-size:19px;line-height:1}
@@ -1312,13 +1320,6 @@ button{font:inherit;color:inherit}
 .ovw .cap2{display:flex;justify-content:space-between;font-size:11px;color:var(--sub);font-weight:700;margin-top:6px}
 .side-foot{margin-top:0}
 .side .empty{padding:18px 0;font-size:13px}
-/* 快速資訊列 */
-.strip{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:12px}
-.tile{border-radius:24px;padding:14px 16px;display:flex;align-items:center;gap:12px;animation:rise .8s cubic-bezier(.22,1,.36,1) both;animation-delay:calc(var(--i,0) * 50ms)}
-.tile .k{font-size:11.5px;color:var(--sub);font-weight:700}
-.tile .v{font-size:16px;font-weight:900;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.tile .s{font-size:11.5px;color:var(--sub);font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.tile>div{min-width:0}
 /* 事件紀錄 */
 /* 曲線範圍切換 */
 .rng{display:inline-flex;background:var(--track);border-radius:10px;padding:2px;gap:1px;position:relative;isolation:isolate}
@@ -1335,6 +1336,7 @@ button{font:inherit;color:inherit}
 .trf .rows{display:grid;grid-template-columns:1fr 1fr;gap:8px 14px;font-size:12.5px;margin-top:12px}
 .trf .rows .k{color:var(--sub);font-weight:700;font-size:11.5px}
 .trf .rows b{font-weight:800;font-size:14px}
+.kd{display:inline-block;width:7px;height:7px;border-radius:50%;margin-right:6px}
 .trf .note{font-size:11.5px;color:var(--faint);font-weight:600;margin-top:10px}
 .bars{display:block;width:100%;height:64px;margin-top:14px;overflow:visible}
 .bars rect{transition:height .7s cubic-bezier(.22,1,.36,1),y .7s cubic-bezier(.22,1,.36,1)}
@@ -1562,6 +1564,14 @@ const P = {
   load:'<path d="M22 12h-4l-3 9L9 3l-3 9H2"/>',
   box:'<path d="M21 8 12 3 3 8v8l9 5 9-5z"/><path d="m3 8 9 5 9-5M12 13v8"/>',
   info:'<circle cx="12" cy="12" r="9.5"/><path d="M12 16v-4M12 8h.01"/>',
+  gauge:'<path d="M12 14l3.5-3.5"/><path d="M3.3 17a9.5 9.5 0 1 1 17.4 0"/><circle cx="12" cy="14" r="1.6"/>',
+  net:'<path d="M7 20V5M3 9l4-4 4 4"/><path d="M17 4v15M21 15l-4 4-4-4"/>',
+  trend:'<path d="M3 3v18h18"/><path d="m7 15 4-4 3 3 6-7"/>',
+  month:'<rect x="3" y="4" width="18" height="17" rx="3"/><path d="M3 9h18M8 2v4M16 2v4"/><path d="M8 17v-3M12 17v-5M16 17v-2"/>',
+  bell:'<path d="M6 8a6 6 0 1 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/>',
+  layers:'<path d="m12 2 9.5 5L12 12 2.5 7z"/><path d="m2.5 12 9.5 5 9.5-5"/><path d="m2.5 17 9.5 5 9.5-5"/>',
+  flag:'<path d="M4 22V4"/><path d="M4 4h13l-2.5 4.5L17 13H4"/>',
+  alert:'<circle cx="12" cy="12" r="9.5"/><path d="M12 7.5v5.5M12 16.5h.01"/>',
   gear:'<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>',
   logout:'<path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9"/>',
   edit:'<path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/>',
@@ -1691,7 +1701,7 @@ const editBtn = s => s.online ? `<button class="iconbtn" title="改名稱" data-
 function alerts(s){
   const k = t => esc(String(t).replace(/[\d.]+/g, ""));
   const al = (s.problems||[]).map(p=>`<div class="alert bad" data-key="b:${k(p)}">${I("warn")}${esc(p)}</div>`)
-    .concat((s.notices||[]).map(p=>`<div class="alert warn" data-key="w:${k(p)}">${I("info")}${esc(p)}</div>`));
+    .concat((s.notices||[]).map(p=>`<div class="alert warn" data-key="w:${k(p)}">${I("alert")}${esc(p)}</div>`));
   return `<div class="alerts" data-key="al" data-keyed>${al.join("")}</div>`;
 }
 function itemsOf(s){
@@ -1787,11 +1797,16 @@ function chartOr(h, id, series, o){
 }
 const minutes = h => (h && h.t && h.t.length > 1) ? Math.max(1, Math.round((h.t[h.t.length-1]-h.t[0])/60)) : 30;
 const cid = (s, k) => "g" + Math.abs([...keyOf(s)].reduce((a,c)=>(a*31+c.charCodeAt(0))|0, 7)) + k;
-const COL = {cpu:"var(--a1)", mem:"var(--a2)", rx:"#2dd4bf", tx:"#f472b6"};
+const COL = {cpu:"var(--c-cpu)", mem:"var(--c-mem)", rx:"var(--c-rx)", tx:"var(--c-tx)"};
+/* 概念 → [顏色樣式, 圖示] */
+const ICO = {cpu:["cpu","cpu"], mem:["mem","mem"], disk:["disk","disk"], load:["load","gauge"], down:["down","down"], up:["up","up"],
+  net:["net","net"], trend:["trend","trend"], month:["month","month"], box:["box","box"], bell:["bell","bell"], info:["info","info"],
+  layers:["theme","layers"], flag:["theme","flag"]};
+const IC = (k, cls="sm") => `<span class="ico ${cls} ${ICO[k][0]}">${I(ICO[k][1])}</span>`;
 
 /* ═════════ 手機版 ═════════ */
 function metric(icon, label, pct, detail){
-  return `<div class="metric"><span class="ico ${icon}">${I(icon)}</span>
+  return `<div class="metric">${IC(icon, "")}
     <div class="row"><span>${label}<span class="sub">${detail}</span></span><b>${num(pct)}<small>%</small></b></div>${track(pct)}</div>`;
 }
 function mcard(s, i){
@@ -1806,12 +1821,12 @@ function mcard(s, i){
   if (PREF.show.chart && s.hist) { const hh = histFor(s);
     h += `<div class="spark" data-key="sp"><div class="lbl"><span><i style="background:${COL.cpu};margin-left:0"></i>處理器<i style="background:${COL.mem}"></i>記憶體</span>${rangeSeg()}</div>
       ${chartOr(hh, cid(s,"m"), x => [{data:x.cpu,color:COL.cpu},{data:x.mem,color:COL.mem}], {max:100, h:64, fade:.25, sw:2})}</div>`; }
-  h += `<div class="stats" data-key="st" data-keyed><div class="stat" data-key="load"><div class="k"><span class="ico sm load">${I("load")}</span>負載</div><div class="v">${num(s.load[0],2)}</div></div>` +
-       (PREF.show.net ? `<div class="stat" data-key="down"><div class="k"><span class="ico sm down">${I("down")}</span>下載</div><div class="v num">${rate(s.net.rx)}</div></div>
-        <div class="stat" data-key="up"><div class="k"><span class="ico sm up">${I("up")}</span>上傳</div><div class="v num">${rate(s.net.tx)}</div></div>` : "") + `</div>`;
+  h += `<div class="stats" data-key="st" data-keyed><div class="stat" data-key="load"><div class="k">${IC("load")}負載</div><div class="v">${num(s.load[0],2)}</div></div>` +
+       (PREF.show.net ? `<div class="stat" data-key="down"><div class="k">${IC("down")}下載</div><div class="v num">${rate(s.net.rx)}</div></div>
+        <div class="stat" data-key="up"><div class="k">${IC("up")}上傳</div><div class="v num">${rate(s.net.tx)}</div></div>` : "") + `</div>`;
   h += trafficLine(s);
   const items = itemsOf(s);
-  if (PREF.show.items && items.length) h += `<div class="more ${open[key]?"open":""}" data-key="mo"><button class="more-head" data-toggle="${esc(key)}"><span class="ico sm box">${I("box")}</span><span>容器與服務：${itemsSummary(items)}</span><span class="chev">${I("chev")}</span></button>
+  if (PREF.show.items && items.length) h += `<div class="more ${open[key]?"open":""}" data-key="mo"><button class="more-head" data-toggle="${esc(key)}">${IC("box")}<span>容器與服務：${itemsSummary(items)}</span><span class="chev">${I("chev")}</span></button>
       <div class="collapse"><div><div class="list" data-keyed>${items.map(itemRow).join("")}</div></div></div></div>`;
   const info = updateInfo(s), btn = updateBtn(s);
   if (info || btn) h += `<div class="foot" data-key="ft"><div class="sub" data-x>${info}</div>${btn}</div>`;
@@ -1841,7 +1856,7 @@ function hostItem(s, on){
 }
 function ring(icon, label, pct, sub, i){
   const r = 52, Cc = 2*Math.PI*r, off = Cc*(1-Math.max(0,Math.min(pct,100))/100);
-  return `<div class="gauge glass panel" style="--i:${i}"><div class="ph"><span class="ico sm ${icon}">${I(icon)}</span><h3>${label}</h3></div>
+  return `<div class="gauge glass panel" style="--i:${i}"><div class="ph">${IC(icon)}<h3>${label}</h3></div>
     <div class="gwrap"><svg viewBox="0 0 120 120"><circle class="rt" cx="60" cy="60" r="${r}"/>
     <circle class="rv ${tier(pct)}" cx="60" cy="60" r="${r}" style="--c:${Cc.toFixed(1)};stroke-dasharray:${Cc.toFixed(1)};stroke-dashoffset:${off.toFixed(1)}"/></svg>
     <div class="gin"><b>${num(pct)}<small>%</small></b><span>${sub}</span></div></div></div>`;
@@ -1853,23 +1868,23 @@ function detail(s){
       <div class="sub dsub">${stline(s)}${s.online ? `<span>・${where?esc(where)+"・":""}${esc(s.os)}・開機 ${up(s.uptime)}</span>` : ""}</div></div>
       ${s.online ? `<div class="act"><div class="sub" data-x style="line-height:1.6;font-weight:600">${updateInfo(s)}</div>${updateBtn(s)}</div>` : ""}</div>`;
   if (!s.online) return h + `<div class="panel glass bigoff" data-key="off" style="--i:1"><b>連不上這台主機</b>${esc(s.error||"")}</div></div>`;
-  h += alerts(s) + strip(s);
+  h += alerts(s);
   const d0 = s.disks[0] || {pct:0, used:0, total:0};
   h += `<div class="gauges" data-key="gg">${ring("cpu", "處理器", s.cpu, `${s.cores} 核心`, 1)}
         ${ring("mem", "記憶體", s.mem.pct, `${size(s.mem.used)} / ${size(s.mem.total)}`, 2)}
         ${ring("disk", "磁碟", d0.pct, `${size(d0.used)} / ${size(d0.total)}`, 3)}</div>`;
   const hs = histFor(s), xl = `<div class="xl" style="align-items:center"><span>${xlabel(hs)}</span>${rangeSeg()}<span>現在</span></div>`;
-  const cp = PREF.show.chart ? `<div class="panel glass" data-key="cp" style="--i:4"><div class="ph"><span class="ico sm cpu">${I("load")}</span><h3>處理器與記憶體</h3><div class="legend">
+  const cp = PREF.show.chart ? `<div class="panel glass" data-key="cp" style="--i:4"><div class="ph">${IC("trend")}<h3>處理器與記憶體</h3><div class="legend">
       <span><i style="background:${COL.cpu}"></i>處理器<b>${num(s.cpu)}%</b></span><span><i style="background:${COL.mem}"></i>記憶體<b>${num(s.mem.pct)}%</b></span></div></div>
       <div class="cbox">${chartOr(hs, cid(s,"a"), x => [{data:x.cpu,color:COL.cpu},{data:x.mem,color:COL.mem}], {max:100, grid:1})}</div>${xl}</div>` : "";
-  const np = PREF.show.net ? `<div class="panel glass" data-key="np" style="--i:5"><div class="ph"><span class="ico sm down">${I("down")}</span><h3>網路速度</h3><div class="legend">
+  const np = PREF.show.net ? `<div class="panel glass" data-key="np" style="--i:5"><div class="ph">${IC("net")}<h3>網路速度</h3><div class="legend">
       <span><i style="background:${COL.rx}"></i>下載<b class="num">${rate(s.net.rx)}</b></span><span><i style="background:${COL.tx}"></i>上傳<b class="num">${rate(s.net.tx)}</b></span></div></div>
       <div class="cbox">${chartOr(hs, cid(s,"b"), x => [{data:x.rx,color:COL.rx},{data:x.tx,color:COL.tx}], {grid:1})}</div>${xl}</div>` : "";
   if (cp || np) h += `<div class="charts" data-key="ch" data-keyed style="${cp&&np?"":"grid-template-columns:1fr"}">${cp}${np}</div>`;
   const items = itemsOf(s);
-  const ip = PREF.show.items ? `<div class="panel glass" data-key="ip" style="--i:6"><div class="ph"><span class="ico sm box">${I("box")}</span><h3>容器與服務</h3><span class="sub" style="margin-left:auto;font-weight:700">${items.length?itemsSummary(items).replace("<b>",'<b style="color:var(--bad)">'):""}</span></div>
+  const ip = PREF.show.items ? `<div class="panel glass" data-key="ip" style="--i:6"><div class="ph">${IC("box")}<h3>容器與服務</h3><span class="sub" style="margin-left:auto;font-weight:700">${items.length?itemsSummary(items).replace("<b>",'<b style="color:var(--bad)">'):""}</span></div>
       ${items.length ? `<div class="tbl" data-keyed>${items.map(itemRow).join("")}</div>` : `<div class="sub">沒有偵測到容器或服務</div>`}</div>` : "";
-  const fp = PREF.show.info ? `<div class="panel glass" data-key="fp" style="--i:7"><div class="ph"><span class="ico sm info">${I("info")}</span><h3>系統資訊</h3></div><dl class="kv">
+  const fp = PREF.show.info ? `<div class="panel glass" data-key="fp" style="--i:7"><div class="ph">${IC("info")}<h3>系統資訊</h3></div><dl class="kv">
       <dt>作業系統</dt><dd>${esc(s.os)}</dd><dt>核心版本</dt><dd>${esc(s.kernel)}</dd>
       ${where?`<dt>位置</dt><dd>${esc(where)}</dd>`:""}${s.geo&&s.geo.org?`<dt>供應商</dt><dd>${esc(s.geo.org)}</dd>`:""}
       <dt>負載（1／5／15 分）</dt><dd class="num">${s.load.map(x=>x.toFixed(2)).join(" / ")}</dd>
@@ -1888,7 +1903,7 @@ function overview(list){
   const rx = on.reduce((a,s) => a + s.net.rx, 0), tx = on.reduce((a,s) => a + s.net.tx, 0);
   const items = on.flatMap(itemsOf), ok = items.filter(x=>x.st==="ok").length, bad = items.filter(x=>x.st==="bad").length, off = items.length-ok-bad;
   const pc = v => items.length ? (v / items.length * 100).toFixed(1) : 0;
-  return `<div class="ovw"><h4><span class="ico sm load">${I("load")}</span>全部主機總覽</h4><div class="ovg">
+  return `<div class="ovw"><h4>${IC("layers")}全部主機總覽</h4><div class="ovg">
     <div><div class="k">平均處理器</div><b>${num(avg("cpu"))}<small>%</small></b></div>
     <div><div class="k">平均記憶體</div><b>${num(avg("mem"))}<small>%</small></b></div>
     <div><div class="k">總下載</div><b class="num">${rate(rx)}</b></div>
@@ -1914,11 +1929,11 @@ function trafficPanel(s){
   const pct = t.pct, lim = t.limit;
   const pp = t.projected && lim ? Math.round(t.projected / lim * 100) : null;
   const proj = t.projected ? `${size(t.projected)}${pp != null ? `<div class="sub" style="font-weight:700;${pp>100?"color:var(--warn)":""}">上限的 ${pp}%</div>` : ""}` : "累積中";
-  return `<div class="panel glass trf" data-key="tp" style="--i:9"><div class="ph"><span class="ico sm up">${I("up")}</span><h3>本月流量</h3>
+  return `<div class="panel glass trf" data-key="tp" style="--i:9"><div class="ph">${IC("month")}<h3>本月流量</h3>
       <span class="sub" style="margin-left:auto;font-weight:700">${CNT[t.count]}</span><button class="iconbtn" data-traffic="${esc(s.node||"")}" data-label="${esc(s.name)}" title="流量設定">${I("gear")}</button></div>
     <div class="big"><b class="num">${size(t.used)}</b><span>${lim ? `／ ${size(lim)}` : "沒有設定上限"}</span>${pct!=null?`<span style="margin-left:auto;color:var(--text)">${num(pct,1)}%</span>`:""}</div>
     ${lim ? track(pct) : ""}
-    <div class="rows"><div><div class="k">下載</div><b class="num">${size(t.rx)}</b></div><div><div class="k">上傳</div><b class="num">${size(t.tx)}</b></div>
+    <div class="rows"><div><div class="k"><i class="kd" style="background:${COL.rx}"></i>下載</div><b class="num">${size(t.rx)}</b></div><div><div class="k"><i class="kd" style="background:${COL.tx}"></i>上傳</div><b class="num">${size(t.tx)}</b></div>
       <div><div class="k">預估月底</div><b>${proj}</b></div><div><div class="k">${t.reset_day} 號重置</div><b>還有 ${t.days_left} 天</b></div></div>
     ${trafficBars(t)}
     <div class="xl"><span>${t.start.slice(5).replace("-","/")}</span><span>${t.prev!=null?`上個週期 ${size(t.prev)}`:""}</span><span>${t.end.slice(5).replace("-","/")}</span></div>
@@ -1928,7 +1943,7 @@ function trafficLine(s){
   const t = s.traffic; if (!t || !PREF.show.traffic) return "";
   const lim = t.limit;
   return `<div class="tline" data-key="tl" data-traffic="${esc(s.node||"")}" data-label="${esc(s.name)}">
-    <div class="r1"><span class="ico sm up">${I("up")}</span>本月流量<b class="num">${size(t.used)}${lim?`<small>／ ${size(lim)}</small>`:""}</b></div>
+    <div class="r1">${IC("month")}本月流量<b class="num">${size(t.used)}${lim?`<small>／ ${size(lim)}</small>`:""}</b></div>
     ${lim ? track(t.pct) : ""}
     <div class="r2"><span>${t.projected ? `預估月底 ${size(t.projected)}` : "預估累積中"}</span><span>${t.reset_day} 號重置・還有 ${t.days_left} 天</span></div></div>`;
 }
@@ -1938,7 +1953,7 @@ async function trafficModal(node, label){
   let mode = t.count;
   const days = Array.from({length:28}, (_, i) => `<option value="${i+1}" ${t.reset_day===i+1?"selected":""}>每月 ${i+1} 號</option>`).join("");
   const v = document.createElement("div"); v.className = "veil";
-  v.innerHTML = `<div class="dialog glass"><div class="ico big up">${I("up")}</div><h3>「${esc(label)}」流量設定</h3>
+  v.innerHTML = `<div class="dialog glass">${IC("month","big")}<h3>「${esc(label)}」流量設定</h3>
     <div class="form">
       <label>每月流量上限（GB）<input class="field" type="number" inputmode="decimal" min="0" step="any" value="${t.limit ? +(t.limit/1073741824).toFixed(3) : ""}" placeholder="不限制就留空"></label>
       <label>每月幾號重置<select class="field">${days}</select></label>
@@ -1964,22 +1979,11 @@ async function trafficModal(node, label){
   } catch(e) { toast("連線失敗，請稍後再試", "bad"); }
   tick();
 }
-function strip(s){
-  const items = itemsOf(s), run = items.filter(x=>x.st==="ok").length, n = s.updates ? s.updates.total : 0;
-  const t = (i, ico, k, v, sub) => `<div class="tile glass" style="--i:${i}"><span class="ico ${ico}">${I(ico)}</span><div><div class="k">${k}</div><div class="v">${v}</div>${sub?`<div class="s">${sub}</div>`:""}</div></div>`;
-  const [l1, l5, l15] = s.load.map(x => x.toFixed(2));
-  return `<div class="strip" data-key="sr">${t(1,"load","負載", num(s.load[0],2), `${l5}・${l15}`)}
-    ${t(2,"down","下載", `<span class="num">${rate(s.net.rx)}</span>`, `上傳 ${rate(s.net.tx)}`)}
-    ${t(3,"box","容器與服務", items.length ? `${run} / ${items.length}` : "—", items.length ? "正在執行" : "沒有偵測到")}
-    ${t(4,"info","系統更新", s.updates ? (n ? `${n} 個` : "最新") : "—", s.updates ? (n ? "可以更新" : "不用更新") : "")}
-    ${t(5,"cpu","開機時間", up(s.uptime), s.reboot ? "需要重新開機" : "")}
-    ${s.traffic && PREF.show.traffic ? t(6,"up","本月流量", `<span class="num">${size(s.traffic.used)}</span>`, s.traffic.limit ? `已用 ${s.traffic.pct}%` : `${s.traffic.days_left} 天後重置`) : ""}</div>`;
-}
 function eventsPanel(s){
   const ev = s.events;
   if (!ev) return "";
   const word = {bad:"異常", warn:"注意", ok:"恢復", info:"通知"};
-  return `<div class="panel glass" data-key="ep" style="--i:8"><div class="ph"><span class="ico sm up">${I("load")}</span><h3>事件紀錄</h3><span class="sub" style="margin-left:auto;font-weight:700">最近 ${ev.length} 筆</span></div>
+  return `<div class="panel glass" data-key="ep" style="--i:8"><div class="ph">${IC("bell")}<h3>事件紀錄</h3><span class="sub" style="margin-left:auto;font-weight:700">最近 ${ev.length} 筆</span></div>
     ${ev.length ? `<div class="evs" data-keyed>${ev.map(e=>`<div class="ev" data-key="${e.t}:${esc(e.text)}"><span class="dot ${e.kind}"></span><div><div>${esc(e.text)}</div><div class="sub">${word[e.kind]||""}・${when(e.t)}</div></div></div>`).join("")}</div>`
       : `<div class="calm">目前沒有事件，一切平靜 ☕</div>`}</div>`;
 }
@@ -2242,12 +2246,12 @@ function settingsBody(){
       <div style="flex-basis:100%">${seg("perf",[["auto","自動"],["lite","流暢優先"],["full","完整效果"]])}</div></div>
   </div></div>
   <div class="sec"><h4>要顯示的內容</h4><div class="group">
-    <div class="opt"><span class="ico sm cpu">${I("load")}</span><span class="lab">歷史曲線圖</span>${tog("show.chart")}</div>
-    <div class="opt"><span class="ico sm down">${I("down")}</span><span class="lab">網路流量</span>${tog("show.net")}</div>
-    <div class="opt"><span class="ico sm box">${I("box")}</span><span class="lab">容器與服務</span>${tog("show.items")}</div>
-    <div class="opt"><span class="ico sm info">${I("info")}</span><span class="lab">系統資訊<small>電腦版才有</small></span>${tog("show.info")}</div>
-    <div class="opt"><span class="ico sm disk">${I("ok")}</span><span class="lab">國旗</span>${tog("show.flag")}</div>
-    <div class="opt"><span class="ico sm up">${I("up")}</span><span class="lab">每月流量</span>${tog("show.traffic")}</div>
+    <div class="opt">${IC("trend")}<span class="lab">歷史曲線圖</span>${tog("show.chart")}</div>
+    <div class="opt">${IC("net")}<span class="lab">網路速度</span>${tog("show.net")}</div>
+    <div class="opt">${IC("box")}<span class="lab">容器與服務</span>${tog("show.items")}</div>
+    <div class="opt">${IC("info")}<span class="lab">系統資訊<small>電腦版才有</small></span>${tog("show.info")}</div>
+    <div class="opt">${IC("flag")}<span class="lab">國旗</span>${tog("show.flag")}</div>
+    <div class="opt">${IC("month")}<span class="lab">每月流量</span>${tog("show.traffic")}</div>
   </div></div>
   <div class="sec"><h4>資料</h4><div class="group">
     <div class="opt"><span class="lab">自動更新<small>多久抓一次最新狀態</small></span>${seg("refresh",[[3,"3 秒"],[5,"5 秒"],[10,"10 秒"],[30,"30 秒"]])}</div>
@@ -2356,7 +2360,7 @@ document.addEventListener("click", async e => {
   if (rn) {
     e.stopPropagation();
     const old = rn.dataset.name;
-    const name = await modal({icon:"edit", cls:"box", title:"幫主機取個名字", text:"中文、英文、表情符號都可以", input:old, ok:"儲存"});
+    const name = await modal({icon:"edit", cls:"theme", title:"幫主機取個名字", text:"中文、英文、表情符號都可以", input:old, ok:"儲存"});
     if (name === null || !name.trim() || name.trim() === old) return;
     try {
       const r = await fetch("/api/rename?node="+encodeURIComponent(rn.dataset.rename),
@@ -2379,7 +2383,7 @@ document.addEventListener("click", async e => {
   const ub = t.closest("[data-update]");
   if (ub) {
     const node = ub.dataset.update, label = ub.dataset.label, n = +ub.dataset.n;
-    const ok = await modal({icon:"upd", cls:"cpu", title: n ? `更新「${label}」？` : `檢查「${label}」的更新？`,
+    const ok = await modal({icon:"upd", cls:"theme", title: n ? `更新「${label}」？` : `檢查「${label}」的更新？`,
       text: n ? `會在背景安裝 ${n} 個套件更新，大約 1～5 分鐘。\n期間部分服務可能會短暫重新啟動。` : "目前沒有偵測到更新，\n要重新檢查並安裝最新的更新嗎？", ok: n ? "開始更新" : "檢查"});
     if (!ok) return;
     flipWidth(ub, () => { ub.disabled = true; ub.innerHTML = `<span class="spin"></span>開始中…`; });
