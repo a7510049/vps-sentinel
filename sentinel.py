@@ -345,8 +345,7 @@ def set_name(new):
 # ───────────────────────── IP 所在國家 ─────────────────────────
 
 def lookup_geo():
-    if C.get("COUNTRY"):                       # 設定檔可以手動指定
-        return {"cc": C["COUNTRY"].upper(), "city": C.get("CITY", ""), "org": ""}
+    manual = {"cc": C["COUNTRY"].upper(), "city": C.get("CITY", ""), "org": ""} if C.get("COUNTRY") else None
     for url in ("https://ipinfo.io/json", "https://api.country.is/"):
         try:
             req = urllib.request.Request(url, headers={"User-Agent": "vps-sentinel-lite",
@@ -355,11 +354,28 @@ def lookup_geo():
                 d = json.loads(r.read())
             cc = (d.get("country") or "").upper()
             if len(cc) == 2:
-                return {"cc": cc, "city": d.get("city", ""),
-                        "org": re.sub(r"^AS\d+\s+", "", d.get("org", ""))}
+                g = {"cc": cc, "city": d.get("city", ""), "ip": d.get("ip", ""),
+                     "org": re.sub(r"^AS\d+\s+", "", d.get("org", ""))}
+                if manual:                             # 設定檔手動指定的國家優先，只借用查到的 IP
+                    manual["ip"] = g["ip"]
+                    return manual
+                return g
         except Exception:  # noqa: BLE001
             pass
-    return None
+    return manual
+
+
+def tcp_conns():
+    """目前建立中的 TCP 連線數（IPv4＋IPv6）"""
+    n = 0
+    for f in ("/proc/net/tcp", "/proc/net/tcp6"):
+        try:
+            with open(f) as fh:
+                next(fh, None)
+                n += sum(1 for line in fh if line.split(None, 4)[3:4] == ["01"])
+        except OSError:
+            pass
+    return n
 
 
 # ───────────────────────── 系統更新 ─────────────────────────
@@ -734,6 +750,7 @@ class Collector:
             "os": os_name(), "kernel": os.uname().release,
             "uptime": float(read("/proc/uptime", "0").split()[0] or 0),
             "cores": os.cpu_count() or 1, "cpu": cpu, "load": [round(x, 2) for x in load],
+            "conns": tcp_conns(), "procs": int((read("/proc/loadavg", "0 0 0 0/0").split()[3:4] or ["0/0"])[0].split("/")[-1] or 0),
             "mem": mem, "disks": disks, "net": net,
             "containers": containers, "services": services,
             "updates": updates, "reboot": reboot, "geo": geo, "update": upd, "events": events, "traffic": traffic,
@@ -1336,6 +1353,16 @@ button{font:inherit;color:inherit}
 .sysp{display:flex;flex-direction:column;min-height:0;border-radius:30px;padding:18px 18px 16px}
 .sysp .ph{margin-bottom:10px}
 .sysp .kv{gap:7px 12px;font-size:12.5px;flex:1 1 0;min-height:0;overflow-y:auto;align-content:start;margin:-4px -2px 0;padding:4px 2px 8px}
+.facts{display:grid;grid-template-columns:1fr 1fr;gap:14px 12px;flex:1 1 auto;align-content:center}
+.facts>div{min-width:0}
+.facts .k{font-size:11.5px;color:var(--sub);font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.facts b{font-size:21px;font-weight:900;line-height:1.25;white-space:nowrap}
+.facts b.warn{color:var(--warn)}.facts b.bad{color:var(--bad)}
+.facts small{font-size:11.5px;color:var(--sub);font-weight:700;margin-left:3px}
+.facts .wide{grid-column:1/-1}
+.ipc{cursor:pointer;border-radius:7px;margin:-2px -4px;padding:2px 4px;transition:background .2s,color .2s}
+.ipc:hover{background:var(--track);color:var(--text)}
+.fx{font-size:11.5px;color:var(--sub);font-weight:700;margin-top:10px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .gauges>.sysp{min-height:100%}
 /* 側邊欄填滿整個高度 */
 .dash.d .side{height:auto}
@@ -1944,22 +1971,28 @@ function ring(icon, label, pct, sub, i){
     <circle class="rv ${tier(pct)}" cx="60" cy="60" r="${r}" style="--c:${Cc.toFixed(1)};stroke-dasharray:${Cc.toFixed(1)};stroke-dashoffset:${off.toFixed(1)}"/></svg>
     <div class="gin"><b>${num(pct)}<small>%</small></b><span>${sub}</span></div></div></div>`;
 }
+/* 主機概況：只放上面沒出現過、又真的有用的數字 */
+function sysPanel(s){
+  const l = s.load[0], lr = l / (s.cores || 1), lt = lr >= 2 ? "bad" : lr >= 1 ? "warn" : "";
+  const v = x => x == null ? "—" : Number(x).toLocaleString("zh-TW");
+  const extra = s.disks.slice(1).map(d => `磁碟 ${esc(d.path)} ${num(d.pct)}%`)
+    .concat(s.mem.swap_total ? [`虛擬記憶體 ${num(s.mem.swap_pct)}%`] : []);
+  return `<div class="panel glass sysp" data-key="fp" style="--i:4"><div class="ph">${IC("info")}<h3>主機概況</h3></div>
+    <div class="facts">
+      <div class="wide" title="最近 1／5／15 分鐘：${s.load.map(x=>x.toFixed(2)).join("／")}"><div class="k">系統負載</div><b class="num ${lt}">${l.toFixed(2)}</b><small>／${s.cores} 核</small></div>
+      <div><div class="k">目前連線</div><b class="num">${v(s.conns)}</b></div>
+      <div><div class="k">執行中程式</div><b class="num">${v(s.procs)}</b></div>
+    </div>${extra.length ? `<div class="fx">${extra.join("・")}</div>` : ""}</div>`;
+}
 function detail(s){
   const key = keyOf(s), where = place(s);
   let h = `<div class="detail" data-key="detail" data-keyed><div class="panel glass dhead" data-key="dh" style="--i:0">
       <div style="min-width:0"><h2 class="nmh" style="display:flex;align-items:center;gap:8px;flex-wrap:wrap"><span>${esc(s.name)}</span>${editBtn(s)}</h2>
-      <div class="sub dsub">${s.online ? `<span>${where?esc(where)+"・":""}${esc(s.os)}・開機 ${up(s.uptime)}</span>` : `<span>目前沒有回應</span>`}</div></div>
+      <div class="sub dsub">${s.online ? `<span title="核心版本 ${esc(s.kernel)}">${where?esc(where)+"・":""}${s.geo&&s.geo.ip?`<span class="ipc" data-copy="${esc(s.geo.ip)}" title="點一下複製 IP${s.geo.org?`（${esc(s.geo.org)}）`:""}">${esc(s.geo.ip)}</span>・`:""}${esc(s.os)}・開機 ${up(s.uptime)}</span>` : `<span>目前沒有回應</span>`}</div></div>
       ${s.online ? `<div class="act"><div class="sub" data-x style="line-height:1.6;font-weight:600">${updateInfo(s)}</div>${updateBtn(s)}</div>` : ""}</div>`;
   if (!s.online) return h + `<div class="panel glass bigoff" data-key="off" style="--i:1"><b>連不上這台主機</b>${esc(s.error||"")}</div></div>`;
   h += alerts(s);
-  const fp = PREF.show.info ? `<div class="panel glass sysp" data-key="fp" style="--i:4"><div class="ph">${IC("info")}<h3>系統資訊</h3></div><dl class="kv">
-      <dt>作業系統</dt><dd>${esc(s.os)}</dd><dt>核心版本</dt><dd>${esc(s.kernel)}</dd>
-      ${where?`<dt>位置</dt><dd>${esc(where)}</dd>`:""}${s.geo&&s.geo.org?`<dt>供應商</dt><dd>${esc(s.geo.org)}</dd>`:""}
-      <dt title="1／5／15 分鐘平均">平均負載</dt><dd class="num">${s.load.map(x=>x.toFixed(2)).join(" / ")}</dd>
-      <dt>開機時間</dt><dd>${up(s.uptime)}</dd>
-      ${s.disks.map(d=>`<dt>磁碟 ${esc(d.path)}</dt><dd class="num">${size(d.used)} / ${size(d.total)}</dd>`).join("")}
-      ${s.mem.swap_total?`<dt>虛擬記憶體</dt><dd class="num">${size(s.mem.swap_used)} / ${size(s.mem.swap_total)}</dd>`:""}
-    </dl></div>` : "";
+  const fp = PREF.show.info ? sysPanel(s) : "";
   const d0 = s.disks[0] || {pct:0, used:0, total:0};
   h += `<div class="gauges" data-key="gg" style="${fp?"":"grid-template-columns:repeat(3,minmax(0,1fr))"}">${ring("cpu", "處理器", s.cpu, `${s.cores} 核心`, 1)}
         ${ring("mem", "記憶體", s.mem.pct, `${size(s.mem.used)} / ${size(s.mem.total)}`, 2)}
@@ -2405,7 +2438,7 @@ function settingsBody(){
     <div class="opt">${IC("trend")}<span class="lab">歷史曲線圖</span>${tog("show.chart")}</div>
     <div class="opt">${IC("net")}<span class="lab">網路速度</span>${tog("show.net")}</div>
     <div class="opt">${IC("box")}<span class="lab">容器與服務</span>${tog("show.items")}</div>
-    <div class="opt">${IC("info")}<span class="lab">系統資訊<small>電腦版才有</small></span>${tog("show.info")}</div>
+    <div class="opt">${IC("info")}<span class="lab">主機概況<small>電腦版才有</small></span>${tog("show.info")}</div>
     <div class="opt">${IC("flag")}<span class="lab">國旗</span>${tog("show.flag")}</div>
     <div class="opt">${IC("month")}<span class="lab">每月流量</span>${tog("show.traffic")}</div>
   </div></div>
@@ -2528,6 +2561,14 @@ document.addEventListener("click", async e => {
       (r.ok && d.ok) ? toast(`已改名為「${name.trim()}」`) : toast(d.message || d.error || "改名失敗", "bad");
     } catch(err) { toast("連線失敗，請稍後再試", "bad"); }
     return tick();
+  }
+  const cp = t.closest("[data-copy]");
+  if (cp) {
+    const txt = cp.dataset.copy;
+    try { await navigator.clipboard.writeText(txt); }
+    catch(e) { const ta = document.createElement("textarea"); ta.value = txt; ta.style.cssText = "position:fixed;opacity:0";
+      document.body.appendChild(ta); ta.select(); try { document.execCommand("copy"); } catch(_) {} ta.remove(); }
+    return toast(`已複製 ${txt}`);
   }
   const hs = t.closest("[data-sel]");
   if (hs) {
