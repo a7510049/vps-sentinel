@@ -1416,7 +1416,8 @@ button{font:inherit;color:inherit}
 .dialog .btns button{justify-content:center;padding:12px}
 
 .veil.sheetv{align-items:flex-end;justify-content:flex-end;padding:0}
-.sheet{width:100%;max-height:88vh;overflow:auto;border-radius:30px 30px 0 0;padding:10px 18px calc(env(safe-area-inset-bottom) + 22px);
+/* 面板本身不捲動（玻璃的光邊、反光才會固定在邊上），只有裡面的內容捲動 */
+.sheet{width:100%;max-height:88vh;overflow:hidden;display:flex;flex-direction:column;border-radius:30px 30px 0 0;padding:10px 0 0;
   animation:slideup .6s cubic-bezier(.22,1,.36,1) both;will-change:transform}
 .sheet.ready{animation:none}
 .closing .sheet{animation:sheetDown .38s cubic-bezier(.4,0,.6,1) forwards}
@@ -1425,7 +1426,9 @@ button{font:inherit;color:inherit}
 @keyframes sheetDown{to{transform:translateY(105%)}}
 @media (min-width:1024px){
   .veil.sheetv{align-items:stretch;padding:16px}
-  .sheet{width:400px;max-height:none;border-radius:30px;padding:10px 22px 22px;animation-name:slidein}
+  .sheet{width:400px;max-height:none;border-radius:30px;padding:10px 0 0;animation-name:slidein}
+  .sheetv .sbody{padding:0 22px 22px}
+  .sheetv .sheet .top{padding:0 22px 10px}
   .closing .sheet{animation-name:sheetRight}
   .grab{visibility:hidden}
   @keyframes slidein{from{transform:translateX(110%)}}
@@ -1433,7 +1436,11 @@ button{font:inherit;color:inherit}
 }
 .grab{width:40px;height:5px;border-radius:9px;background:var(--faint);margin:2px auto 10px;touch-action:none;cursor:grab}
 .sheet .top{touch-action:none}
-.sheet .top{display:flex;align-items:center;justify-content:space-between;margin:6px 0 10px}
+.sheet .top{display:flex;align-items:center;justify-content:space-between;margin:6px 0 0;padding:0 18px 10px;flex:none;
+  box-shadow:0 1px 0 transparent;transition:box-shadow .3s}
+.sheet .top.under{box-shadow:0 1px 0 var(--line)}
+.sbody{flex:1;min-height:0;overflow-y:auto;overscroll-behavior:contain;-webkit-overflow-scrolling:touch;padding:0 18px calc(env(safe-area-inset-bottom) + 22px)}
+.grab{flex:none}
 .sheet h3{font-size:22px;font-weight:900}
 .sec{margin-top:18px}
 .sec>h4{font-size:12px;font-weight:800;color:var(--sub);letter-spacing:.5px;margin:0 6px 8px}
@@ -1512,8 +1519,8 @@ body{overscroll-behavior-y:contain}
 
 /* ═════════ 捲軸 ═════════ */
 /* 內部的捲動區塊不顯示捲軸（滾輪、手指一樣可以捲），動畫時就不會閃出拉條 */
-.evs,.sheet,.hosts,.tbl,.list{scrollbar-width:none}
-.evs::-webkit-scrollbar,.sheet::-webkit-scrollbar,.hosts::-webkit-scrollbar,.tbl::-webkit-scrollbar,.list::-webkit-scrollbar{display:none}
+.evs,.sbody,.hosts,.tbl,.list{scrollbar-width:none}
+.evs::-webkit-scrollbar,.sbody::-webkit-scrollbar,.hosts::-webkit-scrollbar,.tbl::-webkit-scrollbar,.list::-webkit-scrollbar{display:none}
 /* 整個頁面：先保留捲軸的位置，內容變長變短時寬度不會跳；捲軸本身改成細細淡淡的 */
 html{scrollbar-gutter:stable;scrollbar-width:thin;scrollbar-color:color-mix(in srgb,var(--text) 22%,transparent) transparent}
 html::-webkit-scrollbar{width:8px}
@@ -2307,7 +2314,8 @@ function openSettings(){
   const v = document.createElement("div"); v.className = "veil sheetv";
   v.innerHTML = `<div class="sheet glass"><div class="grab"></div><div class="top"><h3>外觀與設定</h3><button class="iconbtn" data-close>${I("x")}</button></div><div class="sbody">${settingsBody()}</div></div>`;
   $("#layer").appendChild(v);
-  const sheet = v.querySelector(".sheet"), body = v.querySelector(".sbody");
+  const sheet = v.querySelector(".sheet"), body = v.querySelector(".sbody"), top = v.querySelector(".top");
+  body.addEventListener("scroll", () => top.classList.toggle("under", body.scrollTop > 4), {passive:true});
   initSegs(body);
   sheet.addEventListener("animationend", e => { if (e.target === sheet && !v._d) sheet.classList.add("ready"); });
   const close = () => { if (v._d) return; v._d = 1; sheet.classList.remove("back"); v.classList.add("closing"); setTimeout(()=>v.remove(), 380); };
