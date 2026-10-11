@@ -2283,6 +2283,11 @@ function modal({icon, cls="box", title, text, input, ok="確定", cancel="取消
 }
 /* 切換主機：舊內容先淡出，換成全新的一頁，再一塊一塊浮上來（不讓兩台的內容互相變形） */
 let SWID = 0;
+/* 要動的是每一塊玻璃本身：如果讓外層容器變透明，裡面玻璃的模糊會暫時「看不到」背景而變暗，結束時又突然亮起來 */
+function swParts(root){
+  const g = [...root.querySelectorAll(".glass")].filter(el => !el.parentElement.closest(".glass"));
+  return g.concat([...root.children].filter(c => !c.classList.contains("glass") && !c.querySelector(".glass")));
+}
 async function switchHost(){
   const id = ++SWID, old = $("#app .detail");
   if (!old || !DESK.matches || !canAnim()) return render(LIST);
@@ -2291,10 +2296,13 @@ async function switchHost(){
   clearTimeout(R._qacc); R._qacc = setTimeout(() => R.classList.remove("qacc"), 400);
   render(LIST);
   const t0 = performance.now();
-  const o0 = +getComputedStyle(old).opacity;       // 連點時從目前的透明度接著淡，不要閃回來
-  old.getAnimations().forEach(a => a.cancel());
-  await old.animate([{opacity:o0, transform:"none"}, {opacity:0, transform:"translateY(-6px)"}],
-    {duration:170, easing:"cubic-bezier(.4,0,1,1)", fill:"forwards", id:"ui"}).finished.catch(()=>{});
+  const outs = swParts(old).map(el => {
+    const o0 = +getComputedStyle(el).opacity;     // 連點時從目前的透明度接著淡，不要閃回來
+    el.getAnimations().forEach(x => x.cancel());
+    return el.animate([{opacity:o0, transform:"none"}, {opacity:0, transform:"translateY(-6px)"}],
+      {duration:170, easing:"cubic-bezier(.4,0,1,1)", fill:"forwards", id:"ui"}).finished.catch(()=>{});
+  });
+  await Promise.all(outs);
   const sel = LIST.find(s => keyOf(s) === SEL);
   if (sel && RANGE !== "30m") {                    // 24 小時／7 天：等新主機的資料一下，避免先看到「讀取中」
     const k = keyOf(sel) + "|" + RANGE;
@@ -2305,11 +2313,13 @@ async function switchHost(){
   const fresh = tpl.content.firstElementChild;
   if (!fresh) { old.remove(); return render(LIST); }
   old.replaceWith(fresh);
-  fresh.getAnimations({subtree:true}).forEach(a => a.animationName === "rise" && a.cancel());  // 不跑第一次載入的浮現，改用下面較快的版本
+  fresh.getAnimations({subtree:true}).forEach(x => x.animationName === "rise" && x.cancel());  // 不跑第一次載入的浮現，改用下面較快的版本
   render(LIST);
-  [...fresh.children].forEach((c, i) => {
-    c.animate([{opacity:0, transform:"translateY(10px)"}, {opacity:1, transform:"none"}],
-      {duration:380, delay:i*45, easing:"cubic-bezier(.2,.8,.3,1)", fill:"backwards", id:"ui"});
+  const parts = swParts(fresh), tops = parts.map(el => Math.round(el.getBoundingClientRect().top / 40));
+  const rows = [...new Set(tops)].sort((x, y) => x - y);       // 同一排的一起出現，由上往下
+  parts.forEach((el, i) => {
+    el.animate([{opacity:0, transform:"translateY(10px)"}, {opacity:1, transform:"none"}],
+      {duration:380, delay:rows.indexOf(tops[i]) * 50, easing:"cubic-bezier(.2,.8,.3,1)", fill:"backwards", id:"ui"});
   });
 }
 /* 整頁平順切換：支援的瀏覽器會淡入淡出，不支援就直接換 */
