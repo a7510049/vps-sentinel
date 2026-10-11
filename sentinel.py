@@ -2280,6 +2280,35 @@ function modal({icon, cls="box", title, text, input, ok="確定", cancel="取消
     v.addEventListener("click", e => { if (e.target === v) return done(0); const b = e.target.closest("[data-r]"); if (b) done(+b.dataset.r); });
   });
 }
+/* 切換主機：舊內容先淡出，換成全新的一頁，再一塊一塊浮上來（不讓兩台的內容互相變形） */
+let SWID = 0;
+async function switchHost(){
+  const id = ++SWID, old = $("#app .detail");
+  if (!old || !DESK.matches || !canAnim()) return render(LIST);
+  old.setAttribute("data-keep", "");               // 淡出期間左邊選單照常更新，右邊先不動
+  render(LIST);
+  const t0 = performance.now();
+  const o0 = +getComputedStyle(old).opacity;       // 連點時從目前的透明度接著淡，不要閃回來
+  old.getAnimations().forEach(a => a.cancel());
+  await old.animate([{opacity:o0, transform:"none"}, {opacity:0, transform:"translateY(-6px)"}],
+    {duration:170, easing:"cubic-bezier(.4,0,1,1)", fill:"forwards", id:"ui"}).finished.catch(()=>{});
+  const sel = LIST.find(s => keyOf(s) === SEL);
+  if (sel && RANGE !== "30m") {                    // 24 小時／7 天：等新主機的資料一下，避免先看到「讀取中」
+    const k = keyOf(sel) + "|" + RANGE;
+    while (HCACHE[k] && HCACHE[k].loading && performance.now() - t0 < 600) await new Promise(r => setTimeout(r, 30));
+  }
+  if (id !== SWID || !old.isConnected) return;     // 又點了別台：交給最新那次處理
+  const tpl = document.createElement("template"); tpl.innerHTML = sel ? detail(sel).trim() : "";
+  const fresh = tpl.content.firstElementChild;
+  if (!fresh) { old.remove(); return render(LIST); }
+  old.replaceWith(fresh);
+  fresh.getAnimations({subtree:true}).forEach(a => a.animationName === "rise" && a.cancel());  // 不跑第一次載入的浮現，改用下面較快的版本
+  render(LIST);
+  [...fresh.children].forEach((c, i) => {
+    c.animate([{opacity:0, transform:"translateY(10px)"}, {opacity:1, transform:"none"}],
+      {duration:380, delay:i*45, easing:"cubic-bezier(.2,.8,.3,1)", fill:"backwards", id:"ui"});
+  });
+}
 /* 整頁平順切換：支援的瀏覽器會淡入淡出，不支援就直接換 */
 function smooth(fn, theme, relayout){
   const motion = PREF.motion && !matchMedia("(prefers-reduced-motion: reduce)").matches;
@@ -2460,10 +2489,7 @@ document.addEventListener("click", async e => {
   if (hs) {
     if (hs.dataset.sel === SEL) return;
     SEL = hs.dataset.sel; store("vps-sel", SEL); scrollTo({top:0, behavior:"smooth"});
-    render(LIST);                                   // 詳細頁原地更新：數字、圓環、曲線直接動到新主機的數值
-    const d = $("#app .detail");
-    if (d && canAnim()) d.animate([{opacity:.12}, {opacity:1}], {duration:340, easing:"cubic-bezier(.2,.7,.3,1)"});
-    return;
+    return switchHost();
   }
 
   const ub = t.closest("[data-update]");
