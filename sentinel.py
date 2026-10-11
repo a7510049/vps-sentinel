@@ -27,7 +27,7 @@ from collections import deque
 from concurrent.futures import ThreadPoolExecutor
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
-VERSION = "1.7"
+VERSION = "1.8"
 
 # ───────────────────────── 設定 ─────────────────────────
 
@@ -104,6 +104,7 @@ def parse_peers(raw):
 
 
 PEERS = parse_peers(C.get("PEERS", ""))
+PEER_SEEN = {}                                  # 其他主機最後一次連上的時間（會存檔）
 
 if not TOKEN:
     sys.exit("錯誤：設定檔裡沒有 TOKEN（存取密碼），請先設定。")
@@ -236,14 +237,15 @@ def docker_containers():
     if not shutil.which("docker"):
         return None
     code, out = run(["docker", "ps", "-a", "--format",
-                     "{{.Names}}\t{{.State}}\t{{.Status}}\t{{.Image}}"], 10)
+                     "{{.Names}}\t{{.State}}\t{{.Status}}\t{{.Image}}\t{{.Label \"com.docker.compose.project\"}}"], 10)
     if code != 0:
         return None
     items = []
     for line in out.strip().splitlines():
         p = line.split("\t")
         if len(p) >= 4:
-            items.append({"name": p[0], "state": p[1], "status": p[2], "image": p[3]})
+            items.append({"name": p[0], "state": p[1], "status": p[2], "image": p[3],
+                          "project": p[4].strip() if len(p) > 4 else ""})
     items.sort(key=lambda c: (c["state"] == "running", c["name"]))
     return items
 
@@ -484,6 +486,7 @@ class Collector:
             tr = st.get("traffic") or {}
             if isinstance(tr.get("days"), dict):
                 self.traffic = {"since": tr.get("since", now), "days": tr["days"], "last": tr.get("last")}
+            PEER_SEEN.update({k: float(v) for k, v in (st.get("peer_seen") or {}).items()})
             if st.get("prev_keys") is not None:
                 self.prev_keys = {k: tuple(v) for k, v in st["prev_keys"].items()}
             log(f"已讀取存檔：歷史 {len(self.hist)}/{len(self.h24)}/{len(self.h7d)} 筆、事件 {len(self.events)} 筆、流量 {len(self.traffic['days'])} 天")
@@ -494,7 +497,7 @@ class Collector:
         with self.lock:
             st = {"v": 1, "saved": time.time(), "hist": list(self.hist), "h24": list(self.h24), "h7d": list(self.h7d),
                   "events": list(self.events), "traffic": self.traffic,
-                  "prev_keys": self.prev_keys}
+                  "prev_keys": self.prev_keys, "peer_seen": dict(PEER_SEEN)}
         try:
             os.makedirs(DATA_DIR, exist_ok=True)
             tmp = self.state_path() + ".tmp"
@@ -773,10 +776,11 @@ def fetch_peer(p):
             data = json.loads(r.read())
         data["node"] = p["name"]                  # 代號：用來把指令轉給這台
         data["name"] = data.get("name") or p["name"]   # 顯示：用那台自己的名稱
+        PEER_SEEN[p["name"]] = time.time()
         return data
     except Exception as e:  # noqa: BLE001
         return {"name": p["name"], "node": p["name"], "online": False, "level": "bad",
-                "problems": ["連不上"], "error": peer_error(e, p["url"])}
+                "problems": ["連不上"], "error": peer_error(e, p["url"]), "last_seen": PEER_SEEN.get(p["name"])}
 
 
 def peer_error(e, url):
@@ -1253,6 +1257,11 @@ button{font:inherit;color:inherit}
 .item:hover{background:var(--track)}
 .item .n{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .item .tag{flex:none}
+.grp{display:flex;align-items:center;gap:8px;font-size:11.5px;font-weight:800;color:var(--sub);letter-spacing:.3px;padding:10px 4px 2px;
+  opacity:0;transition:opacity .4s}
+.grp span{margin-left:auto;font-weight:700;color:var(--faint)}
+.more.open .grp,.tbl .grp{opacity:1}
+.tbl .grp:first-child,.list .grp:first-child{padding-top:2px}
 .tag{color:var(--sub);font-size:11.5px;white-space:nowrap;font-weight:700;padding:3px 8px;border-radius:99px;background:var(--track)}
 .foot{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-top:14px;border-top:1px solid var(--line);padding-top:14px}
 .foot .sub{font-weight:600;line-height:1.6}
@@ -1303,6 +1312,9 @@ button{font:inherit;color:inherit}
 .dhead .sub{font-size:13px;margin-top:2px}
 .dhead .act{display:flex;align-items:center;gap:14px;text-align:right;margin-left:auto}
 .detail>.alerts{margin:0;flex-direction:row;flex-wrap:wrap}
+.dhead .alerts{margin:10px 0 0;flex-direction:row;flex-wrap:wrap;gap:8px}
+.dhead .alert{padding:6px 12px;font-size:12.5px;border-radius:11px}
+.dhead .alert svg{width:15px;height:15px}
 .detail .alert{padding:10px 15px}
 .ph{display:flex;align-items:center;gap:11px;margin-bottom:14px;flex-wrap:wrap}
 .ph h3{font-size:15.5px;font-weight:800}
@@ -1332,6 +1344,19 @@ button{font:inherit;color:inherit}
 .charts>.panel{display:flex;flex-direction:column}
 .charts .cbox{flex:1 1 auto;height:auto;min-height:100px;position:relative}
 .charts .cbox>*{position:absolute;inset:0;height:100%!important;width:100%}
+.yax{pointer-events:none}
+.yax span{position:absolute;left:0;transform:translateY(-100%);padding-bottom:2px;font-size:10.5px;font-weight:700;color:var(--faint);
+  font-variant-numeric:tabular-nums;text-shadow:0 0 6px var(--bg)}
+.cbox{cursor:crosshair}
+#ctip{position:fixed;z-index:60;pointer-events:none;min-width:130px;padding:9px 12px;border-radius:13px;font-size:12px;font-weight:700;
+  background:color-mix(in srgb,var(--bg) 86%,transparent);-webkit-backdrop-filter:blur(14px);backdrop-filter:blur(14px);
+  box-shadow:0 10px 30px -10px rgba(0,0,0,.35),inset 0 0 0 1px var(--line);opacity:0;transition:opacity .15s}
+#ctip .tt{color:var(--sub);font-size:11px;margin-bottom:5px}
+#ctip .tr2{display:flex;align-items:center;gap:7px;line-height:1.7}
+#ctip .tr2 i{width:7px;height:7px;border-radius:50%;flex:none}
+#ctip .tr2 b{margin-left:auto;padding-left:14px;font-weight:900}
+#cline{position:fixed;z-index:59;width:0;border-left:1px dashed var(--faint);pointer-events:none;opacity:0;transition:opacity .15s}
+#ctip.show,#cline.show{opacity:1}
 .lower>.panel{display:flex;flex-direction:column;min-height:0}
 .lower .trf{grid-column:span 2;container-type:inline-size}
 .lower .evs,.lower .tbl{flex:1 1 0;min-height:60px;max-height:none;overflow-y:auto;overflow-x:hidden}
@@ -1373,6 +1398,14 @@ button{font:inherit;color:inherit}
 .ovg .k{font-size:11px;color:var(--sub);font-weight:700}
 .ovg b{display:block;font-size:17px;font-weight:900;line-height:1.3;white-space:nowrap}
 .ovg b small{font-size:11px;opacity:.55;margin-left:1px}
+.tqs{display:flex;flex-direction:column;gap:12px}
+.tq .r{display:flex;align-items:baseline;gap:8px;font-size:12.5px;font-weight:800}
+.tq .nm{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.tq .r b{font-size:14px;font-weight:900}
+.tq .track{height:5px;margin:5px 0 4px}
+.tq .s{font-size:11px;color:var(--sub);font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.tq .s.warn{color:var(--warn)}
+.tqw+.bar2{margin-top:14px}
 .ovw .bar2{display:flex;height:6px;border-radius:9px;overflow:hidden;margin-top:12px;background:var(--track)}
 .ovw .bar2 i{display:block;height:100%;transition:width .8s cubic-bezier(.22,1,.36,1)}
 .ovw .cap2{display:flex;justify-content:space-between;font-size:11px;color:var(--sub);font-weight:700;margin-top:6px}
@@ -1770,6 +1803,19 @@ const place = s => s.geo ? [(REGION&&s.geo.cc)?REGION.of(s.geo.cc):s.geo.cc, s.g
 function when(t){ const d=new Date(t*1000), now=new Date();
   const hm=d.toLocaleTimeString("zh-TW",{hour:"2-digit",minute:"2-digit",hour12:false});
   return d.toDateString()===now.toDateString() ? `今天 ${hm}` : `${d.getMonth()+1}/${d.getDate()} ${hm}`; }
+/* 「3 分鐘前」「昨天 19:42」這種好讀的時間 */
+function ago(t){
+  const d = Date.now()/1000 - t, dt = new Date(t*1000), now = new Date();
+  const hm = dt.toLocaleTimeString("zh-TW",{hour:"2-digit",minute:"2-digit",hour12:false});
+  if (d < 45) return "剛剛";
+  if (d < 3600) return `${Math.round(d/60)} 分鐘前`;
+  if (d < 6*3600) return `${Math.floor(d/3600)} 小時前`;
+  if (dt.toDateString() === now.toDateString()) return `今天 ${hm}`;
+  const y = new Date(now); y.setDate(now.getDate()-1);
+  if (dt.toDateString() === y.toDateString()) return `昨天 ${hm}`;
+  return `${dt.getMonth()+1}/${dt.getDate()} ${hm}`;
+}
+const seen = s => s.last_seen ? `最後連上：${ago(s.last_seen)}` : "";
 function avatar(s){
   const f = PREF.show.flag && s.geo ? flag(s.geo.cc) : "";
   const lv = lvOf(s), tip = {ok:"運作正常", warn:"需要留意", bad:"出問題了"}[lv];
@@ -1796,16 +1842,31 @@ function itemsOf(s){
   (s.containers||[]).forEach(c=>{
     const st = /unhealthy/.test(c.status) ? "bad" : c.state==="running" ? "ok"
       : (c.state==="created" || c.state==="paused" || /Exited \(0\)/.test(c.status)) ? "off" : "bad";
-    items.push({n:c.name, st, s:STATE[c.state]||c.state, t:"容器"});
+    const g = c.project || "", short = g && c.name.startsWith(g + "-") ? c.name.slice(g.length + 1) : c.name;
+    items.push({n:c.name, sn:short, g, st, s:STATE[c.state]||c.state, t:"容器"});
   });
-  (s.services||[]).forEach(v=>items.push({n:v.name, st:v.state==="active"?"ok":"bad", s:STATE[v.state]||v.state, t:"服務"}));
+  const rank = {bad:0, ok:1, off:2};
+  items.sort((a, b) => (a.g === b.g ? 0 : !a.g ? 1 : !b.g ? -1 : a.g.localeCompare(b.g)) || rank[a.st] - rank[b.st] || a.sn.localeCompare(b.sn));
+  (s.services||[]).forEach(v=>items.push({n:v.name, sn:v.name, g:"系統服務", st:v.state==="active"?"ok":"bad", s:STATE[v.state]||v.state, t:"服務"}));
   return items;
 }
 function itemsSummary(items){
   const bad = items.filter(x=>x.st==="bad").length, okn = items.filter(x=>x.st==="ok").length, off = items.length-bad-okn;
   return `${okn} 個正常${off?`・${off} 個沒在用`:""}${bad?`・<b>${bad} 個異常</b>`:""}`;
 }
-const itemRow = (x,j) => `<div class="item" data-key="${x.t}:${esc(x.n)}" style="transition-delay:${j*35}ms"><span class="dot ${x.st}"></span><span class="n" title="${x.t}：${esc(x.n)}">${esc(x.n)}</span><span class="tag">${x.t==="容器"?"":x.t+"・"}${esc(x.s)}</span></div>`;
+const itemRow = (x,j) => `<div class="item" data-key="${x.t}:${esc(x.n)}" style="transition-delay:${j*35}ms"><span class="dot ${x.st}"></span><span class="n" title="${x.t}：${esc(x.n)}">${esc(x.sn||x.n)}</span><span class="tag">${esc(x.s)}</span></div>`;
+/* 有分組（docker compose 專案、系統服務）就加小標題，名稱前面重複的專案名稱拿掉 */
+function itemsHTML(items){
+  const groups = [...new Set(items.map(x => x.g))];
+  const head = groups.length > 1 || groups[0];
+  let j = 0, h = "";
+  for (const g of groups) {
+    const gi = items.filter(x => x.g === g);
+    if (head) h += `<div class="grp" data-key="grp:${esc(g)}" style="transition-delay:${j*35}ms">${g ? esc(g) : "其他容器"}<span>${gi.filter(x=>x.st==="ok").length}／${gi.length}</span></div>`;
+    h += gi.map(x => itemRow(x, j++)).join("");
+  }
+  return h;
+}
 function updateInfo(s){
   const n = s.updates ? s.updates.total : 0, u = s.update;
   let info = s.updates ? (n ? `有 ${n} 個套件可以更新${s.updates.security?`（含 ${s.updates.security} 個安全更新）`:""}` : "系統已經是最新的 ✨") : "";
@@ -1854,18 +1915,27 @@ function resample(v, n){
   }
   return out;
 }
+/* 刻度用的整齊數字：1、2、5、10… */
+function niceMax(v, bin){
+  if (bin) { const u = Math.pow(1024, Math.max(0, Math.floor(Math.log(v) / Math.log(1024)))); return niceMax(v / u) * u; }
+  const e = Math.pow(10, Math.floor(Math.log10(v))), f = v / e;
+  return (f <= 1 ? 1 : f <= 2 ? 2 : f <= 2.5 ? 2.5 : f <= 5 ? 5 : 10) * e;
+}
+const CHD = {};                       // 每張曲線圖的原始資料（滑鼠移上去顯示數值用）
 function chart(id, series, o={}){
-  const N = o.n || 150;
+  const N = o.n || 150, raw = series;
   series = series.map(s => ({...s, data: resample(s.data, N)}));
   const W = 600, H = o.h || 170, all = series.flatMap(s=>s.data||[]);
   if (all.length < 4) return `<div class="wait" style="height:${H}px">收集資料中，約 1 分鐘後出現…</div>`;
-  const max = o.max || Math.max(1, ...all) * 1.2;
+  const max = o.max || (o.grid ? niceMax(Math.max(1, ...all) * 1.1, o.bin) : Math.max(1, ...all) * 1.2);
+  if (o.t) CHD[id] = {t: o.t, ser: raw, fmt: o.fmt || (v => v)};
+  const yax = o.grid && o.fmt ? `<div class="yax">${[.25,.5,.75].map(f=>`<span style="top:${f*100}%">${o.fmt(max*(1-f))}</span>`).join("")}</div>` : "";
   let g = "";
   if (o.grid) for (const f of [.25,.5,.75]) g += `<line class="gl" x1="0" x2="${W}" y1="${(H*f).toFixed(1)}" y2="${(H*f).toFixed(1)}"/>`;
   const defs = series.map((s,i)=>`<linearGradient id="${id}${i}" x1="0" y1="0" x2="0" y2="1"><stop offset="0" style="stop-color:${s.color};stop-opacity:${o.fade??.3}"/><stop offset="1" style="stop-color:${s.color};stop-opacity:0"/></linearGradient>`).join("");
   const body = series.map((s,i)=>{ const p = pathOf(s.data, W, H, max); if (!p) return "";
     return `<path d="${p.area}" fill="url(#${id}${i})"/><path d="${p.line}" fill="none" style="stroke:${s.color}" stroke-width="${o.sw||2.4}" vector-effect="non-scaling-stroke" stroke-linecap="round" stroke-linejoin="miter"/>`; }).join("");
-  return `<svg class="chart" viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" style="height:${H}px"><defs>${defs}</defs>${g}${body}</svg>`;
+  return `<svg class="chart" ${o.t?`data-cid="${id}"`:""} viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" style="height:${H}px"><defs>${defs}</defs>${g}${body}</svg>${yax}`;
 }
 let RANGE = ["30m","24h","7d"].includes(store("vps-range")) ? store("vps-range") : "30m";
 const HCACHE = {}, SHOWN = {};
@@ -1903,7 +1973,7 @@ function chartOr(h, id, series, o){
   if (!h) return `<div class="wait" style="height:${o.h||170}px">讀取中…</div>`;
   if (h.err) return `<div class="wait" style="height:${o.h||170}px">${esc(h.err)}</div>`;
   if (RANGE !== "30m" && (!h.t || h.t.length < 2)) return `<div class="wait" style="height:${o.h||170}px">資料累積中，${RANGE==="24h"?"約 10 分鐘":"約 1 小時"}後開始出現</div>`;
-  return chart(id, series(h), o);
+  return chart(id, series(h), {...o, t: h.t});
 }
 const minutes = h => (h && h.t && h.t.length > 1) ? Math.max(1, Math.round((h.t[h.t.length-1]-h.t[0])/60)) : 30;
 const cid = (s, k) => "g" + Math.abs([...keyOf(s)].reduce((a,c)=>(a*31+c.charCodeAt(0))|0, 7)) + k;
@@ -1922,8 +1992,8 @@ function metric(icon, label, pct, detail){
 function mcard(s, i){
   const lv = lvOf(s), key = keyOf(s);
   let h = `<div class="card glass ${lv==="ok"?"":lv}" data-key="${esc(key)}" data-keyed style="--i:${i}"><div class="head" data-key="hd">${avatar(s)}
-    <div class="nm"><h2><span>${esc(s.name)}</span>${editBtn(s)}</h2><div class="sub">${s.online ? esc(place(s) || s.os) : "目前連不上"}</div></div>`;
-  if (!s.online) return h + `</div><div class="offline" data-key="off">${I("off")}<div>連不上這台主機<div class="sub">${esc(s.error||"")}</div></div></div></div>`;
+    <div class="nm"><h2><span>${esc(s.name)}</span>${editBtn(s)}</h2><div class="sub">${s.online ? esc(place(s) || s.os) : (s.last_seen ? `離線・${ago(s.last_seen)}` : "目前連不上")}</div></div>`;
+  if (!s.online) return h + `</div><div class="offline" data-key="off">${I("off")}<div>連不上這台主機<div class="sub">${s.last_seen?esc(seen(s))+"<br>":""}${esc(s.error||"")}</div></div></div></div>`;
   h += `<span class="uptime">開機 ${up(s.uptime)}</span></div>` + alerts(s);
   h += `<div class="metrics" data-key="mt">` + metric("cpu", "處理器", s.cpu, `${s.cores} 核`) +
        metric("mem", "記憶體", s.mem.pct, `${size(s.mem.used)} / ${size(s.mem.total)}`) +
@@ -1937,7 +2007,7 @@ function mcard(s, i){
   h += trafficLine(s);
   const items = itemsOf(s);
   if (PREF.show.items && items.length) h += `<div class="more ${open[key]?"open":""}" data-key="mo"><button class="more-head" data-toggle="${esc(key)}">${IC("box")}<span>容器與服務：${itemsSummary(items)}</span><span class="chev">${I("chev")}</span></button>
-      <div class="collapse"><div><div class="list" data-keyed>${items.map(itemRow).join("")}</div></div></div></div>`;
+      <div class="collapse"><div><div class="list" data-keyed>${itemsHTML(items)}</div></div></div></div>`;
   const info = updateInfo(s), btn = updateBtn(s);
   if (info || btn) h += `<div class="foot" data-key="ft"><div class="sub" data-x>${info}</div>${btn}</div>`;
   return h + `</div>`;
@@ -1959,7 +2029,7 @@ function renderMobile(list, n, time){
 /* ═════════ 電腦版 ═════════ */
 function hostItem(s, on){
   let h = `<button class="host ${on?"on":""}" data-sel="${esc(keyOf(s))}" data-key="${esc(keyOf(s))}"><div class="head">${avatar(s)}
-    <div class="nm"><h2><span>${esc(s.name)}</span></h2><div class="sub">${s.online ? esc(place(s) || s.os) : "連不上"}</div></div></div>`;
+    <div class="nm"><h2><span>${esc(s.name)}</span></h2><div class="sub">${s.online ? esc(place(s) || s.os) : (s.last_seen ? `離線・${ago(s.last_seen)}` : "連不上")}</div></div></div>`;
   if (s.online) h += `<div class="minis"><div><div class="k">處理器<b>${num(s.cpu)}%</b></div>${track(s.cpu)}</div>
     <div><div class="k">記憶體<b>${num(s.mem.pct)}%</b></div>${track(s.mem.pct)}</div></div>`;
   return h + `</button>`;
@@ -1987,11 +2057,10 @@ function sysPanel(s){
 function detail(s){
   const key = keyOf(s), where = place(s);
   let h = `<div class="detail" data-key="detail" data-keyed><div class="panel glass dhead" data-key="dh" style="--i:0">
-      <div style="min-width:0"><h2 class="nmh" style="display:flex;align-items:center;gap:8px;flex-wrap:wrap"><span>${esc(s.name)}</span>${editBtn(s)}</h2>
-      <div class="sub dsub">${s.online ? `<span title="核心版本 ${esc(s.kernel)}">${where?esc(where)+"・":""}${s.geo&&s.geo.ip?`<span class="ipc" data-copy="${esc(s.geo.ip)}" title="點一下複製 IP${s.geo.org?`（${esc(s.geo.org)}）`:""}">${esc(s.geo.ip)}</span>・`:""}${esc(s.os)}・開機 ${up(s.uptime)}</span>` : `<span>目前沒有回應</span>`}</div></div>
+      <div style="min-width:0" data-key="dl" data-keyed><h2 class="nmh" data-key="nm" style="display:flex;align-items:center;gap:8px;flex-wrap:wrap"><span>${esc(s.name)}</span>${editBtn(s)}</h2>
+      <div class="sub dsub" data-key="ds">${s.online ? `<span title="核心版本 ${esc(s.kernel)}">${where?esc(where)+"・":""}${s.geo&&s.geo.ip?`<span class="ipc" data-copy="${esc(s.geo.ip)}" title="點一下複製 IP${s.geo.org?`（${esc(s.geo.org)}）`:""}">${esc(s.geo.ip)}</span>・`:""}${esc(s.os)}・開機 ${up(s.uptime)}</span>` : `<span>${s.last_seen ? esc(seen(s)) : "目前沒有回應"}</span>`}</div>${s.online ? alerts(s) : ""}</div>
       ${s.online ? `<div class="act"><div class="sub" data-x style="line-height:1.6;font-weight:600">${updateInfo(s)}</div>${updateBtn(s)}</div>` : ""}</div>`;
   if (!s.online) return h + `<div class="panel glass bigoff" data-key="off" style="--i:1"><b>連不上這台主機</b>${esc(s.error||"")}</div></div>`;
-  h += alerts(s);
   const fp = PREF.show.info ? sysPanel(s) : "";
   const d0 = s.disks[0] || {pct:0, used:0, total:0};
   h += `<div class="gauges" data-key="gg" style="${fp?"":"grid-template-columns:repeat(3,minmax(0,1fr))"}">${ring("cpu", "處理器", s.cpu, `${s.cores} 核心`, 1)}
@@ -2000,14 +2069,14 @@ function detail(s){
   const hs = histFor(s), xl = `<div class="xl" style="align-items:center"><span>${xlabel(hs)}</span>${rangeSeg()}<span>現在</span></div>`;
   const cp = PREF.show.chart ? `<div class="panel glass" data-key="cp" style="--i:4"><div class="ph">${IC("trend")}<h3>處理器與記憶體</h3><div class="legend">
       <span><i style="background:${COL.cpu}"></i>處理器<b>${num(s.cpu)}%</b></span><span><i style="background:${COL.mem}"></i>記憶體<b>${num(s.mem.pct)}%</b></span></div></div>
-      <div class="cbox">${chartOr(hs, cid(s,"a"), x => [{data:x.cpu,color:COL.cpu},{data:x.mem,color:COL.mem}], {max:100, grid:1})}</div>${xl}</div>` : "";
+      <div class="cbox">${chartOr(hs, cid(s,"a"), x => [{data:x.cpu,color:COL.cpu,name:"處理器"},{data:x.mem,color:COL.mem,name:"記憶體"}], {max:100, grid:1, fmt:v=>Math.round(v)+"%"})}</div>${xl}</div>` : "";
   const np = PREF.show.net ? `<div class="panel glass" data-key="np" style="--i:5"><div class="ph">${IC("net")}<h3>網路速度</h3><div class="legend">
       <span><i style="background:${COL.rx}"></i>下載<b class="num">${rate(s.net.rx)}</b></span><span><i style="background:${COL.tx}"></i>上傳<b class="num">${rate(s.net.tx)}</b></span></div></div>
-      <div class="cbox">${chartOr(hs, cid(s,"b"), x => [{data:x.rx,color:COL.rx},{data:x.tx,color:COL.tx}], {grid:1})}</div>${xl}</div>` : "";
+      <div class="cbox">${chartOr(hs, cid(s,"b"), x => [{data:x.rx,color:COL.rx,name:"下載"},{data:x.tx,color:COL.tx,name:"上傳"}], {grid:1, bin:1, fmt:rate})}</div>${xl}</div>` : "";
   if (cp || np) h += `<div class="charts" data-key="ch" data-keyed style="${cp&&np?"":"grid-template-columns:1fr"}">${cp}${np}</div>`;
   const items = itemsOf(s);
   const ip = PREF.show.items ? `<div class="panel glass" data-key="ip" style="--i:6"><div class="ph">${IC("box")}<h3>容器與服務</h3><span class="sub" style="margin-left:auto;font-weight:700">${items.length?itemsSummary(items).replace("<b>",'<b style="color:var(--bad)">'):""}</span></div>
-      ${items.length ? `<div class="tbl" data-keyed>${items.map(itemRow).join("")}</div>` : `<div class="sub">沒有偵測到容器或服務</div>`}</div>` : "";
+      ${items.length ? `<div class="tbl" data-keyed>${itemsHTML(items)}</div>` : `<div class="sub">沒有偵測到容器或服務</div>`}</div>` : "";
   const ep = eventsPanel(s), tp = trafficPanel(s);
   if (ip || ep || tp) h += `<div class="lower" data-key="lw" data-keyed>${tp}${ep}${ip}</div>`;
   return h + `</div>`;
@@ -2015,18 +2084,18 @@ function detail(s){
 function overview(list){
   const on = list.filter(s => s.online);
   if (!on.length) return "";
-  const avg = k => on.reduce((a,s) => a + (k === "cpu" ? s.cpu : s.mem.pct), 0) / on.length;
-  const rx = on.reduce((a,s) => a + s.net.rx, 0), tx = on.reduce((a,s) => a + s.net.tx, 0);
+  const tr = PREF.show.traffic ? on.filter(s => s.traffic) : [];
+  const score = s => s.traffic.limit ? Math.max(s.traffic.pct || 0, s.traffic.projected ? s.traffic.projected / s.traffic.limit * 100 : 0) : -1;
+  tr.sort((a, b) => score(b) - score(a));
+  const rows = tr.slice(0, 4).map(s => { const t = s.traffic, over = t.limit && t.projected > t.limit;
+    return `<div class="tq" data-key="${esc(keyOf(s))}"><div class="r"><span class="nm">${esc(s.name)}</span><b class="num">${t.limit ? num(t.pct) + "%" : size(t.used)}</b></div>
+      ${t.limit ? track(t.pct) : ""}<div class="s ${over?"warn":""}">${t.limit ? `${size(t.used)} / ${size(t.limit)}・` : "沒有設定上限・"}${over ? "照目前速度會超過" : `還有 ${t.days_left} 天重置`}</div></div>`; }).join("");
   const items = on.flatMap(itemsOf), ok = items.filter(x=>x.st==="ok").length, bad = items.filter(x=>x.st==="bad").length, off = items.length-ok-bad;
   const pc = v => items.length ? (v / items.length * 100).toFixed(1) : 0;
-  return `<div class="ovw"><h4>${IC("layers")}全部主機總覽</h4><div class="ovg">
-    <div><div class="k">平均處理器</div><b>${num(avg("cpu"))}<small>%</small></b></div>
-    <div><div class="k">平均記憶體</div><b>${num(avg("mem"))}<small>%</small></b></div>
-    <div><div class="k">總下載</div><b class="num">${rate(rx)}</b></div>
-    <div><div class="k">總上傳</div><b class="num">${rate(tx)}</b></div>
-    ${on.some(s=>s.traffic) && PREF.show.traffic ? `<div style="grid-column:1/-1"><div class="k">本月總流量</div><b class="num">${size(on.reduce((a,s)=>a+(s.traffic?s.traffic.used:0),0))}</b></div>` : ""}</div>
-    ${items.length ? `<div class="bar2"><i style="width:${pc(ok)}%;background:var(--ok)"></i><i style="width:${pc(off)}%;background:var(--faint)"></i><i style="width:${pc(bad)}%;background:var(--bad)"></i></div>
-    <div class="cap2"><span>容器與服務</span><span>${ok} 正常${bad?`・${bad} 異常`:""}</span></div>` : ""}</div>`;
+  if (!rows && !items.length) return "";
+  return `<div class="ovw" data-keyed>${rows ? `<div class="tqw" data-key="tqw"><h4>${IC("month")}本月流量</h4><div class="tqs" data-keyed>${rows}</div></div>` : ""}
+    ${items.length ? `<div class="bar2" data-key="b2"><i style="width:${pc(ok)}%;background:var(--ok)"></i><i style="width:${pc(off)}%;background:var(--faint)"></i><i style="width:${pc(bad)}%;background:var(--bad)"></i></div>
+    <div class="cap2" data-key="c2"><span>全部容器與服務</span><span>${ok} 正常${off?`・${off} 沒在用`:""}${bad?`・${bad} 異常`:""}</span></div>` : ""}</div>`;
 }
 const CNT = {both:"上傳＋下載", out:"只算上傳", in:"只算下載", max:"取較大的"};
 function trafficBars(t, id){
@@ -2095,12 +2164,18 @@ async function trafficModal(node, label){
   } catch(e) { toast("連線失敗，請稍後再試", "bad"); }
   tick();
 }
+/* 同一件事反覆發生：只留最新一筆，標上次數 */
+function mergeEv(ev){
+  const m = new Map();
+  for (const e of ev) { const k = e.kind + ":" + e.text, x = m.get(k); x ? x.n++ : m.set(k, {...e, n:1}); }
+  return [...m.values()];
+}
 function eventsPanel(s){
   const ev = s.events;
   if (!ev) return "";
   const word = {bad:"異常", warn:"注意", ok:"恢復", info:"通知"};
   return `<div class="panel glass" data-key="ep" style="--i:8"><div class="ph">${IC("bell")}<h3>事件紀錄</h3><span class="sub" style="margin-left:auto;font-weight:700">最近 ${ev.length} 筆</span></div>
-    ${ev.length ? `<div class="evs" data-keyed>${ev.map(e=>`<div class="ev" data-key="${e.t}:${esc(e.text)}"><span class="dot ${e.kind}"></span><div><div>${esc(e.text)}</div><div class="sub">${word[e.kind]||""}・${when(e.t)}</div></div></div>`).join("")}</div>`
+    ${ev.length ? `<div class="evs" data-keyed>${mergeEv(ev).map(e=>`<div class="ev" data-key="${e.kind}:${esc(e.text)}"><span class="dot ${e.kind}"></span><div><div>${esc(e.text)}</div><div class="sub">${word[e.kind]||""}・${ago(e.t)}${e.n>1?`・共 ${e.n} 次`:""}</div></div></div>`).join("")}</div>`
       : `<div class="calm">目前沒有事件，一切平靜 ☕</div>`}</div>`;
 }
 function renderDesk(list, n, time){
@@ -2158,7 +2233,7 @@ function tween(el, from, to, d){
 const EASE = "cubic-bezier(.22,1,.36,1)";
 const canAnim = () => PREF.motion && !matchMedia("(prefers-reduced-motion: reduce)").matches;
 /* 讓元素平順地離開：先淡出、收起高度，再移除 */
-const BLOCK = ".alert,.item,.card,.host,.empty,.spark,.ev,.more,.foot,.alerts,.offline,.strip,.charts,.lower,.gauges";
+const BLOCK = ".alert,.item,.grp,.tq,.tqw,.card,.host,.empty,.spark,.ev,.more,.foot,.alerts,.offline,.strip,.charts,.lower,.gauges";
 const TILE = ".panel,.stat,.tile,.gauge";
 function flipSiblings(parent, change){
   const kids = [...parent.children].filter(c => !c._leaving), r0 = kids.map(c => c.getBoundingClientRect());
@@ -2325,6 +2400,7 @@ function render(list){
   paint(DESK.matches ? renderDesk(list, n, time) : renderMobile(list, n, time));
   placePind();
   document.querySelectorAll("#app .hosts,#app .evs,#app .tbl,#app .kv").forEach(edgeFades);
+  if (TIPX) drawTip(...TIPX);
   trackCenter();
 }
 DESK.addEventListener("change", () => { applyPrefs(); if (LIST.length) render(LIST); });
@@ -2386,6 +2462,38 @@ async function switchHost(){
       {duration:380, delay:rows.indexOf(tops[i]) * 50, easing:"cubic-bezier(.2,.8,.3,1)", fill:"backwards", id:"ui"});
   });
 }
+/* 滑鼠移到曲線上：顯示那個時間點的數值 */
+let TIPX = null;
+function tipEls(){
+  let t = $("#ctip");
+  if (!t) { t = document.createElement("div"); t.id = "ctip"; document.body.appendChild(t);
+    const l = document.createElement("div"); l.id = "cline"; document.body.appendChild(l); }
+  return [t, $("#cline")];
+}
+function hideTip(){ TIPX = null; const t = $("#ctip"); if (t) { t.classList.remove("show"); $("#cline").classList.remove("show"); } }
+function drawTip(x, y){
+  const el = document.elementFromPoint(x, y), box = el && el.closest && el.closest(".cbox");
+  const svg = box && box.querySelector("svg.chart[data-cid]"), d = svg && CHD[svg.dataset.cid];
+  if (!d || !d.ser[0] || !d.ser[0].data || d.ser[0].data.length < 2) return hideTip();
+  TIPX = [x, y];
+  const r = svg.getBoundingClientRect(), f = Math.max(0, Math.min(1, (x - r.left) / r.width));
+  const n = d.ser[0].data.length, i = Math.round(f * (n - 1)), t = d.t && d.t[i];
+  const dt = t ? new Date(t * 1000) : null, hm = dt ? dt.toLocaleTimeString("zh-TW", {hour:"2-digit", minute:"2-digit", hour12:false}) : "";
+  const when = !dt ? "" : RANGE === "7d" ? `${dt.getMonth()+1}/${dt.getDate()} ${hm}` : hm;
+  const [tip, line] = tipEls();
+  tip.innerHTML = `<div class="tt">${when}</div>` + d.ser.map(s => `<div class="tr2"><i style="background:${s.color}"></i>${esc(s.name||"")}<b class="num">${d.fmt(s.data[i] ?? 0)}</b></div>`).join("");
+  const lx = r.left + f * r.width;
+  line.style.cssText = `left:${lx}px;top:${r.top}px;height:${r.height}px`;
+  const w = tip.offsetWidth || 150, left = lx + 14 + w > innerWidth - 8 ? lx - 14 - w : lx + 14;
+  tip.style.left = left + "px"; tip.style.top = (r.top + 6) + "px";
+  tip.classList.add("show"); line.classList.add("show");
+}
+document.addEventListener("pointermove", e => {
+  if (e.pointerType !== "mouse") return;
+  if (e.target.closest && e.target.closest(".cbox")) drawTip(e.clientX, e.clientY); else if (TIPX) hideTip();
+}, {passive:true});
+addEventListener("scroll", () => { if (TIPX) hideTip(); }, {passive:true});
+document.addEventListener("pointerleave", hideTip);
 /* 整頁平順切換：支援的瀏覽器會淡入淡出，不支援就直接換 */
 function smooth(fn, theme, relayout){
   const motion = PREF.motion && !matchMedia("(prefers-reduced-motion: reduce)").matches;
