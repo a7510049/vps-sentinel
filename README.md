@@ -11,7 +11,8 @@
 ## ✨ 可以做什麼
 
 - 📊 **即時狀態**：處理器、記憶體、磁碟、網路速度、開機多久
-- 📈 **歷史曲線**：最近 30 分鐘的使用量變化
+- 📈 **歷史曲線**：可以切換最近 30 分鐘、24 小時、7 天；資料會存檔，重開機也不會不見
+- 📶 **每月流量統計**：本月用了多少、預估月底會用多少、每天用量，快超過上限會通知你（上限、重置日直接在網頁上設定）
 - 🐳 **容器與服務**：Docker 容器、系統服務有沒有在正常執行
 - 🔄 **一鍵更新系統**：按一下按鈕，VPS 就會在背景安裝更新
 - 🚩 **國旗**：自動顯示主機所在的國家，多台時一眼就分得出來
@@ -88,6 +89,7 @@ nano /etc/vps-sentinel-lite.conf
 | `TG_BOT_TOKEN`、`TG_CHAT_ID` | Telegram 通知，兩個都填才會開啟 |
 | `ALERT_CPU`、`ALERT_MEM`、`ALERT_DISK` | 超過幾 % 算異常（預設 90） |
 | `COUNTRY` | 國旗判斷錯的話，可以手動指定，例如 `JP` |
+| `TRAFFIC_LIMIT_GB`、`TRAFFIC_RESET_DAY`、`TRAFFIC_COUNT` | 每月流量上限、重置日、計算方式（建議直接在網頁上設定） |
 
 ### 多台 VPS 一起看
 
@@ -117,7 +119,7 @@ PEERS=東京=https://tokyo.example.com,大阪=https://osaka.example.com|大阪�
 
 ```bash
 systemctl disable --now vps-sentinel-lite
-rm -rf /opt/vps-sentinel-lite /etc/vps-sentinel-lite.conf /etc/systemd/system/vps-sentinel-lite.service /etc/caddy/sites/vps-sentinel.caddy
+rm -rf /opt/vps-sentinel-lite /var/lib/vps-sentinel-lite /etc/vps-sentinel-lite.conf /etc/systemd/system/vps-sentinel-lite.service /etc/caddy/sites/vps-sentinel.caddy
 systemctl reload caddy 2>/dev/null; systemctl daemon-reload
 ```
 

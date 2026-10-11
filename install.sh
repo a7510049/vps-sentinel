@@ -124,6 +124,12 @@ PEERS=
 TG_BOT_TOKEN=
 TG_CHAT_ID=
 
+# 每月流量（也可以直接在網頁上點「本月流量」旁的齒輪設定）
+# 上限單位 GB，0 = 不限制；重置日 1～28；計算方式 both=上傳＋下載、out=只算上傳、in=只算下載、max=取較大的
+TRAFFIC_LIMIT_GB=0
+TRAFFIC_RESET_DAY=1
+TRAFFIC_COUNT=both
+
 # 警告門檻（百分比）；處理器要持續超過幾分鐘才通知
 ALERT_CPU=90
 ALERT_CPU_MINUTES=5

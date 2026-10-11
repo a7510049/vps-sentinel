@@ -13,11 +13,13 @@ import json
 import os
 import re
 import shutil
+import signal
 import socket
 import subprocess
 import sys
 import threading
 import time
+from datetime import date, datetime, timedelta
 import urllib.parse
 import urllib.error
 import urllib.request
@@ -25,7 +27,7 @@ from collections import deque
 from concurrent.futures import ThreadPoolExecutor
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
-VERSION = "1.6"
+VERSION = "1.7"
 
 # ───────────────────────── 設定 ─────────────────────────
 
@@ -62,6 +64,19 @@ ALERT_CPU = float(C.get("ALERT_CPU", "90"))
 ALERT_MEM = float(C.get("ALERT_MEM", "90"))
 ALERT_DISK = float(C.get("ALERT_DISK", "90"))
 CPU_MINUTES = float(C.get("ALERT_CPU_MINUTES", "5"))
+DATA_DIR = C.get("DATA_DIR", "/var/lib/vps-sentinel-lite")
+
+
+def _num(v, default):
+    try:
+        return float(v)
+    except (TypeError, ValueError):
+        return default
+
+
+TRAFFIC_LIMIT_GB = _num(C.get("TRAFFIC_LIMIT_GB"), 0)            # 0 = 不限制
+TRAFFIC_RESET_DAY = int(min(28, max(1, _num(C.get("TRAFFIC_RESET_DAY"), 1))))
+TRAFFIC_COUNT = C.get("TRAFFIC_COUNT", "both") if C.get("TRAFFIC_COUNT") in ("both", "out", "in", "max") else "both"
 
 
 def parse_peers(raw):
@@ -123,19 +138,59 @@ def cpu_times():
     return sum(v), v[3] + v[4]          # 總時間, 閒置(含等待磁碟)
 
 
-def net_bytes():
-    rx = tx = 0
+def default_ifaces():
+    """對外的網卡：有預設路由的那張（IPv4 或 IPv6）"""
+    ifs = set()
+    for line in read("/proc/net/route").splitlines()[1:]:
+        f = line.split()
+        if len(f) > 2 and f[1] == "00000000":
+            ifs.add(f[0])
+    for line in read("/proc/net/ipv6_route").splitlines():
+        f = line.split()
+        if len(f) >= 10 and f[0] == "0" * 32 and f[1] == "00" and f[9] != "lo":
+            ifs.add(f[9])
+    return ifs
+
+
+def iface_bytes():
+    """{網卡: (收, 送)}；找得到對外網卡就只算那張，避免 Docker、翻牆內部轉送被重複計算"""
+    out = {}
     for line in read("/proc/net/dev").splitlines()[2:]:
         if ":" not in line:
             continue
         iface, data = line.split(":", 1)
-        iface = iface.strip()
-        if iface == "lo" or iface.startswith(("docker", "veth", "br-")):
-            continue
         f = data.split()
-        rx += int(f[0])
-        tx += int(f[8])
-    return rx, tx
+        try:
+            out[iface.strip()] = (int(f[0]), int(f[8]))
+        except (IndexError, ValueError):
+            pass
+    wanted = default_ifaces() & set(out)
+    if wanted:
+        return {k: v for k, v in out.items() if k in wanted}
+    return {k: v for k, v in out.items()
+            if k != "lo" and not k.startswith(("docker", "veth", "br-", "virbr", "tun", "wg", "tailscale"))}
+
+
+def net_bytes():
+    vals = iface_bytes().values()
+    return sum(v[0] for v in vals), sum(v[1] for v in vals)
+
+
+def boot_id():
+    return read("/proc/sys/kernel/random/boot_id").strip()
+
+
+def cycle_bounds(day=None):
+    """這個計費週期的開始、結束日期（依每月重置日）"""
+    day = day or date.today()
+    d = TRAFFIC_RESET_DAY
+    if day.day >= d:
+        start = date(day.year, day.month, d)
+    else:
+        y, m = (day.year, day.month - 1) if day.month > 1 else (day.year - 1, 12)
+        start = date(y, m, d)
+    y, m = (start.year, start.month + 1) if start.month < 12 else (start.year + 1, 1)
+    return start, date(y, m, d)
 
 
 def meminfo():
@@ -212,6 +267,49 @@ def apt_updates():
 
 
 # ───────────────────────── 改名 ─────────────────────────
+
+def write_conf(values):
+    """把多個設定寫回設定檔（有就取代，沒有就加在最後）"""
+    try:
+        with open(CONF_PATH, encoding="utf-8") as f:
+            text = f.read()
+    except OSError:
+        text = ""
+    for k, v in values.items():
+        line = f"{k}={v}"
+        if re.search(rf"(?m)^{k}=.*$", text):
+            text = re.sub(rf"(?m)^{k}=.*$", lambda _: line, text, count=1)
+        else:
+            text = text.rstrip("\n") + "\n" + line + "\n"
+    tmp = CONF_PATH + ".tmp"
+    with open(tmp, "w", encoding="utf-8") as f:
+        f.write(text)
+    os.chmod(tmp, 0o600)
+    os.replace(tmp, CONF_PATH)
+
+
+def set_traffic(cfg):
+    global TRAFFIC_LIMIT_GB, TRAFFIC_RESET_DAY, TRAFFIC_COUNT
+    try:
+        limit = max(0.0, float(cfg.get("limit_gb") or 0))
+        day = int(cfg.get("reset_day") or 1)
+        mode = cfg.get("count") or "both"
+    except (TypeError, ValueError):
+        return False, "數字格式不對"
+    if not 1 <= day <= 28:
+        return False, "重置日要在 1～28 號之間"
+    if mode not in ("both", "out", "in", "max"):
+        return False, "計算方式不對"
+    if limit > 1e6:
+        return False, "上限太大了"
+    try:
+        write_conf({"TRAFFIC_LIMIT_GB": f"{limit:g}", "TRAFFIC_RESET_DAY": str(day), "TRAFFIC_COUNT": mode})
+    except OSError as e:
+        return False, f"無法寫入設定檔：{e}"
+    TRAFFIC_LIMIT_GB, TRAFFIC_RESET_DAY, TRAFFIC_COUNT = limit, day, mode
+    log(f"流量設定：上限 {limit:g} GB、每月 {day} 號重置、計算方式 {mode}")
+    return True, "已儲存"
+
 
 def set_name(new):
     """把新名稱寫回設定檔，並立刻生效"""
@@ -345,6 +443,156 @@ class Collector:
         self.prev_keys = None
         self.upd_running = False
         self.upd_last = update_last()
+        self.h24 = deque(maxlen=288)            # 24 小時，每 5 分鐘一筆
+        self.h7d = deque(maxlen=336)            # 7 天，每 30 分鐘一筆
+        self._b5 = self._b30 = None
+        self.traffic = {"since": time.time(), "days": {}, "last": None}
+        self.load()
+
+    # ── 存檔 ──
+    def state_path(self):
+        return os.path.join(DATA_DIR, "state.json")
+
+    def load(self):
+        try:
+            with open(self.state_path(), encoding="utf-8") as f:
+                st = json.load(f)
+        except (OSError, ValueError):
+            return
+        now = time.time()
+        try:
+            self.hist.extend(tuple(x) for x in st.get("hist", []) if now - x[0] < 1800)
+            self.h24.extend(tuple(x) for x in st.get("h24", []) if now - x[0] < 86400)
+            self.h7d.extend(tuple(x) for x in st.get("h7d", []) if now - x[0] < 7 * 86400)
+            self.events.extend(tuple(x) for x in st.get("events", []))
+            tr = st.get("traffic") or {}
+            if isinstance(tr.get("days"), dict):
+                self.traffic = {"since": tr.get("since", now), "days": tr["days"], "last": tr.get("last")}
+            if st.get("prev_keys") is not None:
+                self.prev_keys = {k: tuple(v) for k, v in st["prev_keys"].items()}
+            log(f"已讀取存檔：歷史 {len(self.hist)}/{len(self.h24)}/{len(self.h7d)} 筆、事件 {len(self.events)} 筆、流量 {len(self.traffic['days'])} 天")
+        except (TypeError, ValueError, IndexError, AttributeError) as e:
+            log("存檔格式有問題，略過：", e)
+
+    def save(self):
+        with self.lock:
+            st = {"v": 1, "saved": time.time(), "hist": list(self.hist), "h24": list(self.h24), "h7d": list(self.h7d),
+                  "events": list(self.events), "traffic": self.traffic,
+                  "prev_keys": self.prev_keys}
+        try:
+            os.makedirs(DATA_DIR, exist_ok=True)
+            tmp = self.state_path() + ".tmp"
+            with open(tmp, "w", encoding="utf-8") as f:
+                json.dump(st, f, ensure_ascii=False, separators=(",", ":"))
+            os.replace(tmp, self.state_path())
+        except OSError as e:
+            log("存檔失敗：", e)
+
+    # ── 長期歷史：每 5 分鐘、每 30 分鐘各取一次平均 ──
+    @staticmethod
+    def _avg(t, pts):
+        n = len(pts)
+        return (int(t), round(sum(p[1] for p in pts) / n, 1), round(sum(p[2] for p in pts) / n, 1),
+                round(sum(p[3] for p in pts) / n), round(sum(p[4] for p in pts) / n))
+
+    def roll(self, now):
+        b5 = int(now // 300)
+        if self._b5 is None:
+            self._b5 = b5
+        elif b5 != self._b5:
+            pts = [h for h in self.hist if self._b5 * 300 <= h[0] < (self._b5 + 1) * 300]
+            if pts:
+                self.h24.append(self._avg(self._b5 * 300, pts))
+            self._b5 = b5
+        b30 = int(now // 1800)
+        if self._b30 is None:
+            self._b30 = b30
+        elif b30 != self._b30:
+            pts = [h for h in self.h24 if self._b30 * 1800 <= h[0] < (self._b30 + 1) * 1800]
+            if pts:
+                self.h7d.append(self._avg(self._b30 * 1800, pts))
+            self._b30 = b30
+
+    # ── 流量：依網卡計數器的增加量累加到每天 ──
+    def count_traffic(self):
+        cur, bid, tr = iface_bytes(), boot_id(), self.traffic
+        last = tr.get("last")
+        drx = dtx = 0
+        if last:
+            same_boot = last.get("boot") == bid
+            prev = last.get("ifs", {})
+            for k, (rx, tx) in cur.items():
+                if k in prev:
+                    prx, ptx = prev[k]
+                    drx += rx - prx if (same_boot and rx >= prx) else rx
+                    dtx += tx - ptx if (same_boot and tx >= ptx) else tx
+                elif not same_boot:               # 重開機後才出現的網卡：開機以來的量都算
+                    drx += rx
+                    dtx += tx
+        if drx or dtx:
+            key = date.today().isoformat()
+            with self.lock:
+                d = tr["days"].setdefault(key, [0, 0])
+                d[0] += drx
+                d[1] += dtx
+                if len(tr["days"]) > 400:          # 只留一年多
+                    for k in sorted(tr["days"])[:-400]:
+                        del tr["days"][k]
+        tr["last"] = {"boot": bid, "ifs": {k: list(v) for k, v in cur.items()}}
+
+    def traffic_info(self):
+        start, end = cycle_bounds()
+        today = date.today()
+        with self.lock:
+            days = dict(self.traffic["days"])
+            since = self.traffic.get("since", time.time())
+
+        def total(a, b):
+            rx = tx = 0
+            d = a
+            while d < b:
+                v = days.get(d.isoformat())
+                if v:
+                    rx += v[0]
+                    tx += v[1]
+                d += timedelta(days=1)
+            return rx, tx
+
+        def used(rx, tx):
+            return {"both": rx + tx, "out": tx, "in": rx, "max": max(rx, tx)}[TRAFFIC_COUNT]
+
+        rx, tx = total(start, end)
+        pstart, _ = cycle_bounds(start - timedelta(days=1))
+        prx, ptx = total(pstart, start)
+        start_ts = datetime.combine(start, datetime.min.time()).timestamp()
+        end_ts = datetime.combine(end, datetime.min.time()).timestamp()
+        now = time.time()
+        counted_from = max(start_ts, since)
+        frac = (now - counted_from) / max(1, end_ts - counted_from)
+        u = used(rx, tx)
+        projected = u / frac if frac > 0.03 else None
+        limit = TRAFFIC_LIMIT_GB * 1024 ** 3
+        daily = []
+        d = start
+        while d <= today and d < end:
+            v = days.get(d.isoformat(), [0, 0])
+            daily.append({"d": f"{d.month}/{d.day}", "rx": v[0], "tx": v[1]})
+            d += timedelta(days=1)
+        return {
+            "rx": rx, "tx": tx, "used": u, "limit": limit, "count": TRAFFIC_COUNT, "reset_day": TRAFFIC_RESET_DAY,
+            "pct": round(u / limit * 100, 1) if limit else None,
+            "projected": round(projected) if projected else None,
+            "start": start.isoformat(), "end": end.isoformat(), "days_left": (end - today).days,
+            "cycle_days": (end - start).days, "daily": daily,
+            "prev": used(prx, ptx) if (prx or ptx) else None,
+            "partial": since > start_ts, "since": since,
+        }
+
+    def history(self, rng):
+        with self.lock:
+            src = list(self.h24 if rng == "24h" else self.h7d if rng == "7d" else self.hist)
+        return {"t": [h[0] for h in src], "cpu": [h[1] for h in src], "mem": [h[2] for h in src],
+                "rx": [h[3] for h in src], "tx": [h[4] for h in src]}
 
     def loop(self):
         last_cpu = cpu_times()
@@ -366,11 +614,18 @@ class Collector:
                 else:
                     self.cpu_high_since = None
             last_cpu, last_net, last_t = now_cpu, now_net, now_t
-            if tick % 5 == 0:                         # 每 10 秒記一筆歷史
+            if tick % 5 == 0:                         # 每 10 秒記一筆歷史、算一次流量
                 m = meminfo()
                 with self.lock:
                     self.hist.append((round(now_t), self.cpu_pct, m["pct"],
                                       round(self.net["rx"]), round(self.net["tx"])))
+                    self.roll(now_t)
+                try:
+                    self.count_traffic()
+                except Exception as e:  # noqa: BLE001
+                    log("流量計算失敗：", e)
+            if tick % 30 == 0 and tick > 0:           # 每 1 分鐘存檔
+                self.save()
 
             if tick % 15 == 0:        # 每 30 秒：容器與服務
                 c, s = docker_containers(), service_states()
@@ -459,7 +714,16 @@ class Collector:
             if s["state"] != "active":
                 problems.append(f"服務 {s['name']} 沒在執行")
 
+        traffic = self.traffic_info()
         notices = []
+        if traffic["limit"]:
+            if traffic["used"] >= traffic["limit"]:
+                problems.append("本月流量已經用完")
+            elif traffic["pct"] >= 90:
+                notices.append(f"本月流量已用 {traffic['pct']:.0f}%")
+            elif (traffic["projected"] and traffic["projected"] > traffic["limit"]
+                  and traffic["days_left"] < traffic["cycle_days"] - 3):   # 週期剛開始幾天不預估，免得誤報
+                notices.append("照目前速度，本月流量會超過上限")
         if reboot:
             notices.append("需要重新開機")
         if updates and updates["security"]:
@@ -472,7 +736,7 @@ class Collector:
             "cores": os.cpu_count() or 1, "cpu": cpu, "load": [round(x, 2) for x in load],
             "mem": mem, "disks": disks, "net": net,
             "containers": containers, "services": services,
-            "updates": updates, "reboot": reboot, "geo": geo, "update": upd, "events": events,
+            "updates": updates, "reboot": reboot, "geo": geo, "update": upd, "events": events, "traffic": traffic,
             "hist": {"t": [h[0] for h in hist], "cpu": [h[1] for h in hist], "mem": [h[2] for h in hist],
                      "rx": [h[3] for h in hist], "tx": [h[4] for h in hist]},
             "problems": problems, "notices": notices,
@@ -615,6 +879,26 @@ class Handler(BaseHTTPRequestHandler):
             return self.send(200, ICON_PNG_512, "image/png", cache=True)
         if path in ("/icon.svg", "/favicon.ico"):
             return self.send(200, ICON, "image/svg+xml", cache=True)
+        if path == "/api/history":
+            if not self.authed():
+                time.sleep(1)
+                return self.send(401, '{"error":"密碼錯誤"}')
+            q = urllib.parse.parse_qs(urllib.parse.urlsplit(self.path).query)
+            rng, node = q.get("range", ["24h"])[0], q.get("node", [""])[0]
+            if node:
+                peer = next((p for p in PEERS if p["name"] == node), None)
+                if not peer:
+                    return self.send(404, '{"error":"找不到這台主機"}')
+                try:
+                    req = urllib.request.Request(peer["url"] + "/api/history?range=" + urllib.parse.quote(rng),
+                                                 headers={"X-Token": peer["token"]})
+                    with urllib.request.urlopen(req, timeout=8) as r:
+                        return self.send(200, r.read())
+                except urllib.error.HTTPError as e:
+                    return self.send(e.code, '{"error":"那台主機還沒更新到新版"}' if e.code == 404 else e.read())
+                except Exception as e:  # noqa: BLE001
+                    return self.send(502, json.dumps({"error": f"連不上：{e}"[:150]}, ensure_ascii=False))
+            return self.send(200, json.dumps(COL.history(rng)))
         if path in ("/api/status", "/api/all"):
             if not self.authed():
                 time.sleep(1)
@@ -625,7 +909,7 @@ class Handler(BaseHTTPRequestHandler):
 
     def do_POST(self):
         u = urllib.parse.urlsplit(self.path)
-        if u.path not in ("/api/update", "/api/rename"):
+        if u.path not in ("/api/update", "/api/rename", "/api/traffic"):
             return self.send(404, '{"error":"找不到"}')
         if not self.authed():
             time.sleep(1)
@@ -651,7 +935,13 @@ class Handler(BaseHTTPRequestHandler):
             except Exception as e:  # noqa: BLE001
                 return self.send(502, json.dumps({"ok": False, "message": f"連不上：{e}"[:150]},
                                                   ensure_ascii=False))
-        if u.path == "/api/rename":
+        if u.path == "/api/traffic":
+            try:
+                cfg = json.loads(body or b"{}")
+            except ValueError:
+                cfg = {}
+            ok, msg = set_traffic(cfg if isinstance(cfg, dict) else {})
+        elif u.path == "/api/rename":
             try:
                 new = json.loads(body or b"{}").get("name", "")
             except (ValueError, AttributeError):
@@ -1007,7 +1297,7 @@ button{font:inherit;color:inherit}
 .gin>span{font-size:12px;color:var(--sub);font-weight:700;margin-top:4px}
 .charts{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:18px}
 .cbox{height:170px}
-.lower{display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:18px;align-items:stretch}
+.lower{display:grid;grid-template-columns:repeat(auto-fit,minmax(380px,1fr));gap:18px;align-items:stretch}
 /* 側邊欄填滿整個高度 */
 .dash.d .side{height:calc(100vh - 48px)}
 .hosts{flex:0 1 auto;min-height:0}
@@ -1023,13 +1313,47 @@ button{font:inherit;color:inherit}
 .side-foot{margin-top:0}
 .side .empty{padding:18px 0;font-size:13px}
 /* 快速資訊列 */
-.strip{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:14px}
+.strip{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:12px}
 .tile{border-radius:24px;padding:14px 16px;display:flex;align-items:center;gap:12px;animation:rise .8s cubic-bezier(.22,1,.36,1) both;animation-delay:calc(var(--i,0) * 50ms)}
 .tile .k{font-size:11.5px;color:var(--sub);font-weight:700}
 .tile .v{font-size:16px;font-weight:900;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .tile .s{font-size:11.5px;color:var(--sub);font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .tile>div{min-width:0}
 /* 事件紀錄 */
+/* 曲線範圍切換 */
+.rng{display:inline-flex;background:var(--track);border-radius:10px;padding:2px;gap:1px;position:relative;isolation:isolate}
+.rng button{border:0;background:transparent;cursor:pointer;border-radius:8px;padding:3px 9px;font-size:11.5px;font-weight:800;color:var(--sub);transition:color .3s}
+.rng button.on{color:var(--text);background:var(--glass);box-shadow:0 1px 4px -1px rgba(0,0,0,.3),inset 0 0 0 1px var(--rim)}
+[data-mode="light"] .rng button.on{background:#fff}
+.ph .rng{margin-left:10px}
+.spark .lbl{align-items:center}
+/* 本月流量 */
+.trf .big{display:flex;align-items:baseline;gap:8px;flex-wrap:wrap}
+.trf .big b{font-size:30px;font-weight:900;line-height:1.1}
+.trf .big span{color:var(--sub);font-weight:700;font-size:14px}
+.trf .track{height:10px;margin:12px 0 8px}
+.trf .rows{display:grid;grid-template-columns:1fr 1fr;gap:8px 14px;font-size:12.5px;margin-top:12px}
+.trf .rows .k{color:var(--sub);font-weight:700;font-size:11.5px}
+.trf .rows b{font-weight:800;font-size:14px}
+.trf .note{font-size:11.5px;color:var(--faint);font-weight:600;margin-top:10px}
+.bars{display:block;width:100%;height:64px;margin-top:14px;overflow:visible}
+.bars rect{transition:height .7s cubic-bezier(.22,1,.36,1),y .7s cubic-bezier(.22,1,.36,1)}
+.tline{margin-top:12px;padding:12px;border-radius:18px;background:var(--glass2);box-shadow:inset 0 0 0 1px var(--line);cursor:pointer;
+  display:flex;flex-direction:column;gap:8px;transition:transform .3s cubic-bezier(.34,1.56,.64,1)}
+.tline:active{transform:scale(.98)}
+.tline .r1{display:flex;align-items:center;gap:9px;font-size:13px;font-weight:700}
+.tline .r1 b{margin-left:auto;font-size:15px;font-weight:900}
+.tline .r1 b small{font-size:11.5px;color:var(--sub);font-weight:700;margin-left:3px}
+.tline .r2{display:flex;justify-content:space-between;font-size:11.5px;color:var(--sub);font-weight:700}
+.tline .track{height:6px}
+.dialog .form{display:flex;flex-direction:column;gap:12px;margin-top:16px;text-align:left}
+.dialog .form label{font-size:12.5px;font-weight:800;color:var(--sub);display:flex;flex-direction:column;gap:6px}
+.dialog .form .field{margin:0;text-align:left;font-size:15px;padding:11px 14px}
+.dialog .form select.field{appearance:none;-webkit-appearance:none}
+.dialog .form .seg{width:100%}.dialog .form .seg button{flex:1;padding:7px 4px}
+.dialog .form .seg button.on{background:var(--glass);color:var(--text);box-shadow:0 2px 8px -2px rgba(0,0,0,.28),inset 0 0 0 1px var(--rim)}
+[data-mode="light"] .dialog .form .seg button.on{background:#fff}
+.dialog .form small{font-weight:600;color:var(--faint);font-size:11.5px;line-height:1.5}
 .evs{display:flex;flex-direction:column;gap:2px;max-height:330px;overflow:auto;margin:0 -6px;padding:0 6px}
 .ev{animation:rise .5s cubic-bezier(.22,1,.36,1) both;display:flex;gap:11px;align-items:flex-start;padding:8px 6px;border-radius:12px;font-size:13.5px;font-weight:700}
 .ev:hover{background:var(--track)}
@@ -1037,7 +1361,7 @@ button{font:inherit;color:inherit}
 .ev .dot.info{background:var(--a1)}
 .ev .sub{font-size:11.5px;margin-top:1px}
 .calm{color:var(--sub);font-size:13.5px;font-weight:600;padding:20px 0;text-align:center}
-.tbl{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:2px 16px}
+.tbl{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:2px 16px}
 .tbl .item{padding:8px 10px}
 .kv{display:grid;grid-template-columns:auto 1fr;gap:11px 18px;font-size:13.5px;margin:0}
 .kv dt{color:var(--sub);font-weight:600}.kv dd{text-align:right;margin:0;font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
@@ -1241,7 +1565,7 @@ const I = n => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strok
 
 /* ═════════ 個人設定（存在這台裝置） ═════════ */
 const DEF = {theme:"auto", accent:"blue", glass:50, bg:"aurora", motion:true, perf:"auto", density:"cozy", size:"m", refresh:5,
-  show:{chart:true, net:true, items:true, info:true, flag:true}};
+  show:{chart:true, net:true, items:true, info:true, flag:true, traffic:true}};
 let PREF = (() => { try { const p = JSON.parse(store("vps-prefs") || "{}"); return {...DEF, ...p, show:{...DEF.show, ...(p.show||{})}}; } catch(e){ return JSON.parse(JSON.stringify(DEF)); } })();
 const getP = k => k.split(".").reduce((o,x)=>o && o[x], PREF);
 function setP(k, v){ const ks = k.split("."); let o = PREF; while (ks.length > 1) o = o[ks.shift()]; o[ks[0]] = v; store("vps-prefs", JSON.stringify(PREF)); }
@@ -1413,6 +1737,44 @@ function chart(id, series, o={}){
     return `<path d="${p.area}" fill="url(#${id}${i})"/><path d="${p.line}" fill="none" style="stroke:${s.color}" stroke-width="${o.sw||2.4}" vector-effect="non-scaling-stroke" stroke-linecap="round" stroke-linejoin="miter"/>`; }).join("");
   return `<svg class="chart" viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" style="height:${H}px"><defs>${defs}</defs>${g}${body}</svg>`;
 }
+let RANGE = ["30m","24h","7d"].includes(store("vps-range")) ? store("vps-range") : "30m";
+const HCACHE = {}, SHOWN = {};
+const RLABEL = {"30m":"30 分鐘", "24h":"24 小時", "7d":"7 天"};
+function rangeSeg(){
+  return `<span class="rng">${[["30m","30分"],["24h","24時"],["7d","7天"]].map(([v,l])=>`<button class="${RANGE===v?"on":""}" data-range="${v}">${l}</button>`).join("")}</span>`;
+}
+/* 取得要畫的歷史：30 分鐘用即時資料；24 小時／7 天另外抓，快取 1 分鐘 */
+function histFor(s){
+  const h = histRaw(s);
+  if (h && !h.err) SHOWN[keyOf(s)] = h;
+  return h || SHOWN[keyOf(s)] || null;      // 新資料還沒到：先留著原本的曲線，到了再直接變形過去
+}
+function histRaw(s){
+  if (RANGE === "30m") return s.hist;
+  const k = keyOf(s) + "|" + RANGE, c = HCACHE[k];
+  if (!c || Date.now() - c.at > 60000) {
+    if (!c || !c.loading) {
+      HCACHE[k] = {...(c || {}), loading: true, at: c ? c.at : 0};
+      fetch(`/api/history?range=${RANGE}&node=${encodeURIComponent(s.node || "")}`, {headers:{"X-Token":getTok()}})
+        .then(r => r.ok ? r.json() : r.json().then(d => Promise.reject(d.error || "讀取失敗")))
+        .then(d => { HCACHE[k] = {at: Date.now(), data: d}; if (LIST.length) render(LIST); })
+        .catch(err => { HCACHE[k] = {at: Date.now(), err: String(err)}; if (LIST.length) render(LIST); });
+    }
+  }
+  return c && c.data ? c.data : (c && c.err ? {err: c.err} : null);
+}
+function xlabel(h){
+  if (RANGE === "30m") return `${minutes(h)} 分鐘前`;
+  if (!h || !h.t || h.t.length < 2) return RLABEL[RANGE] + "前";
+  const hrs = (h.t[h.t.length-1] - h.t[0]) / 3600;
+  return hrs >= 36 ? `${Math.round(hrs/24)} 天前` : `${Math.max(1, Math.round(hrs))} 小時前`;
+}
+function chartOr(h, id, series, o){
+  if (!h) return `<div class="wait" style="height:${o.h||170}px">讀取中…</div>`;
+  if (h.err) return `<div class="wait" style="height:${o.h||170}px">${esc(h.err)}</div>`;
+  if (RANGE !== "30m" && (!h.t || h.t.length < 2)) return `<div class="wait" style="height:${o.h||170}px">資料累積中，${RANGE==="24h"?"約 10 分鐘":"約 1 小時"}後開始出現</div>`;
+  return chart(id, series(h), o);
+}
 const minutes = h => (h && h.t && h.t.length > 1) ? Math.max(1, Math.round((h.t[h.t.length-1]-h.t[0])/60)) : 30;
 const cid = (s, k) => "g" + Math.abs([...keyOf(s)].reduce((a,c)=>(a*31+c.charCodeAt(0))|0, 7)) + k;
 const COL = {cpu:"var(--a1)", mem:"var(--a2)", rx:"#2dd4bf", tx:"#f472b6"};
@@ -1431,11 +1793,13 @@ function mcard(s, i){
   h += `<div class="metrics" data-key="mt">` + metric("cpu", "處理器", s.cpu, `${s.cores} 核`) +
        metric("mem", "記憶體", s.mem.pct, `${size(s.mem.used)} / ${size(s.mem.total)}`) +
        s.disks.map(d=>metric("disk", "磁碟"+(d.path==="/"?"":" "+esc(d.path)), d.pct, `${size(d.used)} / ${size(d.total)}`)).join("") + `</div>`;
-  if (PREF.show.chart && s.hist) h += `<div class="spark" data-key="sp"><div class="lbl"><span>最近 ${minutes(s.hist)} 分鐘</span><span><i style="background:${COL.cpu}"></i>處理器<i style="background:${COL.mem}"></i>記憶體</span></div>
-      ${chart(cid(s,"m"), [{data:s.hist.cpu,color:COL.cpu},{data:s.hist.mem,color:COL.mem}], {max:100, h:64, fade:.25, sw:2})}</div>`;
+  if (PREF.show.chart && s.hist) { const hh = histFor(s);
+    h += `<div class="spark" data-key="sp"><div class="lbl"><span><i style="background:${COL.cpu};margin-left:0"></i>處理器<i style="background:${COL.mem}"></i>記憶體</span>${rangeSeg()}</div>
+      ${chartOr(hh, cid(s,"m"), x => [{data:x.cpu,color:COL.cpu},{data:x.mem,color:COL.mem}], {max:100, h:64, fade:.25, sw:2})}</div>`; }
   h += `<div class="stats" data-key="st" data-keyed><div class="stat" data-key="load"><div class="k"><span class="ico sm load">${I("load")}</span>負載</div><div class="v">${num(s.load[0],2)}</div></div>` +
        (PREF.show.net ? `<div class="stat" data-key="down"><div class="k"><span class="ico sm down">${I("down")}</span>下載</div><div class="v num">${rate(s.net.rx)}</div></div>
         <div class="stat" data-key="up"><div class="k"><span class="ico sm up">${I("up")}</span>上傳</div><div class="v num">${rate(s.net.tx)}</div></div>` : "") + `</div>`;
+  h += trafficLine(s);
   const items = itemsOf(s);
   if (PREF.show.items && items.length) h += `<div class="more ${open[key]?"open":""}" data-key="mo"><button class="more-head" data-toggle="${esc(key)}"><span class="ico sm box">${I("box")}</span><span>容器與服務：${itemsSummary(items)}</span><span class="chev">${I("chev")}</span></button>
       <div class="collapse"><div><div class="list" data-keyed>${items.map(itemRow).join("")}</div></div></div></div>`;
@@ -1484,13 +1848,13 @@ function detail(s){
   h += `<div class="gauges" data-key="gg">${ring("cpu", "處理器", s.cpu, `${s.cores} 核心`, 1)}
         ${ring("mem", "記憶體", s.mem.pct, `${size(s.mem.used)} / ${size(s.mem.total)}`, 2)}
         ${ring("disk", "磁碟", d0.pct, `${size(d0.used)} / ${size(d0.total)}`, 3)}</div>`;
-  const hs = s.hist || {}, mins = minutes(hs), xl = `<div class="xl"><span>${mins} 分鐘前</span><span>現在</span></div>`;
+  const hs = histFor(s), xl = `<div class="xl" style="align-items:center"><span>${xlabel(hs)}</span>${rangeSeg()}<span>現在</span></div>`;
   const cp = PREF.show.chart ? `<div class="panel glass" data-key="cp" style="--i:4"><div class="ph"><span class="ico sm cpu">${I("load")}</span><h3>處理器與記憶體</h3><div class="legend">
       <span><i style="background:${COL.cpu}"></i>處理器<b>${num(s.cpu)}%</b></span><span><i style="background:${COL.mem}"></i>記憶體<b>${num(s.mem.pct)}%</b></span></div></div>
-      <div class="cbox">${chart(cid(s,"a"), [{data:hs.cpu,color:COL.cpu},{data:hs.mem,color:COL.mem}], {max:100, grid:1})}</div>${xl}</div>` : "";
-  const np = PREF.show.net ? `<div class="panel glass" data-key="np" style="--i:5"><div class="ph"><span class="ico sm down">${I("down")}</span><h3>網路流量</h3><div class="legend">
+      <div class="cbox">${chartOr(hs, cid(s,"a"), x => [{data:x.cpu,color:COL.cpu},{data:x.mem,color:COL.mem}], {max:100, grid:1})}</div>${xl}</div>` : "";
+  const np = PREF.show.net ? `<div class="panel glass" data-key="np" style="--i:5"><div class="ph"><span class="ico sm down">${I("down")}</span><h3>網路速度</h3><div class="legend">
       <span><i style="background:${COL.rx}"></i>下載<b class="num">${rate(s.net.rx)}</b></span><span><i style="background:${COL.tx}"></i>上傳<b class="num">${rate(s.net.tx)}</b></span></div></div>
-      <div class="cbox">${chart(cid(s,"b"), [{data:hs.rx,color:COL.rx},{data:hs.tx,color:COL.tx}], {grid:1})}</div>${xl}</div>` : "";
+      <div class="cbox">${chartOr(hs, cid(s,"b"), x => [{data:x.rx,color:COL.rx},{data:x.tx,color:COL.tx}], {grid:1})}</div>${xl}</div>` : "";
   if (cp || np) h += `<div class="charts" data-key="ch" data-keyed style="${cp&&np?"":"grid-template-columns:1fr"}">${cp}${np}</div>`;
   const items = itemsOf(s);
   const ip = PREF.show.items ? `<div class="panel glass" data-key="ip" style="--i:6"><div class="ph"><span class="ico sm box">${I("box")}</span><h3>容器與服務</h3><span class="sub" style="margin-left:auto;font-weight:700">${items.length?itemsSummary(items).replace("<b>",'<b style="color:var(--bad)">'):""}</span></div>
@@ -1503,8 +1867,8 @@ function detail(s){
       ${s.disks.map(d=>`<dt>磁碟 ${esc(d.path)}</dt><dd class="num">${size(d.used)} / ${size(d.total)}</dd>`).join("")}
       ${s.mem.swap_total?`<dt>虛擬記憶體</dt><dd class="num">${size(s.mem.swap_used)} / ${size(s.mem.swap_total)}</dd>`:""}
     </dl></div>` : "";
-  const ep = eventsPanel(s);
-  if (ip || fp || ep) h += `<div class="lower" data-key="lw" data-keyed>${ip}${ep}${fp}</div>`;
+  const ep = eventsPanel(s), tp = trafficPanel(s);
+  if (ip || fp || ep || tp) h += `<div class="lower" data-key="lw" data-keyed>${tp}${ep}${ip}${fp}</div>`;
   return h + `</div>`;
 }
 function overview(list){
@@ -1518,19 +1882,88 @@ function overview(list){
     <div><div class="k">平均處理器</div><b>${num(avg("cpu"))}<small>%</small></b></div>
     <div><div class="k">平均記憶體</div><b>${num(avg("mem"))}<small>%</small></b></div>
     <div><div class="k">總下載</div><b class="num">${rate(rx)}</b></div>
-    <div><div class="k">總上傳</div><b class="num">${rate(tx)}</b></div></div>
+    <div><div class="k">總上傳</div><b class="num">${rate(tx)}</b></div>
+    ${on.some(s=>s.traffic) && PREF.show.traffic ? `<div style="grid-column:1/-1"><div class="k">本月總流量</div><b class="num">${size(on.reduce((a,s)=>a+(s.traffic?s.traffic.used:0),0))}</b></div>` : ""}</div>
     ${items.length ? `<div class="bar2"><i style="width:${pc(ok)}%;background:var(--ok)"></i><i style="width:${pc(off)}%;background:var(--faint)"></i><i style="width:${pc(bad)}%;background:var(--bad)"></i></div>
     <div class="cap2"><span>容器與服務</span><span>${ok} 正常${bad?`・${bad} 異常`:""}</span></div>` : ""}</div>`;
+}
+const CNT = {both:"上傳＋下載", out:"只算上傳", in:"只算下載", max:"取較大的"};
+function trafficBars(t, id){
+  const W = 600, H = 64, n = Math.max(t.cycle_days, t.daily.length), bw = W / n, gap = Math.min(4, bw * .25);
+  const max = Math.max(1, ...t.daily.map(d => d.rx + d.tx));
+  const rects = t.daily.map((d, i) => {
+    const x = i * bw + gap / 2, w = Math.max(1, bw - gap), hr = d.rx / max * (H - 2), ht = d.tx / max * (H - 2);
+    return `<rect x="${x.toFixed(1)}" y="${(H - hr - ht).toFixed(1)}" width="${w.toFixed(1)}" height="${ht.toFixed(1)}" rx="2" style="fill:${COL.tx}"><title>${d.d}：上傳 ${size(d.tx)}</title></rect>`
+         + `<rect x="${x.toFixed(1)}" y="${(H - hr).toFixed(1)}" width="${w.toFixed(1)}" height="${Math.max(0, hr).toFixed(1)}" rx="2" style="fill:${COL.rx}"><title>${d.d}：下載 ${size(d.rx)}</title></rect>`;
+  }).join("");
+  const rest = n > t.daily.length ? `<rect x="${(t.daily.length * bw).toFixed(1)}" y="${H-3}" width="${((n - t.daily.length) * bw).toFixed(1)}" height="3" rx="1.5" style="fill:var(--track)"/>` : "";
+  return `<svg class="bars" viewBox="0 0 ${W} ${H}" preserveAspectRatio="none">${rects}${rest}</svg>`;
+}
+function trafficPanel(s){
+  const t = s.traffic; if (!t || !PREF.show.traffic) return "";
+  const pct = t.pct, lim = t.limit;
+  const pp = t.projected && lim ? Math.round(t.projected / lim * 100) : null;
+  const proj = t.projected ? `${size(t.projected)}${pp != null ? `<div class="sub" style="font-weight:700;${pp>100?"color:var(--warn)":""}">上限的 ${pp}%</div>` : ""}` : "累積中";
+  return `<div class="panel glass trf" data-key="tp" style="--i:9"><div class="ph"><span class="ico sm up">${I("up")}</span><h3>本月流量</h3>
+      <span class="sub" style="margin-left:auto;font-weight:700">${CNT[t.count]}</span><button class="iconbtn" data-traffic="${esc(s.node||"")}" data-label="${esc(s.name)}" title="流量設定">${I("gear")}</button></div>
+    <div class="big"><b class="num">${size(t.used)}</b><span>${lim ? `／ ${size(lim)}` : "沒有設定上限"}</span>${pct!=null?`<span style="margin-left:auto;color:var(--text)">${num(pct,1)}%</span>`:""}</div>
+    ${lim ? track(pct) : ""}
+    <div class="rows"><div><div class="k">下載</div><b class="num">${size(t.rx)}</b></div><div><div class="k">上傳</div><b class="num">${size(t.tx)}</b></div>
+      <div><div class="k">預估月底</div><b>${proj}</b></div><div><div class="k">${t.reset_day} 號重置</div><b>還有 ${t.days_left} 天</b></div></div>
+    ${trafficBars(t)}
+    <div class="xl"><span>${t.start.slice(5).replace("-","/")}</span><span>${t.prev!=null?`上個週期 ${size(t.prev)}`:""}</span><span>${t.end.slice(5).replace("-","/")}</span></div>
+    ${t.partial ? `<div class="note">從 ${new Date(t.since*1000).toLocaleDateString("zh-TW",{month:"numeric",day:"numeric"})} 開始統計，之前的流量沒有算進去</div>` : ""}</div>`;
+}
+function trafficLine(s){
+  const t = s.traffic; if (!t || !PREF.show.traffic) return "";
+  const lim = t.limit;
+  return `<div class="tline" data-key="tl" data-traffic="${esc(s.node||"")}" data-label="${esc(s.name)}">
+    <div class="r1"><span class="ico sm up">${I("up")}</span>本月流量<b class="num">${size(t.used)}${lim?`<small>／ ${size(lim)}</small>`:""}</b></div>
+    ${lim ? track(t.pct) : ""}
+    <div class="r2"><span>${t.projected ? `預估月底 ${size(t.projected)}` : "預估累積中"}</span><span>${t.reset_day} 號重置・還有 ${t.days_left} 天</span></div></div>`;
+}
+async function trafficModal(node, label){
+  const s = LIST.find(x => (x.node || "") === node), t = s && s.traffic;
+  if (!t) return;
+  let mode = t.count;
+  const days = Array.from({length:28}, (_, i) => `<option value="${i+1}" ${t.reset_day===i+1?"selected":""}>每月 ${i+1} 號</option>`).join("");
+  const v = document.createElement("div"); v.className = "veil";
+  v.innerHTML = `<div class="dialog glass"><div class="ico big up">${I("up")}</div><h3>「${esc(label)}」流量設定</h3>
+    <div class="form">
+      <label>每月流量上限（GB）<input class="field" type="number" inputmode="decimal" min="0" step="any" value="${t.limit ? +(t.limit/1073741824).toFixed(3) : ""}" placeholder="不限制就留空"></label>
+      <label>每月幾號重置<select class="field">${days}</select></label>
+      <label>怎麼計算<div class="seg" style="flex-wrap:wrap">${Object.entries(CNT).map(([k,l])=>`<button type="button" class="${mode===k?"on":""}" data-m="${k}">${l}</button>`).join("")}</div>
+        <small>甲骨文等很多主機商只算「上傳」；不確定就選「上傳＋下載」</small></label>
+    </div>
+    <div class="btns"><button class="ubtn ghost" data-r="0">取消</button><button class="ubtn" data-r="1">儲存</button></div></div>`;
+  $("#layer").appendChild(v);
+  v.querySelectorAll(".seg").forEach(sg => sg.querySelectorAll("button").forEach(b => b.onclick = () => {
+    mode = b.dataset.m; sg.querySelectorAll("button").forEach(x => x.classList.toggle("on", x === b)); }));
+  const ok = await new Promise(res => {
+    const done = r => { if (v._d) return; v._d = 1; const val = r ? {limit_gb: +(v.querySelector("input").value || 0), reset_day: +v.querySelector("select").value, count: mode} : null;
+      v.classList.add("closing"); setTimeout(() => { v.remove(); res(val); }, 300); };
+    v._esc = () => done(0);
+    v.addEventListener("click", e => { if (e.target === v) return done(0); const b = e.target.closest("[data-r]"); if (b) done(+b.dataset.r); });
+    v.querySelector("input").addEventListener("keydown", e => { if (e.key === "Enter") done(1); });
+  });
+  if (!ok) return;
+  try {
+    const r = await fetch("/api/traffic?node=" + encodeURIComponent(node), {method:"POST", headers:{"X-Token":getTok(), "Content-Type":"application/json"}, body:JSON.stringify(ok)});
+    const d = await r.json().catch(() => ({}));
+    (r.ok && d.ok) ? toast("流量設定已儲存") : toast(d.message || d.error || (r.status === 404 ? "那台主機還沒更新到新版" : "儲存失敗"), "bad");
+  } catch(e) { toast("連線失敗，請稍後再試", "bad"); }
+  tick();
 }
 function strip(s){
   const items = itemsOf(s), run = items.filter(x=>x.st==="ok").length, n = s.updates ? s.updates.total : 0;
   const t = (i, ico, k, v, sub) => `<div class="tile glass" style="--i:${i}"><span class="ico ${ico}">${I(ico)}</span><div><div class="k">${k}</div><div class="v">${v}</div>${sub?`<div class="s">${sub}</div>`:""}</div></div>`;
   const [l1, l5, l15] = s.load.map(x => x.toFixed(2));
-  return `<div class="strip" data-key="sr">${t(1,"load","負載", num(s.load[0],2), `5 分 ${l5}・15 分 ${l15}`)}
+  return `<div class="strip" data-key="sr">${t(1,"load","負載", num(s.load[0],2), `${l5}・${l15}`)}
     ${t(2,"down","下載", `<span class="num">${rate(s.net.rx)}</span>`, `上傳 ${rate(s.net.tx)}`)}
     ${t(3,"box","容器與服務", items.length ? `${run} / ${items.length}` : "—", items.length ? "正在執行" : "沒有偵測到")}
     ${t(4,"info","系統更新", s.updates ? (n ? `${n} 個` : "最新") : "—", s.updates ? (n ? "可以更新" : "不用更新") : "")}
-    ${t(5,"cpu","開機時間", up(s.uptime), s.reboot ? "需要重新開機" : "")}</div>`;
+    ${t(5,"cpu","開機時間", up(s.uptime), s.reboot ? "需要重新開機" : "")}
+    ${s.traffic && PREF.show.traffic ? t(6,"up","本月流量", `<span class="num">${size(s.traffic.used)}</span>`, s.traffic.limit ? `已用 ${s.traffic.pct}%` : `${s.traffic.days_left} 天後重置`) : ""}</div>`;
 }
 function eventsPanel(s){
   const ev = s.events;
@@ -1804,6 +2237,7 @@ function settingsBody(){
     <div class="opt"><span class="ico sm box">${I("box")}</span><span class="lab">容器與服務</span>${tog("show.items")}</div>
     <div class="opt"><span class="ico sm info">${I("info")}</span><span class="lab">系統資訊<small>電腦版才有</small></span>${tog("show.info")}</div>
     <div class="opt"><span class="ico sm disk">${I("ok")}</span><span class="lab">國旗</span>${tog("show.flag")}</div>
+    <div class="opt"><span class="ico sm up">${I("up")}</span><span class="lab">每月流量</span>${tog("show.traffic")}</div>
   </div></div>
   <div class="sec"><h4>資料</h4><div class="group">
     <div class="opt"><span class="lab">自動更新<small>多久抓一次最新狀態</small></span>${seg("refresh",[[3,"3 秒"],[5,"5 秒"],[10,"10 秒"],[30,"30 秒"]])}</div>
@@ -1889,6 +2323,10 @@ document.addEventListener("click", async e => {
   const t = e.target;
   if (t.closest("[data-login]")) { setTok($("#tok").value.trim()); return tick(); }
   if (t.closest("[data-settings]")) return openSettings();
+  const rg = t.closest("[data-range]");
+  if (rg) { if (RANGE !== rg.dataset.range) { RANGE = rg.dataset.range; store("vps-range", RANGE); render(LIST); } return; }
+  const tf = t.closest("[data-traffic]");
+  if (tf) return trafficModal(tf.dataset.traffic, tf.dataset.label);
   if (t.closest("[data-refresh]")) return refreshNow(t.closest("[data-refresh]"));
   if (t.closest("[data-logout]")) {
     if (await modal({icon:"logout", cls:"info", title:"要登出嗎？", text:"登出後要重新輸入密碼才能看到主機。", ok:"登出"})) { setTok(""); LIST = []; clearTimeout(timer); login(); }
@@ -2036,6 +2474,12 @@ tick();
 
 
 def main():
+    def stop(*_):
+        COL.save()
+        log("已存檔，結束")
+        sys.exit(0)
+    signal.signal(signal.SIGTERM, stop)
+    signal.signal(signal.SIGINT, stop)
     threading.Thread(target=COL.loop, daemon=True).start()
     if TG_BOT and TG_CHAT:
         threading.Thread(target=alert_loop, daemon=True).start()
