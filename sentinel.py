@@ -1121,7 +1121,8 @@ button{font:inherit;color:inherit}
 .xl{display:flex;justify-content:space-between;color:var(--faint);font-size:11.5px;margin-top:6px;font-weight:600}
 .legend{display:flex;gap:14px;font-size:12.5px;color:var(--sub);flex-wrap:wrap}
 .legend i{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:6px}
-.legend b{color:var(--text);font-weight:800;margin-left:4px}
+.legend b{color:var(--text);font-weight:800;margin-left:4px;display:inline-block;min-width:3.2em;font-variant-numeric:tabular-nums}
+.legend b.num{min-width:5.8em}
 
 /* ═════════ 頂部（手機） ═════════ */
 .bar{position:sticky;top:0;z-index:5;margin:0 -16px;padding:calc(env(safe-area-inset-top) + 10px) 16px 10px;
@@ -1307,9 +1308,9 @@ button{font:inherit;color:inherit}
 .cbox{height:170px}
 .lower{display:grid;grid-template-columns:repeat(auto-fit,minmax(380px,1fr));gap:18px;align-items:stretch}
 /* 側邊欄填滿整個高度 */
-.dash.d .side{height:calc(100vh - 48px)}
+.dash.d .side{height:auto}
 .hosts{flex:0 1 auto;min-height:0}
-.ovw{margin-top:auto;border-radius:22px;padding:14px;background:var(--glass2);box-shadow:inset 0 0 0 1px var(--line)}
+.ovw{margin-top:0;border-radius:22px;padding:14px;background:var(--glass2);box-shadow:inset 0 0 0 1px var(--line)}
 .ovw h4{font-size:12px;font-weight:800;color:var(--sub);letter-spacing:.5px;margin-bottom:10px;display:flex;align-items:center;gap:8px}
 .ovg{display:grid;grid-template-columns:1fr 1fr;gap:12px 10px}
 .ovg .k{font-size:11px;color:var(--sub);font-weight:700}
@@ -1356,8 +1357,12 @@ button{font:inherit;color:inherit}
 .dialog .form .seg button.on{background:var(--glass);color:var(--text);box-shadow:0 2px 8px -2px rgba(0,0,0,.28),inset 0 0 0 1px var(--rim)}
 [data-mode="light"] .dialog .form .seg button.on{background:#fff}
 .dialog .form small{font-weight:600;color:var(--faint);font-size:11.5px;line-height:1.5}
-.evs{display:flex;flex-direction:column;gap:2px;max-height:330px;overflow-x:hidden;overflow-y:auto;margin:-8px -6px 0;padding:8px 6px 14px;
-  -webkit-mask:linear-gradient(transparent,#000 12px,#000 calc(100% - 26px),transparent);mask:linear-gradient(transparent,#000 12px,#000 calc(100% - 26px),transparent)}
+.evs{display:flex;flex-direction:column;gap:2px;max-height:330px;overflow-x:hidden;overflow-y:auto;margin:-8px -6px 0;padding:8px 6px 14px}
+/* 有最大高度的清單：裡面的項目不能被擠扁（不然展開動畫會卡在一半再彈回來） */
+.evs>*,.hosts>*,.list>*,.alerts>*{flex-shrink:0}
+/* 可以再捲的那一邊才淡出 */
+.ft,.fb,.ft.fb{--t:0px;--b:0px;-webkit-mask:linear-gradient(transparent,#000 var(--t),#000 calc(100% - var(--b)),transparent);mask:linear-gradient(transparent,#000 var(--t),#000 calc(100% - var(--b)),transparent)}
+.ft{--t:22px}.fb{--b:30px}
 .ev{animation:rise .5s cubic-bezier(.22,1,.36,1) both;display:flex;gap:11px;align-items:flex-start;padding:8px 6px;border-radius:12px;font-size:13.5px;font-weight:700}
 .ev:hover{background:var(--track)}
 .ev .dot{margin-top:6px}
@@ -1591,7 +1596,25 @@ const getP = k => k.split(".").reduce((o,x)=>o && o[x], PREF);
 function setP(k, v){ const ks = k.split("."); let o = PREF; while (ks.length > 1) o = o[ks.shift()]; o[ks[0]] = v; store("vps-prefs", JSON.stringify(PREF)); }
 const DARKQ = matchMedia("(prefers-color-scheme: dark)");
 const TOUCH = matchMedia("(pointer: coarse)");
-function isLite(){ return PREF.perf === "lite" || (PREF.perf === "auto" && (TOUCH.matches || innerWidth < 1024)); }
+let SLOW = false;   // 實測發現這台裝置畫不動完整效果
+try { SLOW = sessionStorage.getItem("vps-slow") === "1"; } catch(e) {}
+function isLite(){ return PREF.perf === "lite" || (PREF.perf === "auto" && (TOUCH.matches || innerWidth < 1024 || SLOW)); }
+/* 「自動」模式：開啟後量 1.2 秒的實際順暢度，畫不動就自動改用輕量效果 */
+function probePerf(){
+  if (PREF.perf !== "auto" || isLite() || !PREF.motion) return;
+  let n = 0, t0 = 0;
+  const f = t => {
+    if (!t0) t0 = t;
+    n++;
+    if (t - t0 < 1200) return requestAnimationFrame(f);
+    const fps = n * 1000 / (t - t0);
+    if (fps < 40) {
+      SLOW = true; try { sessionStorage.setItem("vps-slow", "1"); } catch(e) {}
+      applyPrefs();
+    }
+  };
+  setTimeout(() => requestAnimationFrame(f), 1500);     // 等進場動畫跑完再量
+}
 /* 各國國旗配色：[亮色, 主色, 輔助色] */
 const FLAGPAL = {
   JP:["#ff7a8a","#d3002d","#ffb3c1"], HK:["#ff7b6e","#de2910","#ffc4bd"], SG:["#ff6b7a","#ef3340","#ffc2c9"],
@@ -1702,7 +1725,7 @@ function alerts(s){
   const k = t => esc(String(t).replace(/[\d.]+/g, ""));
   const al = (s.problems||[]).map(p=>`<div class="alert bad" data-key="b:${k(p)}">${I("warn")}${esc(p)}</div>`)
     .concat((s.notices||[]).map(p=>`<div class="alert warn" data-key="w:${k(p)}">${I("alert")}${esc(p)}</div>`));
-  return `<div class="alerts" data-key="al" data-keyed>${al.join("")}</div>`;
+  return al.length ? `<div class="alerts" data-key="al" data-keyed>${al.join("")}</div>` : "";
 }
 function itemsOf(s){
   const items = [];
@@ -2028,49 +2051,49 @@ function flipSiblings(parent, change){
   const kids = [...parent.children].filter(c => !c._leaving), r0 = kids.map(c => c.getBoundingClientRect());
   change();
   kids.forEach((c, i) => { if (!c.isConnected) return; const r = c.getBoundingClientRect(), dx = r0[i].left - r.left, dy = r0[i].top - r.top;
-    if (Math.abs(dx) > 1 || Math.abs(dy) > 1) c.animate([{transform:`translate(${dx}px,${dy}px)`}, {transform:"none"}], {duration:450, easing:EASE}); });
+    if (Math.abs(dx) > 1 || Math.abs(dy) > 1) c.animate([{transform:`translate(${dx}px,${dy}px)`}, {transform:"none"}], {duration:450, easing:EASE, id:"ui"}); });
 }
 const gapOf = el => parseFloat(getComputedStyle(el).rowGap) || 0;
 /* 前後有沒有「真正留著」的鄰居，決定要收哪一邊的間距 */
 function gapSide(n){
-  const live = x => x && x.nodeType === 1 && !x._leaving;
-  let p = n.previousElementSibling; while (p && !live(p)) p = p.previousElementSibling;
-  let q = n.nextElementSibling; while (q && !live(q)) q = q.nextElementSibling;
-  return p ? "marginTop" : q ? "marginBottom" : null;
+  // 依實際排列（包含正在離開的）決定收哪一邊的間距：同時有進有出時，總間距才會剛好對上，不會跳
+  return n.previousElementSibling ? "marginTop" : n.nextElementSibling ? "marginBottom" : null;
 }
 /* 消失：先淡出，再把空間（含間距）收起來 */
 function leaveBlock(n){
   const h = n.offsetHeight, cs = getComputedStyle(n), side = gapSide(n), g = side ? gapOf(n.parentElement) : 0;
-  const pt = cs.paddingTop, pb = cs.paddingBottom, m0 = {}, m1 = {};
-  if (side) { m0[side] = "0px"; m1[side] = -g + "px"; }
+  const box = {paddingTop:cs.paddingTop, paddingBottom:cs.paddingBottom, marginTop:cs.marginTop, marginBottom:cs.marginBottom};
+  const zero = {paddingTop:"0px", paddingBottom:"0px", marginTop:"0px", marginBottom:"0px"};
+  if (side) { box[side] = (parseFloat(box[side]) || 0) + "px"; zero[side] = -g + "px"; }  // 連同和鄰居之間的間距一起收
   n.style.overflow = "hidden"; n.style.pointerEvents = "none"; n.style.animation = "none";
   const dur = Math.min(720, 380 + h * .45);
   n.animate([
-    {height:h+"px", opacity:1, transform:"none", paddingTop:pt, paddingBottom:pb, ...m0, easing:"cubic-bezier(.4,0,1,1)"},
-    {height:h+"px", opacity:0, transform:"scale(.97)", paddingTop:pt, paddingBottom:pb, ...m0, offset:.35, easing:"cubic-bezier(.45,0,.2,1)"},
-    {height:"0px", opacity:0, transform:"scale(.97)", paddingTop:"0px", paddingBottom:"0px", ...m1}],
-    {duration:dur, easing:"linear", fill:"forwards"}).onfinish = () => n.remove();
+    {height:h+"px", opacity:1, ...box, easing:"cubic-bezier(.4,0,1,1)"},
+    {height:h+"px", opacity:0, ...box, offset:.35, easing:"cubic-bezier(.45,0,.2,1)"},
+    {height:"0px", opacity:0, ...zero}],
+    {duration:dur, easing:"linear", fill:"forwards", id:"ui"}).onfinish = () => n.remove();
 }
 /* 出現：先把空間撐開，再淡入 */
 function enterBlock(el, delay){
   const h = el.offsetHeight, cs = getComputedStyle(el), side = gapSide(el), g = side ? gapOf(el.parentElement) : 0;
-  const pt = cs.paddingTop, pb = cs.paddingBottom, m0 = {}, m1 = {};
-  if (side) { m0[side] = -g + "px"; m1[side] = "0px"; }
+  const box = {paddingTop:cs.paddingTop, paddingBottom:cs.paddingBottom, marginTop:cs.marginTop, marginBottom:cs.marginBottom};
+  const zero = {paddingTop:"0px", paddingBottom:"0px", marginTop:"0px", marginBottom:"0px"};
+  if (side) zero[side] = -g + "px";
   el.style.overflow = "hidden";
   el.getAnimations().forEach(x => { if (x.animationName) x.finish(); });   // 原本的進場動畫直接跳到結尾，之後也不會再重播
   const dur = Math.min(820, 460 + h * .45);
   el.animate([
-    {height:"0px", opacity:0, transform:"scale(.97)", paddingTop:"0px", paddingBottom:"0px", ...m0, easing:"cubic-bezier(.45,0,.2,1)"},
-    {height:h+"px", opacity:0, transform:"scale(.97)", paddingTop:pt, paddingBottom:pb, ...m1, offset:.5, easing:"cubic-bezier(.22,1,.36,1)"},
-    {height:h+"px", opacity:1, transform:"none", paddingTop:pt, paddingBottom:pb, ...m1}],
-    {duration:dur, delay, easing:"linear", fill:"backwards"}).onfinish = () => { el.style.overflow = ""; };
+    {height:"0px", opacity:0, ...zero, easing:"cubic-bezier(.45,0,.2,1)"},
+    {height:h+"px", opacity:0, ...box, offset:.5, easing:"cubic-bezier(.22,1,.36,1)"},
+    {height:h+"px", opacity:1, ...box}],
+    {duration:dur, delay, easing:"linear", fill:"backwards", id:"ui"}).onfinish = () => { el.style.overflow = ""; };
 }
 function leave(n){
   if (n.nodeType !== 1 || !canAnim() || !n.isConnected) return n.remove();
   if (n._leaving) return;
   if (n.matches(TILE)) {
     n._leaving = 1; n.style.pointerEvents = "none";
-    n.animate([{opacity:1, transform:"none"}, {opacity:0, transform:"scale(.94)"}], {duration:220, easing:"ease-in"})
+    n.animate([{opacity:1, transform:"none"}, {opacity:0, transform:"scale(.94)"}], {duration:220, easing:"ease-in", id:"ui"})
       .onfinish = () => { const par = n.parentElement; par ? flipSiblings(par, () => n.remove()) : n.remove(); };
     return;
   }
@@ -2092,7 +2115,7 @@ function morph(a, b){
     return flipWidth(a, () => { patch(a, b); a.animate([{opacity:.35}, {opacity:1}], {duration:320, easing:EASE}); });
   }
   if (a.hasAttribute("data-x") && a.innerHTML !== b.innerHTML) {
-    patch(a, b); if (canAnim()) a.animate([{opacity:0, transform:"translateY(4px)"}, {opacity:1, transform:"none"}], {duration:380, easing:EASE});
+    patch(a, b); if (canAnim()) a.animate([{opacity:0}, {opacity:1}], {duration:360, easing:EASE});
     return;
   }
   patch(a, b);
@@ -2121,12 +2144,12 @@ function keyedPatch(a, b){
   leaving.forEach(c => leave(c));
   if (anim) fresh.forEach((el, j) => {
     if (el.nodeType !== 1) return;
-    if (el.matches(TILE)) el.animate([{opacity:0, transform:"scale(.95)"}, {opacity:1, transform:"none"}], {duration:420, delay:j*50, easing:EASE, fill:"backwards"});
+    if (el.matches(TILE)) el.animate([{opacity:0, transform:"scale(.95)"}, {opacity:1, transform:"none"}], {duration:420, delay:j*50, easing:EASE, fill:"backwards", id:"ui"});
     else enterBlock(el, (leaving.length ? 200 : 0) + j*90);   // 有東西要離開時，等它先淡出再進來
   });
   if (anim && !flowing) keep.forEach(([k, el]) => {   // 只有單純換位置時才平滑移位
     const f = first.get(k), l = el.getBoundingClientRect(), dx = f.left - l.left, dy = f.top - l.top;
-    if (Math.abs(dx) > 1 || Math.abs(dy) > 1) el.animate([{transform:`translate(${dx}px,${dy}px)`}, {transform:"none"}], {duration:480, easing:EASE});
+    if (Math.abs(dx) > 1 || Math.abs(dy) > 1) el.animate([{transform:`translate(${dx}px,${dy}px)`}, {transform:"none"}], {duration:480, easing:EASE, id:"ui"});
   });
 }
 function patch(a, b){
@@ -2147,6 +2170,12 @@ function paint(html){
   const cur = $("#app .dash");
   if (cur) morph(cur, tpl.content.firstElementChild); else { $("#app").innerHTML = ""; $("#app").appendChild(tpl.content.firstElementChild); }
 }
+function edgeFades(el){
+  const t = el.scrollTop > 2, b = el.scrollTop + el.clientHeight < el.scrollHeight - 2;
+  if (el.classList.contains("ft") !== t) el.classList.toggle("ft", t);
+  if (el.classList.contains("fb") !== b) el.classList.toggle("fb", b);
+}
+document.addEventListener("scroll", e => { const el = e.target; if (el.matches && el.matches(".hosts,.evs")) edgeFades(el); }, {capture:true, passive:true});
 function placePind(){
   document.querySelectorAll("#app .summary").forEach(sm => {
     const ind = sm.querySelector(".pind"), on = sm.querySelector(".pill.on");
@@ -2181,6 +2210,7 @@ function render(list){
   const time = new Date().toLocaleTimeString("zh-TW",{hour12:false});
   paint(DESK.matches ? renderDesk(list, n, time) : renderMobile(list, n, time));
   placePind();
+  document.querySelectorAll("#app .hosts,#app .evs").forEach(edgeFades);
   trackCenter();
 }
 DESK.addEventListener("change", () => { applyPrefs(); if (LIST.length) render(LIST); });
@@ -2202,18 +2232,22 @@ function modal({icon, cls="box", title, text, input, ok="確定", cancel="取消
   });
 }
 /* 整頁平順切換：支援的瀏覽器會淡入淡出，不支援就直接換 */
-function smooth(fn, theme){
+function smooth(fn, theme, relayout){
   const motion = PREF.motion && !matchMedia("(prefers-reduced-motion: reduce)").matches;
   if (!motion) return fn();
-  if (isLite()) {                       // 手機：蓋一層舊底色再淡出，便宜又順
-    if (theme) {
+  if (isLite()) {                       // 輕量模式：蓋一層舊底色再淡出，便宜又順
+    if (theme || relayout) {
       const x = document.createElement("div"); x.className = "xfade";
       x.style.background = getComputedStyle(document.documentElement).backgroundColor;
+      if (!theme) x.style.animationDuration = ".38s";
       document.body.appendChild(x); setTimeout(() => x.remove(), 500);
+      window._vt = (window._vt || 0) + 1; setTimeout(() => window._vt--, 420);
     }
     return requestAnimationFrame(fn);
   }
-  document.startViewTransition ? document.startViewTransition(fn) : fn();
+  if (!document.startViewTransition) return fn();
+  window._vt = (window._vt || 0) + 1;
+  document.startViewTransition(fn).finished.finally(() => { window._vt--; });
 }
 function toast(msg, type="ok"){
   const t = document.createElement("div"); t.className = `toast glass ${type}`;
@@ -2242,7 +2276,7 @@ function settingsBody(){
     <div class="opt"><span class="lab">文字大小</span>${seg("size",[["s","小"],["m","中"],["l","大"]])}</div>
     <div class="opt"><span class="lab">卡片</span>${seg("density",[["cozy","寬鬆"],["compact","緊湊"]])}</div>
     <div class="opt"><span class="lab">動畫效果</span>${tog("motion")}</div>
-    <div class="opt" style="flex-wrap:wrap"><span class="lab">效能模式<small>「自動」在手機上會關掉比較耗電的效果，讓畫面更順</small></span>
+    <div class="opt" style="flex-wrap:wrap"><span class="lab">效能模式<small>「自動」會在手機、或偵測到畫面不順的電腦上，關掉比較吃效能的效果</small></span>
       <div style="flex-basis:100%">${seg("perf",[["auto","自動"],["lite","流暢優先"],["full","完整效果"]])}</div></div>
   </div></div>
   <div class="sec"><h4>要顯示的內容</h4><div class="group">
@@ -2316,7 +2350,9 @@ function openSettings(){
   function changed(k){
     const big = ["theme","accent","bg","size","density","perf"].includes(k) || k.startsWith("show.");
     const run = () => { applyPrefs(); if (LIST.length) render(LIST); };
-    big && k !== "accent" ? smooth(run, ["theme","bg"].includes(k)) : run();
+    // 文字大小、卡片密度會讓整頁重新排版；電腦版開關面板會讓格子重排 → 用淡入淡出蓋過去
+    const relayout = ["size","density","perf"].includes(k) || (DESK.matches && k.startsWith("show."));
+    big && k !== "accent" ? smooth(run, ["theme","bg"].includes(k), relayout) : run();
     if (k === "refresh") restart();
   }
 }
@@ -2376,7 +2412,7 @@ document.addEventListener("click", async e => {
     SEL = hs.dataset.sel; store("vps-sel", SEL); scrollTo({top:0, behavior:"smooth"});
     render(LIST);                                   // 詳細頁原地更新：數字、圓環、曲線直接動到新主機的數值
     const d = $("#app .detail");
-    if (d && canAnim()) d.animate([{opacity:.55, transform:"translateY(6px)"}, {opacity:1, transform:"none"}], {duration:420, easing:EASE});
+    if (d && canAnim()) d.animate([{opacity:.12}, {opacity:1}], {duration:340, easing:"cubic-bezier(.2,.7,.3,1)"});
     return;
   }
 
@@ -2404,6 +2440,7 @@ let BOOTED = false, REFRESHING = false;
 function splashMsg(t){ const m = document.querySelector(".sp-msg"); if (m && m.textContent !== t) m.innerHTML = `<span>${esc(t)}</span>`; }
 function endSplash(){
   if (BOOTED) return; BOOTED = true;
+  probePerf();
   const sp = $("#splash"); document.documentElement.classList.remove("booting");
   if (!sp) return;
   if (!canAnim()) return sp.remove();
@@ -2417,6 +2454,13 @@ function preloadFlags(list){
     const im = new Image(); im.onload = () => (im.decode ? im.decode().catch(()=>{}) : Promise.resolve()).then(res);
     im.onerror = () => { FLAGFAIL[cc] = 1; res(); }; im.src = `https://flagcdn.com/w80/${cc.toLowerCase()}.png`;
   })));
+}
+/* 等介面動畫（收起、展開、移位）播完再更新畫面，最多等 0.9 秒，避免兩邊搶著動 */
+function uiBusy(){ return document.getAnimations().some(a => a.id === "ui" && a.playState === "running"); }
+async function settle(){
+  const t0 = performance.now();
+  while (uiBusy() && performance.now() - t0 < 900) await sleep(60);
+  await new Promise(r => requestAnimationFrame(r));       // 對齊下一格畫面再改
 }
 async function tick(){
   clearTimeout(timer);
@@ -2433,6 +2477,7 @@ async function tick(){
       const wait = 700 - (performance.now() - T0); if (wait > 0) await sleep(wait);
       endSplash();
     }
+    if (BOOTED) await settle();
     render(data);
   } catch(e) {
     if (!BOOTED) splashMsg("連線不上，正在重試…");
