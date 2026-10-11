@@ -28,7 +28,7 @@
 用 root 身分登入 VPS（如果是用一般帳號登入，先輸入 `sudo -i`），然後貼上：
 
 ```bash
-git clone https://github.com/a7510049/vps-sentinel-homeassistant.git ~/vps-sentinel
+git clone https://github.com/a7510049/vps-sentinel.git ~/vps-sentinel
 cd ~/vps-sentinel && bash install.sh
 ```
 
