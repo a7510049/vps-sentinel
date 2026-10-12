@@ -486,7 +486,8 @@ class Collector:
             tr = st.get("traffic") or {}
             if isinstance(tr.get("days"), dict):
                 self.traffic = {"since": tr.get("since", now), "days": tr["days"], "last": tr.get("last")}
-            PEER_SEEN.update({k: float(v) for k, v in (st.get("peer_seen") or {}).items()})
+            names = {p["name"] for p in PEERS}           # 已經從設定拿掉的主機就不留了
+            PEER_SEEN.update({k: float(v) for k, v in (st.get("peer_seen") or {}).items() if k in names})
             if st.get("prev_keys") is not None:
                 self.prev_keys = {k: tuple(v) for k, v in st["prev_keys"].items()}
             log(f"已讀取存檔：歷史 {len(self.hist)}/{len(self.h24)}/{len(self.h7d)} 筆、事件 {len(self.events)} 筆、流量 {len(self.traffic['days'])} 天")
