@@ -1771,7 +1771,7 @@ button{font:inherit;color:inherit}
   font-variant-numeric:tabular-nums;text-shadow:0 0 6px var(--bg)}
 .cbox{cursor:crosshair}
 #ctip{position:fixed;z-index:60;pointer-events:none;min-width:130px;padding:9px 12px;border-radius:13px;font-size:12px;font-weight:700;
-  background:color-mix(in srgb,var(--bg) 86%,transparent);-webkit-backdrop-filter:blur(14px);backdrop-filter:blur(14px);
+
   box-shadow:0 10px 30px -10px rgba(0,0,0,.35),inset 0 0 0 1px var(--line);opacity:0;transition:opacity .15s}
 #ctip .tt{color:var(--sub);font-size:11px;margin-bottom:5px}
 #ctip .tr2{display:flex;align-items:center;gap:7px;line-height:1.7}
@@ -1894,7 +1894,6 @@ a.plink,button.plink{color:var(--sub);text-decoration:none}
 .lrow .iconbtn{width:30px;height:30px}
 .addl{align-self:flex-start;padding:7px 14px;font-size:12.5px}
 .lmenu{position:fixed;z-index:70;min-width:170px;max-width:280px;padding:6px;border-radius:16px;display:flex;flex-direction:column;
-  background:color-mix(in srgb,var(--bg) 90%,transparent)!important;-webkit-backdrop-filter:blur(18px)!important;backdrop-filter:blur(18px)!important;
   box-shadow:0 16px 40px -14px rgba(0,0,0,.45),inset 0 0 0 1px var(--rim)}
 .lmenu a{display:flex;align-items:center;gap:9px;padding:9px 12px;border-radius:11px;color:var(--text);text-decoration:none;font-size:13.5px;font-weight:700;transition:background .2s}
 .lmenu a:hover{background:var(--track)}
@@ -2096,8 +2095,10 @@ html::-webkit-scrollbar-thumb{background:color-mix(in srgb,var(--text) 22%,trans
 [data-lite="on"] .veil{-webkit-backdrop-filter:none;backdrop-filter:none}
 [data-lite="on"] .glass,[data-lite="on"] .scrolled .bar{-webkit-backdrop-filter:none;backdrop-filter:none}
 [data-lite="on"] .scrolled .bar{background:color-mix(in srgb,var(--bg) 90%,transparent)}
-[data-lite="on"] .sheet,[data-lite="on"] .dialog,[data-lite="on"] .toast{background:color-mix(in srgb,var(--bg) 92%,var(--glass))}
-[data-lite="on"][data-mode="dark"] .sheet,[data-lite="on"][data-mode="dark"] .dialog,[data-lite="on"][data-mode="dark"] .toast{background:color-mix(in srgb,#1a1f2e 94%,var(--a2))}
+/* 浮在畫面上的小選單、提示框：跟著「玻璃效果」設定，但底下多墊一層，任何設定下字都看得清楚 */
+.glass.pop{background:linear-gradient(var(--glass),var(--glass)),color-mix(in srgb,var(--bg) 68%,transparent)}
+[data-lite="on"] .sheet,[data-lite="on"] .dialog,[data-lite="on"] .toast,[data-lite="on"] .pop{background:color-mix(in srgb,var(--bg) 92%,var(--glass))}
+[data-lite="on"][data-mode="dark"] .sheet,[data-lite="on"][data-mode="dark"] .dialog,[data-lite="on"][data-mode="dark"] .toast,[data-lite="on"][data-mode="dark"] .pop{background:color-mix(in srgb,#1a1f2e 94%,var(--a2))}
 [data-lite="on"] .card,[data-lite="on"] .panel{transform:translateZ(0)}
 .xfade{position:fixed;inset:0;z-index:45;pointer-events:none;animation:fadeOut .45s cubic-bezier(.4,0,.2,1) forwards}
 /* ═════════ 無障礙／關閉動畫 ═════════ */
@@ -2957,7 +2958,7 @@ async function switchHost(){
 let TIPX = null;
 function tipEls(){
   let t = $("#ctip");
-  if (!t) { t = document.createElement("div"); t.id = "ctip"; document.body.appendChild(t);
+  if (!t) { t = document.createElement("div"); t.id = "ctip"; t.className = "glass pop"; document.body.appendChild(t);
     const l = document.createElement("div"); l.id = "cline"; document.body.appendChild(l); }
   return [t, $("#cline")];
 }
@@ -3101,7 +3102,7 @@ function hostModal(name, links){
 /* 有好幾個常用連結：點 ↗ 出現小選單 */
 function linksMenu(btn, s){
   closeMenu();
-  const m = document.createElement("div"); m.className = "lmenu glass";
+  const m = document.createElement("div"); m.className = "lmenu glass pop";
   m.innerHTML = linksOf(s).map(x => `<a href="${esc(x.url)}" target="_blank" rel="noopener noreferrer"><i class="ld ${x.up===false?"bad":x.up?"ok":""}"></i><span>${esc(x.name)}<small>${esc(linkSt(x))}</small></span>${I("ext")}</a>`).join("");
   document.body.appendChild(m);
   const r = btn.getBoundingClientRect(), w = m.offsetWidth;
