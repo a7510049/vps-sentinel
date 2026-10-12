@@ -5,6 +5,7 @@
 #   sudo bash cloud.sh 50          安裝雲端硬碟，最多可以放 50 GB（之後再執行一次就能改大小）
 #   sudo bash cloud.sh 密碼         顯示登入密碼
 #   sudo bash cloud.sh 換密碼       換一組新的隨機密碼（後面加上密碼就用你指定的：sudo bash cloud.sh 換密碼 我的新密碼）
+#   sudo bash cloud.sh 更新         更新到官方最新版（檔案和帳號都保留，哨兵網頁上也能按）
 #   sudo bash cloud.sh 移除         移除雲端硬碟程式（檔案會保留）
 #
 # 做了什麼：
@@ -65,6 +66,13 @@ case "${1:-}" in
     chmod 600 "$APP/admin-password"
     run_container
     echo "✅ 已換成新密碼："; show_login; exit 0 ;;
+  更新|update)
+    [ -f "$APP/admin-password" ] || { echo "還沒安裝雲端硬碟"; exit 1; }
+    echo "▶ 下載官方最新的穩定版…"
+    docker pull -q "$IMAGE" >/dev/null || { echo "❌ 下載失敗"; exit 1; }
+    run_container
+    docker image prune -f >/dev/null 2>&1 || true      # 清掉舊版的映像檔，省空間
+    echo "✅ 雲端硬碟已更新到最新版（檔案和帳號都保留）"; exit 0 ;;
   移除|remove)
     docker rm -f "$NAME" >/dev/null 2>&1 || true
     rm -f /etc/caddy/sites/vps-sentinel.d/cloud.caddy

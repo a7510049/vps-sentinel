@@ -411,6 +411,87 @@ cat /tmp/vps-sentinel-selfupdate.result"""
     return True, "已開始更新，大約 10～30 秒後會自動重新啟動"
 
 
+# ───────────────────────── 雲端硬碟的更新 ─────────────────────────
+
+CLOUD_IMAGE = "ghcr.io/gtsteffaniak/filebrowser"
+CLOUD_TAG = "stable"
+CLOUD_UNIT = "vps-cloud-update"
+CLOUDUP = {"checked": 0, "has": None, "err": "", "lock": threading.Lock()}
+
+
+def docker_json(*args):
+    code, out = run(["docker", *args], 15)
+    try:
+        return json.loads(out) if code == 0 and out.strip() else None
+    except ValueError:
+        return None
+
+
+def cloud_local():
+    """雲端硬碟容器目前用的映像檔：(摘要清單, 版本)"""
+    info = docker_json("inspect", "--format", "{{json .Image}}", "vps-cloud")
+    if not info:
+        return None, ""
+    img = docker_json("image", "inspect", "--format", "{{json .}}", info) or {}
+    labels = (img.get("Config") or {}).get("Labels") or {}
+    digests = [d.split("@", 1)[1] for d in img.get("RepoDigests") or [] if "@" in d]
+    return digests, labels.get("org.opencontainers.image.version", "")
+
+
+def cloud_remote_digest():
+    """直接問 GitHub 的映像檔倉庫，官方最新穩定版的摘要（不用下載整個映像檔）"""
+    repo = CLOUD_IMAGE.split("/", 1)[1]
+    with urllib.request.urlopen(f"https://ghcr.io/token?scope=repository:{repo}:pull", timeout=10) as r:
+        tok = json.loads(r.read())["token"]
+    req = urllib.request.Request(f"https://ghcr.io/v2/{repo}/manifests/{CLOUD_TAG}", method="HEAD", headers={
+        "Authorization": f"Bearer {tok}",
+        "Accept": ", ".join(["application/vnd.oci.image.index.v1+json", "application/vnd.docker.distribution.manifest.list.v2+json",
+                             "application/vnd.oci.image.manifest.v1+json", "application/vnd.docker.distribution.manifest.v2+json"])})
+    with urllib.request.urlopen(req, timeout=10) as r:
+        return r.headers.get("Docker-Content-Digest", "")
+
+
+def cloud_running():
+    _, out = run(["systemctl", "is-active", CLOUD_UNIT], 5)
+    return out.strip() in ("active", "activating")
+
+
+def cloud_check(force=False):
+    if not CLOUD_URL or not shutil.which("docker"):
+        return None
+    digests, ver = cloud_local()
+    base = {"version": ver, "running": cloud_running()}
+    if digests is None:
+        return {**base, "has": None, "err": "雲端硬碟程式沒有在跑"}
+    with CLOUDUP["lock"]:
+        if force or time.time() - CLOUDUP["checked"] > 3 * 3600:
+            CLOUDUP["checked"] = time.time()
+            try:
+                dg = cloud_remote_digest()
+                CLOUDUP.update(has=bool(dg) and dg not in digests, err="")
+            except Exception:  # noqa: BLE001
+                CLOUDUP.update(has=None, err="連不上官方的下載點，暫時沒辦法檢查新版")
+        return {**base, "has": CLOUDUP["has"], "err": CLOUDUP["err"]}
+
+
+def cloud_update():
+    d = src_dir()
+    if not CLOUD_URL:
+        return False, "這台還沒安裝雲端硬碟"
+    if not d or not os.path.isfile(os.path.join(d, "cloud.sh")):
+        return False, "找不到安裝資料夾，請先更新哨兵"
+    if cloud_running():
+        return False, "雲端硬碟已經在更新中了"
+    run(["systemctl", "reset-failed", CLOUD_UNIT], 5)
+    code, _ = run(["systemd-run", f"--unit={CLOUD_UNIT}", "--collect", "/bin/bash", os.path.join(d, "cloud.sh"), "更新"], 15)
+    if code != 0:
+        return False, "無法開始更新"
+    CLOUDUP["has"] = None
+    CLOUDUP["checked"] = 0                     # 更新完下次再查一次
+    log("開始更新雲端硬碟")
+    return True, "已開始更新雲端硬碟"
+
+
 # ───────────────────────── 常用連結健康檢查 ─────────────────────────
 
 LINK_STATE = {}                                 # 網址 → {"up", "ms", "err", "fails"}
@@ -950,6 +1031,7 @@ class Collector:
                     v["seen"] = v["seen"] or bool(a)
             if tick % 5400 == 10:                     # 每 3 小時：GitHub 上有沒有新版的哨兵（背景查，不卡畫面）
                 threading.Thread(target=self_check, daemon=True).start()
+                threading.Thread(target=cloud_check, daemon=True).start()
             if all_links() and tick % 30 == 0:              # 每 1 分鐘：常用連結打不打得開
                 try:
                     check_links()
@@ -1045,7 +1127,7 @@ class Collector:
             notices.append(f"{updates['security']} 個安全更新")
 
         return {
-            "name": NAME, "node": "", "online": True, "version": VERSION, "time": time.time(), "links": links_status(), "build": BUILD, "self_has": SELF["has"],
+            "name": NAME, "node": "", "online": True, "version": VERSION, "time": time.time(), "links": links_status(), "build": BUILD, "self_has": bool(SELF["has"] or (CLOUD_URL and CLOUDUP["has"])),
             "os": os_name(), "kernel": os.uname().release,
             "uptime": float(read("/proc/uptime", "0").split()[0] or 0),
             "cores": os.cpu_count() or 1, "cpu": cpu, "load": [round(x, 2) for x in load],
@@ -1436,8 +1518,11 @@ class Handler(BaseHTTPRequestHandler):
                 act = ""
             if act == "update":
                 ok, msg = self_update()
+            elif act == "cloud_update":
+                ok, msg = cloud_update()
             else:
-                return self.send(200, json.dumps({"ok": True, **self_check(act == "check")}, ensure_ascii=False))
+                return self.send(200, json.dumps({"ok": True, **self_check(act == "check"), "cloud": cloud_check(act == "check")},
+                                                 ensure_ascii=False))
             return self.send(200 if ok else 400, json.dumps({"ok": ok, "message": msg}, ensure_ascii=False))
         if u.path == "/api/telegram":
             try:
@@ -2029,6 +2114,12 @@ a.plink,button.plink{color:var(--sub);text-decoration:none}
 .selfrow .lab{flex:1;min-width:0}
 .selfrow .new{color:var(--a1);font-weight:800}.selfrow .warn{color:var(--warn)}
 .selfrow .spin{width:11px;height:11px;margin-right:4px;vertical-align:-1px}
+.cl2{display:flex;align-items:center;gap:10px;margin-top:10px;padding-top:10px;border-top:1px solid var(--line)}
+.cl2.first{border-top:0;padding-top:0;margin-top:8px}
+.selfrow .hn{display:block;font-weight:900}
+.cl2>span{flex:1;min-width:0;display:block;font-size:var(--fs-m);font-weight:700}
+.cl2>span svg{width:14px;height:14px;color:var(--a1);vertical-align:-2px;margin-right:5px;display:inline}
+.cl2 small{display:block;font-size:var(--fs-xs);color:var(--sub);font-weight:600}
 .chg{margin:6px 0 0;padding-left:16px;font-size:var(--fs-xs);color:var(--sub);font-weight:600;line-height:1.55}
 .ubtn.sm{padding:7px 14px;font-size:var(--fs-s);flex:none}
 a.plink:hover{color:var(--a1)}
@@ -3192,7 +3283,7 @@ function settingsBody(){
     <div class="opt">${IC("flag")}<span class="lab">國旗</span>${tog("show.flag")}</div>
     <div class="opt">${IC("month")}<span class="lab">每月流量</span>${tog("show.traffic")}</div>
   </div></div>
-  <div class="sec"><h4>哨兵版本<button class="linkish" data-selfcheck>檢查新版</button></h4><div class="group selfbox"><div class="opt"><span class="lab"><small>讀取中…</small></span></div></div></div>
+  <div class="sec"><h4>軟體更新<button class="linkish" data-selfcheck>檢查新版</button></h4><div class="group selfbox"><div class="opt"><span class="lab"><small>讀取中…</small></span></div></div></div>
   <div class="sec"><h4>通知</h4><div class="group">
     <button class="opt optbtn" data-tg>${IC("bell")}<span class="lab">Telegram 通知<small class="tgst">讀取中…</small></span><span class="chev">${I("chev")}</span></button>
   </div></div>
@@ -3283,26 +3374,40 @@ async function selfStatus(root, force){
   const res = await Promise.all(hosts.map(h => selfCall(h.node || "", force ? "check" : "status").then(d => [h, d]).catch(e => [h, {err: e.message, old: true}])));
   if (!box.isConnected) return;
   res.forEach(([h, d]) => SELFST[keyOf(h)] = d);
-  const any = res.filter(([, d]) => d.has && !d.running).length;
+  const pend = res.reduce((n, [, d]) => n + (d.has && !d.running ? 1 : 0) + (d.cloud && d.cloud.has && !d.cloud.running ? 1 : 0), 0);
   const rows = res.map(([h, d]) => {
+    const node = esc(h.node || "");
     const st = d.running ? `<span class="spin"></span>更新中…` : d.old || d.supported === false ? `<span class="warn">${esc(d.err)}</span>`
       : d.has ? `<span class="new">有新版可以更新</span>` : d.err ? esc(d.err) : "已經是最新版 ✨";
     const ch = d.has && d.changes && d.changes.length ? `<ul class="chg">${d.changes.slice(0, 5).map(c => `<li>${esc(c.split("\n")[0])}</li>`).join("")}</ul>` : "";
-    return `<div class="opt selfrow"><div class="lab">${esc(h.name)}<small>${d.version ? `版本 ${esc(d.version)}・${esc(d.build || "")}・` : ""}${st}</small>${ch}</div>
-      ${d.has && !d.running ? `<button class="ubtn sm" data-selfup="${esc(h.node || "")}">更新</button>` : ""}</div>`;
+    const c = d.cloud;
+    const cst = !c ? "" : c.running ? `<span class="spin"></span>更新中…` : c.has ? `<span class="new">官方有新版可以更新</span>` : c.err ? `<span class="warn">${esc(c.err)}</span>` : c.has === false ? "已經是最新版 ✨" : "還沒檢查";
+    const crow = c ? `<div class="cl2"><span>${I("cloud")}雲端硬碟<small>${c.version ? `版本 ${esc(c.version)}・` : ""}${cst}</small></span>
+      ${c.has && !c.running ? `<button class="ubtn sm" data-cloudup="${node}">更新</button>` : ""}</div>` : "";
+    const srow = `<div class="cl2 first"><span>${I("upd")}哨兵<small>${d.version ? `版本 ${esc(d.version)}・${esc(d.build || "")}・` : ""}${st}</small>${ch}</span>
+      ${d.has && !d.running ? `<button class="ubtn sm" data-selfup="${node}">更新</button>` : ""}</div>`;
+    return `<div class="opt selfrow"><div class="lab"><b class="hn">${esc(h.name)}</b>${srow}${crow}</div></div>`;
   }).join("");
-  box.innerHTML = rows + (any > 1 ? `<div class="opt"><span class="lab"></span><button class="ubtn sm" data-selfup="*">全部更新</button></div>` : "");
+  box.innerHTML = rows + (pend > 1 ? `<div class="opt"><span class="lab"></span><button class="ubtn sm" data-selfup="*">全部更新</button></div>` : "");
 }
-async function selfUpdate(root, nodes){
-  const targets = (nodes || Object.entries(SELFST).filter(([, d]) => d.has).map(([k]) => (LIST.find(x => keyOf(x) === k) || {}).node || ""));
-  const ok = await modal({icon:"upd", cls:"theme", title:"更新哨兵？", text:"會從 GitHub 下載新版並自動重新啟動，\n大約 10～30 秒，你的設定都會保留。", ok:"開始更新"});
+/* jobs：[{node, kind:"self"|"cloud"}]；不給就是「全部更新」 */
+async function selfUpdate(root, jobs){
+  if (!jobs) { jobs = [];
+    for (const [k, d] of Object.entries(SELFST)) { const node = (LIST.find(x => keyOf(x) === k) || {}).node || "";
+      if (d.has && !d.running) jobs.push({node, kind:"self"});
+      if (d.cloud && d.cloud.has && !d.cloud.running) jobs.push({node, kind:"cloud"}); } }
+  const onlyCloud = jobs.every(j => j.kind === "cloud");
+  const ok = await modal({icon:"upd", cls:"theme", title: onlyCloud ? "更新雲端硬碟？" : "開始更新？",
+    text: onlyCloud ? "會下載官方最新的穩定版並重新啟動，\n大約 30 秒～1 分鐘，期間暫時打不開，檔案和帳號都會保留。"
+      : "會下載新版並自動重新啟動，\n大約 10～60 秒，你的設定和檔案都會保留。", ok:"開始更新"});
   if (!ok) return;
   const okn = [], fail = [];
-  for (const n of targets.sort((a, b) => (a === "") - (b === ""))) {   // 先更新其他台，最後才更新這台（這台更新完畫面會重新載入）
-    const name = (LIST.find(x => (x.node || "") === n) || {}).name || "主機";
-    try { await selfCall(n, "update"); okn.push(name); } catch(e) { fail.push(`${name}：${e.message}`); }
+  jobs.sort((a, b) => (a.node === "" && a.kind === "self") - (b.node === "" && b.kind === "self"));   // 這台的哨兵最後更新（更新完畫面會重新載入）
+  for (const j of jobs) {
+    const name = ((LIST.find(x => (x.node || "") === j.node) || {}).name || "主機") + (j.kind === "cloud" ? " 的雲端硬碟" : "");
+    try { await selfCall(j.node, j.kind === "cloud" ? "cloud_update" : "update"); okn.push(name); } catch(e) { fail.push(`${name}：${e.message}`); }
   }
-  if (okn.length) toast(okn.length > 1 ? `已開始更新 ${okn.length} 台主機，大約 10～30 秒後完成` : `已開始更新「${okn[0]}」，大約 10～30 秒後完成`);   // 只跳一則
+  if (okn.length) toast(okn.length > 1 ? `已開始更新 ${okn.length} 個項目，大約 1 分鐘內完成` : `已開始更新「${okn[0]}」`);   // 只跳一則
   if (fail.length) setTimeout(() => toast(fail.join("；"), "bad"), okn.length ? 600 : 0);
   setTimeout(() => selfStatus(root), 1500);
   const poll = setInterval(() => { if (!root.isConnected) return clearInterval(poll); selfStatus(root); }, 5000);
@@ -3400,7 +3505,9 @@ function openSettings(){
     const sc = e.target.closest("[data-selfcheck]");
     if (sc) { sc.disabled = true; sc.textContent = "檢查中…"; return selfStatus(body, true).finally(() => { sc.disabled = false; sc.textContent = "檢查新版"; }); }
     const su = e.target.closest("[data-selfup]");
-    if (su) return selfUpdate(body, su.dataset.selfup === "*" ? null : [su.dataset.selfup]);
+    if (su) return selfUpdate(body, su.dataset.selfup === "*" ? null : [{node: su.dataset.selfup, kind:"self"}]);
+    const cu = e.target.closest("[data-cloudup]");
+    if (cu) return selfUpdate(body, [{node: cu.dataset.cloudup, kind:"cloud"}]);
     const b = e.target.closest("[data-val]");
     if (b) {
       const raw = b.dataset.val, k = b.dataset.pref;
