@@ -80,7 +80,7 @@ cd ~/vps-sentinel && git pull && bash install.sh
 想在主機上放自己的檔案？執行一行就能裝好一個網頁版的雲端硬碟（[FileBrowser Quantum](https://github.com/gtsteffaniak/filebrowser)），可以上傳、下載、分享：
 
 ```bash
-cd ~/vps-sentinel && bash cloud.sh 50
+cd ~/vps-sentinel && git pull && bash install.sh && bash cloud.sh 50
 ```
 
 最後的數字是**容量上限（GB）**，放滿就是滿了，不會吃掉整台主機的硬碟。裝好後畫面會顯示網址、帳號和密碼；哨兵的磁碟卡片上也會出現「☁ 雲端」入口和用量，快滿或打不開時會通知你。
@@ -94,7 +94,7 @@ cd ~/vps-sentinel && bash cloud.sh 50
 | 換密碼 | `bash cloud.sh 換密碼 你的新密碼` |
 | 移除（檔案會保留） | `bash cloud.sh 移除` |
 
-> 有設定網域的話，網址是 `https://你的網域/cloud/`，不用另外開連接埠；沒有網域時是 `http://IP:8788/cloud/`，雲端主機的網站防火牆要打開 8788。
+> 雲端硬碟會接在哨兵的網址後面（例如 `https://你的網域/cloud/` 或 `http://IP:8787/cloud/`），跟哨兵用同一個連接埠，不用另外開防火牆。沒有設定網域的主機連線不會加密，建議加上網域。
 > 請用指令換密碼；在雲端硬碟網頁上改的密碼，重開後會被換回來。
 
 ---

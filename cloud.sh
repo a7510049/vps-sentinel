@@ -13,7 +13,7 @@
 #   1. 建一個固定大小的「空間檔」掛在 /srv/cloud，放滿就是滿了，不會吃掉整台主機的硬碟
 #   2. 用 Docker 跑 FileBrowser Quantum（網頁版檔案總管），只看得到 /srv/cloud
 #   3. 有網域：接在哨兵的網址後面 https://你的網域/cloud/ ，不用另外開連接埠
-#      沒網域：開在 http://IP:8788/cloud/
+#      沒網域：一樣接在哨兵的網址後面 http://IP:8787/cloud/ （由哨兵轉送，也不用另外開連接埠）
 #   4. 哨兵的磁碟卡片會出現雲端硬碟的入口和用量
 set -euo pipefail
 
@@ -27,7 +27,6 @@ APP=/opt/vps-cloud
 NAME=vps-cloud
 IMAGE=ghcr.io/gtsteffaniak/filebrowser:stable
 LOCAL_PORT=8099          # 只給本機的 Caddy 連
-DIRECT_PORT=8788         # 沒有網域時對外開的連接埠
 MOUNT_UNIT=/etc/systemd/system/srv-cloud.mount
 
 [ -f "$CONF" ] || { echo "❌ 請先安裝 VPS 哨兵（bash install.sh）"; exit 1; }
@@ -38,10 +37,8 @@ new_password() { tr -dc 'A-Za-z0-9' < /dev/urandom | head -c 16; }
 
 run_container() {
   docker rm -f "$NAME" >/dev/null 2>&1 || true
-  local publish="127.0.0.1:$LOCAL_PORT:80"
-  [ -z "$(get_conf DOMAIN)" ] && publish="$DIRECT_PORT:80"
   docker run -d --name "$NAME" --restart unless-stopped \
-    -p "$publish" \
+    -p "127.0.0.1:$LOCAL_PORT:80" \
     -v "$MNT":/folder \
     -v "$APP/data":/home/filebrowser/data \
     -e FILEBROWSER_CONFIG=/home/filebrowser/data/config.yaml \
@@ -51,7 +48,7 @@ run_container() {
 
 # 等雲端硬碟真的能連上（最多 60 秒）；連不上就把原因印出來
 wait_ready() {
-  local port="$LOCAL_PORT"; [ -z "$(get_conf DOMAIN)" ] && port="$DIRECT_PORT"
+  local port="$LOCAL_PORT"
   for _ in $(seq 1 30); do
     curl -fsS -o /dev/null --max-time 2 "http://127.0.0.1:$port/cloud/health" && return 0
     sleep 2
@@ -63,7 +60,7 @@ wait_ready() {
 }
 
 diagnose() {
-  local port="$LOCAL_PORT" dom; dom="$(get_conf DOMAIN)"; [ -z "$dom" ] && port="$DIRECT_PORT"
+  local port="$LOCAL_PORT" dom; dom="$(get_conf DOMAIN)"
   echo "── 雲端硬碟檢查 ──"
   if mountpoint -q "$MNT"; then echo "✅ 存放空間：已掛好（$(df -h --output=used,size "$MNT" | tail -1 | awk '{print $1" / "$2}')）"
   else echo "❌ 存放空間沒有掛上：systemctl status srv-cloud.mount"; fi
@@ -80,10 +77,13 @@ diagnose() {
     local code; code="$(curl -sk -o /dev/null -w '%{http_code}' --max-time 5 --resolve "$dom:$hp:127.0.0.1" "https://$dom:$hp/cloud/health" || true)"
     [ "$code" = 200 ] && echo "✅ 透過網域連得到" || echo "❌ 透過網域連不到（代碼 ${code:-無回應}）"
     echo "👉 請用這個網址：$(get_conf CLOUD_URL)"
-    echo "   （有網域時不用開 $DIRECT_PORT 或 $LOCAL_PORT，用的是哨兵同一個連接埠 $hp）"
+    echo "   （跟哨兵用同一個連接埠 $hp，不用另外開）"
   else
+    local sp; sp="$(get_conf PORT)"; sp="${sp:-8787}"
+    local code; code="$(curl -s -o /dev/null -w '%{http_code}' --max-time 5 "http://127.0.0.1:$sp/cloud/health" || true)"
+    [ "$code" = 200 ] && echo "✅ 透過哨兵的連接埠 $sp 連得到" || echo "❌ 透過哨兵連不到（代碼 ${code:-無回應}），請先更新哨兵：齒輪 →「軟體更新」"
     echo "👉 請用這個網址：$(get_conf CLOUD_URL)"
-    echo "   雲端主機網站上的防火牆要打開 $DIRECT_PORT（TCP）"
+    echo "   （跟哨兵用同一個連接埠 $sp，不用另外開）"
   fi
 }
 
@@ -259,18 +259,15 @@ EOF
   systemctl reload caddy 2>/dev/null || systemctl restart caddy
   if [ "$HTTPS_PORT" = 443 ]; then URL="https://$DOMAIN/cloud/"; else URL="https://$DOMAIN:$HTTPS_PORT/cloud/"; fi
 else
-  if command -v ufw >/dev/null && ufw status | grep -q "Status: active"; then ufw allow "$DIRECT_PORT/tcp" >/dev/null
-  elif command -v netfilter-persistent >/dev/null && command -v iptables >/dev/null; then
-    iptables -C INPUT -p tcp --dport "$DIRECT_PORT" -j ACCEPT 2>/dev/null || iptables -I INPUT -p tcp --dport "$DIRECT_PORT" -j ACCEPT
-    netfilter-persistent save >/dev/null 2>&1 || true
-  fi
   IP="$(curl -s4 --max-time 4 https://ifconfig.me || hostname -I | awk '{print $1}')"
-  URL="http://$IP:$DIRECT_PORT/cloud/"
+  SP="$(get_conf PORT)"; SP="${SP:-8787}"
+  URL="http://$IP:$SP/cloud/"                   # 由哨兵轉送，跟哨兵同一個連接埠
 fi
 
 # ── 5. 告訴哨兵 ──
 set_conf CLOUD_URL "$URL"
 set_conf CLOUD_DIR "$MNT"
+set_conf CLOUD_PORT "$LOCAL_PORT"
 systemctl restart vps-sentinel-lite 2>/dev/null || true
 
 echo
@@ -281,4 +278,4 @@ echo
 echo "   忘記密碼：sudo bash cloud.sh 密碼"
 echo "   換密碼：  sudo bash cloud.sh 換密碼 你的新密碼   （請用這個指令換，在網頁上改的話重開後會被換回來）"
 echo "   改容量：  sudo bash cloud.sh 新的GB數"
-if [ -z "$DOMAIN" ]; then echo "   ⚠️ 雲端主機（甲骨文、Azure 等）的網站防火牆也要打開 $DIRECT_PORT 連接埠（TCP）"; fi
+if [ -z "$DOMAIN" ]; then echo "   ⚠️ 這台沒有設定網域，連線沒有加密；之前為雲端硬碟開的 8788 連接埠可以關掉了"; fi

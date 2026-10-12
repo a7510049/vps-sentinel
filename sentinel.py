@@ -11,6 +11,7 @@ import base64
 import glob
 import hashlib
 import hmac
+import http.client
 import ipaddress
 import html
 import json
@@ -22,6 +23,7 @@ import shlex
 import signal
 import socket
 import subprocess
+import tempfile
 import sys
 import threading
 import time
@@ -74,6 +76,7 @@ def _load_links():
 LINKS = _load_links()
 CLOUD_URL = C.get("CLOUD_URL", "")              # 雲端硬碟（cloud.sh 安裝後自動填）
 CLOUD_DIR = C.get("CLOUD_DIR", "/srv/cloud")
+CLOUD_PORT = int(C.get("CLOUD_PORT") or 8099)    # 雲端硬碟在本機的連接埠；網址 /cloud/ 開頭的都轉給它
 
 
 def all_links():
@@ -522,7 +525,9 @@ def check_links():
     for u in list(LINK_STATE):
         if u not in urls:
             del LINK_STATE[u]
-    for u, (up, ms, err) in zip(urls, POOL.map(check_link, urls)):
+    # 雲端硬碟直接在本機檢查（從主機連自己的公開 IP，有些雲端主機會連不到，造成誤報）
+    targets = [f"http://127.0.0.1:{CLOUD_PORT}/cloud/health" if x.get("fixed") else x["url"] for x in all_links()]
+    for u, (up, ms, err) in zip(urls, POOL.map(check_link, targets)):
         st = LINK_STATE.setdefault(u, {"fails": 0})
         st["fails"] = 0 if up else st["fails"] + 1
         st.update(up=True if up else (None if st["fails"] < 2 else False), ms=ms, err=err)   # 連續 2 次失敗才算掛掉，避免偶爾慢一下就誤報
@@ -1443,7 +1448,83 @@ class Handler(BaseHTTPRequestHandler):
         given = self.headers.get("X-Token", "")
         return bool(given) and hmac.compare_digest(given.encode(), TOKEN.encode())
 
+    # ── /cloud/ 開頭：整個轉給本機的雲端硬碟（沒有網域時，雲端硬碟就跟哨兵用同一個連接埠） ──
+    HOP = {"connection", "keep-alive", "proxy-authenticate", "proxy-authorization", "te", "trailers", "transfer-encoding", "upgrade"}
+
+    def is_cloud(self):
+        p = urllib.parse.urlsplit(self.path).path
+        return bool(CLOUD_URL) and (p == "/cloud" or p.startswith("/cloud/"))
+
+    def proxy_cloud(self):
+        self.close_connection = True
+        try:
+            conn = http.client.HTTPConnection("127.0.0.1", CLOUD_PORT, timeout=3600)
+            conn.putrequest(self.command, self.path, skip_host=True, skip_accept_encoding=True)
+            for k, v in self.headers.items():
+                if k.lower() not in self.HOP and k.lower() != "content-length":
+                    conn.putheader(k, v)
+            conn.putheader("X-Forwarded-For", self.client_address[0])
+            conn.putheader("X-Forwarded-Proto", "http")
+            length = self.headers.get("Content-Length")
+            spool = None
+            if length is None and "chunked" in (self.headers.get("Transfer-Encoding") or "").lower():
+                spool = tempfile.SpooledTemporaryFile(max_size=8 << 20)   # 分段上傳：先收齊（大的放暫存檔）再轉
+                while True:
+                    n = int(self.rfile.readline().split(b";")[0].strip() or b"0", 16)
+                    if n == 0:
+                        while self.rfile.readline().strip():
+                            pass
+                        break
+                    spool.write(self.rfile.read(n))
+                    self.rfile.readline()
+                length = str(spool.tell())
+                spool.seek(0)
+            if length is not None:
+                conn.putheader("Content-Length", length)
+            conn.endheaders()
+            src = spool or self.rfile
+            if length is not None:                     # 上傳的檔案邊收邊轉，不會整個放進記憶體
+                left = int(length)
+                while left > 0:
+                    buf = src.read(min(left, 1 << 20))
+                    if not buf:
+                        break
+                    conn.send(buf)
+                    left -= len(buf)
+            r = conn.getresponse()
+        except Exception:  # noqa: BLE001
+            return self.send(502, "<meta charset=utf-8><p style='font:16px sans-serif;padding:24px'>雲端硬碟目前打不開，請稍後再試，或在主機上執行 <b>bash cloud.sh 檢查</b></p>",
+                             "text/html; charset=utf-8")
+        self.send_response(r.status, r.reason)
+        for k, v in r.getheaders():
+            if k.lower() not in self.HOP:
+                self.send_header(k, v)
+        self.end_headers()
+        try:
+            while True:
+                buf = r.read1(65536) if hasattr(r, "read1") else r.read(65536)
+                if not buf:
+                    break
+                self.wfile.write(buf)
+                self.wfile.flush()
+        except (BrokenPipeError, ConnectionResetError, OSError):
+            pass
+        finally:
+            conn.close()
+
+    def do_PUT(self):
+        return self.proxy_cloud() if self.is_cloud() else self.send(404, '{"error":"找不到"}')
+    do_PATCH = do_DELETE = do_OPTIONS = do_PROPFIND = do_PROPPATCH = do_MKCOL = do_COPY = do_MOVE = do_LOCK = do_UNLOCK = do_PUT
+
+    def do_HEAD(self):
+        if self.is_cloud():
+            return self.proxy_cloud()
+        self.send_response(200)
+        self.end_headers()
+
     def do_GET(self):
+        if self.is_cloud():
+            return self.proxy_cloud()
         path = urllib.parse.urlsplit(self.path).path
         if path == "/":
             return self.send(200, PAGE, "text/html; charset=utf-8")
@@ -1484,6 +1565,8 @@ class Handler(BaseHTTPRequestHandler):
         self.send(404, '{"error":"找不到"}')
 
     def do_POST(self):
+        if self.is_cloud():
+            return self.proxy_cloud()
         u = urllib.parse.urlsplit(self.path)
         if u.path not in ("/api/update", "/api/rename", "/api/traffic", "/api/telegram", "/api/links", "/api/self"):
             return self.send(404, '{"error":"找不到"}')
