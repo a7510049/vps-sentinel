@@ -958,6 +958,14 @@ function smooth(fn, theme, relayout){
   window._vt = (window._vt || 0) + 1;
   document.startViewTransition(fn).finished.finally(() => { window._vt--; });
 }
+/* 切換效能模式（自動／流暢優先／完整效果）：毛玻璃的模糊程度、卡片和面板的底色用 0.6 秒慢慢變過去；背景流光停在原地，不會跳回起點 */
+function perfShift(fn){
+  const h = document.documentElement;
+  if (!canAnim()) return fn();
+  clearTimeout(h._perfx); h.classList.add("perfx");
+  fn();
+  h._perfx = setTimeout(() => h.classList.remove("perfx"), T.slow + 100);
+}
 function toast(msg, type="ok"){
   const t = document.createElement("div"); t.className = `toast glass pop ${type}`;
   t.innerHTML = `${I(type==="ok"?"ok":"warn")}<span>${esc(msg)}</span>`;
@@ -1320,8 +1328,9 @@ function openSettings(){
     const big = ["theme","accent","bg","size","density","perf"].includes(k) || k.startsWith("show.");
     const run = () => { applyPrefs(); if (LIST.length) render(LIST); };
     // 文字大小、卡片密度會讓整頁重新排版；電腦版開關面板會讓格子重排 → 用淡入淡出蓋過去
-    const relayout = ["size","density","perf"].includes(k) || (DESK.matches && k.startsWith("show."));
-    big && k !== "accent" ? smooth(run, ["theme","bg"].includes(k), relayout) : run();
+    const relayout = ["size","density"].includes(k) || (DESK.matches && k.startsWith("show."));
+    if (k === "perf") perfShift(run);              // 效能模式：毛玻璃、底色慢慢變過去，不蓋一層淡出
+    else big && k !== "accent" ? smooth(run, ["theme","bg"].includes(k), relayout) : run();
     if (k === "refresh") restart();
   }
 }

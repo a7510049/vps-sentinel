@@ -738,7 +738,7 @@ html::-webkit-scrollbar{width:8px}
 html::-webkit-scrollbar-track{background:transparent}
 html::-webkit-scrollbar-thumb{background:color-mix(in srgb,var(--text) 22%,transparent);border-radius:var(--r-sm);border:2px solid transparent;background-clip:padding-box}
 /* ═════════ 流暢優先（手機預設） ═════════ */
-[data-lite="on"] .aurora i{animation:none;will-change:auto}   /* 不動的背景就不用一直佔著顯示記憶體 */
+[data-lite="on"] .aurora i{animation-play-state:paused;will-change:auto}   /* 停在原地（切換效能模式時才不會跳回起點）；不動的背景就不用一直佔著顯示記憶體 */
 [data-lite="on"] .grain{display:none}
 [data-lite="on"] .fill::after{display:none}
 [data-lite="on"] .veil{-webkit-backdrop-filter:none;backdrop-filter:none}
@@ -756,6 +756,10 @@ html::-webkit-scrollbar-thumb{background:color-mix(in srgb,var(--text) 22%,trans
 [data-lite="on"] .more .item,[data-lite="on"] .more .grp{opacity:1;transform:none;transition:background var(--t-fast)}
 [data-lite="on"] .more.open .list{animation:drop var(--t-mid) var(--ease) both}
 @keyframes drop{from{opacity:0;transform:translateY(-6px)}}
+/* 切換效能模式時的過渡（perfShift）：模糊和底色一起慢慢變 */
+.perfx .glass,.perfx .veil,.perfx .bar,.perfx .sheet,.perfx .dialog,.perfx .toast,.perfx .pop{
+  transition:background var(--t-slow) var(--ease),-webkit-backdrop-filter var(--t-slow) var(--ease),backdrop-filter var(--t-slow) var(--ease)!important}
+.perfx .grain{animation:fadeIn var(--t-slow) var(--ease)}
 .xfade{position:fixed;inset:0;z-index:45;pointer-events:none;animation:fadeOut var(--t-mid) var(--ease) forwards}
 /* ═════════ 無障礙／關閉動畫 ═════════ */
 [data-motion="off"] *,[data-motion="off"] *::before,[data-motion="off"] *::after{animation:none!important;transition:none!important}
