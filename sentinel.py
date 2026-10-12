@@ -668,6 +668,7 @@ class Collector:
         self.started = time.time()
         self.geo = None
         self.hist = deque(maxlen=180)          # 最近 30 分鐘，每 10 秒一筆
+        self.conn_hist = deque(maxlen=360)     # 最近 1 小時的連線數，用來判斷「跟平常比」
         self.events = deque(maxlen=40)         # 事件紀錄
         self.prev_keys = None
         self.upd_running = False
@@ -854,6 +855,9 @@ class Collector:
                     self.hist.append((round(now_t), self.cpu_pct, m["pct"],
                                       round(self.net["rx"]), round(self.net["tx"])))
                     self.roll(now_t)
+                c = tcp_conns()
+                with self.lock:
+                    self.conn_hist.append(c)
                 try:
                     self.count_traffic()
                 except Exception as e:  # noqa: BLE001
@@ -976,7 +980,7 @@ class Collector:
             "os": os_name(), "kernel": os.uname().release,
             "uptime": float(read("/proc/uptime", "0").split()[0] or 0),
             "cores": os.cpu_count() or 1, "cpu": cpu, "load": [round(x, 2) for x in load],
-            "conns": tcp_conns(), "procs": int((read("/proc/loadavg", "0 0 0 0/0").split()[3:4] or ["0/0"])[0].split("/")[-1] or 0),
+            "conns": tcp_conns(), "conns_avg": round(sum(self.conn_hist) / len(self.conn_hist), 1) if len(self.conn_hist) >= 30 else None, "procs": int((read("/proc/loadavg", "0 0 0 0/0").split()[3:4] or ["0/0"])[0].split("/")[-1] or 0),
             "mem": mem, "disks": disks, "net": net,
             "containers": containers, "services": services,
             "updates": updates, "reboot": reboot, "geo": geo, "update": upd, "events": events, "traffic": traffic,
@@ -1814,6 +1818,22 @@ button{font:inherit;color:inherit}
 .sysp{display:flex;flex-direction:column;min-height:0;border-radius:var(--r-xl);padding:18px 18px 16px}
 .sysp .ph{margin-bottom:10px}
 .sysp .kv{gap:7px 12px;font-size:var(--fs-s);flex:1 1 0;min-height:0;overflow-y:auto;align-content:start;margin:-4px -2px 0;padding:4px 2px 8px}
+.facts2{display:flex;flex-direction:column;gap:10px;flex:1 1 auto;justify-content:center;min-height:0}
+.fr{display:grid;grid-template-columns:34px minmax(0,1fr) auto;align-items:center;column-gap:8px;row-gap:4px}
+.fr .k{font-size:var(--fs-xs);color:var(--sub);font-weight:800}
+.fr b{font-size:var(--fs-l);font-weight:900;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}
+.fr b small{font-size:var(--fs-xs);color:var(--sub);font-weight:700}
+.fr b.ok{color:var(--ok)}.fr b.warn{color:var(--warn)}.fr b.bad{color:var(--bad)}
+.fr .d{font-size:var(--fs-xs);color:var(--sub);font-weight:700;white-space:nowrap;text-align:right}
+.fr .d.warn{color:var(--warn)}
+.fr .org{grid-column:2/-1;text-align:left;margin-top:-4px;overflow:hidden;text-overflow:ellipsis}
+.lbar{grid-column:2/-1;height:4px;border-radius:var(--r-pill);background:var(--track);overflow:hidden}
+.lbar i{display:block;height:100%;border-radius:inherit;background:var(--ok);transition:width var(--t-slow) var(--ease),background var(--t-mid)}
+.lbar i.warn{background:var(--warn)}.lbar i.bad{background:var(--bad)}
+.ipb{font-variant-numeric:tabular-nums;cursor:pointer;filter:blur(6px);user-select:none;transition:filter var(--t-mid) var(--ease)}
+.ipb.on{filter:none;user-select:text}
+.fr .eye{width:28px;height:28px}
+.fr .eye svg{width:15px;height:15px}
 .facts{display:grid;grid-template-columns:1fr 1fr;gap:14px 12px;flex:1 1 auto;align-content:center}
 .facts>div{min-width:0}
 .facts .k{font-size:var(--fs-xs);color:var(--sub);font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
@@ -2165,6 +2185,8 @@ const P = {
   logout:'<path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9"/>',
   edit:'<path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/>',
   ext:'<path d="M14 4h6v6"/><path d="M20 4 11 13"/><path d="M19 14v4.5a1.5 1.5 0 0 1-1.5 1.5h-12A1.5 1.5 0 0 1 4 18.5v-12A1.5 1.5 0 0 1 5.5 5H10"/>',
+  eye:'<path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12Z"/><circle cx="12" cy="12" r="3"/>',
+  eyeoff:'<path d="M9.9 4.2A9.6 9.6 0 0 1 12 4c6.4 0 10 8 10 8a17 17 0 0 1-2.2 3.2M6.6 6.6C3.9 8.4 2 12 2 12s3.6 8 10 8a9.7 9.7 0 0 0 5.4-1.6"/><path d="M9.9 9.9a3 3 0 0 0 4.2 4.2M2 2l20 20"/>',
   search:'<circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/>',
   chev:'<path d="m6 9 6 6 6-6"/>', x:'<path d="M18 6 6 18M6 6l12 12"/>',
   warn:'<path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3z"/><path d="M12 9v4M12 17h.01"/>',
@@ -2538,23 +2560,33 @@ function ring(icon, label, pct, sub, i){
     <div class="gin"><b>${num(pct)}<small>%</small></b><span>${sub}</span></div></div></div>`;
 }
 /* 主機概況：只放上面沒出現過、又真的有用的數字 */
+/* 主機概況：每個數字都附上「代表什麼」，一眼看懂 */
+const IPSHOW = {};                    // 哪幾台的 IP 目前是顯示狀態（到期自動再遮起來）
 function sysPanel(s){
-  const l = s.load[0], lr = l / (s.cores || 1), lt = lr >= 2 ? "bad" : lr >= 1 ? "warn" : "";
-  const v = x => x == null ? "—" : Number(x).toLocaleString("zh-TW");
+  const l = s.load[0], lr = l / (s.cores || 1);
+  const [lw, lt] = lr < .7 ? ["輕鬆", "ok"] : lr < 1 ? ["有點忙", "warn"] : lr < 2 ? ["忙碌", "warn"] : ["超載", "bad"];
+  const c = s.conns, avg = s.conns_avg;
+  const cw = c == null ? "" : avg == null ? "統計中" : (c > avg * 2 && c - avg > 20) ? "比平常多很多" : (avg > 10 && c < avg * .3) ? "比平常少很多" : "跟平常差不多";
+  const ip = s.geo && s.geo.ip, org = s.geo && s.geo.org, k = keyOf(s), shown = IPSHOW[k] > Date.now();
   const extra = s.disks.slice(1).map(d => `磁碟 ${esc(d.path)} ${num(d.pct)}%`)
     .concat(s.mem.swap_total ? [`虛擬記憶體 ${num(s.mem.swap_pct)}%`] : []);
   return `<div class="panel glass sysp" data-key="fp" style="--i:4"><div class="ph">${IC("info")}<h3>主機概況</h3></div>
-    <div class="facts">
-      <div class="wide" title="最近 1／5／15 分鐘：${s.load.map(x=>x.toFixed(2)).join("／")}"><div class="k">系統負載</div><b class="num ${lt}">${l.toFixed(2)}</b><small>／${s.cores} 核</small></div>
-      <div><div class="k">目前連線</div><b class="num">${v(s.conns)}</b></div>
-      <div><div class="k">執行中程式</div><b class="num">${v(s.procs)}</b></div>
+    <div class="facts2">
+      <div class="fr" title="最近 1／5／15 分鐘的平均負載：${s.load.map(x=>x.toFixed(2)).join("／")}（${s.cores} 核心，超過 ${s.cores} 就算忙）">
+        <span class="k">負載</span><b class="${lt}">${lw}</b><span class="d">${l.toFixed(2)}／${s.cores} 核</span>
+        <div class="lbar"><i class="${lt}" style="width:${Math.min(100, lr / 2 * 100).toFixed(0)}%"></i></div></div>
+      <div class="fr" title="這台主機現在有多少條網路連線；「平常」是最近 1 小時的平均${avg != null ? `（約 ${Math.round(avg)} 條）` : ""}">
+        <span class="k">連線</span><b>${c == null ? "—" : Number(c).toLocaleString("zh-TW")} <small>條</small></b><span class="d ${cw.includes("多很多") ? "warn" : ""}">${cw}</span></div>
+      ${ip ? `<div class="fr"><span class="k">IP</span><b class="ipb ${shown ? "on" : ""}" ${shown ? `data-copy="${esc(ip)}" title="點一下複製"` : `data-reveal="${esc(k)}" title="點一下顯示"`}>${esc(ip)}</b>
+        <button class="iconbtn eye" data-reveal="${esc(k)}" title="${shown ? "遮起來" : "顯示 IP"}">${I(shown ? "eyeoff" : "eye")}</button>
+        ${org ? `<span class="d org">${esc(org)}</span>` : ""}</div>` : ""}
     </div>${extra.length ? `<div class="fx">${extra.join("・")}</div>` : ""}</div>`;
 }
 function detail(s){
   const key = keyOf(s), where = place(s);
   let h = `<div class="detail" data-key="detail" data-keyed><div class="panel glass dhead" data-key="dh" style="--i:0">
       <div style="min-width:0" data-key="dl" data-keyed><h2 class="nmh" data-key="nm" style="display:flex;align-items:center;gap:8px;flex-wrap:wrap"><span>${esc(s.name)}</span>${editBtn(s)}</h2>
-      <div class="sub dsub" data-key="ds">${s.online ? `<span title="核心版本 ${esc(s.kernel)}">${where?esc(where)+"・":""}${s.geo&&s.geo.ip?`<span class="ipc" data-copy="${esc(s.geo.ip)}" title="點一下複製 IP${s.geo.org?`（${esc(s.geo.org)}）`:""}">${esc(s.geo.ip)}</span>・`:""}${esc(s.os)}・開機 ${up(s.uptime)}</span>` : `<span>${s.last_seen ? esc(seen(s)) : "目前沒有回應"}</span>`}</div>${s.online ? alerts(s) : ""}</div>
+      <div class="sub dsub" data-key="ds">${s.online ? `<span title="核心版本 ${esc(s.kernel)}">${where?esc(where)+"・":""}${esc(s.os)}・開機 ${up(s.uptime)}</span>` : `<span>${s.last_seen ? esc(seen(s)) : "目前沒有回應"}</span>`}</div>${s.online ? alerts(s) : ""}</div>
       ${s.online ? `<div class="act"><div class="sub" data-x style="line-height:1.6;font-weight:600">${updateInfo(s)}</div>${updateBtn(s)}</div>` : ""}</div>`;
   if (!s.online) return h + `<div class="panel glass bigoff" data-key="off" style="--i:1"><b>連不上這台主機</b>${esc(s.error||"")}</div></div>`;
   const fp = PREF.show.info ? sysPanel(s) : "";
@@ -3363,6 +3395,13 @@ document.addEventListener("click", async e => {
       if (msgs.length) toast(msgs.join("，"));
     } catch(err) { toast(err.message === "Failed to fetch" ? "連線失敗，請稍後再試" : err.message, "bad"); }
     return tick();
+  }
+  const rv = t.closest("[data-reveal]");
+  if (rv) {
+    const k = rv.dataset.reveal;
+    if (IPSHOW[k] > Date.now() && rv.classList.contains("eye")) delete IPSHOW[k];
+    else { IPSHOW[k] = Date.now() + 15000; setTimeout(() => { if (IPSHOW[k] <= Date.now()) { delete IPSHOW[k]; render(LIST); } }, 15100); }   // 15 秒後自動再遮起來
+    return render(LIST);
   }
   const cp = t.closest("[data-copy]");
   if (cp) {
