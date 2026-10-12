@@ -940,11 +940,13 @@ document.addEventListener("pointermove", e => {
 }, {passive:true});
 addEventListener("scroll", () => { if (TIPX) hideTip(); }, {passive:true});
 document.addEventListener("pointerleave", hideTip);
+const sheetOpen = () => !!document.querySelector("#layer .sheetv");
 /* 整頁平順切換：支援的瀏覽器會淡入淡出，不支援就直接換 */
 function smooth(fn, theme, relayout){
   const motion = PREF.motion && !matchMedia("(prefers-reduced-motion: reduce)").matches;
   if (!motion) return fn();
-  if (isLite()) {                       // 輕量模式：蓋一層舊底色再淡出，便宜又順
+  // 輕量模式、或設定面板開著時：蓋一層舊底色再淡出（在面板底下），面板本身不會被拍成兩層而閃爍
+  if (isLite() || sheetOpen()) {
     if (theme || relayout) {
       const x = document.createElement("div"); x.className = "xfade";
       x.style.background = getComputedStyle(document.documentElement).backgroundColor;
@@ -962,7 +964,7 @@ function smooth(fn, theme, relayout){
    然後舊畫面一邊放大（或縮小）一邊淡出、新畫面從另一個大小接過來淡入，看起來像整頁平順地縮放 */
 function sizeShift(fn){
   const h = document.documentElement, z0 = parseFloat(h.style.getPropertyValue("--zoom")) || 1;
-  if (!canAnim() || !document.startViewTransition) return smooth(fn, false, true);
+  if (!canAnim() || !document.startViewTransition || sheetOpen()) return smooth(fn, false, true);
   const z1 = {s:.92, m:1, l:1.1}[PREF.size] || 1;
   h.style.setProperty("--zr", (z1 / z0).toFixed(4)); h.classList.add("vtsize");
   window._vt = (window._vt || 0) + 1;
