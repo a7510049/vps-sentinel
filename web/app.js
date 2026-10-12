@@ -148,6 +148,17 @@ function applyPrefs(){
 }
 DARKQ.addEventListener("change", applyPrefs);
 applyPrefs();
+/* 手機用「完整效果」時：滑動、點畫面的期間背景流光先暫停，停手 0.6 秒後再繼續流動。
+   流光一動，每張毛玻璃卡片都要重新模糊一次；滑動時卡片本身也在動，兩件事疊在一起 iPhone 就會卡 */
+let calmT = 0;
+function hush(){
+  if (!TOUCH.matches) return;
+  const h = document.documentElement;
+  if (!h.hasAttribute("data-hush")) h.setAttribute("data-hush", "");
+  clearTimeout(calmT); calmT = setTimeout(() => h.removeAttribute("data-hush"), 600);
+}
+addEventListener("scroll", hush, {passive:true, capture:true});
+addEventListener("touchstart", hush, {passive:true});
 
 /* ═════════ 小工具 ═════════ */
 const DESK = matchMedia("(min-width: 1024px)");
