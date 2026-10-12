@@ -60,6 +60,10 @@ SERVICES = [s.strip() for s in C.get("SERVICES", "").split(",") if s.strip()]
 DISKS = [d.strip() for d in C.get("DISKS", "/").split(",") if d.strip()]
 TG_BOT = C.get("TG_BOT_TOKEN", "")
 TG_CHAT = C.get("TG_CHAT_ID", "")
+try:
+    TG_KEEP = max(0.0, min(47.0, float(C.get("TG_KEEP_HOURS", "0") or 0)))   # 通知保留幾小時後自動刪除（0＝不刪；Telegram 只允許刪 48 小時內的）
+except ValueError:
+    TG_KEEP = 0.0
 ALERT_CPU = float(C.get("ALERT_CPU", "90"))
 ALERT_MEM = float(C.get("ALERT_MEM", "90"))
 ALERT_DISK = float(C.get("ALERT_DISK", "90"))
@@ -105,6 +109,8 @@ def parse_peers(raw):
 
 PEERS = parse_peers(C.get("PEERS", ""))
 PEER_SEEN = {}                                  # 其他主機最後一次連上的時間（會存檔）
+TG_SENT = {}                                    # 每台主機已經通知到哪一筆事件（事件時間，會存檔）
+TG_MSGS = []                                    # 傳出去的通知 [時間, 聊天, 訊息編號]，到期自動刪除（會存檔）
 
 if not TOKEN:
     sys.exit("錯誤：設定檔裡沒有 TOKEN（存取密碼），請先設定。")
@@ -488,6 +494,8 @@ class Collector:
                 self.traffic = {"since": tr.get("since", now), "days": tr["days"], "last": tr.get("last")}
             names = {p["name"] for p in PEERS}           # 已經從設定拿掉的主機就不留了
             PEER_SEEN.update({k: float(v) for k, v in (st.get("peer_seen") or {}).items() if k in names})
+            TG_SENT.update({k: float(v) for k, v in (st.get("tg_sent") or {}).items() if k == "" or k in names})
+            TG_MSGS.extend(list(m) for m in (st.get("tg_msgs") or []) if len(m) == 3)
             if st.get("prev_keys") is not None:
                 self.prev_keys = {k: tuple(v) for k, v in st["prev_keys"].items()}
             log(f"已讀取存檔：歷史 {len(self.hist)}/{len(self.h24)}/{len(self.h7d)} 筆、事件 {len(self.events)} 筆、流量 {len(self.traffic['days'])} 天")
@@ -498,7 +506,8 @@ class Collector:
         with self.lock:
             st = {"v": 1, "saved": time.time(), "hist": list(self.hist), "h24": list(self.h24), "h7d": list(self.h7d),
                   "events": list(self.events), "traffic": self.traffic,
-                  "prev_keys": self.prev_keys, "peer_seen": dict(PEER_SEEN)}
+                  "prev_keys": self.prev_keys, "peer_seen": dict(PEER_SEEN),
+                  "tg_sent": dict(TG_SENT), "tg_msgs": list(TG_MSGS)}
         try:
             os.makedirs(DATA_DIR, exist_ok=True)
             tmp = self.state_path() + ".tmp"
@@ -864,13 +873,13 @@ def tg_chat_name(c):
 
 def telegram(cfg):
     """網頁設定 Telegram 通知：status 查狀態、find 自動尋找聊天、test 測試、save 儲存（都留空就是關閉）"""
-    global TG_BOT, TG_CHAT
+    global TG_BOT, TG_CHAT, TG_KEEP
     act = cfg.get("action")
     token = str(cfg.get("token") or "").strip() or TG_BOT
     chat = norm_chat(cfg.get("chat"))
     token = token.replace(" ", "")
     if act == "status":
-        info = {"ok": True, "on": bool(TG_BOT and TG_CHAT), "chat": TG_CHAT, "has_token": bool(TG_BOT)}
+        info = {"ok": True, "on": bool(TG_BOT and TG_CHAT), "chat": TG_CHAT, "has_token": bool(TG_BOT), "keep": TG_KEEP}
         if TG_BOT:
             me, _ = tg_api(TG_BOT, "getMe")
             info["bot"] = "@" + me["result"]["username"] if me else ""
@@ -913,17 +922,20 @@ def telegram(cfg):
     if not re.fullmatch(r"-?\d{3,}|@\w{4,}", chat):
         return False, "聊天編號格式不對，應該是一串數字（群組是 - 開頭）。不確定的話，這格留空，直接按「自動尋找」"
     text = f"✅ VPS 哨兵：「{NAME}」的通知會傳到這裡" if act == "save" else f"🔔 這是 VPS 哨兵的測試通知（來自「{NAME}」）"
-    _, err = tg_api(token, "sendMessage", {"chat_id": chat, "text": text})
+    sent, err = tg_api(token, "sendMessage", {"chat_id": chat, "text": text})
     if err:
         return False, err
     if act == "test":
         where = "到「" + picked["name"] + "」" if picked else ""
         return True, {"ok": True, "chat": chat, "message": f"測試通知已送出{where}，去 Telegram 看看有沒有收到"}
     try:
-        write_conf({"TG_BOT_TOKEN": token, "TG_CHAT_ID": chat})
-    except OSError as e:
+        keep = max(0.0, min(47.0, float(cfg.get("keep") or 0)))
+        write_conf({"TG_BOT_TOKEN": token, "TG_CHAT_ID": chat, "TG_KEEP_HOURS": f"{keep:g}"})
+    except (OSError, ValueError) as e:
         return False, f"無法寫入設定檔：{e}"
-    TG_BOT, TG_CHAT = token, chat
+    TG_BOT, TG_CHAT, TG_KEEP = token, chat, keep
+    if keep:                                       # 這則確認訊息也照保留時間刪掉
+        TG_MSGS.append([time.time(), chat, sent["result"]["message_id"]])
     log(f"Telegram 通知已設定：{bot} → {chat}")
     return True, {"ok": True, "chat": chat, "message": f"已開啟，通知會由 {bot} 傳送"}
 
@@ -931,37 +943,68 @@ def telegram(cfg):
 def tg_send(text):
     if not (TG_BOT and TG_CHAT):
         return
-    try:
-        body = urllib.parse.urlencode({"chat_id": TG_CHAT, "text": text}).encode()
-        urllib.request.urlopen(f"https://api.telegram.org/bot{TG_BOT}/sendMessage",
-                               data=body, timeout=10).read()
-    except Exception as e:  # noqa: BLE001
-        log("Telegram 傳送失敗：", e)
+    d, err = tg_api(TG_BOT, "sendMessage", {"chat_id": TG_CHAT, "text": text})
+    if err:
+        log("Telegram 傳送失敗：", err)
+    elif TG_KEEP:
+        TG_MSGS.append([time.time(), TG_CHAT, d["result"]["message_id"]])
+
+
+def tg_cleanup():
+    """把超過保留時間的通知刪掉（Telegram 規定只能刪 48 小時內的，太舊的就放棄）"""
+    if not TG_MSGS or not TG_BOT:
+        return
+    now = time.time()
+    for m in list(TG_MSGS):
+        if TG_KEEP and now - m[0] < TG_KEEP * 3600:
+            continue
+        if not TG_KEEP:                            # 改成「不刪除」：之前排隊要刪的也不刪了
+            TG_MSGS.remove(m)
+            continue
+        if now - m[0] < 48 * 3600:
+            tg_api(TG_BOT, "deleteMessage", {"chat_id": m[1], "message_id": m[2]})
+        TG_MSGS.remove(m)
+
+
+EV_ICON = {"bad": "🔴", "warn": "🟠", "ok": "✅", "info": "ℹ️"}
 
 
 def alert_loop():
-    time.sleep(40)                     # 等第一輪資料收集完
-    known = {}                         # 伺服器名稱 → 目前的問題集合
-    offline_count = {}
-    tg_send(f"🛡️ VPS 哨兵已啟動：{NAME}")
+    """每 30 秒看一次所有主機的「事件紀錄」，有新事件就傳到 Telegram（跟網頁上的事件紀錄一致）"""
+    time.sleep(20)                     # 等第一輪資料收集完
+    offline_count, down = {}, set()
     while True:
-        for s in all_status():
-            name = s["name"]
-            if not s.get("online"):
-                offline_count[name] = offline_count.get(name, 0) + 1
-                if offline_count[name] < 3:   # 連續 3 次（約 3 分鐘）才算斷線
-                    continue
+        try:
+            if TG_BOT and TG_CHAT:
+                for s in all_status():
+                    key, name = s.get("node") or "", s.get("name") or "主機"
+                    if not s.get("online"):
+                        offline_count[key] = offline_count.get(key, 0) + 1
+                        if offline_count[key] == 6 and key not in down:     # 連續約 3 分鐘連不上才通知
+                            down.add(key)
+                            tg_send(f"🔌 {name}\n連不上這台主機了\n{s.get('error') or ''}".strip())
+                        continue
+                    offline_count[key] = 0
+                    if key in down:
+                        down.discard(key)
+                        tg_send(f"✅ {name}\n恢復連線了")
+                    evs = sorted(s.get("events") or [], key=lambda e: e.get("t", 0))
+                    if not evs:
+                        continue
+                    last = TG_SENT.get(key)
+                    if last is None:                   # 第一次看到這台：從現在開始通知，不補發以前的
+                        TG_SENT[key] = evs[-1]["t"]
+                        continue
+                    new = [e for e in evs if e["t"] > last and e.get("text") != "哨兵開始監看這台主機"]
+                    if new:
+                        tg_send(f"🖥️ {name}\n" + "\n".join(f"{EV_ICON.get(e.get('kind'), '•')} {e.get('text')}" for e in new[-10:]))
+                    TG_SENT[key] = evs[-1]["t"]
             else:
-                offline_count[name] = 0
-            now = set(s.get("problems", []))
-            before = known.get(name, set())
-            new, gone = now - before, before - now
-            if new:
-                tg_send(f"⚠️ {name}\n" + "\n".join(f"• {x}" for x in sorted(new)))
-            if gone and before:
-                tg_send(f"✅ {name} 已恢復\n" + "\n".join(f"• {x}" for x in sorted(gone)))
-            known[name] = now
-        time.sleep(60)
+                TG_SENT.clear()                         # 關閉期間不累積，重新開啟時從那一刻開始通知
+            tg_cleanup()
+        except Exception as e:  # noqa: BLE001
+            log("通知檢查失敗：", e)
+        time.sleep(30)
 
 
 # ───────────────────────── 網頁伺服器 ─────────────────────────
@@ -1575,6 +1618,8 @@ button{font:inherit;color:inherit}
 .tgd .find svg{width:14px;height:14px}
 .tgd .chats{display:flex;flex-wrap:wrap;gap:6px}
 .tgd .chats:empty{display:none}
+.tgd .seg.keep{display:flex;width:100%;background:var(--track);border-radius:12px;padding:3px;gap:2px}
+.tgd .seg.keep button{flex:1;border:0;background:none;cursor:pointer;border-radius:9px;padding:7px 2px;font-size:12px;font-weight:800;color:var(--sub);transition:background .25s,color .25s,box-shadow .25s}
 .tgd .chats button{border:0;cursor:pointer;border-radius:99px;padding:7px 12px;font-size:12.5px;font-weight:800;color:var(--text);
   background:var(--glass2);box-shadow:inset 0 0 0 1px var(--line);transition:background .2s,box-shadow .2s,color .2s}
 .tgd .chats button.on{color:#fff;background:var(--grad);box-shadow:none}
@@ -2720,7 +2765,7 @@ async function tgCall(body){
 async function tgStatus(root){
   const el = root.querySelector(".tgst"); if (!el) return;
   try { const d = await tgCall({action:"status"});
-    el.textContent = d.on ? `已開啟・由 ${d.bot || "機器人"} 傳送` : d.has_token ? "還沒設定要傳到哪裡" : "還沒設定，點這裡開始";
+    el.textContent = d.on ? `已開啟・由 ${d.bot || "機器人"} 傳送・${d.keep ? `保留 ${d.keep >= 24 ? Math.round(d.keep/24) + " 天" : d.keep + " 小時"}` : "不自動刪除"}` : d.has_token ? "還沒設定要傳到哪裡" : "還沒設定，點這裡開始";
     el.classList.toggle("on", !!d.on);
   } catch(e) { el.textContent = e.message; }
 }
@@ -2737,6 +2782,9 @@ async function tgModal(){
         <button type="button" class="ubtn ghost find" data-find>${I("search")}自動尋找</button>
         <div class="chats"></div>
         <input class="field" data-k="chat" inputmode="text" autocomplete="off" placeholder="可以留空，會自動找" value="${esc(st.chat || "")}"></div>
+      <div class="lbl">③ 通知保留多久
+        <small>時間到了會自動從 Telegram 刪掉，聊天室不會越堆越多（Telegram 最多只能刪 2 天內的訊息）</small>
+        <div class="seg keep">${[[0,"不刪除"],[1,"1 小時"],[6,"6 小時"],[24,"1 天"],[47,"2 天"]].map(([h,l])=>`<button type="button" data-keep="${h}" class="${(+st.keep||0)===h?"on":""}">${l}</button>`).join("")}</div></div>
       <div class="msg" aria-live="polite"></div>
     </div>
     <div class="btns three"><button class="ubtn ghost" data-r="0">取消</button><button class="ubtn ghost" data-test>測試</button><button class="ubtn" data-save>儲存</button></div>
@@ -2744,7 +2792,7 @@ async function tgModal(){
   $("#layer").appendChild(v);
   const q = k => v.querySelector(`[data-k="${k}"]`), msg = v.querySelector(".msg");
   const say = (t, cls) => { msg.textContent = t || ""; msg.className = "msg " + (cls || ""); };
-  const vals = () => ({token: q("token").value.trim(), chat: q("chat").value.trim()});
+  const vals = () => ({token: q("token").value.trim(), chat: q("chat").value.trim(), keep: +((v.querySelector("[data-keep].on") || {}).dataset || {keep:0}).keep});
   let busy = false;
   const run = async (btn, label, fn) => {
     if (busy) return; busy = true; const old = btn.innerHTML;
@@ -2766,6 +2814,8 @@ async function tgModal(){
         if (d.chats.length === 1) { q("chat").value = d.chats[0].id; box.firstChild.classList.add("on"); }
         say(d.chats.length > 1 ? `找到 ${d.chats.length} 個聊天，點一下要傳去哪裡` : `找到了！通知會傳到「${d.chats[0].name}」`, "ok");
       });
+      const kp = t.closest("[data-keep]");
+      if (kp) { v.querySelectorAll("[data-keep]").forEach(x => x.classList.toggle("on", x === kp)); return; }
       const c = t.closest("[data-chat]");
       if (c) { q("chat").value = c.dataset.chat; v.querySelectorAll("[data-chat]").forEach(x => x.classList.toggle("on", x === c)); return say(""); }
       const tb = t.closest("[data-test]");
@@ -3024,8 +3074,7 @@ def main():
     signal.signal(signal.SIGTERM, stop)
     signal.signal(signal.SIGINT, stop)
     threading.Thread(target=COL.loop, daemon=True).start()
-    if TG_BOT and TG_CHAT:
-        threading.Thread(target=alert_loop, daemon=True).start()
+    threading.Thread(target=alert_loop, daemon=True).start()      # 沒設定時也會跑，網頁上一設定好就開始通知
     srv = ThreadingHTTPServer((BIND, PORT), Handler)
     log(f"VPS 哨兵 {VERSION} 已啟動：http://{BIND}:{PORT}  名稱={NAME}  其他主機={len(PEERS)} 台  "
         f"Telegram={'開' if TG_BOT and TG_CHAT else '關'}")
