@@ -1489,7 +1489,7 @@ button{font:inherit;color:inherit}
 .metric{display:grid;grid-template-columns:auto 1fr;gap:4px 11px;align-items:center}
 .metric .ico{grid-row:span 2}
 .metric .row{display:flex;justify-content:space-between;align-items:baseline;font-size:13.5px;font-weight:700}
-.metric .row b{font-size:16px;font-weight:900}
+.metric .row b{font-size:16px;font-weight:900;min-width:3.6ch;text-align:right;font-variant-numeric:tabular-nums}
 .metric .row b small{font-size:12px;opacity:.6;margin-left:1px}
 .metric .row .sub{font-weight:600;margin-left:6px;font-size:12px}
 .spark{margin-top:16px;padding:12px 12px 6px;border-radius:18px;background:var(--glass2);box-shadow:inset 0 0 0 1px var(--line)}
