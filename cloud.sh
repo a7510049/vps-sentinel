@@ -5,6 +5,7 @@
 #   sudo bash cloud.sh 50          安裝雲端硬碟，最多可以放 50 GB（之後再執行一次就能改大小）
 #   sudo bash cloud.sh 密碼         顯示登入密碼
 #   sudo bash cloud.sh 換密碼       換一組新的隨機密碼（後面加上密碼就用你指定的：sudo bash cloud.sh 換密碼 我的新密碼）
+#   sudo bash cloud.sh 檢查         連不上時用這個找原因
 #   sudo bash cloud.sh 更新         更新到官方最新版（檔案和帳號都保留，哨兵網頁上也能按）
 #   sudo bash cloud.sh 移除         移除雲端硬碟程式（檔案會保留）
 #
@@ -48,6 +49,44 @@ run_container() {
     "$IMAGE" >/dev/null
 }
 
+# 等雲端硬碟真的能連上（最多 60 秒）；連不上就把原因印出來
+wait_ready() {
+  local port="$LOCAL_PORT"; [ -z "$(get_conf DOMAIN)" ] && port="$DIRECT_PORT"
+  for _ in $(seq 1 30); do
+    curl -fsS -o /dev/null --max-time 2 "http://127.0.0.1:$port/cloud/health" && return 0
+    sleep 2
+  done
+  echo "❌ 雲端硬碟程式啟動失敗，下面是它最後的訊息（請截圖給我）："
+  docker ps -a --filter "name=^$NAME\$" --format '   狀態：{{.Status}}'
+  docker logs --tail 25 "$NAME" 2>&1 | sed 's/^/   /'
+  return 1
+}
+
+diagnose() {
+  local port="$LOCAL_PORT" dom; dom="$(get_conf DOMAIN)"; [ -z "$dom" ] && port="$DIRECT_PORT"
+  echo "── 雲端硬碟檢查 ──"
+  if mountpoint -q "$MNT"; then echo "✅ 存放空間：已掛好（$(df -h --output=used,size "$MNT" | tail -1 | awk '{print $1" / "$2}')）"
+  else echo "❌ 存放空間沒有掛上：systemctl status srv-cloud.mount"; fi
+  local st; st="$(docker ps -a --filter "name=^$NAME\$" --format '{{.Status}}')"
+  if [ -z "$st" ]; then echo "❌ 雲端硬碟程式不存在，請重新執行：bash cloud.sh 容量"
+  else echo "ℹ️ 雲端硬碟程式：$st"; fi
+  if curl -fsS -o /dev/null --max-time 3 "http://127.0.0.1:$port/cloud/health"; then echo "✅ 主機內部連得到雲端硬碟（連接埠 $port）"
+  else echo "❌ 主機內部連不到雲端硬碟（連接埠 $port），最後的訊息："; docker logs --tail 20 "$NAME" 2>&1 | sed 's/^/   /'; fi
+  if [ -n "$dom" ]; then
+    local hp; hp="$(get_conf HTTPS_PORT)"; hp="${hp:-443}"
+    if grep -qs 'vps-sentinel.d' /etc/caddy/sites/vps-sentinel.caddy && [ -f /etc/caddy/sites/vps-sentinel.d/cloud.caddy ]; then echo "✅ 加密連線設定：有接上"
+    else echo "❌ 加密連線設定沒接上，請重新執行：bash cloud.sh 容量"; fi
+    systemctl is-active --quiet caddy && echo "✅ Caddy 有在跑" || echo "❌ Caddy 沒在跑：systemctl status caddy"
+    local code; code="$(curl -sk -o /dev/null -w '%{http_code}' --max-time 5 --resolve "$dom:$hp:127.0.0.1" "https://$dom:$hp/cloud/health" || true)"
+    [ "$code" = 200 ] && echo "✅ 透過網域連得到" || echo "❌ 透過網域連不到（代碼 ${code:-無回應}）"
+    echo "👉 請用這個網址：$(get_conf CLOUD_URL)"
+    echo "   （有網域時不用開 $DIRECT_PORT 或 $LOCAL_PORT，用的是哨兵同一個連接埠 $hp）"
+  else
+    echo "👉 請用這個網址：$(get_conf CLOUD_URL)"
+    echo "   雲端主機網站上的防火牆要打開 $DIRECT_PORT（TCP）"
+  fi
+}
+
 show_login() {
   echo "   帳號：admin"
   echo "   密碼：$(cat "$APP/admin-password")"
@@ -66,11 +105,14 @@ case "${1:-}" in
     chmod 600 "$APP/admin-password"
     run_container
     echo "✅ 已換成新密碼："; show_login; exit 0 ;;
+  檢查|check)
+    diagnose; exit 0 ;;
   更新|update)
     [ -f "$APP/admin-password" ] || { echo "還沒安裝雲端硬碟"; exit 1; }
     echo "▶ 下載官方最新的穩定版…"
     docker pull -q "$IMAGE" >/dev/null || { echo "❌ 下載失敗"; exit 1; }
     run_container
+    wait_ready || exit 1
     docker image prune -f >/dev/null 2>&1 || true      # 清掉舊版的映像檔，省空間
     echo "✅ 雲端硬碟已更新到最新版（檔案和帳號都保留）"; exit 0 ;;
   移除|remove)
@@ -183,8 +225,9 @@ frontend:
 EOF
 chown 1000:1000 "$APP/data/config.yaml"
 echo "▶ 下載並啟動雲端硬碟程式（第一次會比較久）…"
-docker pull -q "$IMAGE" >/dev/null
+docker pull -q "$IMAGE" >/dev/null || { echo "❌ 下載雲端硬碟程式失敗，請確認主機能連到 ghcr.io"; exit 1; }
 run_container
+wait_ready || exit 1
 
 # ── 4. 網址 ──
 DOMAIN="$(get_conf DOMAIN)"

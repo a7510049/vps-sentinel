@@ -89,6 +89,7 @@ cd ~/vps-sentinel && bash cloud.sh 50
 |---|---|
 | 改容量（可以加大或縮小） | `bash cloud.sh 100` |
 | 更新到官方最新版（網頁上齒輪 →「軟體更新」也能按） | `bash cloud.sh 更新` |
+| 打不開、連不上（自動找原因） | `bash cloud.sh 檢查` |
 | 忘記密碼 | `bash cloud.sh 密碼` |
 | 換密碼 | `bash cloud.sh 換密碼 你的新密碼` |
 | 移除（檔案會保留） | `bash cloud.sh 移除` |
