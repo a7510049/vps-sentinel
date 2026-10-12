@@ -3,8 +3,6 @@
 #
 # 用法：
 #   sudo bash cloud.sh 50          安裝雲端硬碟，最多可以放 50 GB（之後再執行一次就能改大小）
-#   sudo bash cloud.sh 密碼         顯示登入密碼
-#   sudo bash cloud.sh 換密碼       換一組新的隨機密碼（後面加上密碼就用你指定的：sudo bash cloud.sh 換密碼 我的新密碼）
 #   sudo bash cloud.sh 檢查         連不上時用這個找原因
 #   sudo bash cloud.sh 更新         更新到官方最新版（檔案和帳號都保留，哨兵網頁上也能按）
 #   sudo bash cloud.sh 移除         移除雲端硬碟程式（檔案會保留）
@@ -15,6 +13,7 @@
 #   3. 有網域：接在哨兵的網址後面 https://你的網域/cloud/ ，不用另外開連接埠
 #      沒網域：一樣接在哨兵的網址後面 http://IP:8787/cloud/ （由哨兵轉送，也不用另外開連接埠）
 #   4. 哨兵的磁碟卡片會出現雲端硬碟的入口和用量
+#   5. 不用另外的帳號密碼：已經登入哨兵，點「☁ 雲端」就直接進去（由哨兵替你登入）
 set -euo pipefail
 
 [ "$(id -u)" = 0 ] || { echo "請用 sudo 執行：sudo bash cloud.sh 50"; exit 1; }
@@ -33,8 +32,6 @@ MOUNT_UNIT=/etc/systemd/system/srv-cloud.mount
 set_conf() { if grep -q "^$1=" "$CONF"; then sed -i "s|^$1=.*|$1=$2|" "$CONF"; else echo "$1=$2" >> "$CONF"; fi; }
 get_conf() { grep -E "^$1=" "$CONF" | head -1 | cut -d= -f2- || true; }
 
-new_password() { tr -dc 'A-Za-z0-9' < /dev/urandom | head -c 16; }
-
 run_container() {
   docker rm -f "$NAME" >/dev/null 2>&1 || true
   docker run -d --name "$NAME" --restart unless-stopped \
@@ -42,7 +39,6 @@ run_container() {
     -v "$MNT":/folder \
     -v "$APP/data":/home/filebrowser/data \
     -e FILEBROWSER_CONFIG=/home/filebrowser/data/config.yaml \
-    -e FILEBROWSER_ADMIN_PASSWORD="$(cat "$APP/admin-password")" \
     "$IMAGE" >/dev/null
 }
 
@@ -88,27 +84,19 @@ diagnose() {
 }
 
 show_login() {
-  echo "   帳號：admin"
-  echo "   密碼：$(cat "$APP/admin-password")"
+  echo "   登入：不用另外的密碼，在哨兵網頁上點磁碟卡片的「☁ 雲端」就會自動登入"
+  echo "        （直接打開上面的網址也可以，會先請你登入哨兵）"
 }
 
 case "${1:-}" in
-  密碼|password)
-    [ -f "$APP/admin-password" ] || { echo "還沒安裝雲端硬碟"; exit 1; }
-    show_login; exit 0 ;;
-  換密碼|reset)
-    [ -f "$APP/admin-password" ] || { echo "還沒安裝雲端硬碟"; exit 1; }
-    if [ -n "${2:-}" ]; then
-      [ "${#2}" -ge 8 ] || { echo "❌ 密碼至少要 8 個字"; exit 1; }
-      printf '%s' "$2" > "$APP/admin-password"
-    else new_password > "$APP/admin-password"; fi
-    chmod 600 "$APP/admin-password"
-    run_container
-    echo "✅ 已換成新密碼："; show_login; exit 0 ;;
+  密碼|password|換密碼|reset)
+    echo "雲端硬碟已經改成跟哨兵一起登入，不需要另外的密碼了。"
+    echo "要換密碼的話，換的是哨兵的密碼：nano /etc/vps-sentinel-lite.conf 裡的 TOKEN，改完 systemctl restart vps-sentinel-lite"
+    exit 0 ;;
   檢查|check)
     diagnose; exit 0 ;;
   更新|update)
-    [ -f "$APP/admin-password" ] || { echo "還沒安裝雲端硬碟"; exit 1; }
+    [ -f "$APP/data/config.yaml" ] || { echo "還沒安裝雲端硬碟"; exit 1; }
     echo "▶ 下載官方最新的穩定版…"
     docker pull -q "$IMAGE" >/dev/null || { echo "❌ 下載失敗"; exit 1; }
     run_container
@@ -200,7 +188,7 @@ rm -rf "$MNT/lost+found" 2>/dev/null || true
 
 # ── 3. FileBrowser Quantum ──
 install -d -o 1000 -g 1000 "$APP/data" "$APP/data/tmp"
-[ -f "$APP/admin-password" ] || { new_password > "$APP/admin-password"; chmod 600 "$APP/admin-password"; }
+rm -f "$APP/admin-password"                      # 舊版留下的密碼檔，改成跟哨兵一起登入後用不到了
 TRUST=false; [ -n "$(get_conf DOMAIN)" ] && TRUST=true      # 有網域時前面有 Caddy 轉送
 cat > "$APP/data/config.yaml" <<EOF
 http:
@@ -214,12 +202,21 @@ server:
       name: "雲端硬碟"
       config:
         defaultEnabled: true
+        defaultPermissions:        # 只有主人一個人用：上傳、下載、修改、刪除都可以
+          view: true
+          download: true
+          modify: true
+          delete: true
+          create: true
 auth:
-  tokenExpirationHours: 720        # 登入一次可以用 30 天，不用一直重新登入
+  tokenExpirationHours: 720        # 登入一次可以用 30 天
+  adminUsername: owner             # 由哨兵登入的主人帳號
   methods:
     password:
+      enabled: false               # 不用另外的密碼：只能經過哨兵進來
+    proxy:
       enabled: true
-      minLength: 8
+      header: X-Sentinel-User      # 哨兵確認你已登入後，才會帶上這個標頭（外面送來的同名標頭會被哨兵丟掉）
 frontend:
   name: "雲端硬碟"
 EOF
@@ -253,7 +250,7 @@ EOF
   cat > /etc/caddy/sites/vps-sentinel.d/cloud.caddy <<EOF
 # 雲端硬碟（由 cloud.sh 產生）
 handle /cloud* {
-	reverse_proxy 127.0.0.1:$LOCAL_PORT
+	reverse_proxy 127.0.0.1:$(get_conf PORT | grep . || echo 8787)
 }
 EOF
   caddy validate --config /etc/caddy/Caddyfile --adapter caddyfile >/dev/null 2>&1 || { echo "❌ Caddy 設定有問題：caddy validate --config /etc/caddy/Caddyfile"; exit 1; }

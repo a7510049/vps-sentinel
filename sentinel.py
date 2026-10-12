@@ -84,10 +84,30 @@ def all_links():
     return LINKS + ([{"name": "雲端硬碟", "url": CLOUD_URL, "fixed": True}] if CLOUD_URL else [])
 
 
+# ── 雲端硬碟一鍵登入：已經登入哨兵，就不用再登入雲端硬碟 ──
+CLOUD_USER_HEADER = "X-Sentinel-User"           # 哨兵轉送時告訴雲端硬碟「這是主人」（外面送進來的同名標頭一律丟掉）
+CLOUD_OWNER = "owner"
+
+
+def _sign(msg):
+    return hmac.new(TOKEN.encode(), msg.encode(), hashlib.sha256).hexdigest()
+
+
+def cloud_cookie_value():
+    return _sign("cloud-cookie:v1")
+
+
+def cloud_login_url():
+    """10 分鐘內有效的一鍵登入網址（每次讀狀態都會重新產生）"""
+    base = CLOUD_URL[:-len("cloud/")] if CLOUD_URL.endswith("cloud/") else CLOUD_URL.rstrip("/") + "/"
+    exp = (int(time.time()) // 300 + 3) * 300     # 每 5 分鐘才換一次網址（10～15 分鐘內有效），畫面不用一直重畫
+    return f"{base}cloud-sso?e={exp}&s={_sign(f'cloud-sso:{exp}')}"
+
+
 def cloud_info():
     if not CLOUD_URL:
         return None
-    info = {"url": CLOUD_URL}
+    info = {"url": CLOUD_URL, "login": cloud_login_url()}
     if os.path.ismount(CLOUD_DIR):
         st = os.statvfs(CLOUD_DIR)
         total, free = st.f_blocks * st.f_frsize, st.f_bavail * st.f_frsize
@@ -1453,18 +1473,52 @@ class Handler(BaseHTTPRequestHandler):
 
     def is_cloud(self):
         p = urllib.parse.urlsplit(self.path).path
-        return bool(CLOUD_URL) and (p == "/cloud" or p.startswith("/cloud/"))
+        return bool(CLOUD_URL) and (p == "/cloud" or p.startswith("/cloud/") or p == "/cloud-sso")
+
+    def cloud_authed(self):
+        for part in (self.headers.get("Cookie") or "").split(";"):
+            k, _, v = part.strip().partition("=")
+            if k == "vs_cloud" and hmac.compare_digest(v, cloud_cookie_value()):
+                return True
+        return False
+
+    def cloud_cookie(self):
+        secure = "; Secure" if (self.headers.get("X-Forwarded-Proto") or "").lower() == "https" else ""
+        return f"vs_cloud={cloud_cookie_value()}; Path=/; Max-Age=2592000; HttpOnly; SameSite=Lax{secure}"
 
     def proxy_cloud(self):
+        u = urllib.parse.urlsplit(self.path)
+        if u.path == "/cloud-sso":                     # 從哨兵點進來：檢查簽章，發一張 30 天的通行證，再進雲端硬碟
+            q = urllib.parse.parse_qs(u.query)
+            e, sig = (q.get("e") or ["0"])[0], (q.get("s") or [""])[0]
+            ok = e.isdigit() and int(e) > time.time() and hmac.compare_digest(sig, _sign(f"cloud-sso:{e}"))
+            self.send_response(302)
+            if ok:
+                self.send_header("Set-Cookie", self.cloud_cookie())
+            self.send_header("Location", "/cloud/" if ok else "/?go=cloud")
+            self.send_header("Content-Length", "0")
+            self.end_headers()
+            return
+        authed = self.cloud_authed()
+        public = u.path.startswith(("/cloud/public/", "/cloud/static/", "/cloud/health"))
+        if not authed and not public and self.command == "GET" and "text/html" in (self.headers.get("Accept") or ""):
+            self.send_response(302)                     # 還沒登入哨兵：先到哨兵登入，登入後自動回來
+            self.send_header("Location", "/?go=cloud")
+            self.send_header("Content-Length", "0")
+            self.end_headers()
+            return
         self.close_connection = True
         try:
             conn = http.client.HTTPConnection("127.0.0.1", CLOUD_PORT, timeout=3600)
             conn.putrequest(self.command, self.path, skip_host=True, skip_accept_encoding=True)
             for k, v in self.headers.items():
-                if k.lower() not in self.HOP and k.lower() != "content-length":
+                if k.lower() not in self.HOP and k.lower() not in ("content-length", CLOUD_USER_HEADER.lower(),
+                                                                   "x-forwarded-for", "x-forwarded-proto"):
                     conn.putheader(k, v)
-            conn.putheader("X-Forwarded-For", self.client_address[0])
-            conn.putheader("X-Forwarded-Proto", "http")
+            conn.putheader("X-Forwarded-For", self.headers.get("X-Forwarded-For") or self.client_address[0])
+            conn.putheader("X-Forwarded-Proto", self.headers.get("X-Forwarded-Proto") or "http")
+            if authed:
+                conn.putheader(CLOUD_USER_HEADER, CLOUD_OWNER)
             length = self.headers.get("Content-Length")
             spool = None
             if length is None and "chunked" in (self.headers.get("Transfer-Encoding") or "").lower():
@@ -1568,7 +1622,7 @@ class Handler(BaseHTTPRequestHandler):
         if self.is_cloud():
             return self.proxy_cloud()
         u = urllib.parse.urlsplit(self.path)
-        if u.path not in ("/api/update", "/api/rename", "/api/traffic", "/api/telegram", "/api/links", "/api/self"):
+        if u.path not in ("/api/update", "/api/rename", "/api/traffic", "/api/telegram", "/api/links", "/api/self", "/api/cloud-login"):
             return self.send(404, '{"error":"找不到"}')
         if not self.authed():
             time.sleep(1)
@@ -1594,6 +1648,16 @@ class Handler(BaseHTTPRequestHandler):
             except Exception as e:  # noqa: BLE001
                 return self.send(502, json.dumps({"ok": False, "message": f"連不上：{e}"[:150]},
                                                   ensure_ascii=False))
+        if u.path == "/api/cloud-login":            # 網頁上已經登入哨兵：直接發雲端硬碟通行證
+            if not CLOUD_URL:
+                return self.send(404, '{"ok":false}')
+            self.send_response(200)
+            self.send_header("Set-Cookie", self.cloud_cookie())
+            self.send_header("Content-Type", "application/json")
+            self.send_header("Content-Length", "11")
+            self.end_headers()
+            self.wfile.write(b'{"ok":true}')
+            return
         if u.path == "/api/self":
             try:
                 act = json.loads(body or b"{}").get("action")
@@ -2600,7 +2664,8 @@ function stchip(s){
   return `<span class="stchip ${lv}" data-x><span class="dot pulse ${lv}"></span>${t}</span>`;
 }
 const safeUrl = u => /^https?:\/\/[^\s"'<>]+$/i.test(u || "") ? u : "";
-const linksOf = s => (s.links || (s.panel ? [{name:"管理後台", url:s.panel}] : [])).filter(x => safeUrl(x.url));
+const linksOf = s => (s.links || (s.panel ? [{name:"管理後台", url:s.panel}] : []))
+  .map(x => x.fixed && s.cloud && s.cloud.login ? {...x, url: s.cloud.login} : x).filter(x => safeUrl(x.url));   // 雲端硬碟用一鍵登入網址
 const linkSt = x => x.up === false ? `打不開：${x.err || "連不上"}` : x.up ? `正常・${x.ms} 毫秒` : x.err ? "剛剛沒回應，再確認一次中…" : "還沒檢查";
 const editBtn = s => { if (!s.online) return ""; const L = linksOf(s);
   return `<button class="iconbtn" title="編輯名稱與常用連結" data-rename="${esc(s.node||"")}" data-name="${esc(s.name)}">${I("edit")}</button>`
@@ -2774,7 +2839,7 @@ function mcard(s, i){
   h += `<div class="metrics" data-key="mt">` + metric("cpu", "處理器", s.cpu, `${s.cores} 核`) +
        metric("mem", "記憶體", s.mem.pct, `${size(s.mem.used)} / ${size(s.mem.total)}`) +
        s.disks.map(d=>metric("disk", "磁碟"+(d.path==="/"?"":" "+esc(d.path)), d.pct, `${size(d.used)} / ${size(d.total)}`)).join("") + `</div>`
-       + (s.cloud && safeUrl(s.cloud.url) ? `<a class="cloudm" data-key="cl" href="${esc(s.cloud.url)}" target="_blank" rel="noopener noreferrer">${I("cloud")}<span>雲端硬碟</span>
+       + (s.cloud && safeUrl(s.cloud.login || s.cloud.url) ? `<a class="cloudm" data-key="cl" href="${esc(s.cloud.login || s.cloud.url)}" target="_blank" rel="noopener noreferrer">${I("cloud")}<span>雲端硬碟</span>
           ${s.cloud.total ? `<b>${size(s.cloud.used)}<small> / ${size(s.cloud.total)}</small></b>` : ""}${I("ext")}</a>` : "");
   if (PREF.show.chart && s.hist) { const hh = histFor(s);
     h += `<div class="spark" data-key="sp"><div class="lbl"><span><i style="background:${COL.cpu};margin-left:0"></i>處理器<i style="background:${COL.mem}"></i>記憶體</span>${rangeSeg()}</div>
@@ -2814,10 +2879,10 @@ function hostItem(s, on){
 }
 /* 雲端硬碟入口：放在磁碟卡片標題旁，點了直接打開 */
 function cloudChip(s){
-  const c = s.cloud; if (!c || !safeUrl(c.url)) return "";
+  const c = s.cloud, href = c && (c.login || c.url); if (!c || !safeUrl(href)) return "";
   const L = (s.links || []).find(x => x.fixed), down = L && L.up === false;
   const use = c.total ? `${size(c.used)} / ${size(c.total)}` : "";
-  return `<a class="cchip ${down ? "down" : c.pct >= 90 ? "warn" : ""}" href="${esc(c.url)}" target="_blank" rel="noopener noreferrer"
+  return `<a class="cchip ${down ? "down" : c.pct >= 90 ? "warn" : ""}" href="${esc(href)}" target="_blank" rel="noopener noreferrer"
     title="打開雲端硬碟${use ? `（已用 ${use}）` : ""}${down ? `・目前打不開：${esc(L.err || "")}` : ""}">${I("cloud")}<span>雲端${c.total ? ` ${num(c.pct)}%` : ""}</span>${I("ext")}</a>`;
 }
 function ring(icon, label, pct, sub, i, extra = ""){
@@ -3764,6 +3829,11 @@ async function tick(){
     if (r.status === 401) { setTok(""); LIST = []; endSplash(); return login("密碼不對，再試一次"); }
     const data = await r.json();
     const me = data.find(x => !x.node);
+    if (new URLSearchParams(location.search).get("go") === "cloud" && me && me.cloud && !window._goCloud) {   // 從雲端硬碟跳過來登入：登入好了就送回去
+      window._goCloud = true;
+      await fetch("/api/cloud-login", {method:"POST", headers:{"X-Token":getTok()}}).catch(() => {});
+      return location.replace("/cloud/");
+    }
     if (me && me.build) {
       if (!window._build) window._build = me.build;
       else if (me.build !== window._build && !window._reloading) {   // 這台的哨兵剛更新好：重新載入換上新畫面
