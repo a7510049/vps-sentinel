@@ -187,11 +187,16 @@ if [ -n "$DOMAIN" ]; then
   install -d /etc/caddy/sites
   PORT_NOW="$(grep -E '^PORT=' "$CONF" | cut -d= -f2)"
   if [ "$HTTPS_PORT" = 443 ]; then SITE="$DOMAIN"; else SITE="$DOMAIN:$HTTPS_PORT"; fi
+  install -d /etc/caddy/sites/vps-sentinel.d
+  [ -f /etc/caddy/sites/vps-sentinel.d/00-keep.caddy ] || echo "# 附加功能（例如雲端硬碟）的設定放這個資料夾" > /etc/caddy/sites/vps-sentinel.d/00-keep.caddy
   cat > /etc/caddy/sites/vps-sentinel.caddy <<EOF
 # VPS 哨兵（由安裝腳本產生）
 $SITE {
 	encode gzip
-	reverse_proxy 127.0.0.1:${PORT_NOW:-8787}
+	import /etc/caddy/sites/vps-sentinel.d/*.caddy
+	handle {
+		reverse_proxy 127.0.0.1:${PORT_NOW:-8787}
+	}
 }
 EOF
   touch /etc/caddy/Caddyfile

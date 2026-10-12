@@ -1,0 +1,234 @@
+#!/usr/bin/env bash
+# VPS 哨兵：雲端硬碟（FileBrowser Quantum）
+#
+# 用法：
+#   sudo bash cloud.sh 50          安裝雲端硬碟，最多可以放 50 GB（之後再執行一次就能改大小）
+#   sudo bash cloud.sh 密碼         顯示登入密碼
+#   sudo bash cloud.sh 換密碼       換一組新的隨機密碼（後面加上密碼就用你指定的：sudo bash cloud.sh 換密碼 我的新密碼）
+#   sudo bash cloud.sh 移除         移除雲端硬碟程式（檔案會保留）
+#
+# 做了什麼：
+#   1. 建一個固定大小的「空間檔」掛在 /srv/cloud，放滿就是滿了，不會吃掉整台主機的硬碟
+#   2. 用 Docker 跑 FileBrowser Quantum（網頁版檔案總管），只看得到 /srv/cloud
+#   3. 有網域：接在哨兵的網址後面 https://你的網域/cloud/ ，不用另外開連接埠
+#      沒網域：開在 http://IP:8788/cloud/
+#   4. 哨兵的磁碟卡片會出現雲端硬碟的入口和用量
+set -euo pipefail
+
+[ "$(id -u)" = 0 ] || { echo "請用 sudo 執行：sudo bash cloud.sh 50"; exit 1; }
+
+CONF=/etc/vps-sentinel-lite.conf
+BASE=/var/lib/vps-cloud
+IMG=$BASE/disk.img
+MNT=/srv/cloud
+APP=/opt/vps-cloud
+NAME=vps-cloud
+IMAGE=ghcr.io/gtsteffaniak/filebrowser:stable
+LOCAL_PORT=8099          # 只給本機的 Caddy 連
+DIRECT_PORT=8788         # 沒有網域時對外開的連接埠
+MOUNT_UNIT=/etc/systemd/system/srv-cloud.mount
+
+[ -f "$CONF" ] || { echo "❌ 請先安裝 VPS 哨兵（bash install.sh）"; exit 1; }
+set_conf() { if grep -q "^$1=" "$CONF"; then sed -i "s|^$1=.*|$1=$2|" "$CONF"; else echo "$1=$2" >> "$CONF"; fi; }
+get_conf() { grep -E "^$1=" "$CONF" | head -1 | cut -d= -f2- || true; }
+
+new_password() { tr -dc 'A-Za-z0-9' < /dev/urandom | head -c 16; }
+
+run_container() {
+  docker rm -f "$NAME" >/dev/null 2>&1 || true
+  local publish="127.0.0.1:$LOCAL_PORT:80"
+  [ -z "$(get_conf DOMAIN)" ] && publish="$DIRECT_PORT:80"
+  docker run -d --name "$NAME" --restart unless-stopped \
+    -p "$publish" \
+    -v "$MNT":/folder \
+    -v "$APP/data":/home/filebrowser/data \
+    -e FILEBROWSER_CONFIG=/home/filebrowser/data/config.yaml \
+    -e FILEBROWSER_ADMIN_PASSWORD="$(cat "$APP/admin-password")" \
+    "$IMAGE" >/dev/null
+}
+
+show_login() {
+  echo "   帳號：admin"
+  echo "   密碼：$(cat "$APP/admin-password")"
+}
+
+case "${1:-}" in
+  密碼|password)
+    [ -f "$APP/admin-password" ] || { echo "還沒安裝雲端硬碟"; exit 1; }
+    show_login; exit 0 ;;
+  換密碼|reset)
+    [ -f "$APP/admin-password" ] || { echo "還沒安裝雲端硬碟"; exit 1; }
+    if [ -n "${2:-}" ]; then
+      [ "${#2}" -ge 8 ] || { echo "❌ 密碼至少要 8 個字"; exit 1; }
+      printf '%s' "$2" > "$APP/admin-password"
+    else new_password > "$APP/admin-password"; fi
+    chmod 600 "$APP/admin-password"
+    run_container
+    echo "✅ 已換成新密碼："; show_login; exit 0 ;;
+  移除|remove)
+    docker rm -f "$NAME" >/dev/null 2>&1 || true
+    rm -f /etc/caddy/sites/vps-sentinel.d/cloud.caddy
+    command -v caddy >/dev/null && systemctl reload caddy 2>/dev/null || true
+    set_conf CLOUD_URL ""
+    systemctl restart vps-sentinel-lite 2>/dev/null || true
+    echo "✅ 已移除雲端硬碟程式。你的檔案還在 $MNT（空間檔：$IMG）"
+    echo "   要連檔案一起刪掉：systemctl disable --now srv-cloud.mount && rm -rf $BASE $MOUNT_UNIT"
+    exit 0 ;;
+esac
+
+SIZE="${1:-}"
+if ! [[ "$SIZE" =~ ^[0-9]+$ ]] || [ "$SIZE" -lt 1 ]; then
+  echo "用法：sudo bash cloud.sh 容量（GB）"
+  echo "例如：sudo bash cloud.sh 50   ← 雲端硬碟最多放 50 GB"
+  exit 1
+fi
+
+# ── 1. Docker ──
+if ! command -v docker >/dev/null; then
+  echo "▶ 安裝 Docker…"
+  curl -fsSL https://get.docker.com | sh >/dev/null 2>&1 || { echo "❌ Docker 安裝失敗"; exit 1; }
+fi
+command -v resize2fs >/dev/null || { apt-get update -qq && apt-get install -y -qq e2fsprogs; }
+
+# ── 2. 固定大小的空間 ──
+install -d "$BASE" "$MNT"
+cur_gb=0
+[ -f "$IMG" ] && cur_gb=$(( $(stat -c %s "$IMG") / 1073741824 ))
+free_gb=$(( $(df --output=avail -B1 "$BASE" | tail -1) / 1073741824 ))
+used_gb=0
+[ -f "$IMG" ] && used_gb=$(( $(du -B1 "$IMG" | cut -f1) / 1073741824 ))
+if [ "$SIZE" -gt $(( free_gb + used_gb )) ]; then
+  echo "❌ 主機硬碟只剩大約 $(( free_gb + used_gb )) GB 可以給雲端硬碟用，請設小一點（例如 $(( (free_gb + used_gb) * 8 / 10 ))）"
+  exit 1
+fi
+
+if [ ! -f "$IMG" ]; then
+  echo "▶ 建立 ${SIZE} GB 的雲端硬碟空間…"
+  truncate -s "${SIZE}G" "$IMG"                 # 用多少佔多少，不會一次吃掉 ${SIZE} GB
+  mkfs.ext4 -q -F -m 0 -L vps-cloud "$IMG"
+elif [ "$SIZE" -ne "$cur_gb" ]; then
+  if [ "$SIZE" -lt "$cur_gb" ] && mountpoint -q "$MNT"; then
+    in_use_gb=$(( $(df --output=used -B1 "$MNT" | tail -1) / 1073741824 + 1 ))
+    if [ "$in_use_gb" -ge "$SIZE" ]; then
+      echo "❌ 雲端硬碟裡已經放了大約 ${in_use_gb} GB，沒辦法縮小到 ${SIZE} GB"
+      exit 1
+    fi
+  fi
+  echo "▶ 把雲端硬碟從 ${cur_gb} GB 改成 ${SIZE} GB（大約幾秒鐘，期間暫時打不開）…"
+  docker stop "$NAME" >/dev/null 2>&1 || true
+  systemctl stop srv-cloud.mount 2>/dev/null || true
+  mountpoint -q "$MNT" && umount "$MNT"
+  e2fsck -f -y "$IMG" >/dev/null 2>&1 || true
+  if [ "$SIZE" -gt "$cur_gb" ]; then
+    truncate -s "${SIZE}G" "$IMG"; resize2fs "$IMG" >/dev/null
+  else
+    resize2fs "$IMG" "${SIZE}G" >/dev/null; truncate -s "${SIZE}G" "$IMG"
+  fi
+fi
+
+cat > "$MOUNT_UNIT" <<EOF
+[Unit]
+Description=VPS 哨兵雲端硬碟空間
+
+[Mount]
+What=$IMG
+Where=$MNT
+Type=ext4
+Options=loop,noatime
+
+[Install]
+WantedBy=multi-user.target
+EOF
+# 開機時先掛好空間，Docker 才啟動，避免檔案被寫到錯的地方
+install -d /etc/systemd/system/docker.service.d
+printf '[Unit]\nWants=srv-cloud.mount\nAfter=srv-cloud.mount\n' > /etc/systemd/system/docker.service.d/vps-cloud.conf
+systemctl daemon-reload
+systemctl enable --now srv-cloud.mount >/dev/null 2>&1
+mountpoint -q "$MNT" || { echo "❌ 雲端硬碟空間掛載失敗：journalctl -u srv-cloud.mount"; exit 1; }
+chown 1000:1000 "$MNT"
+rm -rf "$MNT/lost+found" 2>/dev/null || true
+
+# ── 3. FileBrowser Quantum ──
+install -d -o 1000 -g 1000 "$APP/data" "$APP/data/tmp"
+[ -f "$APP/admin-password" ] || { new_password > "$APP/admin-password"; chmod 600 "$APP/admin-password"; }
+TRUST=false; [ -n "$(get_conf DOMAIN)" ] && TRUST=true      # 有網域時前面有 Caddy 轉送
+cat > "$APP/data/config.yaml" <<EOF
+http:
+  port: 80
+  baseURL: "/cloud"
+  trustProxyHeaders: $TRUST
+server:
+  cacheDir: /home/filebrowser/data/tmp
+  sources:
+    - path: /folder
+      name: "雲端硬碟"
+      config:
+        defaultEnabled: true
+auth:
+  methods:
+    password:
+      enabled: true
+      adminUsername: admin
+      minLength: 8
+frontend:
+  name: "雲端硬碟"
+EOF
+chown 1000:1000 "$APP/data/config.yaml"
+echo "▶ 下載並啟動雲端硬碟程式（第一次會比較久）…"
+docker pull -q "$IMAGE" >/dev/null
+run_container
+
+# ── 4. 網址 ──
+DOMAIN="$(get_conf DOMAIN)"
+if [ -n "$DOMAIN" ] && [ -f /etc/caddy/sites/vps-sentinel.caddy ]; then
+  HTTPS_PORT="$(get_conf HTTPS_PORT)"; HTTPS_PORT="${HTTPS_PORT:-443}"
+  SITE_FILE=/etc/caddy/sites/vps-sentinel.caddy
+  install -d /etc/caddy/sites/vps-sentinel.d
+  [ -f /etc/caddy/sites/vps-sentinel.d/00-keep.caddy ] || echo "# 附加功能的設定放這個資料夾" > /etc/caddy/sites/vps-sentinel.d/00-keep.caddy
+  if ! grep -q 'vps-sentinel.d' "$SITE_FILE"; then      # 舊版的設定：改成可以掛附加功能的寫法
+    SITE="$(grep -m1 '{$' "$SITE_FILE" | sed 's/ *{$//')"
+    PORT_NOW="$(get_conf PORT)"
+    cat > "$SITE_FILE" <<EOF
+# VPS 哨兵（由安裝腳本產生）
+$SITE {
+	encode gzip
+	import /etc/caddy/sites/vps-sentinel.d/*.caddy
+	handle {
+		reverse_proxy 127.0.0.1:${PORT_NOW:-8787}
+	}
+}
+EOF
+  fi
+  cat > /etc/caddy/sites/vps-sentinel.d/cloud.caddy <<EOF
+# 雲端硬碟（由 cloud.sh 產生）
+handle /cloud* {
+	reverse_proxy 127.0.0.1:$LOCAL_PORT
+}
+EOF
+  caddy validate --config /etc/caddy/Caddyfile --adapter caddyfile >/dev/null 2>&1 || { echo "❌ Caddy 設定有問題：caddy validate --config /etc/caddy/Caddyfile"; exit 1; }
+  systemctl reload caddy 2>/dev/null || systemctl restart caddy
+  if [ "$HTTPS_PORT" = 443 ]; then URL="https://$DOMAIN/cloud/"; else URL="https://$DOMAIN:$HTTPS_PORT/cloud/"; fi
+else
+  if command -v ufw >/dev/null && ufw status | grep -q "Status: active"; then ufw allow "$DIRECT_PORT/tcp" >/dev/null
+  elif command -v netfilter-persistent >/dev/null && command -v iptables >/dev/null; then
+    iptables -C INPUT -p tcp --dport "$DIRECT_PORT" -j ACCEPT 2>/dev/null || iptables -I INPUT -p tcp --dport "$DIRECT_PORT" -j ACCEPT
+    netfilter-persistent save >/dev/null 2>&1 || true
+  fi
+  IP="$(curl -s4 --max-time 4 https://ifconfig.me || hostname -I | awk '{print $1}')"
+  URL="http://$IP:$DIRECT_PORT/cloud/"
+fi
+
+# ── 5. 告訴哨兵 ──
+set_conf CLOUD_URL "$URL"
+set_conf CLOUD_DIR "$MNT"
+systemctl restart vps-sentinel-lite 2>/dev/null || true
+
+echo
+echo "✅ 雲端硬碟好了（最多 ${SIZE} GB）"
+echo "   網址：$URL"
+show_login
+echo
+echo "   忘記密碼：sudo bash cloud.sh 密碼"
+echo "   換密碼：  sudo bash cloud.sh 換密碼 你的新密碼   （請用這個指令換，在網頁上改的話重開後會被換回來）"
+echo "   改容量：  sudo bash cloud.sh 新的GB數"
+if [ -z "$DOMAIN" ]; then echo "   ⚠️ 雲端主機（甲骨文、Azure 等）的網站防火牆也要打開 $DIRECT_PORT 連接埠（TCP）"; fi

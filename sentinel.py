@@ -72,6 +72,24 @@ def _load_links():
 
 
 LINKS = _load_links()
+CLOUD_URL = C.get("CLOUD_URL", "")              # 雲端硬碟（cloud.sh 安裝後自動填）
+CLOUD_DIR = C.get("CLOUD_DIR", "/srv/cloud")
+
+
+def all_links():
+    """使用者設定的常用連結＋雲端硬碟（雲端硬碟是固定的，不能在網頁上刪）"""
+    return LINKS + ([{"name": "雲端硬碟", "url": CLOUD_URL, "fixed": True}] if CLOUD_URL else [])
+
+
+def cloud_info():
+    if not CLOUD_URL:
+        return None
+    info = {"url": CLOUD_URL}
+    if os.path.ismount(CLOUD_DIR):
+        st = os.statvfs(CLOUD_DIR)
+        total, free = st.f_blocks * st.f_frsize, st.f_bavail * st.f_frsize
+        info.update(total=total, used=total - free, pct=round((total - free) / total * 100, 1) if total else 0)
+    return info
 BIND = C.get("BIND", "0.0.0.0")
 PORT = int(C.get("PORT", "8787"))
 TOKEN = C.get("TOKEN", "")
@@ -419,7 +437,7 @@ def check_link(url):
 
 
 def check_links():
-    urls = [x["url"] for x in LINKS]
+    urls = [x["url"] for x in all_links()]
     for u in list(LINK_STATE):
         if u not in urls:
             del LINK_STATE[u]
@@ -430,7 +448,7 @@ def check_links():
 
 
 def links_status():
-    return [{**x, **{k: v for k, v in LINK_STATE.get(x["url"], {}).items() if k != "fails"}} for x in LINKS]
+    return [{**x, **{k: v for k, v in LINK_STATE.get(x["url"], {}).items() if k != "fails"}} for x in all_links()]
 
 
 # ───────────────────────── 改名 ─────────────────────────
@@ -932,7 +950,7 @@ class Collector:
                     v["seen"] = v["seen"] or bool(a)
             if tick % 5400 == 10:                     # 每 3 小時：GitHub 上有沒有新版的哨兵（背景查，不卡畫面）
                 threading.Thread(target=self_check, daemon=True).start()
-            if LINKS and tick % 30 == 0:              # 每 1 分鐘：常用連結打不打得開
+            if all_links() and tick % 30 == 0:              # 每 1 分鐘：常用連結打不打得開
                 try:
                     check_links()
                 except Exception as e:  # noqa: BLE001
@@ -1015,6 +1033,9 @@ class Collector:
                 notices.append("照目前速度，本月流量會超過上限")
         if reboot:
             notices.append("需要重新開機")
+        cloud = cloud_info()
+        if cloud and cloud.get("pct", 0) >= 90:
+            notices.append(f"雲端硬碟快滿了（{cloud['pct']:.0f}%）")
         v6 = dict(self.v6)
         if v6["addr"] and v6["ok"] is False:
             notices.append("IPv6 連不出去")
@@ -1029,6 +1050,7 @@ class Collector:
             "uptime": float(read("/proc/uptime", "0").split()[0] or 0),
             "cores": os.cpu_count() or 1, "cpu": cpu, "load": [round(x, 2) for x in load],
             "ipv6": {"addr": v6["addr"], "ok": v6["ok"]} if v6["addr"] or v6["seen"] else None,
+            "cloud": cloud,
             "conns": tcp_conns(), "conns_avg": round(sum(self.conn_hist) / len(self.conn_hist), 1) if len(self.conn_hist) >= 30 else None, "procs": int((read("/proc/loadavg", "0 0 0 0/0").split()[3:4] or ["0/0"])[0].split("/")[-1] or 0),
             "mem": mem, "disks": disks, "net": net,
             "containers": containers, "services": services,
@@ -1973,6 +1995,16 @@ button{font:inherit;color:inherit}
 .dialog .btns.three{grid-template-columns:1fr 1fr 1.3fr}
 .dialog .btns .spin{width:13px;height:13px;margin-right:6px}
 .linkbtn{background:none;border:0;cursor:pointer;color:var(--bad);font-weight:800;font-size:var(--fs-s);margin-top:14px;padding:4px 8px}
+.cchip{margin-left:auto;display:inline-flex;align-items:center;gap:5px;padding:4px 9px 4px 8px;border-radius:var(--r-pill);
+  background:var(--inset);box-shadow:var(--ring);color:var(--text);text-decoration:none;font-size:var(--fs-xs);font-weight:800;
+  transition:background var(--t-fast),transform var(--t-mid) var(--spring)}
+.cchip:hover{background:var(--track)}.cchip:active{transform:scale(.94)}
+.cchip svg{width:13px;height:13px;flex:none}.cchip svg:first-child{color:var(--a1)}.cchip svg:last-child{color:var(--faint)}
+.cchip.warn span{color:var(--warn)}.cchip.down{box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--bad) 60%,transparent)}.cchip.down svg:first-child{color:var(--bad)}
+.cloudm{display:flex;align-items:center;gap:9px;margin-top:12px;padding:11px 13px;border-radius:var(--r-md);background:var(--inset);box-shadow:var(--ring);
+  color:var(--text);text-decoration:none;font-size:var(--fs-m);font-weight:700}
+.cloudm svg{width:17px;height:17px;flex:none}.cloudm svg:first-child{color:var(--a1)}.cloudm svg:last-child{color:var(--faint);width:14px;height:14px}
+.cloudm b{margin-left:auto;font-weight:900}.cloudm b small{color:var(--sub);font-weight:700;font-size:var(--fs-xs)}
 a.plink,button.plink{color:var(--sub);text-decoration:none}
 .hostd{max-width:420px}
 .lrows{display:flex;flex-direction:column;gap:8px}
@@ -2238,6 +2270,7 @@ const P = {
   logout:'<path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9"/>',
   edit:'<path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/>',
   ext:'<path d="M14 4h6v6"/><path d="M20 4 11 13"/><path d="M19 14v4.5a1.5 1.5 0 0 1-1.5 1.5h-12A1.5 1.5 0 0 1 4 18.5v-12A1.5 1.5 0 0 1 5.5 5H10"/>',
+  cloud:'<path d="M17.5 19a4.5 4.5 0 1 0-1.3-8.8A6 6 0 0 0 4.6 12.5 3.5 3.5 0 0 0 6.5 19Z"/>',
   search:'<circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/>',
   chev:'<path d="m6 9 6 6 6-6"/>', x:'<path d="M18 6 6 18M6 6l12 12"/>',
   warn:'<path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3z"/><path d="M12 9v4M12 17h.01"/>',
@@ -2566,7 +2599,9 @@ function mcard(s, i){
   h += `<span class="uptime">開機 ${up(s.uptime)}</span></div>` + alerts(s);
   h += `<div class="metrics" data-key="mt">` + metric("cpu", "處理器", s.cpu, `${s.cores} 核`) +
        metric("mem", "記憶體", s.mem.pct, `${size(s.mem.used)} / ${size(s.mem.total)}`) +
-       s.disks.map(d=>metric("disk", "磁碟"+(d.path==="/"?"":" "+esc(d.path)), d.pct, `${size(d.used)} / ${size(d.total)}`)).join("") + `</div>`;
+       s.disks.map(d=>metric("disk", "磁碟"+(d.path==="/"?"":" "+esc(d.path)), d.pct, `${size(d.used)} / ${size(d.total)}`)).join("") + `</div>`
+       + (s.cloud && safeUrl(s.cloud.url) ? `<a class="cloudm" data-key="cl" href="${esc(s.cloud.url)}" target="_blank" rel="noopener noreferrer">${I("cloud")}<span>雲端硬碟</span>
+          ${s.cloud.total ? `<b>${size(s.cloud.used)}<small> / ${size(s.cloud.total)}</small></b>` : ""}${I("ext")}</a>` : "");
   if (PREF.show.chart && s.hist) { const hh = histFor(s);
     h += `<div class="spark" data-key="sp"><div class="lbl"><span><i style="background:${COL.cpu};margin-left:0"></i>處理器<i style="background:${COL.mem}"></i>記憶體</span>${rangeSeg()}</div>
       ${chartOr(hh, cid(s,"m"), x => [{data:x.cpu,color:COL.cpu},{data:x.mem,color:COL.mem}], {max:100, h:64, fade:.25, sw:2, n:100})}</div>`; }
@@ -2603,9 +2638,17 @@ function hostItem(s, on){
     <div><div class="k">記憶體<b>${num(s.mem.pct)}%</b></div>${track(s.mem.pct)}</div></div>`;
   return h + `</button>`;
 }
-function ring(icon, label, pct, sub, i){
+/* 雲端硬碟入口：放在磁碟卡片標題旁，點了直接打開 */
+function cloudChip(s){
+  const c = s.cloud; if (!c || !safeUrl(c.url)) return "";
+  const L = (s.links || []).find(x => x.fixed), down = L && L.up === false;
+  const use = c.total ? `${size(c.used)} / ${size(c.total)}` : "";
+  return `<a class="cchip ${down ? "down" : c.pct >= 90 ? "warn" : ""}" href="${esc(c.url)}" target="_blank" rel="noopener noreferrer"
+    title="打開雲端硬碟${use ? `（已用 ${use}）` : ""}${down ? `・目前打不開：${esc(L.err || "")}` : ""}">${I("cloud")}<span>雲端${c.total ? ` ${num(c.pct)}%` : ""}</span>${I("ext")}</a>`;
+}
+function ring(icon, label, pct, sub, i, extra = ""){
   const r = 52, Cc = 2*Math.PI*r, off = Cc*(1-Math.max(0,Math.min(pct,100))/100);
-  return `<div class="gauge glass panel" style="--i:${i}"><div class="ph">${IC(icon)}<h3>${label}</h3></div>
+  return `<div class="gauge glass panel" style="--i:${i}"><div class="ph">${IC(icon)}<h3>${label}</h3>${extra}</div>
     <div class="gwrap"><svg viewBox="0 0 120 120"><circle class="rt" cx="60" cy="60" r="${r}"/>
     <circle class="rv ${tier(pct)}" cx="60" cy="60" r="${r}" style="--c:${Cc.toFixed(1)};stroke-dasharray:${Cc.toFixed(1)};stroke-dashoffset:${off.toFixed(1)}"/></svg>
     <div class="gin"><b>${num(pct)}<small>%</small></b><span>${sub}</span></div></div></div>`;
@@ -2652,7 +2695,7 @@ function detail(s){
   const d0 = s.disks[0] || {pct:0, used:0, total:0};
   h += `<div class="gauges" data-key="gg" style="${fp?"":"grid-template-columns:repeat(3,minmax(0,1fr))"}">${ring("cpu", "處理器", s.cpu, `${s.cores} 核心`, 1)}
         ${ring("mem", "記憶體", s.mem.pct, `${size(s.mem.used)} / ${size(s.mem.total)}`, 2)}
-        ${ring("disk", "磁碟", d0.pct, `${size(d0.used)} / ${size(d0.total)}`, 3)}${fp}</div>`;
+        ${ring("disk", "磁碟", d0.pct, `${size(d0.used)} / ${size(d0.total)}`, 3, cloudChip(s))}${fp}</div>`;
   const hs = histFor(s), xl = `<div class="xl" style="align-items:center"><span>${xlabel(hs)}</span>${rangeSeg()}<span>現在</span></div>`;
   const cp = PREF.show.chart ? `<div class="panel glass" data-key="cp" style="--i:4"><div class="ph">${IC("trend")}<h3>處理器與記憶體</h3><div class="legend">
       <span><i style="background:${COL.cpu}"></i>處理器<b>${num(s.cpu)}%</b></span><span><i style="background:${COL.mem}"></i>記憶體<b>${num(s.mem.pct)}%</b></span></div></div>
@@ -3442,7 +3485,7 @@ document.addEventListener("click", async e => {
   if (rn) {
     e.stopPropagation();
     const old = rn.dataset.name, node = rn.dataset.rename, hs = LIST.find(x => (x.node || "") === node);
-    const oldl = hs ? linksOf(hs) : [];
+    const oldl = hs ? linksOf(hs).filter(x => !x.fixed) : [];
     const r0 = await hostModal(old, oldl);
     if (!r0) return;
     const post = (path, body) => fetch(path + "?node=" + encodeURIComponent(node), {method:"POST", headers:{"X-Token":getTok(), "Content-Type":"application/json"}, body:JSON.stringify(body)})
