@@ -1346,9 +1346,7 @@ button{font:inherit;color:inherit}
 .ubtn{border:0;cursor:pointer;border-radius:999px;padding:10px 17px;font-size:13.5px;font-weight:800;color:#fff;background:var(--grad);
   display:inline-flex;align-items:center;gap:7px;letter-spacing:.2px;
   box-shadow:inset 0 1px 0 rgba(255,255,255,.4),0 10px 24px -10px var(--a2);transition:transform .3s cubic-bezier(.34,1.56,.64,1),opacity .3s,filter .3s}
-.ubtn:hover{filter:brightness(1.06)}.ubtn:active{transform:scale(.94)}.ubtn[disabled]{opacity:.7;cursor:default}
-.ubtn.done{background:linear-gradient(135deg,#34c759,#30b37a);opacity:1!important;cursor:default}
-.ubtn.done.fail{background:linear-gradient(135deg,#ff6b6b,#ff3b30)}
+.ubtn:hover{filter:brightness(1.06)}.ubtn:active{transform:scale(.94)}.ubtn[disabled]{opacity:.5;cursor:default;filter:saturate(.7)}
 .ubtn.ghost{background:var(--glass2);color:var(--text);box-shadow:inset 0 0 0 1px var(--line)}
 .spin{width:13px;height:13px;border:2px solid currentColor;border-right-color:transparent;border-radius:50%;animation:sp .8s linear infinite}
 @keyframes sp{to{transform:rotate(360deg)}}
@@ -2133,15 +2131,11 @@ function updateInfo(s){
   if (u && u.last) info += `${info?"<br>":""}上次更新${u.last.ok?"成功":`<span style="color:var(--bad)">失敗</span>`}・${when(u.last.time)}`;
   return info;
 }
-const UDONE = {};                     // 剛更新完的主機：按鈕先顯示結果 3 秒
+/* 按鈕永遠是同一個樣子（只在進行中變淡、不能按），進度和結果都寫在左邊的說明文字 */
 function updateBtn(s){
   const u = s.update, n = s.updates ? s.updates.total : 0;
   if (!u || !u.supported) return "";
-  const dn = UDONE[keyOf(s)];
-  if (dn && Date.now() < dn.until && !u.running)
-    return `<button class="ubtn done ${dn.ok ? "" : "fail"}" disabled>${I(dn.ok ? "ok" : "warn").replace("<svg","<svg style=\"width:15px;height:15px\"")}${dn.text}</button>`;
-  return u.running ? `<button class="ubtn" disabled><span class="spin"></span>${n ? "更新中…" : "檢查中…"}</button>`
-    : `<button class="ubtn" data-update="${esc(s.node||"")}" data-label="${esc(s.name)}" data-n="${n}">${I("upd").replace("<svg","<svg style=\"width:15px;height:15px\"")}${n?`更新（${n}）`:"檢查更新"}</button>`;
+  return `<button class="ubtn" data-update="${esc(s.node||"")}" data-label="${esc(s.name)}" data-n="${n}" ${u.running ? "disabled" : ""}>${I("upd").replace("<svg","<svg style=\"width:15px;height:15px\"")}檢查更新</button>`;
 }
 function greet(n, total){
   const h = new Date().getHours();
@@ -2666,8 +2660,6 @@ function render(list){
       const ok = s.update.last && s.update.last.ok, k = s.update.last && s.update.last.n;
       const msg = !ok ? `「${s.name}」更新失敗，可以再試一次` : k ? `「${s.name}」更新完成，裝好 ${k} 個更新 ✨` : k === 0 ? `「${s.name}」檢查完成，已經是最新的 ✨` : `「${s.name}」更新完成 ✨`;
       setTimeout(() => toast(msg, ok ? "ok" : "bad"), 400);
-      UDONE[keyOf(s)] = {ok, text: !ok ? "更新失敗" : k ? `已裝好 ${k} 個` : "已是最新", until: Date.now() + 3000};
-      setTimeout(() => { if (LIST.length) render(LIST); }, 3050);   // 結果停留 3 秒再變回原本的按鈕
     }
   }
   LIST = list; flagAccent();
@@ -3068,7 +3060,7 @@ document.addEventListener("click", async e => {
     const ok = await modal({icon:"upd", cls:"theme", title: n ? `更新「${label}」？` : `檢查「${label}」的更新？`,
       text: n ? `會在背景安裝 ${n} 個套件更新，大約 1～5 分鐘。\n期間部分服務可能會短暫重新啟動。` : "目前沒有偵測到更新，\n要重新檢查並安裝最新的更新嗎？", ok: n ? "開始更新" : "檢查"});
     if (!ok) return;
-    flipWidth(ub, () => { ub.disabled = true; ub.innerHTML = `<span class="spin"></span>${n ? "更新中…" : "檢查中…"}`; });
+    ub.disabled = true;
     try {
       const r = await fetch("/api/update?node="+encodeURIComponent(node), {method:"POST", headers:{"X-Token":getTok()}});
       const d = await r.json().catch(()=>({}));
