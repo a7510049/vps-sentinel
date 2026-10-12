@@ -446,10 +446,13 @@ button{font:inherit;color:inherit}
 .side .empty{padding:18px 0;font-size:var(--fs-m)}
 /* 事件紀錄 */
 /* 曲線範圍切換 */
-.rng{display:inline-flex;background:var(--track);border-radius:var(--r-sm);padding:2px;gap:1px;position:relative;isolation:isolate}
+.rng{display:inline-grid;grid-template-columns:repeat(3,1fr);background:var(--track);border-radius:var(--r-sm);padding:2px;gap:1px;position:relative;isolation:isolate}
 .rng button{border:0;background:transparent;cursor:pointer;border-radius:var(--r-sm);padding:3px 9px;font-size:var(--fs-xs);font-weight:800;color:var(--sub);transition:color var(--t-mid)}
-.rng button.on{color:var(--text);background:var(--glass);box-shadow:var(--sh-thumb)}
-[data-mode="light"] .rng button.on{background:#fff}
+.rng button.on{color:var(--text)}
+/* 選取框：三格一樣寬，用 --k（第幾格）決定位置，切換時滑過去 */
+.rng::before{content:"";position:absolute;z-index:-1;top:2px;bottom:2px;left:2px;width:calc((100% - 6px) / 3);border-radius:var(--r-sm);
+  background:var(--glass);box-shadow:var(--sh-thumb);transform:translateX(calc(var(--k,0) * (100% + 1px)));transition:transform var(--t-mid) var(--spring)}
+[data-mode="light"] .rng::before{background:#fff}
 .ph .rng{margin-left:10px}
 .spark .lbl{align-items:center}
 /* 本月流量 */
@@ -697,6 +700,11 @@ a.plink:hover{color:var(--a1)}
 @keyframes toastin{from{opacity:0;transform:translateY(16px) scale(.92)}}
 
 ::view-transition-old(root),::view-transition-new(root){animation-duration:var(--t-mid);animation-timing-function:var(--ease)}
+/* 切換文字大小（sizeShift）：舊畫面放大／縮小到新的比例並淡出，新畫面從舊的比例變回原樣並淡入 */
+.vtsize::view-transition-old(root){animation:vtZoomOut var(--t-slow) var(--ease) both;transform-origin:50% 30%}
+.vtsize::view-transition-new(root){animation:vtZoomIn var(--t-slow) var(--ease) both;transform-origin:50% 30%}
+@keyframes vtZoomOut{to{opacity:0;transform:scale(var(--zr))}}
+@keyframes vtZoomIn{from{opacity:0;transform:scale(calc(1 / var(--zr)))}}
 /* ═════════ 啟動畫面 ═════════ */
 body{overscroll-behavior-y:contain}
 .booting #app{opacity:0}
