@@ -1781,7 +1781,7 @@ button{font:inherit;color:inherit}
   font-variant-numeric:tabular-nums}
 /* 有刻度的曲線：右邊留一條欄位放數字，線條不會蓋到字 */
 .cbox:has(.yax){--yw:62px}
-.charts .cbox:has(.yax)>svg.chart{right:calc(var(--yw) + 8px);width:auto}
+.charts .cbox:has(.yax)>svg.chart{right:auto;width:calc(100% - var(--yw) - 8px)}
 .charts .panel:has(.yax) .xl{padding-right:70px}   /* 「現在」對齊曲線的右邊 */
 .cbox{cursor:crosshair}
 #ctip{position:fixed;z-index:60;pointer-events:none;min-width:130px;padding:9px 12px;border-radius:var(--r-md);font-size:var(--fs-s);font-weight:700;
@@ -3163,9 +3163,13 @@ async function selfUpdate(root, nodes){
   const targets = (nodes || Object.entries(SELFST).filter(([, d]) => d.has).map(([k]) => (LIST.find(x => keyOf(x) === k) || {}).node || ""));
   const ok = await modal({icon:"upd", cls:"theme", title:"更新哨兵？", text:"會從 GitHub 下載新版並自動重新啟動，\n大約 10～30 秒，你的設定都會保留。", ok:"開始更新"});
   if (!ok) return;
+  const okn = [], fail = [];
   for (const n of targets.sort((a, b) => (a === "") - (b === ""))) {   // 先更新其他台，最後才更新這台（這台更新完畫面會重新載入）
-    try { const d = await selfCall(n, "update"); toast(d.message); } catch(e) { toast(e.message, "bad"); }
+    const name = (LIST.find(x => (x.node || "") === n) || {}).name || "主機";
+    try { await selfCall(n, "update"); okn.push(name); } catch(e) { fail.push(`${name}：${e.message}`); }
   }
+  if (okn.length) toast(okn.length > 1 ? `已開始更新 ${okn.length} 台主機，大約 10～30 秒後完成` : `已開始更新「${okn[0]}」，大約 10～30 秒後完成`);   // 只跳一則
+  if (fail.length) setTimeout(() => toast(fail.join("；"), "bad"), okn.length ? 600 : 0);
   setTimeout(() => selfStatus(root), 1500);
   const poll = setInterval(() => { if (!root.isConnected) return clearInterval(poll); selfStatus(root); }, 5000);
   setTimeout(() => clearInterval(poll), 120000);
