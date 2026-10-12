@@ -845,6 +845,16 @@ def tg_api(token, method, params=None):
         return None, "連不上 Telegram，請確認這台主機能連外網"
 
 
+def norm_chat(v):
+    """聊天編號：全形轉半形、拿掉空白和多餘的字（例如貼成「id: -100123」）"""
+    v = str(v or "").translate(str.maketrans("０１２３４５６７８９－−—＠", "0123456789---@")).strip()
+    v = re.sub(r"\s+", "", v)
+    m = re.search(r"-?\d{3,}", v)
+    if m and not re.search(r"\d{5,}:", v) and not v.startswith("@"):
+        return m.group(0)
+    return v
+
+
 def tg_chat_name(c):
     if c.get("type") == "private":
         n = " ".join(x for x in (c.get("first_name"), c.get("last_name")) if x)
@@ -857,7 +867,8 @@ def telegram(cfg):
     global TG_BOT, TG_CHAT
     act = cfg.get("action")
     token = str(cfg.get("token") or "").strip() or TG_BOT
-    chat = str(cfg.get("chat") or "").strip()
+    chat = norm_chat(cfg.get("chat"))
+    token = token.replace(" ", "")
     if act == "status":
         info = {"ok": True, "on": bool(TG_BOT and TG_CHAT), "chat": TG_CHAT, "has_token": bool(TG_BOT)}
         if TG_BOT:
@@ -878,7 +889,8 @@ def telegram(cfg):
     if err:
         return False, err
     bot = "@" + me["result"]["username"]
-    if act == "find":
+    picked = None
+    if act == "find" or not chat:                  # 沒填聊天編號：自動幫忙找
         up, err = tg_api(token, "getUpdates", {"limit": 100})
         if err:
             return False, err
@@ -888,24 +900,32 @@ def telegram(cfg):
             c = m.get("chat")
             if c and "id" in c:
                 chats[c["id"]] = {"id": str(c["id"]), "name": tg_chat_name(c)}
-        if not chats:
+        found = list(chats.values())[::-1]
+        if not found:
             return False, f"還沒收到訊息：請先在 Telegram 找到 {bot}，傳一句話給它，再按一次「自動尋找」"
-        return True, {"ok": True, "bot": bot, "chats": list(chats.values())[::-1]}
+        if act == "find":
+            return True, {"ok": True, "bot": bot, "chats": found}
+        if len(found) > 1:
+            return False, "找到不只一個聊天，請先按「自動尋找」，點選要傳去哪裡"
+        chat, picked = found[0]["id"], found[0]
+    if ":" in chat and re.search(r"\d{5,}:", chat):
+        return False, "「要傳到哪裡」這格貼成機器人密碼了。這格可以留空，直接按「自動尋找」就好"
     if not re.fullmatch(r"-?\d{3,}|@\w{4,}", chat):
-        return False, "聊天編號格式不對，應該是一串數字（群組是 - 開頭）"
+        return False, "聊天編號格式不對，應該是一串數字（群組是 - 開頭）。不確定的話，這格留空，直接按「自動尋找」"
     text = f"✅ VPS 哨兵：「{NAME}」的通知會傳到這裡" if act == "save" else f"🔔 這是 VPS 哨兵的測試通知（來自「{NAME}」）"
     _, err = tg_api(token, "sendMessage", {"chat_id": chat, "text": text})
     if err:
         return False, err
     if act == "test":
-        return True, "測試通知已送出，去 Telegram 看看有沒有收到"
+        where = "到「" + picked["name"] + "」" if picked else ""
+        return True, {"ok": True, "chat": chat, "message": f"測試通知已送出{where}，去 Telegram 看看有沒有收到"}
     try:
         write_conf({"TG_BOT_TOKEN": token, "TG_CHAT_ID": chat})
     except OSError as e:
         return False, f"無法寫入設定檔：{e}"
     TG_BOT, TG_CHAT = token, chat
     log(f"Telegram 通知已設定：{bot} → {chat}")
-    return True, f"已開啟，通知會由 {bot} 傳送"
+    return True, {"ok": True, "chat": chat, "message": f"已開啟，通知會由 {bot} 傳送"}
 
 
 def tg_send(text):
@@ -2716,7 +2736,7 @@ async function tgModal(){
         <small>先在 Telegram 傳一句話給你的機器人（要傳到群組，就把機器人加進群組再講一句話），然後按「自動尋找」</small>
         <button type="button" class="ubtn ghost find" data-find>${I("search")}自動尋找</button>
         <div class="chats"></div>
-        <input class="field" data-k="chat" inputmode="text" autocomplete="off" placeholder="或手動填聊天編號" value="${esc(st.chat || "")}"></div>
+        <input class="field" data-k="chat" inputmode="text" autocomplete="off" placeholder="可以留空，會自動找" value="${esc(st.chat || "")}"></div>
       <div class="msg" aria-live="polite"></div>
     </div>
     <div class="btns three"><button class="ubtn ghost" data-r="0">取消</button><button class="ubtn ghost" data-test>測試</button><button class="ubtn" data-save>儲存</button></div>
@@ -2749,7 +2769,7 @@ async function tgModal(){
       const c = t.closest("[data-chat]");
       if (c) { q("chat").value = c.dataset.chat; v.querySelectorAll("[data-chat]").forEach(x => x.classList.toggle("on", x === c)); return say(""); }
       const tb = t.closest("[data-test]");
-      if (tb) return run(tb, "傳送中…", async () => { const d = await tgCall({action:"test", ...vals()}); say(d.message, "ok"); });
+      if (tb) return run(tb, "傳送中…", async () => { const d = await tgCall({action:"test", ...vals()}); if (d.chat) q("chat").value = d.chat; say(d.message, "ok"); });
       const sb = t.closest("[data-save]");
       if (sb) return run(sb, "儲存中…", async () => { const d = await tgCall({action:"save", ...vals()}); toast(d.message); done(); });
       const ob = t.closest("[data-off]");
