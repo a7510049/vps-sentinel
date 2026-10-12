@@ -414,7 +414,7 @@ def tcp_conns():
 UPDATE_UNIT = "vps-sentinel-update"
 UPDATE_LOG = "/var/log/vps-sentinel-update.log"
 UPDATE_SCRIPT = r"""set -u
-export DEBIAN_FRONTEND=noninteractive NEEDRESTART_SUSPEND=1
+export DEBIAN_FRONTEND=noninteractive NEEDRESTART_SUSPEND=1 LC_ALL=C.UTF-8
 echo "=== 開始更新 $(date '+%F %T') ==="
 if apt-get update \
    && apt-get -y -o Dpkg::Options::=--force-confdef -o Dpkg::Options::=--force-confold upgrade \
@@ -440,13 +440,22 @@ def update_last():
             lines = f.read().splitlines()[-500:]
     except OSError:
         return None
-    for line in reversed(lines):
-        if line.startswith("__RESULT__"):
-            parts = line.split()
+    for i in range(len(lines) - 1, -1, -1):
+        if lines[i].startswith("__RESULT__"):
+            parts = lines[i].split()
             try:
-                return {"ok": parts[1] == "ok", "time": float(parts[2])}
+                res = {"ok": parts[1] == "ok", "time": float(parts[2])}
             except (IndexError, ValueError):
                 return None
+            n = None                               # 這次實際裝了幾個更新（找「N upgraded」）
+            for line in reversed(lines[:i]):
+                if line.startswith("=== 開始更新"):
+                    break
+                m = re.match(r"(\d+) upgraded", line)
+                if m:
+                    n = max(n or 0, int(m.group(1)))
+            res["n"] = n
+            return res
     return None
 
 
@@ -469,7 +478,7 @@ def start_update():
     if code != 0:
         return False, "無法開始更新"
     log("已開始系統更新")
-    return True, "已開始更新"
+    return True, "已開始"
 
 
 # ───────────────────────── 背景收集 ─────────────────────────
@@ -2117,6 +2126,7 @@ function itemsHTML(items){
 }
 function updateInfo(s){
   const n = s.updates ? s.updates.total : 0, u = s.update;
+  if (u && u.running) return n ? `正在安裝 ${n} 個更新…<br>大約 1～5 分鐘，好了會通知你` : `正在檢查有沒有新的更新…<br>有的話會順便裝好，完成會通知你`;
   let info = s.updates ? (n ? `有 ${n} 個套件可以更新${s.updates.security?`（含 ${s.updates.security} 個安全更新）`:""}` : "系統已經是最新的 ✨") : "";
   if (u && u.last) info += `${info?"<br>":""}上次更新${u.last.ok?"成功":`<span style="color:var(--bad)">失敗</span>`}・${when(u.last.time)}`;
   return info;
@@ -2124,7 +2134,7 @@ function updateInfo(s){
 function updateBtn(s){
   const u = s.update, n = s.updates ? s.updates.total : 0;
   if (!u || !u.supported) return "";
-  return u.running ? `<button class="ubtn" disabled><span class="spin"></span>更新中…</button>`
+  return u.running ? `<button class="ubtn" disabled><span class="spin"></span>${n ? "更新中…" : "檢查中…"}</button>`
     : `<button class="ubtn" data-update="${esc(s.node||"")}" data-label="${esc(s.name)}" data-n="${n}">${I("upd").replace("<svg","<svg style=\"width:15px;height:15px\"")}${n?`更新（${n}）`:"檢查更新"}</button>`;
 }
 function greet(n, total){
@@ -2551,7 +2561,16 @@ function morph(a, b){
     return flipWidth(a, () => { patch(a, b); a.animate([{opacity:.35}, {opacity:1}], {duration:320, easing:EASE}); });
   }
   if (a.hasAttribute("data-x") && a.innerHTML !== b.innerHTML) {
-    patch(a, b); if (canAnim()) a.animate([{opacity:0}, {opacity:1}], {duration:360, easing:EASE});
+    if (!canAnim() || !a.isConnected) return patch(a, b);
+    a._xb = b;                                    // 先淡出舊字、再換上新字淡入；高度跟著平順變化
+    if (a._xing) return;
+    a._xing = true;
+    a.animate([{opacity:1}, {opacity:0}], {duration:150, easing:"cubic-bezier(.4,0,1,1)", fill:"forwards", id:"ui"}).finished.catch(()=>{}).then(() => {
+      const h0 = a.offsetHeight; patch(a, a._xb); const h1 = a.offsetHeight; a._xing = false;
+      a.getAnimations().forEach(x => x.cancel());
+      a.animate([{opacity:0, transform:"translateY(3px)"}, {opacity:1, transform:"none"}], {duration:300, easing:EASE, id:"ui"});
+      if (Math.abs(h1 - h0) > 1) a.animate([{height:h0+"px", overflow:"hidden"}, {height:h1+"px", overflow:"hidden"}], {duration:300, easing:EASE, id:"ui"});
+    });
     return;
   }
   patch(a, b);
@@ -2638,8 +2657,9 @@ function render(list){
   for (const s of list) {
     const old = LIST.find(x => keyOf(x) === keyOf(s));
     if (old && old.update && old.update.running && s.update && !s.update.running) {
-      const ok = s.update.last && s.update.last.ok;
-      setTimeout(() => toast(ok ? `「${s.name}」更新完成 ✨` : `「${s.name}」更新失敗，可以再試一次`, ok ? "ok" : "bad"), 400);
+      const ok = s.update.last && s.update.last.ok, k = s.update.last && s.update.last.n;
+      const msg = !ok ? `「${s.name}」更新失敗，可以再試一次` : k ? `「${s.name}」更新完成，裝好 ${k} 個更新 ✨` : k === 0 ? `「${s.name}」檢查完成，已經是最新的 ✨` : `「${s.name}」更新完成 ✨`;
+      setTimeout(() => toast(msg, ok ? "ok" : "bad"), 400);
     }
   }
   LIST = list; flagAccent();
@@ -3040,11 +3060,11 @@ document.addEventListener("click", async e => {
     const ok = await modal({icon:"upd", cls:"theme", title: n ? `更新「${label}」？` : `檢查「${label}」的更新？`,
       text: n ? `會在背景安裝 ${n} 個套件更新，大約 1～5 分鐘。\n期間部分服務可能會短暫重新啟動。` : "目前沒有偵測到更新，\n要重新檢查並安裝最新的更新嗎？", ok: n ? "開始更新" : "檢查"});
     if (!ok) return;
-    flipWidth(ub, () => { ub.disabled = true; ub.innerHTML = `<span class="spin"></span>開始中…`; });
+    flipWidth(ub, () => { ub.disabled = true; ub.innerHTML = `<span class="spin"></span>${n ? "更新中…" : "檢查中…"}`; });
     try {
       const r = await fetch("/api/update?node="+encodeURIComponent(node), {method:"POST", headers:{"X-Token":getTok()}});
       const d = await r.json().catch(()=>({}));
-      (r.ok && d.ok) ? toast("已開始更新，好了會通知你") : toast(d.message || d.error || "無法開始更新", "bad");
+      if (!(r.ok && d.ok)) toast(d.message || d.error || "無法開始更新", "bad");
     } catch(err) { toast("連線失敗，請稍後再試", "bad"); }
     return tick();
   }
