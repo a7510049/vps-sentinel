@@ -749,7 +749,7 @@ html::-webkit-scrollbar-thumb{background:color-mix(in srgb,var(--text) 22%,trans
 [data-lite="on"] .card,[data-lite="on"] .panel{transform:translateZ(0)}
 /* 主題色（國旗配色）切換時直接換，不做漸變：漸變的那半秒內整頁每一格都要重算顏色，手機上滑動會卡 */
 :root[data-lite="on"]{transition:background var(--t-mid)}
-/* 展開「容器與服務」：直接打開，清單整塊淡入。原本是一邊撐高一邊排版，每一格都要重排整頁，iPhone 上特別卡 */
+/* 展開「容器與服務」：高度由程式用固定數字做動畫（foldLite），清單整塊淡入，不再每一行各自動畫；原本的格線撐開法在 iPhone 上特別卡 */
 [data-lite="on"] .collapse{transition:none}
 [data-lite="on"] .more .item,[data-lite="on"] .more .grp{opacity:1;transform:none;transition:background var(--t-fast)}
 [data-lite="on"] .more.open .list{animation:drop var(--t-mid) var(--ease) both}

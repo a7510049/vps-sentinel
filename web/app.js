@@ -1004,6 +1004,22 @@ function moveInd(seg){
   if (!on || !ind) return;
   ind.style.width = on.offsetWidth + "px"; ind.style.transform = `translateX(${on.offsetLeft}px)`;
 }
+/* 手機展開／收起「容器與服務」：先量好最後的高度，再用固定的數字做高度動畫。
+   電腦版用的格線撐開法每一格都要重算整個格線，iPhone 上會卡 */
+function foldLite(more, on){
+  const c = more.querySelector(".collapse");
+  if (!c) return;
+  const h0 = c.getBoundingClientRect().height;
+  c.getAnimations().forEach(a => a.cancel());
+  if (on) {
+    more.classList.add("open");
+    const h1 = c.getBoundingClientRect().height;
+    c.animate([{height:h0 + "px", overflow:"hidden"}, {height:h1 + "px", overflow:"hidden"}], {duration:T.mid, easing:EASE, id:"ui"});
+  } else {                                        // 收起：動畫跑完才真的關上，裡面的字不會先消失
+    c.animate([{height:h0 + "px", overflow:"hidden"}, {height:"0px", overflow:"hidden"}], {duration:T.mid, easing:EASE, fill:"forwards", id:"ui"})
+      .finished.then(a => { if (!open[more.querySelector("[data-toggle]").dataset.toggle]) more.classList.remove("open"); a.cancel(); }).catch(() => {});
+  }
+}
 function initSegs(root){
   // 先一次量完所有按鈕的位置，再一次寫回去；量一個寫一個的話，每一組都要整頁重新排版一次（手機上開設定會頓將近半秒）
   const segs = [...root.querySelectorAll(".seg")].map(sg => { sg.classList.add("noanim"); return [sg.querySelector("button.on"), sg.querySelector(".ind")]; });
@@ -1533,7 +1549,7 @@ document.addEventListener("click", async e => {
     return;
   }
   const tg = t.closest("[data-toggle]");
-  if (tg) { const k = tg.dataset.toggle; open[k] = !open[k]; tg.parentElement.classList.toggle("open", open[k]); return; }
+  if (tg) { const k = tg.dataset.toggle; open[k] = !open[k]; return isLite() && canAnim() ? foldLite(tg.parentElement, open[k]) : tg.parentElement.classList.toggle("open", open[k]); }
   const fl = t.closest("[data-filter]");
   if (fl) {
     FILTER = FILTER===fl.dataset.filter ? "" : fl.dataset.filter;
