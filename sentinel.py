@@ -168,6 +168,44 @@ def parse_peers(raw):
 
 
 PEERS = parse_peers(C.get("PEERS", ""))
+
+
+def peers_conf():
+    """把 PEERS 寫回設定檔的格式（密碼跟這台一樣就不寫）"""
+    return ",".join(f"{p['name']}={p['url']}" + (f"|{p['token']}" if p["token"] != TOKEN else "") for p in PEERS)
+
+
+def set_peer(name, url, token, force=False):
+    """網頁上修改其他主機的連線網址；會先試連，連不上就問要不要照樣儲存"""
+    i = next((k for k, p in enumerate(PEERS) if p["name"] == name), None)
+    if i is None:
+        return False, "找不到這台主機", False
+    url = re.sub(r"[\s,|]", "", str(url or ""))
+    if not url:
+        return False, "網址不能是空白", False
+    token = re.sub(r"[\s,|]", "", str(token or "")) or PEERS[i]["token"]
+    new = parse_peers(f"{name}={url}|{token}")[0]
+    pu = urllib.parse.urlsplit(new["url"])
+    try:
+        pu.port
+    except ValueError:
+        pu = None
+    if not pu or pu.scheme not in ("http", "https") or not pu.hostname:
+        return False, "網址格式不對，例如 https://網域:9443 或 http://IP:8787", False
+    if not force:
+        try:
+            req = urllib.request.Request(new["url"] + "/api/status", headers={"X-Token": new["token"]})
+            with urllib.request.urlopen(req, timeout=6) as r:
+                json.loads(r.read())
+        except Exception as e:  # noqa: BLE001
+            return False, peer_error(e, new["url"]), True
+    PEERS[i] = new
+    try:
+        write_conf({"PEERS": peers_conf()})
+    except OSError as e:
+        return False, f"無法寫入設定檔：{e}", False
+    log(f"更改「{name}」的連線網址：{new['url']}")
+    return True, f"已更新「{name}」的連線網址", False
 PEER_SEEN = {}                                  # 其他主機最後一次連上的時間（會存檔）
 TG_SENT = {}                                    # 每台主機已經通知到哪一筆事件（事件時間，會存檔）
 TG_MSGS = []                                    # 傳出去的通知 [時間, 聊天, 訊息編號]，到期自動刪除（會存檔）
@@ -1185,7 +1223,8 @@ def fetch_peer(p):
         return data
     except Exception as e:  # noqa: BLE001
         return {"name": p["name"], "node": p["name"], "online": False, "level": "bad",
-                "problems": ["連不上"], "error": peer_error(e, p["url"]), "last_seen": PEER_SEEN.get(p["name"])}
+                "problems": ["連不上"], "error": peer_error(e, p["url"]), "last_seen": PEER_SEEN.get(p["name"]),
+                "peer_url": p["url"]}
 
 
 def peer_error(e, url):
@@ -1622,7 +1661,7 @@ class Handler(BaseHTTPRequestHandler):
         if self.is_cloud():
             return self.proxy_cloud()
         u = urllib.parse.urlsplit(self.path)
-        if u.path not in ("/api/update", "/api/rename", "/api/traffic", "/api/telegram", "/api/links", "/api/self", "/api/cloud-login"):
+        if u.path not in ("/api/update", "/api/rename", "/api/traffic", "/api/telegram", "/api/links", "/api/self", "/api/cloud-login", "/api/peer"):
             return self.send(404, '{"error":"找不到"}')
         if not self.authed():
             time.sleep(1)
@@ -1648,6 +1687,13 @@ class Handler(BaseHTTPRequestHandler):
             except Exception as e:  # noqa: BLE001
                 return self.send(502, json.dumps({"ok": False, "message": f"連不上：{e}"[:150]},
                                                   ensure_ascii=False))
+        if u.path == "/api/peer":
+            try:
+                d = json.loads(body or b"{}")
+            except ValueError:
+                d = {}
+            ok, msg, tf = set_peer(d.get("name"), d.get("url"), d.get("token"), bool(d.get("force")))
+            return self.send(200 if ok else 400, json.dumps({"ok": ok, "message": msg, "test_failed": tf}, ensure_ascii=False))
         if u.path == "/api/cloud-login":            # 網頁上已經登入哨兵：直接發雲端硬碟通行證
             if not CLOUD_URL:
                 return self.send(404, '{"ok":false}')
@@ -2222,6 +2268,12 @@ button{font:inherit;color:inherit}
 .tgd .chats button{border:0;cursor:pointer;border-radius:var(--r-pill);padding:7px 12px;font-size:var(--fs-s);font-weight:800;color:var(--text);
   background:var(--inset);box-shadow:var(--ring);transition:background var(--t-fast),box-shadow var(--t-fast),color var(--t-fast)}
 .tgd .chats button.on{color:#fff;background:var(--grad);box-shadow:none}
+.peerfix{margin:14px auto 0;display:inline-flex;align-items:center;gap:6px}
+.bigoff .peerfix{display:flex;width:max-content}
+.peerfix svg{width:14px;height:14px}
+.offline .peerfix{margin:10px 0 0}
+.dialog .msg{min-height:18px;font-size:var(--fs-s);font-weight:700;line-height:1.5;color:var(--sub)}
+.dialog .msg.bad{color:var(--bad)}
 .tgd .msg{min-height:18px;font-size:var(--fs-s);font-weight:700;line-height:1.5;color:var(--sub)}
 .tgd .msg.bad{color:var(--bad)}.tgd .msg.ok{color:var(--ok)}
 .dialog .btns.three{grid-template-columns:1fr 1fr 1.3fr}
@@ -2834,7 +2886,7 @@ function mcard(s, i){
   const lv = lvOf(s), key = keyOf(s);
   let h = `<div class="card glass ${lv==="ok"?"":lv}" data-key="${esc(key)}" data-keyed style="--i:${i}"><div class="head" data-key="hd">${avatar(s)}
     <div class="nm"><h2><span>${esc(s.name)}</span>${editBtn(s)}</h2><div class="sub">${s.online ? esc(place(s) || s.os) : (s.last_seen ? `離線・${ago(s.last_seen)}` : "目前連不上")}</div></div>`;
-  if (!s.online) return h + `</div><div class="offline" data-key="off">${I("off")}<div>連不上這台主機<div class="sub">${s.last_seen?esc(seen(s))+"<br>":""}${esc(s.error||"")}</div></div></div></div>`;
+  if (!s.online) return h + `</div><div class="offline" data-key="off">${I("off")}<div>連不上這台主機<div class="sub">${s.last_seen?esc(seen(s))+"<br>":""}${esc(s.error||"")}</div>${peerBtn(s)}</div></div></div>`;
   h += `<span class="uptime">開機 ${up(s.uptime)}</span></div>` + alerts(s);
   h += `<div class="metrics" data-key="mt">` + metric("cpu", "處理器", s.cpu, `${s.cores} 核`) +
        metric("mem", "記憶體", s.mem.pct, `${size(s.mem.used)} / ${size(s.mem.total)}`) +
@@ -2929,7 +2981,7 @@ function detail(s){
       <div style="min-width:0" data-key="dl" data-keyed><h2 class="nmh" data-key="nm" style="display:flex;align-items:center;gap:8px;flex-wrap:wrap"><span>${esc(s.name)}</span>${editBtn(s)}</h2>
       <div class="sub dsub" data-key="ds">${s.online ? `<span title="核心版本 ${esc(s.kernel)}">${where?esc(where)+"・":""}${esc(s.os)}・開機 ${up(s.uptime)}</span>` : `<span>${s.last_seen ? esc(seen(s)) : "目前沒有回應"}</span>`}</div>${s.online ? alerts(s) : ""}</div>
       ${s.online ? `<div class="act"><div class="sub" data-x style="line-height:1.6;font-weight:600">${updateInfo(s)}</div>${updateBtn(s)}</div>` : ""}</div>`;
-  if (!s.online) return h + `<div class="panel glass bigoff" data-key="off" style="--i:1"><b>連不上這台主機</b>${esc(s.error||"")}</div></div>`;
+  if (!s.online) return h + `<div class="panel glass bigoff" data-key="off" style="--i:1"><b>連不上這台主機</b>${esc(s.error||"")}${peerBtn(s)}</div></div>`;
   const fp = PREF.show.info ? sysPanel(s) : "";
   const d0 = s.disks[0] || {pct:0, used:0, total:0};
   h += `<div class="gauges" data-key="gg" style="${fp?"":"grid-template-columns:repeat(3,minmax(0,1fr))"}">${ring("cpu", "處理器", s.cpu, `${s.cores} 核心`, 1)}
@@ -3450,6 +3502,42 @@ function initSegs(root){
   root.querySelectorAll(".seg").forEach(sg => { sg.classList.add("noanim"); moveInd(sg); });
   requestAnimationFrame(() => requestAnimationFrame(() => root.querySelectorAll(".seg").forEach(sg => sg.classList.remove("noanim"))));
 }
+/* 其他主機連不上：可以直接在網頁上改它的連線網址（例如網域、連接埠換了） */
+const peerBtn = s => s.node ? `<button class="ubtn ghost sm peerfix" data-peeredit="${esc(s.node)}">${I("edit")}更改連線網址</button>` : "";
+function peerModal(s){
+  const v = document.createElement("div"); v.className = "veil";
+  v.innerHTML = `<div class="dialog glass pop"><div class="ico big theme">${I("off")}</div><h3>更改「${esc(s.name)}」的連線網址</h3>
+    <p>網域、連接埠換了，或是改用網域連線時，在這裡換成新的網址</p>
+    <div class="form">
+      <label>網址<input class="field" data-k="url" inputmode="url" autocomplete="off" spellcheck="false" placeholder="https://網域:9443 或 http://IP:8787" value="${esc(s.peer_url || "")}">
+        <small>就是平常打開那台哨兵用的網址</small></label>
+      <label>密碼<input class="field" data-k="token" autocomplete="off" spellcheck="false" placeholder="沒變就留空">
+        <small>那台的密碼（TOKEN）有換才需要填</small></label>
+      <div class="msg"></div>
+    </div>
+    <div class="btns"><button class="ubtn ghost" data-r="0">取消</button><button class="ubtn" data-save>測試並儲存</button></div></div>`;
+  $("#layer").appendChild(v);
+  const q = k => v.querySelector(`[data-k="${k}"]`), msg = v.querySelector(".msg"), sb = v.querySelector("[data-save]");
+  let force = false, busy = false;
+  const done = () => { if (v._d) return; v._d = 1; v.classList.add("closing"); setTimeout(() => v.remove(), 360); };
+  v._esc = done;
+  q("url").addEventListener("input", () => { force = false; sb.textContent = "測試並儲存"; });
+  v.addEventListener("click", async e => {
+    if (e.target === v || e.target.closest("[data-r]")) return done();
+    if (!e.target.closest("[data-save]") || busy) return;
+    busy = true; sb.disabled = true; sb.innerHTML = `<span class="spin"></span>測試中…`; msg.className = "msg"; msg.textContent = "";
+    try {
+      const r = await fetch("/api/peer", {method:"POST", headers:{"X-Token":getTok(), "Content-Type":"application/json"},
+        body: JSON.stringify({name: s.node, url: q("url").value.trim(), token: q("token").value.trim(), force})});
+      const d = await r.json().catch(() => ({}));
+      if (r.ok && d.ok) { toast(d.message); done(); tick(); }
+      else { msg.className = "msg bad"; msg.textContent = (d.message || "儲存失敗") + (d.test_failed ? "。確定網址沒錯的話，可以按「仍然儲存」。" : "");
+        if (d.test_failed) force = true; }
+    } catch(err) { msg.className = "msg bad"; msg.textContent = "連線失敗，請稍後再試"; }
+    busy = false; sb.disabled = false; sb.textContent = force ? "仍然儲存" : "測試並儲存";
+  });
+  setTimeout(() => q("url").focus(), 60);
+}
 /* 編輯主機：名稱＋管理後台網址 */
 function hostModal(name, links){
   return new Promise(res => {
@@ -3733,6 +3821,8 @@ document.addEventListener("click", async e => {
     return render(LIST);
   }
 
+  const pe = t.closest("[data-peeredit]");
+  if (pe) { e.stopPropagation(); const s = LIST.find(x => (x.node || "") === pe.dataset.peeredit); return s && peerModal(s); }
   const lk = t.closest("[data-links]");
   if (lk) { e.stopPropagation(); const s = LIST.find(x => keyOf(x) === lk.dataset.links); if (window._menu) return closeMenu(); return s && linksMenu(lk, s); }
   if (window._menu && !t.closest(".lmenu")) closeMenu();
