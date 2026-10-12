@@ -31,6 +31,7 @@ const P = {
   cloud:'<path d="M17.5 19a4.5 4.5 0 1 0-1.3-8.8A6 6 0 0 0 4.6 12.5 3.5 3.5 0 0 0 6.5 19Z"/>',
   search:'<circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/>',
   key:'<circle cx="7.5" cy="15.5" r="4.5"/><path d="m10.7 12.3 9.8-9.8M17 6l3 3M14.5 8.5l2 2"/>',
+  finger:'<path d="M12 10a2 2 0 0 0-2 2c0 1-.1 2.5-.26 4M14 13.1c0 2.4 0 6.4-1 8.9M17.3 21c.1-.6.4-2.3.5-3M2 12a10 10 0 0 1 18-6M2 16h.01M21.8 16c.2-2 .13-5.35 0-6M5 19.5C5.5 18 6 15 6 12a6 6 0 0 1 .34-2M8.65 22c.2-.66.45-1.3.57-2M9 6.8a6 6 0 0 1 9 5.2v2"/>',
   chev:'<path d="m6 9 6 6 6-6"/>', x:'<path d="M18 6 6 18M6 6l12 12"/>',
   warn:'<path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3z"/><path d="M12 9v4M12 17h.01"/>',
   ok:'<circle cx="12" cy="12" r="9.5"/><path d="m8.5 12 2.5 2.5 4.5-5"/>',
@@ -343,7 +344,7 @@ const COL = {cpu:"var(--c-cpu)", mem:"var(--c-mem)", rx:"var(--c-rx)", tx:"var(-
 /* 概念 → [顏色樣式, 圖示] */
 const ICO = {cpu:["cpu","cpu"], mem:["mem","mem"], disk:["disk","disk"], load:["load","gauge"], down:["down","down"], up:["up","up"],
   net:["net","net"], trend:["trend","trend"], month:["month","month"], box:["box","box"], bell:["bell","bell"], info:["info","info"],
-  layers:["theme","layers"], flag:["theme","flag"], key:["theme","key"]};
+  layers:["theme","layers"], flag:["theme","flag"], key:["theme","key"], finger:["theme","finger"]};
 const IC = (k, cls="sm") => `<span class="ico ${cls} ${ICO[k][0]}">${I(ICO[k][1])}</span>`;
 
 /* ═════════ 手機版 ═════════ */
@@ -956,7 +957,8 @@ function settingsBody(){
   <div class="sec"><h4>通知</h4><div class="group">
     <button class="opt optbtn" data-tg>${IC("bell")}<span class="lab">Telegram 通知<small class="tgst">讀取中…</small></span><span class="chev">${I("chev")}</span></button>
   </div></div>
-  ${LIST.some(s => s.online) ? `<div class="sec"><h4>安全</h4><div class="group">${LIST.filter(s => s.online).map(s =>
+  ${LIST.some(s => s.online) ? `<div class="sec"><h4>安全</h4><div class="group">${PK_OK && LIST.some(s => !s.node && s.online) ?
+    `<button class="opt optbtn" data-pk>${IC("finger")}<span class="lab">手機金鑰登入<small class="pkst">讀取中…</small></span><span class="chev">${I("chev")}</span></button>` : ""}${LIST.filter(s => s.online).map(s =>
     `<button class="opt optbtn" data-newtok="${esc(s.node||"")}" data-label="${esc(s.name)}">${IC("key")}<span class="lab">換一組新密碼${LIST.length > 1 ? `：${esc(s.name)}` : ""}<small>擔心密碼外流時用，舊密碼會馬上失效</small></span><span class="chev">${I("chev")}</span></button>`).join("")}</div></div>` : ""}
   <div class="sec"><h4>資料</h4><div class="group">
     <div class="opt"><span class="lab">自動更新<small>多久抓一次最新狀態</small></span>${seg("refresh",[[3,"3 秒"],[5,"5 秒"],[10,"10 秒"],[30,"30 秒"]])}</div>
@@ -1201,7 +1203,7 @@ function openSettings(){
   const sheet = v.querySelector(".sheet"), body = v.querySelector(".sbody"), top = v.querySelector(".top");
   body.addEventListener("scroll", () => top.classList.toggle("under", body.scrollTop > 4), {passive:true});
   initSegs(body);
-  tgStatus(body); selfStatus(body);
+  tgStatus(body); selfStatus(body); pkStatus(body);
   sheet.addEventListener("animationend", e => { if (e.target === sheet && !v._d) sheet.classList.add("ready"); });
   const close = () => { if (v._d) return; v._d = 1; sheet.classList.remove("back"); v.classList.add("closing"); setTimeout(()=>v.remove(), 380); };
   v._esc = close;
@@ -1209,6 +1211,7 @@ function openSettings(){
   v.addEventListener("click", e => {
     if (e.target === v || e.target.closest("[data-close]")) return close();
     if (e.target.closest("[data-tg]")) return tgModal().then(() => tgStatus(body));
+    if (e.target.closest("[data-pk]")) return pkModal().then(() => pkStatus(body));
     const nt = e.target.closest("[data-newtok]");
     if (nt) return newToken(nt.dataset.newtok, nt.dataset.label);
     const sc = e.target.closest("[data-selfcheck]");
@@ -1286,12 +1289,124 @@ async function newToken(node, label){
 function restart(){ clearTimeout(timer); timer = setTimeout(tick, (PREF.refresh || 5) * 1000); }
 addEventListener("keydown", e => { if (e.key === "Escape") { const v = [...document.querySelectorAll("#layer .veil")].pop(); if (v && v._esc) v._esc(); } });
 
+/* ═════════ 手機金鑰登入：用指紋、臉部辨識代替輸入密碼（要用 https 網址打開才能用） ═════════ */
+const PK_OK = !!(window.PublicKeyCredential && window.isSecureContext && navigator.credentials);
+const ub = s => Uint8Array.from(atob(String(s).replace(/-/g, "+").replace(/_/g, "/")), c => c.charCodeAt(0));
+const bu = b => btoa(String.fromCharCode(...new Uint8Array(b))).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+const isPhone = () => /iPhone|iPad|Android/.test(navigator.userAgent);
+async function pkCall(path, body, auth){
+  const r = await fetch(path, {method:"POST", headers:{...(auth ? {"X-Token":getTok()} : {}), "Content-Type":"application/json"}, body:JSON.stringify(body)});
+  const d = await r.json().catch(() => ({}));
+  if (r.status === 404) throw new Error("主機還沒更新到新版，先更新再試");
+  return d;
+}
+const pkErr = e => e && e.name === "InvalidStateError" ? `這${isPhone() ? "支手機" : "台裝置"}已經登記過了`
+  : e && e.name === "NotAllowedError" ? "已取消，或等太久了" : e && e.name === "SecurityError" ? "網址不符，請用平常的網域網址打開哨兵"
+  : (e && e.message) || "失敗了，請再試一次";
+function devName(){
+  const u = navigator.userAgent;
+  return /iPhone/.test(u) ? "iPhone" : /iPad/.test(u) ? "iPad" : /Android/.test(u) ? "Android 手機" : /Mac/.test(u) ? "Mac" : /Windows/.test(u) ? "Windows 電腦" : "我的裝置";
+}
+async function pkRegister(name){
+  const b = await pkCall("/api/passkey", {action:"begin"}, 1);
+  if (!b.ok) throw new Error(b.message || "沒辦法開始登記");
+  const c = await navigator.credentials.create({publicKey:{
+    challenge:ub(b.challenge), rp:{id:b.rp, name:"VPS 哨兵"},
+    user:{id:ub(b.user), name:`VPS 哨兵（${b.name}）`, displayName:`VPS 哨兵（${b.name}）`},
+    pubKeyCredParams:[{type:"public-key", alg:-7}, {type:"public-key", alg:-257}], timeout:120000, attestation:"none",
+    authenticatorSelection:{residentKey:"required", requireResidentKey:true, userVerification:"required"},
+    excludeCredentials:(b.exclude || []).map(id => ({type:"public-key", id:ub(id)}))}});
+  const d = await pkCall("/api/passkey", {action:"finish", name, clientDataJSON:bu(c.response.clientDataJSON),
+    attestationObject:bu(c.response.attestationObject)}, 1);
+  if (!d.ok) throw new Error(d.message || "登記失敗");
+  return d;
+}
+async function pkLogin(){
+  const b = await pkCall("/api/passkey-login", {action:"begin"});
+  if (!b.challenge) throw new Error("主機還沒更新到新版");
+  const c = await navigator.credentials.get({publicKey:{challenge:ub(b.challenge), rpId:b.rp, timeout:120000, userVerification:"required"}});
+  const d = await pkCall("/api/passkey-login", {action:"finish", id:bu(c.rawId), clientDataJSON:bu(c.response.clientDataJSON),
+    authenticatorData:bu(c.response.authenticatorData), signature:bu(c.response.signature)});
+  if (!d.ok || !d.token) throw new Error(d.message || "登入失敗");
+  return d.token;
+}
+async function pkStatus(root){
+  const el = root.querySelector(".pkst"); if (!el) return;
+  try { const d = await pkCall("/api/passkey", {action:"list"}, 1);
+    el.textContent = d.keys && d.keys.length ? `已登記 ${d.keys.length} 支，登入時用指紋或臉部辨識` : "還沒登記，點這裡開始";
+    el.classList.toggle("on", !!(d.keys && d.keys.length));
+  } catch(e) { el.textContent = e.message; }
+}
+async function pkModal(){
+  const v = document.createElement("div"); v.className = "veil";
+  const me = isPhone() ? "這支手機" : "這台裝置";
+  v.innerHTML = `<div class="dialog glass pop pkd">${IC("finger","big")}<h3>手機金鑰登入</h3>
+    <p>登記之後，登入時用指紋或臉部辨識就好，不用再輸入密碼</p>
+    <div class="form"><div class="pklist"></div>
+      <label class="pkadd">幫${me}取個名字<input class="field" data-k="name" maxlength="20" value="${esc(devName())}">
+        <small>最多 5 支。換密碼後金鑰照樣能用，原本的密碼也還是可以登入</small></label>
+      <div class="msg"></div></div>
+    <div class="btns"><button class="ubtn ghost" data-r="0">關閉</button><button class="ubtn" data-add>登記${me}</button></div></div>`;
+  $("#layer").appendChild(v);
+  const list = v.querySelector(".pklist"), msg = v.querySelector(".msg"), add = v.querySelector("[data-add]"), lab = v.querySelector(".pkadd");
+  const day = t => { const d = new Date(t * 1000); return `${d.getMonth()+1}/${d.getDate()}`; };
+  let keys = [], max = 5, busy = false;
+  const draw = () => {
+    list.innerHTML = keys.map(k => `<div class="pkrow">${I("finger")}<span>${esc(k.name)}<small>${day(k.added)} 登記${k.used ? `・${day(k.used)} 用過` : "・還沒用過"}</small></span>
+      <button type="button" class="iconbtn" data-del="${esc(k.id)}" data-name="${esc(k.name)}" title="刪掉這支">${I("x")}</button></div>`).join("");
+    const full = keys.length >= max;
+    lab.style.display = full ? "none" : "";
+    add.disabled = full; add.textContent = full ? `已經登記滿 ${max} 支` : `登記${me}`;
+  };
+  try { const d = await pkCall("/api/passkey", {action:"list"}, 1); keys = d.keys || []; max = d.max || 5; draw(); }
+  catch(e) { msg.className = "msg bad"; msg.textContent = e.message; }
+  return new Promise(res => {
+    const done = () => { if (v._d) return; v._d = 1; v.classList.add("closing"); setTimeout(() => { v.remove(); res(); }, 360); };
+    v._esc = done;
+    v.addEventListener("click", async e => {
+      if (e.target === v || e.target.closest("[data-r]")) return done();
+      if (busy) return;
+      const del = e.target.closest("[data-del]");
+      if (del) {
+        if (!await modal({icon:"finger", cls:"bell", title:`刪掉「${del.dataset.name}」？`, text:"刪掉之後，它就不能再用指紋或臉部辨識登入哨兵。", ok:"刪除"})) return;
+        busy = true;
+        const d = await pkCall("/api/passkey", {action:"delete", id:del.dataset.del}, 1).catch(err => ({message:err.message}));
+        busy = false;
+        if (d.ok) { keys = d.keys || []; draw(); toast(d.message); } else toast(d.message || "刪除失敗", "bad");
+        return;
+      }
+      if (!e.target.closest("[data-add]")) return;
+      busy = true; add.disabled = true; add.innerHTML = `<span class="spin"></span>請在${me}上確認…`; msg.className = "msg"; msg.textContent = "";
+      try {
+        const d = await pkRegister(v.querySelector('[data-k="name"]').value.trim());
+        keys = d.keys || []; store("vps-pk", "1"); toast(d.message);
+      } catch(err) { msg.className = "msg bad"; msg.textContent = pkErr(err); }
+      busy = false; draw();
+    });
+  });
+}
+
 /* ═════════ 登入 ═════════ */
 function login(msg){
   $("#app").innerHTML = `<div class="login glass ${msg?"shake":""}"><svg class="logo" viewBox="0 0 512 512" aria-hidden="true"><defs><linearGradient id="lblg" x1="0" y1="0" x2="0" y2="1"><stop offset="0" style="stop-color:color-mix(in srgb,var(--a1) 70%,#fff)"/><stop offset="1" style="stop-color:var(--a2)"/></linearGradient><linearGradient id="lhlg" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#fff" stop-opacity=".24"/><stop offset=".45" stop-color="#fff" stop-opacity="0"/></linearGradient><mask id="lmlg"><rect width="512" height="512" fill="#fff"/><path d="M204 258l36 36 72-76" fill="none" stroke="#000" stroke-width="30" stroke-linecap="round" stroke-linejoin="round"/></mask></defs><rect width="512" height="512" rx="115" fill="url(#lblg)"/><rect width="512" height="512" rx="115" fill="url(#lhlg)"/><path d="M256 108 371 150c9 3 15 12 15 22v72c0 84-52 140-122 168-5 2-11 2-16 0-70-28-122-84-122-168v-72c0-10 6-19 15-22Z" fill="#fff" mask="url(#lmlg)" transform="translate(256 262) scale(.88) translate(-256 -258)"/></svg><h1>VPS 哨兵</h1><p>輸入存取密碼就能看到你的主機</p>
     <input id="tok" class="field" type="password" placeholder="存取密碼" autocomplete="current-password">
-    <div class="err">${msg||""}</div><button class="ubtn" data-login>進入</button></div>`;
+    <div class="err">${msg||""}</div><button class="ubtn" data-login>進入</button>${PK_OK && store("vps-pk") ? pkBtn : ""}</div>`;
   $("#tok").addEventListener("keydown",e=>{ if(e.key==="Enter"){ setTok(e.target.value.trim()); tick(); }});
+  if (PK_OK && !store("vps-pk")) pkCall("/api/passkey-login", {action:"has"}).then(d => {   // 這台裝置沒用過：問主機有沒有登記過，有才顯示
+    const box = $("#app .login");
+    if (!d.has || !box || box.querySelector("[data-pklogin]")) return;
+    box.insertAdjacentHTML("beforeend", pkBtn);
+    const b = box.lastElementChild;
+    if (canAnim()) b.animate([{opacity:0, transform:"translateY(-4px)"}, {opacity:1, transform:"none"}], {duration:T.mid, easing:EASE});
+  }).catch(() => {});
+}
+const pkBtn = `<button class="ubtn ghost pkbtn" data-pklogin>${I("finger")}用手機金鑰登入</button>`;
+async function pkLoginClick(b){
+  const err = $("#app .login .err");
+  b.disabled = true; err.textContent = "";
+  try { setTok(await pkLogin()); store("vps-pk", "1"); return tick(); }
+  catch(e) { if (e.name !== "NotAllowedError" && e.name !== "AbortError") err.textContent = pkErr(e); }
+  b.disabled = false;
 }
 
 /* ═════════ 點擊 ═════════ */
@@ -1299,6 +1414,7 @@ document.addEventListener("click", async e => {
   if (e.target.closest("#layer")) return;
   const t = e.target;
   if (t.closest("[data-login]")) { setTok($("#tok").value.trim()); return tick(); }
+  if (t.closest("[data-pklogin]")) return pkLoginClick(t.closest("[data-pklogin]"));
   if (t.closest("[data-settings]")) return openSettings();
   const rg = t.closest("[data-range]");
   if (rg) { if (RANGE !== rg.dataset.range) { RANGE = rg.dataset.range; store("vps-range", RANGE); render(LIST); } return; }
