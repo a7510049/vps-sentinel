@@ -26,6 +26,7 @@ def free_port():
 class Server(unittest.TestCase):
     """每個測試類別各自跑一個哨兵（用暫存資料夾，不會動到正式設定）"""
     STATE = None                                   # 啟動前先放好的存檔內容
+    EXTRA = ""                                     # 額外的設定（每行一個）
 
     @classmethod
     def setUpClass(cls):
@@ -34,7 +35,7 @@ class Server(unittest.TestCase):
         cls.conf = conf = os.path.join(cls.tmp.name, "test.conf")
         data = os.path.join(cls.tmp.name, "data")
         with open(conf, "w", encoding="utf-8") as f:
-            f.write(f"BIND=127.0.0.1\nPORT={cls.port}\nTOKEN={TOKEN}\nNAME=測試主機\nDATA_DIR={data}\n")
+            f.write(f"BIND=127.0.0.1\nPORT={cls.port}\nTOKEN={TOKEN}\nNAME=測試主機\nDATA_DIR={data}\n{cls.EXTRA}")
         if cls.STATE is not None:
             os.makedirs(data)
             with open(os.path.join(data, "state.json"), "w", encoding="utf-8") as f:

@@ -22,6 +22,8 @@ function setTok(t, remember){
   if (!t) store(KEY + "-exp", "");
   window._tok = t;
 }
+/* 連不上主機時（例如主機正在重新啟動），瀏覽器給的錯誤是英文，換成看得懂的中文 */
+const api = (path, opt) => fetch(path, opt).catch(() => { throw new Error("連線失敗，請稍後再試"); });
 const u0 = new URL(location.href);
 if (u0.searchParams.get("t")) { setTok(u0.searchParams.get("t"), true); history.replaceState(null, "", "/"); }
 
@@ -351,7 +353,7 @@ function histRaw(s){
       fetch(`/api/history?range=${RANGE}&node=${encodeURIComponent(s.node || "")}`, {headers:{"X-Token":getTok()}})
         .then(r => r.ok ? r.json() : r.json().then(d => Promise.reject(d.error || "讀取失敗")))
         .then(d => { HCACHE[k] = {at: Date.now(), data: d}; if (LIST.length) render(LIST); })
-        .catch(err => { HCACHE[k] = {at: Date.now(), err: String(err)}; if (LIST.length) render(LIST); });
+        .catch(err => { HCACHE[k] = {at: Date.now(), err: typeof err === "string" ? err : "暫時讀不到，等一下會自動再試"}; if (LIST.length) render(LIST); });
     }
   }
   return c && c.data ? c.data : (c && c.err ? {err: c.err} : null);
@@ -968,7 +970,8 @@ function sizeShift(fn){
   const z1 = {s:.92, m:1, l:1.1}[PREF.size] || 1;
   h.style.setProperty("--zr", (z1 / z0).toFixed(4)); h.classList.add("vtsize");
   window._vt = (window._vt || 0) + 1;
-  document.startViewTransition(fn).finished.finally(() => { h.classList.remove("vtsize"); window._vt--; });
+  const id = h._vts = (h._vts || 0) + 1;           // 連點兩下：前一次被中斷時，不能把這一次要用的縮放設定拿掉，不然設定面板會閃
+  document.startViewTransition(fn).finished.finally(() => { if (h._vts === id) h.classList.remove("vtsize"); window._vt--; });
 }
 /* 切換效能模式（自動／流暢優先／完整效果）：毛玻璃的模糊程度、卡片和面板的底色用 0.6 秒慢慢變過去；背景流光停在原地，不會跳回起點 */
 function perfShift(fn){
@@ -1154,7 +1157,7 @@ addEventListener("scroll", closeMenu, {passive:true, capture:true});
 addEventListener("keydown", e => { if (e.key === "Escape") closeMenu(); });
 /* ═════════ 更新哨兵本身 ═════════ */
 async function selfCall(node, action){
-  const r = await fetch("/api/self?node=" + encodeURIComponent(node), {method:"POST", headers:{"X-Token":getTok(), "Content-Type":"application/json"}, body:JSON.stringify({action})});
+  const r = await api("/api/self?node=" + encodeURIComponent(node), {method:"POST", headers:{"X-Token":getTok(), "Content-Type":"application/json"}, body:JSON.stringify({action})});
   const d = await r.json().catch(() => ({}));
   if (!r.ok) throw new Error(d.message || d.error || (r.status === 404 ? "這台還是舊版，請先手動更新一次" : "讀取失敗"));
   return d;
@@ -1207,7 +1210,7 @@ async function selfUpdate(root, jobs){
 }
 /* ═════════ Telegram 通知設定 ═════════ */
 async function tgCall(body){
-  const r = await fetch("/api/telegram", {method:"POST", headers:{"X-Token":getTok(), "Content-Type":"application/json"}, body:JSON.stringify(body)});
+  const r = await api("/api/telegram", {method:"POST", headers:{"X-Token":getTok(), "Content-Type":"application/json"}, body:JSON.stringify(body)});
   const d = await r.json().catch(() => ({}));
   if (!r.ok) throw new Error(d.message || d.error || (r.status === 404 ? "這台主機還沒更新到新版" : "發生錯誤"));
   return d;
@@ -1381,13 +1384,15 @@ const ub = s => Uint8Array.from(atob(String(s).replace(/-/g, "+").replace(/_/g, 
 const bu = b => btoa(String.fromCharCode(...new Uint8Array(b))).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
 const isPhone = () => /iPhone|iPad|Android/.test(navigator.userAgent);
 async function pkCall(path, body, auth){
-  const r = await fetch(path, {method:"POST", headers:{...(auth ? {"X-Token":getTok()} : {}), "Content-Type":"application/json"}, body:JSON.stringify(body)});
+  const r = await api(path, {method:"POST", headers:{...(auth ? {"X-Token":getTok()} : {}), "Content-Type":"application/json"}, body:JSON.stringify(body)});
   const d = await r.json().catch(() => ({}));
   if (r.status === 404) throw new Error("主機還沒更新到新版，先更新再試");
   return d;
 }
 const pkErr = e => e && e.name === "InvalidStateError" ? `這${isPhone() ? "支手機" : "台裝置"}已經登記過了`
   : e && e.name === "NotAllowedError" ? "已取消，或等太久了" : e && e.name === "SecurityError" ? "網址不符，請用平常的網域網址打開哨兵"
+  : e && (e.name === "NotSupportedError" || e.name === "ConstraintError") ? `這${isPhone() ? "支手機" : "台裝置"}不支援手機金鑰，可以改用 PIN 碼`
+  : e instanceof DOMException ? "沒有完成，請再試一次"                // 瀏覽器其他的錯誤訊息都是英文，不直接顯示
   : (e && e.message) || "失敗了，請再試一次";
 function devName(){
   const u = navigator.userAgent;

@@ -36,7 +36,7 @@ from collections import deque
 from concurrent.futures import ThreadPoolExecutor
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
-VERSION = "1.24"
+VERSION = "1.25"
 
 # ───────────────────────── 設定 ─────────────────────────
 
@@ -94,8 +94,18 @@ def _sign(msg):
     return hmac.new(TOKEN.encode(), msg.encode(), hashlib.sha256).hexdigest()
 
 
-def cloud_cookie_value():
-    return _sign("cloud-cookie:v1")
+CLOUD_DAYS = 30                                 # 雲端硬碟通行證的有效天數
+
+
+def cloud_cookie_value(exp=None):
+    """雲端硬碟通行證：裡面寫著到期時間並簽章，過期就要重新從哨兵點進去（就算被偷看到也不能一直用）"""
+    exp = int(exp or time.time() + CLOUD_DAYS * 86400)
+    return f"{exp}.{_sign(f'cloud-cookie:v2:{exp}')}"
+
+
+def cloud_cookie_ok(v):
+    exp, _, sig = (v or "").partition(".")
+    return exp.isdigit() and int(exp) > time.time() and hmac.compare_digest(sig, _sign(f"cloud-cookie:v2:{exp}"))
 
 
 def cloud_login_url():
@@ -1546,6 +1556,7 @@ class Collector:
         self.traffic = {"since": time.time(), "days": {}, "last": None}
         self.ssh_since = int(time.time() * 1_000_000)   # 從現在開始看 SSH 登入，不補報以前的
         self.saved_boot = None
+        self.jobs = {}                          # 背景工作（查更新、IPv6、連結…）
         self.load()
         if self.saved_boot and self.saved_boot != boot_id():
             self.add_event("warn", "主機重新開機了")
@@ -1704,86 +1715,114 @@ class Collector:
     def loop(self):
         last_cpu = cpu_times()
         last_net, last_t = net_bytes(), time.time()
-        tick = 0
+        tick, last_err = 0, None
         while True:
             time.sleep(2)
-            now_cpu, now_net, now_t = cpu_times(), net_bytes(), time.time()
-            dt_total = now_cpu[0] - last_cpu[0]
-            dt_idle = now_cpu[1] - last_cpu[1]
-            dt = max(now_t - last_t, 0.001)
-            with self.lock:
-                if dt_total > 0:
-                    self.cpu_pct = round(100 * (1 - dt_idle / dt_total), 1)
-                self.net = {"rx": max(0, (now_net[0] - last_net[0]) / dt),
-                            "tx": max(0, (now_net[1] - last_net[1]) / dt)}
-                if self.cpu_pct >= ALERT_CPU:
-                    self.cpu_high_since = self.cpu_high_since or now_t
-                else:
-                    self.cpu_high_since = None
-            last_cpu, last_net, last_t = now_cpu, now_net, now_t
-            if tick % 5 == 0:                         # 每 10 秒記一筆歷史、算一次流量
-                m = meminfo()
+            try:
+                now_cpu, now_net, now_t = cpu_times(), net_bytes(), time.time()
+                dt_total = now_cpu[0] - last_cpu[0]
+                dt_idle = now_cpu[1] - last_cpu[1]
+                dt = max(now_t - last_t, 0.001)
                 with self.lock:
-                    self.hist.append((round(now_t), self.cpu_pct, m["pct"],
-                                      round(self.net["rx"]), round(self.net["tx"])))
-                    self.roll(now_t)
-                c = tcp_conns()
-                with self.lock:
-                    self.conn_hist.append(c)
-                try:
-                    self.count_traffic()
-                except Exception as e:  # noqa: BLE001
-                    log("流量計算失敗：", e)
-            if tick % 30 == 0 and tick > 0:           # 每 1 分鐘存檔
-                self.save()
+                    if dt_total > 0:
+                        self.cpu_pct = round(100 * (1 - dt_idle / dt_total), 1)
+                    self.net = {"rx": max(0, (now_net[0] - last_net[0]) / dt),
+                                "tx": max(0, (now_net[1] - last_net[1]) / dt)}
+                    if self.cpu_pct >= ALERT_CPU:
+                        self.cpu_high_since = self.cpu_high_since or now_t
+                    else:
+                        self.cpu_high_since = None
+                last_cpu, last_net, last_t = now_cpu, now_net, now_t
+                if tick % 5 == 0:                         # 每 10 秒記一筆歷史、算一次流量
+                    m = meminfo()
+                    with self.lock:
+                        self.hist.append((round(now_t), self.cpu_pct, m["pct"],
+                                          round(self.net["rx"]), round(self.net["tx"])))
+                        self.roll(now_t)
+                    c = tcp_conns()
+                    with self.lock:
+                        self.conn_hist.append(c)
+                    try:
+                        self.count_traffic()
+                    except Exception as e:  # noqa: BLE001
+                        log("流量計算失敗：", e)
+                if tick % 30 == 0 and tick > 0:           # 每 1 分鐘存檔
+                    self.save()
 
-            if tick % 15 == 0:        # 每 30 秒：容器與服務
-                c, s = docker_containers(), service_states()
-                with self.lock:
-                    self.containers, self.services = c, s
-            recheck = False
-            if self.upd_running or tick % 15 == 0:    # 更新中每 2 秒看一次，平常 30 秒
-                was, now = self.upd_running, update_running()
-                if was and not now:                   # 剛更新完
-                    last = update_last()
+                if tick % 15 == 0:        # 每 30 秒：容器與服務
+                    c, s = docker_containers(), service_states()
                     with self.lock:
-                        self.upd_last = last
-                    recheck = True
-                    ok = bool(last and last["ok"])
-                    log("系統更新完成" if ok else "系統更新失敗")
-                    self.add_event("ok" if ok else "bad", "系統更新完成" if ok else "系統更新失敗")
-                self.upd_running = now
-            if tick % 15 == 0 and tick > 0:
-                self.track_events()
-                self.track_ssh()
-            if tick % 900 == 0 or recheck:            # 每 30 分鐘：可更新套件數
-                u = apt_updates()
-                with self.lock:
-                    self.updates = u
-            if tick % 150 == 3:                       # 每 5 分鐘：IPv6 還能不能用
-                a = ipv6_addr()
-                ok = ipv6_ok() if a else None
-                with self.lock:
-                    v = self.v6
-                    v["fails"] = 0 if ok or not a else v["fails"] + 1
-                    v.update(addr=a, ok=None if not a else (True if ok else (False if v["fails"] >= 2 else v["ok"])))
-                    v["seen"] = v["seen"] or bool(a)
-            if tick % 5400 == 10:                     # 每 3 小時：GitHub 上有沒有新版的哨兵（背景查，不卡畫面）
-                threading.Thread(target=self_check, daemon=True).start()
-                threading.Thread(target=cloud_check, daemon=True).start()
-            if all_links() and tick % 30 == 0:              # 每 1 分鐘：常用連結打不打得開
-                try:
-                    check_links()
-                except Exception as e:  # noqa: BLE001
-                    log("檢查連結失敗：", e)
-            if tick % 1800 == 120:                    # 每 1 小時：有沒有憑證要幫忙續期
-                threading.Thread(target=acme_renew_due, daemon=True).start()
-            if tick % 10800 == 0:                     # 每 6 小時：IP 所在國家
-                g = lookup_geo()
-                if g:
-                    with self.lock:
-                        self.geo = g
+                        self.containers, self.services = c, s
+                recheck = False
+                if self.upd_running or tick % 15 == 0:    # 更新中每 2 秒看一次，平常 30 秒
+                    was, now = self.upd_running, update_running()
+                    if was and not now:                   # 剛更新完
+                        last = update_last()
+                        with self.lock:
+                            self.upd_last = last
+                        recheck = True
+                        ok = bool(last and last["ok"])
+                        log("系統更新完成" if ok else "系統更新失敗")
+                        self.add_event("ok" if ok else "bad", "系統更新完成" if ok else "系統更新失敗")
+                    self.upd_running = now
+                if tick % 15 == 0 and tick > 0:
+                    self.track_events()
+                    self.track_ssh()
+                # 下面這些要連網路或跑別的程式，可能要等好幾秒：放到背景做，處理器、網速的數字才不會停住
+                if tick % 900 == 0 or recheck:            # 每 30 分鐘：可更新套件數
+                    self.bg("apt", self.check_apt)
+                if tick % 150 == 3:                       # 每 5 分鐘：IPv6 還能不能用
+                    self.bg("v6", self.check_v6)
+                if tick % 5400 == 10:                     # 每 3 小時：GitHub 上有沒有新版的哨兵
+                    self.bg("self", self_check)
+                    self.bg("cloud", cloud_check)
+                if all_links() and tick % 30 == 0:        # 每 1 分鐘：常用連結打不打得開
+                    self.bg("links", check_links)
+                if tick % 1800 == 120:                    # 每 1 小時：有沒有憑證要幫忙續期
+                    self.bg("acme", acme_renew_due)
+                if tick % 10800 == 0:                     # 每 6 小時：IP 所在國家
+                    self.bg("geo", self.check_geo)
+            except Exception as e:  # noqa: BLE001
+                # 某一項出錯不能讓整個收集停掉（不然畫面上的數字會一直停住）；同樣的錯誤只記一次
+                if str(e) != last_err:
+                    log("收集資料時出錯：", repr(e))
+                    last_err = str(e)
+                last_cpu, last_net, last_t = cpu_times(), net_bytes(), time.time()
             tick += 1
+
+    def bg(self, name, fn):
+        """在背景做一件事；上一次的還沒做完就先不重複做"""
+        t = self.jobs.get(name)
+        if t and t.is_alive():
+            return
+
+        def job():
+            try:
+                fn()
+            except Exception as e:  # noqa: BLE001
+                log(f"背景工作 {name} 出錯：", repr(e))
+        self.jobs[name] = t = threading.Thread(target=job, daemon=True)
+        t.start()
+
+    def check_apt(self):
+        u = apt_updates()
+        with self.lock:
+            self.updates = u
+
+    def check_v6(self):
+        a = ipv6_addr()
+        ok = ipv6_ok() if a else None
+        with self.lock:
+            v = self.v6
+            v["fails"] = 0 if ok or not a else v["fails"] + 1
+            v.update(addr=a, ok=None if not a else (True if ok else (False if v["fails"] >= 2 else v["ok"])))
+            v["seen"] = v["seen"] or bool(a)
+
+    def check_geo(self):
+        g = lookup_geo()
+        if g:
+            with self.lock:
+                self.geo = g
 
     def add_event(self, kind, text):
         with self.lock:
@@ -1946,7 +1985,9 @@ def peer_error(e, url):
         return "找不到這個網域：請確認網址有沒有打錯"
     if "CERTIFICATE" in text.upper() or "SSL" in text.upper():
         return "加密憑證有問題：對方可能還在申請憑證，等幾分鐘再看看"
-    return text[:150]
+    if "unreachable" in text.lower() or "No route" in text:
+        return "網路不通：請確認對方開著、網址沒打錯"
+    return f"連不上（{text[:120]}）"
 
 
 POOL = ThreadPoolExecutor(max_workers=8)
@@ -2195,6 +2236,7 @@ MANIFEST = json.dumps({
 
 class Handler(BaseHTTPRequestHandler):
     server_version = "VPSSentinelLite"
+    timeout = 120                               # 連上來卻一直不送資料的連線，2 分鐘後自動斷掉，不會越積越多把哨兵拖垮
 
     def log_message(self, *a):
         pass
@@ -2226,13 +2268,13 @@ class Handler(BaseHTTPRequestHandler):
     def cloud_authed(self):
         for part in (self.headers.get("Cookie") or "").split(";"):
             k, _, v = part.strip().partition("=")
-            if k == "vs_cloud" and hmac.compare_digest(v, cloud_cookie_value()):
+            if k == "vs_cloud" and cloud_cookie_ok(v):
                 return True
         return False
 
     def cloud_cookie(self):
         secure = "; Secure" if (self.headers.get("X-Forwarded-Proto") or "").lower() == "https" else ""
-        return f"vs_cloud={cloud_cookie_value()}; Path=/; Max-Age=2592000; HttpOnly; SameSite=Lax{secure}"
+        return f"vs_cloud={cloud_cookie_value()}; Path=/; Max-Age={CLOUD_DAYS * 86400}; HttpOnly; SameSite=Lax{secure}"
 
     def proxy_cloud(self):
         u = urllib.parse.urlsplit(self.path)
@@ -2393,7 +2435,7 @@ class Handler(BaseHTTPRequestHandler):
                 except urllib.error.HTTPError as e:
                     return self.send(e.code, '{"error":"那台主機還沒更新到新版"}' if e.code == 404 else e.read())
                 except Exception as e:  # noqa: BLE001
-                    return self.send(502, json.dumps({"error": f"連不上：{e}"[:150]}, ensure_ascii=False))
+                    return self.send(502, json.dumps({"error": peer_error(e, peer["url"])}, ensure_ascii=False))
             return self.send(200, json.dumps(COL.history(rng)))
         if path in ("/api/status", "/api/all"):
             if not self.authed():
@@ -2447,8 +2489,7 @@ class Handler(BaseHTTPRequestHandler):
             except urllib.error.HTTPError as e:
                 return self.send(e.code, e.read())
             except Exception as e:  # noqa: BLE001
-                return self.send(502, json.dumps({"ok": False, "message": f"連不上：{e}"[:150]},
-                                                  ensure_ascii=False))
+                return self.send(502, json.dumps({"ok": False, "message": peer_error(e, peer["url"])}, ensure_ascii=False))
         if u.path == "/api/peer":
             try:
                 d = json.loads(body or b"{}")
