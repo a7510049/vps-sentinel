@@ -215,6 +215,7 @@ server:
       config:
         defaultEnabled: true
 auth:
+  tokenExpirationHours: 720        # 登入一次可以用 30 天，不用一直重新登入
   methods:
     password:
       enabled: true
