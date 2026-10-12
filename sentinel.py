@@ -815,6 +815,98 @@ def all_status():
 
 # ───────────────────────── Telegram 通知 ─────────────────────────
 
+TG_BASE = os.environ.get("SENTINEL_TG_API", "https://api.telegram.org/bot")   # 測試時可以換成假的伺服器
+
+
+def tg_api(token, method, params=None):
+    """呼叫 Telegram，失敗時回傳看得懂的中文原因"""
+    try:
+        data = urllib.parse.urlencode(params).encode() if params else None
+        with urllib.request.urlopen(TG_BASE + token + "/" + method, data=data, timeout=10) as r:
+            return json.loads(r.read()), None
+    except urllib.error.HTTPError as e:
+        try:
+            desc = json.loads(e.read()).get("description", "")
+        except Exception:  # noqa: BLE001
+            desc = ""
+        if e.code in (401, 404):
+            return None, "機器人密碼不對，請重新複製 @BotFather 給你的那一串"
+        if e.code == 409:
+            return None, "這個機器人已經被其他程式（例如 n8n）拿去接收訊息，沒辦法自動尋找。建議另外建一個新的機器人，或直接手動填聊天編號"
+        if "chat not found" in desc:
+            return None, "找不到這個聊天：請先傳一句話給機器人（群組的話要先把機器人加進去）"
+        if "blocked" in desc:
+            return None, "你把這個機器人封鎖了，請在 Telegram 解除封鎖後再試"
+        if "kicked" in desc or "not a member" in desc:
+            return None, "機器人不在這個群組裡，請先把它加進群組"
+        return None, f"Telegram 回應錯誤：{desc or e.code}"
+    except Exception:  # noqa: BLE001
+        return None, "連不上 Telegram，請確認這台主機能連外網"
+
+
+def tg_chat_name(c):
+    if c.get("type") == "private":
+        n = " ".join(x for x in (c.get("first_name"), c.get("last_name")) if x)
+        return f"{n or '我自己'}（私訊）"
+    return f"{c.get('title') or '群組'}（{'頻道' if c.get('type') == 'channel' else '群組'}）"
+
+
+def telegram(cfg):
+    """網頁設定 Telegram 通知：status 查狀態、find 自動尋找聊天、test 測試、save 儲存（都留空就是關閉）"""
+    global TG_BOT, TG_CHAT
+    act = cfg.get("action")
+    token = str(cfg.get("token") or "").strip() or TG_BOT
+    chat = str(cfg.get("chat") or "").strip()
+    if act == "status":
+        info = {"ok": True, "on": bool(TG_BOT and TG_CHAT), "chat": TG_CHAT, "has_token": bool(TG_BOT)}
+        if TG_BOT:
+            me, _ = tg_api(TG_BOT, "getMe")
+            info["bot"] = "@" + me["result"]["username"] if me else ""
+        return True, info
+    if act == "save" and not cfg.get("token") and not chat and cfg.get("off"):
+        try:
+            write_conf({"TG_BOT_TOKEN": "", "TG_CHAT_ID": ""})
+        except OSError as e:
+            return False, f"無法寫入設定檔：{e}"
+        TG_BOT = TG_CHAT = ""
+        log("Telegram 通知已關閉")
+        return True, "已關閉 Telegram 通知"
+    if not re.fullmatch(r"\d{5,}:[\w-]{20,}", token):
+        return False, "機器人密碼格式不對，應該長得像 123456789:AAH…"
+    me, err = tg_api(token, "getMe")
+    if err:
+        return False, err
+    bot = "@" + me["result"]["username"]
+    if act == "find":
+        up, err = tg_api(token, "getUpdates", {"limit": 100})
+        if err:
+            return False, err
+        chats = {}
+        for u in up.get("result", []):
+            m = u.get("message") or u.get("channel_post") or u.get("my_chat_member") or u.get("edited_message") or {}
+            c = m.get("chat")
+            if c and "id" in c:
+                chats[c["id"]] = {"id": str(c["id"]), "name": tg_chat_name(c)}
+        if not chats:
+            return False, f"還沒收到訊息：請先在 Telegram 找到 {bot}，傳一句話給它，再按一次「自動尋找」"
+        return True, {"ok": True, "bot": bot, "chats": list(chats.values())[::-1]}
+    if not re.fullmatch(r"-?\d{3,}|@\w{4,}", chat):
+        return False, "聊天編號格式不對，應該是一串數字（群組是 - 開頭）"
+    text = f"✅ VPS 哨兵：「{NAME}」的通知會傳到這裡" if act == "save" else f"🔔 這是 VPS 哨兵的測試通知（來自「{NAME}」）"
+    _, err = tg_api(token, "sendMessage", {"chat_id": chat, "text": text})
+    if err:
+        return False, err
+    if act == "test":
+        return True, "測試通知已送出，去 Telegram 看看有沒有收到"
+    try:
+        write_conf({"TG_BOT_TOKEN": token, "TG_CHAT_ID": chat})
+    except OSError as e:
+        return False, f"無法寫入設定檔：{e}"
+    TG_BOT, TG_CHAT = token, chat
+    log(f"Telegram 通知已設定：{bot} → {chat}")
+    return True, f"已開啟，通知會由 {bot} 傳送"
+
+
 def tg_send(text):
     if not (TG_BOT and TG_CHAT):
         return
@@ -930,7 +1022,7 @@ class Handler(BaseHTTPRequestHandler):
 
     def do_POST(self):
         u = urllib.parse.urlsplit(self.path)
-        if u.path not in ("/api/update", "/api/rename", "/api/traffic"):
+        if u.path not in ("/api/update", "/api/rename", "/api/traffic", "/api/telegram"):
             return self.send(404, '{"error":"找不到"}')
         if not self.authed():
             time.sleep(1)
@@ -956,6 +1048,14 @@ class Handler(BaseHTTPRequestHandler):
             except Exception as e:  # noqa: BLE001
                 return self.send(502, json.dumps({"ok": False, "message": f"連不上：{e}"[:150]},
                                                   ensure_ascii=False))
+        if u.path == "/api/telegram":
+            try:
+                cfg = json.loads(body or b"{}")
+            except ValueError:
+                cfg = {}
+            ok, res = telegram(cfg if isinstance(cfg, dict) else {})
+            out = res if isinstance(res, dict) else {"ok": ok, "message": res}
+            return self.send(200 if ok else 400, json.dumps(out, ensure_ascii=False))
         if u.path == "/api/traffic":
             try:
                 cfg = json.loads(body or b"{}")
@@ -1447,6 +1547,26 @@ button{font:inherit;color:inherit}
 .dialog .form .seg button.on{background:var(--glass);color:var(--text);box-shadow:0 2px 8px -2px rgba(0,0,0,.28),inset 0 0 0 1px var(--rim)}
 [data-mode="light"] .dialog .form .seg button.on{background:#fff}
 .dialog .form small{font-weight:600;color:var(--faint);font-size:11.5px;line-height:1.5}
+.dialog .form small b{color:var(--sub)}
+.dialog .form .lbl{font-size:12.5px;font-weight:800;color:var(--sub);display:flex;flex-direction:column;gap:6px}
+.tgd{max-width:400px}
+.tgd .find{align-self:flex-start;padding:8px 14px;font-size:12.5px;display:inline-flex;align-items:center;gap:6px}
+.tgd .find svg{width:14px;height:14px}
+.tgd .chats{display:flex;flex-wrap:wrap;gap:6px}
+.tgd .chats:empty{display:none}
+.tgd .chats button{border:0;cursor:pointer;border-radius:99px;padding:7px 12px;font-size:12.5px;font-weight:800;color:var(--text);
+  background:var(--glass2);box-shadow:inset 0 0 0 1px var(--line);transition:background .2s,box-shadow .2s,color .2s}
+.tgd .chats button.on{color:#fff;background:var(--grad);box-shadow:none}
+.tgd .msg{min-height:18px;font-size:12.5px;font-weight:700;line-height:1.5;color:var(--sub)}
+.tgd .msg.bad{color:var(--bad)}.tgd .msg.ok{color:var(--ok)}
+.dialog .btns.three{grid-template-columns:1fr 1fr 1.3fr}
+.dialog .btns .spin{width:13px;height:13px;margin-right:6px}
+.linkbtn{background:none;border:0;cursor:pointer;color:var(--bad);font-weight:800;font-size:12.5px;margin-top:14px;padding:4px 8px}
+.optbtn{width:100%;border:0;background:none;color:inherit;font:inherit;text-align:left;cursor:pointer}
+.optbtn .lab{flex:1}
+.optbtn .chev{color:var(--faint);display:flex;transform:rotate(-90deg)}
+.optbtn .chev svg{width:16px;height:16px}
+.tgst.on{color:var(--ok)!important}
 .evs{display:flex;flex-direction:column;gap:2px;max-height:330px;overflow-x:hidden;overflow-y:auto;margin:-8px -6px 0;padding:8px 6px 14px}
 /* 有最大高度的清單：裡面的項目不能被擠扁（不然展開動畫會卡在一半再彈回來） */
 .evs>*,.hosts>*,.list>*,.alerts>*{flex-shrink:0}
@@ -1677,6 +1797,7 @@ const P = {
   gear:'<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>',
   logout:'<path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9"/>',
   edit:'<path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/>',
+  search:'<circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/>',
   chev:'<path d="m6 9 6 6 6-6"/>', x:'<path d="M18 6 6 18M6 6l12 12"/>',
   warn:'<path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3z"/><path d="M12 9v4M12 17h.01"/>',
   ok:'<circle cx="12" cy="12" r="9.5"/><path d="m8.5 12 2.5 2.5 4.5-5"/>',
@@ -2550,11 +2671,14 @@ function settingsBody(){
     <div class="opt">${IC("flag")}<span class="lab">國旗</span>${tog("show.flag")}</div>
     <div class="opt">${IC("month")}<span class="lab">每月流量</span>${tog("show.traffic")}</div>
   </div></div>
+  <div class="sec"><h4>通知</h4><div class="group">
+    <button class="opt optbtn" data-tg>${IC("bell")}<span class="lab">Telegram 通知<small class="tgst">讀取中…</small></span><span class="chev">${I("chev")}</span></button>
+  </div></div>
   <div class="sec"><h4>資料</h4><div class="group">
     <div class="opt"><span class="lab">自動更新<small>多久抓一次最新狀態</small></span>${seg("refresh",[[3,"3 秒"],[5,"5 秒"],[10,"10 秒"],[30,"30 秒"]])}</div>
   </div></div>
   <button class="ubtn ghost reset" data-reset>恢復預設值</button>
-  <p class="sub" style="text-align:center;margin-top:12px">這些設定只會存在這台裝置上</p>`;
+  <p class="sub" style="text-align:center;margin-top:12px">外觀設定只存在這台裝置上；Telegram 通知存在主機上</p>`;
 }
 function moveInd(seg){
   const on = seg.querySelector("button.on"), ind = seg.querySelector(".ind");
@@ -2565,6 +2689,74 @@ function initSegs(root){
   root.querySelectorAll(".seg").forEach(sg => { sg.classList.add("noanim"); moveInd(sg); });
   requestAnimationFrame(() => requestAnimationFrame(() => root.querySelectorAll(".seg").forEach(sg => sg.classList.remove("noanim"))));
 }
+/* ═════════ Telegram 通知設定 ═════════ */
+async function tgCall(body){
+  const r = await fetch("/api/telegram", {method:"POST", headers:{"X-Token":getTok(), "Content-Type":"application/json"}, body:JSON.stringify(body)});
+  const d = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(d.message || d.error || (r.status === 404 ? "這台主機還沒更新到新版" : "發生錯誤"));
+  return d;
+}
+async function tgStatus(root){
+  const el = root.querySelector(".tgst"); if (!el) return;
+  try { const d = await tgCall({action:"status"});
+    el.textContent = d.on ? `已開啟・由 ${d.bot || "機器人"} 傳送` : d.has_token ? "還沒設定要傳到哪裡" : "還沒設定，點這裡開始";
+    el.classList.toggle("on", !!d.on);
+  } catch(e) { el.textContent = e.message; }
+}
+async function tgModal(){
+  const st = await tgCall({action:"status"}).catch(() => ({}));
+  const v = document.createElement("div"); v.className = "veil";
+  v.innerHTML = `<div class="dialog glass tgd">${IC("bell","big")}<h3>Telegram 通知</h3>
+    <p>主機出問題、恢復正常、更新完成時，傳訊息到你的 Telegram</p>
+    <div class="form">
+      <label>① 機器人密碼<input class="field" data-k="token" autocomplete="off" spellcheck="false" placeholder="${st.has_token ? "已經設定過，不用改就留空" : "123456789:AAH…"}">
+        <small>在 Telegram 搜尋 <b>@BotFather</b>，傳送 <b>/newbot</b>，照著取好名字，最後它給你的那一串就是密碼</small></label>
+      <div class="lbl">② 要傳到哪裡
+        <small>先在 Telegram 傳一句話給你的機器人（要傳到群組，就把機器人加進群組再講一句話），然後按「自動尋找」</small>
+        <button type="button" class="ubtn ghost find" data-find>${I("search")}自動尋找</button>
+        <div class="chats"></div>
+        <input class="field" data-k="chat" inputmode="text" autocomplete="off" placeholder="或手動填聊天編號" value="${esc(st.chat || "")}"></div>
+      <div class="msg" aria-live="polite"></div>
+    </div>
+    <div class="btns three"><button class="ubtn ghost" data-r="0">取消</button><button class="ubtn ghost" data-test>測試</button><button class="ubtn" data-save>儲存</button></div>
+    ${st.on ? `<button class="linkbtn" data-off>關閉 Telegram 通知</button>` : ""}</div>`;
+  $("#layer").appendChild(v);
+  const q = k => v.querySelector(`[data-k="${k}"]`), msg = v.querySelector(".msg");
+  const say = (t, cls) => { msg.textContent = t || ""; msg.className = "msg " + (cls || ""); };
+  const vals = () => ({token: q("token").value.trim(), chat: q("chat").value.trim()});
+  let busy = false;
+  const run = async (btn, label, fn) => {
+    if (busy) return; busy = true; const old = btn.innerHTML;
+    btn.disabled = true; btn.innerHTML = `<span class="spin"></span>${label}`; say("");
+    try { await fn(); } catch(e) { say(e.message, "bad"); }
+    btn.disabled = false; btn.innerHTML = old; busy = false;
+  };
+  return new Promise(res => {
+    const done = () => { if (v._d) return; v._d = 1; v.classList.add("closing"); setTimeout(() => { v.remove(); res(); }, 300); };
+    v._esc = done;
+    v.addEventListener("click", e => {
+      const t = e.target;
+      if (t === v || t.closest("[data-r]")) return done();
+      const f = t.closest("[data-find]");
+      if (f) return run(f, "尋找中…", async () => {
+        const d = await tgCall({action:"find", token: vals().token});
+        const box = v.querySelector(".chats");
+        box.innerHTML = d.chats.map(c => `<button type="button" data-chat="${esc(c.id)}">${esc(c.name)}</button>`).join("");
+        if (d.chats.length === 1) { q("chat").value = d.chats[0].id; box.firstChild.classList.add("on"); }
+        say(d.chats.length > 1 ? `找到 ${d.chats.length} 個聊天，點一下要傳去哪裡` : `找到了！通知會傳到「${d.chats[0].name}」`, "ok");
+      });
+      const c = t.closest("[data-chat]");
+      if (c) { q("chat").value = c.dataset.chat; v.querySelectorAll("[data-chat]").forEach(x => x.classList.toggle("on", x === c)); return say(""); }
+      const tb = t.closest("[data-test]");
+      if (tb) return run(tb, "傳送中…", async () => { const d = await tgCall({action:"test", ...vals()}); say(d.message, "ok"); });
+      const sb = t.closest("[data-save]");
+      if (sb) return run(sb, "儲存中…", async () => { const d = await tgCall({action:"save", ...vals()}); toast(d.message); done(); });
+      const ob = t.closest("[data-off]");
+      if (ob) return run(ob, "關閉中…", async () => { const d = await tgCall({action:"save", off:true}); toast(d.message); done(); });
+    });
+    q("chat").addEventListener("input", () => v.querySelectorAll("[data-chat]").forEach(x => x.classList.remove("on")));
+  });
+}
 function openSettings(){
   if ($(".sheetv")) return;
   const v = document.createElement("div"); v.className = "veil sheetv";
@@ -2573,12 +2765,14 @@ function openSettings(){
   const sheet = v.querySelector(".sheet"), body = v.querySelector(".sbody"), top = v.querySelector(".top");
   body.addEventListener("scroll", () => top.classList.toggle("under", body.scrollTop > 4), {passive:true});
   initSegs(body);
+  tgStatus(body);
   sheet.addEventListener("animationend", e => { if (e.target === sheet && !v._d) sheet.classList.add("ready"); });
   const close = () => { if (v._d) return; v._d = 1; sheet.classList.remove("back"); v.classList.add("closing"); setTimeout(()=>v.remove(), 380); };
   v._esc = close;
 
   v.addEventListener("click", e => {
     if (e.target === v || e.target.closest("[data-close]")) return close();
+    if (e.target.closest("[data-tg]")) return tgModal().then(() => tgStatus(body));
     const b = e.target.closest("[data-val]");
     if (b) {
       const raw = b.dataset.val, k = b.dataset.pref;
