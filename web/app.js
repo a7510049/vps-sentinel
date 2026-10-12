@@ -334,7 +334,7 @@ let RANGE = ["30m","24h","7d"].includes(store("vps-range")) ? store("vps-range")
 const HCACHE = {}, SHOWN = {};
 const RLABEL = {"30m":"30 分鐘", "24h":"24 小時", "7d":"7 天"};
 function rangeSeg(){
-  return `<span class="rng">${[["30m","30分"],["24h","24時"],["7d","7天"]].map(([v,l])=>`<button class="${RANGE===v?"on":""}" data-range="${v}">${l}</button>`).join("")}</span>`;
+  return `<span class="rng" style="--k:${["30m","24h","7d"].indexOf(RANGE)}">${[["30m","30分"],["24h","24時"],["7d","7天"]].map(([v,l])=>`<button class="${RANGE===v?"on":""}" data-range="${v}">${l}</button>`).join("")}</span>`;
 }
 /* 取得要畫的歷史：30 分鐘用即時資料；24 小時／7 天另外抓，快取 1 分鐘 */
 function histFor(s){
@@ -958,6 +958,16 @@ function smooth(fn, theme, relayout){
   window._vt = (window._vt || 0) + 1;
   document.startViewTransition(fn).finished.finally(() => { window._vt--; });
 }
+/* 切換文字大小：整頁重新排版只做一次（排版期間畫面先停在舊的樣子），
+   然後舊畫面一邊放大（或縮小）一邊淡出、新畫面從另一個大小接過來淡入，看起來像整頁平順地縮放 */
+function sizeShift(fn){
+  const h = document.documentElement, z0 = parseFloat(h.style.getPropertyValue("--zoom")) || 1;
+  if (!canAnim() || !document.startViewTransition) return smooth(fn, false, true);
+  const z1 = {s:.92, m:1, l:1.1}[PREF.size] || 1;
+  h.style.setProperty("--zr", (z1 / z0).toFixed(4)); h.classList.add("vtsize");
+  window._vt = (window._vt || 0) + 1;
+  document.startViewTransition(fn).finished.finally(() => { h.classList.remove("vtsize"); window._vt--; });
+}
 /* 切換效能模式（自動／流暢優先／完整效果）：毛玻璃的模糊程度、卡片和面板的底色用 0.6 秒慢慢變過去；背景流光停在原地，不會跳回起點 */
 function perfShift(fn){
   const h = document.documentElement;
@@ -1329,7 +1339,8 @@ function openSettings(){
     const run = () => { applyPrefs(); if (LIST.length) render(LIST); };
     // 文字大小、卡片密度會讓整頁重新排版；電腦版開關面板會讓格子重排 → 用淡入淡出蓋過去
     const relayout = ["size","density"].includes(k) || (DESK.matches && k.startsWith("show."));
-    if (k === "perf") perfShift(run);              // 效能模式：毛玻璃、底色慢慢變過去，不蓋一層淡出
+    if (k === "size") sizeShift(run);              // 文字大小：整頁平順地放大／縮小過去
+    else if (k === "perf") perfShift(run);              // 效能模式：毛玻璃、底色慢慢變過去，不蓋一層淡出
     else big && k !== "accent" ? smooth(run, ["theme","bg"].includes(k), relayout) : run();
     if (k === "refresh") restart();
   }
