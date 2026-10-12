@@ -147,6 +147,9 @@ if [ -n "$CUR_BIND" ] && [ "$CUR_BIND" != "0.0.0.0" ] && [ "$CUR_BIND" != "127.0
   set_conf BIND 0.0.0.0
 fi
 
+# 記住安裝來源資料夾：網頁上的「更新哨兵」會從這裡抓新版
+if [ -d "$HERE/.git" ]; then set_conf SRC_DIR "$HERE"; fi
+
 # ── 3. 加密連線（有給網域才做） ──
 if [ -n "$DOMAIN" ]; then
   # 先檢查連接埠，絕對不去搶別的服務（例如翻牆服務）正在用的連接埠

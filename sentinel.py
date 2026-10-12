@@ -8,12 +8,16 @@ VPS 哨兵：用手機或電腦隨時查看 VPS 狀態
 設定檔：/etc/vps-sentinel-lite.conf（可用環境變數 SENTINEL_CONF 指定別的位置）
 """
 import base64
+import glob
+import hashlib
 import hmac
 import html
 import json
 import os
 import re
 import shutil
+import ssl
+import shlex
 import signal
 import socket
 import subprocess
@@ -28,7 +32,7 @@ from collections import deque
 from concurrent.futures import ThreadPoolExecutor
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
-VERSION = "1.8"
+VERSION = "1.9"
 
 # ───────────────────────── 設定 ─────────────────────────
 
@@ -286,6 +290,146 @@ def apt_updates():
         return None
     lines = [l for l in out.splitlines() if l.startswith("Inst ")]
     return {"total": len(lines), "security": sum("-security" in l for l in lines)}
+
+
+# ───────────────────────── 更新哨兵本身 ─────────────────────────
+
+BUILD = hashlib.sha1(open(os.path.abspath(__file__), "rb").read()).hexdigest()[:7]   # 這份程式的指紋，用來判斷是不是最新版
+SELF_UNIT = "vps-sentinel-selfupdate"
+SELF_LOG = "/var/log/vps-sentinel-selfupdate.log"
+SELF = {"checked": 0, "has": None, "changes": [], "err": "", "lock": threading.Lock()}
+
+
+def git(d, *args, timeout=30):
+    try:
+        r = subprocess.run(["git", "-c", "safe.directory=*", "-C", d, *args], capture_output=True,
+                           encoding="utf-8", errors="replace", timeout=timeout,
+                           env={**os.environ, "LANG": "C.UTF-8", "GIT_TERMINAL_PROMPT": "0"})
+        return r.returncode, r.stdout, r.stderr
+    except (OSError, subprocess.SubprocessError) as e:
+        return -1, "", str(e)
+
+
+def src_dir():
+    """找安裝來源資料夾（git clone 下來的那個）"""
+    for d in [C.get("SRC_DIR", ""), "/root/vps-sentinel", *glob.glob("/home/*/vps-sentinel")]:
+        if d and os.path.isdir(os.path.join(d, ".git")) and os.path.isfile(os.path.join(d, "install.sh")):
+            return d
+    return ""
+
+
+def self_running():
+    _, out = run(["systemctl", "is-active", SELF_UNIT], 5)
+    return out.strip() in ("active", "activating")
+
+
+def self_last():
+    try:
+        with open(SELF_LOG, encoding="utf-8", errors="replace") as f:
+            lines = f.read().splitlines()[-200:]
+    except OSError:
+        return None
+    for line in reversed(lines):
+        if line.startswith("__RESULT__"):
+            p = line.split()
+            try:
+                return {"ok": p[1] == "ok", "time": float(p[2])}
+            except (IndexError, ValueError):
+                return None
+    return None
+
+
+def self_check(force=False):
+    """看 GitHub 上有沒有新版（3 小時查一次，或手動按「檢查」）"""
+    d = src_dir()
+    base = {"build": BUILD, "version": VERSION, "running": self_running(), "last": self_last()}
+    if not d or not shutil.which("git") or not shutil.which("systemd-run"):
+        return {**base, "supported": False,
+                "err": "找不到安裝資料夾，請先照說明手動更新一次（git pull 後執行 bash install.sh）"}
+    with SELF["lock"]:
+        if force or time.time() - SELF["checked"] > 3 * 3600:
+            code, _, err = git(d, "fetch", "--quiet", "origin")
+            SELF["checked"] = time.time()
+            if code != 0:
+                SELF.update(has=None, changes=[], err="連不上 GitHub，暫時沒辦法檢查新版")
+            else:
+                _, new_src, _ = git(d, "show", "@{u}:sentinel.py")
+                new_build = hashlib.sha1(new_src.encode("utf-8")).hexdigest()[:7] if new_src else ""
+                _, logs, _ = git(d, "log", "--format=%s", "-n", "8", "HEAD..@{u}")
+                SELF.update(has=bool(new_build) and new_build != BUILD, err="",
+                            changes=[x.strip() for x in logs.splitlines() if x.strip()])
+        return {**base, "supported": True, "has": SELF["has"], "changes": SELF["changes"], "err": SELF["err"],
+                "checked": SELF["checked"]}
+
+
+def self_update():
+    d = src_dir()
+    if not d:
+        return False, "找不到安裝資料夾，請先照說明手動更新一次"
+    if self_running():
+        return False, "已經在更新中了"
+    q = shlex.quote(d)
+    script = f"""set -u
+echo "=== 開始更新哨兵 $(date '+%F %T') ==="
+cd {q} && git -c safe.directory='*' fetch origin && git -c safe.directory='*' reset --hard '@{{u}}' \
+  && echo "__RESULT__ ok $(date +%s)" > /tmp/vps-sentinel-selfupdate.result \
+  || echo "__RESULT__ fail $(date +%s)" > /tmp/vps-sentinel-selfupdate.result
+if grep -q ok /tmp/vps-sentinel-selfupdate.result; then bash install.sh || echo "__RESULT__ fail $(date +%s)" > /tmp/vps-sentinel-selfupdate.result; fi
+cat /tmp/vps-sentinel-selfupdate.result"""
+    try:
+        if os.path.getsize(SELF_LOG) > 1_000_000:
+            open(SELF_LOG, "w").close()
+    except OSError:
+        pass
+    run(["systemctl", "reset-failed", SELF_UNIT], 5)
+    code, _ = run(["systemd-run", f"--unit={SELF_UNIT}", "--collect",
+                   f"--property=StandardOutput=append:{SELF_LOG}",
+                   f"--property=StandardError=append:{SELF_LOG}",
+                   "/bin/bash", "-c", script], 15)
+    if code != 0:
+        return False, "無法開始更新"
+    log("開始更新哨兵本身")
+    return True, "已開始更新，大約 10～30 秒後會自動重新啟動"
+
+
+# ───────────────────────── 常用連結健康檢查 ─────────────────────────
+
+LINK_STATE = {}                                 # 網址 → {"up", "ms", "err", "fails"}
+
+
+def check_link(url):
+    """打開網址看看有沒有回應：有回應（就算要登入、404）都算活著，連不上或 5xx 才算掛掉"""
+    t0 = time.time()
+    try:
+        req = urllib.request.Request(url, headers={"User-Agent": "vps-sentinel"})
+        with urllib.request.urlopen(req, timeout=8, context=ssl._create_unverified_context()) as r:
+            code = r.status
+    except urllib.error.HTTPError as e:
+        code = e.code
+    except Exception as e:  # noqa: BLE001
+        t = str(e)
+        why = ("等太久沒有回應" if "timed out" in t.lower() else "拒絕連線（服務可能沒在跑）" if "refused" in t
+               else "找不到這個網域" if "Name or service" in t or "getaddrinfo" in t else "連不上")
+        return False, None, why
+    ms = int((time.time() - t0) * 1000)
+    if code >= 500:
+        return False, ms, f"網站出錯（代碼 {code}）"
+    return True, ms, ""
+
+
+def check_links():
+    urls = [x["url"] for x in LINKS]
+    for u in list(LINK_STATE):
+        if u not in urls:
+            del LINK_STATE[u]
+    for u, (up, ms, err) in zip(urls, POOL.map(check_link, urls)):
+        st = LINK_STATE.setdefault(u, {"fails": 0})
+        st["fails"] = 0 if up else st["fails"] + 1
+        st.update(up=True if up else (None if st["fails"] < 2 else False), ms=ms, err=err)   # 連續 2 次失敗才算掛掉，避免偶爾慢一下就誤報
+
+
+def links_status():
+    return [{**x, **{k: v for k, v in LINK_STATE.get(x["url"], {}).items() if k != "fails"}} for x in LINKS]
 
 
 # ───────────────────────── 改名 ─────────────────────────
@@ -739,6 +883,13 @@ class Collector:
                 u = apt_updates()
                 with self.lock:
                     self.updates = u
+            if tick % 5400 == 10:                     # 每 3 小時：GitHub 上有沒有新版的哨兵（背景查，不卡畫面）
+                threading.Thread(target=self_check, daemon=True).start()
+            if LINKS and tick % 30 == 0:              # 每 1 分鐘：常用連結打不打得開
+                try:
+                    check_links()
+                except Exception as e:  # noqa: BLE001
+                    log("檢查連結失敗：", e)
             if tick % 10800 == 0:                     # 每 6 小時：IP 所在國家
                 g = lookup_geo()
                 if g:
@@ -801,6 +952,9 @@ class Collector:
         for s in services:
             if s["state"] != "active":
                 problems.append(f"服務 {s['name']} 沒在執行")
+        for x in links_status():
+            if x.get("up") is False:
+                problems.append(f"「{x['name']}」打不開")
 
         traffic = self.traffic_info()
         notices = []
@@ -818,7 +972,7 @@ class Collector:
             notices.append(f"{updates['security']} 個安全更新")
 
         return {
-            "name": NAME, "node": "", "online": True, "version": VERSION, "time": time.time(), "links": LINKS,
+            "name": NAME, "node": "", "online": True, "version": VERSION, "time": time.time(), "links": links_status(), "build": BUILD, "self_has": SELF["has"],
             "os": os_name(), "kernel": os.uname().release,
             "uptime": float(read("/proc/uptime", "0").split()[0] or 0),
             "cores": os.cpu_count() or 1, "cpu": cpu, "load": [round(x, 2) for x in load],
@@ -1174,7 +1328,7 @@ class Handler(BaseHTTPRequestHandler):
 
     def do_POST(self):
         u = urllib.parse.urlsplit(self.path)
-        if u.path not in ("/api/update", "/api/rename", "/api/traffic", "/api/telegram", "/api/links"):
+        if u.path not in ("/api/update", "/api/rename", "/api/traffic", "/api/telegram", "/api/links", "/api/self"):
             return self.send(404, '{"error":"找不到"}')
         if not self.authed():
             time.sleep(1)
@@ -1200,6 +1354,16 @@ class Handler(BaseHTTPRequestHandler):
             except Exception as e:  # noqa: BLE001
                 return self.send(502, json.dumps({"ok": False, "message": f"連不上：{e}"[:150]},
                                                   ensure_ascii=False))
+        if u.path == "/api/self":
+            try:
+                act = json.loads(body or b"{}").get("action")
+            except (ValueError, AttributeError):
+                act = ""
+            if act == "update":
+                ok, msg = self_update()
+            else:
+                return self.send(200, json.dumps({"ok": True, **self_check(act == "check")}, ensure_ascii=False))
+            return self.send(200 if ok else 400, json.dumps({"ok": ok, "message": msg}, ensure_ascii=False))
         if u.path == "/api/telegram":
             try:
                 cfg = json.loads(body or b"{}")
@@ -1734,8 +1898,21 @@ a.plink,button.plink{color:var(--sub);text-decoration:none}
   box-shadow:0 16px 40px -14px rgba(0,0,0,.45),inset 0 0 0 1px var(--rim)}
 .lmenu a{display:flex;align-items:center;gap:9px;padding:9px 12px;border-radius:11px;color:var(--text);text-decoration:none;font-size:13.5px;font-weight:700;transition:background .2s}
 .lmenu a:hover{background:var(--track)}
-.lmenu a svg{width:15px;height:15px;color:var(--a1);flex:none}
-.lmenu a span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.lmenu a svg{width:14px;height:14px;color:var(--faint);flex:none;margin-left:auto}
+.lmenu a span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;display:flex;flex-direction:column;min-width:0}
+.lmenu a small{font-size:11px;color:var(--sub);font-weight:600}
+.ld{width:8px;height:8px;border-radius:50%;flex:none;background:var(--faint)}.ld.ok{background:var(--ok)}.ld.bad{background:var(--bad)}
+.plink{position:relative}
+.plink.down::after,.hasnew::after{content:"";position:absolute;top:3px;right:3px;width:7px;height:7px;border-radius:50%;background:var(--bad);box-shadow:0 0 0 2px var(--bg)}
+.hasnew{position:relative}.hasnew::after{background:var(--a1)}
+.linkish{border:0;background:none;color:var(--a1);font:inherit;font-size:12px;font-weight:800;cursor:pointer;float:right;padding:0}
+.linkish:disabled{color:var(--faint)}
+.selfrow{align-items:flex-start}
+.selfrow .lab{flex:1;min-width:0}
+.selfrow .new{color:var(--a1);font-weight:800}.selfrow .warn{color:var(--warn)}
+.selfrow .spin{width:11px;height:11px;margin-right:4px;vertical-align:-1px}
+.chg{margin:6px 0 0;padding-left:16px;font-size:11.5px;color:var(--sub);font-weight:600;line-height:1.55}
+.ubtn.sm{padding:7px 14px;font-size:12.5px;flex:none}
 a.plink:hover{color:var(--a1)}
 .optbtn{width:100%;border:0;background:none;color:inherit;font:inherit;text-align:left;cursor:pointer}
 .optbtn .lab{flex:1}
@@ -2129,10 +2306,11 @@ function stchip(s){
 }
 const safeUrl = u => /^https?:\/\/[^\s"'<>]+$/i.test(u || "") ? u : "";
 const linksOf = s => (s.links || (s.panel ? [{name:"管理後台", url:s.panel}] : [])).filter(x => safeUrl(x.url));
+const linkSt = x => x.up === false ? `打不開：${x.err || "連不上"}` : x.up ? `正常・${x.ms} 毫秒` : x.err ? "剛剛沒回應，再確認一次中…" : "還沒檢查";
 const editBtn = s => { if (!s.online) return ""; const L = linksOf(s);
   return `<button class="iconbtn" title="編輯名稱與常用連結" data-rename="${esc(s.node||"")}" data-name="${esc(s.name)}">${I("edit")}</button>`
-  + (L.length === 1 ? `<a class="iconbtn plink" href="${esc(L[0].url)}" target="_blank" rel="noopener noreferrer" title="打開 ${esc(L[0].name)}">${I("ext")}</a>`
-    : L.length > 1 ? `<button class="iconbtn plink" data-links="${esc(keyOf(s))}" title="常用連結">${I("ext")}</button>` : ""); };
+  + (L.length === 1 ? `<a class="iconbtn plink ${L[0].up===false?"down":""}" href="${esc(L[0].url)}" target="_blank" rel="noopener noreferrer" title="打開 ${esc(L[0].name)}（${esc(linkSt(L[0]))}）">${I("ext")}</a>`
+    : L.length > 1 ? `<button class="iconbtn plink ${L.some(x=>x.up===false)?"down":""}" data-links="${esc(keyOf(s))}" title="常用連結">${I("ext")}</button>` : ""); };
 function alerts(s){
   const k = t => esc(String(t).replace(/[\d.]+/g, ""));
   const al = (s.problems||[]).map(p=>`<div class="alert bad" data-key="b:${k(p)}">${I("warn")}${esc(p)}</div>`)
@@ -2323,7 +2501,7 @@ function renderMobile(list, n, time){
   const many = true;
   const shown = FILTER ? list.filter(s=>lvOf(s)===FILTER) : list, g = greet(n, list.length);
   return `<div class="dash m" data-key="m"><header class="bar"><span class="mini">VPS 哨兵</span><span class="grow"></span>
-    <button class="cap glass" data-settings title="設定">${I("gear")}</button><button class="cap glass" data-logout title="登出">${I("logout")}</button></header>
+    <button class="cap glass ${list.some(s=>s.self_has)?"hasnew":""}" data-settings title="設定">${I("gear")}</button><button class="cap glass" data-logout title="登出">${I("logout")}</button></header>
     <div class="hero"><div class="hello">${g.hi}</div><h1 data-x>${g.line}</h1><div class="meta"><span class="live"></span>更新於 ${time}</div></div>
     ${summary(n, many)}
     <div class="grid" data-keyed>${shown.length ? shown.map(mcard).join("") : `<div class="empty" data-key="empty">這個分類目前沒有主機 👍</div>`}</div></div>`;
@@ -2491,7 +2669,7 @@ function renderDesk(list, n, time){
       ${overview(list)}
       <div class="side-foot"><span class="sub">${list.length} 台主機</span>
         <button class="iconbtn ${REFRESHING?"spinning":""}" data-refresh title="重新整理">${I("upd")}</button>
-        <button class="iconbtn" data-settings title="設定">${I("gear")}</button><button class="iconbtn" data-logout title="登出">${I("logout")}</button></div>
+        <button class="iconbtn ${list.some(s=>s.self_has)?"hasnew":""}" data-settings title="設定">${I("gear")}</button><button class="iconbtn" data-logout title="登出">${I("logout")}</button></div>
     </aside>${sel ? detail(sel) : ""}</div>`;
 }
 function skeleton(){
@@ -2863,6 +3041,7 @@ function settingsBody(){
     <div class="opt">${IC("flag")}<span class="lab">國旗</span>${tog("show.flag")}</div>
     <div class="opt">${IC("month")}<span class="lab">每月流量</span>${tog("show.traffic")}</div>
   </div></div>
+  <div class="sec"><h4>哨兵版本<button class="linkish" data-selfcheck>檢查新版</button></h4><div class="group selfbox"><div class="opt"><span class="lab"><small>讀取中…</small></span></div></div></div>
   <div class="sec"><h4>通知</h4><div class="group">
     <button class="opt optbtn" data-tg>${IC("bell")}<span class="lab">Telegram 通知<small class="tgst">讀取中…</small></span><span class="chev">${I("chev")}</span></button>
   </div></div>
@@ -2923,7 +3102,7 @@ function hostModal(name, links){
 function linksMenu(btn, s){
   closeMenu();
   const m = document.createElement("div"); m.className = "lmenu glass";
-  m.innerHTML = linksOf(s).map(x => `<a href="${esc(x.url)}" target="_blank" rel="noopener noreferrer">${I("ext")}<span>${esc(x.name)}</span></a>`).join("");
+  m.innerHTML = linksOf(s).map(x => `<a href="${esc(x.url)}" target="_blank" rel="noopener noreferrer"><i class="ld ${x.up===false?"bad":x.up?"ok":""}"></i><span>${esc(x.name)}<small>${esc(linkSt(x))}</small></span>${I("ext")}</a>`).join("");
   document.body.appendChild(m);
   const r = btn.getBoundingClientRect(), w = m.offsetWidth;
   m.style.left = Math.max(8, Math.min(innerWidth - w - 8, r.left + r.width / 2 - w / 2)) + "px";
@@ -2939,6 +3118,41 @@ function closeMenu(){
 }
 addEventListener("scroll", closeMenu, {passive:true, capture:true});
 addEventListener("keydown", e => { if (e.key === "Escape") closeMenu(); });
+/* ═════════ 更新哨兵本身 ═════════ */
+async function selfCall(node, action){
+  const r = await fetch("/api/self?node=" + encodeURIComponent(node), {method:"POST", headers:{"X-Token":getTok(), "Content-Type":"application/json"}, body:JSON.stringify({action})});
+  const d = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(d.message || d.error || (r.status === 404 ? "這台還是舊版，請先手動更新一次" : "讀取失敗"));
+  return d;
+}
+const SELFST = {};
+async function selfStatus(root, force){
+  const box = root.querySelector(".selfbox"); if (!box) return;
+  const hosts = LIST.filter(x => x.online);
+  const res = await Promise.all(hosts.map(h => selfCall(h.node || "", force ? "check" : "status").then(d => [h, d]).catch(e => [h, {err: e.message, old: true}])));
+  if (!box.isConnected) return;
+  res.forEach(([h, d]) => SELFST[keyOf(h)] = d);
+  const any = res.filter(([, d]) => d.has && !d.running).length;
+  const rows = res.map(([h, d]) => {
+    const st = d.running ? `<span class="spin"></span>更新中…` : d.old || d.supported === false ? `<span class="warn">${esc(d.err)}</span>`
+      : d.has ? `<span class="new">有新版可以更新</span>` : d.err ? esc(d.err) : "已經是最新版 ✨";
+    const ch = d.has && d.changes && d.changes.length ? `<ul class="chg">${d.changes.slice(0, 5).map(c => `<li>${esc(c.split("\n")[0])}</li>`).join("")}</ul>` : "";
+    return `<div class="opt selfrow"><div class="lab">${esc(h.name)}<small>${d.version ? `版本 ${esc(d.version)}・${esc(d.build || "")}・` : ""}${st}</small>${ch}</div>
+      ${d.has && !d.running ? `<button class="ubtn sm" data-selfup="${esc(h.node || "")}">更新</button>` : ""}</div>`;
+  }).join("");
+  box.innerHTML = rows + (any > 1 ? `<div class="opt"><span class="lab"></span><button class="ubtn sm" data-selfup="*">全部更新</button></div>` : "");
+}
+async function selfUpdate(root, nodes){
+  const targets = (nodes || Object.entries(SELFST).filter(([, d]) => d.has).map(([k]) => (LIST.find(x => keyOf(x) === k) || {}).node || ""));
+  const ok = await modal({icon:"upd", cls:"theme", title:"更新哨兵？", text:"會從 GitHub 下載新版並自動重新啟動，\n大約 10～30 秒，你的設定都會保留。", ok:"開始更新"});
+  if (!ok) return;
+  for (const n of targets.sort((a, b) => (a === "") - (b === ""))) {   // 先更新其他台，最後才更新這台（這台更新完畫面會重新載入）
+    try { const d = await selfCall(n, "update"); toast(d.message); } catch(e) { toast(e.message, "bad"); }
+  }
+  setTimeout(() => selfStatus(root), 1500);
+  const poll = setInterval(() => { if (!root.isConnected) return clearInterval(poll); selfStatus(root); }, 5000);
+  setTimeout(() => clearInterval(poll), 120000);
+}
 /* ═════════ Telegram 通知設定 ═════════ */
 async function tgCall(body){
   const r = await fetch("/api/telegram", {method:"POST", headers:{"X-Token":getTok(), "Content-Type":"application/json"}, body:JSON.stringify(body)});
@@ -3020,7 +3234,7 @@ function openSettings(){
   const sheet = v.querySelector(".sheet"), body = v.querySelector(".sbody"), top = v.querySelector(".top");
   body.addEventListener("scroll", () => top.classList.toggle("under", body.scrollTop > 4), {passive:true});
   initSegs(body);
-  tgStatus(body);
+  tgStatus(body); selfStatus(body);
   sheet.addEventListener("animationend", e => { if (e.target === sheet && !v._d) sheet.classList.add("ready"); });
   const close = () => { if (v._d) return; v._d = 1; sheet.classList.remove("back"); v.classList.add("closing"); setTimeout(()=>v.remove(), 380); };
   v._esc = close;
@@ -3028,6 +3242,10 @@ function openSettings(){
   v.addEventListener("click", e => {
     if (e.target === v || e.target.closest("[data-close]")) return close();
     if (e.target.closest("[data-tg]")) return tgModal().then(() => tgStatus(body));
+    const sc = e.target.closest("[data-selfcheck]");
+    if (sc) { sc.disabled = true; sc.textContent = "檢查中…"; return selfStatus(body, true).finally(() => { sc.disabled = false; sc.textContent = "檢查新版"; }); }
+    const su = e.target.closest("[data-selfup]");
+    if (su) return selfUpdate(body, su.dataset.selfup === "*" ? null : [su.dataset.selfup]);
     const b = e.target.closest("[data-val]");
     if (b) {
       const raw = b.dataset.val, k = b.dataset.pref;
@@ -3194,6 +3412,14 @@ async function tick(){
     const r = await fetch("/api/all", {headers:{"X-Token":getTok()}, cache:"no-store"});
     if (r.status === 401) { setTok(""); LIST = []; endSplash(); return login("密碼不對，再試一次"); }
     const data = await r.json();
+    const me = data.find(x => !x.node);
+    if (me && me.build) {
+      if (!window._build) window._build = me.build;
+      else if (me.build !== window._build && !window._reloading) {   // 這台的哨兵剛更新好：重新載入換上新畫面
+        window._reloading = true; toast("哨兵已更新到新版，重新載入中…");
+        setTimeout(() => location.reload(), 1400);
+      }
+    }
     if (!BOOTED) {
       splashMsg("準備畫面…");
       // 字型和國旗最多等 1.5 秒；啟動畫面至少顯示 0.7 秒，避免一閃而過
