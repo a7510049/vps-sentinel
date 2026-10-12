@@ -67,9 +67,11 @@ button{font:inherit;color:inherit}
 @keyframes d2{to{transform:translate(-20vmax,10vmax) scale(.9)}}
 @keyframes d3{to{transform:translate(12vmax,-16vmax) scale(1.2)}}
 [data-bg="mesh"] .aurora i{animation:none}
+[data-hush] .aurora i{animation-play-state:paused}      /* 手機滑動、點畫面時先停住（見 app.js 的 hush） */
 [data-bg="plain"] .aurora{opacity:0!important}
 .grain{position:absolute;inset:0;opacity:.045;mix-blend-mode:overlay;
   background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E")}
+@media (pointer:coarse){.grain{display:none}}           /* 手機螢幕很細，雜訊紋理幾乎看不到，混色卻讓整個畫面多算一層 */
 
 /* ═════════ 液態玻璃 ═════════ */
 .glass{position:relative;background:var(--glass);
