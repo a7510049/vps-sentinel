@@ -610,8 +610,18 @@ function skeleton(){
 /* ═════════ 只更新有變動的地方 ═════════ */
 /* 曲線變形：兩條路徑的數字一一對應，每一格畫面算一次中間值（iPhone 也能動） */
 const NUM = /-?\d+(?:\.\d+)?/g;
+/* 不在畫面上的曲線就不做變形動畫，直接換成新的（手機上兩台主機的曲線常常有一半在畫面外） */
+const SEEN = new WeakMap();
+const seenIO = window.IntersectionObserver ? new IntersectionObserver(es => es.forEach(e => SEEN.set(e.target, e.isIntersecting))) : null;
+function onScreen(el){
+  const svg = el.ownerSVGElement || el;
+  if (!seenIO) return true;
+  if (!SEEN.has(svg)) { SEEN.set(svg, true); seenIO.observe(svg); }
+  return SEEN.get(svg);
+}
 function morphPath(el, from, to){
   cancelAnimationFrame(el._praf);
+  if (!onScreen(el)) { el._pcur = null; return false; }
   const cur = el._pcur || from;                 // 上一次還沒變完的話，從目前的樣子接著變
   const a = cur.match(NUM), parts = to.split(NUM), b = to.match(NUM);
   if (!canAnim() || !a || !b || a.length !== b.length) { el._pcur = null; return false; }
@@ -711,6 +721,7 @@ function morph(a, b){
       (a.nodeType===1 && (a.getAttribute("data-key")||"")!==(b.getAttribute("data-key")||""))) { a.replaceWith(b); return; }
   if (a.nodeType===3 || a.nodeType===8){ if (a.nodeValue!==b.nodeValue) a.nodeValue=b.nodeValue; return; }
   if (a.nodeType!==1) return;
+  if (!a._xing && a.isEqualNode(b)) return;                  // 整塊都沒變（圖示、標題…）：直接跳過，不用一個一個比
   if (a.classList.contains("ubtn") && a.innerHTML !== b.innerHTML) {
     return flipWidth(a, () => { patch(a, b); a.animate([{opacity:.35}, {opacity:1}], {duration:T.mid, easing:EASE}); });
   }
@@ -732,8 +743,10 @@ function morph(a, b){
 function keyedPatch(a, b){
   const old = new Map();
   [...a.children].forEach(c => { if (!c._leaving) old.set(c.getAttribute("data-key") || "", c); });
+  // 項目的順序、數量都沒變時，不會有東西移位，就不用量位置（量位置會逼瀏覽器整頁重新排版）
+  const moved = [...old.keys()].join("\n") !== [...b.children].map(c => c.getAttribute("data-key") || "").join("\n");
   const anim = canAnim(), first = new Map();
-  if (anim) old.forEach((c, k) => first.set(k, c.getBoundingClientRect()));
+  if (anim && moved) old.forEach((c, k) => first.set(k, c.getBoundingClientRect()));
   const keep = [], fresh = []; let prev = null;
   const want = new Set([...b.children].map(c => c.getAttribute("data-key") || ""));
   // 找下一個「真正要留下的」元素：跳過空白、正在離開的、等一下要移除的
@@ -756,7 +769,7 @@ function keyedPatch(a, b){
     if (el.matches(TILE)) el.animate([{opacity:0, transform:"scale(.95)"}, {opacity:1, transform:"none"}], {duration:T.mid, delay:j*50, easing:EASE, fill:"backwards", id:"ui"});
     else enterBlock(el, (leaving.length ? 200 : 0) + j*90);   // 有東西要離開時，等它先淡出再進來
   });
-  if (anim && !flowing) keep.forEach(([k, el]) => {   // 只有單純換位置時才平滑移位
+  if (anim && moved && !flowing) keep.forEach(([k, el]) => {   // 只有單純換位置時才平滑移位
     const f = first.get(k), l = el.getBoundingClientRect(), dx = f.left - l.left, dy = f.top - l.top;
     if (Math.abs(dx) > 1 || Math.abs(dy) > 1) el.animate([{transform:`translate(${dx}px,${dy}px)`}, {transform:"none"}], {duration:T.mid, easing:EASE, id:"ui"});
   });
@@ -992,7 +1005,10 @@ function moveInd(seg){
   ind.style.width = on.offsetWidth + "px"; ind.style.transform = `translateX(${on.offsetLeft}px)`;
 }
 function initSegs(root){
-  root.querySelectorAll(".seg").forEach(sg => { sg.classList.add("noanim"); moveInd(sg); });
+  // 先一次量完所有按鈕的位置，再一次寫回去；量一個寫一個的話，每一組都要整頁重新排版一次（手機上開設定會頓將近半秒）
+  const segs = [...root.querySelectorAll(".seg")].map(sg => { sg.classList.add("noanim"); return [sg.querySelector("button.on"), sg.querySelector(".ind")]; });
+  const pos = segs.map(([on, ind]) => on && ind ? [on.offsetWidth, on.offsetLeft] : null);
+  segs.forEach(([, ind], i) => { if (pos[i]) { ind.style.width = pos[i][0] + "px"; ind.style.transform = `translateX(${pos[i][1]}px)`; } });
   requestAnimationFrame(() => requestAnimationFrame(() => root.querySelectorAll(".seg").forEach(sg => sg.classList.remove("noanim"))));
 }
 /* 其他主機連不上：可以直接在網頁上改它的連線網址（例如網域、連接埠換了） */
