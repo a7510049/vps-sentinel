@@ -36,7 +36,7 @@ from collections import deque
 from concurrent.futures import ThreadPoolExecutor
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
-VERSION = "1.10"
+VERSION = "1.11"
 
 # ───────────────────────── 設定 ─────────────────────────
 
@@ -685,6 +685,100 @@ def check_certs():
         CERT_STATE[u] = {"exp": exp, "expired": expired, "checked": now}
 
 
+# ── 用 acme.sh 申請的憑證（例如 3x-ui）：80 埠被 nginx 等佔走時，acme.sh 自己續不了，由哨兵幫忙 ──
+ACME_HOME = C.get("ACME_HOME", "/root/.acme.sh")
+ACME_UNIT = "vps-sentinel-acme"
+ACME_LOG = "/var/log/vps-sentinel-acme.log"
+ACME = {"last": {}, "lock": threading.Lock()}   # 網域 → 上次幫忙續期的時間
+
+
+def acme_certs():
+    """acme.sh 管的憑證：[{"domain", "ecc", "mode", "next"}]；mode 是 "no" 代表要用 80 埠驗證"""
+    out = []
+    for conf in glob.glob(os.path.join(ACME_HOME, "*", "*.conf")):
+        d = os.path.basename(os.path.dirname(conf))
+        name = d[:-4] if d.endswith("_ecc") else d
+        if os.path.basename(conf) != name + ".conf":
+            continue                                  # 略過 .csr.conf 之類的
+        kv = {}
+        for line in read(conf).splitlines():
+            k, _, v = line.partition("=")
+            kv[k.strip()] = v.strip().strip("'\"")
+        try:
+            nxt = int(kv.get("Le_NextRenewTime") or 0)
+        except ValueError:
+            nxt = 0
+        out.append({"domain": name, "ecc": d.endswith("_ecc"), "mode": kv.get("Le_Webroot", ""), "next": nxt})
+    return out
+
+
+def port80_holder():
+    """80 埠被誰佔著：(有沒有被佔, 佔用的系統服務名稱)"""
+    with socket.socket() as s:
+        s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        try:
+            s.bind(("0.0.0.0", 80))
+            return False, ""
+        except OSError:
+            pass
+    _, out = run(["ss", "-ltnpH", "sport = :80"], 10)
+    for pid in dict.fromkeys(re.findall(r"pid=(\d+)", out)):
+        m = re.search(r"/([\w@.-]+\.service)$", read(f"/proc/{pid}/cgroup"), re.M)
+        if m:
+            return True, m.group(1)
+    return True, ""
+
+
+def acme_name(domain):
+    """用常用連結的名稱稱呼這個網域（例如「3x-ui」），沒有就直接用網域"""
+    for x in all_links():
+        if urllib.parse.urlsplit(x["url"]).hostname == domain:
+            return x["name"]
+    return domain
+
+
+def acme_renew_due():
+    """acme.sh 該續期了、但 80 埠被別的服務佔著：暫停那個服務幾秒、續期、再打開"""
+    if not os.path.isfile(os.path.join(ACME_HOME, "acme.sh")) or not shutil.which("systemd-run"):
+        return
+    if not ACME["lock"].acquire(blocking=False):
+        return
+    try:
+        now = time.time()
+        for c in acme_certs():
+            if c["mode"] != "no" or not c["next"] or now < c["next"]:
+                continue
+            if now - ACME["last"].get(c["domain"], 0) < 12 * 3600:
+                continue                              # 失敗的話 12 小時後再試，不要一直重來
+            busy, unit = port80_holder()
+            if not busy or not unit:
+                continue                              # 80 埠空著：acme.sh 自己就續得了
+            ACME["last"][c["domain"]] = now
+            acme = shlex.quote(os.path.join(ACME_HOME, "acme.sh"))
+            u = shlex.quote(unit)
+            script = f"""set -u
+echo "=== 續期 {c['domain']}：暫停 {unit} $(date '+%F %T') ==="
+trap 'systemctl start {u}' EXIT
+systemctl stop {u}
+{acme} --home {shlex.quote(ACME_HOME)} --renew -d {shlex.quote(c['domain'])} {'--ecc ' if c['ecc'] else ''}--force"""
+            run(["systemctl", "reset-failed", ACME_UNIT], 5)
+            code, _ = run(["systemd-run", f"--unit={ACME_UNIT}", "--collect", "--wait", "--quiet",
+                           f"--property=StandardOutput=append:{ACME_LOG}",
+                           f"--property=StandardError=append:{ACME_LOG}",
+                           "/bin/bash", "-c", script], 300)
+            name = acme_name(c["domain"])
+            if code == 0:
+                log(f"已自動續期 {c['domain']} 的憑證")
+                COL.add_event("ok", f"「{name}」的安全憑證已經自動續期")
+                for st in CERT_STATE.values():
+                    st["checked"] = 0                 # 下一分鐘就重新檢查，提醒會自己消失
+            else:
+                log(f"自動續期 {c['domain']} 失敗，詳細記錄在 {ACME_LOG}")
+                COL.add_event("bad", f"「{name}」的安全憑證自動續期失敗")
+    finally:
+        ACME["lock"].release()
+
+
 def links_status():
     return [{**x, **{k: v for k, v in LINK_STATE.get(x["url"], {}).items() if k != "fails"}} for x in all_links()]
 
@@ -1232,6 +1326,8 @@ class Collector:
                     check_links()
                 except Exception as e:  # noqa: BLE001
                     log("檢查連結失敗：", e)
+            if tick % 1800 == 120:                    # 每 1 小時：有沒有憑證要幫忙續期
+                threading.Thread(target=acme_renew_due, daemon=True).start()
             if tick % 10800 == 0:                     # 每 6 小時：IP 所在國家
                 g = lookup_geo()
                 if g:
@@ -1565,6 +1661,8 @@ def ev_line(e):
         return "❌ 系統更新失敗，可以到網頁上再試一次"
     if t.startswith("已恢復："):
         return f"✅ 已解決：{t[4:]}"
+    if "自動續期" in t:
+        return ("✅ " if k == "ok" else "❌ ") + t
     if t == "主機重新開機了":
         return "🔄 主機重新開機了"
     if k == "info" and "登入了主機" in t:
