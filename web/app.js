@@ -964,7 +964,7 @@ function smooth(fn, theme, relayout){
    然後舊畫面一邊放大（或縮小）一邊淡出、新畫面從另一個大小接過來淡入，看起來像整頁平順地縮放 */
 function sizeShift(fn){
   const h = document.documentElement, z0 = parseFloat(h.style.getPropertyValue("--zoom")) || 1;
-  if (!canAnim() || !document.startViewTransition || sheetOpen()) return smooth(fn, false, true);
+  if (!canAnim() || !document.startViewTransition) return smooth(fn, false, true);
   const z1 = {s:.92, m:1, l:1.1}[PREF.size] || 1;
   h.style.setProperty("--zr", (z1 / z0).toFixed(4)); h.classList.add("vtsize");
   window._vt = (window._vt || 0) + 1;
