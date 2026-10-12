@@ -347,6 +347,11 @@ if ! systemctl is-active --quiet vps-sentinel-lite; then
   exit 1
 fi
 
+# 有裝雲端硬碟的話，順便整理一下：容量補足到設定的大小、修好刪不掉的檔案（沒裝就跳過）
+if [ -f /opt/vps-cloud/data/config.yaml ] && [ -f "$HERE/cloud.sh" ]; then
+  bash "$HERE/cloud.sh" 整理 || true
+fi
+
 # ── 6. 顯示網址 ──
 BIND="$(grep -E '^BIND=' "$CONF" | cut -d= -f2)"
 PORT="$(grep -E '^PORT=' "$CONF" | cut -d= -f2)"
