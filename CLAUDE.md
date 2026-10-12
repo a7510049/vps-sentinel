@@ -23,6 +23,7 @@ install.sh         安裝／更新哨兵（複製到 /opt/vps-sentinel-lite、�
 cloud.sh           雲端硬碟（FileBrowser Quantum）安裝、調整容量、檢查、更新、移除
 cleanup-old.sh     清除舊版 Home Assistant 版本
 tools/style_check.py  檢查樣式有沒有照共用規則
+tests/             基本功能測試（只用 Python 內建模組）
 ```
 
 **新增網頁檔案時要一起改三個地方**：
@@ -89,6 +90,11 @@ tools/style_check.py  檢查樣式有沒有照共用規則
 
 1. `python3 -c "import ast;ast.parse(open('sentinel.py').read())"`（語法）
 2. `python3 tools/style_check.py`（要顯示「全部符合規則」）
+2-1. `python3 -m unittest discover -s tests -v`（基本功能測試：把哨兵跑起來，確認網頁和主要 API 有回應）
+2-2. `shellcheck *.sh`（安裝腳本的寫法檢查）
+
+   以上幾項在 GitHub 上每次推送或開合併請求時都會自動跑（`.github/workflows/check.yml`）。
+
 3. 在本機跑起來看畫面：
 
    ```

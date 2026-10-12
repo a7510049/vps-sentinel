@@ -1,0 +1,27 @@
+# 每次推上新版或開合併請求時，自動檢查：樣式規則、程式語法、安裝腳本、基本功能
+name: 自動檢查
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.x"
+      - name: 程式語法
+        run: python3 -m py_compile sentinel.py tools/style_check.py tests/*.py
+      - name: 樣式規則
+        run: python3 tools/style_check.py
+      - name: 安裝腳本（shellcheck）
+        run: shellcheck *.sh
+      - name: 基本功能測試
+        run: python3 -m unittest discover -s tests -v

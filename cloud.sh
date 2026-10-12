@@ -106,7 +106,7 @@ case "${1:-}" in
   移除|remove)
     docker rm -f "$NAME" >/dev/null 2>&1 || true
     rm -f /etc/caddy/sites/vps-sentinel.d/cloud.caddy
-    command -v caddy >/dev/null && systemctl reload caddy 2>/dev/null || true
+    if command -v caddy >/dev/null; then systemctl reload caddy 2>/dev/null || true; fi
     set_conf CLOUD_URL ""
     systemctl restart vps-sentinel-lite 2>/dev/null || true
     echo "✅ 已移除雲端硬碟程式。你的檔案還在 $MNT（空間檔：$IMG）"
