@@ -23,15 +23,22 @@ def free_port():
         return s.getsockname()[1]
 
 
-class SmokeTest(unittest.TestCase):
+class Server(unittest.TestCase):
+    """每個測試類別各自跑一個哨兵（用暫存資料夾，不會動到正式設定）"""
+    STATE = None                                   # 啟動前先放好的存檔內容
+
     @classmethod
     def setUpClass(cls):
         cls.tmp = tempfile.TemporaryDirectory()
         cls.port = free_port()
-        conf = os.path.join(cls.tmp.name, "test.conf")
+        cls.conf = conf = os.path.join(cls.tmp.name, "test.conf")
+        data = os.path.join(cls.tmp.name, "data")
         with open(conf, "w", encoding="utf-8") as f:
-            f.write(f"BIND=127.0.0.1\nPORT={cls.port}\nTOKEN={TOKEN}\nNAME=測試主機\n"
-                    f"DATA_DIR={os.path.join(cls.tmp.name, 'data')}\n")
+            f.write(f"BIND=127.0.0.1\nPORT={cls.port}\nTOKEN={TOKEN}\nNAME=測試主機\nDATA_DIR={data}\n")
+        if cls.STATE is not None:
+            os.makedirs(data)
+            with open(os.path.join(data, "state.json"), "w", encoding="utf-8") as f:
+                json.dump(cls.STATE, f)
         env = {k: v for k, v in os.environ.items() if not k.startswith("SENTINEL_")}
         env["SENTINEL_CONF"] = conf
         cls.log = open(os.path.join(cls.tmp.name, "server.log"), "w+", encoding="utf-8")
@@ -75,6 +82,8 @@ class SmokeTest(unittest.TestCase):
         except urllib.error.HTTPError as e:
             return e.code, e.headers, e.read()
 
+
+class SmokeTest(Server):
     def test_page(self):
         code, headers, body = self.request("/")
         self.assertEqual(code, 200)
@@ -87,6 +96,9 @@ class SmokeTest(unittest.TestCase):
         with open(os.path.join(ROOT, "web", "app.js"), encoding="utf-8") as f:
             first_line = next(line for line in f if line.strip())
         self.assertIn(first_line.strip(), html)
+        # 不讓別的網站把哨兵嵌進去
+        self.assertEqual(headers["X-Frame-Options"], "DENY")
+        self.assertIn("frame-ancestors 'none'", headers["Content-Security-Policy"])
 
     def test_static_files(self):
         for path, ctype in [("/manifest.webmanifest", "application/manifest+json"),
@@ -139,6 +151,26 @@ class SmokeTest(unittest.TestCase):
         self.assertEqual(code, 404)
         code, _, _ = self.request("/api/history?node=no-such-host", token=TOKEN)
         self.assertEqual(code, 404)
+
+
+class RebootAndTokenTest(Server):
+    STATE = {"v": 1, "boot": "上一次開機", "events": []}
+    tok = TOKEN                                    # 換密碼的測試跑過後，其他測試要用新密碼
+
+    def test_reboot_event(self):
+        _, _, body = self.request("/api/status", token=type(self).tok)
+        self.assertIn("主機重新開機了", [e["text"] for e in json.loads(body)["events"]])
+
+    def test_change_token(self):
+        code, headers, body = self.request("/api/token", token=TOKEN, method="POST", data=b"")
+        self.assertEqual(code, 200)
+        new = json.loads(body)["token"]
+        self.assertTrue(new and new != TOKEN)
+        self.assertEqual(self.request("/api/status", token=TOKEN)[0], 401)   # 舊密碼不能用了
+        self.assertEqual(self.request("/api/status", token=new)[0], 200)
+        type(self).tok = new
+        with open(self.conf, encoding="utf-8") as f:
+            self.assertIn(f"TOKEN={new}\n", f.read())                       # 重新啟動後也是新密碼
 
 
 if __name__ == "__main__":

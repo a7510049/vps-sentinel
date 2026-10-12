@@ -17,6 +17,7 @@ import html
 import json
 import os
 import re
+import secrets
 import shutil
 import ssl
 import shlex
@@ -35,7 +36,7 @@ from collections import deque
 from concurrent.futures import ThreadPoolExecutor
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
-VERSION = "1.9"
+VERSION = "1.10"
 
 # ───────────────────────── 設定 ─────────────────────────
 
@@ -283,6 +284,30 @@ def net_bytes():
 
 def boot_id():
     return read("/proc/sys/kernel/random/boot_id").strip()
+
+
+SSH_WAY = {"publickey": "用金鑰", "password": "用密碼", "keyboard-interactive/pam": "用密碼"}
+
+
+def ssh_logins(since_us):
+    """從系統紀錄找出 since_us（微秒）之後成功登入的 SSH：[(時間微秒, 帳號, 來源 IP, 方式)]"""
+    try:
+        r = subprocess.run(["journalctl", "-t", "sshd", "-t", "sshd-session", "--since", f"@{since_us // 1_000_000}",
+                            "-o", "json", "--no-pager", "-q"], capture_output=True, encoding="utf-8",
+                           errors="replace", timeout=15)
+    except (OSError, subprocess.SubprocessError):
+        return []
+    out = []
+    for line in r.stdout.splitlines():
+        try:
+            e = json.loads(line)
+            t, msg = int(e.get("__REALTIME_TIMESTAMP") or 0), e.get("MESSAGE")
+        except (ValueError, TypeError, AttributeError):
+            continue
+        m = re.match(r"Accepted (\S+) for (\S+) from (\S+)", msg) if isinstance(msg, str) else None
+        if m and t > since_us:
+            out.append((t, m.group(2), m.group(3), SSH_WAY.get(m.group(1), "")))
+    return out
 
 
 def cycle_bounds(day=None):
@@ -622,10 +647,78 @@ def check_links():
         st = LINK_STATE.setdefault(u, {"fails": 0})
         st["fails"] = 0 if up else st["fails"] + 1
         st.update(up=True if up else (None if st["fails"] < 2 else False), ms=ms, err=err)   # 連續 2 次失敗才算掛掉，避免偶爾慢一下就誤報
+    check_certs()
+
+
+CERT_STATE = {}                                 # 網址 → {"exp": 到期時間, "expired": 已過期, "checked": 上次檢查}
+
+
+def cert_expiry(url):
+    """看網址的安全憑證什麼時候到期：回傳 (到期時間, 已過期)；不是 https、用 IP 或自己簽的憑證就不管"""
+    u = urllib.parse.urlsplit(url)
+    if u.scheme != "https" or not u.hostname:
+        return None, False
+    try:
+        ipaddress.ip_address(u.hostname)
+        return None, False
+    except ValueError:
+        pass
+    try:
+        ctx = ssl.create_default_context()
+        with socket.create_connection((u.hostname, u.port or 443), timeout=8) as raw, \
+                ctx.wrap_socket(raw, server_hostname=u.hostname) as s:
+            return ssl.cert_time_to_seconds(s.getpeercert()["notAfter"]), False
+    except ssl.SSLCertVerificationError as e:
+        return None, e.verify_code == 10            # 10 ＝ 憑證已過期；其他原因（自己簽的、網域不符）不算
+    except (OSError, KeyError, ValueError, TypeError):
+        return None, False
+
+
+def check_certs():
+    """每 6 小時看一次常用連結的憑證"""
+    now, urls = time.time(), [x["url"] for x in all_links()]
+    for u in list(CERT_STATE):
+        if u not in urls:
+            del CERT_STATE[u]
+    due = [u for u in urls if now - CERT_STATE.get(u, {}).get("checked", 0) > 6 * 3600]
+    for u, (exp, expired) in zip(due, POOL.map(cert_expiry, due)):
+        CERT_STATE[u] = {"exp": exp, "expired": expired, "checked": now}
 
 
 def links_status():
     return [{**x, **{k: v for k, v in LINK_STATE.get(x["url"], {}).items() if k != "fails"}} for x in all_links()]
+
+
+# ───────────────────────── 換密碼 ─────────────────────────
+
+def change_token():
+    """換一組新的存取密碼：舊密碼、雲端硬碟通行證、一鍵登入網址全部失效"""
+    global TOKEN
+    old, new = TOKEN, secrets.token_urlsafe(18)
+    TOKEN = new
+    vals = {"TOKEN": new}
+    if PEERS:
+        vals["PEERS"] = peers_conf()             # 其他主機原本跟這台用同一組密碼的，要把舊密碼寫明，才不會連不上
+    try:
+        write_conf(vals)
+    except OSError as e:
+        TOKEN = old
+        return False, f"無法寫入設定檔：{e}", ""
+    log("已換成新的存取密碼")
+    COL.add_event("info", "存取密碼已經換新")
+    return True, "已換成新密碼", new
+
+
+def set_peer_token(name, token):
+    """幫另一台換了密碼後，這邊記住它的新密碼"""
+    p = next((p for p in PEERS if p["name"] == name), None)
+    if not p or not token:
+        return
+    p["token"] = token
+    try:
+        write_conf({"PEERS": peers_conf()})
+    except OSError as e:
+        log("無法記住新密碼：", e)
 
 
 # ───────────────────────── 改名 ─────────────────────────
@@ -907,7 +1000,11 @@ class Collector:
         self.h7d = deque(maxlen=336)            # 7 天，每 30 分鐘一筆
         self._b5 = self._b30 = None
         self.traffic = {"since": time.time(), "days": {}, "last": None}
+        self.ssh_since = int(time.time() * 1_000_000)   # 從現在開始看 SSH 登入，不補報以前的
+        self.saved_boot = None
         self.load()
+        if self.saved_boot and self.saved_boot != boot_id():
+            self.add_event("warn", "主機重新開機了")
 
     # ── 存檔 ──
     def state_path(self):
@@ -932,6 +1029,7 @@ class Collector:
             PEER_SEEN.update({k: float(v) for k, v in (st.get("peer_seen") or {}).items() if k in names})
             TG_SENT.update({k: float(v) for k, v in (st.get("tg_sent") or {}).items() if k == "" or k in names})
             TG_MSGS.extend(list(m) for m in (st.get("tg_msgs") or []) if len(m) == 3)
+            self.saved_boot = st.get("boot")
             if st.get("prev_keys") is not None:
                 self.prev_keys = {k: tuple(v) for k, v in st["prev_keys"].items()}
             log(f"已讀取存檔：歷史 {len(self.hist)}/{len(self.h24)}/{len(self.h7d)} 筆、事件 {len(self.events)} 筆、流量 {len(self.traffic['days'])} 天")
@@ -940,7 +1038,7 @@ class Collector:
 
     def save(self):
         with self.lock:
-            st = {"v": 1, "saved": time.time(), "hist": list(self.hist), "h24": list(self.h24), "h7d": list(self.h7d),
+            st = {"v": 1, "saved": time.time(), "boot": boot_id(), "hist": list(self.hist), "h24": list(self.h24), "h7d": list(self.h7d),
                   "events": list(self.events), "traffic": self.traffic,
                   "prev_keys": self.prev_keys, "peer_seen": dict(PEER_SEEN),
                   "tg_sent": dict(TG_SENT), "tg_msgs": list(TG_MSGS)}
@@ -1113,6 +1211,7 @@ class Collector:
                 self.upd_running = now
             if tick % 15 == 0 and tick > 0:
                 self.track_events()
+                self.track_ssh()
             if tick % 900 == 0 or recheck:            # 每 30 分鐘：可更新套件數
                 u = apt_updates()
                 with self.lock:
@@ -1143,6 +1242,20 @@ class Collector:
     def add_event(self, kind, text):
         with self.lock:
             self.events.append((round(time.time()), kind, text))
+
+    def track_ssh(self):
+        """有人從 SSH 登入就記一筆（同一個帳號、同一個地方連續登入只記一筆，免得洗版）"""
+        logins = ssh_logins(self.ssh_since)
+        if not logins:
+            return
+        self.ssh_since = max(t for t, *_ in logins)
+        groups = {}
+        for _, user, ip, way in logins:
+            groups.setdefault((user, ip, way), 0)
+            groups[(user, ip, way)] += 1
+        for (user, ip, way), n in list(groups.items())[:5]:
+            more = f"・{n} 次" if n > 1 else ""
+            self.add_event("info", f"{user} 從 {ip} 登入了主機（{way or 'SSH'}{more}）")
 
     def track_events(self):
         """比較這次和上次的問題，記錄「發生」與「恢復」"""
@@ -1198,6 +1311,13 @@ class Collector:
         for x in links_status():
             if x.get("up") is False:
                 problems.append(f"「{x['name']}」打不開")
+        cert_soon = []
+        for x in all_links():
+            c = CERT_STATE.get(x["url"]) or {}
+            if c.get("expired") or (c.get("exp") and c["exp"] < time.time()):
+                problems.append(f"「{x['name']}」的安全憑證過期了")
+            elif c.get("exp") and c["exp"] - time.time() < 14 * 86400:
+                cert_soon.append(f"「{x['name']}」的安全憑證 {max(1, int((c['exp'] - time.time()) // 86400))} 天後到期")
 
         traffic = self.traffic_info()
         notices = []
@@ -1221,6 +1341,7 @@ class Collector:
             notices.append("IPv6 位址不見了")
         if updates and updates["security"]:
             notices.append(f"{updates['security']} 個安全更新")
+        notices += cert_soon
 
         return {
             "name": NAME, "node": "", "online": True, "version": VERSION, "time": time.time(), "links": links_status(), "build": BUILD, "self_has": bool(SELF["has"] or (CLOUD_URL and CLOUDUP["has"])),
@@ -1444,6 +1565,10 @@ def ev_line(e):
         return "❌ 系統更新失敗，可以到網頁上再試一次"
     if t.startswith("已恢復："):
         return f"✅ 已解決：{t[4:]}"
+    if t == "主機重新開機了":
+        return "🔄 主機重新開機了"
+    if k == "info" and "登入了主機" in t:
+        return "🔑 " + t
     return {"bad": "🔴 ", "warn": "🟠 "}.get(k, "• ") + t
 
 
@@ -1533,6 +1658,9 @@ class Handler(BaseHTTPRequestHandler):
         self.send_header("Content-Length", str(len(data)))
         self.send_header("Cache-Control", "max-age=86400" if cache else "no-store")
         self.send_header("X-Content-Type-Options", "nosniff")
+        self.send_header("X-Frame-Options", "DENY")              # 不讓別的網站把哨兵嵌進去騙你點按鈕
+        self.send_header("Content-Security-Policy", "frame-ancestors 'none'")
+        self.send_header("Referrer-Policy", "no-referrer")       # 點外部連結時不帶出哨兵的網址
         self.end_headers()
         self.wfile.write(data)
 
@@ -1694,7 +1822,8 @@ class Handler(BaseHTTPRequestHandler):
         if self.is_cloud():
             return self.proxy_cloud()
         u = urllib.parse.urlsplit(self.path)
-        if u.path not in ("/api/update", "/api/rename", "/api/traffic", "/api/telegram", "/api/links", "/api/self", "/api/cloud-login", "/api/peer"):
+        if u.path not in ("/api/update", "/api/rename", "/api/traffic", "/api/telegram", "/api/links", "/api/self", "/api/cloud-login", "/api/peer",
+                          "/api/token"):
             return self.send(404, '{"error":"找不到"}')
         if not self.authed():
             time.sleep(1)
@@ -1714,7 +1843,13 @@ class Handler(BaseHTTPRequestHandler):
                                              headers={"X-Token": peer["token"],
                                                       "Content-Type": "application/json"})
                 with urllib.request.urlopen(req, timeout=20) as r:
-                    return self.send(r.status, r.read())
+                    data = r.read()
+                if u.path == "/api/token":           # 那台換了密碼：這邊也要記住，不然下次就連不上它
+                    try:
+                        set_peer_token(node, json.loads(data).get("token"))
+                    except (ValueError, AttributeError):
+                        pass
+                return self.send(r.status, data)
             except urllib.error.HTTPError as e:
                 return self.send(e.code, e.read())
             except Exception as e:  # noqa: BLE001
@@ -1727,6 +1862,9 @@ class Handler(BaseHTTPRequestHandler):
                 d = {}
             ok, msg, tf = set_peer(d.get("name"), d.get("url"), d.get("token"), bool(d.get("force")))
             return self.send(200 if ok else 400, json.dumps({"ok": ok, "message": msg, "test_failed": tf}, ensure_ascii=False))
+        if u.path == "/api/token":
+            ok, msg, tok = change_token()
+            return self.send(200 if ok else 500, json.dumps({"ok": ok, "message": msg, "token": tok}, ensure_ascii=False))
         if u.path == "/api/cloud-login":            # 網頁上已經登入哨兵：直接發雲端硬碟通行證
             if not CLOUD_URL:
                 return self.send(404, '{"ok":false}')

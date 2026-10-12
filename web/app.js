@@ -30,6 +30,7 @@ const P = {
   ext:'<path d="M14 4h6v6"/><path d="M20 4 11 13"/><path d="M19 14v4.5a1.5 1.5 0 0 1-1.5 1.5h-12A1.5 1.5 0 0 1 4 18.5v-12A1.5 1.5 0 0 1 5.5 5H10"/>',
   cloud:'<path d="M17.5 19a4.5 4.5 0 1 0-1.3-8.8A6 6 0 0 0 4.6 12.5 3.5 3.5 0 0 0 6.5 19Z"/>',
   search:'<circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/>',
+  key:'<circle cx="7.5" cy="15.5" r="4.5"/><path d="m10.7 12.3 9.8-9.8M17 6l3 3M14.5 8.5l2 2"/>',
   chev:'<path d="m6 9 6 6 6-6"/>', x:'<path d="M18 6 6 18M6 6l12 12"/>',
   warn:'<path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3z"/><path d="M12 9v4M12 17h.01"/>',
   ok:'<circle cx="12" cy="12" r="9.5"/><path d="m8.5 12 2.5 2.5 4.5-5"/>',
@@ -342,7 +343,7 @@ const COL = {cpu:"var(--c-cpu)", mem:"var(--c-mem)", rx:"var(--c-rx)", tx:"var(-
 /* 概念 → [顏色樣式, 圖示] */
 const ICO = {cpu:["cpu","cpu"], mem:["mem","mem"], disk:["disk","disk"], load:["load","gauge"], down:["down","down"], up:["up","up"],
   net:["net","net"], trend:["trend","trend"], month:["month","month"], box:["box","box"], bell:["bell","bell"], info:["info","info"],
-  layers:["theme","layers"], flag:["theme","flag"]};
+  layers:["theme","layers"], flag:["theme","flag"], key:["theme","key"]};
 const IC = (k, cls="sm") => `<span class="ico ${cls} ${ICO[k][0]}">${I(ICO[k][1])}</span>`;
 
 /* ═════════ 手機版 ═════════ */
@@ -955,6 +956,8 @@ function settingsBody(){
   <div class="sec"><h4>通知</h4><div class="group">
     <button class="opt optbtn" data-tg>${IC("bell")}<span class="lab">Telegram 通知<small class="tgst">讀取中…</small></span><span class="chev">${I("chev")}</span></button>
   </div></div>
+  ${LIST.some(s => s.online) ? `<div class="sec"><h4>安全</h4><div class="group">${LIST.filter(s => s.online).map(s =>
+    `<button class="opt optbtn" data-newtok="${esc(s.node||"")}" data-label="${esc(s.name)}">${IC("key")}<span class="lab">換一組新密碼${LIST.length > 1 ? `：${esc(s.name)}` : ""}<small>擔心密碼外流時用，舊密碼會馬上失效</small></span><span class="chev">${I("chev")}</span></button>`).join("")}</div></div>` : ""}
   <div class="sec"><h4>資料</h4><div class="group">
     <div class="opt"><span class="lab">自動更新<small>多久抓一次最新狀態</small></span>${seg("refresh",[[3,"3 秒"],[5,"5 秒"],[10,"10 秒"],[30,"30 秒"]])}</div>
   </div></div>
@@ -1206,6 +1209,8 @@ function openSettings(){
   v.addEventListener("click", e => {
     if (e.target === v || e.target.closest("[data-close]")) return close();
     if (e.target.closest("[data-tg]")) return tgModal().then(() => tgStatus(body));
+    const nt = e.target.closest("[data-newtok]");
+    if (nt) return newToken(nt.dataset.newtok, nt.dataset.label);
     const sc = e.target.closest("[data-selfcheck]");
     if (sc) { sc.disabled = true; sc.textContent = "檢查中…"; return selfStatus(body, true).finally(() => { sc.disabled = false; sc.textContent = "檢查新版"; }); }
     const su = e.target.closest("[data-selfup]");
@@ -1251,6 +1256,31 @@ function openSettings(){
     const relayout = ["size","density","perf"].includes(k) || (DESK.matches && k.startsWith("show."));
     big && k !== "accent" ? smooth(run, ["theme","bg"].includes(k), relayout) : run();
     if (k === "refresh") restart();
+  }
+}
+/* 換密碼：換好後顯示新密碼給你複製，這台裝置會自動改用新密碼 */
+async function newToken(node, label){
+  const ok = await modal({icon:"key", cls:"theme", title:`換掉「${label}」的密碼？`,
+    text:"換好之後，其他手機、電腦要用新密碼重新登入；雲端硬碟也要重新從哨兵點進去。", ok:"換新密碼"});
+  if (!ok) return;
+  let d = {};
+  try {
+    const r = await fetch("/api/token?node=" + encodeURIComponent(node), {method:"POST", headers:{"X-Token":getTok()}});
+    d = await r.json().catch(() => ({}));
+    if (r.status === 404) return toast("那台主機還沒更新到新版，先更新再換密碼", "bad");
+    if (!r.ok || !d.ok || !d.token) return toast(d.message || "換密碼失敗", "bad");
+  } catch(e) { return toast("連線失敗，請稍後再試", "bad"); }
+  if (!node) {
+    setTok(d.token);
+    if (LIST.some(x => !x.node && x.cloud))          // 這台裝置的雲端硬碟通行證也換新
+      fetch("/api/cloud-login", {method:"POST", headers:{"X-Token":getTok()}}).catch(() => {});
+  }
+  const cp = await modal({icon:"ok", cls:"theme", title:"已換成新密碼", input:d.token, ok:"複製密碼", cancel:"關閉",
+    text: node ? "這邊已經記住新密碼，可以照常看到這台。直接打開那台的網址時，請用這組新密碼登入。"
+               : "這台裝置已經改用新密碼。請把新密碼記下來，其他裝置要用它重新登入。"});
+  if (cp) {
+    try { await navigator.clipboard.writeText(d.token); toast("已複製新密碼"); }
+    catch(e) { toast("沒辦法自動複製，請手動選取密碼複製", "bad"); }
   }
 }
 function restart(){ clearTimeout(timer); timer = setTimeout(tick, (PREF.refresh || 5) * 1000); }
