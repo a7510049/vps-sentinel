@@ -145,7 +145,7 @@ show_login() {
 case "${1:-}" in
   密碼|password|換密碼|reset)
     echo "雲端硬碟已經改成跟哨兵一起登入，不需要另外的密碼了。"
-    echo "要換密碼的話，換的是哨兵的密碼：nano /etc/vps-sentinel-lite.conf 裡的 TOKEN，改完 systemctl restart vps-sentinel-lite"
+    echo "要換密碼的話，換的是哨兵的密碼：到哨兵網頁的「設定 → 安全 → 換一組新密碼」"
     exit 0 ;;
   檢查|check)
     diagnose; exit 0 ;;
@@ -340,7 +340,6 @@ echo "✅ 雲端硬碟好了（最多 ${SIZE} GB）"
 echo "   網址：$URL"
 show_login
 echo
-echo "   忘記密碼：sudo bash cloud.sh 密碼"
-echo "   換密碼：  sudo bash cloud.sh 換密碼 你的新密碼   （請用這個指令換，在網頁上改的話重開後會被換回來）"
 echo "   改容量：  sudo bash cloud.sh 新的GB數"
+echo "   連不上時：sudo bash cloud.sh 檢查"
 if [ -z "$DOMAIN" ]; then echo "   ⚠️ 這台沒有設定網域，連線沒有加密；之前為雲端硬碟開的 8788 連接埠可以關掉了"; fi
