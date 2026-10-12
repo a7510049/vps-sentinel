@@ -11,6 +11,7 @@ import base64
 import glob
 import hashlib
 import hmac
+import ipaddress
 import html
 import json
 import os
@@ -569,6 +570,39 @@ def lookup_geo():
     return manual
 
 
+IF_INET6 = os.environ.get("SENTINEL_IF_INET6", "/proc/net/if_inet6")
+V6_TARGETS = [("2606:4700:4700::1111", 443), ("2001:4860:4860::8888", 443)]   # Cloudflare、Google 的 IPv6 位址
+
+
+def ipv6_addr():
+    """這台主機對外的 IPv6 位址（沒有就回傳空字串）"""
+    found = []
+    try:
+        with open(IF_INET6) as f:
+            for line in f:
+                p = line.split()
+                if len(p) < 6 or p[3] != "00" or p[5] == "lo":       # 只要「全球」範圍的位址
+                    continue
+                a = ipaddress.IPv6Address(int(p[0], 16))
+                if a.is_private or a.is_link_local:
+                    continue
+                found.append((int(p[4], 16) & 0x01, str(a)))           # 臨時位址排後面
+    except (OSError, ValueError):
+        return ""
+    return sorted(found)[0][1] if found else ""
+
+
+def ipv6_ok():
+    """實際試著用 IPv6 連到外面"""
+    for host, port in V6_TARGETS:
+        try:
+            with socket.create_connection((host, port), timeout=5):
+                return True
+        except OSError:
+            continue
+    return False
+
+
 def tcp_conns():
     """目前建立中的 TCP 連線數（IPv4＋IPv6）"""
     n = 0
@@ -669,6 +703,7 @@ class Collector:
         self.geo = None
         self.hist = deque(maxlen=180)          # 最近 30 分鐘，每 10 秒一筆
         self.conn_hist = deque(maxlen=360)     # 最近 1 小時的連線數，用來判斷「跟平常比」
+        self.v6 = {"addr": "", "ok": None, "fails": 0, "seen": False}   # IPv6：位址、能不能連出去
         self.events = deque(maxlen=40)         # 事件紀錄
         self.prev_keys = None
         self.upd_running = False
@@ -887,6 +922,14 @@ class Collector:
                 u = apt_updates()
                 with self.lock:
                     self.updates = u
+            if tick % 150 == 3:                       # 每 5 分鐘：IPv6 還能不能用
+                a = ipv6_addr()
+                ok = ipv6_ok() if a else None
+                with self.lock:
+                    v = self.v6
+                    v["fails"] = 0 if ok or not a else v["fails"] + 1
+                    v.update(addr=a, ok=None if not a else (True if ok else (False if v["fails"] >= 2 else v["ok"])))
+                    v["seen"] = v["seen"] or bool(a)
             if tick % 5400 == 10:                     # 每 3 小時：GitHub 上有沒有新版的哨兵（背景查，不卡畫面）
                 threading.Thread(target=self_check, daemon=True).start()
             if LINKS and tick % 30 == 0:              # 每 1 分鐘：常用連結打不打得開
@@ -972,6 +1015,11 @@ class Collector:
                 notices.append("照目前速度，本月流量會超過上限")
         if reboot:
             notices.append("需要重新開機")
+        v6 = dict(self.v6)
+        if v6["addr"] and v6["ok"] is False:
+            notices.append("IPv6 連不出去")
+        elif v6["seen"] and not v6["addr"]:
+            notices.append("IPv6 位址不見了")
         if updates and updates["security"]:
             notices.append(f"{updates['security']} 個安全更新")
 
@@ -980,6 +1028,7 @@ class Collector:
             "os": os_name(), "kernel": os.uname().release,
             "uptime": float(read("/proc/uptime", "0").split()[0] or 0),
             "cores": os.cpu_count() or 1, "cpu": cpu, "load": [round(x, 2) for x in load],
+            "ipv6": {"addr": v6["addr"], "ok": v6["ok"]} if v6["addr"] or v6["seen"] else None,
             "conns": tcp_conns(), "conns_avg": round(sum(self.conn_hist) / len(self.conn_hist), 1) if len(self.conn_hist) >= 30 else None, "procs": int((read("/proc/loadavg", "0 0 0 0/0").split()[3:4] or ["0/0"])[0].split("/")[-1] or 0),
             "mem": mem, "disks": disks, "net": net,
             "containers": containers, "services": services,
@@ -1826,7 +1875,13 @@ button{font:inherit;color:inherit}
 .fr b.ok{color:var(--ok)}.fr b.warn{color:var(--warn)}.fr b.bad{color:var(--bad)}
 .fr .d{font-size:var(--fs-xs);color:var(--sub);font-weight:700;white-space:nowrap;text-align:right}
 .fr .d.warn{color:var(--warn)}
-.fr .org{grid-column:2/-1;text-align:left;margin-top:-4px;overflow:hidden;text-overflow:ellipsis}
+.fr .org{grid-column:2/-1;text-align:left;margin-top:-4px;overflow:hidden;text-overflow:ellipsis;display:flex;align-items:center;min-width:0}
+.fr .org .on2{overflow:hidden;text-overflow:ellipsis}
+.v6{display:inline-flex;align-items:center;gap:5px;flex:none}
+.v6 .ld{width:6px;height:6px}
+.v6.warn{color:var(--warn)}
+.v6.a{flex:1 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis;display:block;cursor:pointer;color:var(--text);font-variant-numeric:tabular-nums}
+.v6.a + .on2{display:none}
 .lbar{grid-column:2/-1;height:4px;border-radius:var(--r-pill);background:var(--track);overflow:hidden}
 .lbar i{display:block;height:100%;border-radius:inherit;background:var(--ok);transition:width var(--t-slow) var(--ease),background var(--t-mid)}
 .lbar i.warn{background:var(--warn)}.lbar i.bad{background:var(--bad)}
@@ -2560,6 +2615,15 @@ function ring(icon, label, pct, sub, i){
     <div class="gin"><b>${num(pct)}<small>%</small></b><span>${sub}</span></div></div></div>`;
 }
 /* 主機概況：只放上面沒出現過、又真的有用的數字 */
+/* IPv6：固定一行（有沒有設定都佔同樣位置，每台主機的版面一樣高） */
+function v6line(s, shown){
+  const v = s.ipv6;
+  if (!v) return `<span class="v6">IPv6 沒有設定</span>`;
+  if (!v.addr) return `<span class="v6 warn">IPv6 位址不見了</span>`;
+  const st = v.ok === false ? `<i class="ld bad"></i>連不出去` : v.ok ? `<i class="ld ok"></i>正常` : `<i class="ld"></i>檢查中`;
+  return shown ? `<span class="v6 a" data-copy="${esc(v.addr)}" title="點一下複製">${esc(v.addr)}</span>`
+    : `<span class="v6 ${v.ok === false ? "warn" : ""}">IPv6 ${st}</span>`;
+}
 /* 主機概況：每個數字都附上「代表什麼」，一眼看懂 */
 const IPSHOW = {};                    // 哪幾台的 IP 目前是顯示狀態（到期自動再遮起來）
 function sysPanel(s){
@@ -2579,7 +2643,7 @@ function sysPanel(s){
         <span class="k">連線</span><b>${c == null ? "—" : Number(c).toLocaleString("zh-TW")} <small>條</small></b><span class="d ${cw.includes("多很多") ? "warn" : ""}">${cw}</span></div>
       ${ip ? `<div class="fr"><span class="k">IP</span><b class="ipb ${shown ? "on" : ""}" ${shown ? `data-copy="${esc(ip)}" title="點一下複製"` : `data-reveal="${esc(k)}" title="點一下顯示"`}>${esc(ip)}</b>
         <button class="iconbtn eye" data-reveal="${esc(k)}" title="${shown ? "遮起來" : "顯示 IP"}">${I(shown ? "eyeoff" : "eye")}</button>
-        ${org ? `<span class="d org">${esc(org)}</span>` : ""}</div>` : ""}
+        <span class="d org">${v6line(s, shown)}${org ? `<span class="on2">・${esc(org)}</span>` : ""}</span></div>` : ""}
     </div>${extra.length ? `<div class="fx">${extra.join("・")}</div>` : ""}</div>`;
 }
 function detail(s){
