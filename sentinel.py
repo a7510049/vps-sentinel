@@ -36,7 +36,7 @@ from collections import deque
 from concurrent.futures import ThreadPoolExecutor
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
-VERSION = "1.11"
+VERSION = "1.12"
 
 # ───────────────────────── 設定 ─────────────────────────
 
@@ -813,6 +813,324 @@ def set_peer_token(name, token):
         write_conf({"PEERS": peers_conf()})
     except OSError as e:
         log("無法記住新密碼：", e)
+
+
+# ───────────────────────── 手機金鑰登入 ─────────────────────────
+# 用手機的指紋／臉部辨識登入（WebAuthn 通行金鑰）。登記好的金鑰存在 DATA_DIR/passkeys.json，
+# 登入成功就把目前的存取密碼交給這台裝置，之後跟輸入密碼登入完全一樣（換密碼後金鑰照樣能用）。
+# 內建模組沒有驗證簽名的工具，下面自己做：讀 CBOR 格式、驗 P-256 橢圓曲線簽名、RSA 簽名。
+
+PASSKEY_MAX = 5
+PK_LOCK = threading.Lock()
+PK_CHALLENGES = {}                              # 一次性的驗證題目 → 到期時間（2 分鐘）
+
+
+def b64u(b):
+    return base64.urlsafe_b64encode(b).rstrip(b"=").decode()
+
+
+def unb64u(s):
+    s = str(s or "")
+    return base64.urlsafe_b64decode(s + "=" * (-len(s) % 4))
+
+
+def cbor_load(data, i=0):
+    """讀一筆 CBOR（金鑰資料用的格式），回傳 (內容, 下一筆的位置)"""
+    ib = data[i]
+    major, info = ib >> 5, ib & 31
+    i += 1
+    if info < 24:
+        n = info
+    elif info in (24, 25, 26, 27):
+        size = 1 << (info - 24)
+        n = int.from_bytes(data[i:i + size], "big")
+        i += size
+    else:
+        raise ValueError("不支援的 CBOR 長度")
+    if major == 0:
+        return n, i
+    if major == 1:
+        return -1 - n, i
+    if major in (2, 3):
+        if i + n > len(data):
+            raise ValueError("CBOR 資料不完整")
+        v = data[i:i + n]
+        return (v if major == 2 else v.decode()), i + n
+    if major == 4:
+        out = []
+        for _ in range(n):
+            v, i = cbor_load(data, i)
+            out.append(v)
+        return out, i
+    if major == 5:
+        out = {}
+        for _ in range(n):
+            k, i = cbor_load(data, i)
+            out[k], i = cbor_load(data, i)
+        return out, i
+    if major == 7:
+        return {20: False, 21: True, 22: None}.get(n), i
+    raise ValueError("不支援的 CBOR 型別")
+
+
+# P-256 橢圓曲線（手機通行金鑰幾乎都用這個）
+_P = 0xffffffff00000001000000000000000000000000ffffffffffffffffffffffff
+_A = _P - 3
+_B = 0x5ac635d8aa3a93e7b3ebbd55769886bc651d06b0cc53b0f63bce3c3e27d2604b
+_N = 0xffffffff00000000ffffffffffffffffbce6faada7179e84f3b9cac2fc632551
+_G = (0x6b17d1f2e12c4247f8bce6e563a440f277037d812deb33a0f4a13945d898c296,
+      0x4fe342e2fe1a7f9b8ee7eb4a7c0f9e162bce33576b315ececbb6406837bf51f5)
+
+
+def _ec_add(p, q):
+    if p is None:
+        return q
+    if q is None:
+        return p
+    if p[0] == q[0]:
+        if (p[1] + q[1]) % _P == 0:
+            return None
+        lam = (3 * p[0] * p[0] + _A) * pow(2 * p[1], -1, _P) % _P
+    else:
+        lam = (q[1] - p[1]) * pow(q[0] - p[0], -1, _P) % _P
+    x = (lam * lam - p[0] - q[0]) % _P
+    return x, (lam * (p[0] - x) - p[1]) % _P
+
+
+def _ec_mul(k, p):
+    out = None
+    while k:
+        if k & 1:
+            out = _ec_add(out, p)
+        p = _ec_add(p, p)
+        k >>= 1
+    return out
+
+
+def ec_on_curve(x, y):
+    return 0 <= x < _P and 0 <= y < _P and (y * y - x * x * x - _A * x - _B) % _P == 0
+
+
+def _der_sig(sig):
+    """把 DER 格式的簽名拆成 (r, s)"""
+    if len(sig) < 8 or sig[0] != 0x30 or sig[1] != len(sig) - 2:
+        raise ValueError("簽名格式不對")
+    out, i = [], 2
+    for _ in range(2):
+        if sig[i] != 0x02:
+            raise ValueError("簽名格式不對")
+        n = sig[i + 1]
+        out.append(int.from_bytes(sig[i + 2:i + 2 + n], "big"))
+        i += 2 + n
+    if i != len(sig):
+        raise ValueError("簽名格式不對")
+    return out
+
+
+def ecdsa_verify(x, y, msg, sig):
+    """驗證 P-256 + SHA-256 簽名（sig 是 DER 格式）"""
+    try:
+        r, s = _der_sig(sig)
+    except (ValueError, IndexError):
+        return False
+    if not (0 < r < _N and 0 < s < _N) or not ec_on_curve(x, y):
+        return False
+    e = int.from_bytes(hashlib.sha256(msg).digest(), "big")
+    w = pow(s, -1, _N)
+    pt = _ec_add(_ec_mul(e * w % _N, _G), _ec_mul(r * w % _N, (x, y)))
+    return pt is not None and pt[0] % _N == r
+
+
+def rsa_verify(n, e, msg, sig):
+    """驗證 RSA PKCS#1 v1.5 + SHA-256 簽名（Windows 電腦的金鑰會用這個）"""
+    k = (n.bit_length() + 7) // 8
+    if len(sig) != k or n.bit_length() < 2048:
+        return False
+    em = pow(int.from_bytes(sig, "big"), e, n).to_bytes(k, "big")
+    t = bytes.fromhex("3031300d060960864801650304020105000420") + hashlib.sha256(msg).digest()
+    return hmac.compare_digest(em, b"\x00\x01" + b"\xff" * (k - len(t) - 3) + b"\x00" + t)
+
+
+def cose_key(raw):
+    """把金鑰裡的公開鑰匙轉成可以存檔的格式；不支援的種類回傳 None"""
+    k = raw if isinstance(raw, dict) else cbor_load(raw)[0]
+    if k.get(1) == 2 and k.get(3) == -7 and k.get(-1) == 1:            # P-256
+        x, y = int.from_bytes(k[-2], "big"), int.from_bytes(k[-3], "big")
+        return {"alg": -7, "x": f"{x:x}", "y": f"{y:x}"} if ec_on_curve(x, y) else None
+    if k.get(1) == 3 and k.get(3) == -257:                             # RSA
+        n = int.from_bytes(k[-1], "big")
+        return {"alg": -257, "n": f"{n:x}", "e": int.from_bytes(k[-2], "big")} if n.bit_length() >= 2048 else None
+    return None
+
+
+def pk_sig_ok(key, msg, sig):
+    if key.get("alg") == -7:
+        return ecdsa_verify(int(key["x"], 16), int(key["y"], 16), msg, sig)
+    if key.get("alg") == -257:
+        return rsa_verify(int(key["n"], 16), int(key["e"]), msg, sig)
+    return False
+
+
+def pk_path():
+    return os.path.join(DATA_DIR, "passkeys.json")
+
+
+def pk_load():
+    try:
+        with open(pk_path(), encoding="utf-8") as f:
+            v = json.load(f)
+        return [x for x in v if isinstance(x, dict) and x.get("id") and x.get("key")] if isinstance(v, list) else []
+    except (OSError, ValueError):
+        return []
+
+
+def pk_save(keys):
+    os.makedirs(DATA_DIR, exist_ok=True)
+    tmp = pk_path() + ".tmp"
+    with open(tmp, "w", encoding="utf-8") as f:
+        json.dump(keys, f, ensure_ascii=False)
+    os.chmod(tmp, 0o600)
+    os.replace(tmp, pk_path())
+
+
+def pk_list():
+    return [{"id": k["id"], "name": k.get("name") or "手機", "added": k.get("added"), "used": k.get("used")} for k in pk_load()]
+
+
+def pk_challenge(kind):
+    now = time.time()
+    with PK_LOCK:
+        for c in [c for c, (_, t) in PK_CHALLENGES.items() if t < now]:
+            PK_CHALLENGES.pop(c, None)
+        while len(PK_CHALLENGES) >= 200:                                # 有人一直要題目：丟掉最舊的
+            PK_CHALLENGES.pop(min(PK_CHALLENGES, key=lambda c: PK_CHALLENGES[c][1]))
+        c = b64u(secrets.token_bytes(32))
+        PK_CHALLENGES[c] = (kind, now + 120)
+    return c
+
+
+def pk_rp(host):
+    """網址的主機名稱（不含連接埠），金鑰會綁在這個名稱上"""
+    h = (host or "").strip().lower()
+    h = h[1:h.index("]")] if h.startswith("[") and "]" in h else h.rsplit(":", 1)[0] if h.count(":") == 1 else h
+    return h
+
+
+def _pk_client(cdj, kind):
+    """檢查瀏覽器送來的 clientDataJSON：題目要對、要是一次性、網址的主機名稱要對；回傳主機名稱"""
+    try:
+        cd = json.loads(cdj)
+    except ValueError:
+        return None, "資料格式不對"
+    if not isinstance(cd, dict) or cd.get("type") != kind:
+        return None, "資料格式不對"
+    with PK_LOCK:
+        got = PK_CHALLENGES.pop(str(cd.get("challenge")), None)
+    if not got or got[0] != kind or got[1] < time.time():
+        return None, "等太久了，請再試一次"
+    o = urllib.parse.urlsplit(str(cd.get("origin") or ""))
+    host = (o.hostname or "").lower()
+    if not host or not (o.scheme == "https" or host == "localhost"):
+        return None, "要用 https 網址才能使用手機金鑰"
+    return host, ""
+
+
+def _pk_auth_data(ad, rp):
+    """檢查驗證資料：要是這個網址、手機要確認過是本人（指紋、臉部或螢幕鎖）"""
+    if len(ad) < 37 or not hmac.compare_digest(ad[:32], hashlib.sha256(rp.encode()).digest()):
+        return "網址不符"
+    if ad[32] & 0x05 != 0x05:
+        return "手機沒有確認是你本人"
+    return ""
+
+
+def pk_register_begin(host):
+    rp = pk_rp(host)
+    keys = pk_load()
+    if len(keys) >= PASSKEY_MAX:
+        return False, {"message": f"最多只能登記 {PASSKEY_MAX} 支，請先刪掉一支"}
+    return True, {"challenge": pk_challenge("webauthn.create"), "rp": rp, "name": NAME,
+                  "user": b64u(hashlib.sha256(f"vps-sentinel:{rp}".encode()).digest()[:16]),
+                  "exclude": [k["id"] for k in keys if k.get("rp") == rp]}
+
+
+def pk_register_finish(d):
+    try:
+        cdj, att = unb64u(d.get("clientDataJSON")), unb64u(d.get("attestationObject"))
+        rp, err = _pk_client(cdj, "webauthn.create")
+        if err:
+            return False, err
+        ao = cbor_load(att)[0]
+        ad = ao["authData"]
+        err = _pk_auth_data(ad, rp)
+        if err:
+            return False, err
+        if not ad[32] & 0x40 or len(ad) < 55:
+            return False, "沒有收到金鑰"
+        n = int.from_bytes(ad[53:55], "big")
+        cid = ad[55:55 + n]
+        key = cose_key(cbor_load(ad, 55 + n)[0])
+    except (ValueError, KeyError, IndexError, TypeError, AttributeError):
+        return False, "資料格式不對"
+    if not key:
+        return False, "這種金鑰還不支援"
+    name = re.sub(r"\s+", " ", str(d.get("name") or "")).strip()[:20] or "手機"
+    with PK_LOCK:
+        keys = pk_load()
+        if len(keys) >= PASSKEY_MAX:
+            return False, f"最多只能登記 {PASSKEY_MAX} 支，請先刪掉一支"
+        if any(k["id"] == b64u(cid) for k in keys):
+            return False, "這支已經登記過了"
+        keys.append({"id": b64u(cid), "rp": rp, "key": key, "name": name, "added": int(time.time()), "used": None})
+        try:
+            pk_save(keys)
+        except OSError as e:
+            return False, f"無法存檔：{e}"
+    log(f"登記了手機金鑰「{name}」")
+    COL.add_event("info", f"登記了手機金鑰「{name}」")
+    return True, f"已登記「{name}」，下次可以直接用它登入"
+
+
+def pk_login_finish(d):
+    try:
+        cid = str(d.get("id") or "")
+        cdj, ad, sig = unb64u(d.get("clientDataJSON")), unb64u(d.get("authenticatorData")), unb64u(d.get("signature"))
+    except (ValueError, TypeError, AttributeError):
+        return False, "資料格式不對"
+    rp, err = _pk_client(cdj, "webauthn.get")
+    if err:
+        return False, err
+    with PK_LOCK:
+        keys = pk_load()
+        k = next((k for k in keys if k["id"] == cid), None)
+        if not k or k.get("rp") != rp:
+            return False, "這支手機沒有登記過，請先用密碼登入，再到設定裡登記"
+        err = _pk_auth_data(ad, rp)
+        if err:
+            return False, err
+        if not pk_sig_ok(k["key"], ad + hashlib.sha256(cdj).digest(), sig):
+            return False, "金鑰驗證失敗"
+        k["used"] = int(time.time())
+        try:
+            pk_save(keys)
+        except OSError:
+            pass
+    return True, k.get("name") or "手機"
+
+
+def pk_delete(cid):
+    with PK_LOCK:
+        keys = pk_load()
+        k = next((k for k in keys if k["id"] == cid), None)
+        if not k:
+            return False, "找不到這支"
+        try:
+            pk_save([x for x in keys if x is not k])
+        except OSError as e:
+            return False, f"無法存檔：{e}"
+    log(f"刪除了手機金鑰「{k.get('name')}」")
+    COL.add_event("info", f"刪除了手機金鑰「{k.get('name')}」")
+    return True, f"已刪除「{k.get('name')}」，它不能再登入了"
 
 
 # ───────────────────────── 改名 ─────────────────────────
@@ -1868,6 +2186,43 @@ class Handler(BaseHTTPRequestHandler):
         return self.proxy_cloud() if self.is_cloud() else self.send(404, '{"error":"找不到"}')
     do_PATCH = do_DELETE = do_OPTIONS = do_PROPFIND = do_PROPPATCH = do_MKCOL = do_COPY = do_MOVE = do_LOCK = do_UNLOCK = do_PUT
 
+    def jbody(self, body):
+        try:
+            d = json.loads(body or b"{}")
+        except ValueError:
+            d = {}
+        return d if isinstance(d, dict) else {}
+
+    def passkey(self, body):
+        """登記、列出、刪除手機金鑰（已登入才能用）"""
+        d = self.jbody(body)
+        act = d.get("action")
+        if act == "begin":
+            ok, out = pk_register_begin(self.headers.get("Host"))
+            return self.send(200 if ok else 400, json.dumps({"ok": ok, **out}, ensure_ascii=False))
+        if act == "finish":
+            ok, msg = pk_register_finish(d)
+        elif act == "delete":
+            ok, msg = pk_delete(str(d.get("id") or ""))
+        else:
+            return self.send(200, json.dumps({"ok": True, "keys": pk_list(), "max": PASSKEY_MAX}, ensure_ascii=False))
+        return self.send(200 if ok else 400, json.dumps({"ok": ok, "message": msg, "keys": pk_list()}, ensure_ascii=False))
+
+    def passkey_login(self, body):
+        d = self.jbody(body)
+        act = d.get("action")
+        if act == "has":                             # 登入頁問：有沒有登記過（沒有就不顯示按鈕）
+            rp = pk_rp(self.headers.get("Host"))
+            return self.send(200, json.dumps({"has": any(k.get("rp") == rp for k in pk_load())}))
+        if act == "begin":
+            return self.send(200, json.dumps({"challenge": pk_challenge("webauthn.get"), "rp": pk_rp(self.headers.get("Host"))}))
+        ok, res = pk_login_finish(d)
+        if not ok:
+            time.sleep(1)
+            return self.send(401, json.dumps({"ok": False, "message": res}, ensure_ascii=False))
+        log(f"用手機金鑰「{res}」登入")
+        return self.send(200, json.dumps({"ok": True, "token": TOKEN}))
+
     def do_HEAD(self):
         if self.is_cloud():
             return self.proxy_cloud()
@@ -1921,16 +2276,18 @@ class Handler(BaseHTTPRequestHandler):
             return self.proxy_cloud()
         u = urllib.parse.urlsplit(self.path)
         if u.path not in ("/api/update", "/api/rename", "/api/traffic", "/api/telegram", "/api/links", "/api/self", "/api/cloud-login", "/api/peer",
-                          "/api/token"):
+                          "/api/token", "/api/passkey", "/api/passkey-login"):
             return self.send(404, '{"error":"找不到"}')
-        if not self.authed():
-            time.sleep(1)
-            return self.send(401, '{"error":"密碼錯誤"}')
         try:
-            size = min(int(self.headers.get("Content-Length") or 0), 4096)
+            size = min(int(self.headers.get("Content-Length") or 0), 16384 if u.path.startswith("/api/passkey") else 4096)
             body = self.rfile.read(size) if size else b""
         except (ValueError, OSError):
             body = b""
+        if u.path == "/api/passkey-login":           # 還沒登入：用手機金鑰換到存取密碼
+            return self.passkey_login(body)
+        if not self.authed():
+            time.sleep(1)
+            return self.send(401, '{"error":"密碼錯誤"}')
         node = urllib.parse.parse_qs(u.query).get("node", [""])[0]
         if node:                                  # 轉給其他 VPS
             peer = next((p for p in PEERS if p["name"] == node), None)
@@ -1960,6 +2317,8 @@ class Handler(BaseHTTPRequestHandler):
                 d = {}
             ok, msg, tf = set_peer(d.get("name"), d.get("url"), d.get("token"), bool(d.get("force")))
             return self.send(200 if ok else 400, json.dumps({"ok": ok, "message": msg, "test_failed": tf}, ensure_ascii=False))
+        if u.path == "/api/passkey":
+            return self.passkey(body)
         if u.path == "/api/token":
             ok, msg, tok = change_token()
             return self.send(200 if ok else 500, json.dumps({"ok": ok, "message": msg, "token": tok}, ensure_ascii=False))

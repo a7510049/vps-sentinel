@@ -481,6 +481,14 @@ button{font:inherit;color:inherit}
 .dialog .form small b{color:var(--sub)}
 .dialog .form .lbl{font-size:var(--fs-s);font-weight:800;color:var(--sub);display:flex;flex-direction:column;gap:6px}
 .tgd{max-width:400px}
+.pkd{max-width:400px}
+.pklist{display:flex;flex-direction:column;gap:8px}
+.pklist:empty{display:none}
+.pkrow{display:flex;align-items:center;gap:10px;padding:10px 8px 10px 13px;border-radius:var(--r-md);background:var(--inset);box-shadow:var(--ring);
+  font-size:var(--fs-m);font-weight:800;color:var(--text)}
+.pkrow>svg{width:18px;height:18px;flex:none;color:var(--a1)}
+.pkrow span{flex:1;min-width:0;display:flex;flex-direction:column;gap:2px;overflow-wrap:anywhere}
+.pkrow .iconbtn{width:30px;height:30px;flex:none}
 .tgd .find{align-self:flex-start;padding:8px 14px;font-size:var(--fs-s);display:inline-flex;align-items:center;gap:6px}
 .tgd .find svg{width:14px;height:14px}
 .tgd .chats{display:flex;flex-wrap:wrap;gap:6px}
@@ -548,7 +556,7 @@ a.plink:hover{color:var(--a1)}
 .optbtn .lab{flex:1}
 .optbtn .chev{color:var(--faint);display:flex;transform:rotate(-90deg)}
 .optbtn .chev svg{width:16px;height:16px}
-.tgst.on{color:var(--ok)!important}
+.tgst.on,.pkst.on{color:var(--ok)!important}
 .evs{display:flex;flex-direction:column;gap:2px;max-height:330px;overflow-x:hidden;overflow-y:auto;margin:-8px -6px 0;padding:8px 6px 14px}
 /* 有最大高度的清單：裡面的項目不能被擠扁（不然展開動畫會卡在一半再彈回來） */
 .evs>*,.hosts>*,.list>*,.alerts>*{flex-shrink:0}
@@ -588,6 +596,7 @@ a.plink:hover{color:var(--a1)}
 .field:focus{box-shadow:inset 0 0 0 2px var(--accent)}
 .login .field{margin:20px 0 8px}
 .login .ubtn{width:100%;justify-content:center;padding:14px;font-size:var(--fs-l)}
+.login .pkbtn{margin-top:10px;gap:8px}.login .pkbtn svg{width:18px;height:18px;color:var(--a1)}
 .err{color:var(--bad);font-size:var(--fs-m);min-height:20px;font-weight:700}
 .shake{animation:shake var(--t-mid)}
 @keyframes shake{20%,60%{transform:translateX(-8px)}40%,80%{transform:translateX(8px)}}
