@@ -747,6 +747,8 @@ html::-webkit-scrollbar-thumb{background:color-mix(in srgb,var(--text) 22%,trans
 [data-lite="on"] .sheet,[data-lite="on"] .dialog,[data-lite="on"] .toast,[data-lite="on"] .pop{background:color-mix(in srgb,var(--bg) 92%,var(--glass))}
 [data-lite="on"][data-mode="dark"] .sheet,[data-lite="on"][data-mode="dark"] .dialog,[data-lite="on"][data-mode="dark"] .toast,[data-lite="on"][data-mode="dark"] .pop{background:color-mix(in srgb,#1a1f2e 94%,var(--a2))}
 [data-lite="on"] .card,[data-lite="on"] .panel{transform:translateZ(0)}
+/* 主題色（國旗配色）切換時直接換，不做漸變：漸變的那半秒內整頁每一格都要重算顏色，手機上滑動會卡 */
+:root[data-lite="on"]{transition:background var(--t-mid)}
 .xfade{position:fixed;inset:0;z-index:45;pointer-events:none;animation:fadeOut var(--t-mid) var(--ease) forwards}
 /* ═════════ 無障礙／關閉動畫 ═════════ */
 [data-motion="off"] *,[data-motion="off"] *::before,[data-motion="off"] *::after{animation:none!important;transition:none!important}
