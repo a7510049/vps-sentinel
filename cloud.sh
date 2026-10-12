@@ -4,7 +4,7 @@
 # 用法：
 #   sudo bash cloud.sh 50          安裝雲端硬碟，最多可以放 50 GB（之後再執行一次就能改大小）
 #   sudo bash cloud.sh 檢查         連不上時用這個找原因
-#   sudo bash cloud.sh 整理         補足容量、修好刪不掉的檔案（更新哨兵時會自動做）
+#   sudo bash cloud.sh 整理         補足容量、修好刪不掉的檔案、把刪掉的檔案佔的主機空間還回去（更新哨兵時會自動做）
 #   sudo bash cloud.sh 更新         更新到官方最新版（檔案和帳號都保留，哨兵網頁上也能按）
 #   sudo bash cloud.sh 移除         移除雲端硬碟程式（檔案會保留）
 #
@@ -81,6 +81,18 @@ fix_owner() {
   find "$MNT" -xdev \( ! -user 1000 -o ! -group 1000 \) -exec chown -h 1000:1000 {} + 2>/dev/null || true
 }
 
+# 刪掉的檔案要把主機硬碟的空間還回去：空間檔不會自己變小，要「還空間」（discard／fstrim）才會。
+# 以前沒開，所以雲端裡刪了檔案，哨兵上主機硬碟的用量卻沒有減少。
+give_back() {
+  mountpoint -q "$MNT" || return 0
+  if [ -f "$MOUNT_UNIT" ] && ! grep -q discard "$MOUNT_UNIT"; then
+    sed -i 's/^Options=loop,noatime$/Options=loop,noatime,discard/' "$MOUNT_UNIT"
+    systemctl daemon-reload
+  fi
+  findmnt -no OPTIONS "$MNT" | grep -q discard || mount -o remount,discard "$MNT" 2>/dev/null || true
+  fstrim "$MNT" >/dev/null 2>&1 || true            # 把之前刪掉的檔案佔的空間一次還回去
+}
+
 # 目前設定的容量（GB）：有記錄就用記錄，舊版沒記錄就看空間檔的大小
 saved_gb() {
   local g; g="$(get_conf CLOUD_GB)"
@@ -137,7 +149,7 @@ case "${1:-}" in
     [ -f "$APP/data/config.yaml" ] || { echo "還沒安裝雲端硬碟"; exit 1; }
     echo "▶ 下載官方最新的穩定版…"
     docker pull -q "$IMAGE" >/dev/null || { echo "❌ 下載失敗"; exit 1; }
-    top_up "$(saved_gb)"; fix_owner
+    top_up "$(saved_gb)"; fix_owner; give_back
     run_container
     wait_ready || exit 1
     docker image prune -f >/dev/null 2>&1 || true      # 清掉舊版的映像檔，省空間
@@ -145,7 +157,7 @@ case "${1:-}" in
   整理|tidy)                                         # 哨兵更新時會自動跑：補足容量、修好刪不掉的檔案
     [ -f "$APP/data/config.yaml" ] || exit 0
     command -v resize2fs >/dev/null || exit 0
-    top_up "$(saved_gb)"; fix_owner
+    top_up "$(saved_gb)"; fix_owner; give_back
     echo "✅ 雲端硬碟整理好了（可用空間 $(df -h --output=size "$MNT" 2>/dev/null | tail -1 | tr -d ' ')）"; exit 0 ;;
   移除|remove)
     docker rm -f "$NAME" >/dev/null 2>&1 || true
@@ -220,7 +232,7 @@ Description=VPS 哨兵雲端硬碟空間
 What=$IMG
 Where=$MNT
 Type=ext4
-Options=loop,noatime
+Options=loop,noatime,discard
 
 [Install]
 WantedBy=multi-user.target
@@ -234,6 +246,7 @@ mountpoint -q "$MNT" || { echo "❌ 雲端硬碟空間掛載失敗：journalctl 
 rm -rf "$MNT/lost+found" 2>/dev/null || true
 top_up "$SIZE"
 fix_owner
+give_back
 set_conf CLOUD_GB "$SIZE"
 
 # ── 3. FileBrowser Quantum ──
