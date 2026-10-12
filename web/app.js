@@ -2,10 +2,28 @@ const $ = s => document.querySelector(s);
 const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
 function store(k, v){ try { if (v === undefined) return localStorage.getItem(k) || ""; v ? localStorage.setItem(k, v) : localStorage.removeItem(k); } catch(e){ return ""; } }
 const KEY = "vps-sentinel-token";
-function getTok(){ return store(KEY) || window._tok || ""; }
-function setTok(t){ store(KEY, t); window._tok = t; }
+/* 登入狀態：勾「30 天內不用再登入」存在這台裝置 30 天；沒勾的話關掉瀏覽器（或 App）就要重新登入 */
+const DAY30 = 30 * 86400000;
+function sstore(k, v){ try { if (v === undefined) return sessionStorage.getItem(k) || ""; v ? sessionStorage.setItem(k, v) : sessionStorage.removeItem(k); } catch(e){ return ""; } }
+function getTok(){
+  const t = store(KEY);
+  if (t) {
+    const exp = +store(KEY + "-exp");
+    if (!exp) store(KEY + "-exp", String(Date.now() + DAY30));      // 舊版存的：從現在開始算 30 天
+    else if (exp < Date.now()) { store(KEY, ""); store(KEY + "-exp", ""); return sstore(KEY) || ""; }
+    return t;
+  }
+  return sstore(KEY) || window._tok || "";
+}
+function setTok(t, remember){
+  if (remember === undefined) remember = !!store(KEY) || !sstore(KEY);   // 換密碼時：維持原本的記住方式和期限
+  else store(KEY + "-exp", remember && t ? String(Date.now() + DAY30) : "");
+  store(KEY, remember ? t : ""); sstore(KEY, remember ? "" : t);
+  if (!t) store(KEY + "-exp", "");
+  window._tok = t;
+}
 const u0 = new URL(location.href);
-if (u0.searchParams.get("t")) { setTok(u0.searchParams.get("t")); history.replaceState(null, "", "/"); }
+if (u0.searchParams.get("t")) { setTok(u0.searchParams.get("t"), true); history.replaceState(null, "", "/"); }
 
 /* ═════════ 圖示 ═════════ */
 const P = {
@@ -31,6 +49,7 @@ const P = {
   cloud:'<path d="M17.5 19a4.5 4.5 0 1 0-1.3-8.8A6 6 0 0 0 4.6 12.5 3.5 3.5 0 0 0 6.5 19Z"/>',
   search:'<circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/>',
   key:'<circle cx="7.5" cy="15.5" r="4.5"/><path d="m10.7 12.3 9.8-9.8M17 6l3 3M14.5 8.5l2 2"/>',
+  pin:'<rect x="3" y="6" width="18" height="12" rx="3"/><path d="M7.5 12h.01M12 12h.01M16.5 12h.01"/>',
   finger:'<path d="M12 10a2 2 0 0 0-2 2c0 1-.1 2.5-.26 4M14 13.1c0 2.4 0 6.4-1 8.9M17.3 21c.1-.6.4-2.3.5-3M2 12a10 10 0 0 1 18-6M2 16h.01M21.8 16c.2-2 .13-5.35 0-6M5 19.5C5.5 18 6 15 6 12a6 6 0 0 1 .34-2M8.65 22c.2-.66.45-1.3.57-2M9 6.8a6 6 0 0 1 9 5.2v2"/>',
   chev:'<path d="m6 9 6 6 6-6"/>', x:'<path d="M18 6 6 18M6 6l12 12"/>',
   warn:'<path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3z"/><path d="M12 9v4M12 17h.01"/>',
@@ -344,7 +363,7 @@ const COL = {cpu:"var(--c-cpu)", mem:"var(--c-mem)", rx:"var(--c-rx)", tx:"var(-
 /* 概念 → [顏色樣式, 圖示] */
 const ICO = {cpu:["cpu","cpu"], mem:["mem","mem"], disk:["disk","disk"], load:["load","gauge"], down:["down","down"], up:["up","up"],
   net:["net","net"], trend:["trend","trend"], month:["month","month"], box:["box","box"], bell:["bell","bell"], info:["info","info"],
-  layers:["theme","layers"], flag:["theme","flag"], key:["theme","key"], finger:["theme","finger"]};
+  layers:["theme","layers"], flag:["theme","flag"], key:["theme","key"], finger:["theme","finger"], pin:["theme","pin"]};
 const IC = (k, cls="sm") => `<span class="ico ${cls} ${ICO[k][0]}">${I(ICO[k][1])}</span>`;
 
 /* ═════════ 手機版 ═════════ */
@@ -958,7 +977,8 @@ function settingsBody(){
     <button class="opt optbtn" data-tg>${IC("bell")}<span class="lab">Telegram 通知<small class="tgst">讀取中…</small></span><span class="chev">${I("chev")}</span></button>
   </div></div>
   ${LIST.some(s => s.online) ? `<div class="sec"><h4>安全</h4><div class="group">${PK_OK && LIST.some(s => !s.node && s.online) ?
-    `<button class="opt optbtn" data-pk>${IC("finger")}<span class="lab">手機金鑰登入<small class="pkst">讀取中…</small></span><span class="chev">${I("chev")}</span></button>` : ""}${LIST.filter(s => s.online).map(s =>
+    `<button class="opt optbtn" data-pk>${IC("finger")}<span class="lab">手機金鑰登入<small class="pkst">讀取中…</small></span><span class="chev">${I("chev")}</span></button>` : ""}${LIST.some(s => !s.node && s.online) ?
+    `<button class="opt optbtn" data-pin>${IC("pin")}<span class="lab">PIN 碼登入<small class="pinst">讀取中…</small></span><span class="chev">${I("chev")}</span></button>` : ""}${LIST.filter(s => s.online).map(s =>
     `<button class="opt optbtn" data-newtok="${esc(s.node||"")}" data-label="${esc(s.name)}">${IC("key")}<span class="lab">換一組新密碼${LIST.length > 1 ? `：${esc(s.name)}` : ""}<small>擔心密碼外流時用，舊密碼會馬上失效</small></span><span class="chev">${I("chev")}</span></button>`).join("")}</div></div>` : ""}
   <div class="sec"><h4>資料</h4><div class="group">
     <div class="opt"><span class="lab">自動更新<small>多久抓一次最新狀態</small></span>${seg("refresh",[[3,"3 秒"],[5,"5 秒"],[10,"10 秒"],[30,"30 秒"]])}</div>
@@ -1203,7 +1223,7 @@ function openSettings(){
   const sheet = v.querySelector(".sheet"), body = v.querySelector(".sbody"), top = v.querySelector(".top");
   body.addEventListener("scroll", () => top.classList.toggle("under", body.scrollTop > 4), {passive:true});
   initSegs(body);
-  tgStatus(body); selfStatus(body); pkStatus(body);
+  tgStatus(body); selfStatus(body); pkStatus(body); pinStatus(body);
   sheet.addEventListener("animationend", e => { if (e.target === sheet && !v._d) sheet.classList.add("ready"); });
   const close = () => { if (v._d) return; v._d = 1; sheet.classList.remove("back"); v.classList.add("closing"); setTimeout(()=>v.remove(), 380); };
   v._esc = close;
@@ -1212,6 +1232,7 @@ function openSettings(){
     if (e.target === v || e.target.closest("[data-close]")) return close();
     if (e.target.closest("[data-tg]")) return tgModal().then(() => tgStatus(body));
     if (e.target.closest("[data-pk]")) return pkModal().then(() => pkStatus(body));
+    if (e.target.closest("[data-pin]")) return pinModal().then(() => pinStatus(body));
     const nt = e.target.closest("[data-newtok]");
     if (nt) return newToken(nt.dataset.newtok, nt.dataset.label);
     const sc = e.target.closest("[data-selfcheck]");
@@ -1386,25 +1407,95 @@ async function pkModal(){
   });
 }
 
+/* ═════════ PIN 碼登入：4～8 位數字，連續輸錯 5 次暫停 15 分鐘，累計 10 次自動關閉 ═════════ */
+const pinCall = body => pkCall("/api/pin", body, 1);
+async function pinStatus(root){
+  const el = root.querySelector(".pinst"); if (!el) return;
+  try { const d = await pinCall({action:"status"});
+    el.textContent = !d.on ? "還沒設定，點這裡開始" : d.locked ? `輸錯太多次，暫停中（還有 ${Math.ceil(d.locked / 60)} 分鐘）` : "已設定，登入時可以直接輸入 PIN 碼";
+    el.classList.toggle("on", !!d.on && !d.locked);
+  } catch(e) { el.textContent = e.message; }
+}
+async function pinModal(){
+  const st = await pinCall({action:"status"}).catch(() => ({}));
+  const v = document.createElement("div"); v.className = "veil";
+  const inp = k => `<input class="field" data-k="${k}" type="password" inputmode="numeric" pattern="[0-9]*" maxlength="8" autocomplete="new-password">`;
+  v.innerHTML = `<div class="dialog glass pop pindlg">${IC("pin","big")}<h3>${st.on ? "換一組 PIN 碼" : "設定 PIN 碼"}</h3>
+    <p>登入時輸入 PIN 碼就能進去，不用打一長串密碼</p>
+    <div class="form">
+      <label>新的 PIN 碼${inp("a")}<small>4 到 8 位數字。連續輸錯 5 次會暫停 15 分鐘，累計輸錯 10 次會自動關閉</small></label>
+      <label>再輸入一次${inp("b")}</label>
+      <div class="msg"></div></div>
+    <div class="btns ${st.on ? "three" : ""}">${st.on ? `<button class="ubtn ghost" data-off>關閉 PIN 碼</button>` : ""}<button class="ubtn ghost" data-r="0">取消</button><button class="ubtn" data-save>儲存</button></div></div>`;
+  $("#layer").appendChild(v);
+  const q = k => v.querySelector(`[data-k="${k}"]`), msg = v.querySelector(".msg");
+  setTimeout(() => q("a").focus(), 60);
+  return new Promise(res => {
+    let busy = false;
+    const done = () => { if (v._d) return; v._d = 1; v.classList.add("closing"); setTimeout(() => { v.remove(); res(); }, 360); };
+    v._esc = done;
+    const bad = t => { msg.className = "msg bad"; msg.textContent = t; };
+    const save = async () => {
+      const a = q("a").value.trim(), b = q("b").value.trim();
+      if (!/^\d{4,8}$/.test(a)) return bad("PIN 碼要是 4 到 8 位數字");
+      if (a !== b) return bad("兩次輸入的不一樣");
+      busy = true;
+      const d = await pinCall({action:"set", pin:a}).catch(e => ({message:e.message}));
+      busy = false;
+      if (d.ok) { toast(d.message); done(); } else bad(d.message || "設定失敗");
+    };
+    v.addEventListener("keydown", e => { if (e.key === "Enter" && !busy) { e.target === q("a") ? q("b").focus() : save(); } });
+    v.addEventListener("click", async e => {
+      if (e.target === v || e.target.closest("[data-r]")) return done();
+      if (busy) return;
+      if (e.target.closest("[data-save]")) return save();
+      if (e.target.closest("[data-off]")) {
+        busy = true;
+        const d = await pinCall({action:"off"}).catch(err => ({message:err.message}));
+        busy = false;
+        if (d.ok) { toast(d.message); done(); } else bad(d.message || "關閉失敗");
+      }
+    });
+  });
+}
+
 /* ═════════ 登入 ═════════ */
 function login(msg){
   $("#app").innerHTML = `<div class="login glass ${msg?"shake":""}"><svg class="logo" viewBox="0 0 512 512" aria-hidden="true"><defs><linearGradient id="lblg" x1="0" y1="0" x2="0" y2="1"><stop offset="0" style="stop-color:color-mix(in srgb,var(--a1) 70%,#fff)"/><stop offset="1" style="stop-color:var(--a2)"/></linearGradient><linearGradient id="lhlg" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#fff" stop-opacity=".24"/><stop offset=".45" stop-color="#fff" stop-opacity="0"/></linearGradient><mask id="lmlg"><rect width="512" height="512" fill="#fff"/><path d="M204 258l36 36 72-76" fill="none" stroke="#000" stroke-width="30" stroke-linecap="round" stroke-linejoin="round"/></mask></defs><rect width="512" height="512" rx="115" fill="url(#lblg)"/><rect width="512" height="512" rx="115" fill="url(#lhlg)"/><path d="M256 108 371 150c9 3 15 12 15 22v72c0 84-52 140-122 168-5 2-11 2-16 0-70-28-122-84-122-168v-72c0-10 6-19 15-22Z" fill="#fff" mask="url(#lmlg)" transform="translate(256 262) scale(.88) translate(-256 -258)"/></svg><h1>VPS 哨兵</h1><p>輸入存取密碼就能看到你的主機</p>
-    <input id="tok" class="field" type="password" placeholder="存取密碼" autocomplete="current-password">
+    <input id="tok" class="field" type="password" placeholder="${PIN_ON ? "存取密碼或 PIN 碼" : "存取密碼"}" autocomplete="current-password">
+    <label class="remember"><input type="checkbox" id="rem" ${REM ? "checked" : ""}><span>30 天內不用再登入</span></label>
     <div class="err">${msg||""}</div><button class="ubtn" data-login>進入</button>${PK_OK && store("vps-pk") ? pkBtn : ""}</div>`;
-  $("#tok").addEventListener("keydown",e=>{ if(e.key==="Enter"){ setTok(e.target.value.trim()); tick(); }});
-  if (PK_OK && !store("vps-pk")) pkCall("/api/passkey-login", {action:"has"}).then(d => {   // 這台裝置沒用過：問主機有沒有登記過，有才顯示
+  $("#tok").addEventListener("keydown",e=>{ if(e.key==="Enter") doLogin(); });
+  $("#rem").addEventListener("change", e => { REM = e.target.checked; });
+  pkCall("/api/passkey-login", {action:"has"}).then(d => {   // 問主機有沒有設定 PIN 碼、有沒有登記手機金鑰，有才顯示
     const box = $("#app .login");
-    if (!d.has || !box || box.querySelector("[data-pklogin]")) return;
+    if (!box) return;
+    PIN_ON = !!d.pin; $("#tok").placeholder = PIN_ON ? "存取密碼或 PIN 碼" : "存取密碼";
+    if (!PK_OK || !d.has || box.querySelector("[data-pklogin]")) return;
     box.insertAdjacentHTML("beforeend", pkBtn);
     const b = box.lastElementChild;
     if (canAnim()) b.animate([{opacity:0, transform:"translateY(-4px)"}, {opacity:1, transform:"none"}], {duration:T.mid, easing:EASE});
   }).catch(() => {});
 }
+let REM = true, PIN_ON = false;
+/* 輸入 4～8 位數字、主機又有設定 PIN 碼：當成 PIN 碼；其他都當成存取密碼 */
+async function doLogin(){
+  const v = $("#tok").value.trim();
+  window._fresh = true;
+  if (!(PIN_ON && /^\d{4,8}$/.test(v))) { setTok(v, REM); return tick(); }
+  const b = $("#app [data-login]"); b.disabled = true;
+  let d = {};
+  try { const r = await fetch("/api/pin-login", {method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({pin:v})});
+    d = await r.json().catch(() => ({})); }
+  catch(e) { d = {message:"連線失敗，請稍後再試"}; }
+  if (d.ok && d.token) { setTok(d.token, REM); return tick(); }
+  login(d.message || "PIN 碼不對");
+}
 const pkBtn = `<button class="ubtn ghost pkbtn" data-pklogin>${I("finger")}用手機金鑰登入</button>`;
 async function pkLoginClick(b){
   const err = $("#app .login .err");
   b.disabled = true; err.textContent = "";
-  try { setTok(await pkLogin()); store("vps-pk", "1"); return tick(); }
+  try { setTok(await pkLogin(), REM); store("vps-pk", "1"); window._fresh = true; return tick(); }
   catch(e) { if (e.name !== "NotAllowedError" && e.name !== "AbortError") err.textContent = pkErr(e); }
   b.disabled = false;
 }
@@ -1413,7 +1504,7 @@ async function pkLoginClick(b){
 document.addEventListener("click", async e => {
   if (e.target.closest("#layer")) return;
   const t = e.target;
-  if (t.closest("[data-login]")) { setTok($("#tok").value.trim()); return tick(); }
+  if (t.closest("[data-login]")) return doLogin();
   if (t.closest("[data-pklogin]")) return pkLoginClick(t.closest("[data-pklogin]"));
   if (t.closest("[data-settings]")) return openSettings();
   const rg = t.closest("[data-range]");
@@ -1533,6 +1624,7 @@ async function tick(){
     if (r.status === 401) { setTok(""); LIST = []; endSplash(); return login("密碼不對，再試一次"); }
     const data = await r.json();
     const me = data.find(x => !x.node);
+    if (window._fresh) { window._fresh = false; fetch("/api/pin", {method:"POST", headers:{"X-Token":getTok()}, body:'{"action":"login"}'}).catch(() => {}); }  // 登入成功：PIN 碼輸錯的次數歸零
     if (new URLSearchParams(location.search).get("go") === "cloud" && me && me.cloud && !window._goCloud) {   // 從雲端硬碟跳過來登入：登入好了就送回去
       window._goCloud = true;
       await fetch("/api/cloud-login", {method:"POST", headers:{"X-Token":getTok()}}).catch(() => {});

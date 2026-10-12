@@ -36,7 +36,7 @@ from collections import deque
 from concurrent.futures import ThreadPoolExecutor
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
-VERSION = "1.12"
+VERSION = "1.13"
 
 # ───────────────────────── 設定 ─────────────────────────
 
@@ -1133,6 +1133,138 @@ def pk_delete(cid):
     return True, f"已刪除「{k.get('name')}」，它不能再登入了"
 
 
+# ───────────────────────── PIN 碼登入 ─────────────────────────
+# 4～8 位數字，存在 DATA_DIR/pin.json（只存加鹽雜湊，不存 PIN 碼本身）。登入成功就交出目前的存取密碼。
+# 數字很短容易被猜，所以：連續輸錯 5 次暫停 15 分鐘；累計輸錯 10 次直接關閉 PIN 碼，要用密碼或手機金鑰登入後重新設定。
+
+PIN_LOCK_AFTER, PIN_LOCK_MIN, PIN_OFF_AFTER = 5, 15, 10
+PIN_LK = threading.Lock()
+
+
+def pin_path():
+    return os.path.join(DATA_DIR, "pin.json")
+
+
+def pin_load():
+    try:
+        with open(pin_path(), encoding="utf-8") as f:
+            v = json.load(f)
+        return v if isinstance(v, dict) and v.get("hash") else None
+    except (OSError, ValueError):
+        return None
+
+
+def pin_save(v):
+    os.makedirs(DATA_DIR, exist_ok=True)
+    if v is None:
+        try:
+            os.remove(pin_path())
+        except FileNotFoundError:
+            pass
+        return
+    tmp = pin_path() + ".tmp"
+    with open(tmp, "w", encoding="utf-8") as f:
+        json.dump(v, f)
+    os.chmod(tmp, 0o600)
+    os.replace(tmp, pin_path())
+
+
+def _pin_hash(pin, salt, n):
+    return hashlib.pbkdf2_hmac("sha256", pin.encode(), bytes.fromhex(salt), n).hex()
+
+
+def pin_status():
+    p = pin_load()
+    if not p:
+        return {"on": False}
+    left = int(p.get("lock_until", 0) - time.time())
+    return {"on": True, "locked": max(0, left)}
+
+
+def pin_set(pin):
+    pin = str(pin or "")
+    if not re.fullmatch(r"\d{4,8}", pin):
+        return False, "PIN 碼要是 4 到 8 位數字"
+    if len(set(pin)) == 1 or pin in "0123456789" or pin in "9876543210":
+        return False, "這組太好猜了（同一個數字或連號），換一組吧"
+    salt, n = secrets.token_hex(16), 200_000
+    with PIN_LK:
+        try:
+            pin_save({"hash": _pin_hash(pin, salt, n), "salt": salt, "n": n, "fails": 0, "streak": 0, "lock_until": 0,
+                      "set": int(time.time())})
+        except OSError as e:
+            return False, f"無法存檔：{e}"
+    log("設定了 PIN 碼")
+    COL.add_event("info", "PIN 碼登入已設定")
+    return True, "PIN 碼設定好了，下次登入可以直接輸入 PIN 碼"
+
+
+def pin_off(reason=""):
+    with PIN_LK:
+        try:
+            pin_save(None)
+        except OSError as e:
+            return False, f"無法存檔：{e}"
+    log("關閉了 PIN 碼" + (f"：{reason}" if reason else ""))
+    COL.add_event("warn" if reason else "info", reason or "PIN 碼登入已關閉")
+    return True, "PIN 碼已關閉"
+
+
+def pin_reset_fails():
+    """用密碼或手機金鑰登入成功：之前輸錯的次數歸零"""
+    with PIN_LK:
+        p = pin_load()
+        if p and (p.get("fails") or p.get("streak") or p.get("lock_until")):
+            p.update(fails=0, streak=0, lock_until=0)
+            try:
+                pin_save(p)
+            except OSError:
+                pass
+
+
+def pin_login(pin):
+    """回傳 (成功與否, 訊息)"""
+    pin = str(pin or "")
+    with PIN_LK:
+        p = pin_load()
+        if not p:
+            return False, "這台主機沒有設定 PIN 碼"
+        now = time.time()
+        if p.get("lock_until", 0) > now:
+            return False, f"輸錯太多次，請 {int((p['lock_until'] - now) // 60) + 1} 分鐘後再試，或改用密碼登入"
+        try:
+            ok = re.fullmatch(r"\d{4,8}", pin) and hmac.compare_digest(_pin_hash(pin, p["salt"], int(p["n"])), p["hash"])
+        except (KeyError, ValueError, TypeError):
+            ok = False
+        if ok:
+            p.update(streak=0, fails=0)
+            event = None
+        else:
+            p["streak"] = p.get("streak", 0) + 1
+            p["fails"] = p.get("fails", 0) + 1
+            event = None
+            if p["fails"] >= PIN_OFF_AFTER:
+                p = None
+            elif p["streak"] >= PIN_LOCK_AFTER:
+                p.update(streak=0, lock_until=now + PIN_LOCK_MIN * 60)
+                event = f"PIN 碼連續輸錯 {PIN_LOCK_AFTER} 次，暫停 {PIN_LOCK_MIN} 分鐘"
+        try:
+            pin_save(p)
+        except OSError:
+            pass
+    if p is None:
+        log("PIN 碼輸錯太多次，已自動關閉")
+        COL.add_event("bad", f"PIN 碼累計輸錯 {PIN_OFF_AFTER} 次，已自動關閉；請用密碼登入後重新設定")
+        return False, "PIN 碼輸錯太多次，已經自動關閉，請改用密碼登入"
+    if event:
+        log(event)
+        COL.add_event("warn", event)
+        return False, f"輸錯太多次，請 {PIN_LOCK_MIN} 分鐘後再試，或改用密碼登入"
+    if not ok:
+        return False, f"PIN 碼不對（再錯 {PIN_LOCK_AFTER - p['streak']} 次會暫停 {PIN_LOCK_MIN} 分鐘）"
+    return True, ""
+
+
 # ───────────────────────── 改名 ─────────────────────────
 
 def write_conf(values):
@@ -2211,9 +2343,9 @@ class Handler(BaseHTTPRequestHandler):
     def passkey_login(self, body):
         d = self.jbody(body)
         act = d.get("action")
-        if act == "has":                             # 登入頁問：有沒有登記過（沒有就不顯示按鈕）
+        if act == "has":                             # 登入頁問：有沒有登記過手機金鑰、有沒有設定 PIN 碼（沒有就不顯示）
             rp = pk_rp(self.headers.get("Host"))
-            return self.send(200, json.dumps({"has": any(k.get("rp") == rp for k in pk_load())}))
+            return self.send(200, json.dumps({"has": any(k.get("rp") == rp for k in pk_load()), "pin": bool(pin_load())}))
         if act == "begin":
             return self.send(200, json.dumps({"challenge": pk_challenge("webauthn.get"), "rp": pk_rp(self.headers.get("Host"))}))
         ok, res = pk_login_finish(d)
@@ -2276,7 +2408,7 @@ class Handler(BaseHTTPRequestHandler):
             return self.proxy_cloud()
         u = urllib.parse.urlsplit(self.path)
         if u.path not in ("/api/update", "/api/rename", "/api/traffic", "/api/telegram", "/api/links", "/api/self", "/api/cloud-login", "/api/peer",
-                          "/api/token", "/api/passkey", "/api/passkey-login"):
+                          "/api/token", "/api/passkey", "/api/passkey-login", "/api/pin", "/api/pin-login"):
             return self.send(404, '{"error":"找不到"}')
         try:
             size = min(int(self.headers.get("Content-Length") or 0), 16384 if u.path.startswith("/api/passkey") else 4096)
@@ -2285,6 +2417,13 @@ class Handler(BaseHTTPRequestHandler):
             body = b""
         if u.path == "/api/passkey-login":           # 還沒登入：用手機金鑰換到存取密碼
             return self.passkey_login(body)
+        if u.path == "/api/pin-login":               # 還沒登入：用 PIN 碼換到存取密碼
+            ok, msg = pin_login(self.jbody(body).get("pin"))
+            if not ok:
+                time.sleep(1)
+                return self.send(401, json.dumps({"ok": False, "message": msg}, ensure_ascii=False))
+            log("用 PIN 碼登入")
+            return self.send(200, json.dumps({"ok": True, "token": TOKEN}))
         if not self.authed():
             time.sleep(1)
             return self.send(401, '{"error":"密碼錯誤"}')
@@ -2319,6 +2458,17 @@ class Handler(BaseHTTPRequestHandler):
             return self.send(200 if ok else 400, json.dumps({"ok": ok, "message": msg, "test_failed": tf}, ensure_ascii=False))
         if u.path == "/api/passkey":
             return self.passkey(body)
+        if u.path == "/api/pin":                     # 設定、關閉 PIN 碼（已登入才能用）
+            d = self.jbody(body)
+            if d.get("action") == "set":
+                ok, msg = pin_set(d.get("pin"))
+            elif d.get("action") == "off":
+                ok, msg = pin_off()
+            else:
+                if d.get("action") == "login":       # 網頁剛用密碼或手機金鑰登入：輸錯次數歸零
+                    pin_reset_fails()
+                return self.send(200, json.dumps({"ok": True, **pin_status()}))
+            return self.send(200 if ok else 400, json.dumps({"ok": ok, "message": msg, **pin_status()}, ensure_ascii=False))
         if u.path == "/api/token":
             ok, msg, tok = change_token()
             return self.send(200 if ok else 500, json.dumps({"ok": ok, "message": msg, "token": tok}, ensure_ascii=False))
