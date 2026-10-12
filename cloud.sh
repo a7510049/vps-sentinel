@@ -93,11 +93,15 @@ give_back() {
   fstrim "$MNT" >/dev/null 2>&1 || true            # 把之前刪掉的檔案佔的空間一次還回去
 }
 
-# 目前設定的容量（GB）：有記錄就用記錄，舊版沒記錄就看空間檔的大小
+# 目前設定的容量（GB）：有記錄就用記錄。
+# 舊版沒記錄：空間檔還沒補過時剛好是整數 GB，那就是設定的大小，順便記下來；
+# 已經補過（不是整數 GB）就看不出原本設多少，不要猜，免得每次更新都再補一次、越補越大。
 saved_gb() {
-  local g; g="$(get_conf CLOUD_GB)"
-  if [[ "$g" =~ ^[0-9]+$ ]] && [ "$g" -gt 0 ]; then echo "$g"
-  elif [ -f "$IMG" ]; then echo $(( $(stat -c %s "$IMG") / 1073741824 ))
+  local g sz; g="$(get_conf CLOUD_GB)"
+  if [[ "$g" =~ ^[0-9]+$ ]] && [ "$g" -gt 0 ]; then echo "$g"; return; fi
+  sz=0; [ -f "$IMG" ] && sz=$(stat -c %s "$IMG")
+  if [ "$sz" -gt 0 ] && [ $(( sz % 1073741824 )) -eq 0 ]; then
+    set_conf CLOUD_GB $(( sz / 1073741824 )); echo $(( sz / 1073741824 ))
   else echo 0; fi
 }
 
