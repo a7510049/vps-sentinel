@@ -171,10 +171,23 @@ if [ -n "$DOMAIN" ]; then
     echo "   sudo HTTPS_PORT=10443 bash install.sh $DOMAIN"
     exit 1
   fi
+  # 申請憑證需要 80 連接埠。被 nginx 佔用時，不去搶，改請 nginx 把「驗證網域」的請求轉交給 Caddy
+  CADDY_HTTP_PORT=80
+  NGINX_ACME=""
   OWNER="$(port_owner tcp 80)"
   if [ -n "$OWNER" ] && [ "$OWNER" != caddy ]; then
-    echo "❌ 申請加密憑證需要用到 80 連接埠，但它被「$OWNER」使用中，無法自動設定"
-    exit 1
+    if [ "$OWNER" = nginx ] && command -v nginx >/dev/null; then
+      CADDY_HTTP_PORT=8880
+      while [ -n "$(port_owner tcp "$CADDY_HTTP_PORT")" ] && [ "$(port_owner tcp "$CADDY_HTTP_PORT")" != caddy ]; do
+        CADDY_HTTP_PORT=$((CADDY_HTTP_PORT + 1))
+      done
+      NGINX_ACME=1
+      echo "ℹ️ 80 已經被「nginx」使用中，不會去動它；改由 nginx 轉交憑證驗證"
+    else
+      echo "❌ 申請加密憑證需要用到 80 連接埠，但它被「$OWNER」使用中，無法自動設定"
+      echo "   請把上面這行截圖給我，我幫你看怎麼處理"
+      exit 1
+    fi
   fi
 
   if [ "$HTTPS_PORT" = 443 ]; then SHOWURL="https://$DOMAIN"; else SHOWURL="https://$DOMAIN:$HTTPS_PORT"; fi
@@ -200,16 +213,75 @@ $SITE {
 }
 EOF
   touch /etc/caddy/Caddyfile
-  # 關掉 HTTP/3：它會佔用 UDP 連接埠，可能跟 Hysteria2 之類的服務衝突
-  if ! grep -q 'protocols h1 h2' /etc/caddy/Caddyfile; then
-    if grep -qE '^\{' /etc/caddy/Caddyfile; then
-      echo "⚠️ 你的 Caddyfile 已經有全域設定，請自己在裡面加上：servers { protocols h1 h2 }"
+  # 全域設定：
+  #  ‧ 關掉 HTTP/3：它會佔用 UDP 連接埠，可能跟 Hysteria2 之類的服務衝突
+  #  ‧ 80 被 nginx 佔用時，Caddy 改聽別的連接埠，由 nginx 轉交過來
+  # 開頭的全域設定如果是本程式寫的（只含下面這幾種設定），就整段換新；是你自己寫的就不動
+  GLOBAL="$(awk 'NR==1 && $0!="{" {exit} {print} $0=="}" {exit}' /etc/caddy/Caddyfile)"
+  if [ -n "$GLOBAL" ] && printf '%s\n' "$GLOBAL" | grep -vqE '^[[:space:]]*(\{|\}|servers \{|protocols h1 h2|http_port [0-9]+|#.*)?[[:space:]]*$'; then
+    echo "⚠️ 你的 Caddyfile 已經有自己的全域設定，請自己在裡面加上：servers { protocols h1 h2 }"
+    [ "$CADDY_HTTP_PORT" != 80 ] && echo "   以及：http_port $CADDY_HTTP_PORT"
+  else
+    if [ -n "$GLOBAL" ]; then
+      awk 'f{print;next} $0=="}"{f=1;next} NR==1 && $0!="{"{f=1;print}' /etc/caddy/Caddyfile \
+        | sed '/./,$!d' > /etc/caddy/Caddyfile.rest
     else
-      { printf '{\n\tservers {\n\t\tprotocols h1 h2\n\t}\n}\n\n'; cat /etc/caddy/Caddyfile; } > /etc/caddy/Caddyfile.new
-      mv /etc/caddy/Caddyfile.new /etc/caddy/Caddyfile
+      cp /etc/caddy/Caddyfile /etc/caddy/Caddyfile.rest
     fi
+    {
+      printf '{\n'
+      [ "$CADDY_HTTP_PORT" != 80 ] && printf '\thttp_port %s\n' "$CADDY_HTTP_PORT"
+      printf '\tservers {\n\t\tprotocols h1 h2\n\t}\n}\n\n'
+      cat /etc/caddy/Caddyfile.rest
+    } > /etc/caddy/Caddyfile.new
+    mv /etc/caddy/Caddyfile.new /etc/caddy/Caddyfile
+    rm -f /etc/caddy/Caddyfile.rest
   fi
   grep -q 'import sites/\*.caddy' /etc/caddy/Caddyfile || printf '\nimport sites/*.caddy\n' >> /etc/caddy/Caddyfile
+
+  # 請 nginx 把這個網域的「憑證驗證」轉交給 Caddy（其他網址一律導向加密連線）
+  NGX_FILE=""
+  if [ -d /etc/nginx/conf.d ] && nginx -T 2>/dev/null | grep -qE 'include[^;]*conf\.d/\*'; then
+    NGX_FILE=/etc/nginx/conf.d/vps-sentinel-acme.conf
+  elif [ -d /etc/nginx/sites-enabled ]; then
+    NGX_FILE=/etc/nginx/sites-enabled/vps-sentinel-acme.conf
+  fi
+  if [ -n "$NGINX_ACME" ]; then
+    [ -n "$NGX_FILE" ] || { echo "❌ 找不到 nginx 的設定資料夾，無法自動設定，請截圖給我"; exit 1; }
+    rm -f /etc/nginx/conf.d/vps-sentinel-acme.conf /etc/nginx/sites-enabled/vps-sentinel-acme.conf
+    if nginx -T 2>/dev/null | grep -E '^[[:space:]]*server_name' | grep -qw -- "$DOMAIN"; then
+      echo "⚠️ nginx 裡已經有別的設定在用 $DOMAIN，可能會搶走憑證驗證。"
+      echo "   如果最後憑證申請失敗，建議另外開一個子網域給哨兵用（例如 mon.$DOMAIN）"
+    fi
+    LISTEN6=""
+    nginx -T 2>/dev/null | grep -qE 'listen[[:space:]]+\[::\]:80' && LISTEN6="	listen [::]:80;"
+    if [ "$HTTPS_PORT" = 443 ]; then REDIR="https://\$host\$request_uri"; else REDIR="https://\$host:$HTTPS_PORT\$request_uri"; fi
+    cat > "$NGX_FILE" <<EOF
+# VPS 哨兵（由安裝腳本產生）：把憑證驗證轉交給 Caddy
+server {
+	listen 80;
+$LISTEN6
+	server_name $DOMAIN;
+	location /.well-known/acme-challenge/ {
+		proxy_pass http://127.0.0.1:$CADDY_HTTP_PORT;
+		proxy_set_header Host \$host;
+	}
+	location / {
+		return 301 $REDIR;
+	}
+}
+EOF
+    if ! nginx -t >/dev/null 2>&1; then
+      rm -f "$NGX_FILE"
+      echo "❌ nginx 設定檢查沒通過（已還原，沒有改到你原本的設定）。請把下面的訊息截圖給我："
+      nginx -t || true
+      exit 1
+    fi
+    systemctl reload nginx 2>/dev/null || nginx -s reload
+  elif [ -n "$NGX_FILE" ] && [ -f "$NGX_FILE" ]; then
+    rm -f "$NGX_FILE"   # 不再需要 nginx 轉交，把之前加的設定拿掉
+    nginx -t >/dev/null 2>&1 && { systemctl reload nginx 2>/dev/null || nginx -s reload; }
+  fi
 
   set_conf BIND 127.0.0.1      # 只讓 Caddy 從本機連，外面一律走 https
   set_conf DOMAIN "$DOMAIN"
