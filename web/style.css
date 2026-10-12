@@ -703,6 +703,13 @@ a.plink:hover{color:var(--a1)}
 /* 切換文字大小（sizeShift）：舊畫面放大／縮小到新的比例並淡出，新畫面從舊的比例變回原樣並淡入 */
 .vtsize::view-transition-old(root){animation:vtZoomOut var(--t-slow) var(--ease) both;transform-origin:50% 30%}
 .vtsize::view-transition-new(root){animation:vtZoomIn var(--t-slow) var(--ease) both;transform-origin:50% 30%}
+/* 設定面板開著時切換文字大小：面板只用新畫面、從舊的比例縮放回原樣（不疊兩層，所以泡泡不會閃） */
+.vtsize .sheetv .sheet{view-transition-name:vs-sheet}
+.vtsize::view-transition-group(vs-sheet){animation:none}
+.vtsize::view-transition-old(vs-sheet){display:none}
+.vtsize::view-transition-new(vs-sheet){animation:vtZoomSolid var(--t-slow) var(--ease) both;transform-origin:50% 100%}
+@media (min-width:1024px){.vtsize::view-transition-new(vs-sheet){transform-origin:100% 0}}
+@keyframes vtZoomSolid{from{transform:scale(calc(1 / var(--zr)))}}
 @keyframes vtZoomOut{to{opacity:0;transform:scale(var(--zr))}}
 @keyframes vtZoomIn{from{opacity:0;transform:scale(calc(1 / var(--zr)))}}
 /* ═════════ 啟動畫面 ═════════ */
