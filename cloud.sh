@@ -4,6 +4,7 @@
 # 用法：
 #   sudo bash cloud.sh 50          安裝雲端硬碟，最多可以放 50 GB（之後再執行一次就能改大小）
 #   sudo bash cloud.sh 檢查         連不上時用這個找原因
+#   sudo bash cloud.sh 整理         補足容量、修好刪不掉的檔案（更新哨兵時會自動做）
 #   sudo bash cloud.sh 更新         更新到官方最新版（檔案和帳號都保留，哨兵網頁上也能按）
 #   sudo bash cloud.sh 移除         移除雲端硬碟程式（檔案會保留）
 #
@@ -55,11 +56,48 @@ wait_ready() {
   return 1
 }
 
+# 讓雲端硬碟「真正能放的空間」等於設定的大小。
+# 格式化本身會佔掉大約 2%（檔案目錄表、日誌），所以設 30 GB 只剩 29.多；這裡把空間檔加大補回來。
+# 空間檔是「用多少佔多少」，加大不會多吃主機硬碟。掛著也能直接加大，不用停雲端硬碟。
+top_up() {
+  local want=$(( $1 * 1073741824 )) have dev fs size
+  mountpoint -q "$MNT" || return 0
+  dev="$(findmnt -no SOURCE "$MNT")"
+  for _ in 1 2 3; do
+    have=$(df -B1 --output=size "$MNT" | tail -1 | tr -d ' ')
+    [ $(( want - have )) -lt 4194304 ] && return 0          # 差不到 4 MB 就算剛好
+    fs=$(dumpe2fs -h "$dev" 2>/dev/null | awk -F: '/^Block count/{c=$2} /^Block size/{s=$2} END{print c*s}')
+    [ "${fs:-0}" -gt 0 ] || return 0
+    size=$(( fs + want - have ))                             # 照現在格式化佔掉的比例補回來
+    [ "$size" -gt "$(stat -c %s "$IMG")" ] && truncate -s "$size" "$IMG"
+    losetup -c "$dev" 2>/dev/null && resize2fs "$dev" >/dev/null 2>&1 || return 0
+  done
+}
+
+# 雲端硬碟程式是用一般使用者（編號 1000）在跑；用 root 放進去的檔案它刪不掉、也改不了。
+# 這裡把擁有者統一改回來（只改不對的，檔案很多也很快）。
+fix_owner() {
+  mountpoint -q "$MNT" || return 0
+  find "$MNT" -xdev \( ! -user 1000 -o ! -group 1000 \) -exec chown -h 1000:1000 {} + 2>/dev/null || true
+}
+
+# 目前設定的容量（GB）：有記錄就用記錄，舊版沒記錄就看空間檔的大小
+saved_gb() {
+  local g; g="$(get_conf CLOUD_GB)"
+  if [[ "$g" =~ ^[0-9]+$ ]] && [ "$g" -gt 0 ]; then echo "$g"
+  elif [ -f "$IMG" ]; then echo $(( $(stat -c %s "$IMG") / 1073741824 ))
+  else echo 0; fi
+}
+
 diagnose() {
   local port="$LOCAL_PORT" dom; dom="$(get_conf DOMAIN)"
   echo "── 雲端硬碟檢查 ──"
   if mountpoint -q "$MNT"; then echo "✅ 存放空間：已掛好（$(df -h --output=used,size "$MNT" | tail -1 | awk '{print $1" / "$2}')）"
   else echo "❌ 存放空間沒有掛上：systemctl status srv-cloud.mount"; fi
+  if mountpoint -q "$MNT"; then
+    local bad; bad="$(find "$MNT" -xdev \( ! -user 1000 -o ! -group 1000 \) 2>/dev/null | wc -l || true)"
+    if [ "$bad" -gt 0 ]; then echo "❌ 有 $bad 個檔案或資料夾雲端硬碟刪不掉（是用 root 放進去的），執行 sudo bash cloud.sh 整理 就會修好"; fi
+  fi
   local st; st="$(docker ps -a --filter "name=^$NAME\$" --format '{{.Status}}')"
   if [ -z "$st" ]; then echo "❌ 雲端硬碟程式不存在，請重新執行：bash cloud.sh 容量"
   else echo "ℹ️ 雲端硬碟程式：$st"; fi
@@ -99,10 +137,16 @@ case "${1:-}" in
     [ -f "$APP/data/config.yaml" ] || { echo "還沒安裝雲端硬碟"; exit 1; }
     echo "▶ 下載官方最新的穩定版…"
     docker pull -q "$IMAGE" >/dev/null || { echo "❌ 下載失敗"; exit 1; }
+    top_up "$(saved_gb)"; fix_owner
     run_container
     wait_ready || exit 1
     docker image prune -f >/dev/null 2>&1 || true      # 清掉舊版的映像檔，省空間
     echo "✅ 雲端硬碟已更新到最新版（檔案和帳號都保留）"; exit 0 ;;
+  整理|tidy)                                         # 哨兵更新時會自動跑：補足容量、修好刪不掉的檔案
+    [ -f "$APP/data/config.yaml" ] || exit 0
+    command -v resize2fs >/dev/null || exit 0
+    top_up "$(saved_gb)"; fix_owner
+    echo "✅ 雲端硬碟整理好了（可用空間 $(df -h --output=size "$MNT" 2>/dev/null | tail -1 | tr -d ' ')）"; exit 0 ;;
   移除|remove)
     docker rm -f "$NAME" >/dev/null 2>&1 || true
     rm -f /etc/caddy/sites/vps-sentinel.d/cloud.caddy
@@ -132,6 +176,9 @@ command -v resize2fs >/dev/null || { apt-get update -qq && apt-get install -y -q
 install -d "$BASE" "$MNT"
 cur_gb=0
 [ -f "$IMG" ] && cur_gb=$(( $(stat -c %s "$IMG") / 1073741824 ))
+if [ -f "$IMG" ] && mountpoint -q "$MNT"; then      # 空間檔會比設定大一點（補格式化佔掉的），看實際可用的空間
+  cur_gb=$(( ($(df -B1 --output=size "$MNT" | tail -1 | tr -d ' ') + 536870912) / 1073741824 ))
+fi
 free_gb=$(( $(df --output=avail -B1 "$BASE" | tail -1) / 1073741824 ))
 used_gb=0
 [ -f "$IMG" ] && used_gb=$(( $(du -B1 "$IMG" | cut -f1) / 1073741824 ))
@@ -158,7 +205,8 @@ elif [ "$SIZE" -ne "$cur_gb" ]; then
   mountpoint -q "$MNT" && umount "$MNT"
   e2fsck -f -y "$IMG" >/dev/null 2>&1 || true
   if [ "$SIZE" -gt "$cur_gb" ]; then
-    truncate -s "${SIZE}G" "$IMG"; resize2fs "$IMG" >/dev/null
+    [ $(( SIZE * 1073741824 )) -gt "$(stat -c %s "$IMG")" ] && truncate -s "${SIZE}G" "$IMG"   # 空間檔可能已經比設定大一點，不能反過來縮小它
+    resize2fs "$IMG" >/dev/null
   else
     resize2fs "$IMG" "${SIZE}G" >/dev/null; truncate -s "${SIZE}G" "$IMG"
   fi
@@ -183,8 +231,10 @@ printf '[Unit]\nWants=srv-cloud.mount\nAfter=srv-cloud.mount\n' > /etc/systemd/s
 systemctl daemon-reload
 systemctl enable --now srv-cloud.mount >/dev/null 2>&1
 mountpoint -q "$MNT" || { echo "❌ 雲端硬碟空間掛載失敗：journalctl -u srv-cloud.mount"; exit 1; }
-chown 1000:1000 "$MNT"
 rm -rf "$MNT/lost+found" 2>/dev/null || true
+top_up "$SIZE"
+fix_owner
+set_conf CLOUD_GB "$SIZE"
 
 # ── 3. FileBrowser Quantum ──
 install -d -o 1000 -g 1000 "$APP/data" "$APP/data/tmp"
