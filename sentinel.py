@@ -1776,9 +1776,13 @@ button{font:inherit;color:inherit}
 .charts>.panel{display:flex;flex-direction:column}
 .charts .cbox{flex:1 1 auto;height:auto;min-height:100px;position:relative}
 .charts .cbox>*{position:absolute;inset:0;height:100%!important;width:100%}
-.yax{pointer-events:none}
-.yax span{position:absolute;left:0;transform:translateY(-100%);padding-bottom:2px;font-size:var(--fs-xs);font-weight:700;color:var(--faint);
-  font-variant-numeric:tabular-nums;text-shadow:0 0 6px var(--bg)}
+.charts .cbox>.yax{pointer-events:none;left:auto;width:var(--yw)}
+.yax span{position:absolute;right:0;transform:translateY(-50%);font-size:var(--fs-xs);font-weight:700;color:var(--faint);white-space:nowrap;
+  font-variant-numeric:tabular-nums}
+/* 有刻度的曲線：右邊留一條欄位放數字，線條不會蓋到字 */
+.cbox:has(.yax){--yw:62px}
+.charts .cbox:has(.yax)>svg.chart{right:calc(var(--yw) + 8px);width:auto}
+.charts .panel:has(.yax) .xl{padding-right:70px}   /* 「現在」對齊曲線的右邊 */
 .cbox{cursor:crosshair}
 #ctip{position:fixed;z-index:60;pointer-events:none;min-width:130px;padding:9px 12px;border-radius:var(--r-md);font-size:var(--fs-s);font-weight:700;
 
