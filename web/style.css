@@ -54,7 +54,7 @@ button{font:inherit;color:inherit}
 .num,.tab{font-variant-numeric:tabular-nums}
 
 /* ═════════ 背景 ═════════ */
-.bgfx{position:fixed;inset:0;z-index:0;pointer-events:none;overflow:hidden}
+.bgfx{position:fixed;inset:0;bottom:auto;height:100vh;z-index:0;pointer-events:none;overflow:hidden}   /* 固定用「網址列收起來時」的高度：iPhone 捲動時網址列伸縮，背景不用跟著重畫 */
 .aurora{position:absolute;inset:-20vmax;transition:opacity var(--t-slow)}
 .aurora i{position:absolute;width:60vmax;height:60vmax;border-radius:50%;will-change:transform}
 .aurora i:nth-child(1){background:radial-gradient(circle,var(--a1) 0%,color-mix(in srgb,var(--a1) 45%,transparent) 30%,transparent 68%);left:2%;top:-2%;animation:d1 26s ease-in-out infinite alternate}
@@ -736,7 +736,7 @@ html::-webkit-scrollbar{width:8px}
 html::-webkit-scrollbar-track{background:transparent}
 html::-webkit-scrollbar-thumb{background:color-mix(in srgb,var(--text) 22%,transparent);border-radius:var(--r-sm);border:2px solid transparent;background-clip:padding-box}
 /* ═════════ 流暢優先（手機預設） ═════════ */
-[data-lite="on"] .aurora i{animation:none}
+[data-lite="on"] .aurora i{animation:none;will-change:auto}   /* 不動的背景就不用一直佔著顯示記憶體 */
 [data-lite="on"] .grain{display:none}
 [data-lite="on"] .fill::after{display:none}
 [data-lite="on"] .veil{-webkit-backdrop-filter:none;backdrop-filter:none}
@@ -749,6 +749,11 @@ html::-webkit-scrollbar-thumb{background:color-mix(in srgb,var(--text) 22%,trans
 [data-lite="on"] .card,[data-lite="on"] .panel{transform:translateZ(0)}
 /* 主題色（國旗配色）切換時直接換，不做漸變：漸變的那半秒內整頁每一格都要重算顏色，手機上滑動會卡 */
 :root[data-lite="on"]{transition:background var(--t-mid)}
+/* 展開「容器與服務」：直接打開，清單整塊淡入。原本是一邊撐高一邊排版，每一格都要重排整頁，iPhone 上特別卡 */
+[data-lite="on"] .collapse{transition:none}
+[data-lite="on"] .more .item,[data-lite="on"] .more .grp{opacity:1;transform:none;transition:background var(--t-fast)}
+[data-lite="on"] .more.open .list{animation:drop var(--t-mid) var(--ease) both}
+@keyframes drop{from{opacity:0;transform:translateY(-6px)}}
 .xfade{position:fixed;inset:0;z-index:45;pointer-events:none;animation:fadeOut var(--t-mid) var(--ease) forwards}
 /* ═════════ 無障礙／關閉動畫 ═════════ */
 [data-motion="off"] *,[data-motion="off"] *::before,[data-motion="off"] *::after{animation:none!important;transition:none!important}
