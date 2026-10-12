@@ -54,6 +54,7 @@ def load_config():
 
 C = load_config()
 NAME = C.get("NAME") or socket.gethostname()
+PANEL = C.get("PANEL_URL", "")                  # 這台的管理後台網址（例如 3x-ui），會在名稱旁邊出現一個連結
 BIND = C.get("BIND", "0.0.0.0")
 PORT = int(C.get("PORT", "8787"))
 TOKEN = C.get("TOKEN", "")
@@ -318,6 +319,27 @@ def set_traffic(cfg):
     TRAFFIC_LIMIT_GB, TRAFFIC_RESET_DAY, TRAFFIC_COUNT = limit, day, mode
     log(f"流量設定：上限 {limit:g} GB、每月 {day} 號重置、計算方式 {mode}")
     return True, "已儲存"
+
+
+def set_panel(url):
+    """儲存管理後台網址；留空就是拿掉"""
+    global PANEL
+    url = re.sub(r"[\x00-\x20\x7f]", "", str(url or ""))
+    if url and not re.match(r"(?i)^https?://", url):
+        if re.match(r"(?i)^[a-z][a-z0-9+.-]*:(?!\d)", url):
+            return False, "只能填 http:// 或 https:// 開頭的網址"
+        url = "https://" + url                     # 沒打 https:// 就自動補上
+    if url and not re.match(r"(?i)^https?://[^/\s]+", url):
+        return False, "網址格式不對，例如 https://你的網域:2053/路徑/"
+    if len(url) > 300:
+        return False, "網址太長了"
+    try:
+        write_conf({"PANEL_URL": url})
+    except OSError as e:
+        return False, f"無法寫入設定檔：{e}"
+    PANEL = url
+    log(f"管理後台網址：{url or '（已拿掉）'}")
+    return True, "已儲存後台網址" if url else "已拿掉後台連結"
 
 
 def set_name(new):
@@ -758,7 +780,7 @@ class Collector:
             notices.append(f"{updates['security']} 個安全更新")
 
         return {
-            "name": NAME, "node": "", "online": True, "version": VERSION, "time": time.time(),
+            "name": NAME, "node": "", "online": True, "version": VERSION, "time": time.time(), "panel": PANEL,
             "os": os_name(), "kernel": os.uname().release,
             "uptime": float(read("/proc/uptime", "0").split()[0] or 0),
             "cores": os.cpu_count() or 1, "cpu": cpu, "load": [round(x, 2) for x in load],
@@ -1114,7 +1136,7 @@ class Handler(BaseHTTPRequestHandler):
 
     def do_POST(self):
         u = urllib.parse.urlsplit(self.path)
-        if u.path not in ("/api/update", "/api/rename", "/api/traffic", "/api/telegram"):
+        if u.path not in ("/api/update", "/api/rename", "/api/traffic", "/api/telegram", "/api/panel"):
             return self.send(404, '{"error":"找不到"}')
         if not self.authed():
             time.sleep(1)
@@ -1154,6 +1176,12 @@ class Handler(BaseHTTPRequestHandler):
             except ValueError:
                 cfg = {}
             ok, msg = set_traffic(cfg if isinstance(cfg, dict) else {})
+        elif u.path == "/api/panel":
+            try:
+                url = json.loads(body or b"{}").get("url", "")
+            except (ValueError, AttributeError):
+                url = ""
+            ok, msg = set_panel(url)
         elif u.path == "/api/rename":
             try:
                 new = json.loads(body or b"{}").get("name", "")
@@ -1656,6 +1684,8 @@ button{font:inherit;color:inherit}
 .dialog .btns.three{grid-template-columns:1fr 1fr 1.3fr}
 .dialog .btns .spin{width:13px;height:13px;margin-right:6px}
 .linkbtn{background:none;border:0;cursor:pointer;color:var(--bad);font-weight:800;font-size:12.5px;margin-top:14px;padding:4px 8px}
+a.plink{color:var(--sub);text-decoration:none}
+a.plink:hover{color:var(--a1)}
 .optbtn{width:100%;border:0;background:none;color:inherit;font:inherit;text-align:left;cursor:pointer}
 .optbtn .lab{flex:1}
 .optbtn .chev{color:var(--faint);display:flex;transform:rotate(-90deg)}
@@ -1891,6 +1921,7 @@ const P = {
   gear:'<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>',
   logout:'<path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9"/>',
   edit:'<path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/>',
+  ext:'<path d="M14 4h6v6"/><path d="M20 4 11 13"/><path d="M19 14v4.5a1.5 1.5 0 0 1-1.5 1.5h-12A1.5 1.5 0 0 1 4 18.5v-12A1.5 1.5 0 0 1 5.5 5H10"/>',
   search:'<circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/>',
   chev:'<path d="m6 9 6 6 6-6"/>', x:'<path d="M18 6 6 18M6 6l12 12"/>',
   warn:'<path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3z"/><path d="M12 9v4M12 17h.01"/>',
@@ -2045,7 +2076,9 @@ function stchip(s){
   const lv = lvOf(s), t = s.online ? {ok:"運作正常", warn:"需要留意", bad:"出問題了"}[lv] : "連不上";
   return `<span class="stchip ${lv}" data-x><span class="dot pulse ${lv}"></span>${t}</span>`;
 }
-const editBtn = s => s.online ? `<button class="iconbtn" title="改名稱" data-rename="${esc(s.node||"")}" data-name="${esc(s.name)}">${I("edit")}</button>` : "";
+const safeUrl = u => /^https?:\/\/[^\s"'<>]+$/i.test(u || "") ? u : "";
+const editBtn = s => s.online ? `<button class="iconbtn" title="編輯名稱與後台連結" data-rename="${esc(s.node||"")}" data-name="${esc(s.name)}" data-panel="${esc(s.panel||"")}">${I("edit")}</button>`
+  + (safeUrl(s.panel) ? `<a class="iconbtn plink" href="${esc(s.panel)}" target="_blank" rel="noopener noreferrer" title="打開管理後台">${I("ext")}</a>` : "") : "";
 function alerts(s){
   const k = t => esc(String(t).replace(/[\d.]+/g, ""));
   const al = (s.problems||[]).map(p=>`<div class="alert bad" data-key="b:${k(p)}">${I("warn")}${esc(p)}</div>`)
@@ -2783,6 +2816,27 @@ function initSegs(root){
   root.querySelectorAll(".seg").forEach(sg => { sg.classList.add("noanim"); moveInd(sg); });
   requestAnimationFrame(() => requestAnimationFrame(() => root.querySelectorAll(".seg").forEach(sg => sg.classList.remove("noanim"))));
 }
+/* 編輯主機：名稱＋管理後台網址 */
+function hostModal(name, panel){
+  return new Promise(res => {
+    const v = document.createElement("div"); v.className = "veil";
+    v.innerHTML = `<div class="dialog glass"><div class="ico big theme">${I("edit")}</div><h3>編輯主機</h3>
+      <div class="form">
+        <label>名稱<input class="field" data-k="name" maxlength="40" value="${esc(name)}"><small>中文、英文、表情符號都可以</small></label>
+        <label>管理後台網址<input class="field" data-k="panel" inputmode="url" autocomplete="off" spellcheck="false" placeholder="例如 https://你的網域:2053/路徑/" value="${esc(panel)}">
+          <small>例如 3x-ui 的後台。填了之後，名稱旁邊會出現 ↗ 圖示，點一下就能直接打開；留空就不顯示</small></label>
+      </div>
+      <div class="btns"><button class="ubtn ghost" data-r="0">取消</button><button class="ubtn" data-r="1">儲存</button></div></div>`;
+    $("#layer").appendChild(v);
+    const q = k => v.querySelector(`[data-k="${k}"]`);
+    const done = ok => { if (v._d) return; v._d = 1; v.classList.add("closing");
+      const val = ok ? {name: q("name").value.trim(), panel: q("panel").value.trim()} : null; setTimeout(() => { v.remove(); res(val); }, 300); };
+    v._esc = () => done(0);
+    setTimeout(() => q("name").focus(), 60);
+    v.querySelectorAll("input").forEach(i => i.addEventListener("keydown", e => { if (e.key === "Enter") done(1); }));
+    v.addEventListener("click", e => { if (e.target === v) return done(0); const b = e.target.closest("[data-r]"); if (b) done(+b.dataset.r); });
+  });
+}
 /* ═════════ Telegram 通知設定 ═════════ */
 async function tgCall(body){
   const r = await fetch("/api/telegram", {method:"POST", headers:{"X-Token":getTok(), "Content-Type":"application/json"}, body:JSON.stringify(body)});
@@ -2952,15 +3006,17 @@ document.addEventListener("click", async e => {
   const rn = t.closest("[data-rename]");
   if (rn) {
     e.stopPropagation();
-    const old = rn.dataset.name;
-    const name = await modal({icon:"edit", cls:"theme", title:"幫主機取個名字", text:"中文、英文、表情符號都可以", input:old, ok:"儲存"});
-    if (name === null || !name.trim() || name.trim() === old) return;
+    const old = rn.dataset.name, oldp = rn.dataset.panel || "", node = rn.dataset.rename;
+    const r0 = await hostModal(old, oldp);
+    if (!r0) return;
+    const post = (path, body) => fetch(path + "?node=" + encodeURIComponent(node), {method:"POST", headers:{"X-Token":getTok(), "Content-Type":"application/json"}, body:JSON.stringify(body)})
+      .then(async r => { const d = await r.json().catch(()=>({})); if (!(r.ok && d.ok)) throw new Error(d.message || d.error || (r.status === 404 ? "那台主機還沒更新到新版" : "儲存失敗")); return d; });
     try {
-      const r = await fetch("/api/rename?node="+encodeURIComponent(rn.dataset.rename),
-        {method:"POST", headers:{"X-Token":getTok(), "Content-Type":"application/json"}, body:JSON.stringify({name:name.trim()})});
-      const d = await r.json().catch(()=>({}));
-      (r.ok && d.ok) ? toast(`已改名為「${name.trim()}」`) : toast(d.message || d.error || "改名失敗", "bad");
-    } catch(err) { toast("連線失敗，請稍後再試", "bad"); }
+      const msgs = [];
+      if (r0.name && r0.name !== old) { await post("/api/rename", {name:r0.name}); msgs.push(`已改名為「${r0.name}」`); }
+      if (r0.panel !== oldp) msgs.push((await post("/api/panel", {url:r0.panel})).message);
+      if (msgs.length) toast(msgs.join("，"));
+    } catch(err) { toast(err.message === "Failed to fetch" ? "連線失敗，請稍後再試" : err.message, "bad"); }
     return tick();
   }
   const cp = t.closest("[data-copy]");
