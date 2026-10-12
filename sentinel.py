@@ -36,7 +36,7 @@ from collections import deque
 from concurrent.futures import ThreadPoolExecutor
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
-VERSION = "1.14"
+VERSION = "1.15"
 
 # ───────────────────────── 設定 ─────────────────────────
 
@@ -110,9 +110,9 @@ def cloud_info():
         return None
     info = {"url": CLOUD_URL, "login": cloud_login_url()}
     if os.path.ismount(CLOUD_DIR):
-        st = os.statvfs(CLOUD_DIR)
-        total, free = st.f_blocks * st.f_frsize, st.f_bavail * st.f_frsize
-        info.update(total=total, used=total - free, pct=round((total - free) / total * 100, 1) if total else 0)
+        d = disk(CLOUD_DIR)          # 跟 df 一樣的算法：系統預留的一小塊（約 16 MB）不算「已用」
+        if d:
+            info.update(total=d["total"], used=d["used"], pct=d["pct"])
     return info
 BIND = C.get("BIND", "0.0.0.0")
 PORT = int(C.get("PORT", "8787"))
