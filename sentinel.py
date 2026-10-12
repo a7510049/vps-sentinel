@@ -1885,10 +1885,8 @@ button{font:inherit;color:inherit}
 .lbar{grid-column:2/-1;height:4px;border-radius:var(--r-pill);background:var(--track);overflow:hidden}
 .lbar i{display:block;height:100%;border-radius:inherit;background:var(--ok);transition:width var(--t-slow) var(--ease),background var(--t-mid)}
 .lbar i.warn{background:var(--warn)}.lbar i.bad{background:var(--bad)}
-.ipb{font-variant-numeric:tabular-nums;cursor:pointer;filter:blur(6px);user-select:none;transition:filter var(--t-mid) var(--ease)}
+.ipb{grid-column:2/-1;justify-self:start;font-variant-numeric:tabular-nums;cursor:pointer;filter:blur(6px);user-select:none;transition:filter var(--t-mid) var(--ease)}
 .ipb.on{filter:none;user-select:text}
-.fr .eye{width:28px;height:28px}
-.fr .eye svg{width:15px;height:15px}
 .facts{display:grid;grid-template-columns:1fr 1fr;gap:14px 12px;flex:1 1 auto;align-content:center}
 .facts>div{min-width:0}
 .facts .k{font-size:var(--fs-xs);color:var(--sub);font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
@@ -2240,8 +2238,6 @@ const P = {
   logout:'<path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9"/>',
   edit:'<path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/>',
   ext:'<path d="M14 4h6v6"/><path d="M20 4 11 13"/><path d="M19 14v4.5a1.5 1.5 0 0 1-1.5 1.5h-12A1.5 1.5 0 0 1 4 18.5v-12A1.5 1.5 0 0 1 5.5 5H10"/>',
-  eye:'<path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12Z"/><circle cx="12" cy="12" r="3"/>',
-  eyeoff:'<path d="M9.9 4.2A9.6 9.6 0 0 1 12 4c6.4 0 10 8 10 8a17 17 0 0 1-2.2 3.2M6.6 6.6C3.9 8.4 2 12 2 12s3.6 8 10 8a9.7 9.7 0 0 0 5.4-1.6"/><path d="M9.9 9.9a3 3 0 0 0 4.2 4.2M2 2l20 20"/>',
   search:'<circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/>',
   chev:'<path d="m6 9 6 6 6-6"/>', x:'<path d="M18 6 6 18M6 6l12 12"/>',
   warn:'<path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3z"/><path d="M12 9v4M12 17h.01"/>',
@@ -2618,7 +2614,7 @@ function ring(icon, label, pct, sub, i){
 /* IPv6：固定一行（有沒有設定都佔同樣位置，每台主機的版面一樣高） */
 function v6line(s, shown){
   const v = s.ipv6;
-  if (!v) return `<span class="v6">IPv6 沒有設定</span>`;
+  if (!v) return "";                                       // 沒有 IPv6：不特別顯示
   if (!v.addr) return `<span class="v6 warn">IPv6 位址不見了</span>`;
   const st = v.ok === false ? `<i class="ld bad"></i>連不出去` : v.ok ? `<i class="ld ok"></i>正常` : `<i class="ld"></i>檢查中`;
   return shown ? `<span class="v6 a" data-copy="${esc(v.addr)}" title="點一下複製">${esc(v.addr)}</span>`
@@ -2641,9 +2637,8 @@ function sysPanel(s){
         <div class="lbar"><i class="${lt}" style="width:${Math.min(100, lr / 2 * 100).toFixed(0)}%"></i></div></div>
       <div class="fr" title="這台主機現在有多少條網路連線；「平常」是最近 1 小時的平均${avg != null ? `（約 ${Math.round(avg)} 條）` : ""}">
         <span class="k">連線</span><b>${c == null ? "—" : Number(c).toLocaleString("zh-TW")} <small>條</small></b><span class="d ${cw.includes("多很多") ? "warn" : ""}">${cw}</span></div>
-      ${ip ? `<div class="fr"><span class="k">IP</span><b class="ipb ${shown ? "on" : ""}" ${shown ? `data-copy="${esc(ip)}" title="點一下複製"` : `data-reveal="${esc(k)}" title="點一下顯示"`}>${esc(ip)}</b>
-        <button class="iconbtn eye" data-reveal="${esc(k)}" title="${shown ? "遮起來" : "顯示 IP"}">${I(shown ? "eyeoff" : "eye")}</button>
-        <span class="d org">${v6line(s, shown)}${org ? `<span class="on2">・${esc(org)}</span>` : ""}</span></div>` : ""}
+      ${ip ? `<div class="fr"><span class="k">IP</span><b class="ipb ${shown ? "on" : ""}" ${shown ? `data-copy="${esc(ip)}" title="點一下複製（15 秒後會自動遮起來）"` : `data-reveal="${esc(k)}" title="點一下顯示"`}>${esc(ip)}</b>
+        ${s.ipv6 || org ? `<span class="d org">${v6line(s, shown)}${org ? `<span class="on2">${s.ipv6 ? "・" : ""}${esc(org)}</span>` : ""}</span>` : ""}</div>` : ""}
     </div>${extra.length ? `<div class="fx">${extra.join("・")}</div>` : ""}</div>`;
 }
 function detail(s){
@@ -3463,8 +3458,7 @@ document.addEventListener("click", async e => {
   const rv = t.closest("[data-reveal]");
   if (rv) {
     const k = rv.dataset.reveal;
-    if (IPSHOW[k] > Date.now() && rv.classList.contains("eye")) delete IPSHOW[k];
-    else { IPSHOW[k] = Date.now() + 15000; setTimeout(() => { if (IPSHOW[k] <= Date.now()) { delete IPSHOW[k]; render(LIST); } }, 15100); }   // 15 秒後自動再遮起來
+    { IPSHOW[k] = Date.now() + 15000; setTimeout(() => { if (IPSHOW[k] <= Date.now()) { delete IPSHOW[k]; render(LIST); } }, 15100); }   // 15 秒後自動再遮起來
     return render(LIST);
   }
   const cp = t.closest("[data-copy]");
