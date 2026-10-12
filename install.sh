@@ -90,6 +90,8 @@ fi
 # ── 1. 安裝主程式 ──
 install -d "$DIR"
 install -m 755 "$HERE/sentinel.py" "$DIR/sentinel.py"
+install -d "$DIR/web"
+install -m 644 "$HERE"/web/index.html "$HERE"/web/style.css "$HERE"/web/app.js "$DIR/web/"
 
 # ── 2. 設定檔（已存在就保留） ──
 if [ ! -f "$CONF" ]; then

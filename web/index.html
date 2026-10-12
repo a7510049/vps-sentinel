@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="zh-Hant-TW" data-mode="dark" data-accent="blue">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>VPS 哨兵</title>
+<link rel="manifest" href="/manifest.webmanifest?v=2">
+<link rel="icon" href="/icon.svg?v=2">
+<link rel="apple-touch-icon" href="/apple-touch-icon.png?v=2">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="VPS 哨兵">
+<meta name="theme-color" content="#06080f">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Nunito:wght@500;600;700;800;900&display=swap" rel="stylesheet">
+<script>
+/* 先套用設定，避免畫面閃一下 */
+document.documentElement.classList.add("booting");
+(function(){ try {
+  var p = JSON.parse(localStorage.getItem("vps-prefs") || "{}"), h = document.documentElement;
+  var t = p.theme || "auto", dark = t === "dark" || (t === "auto" && matchMedia("(prefers-color-scheme: dark)").matches);
+  h.dataset.mode = dark ? "dark" : "light"; h.dataset.accent = p.accent || "blue";
+} catch(e){} })();
+</script>
+<style>
+/*@style.css*/
+</style>
+</head>
+<body>
+<div class="bgfx"><div class="aurora"><i></i><i></i><i></i><i></i></div><div class="grain"></div></div>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs>
+<linearGradient id="rgN" x1="0" y1="0" x2="1" y2="1"><stop offset="0" style="stop-color:var(--a1)"/><stop offset="1" style="stop-color:var(--a2)"/></linearGradient>
+<linearGradient id="rgW" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#fbbf24"/><stop offset="1" stop-color="#f97316"/></linearGradient>
+<linearGradient id="rgB" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#fb7185"/><stop offset="1" stop-color="#e11d48"/></linearGradient>
+</defs></svg>
+<div id="splash"><div class="sp-logo"><span class="sp-glow"></span><span class="sp-ring"></span><svg class="" viewBox="0 0 512 512" aria-hidden="true"><defs><linearGradient id="lbsp" x1="0" y1="0" x2="0" y2="1"><stop offset="0" style="stop-color:color-mix(in srgb,var(--a1) 70%,#fff)"/><stop offset="1" style="stop-color:var(--a2)"/></linearGradient><linearGradient id="lhsp" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#fff" stop-opacity=".24"/><stop offset=".45" stop-color="#fff" stop-opacity="0"/></linearGradient><mask id="lmsp"><rect width="512" height="512" fill="#fff"/><path d="M204 258l36 36 72-76" fill="none" stroke="#000" stroke-width="30" stroke-linecap="round" stroke-linejoin="round"/></mask></defs><rect width="512" height="512" rx="115" fill="url(#lbsp)"/><rect width="512" height="512" rx="115" fill="url(#lhsp)"/><path d="M256 108 371 150c9 3 15 12 15 22v72c0 84-52 140-122 168-5 2-11 2-16 0-70-28-122-84-122-168v-72c0-10 6-19 15-22Z" fill="#fff" mask="url(#lmsp)" transform="translate(256 262) scale(.88) translate(-256 -258)"/></svg></div>
+<div class="sp-title">VPS 哨兵</div><div class="sp-msg"><span>正在連線…</span></div></div>
+<div id="ptr" class="glass"></div>
+<div class="wrap" id="app"></div>
+<div id="layer"></div>
+<div class="toasts" id="toasts"></div>
+<script>
+/*@app.js*/
+</script>
+</body>
+</html>
