@@ -218,7 +218,6 @@ auth:
   methods:
     password:
       enabled: true
-      adminUsername: admin
       minLength: 8
 frontend:
   name: "雲端硬碟"
