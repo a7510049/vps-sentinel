@@ -9,6 +9,7 @@ VPS 哨兵：用手機或電腦隨時查看 VPS 狀態
 """
 import base64
 import hmac
+import html
 import json
 import os
 import re
@@ -671,8 +672,6 @@ class Collector:
                     ok = bool(last and last["ok"])
                     log("系統更新完成" if ok else "系統更新失敗")
                     self.add_event("ok" if ok else "bad", "系統更新完成" if ok else "系統更新失敗")
-                    threading.Thread(target=tg_send, daemon=True, args=(
-                        f"{'✅' if ok else '❌'} {NAME} 系統更新{'完成' if ok else '失敗'}",)).start()
                 self.upd_running = now
             if tick % 15 == 0 and tick > 0:
                 self.track_events()
@@ -943,7 +942,7 @@ def telegram(cfg):
 def tg_send(text):
     if not (TG_BOT and TG_CHAT):
         return
-    d, err = tg_api(TG_BOT, "sendMessage", {"chat_id": TG_CHAT, "text": text})
+    d, err = tg_api(TG_BOT, "sendMessage", {"chat_id": TG_CHAT, "text": text, "parse_mode": "HTML"})
     if err:
         log("Telegram 傳送失敗：", err)
     elif TG_KEEP:
@@ -966,13 +965,34 @@ def tg_cleanup():
         TG_MSGS.remove(m)
 
 
-EV_ICON = {"bad": "🔴", "warn": "🟠", "ok": "✅", "info": "ℹ️"}
+def ev_line(e):
+    """事件 → 一句通順的通知；不需要通知的回傳空字串"""
+    k, t = e.get("kind"), str(e.get("text") or "")
+    if t in ("哨兵開始監看這台主機", "開始系統更新"):     # 自己按的更新不用再通知「開始」，等結果就好
+        return ""
+    if t == "系統更新完成":
+        return "✅ 系統更新完成"
+    if t == "系統更新失敗":
+        return "❌ 系統更新失敗，可以到網頁上再試一次"
+    if t.startswith("已恢復："):
+        return f"✅ 已解決：{t[4:]}"
+    return {"bad": "🔴 ", "warn": "🟠 "}.get(k, "• ") + t
+
+
+def tg_host_msg(name, lines):
+    """同一台主機的通知合成一則：只有一件事就一行，多件事就主機名稱當標題"""
+    name = html.escape(name)
+    lines = [html.escape(x) for x in dict.fromkeys(lines)]          # 同樣的內容只留一次
+    if len(lines) == 1:
+        icon, _, rest = lines[0].partition(" ")
+        return f"{icon} <b>{name}</b>　{rest}"
+    return f"<b>{name}</b>\n" + "\n".join(lines)
 
 
 def alert_loop():
     """每 30 秒看一次所有主機的「事件紀錄」，有新事件就傳到 Telegram（跟網頁上的事件紀錄一致）"""
     time.sleep(20)                     # 等第一輪資料收集完
-    offline_count, down = {}, set()
+    offline_count, down, seen_ev = {}, set(), {}
     while True:
         try:
             if TG_BOT and TG_CHAT:
@@ -982,22 +1002,30 @@ def alert_loop():
                         offline_count[key] = offline_count.get(key, 0) + 1
                         if offline_count[key] == 6 and key not in down:     # 連續約 3 分鐘連不上才通知
                             down.add(key)
-                            tg_send(f"🔌 {name}\n連不上這台主機了\n{s.get('error') or ''}".strip())
+                            tg_send(f"🔌 <b>{html.escape(name)}</b>　連不上了\n{html.escape(s.get('error') or '')}".strip())
                         continue
                     offline_count[key] = 0
                     if key in down:
                         down.discard(key)
-                        tg_send(f"✅ {name}\n恢復連線了")
+                        tg_send(f"✅ <b>{html.escape(name)}</b>　恢復連線了")
                     evs = sorted(s.get("events") or [], key=lambda e: e.get("t", 0))
                     if not evs:
                         continue
                     last = TG_SENT.get(key)
                     if last is None:                   # 第一次看到這台：從現在開始通知，不補發以前的
                         TG_SENT[key] = evs[-1]["t"]
+                        seen_ev[key] = {(e["t"], e.get("text")) for e in evs}
                         continue
-                    new = [e for e in evs if e["t"] > last and e.get("text") != "哨兵開始監看這台主機"]
-                    if new:
-                        tg_send(f"🖥️ {name}\n" + "\n".join(f"{EV_ICON.get(e.get('kind'), '•')} {e.get('text')}" for e in new[-10:]))
+                    done = seen_ev.get(key)
+                    if done is None:                   # 剛重新啟動：已經通知過的（時間不晚於上次那筆）不要再發
+                        done = seen_ev[key] = {(e["t"], e.get("text")) for e in evs if e["t"] <= last}
+                    new = [e for e in evs if e["t"] >= last and (e["t"], e.get("text")) not in done]
+                    lines = [x for x in (ev_line(e) for e in new) if x]
+                    if lines:
+                        tg_send(tg_host_msg(name, lines[-10:]))
+                    done.update((e["t"], e.get("text")) for e in new)
+                    if len(done) > 200:
+                        seen_ev[key] = {(e["t"], e.get("text")) for e in evs}
                     TG_SENT[key] = evs[-1]["t"]
             else:
                 TG_SENT.clear()                         # 關閉期間不累積，重新開啟時從那一刻開始通知
