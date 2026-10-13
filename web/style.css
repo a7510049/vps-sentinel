@@ -295,7 +295,8 @@ button{font:inherit;color:inherit}
 .wpeek,.wbody{display:flow-root}
 .wpeek>div{padding-top:14px}
 .wpeek .minis{grid-template-columns:repeat(3,minmax(0,1fr))}
-.wnote{display:flex;align-items:center;gap:7px;margin-top:10px;font-size:var(--fs-s);font-weight:700;color:var(--bad)}
+.wnote{display:flex;align-items:center;gap:8px;margin-bottom:12px;padding:9px 12px;border-radius:var(--r-md);font-size:var(--fs-m);font-weight:800;color:var(--bad);
+  background:color-mix(in srgb,currentColor 13%,transparent)}   /* 告警放在卡片收起來時最上面，一眼就看到 */
 .wnote.warn{color:var(--warn)}
 .wnote svg{width:15px;height:15px;flex:none}
 .wnote span{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
