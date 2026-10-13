@@ -40,7 +40,7 @@ from collections import deque
 from concurrent.futures import ThreadPoolExecutor
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
-VERSION = "1.40"
+VERSION = "1.41"
 
 # ───────────────────────── 哨兵備份檔（.vsbk）─────────────────────────
 # 哨兵專用的備份格式：外面是自己的檔案格式，裡面用的是成熟、標準的加密方法（不自己發明加密）：
@@ -1299,7 +1299,7 @@ systemctl stop {u}
             name = acme_name(c["domain"])
             if code == 0:
                 log(f"已自動續期 {c['domain']} 的憑證")
-                COL.add_event("ok", f"「{name}」的安全憑證已經自動續期")
+                COL.add_event("ok", f"「{name}」的安全憑證已自動續期")
                 for st in CERT_STATE.values():
                     st["checked"] = 0                 # 下一分鐘就重新檢查，提醒會自己消失
             else:
@@ -1329,7 +1329,7 @@ def change_token():
         TOKEN = old
         return False, f"無法寫入設定檔：{e}", ""
     log("已換成新的存取密碼")
-    COL.add_event("info", "存取密碼已經換新")
+    COL.add_event("info", "存取密碼已換新")
     return True, "已換成新密碼", new
 
 
@@ -1726,7 +1726,7 @@ def pin_set(pin):
             return False, f"無法存檔：{e}"
     log("設定了 PIN 碼")
     COL.add_event("info", "PIN 碼登入已設定")
-    return True, "PIN 碼設定好了，下次登入可以直接輸入 PIN 碼"
+    return True, "PIN 碼設定好了"
 
 
 def pin_off(reason=""):
@@ -1784,7 +1784,7 @@ def pin_login(pin):
             pass
     if p is None:
         log("PIN 碼輸錯太多次，已自動關閉")
-        COL.add_event("bad", f"PIN 碼累計輸錯 {PIN_OFF_AFTER} 次，已自動關閉；請用密碼登入後重新設定")
+        COL.add_event("bad", f"PIN 碼輸錯 {PIN_OFF_AFTER} 次，已自動關閉")
         return False, "PIN 碼輸錯太多次，已經自動關閉，請改用密碼登入"
     if event:
         log(event)
@@ -2441,7 +2441,7 @@ class Collector:
                 notices.append(f"本月流量已用 {traffic['pct']:.0f}%")
             elif (traffic["projected"] and traffic["projected"] > traffic["limit"]
                   and traffic["days_left"] < traffic["cycle_days"] - 3):   # 週期剛開始幾天不預估，免得誤報
-                notices.append("照目前速度，本月流量會超過上限")
+                notices.append("本月流量預計會超過上限")
         if reboot:
             notices.append("需要重新開機")
         cloud = cloud_info()
@@ -2455,7 +2455,7 @@ class Collector:
         if updates and updates["security"]:
             notices.append(f"{updates['security']} 個安全更新")
         if BACKUP_ON and BK["ok_t"] and time.time() - BK["ok_t"] > 50 * 3600:
-            notices.append(f"已經 {int((time.time() - BK['ok_t']) // 86400)} 天沒有成功備份")
+            notices.append(f"{int((time.time() - BK['ok_t']) // 86400)} 天沒有成功備份")
         notices += cert_soon
 
         return {
@@ -2506,7 +2506,7 @@ def peer_error(e, url):
             return f"這個網址不是 VPS 哨兵（{url}），請確認網址和連接埠"
         return f"對方回應錯誤（代碼 {e.code}）"
     if isinstance(e, ValueError):          # 回傳的不是哨兵的資料
-        return f"這個網址打得開，但不是 VPS 哨兵（{url}）。請確認網址後面的連接埠，例如 https://網域:9443"
+        return f"這個網址不是 VPS 哨兵（{url}），請檢查連接埠，例如 https://網域:9443"
     if "timed out" in text or "timeout" in text.lower():
         return "等太久沒有回應：請確認對方開著，防火牆有開放這個連接埠"
     if "refused" in text:
@@ -2547,7 +2547,7 @@ def tg_api(token, method, params=None):
         if e.code in (401, 404):
             return None, "機器人密碼不對，請重新複製 @BotFather 給你的那一串"
         if e.code == 409:
-            return None, "這個機器人已經被其他程式（例如 n8n）拿去接收訊息，沒辦法自動尋找。建議另外建一個新的機器人，或直接手動填聊天編號"
+            return None, "這個機器人被其他程式（例如 n8n）佔用了，請手動填聊天編號，或另建一個機器人"
         if "chat not found" in desc:
             return None, "找不到這個聊天：請先傳一句話給機器人（群組的話要先把機器人加進去）"
         if "blocked" in desc:
@@ -2623,16 +2623,16 @@ def telegram(cfg):
             return False, "找到不只一個聊天，請先按「自動尋找」，點選要傳去哪裡"
         chat, picked = found[0]["id"], found[0]
     if ":" in chat and re.search(r"\d{5,}:", chat):
-        return False, "「要傳到哪裡」這格貼成機器人密碼了。這格可以留空，直接按「自動尋找」就好"
+        return False, "「要傳到哪裡」貼成機器人密碼了，這格可以留空，按「自動尋找」"
     if not re.fullmatch(r"-?\d{3,}|@\w{4,}", chat):
-        return False, "聊天編號格式不對，應該是一串數字（群組是 - 開頭）。不確定的話，這格留空，直接按「自動尋找」"
-    text = f"✅ VPS 哨兵：「{NAME}」的通知會傳到這裡" if act == "save" else f"🔔 這是 VPS 哨兵的測試通知（來自「{NAME}」）"
+        return False, "聊天編號是一串數字（群組是 - 開頭）；不確定就留空，按「自動尋找」"
+    text = f"✅ 「{NAME}」的通知會傳到這裡" if act == "save" else f"🔔 測試通知（{NAME}）"
     sent, err = tg_api(token, "sendMessage", {"chat_id": chat, "text": text})
     if err:
         return False, err
     if act == "test":
         where = "到「" + picked["name"] + "」" if picked else ""
-        return True, {"ok": True, "chat": chat, "message": f"測試通知已送出{where}，去 Telegram 看看有沒有收到"}
+        return True, {"ok": True, "chat": chat, "message": f"測試通知已送出{where}"}
     try:
         keep = max(0.0, min(47.0, float(cfg.get("keep") or 0)))
         write_conf({"TG_BOT_TOKEN": token, "TG_CHAT_ID": chat, "TG_KEEP_HOURS": f"{keep:g}"})
@@ -2679,7 +2679,7 @@ def ev_line(e):
     if t == "系統更新完成":
         return "✅ 系統更新完成"
     if t == "系統更新失敗":
-        return "❌ 系統更新失敗，可以到網頁上再試一次"
+        return "❌ 系統更新失敗"
     if t.startswith("已恢復："):
         return f"✅ 已解決：{t[4:]}"
     if "自動續期" in t:
@@ -3232,7 +3232,7 @@ def bk_to_tg(path, owner=None):
     if pw:
         cap += f"解開密碼：<tg-spoiler>{html.escape(pw)}</tg-spoiler>"   # 這份自己的密碼，只打得開這一份
     else:
-        cap += "已加密，解開密碼在哨兵網頁的「設定 → 備份」裡"
+        cap += "解開密碼在網頁的「設定 → 備份」"
     err, mid = tg_send_file(path, os.path.basename(path), cap)
     if not err and mid:
         old = BK["tg"].get(owner)
