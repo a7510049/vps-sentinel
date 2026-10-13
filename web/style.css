@@ -292,6 +292,16 @@ button{font:inherit;color:inherit}
 .wchev{display:grid;place-items:center;flex:none;width:28px;height:28px;border-radius:var(--r-pill);background:var(--track);color:var(--sub)}
 .wchev svg{width:16px;height:16px;transition:transform var(--t-slow) var(--ease)}
 .wallet>.card.open .wchev svg{transform:rotate(180deg)}
+/* 手機：名稱和第二行最多各兩行，長名稱整個看得到，不會只剩「香…」 */
+@media (max-width:700px){
+  .dash.m .head{align-items:flex-start}
+  .dash.m .head .avatar,.dash.m .head .wchev{margin-top:2px}
+  .dash.m .head h2{white-space:normal;align-items:flex-start}
+  .dash.m .head h2 span,.dash.m .head .sub{white-space:normal;display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;overflow:hidden;overflow-wrap:break-word}
+  .dash.m .head .upx{white-space:nowrap}
+  .dash.m .head .sub{margin-top:2px;line-height:1.4}
+  .dash.m .head h2 .iconbtn{margin-top:-3px}
+}
 .wpeek,.wbody{display:flow-root}
 .wpeek>div{padding-top:14px}
 .wpeek .minis{grid-template-columns:repeat(3,minmax(0,1fr))}

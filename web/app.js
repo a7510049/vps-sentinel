@@ -395,12 +395,13 @@ function wpeek(s){
 }
 function mcard(s, i, w){
   const lv = lvOf(s), key = keyOf(s), wc = w ? (WAL === key ? " open" : " peek") : "";
+  const ph = PHONE.matches;           // 手機：開機時間併到第二行，右邊空出來給名稱（名稱可以換行，不會被砍掉）
   let h = `<div class="card glass ${lv==="ok"?"":lv}${wc}" data-key="${esc(key)}" data-keyed style="--i:${i}"><div class="head" data-key="hd">${avatar(s)}
-    <div class="nm"><h2><span>${esc(s.name)}</span>${editBtn(s)}</h2><div class="sub">${s.online ? esc(place(s) || s.os) : (s.last_seen ? `離線・${ago(s.last_seen)}` : "目前連不上")}</div></div>`;
+    <div class="nm"><h2><span>${esc(s.name)}</span>${editBtn(s)}</h2><div class="sub">${s.online ? esc(place(s) || s.os) + (ph ? `<span class="upx">・開機 ${up(s.uptime)}</span>` : "") : (s.last_seen ? `離線・${ago(s.last_seen)}` : "目前連不上")}</div></div>`;
   const wchev = w ? `<span class="wchev">${I("chev")}</span>` : "";
   const body = b => w ? `${wchev}</div>${wpeek(s)}<div class="wbody" data-key="wb" data-keyed>${b}</div></div>` : `</div>${b}</div>`;
   if (!s.online) return h + body(`<div class="offline" data-key="off">${I("off")}<div>連不上這台主機<div class="sub">${s.last_seen?esc(seen(s))+"<br>":""}${esc(s.error||"")}</div>${peerBtn(s)}</div></div>`);
-  h += `<span class="uptime">開機 ${up(s.uptime)}</span>`;
+  if (!ph) h += `<span class="uptime">開機 ${up(s.uptime)}</span>`;
   let b = alerts(s);
   b += `<div class="metrics" data-key="mt">` + metric("cpu", "處理器", s.cpu, `${s.cores} 核`) +
        metric("mem", "記憶體", s.mem.pct, `${size(s.mem.used)} / ${size(s.mem.total)}`) +
