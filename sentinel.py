@@ -36,7 +36,7 @@ from collections import deque
 from concurrent.futures import ThreadPoolExecutor
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
-VERSION = "1.27"
+VERSION = "1.28"
 
 # ───────────────────────── 設定 ─────────────────────────
 

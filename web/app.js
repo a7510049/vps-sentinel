@@ -164,7 +164,7 @@ addEventListener("touchstart", hush, {passive:true});
 
 /* ═════════ 小工具 ═════════ */
 const DESK = matchMedia("(min-width: 1024px)"), PHONE = matchMedia("(max-width: 700px)");
-let LIST = [], SEL = store("vps-sel"), FILTER = "", WAL = store("vps-wal");   // WAL：手機疊卡目前打開的那一張（空的＝全部疊起來）
+let LIST = [], SEL = store("vps-sel"), FILTER = "", WAL = store("vps-wal");   // WAL：手機版目前打開的那張卡片（空的＝全部收起來）
 const open = {};
 function size(b){ if(!b) return "0 B"; const u=["B","KB","MB","GB","TB"]; let i=0; while(b>=1024&&i<4){b/=1024;i++} return (b<10&&i?b.toFixed(1):Math.round(b))+" "+u[i]; }
 const rate = b => size(b)+"/s";
@@ -384,7 +384,7 @@ function metric(icon, label, pct, detail){
   return `<div class="metric">${IC(icon, "")}
     <div class="row"><span>${label}<span class="sub">${detail}</span></span><b>${num(pct)}<small>%</small></b></div>${track(pct)}</div>`;
 }
-/* 手機錢包疊卡：收起來時只露出的那一條（三個小進度條＋第一則警告） */
+/* 手機卡片收起來時只露出的那一條（三個小進度條＋第一則警告） */
 function wpeek(s){
   if (!s.online) return `<div class="wpeek" data-key="wp"><div></div></div>`;
   const d = s.disks.find(x => x.path === "/") || s.disks[0], mi = (k, v) => `<div><div class="k">${k}<b>${num(v)}%</b></div>${track(v)}</div>`;
@@ -393,7 +393,7 @@ function wpeek(s){
   return `<div class="wpeek" data-key="wp"><div data-keyed><div class="minis" data-key="mi">${mi("處理器", s.cpu)}${mi("記憶體", s.mem.pct)}${d ? mi("磁碟", d.pct) : ""}</div>${note}</div></div>`;
 }
 function mcard(s, i, w){
-  const lv = lvOf(s), key = keyOf(s), wc = w ? (WAL === key ? " open" : " peek" + (w.stk ? " stk" : "")) : "";
+  const lv = lvOf(s), key = keyOf(s), wc = w ? (WAL === key ? " open" : " peek") : "";
   let h = `<div class="card glass ${lv==="ok"?"":lv}${wc}" data-key="${esc(key)}" data-keyed style="--i:${i}"><div class="head" data-key="hd">${avatar(s)}
     <div class="nm"><h2><span>${esc(s.name)}</span>${editBtn(s)}</h2><div class="sub">${s.online ? esc(place(s) || s.os) : (s.last_seen ? `離線・${ago(s.last_seen)}` : "目前連不上")}</div></div>`;
   const wchev = w ? `<span class="wchev">${I("chev")}</span>` : "";
@@ -427,12 +427,12 @@ function summary(n, clickable){
 function renderMobile(list, n, time){
   const many = true;
   const shown = FILTER ? list.filter(s=>lvOf(s)===FILTER) : list, g = greet(n, list.length);
-  const w = PHONE.matches && list.length > 1;     // 兩台以上的手機版：像錢包一樣疊起來，點一張才展開
+  const w = PHONE.matches && list.length > 1;     // 兩台以上的手機版：卡片平常只露出一條，點一張才展開
   return `<div class="dash m" data-key="m"><header class="bar"><span class="mini">VPS 哨兵</span><span class="grow"></span>
     <button class="cap glass ${list.some(s=>s.self_has)?"hasnew":""}" data-settings title="設定">${I("gear")}</button><button class="cap glass" data-logout title="登出">${I("logout")}</button></header>
     <div class="hero"><div class="hello">${g.hi}</div><h1 data-x>${g.line}</h1><div class="meta"><span class="live"></span>更新於 ${time}</div></div>
     ${summary(n, many)}
-    <div class="grid${w ? " wallet" : ""}" data-keyed>${shown.length ? shown.map((s, i) => mcard(s, i, w && {stk: keyOf(s) !== WAL && shown[i+1] && keyOf(shown[i+1]) !== WAL})).join("") : `<div class="empty" data-key="empty">這個分類目前沒有主機 👍</div>`}</div></div>`;
+    <div class="grid${w ? " wallet" : ""}" data-keyed>${shown.length ? shown.map((s, i) => mcard(s, i, w)).join("") : `<div class="empty" data-key="empty">這個分類目前沒有主機 👍</div>`}</div></div>`;
 }
 
 /* ═════════ 電腦版 ═════════ */
@@ -1067,7 +1067,7 @@ function foldLite(more, on){
       .finished.then(a => { if (!open[more.querySelector("[data-toggle]").dataset.toggle]) more.classList.remove("open"); a.cancel(); }).catch(() => {});
   }
 }
-/* 手機錢包疊卡：點一張展開、再點上面那一排收回去。
+/* 手機卡片：點一張展開、再點上面那一排收回去。
    先記下每張卡片的間距、露出的那一條、內容的高度，換好以後再從舊的數字平順變到新的數字；
    跟「容器與服務」一樣用固定的數字做高度動畫，iPhone 才不會卡 */
 function walletSet(k){
@@ -1084,8 +1084,7 @@ function walletSet(k){
   parts.forEach(([el]) => { (el._wa || []).forEach(a => a.cancel()); el._wa = []; });
   // 只換卡片的狀態，不整頁重畫（手機上整頁重畫會讓動畫第一格頓一下）；下次自動更新算出來的會一模一樣
   const cs = [...g.children].filter(c => c.matches(".card") && !c._leaving);
-  cs.forEach((c, i) => { const on = c.dataset.key === k, nx = cs[i+1];
-    c.classList.toggle("open", on); c.classList.toggle("peek", !on); c.classList.toggle("stk", !on && !!nx && nx.dataset.key !== k); });
+  cs.forEach(c => { const on = c.dataset.key === k; c.classList.toggle("open", on); c.classList.toggle("peek", !on); });
   const to = parts.map(val), dur = T.slow;
   const c = k && [...g.children].find(x => x.dataset.key === k), top = c ? c.getBoundingClientRect().top : 0;   // 動畫開始前量：這時是最後的位置
   parts.forEach(([el, p], i) => {
@@ -1685,7 +1684,7 @@ document.addEventListener("click", async e => {
     return switchHost();
   }
 
-  const wc = t.closest(".wallet>.card");             // 手機疊卡：點收著的卡片就打開；點打開那張的最上面一排就收回去
+  const wc = t.closest(".wallet>.card");             // 手機卡片：點收著的卡片就打開；點打開那張的最上面一排就收回去
   if (wc && !t.closest("button,a,input,[data-range]")) {
     const k = wc.dataset.key;
     if (WAL !== k) walletSet(k); else if (t.closest(".head")) walletSet("");
