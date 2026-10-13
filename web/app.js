@@ -279,12 +279,10 @@ function updateBtn(s){
 function greet(n, total){
   const h = new Date().getHours();
   const hi = h < 5 ? "夜深了 🌙" : h < 11 ? "早安 ☀️" : h < 14 ? "午安 🌤️" : h < 18 ? "下午好 ☕" : "晚安 🌙";
-  const word = total > 1 ? "所有主機" : "主機";
-  const line = n.bad ? `有 ${n.bad} 台<em>出問題了</em>` : n.warn ? `有 ${n.warn} 台<em>需要留意</em>` : `${word}都<em>很健康</em>`;
-  const on = PREF.show.weather && WX;
-  // 第一行：問候（左）＋天氣（右），同樣的小字；第二行：主機狀態；第三行：天氣小提醒
-  return {hi: on ? hi.split(" ")[0] : hi, line,
-    wx: on ? `${WX.icon} <b>${WX.t}°</b> ${esc(WX.word)}` : "", tip: on ? esc(WX.tip || "") : ""};
+  const on = PREF.show.weather && WX, [w, e] = hi.split(" ");
+  // 問候當標題（有天氣時不加表情符號，免得跟天氣圖示重複）；主機狀態交給下面的三格數字
+  return {hi: `<em>${w}</em>${on ? "" : " " + e}`,
+    wx: on ? `<div class="wxb glass"><span class="wi">${WX.icon}</span><div><b>${WX.t}°</b>${esc(WX.word)}${WX.tip ? `<small>${esc(WX.tip)}</small>` : ""}</div></div>` : ""};
 }
 
 /* ═════════ 天氣：問候旁邊顯示目前位置的天氣和小提醒 ═════════ */
@@ -486,7 +484,7 @@ function mcard(s, i, w){
   return h + body(b);
 }
 function summary(n, clickable){
-  const p = (k, label) => `<button class="pill glass ${k} ${FILTER===k?"on":""}" ${clickable?`data-filter="${k}"`:""}><span class="dot ${k}"></span>${label} <b class="num">${n[k]}</b></button>`;
+  const p = (k, label) => `<button class="pill glass ${k} ${FILTER===k?"on":""} ${n[k]&&k!=="ok"?"has":""}" ${clickable?`data-filter="${k}"`:""}><span class="dot ${k}"></span>${label} <b class="num">${n[k]}</b></button>`;
   return `<div class="summary ${FILTER&&clickable?"filtering":""}"><span class="pind" data-keep></span>${p("ok","正常")}${p("warn","注意")}${p("bad","異常")}</div>`;
 }
 function renderMobile(list, n, time){
@@ -495,7 +493,7 @@ function renderMobile(list, n, time){
   const w = PHONE.matches && list.length > 1;     // 兩台以上的手機版：卡片平常只露出一條，點一張才展開
   return `<div class="dash m" data-key="m"><header class="bar"><span class="mini">VPS 哨兵</span><span class="grow"></span>
     <button class="cap glass ${list.some(s=>s.self_has)?"hasnew":""}" data-settings title="設定">${I("gear")}</button><button class="cap glass" data-logout title="登出">${I("logout")}</button></header>
-    <div class="hero"><div class="hello"><span data-x>${g.hi}</span><span class="wxs" data-x>${g.wx}</span></div><h1 data-x>${g.line}</h1><div class="wxtip" data-x>${g.tip}</div><div class="meta"><span class="live"></span>更新於 ${time}</div></div>
+    <div class="hero"><h1 data-x>${g.hi}</h1><div class="meta"><span class="live"></span>更新於 ${time}</div><div class="wxw" data-x>${g.wx}</div></div>
     ${summary(n, many)}
     <div class="grid${w ? " wallet" : ""}" data-keyed>${shown.length ? shown.map((s, i) => mcard(s, i, w)).join("") : `<div class="empty" data-key="empty">這個分類目前沒有主機 👍</div>`}</div></div>`;
 }
@@ -666,7 +664,8 @@ function renderDesk(list, n, time){
   const sel = list.find(s=>keyOf(s)===SEL) || list[0], g = greet(n, list.length);
   return `<div class="dash d" data-key="d"><aside class="side glass">
       <div class="brand"><svg class="" viewBox="0 0 512 512" aria-hidden="true"><defs><linearGradient id="lbbr" x1="0" y1="0" x2="0" y2="1"><stop offset="0" style="stop-color:color-mix(in srgb,var(--a1) 70%,#fff)"/><stop offset="1" style="stop-color:var(--a2)"/></linearGradient><linearGradient id="lhbr" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#fff" stop-opacity=".24"/><stop offset=".45" stop-color="#fff" stop-opacity="0"/></linearGradient><mask id="lmbr"><rect width="512" height="512" fill="#fff"/><path d="M204 258l36 36 72-76" fill="none" stroke="#000" stroke-width="30" stroke-linecap="round" stroke-linejoin="round"/></mask></defs><rect width="512" height="512" rx="115" fill="url(#lbbr)"/><rect width="512" height="512" rx="115" fill="url(#lhbr)"/><path d="M256 108 371 150c9 3 15 12 15 22v72c0 84-52 140-122 168-5 2-11 2-16 0-70-28-122-84-122-168v-72c0-10 6-19 15-22Z" fill="#fff" mask="url(#lmbr)" transform="translate(256 262) scale(.88) translate(-256 -258)"/></svg><div><h1>VPS 哨兵</h1><div class="meta"><span class="live"></span>更新於 ${time}</div></div></div>
-      <div class="greet"><div class="hello"><span data-x>${g.hi}</span><span class="wxs" data-x>${g.wx}</span></div><h2 data-x>${g.line}</h2><div class="wxtip" data-x>${g.tip}</div></div>
+      <div class="greet"><h2 data-x>${g.hi}</h2></div>
+      <div class="wxw" data-x>${g.wx}</div>
       ${summary(n, true)}
       <div class="hosts" data-keyed>${(FILTER ? list.filter(s=>lvOf(s)===FILTER) : list).map(s=>hostItem(s, s===sel)).join("") || `<div class="empty" data-key="empty">這個分類目前沒有主機 👍</div>`}</div>
       <div class="side-foot"><span class="sub">${list.length} 台主機</span>
