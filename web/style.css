@@ -12,6 +12,7 @@
   /* ── 共用規則（所有元件只能用這些值） ── */
   --r-sm:8px; --r-md:14px; --r-lg:20px; --r-xl:30px; --r-pill:999px;          /* 圓角：小元件／中區塊／大區塊／卡片與面板／膠囊 */
   --fs-xs:11.5px; --fs-s:12.5px; --fs-m:13.5px; --fs-l:15.5px; --fs-xl:18px; --fs-2xl:27px; --fs-3xl:36px;   /* 字級 */
+  --fs-input:16px;                                                             /* 手機輸入框最小字級：小於這個 iPhone 一點輸入框就會自己放大畫面 */
   --t-fast:.2s; --t-mid:.35s; --t-slow:.6s;                                   /* 動畫時間：快（按下、淡出）／中（展開、切換）／慢（進場、數字） */
   --ease:cubic-bezier(.22,1,.36,1); --spring:cubic-bezier(.34,1.4,.64,1); --exit:cubic-bezier(.4,0,1,1);   /* 曲線：平順／微彈／離場 */
   --ring:inset 0 0 0 1px var(--line);                                          /* 細邊框 */
@@ -46,7 +47,7 @@
 [data-motion="off"]{transition:none}
 
 *{box-sizing:border-box;margin:0;-webkit-tap-highlight-color:transparent}
-html{background:var(--bg);transition:background var(--t-mid)}
+html{background:var(--bg);transition:background var(--t-mid);touch-action:manipulation}   /* 連點不會變成雙擊放大；雙指縮放照樣可以 */
 body{color:var(--text);min-height:100vh;font:15px/1.5 var(--font);zoom:var(--zoom);
   padding:0 16px calc(env(safe-area-inset-bottom) + 40px);-webkit-font-smoothing:antialiased;overflow-x:hidden;transition:color var(--t-mid)}
 button{font:inherit;color:inherit}
@@ -614,6 +615,8 @@ a.plink:hover{color:var(--a1)}
 .field{width:100%;font:inherit;font-size:var(--fs-l);padding:13px 16px;border-radius:var(--r-md);border:0;color:var(--text);
   background:var(--inset);box-shadow:var(--ring);outline:none;transition:box-shadow var(--t-fast)}
 .field:focus{box-shadow:inset 0 0 0 2px var(--accent)}
+@media (pointer:coarse){   /* 手機：輸入框字級乘上文字大小後至少 16px，點下去畫面不會自己放大 */
+  .field,.dialog .form .field,.dialog .form .lrow .field{font-size:max(var(--fs-l),calc(var(--fs-input) / var(--zoom)))}}
 .login .field{margin:20px 0 10px}
 .remember{display:flex;align-items:center;justify-content:center;gap:8px;font-size:var(--fs-m);font-weight:700;color:var(--sub);cursor:pointer;margin-bottom:6px;user-select:none}
 .remember input{appearance:none;-webkit-appearance:none;width:20px;height:20px;margin:0;border-radius:var(--r-sm);background:var(--inset);box-shadow:var(--ring);
