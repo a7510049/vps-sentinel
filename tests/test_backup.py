@@ -1,4 +1,4 @@
-"""每日備份的測試：打包內容正確（資料庫是完整的一份）、加密碼後傳到 Telegram、兩台互相存一份、網頁可以下載。
+"""每日備份的測試：打包內容正確（資料庫是完整的一份）、加密格式打得開也防竄改、兩台都有兩台的備份、Telegram、下載、換密碼。
 
 開兩個哨兵：A 設定了 B（PEERS），B 沒有設定 Telegram，由 A 幫它傳。只用 Python 內建模組。
 """
@@ -120,7 +120,20 @@ class BackupTest(unittest.TestCase):
         except urllib.error.HTTPError as e:
             return e.code, e.read(), e.headers
 
-    def check_tar(self, data, name):
+    def decrypt(self, data, key):
+        """用哨兵自己的還原指令解開（跟使用者在新主機上做的一樣）"""
+        with tempfile.TemporaryDirectory() as d:
+            src = os.path.join(d, "x.vsbk")
+            with open(src, "wb") as f:
+                f.write(data)
+            out = subprocess.run([sys.executable, os.path.join(ROOT, "sentinel.py"), "--decrypt", src],
+                                 input=key + "\n", capture_output=True, text=True, cwd=d)
+            if out.returncode != 0:
+                return None, out.stderr
+            with open(os.path.join(d, "x.tar.gz"), "rb") as f:
+                return f.read(), out.stdout
+
+    def check_tar(self, data):
         with tarfile.open(fileobj=io.BytesIO(data), mode="r:gz") as t:
             names = t.getnames()
             src = self.src.lstrip("/")
@@ -129,70 +142,105 @@ class BackupTest(unittest.TestCase):
             self.assertFalse([n for n in names if n.endswith("-wal") or n.endswith("-shm")])
             self.assertTrue([n for n in names if n.startswith("還原說明")])
             self.assertTrue([n for n in names if n.endswith(".conf")])  # 哨兵自己的設定
+            self.assertFalse([n for n in names if n.endswith(".vsbk")])  # 不會把備份又包進備份裡
             with tempfile.TemporaryDirectory() as d:
                 with open(os.path.join(d, "db"), "wb") as f:
                     f.write(t.extractfile(f"{src}/x-ui.db").read())
                 c = sqlite3.connect(os.path.join(d, "db"))
                 self.assertEqual(c.execute("SELECT count(*) FROM users").fetchone()[0], 50)   # 資料庫是完整的
                 c.close()
-        self.assertTrue(name.startswith(name.split("-")[0]))
 
     def wait_done(self, port):
         deadline = time.time() + 90
         while time.time() < deadline:
             _, st, _ = self.call(port, "/api/backup")
-            if not st["running"] and st["last"]:
+            if not st["running"] and st["last"] and st["last"]["t"] > self.t0:
                 return st
             time.sleep(0.5)
         self.fail("備份 90 秒內沒有完成")
 
+    def files(self, host, who):
+        d = os.path.join(host[2], "data", "backups", who)
+        return sorted(os.path.join(d, f) for f in os.listdir(d))
+
+    def run_backup(self):
+        self.t0 = time.time()
+        code, d, _ = self.call(self.a[1], "/api/backup", {"action": "run"})
+        self.assertEqual(code, 200, d)
+        return self.wait_done(self.a[1])
+
     def test_flow(self):
         a, b = self.a[1], self.b[1]
-        code, d, _ = self.call(a, "/api/backup", {"action": "run"})
-        self.assertEqual(code, 200, d)
-        st = self.wait_done(a)
+        legacy = os.path.join(self.a[2], "data", "backups", "A-old.tar.gz")       # 1.30 版留下的沒加密備份
+        os.makedirs(os.path.dirname(legacy), exist_ok=True)
+        with open(legacy, "wb") as f:
+            f.write(b"old")
+        st = self.run_backup()
         last = st["last"]
         self.assertTrue(last["ok"], last)
-        self.assertTrue(st["key"])
         self.assertEqual([x["where"] for x in last["to"]],
-                         ["存在這台主機", "傳到 Telegram", "存到「B」的主機上", "「B」的備份也存了一份在這台的主機上"])
+                         ["存在這台的主機上", "傳到 Telegram", "存到「B」的主機上", "「B」的備份也存了一份在這台的主機上"])
         self.assertIn("其他", last["items"])
         self.assertIn("哨兵設定", last["items"])
+        self.assertFalse(os.path.exists(legacy))
 
-        # 兩台各存一份對方的
-        mine = os.listdir(os.path.join(self.a[2], "data", "backups"))
-        self.assertEqual(len(mine), 1)
-        with open(os.path.join(self.a[2], "data", "backups", mine[0]), "rb") as f:
-            self.check_tar(f.read(), mine[0])
-        on_b = os.listdir(os.path.join(self.b[2], "data", "peer-backups", "A"))
-        self.assertEqual(on_b, mine)
-        on_a = os.listdir(os.path.join(self.a[2], "data", "peer-backups", "B"))
-        self.assertEqual(len(on_a), 1)
-        self.assertTrue(on_a[0].startswith("B-"))
+        # 兩台都有兩台的備份，而且是同一組解開密碼
+        key = st["key"]
         _, bst, _ = self.call(b, "/api/backup")
-        self.assertEqual(bst["got"][0]["name"], "A")
-        _, ast, _ = self.call(a, "/api/backup")
-        self.assertEqual(ast["got"][0]["name"], "B")
+        self.assertEqual(bst["key"], key)
+        for host in (self.a, self.b):
+            for who in ("A", "B"):
+                fs = self.files(host, who)
+                self.assertEqual(len(fs), 1, (host[2], who))
+                with open(fs[0], "rb") as f:
+                    data = f.read()
+                self.assertTrue(data.startswith(b"VSBK"))
+                self.assertNotIn(b"settings.json", data)                  # 看不到裡面的東西
+                plain, _ = self.decrypt(data, key)
+                self.check_tar(plain)
+        self.assertEqual([c["name"] for c in st["copies"]], ["A", "B"])
+        self.assertEqual([c["name"] for c in bst["copies"]], ["B", "A"])
 
-        # Telegram：A 自己一份，B 沒設定 Telegram，A 幫它傳一份；都加了密碼，用解開密碼打得開
+        # 密碼錯、檔案被改過：都打不開
+        with open(self.files(self.a, "A")[0], "rb") as f:
+            data = f.read()
+        plain, err = self.decrypt(data, key + "x")
+        self.assertIsNone(plain)
+        self.assertIn("解開密碼不對", err)
+        bad = bytearray(data)
+        bad[len(bad) // 2] ^= 1
+        self.assertIsNone(self.decrypt(bytes(bad), key)[0])
+        self.assertIsNone(self.decrypt(b"hello" * 20, key)[0])
+
+        # Telegram：A 自己一份，B 沒設定 Telegram，A 幫它傳一份；都是加密的哨兵備份檔
         self.assertEqual(sorted(x[0].split("-")[0] for x in DOCS), ["A", "B"])
         for fn, data, cap in DOCS:
-            self.assertTrue(fn.endswith(".tar.gz.enc"))
-            self.assertFalse(data.startswith(b"\x1f\x8b"))             # 不是直接看得到的壓縮檔
-            out = subprocess.run(["openssl", "enc", "-d", "-aes-256-cbc", "-pbkdf2", "-iter", "200000", "-pass", f"pass:{st['key']}"],
-                                 input=data, capture_output=True)
-            self.assertEqual(out.returncode, 0)
-            self.check_tar(out.stdout, fn)
-        self.assertIn("跟「A」的一樣", [c for f, _, c in DOCS if f.startswith("B-")][0])
+            self.assertTrue(fn.endswith(".vsbk"))
+            self.assertIn("已加密", cap)
+            self.check_tar(self.decrypt(data, key)[0])
 
-        # 網頁下載：這台、透過 A 下載 B 的
+        # 網頁下載：這台、透過 A 下載 B 的（都是加密的）
         code, data, h = self.call(a, "/api/backup-file", raw=True)
         self.assertEqual(code, 200)
-        self.check_tar(data, "A")
+        self.check_tar(self.decrypt(data, key)[0])
         code, data, h = self.call(a, "/api/backup-file?node=B", raw=True)
         self.assertEqual(code, 200)
         self.assertTrue(urllib.parse.unquote(h["X-Backup-Name"]).startswith("B-"))
-        self.check_tar(data, "B")
+        self.check_tar(self.decrypt(data, key)[0])
+
+        # 改成自己的密碼：兩台一起改，之後的備份用新密碼（B 會重新打包，不拿舊密碼做的那份）
+        code, d, _ = self.call(a, "/api/backup", {"action": "key", "key": " 太短 ", "sync": True})
+        self.assertEqual(code, 400)
+        code, d, _ = self.call(a, "/api/backup", {"action": "key", "key": "我的新密碼 2026!", "sync": True})
+        self.assertEqual(code, 200, d)
+        self.assertEqual(self.call(b, "/api/backup")[1]["key"], "我的新密碼 2026!")
+        st = self.run_backup()
+        self.assertTrue(st["last"]["ok"], st["last"])
+        for who in ("A", "B"):
+            with open(self.files(self.a, who)[-1], "rb") as f:
+                self.check_tar(self.decrypt(f.read(), "我的新密碼 2026!")[0])
+        with open(self.files(self.a, "A")[0], "rb") as f:            # 以前的備份還是用舊密碼開
+            self.check_tar(self.decrypt(f.read(), key)[0])
 
         # 設定開關會寫進設定檔
         code, d, _ = self.call(a, "/api/backup", {"action": "set", "on": False})
@@ -205,11 +253,11 @@ class BackupTest(unittest.TestCase):
         b = self.b[1]
         code, _, _ = self.call(b, "/api/backup-store?from=X&file=x.tar.gz", b"abc", token="wrong")
         self.assertEqual(code, 401)
-        for bad in ("../x.tar.gz", "x.sh", ".x.tar.gz"):
+        for bad in ("../x.vsbk", "x.sh", ".x.vsbk", "x.tar.gz"):
             code, d, _ = self.call(b, "/api/backup-store?from=X&file=" + urllib.parse.quote(bad), b"abc")
             self.assertEqual(code, 400, bad)
-        self.assertFalse(os.path.exists(os.path.join(self.b[2], "data", "peer-backups", "X")))
-        self.assertFalse(os.path.exists(os.path.join(self.tmp, "B", "data", "x.tar.gz")))
+        self.assertFalse(os.path.exists(os.path.join(self.b[2], "data", "backups", "X")))
+        self.assertFalse(os.path.exists(os.path.join(self.tmp, "B", "data", "x.vsbk")))
 
 
 if __name__ == "__main__":
