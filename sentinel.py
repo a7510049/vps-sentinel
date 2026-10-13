@@ -40,7 +40,7 @@ from collections import deque
 from concurrent.futures import ThreadPoolExecutor
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
-VERSION = "1.32"
+VERSION = "1.33"
 
 # ───────────────────────── 哨兵備份檔（.vsbk）─────────────────────────
 # 哨兵專用的備份格式：外面是自己的檔案格式，裡面用的是成熟、標準的加密方法（不自己發明加密）：
@@ -279,7 +279,8 @@ TG_FILE_MAX = 49 * 1024 * 1024                    # Telegram 機器人最多只�
 BK_SKIP_DIRS = {"cache", ".cache", "tmp", "log", "logs", "node_modules"}
 BK_RUN = threading.Lock()                         # 同一時間只跑一次備份
 BK_MAKE = threading.Lock()                        # 同一時間只打包一份
-BK = {"last": None, "ok_t": None, "day": None, "key_t": 0, "names": {}, "running": False}  # 會存檔
+BK = {"last": None, "ok_t": None, "day": None, "key_t": 0, "names": {}, "tg": {}, "running": False}  # 會存檔
+# tg：每台主機在 Telegram 裡最新那份備份的訊息 [聊天編號, 訊息編號]，傳了新的就把舊的刪掉
 # names：每台主機上次用的名稱（""＝這台；其他主機用代號），主機改名後把舊資料夾搬到新名稱
 
 TRAFFIC_LIMIT_GB = _num(C.get("TRAFFIC_LIMIT_GB"), 0)            # 0 = 不限制
@@ -1719,7 +1720,7 @@ class Collector:
             TG_MSGS.extend(list(m) for m in (st.get("tg_msgs") or []) if len(m) == 3)
             self.saved_boot = st.get("boot")
             bk = st.get("backup") or {}
-            BK.update({k: bk[k] for k in ("last", "ok_t", "day", "key_t", "names") if k in bk})
+            BK.update({k: bk[k] for k in ("last", "ok_t", "day", "key_t", "names", "tg") if k in bk})
             if st.get("prev_keys") is not None:
                 self.prev_keys = {k: tuple(v) for k, v in st["prev_keys"].items()}
             log(f"已讀取存檔：歷史 {len(self.hist)}/{len(self.h24)}/{len(self.h7d)} 筆、事件 {len(self.events)} 筆、流量 {len(self.traffic['days'])} 天")
@@ -1732,7 +1733,7 @@ class Collector:
                   "events": list(self.events), "traffic": self.traffic,
                   "prev_keys": self.prev_keys, "peer_seen": dict(PEER_SEEN),
                   "tg_sent": dict(TG_SENT), "tg_msgs": list(TG_MSGS),
-                  "backup": {k: BK[k] for k in ("last", "ok_t", "day", "key_t", "names")}}
+                  "backup": {k: BK[k] for k in ("last", "ok_t", "day", "key_t", "names", "tg")}}
         try:
             os.makedirs(DATA_DIR, exist_ok=True)
             tmp = self.state_path() + ".tmp"
@@ -2744,9 +2745,9 @@ def fmt_size(n):
 
 
 def tg_send_file(path, filename, caption):
-    """把檔案傳到 Telegram（最多 50 MB）；成功回傳空字串，失敗回傳原因"""
+    """把檔案傳到 Telegram（最多 50 MB）；回傳 (失敗原因或空字串, 訊息編號)"""
     if os.path.getsize(path) > TG_FILE_MAX:
-        return f"檔案太大（{fmt_size(os.path.getsize(path))}），Telegram 只收 50 MB 以下的檔案"
+        return f"檔案太大（{fmt_size(os.path.getsize(path))}），Telegram 只收 50 MB 以下的檔案", None
     b = "----vs" + secrets.token_hex(12)
     fields = {"chat_id": TG_CHAT, "caption": caption, "parse_mode": "HTML", "disable_notification": "true"}
     head = "".join(f'--{b}\r\nContent-Disposition: form-data; name="{k}"\r\n\r\n{v}\r\n' for k, v in fields.items())
@@ -2758,25 +2759,41 @@ def tg_send_file(path, filename, caption):
                                  headers={"Content-Type": f"multipart/form-data; boundary={b}"})
     try:
         with urllib.request.urlopen(req, timeout=300) as r:
-            json.loads(r.read())
-        return ""
+            d = json.loads(r.read())
+        return "", (d.get("result") or {}).get("message_id")
     except urllib.error.HTTPError as e:
         try:
             desc = json.loads(e.read()).get("description", "")
         except Exception:  # noqa: BLE001
             desc = ""
         if e.code == 413 or "too big" in desc:
-            return "檔案太大，Telegram 不收"
-        return f"Telegram 回應錯誤：{desc or e.code}"
+            return "檔案太大，Telegram 不收", None
+        return f"Telegram 回應錯誤：{desc or e.code}", None
     except Exception:  # noqa: BLE001
-        return "連不上 Telegram"
+        return "連不上 Telegram", None
+
+
+def tg_private():
+    """通知是傳到私人對話（不是群組或頻道）：私人對話的編號是正的數字"""
+    return TG_CHAT.isdigit()
 
 
 def bk_to_tg(path, owner=None):
-    """把備份檔（已經加密）傳到 Telegram；owner 是幫別台傳的時候那台的名稱"""
-    cap = (f"🗄 <b>{html.escape(owner or NAME)}</b>　每日備份（{fmt_size(os.path.getsize(path))}）\n"
-           "已加密，解開密碼在哨兵網頁的「設定 → 備份」裡")
-    return tg_send_file(path, os.path.basename(path), cap)
+    """把備份檔（已經加密）傳到 Telegram；owner 是幫別台傳的時候那台的名稱。
+    私人對話會附上打碼的解開密碼；傳成功後把同一台前一份備份的訊息刪掉，Telegram 裡每台只留最新一份"""
+    owner = owner or NAME
+    cap = f"🗄 <b>{html.escape(owner)}</b>　每日備份（{fmt_size(os.path.getsize(path))}）\n"
+    if tg_private():
+        cap += f"解開密碼（點一下顯示）：<tg-spoiler><code>{html.escape(bk_key())}</code></tg-spoiler>"
+    else:
+        cap += "已加密，解開密碼在哨兵網頁的「設定 → 備份」裡（群組裡不附密碼）"
+    err, mid = tg_send_file(path, os.path.basename(path), cap)
+    if not err and mid:
+        old = BK["tg"].get(owner)
+        BK["tg"][owner] = [TG_CHAT, mid]
+        if old:
+            tg_api(TG_BOT, "deleteMessage", {"chat_id": old[0], "message_id": old[1]})   # 超過 48 小時的 Telegram 不讓刪，就留著
+    return err
 
 
 def bk_store(src, fname, stream, length, aliases=()):

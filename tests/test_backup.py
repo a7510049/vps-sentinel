@@ -24,18 +24,22 @@ from test_smoke import ROOT, TOKEN, free_port
 
 HA, HB = "Oracle Cloud", "香港 Azure"
 FNAME = r"^{} \d{{4}}-\d\d-\d\d \d\d\.\d\d( \(\d+\))?\.vsbk$"
-DOCS = []
+DOCS = []                                                                       # 假的 Telegram 收到的檔案 [(檔名, 內容, 說明文字, 訊息編號)]
+DELETED = []                                                                    # 假的 Telegram 被刪掉的訊息編號
 
 
 def is_old(path):
     """測試裡假裝的 1.31 版舊檔案"""
     with open(path, "rb") as f:
-        return f.read(8) == b"VSBK-old"                                          # 假的 Telegram 收到的檔案 [(檔名, 內容, 說明文字)]
+        return f.read(8) == b"VSBK-old"
 
 
 class FakeTG(http.server.BaseHTTPRequestHandler):
     def do_POST(self):
         body = self.rfile.read(int(self.headers.get("Content-Length") or 0))
+        mid = 1
+        if self.path.endswith("/deleteMessage"):
+            DELETED.append(int(urllib.parse.parse_qs(body.decode())["message_id"][0]))
         if self.path.endswith("/sendDocument"):
             b = self.headers["Content-Type"].split("boundary=")[1].encode()
             parts = {}
@@ -44,8 +48,9 @@ class FakeTG(http.server.BaseHTTPRequestHandler):
                 name = re.search(rb'name="([^"]+)"', head).group(1).decode()
                 fn = re.search(rb'filename="([^"]+)"', head)
                 parts[name] = (fn.group(1).decode() if fn else None, data[:-2])
-            DOCS.append((parts["document"][0], parts["document"][1], parts["caption"][1].decode()))
-        out = b'{"ok":true,"result":{"message_id":1}}'
+            mid = 100 + len(DOCS)
+            DOCS.append((parts["document"][0], parts["document"][1], parts["caption"][1].decode(), mid))
+        out = json.dumps({"ok": True, "result": {"message_id": mid}}).encode()
         self.send_response(200)
         self.send_header("Content-Length", str(len(out)))
         self.end_headers()
@@ -240,12 +245,14 @@ class BackupTest(unittest.TestCase):
 
         # Telegram：A 自己一份，B 沒設定 Telegram，A 幫它傳一份；都是加密的哨兵備份檔
         self.assertEqual(sorted(re.sub(r" \d{4}-.*", "", x[0]) for x in DOCS), sorted([HA, HB]))
-        for fn, data, cap in DOCS:
+        for fn, data, cap, _ in DOCS:
             who = HA if fn.startswith(HA) else HB
             self.assertRegex(fn, FNAME.format(re.escape(who)))
             self.assertIn(f"<b>{who}</b>", cap)                                   # 說明文字跟檔名用同一個名稱
-            self.assertIn("已加密", cap)
+            self.assertIn(f"<tg-spoiler><code>{key}</code></tg-spoiler>", cap)    # 私人對話：附上打碼的解開密碼
             self.check_tar(self.decrypt(data, key)[0])
+        first = [x[3] for x in DOCS]
+        self.assertEqual(DELETED, [])
 
         # 網頁下載：這台、透過 A 下載 B 的（都是加密的）
         code, data, h = self.call(a, "/api/backup-file", raw=True)
@@ -269,6 +276,12 @@ class BackupTest(unittest.TestCase):
                 self.check_tar(self.decrypt(f.read(), "我的新密碼 2026!")[0])
         with open([f for f in self.files(self.a, HA) if not is_old(f)][0], "rb") as f:   # 以前的備份還是用舊密碼開
             self.check_tar(self.decrypt(f.read(), key)[0])
+
+        # Telegram 裡每台只留最新一份：新的傳成功後，前一份被刪掉；新的說明附的是新密碼
+        self.assertEqual(sorted(DELETED), sorted(first))
+        for fn, data, cap, _ in DOCS[len(first):]:
+            self.assertIn("<tg-spoiler><code>我的新密碼 2026!</code></tg-spoiler>", cap)
+            self.check_tar(self.decrypt(data, "我的新密碼 2026!")[0])
 
         # 設定開關會寫進設定檔
         code, d, _ = self.call(a, "/api/backup", {"action": "set", "on": False})
