@@ -286,12 +286,8 @@ button{font:inherit;color:inherit}
 [data-density="compact"] .spark,[data-density="compact"] .stats{margin-top:10px}
 [data-density="compact"] .card{border-radius:var(--r-lg)}
 
-/* ═════════ 手機：錢包式疊卡（兩台以上才有，見 app.js 的 walletSet） ═════════ */
-.wallet{--ov:34px}
+/* ═════════ 手機：點一下展開的卡片（兩台以上才有，見 app.js 的 walletSet） ═════════ */
 .wallet>.card.peek{cursor:pointer}
-.wallet>.card.stk{padding-bottom:calc(var(--pad) + var(--ov))}                 /* 下一張會蓋住這一段，內容往上留 */
-.wallet>.card.stk+.card{margin-top:calc(-1 * var(--ov) - var(--gap))}         /* 疊上去：只露出上面那一條 */
-.wallet>.card.stk+.card:not(.bad,.warn){box-shadow:0 -12px 24px -18px rgba(0,0,0,.5),var(--shadow)}   /* 疊在上面的卡片，上緣有一點影子，看得出層次 */
 .wchev{display:grid;place-items:center;flex:none;width:28px;height:28px;border-radius:var(--r-pill);background:var(--track);color:var(--sub)}
 .wchev svg{width:16px;height:16px;transition:transform var(--t-slow) var(--ease)}
 .wallet>.card.open .wchev svg{transform:rotate(180deg)}
