@@ -36,7 +36,7 @@ from collections import deque
 from concurrent.futures import ThreadPoolExecutor
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
-VERSION = "1.25"
+VERSION = "1.26"
 
 # ───────────────────────── 設定 ─────────────────────────
 
@@ -2158,7 +2158,9 @@ def ev_line(e):
         return "🔄 主機重新開機了"
     if k == "info" and "登入了主機" in t:
         return "🔑 " + t
-    return {"bad": "🔴 ", "warn": "🟠 "}.get(k, "• ") + t
+    if k == "info" and ("密碼" in t or "手機金鑰" in t or "PIN" in t):
+        return "🔐 " + t                               # 登入方式有變動：換密碼、手機金鑰、PIN 碼
+    return {"bad": "🔴 ", "warn": "🟠 ", "ok": "✅ "}.get(k, "ℹ️ ") + t
 
 
 def tg_host_msg(name, lines):
