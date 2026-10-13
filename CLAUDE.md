@@ -39,6 +39,7 @@ tests/             基本功能測試（只用 Python 內建模組）
 - 設定：`/etc/vps-sentinel-lite.conf`（用 `write_conf` 修改；狀態存在 state.json）
 - 服務：`systemctl status vps-sentinel-lite`
 - 安裝來源：使用者把專案 clone 在 `~/vps-sentinel`，設定檔的 `SRC_DIR` 會記錄位置
+- 每日備份：本機在 `DATA_DIR/backups/`；其他主機傳來的放在雲端硬碟的 `哨兵備份/主機名稱/`（沒有雲端硬碟時放 `DATA_DIR/peer-backups/`）；Telegram 上那份用設定檔的 `BACKUP_KEY` 加密碼
 - Caddy：主設定用 `import /etc/caddy/sites/vps-sentinel.d/*.caddy`；雲端硬碟的轉接寫在 `cloud.caddy`
 
 ## 使用者的兩台主機
