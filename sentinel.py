@@ -40,7 +40,7 @@ from collections import deque
 from concurrent.futures import ThreadPoolExecutor
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
-VERSION = "1.34"
+VERSION = "1.35"
 
 # ───────────────────────── 哨兵備份檔（.vsbk）─────────────────────────
 # 哨兵專用的備份格式：外面是自己的檔案格式，裡面用的是成熟、標準的加密方法（不自己發明加密）：
@@ -182,8 +182,305 @@ def vsbk_cli(args):
     sys.exit(0)
 
 
+# ───────────────────────── 還原（sudo python3 sentinel.py --restore）─────────────────────────
+# 一個指令把備份放回去，並讓服務回到原本的樣子：
+#   1. 拿到備份檔（這台上的、或是哨兵網頁上產生的還原連結）→ 解開 → 列出內容、確認
+#   2. 先把這台現在的檔案留一份（還原錯了可以放回去）
+#   3. 新主機：先用系統內建的套件裝好 Docker、nginx，哨兵自己用 install.sh 裝好
+#   4. 停掉相關服務 → 放回檔案 → n8n 容器照原本的設定建回來 → 哨兵、3x-ui、網站重新啟動
+#   5. 一項一項檢查有沒有跑起來，提醒網址（網域）要不要改指向這台
+# 3x-ui 不會自動安裝（要跑它官方的安裝程式），缺的話會先告訴使用者。
+# 測試用：SENTINEL_RESTORE_ROOT＝放回到哪個資料夾（預設 /）；SENTINEL_RESTORE_DRY=1＝不真的執行指令，只列出來
+RS_MANIFEST = "vsbk-manifest.json"
+RS_HERE = os.path.dirname(os.path.abspath(__file__))
+RS_UNIT = "/etc/systemd/system/vps-sentinel-lite.service"
+
+
+def rs_conf_text(text):
+    out = {}
+    for line in text.splitlines():
+        if "=" in line and not line.lstrip().startswith("#"):
+            k, v = line.split("=", 1)
+            out[k.strip()] = v.strip()
+    return out
+
+
+def rs_conf(path):
+    try:
+        with open(path, encoding="utf-8") as f:
+            return rs_conf_text(f.read())
+    except OSError:
+        return {}
+
+
+class Restore:
+    def __init__(self, root, dry, yes):
+        self.root, self.dry, self.yes = root, dry, yes
+        self.cmds, self.result = [], []
+
+    def p(self, path):
+        """原本的絕對路徑 → 這次要放回去的位置"""
+        return os.path.join(self.root, path.lstrip("/"))
+
+    def sh(self, cmd, timeout=900, cwd=None, quiet=True, env=None):
+        """執行指令；成功回傳 True。測試時只記下來"""
+        self.cmds.append(" ".join(shlex.quote(c) for c in cmd))
+        if self.dry:
+            print("   （測試，不執行）" + self.cmds[-1])
+            return True
+        try:
+            r = subprocess.run(cmd, cwd=cwd, timeout=timeout, stdin=subprocess.DEVNULL, env={**os.environ, **(env or {})},
+                               stdout=subprocess.DEVNULL if quiet else None, stderr=subprocess.DEVNULL if quiet else None)
+            return r.returncode == 0
+        except (OSError, subprocess.SubprocessError):
+            return False
+
+    def has(self, prog):
+        return self.dry or bool(shutil.which(prog))
+
+    def ask(self, q):
+        if self.yes:
+            return True
+        try:
+            return input(q).strip().lower() in ("y", "yes", "是", "好")
+        except EOFError:
+            return False
+
+
+def rs_pick_local():
+    """沒指定檔案：列出這台上的備份讓使用者選"""
+    conf = rs_conf(os.environ.get("SENTINEL_CONF", "/etc/vps-sentinel-lite.conf"))
+    fs = []
+    for r in (os.path.join(conf.get("CLOUD_DIR", "/srv/cloud"), "哨兵備份"),
+              os.path.join(conf.get("DATA_DIR", "/var/lib/vps-sentinel-lite"), "backups")):
+        fs += glob.glob(os.path.join(r, "*", "*.vsbk"))
+    fs = sorted(fs, key=os.path.getmtime, reverse=True)[:20]
+    if not fs:
+        sys.exit("這台上找不到備份檔。請在指令後面加上備份檔的位置，或哨兵網頁上產生的還原連結")
+    print("這台上的備份（最新的在最上面）：")
+    for i, f in enumerate(fs, 1):
+        print(f"  {i:>2}. {os.path.basename(os.path.dirname(f))}／{os.path.basename(f)}")
+    try:
+        n = int(input("要還原哪一份？輸入編號：").strip())
+    except (ValueError, EOFError):
+        sys.exit("沒有選，結束")
+    if not 1 <= n <= len(fs):
+        sys.exit("沒有這個編號")
+    return fs[n - 1]
+
+
+def rs_download(url, td):
+    print("下載備份檔中…")
+    dst = os.path.join(td, "download.vsbk")
+    try:
+        with urllib.request.urlopen(url, timeout=900) as r, open(dst, "wb") as f:
+            shutil.copyfileobj(r, f, 1 << 20)
+    except urllib.error.HTTPError as e:
+        sys.exit("還原連結過期或不對，請在哨兵網頁上重新產生一個" if e.code in (403, 404) else f"下載失敗（錯誤 {e.code}）")
+    except Exception as e:  # noqa: BLE001
+        sys.exit(f"下載失敗：{e}")
+    return dst
+
+
+def rs_members(tar):
+    """檢查備份裡的每個檔案：只接受一般檔案、資料夾、捷徑，而且不能跑到別的地方去"""
+    out = []
+    for m in tar.getmembers():
+        parts = m.name.split("/")
+        if m.name.startswith("/") or ".." in parts or not (m.isfile() or m.isdir() or m.issym()):
+            continue
+        if m.name == RS_MANIFEST or (len(parts) == 1 and m.name.endswith(".txt")):
+            continue                                    # 還原說明、還原資料：不用放到主機上
+        out.append(m)
+    return out
+
+
+def rs_items(names, man, conf_path):
+    """從備份內容判斷有哪些服務"""
+    def any_in(prefix):
+        return any(n == prefix or n.startswith(prefix + "/") for n in names)
+    return {"sentinel": conf_path.lstrip("/") in names, "xui": any_in("etc/x-ui"), "nginx": any_in("etc/nginx"),
+            "caddy": any_in("etc/caddy"), "acme": any_in("root/.acme.sh"), "cloud": any_in("opt/vps-cloud/data"),
+            "n8n": bool(man.get("containers"))}
+
+
+def rs_docker_run(c):
+    """照備份時記下來的設定，把容器建回來"""
+    cmd = ["docker", "run", "-d", "--name", c["name"]]
+    if c.get("restart") and c["restart"] != "no":
+        cmd += ["--restart", c["restart"]]
+    for e in c.get("env") or []:
+        cmd += ["-e", e]
+    for p in c.get("ports") or []:
+        cmd += ["-p", p]
+    for m in c.get("mounts") or []:
+        cmd += ["-v", f"{m['name'] if m.get('type') == 'volume' else m['source']}:{m['dest']}"]
+    if c.get("network") not in (None, "", "default", "bridge"):
+        cmd += ["--network", c["network"]]
+    return cmd + [c["image"]]
+
+
+def restore_cli(args):
+    """sudo python3 sentinel.py --restore [備份檔或還原連結] [--yes]"""
+    yes = "--yes" in args
+    args = [a for a in args if a != "--yes"]
+    root = os.environ.get("SENTINEL_RESTORE_ROOT", "/")
+    dry = os.environ.get("SENTINEL_RESTORE_DRY") == "1"
+    if root == "/" and os.geteuid() != 0:
+        sys.exit("請用 sudo 執行：sudo python3 sentinel.py --restore")
+    td = tempfile.mkdtemp(prefix="vsrestore-")
+    os.chmod(td, 0o700)
+    try:
+        src = args[0] if args else rs_pick_local()
+        if re.match(r"https?://", src):
+            src = rs_download(src, td)
+        elif not os.path.isfile(src):
+            sys.exit(f"找不到備份檔：{src}")
+        if sys.stdin.isatty():
+            import getpass
+            pw = getpass.getpass("解開密碼（總密碼或這份自己的密碼都可以）：")
+        else:
+            pw = sys.stdin.readline().rstrip("\r\n")
+        tgz = os.path.join(td, "backup.tar.gz")
+        try:
+            vsbk_decrypt(src, tgz, pw)
+        except (ValueError, OSError) as e:
+            sys.exit(f"沒有解開：{e}")
+        rs = rs_run(Restore(root, dry, yes), tgz)
+    finally:
+        shutil.rmtree(td, ignore_errors=True)
+    sys.exit(1 if any(not ok for _, ok in rs.result) else 0)
+
+
+def rs_run(rs, tgz):
+    with tarfile.open(tgz, "r:gz") as tar:
+        try:
+            man = json.load(tar.extractfile(RS_MANIFEST))
+        except (KeyError, ValueError, AttributeError):
+            man = {}                                   # 1.34 以前做的備份沒有還原資料，從內容判斷
+        conf_path = man.get("conf") or "/etc/vps-sentinel-lite.conf"
+        try:                                           # 備份裡的哨兵設定（網域、連接埠：新主機安裝時要用）
+            bconf = rs_conf_text(tar.extractfile(conf_path.lstrip("/")).read().decode("utf-8", "replace"))
+        except (KeyError, AttributeError):
+            bconf = {}
+        members = rs_members(tar)
+        items = rs_items({m.name for m in members}, man, conf_path)
+        here = rs_conf(rs.p(conf_path)).get("NAME") or ""
+        print(f"\n這份備份：「{man.get('name') or bconf.get('NAME') or '（舊版備份）'}」{man.get('when') or ''}")
+        print("裡面有：" + "、".join(man.get("items") or [k for k, v in items.items() if v]))
+        if here and man.get("name") and here != man["name"]:
+            print(f"⚠️ 這台現在叫「{here}」，但這份是「{man['name']}」的備份；還原後這台會變成「{man['name']}」的設定")
+        xui_missing = items["xui"] and not os.path.exists(rs.p("/usr/local/x-ui/x-ui")) and not rs.dry
+        if xui_missing:
+            print("⚠️ 這台還沒有裝 3x-ui。建議先用 3x-ui 官方的安裝指令裝好（裝的時候問的問題都按 Enter），再執行一次還原；"
+                  "不先裝的話，3x-ui 的設定一樣會放回去，裝好之後就會用回原本的設定。")
+        print("還原會蓋掉這台上同樣位置的檔案（會先另外留一份）。")
+        if not rs.ask("要開始還原嗎？輸入 y 繼續："):
+            sys.exit("沒有還原")
+
+        # 1. 先把現在的檔案留一份
+        keep = rs.p(f"/root/還原前的檔案-{datetime.now():%Y%m%d-%H%M%S}.tar.gz")
+        os.makedirs(os.path.dirname(keep), exist_ok=True)
+        n = 0
+        with tarfile.open(keep, "w:gz") as old:
+            for m in members:
+                p = rs.p(m.name)
+                if not m.isdir() and os.path.lexists(p):
+                    try:
+                        old.add(p, m.name, recursive=False)
+                        n += 1
+                    except OSError:
+                        pass
+        os.chmod(keep, 0o600)
+        print(f"\n① 這台原本的檔案（{n} 個）先留在 {keep}")
+
+        # 2. 新主機：缺的程式先裝好（之後再把備份的設定蓋上去）
+        print("② 檢查需要的程式")
+        apt = {"DEBIAN_FRONTEND": "noninteractive"}
+        if items["n8n"] and not rs.has("docker"):
+            print("   安裝 Docker…")
+            rs.sh(["apt-get", "update", "-qq"], env=apt)
+            rs.sh(["apt-get", "install", "-y", "-qq", "docker.io"], env=apt)
+            if any(c.get("compose") for c in man["containers"]):
+                rs.sh(["apt-get", "install", "-y", "-qq", "docker-compose-v2"], env=apt)
+        if items["nginx"] and not rs.has("nginx"):
+            print("   安裝 nginx…")
+            rs.sh(["apt-get", "install", "-y", "-qq", "nginx"], env=apt)
+        if items["sentinel"] and not os.path.exists(rs.p(RS_UNIT)):
+            print("   安裝哨兵（含網站的加密連線）…")
+            rs.sh(["bash", os.path.join(RS_HERE, "install.sh"), bconf.get("DOMAIN", "")], timeout=1200, quiet=False,
+                  env={**apt, **({"HTTPS_PORT": bconf["HTTPS_PORT"]} if bconf.get("HTTPS_PORT") else {})})
+
+        # 3. 停掉相關服務，免得放回檔案時正在寫
+        print("③ 暫停相關服務")
+        services = [(s, label) for s, label, k in (("vps-sentinel-lite", "哨兵", "sentinel"), ("x-ui", "3x-ui", "xui"),
+                                                    ("nginx", "nginx", "nginx"), ("caddy", "Caddy", "caddy")) if items[k]]
+        for s, _ in services:
+            rs.sh(["systemctl", "stop", s])
+        for c in man.get("containers") or []:
+            rs.sh(["docker", "stop", c["name"]])
+            for m in c.get("mounts") or []:
+                if m.get("type") == "volume":
+                    rs.sh(["docker", "volume", "create", m["name"]])    # 資料卷要先建好，資料才放得進去
+
+        # 4. 放回檔案（保留原本的擁有者和權限）
+        print("④ 放回檔案")
+        kw = {"filter": "fully_trusted"} if hasattr(tarfile, "fully_trusted_filter") else {}
+        tar.extractall(rs.root, members=members, numeric_owner=True, **kw)   # 上面已經一個一個檢查過
+        print(f"   放回 {sum(1 for m in members if not m.isdir())} 個檔案")
+
+    # 5. 讓服務回到原本的樣子
+    print("⑤ 啟動服務")
+    rs.sh(["systemctl", "daemon-reload"])
+    if items["acme"] and (rs.dry or os.path.exists(rs.p("/root/.acme.sh/acme.sh"))):
+        rs.sh([rs.p("/root/.acme.sh/acme.sh"), "--install-cronjob"])    # 憑證自動更新的排程
+    for c in man.get("containers") or []:
+        if c.get("compose"):
+            rs.sh(["docker", "compose", "up", "-d"], cwd=None if rs.dry else rs.p(c["compose"]))
+        elif not rs.sh(["docker", "start", c["name"]]) or rs.dry:
+            if c.get("network") not in (None, "", "default", "bridge", "host"):
+                rs.sh(["docker", "network", "create", c["network"]])
+            rs.sh(rs_docker_run(c))
+    for s, _ in services:
+        if s != "x-ui" or not xui_missing:
+            rs.sh(["systemctl", "enable", s])
+            rs.sh(["systemctl", "restart", s])
+    conf = rs_conf(rs.p(conf_path))
+    if items["cloud"] and conf.get("CLOUD_GB") and (rs.dry or not os.path.isdir(rs.p("/srv/cloud"))):
+        print("   重新建立雲端硬碟…")
+        rs.sh(["bash", os.path.join(RS_HERE, "cloud.sh"), conf["CLOUD_GB"]], timeout=1800, quiet=False)
+
+    # 6. 檢查
+    print("\n還原結果：")
+    checks = [(label, ["systemctl", "is-active", "--quiet", s]) for s, label in services]
+    checks += [(f"n8n（{c['name']}）", ["docker", "exec", c["name"], "true"]) for c in man.get("containers") or []]
+    for label, cmd in checks:
+        ok = rs.sh(cmd, timeout=30)
+        rs.result.append((label, ok))
+        tip = "：請先用 3x-ui 官方的安裝指令裝好，裝好就會用回備份的設定" if label == "3x-ui" and xui_missing else " 沒有跑起來"
+        print(f"  {'✅' if ok else '❌'} {label}{'' if ok else tip}")
+    if not checks:
+        print("  （這份備份裡沒有需要啟動的服務）")
+    dom = conf.get("DOMAIN")
+    if dom and not rs.dry:
+        try:
+            dip = socket.gethostbyname(dom)
+            with urllib.request.urlopen("https://api.ipify.org", timeout=6) as r:
+                mine = r.read().decode().strip()
+            if dip != mine:
+                print(f"\n⚠️ 網址 {dom} 現在指向 {dip}，這台是 {mine}：請到網域商把它改指向這台，網站和憑證才會正常")
+        except Exception:  # noqa: BLE001
+            pass
+    bad = sum(1 for _, ok in rs.result if not ok)
+    print("\n還原完成 ✅" if not bad else f"\n還原完成，但有 {bad} 項沒有跑起來 ❌")
+    print(f"如果想回到還原前的樣子：sudo tar -xzf {shlex.quote(keep)} -C /")
+    return rs
+
+
 if __name__ == "__main__" and sys.argv[1:2] == ["--decrypt"]:
     vsbk_cli(sys.argv[2:])
+if __name__ == "__main__" and sys.argv[1:2] == ["--restore"]:
+    restore_cli(sys.argv[2:])
 
 # ───────────────────────── 設定 ─────────────────────────
 
@@ -2608,22 +2905,39 @@ def bk_cleanup_legacy():
             pass
 
 
-def n8n_dirs():
-    """n8n 容器的資料放在哪裡（docker 的資料卷或掛進去的資料夾）"""
+def n8n_containers():
+    """n8n 容器的設定（還原時照這個把容器建回來）：[{name, image, env, ports, mounts, restart, network, compose}]"""
     out = []
     for c in docker_containers() or []:
         if "n8n" not in (c["image"] + " " + c["name"]).lower():
             continue
-        info = docker_json("inspect", c["name"]) or [{}]
-        out += [m["Source"] for m in info[0].get("Mounts") or [] if m.get("Source")]
+        info = (docker_json("inspect", c["name"]) or [{}])[0]
+        cfg, host = info.get("Config") or {}, info.get("HostConfig") or {}
+        img_env = set((((docker_json("image", "inspect", cfg.get("Image") or "") or [{}])[0].get("Config") or {}).get("Env") or []))
+        ports = []
+        for cp, binds in (host.get("PortBindings") or {}).items():
+            for b in binds or []:
+                ports.append(":".join(x for x in (b.get("HostIp") or "", b.get("HostPort") or "", cp) if x))
+        out.append({"name": c["name"], "image": cfg.get("Image") or c["image"],
+                    "env": [e for e in cfg.get("Env") or [] if e not in img_env],     # 映像檔本來就有的不用記
+                    "ports": ports, "restart": (host.get("RestartPolicy") or {}).get("Name") or "",
+                    "network": host.get("NetworkMode") or "",
+                    "mounts": [{"type": m.get("Type"), "name": m.get("Name") or "", "source": m.get("Source") or "",
+                                "dest": m.get("Destination") or ""} for m in info.get("Mounts") or []],
+                    "compose": (cfg.get("Labels") or {}).get("com.docker.compose.project.working_dir") or ""})
     return out
 
 
-def backup_sources():
-    """[(說明, [路徑…])]；只列出這台主機上真的有的"""
+def n8n_dirs(cs):
+    """n8n 的資料（docker 的資料卷或掛進去的資料夾）和 docker compose 的設定資料夾"""
+    return [m["source"] for c in cs for m in c["mounts"] if m["source"]] + [c["compose"] for c in cs if c["compose"]]
+
+
+def backup_sources(cs=None):
+    """[(說明, [路徑…])]；只列出這台主機上真的有的（cs＝n8n 容器的設定）"""
     items = [("哨兵設定", [CONF_PATH, DATA_DIR]),
-             ("3x-ui", ["/etc/x-ui"]),
-             ("n8n", n8n_dirs()),
+             ("3x-ui", ["/etc/x-ui", "/etc/systemd/system/x-ui.service"]),
+             ("n8n", n8n_dirs(n8n_containers() if cs is None else cs)),
              ("Caddy", ["/etc/caddy"]),
              ("nginx", ["/etc/nginx"]),
              ("安全憑證", ["/root/.acme.sh", "/root/cert"]),
@@ -2679,20 +2993,25 @@ BK_README = """VPS 哨兵的備份：{name}（{when}）
 
 內容：{items}
 
-還原方法（在主機上用 root 執行，會蓋掉原本的檔案）：
-  sudo tar -xzf 這個檔案.tar.gz -C /
-然後重新啟動相關的服務，例如：
-  sudo systemctl restart x-ui vps-sentinel-lite
-  docker restart n8n
+還原方法（會自動放回檔案、把服務重新啟動）：
+  sudo python3 ~/vps-sentinel/sentinel.py --restore 備份檔.vsbk
+詳細說明在哨兵網頁的「設定 → 備份 → 還原」。
 """
+
+
+def xui_version():
+    code, out = run(["/usr/local/x-ui/x-ui", "-v"], 10) if os.path.exists("/usr/local/x-ui/x-ui") else (1, "")
+    m = re.search(r"v?(\d+\.\d+\.\d+)", out) if code == 0 else None
+    return "v" + m.group(1) if m else ""
 
 
 def _bk_tar(dst, td):
     """把要備份的東西打包成 dst（.tar.gz）；回傳 (包含哪些東西, 跳過的大檔)"""
     skip = {os.path.realpath(p) for p in (BK_LOCAL_DIR, os.path.join(DATA_DIR, "peer-backups"), CLOUD_DIR)}
     labels, big, seen, n = [], [], set(), 0
+    cs = n8n_containers()
     with tarfile.open(dst, "w:gz", compresslevel=6) as tar:
-        for label, paths in backup_sources():
+        for label, paths in backup_sources(cs):
             got = 0
             for top in paths:
                 for p in _bk_walk(top, skip):
@@ -2736,6 +3055,12 @@ def _bk_tar(dst, td):
         info = tarfile.TarInfo(f"還原說明-{bk_safe(NAME)}.txt")
         info.size, info.mtime, info.mode = len(text), int(time.time()), 0o644
         tar.addfile(info, io.BytesIO(text))
+        man = json.dumps({"name": NAME, "when": f"{bk_time(time.time()):%Y-%m-%d %H:%M}", "items": labels, "version": VERSION,
+                          "conf": CONF_PATH, "xui_version": xui_version(),
+                          "containers": cs if "n8n" in labels else []}, ensure_ascii=False, indent=1).encode()
+        info = tarfile.TarInfo(RS_MANIFEST)                # 還原時用的資料：n8n 容器怎麼建、3x-ui 是哪一版…
+        info.size, info.mtime, info.mode = len(man), int(time.time()), 0o600
+        tar.addfile(info, io.BytesIO(man))
     return labels, big
 
 
@@ -2998,6 +3323,32 @@ def set_backup(on):
     return True, "已開啟每日備份" if on else "已關閉每日備份"
 
 
+BK_LINK_HOURS = 24
+
+
+def bk_link_sig(host, exp):
+    return hmac.new(("vsbk-dl|" + TOKEN).encode(), f"{host}|{exp}".encode(), hashlib.sha256).hexdigest()[:40]
+
+
+def bk_link(host):
+    """新主機還原用的下載連結（24 小時內有效、只能下載加密過的備份檔）；回傳網址後面的參數"""
+    if host not in {c["name"] for c in bk_copies()}:
+        return None
+    exp = int(time.time()) + BK_LINK_HOURS * 3600
+    return urllib.parse.urlencode({"h": host, "e": exp, "s": bk_link_sig(host, exp)})
+
+
+def bk_link_file(q):
+    """還原連結 → 那台最新的備份檔；過期、被改過就回傳 None"""
+    h, e, sig = q.get("h", [""])[0], q.get("e", [""])[0], q.get("s", [""])[0]
+    if not e.isdigit() or int(e) < time.time() or "/" in h or h.startswith(".") or not h:
+        return None
+    if not hmac.compare_digest(sig.encode(), bk_link_sig(h, int(e)).encode()):
+        return None
+    fs = bk_list(os.path.join(bk_root(), h))
+    return fs[-1] if fs else None
+
+
 # ───────────────────────── 網頁伺服器 ─────────────────────────
 
 # App 圖示（蘋果風格：圓角方形、藍色漸層、白色盾牌，勾勾用挖空呈現）
@@ -3220,6 +3571,19 @@ class Handler(BaseHTTPRequestHandler):
             return self.send(200, json.dumps(COL.history(rng)))
         if path in ("/api/backup", "/api/backup-file"):
             return self.backup_get(path)
+        if path == "/api/backup-dl":                    # 新主機還原：不用登入，靠連結上的簽章
+            f = bk_link_file(urllib.parse.parse_qs(urllib.parse.urlsplit(self.path).query))
+            if not f:
+                time.sleep(1)
+                return self.send(403, '{"error":"還原連結過期或不對"}')
+            self.send_response(200)
+            self.send_header("Content-Type", "application/octet-stream")
+            self.send_header("Content-Length", str(os.path.getsize(f)))
+            self.send_header("Cache-Control", "no-store")
+            self.end_headers()
+            with open(f, "rb") as fh:
+                shutil.copyfileobj(fh, self.wfile, 1 << 20)
+            return
         if path in ("/api/status", "/api/all"):
             if not self.authed():
                 time.sleep(1)
@@ -3363,6 +3727,10 @@ class Handler(BaseHTTPRequestHandler):
                     for p in PEERS:
                         bk_send_key(p)
                 return self.send(200 if ok else 400, json.dumps({"ok": ok}))
+            if d.get("action") == "link":            # 產生新主機還原用的下載連結
+                q = bk_link(d.get("host"))
+                return self.send(200 if q else 404, json.dumps({"ok": bool(q), "q": q or "", "hours": BK_LINK_HOURS,
+                                                                "message": "" if q else "這台上沒有那台的備份"}, ensure_ascii=False))
             if d.get("action") == "set":
                 ok, msg = set_backup(bool(d.get("on")))
                 return self.send(200 if ok else 500, json.dumps({"ok": ok, "message": msg}, ensure_ascii=False))

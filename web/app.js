@@ -1626,7 +1626,8 @@ async function bkModal(node, label){
     <p>3x-ui、n8n、哨兵和網站的設定，每天自動打包並加密。每台主機都存著每一台的備份，Telegram 上也有一份</p>
     <div class="form">
       <ul class="bkrows">${bkRows(d)}</ul>
-      <div class="lbl">${d.where === "雲端硬碟" ? "這台的雲端硬碟裡有" : "這台主機上有"}${d.where === "雲端硬碟" ? `<small>在「${esc(d.folder)}」資料夾，打開雲端硬碟就看得到</small>` : ""}<ul class="bkrows bkcopies">${bkCopies(d)}</ul></div>
+      <div class="lbl">${d.where === "雲端硬碟" ? "這台的雲端硬碟裡有" : "這台主機上有"}${d.where === "雲端硬碟" ? `<small>在「${esc(d.folder)}」資料夾，打開雲端硬碟就看得到</small>` : ""}<ul class="bkrows bkcopies">${bkCopies(d)}</ul>
+        <button class="linkish bkchg" data-restore>怎麼還原？</button></div>
       <div class="lbl">解開密碼（每一份備份都打得開，所有主機共用）<b class="bkkey" title="點一下顯示">${esc(d.key)}</b>
         <small>備份檔都用銀行等級的加密保護，沒有這組密碼誰都打不開。請另外記在安全的地方，主機壞掉時才拿得到</small>
         <button class="linkish bkchg" data-chg>改成自己的密碼</button>
@@ -1668,6 +1669,11 @@ async function bkModal(node, label){
     });
     v.addEventListener("click", async e => {
       if (e.target === v || e.target.closest("[data-r]")) return done();
+      if (e.target.closest("[data-restore]")) {     // 還原說明蓋在上面時，先把這個視窗藏起來（玻璃疊在一起會看到底下的字）
+        const box = v.querySelector(".dialog"); box.style.visibility = "hidden";
+        await bkRestore(); box.style.visibility = "";
+        return;
+      }
       if (e.target.closest("[data-chg]")) {
         const box = v.querySelector(".bknew"); box.hidden = false; e.target.closest("[data-chg]").hidden = true;
         return box.querySelector("input").focus();
@@ -1710,6 +1716,58 @@ async function bkModal(node, label){
         } catch(err) { say(err.message, "bad"); }
         busy(dl);
       }
+    });
+  });
+}
+
+/* 還原：在這台上執行一行指令挑一份放回去；整台搬到新主機時，產生一個 24 小時內有效的下載連結，貼一段指令就好。
+   連結一律由目前連線的這台產生（它存著每一台的備份） */
+const BK_REPO = "https://github.com/a7510049/vps-sentinel.git";
+async function bkRestore(){
+  const d = await bkGet("").catch(e => ({err:e.message}));
+  if (d.err) return toast(d.err, "bad");
+  const here = "sudo python3 ~/vps-sentinel/sentinel.py --restore";
+  const hosts = d.copies || [];
+  const v = document.createElement("div"); v.className = "veil";
+  v.innerHTML = `<div class="dialog glass pop bkdlg">${IC("archive","big")}<h3>還原備份</h3>
+    <p>還原會把設定放回去，3x-ui、n8n、網站和哨兵都會自動重新啟動。還原前，主機上原本的檔案會先另外留一份，放錯了也退得回去</p>
+    <div class="form">
+      <div class="lbl">讓主機回到前幾天的樣子<small>在那台主機上執行下面這行（點一下複製），從清單挑一份、輸入解開密碼就好</small>
+        <code class="bkcmd" data-cmd="${esc(here)}">${esc(here)}</code></div>
+      ${hosts.length ? `<div class="lbl">整台搬到新主機（原本那台壞掉時）<small>先到網域商把網址改指向新主機，再選要還原哪一台，把產生的指令貼到新主機上執行。指令裡的下載連結 24 小時內有效，只拿得到加密過的備份檔</small>
+        <div class="bkhosts">${hosts.map(h => `<button class="ubtn ghost sm" data-link="${esc(h.name)}">${esc(h.name)}</button>`).join("")}</div>
+        <code class="bkcmd" data-cmd="" hidden></code></div>` : ""}
+      <div class="msg"></div></div>
+    <div class="btns one"><button class="ubtn" data-r="0">關閉</button></div></div>`;
+  $("#layer").appendChild(v);
+  const msg = v.querySelector(".msg");
+  const say = (t, c = "") => { msg.className = "msg " + c; msg.textContent = t; };
+  return new Promise(res => {
+    const done = () => { if (v._d) return; v._d = 1; v.classList.add("closing"); setTimeout(() => { v.remove(); res(); }, 360); };
+    v._esc = done;
+    v.addEventListener("click", async e => {
+      if (e.target === v || e.target.closest("[data-r]")) return done();
+      const c = e.target.closest(".bkcmd");
+      if (c) {
+        try { await navigator.clipboard.writeText(c.dataset.cmd); toast("已複製指令"); } catch(err) { /* 不能複製就讓使用者自己選取 */ }
+        return;
+      }
+      const b = e.target.closest("[data-link]");
+      if (!b || b.disabled) return;
+      b.disabled = true; say("");
+      try {
+        const r = await api("/api/backup", {method:"POST", headers:{"X-Token":getTok(), "Content-Type":"application/json"},
+                                            body:JSON.stringify({action:"link", host:b.dataset.link})});
+        const x = await r.json().catch(() => ({}));
+        if (!r.ok) throw new Error(x.message || "產生失敗，請再試一次");
+        const url = `${location.origin}/api/backup-dl?${x.q}`;
+        const cmd = `sudo apt-get install -y -qq git; git clone ${BK_REPO} ~/vps-sentinel; sudo python3 ~/vps-sentinel/sentinel.py --restore '${url}'`;
+        const box = v.querySelector(".bkhosts + .bkcmd");
+        box.dataset.cmd = cmd; box.textContent = cmd; box.hidden = false;
+        v.querySelectorAll("[data-link]").forEach(x => x.classList.toggle("on", x === b));
+        say(`這是「${b.dataset.link}」的還原指令，點一下複製`, "ok");
+      } catch(err) { say(err.message, "bad"); }
+      b.disabled = false;
     });
   });
 }

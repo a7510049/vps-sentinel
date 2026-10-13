@@ -592,6 +592,10 @@ a.plink:hover{color:var(--a1)}
 .bkcopies li svg{color:var(--sub)}
 .dialog .form .bkchg{align-self:flex-start;font-size:var(--fs-s)}
 .bknew{display:flex;gap:8px;align-items:center}.bknew[hidden]{display:none}
+.dialog .form .bkcmd{display:block;padding:10px 12px;border-radius:var(--r-sm);background:var(--inset);box-shadow:var(--ring);font:600 var(--fs-xs)/1.6 ui-monospace,SFMono-Regular,Menlo,monospace;color:var(--text);word-break:break-all;cursor:pointer;user-select:all}
+.dialog .form .bkcmd[hidden]{display:none}
+.bkhosts{display:flex;flex-wrap:wrap;gap:8px}
+.bkhosts .ubtn.on{background:var(--a1);color:#fff}
 .dialog .form .bknew .field{flex:1;font-size:var(--fs-m);padding:10px 12px}
 .dialog .form .bkon{flex-direction:row;align-items:center;justify-content:space-between;font-size:var(--fs-m);color:var(--text)}
 .evs{display:flex;flex-direction:column;gap:2px;max-height:330px;overflow-x:hidden;overflow-y:auto;margin:-8px -6px 0;padding:8px 6px 14px}
@@ -660,6 +664,7 @@ a.plink:hover{color:var(--a1)}
 .dialog p{color:var(--sub);font-size:var(--fs-m);margin-top:6px;white-space:pre-line;font-weight:600}
 .dialog .field{margin-top:16px;text-align:center}
 .dialog .btns{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:20px}
+.dialog .btns.one{grid-template-columns:1fr}
 .dialog .btns button{justify-content:center;padding:12px}
 
 .veil.sheetv{align-items:flex-end;justify-content:flex-end;padding:0}
