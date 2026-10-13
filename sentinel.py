@@ -40,7 +40,7 @@ from collections import deque
 from concurrent.futures import ThreadPoolExecutor
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
-VERSION = "1.38"
+VERSION = "1.39"
 
 # ───────────────────────── 哨兵備份檔（.vsbk）─────────────────────────
 # 哨兵專用的備份格式：外面是自己的檔案格式，裡面用的是成熟、標準的加密方法（不自己發明加密）：
@@ -2986,6 +2986,31 @@ def n8n_dirs(cs):
     return [m["source"] for c in cs for m in c["mounts"] if m["source"]] + [c["compose"] for c in cs if c["compose"]]
 
 
+def xui_cert_paths(db="/etc/x-ui/x-ui.db"):
+    """3x-ui 設定裡用到的憑證和私鑰（後台的、訂閱的、各個連線的）；放在別的資料夾也要一起備份，不然還原後 3x-ui 開不起來"""
+    out = []
+    if not os.path.isfile(db):
+        return out
+    try:
+        con = sqlite3.connect(f"file:{urllib.parse.quote(db)}?mode=ro", uri=True, timeout=10)
+        try:
+            out += [v for (v,) in con.execute("SELECT value FROM settings WHERE key IN "
+                                              "('webCertFile','webKeyFile','subCertFile','subKeyFile')")]
+            for (ss,) in con.execute("SELECT stream_settings FROM inbounds"):
+                try:
+                    tls = (json.loads(ss or "{}") or {}).get("tlsSettings") or {}
+                except ValueError:
+                    continue
+                for c in tls.get("certificates") or []:
+                    out += [c.get("certificateFile"), c.get("keyFile")]
+        finally:
+            con.close()
+    except sqlite3.Error:
+        return []
+    out = [p for p in out if isinstance(p, str) and p.startswith("/")]
+    return out + [os.path.realpath(p) for p in out if os.path.islink(p)]   # 捷徑（例如 letsencrypt 的 live）連真正的檔案一起
+
+
 def backup_sources(cs=None):
     """[(說明, [路徑…])]；只列出這台主機上真的有的（cs＝n8n 容器的設定）"""
     items = [("哨兵設定", [CONF_PATH, DATA_DIR]),
@@ -2993,7 +3018,8 @@ def backup_sources(cs=None):
              ("n8n", n8n_dirs(n8n_containers() if cs is None else cs)),
              ("Caddy", ["/etc/caddy"]),
              ("nginx", ["/etc/nginx"]),
-             ("安全憑證", ["/root/.acme.sh", "/root/cert"]),
+             ("安全憑證", ["/root/.acme.sh", "/root/cert"] + xui_cert_paths()),
+             ("排程", ["/var/spool/cron/crontabs/root"]),
              ("雲端硬碟設定", ["/opt/vps-cloud/data"]),
              ("其他", [p.strip() for p in C.get("BACKUP_PATHS", "").split(",") if p.strip()])]
     out = []
