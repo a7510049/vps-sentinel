@@ -40,7 +40,116 @@ from collections import deque
 from concurrent.futures import ThreadPoolExecutor
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
-VERSION = "1.30"
+VERSION = "1.31"
+
+# ───────────────────────── 哨兵備份檔（.vsbk）─────────────────────────
+# 哨兵專用的備份格式：外面是自己的檔案格式，裡面用的是成熟、標準的加密方法（不自己發明加密）：
+#   - 密碼 → 金鑰：scrypt（Python 內建；故意算得很慢又吃記憶體，就算密碼被拿去猜也猜很久）
+#   - 加密內容：AES-256（系統的 openssl 來算，CTR 模式）
+#   - 防竄改：HMAC-SHA256（先加密再簽，打開前先檢查，密碼不對或檔案被改過一個位元都會發現）
+# 檔案內容：「VSBK」＋版本(1)＋scrypt 參數(log2 N, r, p)＋鹽(16)＋隨機數(16)＋加密後的內容＋簽章(32)
+# 每個檔案的鹽和隨機數都不一樣，所以每個檔案的加密金鑰也都不一樣。
+VSBK_MAGIC = b"VSBK"
+VSBK_HEAD = 40
+VSBK_SCRYPT = (15, 8, 1)                          # N=32768、r=8、p=1：大約要 32 MB 記憶體、零點幾秒
+
+
+def _vsbk_keys(pw, salt, nonce, n, r, p):
+    m = hashlib.scrypt(pw.encode("utf-8"), salt=salt, n=1 << n, r=r, p=p, maxmem=256 << 20, dklen=64)
+    enc = hmac.new(m[:32], b"vsbk-enc" + nonce, hashlib.sha256).hexdigest()
+    mac = hmac.new(m[32:], b"vsbk-mac" + nonce, hashlib.sha256).digest()
+    return enc, mac
+
+
+def _vsbk_aes(enc, src, dst, decrypt=False):
+    """AES-256-CTR。金鑰用環境變數交給 openssl（不放在指令列上，別的程式看不到）；
+    openssl 會把這串（每個檔案都不同的）金鑰材料再轉成真正的金鑰和起始值"""
+    if not shutil.which("openssl"):
+        raise OSError("主機上沒有 openssl")
+    r = subprocess.run(["openssl", "enc", "-aes-256-ctr", *(["-d"] if decrypt else []), "-pbkdf2", "-iter", "1",
+                        "-md", "sha256", "-nosalt", "-pass", "env:VSBK_K", "-in", src, "-out", dst],
+                       env=dict(os.environ, VSBK_K=enc), capture_output=True, timeout=3600)
+    if r.returncode != 0:
+        raise OSError("openssl 執行失敗：" + r.stderr.decode(errors="replace").strip()[:200])
+
+
+def vsbk_encrypt(src, dst, pw):
+    salt, nonce = os.urandom(16), os.urandom(16)
+    head = VSBK_MAGIC + bytes([1, *VSBK_SCRYPT]) + salt + nonce
+    enc, mac = _vsbk_keys(pw, salt, nonce, *VSBK_SCRYPT)
+    ct = dst + ".ct"
+    try:
+        _vsbk_aes(enc, src, ct)
+        h = hmac.new(mac, head, hashlib.sha256)
+        with open(ct, "rb") as fi, open(dst, "wb") as fo:
+            fo.write(head)
+            for chunk in iter(lambda: fi.read(1 << 20), b""):
+                h.update(chunk)
+                fo.write(chunk)
+            fo.write(h.digest())
+    finally:
+        if os.path.exists(ct):
+            os.remove(ct)
+
+
+def vsbk_decrypt(src, dst, pw):
+    """解開 .vsbk；密碼不對或檔案壞掉會丟出 ValueError（先檢查簽章，沒問題才解）"""
+    size = os.path.getsize(src)
+    with open(src, "rb") as f:
+        head = f.read(VSBK_HEAD)
+        if len(head) < VSBK_HEAD or head[:4] != VSBK_MAGIC or size < VSBK_HEAD + 32:
+            raise ValueError("這不是哨兵的備份檔")
+        if head[4] != 1:
+            raise ValueError("這個備份檔是比較新版的哨兵做的，請先更新哨兵")
+        n, r, p = head[5], head[6], head[7]
+        if not (10 <= n <= 22 and 1 <= r <= 32 and 1 <= p <= 16):
+            raise ValueError("備份檔壞了")
+        enc, mac = _vsbk_keys(pw, head[8:24], head[24:40], n, r, p)
+        h = hmac.new(mac, head, hashlib.sha256)
+        ct = dst + ".ct"
+        try:
+            with open(ct, "wb") as fo:
+                left = size - VSBK_HEAD - 32
+                while left > 0:
+                    chunk = f.read(min(left, 1 << 20))
+                    if not chunk:
+                        raise ValueError("備份檔不完整")
+                    h.update(chunk)
+                    fo.write(chunk)
+                    left -= len(chunk)
+            if not hmac.compare_digest(h.digest(), f.read(32)):
+                raise ValueError("解開密碼不對，或是備份檔被改過、壞掉了")
+            _vsbk_aes(enc, ct, dst, decrypt=True)
+        finally:
+            if os.path.exists(ct):
+                os.remove(ct)
+
+
+def vsbk_cli(args):
+    """python3 sentinel.py --decrypt 備份檔.vsbk [解開後的檔名]：在任何有 Python 和 openssl 的主機上都能用"""
+    if not args or not os.path.isfile(args[0]):
+        sys.exit("用法：python3 sentinel.py --decrypt 備份檔.vsbk")
+    src = args[0]
+    dst = args[1] if len(args) > 1 else re.sub(r"\.vsbk$", "", src) + (".tar.gz" if not src.endswith(".tar.gz.vsbk") else "")
+    if os.path.exists(dst):
+        sys.exit(f"{dst} 已經存在，請先移走或換一個檔名")
+    if sys.stdin.isatty():
+        import getpass
+        pw = getpass.getpass("解開密碼：")
+    else:
+        pw = sys.stdin.readline().rstrip("\r\n")
+    try:
+        vsbk_decrypt(src, dst, pw)
+    except (ValueError, OSError) as e:
+        if os.path.exists(dst):
+            os.remove(dst)
+        sys.exit(f"沒有解開：{e}")
+    print(f"已解開：{dst}\n放回原位：sudo tar -xzf {shlex.quote(dst)} -C /")
+    sys.exit(0)
+
+
+if __name__ == "__main__" and sys.argv[1:2] == ["--decrypt"]:
+    vsbk_cli(sys.argv[2:])
 
 # ───────────────────────── 設定 ─────────────────────────
 
@@ -157,17 +266,16 @@ def _num(v, default):
 BACKUP_ON = C.get("BACKUP", "on").lower() not in ("off", "0", "no")
 BACKUP_HOUR = int(min(23, max(0, _num(C.get("BACKUP_HOUR"), 4))))
 BACKUP_KEEP = 7                                   # 每個地方都只留最近 7 份
-BACKUP_KEY = C.get("BACKUP_KEY", "")              # Telegram 上那份的解開密碼（第一次備份時自動產生）
-BK_DIR = os.path.join(DATA_DIR, "backups")        # 這台自己的備份
-BK_PEER_DIR = os.path.join(DATA_DIR, "peer-backups")   # 沒有雲端硬碟時，其他主機的備份放這裡
-BK_CLOUD_SUB = "哨兵備份"                          # 有雲端硬碟時，其他主機的備份放在雲端硬碟的這個資料夾
+BACKUP_KEY = C.get("BACKUP_KEY", "")              # 備份檔的解開密碼（所有主機共用；第一次備份時自動產生）
+BK_LOCAL_DIR = os.path.join(DATA_DIR, "backups")  # 沒有雲端硬碟時，備份放這裡
+BK_CLOUD_SUB = "哨兵備份"                          # 有雲端硬碟時，備份放在雲端硬碟的這個資料夾
 BK_FILE_MAX = 300 * 1024 * 1024                   # 單一檔案超過這個大小就跳過（多半是記錄檔或暫存）
 BK_UPLOAD_MAX = 2 * 1024 ** 3
 TG_FILE_MAX = 49 * 1024 * 1024                    # Telegram 機器人最多只能傳 50 MB 的檔案
 BK_SKIP_DIRS = {"cache", ".cache", "tmp", "log", "logs", "node_modules"}
 BK_RUN = threading.Lock()                         # 同一時間只跑一次備份
 BK_MAKE = threading.Lock()                        # 同一時間只打包一份
-BK = {"last": None, "ok_t": None, "day": None, "got": {}, "running": False}   # 會存檔
+BK = {"last": None, "ok_t": None, "day": None, "key_t": 0, "running": False}  # 會存檔
 
 TRAFFIC_LIMIT_GB = _num(C.get("TRAFFIC_LIMIT_GB"), 0)            # 0 = 不限制
 TRAFFIC_RESET_DAY = int(min(28, max(1, _num(C.get("TRAFFIC_RESET_DAY"), 1))))
@@ -1606,8 +1714,7 @@ class Collector:
             TG_MSGS.extend(list(m) for m in (st.get("tg_msgs") or []) if len(m) == 3)
             self.saved_boot = st.get("boot")
             bk = st.get("backup") or {}
-            BK.update({k: bk[k] for k in ("last", "ok_t", "day") if k in bk})
-            BK["got"] = {k: v for k, v in (bk.get("got") or {}).items() if isinstance(v, dict)}
+            BK.update({k: bk[k] for k in ("last", "ok_t", "day", "key_t") if k in bk})
             if st.get("prev_keys") is not None:
                 self.prev_keys = {k: tuple(v) for k, v in st["prev_keys"].items()}
             log(f"已讀取存檔：歷史 {len(self.hist)}/{len(self.h24)}/{len(self.h7d)} 筆、事件 {len(self.events)} 筆、流量 {len(self.traffic['days'])} 天")
@@ -1620,7 +1727,7 @@ class Collector:
                   "events": list(self.events), "traffic": self.traffic,
                   "prev_keys": self.prev_keys, "peer_seen": dict(PEER_SEEN),
                   "tg_sent": dict(TG_SENT), "tg_msgs": list(TG_MSGS),
-                  "backup": {k: BK[k] for k in ("last", "ok_t", "day", "got")}}
+                  "backup": {k: BK[k] for k in ("last", "ok_t", "day", "key_t")}}
         try:
             os.makedirs(DATA_DIR, exist_ok=True)
             tmp = self.state_path() + ".tmp"
@@ -2251,9 +2358,10 @@ def alert_loop():
 
 
 # ───────────────────────── 每日備份 ─────────────────────────
-# 每天清晨把這台主機上重要的設定打包（3x-ui、n8n、哨兵自己、Caddy／nginx、憑證…）：
-# 本機留一份、加上密碼傳到 Telegram，再跟其他主機互相存一份到對方的雲端硬碟。
-
+# 每天清晨把這台主機上重要的設定打包（3x-ui、n8n、哨兵自己、Caddy／nginx、憑證…），加密成哨兵備份檔（.vsbk）。
+# 每台主機的雲端硬碟「哨兵備份」資料夾裡，都放著「每一台」的備份（一台一個資料夾）；Telegram 上也有一份。
+# 主要那台（有設定其他主機的）負責：把解開密碼同步給其他台、把自己的備份送過去、把其他台的拿回來。
+# 所有主機共用同一組解開密碼。
 
 
 def bk_safe(s):
@@ -2269,6 +2377,112 @@ def bk_key():
         write_conf({"BACKUP_KEY": key})
         BACKUP_KEY = key
     return BACKUP_KEY
+
+
+def bk_key_ok(key):
+    return (isinstance(key, str) and 8 <= len(key) <= 128 and key == key.strip() and not re.search(r"[\r\n]", key)
+            and key[0] not in "'\"" and key[-1] not in "'\"")
+
+
+def bk_set_key(key, sync=False):
+    """換解開密碼；sync＝順便告訴其他主機（之後的備份都用新密碼，以前的備份還是要用舊密碼開）"""
+    global BACKUP_KEY
+    if not bk_key_ok(key):
+        return False, "密碼要 8 到 128 個字，前後不能有空白或引號"
+    if key != BACKUP_KEY:
+        try:
+            write_conf({"BACKUP_KEY": key})
+        except OSError as e:
+            return False, f"無法寫入設定檔：{e}"
+        BACKUP_KEY = key
+        with COL.lock:
+            BK["key_t"] = time.time()             # 之前打包好的（舊密碼）不再拿來用
+    if not sync:
+        return True, "已換成新的解開密碼"
+    bad = [f"「{p['name']}」{msg}" for p in PEERS for ok, msg in [bk_send_key(p)] if not ok]
+    return True, "已換成新的解開密碼" + (f"（{'、'.join(bad)}，下次備份時會再同步）" if bad else "，所有主機都改好了" if PEERS else "")
+
+
+def bk_send_key(peer):
+    try:
+        req = urllib.request.Request(peer["url"] + "/api/backup", method="POST",
+                                     data=json.dumps({"action": "key", "key": bk_key()}).encode(),
+                                     headers={"X-Token": peer["token"], "Content-Type": "application/json"})
+        with urllib.request.urlopen(req, timeout=20) as r:
+            d = json.loads(r.read())
+        return bool(d.get("ok")), d.get("message") or ""
+    except urllib.error.HTTPError as e:
+        return False, "還沒更新到新版" if e.code in (400, 404) else f"錯誤 {e.code}"
+    except Exception as e:  # noqa: BLE001
+        return False, peer_error(e, peer["url"])
+
+
+def bk_cloud():
+    return os.path.ismount(CLOUD_DIR)
+
+
+def bk_root():
+    """所有主機的備份都放這裡，一台一個資料夾；有雲端硬碟就放雲端硬碟，打開雲端硬碟就看得到"""
+    return os.path.join(CLOUD_DIR, BK_CLOUD_SUB) if bk_cloud() else BK_LOCAL_DIR
+
+
+def bk_where():
+    return "雲端硬碟" if bk_cloud() else "主機上"
+
+
+def bk_dir(name):
+    d = os.path.join(bk_root(), bk_safe(name))
+    cloud = bk_cloud()
+    os.makedirs(d, mode=0o755 if cloud else 0o700, exist_ok=True)
+    if cloud:                                      # 雲端硬碟程式用編號 1000 的使用者在跑：要改成它的，才刪得掉
+        for p in (bk_root(), d):
+            try:
+                os.chown(p, 1000, 1000)
+            except OSError:
+                pass
+    return d
+
+
+def bk_own(path):
+    if bk_cloud():
+        try:
+            os.chown(path, 1000, 1000)
+        except OSError:
+            pass
+    else:
+        os.chmod(path, 0o600)
+
+
+def bk_list(folder):
+    try:
+        fs = [os.path.join(folder, f) for f in os.listdir(folder) if f.endswith(".vsbk")]
+    except OSError:
+        return []
+    return sorted(fs, key=os.path.getmtime)
+
+
+def bk_prune(folder):
+    for f in bk_list(folder)[:-BACKUP_KEEP]:
+        try:
+            os.remove(f)
+        except OSError:
+            pass
+
+
+def bk_cleanup_legacy():
+    """1.30 版的備份沒有加密（只有 Telegram 上那份有），換成新格式後把它們刪掉"""
+    pats = [os.path.join(BK_LOCAL_DIR, "*.tar.gz"), os.path.join(DATA_DIR, "peer-backups", "*", "*.tar.gz"),
+            os.path.join(CLOUD_DIR, BK_CLOUD_SUB, "*", "*.tar.gz")]
+    for f in (f for p in pats for f in glob.glob(p)):
+        try:
+            os.remove(f)
+        except OSError:
+            pass
+    for d in glob.glob(os.path.join(DATA_DIR, "peer-backups", "*")) + [os.path.join(DATA_DIR, "peer-backups")]:
+        try:
+            os.rmdir(d)
+        except OSError:
+            pass
 
 
 def n8n_dirs():
@@ -2347,97 +2561,87 @@ BK_README = """VPS 哨兵的備份：{name}（{when}）
 然後重新啟動相關的服務，例如：
   sudo systemctl restart x-ui vps-sentinel-lite
   docker restart n8n
-
-Telegram 上的備份檔（.enc 結尾）有加密碼，要先解開：
-  openssl enc -d -aes-256-cbc -pbkdf2 -iter 200000 -in 檔案.tar.gz.enc -out 檔案.tar.gz
-解開密碼在哨兵網頁的「設定 → 備份」裡。
 """
 
 
-def bk_list(folder):
-    try:
-        fs = [os.path.join(folder, f) for f in os.listdir(folder) if f.endswith(".tar.gz")]
-    except OSError:
-        return []
-    return sorted(fs, key=os.path.getmtime)
-
-
-def bk_prune(folder):
-    for f in bk_list(folder)[:-BACKUP_KEEP]:
-        try:
-            os.remove(f)
-        except OSError:
-            pass
+def _bk_tar(dst, td):
+    """把要備份的東西打包成 dst（.tar.gz）；回傳 (包含哪些東西, 跳過的大檔)"""
+    skip = {os.path.realpath(p) for p in (BK_LOCAL_DIR, os.path.join(DATA_DIR, "peer-backups"), CLOUD_DIR)}
+    labels, big, seen, n = [], [], set(), 0
+    with tarfile.open(dst, "w:gz", compresslevel=6) as tar:
+        for label, paths in backup_sources():
+            got = 0
+            for top in paths:
+                for p in _bk_walk(top, skip):
+                    rp = os.path.abspath(p)
+                    if rp in seen or os.path.realpath(p) in skip:
+                        continue
+                    seen.add(rp)
+                    arc = rp.lstrip("/")
+                    try:
+                        st = os.lstat(p)
+                        if os.path.islink(p):
+                            tar.add(p, arc, recursive=False)
+                        elif not stat.S_ISREG(st.st_mode):
+                            continue
+                        elif st.st_size > BK_FILE_MAX:
+                            big.append(rp)
+                            continue
+                        elif re.search(r"-(wal|shm|journal)$", p) and os.path.exists(re.sub(r"-(wal|shm|journal)$", "", p)):
+                            continue                      # 資料庫的暫存檔：下面複製資料庫時已經包含進去了
+                        elif _is_sqlite(p):
+                            n += 1
+                            cp = os.path.join(td, f"db{n}")
+                            try:
+                                _sqlite_copy(p, cp)
+                                info = tar.gettarinfo(p, arc)
+                                info.size = os.path.getsize(cp)
+                                with open(cp, "rb") as f:
+                                    tar.addfile(info, f)
+                                os.remove(cp)
+                            except sqlite3.Error:
+                                tar.add(p, arc, recursive=False)
+                        else:
+                            tar.add(p, arc, recursive=False)
+                        got += 1
+                    except OSError:
+                        continue                          # 檔案剛好被刪掉或讀不到：跳過
+            if got:
+                labels.append(label)
+        text = BK_README.format(name=NAME, when=f"{datetime.now():%Y-%m-%d %H:%M}",
+                                items="、".join(labels) or "（沒有找到要備份的東西）").encode()
+        info = tarfile.TarInfo(f"還原說明-{bk_safe(NAME)}.txt")
+        info.size, info.mtime, info.mode = len(text), int(time.time()), 0o644
+        tar.addfile(info, io.BytesIO(text))
+    return labels, big
 
 
 def make_backup():
-    """打包一份備份到本機，回傳 (檔案路徑, 包含哪些東西, 跳過的大檔)"""
-    os.makedirs(BK_DIR, mode=0o700, exist_ok=True)
-    now = datetime.now()
-    path = os.path.join(BK_DIR, f"{bk_safe(NAME)}-{now:%Y%m%d-%H%M%S}.tar.gz")
-    skip = {os.path.realpath(p) for p in (BK_DIR, BK_PEER_DIR, CLOUD_DIR)}
-    labels, big, seen = [], [], set()
-    tmp = path + ".part"
+    """打包並加密一份這台的備份，回傳 (檔案路徑, 包含哪些東西, 跳過的大檔)"""
+    folder = bk_dir(NAME)
+    path = os.path.join(folder, f"{bk_safe(NAME)}-{datetime.now():%Y%m%d-%H%M%S}.vsbk")
+    tmp = os.path.join(folder, "." + os.path.basename(path) + ".part")
     try:
-        with tempfile.TemporaryDirectory() as td, tarfile.open(tmp, "w:gz", compresslevel=6) as tar:
-            n = 0
-            for label, paths in backup_sources():
-                got = 0
-                for top in paths:
-                    for p in _bk_walk(top, skip):
-                        rp = os.path.abspath(p)
-                        if rp in seen or os.path.realpath(p) in skip:
-                            continue
-                        seen.add(rp)
-                        arc = rp.lstrip("/")
-                        try:
-                            st = os.lstat(p)
-                            if os.path.islink(p):
-                                tar.add(p, arc, recursive=False)
-                            elif not stat.S_ISREG(st.st_mode):
-                                continue
-                            elif st.st_size > BK_FILE_MAX:
-                                big.append(rp)
-                                continue
-                            elif re.search(r"-(wal|shm|journal)$", p) and os.path.exists(re.sub(r"-(wal|shm|journal)$", "", p)):
-                                continue                      # 資料庫的暫存檔：下面複製資料庫時已經包含進去了
-                            elif _is_sqlite(p):
-                                n += 1
-                                cp = os.path.join(td, f"db{n}")
-                                try:
-                                    _sqlite_copy(p, cp)
-                                    info = tar.gettarinfo(p, arc)
-                                    info.size = os.path.getsize(cp)
-                                    with open(cp, "rb") as f:
-                                        tar.addfile(info, f)
-                                    os.remove(cp)
-                                except sqlite3.Error:
-                                    tar.add(p, arc, recursive=False)
-                            else:
-                                tar.add(p, arc, recursive=False)
-                            got += 1
-                        except OSError:
-                            continue                          # 檔案剛好被刪掉或讀不到：跳過
-                if got:
-                    labels.append(label)
-            text = BK_README.format(name=NAME, when=f"{now:%Y-%m-%d %H:%M}", items="、".join(labels) or "（沒有找到要備份的東西）").encode()
-            info = tarfile.TarInfo(f"還原說明-{bk_safe(NAME)}.txt")
-            info.size, info.mtime, info.mode = len(text), int(time.time()), 0o644
-            tar.addfile(info, io.BytesIO(text))
-        os.chmod(tmp, 0o600)
+        with tempfile.TemporaryDirectory() as td:
+            os.chmod(td, 0o700)
+            tgz = os.path.join(td, "backup.tar.gz")
+            labels, big = _bk_tar(tgz, td)
+            vsbk_encrypt(tgz, tmp, bk_key())
+        bk_own(tmp)
         os.replace(tmp, path)
     finally:
         if os.path.exists(tmp):
             os.remove(tmp)
-    bk_prune(BK_DIR)
+    bk_prune(folder)
     return path, labels, big
 
 
 def bk_latest(max_age):
-    """最近一份備份；太舊（或還沒有）就馬上打包一份新的"""
+    """這台最近一份備份；太舊、還沒有、或是換密碼之前做的，就馬上打包一份新的"""
     with BK_MAKE:
-        fs = bk_list(BK_DIR)
-        if fs and time.time() - os.path.getmtime(fs[-1]) < max_age:
+        since = max(time.time() - max_age, BK.get("key_t") or 0)
+        fs = [f for f in bk_list(os.path.join(bk_root(), bk_safe(NAME))) if os.path.getmtime(f) > since]
+        if fs:
             return fs[-1], None
         path, labels, big = make_backup()
         return path, (labels, big)
@@ -2481,33 +2685,20 @@ def tg_send_file(path, filename, caption):
 
 
 def bk_to_tg(path, owner=None):
-    """加上密碼後傳到 Telegram；owner 是幫別台傳的時候那台的名稱"""
-    if not shutil.which("openssl"):
-        return "主機上沒有 openssl，沒辦法加密碼，所以沒有傳"
-    with tempfile.TemporaryDirectory() as td:
-        name = os.path.basename(path) + ".enc"
-        out = os.path.join(td, name)
-        r = subprocess.run(["openssl", "enc", "-aes-256-cbc", "-pbkdf2", "-iter", "200000", "-salt",
-                            "-in", path, "-out", out, "-pass", "env:VS_BK_KEY"],
-                           env=dict(os.environ, VS_BK_KEY=bk_key()), capture_output=True, timeout=600)
-        if r.returncode != 0:
-            return "加密碼失敗"
-        who = html.escape(owner or NAME)
-        cap = (f"🗄 <b>{who}</b>　每日備份（{fmt_size(os.path.getsize(path))}）\n"
-               + (f"解開密碼跟「{html.escape(NAME)}」的一樣，在哨兵網頁的「設定 → 備份」裡" if owner else "解開密碼在哨兵網頁的「設定 → 備份」裡"))
-        return tg_send_file(out, name, cap)
+    """把備份檔（已經加密）傳到 Telegram；owner 是幫別台傳的時候那台的名稱"""
+    cap = (f"🗄 <b>{html.escape(owner or NAME)}</b>　每日備份（{fmt_size(os.path.getsize(path))}）\n"
+           "已加密，解開密碼在哨兵網頁的「設定 → 備份」裡")
+    return tg_send_file(path, os.path.basename(path), cap)
 
 
 def bk_store(src, fname, stream, length):
-    """把其他主機傳來的備份存起來（有雲端硬碟就放雲端硬碟，打開雲端硬碟就看得到）；回傳 (成功, 說明, 存放位置)"""
-    if not re.fullmatch(r"[^/\\\x00]{1,120}\.tar\.gz", fname or "") or fname.startswith("."):
+    """把其他主機傳來的備份存在這台；回傳 (成功, 說明, 存放位置)"""
+    if not re.fullmatch(r"[^/\\\x00]{1,120}\.vsbk", fname or "") or fname.startswith("."):
         return False, "檔名不對", None
     if not 0 < length <= BK_UPLOAD_MAX:
         return False, "檔案大小不對", None
-    cloud = os.path.ismount(CLOUD_DIR)
-    folder = os.path.join(CLOUD_DIR, BK_CLOUD_SUB, bk_safe(src)) if cloud else os.path.join(BK_PEER_DIR, bk_safe(src))
-    where = "雲端硬碟" if cloud else "主機上"
-    os.makedirs(folder, mode=0o700 if not cloud else 0o755, exist_ok=True)
+    folder = bk_dir(src)
+    where = bk_where()
     if shutil.disk_usage(folder).free < length + 50 * 1024 * 1024:
         return False, f"{where}的空間不夠", None
     dest = os.path.join(folder, fname)
@@ -2521,6 +2712,7 @@ def bk_store(src, fname, stream, length):
                     raise OSError("傳到一半斷掉了")
                 f.write(chunk)
                 left -= len(chunk)
+        bk_own(tmp)
         os.replace(tmp, dest)
     except OSError as e:
         try:
@@ -2528,17 +2720,7 @@ def bk_store(src, fname, stream, length):
         except OSError:
             pass
         return False, f"存檔失敗：{e}", None
-    if cloud:                                      # 雲端硬碟程式用編號 1000 的使用者在跑：要改成它的，才刪得掉
-        for p in (os.path.join(CLOUD_DIR, BK_CLOUD_SUB), folder, dest):
-            try:
-                os.chown(p, 1000, 1000)
-            except OSError:
-                pass
-    else:
-        os.chmod(dest, 0o600)
     bk_prune(folder)
-    with COL.lock:
-        BK["got"][src] = {"t": time.time(), "size": length, "where": where}
     return True, where, dest
 
 
@@ -2584,7 +2766,7 @@ def bk_pull(peer):
 
 
 def backup_run(manual=False):
-    """完整的一次備份：打包 → Telegram → 傳給其他主機 → 拿其他主機的回來"""
+    """完整的一次備份：打包加密 → Telegram → 同步密碼、送給其他主機 → 拿其他主機的回來"""
     if not BK_RUN.acquire(blocking=False):
         return
     BK["running"] = True
@@ -2595,22 +2777,25 @@ def backup_run(manual=False):
             labels, big = made or (None, None)
             res.update(size=os.path.getsize(path), items=labels if labels is not None else (BK["last"] or {}).get("items", []),
                        big=big or [])
+            bk_cleanup_legacy()
         except Exception as e:  # noqa: BLE001
             log("備份打包失敗：", repr(e))
             res["msg"] = f"打包失敗：{e}"
             path = None
         if path:
-            res["to"].append({"where": "存在這台主機", "ok": True, "msg": ""})
+            res["to"].append({"where": f"存在這台的{bk_where()}", "ok": True, "msg": ""})
             if TG_BOT and TG_CHAT:
                 err = bk_to_tg(path)
                 res["to"].append({"where": "傳到 Telegram", "ok": not err, "msg": err})
             for p in PEERS:
-                ok, msg = bk_push(p, path)
+                ok, msg = bk_send_key(p)                         # 先讓那台用同一組密碼，它做的備份這邊也打得開
+                if ok:
+                    ok, msg = bk_push(p, path)
                 res["to"].append({"where": f"存到「{p['name']}」的{msg}" if ok else f"存到「{p['name']}」", "ok": ok, "msg": "" if ok else msg})
-            for p in PEERS:
-                ok, msg = bk_pull(p)
-                res["to"].append({"where": f"「{p['name']}」的備份也存了一份在這台的{msg}" if ok else f"拿「{p['name']}」的備份", "ok": ok,
-                                  "msg": "" if ok else msg})
+                if ok:
+                    ok, msg = bk_pull(p)
+                    res["to"].append({"where": f"「{p['name']}」的備份也存了一份在這台的{msg}" if ok else f"拿「{p['name']}」的備份",
+                                      "ok": ok, "msg": "" if ok else msg})
             res["ok"] = all(x["ok"] for x in res["to"])
         prev = BK["last"]
         with COL.lock:
@@ -2631,13 +2816,26 @@ def backup_run(manual=False):
         BK_RUN.release()
 
 
+def bk_copies():
+    """這台存著哪些主機的備份：[{name, count, t, size}]，這台自己排第一個"""
+    out, root, me = [], bk_root(), bk_safe(NAME)
+    try:
+        names = sorted(os.listdir(root), key=lambda n: (n != me, n))
+    except OSError:
+        return []
+    for n in names:
+        fs = bk_list(os.path.join(root, n))
+        if fs:
+            out.append({"name": n, "me": n == me, "count": len(fs), "t": os.path.getmtime(fs[-1]), "size": os.path.getsize(fs[-1])})
+    return out
+
+
 def backup_status():
     with COL.lock:
-        got = [{"name": k, **v} for k, v in BK["got"].items()]
         last = BK["last"]
     return {"on": BACKUP_ON, "hour": BACKUP_HOUR, "key": bk_key(), "running": BK["running"], "last": last,
-            "got": got, "tg": bool(TG_BOT and TG_CHAT), "peers": [p["name"] for p in PEERS],
-            "cloud": os.path.ismount(CLOUD_DIR)}
+            "copies": bk_copies(), "where": bk_where(), "folder": BK_CLOUD_SUB, "tg": bool(TG_BOT and TG_CHAT),
+            "peers": [p["name"] for p in PEERS]}
 
 
 def set_backup(on):
@@ -2917,9 +3115,9 @@ class Handler(BaseHTTPRequestHandler):
             return self.send(500, json.dumps({"error": f"打包失敗：{e}"}, ensure_ascii=False))
         name = os.path.basename(f)
         self.send_response(200)
-        self.send_header("Content-Type", "application/gzip")
+        self.send_header("Content-Type", "application/octet-stream")
         self.send_header("Content-Length", str(os.path.getsize(f)))
-        self.send_header("Content-Disposition", f"attachment; filename=\"backup.tar.gz\"; filename*=UTF-8''{urllib.parse.quote(name)}")
+        self.send_header("Content-Disposition", f"attachment; filename=\"backup.vsbk\"; filename*=UTF-8''{urllib.parse.quote(name)}")
         self.send_header("X-Backup-Name", urllib.parse.quote(name))
         self.send_header("X-Backup-TG", "1" if TG_BOT and TG_CHAT else "0")   # 這台自己會傳到 Telegram，拿走的那台就不用再幫忙傳
         self.send_header("Cache-Control", "no-store")
@@ -3001,6 +3199,9 @@ class Handler(BaseHTTPRequestHandler):
                     return self.send(200, json.dumps({"ok": True, "message": "正在備份中"}, ensure_ascii=False))
                 COL.bg("backup", lambda: backup_run(manual=True))
                 return self.send(200, json.dumps({"ok": True, "message": "開始備份"}, ensure_ascii=False))
+            if d.get("action") == "key":             # 換解開密碼（網頁上改：sync＝其他主機也一起改；主要那台同步過來的：不再往外傳）
+                ok, msg = bk_set_key(d.get("key"), sync=bool(d.get("sync")))
+                return self.send(200 if ok else 400, json.dumps({"ok": ok, "message": msg}, ensure_ascii=False))
             if d.get("action") == "set":
                 ok, msg = set_backup(bool(d.get("on")))
                 return self.send(200 if ok else 500, json.dumps({"ok": ok, "message": msg}, ensure_ascii=False))

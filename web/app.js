@@ -1590,7 +1590,9 @@ async function bkGet(node){
 const bkSize = n => n >= 1048576 ? `${(n / 1048576).toFixed(1)} MB` : `${Math.max(1, Math.round(n / 1024))} KB`;
 function bkLine(d){
   const L = d.last;
-  return !d.on ? ["已關閉", ""] : d.running ? ["備份中…", ""] : !L ? [`每天清晨 ${d.hour} 點自動備份，還沒備份過`, ""]
+  const me = (d.copies || []).find(c => c.me);
+  return !d.on ? ["已關閉", ""] : d.running ? ["備份中…", ""]
+    : !L && me ? [`上次備份：${ago(me.t)}（${bkSize(me.size)}）`, "on"] : !L ? [`每天清晨 ${d.hour} 點自動備份，還沒備份過`, ""]
     : L.ok ? [`上次備份：${ago(L.t)}（${bkSize(L.size)}）`, "on"] : [`上次備份有問題（${ago(L.t)}），點進來看`, "bad"];
 }
 async function bkStatus(root){
@@ -1609,29 +1611,34 @@ function bkRows(d){
     if (L.items && L.items.length) h += row(null, `<b>備份內容</b>${esc(L.items.join("、"))}`);
     if (L.big && L.big.length) h += row(null, `<b>太大沒備份</b>${esc(L.big.map(p => p.split("/").pop()).join("、"))}`);
   } else h += row(null, d.on ? `還沒備份過，每天清晨 ${d.hour} 點會自動備份` : "每日備份已關閉");
-  h += (d.got || []).filter(g => !d.peers.includes(g.name)).map(g => row(true, `「${esc(g.name)}」的備份存在這台的${esc(g.where)}`, when(g.t))).join("");
   if (!d.tg) h += row(null, `<small>設定好 Telegram 通知，就會多存一份在 Telegram 上</small>`);
   return h;
 }
+/* 這台存著哪些主機的備份（每台主機都存著每一台的） */
+const bkCopies = d => (d.copies || []).map(c => `<li>${I("archive")}<span><b>${esc(c.name)}${c.me ? "（這台）" : ""}</b>${c.count} 份<small>最新：${esc(when(c.t))}・${bkSize(c.size)}</small></span></li>`).join("")
+  || `<li><span>還沒有備份</span></li>`;
 async function bkModal(node, label){
   let d = await bkGet(node).catch(e => ({err:e.message}));
   if (d.err) return toast(d.err, "bad");
   const v = document.createElement("div"); v.className = "veil";
   const multi = LIST.length > 1;
   v.innerHTML = `<div class="dialog glass pop bkdlg">${IC("archive","big")}<h3>每日備份${multi ? `：${esc(label)}` : ""}</h3>
-    <p>3x-ui、n8n、哨兵和網站的設定，每天自動打包一份，${d.peers.length ? "存在另一台主機和 Telegram 上" : "存在這台和 Telegram 上"}</p>
+    <p>3x-ui、n8n、哨兵和網站的設定，每天自動打包並加密。每台主機都存著每一台的備份，Telegram 上也有一份</p>
     <div class="form">
       <ul class="bkrows">${bkRows(d)}</ul>
-      <div class="lbl">Telegram 上那份的解開密碼<b class="bkkey" title="點一下顯示">${esc(d.key)}</b>
-        <small>請另外記在安全的地方。主機壞掉時，要用這組密碼才打得開 Telegram 上的備份檔</small></div>
+      <div class="lbl">${d.where === "雲端硬碟" ? "這台的雲端硬碟裡有" : "這台主機上有"}${d.where === "雲端硬碟" ? `<small>在「${esc(d.folder)}」資料夾，打開雲端硬碟就看得到</small>` : ""}<ul class="bkrows bkcopies">${bkCopies(d)}</ul></div>
+      <div class="lbl">解開密碼（所有主機共用）<b class="bkkey" title="點一下顯示">${esc(d.key)}</b>
+        <small>備份檔都用銀行等級的加密保護，沒有這組密碼誰都打不開。請另外記在安全的地方，主機壞掉時才拿得到</small>
+        <button class="linkish bkchg" data-chg>改成自己的密碼</button>
+        <span class="bknew" hidden><input class="field" type="password" maxlength="128" autocomplete="new-password" placeholder="至少 8 個字"><button class="ubtn sm" data-setkey>儲存</button></span></div>
       <label class="bkon"><span>每天清晨 ${d.hour} 點自動備份</span><input type="checkbox" class="tog" ${d.on ? "checked" : ""}></label>
       <div class="msg"></div></div>
     <div class="btns three"><button class="ubtn ghost" data-dl>下載</button><button class="ubtn ghost" data-r="0">關閉</button><button class="ubtn" data-run>立即備份</button></div></div>`;
   $("#layer").appendChild(v);
   const msg = v.querySelector(".msg"), rows = v.querySelector(".bkrows"), runb = v.querySelector("[data-run]");
   const say = (t, c = "") => { msg.className = "msg " + c; msg.textContent = t; };
-  const post = async body => {
-    const r = await api("/api/backup" + bkQ(node), {method:"POST", headers:{"X-Token":getTok(), "Content-Type":"application/json"}, body:JSON.stringify(body)});
+  const post = async (body, here) => {           // here：送給目前開著的這台（換密碼由它負責通知其他台）
+    const r = await api("/api/backup" + (here ? "" : bkQ(node)), {method:"POST", headers:{"X-Token":getTok(), "Content-Type":"application/json"}, body:JSON.stringify(body)});
     const x = await r.json().catch(() => ({}));
     if (!r.ok) throw new Error(x.message || x.error || "失敗了，請再試一次");
     return x;
@@ -1650,7 +1657,7 @@ async function bkModal(node, label){
         if (!d.running) break;
       }
       if (!live) return;
-      busy(runb); rows.innerHTML = bkRows(d);
+      busy(runb); rows.innerHTML = bkRows(d); v.querySelector(".bkcopies").innerHTML = bkCopies(d);
       d.last && d.last.ok ? say("備份好了", "ok") : say("有地方沒備份成功，看上面的說明", "bad");
     };
     if (d.running) watch();
@@ -1661,6 +1668,24 @@ async function bkModal(node, label){
     });
     v.addEventListener("click", async e => {
       if (e.target === v || e.target.closest("[data-r]")) return done();
+      if (e.target.closest("[data-chg]")) {
+        const box = v.querySelector(".bknew"); box.hidden = false; e.target.closest("[data-chg]").hidden = true;
+        return box.querySelector("input").focus();
+      }
+      const sk = e.target.closest("[data-setkey]");
+      if (sk && !sk.disabled) {
+        const inp = v.querySelector(".bknew input"), key = inp.value;
+        if (key.length < 8) return say("密碼至少要 8 個字", "bad");
+        if (!await modal({icon:"key", cls:"theme", title:"換成新的解開密碼？", text:"所有主機會一起換。之後的備份用新密碼；以前的備份還是要用舊密碼才打得開，舊密碼也請留著。", ok:"換"})) return;
+        busy(sk, "儲存中…");
+        try {
+          const x = await post({action:"key", key, sync:true}, true); d.key = key;
+          const kb = v.querySelector(".bkkey"); kb.textContent = key; kb.classList.add("on");
+          inp.value = ""; v.querySelector(".bknew").hidden = true; v.querySelector("[data-chg]").hidden = false; say(x.message, "ok");
+        } catch(err) { say(err.message, "bad"); }
+        busy(sk);
+        return;
+      }
       const k = e.target.closest(".bkkey");
       if (k) {
         if (!k.classList.contains("on")) return k.classList.add("on");
@@ -1681,7 +1706,7 @@ async function bkModal(node, label){
           const name = decodeURIComponent(r.headers.get("X-Backup-Name") || "backup.tar.gz");
           const a = document.createElement("a"); a.href = URL.createObjectURL(await r.blob()); a.download = name;
           document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 60000);
-          say(`已下載 ${name}`, "ok");
+          say(`已下載 ${name}（要用解開密碼才打得開）`, "ok");
         } catch(err) { say(err.message, "bad"); }
         busy(dl);
       }
