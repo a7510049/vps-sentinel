@@ -317,14 +317,20 @@ button{font:inherit;color:inherit}
 .dash.d{display:grid;grid-template-columns:304px minmax(0,1fr);gap:22px;padding:24px 0 34px;align-items:start}
 .side{position:sticky;top:24px;border-radius:var(--r-xl);padding:20px 14px 14px;display:flex;flex-direction:column;gap:16px;
   max-height:calc(100vh - 48px);animation:rise var(--t-slow) var(--ease) both}
-.brand{display:flex;align-items:center;gap:11px;padding:0 6px}
+.brand{display:flex;align-items:center;gap:11px;padding:0 10px}
 .brand svg{width:38px;height:38px;border-radius:var(--r-sm);flex:none;box-shadow:0 8px 20px -8px var(--a1)}
 .brand h1{font-size:var(--fs-xl);font-weight:900;line-height:1.2}
 .brand .meta{margin-top:1px}
-.greet{padding:0 8px;font-size:var(--fs-m);font-weight:700;color:var(--sub);line-height:1.5}
-.greet b{color:var(--text)}
-.side .summary{margin:0;padding:0 4px;gap:6px}
-.side .pill{padding:6px 11px 6px 10px;font-size:var(--fs-s);gap:6px}
+.greet{padding:4px 12px 0}
+.greet .hello{font-size:var(--fs-s);color:var(--sub);font-weight:700}
+.greet h2{font-size:var(--fs-xl);font-weight:900;line-height:1.3;margin-top:4px}
+.greet h2 em{font-style:normal;background:var(--grad);-webkit-background-clip:text;background-clip:text;color:transparent}
+.greet .wxtip{margin-top:4px}
+/* 三格統計：數字在上、名稱在下，跟主機卡片同樣的圓角 */
+.side .summary{margin:0;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
+.side .pill{border-radius:var(--r-lg);padding:9px 8px 10px;flex-wrap:wrap;justify-content:center;gap:2px 6px;font-size:var(--fs-xs);color:var(--sub)}
+.side .pill b{order:-1;flex-basis:100%;text-align:center;font-size:var(--fs-xl);color:var(--text);line-height:1.2}
+.side .pind{border-radius:var(--r-lg)}
 .hosts{display:flex;flex-direction:column;gap:6px;overflow-x:hidden;overflow-y:auto;padding:2px;margin:0 -2px;scrollbar-width:none}
 .hosts::-webkit-scrollbar{display:none}
 .host{border:0;background:transparent;text-align:left;cursor:pointer;border-radius:var(--r-lg);padding:11px 12px;display:flex;flex-direction:column;gap:9px;
@@ -826,10 +832,10 @@ html::-webkit-scrollbar-thumb{background:color-mix(in srgb,var(--text) 22%,trans
 @media (prefers-reduced-motion:reduce){*,*::before,*::after{animation:none!important;transition:none!important}}
 @media (prefers-reduced-transparency:reduce){.glass,.scrolled .bar{background:var(--bg);-webkit-backdrop-filter:none;backdrop-filter:none}.aurora{display:none}}
 /* ═════════ 天氣（問候旁邊） ═════════ */
-.wxw:empty{display:none}
-.wxb{display:flex;align-items:center;gap:12px;margin-top:14px;padding:10px 14px;border-radius:var(--r-md);background:var(--inset);box-shadow:var(--ring)}
-.side .wxb{margin-top:0}
-.wxb .wi{font-size:var(--fs-2xl);line-height:1;flex:none}
-.wxb div{min-width:0;font-size:var(--fs-m);font-weight:700;color:var(--sub)}
-.wxb b{font-size:var(--fs-xl);font-weight:900;color:var(--text);margin-right:8px}
-.wxb small{display:block;font-size:var(--fs-s);font-weight:600;margin-top:1px}
+.hello{display:flex;align-items:baseline;justify-content:space-between;gap:10px}
+.wxs{white-space:nowrap;font-weight:700}
+.wxs b{color:var(--text);font-weight:900}
+.wxs:empty,.wxtip:empty{display:none}
+.wxtip{font-size:var(--fs-s);font-weight:700;color:var(--sub);margin-top:6px}
+.dash.m .summary{display:grid;grid-template-columns:repeat(3,minmax(0,1fr))}
+.dash.m .pill{justify-content:center}
