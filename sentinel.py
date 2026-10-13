@@ -40,7 +40,7 @@ from collections import deque
 from concurrent.futures import ThreadPoolExecutor
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
-VERSION = "1.42"
+VERSION = "1.43"
 
 # ───────────────────────── 哨兵備份檔（.vsbk）─────────────────────────
 # 哨兵專用的備份格式：外面是自己的檔案格式，裡面用的是成熟、標準的加密方法（不自己發明加密）：
