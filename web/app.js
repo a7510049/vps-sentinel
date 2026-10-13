@@ -282,7 +282,9 @@ function greet(n, total){
   const word = total > 1 ? "所有主機" : "主機";
   const line = n.bad ? `有 ${n.bad} 台<em>出問題了</em>` : n.warn ? `有 ${n.warn} 台<em>需要留意</em>` : `${word}都<em>很健康</em>`;
   const on = PREF.show.weather && WX;
-  return {hi, line, wx: on ? `${WX.icon} ${WX.t}° ${WX.word}` : "", tip: on ? WX.tip : ""};
+  // 有天氣時問候不加表情符號，天氣自己一塊：大圖示＋溫度、天氣，下面一行小提醒
+  return {hi: on ? hi.split(" ")[0] : hi, line,
+    wx: on ? `<div class="wxb"><span class="wi">${WX.icon}</span><div><b>${WX.t}°</b>${esc(WX.word)}${WX.tip ? `<small>${esc(WX.tip)}</small>` : ""}</div></div>` : ""};
 }
 
 /* ═════════ 天氣：問候旁邊顯示目前位置的天氣和小提醒 ═════════ */
@@ -493,7 +495,7 @@ function renderMobile(list, n, time){
   const w = PHONE.matches && list.length > 1;     // 兩台以上的手機版：卡片平常只露出一條，點一張才展開
   return `<div class="dash m" data-key="m"><header class="bar"><span class="mini">VPS 哨兵</span><span class="grow"></span>
     <button class="cap glass ${list.some(s=>s.self_has)?"hasnew":""}" data-settings title="設定">${I("gear")}</button><button class="cap glass" data-logout title="登出">${I("logout")}</button></header>
-    <div class="hero"><div class="hello">${g.hi}<span class="wx" data-x>${g.wx}</span></div><h1 data-x>${g.line}</h1><div class="wxtip" data-x>${g.tip}</div><div class="meta"><span class="live"></span>更新於 ${time}</div></div>
+    <div class="hero"><div class="hello" data-x>${g.hi}</div><h1 data-x>${g.line}</h1><div class="meta"><span class="live"></span>更新於 ${time}</div><div class="wxw" data-x>${g.wx}</div></div>
     ${summary(n, many)}
     <div class="grid${w ? " wallet" : ""}" data-keyed>${shown.length ? shown.map((s, i) => mcard(s, i, w)).join("") : `<div class="empty" data-key="empty">這個分類目前沒有主機 👍</div>`}</div></div>`;
 }
@@ -578,22 +580,6 @@ function detail(s){
   const ep = eventsPanel(s), tp = trafficPanel(s);
   if (ip || ep || tp) h += `<div class="lower" data-key="lw" data-keyed>${tp}${ep}${ip}</div>`;
   return h + `</div>`;
-}
-function overview(list){
-  const on = list.filter(s => s.online);
-  if (!on.length) return "";
-  const tr = PREF.show.traffic ? on.filter(s => s.traffic) : [];
-  const score = s => s.traffic.limit ? Math.max(s.traffic.pct || 0, s.traffic.projected ? s.traffic.projected / s.traffic.limit * 100 : 0) : -1;
-  tr.sort((a, b) => score(b) - score(a));
-  const rows = tr.slice(0, 4).map(s => { const t = s.traffic, over = t.limit && t.projected > t.limit;
-    return `<div class="tq" data-key="${esc(keyOf(s))}"><div class="r"><span class="nm">${esc(s.name)}</span><b class="num">${t.limit ? num(t.pct) + "%" : size(t.used)}</b></div>
-      ${t.limit ? track(t.pct) : ""}<div class="s ${over?"warn":""}">${t.limit ? `${size(t.used)} / ${size(t.limit)}・` : "沒有設定上限・"}${over ? "照目前速度會超過" : `還有 ${t.days_left} 天重置`}</div></div>`; }).join("");
-  const items = on.flatMap(itemsOf), ok = items.filter(x=>x.st==="ok").length, bad = items.filter(x=>x.st==="bad").length, off = items.length-ok-bad;
-  const pc = v => items.length ? (v / items.length * 100).toFixed(1) : 0;
-  if (!rows && !items.length) return "";
-  return `<div class="ovw" data-keyed>${rows ? `<div class="tqw" data-key="tqw"><h4>${IC("month")}本月流量</h4><div class="tqs" data-keyed>${rows}</div></div>` : ""}
-    ${items.length ? `<div class="bar2" data-key="b2"><i style="width:${pc(ok)}%;background:var(--ok)"></i><i style="width:${pc(off)}%;background:var(--faint)"></i><i style="width:${pc(bad)}%;background:var(--bad)"></i></div>
-    <div class="cap2" data-key="c2"><span>全部容器與服務</span><span>${ok} 正常${off?`・${off} 沒在用`:""}${bad?`・${bad} 異常`:""}</span></div>` : ""}</div>`;
 }
 const CNT = {both:"上傳＋下載", out:"只算上傳", in:"只算下載", max:"取較大的"};
 function trafficBars(t, id){
@@ -680,10 +666,10 @@ function renderDesk(list, n, time){
   const sel = list.find(s=>keyOf(s)===SEL) || list[0], g = greet(n, list.length);
   return `<div class="dash d" data-key="d"><aside class="side glass">
       <div class="brand"><svg class="" viewBox="0 0 512 512" aria-hidden="true"><defs><linearGradient id="lbbr" x1="0" y1="0" x2="0" y2="1"><stop offset="0" style="stop-color:color-mix(in srgb,var(--a1) 70%,#fff)"/><stop offset="1" style="stop-color:var(--a2)"/></linearGradient><linearGradient id="lhbr" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#fff" stop-opacity=".24"/><stop offset=".45" stop-color="#fff" stop-opacity="0"/></linearGradient><mask id="lmbr"><rect width="512" height="512" fill="#fff"/><path d="M204 258l36 36 72-76" fill="none" stroke="#000" stroke-width="30" stroke-linecap="round" stroke-linejoin="round"/></mask></defs><rect width="512" height="512" rx="115" fill="url(#lbbr)"/><rect width="512" height="512" rx="115" fill="url(#lhbr)"/><path d="M256 108 371 150c9 3 15 12 15 22v72c0 84-52 140-122 168-5 2-11 2-16 0-70-28-122-84-122-168v-72c0-10 6-19 15-22Z" fill="#fff" mask="url(#lmbr)" transform="translate(256 262) scale(.88) translate(-256 -258)"/></svg><div><h1>VPS 哨兵</h1><div class="meta"><span class="live"></span>更新於 ${time}</div></div></div>
-      <div class="greet">${g.hi}<span class="wx" data-x>${g.wx}</span><br><b>${g.line.replace(/<\/?em>/g,"")}</b><span class="wxtip" data-x>${g.tip}</span></div>
+      <div class="greet"><span data-x>${g.hi}</span><br><b>${g.line.replace(/<\/?em>/g,"")}</b></div>
+      <div class="wxw" data-x>${g.wx}</div>
       ${summary(n, true)}
       <div class="hosts" data-keyed>${(FILTER ? list.filter(s=>lvOf(s)===FILTER) : list).map(s=>hostItem(s, s===sel)).join("") || `<div class="empty" data-key="empty">這個分類目前沒有主機 👍</div>`}</div>
-      ${overview(list)}
       <div class="side-foot"><span class="sub">${list.length} 台主機</span>
         <button class="iconbtn ${REFRESHING?"spinning":""}" data-refresh title="重新整理">${I("upd")}</button>
         <button class="iconbtn ${list.some(s=>s.self_has)?"hasnew":""}" data-settings title="設定">${I("gear")}</button><button class="iconbtn" data-logout title="登出">${I("logout")}</button></div>
@@ -743,7 +729,7 @@ const T = {fast:200, mid:350, slow:600};
 const EASE = "cubic-bezier(.22,1,.36,1)", SPRING = "cubic-bezier(.34,1.4,.64,1)", EXIT = "cubic-bezier(.4,0,1,1)";
 const canAnim = () => PREF.motion && !matchMedia("(prefers-reduced-motion: reduce)").matches;
 /* 讓元素平順地離開：先淡出、收起高度，再移除 */
-const BLOCK = ".alert,.wnote,.item,.grp,.tq,.tqw,.card,.host,.empty,.spark,.ev,.more,.foot,.alerts,.offline,.strip,.charts,.lower,.gauges";
+const BLOCK = ".alert,.wnote,.item,.grp,.card,.host,.empty,.spark,.ev,.more,.foot,.alerts,.offline,.strip,.charts,.lower,.gauges";
 const TILE = ".panel,.stat,.tile,.gauge";
 function flipSiblings(parent, change){
   const kids = [...parent.children].filter(c => !c._leaving), r0 = kids.map(c => c.getBoundingClientRect());
