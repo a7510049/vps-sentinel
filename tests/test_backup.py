@@ -22,7 +22,15 @@ import urllib.request
 
 from test_smoke import ROOT, TOKEN, free_port
 
-DOCS = []                                          # 假的 Telegram 收到的檔案 [(檔名, 內容, 說明文字)]
+HA, HB = "Oracle Cloud", "香港 Azure"
+FNAME = r"^{} \d{{4}}-\d\d-\d\d \d\d\.\d\d( \(\d+\))?\.vsbk$"
+DOCS = []
+
+
+def is_old(path):
+    """測試裡假裝的 1.31 版舊檔案"""
+    with open(path, "rb") as f:
+        return f.read(8) == b"VSBK-old"                                          # 假的 Telegram 收到的檔案 [(檔名, 內容, 說明文字)]
 
 
 class FakeTG(http.server.BaseHTTPRequestHandler):
@@ -47,13 +55,13 @@ class FakeTG(http.server.BaseHTTPRequestHandler):
         pass
 
 
-def start(tmp, name, extra, env_extra=None):
+def start(tmp, name, extra, env_extra=None, display=None):
     port = free_port()
     d = os.path.join(tmp, name)
     os.makedirs(d)
     conf = os.path.join(d, "test.conf")
     with open(conf, "w", encoding="utf-8") as f:
-        f.write(f"BIND=127.0.0.1\nPORT={port}\nTOKEN={TOKEN}\nNAME={name}\nDATA_DIR={d}/data\nCLOUD_DIR={d}/cloud\n{extra}")
+        f.write(f"BIND=127.0.0.1\nPORT={port}\nTOKEN={TOKEN}\nNAME={display or name}\nDATA_DIR={d}/data\nCLOUD_DIR={d}/cloud\n{extra}")
     env = {k: v for k, v in os.environ.items() if not k.startswith("SENTINEL_")}
     env.update(SENTINEL_CONF=conf, **(env_extra or {}))
     log = open(os.path.join(d, "server.log"), "w+", encoding="utf-8")
@@ -87,11 +95,12 @@ class BackupTest(unittest.TestCase):
         cls.db.executemany("INSERT INTO users VALUES (?)", [(f"u{i}",) for i in range(50)])
         cls.db.commit()                            # 還開著不關：資料在 -wal 檔裡，直接複製主檔會缺資料
         cls.procs = []
-        cls.b = start(cls.tmp, "B", f"BACKUP_PATHS={cls.src}\n")
+        # 主機在網頁上顯示的名稱（NAME）跟主要那台設定裡的代號（PEERS 的 HK）不一樣：備份一律用顯示的名稱
+        cls.b = start(cls.tmp, "B", f"BACKUP_PATHS={cls.src}\n", display=HB)
         cls.procs.append(cls.b)
         tg = {"SENTINEL_TG_API": f"http://127.0.0.1:{cls.tg.server_address[1]}/bot"}
-        cls.a = start(cls.tmp, "A", f"BACKUP_PATHS={cls.src}\nPEERS=B=http://127.0.0.1:{cls.b[1]}\n"
-                      "TG_BOT_TOKEN=123:abc\nTG_CHAT_ID=42\n", tg)
+        cls.a = start(cls.tmp, "A", f"BACKUP_PATHS={cls.src}\nPEERS=HK=http://127.0.0.1:{cls.b[1]}\n"
+                      "TG_BOT_TOKEN=123:abc\nTG_CHAT_ID=42\n", tg, display=HA)
         cls.procs.append(cls.a)
 
     @classmethod
@@ -161,7 +170,7 @@ class BackupTest(unittest.TestCase):
 
     def files(self, host, who):
         d = os.path.join(host[2], "data", "backups", who)
-        return sorted(os.path.join(d, f) for f in os.listdir(d))
+        return sorted((os.path.join(d, f) for f in os.listdir(d)), key=os.path.getmtime)
 
     def run_backup(self):
         self.t0 = time.time()
@@ -175,34 +184,51 @@ class BackupTest(unittest.TestCase):
         os.makedirs(os.path.dirname(legacy), exist_ok=True)
         with open(legacy, "wb") as f:
             f.write(b"old")
+        # 1.31 版：資料夾和檔名用了不同的名字（代號 HK、空白換成底線），要搬到一致的名稱
+        old = {os.path.join(self.a[2], "data", "backups", "HK", "Microsoft_Azure-20261013-152249.vsbk"): 1791876169,
+               os.path.join(self.a[2], "data", "backups", "Oracle_Cloud", "Oracle_Cloud-20261013-162242.vsbk"): 1791876162}
+        for p, mt in old.items():
+            os.makedirs(os.path.dirname(p), exist_ok=True)
+            with open(p, "wb") as f:
+                f.write(b"VSBK-old")
+            os.utime(p, (mt, mt))
+        code, _, _ = self.call(a, "/api/backup", {"action": "tz", "tz": 480})          # 網頁告訴主機：使用者在 UTC+8
+        self.assertEqual(code, 200)
         st = self.run_backup()
         last = st["last"]
         self.assertTrue(last["ok"], last)
         self.assertEqual([x["where"] for x in last["to"]],
-                         ["存在這台的主機上", "傳到 Telegram", "存到「B」的主機上", "「B」的備份也存了一份在這台的主機上"])
+                         ["存在這台的主機上", "傳到 Telegram", f"存到「{HB}」的主機上", f"「{HB}」的備份也存了一份在這台的主機上"])
         self.assertIn("其他", last["items"])
         self.assertIn("哨兵設定", last["items"])
         self.assertFalse(os.path.exists(legacy))
+        for p in old:                                                              # 舊資料夾搬空、刪掉了
+            self.assertFalse(os.path.exists(os.path.dirname(p)))
+        self.assertTrue(os.path.exists(os.path.join(self.a[2], "data", "backups", HB, f"{HB} 2026-10-13 15.22.vsbk")))
+        self.assertTrue(os.path.exists(os.path.join(self.a[2], "data", "backups", HA, f"{HA} 2026-10-13 15.22.vsbk")))
 
         # 兩台都有兩台的備份，而且是同一組解開密碼
         key = st["key"]
         _, bst, _ = self.call(b, "/api/backup")
         self.assertEqual(bst["key"], key)
+        self.assertEqual(sorted(os.listdir(os.path.join(self.b[2], "data", "backups"))), sorted([HA, HB]))
         for host in (self.a, self.b):
-            for who in ("A", "B"):
-                fs = self.files(host, who)
+            for who in (HA, HB):
+                fs = [f for f in self.files(host, who) if not is_old(f)]
                 self.assertEqual(len(fs), 1, (host[2], who))
+                self.assertRegex(os.path.basename(fs[0]), FNAME.format(re.escape(who)))
                 with open(fs[0], "rb") as f:
                     data = f.read()
                 self.assertTrue(data.startswith(b"VSBK"))
                 self.assertNotIn(b"settings.json", data)                  # 看不到裡面的東西
                 plain, _ = self.decrypt(data, key)
                 self.check_tar(plain)
-        self.assertEqual([c["name"] for c in st["copies"]], ["A", "B"])
-        self.assertEqual([c["name"] for c in bst["copies"]], ["B", "A"])
+        self.assertEqual([c["name"] for c in st["copies"]], [HA, HB])
+        self.assertEqual([c["name"] for c in bst["copies"]], [HB, HA])
+        self.assertEqual(bst["tz"], 480)                                            # 時區也同步給另一台了
 
         # 密碼錯、檔案被改過：都打不開
-        with open(self.files(self.a, "A")[0], "rb") as f:
+        with open(self.files(self.a, HA)[-1], "rb") as f:
             data = f.read()
         plain, err = self.decrypt(data, key + "x")
         self.assertIsNone(plain)
@@ -213,9 +239,11 @@ class BackupTest(unittest.TestCase):
         self.assertIsNone(self.decrypt(b"hello" * 20, key)[0])
 
         # Telegram：A 自己一份，B 沒設定 Telegram，A 幫它傳一份；都是加密的哨兵備份檔
-        self.assertEqual(sorted(x[0].split("-")[0] for x in DOCS), ["A", "B"])
+        self.assertEqual(sorted(re.sub(r" \d{4}-.*", "", x[0]) for x in DOCS), sorted([HA, HB]))
         for fn, data, cap in DOCS:
-            self.assertTrue(fn.endswith(".vsbk"))
+            who = HA if fn.startswith(HA) else HB
+            self.assertRegex(fn, FNAME.format(re.escape(who)))
+            self.assertIn(f"<b>{who}</b>", cap)                                   # 說明文字跟檔名用同一個名稱
             self.assertIn("已加密", cap)
             self.check_tar(self.decrypt(data, key)[0])
 
@@ -223,9 +251,9 @@ class BackupTest(unittest.TestCase):
         code, data, h = self.call(a, "/api/backup-file", raw=True)
         self.assertEqual(code, 200)
         self.check_tar(self.decrypt(data, key)[0])
-        code, data, h = self.call(a, "/api/backup-file?node=B", raw=True)
+        code, data, h = self.call(a, "/api/backup-file?node=HK", raw=True)
         self.assertEqual(code, 200)
-        self.assertTrue(urllib.parse.unquote(h["X-Backup-Name"]).startswith("B-"))
+        self.assertTrue(urllib.parse.unquote(h["X-Backup-Name"]).startswith(HB + " "))
         self.check_tar(self.decrypt(data, key)[0])
 
         # 改成自己的密碼：兩台一起改，之後的備份用新密碼（B 會重新打包，不拿舊密碼做的那份）
@@ -236,10 +264,10 @@ class BackupTest(unittest.TestCase):
         self.assertEqual(self.call(b, "/api/backup")[1]["key"], "我的新密碼 2026!")
         st = self.run_backup()
         self.assertTrue(st["last"]["ok"], st["last"])
-        for who in ("A", "B"):
+        for who in (HA, HB):
             with open(self.files(self.a, who)[-1], "rb") as f:
                 self.check_tar(self.decrypt(f.read(), "我的新密碼 2026!")[0])
-        with open(self.files(self.a, "A")[0], "rb") as f:            # 以前的備份還是用舊密碼開
+        with open([f for f in self.files(self.a, HA) if not is_old(f)][0], "rb") as f:   # 以前的備份還是用舊密碼開
             self.check_tar(self.decrypt(f.read(), key)[0])
 
         # 設定開關會寫進設定檔

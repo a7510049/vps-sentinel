@@ -1891,6 +1891,11 @@ async function tick(){
       await fetch("/api/cloud-login", {method:"POST", headers:{"X-Token":getTok()}}).catch(() => {});
       return location.replace("/cloud/");
     }
+    const tz = -new Date().getTimezoneOffset();
+    if (me && "bk_tz" in me && me.bk_tz !== tz && !window._tzSent) {   // 備份檔名上的時間跟這支手機／電腦一樣（所有主機一起用）
+      window._tzSent = true;
+      fetch("/api/backup", {method:"POST", headers:{"X-Token":getTok(), "Content-Type":"application/json"}, body:JSON.stringify({action:"tz", tz})}).catch(() => {});
+    }
     if (me && me.build) {
       if (!window._build) window._build = me.build;
       else if (me.build !== window._build && !window._reloading) {   // 這台的哨兵剛更新好：重新載入換上新畫面
