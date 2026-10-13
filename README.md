@@ -166,14 +166,16 @@ nano /etc/vps-sentinel-lite.conf
 
 在網頁的「設定 → 備份」可以看上次備份的結果、每台主機存著哪些備份、馬上備份一次、下載最新的備份。備份失敗會通知你。
 
-**還原**（在任何有 Python 3 和 openssl 的主機上都可以，例如一台全新的主機）：
+**還原**：一個指令就會把檔案放回去，3x-ui、n8n、網站和哨兵也會自動重新啟動，最後一項一項告訴你有沒有跑起來。還原前，主機上原本的檔案會先另外留一份（放在 `/root/還原前的檔案-時間.tar.gz`），放錯了也退得回去。
 
-```bash
-git clone https://github.com/a7510049/vps-sentinel.git && cd vps-sentinel
-python3 sentinel.py --decrypt "主機名稱 2026-10-13 04.00.vsbk"   # 會問解開密碼，解開成 .tar.gz
-sudo tar -xzf "主機名稱 2026-10-13 04.00.tar.gz" -C /             # 放回原位（會蓋掉原本的檔案）
-sudo systemctl restart x-ui vps-sentinel-lite
-```
+- **讓主機回到前幾天的樣子**：在那台主機上執行下面這行，從清單挑一份、輸入解開密碼
+
+  ```bash
+  sudo python3 ~/vps-sentinel/sentinel.py --restore
+  ```
+
+- **整台搬到新主機**（原本那台壞掉時）：先到網域商把網址改指向新主機，再到還活著那台的網頁「設定 → 備份 → 怎麼還原？」，選要還原哪一台，複製產生的指令貼到新主機上執行。指令會下載專案、用一個 24 小時內有效的連結拿到加密的備份檔，再整台還原：新主機缺的 Docker、nginx、哨兵會自動裝好，n8n 容器照原本的設定建回來。3x-ui 要先用它官方的安裝指令裝好（裝的時候問的問題都按 Enter），還原時會用回原本的設定。
+- 只想把備份檔解開看看：`python3 sentinel.py --decrypt 備份檔.vsbk`（解開成 .tar.gz）
 
 ### 多台 VPS 一起看
 
