@@ -842,3 +842,8 @@ html::-webkit-scrollbar-thumb{background:color-mix(in srgb,var(--text) 22%,trans
 [data-motion="off"] *,[data-motion="off"] *::before,[data-motion="off"] *::after{animation:none!important;transition:none!important}
 @media (prefers-reduced-motion:reduce){*,*::before,*::after{animation:none!important;transition:none!important}}
 @media (prefers-reduced-transparency:reduce){.glass,.scrolled .bar{background:var(--bg);-webkit-backdrop-filter:none;backdrop-filter:none}.aurora{display:none}}
+/* ═════════ 天氣（問候旁邊） ═════════ */
+.wx{display:inline-block;margin-left:.6em;font-weight:700;color:var(--sub);white-space:nowrap}
+.wx:empty,.wxtip:empty{display:none}
+.wxtip{display:block;font-size:var(--fs-s);font-weight:600;color:var(--sub);margin-top:4px}
+.greet .wxtip{margin-top:2px}

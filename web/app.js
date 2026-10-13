@@ -54,6 +54,7 @@ const P = {
   pin:'<rect x="3" y="6" width="18" height="12" rx="3"/><path d="M7.5 12h.01M12 12h.01M16.5 12h.01"/>',
   archive:'<rect x="2.5" y="3.5" width="19" height="5" rx="1.5"/><path d="M4.5 8.5v10a2 2 0 0 0 2 2h11a2 2 0 0 0 2-2v-10M10 12.5h4"/>',
   finger:'<path d="M12 10a2 2 0 0 0-2 2c0 1-.1 2.5-.26 4M14 13.1c0 2.4 0 6.4-1 8.9M17.3 21c.1-.6.4-2.3.5-3M2 12a10 10 0 0 1 18-6M2 16h.01M21.8 16c.2-2 .13-5.35 0-6M5 19.5C5.5 18 6 15 6 12a6 6 0 0 1 .34-2M8.65 22c.2-.66.45-1.3.57-2M9 6.8a6 6 0 0 1 9 5.2v2"/>',
+  sun:'<circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41"/>',
   chev:'<path d="m6 9 6 6 6-6"/>', x:'<path d="M18 6 6 18M6 6l12 12"/>',
   warn:'<path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3z"/><path d="M12 9v4M12 17h.01"/>',
   ok:'<circle cx="12" cy="12" r="9.5"/><path d="m8.5 12 2.5 2.5 4.5-5"/>',
@@ -64,7 +65,7 @@ const I = n => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strok
 
 /* ═════════ 個人設定（存在這台裝置） ═════════ */
 const DEF = {theme:"auto", accent:"blue", glass:50, bg:"aurora", motion:true, perf:"auto", density:"cozy", size:"m", refresh:5,
-  show:{chart:true, net:true, items:true, info:true, flag:true, traffic:true}};
+  show:{chart:true, net:true, items:true, info:true, flag:true, traffic:true, weather:true}};
 let PREF = (() => { try { const p = JSON.parse(store("vps-prefs") || "{}"); return {...DEF, ...p, show:{...DEF.show, ...(p.show||{})}}; } catch(e){ return JSON.parse(JSON.stringify(DEF)); } })();
 const getP = k => k.split(".").reduce((o,x)=>o && o[x], PREF);
 function setP(k, v){ const ks = k.split("."); let o = PREF; while (ks.length > 1) o = o[ks.shift()]; o[ks[0]] = v; store("vps-prefs", JSON.stringify(PREF)); }
@@ -264,8 +265,8 @@ function itemsHTML(items){
 }
 function updateInfo(s){
   const n = s.updates ? s.updates.total : 0, u = s.update;
-  if (u && u.running) return n ? `正在安裝 ${n} 個更新…<br>大約 1～5 分鐘，好了會通知你` : `正在檢查有沒有新的更新…<br>有的話會順便裝好，完成會通知你`;
-  let info = s.updates ? (n ? `有 ${n} 個套件可以更新${s.updates.security?`（含 ${s.updates.security} 個安全更新）`:""}` : "系統已經是最新的 ✨") : "";
+  if (u && u.running) return n ? `正在安裝 ${n} 個更新…` : `正在檢查更新…`;
+  let info = s.updates ? (n ? `${n} 個更新可安裝${s.updates.security?`（${s.updates.security} 個安全性）`:""}` : "已是最新 ✨") : "";
   if (u && u.last) info += `${info?"<br>":""}上次更新${u.last.ok?"成功":`<span style="color:var(--bad)">失敗</span>`}・${when(u.last.time)}`;
   return info;
 }
@@ -280,7 +281,67 @@ function greet(n, total){
   const hi = h < 5 ? "夜深了 🌙" : h < 11 ? "早安 ☀️" : h < 14 ? "午安 🌤️" : h < 18 ? "下午好 ☕" : "晚安 🌙";
   const word = total > 1 ? "所有主機" : "主機";
   const line = n.bad ? `有 ${n.bad} 台<em>出問題了</em>` : n.warn ? `有 ${n.warn} 台<em>需要留意</em>` : `${word}都<em>很健康</em>`;
-  return {hi, line};
+  const on = PREF.show.weather && WX;
+  return {hi, line, wx: on ? `${WX.icon} ${WX.t}° ${WX.word}` : "", tip: on ? WX.tip : ""};
+}
+
+/* ═════════ 天氣：問候旁邊顯示目前位置的天氣和小提醒 ═════════ */
+// 位置用瀏覽器定位（只取到小數點後 2 位，約 1 公里），天氣問 Open-Meteo（免費、不用帳號）。
+// 不給定位、抓不到或網路不通，就安靜地不顯示；位置記 6 小時、天氣記 30 分鐘，不會每次打開都問。
+const WXK = "vps-wx";
+let WX = null, wxTimer = 0;
+const wxMem = () => { try { return JSON.parse(store(WXK) || "{}"); } catch(e) { return {}; } };
+(() => { const m = wxMem(); if (m.data && Date.now() - m.dt < 3 * 3600e3) WX = m.data; })();
+function wxWord(c, day){
+  const W = [[0, day ? "☀️" : "🌙", "晴朗"], [1, day ? "🌤️" : "🌙", "大致晴朗"], [2, "⛅", "多雲"], [3, "☁️", "陰天"], [48, "🌫️", "有霧"],
+    [57, "🌦️", "毛毛雨"], [61, "🌧️", "小雨"], [63, "🌧️", "下雨"], [67, "🌧️", "大雨"], [77, "🌨️", "下雪"],
+    [81, "🌦️", "陣雨"], [82, "⛈️", "大陣雨"], [86, "🌨️", "陣雪"], [99, "⛈️", "雷雨"]];
+  return W.find(([n]) => c <= n) || W[W.length - 1];
+}
+function wxTip(d){
+  const c = d.current, code = c.weather_code, feel = c.apparent_temperature;
+  if (code >= 95) return "外面在打雷，盡量待在室內";
+  if ((code >= 51 && code <= 67) || (code >= 80 && code <= 82)) return "外面在下雨，出門記得帶傘";
+  if ((code >= 71 && code <= 77) || code >= 85) return "外面在下雪，路面小心";
+  const now = d.hourly.time.indexOf(c.time.slice(0, 14) + "00"), from = Math.max(0, now);
+  const rain = d.hourly.precipitation_probability.slice(from + 1, from + 10).findIndex(p => p >= 50);
+  if (rain >= 0) {
+    const h = (+d.hourly.time[from + 1 + rain].slice(11, 13));
+    const when = h < 5 ? "半夜" : h < 11 ? "早上" : h < 14 ? "中午" : h < 17 ? "下午" : h < 19 ? "傍晚" : "晚上";
+    return `${when}可能下雨，出門帶把傘`;
+  }
+  if (feel >= 33) return "很熱，記得多喝水";
+  if (c.is_day && Math.max(...d.hourly.uv_index.slice(from, from + 4)) >= 8) return "紫外線很強，注意防曬";
+  if (feel <= 5) return "很冷，注意保暖";
+  if (feel <= 12) return "有點涼，多穿一件";
+  if (d.daily.temperature_2m_max[0] - d.daily.temperature_2m_min[0] >= 10) return "早晚溫差大，帶件外套";
+  return "";
+}
+function wxRun(){
+  clearTimeout(wxTimer);
+  if (!PREF.show.weather || !navigator.geolocation) return;
+  wxTimer = setTimeout(wxRun, 30 * 60e3);
+  const m = wxMem(), now = Date.now();
+  if (m.deny && now - m.deny < 3 * 86400e3) return;            // 剛拒絕定位：3 天內不再問
+  if (m.data && now - m.dt < 30 * 60e3) return;
+  const go = async (lat, lon) => {
+    try {
+      const q = `latitude=${lat}&longitude=${lon}&current=temperature_2m,apparent_temperature,weather_code,is_day`
+        + `&hourly=precipitation_probability,uv_index&daily=temperature_2m_max,temperature_2m_min&timezone=auto&forecast_days=2`;
+      const r = await fetch("https://api.open-meteo.com/v1/forecast?" + q, {signal: AbortSignal.timeout ? AbortSignal.timeout(8000) : undefined});
+      if (!r.ok) return;
+      const d = await r.json(), c = d.current, [, icon, word] = wxWord(c.weather_code, c.is_day);
+      WX = {icon, word, t: Math.round(c.temperature_2m), tip: wxTip(d)};
+      store(WXK, JSON.stringify({lat, lon, at: m.lat === lat && m.lon === lon && m.at ? m.at : now, data: WX, dt: Date.now()}));
+      if (LIST.length) render(LIST);
+    } catch(e) {}
+  };
+  if (m.lat != null && now - m.at < 6 * 3600e3) return go(m.lat, m.lon);
+  navigator.geolocation.getCurrentPosition(p => {
+    const lat = +p.coords.latitude.toFixed(2), lon = +p.coords.longitude.toFixed(2);
+    m.lat = lat; m.lon = lon; m.at = Date.now(); store(WXK, JSON.stringify(m));
+    go(lat, lon);
+  }, e => { if (e.code === 1) store(WXK, JSON.stringify({deny: Date.now()})); }, {timeout: 15000, maximumAge: 3600e3});
 }
 
 /* ═════════ 曲線圖 ═════════ */
@@ -322,7 +383,7 @@ function chart(id, series, o={}){
   const N = o.n || 150, raw = series;
   series = series.map(s => ({...s, data: resample(s.data, N)}));
   const W = 600, H = o.h || 170, all = series.flatMap(s=>s.data||[]);
-  if (all.length < 4) return `<div class="wait" style="height:${H}px">收集資料中，約 1 分鐘後出現…</div>`;
+  if (all.length < 4) return `<div class="wait" style="height:${H}px">收集資料中…</div>`;
   const max = o.max || (o.grid ? niceMax(Math.max(1, ...all) * 1.1, o.bin) : Math.max(1, ...all) * 1.2);
   if (o.t) CHD[id] = {t: o.t, ser: raw, fmt: o.fmt || (v => v)};
   const yax = o.grid && o.fmt ? `<div class="yax">${[.25,.5,.75].map(f=>`<span style="top:${f*100}%">${o.fmt(max*(1-f))}</span>`).join("")}</div>` : "";
@@ -354,7 +415,7 @@ function histRaw(s){
       fetch(`/api/history?range=${RANGE}&node=${encodeURIComponent(s.node || "")}`, {headers:{"X-Token":getTok()}})
         .then(r => r.ok ? r.json() : r.json().then(d => Promise.reject(d.error || "讀取失敗")))
         .then(d => { HCACHE[k] = {at: Date.now(), data: d}; if (LIST.length) render(LIST); })
-        .catch(err => { HCACHE[k] = {at: Date.now(), err: typeof err === "string" ? err : "暫時讀不到，等一下會自動再試"}; if (LIST.length) render(LIST); });
+        .catch(err => { HCACHE[k] = {at: Date.now(), err: typeof err === "string" ? err : "暫時讀不到，稍後自動重試"}; if (LIST.length) render(LIST); });
     }
   }
   return c && c.data ? c.data : (c && c.err ? {err: c.err} : null);
@@ -368,7 +429,7 @@ function xlabel(h){
 function chartOr(h, id, series, o){
   if (!h) return `<div class="wait" style="height:${o.h||170}px">讀取中…</div>`;
   if (h.err) return `<div class="wait" style="height:${o.h||170}px">${esc(h.err)}</div>`;
-  if (RANGE !== "30m" && (!h.t || h.t.length < 2)) return `<div class="wait" style="height:${o.h||170}px">資料累積中，${RANGE==="24h"?"約 10 分鐘":"約 1 小時"}後開始出現</div>`;
+  if (RANGE !== "30m" && (!h.t || h.t.length < 2)) return `<div class="wait" style="height:${o.h||170}px">${RANGE==="24h"?"約 10 分鐘":"約 1 小時"}後出現</div>`;
   return chart(id, series(h), {...o, t: h.t});
 }
 const minutes = h => (h && h.t && h.t.length > 1) ? Math.max(1, Math.round((h.t[h.t.length-1]-h.t[0])/60)) : 30;
@@ -377,7 +438,7 @@ const COL = {cpu:"var(--c-cpu)", mem:"var(--c-mem)", rx:"var(--c-rx)", tx:"var(-
 /* 概念 → [顏色樣式, 圖示] */
 const ICO = {cpu:["cpu","cpu"], mem:["mem","mem"], disk:["disk","disk"], load:["load","gauge"], down:["down","down"], up:["up","up"],
   net:["net","net"], trend:["trend","trend"], month:["month","month"], box:["box","box"], bell:["bell","bell"], info:["info","info"],
-  layers:["theme","layers"], flag:["theme","flag"], key:["theme","key"], finger:["theme","finger"], pin:["theme","pin"], archive:["month","archive"]};
+  layers:["theme","layers"], flag:["theme","flag"], key:["theme","key"], finger:["theme","finger"], pin:["theme","pin"], archive:["month","archive"], sun:["month","sun"]};
 const IC = (k, cls="sm") => `<span class="ico ${cls} ${ICO[k][0]}">${I(ICO[k][1])}</span>`;
 
 /* ═════════ 手機版 ═════════ */
@@ -432,7 +493,7 @@ function renderMobile(list, n, time){
   const w = PHONE.matches && list.length > 1;     // 兩台以上的手機版：卡片平常只露出一條，點一張才展開
   return `<div class="dash m" data-key="m"><header class="bar"><span class="mini">VPS 哨兵</span><span class="grow"></span>
     <button class="cap glass ${list.some(s=>s.self_has)?"hasnew":""}" data-settings title="設定">${I("gear")}</button><button class="cap glass" data-logout title="登出">${I("logout")}</button></header>
-    <div class="hero"><div class="hello">${g.hi}</div><h1 data-x>${g.line}</h1><div class="meta"><span class="live"></span>更新於 ${time}</div></div>
+    <div class="hero"><div class="hello">${g.hi}<span class="wx" data-x>${g.wx}</span></div><h1 data-x>${g.line}</h1><div class="wxtip" data-x>${g.tip}</div><div class="meta"><span class="live"></span>更新於 ${time}</div></div>
     ${summary(n, many)}
     <div class="grid${w ? " wallet" : ""}" data-keyed>${shown.length ? shown.map((s, i) => mcard(s, i, w)).join("") : `<div class="empty" data-key="empty">這個分類目前沒有主機 👍</div>`}</div></div>`;
 }
@@ -559,7 +620,7 @@ function trafficPanel(s){
       <div><div class="k">預估月底</div><b>${proj}</b></div><div><div class="k">${t.reset_day} 號重置</div><b>還有 ${t.days_left} 天</b></div></div></div>
     <div class="tr">${trafficBars(t)}
     <div class="xl"><span>${t.start.slice(5).replace("-","/")}</span><span>${t.prev!=null?`上個週期 ${size(t.prev)}`:""}</span><span>${t.end.slice(5).replace("-","/")}</span></div>
-    ${t.partial ? `<div class="note">從 ${new Date(t.since*1000).toLocaleDateString("zh-TW",{month:"numeric",day:"numeric"})} 開始統計，之前的流量沒有算進去</div>` : ""}</div></div></div>`;
+    ${t.partial ? `<div class="note">從 ${new Date(t.since*1000).toLocaleDateString("zh-TW",{month:"numeric",day:"numeric"})} 開始統計</div>` : ""}</div></div></div>`;
 }
 function trafficLine(s){
   const t = s.traffic; if (!t || !PREF.show.traffic) return "";
@@ -577,10 +638,10 @@ async function trafficModal(node, label){
   const v = document.createElement("div"); v.className = "veil";
   v.innerHTML = `<div class="dialog glass pop">${IC("month","big")}<h3>「${esc(label)}」流量設定</h3>
     <div class="form">
-      <label>每月流量上限（GB）<input class="field" type="number" inputmode="decimal" min="0" step="any" value="${t.limit ? +(t.limit/1073741824).toFixed(3) : ""}" placeholder="不限制就留空"></label>
+      <label>每月流量上限（GB）<input class="field" type="number" inputmode="decimal" min="0" step="any" value="${t.limit ? +(t.limit/1073741824).toFixed(3) : ""}" placeholder="不限就留空"></label>
       <label>每月幾號重置<select class="field">${days}</select></label>
       <label>怎麼計算<div class="seg" style="flex-wrap:wrap">${Object.entries(CNT).map(([k,l])=>`<button type="button" class="${mode===k?"on":""}" data-m="${k}">${l}</button>`).join("")}</div>
-        <small>甲骨文等很多主機商只算「上傳」；不確定就選「上傳＋下載」</small></label>
+        <small>不確定就選「上傳＋下載」</small></label>
     </div>
     <div class="btns"><button class="ubtn ghost" data-r="0">取消</button><button class="ubtn" data-r="1">儲存</button></div></div>`;
   $("#layer").appendChild(v);
@@ -613,13 +674,13 @@ function eventsPanel(s){
   const word = {bad:"異常", warn:"注意", ok:"恢復", info:"通知"};
   return `<div class="panel glass" data-key="ep" style="--i:8"><div class="ph">${IC("bell")}<h3>事件紀錄</h3><span class="sub" style="margin-left:auto;font-weight:700">最近 ${ev.length} 筆</span></div>
     ${ev.length ? `<div class="evs" data-keyed>${mergeEv(ev).map(e=>`<div class="ev" data-key="${e.kind}:${esc(e.text)}"><span class="dot ${e.kind}"></span><div><div>${esc(e.text)}</div><div class="sub">${word[e.kind]||""}・${ago(e.t)}${e.n>1?`・共 ${e.n} 次`:""}</div></div></div>`).join("")}</div>`
-      : `<div class="calm">目前沒有事件，一切平靜 ☕</div>`}</div>`;
+      : `<div class="calm">目前沒有事件</div>`}</div>`;
 }
 function renderDesk(list, n, time){
   const sel = list.find(s=>keyOf(s)===SEL) || list[0], g = greet(n, list.length);
   return `<div class="dash d" data-key="d"><aside class="side glass">
       <div class="brand"><svg class="" viewBox="0 0 512 512" aria-hidden="true"><defs><linearGradient id="lbbr" x1="0" y1="0" x2="0" y2="1"><stop offset="0" style="stop-color:color-mix(in srgb,var(--a1) 70%,#fff)"/><stop offset="1" style="stop-color:var(--a2)"/></linearGradient><linearGradient id="lhbr" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#fff" stop-opacity=".24"/><stop offset=".45" stop-color="#fff" stop-opacity="0"/></linearGradient><mask id="lmbr"><rect width="512" height="512" fill="#fff"/><path d="M204 258l36 36 72-76" fill="none" stroke="#000" stroke-width="30" stroke-linecap="round" stroke-linejoin="round"/></mask></defs><rect width="512" height="512" rx="115" fill="url(#lbbr)"/><rect width="512" height="512" rx="115" fill="url(#lhbr)"/><path d="M256 108 371 150c9 3 15 12 15 22v72c0 84-52 140-122 168-5 2-11 2-16 0-70-28-122-84-122-168v-72c0-10 6-19 15-22Z" fill="#fff" mask="url(#lmbr)" transform="translate(256 262) scale(.88) translate(-256 -258)"/></svg><div><h1>VPS 哨兵</h1><div class="meta"><span class="live"></span>更新於 ${time}</div></div></div>
-      <div class="greet">${g.hi}<br><b>${g.line.replace(/<\/?em>/g,"")}</b></div>
+      <div class="greet">${g.hi}<span class="wx" data-x>${g.wx}</span><br><b>${g.line.replace(/<\/?em>/g,"")}</b><span class="wxtip" data-x>${g.tip}</span></div>
       ${summary(n, true)}
       <div class="hosts" data-keyed>${(FILTER ? list.filter(s=>lvOf(s)===FILTER) : list).map(s=>hostItem(s, s===sel)).join("") || `<div class="empty" data-key="empty">這個分類目前沒有主機 👍</div>`}</div>
       ${overview(list)}
@@ -1018,8 +1079,8 @@ function settingsBody(){
   return `
   <div class="sec"><h4>外觀</h4><div class="group">
     <div class="opt"><span class="lab">主題</span>${seg("theme",[["auto","自動"],["light","淺色"],["dark","深色"]])}</div>
-    <div class="opt" style="flex-wrap:wrap"><span class="lab">主題色<small>選「旗」會跟著主機的國旗變色（手機跟著畫面中間的卡片）</small></span><div class="sw" style="flex-basis:100%;padding:4px 2px 2px">${sw}</div></div>
-    <div class="opt" style="flex-wrap:wrap"><span class="lab">玻璃效果<small>往左越透明、往右越霧面</small></span>
+    <div class="opt" style="flex-wrap:wrap"><span class="lab">主題色<small>「旗」會跟著主機的國旗變色</small></span><div class="sw" style="flex-basis:100%;padding:4px 2px 2px">${sw}</div></div>
+    <div class="opt" style="flex-wrap:wrap"><span class="lab">玻璃效果</span>
       <div class="slider" style="flex-basis:100%"><span>清透</span><input type="range" min="0" max="100" value="${PREF.glass}" data-pref="glass"><span>霧面</span></div></div>
     <div class="opt"><span class="lab">背景</span>${seg("bg",[["aurora","流光"],["mesh","漸層"],["plain","純色"]])}</div>
   </div></div>
@@ -1027,7 +1088,7 @@ function settingsBody(){
     <div class="opt"><span class="lab">文字大小</span>${seg("size",[["s","小"],["m","中"],["l","大"]])}</div>
     <div class="opt"><span class="lab">卡片</span>${seg("density",[["cozy","寬鬆"],["compact","緊湊"]])}</div>
     <div class="opt"><span class="lab">動畫效果</span>${tog("motion")}</div>
-    <div class="opt" style="flex-wrap:wrap"><span class="lab">效能模式<small>「自動」會在手機、或偵測到畫面不順的電腦上，關掉比較吃效能的效果</small></span>
+    <div class="opt" style="flex-wrap:wrap"><span class="lab">效能模式<small>「自動」會在卡頓時減少特效</small></span>
       <div style="flex-basis:100%">${seg("perf",[["auto","自動"],["lite","流暢優先"],["full","完整效果"]])}</div></div>
   </div></div>
   <div class="sec"><h4>要顯示的內容</h4><div class="group">
@@ -1037,6 +1098,7 @@ function settingsBody(){
     <div class="opt">${IC("info")}<span class="lab">主機概況<small>電腦版才有</small></span>${tog("show.info")}</div>
     <div class="opt">${IC("flag")}<span class="lab">國旗</span>${tog("show.flag")}</div>
     <div class="opt">${IC("month")}<span class="lab">每月流量</span>${tog("show.traffic")}</div>
+    <div class="opt">${IC("sun")}<span class="lab">天氣<small>用這台裝置的位置</small></span>${tog("show.weather")}</div>
   </div></div>
   <div class="sec"><h4>軟體更新<button class="linkish" data-selfcheck>檢查新版</button></h4><div class="group selfbox"><div class="opt"><span class="lab"><small>讀取中…</small></span></div></div></div>
   <div class="sec"><h4>通知</h4><div class="group">
@@ -1047,12 +1109,12 @@ function settingsBody(){
   ${LIST.some(s => s.online) ? `<div class="sec"><h4>安全</h4><div class="group">${PK_OK && LIST.some(s => !s.node && s.online) ?
     `<button class="opt optbtn" data-pk>${IC("finger")}<span class="lab">手機金鑰登入<small class="pkst">讀取中…</small></span><span class="chev">${I("chev")}</span></button>` : ""}${LIST.some(s => !s.node && s.online) ?
     `<button class="opt optbtn" data-pin>${IC("pin")}<span class="lab">PIN 碼登入<small class="pinst">讀取中…</small></span><span class="chev">${I("chev")}</span></button>` : ""}${LIST.filter(s => s.online).map(s =>
-    `<button class="opt optbtn" data-newtok="${esc(s.node||"")}" data-label="${esc(s.name)}">${IC("key")}<span class="lab">換一組新密碼${LIST.length > 1 ? `：${esc(s.name)}` : ""}<small>擔心密碼外流時用，舊密碼會馬上失效</small></span><span class="chev">${I("chev")}</span></button>`).join("")}</div></div>` : ""}
+    `<button class="opt optbtn" data-newtok="${esc(s.node||"")}" data-label="${esc(s.name)}">${IC("key")}<span class="lab">換一組新密碼${LIST.length > 1 ? `：${esc(s.name)}` : ""}<small>舊密碼會立刻失效</small></span><span class="chev">${I("chev")}</span></button>`).join("")}</div></div>` : ""}
   <div class="sec"><h4>資料</h4><div class="group">
-    <div class="opt"><span class="lab">自動更新<small>多久抓一次最新狀態</small></span>${seg("refresh",[[3,"3 秒"],[5,"5 秒"],[10,"10 秒"],[30,"30 秒"]])}</div>
+    <div class="opt"><span class="lab">畫面更新頻率</span>${seg("refresh",[[3,"3 秒"],[5,"5 秒"],[10,"10 秒"],[30,"30 秒"]])}</div>
   </div></div>
   <button class="ubtn ghost reset" data-reset>恢復預設值</button>
-  <p class="sub" style="text-align:center;margin-top:12px">外觀設定只存在這台裝置上；Telegram 通知存在主機上</p>`;
+  <p class="sub" style="text-align:center;margin-top:12px">外觀設定只存在這台裝置</p>`;
 }
 function moveInd(seg){
   const on = seg.querySelector("button.on"), ind = seg.querySelector(".ind");
@@ -1119,12 +1181,12 @@ const peerBtn = s => s.node ? `<button class="ubtn ghost sm peerfix" data-peered
 function peerModal(s){
   const v = document.createElement("div"); v.className = "veil";
   v.innerHTML = `<div class="dialog glass pop"><div class="ico big theme">${I("off")}</div><h3>更改「${esc(s.name)}」的連線網址</h3>
-    <p>網域、連接埠換了，或是改用網域連線時，在這裡換成新的網址</p>
+    <p>網域或連接埠換了時用</p>
     <div class="form">
       <label>網址<input class="field" data-k="url" inputmode="url" autocomplete="off" spellcheck="false" placeholder="https://網域:9443 或 http://IP:8787" value="${esc(s.peer_url || "")}">
-        <small>就是平常打開那台哨兵用的網址</small></label>
+        </label>
       <label>密碼<input class="field" data-k="token" autocomplete="off" spellcheck="false" placeholder="沒變就留空">
-        <small>那台的密碼（TOKEN）有換才需要填</small></label>
+        <small>那台換過密碼才要填</small></label>
       <div class="msg"></div>
     </div>
     <div class="btns"><button class="ubtn ghost" data-r="0">取消</button><button class="ubtn" data-save>測試並儲存</button></div></div>`;
@@ -1143,7 +1205,7 @@ function peerModal(s){
         body: JSON.stringify({name: s.node, url: q("url").value.trim(), token: q("token").value.trim(), force})});
       const d = await r.json().catch(() => ({}));
       if (r.ok && d.ok) { toast(d.message); done(); tick(); }
-      else { msg.className = "msg bad"; msg.textContent = (d.message || "儲存失敗") + (d.test_failed ? "。確定網址沒錯的話，可以按「仍然儲存」。" : "");
+      else { msg.className = "msg bad"; msg.textContent = (d.message || "儲存失敗") + (d.test_failed ? "。網址沒錯的話可按「仍然儲存」。" : "");
         if (d.test_failed) force = true; }
     } catch(err) { msg.className = "msg bad"; msg.textContent = "連線失敗，請稍後再試"; }
     busy = false; sb.disabled = false; sb.textContent = force ? "仍然儲存" : "測試並儲存";
@@ -1157,9 +1219,9 @@ function hostModal(name, links){
     const row = (x = {name:"", url:""}) => `<div class="lrow"><input class="field ln" maxlength="30" placeholder="名稱，例如 3x-ui" value="${esc(x.name)}"><input class="field lu" inputmode="url" autocomplete="off" spellcheck="false" placeholder="https://你的網域:2053/路徑/" value="${esc(x.url)}"><button type="button" class="iconbtn" data-del title="刪掉這個連結">${I("x")}</button></div>`;
     v.innerHTML = `<div class="dialog glass pop hostd"><div class="ico big theme">${I("edit")}</div><h3>編輯主機</h3>
       <div class="form">
-        <label>名稱<input class="field" data-k="name" maxlength="40" value="${esc(name)}"><small>中文、英文、表情符號都可以</small></label>
+        <label>名稱<input class="field" data-k="name" maxlength="40" value="${esc(name)}"></label>
         <div class="lbl">常用連結
-          <small>這台主機上的網頁，例如 3x-ui 後台、n8n。只有一個時，點名稱旁的 ↗ 直接打開；有好幾個時會先出現選單</small>
+          <small>例如 3x-ui 後台、n8n，點名稱旁的 ↗ 打開</small>
           <div class="lrows">${(links.length ? links : [{name:"", url:""}]).map(row).join("")}</div>
           <button type="button" class="ubtn ghost addl" data-add>＋ 新增連結</button></div>
       </div>
@@ -1246,8 +1308,8 @@ async function selfUpdate(root, jobs){
       if (d.cloud && d.cloud.has && !d.cloud.running) jobs.push({node, kind:"cloud"}); } }
   const onlyCloud = jobs.every(j => j.kind === "cloud");
   const ok = await modal({icon:"upd", cls:"theme", title: onlyCloud ? "更新雲端硬碟？" : "開始更新？",
-    text: onlyCloud ? "會下載官方最新的穩定版並重新啟動，\n大約 30 秒～1 分鐘，期間暫時打不開，檔案和帳號都會保留。"
-      : "會下載新版並自動重新啟動，\n大約 10～60 秒，你的設定和檔案都會保留。", ok:"開始更新"});
+    text: onlyCloud ? "約 1 分鐘，期間暫時打不開，檔案都會保留。"
+      : "約 1 分鐘，設定和檔案都會保留。", ok:"開始更新"});
   if (!ok) return;
   const okn = [], fail = [];
   jobs.sort((a, b) => (a.node === "" && a.kind === "self") - (b.node === "" && b.kind === "self"));   // 這台的哨兵最後更新（更新完畫面會重新載入）
@@ -1258,7 +1320,7 @@ async function selfUpdate(root, jobs){
       UPW.jobs.push({node: j.node, kind: j.kind, name: h.name || "主機", from: j.kind === "cloud" ? (d.cloud || {}).version || "" : d.build || "", t0: Date.now()});
     } catch(e) { fail.push(`${name}：${e.message}`); }
   }
-  if (okn.length) toast(okn.length > 1 ? `已開始更新 ${okn.length} 個項目，大約 1 分鐘內完成` : `已開始更新「${okn[0]}」`);   // 只跳一則
+  if (okn.length) toast(okn.length > 1 ? `已開始更新 ${okn.length} 個項目` : `已開始更新「${okn[0]}」`);   // 只跳一則
   if (fail.length) setTimeout(() => toast(fail.join("；"), "bad"), okn.length ? 600 : 0);
   setTimeout(() => selfStatus(root), 1500);
   upwSave(); upwRun();
@@ -1299,7 +1361,7 @@ async function upwStep(){
     }
   }));
   if (window._reloading) return;
-  for (const j of UPW.jobs) if (Date.now() - j.t0 > 15 * 60000 && !done.some(x => x[0] === j)) done.push([j, `「${j.name}」${j.kind === "cloud" ? "的雲端硬碟" : "的哨兵"}更新太久沒有回應，請到主機上看看`, false]);
+  for (const j of UPW.jobs) if (Date.now() - j.t0 > 15 * 60000 && !done.some(x => x[0] === j)) done.push([j, `「${j.name}」${j.kind === "cloud" ? "的雲端硬碟" : "的哨兵"}更新太久沒回應，請到主機上看看`, false]);
   if (done.length) {
     UPW.jobs = UPW.jobs.filter(j => !done.some(x => x[0] === j)); upwSave();
     const bad = done.filter(x => !x[2]), good = done.filter(x => x[2]);
@@ -1319,7 +1381,7 @@ async function tgCall(body){
 async function tgStatus(root){
   const el = root.querySelector(".tgst"); if (!el) return;
   try { const d = await tgCall({action:"status"});
-    el.textContent = d.on ? `已開啟・由 ${d.bot || "機器人"} 傳送・${d.keep ? `保留 ${d.keep >= 24 ? Math.round(d.keep/24) + " 天" : d.keep + " 小時"}` : "不自動刪除"}` : d.has_token ? "還沒設定要傳到哪裡" : "還沒設定，點這裡開始";
+    el.textContent = d.on ? `已開啟・由 ${d.bot || "機器人"} 傳送・${d.keep ? `保留 ${d.keep >= 24 ? Math.round(d.keep/24) + " 天" : d.keep + " 小時"}` : "不自動刪除"}` : d.has_token ? "還沒選要傳到哪裡" : "還沒設定";
     el.classList.toggle("on", !!d.on);
   } catch(e) { el.textContent = e.message; }
 }
@@ -1327,17 +1389,17 @@ async function tgModal(){
   const st = await tgCall({action:"status"}).catch(() => ({}));
   const v = document.createElement("div"); v.className = "veil";
   v.innerHTML = `<div class="dialog glass pop tgd">${IC("bell","big")}<h3>Telegram 通知</h3>
-    <p>主機出問題、恢復正常、更新完成時，傳訊息到你的 Telegram</p>
+    <p>主機有狀況時傳訊息給你</p>
     <div class="form">
       <label>① 機器人密碼<input class="field" data-k="token" autocomplete="off" spellcheck="false" placeholder="${st.has_token ? "已經設定過，不用改就留空" : "123456789:AAH…"}">
-        <small>在 Telegram 搜尋 <b>@BotFather</b>，傳送 <b>/newbot</b>，照著取好名字，最後它給你的那一串就是密碼</small></label>
+        <small>找 <b>@BotFather</b> 傳 <b>/newbot</b>，最後給你的那串就是</small></label>
       <div class="lbl">② 要傳到哪裡
-        <small>先在 Telegram 傳一句話給你的機器人（要傳到群組，就把機器人加進群組再講一句話），然後按「自動尋找」</small>
+        <small>先傳一句話給機器人（或在有它的群組講話），再按「自動尋找」</small>
         <button type="button" class="ubtn ghost find" data-find>${I("search")}自動尋找</button>
         <div class="chats"></div>
         <input class="field" data-k="chat" inputmode="text" autocomplete="off" placeholder="可以留空，會自動找" value="${esc(st.chat || "")}"></div>
       <div class="lbl">③ 通知保留多久
-        <small>時間到了會自動從 Telegram 刪掉，聊天室不會越堆越多（Telegram 最多只能刪 2 天內的訊息）</small>
+        <small>時間到自動刪掉，最多 2 天</small>
         <div class="seg keep">${[[0,"不刪除"],[1,"1 小時"],[6,"6 小時"],[24,"1 天"],[47,"2 天"]].map(([h,l])=>`<button type="button" data-keep="${h}" class="${(+st.keep||0)===h?"on":""}">${l}</button>`).join("")}</div></div>
       <div class="msg" aria-live="polite"></div>
     </div>
@@ -1366,7 +1428,7 @@ async function tgModal(){
         const box = v.querySelector(".chats");
         box.innerHTML = d.chats.map(c => `<button type="button" data-chat="${esc(c.id)}">${esc(c.name)}</button>`).join("");
         if (d.chats.length === 1) { q("chat").value = d.chats[0].id; box.firstChild.classList.add("on"); }
-        say(d.chats.length > 1 ? `找到 ${d.chats.length} 個聊天，點一下要傳去哪裡` : `找到了！通知會傳到「${d.chats[0].name}」`, "ok");
+        say(d.chats.length > 1 ? `找到 ${d.chats.length} 個聊天，點一下要傳去哪裡` : `會傳到「${d.chats[0].name}」`, "ok");
       });
       const kp = t.closest("[data-keep]");
       if (kp) { v.querySelectorAll("[data-keep]").forEach(x => x.classList.toggle("on", x === kp)); return; }
@@ -1451,12 +1513,13 @@ function openSettings(){
     else if (k === "perf") perfShift(run);              // 效能模式：毛玻璃、底色慢慢變過去，不蓋一層淡出
     else big && k !== "accent" ? smooth(run, ["theme","bg"].includes(k), relayout) : run();
     if (k === "refresh") restart();
+    if (k === "show.weather") { if (PREF.show.weather) store(WXK, JSON.stringify({...wxMem(), deny: 0})); wxRun(); }
   }
 }
 /* 換密碼：換好後顯示新密碼給你複製，這台裝置會自動改用新密碼 */
 async function newToken(node, label){
   const ok = await modal({icon:"key", cls:"theme", title:`換掉「${label}」的密碼？`,
-    text:"換好之後，其他手機、電腦要用新密碼重新登入；雲端硬碟也要重新從哨兵點進去。", ok:"換新密碼"});
+    text:"其他裝置要用新密碼重新登入。", ok:"換新密碼"});
   if (!ok) return;
   let d = {};
   try {
@@ -1471,8 +1534,8 @@ async function newToken(node, label){
       fetch("/api/cloud-login", {method:"POST", headers:{"X-Token":getTok()}}).catch(() => {});
   }
   const cp = await modal({icon:"ok", cls:"theme", title:"已換成新密碼", input:d.token, ok:"複製密碼", cancel:"關閉",
-    text: node ? "這邊已經記住新密碼，可以照常看到這台。直接打開那台的網址時，請用這組新密碼登入。"
-               : "這台裝置已經改用新密碼。請把新密碼記下來，其他裝置要用它重新登入。"});
+    text: node ? "這邊已記住新密碼。直接打開那台時，用新密碼登入。"
+               : "請記下新密碼，其他裝置要用它重新登入。"});
   if (cp) {
     try { await navigator.clipboard.writeText(d.token); toast("已複製新密碼"); }
     catch(e) { toast("沒辦法自動複製，請手動選取密碼複製", "bad"); }
@@ -1527,7 +1590,7 @@ async function pkLogin(){
 async function pkStatus(root){
   const el = root.querySelector(".pkst"); if (!el) return;
   try { const d = await pkCall("/api/passkey", {action:"list"}, 1);
-    el.textContent = d.keys && d.keys.length ? `已登記 ${d.keys.length} 支，登入時用指紋或臉部辨識` : "還沒登記，點這裡開始";
+    el.textContent = d.keys && d.keys.length ? `已登記 ${d.keys.length} 支` : "還沒登記";
     el.classList.toggle("on", !!(d.keys && d.keys.length));
   } catch(e) { el.textContent = e.message; }
 }
@@ -1535,10 +1598,10 @@ async function pkModal(){
   const v = document.createElement("div"); v.className = "veil";
   const me = isPhone() ? "這支手機" : "這台裝置";
   v.innerHTML = `<div class="dialog glass pop pkd">${IC("finger","big")}<h3>手機金鑰登入</h3>
-    <p>登記之後，登入時用指紋或臉部辨識就好，不用再輸入密碼</p>
+    <p>用指紋或臉部辨識登入</p>
     <div class="form"><div class="pklist"></div>
       <label class="pkadd">幫${me}取個名字<input class="field" data-k="name" maxlength="20" value="${esc(devName())}">
-        <small>最多 5 支。換密碼後金鑰照樣能用，原本的密碼也還是可以登入</small></label>
+        <small>最多 5 支，換密碼也照樣能用</small></label>
       <div class="msg"></div></div>
     <div class="btns"><button class="ubtn ghost" data-r="0">關閉</button><button class="ubtn" data-add>登記${me}</button></div></div>`;
   $("#layer").appendChild(v);
@@ -1585,7 +1648,7 @@ const pinCall = body => pkCall("/api/pin", body, 1);
 async function pinStatus(root){
   const el = root.querySelector(".pinst"); if (!el) return;
   try { const d = await pinCall({action:"status"});
-    el.textContent = !d.on ? "還沒設定，點這裡開始" : d.locked ? `輸錯太多次，暫停中（還有 ${Math.ceil(d.locked / 60)} 分鐘）` : "已設定，登入時可以直接輸入 PIN 碼";
+    el.textContent = !d.on ? "還沒設定" : d.locked ? `輸錯太多次，暫停中（還有 ${Math.ceil(d.locked / 60)} 分鐘）` : "已設定";
     el.classList.toggle("on", !!d.on && !d.locked);
   } catch(e) { el.textContent = e.message; }
 }
@@ -1594,9 +1657,9 @@ async function pinModal(){
   const v = document.createElement("div"); v.className = "veil";
   const inp = k => `<input class="field" data-k="${k}" type="password" inputmode="numeric" pattern="[0-9]*" maxlength="8" autocomplete="new-password">`;
   v.innerHTML = `<div class="dialog glass pop pindlg">${IC("pin","big")}<h3>${st.on ? "換一組 PIN 碼" : "設定 PIN 碼"}</h3>
-    <p>登入時輸入 PIN 碼就能進去，不用打一長串密碼</p>
+    <p>用短短的數字登入</p>
     <div class="form">
-      <label>新的 PIN 碼${inp("a")}<small>4 到 8 位數字。連續輸錯 5 次會暫停 15 分鐘，累計輸錯 10 次會自動關閉</small></label>
+      <label>新的 PIN 碼${inp("a")}<small>4～8 位數字，輸錯太多次會暫停</small></label>
       <label>再輸入一次${inp("b")}</label>
       <div class="msg"></div></div>
     <div class="btns ${st.on ? "three" : ""}">${st.on ? `<button class="ubtn ghost" data-off>關閉 PIN 碼</button>` : ""}<button class="ubtn ghost" data-r="0">取消</button><button class="ubtn" data-save>儲存</button></div></div>`;
@@ -1645,8 +1708,8 @@ function bkLine(d){
   const L = d.last;
   const me = (d.copies || []).find(c => c.me);
   return !d.on ? ["已關閉", ""] : d.running ? ["備份中…", ""]
-    : !L && me ? [`上次備份：${ago(me.t)}（${bkSize(me.size)}）`, "on"] : !L ? [`每天清晨 ${d.hour} 點自動備份，還沒備份過`, ""]
-    : L.ok ? [`上次備份：${ago(L.t)}（${bkSize(L.size)}）`, "on"] : [`上次備份有問題（${ago(L.t)}），點進來看`, "bad"];
+    : !L && me ? [`上次備份：${ago(me.t)}（${bkSize(me.size)}）`, "on"] : !L ? [`還沒備份過`, ""]
+    : L.ok ? [`上次備份：${ago(L.t)}（${bkSize(L.size)}）`, "on"] : [`上次備份有問題（${ago(L.t)}）`, "bad"];
 }
 async function bkStatus(root){
   await Promise.all([...root.querySelectorAll(".bkst")].map(async el => {
@@ -1663,8 +1726,8 @@ function bkRows(d){
     h += (L.to || []).map(x => row(x.ok, x.ok ? esc(x.where) : `${esc(x.where)}沒有成功`, x.msg)).join("");
     if (L.items && L.items.length) h += row(null, `<b>備份內容</b>${esc(L.items.join("、"))}`);
     if (L.big && L.big.length) h += row(null, `<b>太大沒備份</b>${esc(L.big.map(p => p.split("/").pop()).join("、"))}`);
-  } else h += row(null, d.on ? `還沒備份過，每天清晨 ${d.hour} 點會自動備份` : "每日備份已關閉");
-  if (!d.tg) h += row(null, `<small>設定好 Telegram 通知，就會多存一份在 Telegram 上</small>`);
+  } else h += row(null, d.on ? "還沒備份過" : "每日備份已關閉");
+  if (!d.tg) h += row(null, `<small>開啟 Telegram 通知會多存一份</small>`);
   return h;
 }
 /* 這台存著哪些主機的備份（每台主機都存著每一台的） */
@@ -1676,13 +1739,13 @@ async function bkModal(node, label){
   const v = document.createElement("div"); v.className = "veil";
   const multi = LIST.length > 1;
   v.innerHTML = `<div class="dialog glass pop bkdlg">${IC("archive","big")}<h3>每日備份${multi ? `：${esc(label)}` : ""}</h3>
-    <p>3x-ui、n8n、哨兵和網站的設定，每天自動打包並加密。每台主機都存著每一台的備份，Telegram 上也有一份</p>
+    <p>每天自動打包加密，每台主機都存一份</p>
     <div class="form">
       <ul class="bkrows">${bkRows(d)}</ul>
-      <div class="lbl">${d.where === "雲端硬碟" ? "這台的雲端硬碟裡有" : "這台主機上有"}${d.where === "雲端硬碟" ? `<small>在「${esc(d.folder)}」資料夾，打開雲端硬碟就看得到</small>` : ""}<ul class="bkrows bkcopies">${bkCopies(d)}</ul>
+      <div class="lbl">${d.where === "雲端硬碟" ? "這台的雲端硬碟裡有" : "這台主機上有"}${d.where === "雲端硬碟" ? `<small>「${esc(d.folder)}」資料夾</small>` : ""}<ul class="bkrows bkcopies">${bkCopies(d)}</ul>
         <button class="linkish bkchg" data-restore>怎麼還原？</button></div>
-      <div class="lbl">解開密碼（每一份備份都打得開，所有主機共用）<b class="bkkey" title="點一下顯示">${esc(d.key)}</b>
-        <small>備份檔都用銀行等級的加密保護，沒有這組密碼誰都打不開。請另外記在安全的地方，主機壞掉時才拿得到</small>
+      <div class="lbl">解開密碼（所有主機共用）<b class="bkkey" title="點一下顯示">${esc(d.key)}</b>
+        <small>沒有它誰都打不開，請另外記好</small>
         <button class="linkish bkchg" data-chg>改成自己的密碼</button>
         <span class="bknew" hidden><input class="field" type="password" maxlength="128" autocomplete="new-password" placeholder="至少 8 個字"><button class="ubtn sm" data-setkey>儲存</button></span></div>
       <label class="bkon"><span>每天清晨 ${d.hour} 點自動備份</span><input type="checkbox" class="tog" ${d.on ? "checked" : ""}></label>
@@ -1735,7 +1798,7 @@ async function bkModal(node, label){
       if (sk && !sk.disabled) {
         const inp = v.querySelector(".bknew input"), key = inp.value;
         if (key.length < 8) return say("密碼至少要 8 個字", "bad");
-        if (!await modal({icon:"key", cls:"theme", title:"換成新的解開密碼？", text:"所有主機會一起換。之後的備份用新密碼；以前的備份還是要用舊密碼才打得開，舊密碼也請留著。", ok:"換"})) return;
+        if (!await modal({icon:"key", cls:"theme", title:"換成新的解開密碼？", text:"所有主機一起換。舊備份仍要用舊密碼，請留著。", ok:"換"})) return;
         busy(sk, "儲存中…");
         try {
           const x = await post({action:"key", key, sync:true}, true); d.key = key;
@@ -1765,7 +1828,7 @@ async function bkModal(node, label){
           const name = decodeURIComponent(r.headers.get("X-Backup-Name") || "backup.tar.gz");
           const a = document.createElement("a"); a.href = URL.createObjectURL(await r.blob()); a.download = name;
           document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 60000);
-          say(`已下載 ${name}（要用解開密碼才打得開）`, "ok");
+          say(`已下載 ${name}`, "ok");
         } catch(err) { say(err.message, "bad"); }
         busy(dl);
       }
@@ -1783,11 +1846,11 @@ async function bkRestore(){
   const hosts = d.copies || [];
   const v = document.createElement("div"); v.className = "veil";
   v.innerHTML = `<div class="dialog glass pop bkdlg">${IC("archive","big")}<h3>還原備份</h3>
-    <p>還原會把設定放回去，3x-ui、n8n、網站和哨兵都會自動重新啟動。還原前，主機上原本的檔案會先另外留一份，放錯了也退得回去</p>
+    <p>原本的檔案會先另存一份，還原錯了也退得回去</p>
     <div class="form">
-      <div class="lbl">讓主機回到前幾天的樣子<small>在那台主機上執行下面這行（點一下複製），從清單挑一份、輸入解開密碼就好</small>
+      <div class="lbl">讓主機回到前幾天的樣子<small>在那台執行這行（點一下複製）</small>
         <code class="bkcmd" data-cmd="${esc(here)}">${esc(here)}</code></div>
-      ${hosts.length ? `<div class="lbl">整台搬到新主機（原本那台壞掉時）<small>先到網域商把網址改指向新主機，再選要還原哪一台，把產生的指令貼到新主機上執行。指令裡的下載連結 24 小時內有效，只拿得到加密過的備份檔</small>
+      ${hosts.length ? `<div class="lbl">整台搬到新主機（原本那台壞掉時）<small>網域先指向新主機，選一台，把指令貼到新主機執行（24 小時內有效）</small>
         <div class="bkhosts">${hosts.map(h => `<button class="ubtn ghost sm" data-link="${esc(h.name)}">${esc(h.name)}</button>`).join("")}</div>
         <code class="bkcmd" data-cmd="" hidden></code></div>` : ""}
       <div class="msg"></div></div>
@@ -1828,7 +1891,7 @@ async function bkRestore(){
 /* ═════════ 登入 ═════════ */
 const LOGO = `<svg class="logo" viewBox="0 0 512 512" aria-hidden="true"><defs><linearGradient id="lblg" x1="0" y1="0" x2="0" y2="1"><stop offset="0" style="stop-color:color-mix(in srgb,var(--a1) 70%,#fff)"/><stop offset="1" style="stop-color:var(--a2)"/></linearGradient><linearGradient id="lhlg" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#fff" stop-opacity=".24"/><stop offset=".45" stop-color="#fff" stop-opacity="0"/></linearGradient><mask id="lmlg"><rect width="512" height="512" fill="#fff"/><path d="M204 258l36 36 72-76" fill="none" stroke="#000" stroke-width="30" stroke-linecap="round" stroke-linejoin="round"/></mask></defs><rect width="512" height="512" rx="115" fill="url(#lblg)"/><rect width="512" height="512" rx="115" fill="url(#lhlg)"/><path d="M256 108 371 150c9 3 15 12 15 22v72c0 84-52 140-122 168-5 2-11 2-16 0-70-28-122-84-122-168v-72c0-10 6-19 15-22Z" fill="#fff" mask="url(#lmlg)" transform="translate(256 262) scale(.88) translate(-256 -258)"/></svg>`;
 function login(msg){
-  $("#app").innerHTML = `<div class="login glass ${msg?"shake":""}">${LOGO}<h1>VPS 哨兵</h1><p>輸入存取密碼就能看到你的主機</p>
+  $("#app").innerHTML = `<div class="login glass ${msg?"shake":""}">${LOGO}<h1>VPS 哨兵</h1>
     <input id="tok" class="field" type="password" placeholder="${PIN_ON ? "存取密碼或 PIN 碼" : "存取密碼"}" autocomplete="current-password">
     <label class="remember"><input type="checkbox" id="rem" ${REM ? "checked" : ""}><span>30 天內不用再登入</span></label>
     <div class="err">${msg||""}</div><button class="ubtn" data-login>進入</button>${PK_OK && store("vps-pk") ? pkBtn : ""}</div>`;
@@ -1858,7 +1921,7 @@ function rswApi(path, opt = {}){
 async function restoreScreen(){
   endSplash(); clearTimeout(timer);
   $("#app").innerHTML = `<div class="login glass rsw">${LOGO}<h1>從備份還原</h1>
-    <p>上傳備份檔、輸入解開密碼，這台主機的設定和服務就會回到備份時的樣子</p><div class="rswbody"></div></div>`;
+    <p>上傳備份檔，主機就會回到備份時的樣子</p><div class="rswbody"></div></div>`;
   rswShow();
 }
 async function rswShow(){
@@ -1868,13 +1931,13 @@ async function rswShow(){
   try {
     const r = await rswApi("/api/restore");
     d = await r.json();
-    if (r.status === 401 || !RSW.code) return rswCodeForm(body, RSW.code ? "代碼不對，請再看一次終端機上的還原代碼" : "");
+    if (r.status === 401 || !RSW.code) return rswCodeForm(body, RSW.code ? "還原代碼不對" : "");
     RSW.down = 0;
   } catch(e) {                                   // 還原時哨兵會重新啟動：連不上一下是正常的
     RSW.down++;
     return rswRunning(body, null);
   }
-  if (!d.active) return rswEnd(body, null, "現在沒有在等待還原。要重新還原的話，在主機上執行：sudo bash install.sh --restore");
+  if (!d.active) return rswEnd(body, null, "目前沒有等待中的還原。要還原請在主機執行：sudo bash install.sh --restore");
   if (d.stage === "wait") return rswForm(body);
   if (d.stage === "running" || (d.progress && !d.progress.done)) return rswRunning(body, d.progress);
   return rswEnd(body, d.progress);
@@ -1922,7 +1985,7 @@ function rswLog(pg){
 function rswRunning(body, pg){
   const after = pg && pg.after;
   const note = RSW.down > 40 && after ? `還原後網址換成 <a href="${esc(after)}">${esc(after)}</a>，請改用這個網址登入`
-             : RSW.down ? "哨兵正在重新啟動，等一下就好…" : "大約需要幾分鐘，請不要關掉這個頁面";
+             : RSW.down ? "哨兵正在重新啟動，等一下就好…" : "請不要關掉這個頁面";
   body.innerHTML = `<div class="rswnow"><span class="spin"></span>還原中${pg && pg.name ? `：${esc(pg.name)}` : ""}</div>
     <ul class="bkrows rswlog">${rswLog(pg) || "<li>準備中…</li>"}</ul><small class="rswtip">${note}</small>`;
   clearTimeout(RSW.poll); RSW.poll = setTimeout(rswShow, 1500);
@@ -1980,7 +2043,7 @@ document.addEventListener("click", async e => {
   if (tf) return trafficModal(tf.dataset.traffic, tf.dataset.label);
   if (t.closest("[data-refresh]")) return refreshNow(t.closest("[data-refresh]"));
   if (t.closest("[data-logout]")) {
-    if (await modal({icon:"logout", cls:"info", title:"要登出嗎？", text:"登出後要重新輸入密碼才能看到主機。", ok:"登出"})) { setTok(""); LIST = []; clearTimeout(timer); login(); }
+    if (await modal({icon:"logout", cls:"info", title:"要登出嗎？", text:"", ok:"登出"})) { setTok(""); LIST = []; clearTimeout(timer); login(); }
     return;
   }
   const tg = t.closest("[data-toggle]");
@@ -2046,7 +2109,7 @@ document.addEventListener("click", async e => {
   if (ub) {
     const node = ub.dataset.update, label = ub.dataset.label, n = +ub.dataset.n;
     const ok = await modal({icon:"upd", cls:"theme", title: n ? `更新「${label}」？` : `檢查「${label}」的更新？`,
-      text: n ? `會在背景安裝 ${n} 個套件更新，大約 1～5 分鐘。\n期間部分服務可能會短暫重新啟動。` : "目前沒有偵測到更新，\n要重新檢查並安裝最新的更新嗎？", ok: n ? "開始更新" : "檢查"});
+      text: n ? `約 1～5 分鐘，部分服務可能短暫重啟。` : "重新檢查，有更新就裝好。", ok: n ? "開始更新" : "檢查"});
     if (!ok) return;
     ub.disabled = true;
     try {
@@ -2123,6 +2186,7 @@ async function tick(){
       endSplash();
       const um = sstore("vs-upmsg"); if (um) { sstore("vs-upmsg", ""); setTimeout(() => toast(um), 500); }   // 剛重新載入：說一聲換成哪一版
       upwRun();
+      setTimeout(wxRun, 1200);                   // 畫面出來後再問位置、抓天氣，不拖慢開啟
     }
     if (BOOTED) await settle();
     render(data);

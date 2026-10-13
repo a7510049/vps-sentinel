@@ -67,7 +67,7 @@ if [ ! -f "$CONF" ] && [ -t 0 ]; then
   if [ -z "$MODE" ]; then
     printf '\n  這台還沒裝過哨兵，要怎麼裝？\n'
     printf '    %s1%s  全新安裝\n' "$B" "$N"
-    printf '    %s2%s  從備份還原 %s（裝好後在網頁上傳備份檔，設定和服務會回到備份時的樣子）%s\n' "$B" "$N" "$D" "$N"
+    printf '    %s2%s  從備份還原 %s（裝好後在網頁上傳備份檔）%s\n' "$B" "$N" "$D" "$N"
     read -rp "  請輸入 1 或 2（直接按 Enter＝1）：" ans
     case "$ans" in 2|２) MODE=restore ;; *) MODE=fresh ;; esac
   fi
@@ -466,7 +466,7 @@ if [ -n "$RCODE" ]; then
   printf '  %s✅ 哨兵裝好了，接下來在網頁上還原%s\n\n' "$B" "$N"
   printf '  1. 用電腦或手機打開這個網址：\n     %s%s?restore=%s%s\n\n' "$B$C" "$BASE" "$RCODE" "$N"
   printf '  2. 選擇備份檔（.vsbk）、輸入解開密碼，按「開始還原」\n\n'
-  printf '  %s還原代碼：%s（24 小時內有效，網址裡已經帶了；只有拿到代碼的人能還原）%s\n' "$D" "$RCODE" "$N"
+  printf '  %s還原代碼：%s（24 小時內有效）%s\n' "$D" "$RCODE" "$N"
   printf '  %s備份檔可以從 Telegram，或另一台主機雲端硬碟裡的「哨兵備份」資料夾下載%s\n' "$D" "$N"
 else
   printf '  %s✅ VPS 哨兵%s好了%s\n\n' "$B" "$( [ -n "$NEWCONF" ] && echo 裝 || echo 更新 )" "$N"
