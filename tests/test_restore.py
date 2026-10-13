@@ -1,5 +1,7 @@
 """還原的測試：把備份放回去（放到測試用的資料夾，指令只列出來不真的執行）、原本的檔案先留一份、新主機用的還原連結。只用 Python 內建模組。"""
 import glob
+import hashlib
+import json
 import os
 import shutil
 import subprocess
@@ -109,3 +111,83 @@ class RestoreTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class WebRestoreTest(unittest.TestCase):
+    """安裝時選「從備份還原」：拿著一次性代碼在網頁上傳備份檔、輸入密碼，背景還原，網頁讀進度"""
+    call = test_backup.BackupTest.call
+
+    @classmethod
+    def setUpClass(cls):
+        cls.tmp = tempfile.mkdtemp()
+        cls.src = os.path.join(cls.tmp, "app")
+        os.makedirs(cls.src)
+        with open(os.path.join(cls.src, "settings.json"), "w") as f:
+            f.write("備份時的內容")
+        # 先在一台「舊主機」做出備份檔
+        cls.old = start(cls.tmp, "OLD", f"BACKUP_PATHS={cls.src}\n", display=NAME)
+        cls.state = os.path.join(cls.tmp, "rsw", "state.json")
+        os.makedirs(os.path.dirname(cls.state))
+        with open(cls.state, "w") as f:                           # 跟 install.sh --restore 寫的一樣
+            json.dump({"hash": hashlib.sha256(b"ABCD2345").hexdigest(), "exp": time.time() + 3600, "stage": "wait"}, f)
+        cls.root = os.path.join(cls.tmp, "root")
+        cls.new = start(cls.tmp, "NEW", "", {"SENTINEL_RESTORE_STATE": cls.state, "SENTINEL_RESTORE_ROOT": cls.root,
+                                             "SENTINEL_RESTORE_DRY": "1"}, display="新主機")
+
+    @classmethod
+    def tearDownClass(cls):
+        for p, _, _, log in (cls.old, cls.new):
+            p.terminate()
+            p.wait(10)
+            log.close()
+        shutil.rmtree(cls.tmp, ignore_errors=True)
+
+    def test_web_restore(self):
+        port = self.old[1]
+        t0 = time.time()
+        self.call(port, "/api/backup", {"action": "run"})
+        while time.time() < t0 + 90:
+            st = self.call(port, "/api/backup")[1]
+            if not st["running"] and st["last"] and st["last"]["t"] > t0:
+                break
+            time.sleep(0.5)
+        key = st["key"]
+        with open(glob.glob(os.path.join(self.old[2], "data", "backups", NAME, "*.vsbk"))[-1], "rb") as f:
+            data = f.read()
+
+        n = self.new[1]
+        # 沒有代碼：只知道「有在等待還原」，其他都不行
+        self.assertEqual(self.call(n, "/api/restore", token=None)[1], {"active": True})
+        self.assertEqual(self.call(n, "/api/restore", token=None, headers={"X-Restore-Code": "WRONG-123"})[0], 401)
+        self.assertEqual(self.call(n, "/api/restore-upload", data, token=None)[0], 401)
+        code = {"X-Restore-Code": "abcd-2345"}                   # 有沒有「-」、大小寫都可以
+        c, d, _ = self.call(n, "/api/restore", token=None, headers=code)
+        self.assertEqual((c, d["stage"], d["file"]), (200, "wait", False))
+
+        # 上傳不是備份檔的東西：拒絕
+        c, d, _ = self.call(n, "/api/restore-upload", b"hello" * 20, token=None, headers=code)
+        self.assertEqual(c, 400, d)
+        # 上傳備份檔、密碼不對：不會開始
+        c, d, _ = self.call(n, "/api/restore-upload", data, token=None, headers=code)
+        self.assertEqual(c, 200, d)
+        c, d, _ = self.call(n, "/api/restore-run", {"pw": key + "x"}, token=None, headers=code)
+        self.assertEqual(c, 400)
+        self.assertIn("解開密碼不對", json.loads(d)["message"])
+        # 密碼對：背景還原，網頁讀得到進度和結果
+        c, d, _ = self.call(n, "/api/restore-run", {"pw": key}, token=None, headers=code)
+        self.assertEqual(c, 200, d)
+        deadline = time.time() + 60
+        while time.time() < deadline:
+            d = self.call(n, "/api/restore", token=None, headers=code)[1]
+            if d["stage"] == "done":
+                break
+            time.sleep(0.5)
+        pg = d["progress"]
+        self.assertTrue(pg["done"] and pg["ok"], pg)
+        self.assertEqual(pg["name"], NAME)
+        self.assertIn({"label": "哨兵", "ok": True}, pg["result"])
+        with open(os.path.join(self.root, self.src.lstrip("/"), "settings.json")) as f:
+            self.assertEqual(f.read(), "備份時的內容")
+        self.assertFalse(os.path.exists(os.path.join(self.tmp, "rsw", "pw")))      # 密碼檔用完就刪掉
+        # 還原完就不能再上傳
+        self.assertEqual(self.call(n, "/api/restore-upload", data, token=None, headers=code)[0], 400)

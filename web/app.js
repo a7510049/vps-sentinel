@@ -1773,8 +1773,9 @@ async function bkRestore(){
 }
 
 /* ═════════ 登入 ═════════ */
+const LOGO = `<svg class="logo" viewBox="0 0 512 512" aria-hidden="true"><defs><linearGradient id="lblg" x1="0" y1="0" x2="0" y2="1"><stop offset="0" style="stop-color:color-mix(in srgb,var(--a1) 70%,#fff)"/><stop offset="1" style="stop-color:var(--a2)"/></linearGradient><linearGradient id="lhlg" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#fff" stop-opacity=".24"/><stop offset=".45" stop-color="#fff" stop-opacity="0"/></linearGradient><mask id="lmlg"><rect width="512" height="512" fill="#fff"/><path d="M204 258l36 36 72-76" fill="none" stroke="#000" stroke-width="30" stroke-linecap="round" stroke-linejoin="round"/></mask></defs><rect width="512" height="512" rx="115" fill="url(#lblg)"/><rect width="512" height="512" rx="115" fill="url(#lhlg)"/><path d="M256 108 371 150c9 3 15 12 15 22v72c0 84-52 140-122 168-5 2-11 2-16 0-70-28-122-84-122-168v-72c0-10 6-19 15-22Z" fill="#fff" mask="url(#lmlg)" transform="translate(256 262) scale(.88) translate(-256 -258)"/></svg>`;
 function login(msg){
-  $("#app").innerHTML = `<div class="login glass ${msg?"shake":""}"><svg class="logo" viewBox="0 0 512 512" aria-hidden="true"><defs><linearGradient id="lblg" x1="0" y1="0" x2="0" y2="1"><stop offset="0" style="stop-color:color-mix(in srgb,var(--a1) 70%,#fff)"/><stop offset="1" style="stop-color:var(--a2)"/></linearGradient><linearGradient id="lhlg" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#fff" stop-opacity=".24"/><stop offset=".45" stop-color="#fff" stop-opacity="0"/></linearGradient><mask id="lmlg"><rect width="512" height="512" fill="#fff"/><path d="M204 258l36 36 72-76" fill="none" stroke="#000" stroke-width="30" stroke-linecap="round" stroke-linejoin="round"/></mask></defs><rect width="512" height="512" rx="115" fill="url(#lblg)"/><rect width="512" height="512" rx="115" fill="url(#lhlg)"/><path d="M256 108 371 150c9 3 15 12 15 22v72c0 84-52 140-122 168-5 2-11 2-16 0-70-28-122-84-122-168v-72c0-10 6-19 15-22Z" fill="#fff" mask="url(#lmlg)" transform="translate(256 262) scale(.88) translate(-256 -258)"/></svg><h1>VPS 哨兵</h1><p>輸入存取密碼就能看到你的主機</p>
+  $("#app").innerHTML = `<div class="login glass ${msg?"shake":""}">${LOGO}<h1>VPS 哨兵</h1><p>輸入存取密碼就能看到你的主機</p>
     <input id="tok" class="field" type="password" placeholder="${PIN_ON ? "存取密碼或 PIN 碼" : "存取密碼"}" autocomplete="current-password">
     <label class="remember"><input type="checkbox" id="rem" ${REM ? "checked" : ""}><span>30 天內不用再登入</span></label>
     <div class="err">${msg||""}</div><button class="ubtn" data-login>進入</button>${PK_OK && store("vps-pk") ? pkBtn : ""}</div>`;
@@ -1789,6 +1790,105 @@ function login(msg){
     const b = box.lastElementChild;
     if (canAnim()) b.animate([{opacity:0, transform:"translateY(-4px)"}, {opacity:1, transform:"none"}], {duration:T.mid, easing:EASE});
   }).catch(() => {});
+  fetch("/api/restore", {cache:"no-store"}).then(r => r.json()).then(d => {   // 剛裝好、正在等待還原：多一個入口
+    const box = $("#app .login");
+    if (d.active && box && !box.querySelector("[data-rsw]")) box.insertAdjacentHTML("beforeend", `<button class="linkish rswgo" data-rsw>從備份還原</button>`);
+  }).catch(() => {});
+}
+
+/* ═════════ 從備份還原（安裝時選了「從備份還原」）═════════
+   網址上的 ?restore=代碼 是安裝完成時終端機給的一次性代碼；有代碼才能上傳備份檔、開始還原 */
+const RSW = {code: sessionStorage.getItem("vs-rsw") || "", poll: 0, down: 0};
+function rswApi(path, opt = {}){
+  return fetch(path, {...opt, cache:"no-store", headers:{...(opt.headers || {}), "X-Restore-Code": RSW.code}});
+}
+async function restoreScreen(){
+  endSplash(); clearTimeout(timer);
+  $("#app").innerHTML = `<div class="login glass rsw">${LOGO}<h1>從備份還原</h1>
+    <p>上傳備份檔、輸入解開密碼，這台主機的設定和服務就會回到備份時的樣子</p><div class="rswbody"></div></div>`;
+  rswShow();
+}
+async function rswShow(){
+  const body = $("#app .rswbody");
+  if (!body) return;
+  let d;
+  try {
+    const r = await rswApi("/api/restore");
+    d = await r.json();
+    if (r.status === 401 || !RSW.code) return rswCodeForm(body, RSW.code ? "代碼不對，請再看一次終端機上的還原代碼" : "");
+    RSW.down = 0;
+  } catch(e) {                                   // 還原時哨兵會重新啟動：連不上一下是正常的
+    RSW.down++;
+    return rswRunning(body, null);
+  }
+  if (!d.active) return rswEnd(body, null, "現在沒有在等待還原。要重新還原的話，在主機上執行：sudo bash install.sh --restore");
+  if (d.stage === "wait") return rswForm(body);
+  if (d.stage === "running" || (d.progress && !d.progress.done)) return rswRunning(body, d.progress);
+  return rswEnd(body, d.progress);
+}
+function rswCodeForm(body, err){
+  body.innerHTML = `<input class="field" id="rswcode" placeholder="還原代碼（安裝完成時終端機上顯示的）" autocomplete="off" value="${esc(RSW.code)}">
+    <div class="err">${esc(err)}</div><button class="ubtn" data-rswcode>下一步</button>`;
+  const go = () => { RSW.code = $("#rswcode").value.trim().toUpperCase(); sessionStorage.setItem("vs-rsw", RSW.code); rswShow(); };
+  body.querySelector("[data-rswcode]").onclick = go;
+  $("#rswcode").addEventListener("keydown", e => { if (e.key === "Enter") go(); });
+}
+function rswForm(body){
+  body.innerHTML = `<label class="ubtn ghost rswfile"><input type="file" accept=".vsbk" hidden>${IC("archive")}<span class="rswname">選擇備份檔（.vsbk）</span></label>
+    <input class="field" id="rswpw" type="password" placeholder="解開密碼" autocomplete="off">
+    <small class="rswtip">備份檔可以從 Telegram，或另一台主機雲端硬碟裡的「哨兵備份」資料夾下載。密碼用網頁上的總密碼，或 Telegram 上那份備份附的密碼都可以</small>
+    <div class="err"></div><button class="ubtn" data-rswgo>開始還原</button>`;
+  const inp = body.querySelector("input[type=file]"), err = body.querySelector(".err"), go = body.querySelector("[data-rswgo]");
+  const lab = body.querySelector(".rswname");
+  inp.onchange = () => { const f = inp.files[0]; lab.textContent = f ? `${f.name}（${bkSize(f.size)}）` : "選擇備份檔（.vsbk）"; err.textContent = ""; };
+  go.onclick = async () => {
+    const f = inp.files[0], pw = $("#rswpw").value;
+    if (!f) return err.textContent = "請先選擇備份檔";
+    if (!pw) return err.textContent = "請輸入解開密碼";
+    go.disabled = true; err.textContent = "";
+    try {
+      await new Promise((res, rej) => {          // 用 XHR 才看得到上傳進度
+        const x = new XMLHttpRequest();
+        x.open("POST", "/api/restore-upload"); x.setRequestHeader("X-Restore-Code", RSW.code);
+        x.upload.onprogress = e => { if (e.lengthComputable) go.innerHTML = `<span class="spin"></span>上傳中 ${Math.round(e.loaded / e.total * 100)}%`; };
+        x.onload = () => { let j = {}; try { j = JSON.parse(x.responseText); } catch(_) {} x.status === 200 ? res() : rej(new Error(j.message || j.error || "上傳失敗")); };
+        x.onerror = () => rej(new Error("上傳失敗，請確認網路後再試一次"));
+        x.send(f);
+      });
+      go.innerHTML = `<span class="spin"></span>檢查密碼…`;
+      const r = await rswApi("/api/restore-run", {method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({pw})});
+      const j = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(j.message || j.error || "沒辦法開始還原");
+      rswShow();
+    } catch(e) { err.textContent = e.message; go.disabled = false; go.textContent = "開始還原"; }
+  };
+}
+function rswLog(pg){
+  return (pg && pg.log || []).filter(l => !/測試，不執行/.test(l)).slice(-10).map(l => `<li>${esc(l.trim())}</li>`).join("");
+}
+function rswRunning(body, pg){
+  const after = pg && pg.after;
+  const note = RSW.down > 40 && after ? `還原後網址換成 <a href="${esc(after)}">${esc(after)}</a>，請改用這個網址登入`
+             : RSW.down ? "哨兵正在重新啟動，等一下就好…" : "大約需要幾分鐘，請不要關掉這個頁面";
+  body.innerHTML = `<div class="rswnow"><span class="spin"></span>還原中${pg && pg.name ? `：${esc(pg.name)}` : ""}</div>
+    <ul class="bkrows rswlog">${rswLog(pg) || "<li>準備中…</li>"}</ul><small class="rswtip">${note}</small>`;
+  clearTimeout(RSW.poll); RSW.poll = setTimeout(rswShow, 1500);
+}
+function rswEnd(body, pg, msg){
+  clearTimeout(RSW.poll);
+  if (!pg) { body.innerHTML = `<small class="rswtip">${esc(msg)}</small><button class="ubtn" data-rswdone>前往登入</button>`; }
+  else {
+    const res = (pg.result || []).map(x => `<li class="${x.ok ? "ok" : "bad"}">${I(x.ok ? "ok" : "warn")}<span>${esc(x.label)}${x.ok ? "" : " 沒有跑起來"}</span></li>`).join("");
+    body.innerHTML = `<div class="rswnow ${pg.ok ? "ok" : "bad"}">${pg.error ? "沒有還原成功" : pg.ok ? "還原完成" : "還原完成，但有地方沒跑起來"}</div>
+      ${pg.error ? `<small class="rswtip">${esc(pg.error)}</small>` : `<ul class="bkrows">${res || "<li>（這份備份裡沒有需要啟動的服務）</li>"}</ul>`}
+      <small class="rswtip">${pg.error ? "可以在主機上執行 sudo bash install.sh --restore 重新產生代碼再試一次" : "登入時用原本那台的密碼、PIN 碼或手機金鑰"}</small>
+      <button class="ubtn" data-rswdone>前往登入</button>`;
+  }
+  body.querySelector("[data-rswdone]").onclick = () => {
+    sessionStorage.removeItem("vs-rsw"); RSW.code = ""; setTok("");
+    if (pg && pg.after && !location.href.startsWith(pg.after)) location.href = pg.after;
+    else login();
+  };
 }
 let REM = true, PIN_ON = false;
 /* 輸入 4～8 位數字、主機又有設定 PIN 碼：當成 PIN 碼；其他都當成存取密碼 */
@@ -1820,6 +1920,7 @@ document.addEventListener("click", async e => {
   if (t.closest("[data-login]")) return doLogin();
   if (t.closest("[data-pklogin]")) return pkLoginClick(t.closest("[data-pklogin]"));
   if (t.closest("[data-settings]")) return openSettings();
+  if (t.closest("[data-rsw]")) return restoreScreen();
   const rg = t.closest("[data-range]");
   if (rg) { if (RANGE !== rg.dataset.range) { RANGE = rg.dataset.range; store("vps-range", RANGE); render(LIST); } return; }
   const tf = t.closest("[data-traffic]");
@@ -1936,6 +2037,9 @@ async function settle(){
 }
 async function tick(){
   clearTimeout(timer);
+  const rq = new URLSearchParams(location.search).get("restore");
+  if (rq) { RSW.code = rq.trim().toUpperCase(); sessionStorage.setItem("vs-rsw", RSW.code); history.replaceState(null, "", location.pathname); }
+  if (RSW.code) return restoreScreen();
   if (!getTok()) { endSplash(); return login(); }
   try {
     if (!BOOTED) splashMsg("讀取主機狀態…");

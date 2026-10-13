@@ -2,20 +2,84 @@
 # VPS 哨兵：安裝／更新
 #
 # 用法：
-#   sudo bash install.sh              一般安裝（http://IP:8787）
-#   sudo bash install.sh 你的網域      加上加密連線（https://你的網域），會自動安裝 Caddy
+#   sudo bash install.sh                   第一次安裝會問你：全新安裝，還是從備份還原；之後執行就是更新
+#   sudo bash install.sh 你的網域           加上加密連線（https://你的網域），會自動安裝 Caddy
+#   sudo bash install.sh --restore [網域]   從備份還原：裝好後打開網頁，上傳備份檔就會還原
+#   sudo bash install.sh --fresh [網域]     全新安裝（不問）
 #
 set -euo pipefail
 
-[ "$(id -u)" = 0 ] || { echo "請用 sudo 執行：sudo bash install.sh"; exit 1; }
-command -v systemctl >/dev/null || { echo "這台主機沒有 systemd，無法自動安裝"; exit 1; }
+# ── 畫面：有顏色的步驟、打勾、轉圈圈（不是在終端機裡執行時，例如網頁上的一鍵更新，就只印文字）──
+if [ -t 1 ]; then
+  B=$'\e[1m' D=$'\e[2m' G=$'\e[32m' Y=$'\e[33m' R=$'\e[31m' C=$'\e[36m' N=$'\e[0m'
+else
+  B="" D="" G="" Y="" R="" C="" N=""
+fi
+STEP=0
+TOTAL=4
+step() { STEP=$((STEP + 1)); printf '\n%s[%d/%d]%s %s%s%s\n' "$C" "$STEP" "$TOTAL" "$N" "$B" "$1" "$N"; }
+ok()   { printf '  %s✓%s %s\n' "$G" "$N" "$1"; }
+info() { printf '  %sℹ%s %s\n' "$C" "$N" "$1"; }
+warn() { printf '  %s⚠%s %s\n' "$Y" "$N" "$1"; }
+die()  {   # die 原因 [補充說明…]
+  printf '\n  %s✗ %s%s\n' "$R" "$1" "$N"; shift
+  for l in "$@"; do printf '    %s\n' "$l"; done
+  echo; exit 1
+}
+spin() {   # spin 說明 指令…：比較久的步驟顯示轉圈圈，做完印打勾；失敗回傳失敗
+  local msg="$1" pid rc=0 i=0 fr=(⠋ ⠙ ⠹ ⠸ ⠼ ⠴ ⠦ ⠧ ⠇ ⠏); shift
+  if [ ! -t 1 ]; then "$@" && ok "$msg"; return; fi
+  "$@" >/dev/null 2>&1 & pid=$!
+  while kill -0 "$pid" 2>/dev/null; do printf '\r  %s%s%s %s' "$C" "${fr[i++ % 10]}" "$N" "$msg"; sleep 0.1; done
+  wait "$pid" || rc=$?
+  printf '\r\033[K'
+  [ "$rc" = 0 ] && ok "$msg"
+  return "$rc"
+}
+
+[ "$(id -u)" = 0 ] || die "請用 sudo 執行" "sudo bash install.sh"
+command -v systemctl >/dev/null || die "這台主機沒有 systemd，無法自動安裝"
 command -v python3 >/dev/null || { apt-get update -qq && apt-get install -y -qq python3; }
 
-DOMAIN="${1:-}"
+MODE=""
+DOMAIN=""
+for a in "$@"; do
+  case "$a" in
+    --restore) MODE=restore ;;
+    --fresh) MODE=fresh ;;
+    -*) die "看不懂的選項：$a" "用法：sudo bash install.sh [--fresh|--restore] [你的網域]" ;;
+    *) DOMAIN="$a" ;;
+  esac
+done
 HERE="$(cd "$(dirname "$0")" && pwd)"
 DIR=/opt/vps-sentinel-lite
 CONF=/etc/vps-sentinel-lite.conf
 UNIT=/etc/systemd/system/vps-sentinel-lite.service
+RSW_DIR=/var/lib/vps-sentinel-restore
+VER="$(grep -m1 -E '^VERSION = ' "$HERE/sentinel.py" | cut -d'"' -f2)"
+
+printf '\n  %s━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━%s\n' "$C" "$N"
+printf '    %s🛡  VPS 哨兵%s  %s%s v%s%s\n' "$B" "$N" "$( [ -f "$CONF" ] && echo 更新 || echo 安裝 )" "$D" "$VER" "$N"
+printf '  %s━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━%s\n' "$C" "$N"
+
+# 第一次安裝：問要全新安裝還是從備份還原、要不要設網域（不是在終端機裡執行就不問）
+if [ ! -f "$CONF" ] && [ -t 0 ]; then
+  if [ -z "$MODE" ]; then
+    printf '\n  這台還沒裝過哨兵，要怎麼裝？\n'
+    printf '    %s1%s  全新安裝\n' "$B" "$N"
+    printf '    %s2%s  從備份還原 %s（裝好後在網頁上傳備份檔，設定和服務會回到備份時的樣子）%s\n' "$B" "$N" "$D" "$N"
+    read -rp "  請輸入 1 或 2（直接按 Enter＝1）：" ans
+    case "$ans" in 2|２) MODE=restore ;; *) MODE=fresh ;; esac
+  fi
+  if [ -z "$DOMAIN" ]; then
+    printf '\n  有網域嗎？有的話會設定加密連線（https）\n'
+    [ "$MODE" = restore ] && printf '  %s先不設也沒關係：還原時會自動用回備份裡的網域%s\n' "$D" "$N"
+    read -rp "  輸入網域，或直接按 Enter 先不設定：" DOMAIN
+    DOMAIN="$(echo "$DOMAIN" | tr -d '[:space:]')"
+  fi
+fi
+[ -n "$DOMAIN" ] && TOTAL=$((TOTAL + 1))
+[ -f /opt/vps-cloud/data/config.yaml ] && [ -f "$HERE/cloud.sh" ] && TOTAL=$((TOTAL + 1))
 
 set_conf() {   # set_conf 名稱 值
   if grep -q "^$1=" "$CONF"; then sed -i "s|^$1=.*|$1=$2|" "$CONF"; else echo "$1=$2" >> "$CONF"; fi
@@ -37,13 +101,13 @@ install_caddy() {
   fi
   rm -f /etc/apt/sources.list.d/caddy-stable.list   # 壞掉的來源要拿掉，不然以後 apt 都會報錯
 
-  echo "  官方來源暫時無法使用，改用 Ubuntu 內建版本…"
+  # 官方來源暫時無法使用，改用 Ubuntu 內建版本
   apt-get update -qq >/dev/null 2>&1 || true
   if apt-get install -y -qq caddy >/dev/null 2>&1; then
     return 0
   fi
 
-  echo "  改從 GitHub 直接下載…"
+  # 改從 GitHub 直接下載
   local arch ver tmp
   case "$(uname -m)" in
     x86_64) arch=amd64 ;; aarch64|arm64) arch=arm64 ;; armv7l) arch=armv7 ;; *) return 1 ;;
@@ -88,12 +152,16 @@ if ! command -v caddy >/dev/null && [ -f /etc/apt/sources.list.d/caddy-stable.li
 fi
 
 # ── 1. 安裝主程式 ──
+step "安裝主程式"
 install -d "$DIR"
 install -m 755 "$HERE/sentinel.py" "$DIR/sentinel.py"
 install -d "$DIR/web"
 install -m 644 "$HERE"/web/index.html "$HERE"/web/style.css "$HERE"/web/app.js "$DIR/web/"
+ok "放在 $DIR"
 
 # ── 2. 設定檔（已存在就保留） ──
+step "設定檔"
+if [ -f "$CONF" ]; then ok "沿用原本的設定（$CONF）"; NEWCONF=""; else NEWCONF=1; fi
 if [ ! -f "$CONF" ]; then
   TOKEN="$(python3 -c 'import secrets;print(secrets.token_urlsafe(18))')"
   cat > "$CONF" <<EOF
@@ -139,13 +207,14 @@ ALERT_MEM=90
 ALERT_DISK=90
 EOF
   chmod 600 "$CONF"
+  ok "建立新的設定檔（$CONF）"
 fi
 
 # 舊版可能綁在 Tailscale 的位址上；那個位址不存在了就改回對外開放
 CUR_BIND="$(grep -E '^BIND=' "$CONF" | cut -d= -f2 || true)"
 if [ -n "$CUR_BIND" ] && [ "$CUR_BIND" != "0.0.0.0" ] && [ "$CUR_BIND" != "127.0.0.1" ] \
    && ! hostname -I | tr ' ' '\n' | grep -qx "$CUR_BIND"; then
-  echo "ℹ️ 原本設定的位址 $CUR_BIND 已不存在，改為對外開放"
+  info "原本設定的位址 $CUR_BIND 已不存在，改為對外開放"
   set_conf BIND 0.0.0.0
 fi
 
@@ -154,6 +223,7 @@ if [ -d "$HERE/.git" ]; then set_conf SRC_DIR "$HERE"; fi
 
 # ── 3. 加密連線（有給網域才做） ──
 if [ -n "$DOMAIN" ]; then
+  step "加密連線（$DOMAIN）"
   # 先檢查連接埠，絕對不去搶別的服務（例如翻牆服務）正在用的連接埠
   port_owner() {   # port_owner tcp|udp 連接埠 → 印出使用中的程式名稱
     ss -lnpH -A "$1" "( sport = :$2 )" 2>/dev/null | grep -o 'users:(("[^"]*"' | head -1 | cut -d'"' -f2 || true
@@ -164,14 +234,12 @@ if [ -n "$DOMAIN" ]; then
       HTTPS_PORT=443
     else
       HTTPS_PORT=9443
-      echo "ℹ️ 443 已經被「$OWNER」使用中，不會去動它；加密連線改用 $HTTPS_PORT"
+      info "443 已經被「$OWNER」使用中，不會去動它；加密連線改用 $HTTPS_PORT"
     fi
   fi
   OWNER="$(port_owner tcp "$HTTPS_PORT")"
   if [ -n "$OWNER" ] && [ "$OWNER" != caddy ]; then
-    echo "❌ 連接埠 $HTTPS_PORT 被「$OWNER」使用中。可以換一個號碼，例如："
-    echo "   sudo HTTPS_PORT=10443 bash install.sh $DOMAIN"
-    exit 1
+    die "連接埠 $HTTPS_PORT 被「$OWNER」使用中。可以換一個號碼，例如：" "sudo HTTPS_PORT=10443 bash install.sh $DOMAIN"
   fi
   # 申請憑證需要 80 連接埠。被 nginx 佔用時，不去搶，改請 nginx 把「驗證網域」的請求轉交給 Caddy
   CADDY_HTTP_PORT=80
@@ -184,19 +252,17 @@ if [ -n "$DOMAIN" ]; then
         CADDY_HTTP_PORT=$((CADDY_HTTP_PORT + 1))
       done
       NGINX_ACME=1
-      echo "ℹ️ 80 已經被「nginx」使用中，不會去動它；改由 nginx 轉交憑證驗證"
+      info "80 已經被「nginx」使用中，不會去動它；改由 nginx 轉交憑證驗證"
     else
-      echo "❌ 申請加密憑證需要用到 80 連接埠，但它被「$OWNER」使用中，無法自動設定"
-      echo "   請把上面這行截圖給我，我幫你看怎麼處理"
-      exit 1
+      die "申請加密憑證需要用到 80 連接埠，但它被「$OWNER」使用中，無法自動設定" "請把這段畫面截圖給我，我幫你看怎麼處理"
     fi
   fi
 
   if [ "$HTTPS_PORT" = 443 ]; then SHOWURL="https://$DOMAIN"; else SHOWURL="https://$DOMAIN:$HTTPS_PORT"; fi
-  echo "▶ 設定加密連線：$SHOWURL"
   if ! command -v caddy >/dev/null; then
-    echo "  安裝 Caddy（自動申請免費加密憑證的小程式）…"
-    install_caddy || { echo "❌ Caddy 安裝失敗，請把上面的訊息截圖給我"; exit 1; }
+    spin "安裝 Caddy（自動申請免費加密憑證的小程式）" install_caddy || die "Caddy 安裝失敗" "請把這段畫面截圖給我"
+  else
+    ok "Caddy 已經裝好了"
   fi
 
   install -d /etc/caddy/sites
@@ -221,8 +287,8 @@ EOF
   # 開頭的全域設定如果是本程式寫的（只含下面這幾種設定），就整段換新；是你自己寫的就不動
   GLOBAL="$(awk 'NR==1 && $0!="{" {exit} {print} $0=="}" {exit}' /etc/caddy/Caddyfile)"
   if [ -n "$GLOBAL" ] && printf '%s\n' "$GLOBAL" | grep -vqE '^[[:space:]]*(\{|\}|servers \{|protocols h1 h2|http_port [0-9]+|#.*)?[[:space:]]*$'; then
-    echo "⚠️ 你的 Caddyfile 已經有自己的全域設定，請自己在裡面加上：servers { protocols h1 h2 }"
-    [ "$CADDY_HTTP_PORT" != 80 ] && echo "   以及：http_port $CADDY_HTTP_PORT"
+    warn "你的 Caddyfile 已經有自己的全域設定，請自己在裡面加上：servers { protocols h1 h2 }"
+    [ "$CADDY_HTTP_PORT" != 80 ] && echo "    以及：http_port $CADDY_HTTP_PORT"
   else
     if [ -n "$GLOBAL" ]; then
       awk 'f{print;next} $0=="}"{f=1;next} NR==1 && $0!="{"{f=1;print}' /etc/caddy/Caddyfile \
@@ -249,11 +315,11 @@ EOF
     NGX_FILE=/etc/nginx/sites-enabled/vps-sentinel-acme.conf
   fi
   if [ -n "$NGINX_ACME" ]; then
-    [ -n "$NGX_FILE" ] || { echo "❌ 找不到 nginx 的設定資料夾，無法自動設定，請截圖給我"; exit 1; }
+    [ -n "$NGX_FILE" ] || die "找不到 nginx 的設定資料夾，無法自動設定" "請把這段畫面截圖給我"
     rm -f /etc/nginx/conf.d/vps-sentinel-acme.conf /etc/nginx/sites-enabled/vps-sentinel-acme.conf
     if nginx -T 2>/dev/null | grep -E '^[[:space:]]*server_name' | grep -qw -- "$DOMAIN"; then
-      echo "⚠️ nginx 裡已經有別的設定在用 $DOMAIN，可能會搶走憑證驗證。"
-      echo "   如果最後憑證申請失敗，建議另外開一個子網域給哨兵用（例如 mon.$DOMAIN）"
+      warn "nginx 裡已經有別的設定在用 $DOMAIN，可能會搶走憑證驗證。"
+      echo "    如果最後憑證申請失敗，建議另外開一個子網域給哨兵用（例如 mon.$DOMAIN）"
     fi
     LISTEN6=""
     nginx -T 2>/dev/null | grep -qE 'listen[[:space:]]+\[::\]:80' && LISTEN6="	listen [::]:80;"
@@ -275,9 +341,8 @@ $LISTEN6
 EOF
     if ! nginx -t >/dev/null 2>&1; then
       rm -f "$NGX_FILE"
-      echo "❌ nginx 設定檢查沒通過（已還原，沒有改到你原本的設定）。請把下面的訊息截圖給我："
       nginx -t || true
-      exit 1
+      die "nginx 設定檢查沒通過（已還原，沒有改到你原本的設定）" "請把這段畫面截圖給我"
     fi
     systemctl reload nginx 2>/dev/null || nginx -s reload
   elif [ -n "$NGX_FILE" ] && [ -f "$NGX_FILE" ]; then
@@ -290,22 +355,25 @@ EOF
   set_conf HTTPS_PORT "$HTTPS_PORT"
 
   if ! caddy validate --config /etc/caddy/Caddyfile --adapter caddyfile >/dev/null 2>&1; then
-    echo "❌ Caddy 設定有問題，請看：caddy validate --config /etc/caddy/Caddyfile"
-    exit 1
+    die "Caddy 設定有問題" "請看：caddy validate --config /etc/caddy/Caddyfile"
   fi
   systemctl enable caddy >/dev/null 2>&1
   systemctl reload caddy 2>/dev/null || systemctl restart caddy
+  ok "網址：$SHOWURL"
 
   # 檢查網域是不是指向這台 VPS
   MYIP="$(curl -s4 --max-time 4 https://ifconfig.me || true)"
   DNSIP="$(getent ahostsv4 "$DOMAIN" | awk 'NR==1{print $1}' || true)"
   if [ -n "$MYIP" ] && [ "$DNSIP" != "$MYIP" ]; then
-    echo "⚠️ 網域 $DOMAIN 目前指向「${DNSIP:-找不到}」，但這台 VPS 是「$MYIP」"
-    echo "   請到網域商把 A 紀錄設成 $MYIP，生效後 Caddy 會自動申請憑證（不用重新安裝）"
+    warn "網域 $DOMAIN 目前指向「${DNSIP:-找不到}」，但這台 VPS 是「$MYIP」"
+    echo "    請到網域商把 A 紀錄設成 $MYIP，生效後 Caddy 會自動申請憑證（不用重新安裝）"
+  else
+    ok "網域有指向這台主機"
   fi
 fi
 
 # ── 4. VPS 內的防火牆：打開需要的連接埠 ──
+step "防火牆"
 if [ "$(grep -E '^BIND=' "$CONF" | cut -d= -f2)" = "127.0.0.1" ]; then
   OPEN_PORTS="80 $(grep -E '^HTTPS_PORT=' "$CONF" | cut -d= -f2 || echo 443)"
 else
@@ -320,8 +388,10 @@ elif command -v netfilter-persistent >/dev/null && command -v iptables >/dev/nul
   done
   netfilter-persistent save >/dev/null 2>&1 || true
 fi
+ok "已開放連接埠：$OPEN_PORTS"
 
 # ── 5. 開機自動啟動 ──
+step "啟動哨兵"
 cat > "$UNIT" <<'EOF'
 [Unit]
 Description=VPS 哨兵
@@ -343,13 +413,32 @@ systemctl restart vps-sentinel-lite
 sleep 2
 
 if ! systemctl is-active --quiet vps-sentinel-lite; then
-  echo "❌ 啟動失敗，請看：journalctl -u vps-sentinel-lite -n 30"
-  exit 1
+  die "啟動失敗" "請看：journalctl -u vps-sentinel-lite -n 30"
 fi
+ok "已啟動，開機也會自動啟動"
 
 # 有裝雲端硬碟的話，順便整理一下：容量補足到設定的大小、修好刪不掉的檔案（沒裝就跳過）
 if [ -f /opt/vps-cloud/data/config.yaml ] && [ -f "$HERE/cloud.sh" ]; then
+  step "整理雲端硬碟"
   bash "$HERE/cloud.sh" 整理 || true
+fi
+
+# 從備份還原：產生一組一次性代碼（只存雜湊），拿著它才能在網頁上傳備份檔還原
+RCODE=""
+if [ "$MODE" = restore ]; then
+  install -d -m 700 "$RSW_DIR"
+  rm -f "$RSW_DIR/upload.vsbk" "$RSW_DIR/progress.json" "$RSW_DIR/pw"
+  RCODE="$(python3 - "$RSW_DIR/state.json" <<'PY'
+import hashlib, json, os, secrets, sys, time
+abc = "ABCDEFGHJKMNPQRSTUVWXYZ23456789"            # 去掉容易看錯的 I、L、O、0、1
+code = "".join(secrets.choice(abc) for _ in range(8))
+st = {"hash": hashlib.sha256(code.encode()).hexdigest(), "exp": time.time() + 86400, "stage": "wait"}
+fd = os.open(sys.argv[1], os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+with os.fdopen(fd, "w") as f:
+    json.dump(st, f)
+print(code[:4] + "-" + code[4:])
+PY
+)"
 fi
 
 # ── 6. 顯示網址 ──
@@ -361,28 +450,31 @@ SAVED_DOMAIN="$(grep -E '^DOMAIN=' "$CONF" | cut -d= -f2 || true)"
 SAVED_HTTPS="$(grep -E '^HTTPS_PORT=' "$CONF" | cut -d= -f2 || true)"
 if [ "$BIND" = "127.0.0.1" ] && [ -n "$SAVED_DOMAIN" ]; then
   if [ -z "$SAVED_HTTPS" ] || [ "$SAVED_HTTPS" = 443 ]; then
-    URL="https://$SAVED_DOMAIN/?t=$TOKEN"
+    BASE="https://$SAVED_DOMAIN/"
   else
-    URL="https://$SAVED_DOMAIN:$SAVED_HTTPS/?t=$TOKEN"
-    CLOUD_NOTE="⚠️ 記得到雲端主機網站的防火牆（安全清單）新增 TCP $SAVED_HTTPS"
+    BASE="https://$SAVED_DOMAIN:$SAVED_HTTPS/"
+    CLOUD_NOTE="記得到雲端主機網站的防火牆（安全清單）新增 TCP $SAVED_HTTPS"
   fi
 else
   IP="$(curl -s4 --max-time 4 https://ifconfig.me || hostname -I | awk '{print $1}')"
-  URL="http://$IP:$PORT/?t=$TOKEN"
+  BASE="http://$IP:$PORT/"
+  [ -n "$NEWCONF" ] && CLOUD_NOTE="記得到雲端主機網站的防火牆（安全清單）新增 TCP $PORT"
 fi
 
-echo
-echo "✅ VPS 哨兵已啟動"
-echo
-echo "   用手機打開這個網址（第一次會自動記住密碼）："
-echo "   $URL"
-echo
-echo "   設定檔：$CONF"
-echo "   改完設定：sudo systemctl restart vps-sentinel-lite"
-[ -n "${CLOUD_NOTE:-}" ] && { echo; echo "   $CLOUD_NOTE"; }
-if [ "$BIND" = "0.0.0.0" ]; then
-  echo
-  echo "   💡 目前是一般連線（http）。有網域的話可以改成加密連線："
-  echo "      sudo bash install.sh 你的網域"
+printf '\n  %s━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━%s\n' "$G" "$N"
+if [ -n "$RCODE" ]; then
+  printf '  %s✅ 哨兵裝好了，接下來在網頁上還原%s\n\n' "$B" "$N"
+  printf '  1. 用電腦或手機打開這個網址：\n     %s%s?restore=%s%s\n\n' "$B$C" "$BASE" "$RCODE" "$N"
+  printf '  2. 選擇備份檔（.vsbk）、輸入解開密碼，按「開始還原」\n\n'
+  printf '  %s還原代碼：%s（24 小時內有效，網址裡已經帶了；只有拿到代碼的人能還原）%s\n' "$D" "$RCODE" "$N"
+  printf '  %s備份檔可以從 Telegram，或另一台主機雲端硬碟裡的「哨兵備份」資料夾下載%s\n' "$D" "$N"
+else
+  printf '  %s✅ VPS 哨兵%s好了%s\n\n' "$B" "$( [ -n "$NEWCONF" ] && echo 裝 || echo 更新 )" "$N"
+  printf '  用手機打開這個網址（第一次會自動記住密碼）：\n     %s%s?t=%s%s\n\n' "$B$C" "$BASE" "$TOKEN" "$N"
+  printf '  %s設定檔：%s（改完執行 sudo systemctl restart vps-sentinel-lite）%s\n' "$D" "$CONF" "$N"
 fi
-echo
+[ -n "${CLOUD_NOTE:-}" ] && { echo; warn "$CLOUD_NOTE"; }
+if [ "$BIND" = "0.0.0.0" ]; then
+  printf '\n  %s💡 目前是一般連線（http）。有網域的話可以改成加密連線：sudo bash install.sh 你的網域%s\n' "$D" "$N"
+fi
+printf '  %s━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━%s\n\n' "$G" "$N"

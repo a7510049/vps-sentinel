@@ -40,7 +40,7 @@ from collections import deque
 from concurrent.futures import ThreadPoolExecutor
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
-VERSION = "1.35"
+VERSION = "1.36"
 
 # ───────────────────────── 哨兵備份檔（.vsbk）─────────────────────────
 # 哨兵專用的備份格式：外面是自己的檔案格式，裡面用的是成熟、標準的加密方法（不自己發明加密）：
@@ -193,6 +193,8 @@ def vsbk_cli(args):
 # 測試用：SENTINEL_RESTORE_ROOT＝放回到哪個資料夾（預設 /）；SENTINEL_RESTORE_DRY=1＝不真的執行指令，只列出來
 RS_MANIFEST = "vsbk-manifest.json"
 RS_HERE = os.path.dirname(os.path.abspath(__file__))
+# install.sh、cloud.sh 在專案資料夾（git clone 的地方）；從網頁還原時哨兵會告訴我們在哪
+RS_SRC = next((d for d in (os.environ.get("SENTINEL_SRC"), RS_HERE) if d and os.path.isfile(os.path.join(d, "install.sh"))), RS_HERE)
 RS_UNIT = "/etc/systemd/system/vps-sentinel-lite.service"
 
 
@@ -214,9 +216,30 @@ def rs_conf(path):
 
 
 class Restore:
-    def __init__(self, root, dry, yes):
-        self.root, self.dry, self.yes = root, dry, yes
-        self.cmds, self.result = [], []
+    def __init__(self, root, dry, yes, status=None):
+        self.root, self.dry, self.yes, self.status = root, dry, yes, status
+        self.cmds, self.result, self.log = [], [], []
+        self.name, self.after = "", ""
+
+    def say(self, text=""):
+        """印出來；從網頁還原時也寫進進度檔，網頁每隔一下來讀"""
+        print(text, flush=True)
+        self.log += [ln for ln in str(text).split("\n") if ln.strip()]
+        self.save()
+
+    def save(self, done=False, error=""):
+        if not self.status:
+            return
+        d = {"t": time.time(), "done": done, "error": error, "name": self.name, "log": self.log[-200:],
+             "result": [{"label": a, "ok": b} for a, b in self.result], "after": self.after,
+             "ok": done and not error and all(b for _, b in self.result)}
+        tmp = self.status + ".tmp"
+        try:
+            with open(tmp, "w", encoding="utf-8") as f:
+                json.dump(d, f, ensure_ascii=False)
+            os.replace(tmp, self.status)
+        except OSError:
+            pass
 
     def p(self, path):
         """原本的絕對路徑 → 這次要放回去的位置"""
@@ -226,7 +249,7 @@ class Restore:
         """執行指令；成功回傳 True。測試時只記下來"""
         self.cmds.append(" ".join(shlex.quote(c) for c in cmd))
         if self.dry:
-            print("   （測試，不執行）" + self.cmds[-1])
+            self.say("   （測試，不執行）" + self.cmds[-1])
             return True
         try:
             r = subprocess.run(cmd, cwd=cwd, timeout=timeout, stdin=subprocess.DEVNULL, env={**os.environ, **(env or {})},
@@ -321,22 +344,38 @@ def rs_docker_run(c):
 
 
 def restore_cli(args):
-    """sudo python3 sentinel.py --restore [備份檔或還原連結] [--yes]"""
-    yes = "--yes" in args
-    args = [a for a in args if a != "--yes"]
+    """sudo python3 sentinel.py --restore [備份檔或還原連結] [--yes] [--password-file 檔案] [--status 進度檔]
+    --password-file：密碼放在檔案裡（讀完就刪掉）；--status：把進度寫成 JSON（網頁還原用）"""
+    opts, rest, it = {}, [], iter(args)
+    for a in it:
+        if a in ("--password-file", "--status"):
+            opts[a] = next(it, "")
+        elif a == "--yes":
+            opts[a] = True
+        else:
+            rest.append(a)
     root = os.environ.get("SENTINEL_RESTORE_ROOT", "/")
-    dry = os.environ.get("SENTINEL_RESTORE_DRY") == "1"
-    if root == "/" and os.geteuid() != 0:
-        sys.exit("請用 sudo 執行：sudo python3 sentinel.py --restore")
+    rs = Restore(root, os.environ.get("SENTINEL_RESTORE_DRY") == "1", bool(opts.get("--yes")), opts.get("--status") or None)
     td = tempfile.mkdtemp(prefix="vsrestore-")
     os.chmod(td, 0o700)
     try:
-        src = args[0] if args else rs_pick_local()
+        if root == "/" and os.geteuid() != 0:
+            sys.exit("請用 sudo 執行：sudo python3 sentinel.py --restore")
+        src = rest[0] if rest else rs_pick_local()
         if re.match(r"https?://", src):
             src = rs_download(src, td)
         elif not os.path.isfile(src):
             sys.exit(f"找不到備份檔：{src}")
-        if sys.stdin.isatty():
+        if opts.get("--password-file"):
+            try:
+                with open(opts["--password-file"], encoding="utf-8") as f:
+                    pw = f.read().rstrip("\r\n")
+            finally:
+                try:
+                    os.remove(opts["--password-file"])
+                except OSError:
+                    pass
+        elif sys.stdin.isatty():
             import getpass
             pw = getpass.getpass("解開密碼（總密碼或這份自己的密碼都可以）：")
         else:
@@ -346,9 +385,17 @@ def restore_cli(args):
             vsbk_decrypt(src, tgz, pw)
         except (ValueError, OSError) as e:
             sys.exit(f"沒有解開：{e}")
-        rs = rs_run(Restore(root, dry, yes), tgz)
+        rs_run(rs, tgz)
+    except SystemExit as e:
+        if e.code not in (0, None):
+            rs.save(done=True, error=str(e.code))
+        raise
+    except Exception as e:  # noqa: BLE001
+        rs.save(done=True, error=f"還原到一半出錯了：{e}")
+        raise
     finally:
         shutil.rmtree(td, ignore_errors=True)
+    rs.save(done=True)
     sys.exit(1 if any(not ok for _, ok in rs.result) else 0)
 
 
@@ -365,16 +412,18 @@ def rs_run(rs, tgz):
             bconf = {}
         members = rs_members(tar)
         items = rs_items({m.name for m in members}, man, conf_path)
-        here = rs_conf(rs.p(conf_path)).get("NAME") or ""
-        print(f"\n這份備份：「{man.get('name') or bconf.get('NAME') or '（舊版備份）'}」{man.get('when') or ''}")
-        print("裡面有：" + "、".join(man.get("items") or [k for k, v in items.items() if v]))
+        cur = rs_conf(rs.p(conf_path))
+        here = cur.get("NAME") or ""
+        rs.name = man.get("name") or bconf.get("NAME") or ""
+        rs.say(f"\n這份備份：「{man.get('name') or bconf.get('NAME') or '（舊版備份）'}」{man.get('when') or ''}")
+        rs.say("裡面有：" + "、".join(man.get("items") or [k for k, v in items.items() if v]))
         if here and man.get("name") and here != man["name"]:
-            print(f"⚠️ 這台現在叫「{here}」，但這份是「{man['name']}」的備份；還原後這台會變成「{man['name']}」的設定")
+            rs.say(f"⚠️ 這台現在叫「{here}」，但這份是「{man['name']}」的備份；還原後這台會變成「{man['name']}」的設定")
         xui_missing = items["xui"] and not os.path.exists(rs.p("/usr/local/x-ui/x-ui")) and not rs.dry
         if xui_missing:
-            print("⚠️ 這台還沒有裝 3x-ui。建議先用 3x-ui 官方的安裝指令裝好（裝的時候問的問題都按 Enter），再執行一次還原；"
+            rs.say("⚠️ 這台還沒有裝 3x-ui。建議先用 3x-ui 官方的安裝指令裝好（裝的時候問的問題都按 Enter），再執行一次還原；"
                   "不先裝的話，3x-ui 的設定一樣會放回去，裝好之後就會用回原本的設定。")
-        print("還原會蓋掉這台上同樣位置的檔案（會先另外留一份）。")
+        rs.say("還原會蓋掉這台上同樣位置的檔案（會先另外留一份）。")
         if not rs.ask("要開始還原嗎？輸入 y 繼續："):
             sys.exit("沒有還原")
 
@@ -392,27 +441,28 @@ def rs_run(rs, tgz):
                     except OSError:
                         pass
         os.chmod(keep, 0o600)
-        print(f"\n① 這台原本的檔案（{n} 個）先留在 {keep}")
+        rs.say(f"\n① 這台原本的檔案（{n} 個）先留在 {keep}")
 
         # 2. 新主機：缺的程式先裝好（之後再把備份的設定蓋上去）
-        print("② 檢查需要的程式")
+        rs.say("② 檢查需要的程式")
         apt = {"DEBIAN_FRONTEND": "noninteractive"}
         if items["n8n"] and not rs.has("docker"):
-            print("   安裝 Docker…")
+            rs.say("   安裝 Docker…")
             rs.sh(["apt-get", "update", "-qq"], env=apt)
             rs.sh(["apt-get", "install", "-y", "-qq", "docker.io"], env=apt)
             if any(c.get("compose") for c in man["containers"]):
                 rs.sh(["apt-get", "install", "-y", "-qq", "docker-compose-v2"], env=apt)
         if items["nginx"] and not rs.has("nginx"):
-            print("   安裝 nginx…")
+            rs.say("   安裝 nginx…")
             rs.sh(["apt-get", "install", "-y", "-qq", "nginx"], env=apt)
-        if items["sentinel"] and not os.path.exists(rs.p(RS_UNIT)):
-            print("   安裝哨兵（含網站的加密連線）…")
-            rs.sh(["bash", os.path.join(RS_HERE, "install.sh"), bconf.get("DOMAIN", "")], timeout=1200, quiet=False,
+        new_dom = bconf.get("DOMAIN") and (not rs.has("caddy") or cur.get("DOMAIN") != bconf["DOMAIN"])
+        if items["sentinel"] and (not os.path.exists(rs.p(RS_UNIT)) or new_dom):
+            rs.say(f"   {'設定網站的加密連線（' + bconf['DOMAIN'] + '）' if bconf.get('DOMAIN') else '安裝哨兵'}…")
+            rs.sh(["bash", os.path.join(RS_SRC, "install.sh"), bconf.get("DOMAIN", "")], timeout=1200, quiet=False,
                   env={**apt, **({"HTTPS_PORT": bconf["HTTPS_PORT"]} if bconf.get("HTTPS_PORT") else {})})
 
         # 3. 停掉相關服務，免得放回檔案時正在寫
-        print("③ 暫停相關服務")
+        rs.say("③ 暫停相關服務")
         services = [(s, label) for s, label, k in (("vps-sentinel-lite", "哨兵", "sentinel"), ("x-ui", "3x-ui", "xui"),
                                                     ("nginx", "nginx", "nginx"), ("caddy", "Caddy", "caddy")) if items[k]]
         for s, _ in services:
@@ -424,13 +474,13 @@ def rs_run(rs, tgz):
                     rs.sh(["docker", "volume", "create", m["name"]])    # 資料卷要先建好，資料才放得進去
 
         # 4. 放回檔案（保留原本的擁有者和權限）
-        print("④ 放回檔案")
+        rs.say("④ 放回檔案")
         kw = {"filter": "fully_trusted"} if hasattr(tarfile, "fully_trusted_filter") else {}
         tar.extractall(rs.root, members=members, numeric_owner=True, **kw)   # 上面已經一個一個檢查過
-        print(f"   放回 {sum(1 for m in members if not m.isdir())} 個檔案")
+        rs.say(f"   放回 {sum(1 for m in members if not m.isdir())} 個檔案")
 
     # 5. 讓服務回到原本的樣子
-    print("⑤ 啟動服務")
+    rs.say("⑤ 啟動服務")
     rs.sh(["systemctl", "daemon-reload"])
     if items["acme"] and (rs.dry or os.path.exists(rs.p("/root/.acme.sh/acme.sh"))):
         rs.sh([rs.p("/root/.acme.sh/acme.sh"), "--install-cronjob"])    # 憑證自動更新的排程
@@ -447,33 +497,36 @@ def rs_run(rs, tgz):
             rs.sh(["systemctl", "restart", s])
     conf = rs_conf(rs.p(conf_path))
     if items["cloud"] and conf.get("CLOUD_GB") and (rs.dry or not os.path.isdir(rs.p("/srv/cloud"))):
-        print("   重新建立雲端硬碟…")
-        rs.sh(["bash", os.path.join(RS_HERE, "cloud.sh"), conf["CLOUD_GB"]], timeout=1800, quiet=False)
+        rs.say("   重新建立雲端硬碟…")
+        rs.sh(["bash", os.path.join(RS_SRC, "cloud.sh"), conf["CLOUD_GB"]], timeout=1800, quiet=False)
 
     # 6. 檢查
-    print("\n還原結果：")
+    rs.say("\n還原結果：")
     checks = [(label, ["systemctl", "is-active", "--quiet", s]) for s, label in services]
     checks += [(f"n8n（{c['name']}）", ["docker", "exec", c["name"], "true"]) for c in man.get("containers") or []]
     for label, cmd in checks:
         ok = rs.sh(cmd, timeout=30)
         rs.result.append((label, ok))
         tip = "：請先用 3x-ui 官方的安裝指令裝好，裝好就會用回備份的設定" if label == "3x-ui" and xui_missing else " 沒有跑起來"
-        print(f"  {'✅' if ok else '❌'} {label}{'' if ok else tip}")
+        rs.say(f"  {'✅' if ok else '❌'} {label}{'' if ok else tip}")
     if not checks:
-        print("  （這份備份裡沒有需要啟動的服務）")
+        rs.say("  （這份備份裡沒有需要啟動的服務）")
     dom = conf.get("DOMAIN")
+    if dom and conf.get("BIND") == "127.0.0.1":            # 還原後哨兵改走網域的加密連線：網頁要換網址
+        hp = conf.get("HTTPS_PORT") or "443"
+        rs.after = f"https://{dom}" + ("" if hp == "443" else f":{hp}") + "/"
     if dom and not rs.dry:
         try:
             dip = socket.gethostbyname(dom)
             with urllib.request.urlopen("https://api.ipify.org", timeout=6) as r:
                 mine = r.read().decode().strip()
             if dip != mine:
-                print(f"\n⚠️ 網址 {dom} 現在指向 {dip}，這台是 {mine}：請到網域商把它改指向這台，網站和憑證才會正常")
+                rs.say(f"\n⚠️ 網址 {dom} 現在指向 {dip}，這台是 {mine}：請到網域商把它改指向這台，網站和憑證才會正常")
         except Exception:  # noqa: BLE001
             pass
     bad = sum(1 for _, ok in rs.result if not ok)
-    print("\n還原完成 ✅" if not bad else f"\n還原完成，但有 {bad} 項沒有跑起來 ❌")
-    print(f"如果想回到還原前的樣子：sudo tar -xzf {shlex.quote(keep)} -C /")
+    rs.say("\n還原完成 ✅" if not bad else f"\n還原完成，但有 {bad} 項沒有跑起來 ❌")
+    rs.say(f"如果想回到還原前的樣子：sudo tar -xzf {shlex.quote(keep)} -C /")
     return rs
 
 
@@ -3349,6 +3402,132 @@ def bk_link_file(q):
     return fs[-1] if fs else None
 
 
+# ───────────────────────── 網頁還原（安裝時選「從備份還原」）─────────────────────────
+# install.sh --restore 會產生一組一次性代碼（只存雜湊），印在終端機上；拿著代碼才能在網頁上傳備份檔、開始還原。
+# 還原本身交給 sentinel.py --restore 在背景跑（用 systemd-run 跑在哨兵外面，哨兵被重新啟動也不會中斷），
+# 進度寫在 progress.json，網頁每隔一下來讀。狀態檔不放在 DATA_DIR（那裡會被備份蓋掉）。
+RSW_STATE = os.environ.get("SENTINEL_RESTORE_STATE", "/var/lib/vps-sentinel-restore/state.json")
+RSW_DIR = os.path.dirname(RSW_STATE)
+RSW_FILE = os.path.join(RSW_DIR, "upload.vsbk")
+RSW_PROG = os.path.join(RSW_DIR, "progress.json")
+RSW_FAIL = {"n": 0, "until": 0.0}                  # 代碼輸錯 10 次就暫停 10 分鐘
+
+
+def rsw_read(path):
+    try:
+        with open(path, encoding="utf-8") as f:
+            return json.load(f)
+    except (OSError, ValueError):
+        return None
+
+
+def rsw_state():
+    """還原模式的狀態；沒有在還原（或已經過期）回傳 None"""
+    st = rsw_read(RSW_STATE)
+    if not isinstance(st, dict):
+        return None
+    now = time.time()
+    if st.get("stage") == "wait" and st.get("exp", 0) < now:
+        return None
+    if st.get("stage") == "running":
+        pg = rsw_read(RSW_PROG) or {}
+        if pg.get("done"):
+            st.update(stage="done", done_t=pg.get("t") or now)
+    if st.get("stage") == "done" and now - (st.get("done_t") or 0) > 6 * 3600:
+        return None
+    return st
+
+
+def rsw_save(st):
+    tmp = RSW_STATE + ".tmp"
+    with open(os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600), "w", encoding="utf-8") as f:
+        json.dump(st, f)
+    os.replace(tmp, RSW_STATE)
+
+
+def rsw_code_ok(code):
+    st = rsw_state()
+    if not st or not code or RSW_FAIL["until"] > time.time():
+        return False
+    norm = re.sub(r"[\s-]", "", code).upper()           # 有沒有打中間的「-」、大小寫都可以
+    ok = hmac.compare_digest(hashlib.sha256(norm.encode()).hexdigest(), str(st.get("hash", "")))
+    if ok:
+        RSW_FAIL["n"] = 0
+    else:
+        RSW_FAIL["n"] += 1
+        if RSW_FAIL["n"] >= 10:
+            RSW_FAIL.update(n=0, until=time.time() + 600)
+    return ok
+
+
+def rsw_status():
+    st = rsw_state() or {}
+    has = os.path.isfile(RSW_FILE)
+    return {"active": bool(st), "stage": st.get("stage", ""), "file": has, "size": os.path.getsize(RSW_FILE) if has else 0,
+            "progress": rsw_read(RSW_PROG) if st.get("stage") in ("running", "done") else None}
+
+
+def rsw_store(stream, length):
+    st = rsw_state()
+    if not st or st.get("stage") != "wait":
+        return False, "現在沒有在等待還原"
+    if not 40 < length <= BK_UPLOAD_MAX:
+        return False, "檔案大小不對"
+    tmp, left, head = RSW_FILE + ".part", length, b""
+    try:
+        with open(os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600), "wb") as f:
+            while left > 0:
+                chunk = stream.read(min(left, 1 << 20))
+                if not chunk:
+                    raise OSError("傳到一半斷掉了")
+                head = head or chunk[:4]
+                f.write(chunk)
+                left -= len(chunk)
+        if head != VSBK_MAGIC:
+            os.remove(tmp)
+            return False, "這不是哨兵的備份檔（檔名是 .vsbk 的那個）"
+        os.replace(tmp, RSW_FILE)
+    except OSError as e:
+        try:
+            os.remove(tmp)
+        except OSError:
+            pass
+        return False, f"存檔失敗：{e}"
+    return True, "已上傳"
+
+
+def rsw_start(pw):
+    """先確認密碼打得開，再在背景開始還原"""
+    st = rsw_state()
+    if not st or st.get("stage") != "wait":
+        return False, "現在沒有在等待還原"
+    if not os.path.isfile(RSW_FILE):
+        return False, "請先選擇備份檔"
+    try:
+        vsbk_decrypt(RSW_FILE, None, pw or "")
+    except (ValueError, OSError) as e:
+        return False, str(e)
+    pwf = os.path.join(RSW_DIR, "pw")
+    with open(os.open(pwf, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600), "w", encoding="utf-8") as f:
+        f.write(pw)
+    try:
+        os.remove(RSW_PROG)
+    except OSError:
+        pass
+    args = [sys.executable, os.path.abspath(__file__), "--restore", RSW_FILE, "--yes", "--password-file", pwf, "--status", RSW_PROG]
+    env = {"SENTINEL_SRC": C.get("SRC_DIR", "")}
+    st.update(stage="running", start_t=time.time())
+    rsw_save(st)
+    if shutil.which("systemd-run") and os.environ.get("SENTINEL_RESTORE_DRY") != "1":
+        cmd = ["systemd-run", "--unit", f"vps-sentinel-restore-{int(time.time())}", "--collect", "--quiet",
+               *(f"--setenv={k}={v}" for k, v in env.items() if v), *args]
+    else:
+        cmd = args
+    subprocess.Popen(cmd, env={**os.environ, **env}, stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
+                     stderr=subprocess.DEVNULL, start_new_session=True)
+    return True, "開始還原"
+
+
 # ───────────────────────── 網頁伺服器 ─────────────────────────
 
 # App 圖示（蘋果風格：圓角方形、藍色漸層、白色盾牌，勾勾用挖空呈現）
@@ -3571,6 +3750,13 @@ class Handler(BaseHTTPRequestHandler):
             return self.send(200, json.dumps(COL.history(rng)))
         if path in ("/api/backup", "/api/backup-file"):
             return self.backup_get(path)
+        if path == "/api/restore":                      # 網頁還原：沒有代碼只回答「有沒有在等待還原」
+            if self.authed() or rsw_code_ok(self.headers.get("X-Restore-Code", "")):
+                return self.send(200, json.dumps({"ok": True, **rsw_status()}, ensure_ascii=False))
+            if self.headers.get("X-Restore-Code"):
+                time.sleep(1)
+                return self.send(401, json.dumps({"active": bool(rsw_state()), "error": "代碼不對"}, ensure_ascii=False))
+            return self.send(200, json.dumps({"active": bool(rsw_state())}))
         if path == "/api/backup-dl":                    # 新主機還原：不用登入，靠連結上的簽章
             f = bk_link_file(urllib.parse.parse_qs(urllib.parse.urlsplit(self.path).query))
             if not f:
@@ -3645,8 +3831,25 @@ class Handler(BaseHTTPRequestHandler):
             return self.proxy_cloud()
         u = urllib.parse.urlsplit(self.path)
         if u.path not in ("/api/update", "/api/rename", "/api/traffic", "/api/telegram", "/api/links", "/api/self", "/api/cloud-login", "/api/peer",
-                          "/api/token", "/api/passkey", "/api/passkey-login", "/api/pin", "/api/pin-login", "/api/backup", "/api/backup-store"):
+                          "/api/token", "/api/passkey", "/api/passkey-login", "/api/pin", "/api/pin-login", "/api/backup", "/api/backup-store",
+                          "/api/restore-upload", "/api/restore-run"):
             return self.send(404, '{"error":"找不到"}')
+        if u.path in ("/api/restore-upload", "/api/restore-run"):   # 網頁還原：要有安裝時給的代碼（或已經登入）
+            if not (self.authed() or rsw_code_ok(self.headers.get("X-Restore-Code", ""))):
+                time.sleep(1)
+                return self.send(401, json.dumps({"error": "代碼不對，請看安裝完成時終端機上顯示的還原代碼"}, ensure_ascii=False))
+            if u.path == "/api/restore-upload":
+                try:
+                    length = int(self.headers.get("Content-Length") or 0)
+                except ValueError:
+                    length = 0
+                ok, msg = rsw_store(self.rfile, length)
+                if not ok:
+                    self.close_connection = True       # 沒讀完的內容不要留在連線裡
+            else:
+                n = int(self.headers.get("Content-Length") or 0)
+                ok, msg = rsw_start(self.jbody(self.rfile.read(min(n, 4096))).get("pw"))
+            return self.send(200 if ok else 400, json.dumps({"ok": ok, "message": msg}, ensure_ascii=False))
         if u.path == "/api/backup-store":            # 其他主機傳來的備份（檔案很大，邊收邊存，不先讀進記憶體）
             if not self.authed():
                 time.sleep(1)
