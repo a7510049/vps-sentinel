@@ -40,7 +40,7 @@ from collections import deque
 from concurrent.futures import ThreadPoolExecutor
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
-VERSION = "1.39"
+VERSION = "1.40"
 
 # ───────────────────────── 哨兵備份檔（.vsbk）─────────────────────────
 # 哨兵專用的備份格式：外面是自己的檔案格式，裡面用的是成熟、標準的加密方法（不自己發明加密）：
@@ -1110,6 +1110,8 @@ def cloud_check(force=False):
     base = {"version": ver, "running": cloud_running()}
     if digests is None:
         return {**base, "has": None, "err": "雲端硬碟程式沒有在跑"}
+    if base["running"]:                         # 更新中先不查：不然會拿舊版去比，更新完還一直說「有新版」
+        return {**base, "has": None, "err": ""}
     with CLOUDUP["lock"]:
         if force or time.time() - CLOUDUP["checked"] > 3 * 3600:
             CLOUDUP["checked"] = time.time()
