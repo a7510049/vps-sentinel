@@ -52,6 +52,7 @@ const P = {
   search:'<circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/>',
   key:'<circle cx="7.5" cy="15.5" r="4.5"/><path d="m10.7 12.3 9.8-9.8M17 6l3 3M14.5 8.5l2 2"/>',
   pin:'<rect x="3" y="6" width="18" height="12" rx="3"/><path d="M7.5 12h.01M12 12h.01M16.5 12h.01"/>',
+  archive:'<rect x="2.5" y="3.5" width="19" height="5" rx="1.5"/><path d="M4.5 8.5v10a2 2 0 0 0 2 2h11a2 2 0 0 0 2-2v-10M10 12.5h4"/>',
   finger:'<path d="M12 10a2 2 0 0 0-2 2c0 1-.1 2.5-.26 4M14 13.1c0 2.4 0 6.4-1 8.9M17.3 21c.1-.6.4-2.3.5-3M2 12a10 10 0 0 1 18-6M2 16h.01M21.8 16c.2-2 .13-5.35 0-6M5 19.5C5.5 18 6 15 6 12a6 6 0 0 1 .34-2M8.65 22c.2-.66.45-1.3.57-2M9 6.8a6 6 0 0 1 9 5.2v2"/>',
   chev:'<path d="m6 9 6 6 6-6"/>', x:'<path d="M18 6 6 18M6 6l12 12"/>',
   warn:'<path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3z"/><path d="M12 9v4M12 17h.01"/>',
@@ -376,7 +377,7 @@ const COL = {cpu:"var(--c-cpu)", mem:"var(--c-mem)", rx:"var(--c-rx)", tx:"var(-
 /* 概念 → [顏色樣式, 圖示] */
 const ICO = {cpu:["cpu","cpu"], mem:["mem","mem"], disk:["disk","disk"], load:["load","gauge"], down:["down","down"], up:["up","up"],
   net:["net","net"], trend:["trend","trend"], month:["month","month"], box:["box","box"], bell:["bell","bell"], info:["info","info"],
-  layers:["theme","layers"], flag:["theme","flag"], key:["theme","key"], finger:["theme","finger"], pin:["theme","pin"]};
+  layers:["theme","layers"], flag:["theme","flag"], key:["theme","key"], finger:["theme","finger"], pin:["theme","pin"], archive:["month","archive"]};
 const IC = (k, cls="sm") => `<span class="ico ${cls} ${ICO[k][0]}">${I(ICO[k][1])}</span>`;
 
 /* ═════════ 手機版 ═════════ */
@@ -1036,6 +1037,8 @@ function settingsBody(){
   <div class="sec"><h4>通知</h4><div class="group">
     <button class="opt optbtn" data-tg>${IC("bell")}<span class="lab">Telegram 通知<small class="tgst">讀取中…</small></span><span class="chev">${I("chev")}</span></button>
   </div></div>
+  ${LIST.some(s => s.online) ? `<div class="sec"><h4>備份</h4><div class="group">${LIST.filter(s => s.online).map(s =>
+    `<button class="opt optbtn" data-bk="${esc(s.node||"")}" data-label="${esc(s.name)}">${IC("archive")}<span class="lab">每日備份${LIST.length > 1 ? `：${esc(s.name)}` : ""}<small class="bkst" data-n="${esc(s.node||"")}">讀取中…</small></span><span class="chev">${I("chev")}</span></button>`).join("")}</div></div>` : ""}
   ${LIST.some(s => s.online) ? `<div class="sec"><h4>安全</h4><div class="group">${PK_OK && LIST.some(s => !s.node && s.online) ?
     `<button class="opt optbtn" data-pk>${IC("finger")}<span class="lab">手機金鑰登入<small class="pkst">讀取中…</small></span><span class="chev">${I("chev")}</span></button>` : ""}${LIST.some(s => !s.node && s.online) ?
     `<button class="opt optbtn" data-pin>${IC("pin")}<span class="lab">PIN 碼登入<small class="pinst">讀取中…</small></span><span class="chev">${I("chev")}</span></button>` : ""}${LIST.filter(s => s.online).map(s =>
@@ -1334,7 +1337,7 @@ function openSettings(){
   const sheet = v.querySelector(".sheet"), body = v.querySelector(".sbody"), top = v.querySelector(".top");
   body.addEventListener("scroll", () => top.classList.toggle("under", body.scrollTop > 4), {passive:true});
   initSegs(body);
-  tgStatus(body); selfStatus(body); pkStatus(body); pinStatus(body);
+  tgStatus(body); selfStatus(body); pkStatus(body); pinStatus(body); bkStatus(body);
   sheet.addEventListener("animationend", e => { if (e.target === sheet && !v._d) sheet.classList.add("ready"); });
   const close = () => { if (v._d) return; v._d = 1; sheet.classList.remove("back"); v.classList.add("closing"); setTimeout(()=>v.remove(), 380); };
   v._esc = close;
@@ -1344,6 +1347,8 @@ function openSettings(){
     if (e.target.closest("[data-tg]")) return tgModal().then(() => tgStatus(body));
     if (e.target.closest("[data-pk]")) return pkModal().then(() => pkStatus(body));
     if (e.target.closest("[data-pin]")) return pinModal().then(() => pinStatus(body));
+    const bk = e.target.closest("[data-bk]");
+    if (bk) return bkModal(bk.dataset.bk, bk.dataset.label).then(() => bkStatus(body));
     const nt = e.target.closest("[data-newtok]");
     if (nt) return newToken(nt.dataset.newtok, nt.dataset.label);
     const sc = e.target.closest("[data-selfcheck]");
@@ -1569,6 +1574,116 @@ async function pinModal(){
         const d = await pinCall({action:"off"}).catch(err => ({message:err.message}));
         busy = false;
         if (d.ok) { toast(d.message); done(); } else bad(d.message || "關閉失敗");
+      }
+    });
+  });
+}
+
+/* ═════════ 每日備份：本機一份、Telegram 一份（有密碼）、其他主機的雲端硬碟一份 ═════════ */
+const bkQ = node => node ? `?node=${encodeURIComponent(node)}` : "";
+async function bkGet(node){
+  const r = await api("/api/backup" + bkQ(node), {headers:{"X-Token":getTok()}});
+  const d = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(r.status === 404 ? "主機還沒更新到新版，先更新再試" : d.error || "讀取失敗");
+  return d;
+}
+const bkSize = n => n >= 1048576 ? `${(n / 1048576).toFixed(1)} MB` : `${Math.max(1, Math.round(n / 1024))} KB`;
+function bkLine(d){
+  const L = d.last;
+  return !d.on ? ["已關閉", ""] : d.running ? ["備份中…", ""] : !L ? [`每天清晨 ${d.hour} 點自動備份，還沒備份過`, ""]
+    : L.ok ? [`上次備份：${ago(L.t)}（${bkSize(L.size)}）`, "on"] : [`上次備份有問題（${ago(L.t)}），點進來看`, "bad"];
+}
+async function bkStatus(root){
+  await Promise.all([...root.querySelectorAll(".bkst")].map(async el => {
+    try { const [t, c] = bkLine(await bkGet(el.dataset.n)); el.textContent = t; el.className = "bkst " + c; }
+    catch(e) { el.textContent = e.message; el.className = "bkst"; }
+  }));
+}
+function bkRows(d){
+  const L = d.last, row = (ok, t, sub) => `<li class="${ok === null ? "" : ok ? "ok" : "bad"}">${ok === null ? "" : I(ok ? "ok" : "warn")}<span>${t}${sub ? `<small>${esc(sub)}</small>` : ""}</span></li>`;
+  let h = "";
+  if (L) {
+    h += row(null, `<b>上次備份</b>${esc(when(L.t))}${L.size ? `・${bkSize(L.size)}` : ""}`);
+    if (L.msg) h += row(false, esc(L.msg));
+    h += (L.to || []).map(x => row(x.ok, x.ok ? esc(x.where) : `${esc(x.where)}沒有成功`, x.msg)).join("");
+    if (L.items && L.items.length) h += row(null, `<b>備份內容</b>${esc(L.items.join("、"))}`);
+    if (L.big && L.big.length) h += row(null, `<b>太大沒備份</b>${esc(L.big.map(p => p.split("/").pop()).join("、"))}`);
+  } else h += row(null, d.on ? `還沒備份過，每天清晨 ${d.hour} 點會自動備份` : "每日備份已關閉");
+  h += (d.got || []).filter(g => !d.peers.includes(g.name)).map(g => row(true, `「${esc(g.name)}」的備份存在這台的${esc(g.where)}`, when(g.t))).join("");
+  if (!d.tg) h += row(null, `<small>設定好 Telegram 通知，就會多存一份在 Telegram 上</small>`);
+  return h;
+}
+async function bkModal(node, label){
+  let d = await bkGet(node).catch(e => ({err:e.message}));
+  if (d.err) return toast(d.err, "bad");
+  const v = document.createElement("div"); v.className = "veil";
+  const multi = LIST.length > 1;
+  v.innerHTML = `<div class="dialog glass pop bkdlg">${IC("archive","big")}<h3>每日備份${multi ? `：${esc(label)}` : ""}</h3>
+    <p>3x-ui、n8n、哨兵和網站的設定，每天自動打包一份，${d.peers.length ? "存在另一台主機和 Telegram 上" : "存在這台和 Telegram 上"}</p>
+    <div class="form">
+      <ul class="bkrows">${bkRows(d)}</ul>
+      <div class="lbl">Telegram 上那份的解開密碼<b class="bkkey" title="點一下顯示">${esc(d.key)}</b>
+        <small>請另外記在安全的地方。主機壞掉時，要用這組密碼才打得開 Telegram 上的備份檔</small></div>
+      <label class="bkon"><span>每天清晨 ${d.hour} 點自動備份</span><input type="checkbox" class="tog" ${d.on ? "checked" : ""}></label>
+      <div class="msg"></div></div>
+    <div class="btns three"><button class="ubtn ghost" data-dl>下載</button><button class="ubtn ghost" data-r="0">關閉</button><button class="ubtn" data-run>立即備份</button></div></div>`;
+  $("#layer").appendChild(v);
+  const msg = v.querySelector(".msg"), rows = v.querySelector(".bkrows"), runb = v.querySelector("[data-run]");
+  const say = (t, c = "") => { msg.className = "msg " + c; msg.textContent = t; };
+  const post = async body => {
+    const r = await api("/api/backup" + bkQ(node), {method:"POST", headers:{"X-Token":getTok(), "Content-Type":"application/json"}, body:JSON.stringify(body)});
+    const x = await r.json().catch(() => ({}));
+    if (!r.ok) throw new Error(x.message || x.error || "失敗了，請再試一次");
+    return x;
+  };
+  const busy = (b, t) => { b.disabled = !!t; b.innerHTML = t ? `<span class="spin"></span>${t}` : b._t; };
+  v.querySelectorAll(".btns button").forEach(b => b._t = b.innerHTML);
+  return new Promise(res => {
+    let live = true;
+    const done = () => { if (v._d) return; v._d = 1; live = false; v.classList.add("closing"); setTimeout(() => { v.remove(); res(); }, 360); };
+    v._esc = done;
+    const watch = async () => {                    // 備份中：每 1.5 秒看一次，好了就更新上面的清單
+      busy(runb, "備份中…");
+      while (live) {
+        await new Promise(r => setTimeout(r, 1500));
+        try { d = await bkGet(node); } catch(e) { continue; }
+        if (!d.running) break;
+      }
+      if (!live) return;
+      busy(runb); rows.innerHTML = bkRows(d);
+      d.last && d.last.ok ? say("備份好了", "ok") : say("有地方沒備份成功，看上面的說明", "bad");
+    };
+    if (d.running) watch();
+    v.addEventListener("change", async e => {
+      const t = e.target; if (!t.classList.contains("tog")) return;
+      try { const x = await post({action:"set", on:t.checked}); d.on = t.checked; toast(x.message); }
+      catch(err) { t.checked = !t.checked; say(err.message, "bad"); }
+    });
+    v.addEventListener("click", async e => {
+      if (e.target === v || e.target.closest("[data-r]")) return done();
+      const k = e.target.closest(".bkkey");
+      if (k) {
+        if (!k.classList.contains("on")) return k.classList.add("on");
+        try { await navigator.clipboard.writeText(d.key); toast("已複製解開密碼"); } catch(err) { /* 不能複製就讓使用者自己選取 */ }
+        return;
+      }
+      if (e.target.closest("[data-run]") && !runb.disabled) {
+        say("");
+        try { await post({action:"run"}); watch(); } catch(err) { say(err.message, "bad"); }
+        return;
+      }
+      const dl = e.target.closest("[data-dl]");
+      if (dl && !dl.disabled) {
+        busy(dl, "準備中…"); say("");
+        try {
+          const r = await api("/api/backup-file" + bkQ(node), {headers:{"X-Token":getTok()}});
+          if (!r.ok) { const x = await r.json().catch(() => ({})); throw new Error(x.error || "下載失敗"); }
+          const name = decodeURIComponent(r.headers.get("X-Backup-Name") || "backup.tar.gz");
+          const a = document.createElement("a"); a.href = URL.createObjectURL(await r.blob()); a.download = name;
+          document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 60000);
+          say(`已下載 ${name}`, "ok");
+        } catch(err) { say(err.message, "bad"); }
+        busy(dl);
       }
     });
   });

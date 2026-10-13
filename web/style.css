@@ -578,6 +578,18 @@ a.plink:hover{color:var(--a1)}
 .optbtn .chev{color:var(--faint);display:flex;transform:rotate(-90deg)}
 .optbtn .chev svg{width:16px;height:16px}
 .tgst.on,.pkst.on,.pinst.on{color:var(--ok)!important}
+.bkst.on{color:var(--ok)!important}.bkst.bad{color:var(--bad)!important}
+.bkdlg{max-width:420px}
+.dialog .msg.ok{color:var(--ok)}
+.bkrows{list-style:none;display:flex;flex-direction:column;gap:7px;padding:12px 14px;border-radius:var(--r-md);background:var(--inset);box-shadow:var(--ring);font-size:var(--fs-s);font-weight:600;color:var(--text)}
+.bkrows li{display:flex;gap:8px;align-items:flex-start;line-height:1.5}
+.bkrows li svg{width:15px;height:15px;flex:none;margin-top:2px}
+.bkrows li.ok svg{color:var(--ok)}.bkrows li.bad svg,.bkrows li.bad{color:var(--bad)}
+.bkrows li b{color:var(--sub);font-weight:800;margin-right:8px}
+.bkrows li small{display:block}
+.dialog .form .bkkey{font-size:var(--fs-l);font-weight:800;color:var(--text);letter-spacing:.04em;font-variant-numeric:tabular-nums;cursor:pointer;filter:blur(6px);user-select:none;transition:filter var(--t-mid) var(--ease);align-self:flex-start}
+.dialog .form .bkkey.on{filter:none;user-select:text}
+.dialog .form .bkon{flex-direction:row;align-items:center;justify-content:space-between;font-size:var(--fs-m);color:var(--text)}
 .evs{display:flex;flex-direction:column;gap:2px;max-height:330px;overflow-x:hidden;overflow-y:auto;margin:-8px -6px 0;padding:8px 6px 14px}
 /* 有最大高度的清單：裡面的項目不能被擠扁（不然展開動畫會卡在一半再彈回來） */
 .evs>*,.hosts>*,.list>*,.alerts>*{flex-shrink:0}
