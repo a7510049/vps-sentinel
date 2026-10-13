@@ -40,15 +40,17 @@ from collections import deque
 from concurrent.futures import ThreadPoolExecutor
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
-VERSION = "1.33"
+VERSION = "1.34"
 
 # ───────────────────────── 哨兵備份檔（.vsbk）─────────────────────────
 # 哨兵專用的備份格式：外面是自己的檔案格式，裡面用的是成熟、標準的加密方法（不自己發明加密）：
 #   - 密碼 → 金鑰：scrypt（Python 內建；故意算得很慢又吃記憶體，就算密碼被拿去猜也猜很久）
 #   - 加密內容：AES-256（系統的 openssl 來算，CTR 模式）
 #   - 防竄改：HMAC-SHA256（先加密再簽，打開前先檢查，密碼不對或檔案被改過一個位元都會發現）
-# 檔案內容：「VSBK」＋版本(1)＋scrypt 參數(log2 N, r, p)＋鹽(16)＋隨機數(16)＋加密後的內容＋簽章(32)
+# 檔案內容：「VSBK」＋版本＋scrypt 參數(log2 N, r, p)＋鹽(16)＋隨機數(16)＋加密後的內容＋簽章(32)
 # 每個檔案的鹽和隨機數都不一樣，所以每個檔案的加密金鑰也都不一樣。
+# 版本 2：每個檔案有自己的密碼（＝用總密碼和這個檔案的鹽算出來的，HMAC-SHA256，反推不回總密碼），
+#   Telegram 上只給這份的密碼，就算外流也只打得開這一份；總密碼（網頁上那組）每一份都打得開。
 VSBK_MAGIC = b"VSBK"
 VSBK_HEAD = 40
 VSBK_SCRYPT = (15, 8, 1)                          # N=32768、r=8、p=1：大約要 32 MB 記憶體、零點幾秒
@@ -73,10 +75,34 @@ def _vsbk_aes(enc, src, dst, decrypt=False):
         raise OSError("openssl 執行失敗：" + r.stderr.decode(errors="replace").strip()[:200])
 
 
-def vsbk_encrypt(src, dst, pw):
+def vsbk_file_pass(master, salt):
+    """這個檔案自己的密碼：4 組 5 個字（大約 99 位元，跟自動產生的總密碼一樣強）"""
+    abc = "abcdefghjkmnpqrstuvwxyz23456789"
+    v = int.from_bytes(hmac.new(master.encode("utf-8"), b"vsbk-file" + salt, hashlib.sha256).digest(), "big")
+    out = []
+    for _ in range(20):
+        v, i = divmod(v, len(abc))
+        out.append(abc[i])
+    return "-".join("".join(out[i:i + 5]) for i in range(0, 20, 5))
+
+
+def vsbk_pass_of(path, master):
+    """備份檔自己的密碼（舊版做的檔案沒有，回傳空字串）"""
+    try:
+        with open(path, "rb") as f:
+            head = f.read(VSBK_HEAD)
+    except OSError:
+        return ""
+    if len(head) < VSBK_HEAD or head[:4] != VSBK_MAGIC or head[4] != 2:
+        return ""
+    return vsbk_file_pass(master, head[8:24])
+
+
+def vsbk_encrypt(src, dst, master):
+    """用總密碼加密；實際上鎖的是這個檔案自己的密碼（見上面版本 2 的說明）"""
     salt, nonce = os.urandom(16), os.urandom(16)
-    head = VSBK_MAGIC + bytes([1, *VSBK_SCRYPT]) + salt + nonce
-    enc, mac = _vsbk_keys(pw, salt, nonce, *VSBK_SCRYPT)
+    head = VSBK_MAGIC + bytes([2, *VSBK_SCRYPT]) + salt + nonce
+    enc, mac = _vsbk_keys(vsbk_file_pass(master, salt), salt, nonce, *VSBK_SCRYPT)
     ct = dst + ".ct"
     try:
         _vsbk_aes(enc, src, ct)
@@ -93,35 +119,43 @@ def vsbk_encrypt(src, dst, pw):
 
 
 def vsbk_decrypt(src, dst, pw):
-    """解開 .vsbk；密碼不對或檔案壞掉會丟出 ValueError（先檢查簽章，沒問題才解）"""
+    """解開 .vsbk（總密碼或這份自己的密碼都可以）；密碼不對或檔案壞掉會丟出 ValueError（先檢查簽章，沒問題才解）。
+    dst 是 None 的話只檢查密碼對不對"""
     size = os.path.getsize(src)
     with open(src, "rb") as f:
         head = f.read(VSBK_HEAD)
         if len(head) < VSBK_HEAD or head[:4] != VSBK_MAGIC or size < VSBK_HEAD + 32:
             raise ValueError("這不是哨兵的備份檔")
-        if head[4] != 1:
+        if head[4] not in (1, 2):
             raise ValueError("這個備份檔是比較新版的哨兵做的，請先更新哨兵")
         n, r, p = head[5], head[6], head[7]
         if not (10 <= n <= 22 and 1 <= r <= 32 and 1 <= p <= 16):
             raise ValueError("備份檔壞了")
-        enc, mac = _vsbk_keys(pw, head[8:24], head[24:40], n, r, p)
-        h = hmac.new(mac, head, hashlib.sha256)
-        ct = dst + ".ct"
+        tries = [pw]
+        if head[4] == 2:                                 # 打的可能是總密碼，也可能是這份自己的密碼
+            tries.append(vsbk_file_pass(pw, head[8:24]))
+        keys = [_vsbk_keys(t, head[8:24], head[24:40], n, r, p) for t in tries]
+        hs = [hmac.new(mac, head, hashlib.sha256) for _, mac in keys]
+        ct = dst + ".ct" if dst else None
         try:
-            with open(ct, "wb") as fo:
+            with open(ct or os.devnull, "wb") as fo:
                 left = size - VSBK_HEAD - 32
                 while left > 0:
                     chunk = f.read(min(left, 1 << 20))
                     if not chunk:
                         raise ValueError("備份檔不完整")
-                    h.update(chunk)
+                    for h in hs:
+                        h.update(chunk)
                     fo.write(chunk)
                     left -= len(chunk)
-            if not hmac.compare_digest(h.digest(), f.read(32)):
+            tag = f.read(32)
+            ok = [k for (k, _), h in zip(keys, hs) if hmac.compare_digest(h.digest(), tag)]
+            if not ok:
                 raise ValueError("解開密碼不對，或是備份檔被改過、壞掉了")
-            _vsbk_aes(enc, ct, dst, decrypt=True)
+            if dst:
+                _vsbk_aes(ok[0], ct, dst, decrypt=True)
         finally:
-            if os.path.exists(ct):
+            if ct and os.path.exists(ct):
                 os.remove(ct)
 
 
@@ -2780,13 +2814,19 @@ def tg_private():
 
 def bk_to_tg(path, owner=None):
     """把備份檔（已經加密）傳到 Telegram；owner 是幫別台傳的時候那台的名稱。
-    私人對話會附上打碼的解開密碼；傳成功後把同一台前一份備份的訊息刪掉，Telegram 裡每台只留最新一份"""
+    私人對話會附上打碼的「這份自己的」解開密碼；傳成功後把同一台前一份備份的訊息刪掉，Telegram 裡每台只留最新一份"""
     owner = owner or NAME
     cap = f"🗄 <b>{html.escape(owner)}</b>　每日備份（{fmt_size(os.path.getsize(path))}）\n"
-    if tg_private():
-        cap += f"解開密碼（點一下顯示）：<tg-spoiler><code>{html.escape(bk_key())}</code></tg-spoiler>"
+    pw = vsbk_pass_of(path, bk_key()) if tg_private() else ""
+    if pw and owner != NAME:                       # 別台做的：確定這組真的打得開才附（那台的總密碼可能還沒同步）
+        try:
+            vsbk_decrypt(path, None, pw)
+        except (ValueError, OSError):
+            pw = ""
+    if pw:
+        cap += f"解開密碼：<tg-spoiler>{html.escape(pw)}</tg-spoiler>"   # 這份自己的密碼，只打得開這一份
     else:
-        cap += "已加密，解開密碼在哨兵網頁的「設定 → 備份」裡（群組裡不附密碼）"
+        cap += "已加密，解開密碼在哨兵網頁的「設定 → 備份」裡"
     err, mid = tg_send_file(path, os.path.basename(path), cap)
     if not err and mid:
         old = BK["tg"].get(owner)
