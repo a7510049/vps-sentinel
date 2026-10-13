@@ -249,8 +249,13 @@ class BackupTest(unittest.TestCase):
             who = HA if fn.startswith(HA) else HB
             self.assertRegex(fn, FNAME.format(re.escape(who)))
             self.assertIn(f"<b>{who}</b>", cap)                                   # 說明文字跟檔名用同一個名稱
-            self.assertIn(f"<tg-spoiler><code>{key}</code></tg-spoiler>", cap)    # 私人對話：附上打碼的解開密碼
-            self.check_tar(self.decrypt(data, key)[0])
+            pw = re.search(r"解開密碼：<tg-spoiler>([a-z2-9-]+)</tg-spoiler>", cap).group(1)   # 私人對話：附上打碼的「這份自己的」密碼
+            self.assertNotEqual(pw, key)
+            self.check_tar(self.decrypt(data, pw)[0])                              # 這份自己的密碼打得開
+            self.check_tar(self.decrypt(data, key)[0])                             # 總密碼也打得開
+        pws = [re.search(r"<tg-spoiler>(.+)</tg-spoiler>", x[2]).group(1) for x in DOCS]
+        self.assertEqual(len(set(pws)), len(pws))                                   # 每份的密碼都不一樣
+        self.assertIsNone(self.decrypt(DOCS[0][1], pws[1])[0])                     # 別份的密碼打不開這份
         first = [x[3] for x in DOCS]
         self.assertEqual(DELETED, [])
 
@@ -280,7 +285,7 @@ class BackupTest(unittest.TestCase):
         # Telegram 裡每台只留最新一份：新的傳成功後，前一份被刪掉；新的說明附的是新密碼
         self.assertEqual(sorted(DELETED), sorted(first))
         for fn, data, cap, _ in DOCS[len(first):]:
-            self.assertIn("<tg-spoiler><code>我的新密碼 2026!</code></tg-spoiler>", cap)
+            self.check_tar(self.decrypt(data, re.search(r"<tg-spoiler>(.+)</tg-spoiler>", cap).group(1))[0])
             self.check_tar(self.decrypt(data, "我的新密碼 2026!")[0])
 
         # 設定開關會寫進設定檔

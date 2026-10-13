@@ -1627,7 +1627,7 @@ async function bkModal(node, label){
     <div class="form">
       <ul class="bkrows">${bkRows(d)}</ul>
       <div class="lbl">${d.where === "雲端硬碟" ? "這台的雲端硬碟裡有" : "這台主機上有"}${d.where === "雲端硬碟" ? `<small>在「${esc(d.folder)}」資料夾，打開雲端硬碟就看得到</small>` : ""}<ul class="bkrows bkcopies">${bkCopies(d)}</ul></div>
-      <div class="lbl">解開密碼（所有主機共用）<b class="bkkey" title="點一下顯示">${esc(d.key)}</b>
+      <div class="lbl">解開密碼（每一份備份都打得開，所有主機共用）<b class="bkkey" title="點一下顯示">${esc(d.key)}</b>
         <small>備份檔都用銀行等級的加密保護，沒有這組密碼誰都打不開。請另外記在安全的地方，主機壞掉時才拿得到</small>
         <button class="linkish bkchg" data-chg>改成自己的密碼</button>
         <span class="bknew" hidden><input class="field" type="password" maxlength="128" autocomplete="new-password" placeholder="至少 8 個字"><button class="ubtn sm" data-setkey>儲存</button></span></div>
