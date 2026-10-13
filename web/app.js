@@ -1252,14 +1252,62 @@ async function selfUpdate(root, jobs){
   const okn = [], fail = [];
   jobs.sort((a, b) => (a.node === "" && a.kind === "self") - (b.node === "" && b.kind === "self"));   // 這台的哨兵最後更新（更新完畫面會重新載入）
   for (const j of jobs) {
-    const name = ((LIST.find(x => (x.node || "") === j.node) || {}).name || "主機") + (j.kind === "cloud" ? " 的雲端硬碟" : "");
-    try { await selfCall(j.node, j.kind === "cloud" ? "cloud_update" : "update"); okn.push(name); } catch(e) { fail.push(`${name}：${e.message}`); }
+    const h = LIST.find(x => (x.node || "") === j.node) || {}, name = (h.name || "主機") + (j.kind === "cloud" ? " 的雲端硬碟" : "");
+    const d = SELFST[keyOf(h)] || {};
+    try { await selfCall(j.node, j.kind === "cloud" ? "cloud_update" : "update"); okn.push(name);
+      UPW.jobs.push({node: j.node, kind: j.kind, name: h.name || "主機", from: j.kind === "cloud" ? (d.cloud || {}).version || "" : d.build || "", t0: Date.now()});
+    } catch(e) { fail.push(`${name}：${e.message}`); }
   }
   if (okn.length) toast(okn.length > 1 ? `已開始更新 ${okn.length} 個項目，大約 1 分鐘內完成` : `已開始更新「${okn[0]}」`);   // 只跳一則
   if (fail.length) setTimeout(() => toast(fail.join("；"), "bad"), okn.length ? 600 : 0);
   setTimeout(() => selfStatus(root), 1500);
-  const poll = setInterval(() => { if (!root.isConnected) return clearInterval(poll); selfStatus(root); }, 5000);
-  setTimeout(() => clearInterval(poll), 120000);
+  upwSave(); upwRun();
+}
+/* 更新完自動套用：盯著剛開始更新的項目，好了就跳通知、更新設定面板上的版本號；
+   這台的哨兵換新版時自動重新載入網頁。記在分頁裡，重新載入後會接著盯 */
+const UPW = {jobs: (() => { try { return JSON.parse(sstore("vs-upw") || "[]"); } catch(e) { return []; } })(), timer: 0};
+function upwSave(){ sstore("vs-upw", UPW.jobs.length ? JSON.stringify(UPW.jobs) : ""); }
+function upwPanel(){ const b = document.querySelector(".sheetv:not(.closing) .sbody"); if (b) selfStatus(b); }
+function upwReload(msg){
+  if (window._reloading) return; window._reloading = true;
+  UPW.jobs = UPW.jobs.filter(j => j.node || j.kind !== "self"); upwSave();   // 這台的哨兵已經好了，重新載入後不用再盯
+  sstore("vs-upmsg", msg); toast("哨兵已更新到新版，重新載入中…");
+  setTimeout(() => location.reload(), 1400);
+}
+function upwRun(){
+  clearTimeout(UPW.timer);
+  if (!UPW.jobs.length || window._reloading) return;
+  UPW.timer = setTimeout(upwStep, 3000);
+}
+async function upwStep(){
+  const nodes = [...new Set(UPW.jobs.map(j => j.node))], done = [];
+  await Promise.all(nodes.map(async node => {
+    let d; try { d = await selfCall(node, "status"); } catch(e) { return; }   // 正在重新啟動，連不上是正常的
+    for (const j of UPW.jobs.filter(x => x.node === node)) {
+      const age = Date.now() - j.t0;
+      if (j.kind === "cloud") {
+        const c = d.cloud; if (!c || c.running) continue;
+        if (age < 4000) continue;                                       // 剛開始的那一下可能還沒跑起來
+        const v = c.version || "";
+        done.push([j, c.err && !v ? `「${j.name}」的雲端硬碟更新失敗：${c.err}` : v && v !== j.from ? `「${j.name}」的雲端硬碟已更新到 ${v} ✨` : `「${j.name}」的雲端硬碟更新完成 ✨`, !(c.err && !v)]);
+      } else if (j.from && d.build && d.build !== j.from) {
+        if (!node) return upwReload(`哨兵已更新到 ${d.version} ✨`);    // 這台：換上新畫面
+        done.push([j, `「${j.name}」的哨兵已更新到 ${d.version} ✨`, true]);
+      } else if (!d.running && age > 15000) {
+        done.push([j, d.last && d.last.ok === false ? `「${j.name}」的哨兵更新失敗，可以再試一次` : `「${j.name}」的哨兵${j.from ? "已經是最新版" : "更新完成"} ✨`, !(d.last && d.last.ok === false)]);
+      }
+    }
+  }));
+  if (window._reloading) return;
+  for (const j of UPW.jobs) if (Date.now() - j.t0 > 15 * 60000 && !done.some(x => x[0] === j)) done.push([j, `「${j.name}」${j.kind === "cloud" ? "的雲端硬碟" : "的哨兵"}更新太久沒有回應，請到主機上看看`, false]);
+  if (done.length) {
+    UPW.jobs = UPW.jobs.filter(j => !done.some(x => x[0] === j)); upwSave();
+    const bad = done.filter(x => !x[2]), good = done.filter(x => x[2]);
+    if (good.length) toast(good.length > 1 ? `${good.length} 個項目都更新好了 ✨` : good[0][1]);   // 一起好的只跳一則
+    if (bad.length) setTimeout(() => toast(bad.map(x => x[1]).join("；"), "bad"), good.length ? 600 : 0);
+    upwPanel(); tick();                                                 // 設定面板的版本號、齒輪上的紅點馬上跟著變
+  }
+  upwRun();
 }
 /* ═════════ Telegram 通知設定 ═════════ */
 async function tgCall(body){
@@ -2065,10 +2113,7 @@ async function tick(){
     }
     if (me && me.build) {
       if (!window._build) window._build = me.build;
-      else if (me.build !== window._build && !window._reloading) {   // 這台的哨兵剛更新好：重新載入換上新畫面
-        window._reloading = true; toast("哨兵已更新到新版，重新載入中…");
-        setTimeout(() => location.reload(), 1400);
-      }
+      else if (me.build !== window._build) upwReload(`哨兵已更新到 ${me.version} ✨`);   // 這台的哨兵剛更新好：重新載入換上新畫面
     }
     if (!BOOTED) {
       splashMsg("準備畫面…");
@@ -2076,6 +2121,8 @@ async function tick(){
       await Promise.race([Promise.all([document.fonts ? document.fonts.ready : null, preloadFlags(data)]), sleep(1500)]);
       const wait = 700 - (performance.now() - T0); if (wait > 0) await sleep(wait);
       endSplash();
+      const um = sstore("vs-upmsg"); if (um) { sstore("vs-upmsg", ""); setTimeout(() => toast(um), 500); }   // 剛重新載入：說一聲換成哪一版
+      upwRun();
     }
     if (BOOTED) await settle();
     render(data);
