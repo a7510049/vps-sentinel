@@ -77,6 +77,7 @@ tests/             基本功能測試（只用 Python 內建模組）
 - 「全部更新」只跳出一則通知。
 - 不要「運作正常」這種多餘的狀態字。
 - Telegram 兩台主機都要通知；舊訊息會依設定的保留時間自動刪除。
+- 每一則 Telegram 通知開頭都要有狀態符號（✅ ❌ 🔴 🟠 🔄 🔑 🔐 🔌 ℹ️ 這類，不是笑臉）。新增通知時，要在 `ev_line()` 給它合適的符號，並加進 `tests/test_tg_icons.py`。
 - 雲端硬碟不用另外的帳號密碼，靠哨兵登入（SSO：`/cloud-sso` 簽章連結＋`vs_cloud` 通行證，哨兵轉接時加上 `X-Sentinel-User: owner`）。
 
 ## 雲端硬碟（FileBrowser Quantum）注意事項
