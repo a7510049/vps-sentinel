@@ -163,8 +163,8 @@ addEventListener("scroll", hush, {passive:true, capture:true});
 addEventListener("touchstart", hush, {passive:true});
 
 /* ═════════ 小工具 ═════════ */
-const DESK = matchMedia("(min-width: 1024px)");
-let LIST = [], SEL = store("vps-sel"), FILTER = "";
+const DESK = matchMedia("(min-width: 1024px)"), PHONE = matchMedia("(max-width: 700px)");
+let LIST = [], SEL = store("vps-sel"), FILTER = "", WAL = store("vps-wal");   // WAL：手機疊卡目前打開的那一張（空的＝全部疊起來）
 const open = {};
 function size(b){ if(!b) return "0 B"; const u=["B","KB","MB","GB","TB"]; let i=0; while(b>=1024&&i<4){b/=1024;i++} return (b<10&&i?b.toFixed(1):Math.round(b))+" "+u[i]; }
 const rate = b => size(b)+"/s";
@@ -384,30 +384,41 @@ function metric(icon, label, pct, detail){
   return `<div class="metric">${IC(icon, "")}
     <div class="row"><span>${label}<span class="sub">${detail}</span></span><b>${num(pct)}<small>%</small></b></div>${track(pct)}</div>`;
 }
-function mcard(s, i){
-  const lv = lvOf(s), key = keyOf(s);
-  let h = `<div class="card glass ${lv==="ok"?"":lv}" data-key="${esc(key)}" data-keyed style="--i:${i}"><div class="head" data-key="hd">${avatar(s)}
+/* 手機錢包疊卡：收起來時只露出的那一條（三個小進度條＋第一則警告） */
+function wpeek(s){
+  if (!s.online) return `<div class="wpeek" data-key="wp"><div></div></div>`;
+  const d = s.disks.find(x => x.path === "/") || s.disks[0], mi = (k, v) => `<div><div class="k">${k}<b>${num(v)}%</b></div>${track(v)}</div>`;
+  const al = (s.problems||[]).length ? ["bad", s.problems] : (s.notices||[]).length ? ["warn", s.notices] : null;
+  const note = al ? `<div class="wnote ${al[0]}" data-key="wn">${I(al[0]==="bad"?"warn":"alert")}<span data-x>${esc(al[1][0])}${al[1].length > 1 ? `，還有 ${al[1].length - 1} 項` : ""}</span></div>` : "";
+  return `<div class="wpeek" data-key="wp"><div data-keyed><div class="minis" data-key="mi">${mi("處理器", s.cpu)}${mi("記憶體", s.mem.pct)}${d ? mi("磁碟", d.pct) : ""}</div>${note}</div></div>`;
+}
+function mcard(s, i, w){
+  const lv = lvOf(s), key = keyOf(s), wc = w ? (WAL === key ? " open" : " peek" + (w.stk ? " stk" : "")) : "";
+  let h = `<div class="card glass ${lv==="ok"?"":lv}${wc}" data-key="${esc(key)}" data-keyed style="--i:${i}"><div class="head" data-key="hd">${avatar(s)}
     <div class="nm"><h2><span>${esc(s.name)}</span>${editBtn(s)}</h2><div class="sub">${s.online ? esc(place(s) || s.os) : (s.last_seen ? `離線・${ago(s.last_seen)}` : "目前連不上")}</div></div>`;
-  if (!s.online) return h + `</div><div class="offline" data-key="off">${I("off")}<div>連不上這台主機<div class="sub">${s.last_seen?esc(seen(s))+"<br>":""}${esc(s.error||"")}</div>${peerBtn(s)}</div></div></div>`;
-  h += `<span class="uptime">開機 ${up(s.uptime)}</span></div>` + alerts(s);
-  h += `<div class="metrics" data-key="mt">` + metric("cpu", "處理器", s.cpu, `${s.cores} 核`) +
+  const wchev = w ? `<span class="wchev">${I("chev")}</span>` : "";
+  const body = b => w ? `${wchev}</div>${wpeek(s)}<div class="wbody" data-key="wb" data-keyed>${b}</div></div>` : `</div>${b}</div>`;
+  if (!s.online) return h + body(`<div class="offline" data-key="off">${I("off")}<div>連不上這台主機<div class="sub">${s.last_seen?esc(seen(s))+"<br>":""}${esc(s.error||"")}</div>${peerBtn(s)}</div></div>`);
+  h += `<span class="uptime">開機 ${up(s.uptime)}</span>`;
+  let b = alerts(s);
+  b += `<div class="metrics" data-key="mt">` + metric("cpu", "處理器", s.cpu, `${s.cores} 核`) +
        metric("mem", "記憶體", s.mem.pct, `${size(s.mem.used)} / ${size(s.mem.total)}`) +
        s.disks.map(d=>metric("disk", "磁碟"+(d.path==="/"?"":" "+esc(d.path)), d.pct, `${size(d.used)} / ${size(d.total)}`)).join("") + `</div>`
        + (s.cloud && safeUrl(s.cloud.login || s.cloud.url) ? `<a class="cloudm" data-key="cl" href="${esc(s.cloud.login || s.cloud.url)}" target="_blank" rel="noopener noreferrer">${I("cloud")}<span>雲端硬碟</span>
           ${s.cloud.total ? `<b>${size(s.cloud.used)}<small> / ${size(s.cloud.total)}</small></b>` : ""}${I("ext")}</a>` : "");
   if (PREF.show.chart && s.hist) { const hh = histFor(s);
-    h += `<div class="spark" data-key="sp"><div class="lbl"><span><i style="background:${COL.cpu};margin-left:0"></i>處理器<i style="background:${COL.mem}"></i>記憶體</span>${rangeSeg()}</div>
+    b += `<div class="spark" data-key="sp"><div class="lbl"><span><i style="background:${COL.cpu};margin-left:0"></i>處理器<i style="background:${COL.mem}"></i>記憶體</span>${rangeSeg()}</div>
       ${chartOr(hh, cid(s,"m"), x => [{data:x.cpu,color:COL.cpu},{data:x.mem,color:COL.mem}], {max:100, h:64, fade:.25, sw:2, n:100})}</div>`; }
-  h += `<div class="stats" data-key="st" data-keyed><div class="stat" data-key="load"><div class="k">${IC("load")}負載</div><div class="v">${num(s.load[0],2)}</div></div>` +
+  b += `<div class="stats" data-key="st" data-keyed><div class="stat" data-key="load"><div class="k">${IC("load")}負載</div><div class="v">${num(s.load[0],2)}</div></div>` +
        (PREF.show.net ? `<div class="stat" data-key="down"><div class="k">${IC("down")}下載</div><div class="v num">${rate(s.net.rx)}</div></div>
         <div class="stat" data-key="up"><div class="k">${IC("up")}上傳</div><div class="v num">${rate(s.net.tx)}</div></div>` : "") + `</div>`;
-  h += trafficLine(s);
+  b += trafficLine(s);
   const items = itemsOf(s);
-  if (PREF.show.items && items.length) h += `<div class="more ${open[key]?"open":""}" data-key="mo"><button class="more-head" data-toggle="${esc(key)}">${IC("box")}<span>容器與服務：${itemsSummary(items)}</span><span class="chev">${I("chev")}</span></button>
+  if (PREF.show.items && items.length) b += `<div class="more ${open[key]?"open":""}" data-key="mo"><button class="more-head" data-toggle="${esc(key)}">${IC("box")}<span>容器與服務：${itemsSummary(items)}</span><span class="chev">${I("chev")}</span></button>
       <div class="collapse"><div><div class="list" data-keyed>${itemsHTML(items)}</div></div></div></div>`;
   const info = updateInfo(s), btn = updateBtn(s);
-  if (info || btn) h += `<div class="foot" data-key="ft"><div class="sub" data-x>${info}</div>${btn}</div>`;
-  return h + `</div>`;
+  if (info || btn) b += `<div class="foot" data-key="ft"><div class="sub" data-x>${info}</div>${btn}</div>`;
+  return h + body(b);
 }
 function summary(n, clickable){
   const p = (k, label) => `<button class="pill glass ${k} ${FILTER===k?"on":""}" ${clickable?`data-filter="${k}"`:""}><span class="dot ${k}"></span>${label} <b class="num">${n[k]}</b></button>`;
@@ -416,11 +427,12 @@ function summary(n, clickable){
 function renderMobile(list, n, time){
   const many = true;
   const shown = FILTER ? list.filter(s=>lvOf(s)===FILTER) : list, g = greet(n, list.length);
+  const w = PHONE.matches && list.length > 1;     // 兩台以上的手機版：像錢包一樣疊起來，點一張才展開
   return `<div class="dash m" data-key="m"><header class="bar"><span class="mini">VPS 哨兵</span><span class="grow"></span>
     <button class="cap glass ${list.some(s=>s.self_has)?"hasnew":""}" data-settings title="設定">${I("gear")}</button><button class="cap glass" data-logout title="登出">${I("logout")}</button></header>
     <div class="hero"><div class="hello">${g.hi}</div><h1 data-x>${g.line}</h1><div class="meta"><span class="live"></span>更新於 ${time}</div></div>
     ${summary(n, many)}
-    <div class="grid" data-keyed>${shown.length ? shown.map(mcard).join("") : `<div class="empty" data-key="empty">這個分類目前沒有主機 👍</div>`}</div></div>`;
+    <div class="grid${w ? " wallet" : ""}" data-keyed>${shown.length ? shown.map((s, i) => mcard(s, i, w && {stk: keyOf(s) !== WAL && shown[i+1] && keyOf(shown[i+1]) !== WAL})).join("") : `<div class="empty" data-key="empty">這個分類目前沒有主機 👍</div>`}</div></div>`;
 }
 
 /* ═════════ 電腦版 ═════════ */
@@ -668,7 +680,7 @@ const T = {fast:200, mid:350, slow:600};
 const EASE = "cubic-bezier(.22,1,.36,1)", SPRING = "cubic-bezier(.34,1.4,.64,1)", EXIT = "cubic-bezier(.4,0,1,1)";
 const canAnim = () => PREF.motion && !matchMedia("(prefers-reduced-motion: reduce)").matches;
 /* 讓元素平順地離開：先淡出、收起高度，再移除 */
-const BLOCK = ".alert,.item,.grp,.tq,.tqw,.card,.host,.empty,.spark,.ev,.more,.foot,.alerts,.offline,.strip,.charts,.lower,.gauges";
+const BLOCK = ".alert,.wnote,.item,.grp,.tq,.tqw,.card,.host,.empty,.spark,.ev,.more,.foot,.alerts,.offline,.strip,.charts,.lower,.gauges";
 const TILE = ".panel,.stat,.tile,.gauge";
 function flipSiblings(parent, change){
   const kids = [...parent.children].filter(c => !c._leaving), r0 = kids.map(c => c.getBoundingClientRect());
@@ -852,6 +864,7 @@ function render(list){
   trackCenter();
 }
 DESK.addEventListener("change", () => { applyPrefs(); if (LIST.length) render(LIST); });
+PHONE.addEventListener("change", () => { if (LIST.length) render(LIST); });
 
 /* ═════════ 對話框、通知 ═════════ */
 function modal({icon, cls="box", title, text, input, ok="確定", cancel="取消"}){
@@ -1052,6 +1065,39 @@ function foldLite(more, on){
   } else {                                        // 收起：動畫跑完才真的關上，裡面的字不會先消失
     c.animate([{height:h0 + "px", overflow:"hidden"}, {height:"0px", overflow:"hidden"}], {duration:T.mid, easing:EASE, fill:"forwards", id:"ui"})
       .finished.then(a => { if (!open[more.querySelector("[data-toggle]").dataset.toggle]) more.classList.remove("open"); a.cancel(); }).catch(() => {});
+  }
+}
+/* 手機錢包疊卡：點一張展開、再點上面那一排收回去。
+   先記下每張卡片的間距、露出的那一條、內容的高度，換好以後再從舊的數字平順變到新的數字；
+   跟「容器與服務」一樣用固定的數字做高度動畫，iPhone 才不會卡 */
+function walletSet(k){
+  WAL = k; store("vps-wal", k);
+  const g = $("#app .grid.wallet");
+  if (!g || !canAnim()) return render(LIST);
+  const parts = [];
+  g.querySelectorAll(":scope>.card").forEach(c => {
+    parts.push([c, "marginTop"], [c, "paddingBottom"]);
+    c.querySelectorAll(":scope>.wpeek,:scope>.wbody").forEach(x => parts.push([x, "height"]));
+  });
+  const val = ([el, p]) => parseFloat(getComputedStyle(el)[p]) || 0;
+  const from = parts.map(val);                       // 上一次還沒動完的話，從目前的樣子接著動
+  parts.forEach(([el]) => { (el._wa || []).forEach(a => a.cancel()); el._wa = []; });
+  // 只換卡片的狀態，不整頁重畫（手機上整頁重畫會讓動畫第一格頓一下）；下次自動更新算出來的會一模一樣
+  const cs = [...g.children].filter(c => c.matches(".card") && !c._leaving);
+  cs.forEach((c, i) => { const on = c.dataset.key === k, nx = cs[i+1];
+    c.classList.toggle("open", on); c.classList.toggle("peek", !on); c.classList.toggle("stk", !on && !!nx && nx.dataset.key !== k); });
+  const to = parts.map(val), dur = T.slow;
+  const c = k && [...g.children].find(x => x.dataset.key === k), top = c ? c.getBoundingClientRect().top : 0;   // 動畫開始前量：這時是最後的位置
+  parts.forEach(([el, p], i) => {
+    if (!el.isConnected || Math.abs(to[i] - from[i]) < .5) return;
+    const fold = p === "height", show = to[i] > from[i];
+    const f0 = {[p]: from[i] + "px"}, f1 = {[p]: to[i] + "px"};
+    if (fold) Object.assign(f0, {overflow:"hidden", visibility:"visible", opacity:show ? 0 : 1}), Object.assign(f1, {overflow:"hidden", visibility:"visible", opacity:show ? 1 : 0});
+    el._wa.push(el.animate([f0, f1], {duration:dur, easing:EASE, id:"ui"}));
+  });
+  if (c) {                                           // 打開的卡片要看得到開頭：太上面或太下面就捲過去
+    const bar = 70;
+    if (top < bar || top > innerHeight * .45) scrollTo({top: scrollY + top - bar, behavior: "smooth"});
   }
 }
 function initSegs(root){
@@ -1639,6 +1685,12 @@ document.addEventListener("click", async e => {
     return switchHost();
   }
 
+  const wc = t.closest(".wallet>.card");             // 手機疊卡：點收著的卡片就打開；點打開那張的最上面一排就收回去
+  if (wc && !t.closest("button,a,input,[data-range]")) {
+    const k = wc.dataset.key;
+    if (WAL !== k) walletSet(k); else if (t.closest(".head")) walletSet("");
+    return;
+  }
   const ub = t.closest("[data-update]");
   if (ub) {
     const node = ub.dataset.update, label = ub.dataset.label, n = +ub.dataset.n;
