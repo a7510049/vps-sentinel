@@ -165,7 +165,7 @@ addEventListener("touchstart", hush, {passive:true});
 
 /* ═════════ 小工具 ═════════ */
 const DESK = matchMedia("(min-width: 1024px)"), PHONE = matchMedia("(max-width: 700px)");
-let LIST = [], SEL = store("vps-sel"), FILTER = "", WAL = store("vps-wal");   // WAL：手機版目前打開的那張卡片（空的＝全部收起來）
+let LIST = [], SEL = store("vps-sel"), FILTER = "", WAL = "";   // WAL：手機版目前打開的那張卡片（空的＝全部收起來；打開或重整網頁時一律收起來）
 const open = {};
 function size(b){ if(!b) return "0 B"; const u=["B","KB","MB","GB","TB"]; let i=0; while(b>=1024&&i<4){b/=1024;i++} return (b<10&&i?b.toFixed(1):Math.round(b))+" "+u[i]; }
 const rate = b => size(b)+"/s";
@@ -391,7 +391,7 @@ function wpeek(s){
   const d = s.disks.find(x => x.path === "/") || s.disks[0], mi = (k, v) => `<div><div class="k">${k}<b>${num(v)}%</b></div>${track(v)}</div>`;
   const al = (s.problems||[]).length ? ["bad", s.problems] : (s.notices||[]).length ? ["warn", s.notices] : null;
   const note = al ? `<div class="wnote ${al[0]}" data-key="wn">${I(al[0]==="bad"?"warn":"alert")}<span data-x>${esc(al[1][0])}${al[1].length > 1 ? `，還有 ${al[1].length - 1} 項` : ""}</span></div>` : "";
-  return `<div class="wpeek" data-key="wp"><div data-keyed><div class="minis" data-key="mi">${mi("處理器", s.cpu)}${mi("記憶體", s.mem.pct)}${d ? mi("磁碟", d.pct) : ""}</div>${note}</div></div>`;
+  return `<div class="wpeek" data-key="wp"><div data-keyed>${note}<div class="minis" data-key="mi">${mi("處理器", s.cpu)}${mi("記憶體", s.mem.pct)}${d ? mi("磁碟", d.pct) : ""}</div></div></div>`;
 }
 function mcard(s, i, w){
   const lv = lvOf(s), key = keyOf(s), wc = w ? (WAL === key ? " open" : " peek") : "";
@@ -845,6 +845,7 @@ function placePind(){
     }
   });
 }
+const LVRANK = {bad:0, warn:1, ok:2};
 function render(list){
   // 更新剛完成：跳通知
   for (const s of list) {
@@ -855,6 +856,9 @@ function render(list){
       setTimeout(() => toast(msg, ok ? "ok" : "bad"), 400);
     }
   }
+  // 有紅色（異常）或橘色（注意）告警的主機排在最前面；同一級的照原本順序
+  list = [...list].sort((a, b) => LVRANK[lvOf(a)] - LVRANK[lvOf(b)]);
+  if (!LIST.length && list.length && lvOf(list[0]) !== "ok") { SEL = keyOf(list[0]); store("vps-sel", SEL); }   // 剛打開網頁就有告警：電腦版直接顯示出問題的那台
   LIST = list; flagAccent();
   const n = {ok:0,warn:0,bad:0}; list.forEach(s=>n[lvOf(s)]++);
   const time = new Date().toLocaleTimeString("zh-TW",{hour12:false});
@@ -1074,7 +1078,7 @@ function foldLite(more, on){
    先記下每張卡片的間距、露出的那一條、內容的高度，換好以後再從舊的數字平順變到新的數字；
    跟「容器與服務」一樣用固定的數字做高度動畫，iPhone 才不會卡 */
 function walletSet(k){
-  WAL = k; store("vps-wal", k);
+  WAL = k;
   const g = $("#app .grid.wallet");
   if (!g || !canAnim()) return render(LIST);
   const parts = [];
