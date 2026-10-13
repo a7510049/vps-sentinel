@@ -646,6 +646,19 @@ a.plink:hover{color:var(--a1)}
 .remember input:checked::after{transform:translateY(-1px) rotate(-45deg) scale(1)}
 .login .ubtn{width:100%;justify-content:center;padding:14px;font-size:var(--fs-l)}
 .login .pkbtn{margin-top:10px;gap:8px}.login .pkbtn svg{width:18px;height:18px;color:var(--a1)}
+/* 從備份還原 */
+.login .rswgo{display:block;margin:14px auto 0;font-size:var(--fs-s)}
+.login.rsw{max-width:440px}
+.rswbody{display:flex;flex-direction:column;gap:12px;margin-top:20px;text-align:left}
+.login .rswbody .field{margin:0}
+.login .rswfile{cursor:pointer;gap:10px;font-size:var(--fs-m);padding:14px;overflow:hidden}
+.login .rswfile .rswname{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.rswtip{color:var(--sub);font-size:var(--fs-s);font-weight:600;line-height:1.6}
+.rswtip a{color:var(--a1);word-break:break-all}
+.rswnow{display:flex;align-items:center;gap:10px;justify-content:center;font-size:var(--fs-l);font-weight:800}
+.rswnow.ok{color:var(--ok)}.rswnow.bad{color:var(--bad)}
+.rswnow .spin{width:16px;height:16px}
+.rswlog li{color:var(--sub)}.rswlog li:last-child{color:var(--text)}
 .err{color:var(--bad);font-size:var(--fs-m);min-height:20px;font-weight:700}
 .shake{animation:shake var(--t-mid)}
 @keyframes shake{20%,60%{transform:translateX(-8px)}40%,80%{transform:translateX(8px)}}
