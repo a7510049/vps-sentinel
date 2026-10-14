@@ -114,7 +114,17 @@ button{font:inherit;color:inherit}
 .ico.month{background:linear-gradient(160deg,#ffd84d,#f2a900)}
 .ico.box{background:linear-gradient(160deg,#8e8cff,var(--c-box))}
 .ico.info{background:linear-gradient(160deg,#aeaeb2,#636366)}
-.ico.theme{background:var(--grad)}
+/* 功能圖示：每個功能一個自己的色調（同一套亮→深漸層），不跟其他圖示重複 */
+.ico.bell{background:linear-gradient(160deg,#ff8cc6,#e0479e)}      /* 通知：桃紅 */
+.ico.archive{background:linear-gradient(160deg,#d9b48c,#a47a52)}   /* 備份：焦糖 */
+.ico.finger{background:linear-gradient(160deg,#5fe3cf,#0fa595)}    /* 手機金鑰：青綠 */
+.ico.pin{background:linear-gradient(160deg,#b39cff,#7650f0)}       /* PIN 碼：紫羅蘭 */
+.ico.link{background:linear-gradient(160deg,#bfe86a,#78b31c)}      /* 配對、新增主機：萊姆 */
+.ico.key{background:linear-gradient(160deg,#9fb2cc,#5a6e8e)}       /* 換密碼：石板藍 */
+.ico.flag{background:linear-gradient(160deg,#5fd6a0,#14895e)}      /* 國旗：翡翠 */
+.ico.sun{background:linear-gradient(160deg,#ffb27a,#f2643d)}       /* 天氣：夕陽 */
+.ico.quote{background:linear-gradient(160deg,#6cc4ff,#1f7fd6)}     /* 心情小語：海藍 */
+.ico.theme{background:var(--grad)}                                  /* 哨兵本身的動作（更新、編輯）：主題色 */
 /* 確認視窗的方塊：要小心的動作（重新開機、換密碼）橘色，刪除／移除紅色 */
 .ico.warn{background:linear-gradient(160deg,#ffc04d,#ff9500)}
 .ico.bad{background:linear-gradient(160deg,#ff7a70,#ff3b30)}

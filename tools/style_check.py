@@ -55,6 +55,17 @@ used += [(m.start(), m.group(1)) for m in re.finditer(r'modal\(\{icon:"[a-z]+", 
 for idx, c in used:
     if c not in tiles:
         report("app.js", jline0, js, idx, f"方塊圖示沒有「{c}」這個顏色，請用：{'、'.join(sorted(tiles))}")
+# 每個概念要有自己的色調：ICO 裡不能兩個概念共用一個顏色，style.css 裡也不能兩個 .ico 樣式長得一樣
+seen = {}
+for m in re.finditer(r'\b([a-z]+):\["([a-z]+)","[a-z]+"\]', js):
+    if m.group(2) in seen:
+        report("app.js", jline0, js, m.start(), f"「{m.group(1)}」跟「{seen[m.group(2)]}」用了同一個顏色，請給它自己的色調")
+    seen.setdefault(m.group(2), m.group(1))
+bgs = {}
+for m in re.finditer(r"\.ico\.([a-z]+)\{background:([^}]+)\}", body_css):
+    if m.group(2) in bgs:
+        report("style.css", line0, body_css, m.start(), f".ico.{m.group(1)} 跟 .ico.{bgs[m.group(2)]} 顏色一樣")
+    bgs.setdefault(m.group(2), m.group(1))
 
 if bad:
     print(f"有 {len(bad)} 個地方沒照共用規則：")

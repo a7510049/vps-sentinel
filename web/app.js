@@ -461,8 +461,8 @@ const cid = (s, k) => "g" + Math.abs([...keyOf(s)].reduce((a,c)=>(a*31+c.charCod
 const COL = {cpu:"var(--c-cpu)", mem:"var(--c-mem)", rx:"var(--c-rx)", tx:"var(--c-tx)"};
 /* 概念 → [顏色樣式, 圖示] */
 const ICO = {cpu:["cpu","cpu"], mem:["mem","mem"], disk:["disk","disk"], load:["load","gauge"], down:["down","down"], up:["up","up"],
-  net:["net","net"], trend:["trend","trend"], month:["month","month"], box:["box","box"], bell:["theme","bell"], info:["info","info"],
-  layers:["theme","layers"], flag:["theme","flag"], key:["theme","key"], finger:["theme","finger"], pin:["theme","pin"], link:["theme","link"], archive:["theme","archive"], sun:["theme","sun"], quote:["theme","quote"]};
+  net:["net","net"], trend:["trend","trend"], month:["month","month"], box:["box","box"], bell:["bell","bell"], info:["info","info"],
+  flag:["flag","flag"], key:["key","key"], finger:["finger","finger"], pin:["pin","pin"], link:["link","link"], archive:["archive","archive"], sun:["sun","sun"], quote:["quote","quote"]};
 const IC = (k, cls="sm") => `<span class="ico ${cls} ${ICO[k][0]}">${I(ICO[k][1])}</span>`;
 
 /* ═════════ 手機版 ═════════ */
