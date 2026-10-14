@@ -40,7 +40,7 @@ from collections import deque
 from concurrent.futures import ThreadPoolExecutor
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
-VERSION = "1.47"
+VERSION = "1.48"
 
 # ───────────────────────── 哨兵備份檔（.vsbk）─────────────────────────
 # 哨兵專用的備份格式：外面是自己的檔案格式，裡面用的是成熟、標準的加密方法（不自己發明加密）：
@@ -2673,8 +2673,10 @@ def pair_accept(d):
         st["keys"] = keys[-PAIR_MAX:]
         st.pop("pending", None)
         pair_save(st)
-    log(f"「{name}」配對了這台主機")
-    COL.add_event("info", f"「{name}」配對了這台主機")
+    global PAGE
+    PAGE = None                                   # 被監看就不用完整網頁，放掉記憶體
+    log(f"「{name}」開始監看這台主機")
+    COL.add_event("info", f"「{name}」開始監看這台主機")
     return True, "", {"n": b64u(n2), "name": NAME, "proof": b64u(pair_mac(secret, "ok", n1, n2, NAME))}
 
 
@@ -2738,8 +2740,8 @@ def peer_add(code):
     except OSError as e:
         return False, f"無法寫入設定檔：{e}"
     if not old:
-        log(f"新增了主機「{name}」：{url}")
-        COL.add_event("info", f"新增了主機「{name}」")
+        log(f"開始監看「{name}」：{url}")
+        COL.add_event("info", f"開始監看「{name}」")
     return True, f"已重新配對「{name}」" if old else f"已新增「{name}」"
 
 
@@ -2762,9 +2764,124 @@ def peer_remove(node):
         PEERS.append(p)
         return False, f"無法寫入設定檔：{e}"
     PEER_SEEN.pop(node, None)
-    log(f"移除了主機「{node}」")
-    COL.add_event("info", f"移除了主機「{node}」")
+    BEAT_SENT.pop(node, None)
+    log(f"不再監看「{node}」")
+    COL.add_event("info", f"不再監看「{node}」")
     return True, "已移除"
+
+# ───────────────────────── 被監看模式 ─────────────────────────
+# 被其他主機配對、自己又沒有要看別台的主機＝「被監看」：不開完整網頁（只留一頁說明＋取消按鈕），
+# 不自己發事件通知（主要主機會轉發），只留主要主機拉資料需要的基本運作。
+# 主要主機每 10 分鐘傳一次「心跳」，順便帶上它的 Telegram 設定；主要主機太久沒連進來，這台就用那組設定通知。
+WATCH_SILENT = 300                              # 主要主機幾秒沒連進來就算失聯
+WATCH = {"down": False}
+BEAT_SENT = {}                                  # 主要主機這邊：每台上次送心跳的 [時間, 內容]
+
+
+def watchers():
+    """這台被哪些主機監看"""
+    return [] if PEERS else [str(k.get("name") or "主要主機") for k in pair_keys()]
+
+
+def pair_unwatch():
+    """取消被監看：所有配對鑰匙作廢，網頁恢復"""
+    with PAIR_LOCK:
+        st = dict(pair_load())
+        gone = [str(k.get("name") or "") for k in pair_keys()]
+        if not gone:
+            return False, "這台沒有被監看"
+        st["keys"] = []
+        st.pop("tg", None)
+        pair_save(st)
+    who = "、".join(gone)
+    log(f"已取消被「{who}」監看")
+    COL.add_event("info", f"已取消被「{who}」監看")
+    return True, "已取消被監看"
+
+
+def pair_beat_store(tg):
+    """被監看這邊：記住主要主機的 Telegram 設定（失聯時用）"""
+    tg = {"bot": str(tg.get("bot") or "")[:100], "chat": str(tg.get("chat") or "")[:40]} if isinstance(tg, dict) else {}
+    with PAIR_LOCK:
+        st = dict(pair_load())
+        if (st.get("tg") or {}) != tg:
+            st["tg"] = tg
+            pair_save(st)
+
+
+def peer_beats():
+    """主要主機這邊：每 10 分鐘（Telegram 設定有變就馬上）告訴被監看的主機「我還在」"""
+    tg = {"bot": TG_BOT, "chat": TG_CHAT} if TG_BOT and TG_CHAT else {}
+    body = json.dumps({"action": "beat", "tg": tg}).encode()
+    for p in PEERS:
+        last = BEAT_SENT.get(p["name"])
+        if not p["token"].startswith("vsk_") or (last and last[1] == body and time.time() - last[0] < 600):
+            continue
+        try:
+            req = urllib.request.Request(p["url"] + "/api/pair", data=body, method="POST",
+                                         headers={"X-Token": p["token"], "Content-Type": "application/json"})
+            urllib.request.urlopen(req, timeout=6).close()
+            BEAT_SENT[p["name"]] = [time.time(), body]
+        except Exception:  # noqa: BLE001
+            pass
+
+
+def watch_check():
+    """被監看這邊：主要主機太久沒連進來就通知（用主要主機給的 Telegram 設定）"""
+    tg = pair_load().get("tg") or {}
+    if not (tg.get("bot") and tg.get("chat")):
+        return
+    seen = max((PAIR_SEEN.get(k.get("id"), 0) for k in pair_keys()), default=0)
+    if not seen:                                  # 剛重新啟動：等主要主機先連進來一次
+        return
+    gone = time.time() - seen > WATCH_SILENT
+    if gone != WATCH["down"]:
+        who = html.escape("、".join(watchers()))
+        text = (f"🔌 <b>{who}</b>　超過 {WATCH_SILENT // 60} 分鐘沒來看「{html.escape(NAME)}」，可能當機或斷線了" if gone
+                else f"✅ <b>{who}</b>　恢復連線了")
+        _, err = tg_api(tg["bot"], "sendMessage", {"chat_id": tg["chat"], "text": text, "parse_mode": "HTML"})
+        if err:
+            log("Telegram 傳送失敗：", err)
+            return
+    WATCH["down"] = gone
+
+
+def watch_page(names):
+    who = html.escape("、".join(names))
+    return f"""<!doctype html><html lang="zh-Hant"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>{html.escape(NAME)}・VPS 哨兵</title><link rel="icon" href="/icon.svg"><link rel="apple-touch-icon" href="/apple-touch-icon.png">
+<style>
+:root{{color-scheme:light dark;--bg:#eef1f7;--card:rgba(255,255,255,.7);--text:#101828;--sub:rgba(16,24,40,.55);--line:rgba(16,24,40,.1);--bad:#f04438}}
+@media (prefers-color-scheme:dark){{:root{{--bg:#06080f;--card:rgba(255,255,255,.06);--text:#f1f4fa;--sub:rgba(226,232,245,.58);--line:rgba(255,255,255,.1);--bad:#f97066}}}}
+*{{box-sizing:border-box}}
+body{{margin:0;min-height:100vh;display:grid;place-items:center;padding:16px;background:var(--bg);color:var(--text);
+  font:15px/1.6 ui-rounded,-apple-system,BlinkMacSystemFont,"PingFang TC","Noto Sans TC","Microsoft JhengHei",sans-serif}}
+.c{{width:100%;max-width:360px;padding:30px 24px 22px;border-radius:30px;background:var(--card);text-align:center;
+  box-shadow:inset 0 0 0 1px var(--line),0 14px 36px -16px rgba(30,50,110,.3)}}
+h1{{margin:12px 0 4px;font-size:24px}}p{{margin:0;color:var(--sub);font-weight:600}}
+details{{margin-top:20px}}summary{{cursor:pointer;color:var(--sub);font-size:13.5px;font-weight:700;list-style:none}}
+input,button{{width:100%;font:inherit;font-size:16px;border:0;border-radius:14px;padding:12px 14px;margin-top:10px}}
+input{{background:var(--line);color:var(--text)}}button{{cursor:pointer;font-weight:800;color:#fff;background:linear-gradient(135deg,#38bdf8,#6366f1)}}
+.m{{min-height:20px;margin-top:8px;font-size:13.5px;color:var(--bad)}}
+</style></head><body><div class="c"><img src="/icon.svg" width="60" height="60" alt="">
+<h1>{html.escape(NAME)}</h1><p>由「{who}」監看中，請到那邊看這台</p>
+<details><summary>取消被監看</summary><form><input type="password" placeholder="這台的密碼或 PIN 碼" autocomplete="current-password" required>
+<button>取消被監看</button><div class="m"></div></form></details></div>
+<script>
+document.querySelector("form").addEventListener("submit", async e => {{
+  e.preventDefault();
+  const b = e.target.querySelector("button"), m = e.target.querySelector(".m");
+  b.disabled = true; m.textContent = "";
+  try {{
+    const r = await fetch("/api/pair", {{method:"POST", headers:{{"Content-Type":"application/json"}},
+      body:JSON.stringify({{action:"unwatch", pw:e.target.querySelector("input").value.trim()}})}});
+    const d = await r.json().catch(() => ({{}}));
+    if (d.ok) return location.reload();
+    m.textContent = d.message || "沒有成功，請再試一次";
+  }} catch(err) {{ m.textContent = "連線失敗，請稍後再試"; }}
+  b.disabled = false;
+}});
+</script></body></html>"""
 
 
 # ───────────────────────── Telegram 通知 ─────────────────────────
@@ -2927,7 +3044,7 @@ def ev_line(e):
         return "🔄 主機重新開機了"
     if k == "info" and "登入了主機" in t:
         return "🔑 " + t
-    if k == "info" and ("配對" in t or t.startswith(("新增了主機", "移除了主機"))):
+    if k == "info" and ("配對" in t or "監看" in t):
         return "🔗 " + t                               # 主機之間的連線有變動
     if k == "info" and ("密碼" in t or "手機金鑰" in t or "PIN" in t):
         return "🔐 " + t                               # 登入方式有變動：換密碼、手機金鑰、PIN 碼
@@ -2950,7 +3067,9 @@ def alert_loop():
     offline_count, down, seen_ev = {}, set(), {}
     while True:
         try:
-            if TG_BOT and TG_CHAT:
+            if watchers():                     # 被監看：事件由主要主機轉發，這邊只注意主要主機有沒有失聯
+                watch_check()
+            elif TG_BOT and TG_CHAT:
                 for s in all_status():
                     key, name = s.get("node") or "", s.get("name") or "主機"
                     if not s.get("online"):
@@ -2984,6 +3103,8 @@ def alert_loop():
                     TG_SENT[key] = evs[-1]["t"]
             else:
                 TG_SENT.clear()                         # 關閉期間不累積，重新開啟時從那一刻開始通知
+            if PEERS:
+                peer_beats()
             tg_cleanup()
         except Exception as e:  # noqa: BLE001
             log("通知檢查失敗：", e)
@@ -3988,7 +4109,8 @@ class Handler(BaseHTTPRequestHandler):
             return self.proxy_cloud()
         path = urllib.parse.urlsplit(self.path).path
         if path == "/":
-            return self.send(200, PAGE, "text/html; charset=utf-8")
+            w = watchers()
+            return self.send(200, watch_page(w) if w else page(), "text/html; charset=utf-8")
         if path == "/manifest.webmanifest":
             return self.send(200, MANIFEST, "application/manifest+json", cache=True)
         if path == "/apple-touch-icon.png":
@@ -4150,6 +4272,22 @@ class Handler(BaseHTTPRequestHandler):
             return self.send(200, json.dumps({"ok": True, "token": TOKEN}))
         if u.path == "/api/pair":                    # 還沒登入：主要主機拿配對暗號來對（或主要主機移除這台時把鑰匙作廢）
             d = self.jbody(body)
+            if d.get("action") == "unwatch":         # 被監看的那頁：用這台的密碼或 PIN 碼取消
+                pw = str(d.get("pw") or "")
+                ok = bool(pw) and hmac.compare_digest(pw.encode(), TOKEN.encode())
+                msg = "密碼不對"
+                if not ok and re.fullmatch(r"[0-9]{4,8}", pw) and pin_load():
+                    ok, msg = pin_login(pw)
+                if not ok:
+                    time.sleep(1)
+                    return self.send(401, json.dumps({"ok": False, "message": msg}, ensure_ascii=False))
+                ok, msg = pair_unwatch()
+                return self.send(200 if ok else 400, json.dumps({"ok": ok, "message": msg}, ensure_ascii=False))
+            if d.get("action") == "beat":            # 主要主機的心跳
+                if not self.authed():
+                    return self.send(401, '{"error":"密碼錯誤"}')
+                pair_beat_store(d.get("tg"))
+                return self.send(200, '{"ok":true}')
             if d.get("action") == "forget":
                 if not self.authed():
                     return self.send(401, '{"error":"密碼錯誤"}')
@@ -4303,7 +4441,14 @@ class Handler(BaseHTTPRequestHandler):
         self.send(200 if ok else 400, json.dumps({"ok": ok, "message": msg}, ensure_ascii=False))
 
 
-PAGE = load_page()
+PAGE = None if watchers() else load_page()       # 被監看的主機不載入完整網頁
+
+
+def page():
+    global PAGE
+    if PAGE is None:                              # 取消被監看後第一次打開才載入
+        PAGE = load_page()
+    return PAGE
 
 
 def main():
@@ -4321,6 +4466,9 @@ def main():
     srv.serve_forever()
 
 
+if __name__ == "__main__" and sys.argv[1:2] == ["--unwatch"]:      # 忘了密碼時：在主機上取消被監看
+    print(pair_unwatch()[1])
+    sys.exit(0)
 if __name__ == "__main__" and sys.argv[1:2] == ["--pair-code"]:   # 安裝畫面用：產生配對暗號
     ok, out = pair_code(sys.argv[2] if len(sys.argv) > 2 else "")
     print(out)

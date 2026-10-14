@@ -1232,7 +1232,7 @@ function peerModal(s){
   setTimeout(() => q("url").focus(), 60);
 }
 /* 編輯主機：名稱＋管理後台網址 */
-function hostModal(name, links, removable){
+function hostModal(name, links){
   return new Promise(res => {
     const v = document.createElement("div"); v.className = "veil";
     const row = (x = {name:"", url:""}) => `<div class="lrow"><input class="field ln" maxlength="30" placeholder="名稱，例如 3x-ui" value="${esc(x.name)}"><input class="field lu" inputmode="url" autocomplete="off" spellcheck="false" placeholder="https://你的網域:2053/路徑/" value="${esc(x.url)}"><button type="button" class="iconbtn" data-del title="刪掉這個連結">${I("x")}</button></div>`;
@@ -1244,12 +1244,12 @@ function hostModal(name, links, removable){
           <div class="lrows">${(links.length ? links : [{name:"", url:""}]).map(row).join("")}</div>
           <button type="button" class="ubtn ghost addl" data-add>＋ 新增連結</button></div>
       </div>
-      <div class="btns ${removable ? "three" : ""}">${removable ? `<button class="ubtn ghost" data-rm>移除主機</button>` : ""}<button class="ubtn ghost" data-r="0">取消</button><button class="ubtn" data-r="1">儲存</button></div></div>`;
+      <div class="btns"><button class="ubtn ghost" data-r="0">取消</button><button class="ubtn" data-r="1">儲存</button></div></div>`;
     $("#layer").appendChild(v);
     const box = v.querySelector(".lrows");
     const sync = () => { v.querySelector("[data-add]").style.display = box.children.length >= 6 ? "none" : ""; };
     const done = ok => { if (v._d) return; v._d = 1; v.classList.add("closing");
-      const val = ok === "rm" ? {remove: true} : ok ? {name: v.querySelector('[data-k="name"]').value.trim(),
+      const val = ok ? {name: v.querySelector('[data-k="name"]').value.trim(),
         links: [...box.querySelectorAll(".lrow")].map(r => ({name: r.querySelector(".ln").value.trim(), url: r.querySelector(".lu").value.trim()})).filter(x => x.url)} : null;
       setTimeout(() => { v.remove(); res(val); }, 360); };
     v._esc = () => done(0);
@@ -1258,7 +1258,6 @@ function hostModal(name, links, removable){
     v.addEventListener("click", e => {
       if (e.target === v) return done(0);
       const b = e.target.closest("[data-r]"); if (b) return done(+b.dataset.r);
-      if (e.target.closest("[data-rm]")) return done("rm");
       if (e.target.closest("[data-add]")) { box.insertAdjacentHTML("beforeend", row()); const r = box.lastElementChild;
         if (canAnim()) r.animate([{opacity:0, transform:"translateY(-4px)"}, {opacity:1, transform:"none"}], {duration:T.mid, easing:EASE});
         r.querySelector(".ln").focus(); return sync(); }
@@ -2188,9 +2187,8 @@ document.addEventListener("click", async e => {
     e.stopPropagation();
     const old = rn.dataset.name, node = rn.dataset.rename, hs = LIST.find(x => (x.node || "") === node);
     const oldl = hs ? linksOf(hs).filter(x => !x.fixed) : [];
-    const r0 = await hostModal(old, oldl, !!node);
+    const r0 = await hostModal(old, oldl);
     if (!r0) return;
-    if (r0.remove) return rmHost(node, old);
     const post = (path, body) => fetch(path + "?node=" + encodeURIComponent(node), {method:"POST", headers:{"X-Token":getTok(), "Content-Type":"application/json"}, body:JSON.stringify(body)})
       .then(async r => { const d = await r.json().catch(()=>({})); if (!(r.ok && d.ok)) throw new Error(d.message || d.error || (r.status === 404 ? "那台主機還沒更新到新版" : "儲存失敗")); return d; });
     try {
