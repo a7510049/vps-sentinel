@@ -686,6 +686,7 @@ a.plink:hover{color:var(--a1)}
 .dialog .big svg{width:26px;height:26px}
 .dialog h3{font-size:var(--fs-xl);font-weight:900}
 .dialog p{color:var(--sub);font-size:var(--fs-m);margin-top:6px;white-space:pre-line;font-weight:600}
+.dialog p a{color:var(--accent);font-weight:800;text-decoration:none;margin-left:4px}
 .dialog .field{margin-top:16px;text-align:center}
 .dialog .btns{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:20px}
 .dialog .btns.one{grid-template-columns:1fr}

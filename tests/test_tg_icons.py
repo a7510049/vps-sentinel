@@ -13,7 +13,7 @@ EVENTS = [
     ("info", "PIN 碼登入已設定"), ("info", "PIN 碼登入已關閉"), ("warn", "PIN 碼連續輸錯 5 次，暫停 15 分鐘"),
     ("bad", "PIN 碼累計輸錯 20 次，已自動關閉"), ("warn", "安全憑證再 7 天到期"), ("bad", "記憶體不夠了"),
     ("info", "「主要主機」開始監看這台主機"), ("info", "解除了「主要主機」的配對"), ("info", "開始監看「新主機」"),
-    ("info", "不再監看「新主機」"), ("info", "已取消被「主要主機」監看"), ("ok", "其他好消息"), ("info", "其他一般消息"), ("weird", "不認得的種類"),
+    ("info", "不再監看「新主機」"), ("bad", "重新開機失敗"), ("info", "已取消被「主要主機」監看"), ("ok", "其他好消息"), ("info", "其他一般消息"), ("weird", "不認得的種類"),
 ]
 
 
@@ -39,6 +39,10 @@ class TgIcons(unittest.TestCase):
     def test_pairing_icon(self):
         self.assertEqual(S.ev_line({"kind": "info", "text": "開始監看「新主機」"}), "🔗 開始監看「新主機」")
         self.assertEqual(S.ev_line({"kind": "info", "text": "哨兵開始監看這台主機"}), "")
+
+    def test_reboot_lines(self):
+        self.assertEqual(S.ev_line({"kind": "info", "text": "從網頁重新開機"}), "")   # 重開前已經直接傳過了
+        self.assertEqual(S.ev_line({"kind": "bad", "text": "重新開機失敗"}), "❌ 重新開機失敗")
 
 
 if __name__ == "__main__":

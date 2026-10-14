@@ -40,7 +40,7 @@ from collections import deque
 from concurrent.futures import ThreadPoolExecutor
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
-VERSION = "1.49"
+VERSION = "1.50"
 
 # ───────────────────────── 哨兵備份檔（.vsbk）─────────────────────────
 # 哨兵專用的備份格式：外面是自己的檔案格式，裡面用的是成熟、標準的加密方法（不自己發明加密）：
@@ -2879,6 +2879,105 @@ def watch_check():
     WATCH["down"] = gone
 
 
+# ───────────────────────── 從網頁重新開機 ─────────────────────────
+# 要先拿到傳到 Telegram 的一次性驗證碼（沒設定 Telegram 就改輸入這台的密碼或 PIN 碼），免得被隨手重開
+
+REBOOT_MIN, REBOOT_TRIES = 5, 5                      # 驗證碼幾分鐘內有效、最多輸錯幾次
+REBOOT_CMD = os.environ.get("SENTINEL_REBOOT_CMD", "systemctl reboot").split()   # 測試時換成不會真的重開的指令
+REBOOT = {"code": "", "t": 0, "tries": 0, "msg": None, "going": False}
+REBOOT_LK = threading.Lock()
+
+
+def reboot_tg():
+    """這台能用的 Telegram：自己設定的；被監看的主機用主要主機給的"""
+    if TG_BOT and TG_CHAT:
+        return TG_BOT, TG_CHAT
+    tg = pair_load().get("tg") or {}
+    return (tg["bot"], tg["chat"]) if tg.get("bot") and tg.get("chat") else None
+
+
+def reboot_ask():
+    """傳驗證碼到 Telegram。回傳 (成功與否, 結果)"""
+    tg = reboot_tg()
+    if not tg:
+        return True, {"ok": True, "mode": "pw"}
+    with REBOOT_LK:
+        if REBOOT["going"]:
+            return False, {"ok": False, "message": "已經在重新開機了"}
+        if REBOOT["code"] and time.time() - REBOOT["t"] < 30:      # 連按不要一直傳
+            return True, {"ok": True, "mode": "tg", "message": "驗證碼剛傳過，請看 Telegram"}
+        old, code = REBOOT["msg"], f"{secrets.randbelow(10 ** 6):06d}"
+        REBOOT.update(code=code, t=time.time(), tries=0, msg=None)
+    if old:
+        tg_api(old[0], "deleteMessage", {"chat_id": old[1], "message_id": old[2]})
+    text = f"🔐 <b>{html.escape(NAME)}</b>　重新開機驗證碼：<code>{code}</code>（{REBOOT_MIN} 分鐘內有效）"
+    d, err = tg_api(tg[0], "sendMessage", {"chat_id": tg[1], "text": text, "parse_mode": "HTML"})
+    if err:
+        with REBOOT_LK:
+            REBOOT.update(code="")
+        return False, {"ok": False, "message": f"驗證碼傳不出去：{err}"}
+    with REBOOT_LK:
+        if REBOOT["code"] == code:
+            REBOOT["msg"] = (tg[0], tg[1], d["result"]["message_id"])
+    log("重新開機驗證碼已傳到 Telegram")
+    return True, {"ok": True, "mode": "tg"}
+
+
+def reboot_check(given):
+    """回傳 (通過與否, 訊息)"""
+    given = str(given or "").strip()
+    if not reboot_tg():                             # 沒有 Telegram：用這台的密碼或 PIN 碼
+        if given and hmac.compare_digest(given.encode(), TOKEN.encode()):
+            return True, ""
+        if re.fullmatch(r"[0-9]{4,8}", given) and pin_load():
+            return pin_login(given)
+        return False, "密碼不對"
+    with REBOOT_LK:
+        if not REBOOT["code"] or time.time() - REBOOT["t"] > REBOOT_MIN * 60:
+            REBOOT["code"] = ""
+            return False, "驗證碼過期了，請重新傳送"
+        if re.fullmatch(r"[0-9]{6}", given) and hmac.compare_digest(given, REBOOT["code"]):
+            REBOOT["code"] = ""                     # 用一次就失效
+            return True, ""
+        REBOOT["tries"] += 1
+        if REBOOT["tries"] >= REBOOT_TRIES:
+            REBOOT["code"] = ""
+            return False, f"輸錯 {REBOOT_TRIES} 次，驗證碼已失效，請重新傳送"
+        return False, "驗證碼不對"
+
+
+def reboot_go(given):
+    """驗證通過就在幾秒後重新開機（先讓網頁收到回覆）"""
+    with REBOOT_LK:
+        if REBOOT["going"]:
+            return False, "已經在重新開機了"
+    ok, msg = reboot_check(given)
+    if not ok:
+        return False, msg
+    with REBOOT_LK:
+        REBOOT["going"] = True
+        msg_old, REBOOT["msg"] = REBOOT["msg"], None
+    log("從網頁重新開機")
+    COL.add_event("info", "從網頁重新開機")
+    tg = reboot_tg()
+
+    def later():
+        if msg_old:                                 # 用過的驗證碼訊息刪掉
+            tg_api(msg_old[0], "deleteMessage", {"chat_id": msg_old[1], "message_id": msg_old[2]})
+        if tg:                                      # 等不到一般通知流程就重開了：直接傳
+            tg_api(tg[0], "sendMessage", {"chat_id": tg[1], "parse_mode": "HTML",
+                                          "text": tg_host_msg(NAME, ["🔄 從網頁重新開機"])})
+        time.sleep(2)
+        COL.save()
+        rc, _ = run(REBOOT_CMD, 30)
+        if rc != 0:
+            with REBOOT_LK:
+                REBOOT["going"] = False
+            COL.add_event("bad", "重新開機失敗")
+    threading.Thread(target=later, daemon=True).start()
+    return True, "正在重新開機"
+
+
 def watch_page(names):
     who = html.escape("、".join(names))
     return f"""<!doctype html><html lang="zh-Hant"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
@@ -3075,6 +3174,10 @@ def ev_line(e):
         return ("✅ " if k == "ok" else "❌ ") + t
     if t == "主機重新開機了":
         return "🔄 主機重新開機了"
+    if t == "從網頁重新開機":                       # 重開前已經直接傳了，不用再傳一次
+        return ""
+    if t == "重新開機失敗":
+        return "❌ 重新開機失敗"
     if k == "info" and "登入了主機" in t:
         return "🔑 " + t
     if k == "info" and ("配對" in t or "監看" in t):
@@ -4298,7 +4401,7 @@ class Handler(BaseHTTPRequestHandler):
         u = urllib.parse.urlsplit(self.path)
         if u.path not in ("/api/update", "/api/rename", "/api/traffic", "/api/telegram", "/api/links", "/api/self", "/api/cloud-login", "/api/peer",
                           "/api/token", "/api/passkey", "/api/passkey-login", "/api/pin", "/api/pin-login", "/api/backup", "/api/backup-store",
-                          "/api/restore-upload", "/api/restore-run", "/api/pair", "/api/pair-admin"):
+                          "/api/restore-upload", "/api/restore-run", "/api/pair", "/api/pair-admin", "/api/reboot"):
             return self.send(404, '{"error":"找不到"}')
         if u.path in ("/api/restore-upload", "/api/restore-run"):   # 網頁還原：要有安裝時給的代碼（或已經登入）
             if not (self.authed() or rsw_code_ok(self.headers.get("X-Restore-Code", ""))):
@@ -4419,6 +4522,15 @@ class Handler(BaseHTTPRequestHandler):
             return self.send(200 if ok else 400, json.dumps({"ok": ok, "message": msg, "test_failed": tf}, ensure_ascii=False))
         if u.path == "/api/passkey":
             return self.passkey(body)
+        if u.path == "/api/reboot":                  # 先要驗證碼（ask），再帶著驗證碼重新開機（go）
+            d = self.jbody(body)
+            if d.get("action") == "go":
+                ok, msg = reboot_go(d.get("code"))
+                if not ok:
+                    time.sleep(1)
+                return self.send(200 if ok else 400, json.dumps({"ok": ok, "message": msg}, ensure_ascii=False))
+            ok, res = reboot_ask()
+            return self.send(200 if ok else 400, json.dumps(res, ensure_ascii=False))
         if u.path == "/api/backup":
             d = self.jbody(body)
             if d.get("action") == "run":
