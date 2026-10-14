@@ -40,7 +40,7 @@ from collections import deque
 from concurrent.futures import ThreadPoolExecutor
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
-VERSION = "1.52"
+VERSION = "1.53"
 
 # ───────────────────────── 哨兵備份檔（.vsbk）─────────────────────────
 # 哨兵專用的備份格式：外面是自己的檔案格式，裡面用的是成熟、標準的加密方法（不自己發明加密）：
@@ -2983,14 +2983,14 @@ def watch_page(names):
     return f"""<!doctype html><html lang="zh-Hant"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>{html.escape(NAME)}・VPS 哨兵</title><link rel="icon" href="/icon.svg"><link rel="apple-touch-icon" href="/apple-touch-icon.png">
 <style>
-:root{{color-scheme:light dark;--bg:#eef1f7;--card:rgba(255,255,255,.7);--text:#101828;--sub:rgba(16,24,40,.55);--line:rgba(16,24,40,.1);--bad:#f04438}}
+:root{{color-scheme:light dark;--bg:#eef1f7;--card:rgba(255,255,255,.7);--text:#101828;--sub:rgba(16,24,40,.6);--line:rgba(16,24,40,.1);--bad:#d92d20}}
 @media (prefers-color-scheme:dark){{:root{{--bg:#06080f;--card:rgba(255,255,255,.06);--text:#f1f4fa;--sub:rgba(226,232,245,.58);--line:rgba(255,255,255,.1);--bad:#f97066}}}}
 *{{box-sizing:border-box}}
 body{{margin:0;min-height:100vh;display:grid;place-items:center;padding:16px;background:var(--bg);color:var(--text);
   font:15px/1.6 ui-rounded,-apple-system,BlinkMacSystemFont,"PingFang TC","Noto Sans TC","Microsoft JhengHei",sans-serif}}
 .c{{width:100%;max-width:360px;padding:30px 24px 22px;border-radius:30px;background:var(--card);text-align:center;
   box-shadow:inset 0 0 0 1px var(--line),0 14px 36px -16px rgba(30,50,110,.3)}}
-h1{{margin:12px 0 4px;font-size:24px}}p{{margin:0;color:var(--sub);font-weight:600}}
+h1{{margin:12px 0 4px;font-size:27px}}p{{margin:0;color:var(--sub);font-weight:600}}
 details{{margin-top:20px}}summary{{cursor:pointer;color:var(--sub);font-size:13.5px;font-weight:700;list-style:none}}
 input,button{{width:100%;font:inherit;font-size:16px;border:0;border-radius:14px;padding:12px 14px;margin-top:10px}}
 input{{background:var(--line);color:var(--text)}}button{{cursor:pointer;font-weight:800;color:#fff;background:linear-gradient(135deg,#38bdf8,#6366f1)}}

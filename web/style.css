@@ -1,14 +1,16 @@
 /* ═════════ 色彩：淺色 ═════════ */
 :root{
   --font:"Nunito",ui-rounded,"SF Pro Rounded",-apple-system,BlinkMacSystemFont,"PingFang TC","Noto Sans TC","Microsoft JhengHei",sans-serif;
-  --bg:#eef1f7; --text:#101828; --sub:rgba(16,24,40,.55); --faint:rgba(16,24,40,.35); --line:rgba(16,24,40,.08);
+  --bg:#eef1f7; --text:#101828; --sub:rgba(16,24,40,.6); --faint:rgba(16,24,40,.5); --line:rgba(16,24,40,.08);
   --ga:.56; --glass:rgba(255,255,255,var(--ga)); --glass2:rgba(255,255,255,calc(var(--ga) * .7));
   --blur:28px; --spec:rgba(255,255,255,.95); --rim:rgba(255,255,255,.6); --edge:rgba(16,24,60,.07);
   --shadow:0 1px 3px rgba(16,24,60,.05),0 14px 36px -16px rgba(30,50,110,.26);
   --hi1:rgba(255,255,255,.95); --hi2:rgba(255,255,255,.55); --hi3:rgba(255,255,255,.22); --hi4:rgba(255,255,255,.6);
   --track:rgba(16,24,60,.07); --veil:rgba(240,243,250,.5);
-  --ok:#12b76a; --warn:#f79009; --bad:#f04438;
-  --zoom:1; --pad:18px; --gap:16px;
+  --ok:#079455; --warn:#dc6803; --bad:#d92d20;                               /* 狀態色（文字、圓點）：淺色底上要看得清楚，所以比深色模式深一點 */
+  --warn-hi:#ffc04d; --warn-lo:#ff9500; --bad-hi:#ff7a70; --bad-lo:#ff3b30;  /* 狀態色的漸層（進度條、圓環、按鈕、方塊），上淺下深 */
+  --zoom:1; --pad:18px; --gap:16px;                                           /* 卡片內距／卡片之間的距離 */
+  color-scheme:light;                                                          /* 瀏覽器內建的控制項（滑桿、下拉選單、捲軸）跟著深淺模式 */
   /* ── 共用規則（所有元件只能用這些值） ── */
   --r-sm:8px; --r-md:14px; --r-lg:20px; --r-xl:30px; --r-pill:999px;          /* 圓角：小元件／中區塊／大區塊／卡片與面板／膠囊 */
   --fs-xs:11.5px; --fs-s:12.5px; --fs-m:13.5px; --fs-l:15.5px; --fs-xl:18px; --fs-2xl:27px; --fs-3xl:36px;   /* 字級 */
@@ -20,16 +22,21 @@
   --sh-pop:0 16px 40px -14px rgba(0,0,0,.45),inset 0 0 0 1px var(--rim);      /* 浮層（選單、提示框） */
   --sh-accent:0 14px 34px -12px var(--a1);                                     /* 主題色光暈 */
   --inset:var(--glass2);                                                       /* 內嵌區塊的底色 */
+  --hl:inset 0 1px 0 rgba(255,255,255,.4);                                     /* 實心按鈕、方塊圖示上緣的亮邊 */
+  --sh-tile:inset 0 1px 0 rgba(255,255,255,.35),0 4px 10px -4px rgba(0,0,0,.35);   /* 方塊圖示 */
+  --z-bar:5; --z-ptr:30; --z-fade:45; --z-veil:50; --z-toast:60; --z-menu:70;   /* 疊放順序：頂部列／下拉更新／換主題淡出／視窗遮罩／通知與提示框／選單與開場畫面 */
 }
 /* ═════════ 色彩：深色 ═════════ */
 [data-mode="dark"]{
-  --bg:#06080f; --text:#f1f4fa; --sub:rgba(226,232,245,.58); --faint:rgba(226,232,245,.32); --line:rgba(255,255,255,.075);
+  --bg:#06080f; --text:#f1f4fa; --sub:rgba(226,232,245,.58); --faint:rgba(226,232,245,.45); --line:rgba(255,255,255,.075);
   --ga:.07; --glass:rgba(255,255,255,var(--ga)); --glass2:rgba(255,255,255,calc(var(--ga) * .75));
   --spec:rgba(255,255,255,.26); --rim:rgba(255,255,255,.09); --edge:rgba(0,0,0,.5);
   --shadow:0 2px 6px -2px rgba(0,0,0,.35),0 24px 50px -24px rgba(0,0,0,.9);
   --hi1:rgba(255,255,255,.34); --hi2:rgba(255,255,255,.09); --hi3:rgba(255,255,255,.03); --hi4:rgba(255,255,255,.13);
   --track:rgba(255,255,255,.07); --veil:rgba(4,6,12,.55);
   --ok:#32d583; --warn:#fdb022; --bad:#f97066;
+  color-scheme:dark;
+  --solid:#1a1f2e;                                                             /* 輕量模式的實心底色 */
 }
 /* ═════════ 主題色 ═════════ */
 [data-accent="blue"]  {--a1:#38bdf8; --a2:#6366f1; --a3:#22d3ee}
@@ -98,7 +105,7 @@ button{font:inherit;color:inherit}
 .dot.pulse.bad::after{animation-duration:var(--t-slow)}
 @keyframes ring{0%{transform:scale(.55);opacity:.7}100%{transform:scale(1.9);opacity:0}}
 .ico{width:30px;height:30px;border-radius:var(--r-sm);display:grid;place-items:center;flex:none;color:#fff;
-  box-shadow:inset 0 1px 0 rgba(255,255,255,.35),0 4px 10px -4px rgba(0,0,0,.35)}
+  box-shadow:var(--sh-tile)}
 .ico svg{width:17px;height:17px}
 /* 一個概念＝一個圖示＋一個顏色，曲線、圖例、長條都用同一個顏色 */
 :root{--c-cpu:#0a84ff;--c-mem:#bf5af2;--c-disk:#ff9f0a;--c-load:#30d158;--c-rx:#32c5e6;--c-tx:#ff375f;
@@ -126,8 +133,8 @@ button{font:inherit;color:inherit}
 .ico.quote{background:linear-gradient(160deg,#6cc4ff,#1f7fd6)}     /* 心情小語：海藍 */
 .ico.theme{background:var(--grad)}                                  /* 哨兵本身的動作（更新、編輯）：主題色 */
 /* 確認視窗的方塊：要小心的動作（重新開機、換密碼）橘色，刪除／移除紅色 */
-.ico.warn{background:linear-gradient(160deg,#ffc04d,#ff9500)}
-.ico.bad{background:linear-gradient(160deg,#ff7a70,#ff3b30)}
+.ico.warn{background:linear-gradient(160deg,var(--warn-hi),var(--warn-lo))}
+.ico.bad{background:linear-gradient(160deg,var(--bad-hi),var(--bad-lo))}
 .ico.sm{width:24px;height:24px;border-radius:var(--r-sm)}.ico.sm svg{width:14px;height:14px}
 .flag{width:24px;height:18px;object-fit:cover;border-radius:var(--r-sm);flex:none;box-shadow:0 0 0 1px rgba(127,127,127,.25),0 3px 8px -3px rgba(0,0,0,.4)}
 .emoji{font-size:var(--fs-xl);line-height:1}
@@ -140,11 +147,11 @@ button{font:inherit;color:inherit}
 .cap svg{width:16px;height:16px}.cap:active{transform:scale(.93)}
 .ubtn{border:0;cursor:pointer;border-radius:var(--r-pill);padding:10px 17px;font-size:var(--fs-m);font-weight:800;color:#fff;background:var(--grad);
   display:inline-flex;align-items:center;gap:7px;letter-spacing:.2px;
-  box-shadow:inset 0 1px 0 rgba(255,255,255,.4),0 10px 24px -10px var(--a2);transition:transform var(--t-mid) var(--spring),opacity var(--t-mid),filter var(--t-mid)}
+  box-shadow:var(--hl),0 10px 24px -10px var(--a2);transition:transform var(--t-mid) var(--spring),opacity var(--t-mid),filter var(--t-mid)}
 .ubtn:hover{filter:brightness(1.06)}.ubtn:active{transform:scale(.94)}.ubtn[disabled]{opacity:.5;cursor:default;filter:saturate(.7)}
 .ubtn.ghost{background:var(--inset);color:var(--text);box-shadow:var(--ring)}
-.ubtn.warn{background:linear-gradient(135deg,#ffb020,#ff9500);box-shadow:inset 0 1px 0 rgba(255,255,255,.4),0 10px 24px -10px #ff9500}
-.ubtn.bad{background:linear-gradient(135deg,#ff6a5f,#ff3b30);box-shadow:inset 0 1px 0 rgba(255,255,255,.4),0 10px 24px -10px #ff3b30}
+.ubtn.warn{background:linear-gradient(135deg,var(--warn-hi),var(--warn-lo));box-shadow:var(--hl),0 10px 24px -10px var(--warn-lo)}
+.ubtn.bad{background:linear-gradient(135deg,var(--bad-hi),var(--bad-lo));box-shadow:var(--hl),0 10px 24px -10px var(--bad-lo)}
 .spin{width:13px;height:13px;border:2px solid currentColor;border-right-color:transparent;border-radius:50%;animation:sp .8s linear infinite}
 @keyframes sp{to{transform:rotate(360deg)}}
 @keyframes rise{from{opacity:0;transform:translateY(18px) scale(.975)}}
@@ -155,7 +162,7 @@ button{font:inherit;color:inherit}
 .track{height:8px;background:var(--track);border-radius:var(--r-pill);overflow:hidden;contain:strict;width:100%}
 .fill{height:100%;border-radius:var(--r-pill);background:var(--grad);position:relative;overflow:hidden;min-width:8px;
   transition:width var(--t-slow) var(--ease);animation:grow var(--t-slow) var(--ease) both;transform-origin:left}
-.fill.w{background:linear-gradient(90deg,#fbbf24,#f97316)}.fill.b{background:linear-gradient(90deg,#fb7185,#e11d48)}
+.fill.w{background:linear-gradient(90deg,var(--warn-hi),var(--warn-lo))}.fill.b{background:linear-gradient(90deg,var(--bad-hi),var(--bad-lo))}
 .fill::after{content:"";position:absolute;inset:0;background:linear-gradient(90deg,transparent,rgba(255,255,255,.5),transparent);
   transform:translateX(-100%);animation:sweep 3s linear infinite}
 @keyframes grow{from{transform:scaleX(0)}}
@@ -172,7 +179,7 @@ button{font:inherit;color:inherit}
 .legend b.num{min-width:5.8em}
 
 /* ═════════ 頂部（手機） ═════════ */
-.bar{position:sticky;top:0;z-index:5;margin:0 -16px;padding:calc(env(safe-area-inset-top) + 10px) 16px 10px;
+.bar{position:sticky;top:0;z-index:var(--z-bar);margin:0 -16px;padding:calc(env(safe-area-inset-top) + 10px) 16px 10px;
   display:flex;align-items:center;gap:8px;transition:background var(--t-mid),box-shadow var(--t-mid)}
 .scrolled .bar{background:var(--inset);-webkit-backdrop-filter:blur(24px) saturate(180%);backdrop-filter:blur(24px) saturate(180%);box-shadow:0 1px 0 var(--line)}
 .bar .mini{font-weight:800;font-size:var(--fs-l);opacity:0;transform:translateY(6px);transition:var(--t-mid) var(--ease)}
@@ -415,14 +422,14 @@ button{font:inherit;color:inherit}
 .charts .cbox:has(.yax)>svg.chart{right:auto;width:calc(100% - var(--yw) - 8px)}
 .charts .panel:has(.yax) .xl{padding-right:70px}   /* 「現在」對齊曲線的右邊 */
 .cbox{cursor:crosshair}
-#ctip{position:fixed;z-index:60;pointer-events:none;min-width:130px;padding:9px 12px;border-radius:var(--r-md);font-size:var(--fs-s);font-weight:700;
+#ctip{position:fixed;z-index:var(--z-toast);pointer-events:none;min-width:130px;padding:9px 12px;border-radius:var(--r-md);font-size:var(--fs-s);font-weight:700;
 
-  box-shadow:0 10px 30px -10px rgba(0,0,0,.35),var(--ring);opacity:0;transition:opacity var(--t-fast)}
+  box-shadow:var(--sh-pop);opacity:0;transition:opacity var(--t-fast)}
 #ctip .tt{color:var(--sub);font-size:var(--fs-xs);margin-bottom:5px}
 #ctip .tr2{display:flex;align-items:center;gap:7px;line-height:1.7}
 #ctip .tr2 i{width:7px;height:7px;border-radius:50%;flex:none}
 #ctip .tr2 b{margin-left:auto;padding-left:14px;font-weight:900}
-#cline{position:fixed;z-index:59;width:0;border-left:1px dashed var(--faint);pointer-events:none;opacity:0;transition:opacity var(--t-fast)}
+#cline{position:fixed;z-index:calc(var(--z-toast) - 1);width:0;border-left:1px dashed var(--faint);pointer-events:none;opacity:0;transition:opacity var(--t-fast)}
 #ctip.show,#cline.show{opacity:1}
 .lower>.panel{display:flex;flex-direction:column;min-height:0}
 .lower .trf{grid-column:span 2;container-type:inline-size}
@@ -574,7 +581,7 @@ a.plink,button.plink{color:var(--sub);text-decoration:none}
 .dialog .form .lrow .field{font-size:var(--fs-m);padding:10px 11px}
 .lrow .iconbtn{width:30px;height:30px}
 .addl{align-self:flex-start;padding:7px 14px;font-size:var(--fs-s)}
-.lmenu{position:fixed;z-index:70;min-width:170px;max-width:280px;padding:6px;border-radius:var(--r-md);display:flex;flex-direction:column;
+.lmenu{position:fixed;z-index:var(--z-menu);min-width:170px;max-width:280px;padding:6px;border-radius:var(--r-md);display:flex;flex-direction:column;
   box-shadow:var(--sh-pop)}
 .lmenu a{display:flex;align-items:center;gap:9px;padding:9px 12px;border-radius:var(--r-md);color:var(--text);text-decoration:none;font-size:var(--fs-m);font-weight:700;transition:background var(--t-fast)}
 .lmenu a:hover{background:var(--track)}
@@ -629,7 +636,7 @@ a.plink:hover{color:var(--ink)}
 .dialog .form .bkcmd{display:block;padding:10px 12px;border-radius:var(--r-sm);background:var(--inset);box-shadow:var(--ring);font:600 var(--fs-xs)/1.6 ui-monospace,SFMono-Regular,Menlo,monospace;color:var(--text);word-break:break-all;cursor:pointer;user-select:all}
 .dialog .form .bkcmd[hidden]{display:none}
 .bkhosts{display:flex;flex-wrap:wrap;gap:8px}
-.bkhosts .ubtn.on{background:var(--a1);color:#fff}
+.bkhosts .ubtn.on{background:var(--grad);color:#fff;box-shadow:none}
 .dialog .form .bknew .field{flex:1;font-size:var(--fs-m);padding:10px 12px}
 .dialog .form .bkon{flex-direction:row;align-items:center;justify-content:space-between;font-size:var(--fs-m);color:var(--text)}
 .evs{display:flex;flex-direction:column;gap:2px;max-height:330px;overflow-x:hidden;overflow-y:auto;margin:-8px -6px 0;padding:8px 6px 14px}
@@ -698,7 +705,7 @@ a.plink:hover{color:var(--ink)}
 @keyframes shake{20%,60%{transform:translateX(-8px)}40%,80%{transform:translateX(8px)}}
 
 /* ═════════ 對話框、設定面板、通知 ═════════ */
-.veil{position:fixed;inset:0;z-index:50;background:var(--veil);-webkit-backdrop-filter:blur(6px);backdrop-filter:blur(6px);
+.veil{position:fixed;inset:0;z-index:var(--z-veil);background:var(--veil);-webkit-backdrop-filter:blur(6px);backdrop-filter:blur(6px);
   display:flex;align-items:center;justify-content:center;padding:20px;animation:fadeIn var(--t-mid) ease both}
 .veil.closing{animation:fadeOut var(--t-mid) ease forwards;pointer-events:none}
 .dialog{width:100%;max-width:360px;border-radius:var(--r-xl);padding:24px 22px 18px;text-align:center;animation:pop var(--t-mid) var(--spring) both}
@@ -770,12 +777,18 @@ a.plink:hover{color:var(--ink)}
   transition:background var(--t-mid);box-shadow:var(--ring)}
 .tog::after{content:"";position:absolute;top:3px;left:3px;width:24px;height:24px;border-radius:50%;background:#fff;
   box-shadow:0 3px 8px rgba(0,0,0,.3);transition:transform var(--t-mid) var(--spring)}
-.tog:checked{background:var(--ok)}.tog:checked::after{transform:translateX(20px)}
+.tog:checked{background:var(--accent)}.tog:checked::after{transform:translateX(20px)}
 .slider{width:100%;display:flex;align-items:center;gap:10px;font-size:var(--fs-xs);color:var(--sub);font-weight:700}
-.slider input{flex:1;accent-color:var(--a2)}
+/* 滑桿：自己畫，深淺模式都跟其他控制項一樣（已拉的部分用主題色，圓鈕跟切換鈕同一種） */
+.slider input{flex:1;-webkit-appearance:none;appearance:none;height:6px;margin:0;border-radius:var(--r-pill);cursor:pointer;
+  background:linear-gradient(90deg,var(--a1),var(--a2)) 0 0/var(--v,50%) 100% no-repeat,var(--track);box-shadow:var(--ring)}
+.slider input::-webkit-slider-thumb{-webkit-appearance:none;width:22px;height:22px;border-radius:50%;background:#fff;box-shadow:var(--sh-thumb);
+  transition:transform var(--t-mid) var(--spring)}
+.slider input::-moz-range-thumb{width:22px;height:22px;border:0;border-radius:50%;background:#fff;box-shadow:var(--sh-thumb)}
+.slider input:active::-webkit-slider-thumb{transform:scale(1.12)}
 .reset{margin-top:20px;width:100%;justify-content:center}
 
-.toasts{position:fixed;left:50%;bottom:calc(env(safe-area-inset-bottom) + 22px);transform:translateX(-50%);z-index:60;
+.toasts{position:fixed;left:50%;bottom:calc(env(safe-area-inset-bottom) + 22px);transform:translateX(-50%);z-index:var(--z-toast);
   display:flex;flex-direction:column;align-items:center;gap:8px;pointer-events:none;width:max-content;max-width:92vw}
 .toast{border-radius:var(--r-pill);padding:11px 18px 11px 14px;font-size:var(--fs-m);font-weight:700;display:flex;align-items:center;gap:9px;
   animation:toastin var(--t-slow) var(--spring) both}
@@ -802,7 +815,7 @@ a.plink:hover{color:var(--ink)}
 body{overscroll-behavior-y:contain}
 .booting #app{opacity:0}
 #app{transition:opacity var(--t-mid) ease}
-#splash{position:fixed;inset:0;z-index:70;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px;pointer-events:none}
+#splash{position:fixed;inset:0;z-index:var(--z-menu);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px;pointer-events:none}
 #splash.out{animation:spOut var(--t-slow) var(--ease) forwards}
 @keyframes spOut{to{opacity:0;transform:scale(1.08)}}
 .sp-logo{position:relative;width:96px;height:96px;display:grid;place-items:center;animation:spIn var(--t-slow) var(--spring) both}
@@ -821,7 +834,7 @@ body{overscroll-behavior-y:contain}
 @keyframes msgIn{from{opacity:0;transform:translateY(6px)}}
 
 /* ═════════ 下拉重新整理 ═════════ */
-#ptr{position:fixed;left:50%;top:calc(env(safe-area-inset-top) + 8px);z-index:30;width:40px;height:40px;margin-left:-20px;border-radius:50%;
+#ptr{position:fixed;left:50%;top:calc(env(safe-area-inset-top) + 8px);z-index:var(--z-ptr);width:40px;height:40px;margin-left:-20px;border-radius:50%;
   display:grid;place-items:center;color:var(--text);transform:translateY(-70px);opacity:0;pointer-events:none}
 #ptr svg{width:19px;height:19px}
 #ptr.back{transition:transform var(--t-mid) var(--spring),opacity var(--t-mid)}
@@ -848,7 +861,7 @@ html::-webkit-scrollbar-thumb{background:color-mix(in srgb,var(--text) 22%,trans
 /* 浮在畫面上的小選單、提示框：跟著「玻璃效果」設定，但底下多墊一層，任何設定下字都看得清楚 */
 .glass.pop{background:linear-gradient(var(--glass),var(--glass)),color-mix(in srgb,var(--bg) 68%,transparent)}
 [data-lite="on"] .sheet,[data-lite="on"] .dialog,[data-lite="on"] .toast,[data-lite="on"] .pop{background:color-mix(in srgb,var(--bg) 92%,var(--glass))}
-[data-lite="on"][data-mode="dark"] .sheet,[data-lite="on"][data-mode="dark"] .dialog,[data-lite="on"][data-mode="dark"] .toast,[data-lite="on"][data-mode="dark"] .pop{background:color-mix(in srgb,#1a1f2e 94%,var(--a2))}
+[data-lite="on"][data-mode="dark"] .sheet,[data-lite="on"][data-mode="dark"] .dialog,[data-lite="on"][data-mode="dark"] .toast,[data-lite="on"][data-mode="dark"] .pop{background:color-mix(in srgb,var(--solid) 94%,var(--a2))}
 [data-lite="on"] .card,[data-lite="on"] .panel{transform:translateZ(0)}
 /* 主題色（國旗配色）切換時直接換，不做漸變：漸變的那半秒內整頁每一格都要重算顏色，手機上滑動會卡 */
 :root[data-lite="on"]{transition:background var(--t-mid)}
@@ -861,7 +874,7 @@ html::-webkit-scrollbar-thumb{background:color-mix(in srgb,var(--text) 22%,trans
 .perfx .glass,.perfx .veil,.perfx .bar,.perfx .sheet,.perfx .dialog,.perfx .toast,.perfx .pop{
   transition:background var(--t-slow) var(--ease),-webkit-backdrop-filter var(--t-slow) var(--ease),backdrop-filter var(--t-slow) var(--ease)!important}
 .perfx .grain{animation:fadeIn var(--t-slow) var(--ease)}
-.xfade{position:fixed;inset:0;z-index:45;pointer-events:none;animation:fadeOut var(--t-mid) var(--ease) forwards}
+.xfade{position:fixed;inset:0;z-index:var(--z-fade);pointer-events:none;animation:fadeOut var(--t-mid) var(--ease) forwards}
 /* ═════════ 無障礙／關閉動畫 ═════════ */
 [data-motion="off"] *,[data-motion="off"] *::before,[data-motion="off"] *::after{animation:none!important;transition:none!important}
 @media (prefers-reduced-motion:reduce){*,*::before,*::after{animation:none!important;transition:none!important}}
