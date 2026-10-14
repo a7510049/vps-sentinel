@@ -858,3 +858,4 @@ html::-webkit-scrollbar-thumb{background:color-mix(in srgb,var(--text) 22%,trans
 .quote{font-size:var(--fs-m);font-weight:700;color:var(--sub);margin-top:4px}
 .quote:empty{display:none}
 .greet .quote{font-size:var(--fs-s);margin-top:2px}
+.iconbtn.rmhost{color:var(--faint)}.iconbtn.rmhost:hover{color:var(--bad)}

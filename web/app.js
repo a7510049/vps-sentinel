@@ -57,6 +57,7 @@ const P = {
   sun:'<circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41"/>',
   quote:'<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/><path d="M8 9h8M8 13h5"/>',
   plus:'<path d="M12 5v14M5 12h14"/>',
+  trash:'<path d="M3 6h18M8 6V4a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v2M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6M10 11v6M14 11v6"/>',
   link:'<path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/>',
   chev:'<path d="m6 9 6 6 6-6"/>', x:'<path d="M18 6 6 18M6 6l12 12"/>',
   warn:'<path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3z"/><path d="M12 9v4M12 17h.01"/>',
@@ -226,10 +227,11 @@ const safeUrl = u => /^https?:\/\/[^\s"'<>]+$/i.test(u || "") ? u : "";
 const linksOf = s => (s.links || (s.panel ? [{name:"管理後台", url:s.panel}] : []))
   .map(x => x.fixed && s.cloud && s.cloud.login ? {...x, url: s.cloud.login} : x).filter(x => safeUrl(x.url));   // 雲端硬碟用一鍵登入網址
 const linkSt = x => x.up === false ? `打不開：${x.err || "連不上"}` : x.up ? `正常・${x.ms} 毫秒` : x.err ? "剛剛沒回應，再確認一次中…" : "還沒檢查";
-const editBtn = s => { if (!s.online) return ""; const L = linksOf(s);
+const rmBtn = s => s.node ? `<button class="iconbtn rmhost" title="移除主機" data-rmhost="${esc(s.node)}" data-name="${esc(s.name)}">${I("trash")}</button>` : "";
+const editBtn = s => { if (!s.online) return rmBtn(s); const L = linksOf(s);
   return `<button class="iconbtn" title="編輯名稱與常用連結" data-rename="${esc(s.node||"")}" data-name="${esc(s.name)}">${I("edit")}</button>`
   + (L.length === 1 ? `<a class="iconbtn plink ${L[0].up===false?"down":""}" href="${esc(L[0].url)}" target="_blank" rel="noopener noreferrer" title="打開 ${esc(L[0].name)}（${esc(linkSt(L[0]))}）">${I("ext")}</a>`
-    : L.length > 1 ? `<button class="iconbtn plink ${L.some(x=>x.up===false)?"down":""}" data-links="${esc(keyOf(s))}" title="常用連結">${I("ext")}</button>` : ""); };
+    : L.length > 1 ? `<button class="iconbtn plink ${L.some(x=>x.up===false)?"down":""}" data-links="${esc(keyOf(s))}" title="常用連結">${I("ext")}</button>` : "") + rmBtn(s); };
 function alerts(s){
   const k = t => esc(String(t).replace(/[\d.]+/g, ""));
   const al = (s.problems||[]).map(p=>`<div class="alert bad" data-key="b:${k(p)}">${I("warn")}${esc(p)}</div>`)
@@ -1685,6 +1687,11 @@ async function pinModal(){
   $("#layer").appendChild(v);
   const q = k => v.querySelector(`[data-k="${k}"]`), msg = v.querySelector(".msg");
   setTimeout(() => q("a").focus(), 60);
+  v.addEventListener("input", e => {                // 只留數字（全形數字也換成半形）
+    const f = e.target; if (!f.matches("[data-k]")) return;
+    const d = f.value.replace(/[０-９]/g, c => String.fromCharCode(c.charCodeAt(0) - 0xFEE0)).replace(/\D/g, "").slice(0, 8);
+    if (d !== f.value) f.value = d;
+  });
   return new Promise(res => {
     let busy = false;
     const done = () => { if (v._d) return; v._d = 1; v.classList.add("closing"); setTimeout(() => { v.remove(); res(); }, 360); };
@@ -1770,6 +1777,14 @@ async function pairModal(){
       if (d.ok) { code = d.code; draw(); } else { msg.className = "msg bad"; msg.textContent = d.message || "產生失敗"; }
     });
   });
+}
+async function rmHost(node, name){
+  if (!await modal({icon:"trash", cls:"bell", title:`移除「${name}」？`, text:"會同時解除配對，要加回來得重新配對。", ok:"移除"})) return;
+  const d = await pkCall("/api/peer", {action:"remove", name:node}, 1).catch(err => ({message:err.message}));
+  if (!d.ok) return toast(d.message || "移除失敗", "bad");
+  toast(`已移除「${name}」`);
+  if (SEL === node) { SEL = ""; store("vps-sel", ""); }
+  return tick();
 }
 async function addHostModal(){
   const v = document.createElement("div"); v.className = "veil";
@@ -2166,6 +2181,8 @@ document.addEventListener("click", async e => {
   const lk = t.closest("[data-links]");
   if (lk) { e.stopPropagation(); const s = LIST.find(x => keyOf(x) === lk.dataset.links); if (window._menu) return closeMenu(); return s && linksMenu(lk, s); }
   if (window._menu && !t.closest(".lmenu")) closeMenu();
+  const rm = t.closest("[data-rmhost]");
+  if (rm) { e.stopPropagation(); return rmHost(rm.dataset.rmhost, rm.dataset.name); }
   const rn = t.closest("[data-rename]");
   if (rn) {
     e.stopPropagation();
@@ -2173,14 +2190,7 @@ document.addEventListener("click", async e => {
     const oldl = hs ? linksOf(hs).filter(x => !x.fixed) : [];
     const r0 = await hostModal(old, oldl, !!node);
     if (!r0) return;
-    if (r0.remove) {
-      if (!await modal({icon:"x", cls:"bell", title:`移除「${old}」？`, text:"會同時解除配對，之後要再加回來得重新配對。", ok:"移除"})) return;
-      const d = await pkCall("/api/peer", {action:"remove", name:node}, 1).catch(err => ({message:err.message}));
-      if (!d.ok) return toast(d.message || "移除失敗", "bad");
-      toast(`已移除「${old}」`);
-      if (SEL === keyOf(hs)) { SEL = ""; store("vps-sel", ""); }
-      return tick();
-    }
+    if (r0.remove) return rmHost(node, old);
     const post = (path, body) => fetch(path + "?node=" + encodeURIComponent(node), {method:"POST", headers:{"X-Token":getTok(), "Content-Type":"application/json"}, body:JSON.stringify(body)})
       .then(async r => { const d = await r.json().catch(()=>({})); if (!(r.ok && d.ok)) throw new Error(d.message || d.error || (r.status === 404 ? "那台主機還沒更新到新版" : "儲存失敗")); return d; });
     try {
