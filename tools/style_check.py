@@ -90,6 +90,10 @@ for m in re.finditer(r"z-index:\s*(-?\d+)", body_css):
 # 浮動玻璃和方塊圖示的陰影用共用的 --sh-*，不要每個地方各寫一份
 for m in re.finditer(r"box-shadow:inset 0 1px 0 rgba\(255,255,255,\.[34]5?\)", body_css):
     report("style.css", line0, body_css, m.start(), f"上緣亮邊請用 var(--hl) 或 var(--sh-tile)：{m.group(0)}")
+# 滑過效果只給有滑鼠的裝置，不然手機點一下會一直停在滑過的樣子
+for m in re.finditer(r"(@media \(hover:hover\)\{)?[^{}\n]*:hover\{", body_css):
+    if not m.group(1):
+        report("style.css", line0, body_css, m.start(), "滑過效果請包在 @media (hover:hover){…} 裡")
 
 if bad:
     print(f"有 {len(bad)} 個地方沒照共用規則：")

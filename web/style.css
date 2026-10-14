@@ -96,6 +96,7 @@ button{font:inherit;color:inherit}
   mask:linear-gradient(#000 0 0) content-box exclude,linear-gradient(#000 0 0)}
 
 /* ═════════ 共用小元件 ═════════ */
+/* 「滑過」效果都包在 @media (hover:hover) 裡：手機沒有滑鼠，點一下後不會一直停在滑過的樣子 */
 .sub{color:var(--sub);font-size:var(--fs-s)}
 .grow{flex:1}
 .dot{width:8px;height:8px;border-radius:50%;flex:none;position:relative;background:var(--faint)}
@@ -140,7 +141,7 @@ button{font:inherit;color:inherit}
 .emoji{font-size:var(--fs-xl);line-height:1}
 .iconbtn{border:0;background:transparent;color:var(--sub);cursor:pointer;padding:6px;border-radius:var(--r-md);display:inline-grid;place-items:center;
   transition:background var(--t-fast),color var(--t-fast),transform var(--t-mid) var(--spring)}
-.iconbtn:hover{background:var(--track);color:var(--text)}.iconbtn:active{transform:scale(.86)}
+@media (hover:hover){.iconbtn:hover{background:var(--track);color:var(--text)}}.iconbtn:active{transform:scale(.86)}
 .iconbtn svg{width:16px;height:16px}
 .cap{border:0;cursor:pointer;border-radius:var(--r-pill);padding:9px 16px;font-size:var(--fs-m);font-weight:700;display:inline-flex;align-items:center;gap:7px;
   transition:transform var(--t-mid) var(--spring)}
@@ -148,7 +149,7 @@ button{font:inherit;color:inherit}
 .ubtn{border:0;cursor:pointer;border-radius:var(--r-pill);padding:10px 17px;font-size:var(--fs-m);font-weight:800;color:#fff;background:var(--grad);
   display:inline-flex;align-items:center;gap:7px;letter-spacing:.2px;
   box-shadow:var(--hl),0 10px 24px -10px var(--a2);transition:transform var(--t-mid) var(--spring),opacity var(--t-mid),filter var(--t-mid)}
-.ubtn:hover{filter:brightness(1.06)}.ubtn:active{transform:scale(.94)}.ubtn[disabled]{opacity:.5;cursor:default;filter:saturate(.7)}
+@media (hover:hover){.ubtn:hover{filter:brightness(1.06)}}.ubtn:active{transform:scale(.94)}.ubtn[disabled]{opacity:.5;cursor:default;filter:saturate(.7)}
 .ubtn.ghost{background:var(--inset);color:var(--text);box-shadow:var(--ring)}
 .ubtn.warn{background:linear-gradient(135deg,var(--warn-hi),var(--warn-lo));box-shadow:var(--hl),0 10px 24px -10px var(--warn-lo)}
 .ubtn.bad{background:linear-gradient(135deg,var(--bad-hi),var(--bad-lo));box-shadow:var(--hl),0 10px 24px -10px var(--bad-lo)}
@@ -287,7 +288,7 @@ button{font:inherit;color:inherit}
 .item{display:flex;align-items:center;gap:10px;font-size:var(--fs-m);padding:7px 4px;border-radius:var(--r-md);font-weight:600;
   opacity:0;transform:translateY(-4px);transition:opacity var(--t-mid),transform var(--t-mid) var(--ease),background var(--t-fast)}
 .more.open .item,.tbl .item{opacity:1;transform:none}
-.item:hover{background:var(--track)}
+@media (hover:hover){.item:hover{background:var(--track)}}
 .item .n{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .item .tag{flex:none}
 .grp{display:flex;align-items:center;gap:8px;font-size:var(--fs-xs);font-weight:800;color:var(--sub);letter-spacing:.3px;padding:10px 4px 2px;
@@ -356,7 +357,7 @@ button{font:inherit;color:inherit}
 .hosts::-webkit-scrollbar{display:none}
 .host{border:0;background:transparent;text-align:left;cursor:pointer;border-radius:var(--r-lg);padding:11px 12px;display:flex;flex-direction:column;gap:9px;
   transition:background var(--t-mid),box-shadow var(--t-mid),transform var(--t-mid) var(--spring)}
-.host:hover{background:var(--track)}.host:active{transform:scale(.98)}
+@media (hover:hover){.host:hover{background:var(--track)}}.host:active{transform:scale(.98)}
 .host.on{background:var(--glass);position:relative;box-shadow:0 10px 26px -14px rgba(0,0,0,.5)}
 .host .head{gap:11px}.host .avatar .flag{width:26px;height:19px;border-radius:var(--r-sm)}.host .fw{border-radius:var(--r-sm)}.host .fw.round{border-radius:50%}
 .host h2{font-size:var(--fs-l)}
@@ -365,9 +366,10 @@ button{font:inherit;color:inherit}
   border:1.5px dashed var(--line);background:transparent;border-radius:var(--r-lg);padding:11px 12px;
   transition:color var(--t-mid),border-color var(--t-mid),background var(--t-mid),transform var(--t-mid) var(--spring)}
 .addhost svg{width:16px;height:16px;flex:none}
-.addhost:hover{color:var(--text);border-color:var(--faint);background:var(--track)}.addhost:active{transform:scale(.98)}
+@media (hover:hover){.addhost:hover{color:var(--text);border-color:var(--faint);background:var(--track)}}.addhost:active{transform:scale(.98)}
 .host.addhost{flex-direction:row}
-.m-add{width:100%;margin-top:var(--gap);border-radius:var(--r-xl);padding:15px;border-style:dashed}
+.m-add{width:100%;margin-top:var(--gap);border-radius:var(--r-xl);padding:15px;background:var(--inset)}   /* 手機：跟其他按鈕一樣是實心底，不是玻璃泡泡 */
+.m-add:active{transform:scale(.94)}
 .minis{display:grid;grid-template-columns:1fr 1fr;gap:10px}
 .minis .k{display:flex;justify-content:space-between;font-size:var(--fs-xs);color:var(--sub);margin-bottom:4px;font-weight:700}
 .minis .k b{color:var(--text);font-weight:900}
@@ -480,7 +482,7 @@ button{font:inherit;color:inherit}
 .facts small{font-size:var(--fs-xs);color:var(--sub);font-weight:700;margin-left:3px}
 .facts .wide{grid-column:1/-1}
 .ipc{cursor:pointer;border-radius:var(--r-sm);margin:-2px -4px;padding:2px 4px;transition:background var(--t-fast),color var(--t-fast)}
-.ipc:hover{background:var(--track);color:var(--text)}
+@media (hover:hover){.ipc:hover{background:var(--track);color:var(--text)}}
 .fx{font-size:var(--fs-xs);color:var(--sub);font-weight:700;margin-top:10px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .gauges>.sysp{min-height:100%}
 /* 側邊欄填滿整個高度 */
@@ -567,7 +569,7 @@ button{font:inherit;color:inherit}
 .cchip{margin-left:auto;display:inline-flex;align-items:center;gap:5px;padding:4px 9px 4px 8px;border-radius:var(--r-pill);
   background:var(--inset);box-shadow:var(--ring);color:var(--text);text-decoration:none;font-size:var(--fs-xs);font-weight:800;
   transition:background var(--t-fast),transform var(--t-mid) var(--spring)}
-.cchip:hover{background:var(--track)}.cchip:active{transform:scale(.94)}
+@media (hover:hover){.cchip:hover{background:var(--track)}}.cchip:active{transform:scale(.94)}
 .cchip svg{width:13px;height:13px;flex:none}.cchip svg:first-child{color:var(--ink)}.cchip svg:last-child{color:var(--faint)}
 .cchip.warn span{color:var(--warn)}.cchip.down{box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--bad) 60%,transparent)}.cchip.down svg:first-child{color:var(--bad)}
 .cloudm{display:flex;align-items:center;gap:9px;margin-top:12px;padding:11px 13px;border-radius:var(--r-md);background:var(--inset);box-shadow:var(--ring);
@@ -584,13 +586,13 @@ a.plink,button.plink{color:var(--sub);text-decoration:none}
 .lmenu{position:fixed;z-index:var(--z-menu);min-width:170px;max-width:280px;padding:6px;border-radius:var(--r-md);display:flex;flex-direction:column;
   box-shadow:var(--sh-pop)}
 .lmenu a{display:flex;align-items:center;gap:9px;padding:9px 12px;border-radius:var(--r-md);color:var(--text);text-decoration:none;font-size:var(--fs-m);font-weight:700;transition:background var(--t-fast)}
-.lmenu a:hover{background:var(--track)}
+@media (hover:hover){.lmenu a:hover{background:var(--track)}}
 .lmenu a svg{width:14px;height:14px;color:var(--faint);flex:none;margin-left:auto}
 .lmenu a span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;display:flex;flex-direction:column;min-width:0}
 .hmenu{min-width:180px}
 .hmenu button{display:flex;align-items:center;gap:10px;padding:10px 12px;border:0;background:transparent;border-radius:var(--r-md);color:var(--text);cursor:pointer;
   font:inherit;font-size:var(--fs-m);font-weight:700;text-align:left;transition:background var(--t-fast)}
-.hmenu button:hover{background:var(--track)}
+@media (hover:hover){.hmenu button:hover{background:var(--track)}}
 .hmenu button svg{width:16px;height:16px;flex:none;color:var(--sub)}
 .hmenu button.warn,.hmenu button.warn svg{color:var(--warn)}
 .hmenu button.bad,.hmenu button.bad svg{color:var(--bad)}
@@ -613,7 +615,7 @@ a.plink,button.plink{color:var(--sub);text-decoration:none}
 .cl2 small{display:block;font-size:var(--fs-xs);color:var(--sub);font-weight:600}
 .chg{margin:6px 0 0;padding-left:16px;font-size:var(--fs-xs);color:var(--sub);font-weight:600;line-height:1.55}
 .ubtn.sm{padding:7px 14px;font-size:var(--fs-s);flex:none}
-a.plink:hover{color:var(--ink)}
+@media (hover:hover){a.plink:hover{color:var(--ink)}}
 .optbtn{width:100%;border:0;background:none;color:inherit;font:inherit;text-align:left;cursor:pointer}
 .optbtn .lab{flex:1}
 .optbtn .chev{color:var(--faint);display:flex;transform:rotate(-90deg)}
@@ -646,7 +648,7 @@ a.plink:hover{color:var(--ink)}
 .ft,.fb,.ft.fb{--t:0px;--b:0px;-webkit-mask:linear-gradient(transparent,#000 var(--t),#000 calc(100% - var(--b)),transparent);mask:linear-gradient(transparent,#000 var(--t),#000 calc(100% - var(--b)),transparent)}
 .ft{--t:22px}.fb{--b:30px}
 .ev{animation:rise var(--t-mid) var(--ease) both;display:flex;gap:11px;align-items:flex-start;padding:8px 6px;border-radius:var(--r-md);font-size:var(--fs-m);font-weight:700}
-.ev:hover{background:var(--track)}
+@media (hover:hover){.ev:hover{background:var(--track)}}
 .ev .dot{margin-top:6px}
 .ev .dot.info{background:var(--a1)}
 .ev .sub{font-size:var(--fs-xs);margin-top:1px}
