@@ -841,3 +841,7 @@ html::-webkit-scrollbar-thumb{background:color-mix(in srgb,var(--text) 22%,trans
 .pill.has.warn b{color:var(--warn)}.pill.has.bad b{color:var(--bad)}
 .dash.m .summary{display:grid;grid-template-columns:repeat(3,minmax(0,1fr))}
 .dash.m .pill{justify-content:center}
+/* 心情小語（問候下面） */
+.quote{font-size:var(--fs-m);font-weight:700;color:var(--sub);margin-top:4px}
+.quote:empty{display:none}
+.greet .quote{font-size:var(--fs-s);margin-top:2px}
