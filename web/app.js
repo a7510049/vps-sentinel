@@ -461,8 +461,8 @@ const cid = (s, k) => "g" + Math.abs([...keyOf(s)].reduce((a,c)=>(a*31+c.charCod
 const COL = {cpu:"var(--c-cpu)", mem:"var(--c-mem)", rx:"var(--c-rx)", tx:"var(--c-tx)"};
 /* 概念 → [顏色樣式, 圖示] */
 const ICO = {cpu:["cpu","cpu"], mem:["mem","mem"], disk:["disk","disk"], load:["load","gauge"], down:["down","down"], up:["up","up"],
-  net:["net","net"], trend:["trend","trend"], month:["month","month"], box:["box","box"], bell:["bell","bell"], info:["info","info"],
-  layers:["theme","layers"], flag:["theme","flag"], key:["theme","key"], finger:["theme","finger"], pin:["theme","pin"], link:["theme","link"], archive:["month","archive"], sun:["month","sun"], quote:["theme","quote"]};
+  net:["net","net"], trend:["trend","trend"], month:["month","month"], box:["box","box"], bell:["theme","bell"], info:["info","info"],
+  layers:["theme","layers"], flag:["theme","flag"], key:["theme","key"], finger:["theme","finger"], pin:["theme","pin"], link:["theme","link"], archive:["theme","archive"], sun:["theme","sun"], quote:["theme","quote"]};
 const IC = (k, cls="sm") => `<span class="ico ${cls} ${ICO[k][0]}">${I(ICO[k][1])}</span>`;
 
 /* ═════════ 手機版 ═════════ */
@@ -962,7 +962,7 @@ function modal({icon, cls="box", title, text, input, ok="確定", cancel="取消
     const v = document.createElement("div"); v.className = "veil";
     v.innerHTML = `<div class="dialog glass pop">${icon?`<div class="ico big ${cls}">${I(icon)}</div>`:""}<h3>${esc(title)}</h3>${text?`<p>${esc(text)}</p>`:""}
       ${input!==undefined?`<input class="field" maxlength="40" value="${esc(input)}">`:""}
-      <div class="btns"><button class="ubtn ghost" data-r="0">${cancel}</button><button class="ubtn" data-r="1">${ok}</button></div></div>`;
+      <div class="btns"><button class="ubtn ghost" data-r="0">${cancel}</button><button class="ubtn ${cls === "bad" || cls === "warn" ? cls : ""}" data-r="1">${ok}</button></div></div>`;
     $("#layer").appendChild(v);
     const inp = v.querySelector("input");
     const done = r => { if (v._d) return; v._d = 1; v.classList.add("closing"); const val = r ? (inp ? inp.value : true) : null;
@@ -1559,7 +1559,7 @@ function openSettings(){
 }
 /* 換密碼：換好後顯示新密碼給你複製，這台裝置會自動改用新密碼 */
 async function newToken(node, label){
-  const ok = await modal({icon:"key", cls:"theme", title:`換掉「${label}」的密碼？`,
+  const ok = await modal({icon:"key", cls:"warn", title:`換掉「${label}」的密碼？`,
     text:"其他裝置要用新密碼重新登入。", ok:"換新密碼"});
   if (!ok) return;
   let d = {};
@@ -1666,7 +1666,7 @@ async function pkModal(){
       if (busy) return;
       const del = e.target.closest("[data-del]");
       if (del) {
-        if (!await modal({icon:"finger", cls:"bell", title:`刪掉「${del.dataset.name}」？`, text:"刪掉之後，它就不能再用指紋或臉部辨識登入哨兵。", ok:"刪除"})) return;
+        if (!await modal({icon:"finger", cls:"bad", title:`刪掉「${del.dataset.name}」？`, text:"刪掉之後，它就不能再用指紋或臉部辨識登入哨兵。", ok:"刪除"})) return;
         busy = true;
         const d = await pkCall("/api/passkey", {action:"delete", id:del.dataset.del}, 1).catch(err => ({message:err.message}));
         busy = false;
@@ -1794,7 +1794,7 @@ async function pairModal(){
       }
       const del = e.target.closest("[data-del]");
       if (del) {
-        if (!await modal({icon:"link", cls:"bell", title:`解除「${del.dataset.name}」的配對？`, text:"那台就看不到這台了。", ok:"解除"})) return;
+        if (!await modal({icon:"link", cls:"bad", title:`解除「${del.dataset.name}」的配對？`, text:"那台就看不到這台了。", ok:"解除"})) return;
         busy = true;
         const d = await pairCall({action:"revoke", id:del.dataset.del}).catch(err => ({message:err.message}));
         busy = false;
@@ -1811,7 +1811,7 @@ async function pairModal(){
   });
 }
 async function rmHost(node, name){
-  if (!await modal({icon:"trash", cls:"bell", title:`移除「${name}」？`, text:"會同時解除配對，要加回來得重新配對。", ok:"移除"})) return;
+  if (!await modal({icon:"trash", cls:"bad", title:`移除「${name}」？`, text:"會同時解除配對，要加回來得重新配對。", ok:"移除"})) return;
   const d = await pkCall("/api/peer", {action:"remove", name:node}, 1).catch(err => ({message:err.message}));
   if (!d.ok) return toast(d.message || "移除失敗", "bad");
   toast(`已移除「${name}」`);
@@ -1821,10 +1821,10 @@ async function rmHost(node, name){
 /* 重新開機：先傳驗證碼到 Telegram，輸入對了才重開（沒設定 Telegram 就輸入那台的密碼或 PIN 碼） */
 function rebootModal(node, name){
   const v = document.createElement("div"); v.className = "veil";
-  v.innerHTML = `<div class="dialog glass pop"><div class="ico big bell">${I("power")}</div><h3>重新開機「${esc(name)}」？</h3>
+  v.innerHTML = `<div class="dialog glass pop"><div class="ico big warn">${I("power")}</div><h3>重新開機「${esc(name)}」？</h3>
     <p data-t>會先傳驗證碼到 Telegram</p>
     <div class="form" hidden><input class="field" data-k="code" autocomplete="one-time-code" autocapitalize="off" spellcheck="false"><div class="msg"></div></div>
-    <div class="btns"><button class="ubtn ghost" data-r="0">取消</button><button class="ubtn" data-go>傳送驗證碼</button></div></div>`;
+    <div class="btns"><button class="ubtn ghost" data-r="0">取消</button><button class="ubtn warn" data-go>傳送驗證碼</button></div></div>`;
   $("#layer").appendChild(v);
   const form = v.querySelector(".form"), inp = v.querySelector("input"), msg = v.querySelector(".msg"), go = v.querySelector("[data-go]"), txt = v.querySelector("[data-t]");
   const call = body => pkCall("/api/reboot" + (node ? "?node=" + encodeURIComponent(node) : ""), body, 1).catch(err => ({message:err.message}));
@@ -1990,7 +1990,7 @@ async function bkModal(node, label){
       if (sk && !sk.disabled) {
         const inp = v.querySelector(".bknew input"), key = inp.value;
         if (key.length < 8) return say("密碼至少要 8 個字", "bad");
-        if (!await modal({icon:"key", cls:"theme", title:"換成新的解開密碼？", text:"所有主機一起換。舊備份仍要用舊密碼，請留著。", ok:"換"})) return;
+        if (!await modal({icon:"key", cls:"warn", title:"換成新的解開密碼？", text:"所有主機一起換。舊備份仍要用舊密碼，請留著。", ok:"換"})) return;
         busy(sk, "儲存中…");
         try {
           const x = await post({action:"key", key, sync:true}, true); d.key = key;
