@@ -30,6 +30,25 @@ class Crypto(unittest.TestCase):
         self.assertIsNone(S.pair_decode(bad))                                       # 少抄錯一個字也看得出來
         self.assertIsNone(S.pair_decode("亂打的"))
 
+    def test_watch_alert(self):
+        """被監看的主機：主要主機太久沒連進來就通知，回來了再通知一次"""
+        sent = []
+        S.tg_api = lambda bot, m, d: (sent.append(d["text"]) or ({}, ""))
+        S.PEERS[:] = []
+        S.pair_save({"keys": [{"id": "k1", "name": "主要主機", "hash": "x"}], "tg": {"bot": "1:x", "chat": "9"}})
+        S.PAIR_SEEN["k1"] = S.time.time()
+        S.watch_check()
+        self.assertEqual(sent, [])
+        S.PAIR_SEEN["k1"] = S.time.time() - S.WATCH_SILENT - 5
+        S.watch_check()
+        S.watch_check()
+        self.assertEqual(len(sent), 1)
+        self.assertTrue(sent[0].startswith("🔌 <b>主要主機</b>"), sent[0])
+        S.PAIR_SEEN["k1"] = S.time.time()
+        S.watch_check()
+        self.assertTrue(sent[-1].startswith("✅"), sent[-1])
+        S.pair_save({})
+
     def test_bad_url(self):
         self.assertFalse(S.pair_code("ftp://x")[0])
         self.assertFalse(S.pair_code("")[0])
@@ -79,6 +98,12 @@ class Pairing(unittest.TestCase):
         st, d = self.post(self.a, "/api/peer", {"action": "add", "code": code})
         self.assertEqual(st, 200, d)
         self.assertIn("已新增", d["message"])
+
+        # 新主機進入被監看模式：網頁只剩說明頁，主要主機照樣拿得到資料
+        _, _, page = self.b.request("/")
+        self.assertIn("監看中", page.decode())
+        self.assertNotIn("/*@app.js*/", page.decode())
+        self.assertLess(len(page), 20000)
         peers = self.peers()
         self.assertIn(f"http://127.0.0.1:{self.B.port}|vsk_", peers)
         key = peers.split("|", 1)[1]
@@ -112,6 +137,8 @@ class Pairing(unittest.TestCase):
         self.assertEqual(self.peers(), "")
         code2, _, _ = self.b.request("/api/status", token=key)
         self.assertEqual(code2, 401)
+        _, _, page = self.b.request("/")
+        self.assertNotIn("監看中", page.decode())                # 移除後網頁恢復
 
     def test_2_wrong_secret(self):
         code = self.new_code()
@@ -134,6 +161,27 @@ class Pairing(unittest.TestCase):
         self.assertEqual(self.b.request("/api/status", token=key)[0], 401)
         _, _, body = self.a.request("/api/all", token=TOKEN)
         self.assertIn("重新配對", json.loads(body)[1]["error"])
+
+
+    def test_4_unwatch(self):
+        st, d = self.post(self.a, "/api/peer", {"action": "add", "code": self.new_code()})
+        self.assertEqual(st, 200, d)
+        key = self.peers().split("|", 1)[1]
+        # 主要主機的心跳：帶 Telegram 設定（只有拿配對鑰匙的才收）
+        beat = json.dumps({"action": "beat", "tg": {"bot": "1:x", "chat": "9"}}).encode()
+        self.assertEqual(self.b.request("/api/pair", token="wrong", method="POST", data=beat)[0], 401)
+        self.assertEqual(self.b.request("/api/pair", token=key, method="POST", data=beat)[0], 200)
+        with open(os.path.join(self.B.tmp.name, "data", "pairing.json"), encoding="utf-8") as f:
+            self.assertEqual(json.load(f)["tg"], {"bot": "1:x", "chat": "9"})
+        # 在新主機上取消被監看：密碼不對不行
+        bad = json.dumps({"action": "unwatch", "pw": "nope"}).encode()
+        self.assertEqual(self.b.request("/api/pair", method="POST", data=bad)[0], 401)
+        good = json.dumps({"action": "unwatch", "pw": self.btok}).encode()
+        code, _, body = self.b.request("/api/pair", method="POST", data=good)
+        self.assertEqual(code, 200, body)
+        self.assertEqual(self.b.request("/api/status", token=key)[0], 401)
+        self.assertNotIn("監看中", self.b.request("/")[2].decode())
+        self.post(self.a, "/api/peer", {"action": "remove", "name": json.loads(self.a.request("/api/all", token=TOKEN)[2])[1]["node"]})
 
 
 class Cli(unittest.TestCase):
