@@ -28,7 +28,7 @@ class PinTest(Server):
         self.assertFalse(self.call("/api/passkey-login", {"action": "has"})[1]["pin"])
 
         # 太短、不是數字、太好猜的都不收
-        for bad in ("123", "12ab", "0000", "1234", "987654", "123456789"):
+        for bad in ("123", "12ab", "48#6", "４８２６", "4826\n", "0000", "1234", "987654", "123456789"):
             with self.subTest(pin=bad):
                 self.assertEqual(self.call("/api/pin", {"action": "set", "pin": bad}, TOKEN)[0], 400)
 

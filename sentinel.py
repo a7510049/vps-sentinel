@@ -40,7 +40,7 @@ from collections import deque
 from concurrent.futures import ThreadPoolExecutor
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
-VERSION = "1.46"
+VERSION = "1.47"
 
 # ───────────────────────── 哨兵備份檔（.vsbk）─────────────────────────
 # 哨兵專用的備份格式：外面是自己的檔案格式，裡面用的是成熟、標準的加密方法（不自己發明加密）：
@@ -1713,7 +1713,7 @@ def pin_status():
 
 def pin_set(pin):
     pin = str(pin or "")
-    if not re.fullmatch(r"\d{4,8}", pin):
+    if not re.fullmatch(r"[0-9]{4,8}", pin):
         return False, "PIN 碼要是 4 到 8 位數字"
     if len(set(pin)) == 1 or pin in "0123456789" or pin in "9876543210":
         return False, "這組太好猜了（同一個數字或連號），換一組吧"
@@ -1763,7 +1763,7 @@ def pin_login(pin):
         if p.get("lock_until", 0) > now:
             return False, f"輸錯太多次，請 {int((p['lock_until'] - now) // 60) + 1} 分鐘後再試，或改用密碼登入"
         try:
-            ok = re.fullmatch(r"\d{4,8}", pin) and hmac.compare_digest(_pin_hash(pin, p["salt"], int(p["n"])), p["hash"])
+            ok = re.fullmatch(r"[0-9]{4,8}", pin) and hmac.compare_digest(_pin_hash(pin, p["salt"], int(p["n"])), p["hash"])
         except (KeyError, ValueError, TypeError):
             ok = False
         if ok:
