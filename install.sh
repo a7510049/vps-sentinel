@@ -472,6 +472,9 @@ else
   printf '  %s✅ VPS 哨兵%s好了%s\n\n' "$B" "$( [ -n "$NEWCONF" ] && echo 裝 || echo 更新 )" "$N"
   printf '  用手機打開這個網址（第一次會自動記住密碼）：\n     %s%s?t=%s%s\n\n' "$B$C" "$BASE" "$TOKEN" "$N"
   printf '  %s設定檔：%s（改完執行 sudo systemctl restart vps-sentinel-lite）%s\n' "$D" "$CONF" "$N"
+  if [ -n "$NEWCONF" ] && PCODE="$(SENTINEL_CONF="$CONF" python3 "$DIR/sentinel.py" --pair-code "${BASE%/}" 2>/dev/null)"; then
+    printf '\n  要加到主要主機：在主要主機按「新增主機」，貼上這組配對暗號（24 小時內有效）\n     %s%s%s\n' "$B$C" "$PCODE" "$N"
+  fi
 fi
 [ -n "${CLOUD_NOTE:-}" ] && { echo; warn "$CLOUD_NOTE"; }
 if [ "$BIND" = "0.0.0.0" ]; then

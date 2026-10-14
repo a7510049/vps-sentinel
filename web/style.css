@@ -337,6 +337,14 @@ button{font:inherit;color:inherit}
 .host.on{background:var(--glass);position:relative;box-shadow:0 10px 26px -14px rgba(0,0,0,.5)}
 .host .head{gap:11px}.host .avatar .flag{width:26px;height:19px;border-radius:var(--r-sm)}.host .fw{border-radius:var(--r-sm)}.host .fw.round{border-radius:50%}
 .host h2{font-size:var(--fs-l)}
+/* 新增主機：主機列表最後一個，虛線框 */
+.addhost{display:flex;align-items:center;justify-content:center;gap:8px;cursor:pointer;color:var(--sub);font-weight:800;font-size:var(--fs-m);
+  border:1.5px dashed var(--line);background:transparent;border-radius:var(--r-lg);padding:11px 12px;
+  transition:color var(--t-mid),border-color var(--t-mid),background var(--t-mid),transform var(--t-mid) var(--spring)}
+.addhost svg{width:16px;height:16px;flex:none}
+.addhost:hover{color:var(--text);border-color:var(--faint);background:var(--track)}.addhost:active{transform:scale(.98)}
+.host.addhost{flex-direction:row}
+.m-add{width:100%;margin-top:var(--gap);border-radius:var(--r-xl);padding:15px;border-style:dashed}
 .minis{display:grid;grid-template-columns:1fr 1fr;gap:10px}
 .minis .k{display:flex;justify-content:space-between;font-size:var(--fs-xs);color:var(--sub);margin-bottom:4px;font-weight:700}
 .minis .k b{color:var(--text);font-weight:900}
@@ -502,6 +510,11 @@ button{font:inherit;color:inherit}
 .pkd,.pindlg{max-width:400px}
 .pindlg .btns.three{grid-template-columns:1.2fr 1fr 1fr}
 .pklist{display:flex;flex-direction:column;gap:8px}
+/* 配對暗號 */
+.pcode{display:flex;flex-direction:column;gap:6px}.pcode:empty{display:none}
+.codebox{display:flex;align-items:center;gap:10px;padding:10px 10px 10px 13px;border-radius:var(--r-md);background:var(--inset);box-shadow:var(--ring)}
+.codebox code{flex:1;min-width:0;font:700 var(--fs-s)/1.45 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;word-break:break-all;user-select:all;color:var(--text)}
+.dialog .form .pfield{resize:none;font:700 var(--fs-m)/1.45 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;word-break:break-all}
 .pklist:empty{display:none}
 .pkrow{display:flex;align-items:center;gap:10px;padding:10px 8px 10px 13px;border-radius:var(--r-md);background:var(--inset);box-shadow:var(--ring);
   font-size:var(--fs-m);font-weight:800;color:var(--text)}
@@ -634,7 +647,7 @@ a.plink:hover{color:var(--a1)}
   background:var(--inset);box-shadow:var(--ring);outline:none;transition:box-shadow var(--t-fast)}
 .field:focus{box-shadow:inset 0 0 0 2px var(--accent)}
 @media (pointer:coarse){   /* 手機：輸入框字級乘上文字大小後至少 16px，點下去畫面不會自己放大 */
-  .field,.dialog .form .field,.dialog .form .lrow .field{font-size:max(var(--fs-l),calc(var(--fs-input) / var(--zoom)))}}
+  .field,.dialog .form .field,.dialog .form .lrow .field,.dialog .form .pfield{font-size:max(var(--fs-l),calc(var(--fs-input) / var(--zoom)))}}
 .login .field{margin:20px 0 10px}
 .remember{display:flex;align-items:center;justify-content:center;gap:8px;font-size:var(--fs-m);font-weight:700;color:var(--sub);cursor:pointer;margin-bottom:6px;user-select:none}
 .remember input{appearance:none;-webkit-appearance:none;width:20px;height:20px;margin:0;border-radius:var(--r-sm);background:var(--inset);box-shadow:var(--ring);

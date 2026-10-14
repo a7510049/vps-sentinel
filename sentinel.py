@@ -40,7 +40,7 @@ from collections import deque
 from concurrent.futures import ThreadPoolExecutor
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
-VERSION = "1.45"
+VERSION = "1.46"
 
 # ───────────────────────── 哨兵備份檔（.vsbk）─────────────────────────
 # 哨兵專用的備份格式：外面是自己的檔案格式，裡面用的是成熟、標準的加密方法（不自己發明加密）：
@@ -1336,7 +1336,7 @@ def change_token():
 def set_peer_token(name, token):
     """幫另一台換了密碼後，這邊記住它的新密碼"""
     p = next((p for p in PEERS if p["name"] == name), None)
-    if not p or not token:
+    if not p or not token or p["token"].startswith("vsk_"):      # 用配對鑰匙連的：跟那台的登入密碼無關
         return
     p["token"] = token
     try:
@@ -2501,7 +2501,7 @@ def peer_error(e, url):
     text = str(e)
     if isinstance(e, urllib.error.HTTPError):
         if e.code == 401:
-            return "密碼不對：請在 PEERS 網址後面加上「|那台的密碼」"
+            return "連線密碼不對，請重新配對"
         if e.code == 404:
             return f"這個網址不是 VPS 哨兵（{url}），請確認網址和連接埠"
         return f"對方回應錯誤（代碼 {e.code}）"
@@ -2526,6 +2526,245 @@ POOL = ThreadPoolExecutor(max_workers=8)
 def all_status():
     peers = list(POOL.map(fetch_peer, PEERS)) if PEERS else []
     return [COL.snapshot()] + peers
+
+
+# ───────────────────────── 配對暗號（新增主機） ─────────────────────────
+# 新主機產生一組「配對暗號」＝ 它的網址 ＋ 一次性的隨機密鑰（128 位元），24 小時內有效、用一次就失效。
+# 主要主機貼上暗號後跟新主機「對暗號」：雙方都用 HMAC-SHA256 證明自己知道密鑰，
+# 再各自用 HKDF-SHA256（RFC 5869）算出同一把長期連線鑰匙 —— 密鑰和鑰匙都不會在網路上傳。
+# 每台配對過來的主機各有一把鑰匙（新主機只存雜湊），可以單獨解除，不影響登入密碼；換登入密碼也不會斷線。
+PAIR_FILE = os.path.join(DATA_DIR, "pairing.json")
+PAIR_HOURS = 24
+PAIR_FAILS = 5                                  # 對錯幾次就作廢這組暗號
+PAIR_MAX = 10                                   # 最多幾台主機可以配對過來
+PAIR_LOCK = threading.Lock()
+PAIR_CACHE = {"mt": None, "d": {}}
+PAIR_SEEN = {}                                  # 每把鑰匙最近一次連進來的時間（只記在記憶體）
+
+
+def hkdf(ikm, salt, info, n=32):
+    """HKDF-SHA256（RFC 5869）"""
+    prk = hmac.new(salt or b"\0" * 32, ikm, hashlib.sha256).digest()
+    out, t, i = b"", b"", 1
+    while len(out) < n:
+        t = hmac.new(prk, t + info + bytes([i]), hashlib.sha256).digest()
+        out, i = out + t, i + 1
+    return out[:n]
+
+
+def pair_mac(secret, *parts):
+    k = hkdf(secret, b"", b"vps-sentinel pair auth v1")
+    return hmac.new(k, b"|".join(p if isinstance(p, bytes) else str(p).encode() for p in parts), hashlib.sha256).digest()
+
+
+def pair_key(secret, n1, n2):
+    return "vsk_" + b64u(hkdf(secret, n1 + n2, b"vps-sentinel peer key v1"))
+
+
+def pair_load():
+    try:
+        mt = os.stat(PAIR_FILE).st_mtime_ns
+    except OSError:
+        mt = 0
+    if mt != PAIR_CACHE["mt"]:                  # 安裝畫面另外產生的暗號也要讀得到
+        try:
+            with open(PAIR_FILE, encoding="utf-8") as f:
+                d = json.load(f)
+        except (OSError, ValueError):
+            d = {}
+        PAIR_CACHE.update(mt=mt, d=d if isinstance(d, dict) else {})
+    return PAIR_CACHE["d"]
+
+
+def pair_save(d):
+    os.makedirs(DATA_DIR, exist_ok=True)
+    tmp = PAIR_FILE + ".tmp"
+    fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+    with os.fdopen(fd, "w", encoding="utf-8") as f:
+        json.dump(d, f, ensure_ascii=False)
+    os.replace(tmp, PAIR_FILE)
+    PAIR_CACHE.update(mt=None)
+
+
+def pair_code(url):
+    """產生新的配對暗號（舊的那組立刻失效）"""
+    url = re.sub(r"[\s,|]", "", str(url or "")).rstrip("/")
+    u = urllib.parse.urlsplit(url)
+    if u.scheme not in ("http", "https") or not u.hostname:
+        return False, "網址格式不對"
+    url = f"{u.scheme}://{u.netloc}{u.path.rstrip('/')}"
+    secret = secrets.token_bytes(16)
+    raw = b"\x01" + secret + url.encode()
+    with PAIR_LOCK:
+        d = dict(pair_load())
+        d["pending"] = {"s": secret.hex(), "url": url, "exp": time.time() + PAIR_HOURS * 3600, "fails": 0}
+        pair_save(d)
+    return True, "VS-" + b64u(raw + hashlib.sha256(raw).digest()[:3])
+
+
+def pair_decode(code):
+    s = re.sub(r"\s", "", str(code or ""))
+    if s[:3].upper() == "VS-":
+        s = s[3:]
+    try:
+        raw = unb64u(s)
+    except (ValueError, TypeError):
+        raw = b""
+    body, chk = raw[:-3], raw[-3:]
+    if len(body) < 20 or body[:1] != b"\x01" or not hmac.compare_digest(hashlib.sha256(body).digest()[:3], chk):
+        return None
+    try:
+        url = body[17:].decode()
+    except UnicodeDecodeError:
+        return None
+    return url, body[1:17]
+
+
+def pair_keys():
+    return [k for k in pair_load().get("keys", []) if isinstance(k, dict)]
+
+
+def pair_key_ok(given):
+    """其他主機用配對鑰匙連進來"""
+    if not given.startswith("vsk_"):
+        return False
+    h = hashlib.sha256(given.encode()).hexdigest()
+    for k in pair_keys():
+        if hmac.compare_digest(h, str(k.get("hash", ""))):
+            PAIR_SEEN[k.get("id")] = time.time()
+            return True
+    return False
+
+
+def pair_status():
+    d = pair_load()
+    p = d.get("pending") or {}
+    left = max(0, int(p.get("exp", 0) - time.time())) if p else 0
+    return {"keys": [{"id": k.get("id"), "name": k.get("name"), "t": k.get("t"), "seen": PAIR_SEEN.get(k.get("id"))}
+                     for k in pair_keys()], "pending": left}
+
+
+def pair_accept(d):
+    """新主機這邊：主要主機拿暗號來對"""
+    try:
+        n1 = unb64u(d.get("n"))
+        proof = unb64u(d.get("proof"))
+    except (ValueError, TypeError):
+        return False, "暗號不對", None
+    name = re.sub(r"[\s,=|]+", " ", str(d.get("name") or "")).strip()[:40] or "主要主機"
+    with PAIR_LOCK:
+        st = dict(pair_load())
+        p = st.get("pending")
+        if not p or p.get("exp", 0) < time.time():
+            return False, "暗號已失效，請在新主機重新產生", None
+        secret = bytes.fromhex(p["s"])
+        if len(n1) != 16 or not hmac.compare_digest(pair_mac(secret, "req", n1, name), proof):
+            p = {**p, "fails": p.get("fails", 0) + 1}
+            if p["fails"] >= PAIR_FAILS:
+                st.pop("pending", None)
+            else:
+                st["pending"] = p
+            pair_save(st)
+            return False, "暗號不對", None
+        n2 = secrets.token_bytes(16)
+        key = pair_key(secret, n1, n2)
+        keys = [k for k in pair_keys() if k.get("name") != name]      # 同一台重新配對：舊鑰匙作廢
+        keys.append({"id": secrets.token_hex(4), "name": name, "hash": hashlib.sha256(key.encode()).hexdigest(), "t": int(time.time())})
+        st["keys"] = keys[-PAIR_MAX:]
+        st.pop("pending", None)
+        pair_save(st)
+    log(f"「{name}」配對了這台主機")
+    COL.add_event("info", f"「{name}」配對了這台主機")
+    return True, "", {"n": b64u(n2), "name": NAME, "proof": b64u(pair_mac(secret, "ok", n1, n2, NAME))}
+
+
+def pair_revoke(kid=None, given=None):
+    """解除配對：指定哪一把，或是「連進來的這一把」（主要主機移除這台時）"""
+    h = hashlib.sha256(str(given or "").encode()).hexdigest()
+    with PAIR_LOCK:
+        st = dict(pair_load())
+        keys = pair_keys()
+        gone = [k for k in keys if (kid and k.get("id") == kid) or (given and hmac.compare_digest(h, str(k.get("hash", ""))))]
+        if not gone:
+            return False, "找不到這個配對"
+        st["keys"] = [k for k in keys if k not in gone]
+        pair_save(st)
+    for k in gone:
+        log(f"解除了「{k.get('name')}」的配對")
+        COL.add_event("info", f"解除了「{k.get('name')}」的配對")
+    return True, "已解除配對"
+
+
+def peer_add(code):
+    """主要主機這邊：貼上新主機的暗號，對完暗號就加進主機列表"""
+    got = pair_decode(code)
+    if not got:
+        return False, "暗號不完整，請整串複製貼上"
+    url, secret = got
+    n1 = secrets.token_bytes(16)
+    body = json.dumps({"n": b64u(n1), "name": NAME, "proof": b64u(pair_mac(secret, "req", n1, NAME))}).encode()
+    try:
+        req = urllib.request.Request(url + "/api/pair", data=body, method="POST", headers={"Content-Type": "application/json"})
+        with urllib.request.urlopen(req, timeout=10) as r:
+            d = json.loads(r.read())
+        n2 = unb64u(d.get("n"))
+        name = re.sub(r"[\s,=|]+", " ", str(d.get("name") or "")).strip()[:40]
+        if len(n2) != 16 or not name or not hmac.compare_digest(pair_mac(secret, "ok", n1, n2, str(d.get("name") or "")),
+                                                               unb64u(d.get("proof"))):
+            return False, "對方的回應對不上，已取消"
+    except urllib.error.HTTPError as e:
+        if e.code == 404:
+            return False, "那台的哨兵是舊版，請先更新"
+        try:
+            return False, json.loads(e.read()).get("message") or peer_error(e, url)
+        except ValueError:
+            return False, peer_error(e, url)
+    except (ValueError, TypeError, AttributeError):
+        return False, f"這個網址不是 VPS 哨兵（{url}）"
+    except Exception as e:  # noqa: BLE001
+        return False, peer_error(e, url)
+    key = pair_key(secret, n1, n2)
+    old = next((p for p in PEERS if p["url"] == url), None)
+    if old:                                       # 本來就在列表裡：換成新的配對鑰匙
+        old["token"] = key
+    else:
+        names = {p["name"] for p in PEERS} | {NAME}
+        node, i = name, 2
+        while node in names:
+            node, i = f"{name} {i}", i + 1
+        PEERS.append({"name": node, "url": url, "token": key})
+    try:
+        write_conf({"PEERS": peers_conf()})
+    except OSError as e:
+        return False, f"無法寫入設定檔：{e}"
+    if not old:
+        log(f"新增了主機「{name}」：{url}")
+        COL.add_event("info", f"新增了主機「{name}」")
+    return True, f"已重新配對「{name}」" if old else f"已新增「{name}」"
+
+
+def peer_remove(node):
+    """主要主機這邊：把一台從列表移除（順便請那台把這邊的鑰匙作廢）"""
+    p = next((p for p in PEERS if p["name"] == node), None)
+    if not p:
+        return False, "找不到這台主機"
+    if p["token"].startswith("vsk_"):
+        try:
+            req = urllib.request.Request(p["url"] + "/api/pair", data=b'{"action":"forget"}', method="POST",
+                                         headers={"X-Token": p["token"], "Content-Type": "application/json"})
+            urllib.request.urlopen(req, timeout=6).close()
+        except Exception:  # noqa: BLE001
+            pass                                  # 連不上也照樣移除；那邊可以自己在設定裡解除
+    PEERS.remove(p)
+    try:
+        write_conf({"PEERS": peers_conf()})
+    except OSError as e:
+        PEERS.append(p)
+        return False, f"無法寫入設定檔：{e}"
+    PEER_SEEN.pop(node, None)
+    log(f"移除了主機「{node}」")
+    COL.add_event("info", f"移除了主機「{node}」")
+    return True, "已移除"
 
 
 # ───────────────────────── Telegram 通知 ─────────────────────────
@@ -2688,6 +2927,8 @@ def ev_line(e):
         return "🔄 主機重新開機了"
     if k == "info" and "登入了主機" in t:
         return "🔑 " + t
+    if k == "info" and ("配對" in t or t.startswith(("新增了主機", "移除了主機"))):
+        return "🔗 " + t                               # 主機之間的連線有變動
     if k == "info" and ("密碼" in t or "手機金鑰" in t or "PIN" in t):
         return "🔐 " + t                               # 登入方式有變動：換密碼、手機金鑰、PIN 碼
     return {"bad": "🔴 ", "warn": "🟠 ", "ok": "✅ "}.get(k, "ℹ️ ") + t
@@ -3595,7 +3836,7 @@ class Handler(BaseHTTPRequestHandler):
 
     def authed(self):
         given = self.headers.get("X-Token", "")
-        return bool(given) and hmac.compare_digest(given.encode(), TOKEN.encode())
+        return bool(given) and (hmac.compare_digest(given.encode(), TOKEN.encode()) or pair_key_ok(given))
 
     # ── /cloud/ 開頭：整個轉給本機的雲端硬碟（沒有網域時，雲端硬碟就跟哨兵用同一個連接埠） ──
     HOP = {"connection", "keep-alive", "proxy-authenticate", "proxy-authorization", "te", "trailers", "transfer-encoding", "upgrade"}
@@ -3860,7 +4101,7 @@ class Handler(BaseHTTPRequestHandler):
         u = urllib.parse.urlsplit(self.path)
         if u.path not in ("/api/update", "/api/rename", "/api/traffic", "/api/telegram", "/api/links", "/api/self", "/api/cloud-login", "/api/peer",
                           "/api/token", "/api/passkey", "/api/passkey-login", "/api/pin", "/api/pin-login", "/api/backup", "/api/backup-store",
-                          "/api/restore-upload", "/api/restore-run"):
+                          "/api/restore-upload", "/api/restore-run", "/api/pair", "/api/pair-admin"):
             return self.send(404, '{"error":"找不到"}')
         if u.path in ("/api/restore-upload", "/api/restore-run"):   # 網頁還原：要有安裝時給的代碼（或已經登入）
             if not (self.authed() or rsw_code_ok(self.headers.get("X-Restore-Code", ""))):
@@ -3907,6 +4148,18 @@ class Handler(BaseHTTPRequestHandler):
                 return self.send(401, json.dumps({"ok": False, "message": msg}, ensure_ascii=False))
             log("用 PIN 碼登入")
             return self.send(200, json.dumps({"ok": True, "token": TOKEN}))
+        if u.path == "/api/pair":                    # 還沒登入：主要主機拿配對暗號來對（或主要主機移除這台時把鑰匙作廢）
+            d = self.jbody(body)
+            if d.get("action") == "forget":
+                if not self.authed():
+                    return self.send(401, '{"error":"密碼錯誤"}')
+                ok, msg = pair_revoke(given=self.headers.get("X-Token", ""))
+                return self.send(200 if ok else 404, json.dumps({"ok": ok, "message": msg}, ensure_ascii=False))
+            ok, msg, res = pair_accept(d)
+            if not ok:
+                time.sleep(1)
+                return self.send(401, json.dumps({"ok": False, "message": msg}, ensure_ascii=False))
+            return self.send(200, json.dumps(res, ensure_ascii=False))
         if not self.authed():
             time.sleep(1)
             return self.send(401, '{"error":"密碼錯誤"}')
@@ -3931,11 +4184,24 @@ class Handler(BaseHTTPRequestHandler):
                 return self.send(e.code, e.read())
             except Exception as e:  # noqa: BLE001
                 return self.send(502, json.dumps({"ok": False, "message": peer_error(e, peer["url"])}, ensure_ascii=False))
+        if u.path == "/api/pair-admin":              # 這台：產生配對暗號、看配對過來的主機、解除配對
+            d = self.jbody(body)
+            if d.get("action") == "code":
+                ok, code = pair_code(d.get("url"))
+                return self.send(200 if ok else 400, json.dumps({"ok": ok, "code": code if ok else "", "message": "" if ok else code,
+                                                                 "hours": PAIR_HOURS}, ensure_ascii=False))
+            if d.get("action") == "revoke":
+                ok, msg = pair_revoke(kid=str(d.get("id") or "")[:20] or None)
+                return self.send(200 if ok else 404, json.dumps({"ok": ok, "message": msg, **pair_status()}, ensure_ascii=False))
+            return self.send(200, json.dumps({"ok": True, **pair_status()}, ensure_ascii=False))
         if u.path == "/api/peer":
-            try:
-                d = json.loads(body or b"{}")
-            except ValueError:
-                d = {}
+            d = self.jbody(body)
+            if d.get("action") == "add":
+                ok, msg = peer_add(d.get("code"))
+                return self.send(200 if ok else 400, json.dumps({"ok": ok, "message": msg}, ensure_ascii=False))
+            if d.get("action") == "remove":
+                ok, msg = peer_remove(d.get("name"))
+                return self.send(200 if ok else 400, json.dumps({"ok": ok, "message": msg}, ensure_ascii=False))
             ok, msg, tf = set_peer(d.get("name"), d.get("url"), d.get("token"), bool(d.get("force")))
             return self.send(200 if ok else 400, json.dumps({"ok": ok, "message": msg, "test_failed": tf}, ensure_ascii=False))
         if u.path == "/api/passkey":
@@ -4055,5 +4321,9 @@ def main():
     srv.serve_forever()
 
 
+if __name__ == "__main__" and sys.argv[1:2] == ["--pair-code"]:   # 安裝畫面用：產生配對暗號
+    ok, out = pair_code(sys.argv[2] if len(sys.argv) > 2 else "")
+    print(out)
+    sys.exit(0 if ok else 1)
 if __name__ == "__main__":
     main()
