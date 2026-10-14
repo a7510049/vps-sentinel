@@ -56,6 +56,8 @@ const P = {
   finger:'<path d="M12 10a2 2 0 0 0-2 2c0 1-.1 2.5-.26 4M14 13.1c0 2.4 0 6.4-1 8.9M17.3 21c.1-.6.4-2.3.5-3M2 12a10 10 0 0 1 18-6M2 16h.01M21.8 16c.2-2 .13-5.35 0-6M5 19.5C5.5 18 6 15 6 12a6 6 0 0 1 .34-2M8.65 22c.2-.66.45-1.3.57-2M9 6.8a6 6 0 0 1 9 5.2v2"/>',
   sun:'<circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41"/>',
   quote:'<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/><path d="M8 9h8M8 13h5"/>',
+  plus:'<path d="M12 5v14M5 12h14"/>',
+  link:'<path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/>',
   chev:'<path d="m6 9 6 6 6-6"/>', x:'<path d="M18 6 6 18M6 6l12 12"/>',
   warn:'<path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3z"/><path d="M12 9v4M12 17h.01"/>',
   ok:'<circle cx="12" cy="12" r="9.5"/><path d="m8.5 12 2.5 2.5 4.5-5"/>',
@@ -463,7 +465,7 @@ const COL = {cpu:"var(--c-cpu)", mem:"var(--c-mem)", rx:"var(--c-rx)", tx:"var(-
 /* 概念 → [顏色樣式, 圖示] */
 const ICO = {cpu:["cpu","cpu"], mem:["mem","mem"], disk:["disk","disk"], load:["load","gauge"], down:["down","down"], up:["up","up"],
   net:["net","net"], trend:["trend","trend"], month:["month","month"], box:["box","box"], bell:["bell","bell"], info:["info","info"],
-  layers:["theme","layers"], flag:["theme","flag"], key:["theme","key"], finger:["theme","finger"], pin:["theme","pin"], archive:["month","archive"], sun:["month","sun"], quote:["theme","quote"]};
+  layers:["theme","layers"], flag:["theme","flag"], key:["theme","key"], finger:["theme","finger"], pin:["theme","pin"], link:["theme","link"], archive:["month","archive"], sun:["month","sun"], quote:["theme","quote"]};
 const IC = (k, cls="sm") => `<span class="ico ${cls} ${ICO[k][0]}">${I(ICO[k][1])}</span>`;
 
 /* ═════════ 手機版 ═════════ */
@@ -520,8 +522,12 @@ function renderMobile(list, n, time){
     <button class="cap glass ${list.some(s=>s.self_has)?"hasnew":""}" data-settings title="設定">${I("gear")}</button><button class="cap glass" data-logout title="登出">${I("logout")}</button></header>
     <div class="hero"><h1 data-x>${g.hi}</h1><div class="quote" data-x>${g.quote}</div><div class="meta"><span class="live"></span>更新於 ${time}</div><div class="wxw" data-x>${g.wx}</div></div>
     ${summary(n, many)}
-    <div class="grid${w ? " wallet" : ""}" data-keyed>${shown.length ? shown.map((s, i) => mcard(s, i, w)).join("") : `<div class="empty" data-key="empty">這個分類目前沒有主機 👍</div>`}</div></div>`;
+    <div class="grid${w ? " wallet" : ""}" data-keyed>${shown.length ? shown.map((s, i) => mcard(s, i, w)).join("") : `<div class="empty" data-key="empty">這個分類目前沒有主機 👍</div>`}</div>
+    ${FILTER ? "" : addHostBtn("addhost glass m-add")}</div>`;
 }
+
+/* 主機列表最後的「新增主機」：貼上新主機的配對暗號 */
+const addHostBtn = cls => `<button class="${cls}" data-addhost data-key="+add">${I("plus")}<span>新增主機</span></button>`;
 
 /* ═════════ 電腦版 ═════════ */
 function hostItem(s, on){
@@ -692,7 +698,7 @@ function renderDesk(list, n, time){
       <div class="greet"><h2 data-x>${g.hi}</h2><div class="quote" data-x>${g.quote}</div></div>
       <div class="wxw" data-x>${g.wx}</div>
       ${summary(n, true)}
-      <div class="hosts" data-keyed>${(FILTER ? list.filter(s=>lvOf(s)===FILTER) : list).map(s=>hostItem(s, s===sel)).join("") || `<div class="empty" data-key="empty">這個分類目前沒有主機 👍</div>`}</div>
+      <div class="hosts" data-keyed>${(FILTER ? list.filter(s=>lvOf(s)===FILTER) : list).map(s=>hostItem(s, s===sel)).join("") || `<div class="empty" data-key="empty">這個分類目前沒有主機 👍</div>`}${FILTER ? "" : addHostBtn("host addhost")}</div>
       <div class="side-foot"><span class="sub">${list.length} 台主機</span>
         <button class="iconbtn ${REFRESHING?"spinning":""}" data-refresh title="重新整理">${I("upd")}</button>
         <button class="iconbtn ${list.some(s=>s.self_has)?"hasnew":""}" data-settings title="設定">${I("gear")}</button><button class="iconbtn" data-logout title="登出">${I("logout")}</button></div>
@@ -1118,7 +1124,8 @@ function settingsBody(){
     `<button class="opt optbtn" data-bk="${esc(s.node||"")}" data-label="${esc(s.name)}">${IC("archive")}<span class="lab">每日備份${LIST.length > 1 ? `：${esc(s.name)}` : ""}<small class="bkst" data-n="${esc(s.node||"")}">讀取中…</small></span><span class="chev">${I("chev")}</span></button>`).join("")}</div></div>` : ""}
   ${LIST.some(s => s.online) ? `<div class="sec"><h4>安全</h4><div class="group">${PK_OK && LIST.some(s => !s.node && s.online) ?
     `<button class="opt optbtn" data-pk>${IC("finger")}<span class="lab">手機金鑰登入<small class="pkst">讀取中…</small></span><span class="chev">${I("chev")}</span></button>` : ""}${LIST.some(s => !s.node && s.online) ?
-    `<button class="opt optbtn" data-pin>${IC("pin")}<span class="lab">PIN 碼登入<small class="pinst">讀取中…</small></span><span class="chev">${I("chev")}</span></button>` : ""}${LIST.filter(s => s.online).map(s =>
+    `<button class="opt optbtn" data-pin>${IC("pin")}<span class="lab">PIN 碼登入<small class="pinst">讀取中…</small></span><span class="chev">${I("chev")}</span></button>` : ""}${LIST.some(s => !s.node && s.online) ?
+    `<button class="opt optbtn" data-pair>${IC("link")}<span class="lab">配對暗號<small class="pairst">讀取中…</small></span><span class="chev">${I("chev")}</span></button>` : ""}${LIST.filter(s => s.online).map(s =>
     `<button class="opt optbtn" data-newtok="${esc(s.node||"")}" data-label="${esc(s.name)}">${IC("key")}<span class="lab">換一組新密碼${LIST.length > 1 ? `：${esc(s.name)}` : ""}<small>舊密碼會立刻失效</small></span><span class="chev">${I("chev")}</span></button>`).join("")}</div></div>` : ""}
   <div class="sec"><h4>資料</h4><div class="group">
     <div class="opt"><span class="lab">畫面更新頻率</span>${seg("refresh",[[3,"3 秒"],[5,"5 秒"],[10,"10 秒"],[30,"30 秒"]])}</div>
@@ -1223,7 +1230,7 @@ function peerModal(s){
   setTimeout(() => q("url").focus(), 60);
 }
 /* 編輯主機：名稱＋管理後台網址 */
-function hostModal(name, links){
+function hostModal(name, links, removable){
   return new Promise(res => {
     const v = document.createElement("div"); v.className = "veil";
     const row = (x = {name:"", url:""}) => `<div class="lrow"><input class="field ln" maxlength="30" placeholder="名稱，例如 3x-ui" value="${esc(x.name)}"><input class="field lu" inputmode="url" autocomplete="off" spellcheck="false" placeholder="https://你的網域:2053/路徑/" value="${esc(x.url)}"><button type="button" class="iconbtn" data-del title="刪掉這個連結">${I("x")}</button></div>`;
@@ -1235,12 +1242,12 @@ function hostModal(name, links){
           <div class="lrows">${(links.length ? links : [{name:"", url:""}]).map(row).join("")}</div>
           <button type="button" class="ubtn ghost addl" data-add>＋ 新增連結</button></div>
       </div>
-      <div class="btns"><button class="ubtn ghost" data-r="0">取消</button><button class="ubtn" data-r="1">儲存</button></div></div>`;
+      <div class="btns ${removable ? "three" : ""}">${removable ? `<button class="ubtn ghost" data-rm>移除主機</button>` : ""}<button class="ubtn ghost" data-r="0">取消</button><button class="ubtn" data-r="1">儲存</button></div></div>`;
     $("#layer").appendChild(v);
     const box = v.querySelector(".lrows");
     const sync = () => { v.querySelector("[data-add]").style.display = box.children.length >= 6 ? "none" : ""; };
     const done = ok => { if (v._d) return; v._d = 1; v.classList.add("closing");
-      const val = ok ? {name: v.querySelector('[data-k="name"]').value.trim(),
+      const val = ok === "rm" ? {remove: true} : ok ? {name: v.querySelector('[data-k="name"]').value.trim(),
         links: [...box.querySelectorAll(".lrow")].map(r => ({name: r.querySelector(".ln").value.trim(), url: r.querySelector(".lu").value.trim()})).filter(x => x.url)} : null;
       setTimeout(() => { v.remove(); res(val); }, 360); };
     v._esc = () => done(0);
@@ -1249,6 +1256,7 @@ function hostModal(name, links){
     v.addEventListener("click", e => {
       if (e.target === v) return done(0);
       const b = e.target.closest("[data-r]"); if (b) return done(+b.dataset.r);
+      if (e.target.closest("[data-rm]")) return done("rm");
       if (e.target.closest("[data-add]")) { box.insertAdjacentHTML("beforeend", row()); const r = box.lastElementChild;
         if (canAnim()) r.animate([{opacity:0, transform:"translateY(-4px)"}, {opacity:1, transform:"none"}], {duration:T.mid, easing:EASE});
         r.querySelector(".ln").focus(); return sync(); }
@@ -1462,7 +1470,7 @@ function openSettings(){
   const sheet = v.querySelector(".sheet"), body = v.querySelector(".sbody"), top = v.querySelector(".top");
   body.addEventListener("scroll", () => top.classList.toggle("under", body.scrollTop > 4), {passive:true});
   initSegs(body);
-  tgStatus(body); selfStatus(body); pkStatus(body); pinStatus(body); bkStatus(body);
+  tgStatus(body); selfStatus(body); pkStatus(body); pinStatus(body); bkStatus(body); pairStatus(body);
   sheet.addEventListener("animationend", e => { if (e.target === sheet && !v._d) sheet.classList.add("ready"); });
   const close = () => { if (v._d) return; v._d = 1; sheet.classList.remove("back"); v.classList.add("closing"); setTimeout(()=>v.remove(), 380); };
   v._esc = close;
@@ -1472,6 +1480,7 @@ function openSettings(){
     if (e.target.closest("[data-tg]")) return tgModal().then(() => tgStatus(body));
     if (e.target.closest("[data-pk]")) return pkModal().then(() => pkStatus(body));
     if (e.target.closest("[data-pin]")) return pinModal().then(() => pinStatus(body));
+    if (e.target.closest("[data-pair]")) return pairModal().then(() => pairStatus(body));
     const bk = e.target.closest("[data-bk]");
     if (bk) return bkModal(bk.dataset.bk, bk.dataset.label).then(() => bkStatus(body));
     const nt = e.target.closest("[data-newtok]");
@@ -1703,6 +1712,91 @@ async function pinModal(){
       }
     });
   });
+}
+
+/* ═════════ 配對暗號：新主機產生暗號，主要主機貼上就加進來（暗號用一次就失效，每台各有自己的連線鑰匙） ═════════ */
+const pairCall = body => pkCall("/api/pair-admin", body, 1);
+const pairDay = t => { const d = new Date(t * 1000); return `${d.getMonth()+1}/${d.getDate()}`; };
+async function pairStatus(root){
+  const el = root.querySelector(".pairst"); if (!el) return;
+  try { const d = await pairCall({action:"status"}), n = (d.keys || []).length;
+    el.textContent = n ? `已配對 ${n} 台` : "還沒配對";
+    el.classList.toggle("on", n > 0);
+  } catch(e) { el.textContent = e.message; }
+}
+async function pairModal(){
+  const v = document.createElement("div"); v.className = "veil";
+  v.innerHTML = `<div class="dialog glass pop pkd pairdlg">${IC("link","big")}<h3>配對暗號</h3>
+    <p>在主要主機按「新增主機」，貼上暗號</p>
+    <div class="form"><div class="pklist"></div><div class="pcode"></div><div class="msg"></div></div>
+    <div class="btns"><button class="ubtn ghost" data-r="0">關閉</button><button class="ubtn" data-gen>產生暗號</button></div></div>`;
+  $("#layer").appendChild(v);
+  const list = v.querySelector(".pklist"), box = v.querySelector(".pcode"), msg = v.querySelector(".msg"), gen = v.querySelector("[data-gen]");
+  let keys = [], code = "", busy = false;
+  const draw = () => {
+    list.innerHTML = keys.map(k => `<div class="pkrow">${I("link")}<span>${esc(k.name)}<small>${pairDay(k.t)} 配對${k.seen ? `・${ago(k.seen).replace(/\d$/, "$& ")}連過` : ""}</small></span>
+      <button type="button" class="iconbtn" data-del="${esc(k.id)}" data-name="${esc(k.name)}" title="解除配對">${I("x")}</button></div>`).join("");
+    box.innerHTML = code ? `<div class="codebox" data-x><code>${esc(code)}</code><button type="button" class="ubtn sm" data-cp>複製</button></div>
+      <small>24 小時內有效，用一次就失效</small>` : "";
+    gen.textContent = code ? "重新產生" : "產生暗號";
+  };
+  try { keys = (await pairCall({action:"status"})).keys || []; draw(); }
+  catch(e) { msg.className = "msg bad"; msg.textContent = e.message; }
+  return new Promise(res => {
+    const done = () => { if (v._d) return; v._d = 1; v.classList.add("closing"); setTimeout(() => { v.remove(); res(); }, 360); };
+    v._esc = done;
+    v.addEventListener("click", async e => {
+      if (e.target === v || e.target.closest("[data-r]")) return done();
+      if (busy) return;
+      if (e.target.closest("[data-cp]")) {
+        try { await navigator.clipboard.writeText(code); toast("已複製暗號"); }
+        catch(err) { const r = document.createRange(); r.selectNodeContents(box.querySelector("code")); getSelection().removeAllRanges(); getSelection().addRange(r);
+          toast("請手動複製選取的暗號", "bad"); }
+        return;
+      }
+      const del = e.target.closest("[data-del]");
+      if (del) {
+        if (!await modal({icon:"link", cls:"bell", title:`解除「${del.dataset.name}」的配對？`, text:"那台就看不到這台了。", ok:"解除"})) return;
+        busy = true;
+        const d = await pairCall({action:"revoke", id:del.dataset.del}).catch(err => ({message:err.message}));
+        busy = false;
+        if (d.ok) { keys = d.keys || []; draw(); toast(d.message); } else toast(d.message || "解除失敗", "bad");
+        return;
+      }
+      if (!e.target.closest("[data-gen]")) return;
+      busy = true; gen.disabled = true; msg.className = "msg"; msg.textContent = "";
+      const d = await pairCall({action:"code", url: location.origin + location.pathname.replace(/\/(index\.html)?$/, "")}).catch(err => ({message:err.message}));
+      busy = false; gen.disabled = false;
+      if (d.ok) { code = d.code; draw(); } else { msg.className = "msg bad"; msg.textContent = d.message || "產生失敗"; }
+    });
+  });
+}
+async function addHostModal(){
+  const v = document.createElement("div"); v.className = "veil";
+  v.innerHTML = `<div class="dialog glass pop">${IC("link","big")}<h3>新增主機</h3>
+    <p>貼上新主機的配對暗號</p>
+    <div class="form"><textarea class="field pfield" data-k="code" rows="3" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="VS-…"></textarea>
+      <small>新主機裝好時會顯示，也能在它的「設定 → 配對暗號」產生</small><div class="msg"></div></div>
+    <div class="btns"><button class="ubtn ghost" data-r="0">取消</button><button class="ubtn" data-go>連接</button></div></div>`;
+  $("#layer").appendChild(v);
+  const inp = v.querySelector("textarea"), msg = v.querySelector(".msg"), go = v.querySelector("[data-go]");
+  let busy = false;
+  const done = () => { if (v._d) return; v._d = 1; v.classList.add("closing"); setTimeout(() => v.remove(), 360); };
+  v._esc = done;
+  const send = async () => {
+    const code = inp.value.trim();
+    if (!code) return inp.focus();
+    busy = true; go.disabled = true; go.innerHTML = `<span class="spin"></span>連接中…`; msg.className = "msg"; msg.textContent = "";
+    const d = await pkCall("/api/peer", {action:"add", code}, 1).catch(err => ({message:err.message}));
+    busy = false; go.disabled = false; go.textContent = "連接";
+    if (d.ok) { toast(d.message); done(); tick(); } else { msg.className = "msg bad"; msg.textContent = d.message || "連接失敗"; }
+  };
+  inp.addEventListener("keydown", e => { if (e.key === "Enter" && !busy) { e.preventDefault(); send(); } });
+  v.addEventListener("click", e => {
+    if (e.target === v || e.target.closest("[data-r]")) return done();
+    if (e.target.closest("[data-go]") && !busy) send();
+  });
+  setTimeout(() => inp.focus(), 60);
 }
 
 /* ═════════ 每日備份：本機一份、Telegram 一份（有密碼）、其他主機的雲端硬碟一份 ═════════ */
@@ -2047,6 +2141,7 @@ document.addEventListener("click", async e => {
   if (t.closest("[data-pklogin]")) return pkLoginClick(t.closest("[data-pklogin]"));
   if (t.closest("[data-settings]")) return openSettings();
   if (t.closest("[data-rsw]")) return restoreScreen();
+  if (t.closest("[data-addhost]")) return addHostModal();
   const rg = t.closest("[data-range]");
   if (rg) { if (RANGE !== rg.dataset.range) { RANGE = rg.dataset.range; store("vps-range", RANGE); render(LIST); } return; }
   const tf = t.closest("[data-traffic]");
@@ -2076,8 +2171,16 @@ document.addEventListener("click", async e => {
     e.stopPropagation();
     const old = rn.dataset.name, node = rn.dataset.rename, hs = LIST.find(x => (x.node || "") === node);
     const oldl = hs ? linksOf(hs).filter(x => !x.fixed) : [];
-    const r0 = await hostModal(old, oldl);
+    const r0 = await hostModal(old, oldl, !!node);
     if (!r0) return;
+    if (r0.remove) {
+      if (!await modal({icon:"x", cls:"bell", title:`移除「${old}」？`, text:"會同時解除配對，之後要再加回來得重新配對。", ok:"移除"})) return;
+      const d = await pkCall("/api/peer", {action:"remove", name:node}, 1).catch(err => ({message:err.message}));
+      if (!d.ok) return toast(d.message || "移除失敗", "bad");
+      toast(`已移除「${old}」`);
+      if (SEL === keyOf(hs)) { SEL = ""; store("vps-sel", ""); }
+      return tick();
+    }
     const post = (path, body) => fetch(path + "?node=" + encodeURIComponent(node), {method:"POST", headers:{"X-Token":getTok(), "Content-Type":"application/json"}, body:JSON.stringify(body)})
       .then(async r => { const d = await r.json().catch(()=>({})); if (!(r.ok && d.ok)) throw new Error(d.message || d.error || (r.status === 404 ? "那台主機還沒更新到新版" : "儲存失敗")); return d; });
     try {
