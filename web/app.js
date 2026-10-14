@@ -24,8 +24,7 @@ function setTok(t, remember){
 }
 /* 連不上主機時（例如主機正在重新啟動），瀏覽器給的錯誤是英文，換成看得懂的中文 */
 const api = (path, opt) => fetch(path, opt).catch(() => { throw new Error("連線失敗，請稍後再試"); });
-const u0 = new URL(location.href);
-if (u0.searchParams.get("t")) { setTok(u0.searchParams.get("t"), true); history.replaceState(null, "", "/"); }
+if (window._t0) { setTok(window._t0, true); window._t0 = ""; }   // 網址上的密碼已經在 index.html 最前面拿掉了
 
 /* ═════════ 圖示 ═════════ */
 const P = {
@@ -220,12 +219,30 @@ function avatar(s){
 }
 const safeUrl = u => /^https?:\/\/[^\s"'<>]+$/i.test(u || "") ? u : "";
 const linksOf = s => (s.links || (s.panel ? [{name:"管理後台", url:s.panel}] : []))
-  .map(x => x.fixed && s.cloud && s.cloud.login ? {...x, url: s.cloud.login} : x).filter(x => safeUrl(x.url));   // 雲端硬碟用一鍵登入網址
+  .map(x => x.fixed && s.cloud ? {...x, url: cloudHref(s.cloud), sso: keyOf(s)} : x).filter(x => safeUrl(x.url));   // 雲端硬碟：點了用一次性登入票打開
+/* 雲端硬碟一鍵登入：一次性登入票用表單送出，不放在網址上（網址列、瀏覽紀錄都看不到）；票用過一次就失效 */
+const cloudHref = c => c.ticket ? c.url : (c.login || c.url);    // 沒有登入票的是還沒更新的主機，照舊用它給的網址
+const ssoAttr = s => s.cloud && s.cloud.ticket ? ` data-sso="${esc(keyOf(s))}"` : "";
+const TK_USED = new Set();
+function openCloud(s){
+  const c = s && s.cloud;
+  if (!c || !c.ticket || TK_USED.has(c.ticket) || !safeUrl(c.login)) return false;   // 票用過了：直接開雲端硬碟（剛剛已經拿到通行證）
+  TK_USED.add(c.ticket);
+  const f = document.createElement("form"), i = document.createElement("input");
+  Object.assign(f, {method: "post", action: c.login, target: "_blank", rel: "noopener noreferrer", hidden: true});
+  Object.assign(i, {type: "hidden", name: "t", value: c.ticket});
+  f.append(i); document.body.append(f); f.submit(); f.remove();
+  return true;
+}
+document.addEventListener("click", e => {
+  const a = e.target.closest && e.target.closest("a[data-sso]");
+  if (a && !e.ctrlKey && !e.metaKey && !e.shiftKey && e.button === 0 && openCloud(LIST.find(x => keyOf(x) === a.dataset.sso))) e.preventDefault();
+}, true);
 const linkSt = x => x.up === false ? `打不開：${x.err || "連不上"}` : x.up ? `正常・${x.ms} 毫秒` : x.err ? "剛剛沒回應，再確認一次中…" : "還沒檢查";
 /* 主機名稱旁：常用連結一直都在，編輯、重新開機、移除收進「⋯」選單 */
 const moreBtn = s => (s.online || s.node) ? `<button class="iconbtn" title="更多" data-more="${esc(keyOf(s))}">${I("more")}</button>` : "";
 const editBtn = s => { const L = s.online ? linksOf(s) : [];
-  return (L.length === 1 ? `<a class="iconbtn plink ${L[0].up===false?"down":""}" href="${esc(L[0].url)}" target="_blank" rel="noopener noreferrer" title="打開 ${esc(L[0].name)}（${esc(linkSt(L[0]))}）">${I("ext")}</a>`
+  return (L.length === 1 ? `<a class="iconbtn plink ${L[0].up===false?"down":""}" href="${esc(L[0].url)}"${L[0].sso ? ` data-sso="${esc(L[0].sso)}"` : ""} target="_blank" rel="noopener noreferrer" title="打開 ${esc(L[0].name)}（${esc(linkSt(L[0]))}）">${I("ext")}</a>`
     : L.length > 1 ? `<button class="iconbtn plink ${L.some(x=>x.up===false)?"down":""}" data-links="${esc(keyOf(s))}" title="常用連結">${I("ext")}</button>` : "") + moreBtn(s); };
 function alerts(s){
   const k = t => esc(String(t).replace(/^\d+\s*|\s*[（(]?\d+(\.\d+)?\s*%[）)]?$/g, ""));   // 只拿掉會變的數字，名稱裡的數字要留（app-1、app-2 是兩件事）
@@ -491,7 +508,7 @@ function mcard(s, i, w){
   b += `<div class="metrics" data-key="mt">` + metric("cpu", "處理器", s.cpu, `${s.cores} 核`) +
        metric("mem", "記憶體", s.mem.pct, `${size(s.mem.used)} / ${size(s.mem.total)}`) +
        s.disks.map(d=>metric("disk", "磁碟"+(d.path==="/"?"":" "+esc(d.path)), d.pct, `${size(d.used)} / ${size(d.total)}`)).join("") + `</div>`
-       + (s.cloud && safeUrl(s.cloud.login || s.cloud.url) ? `<a class="cloudm" data-key="cl" href="${esc(s.cloud.login || s.cloud.url)}" target="_blank" rel="noopener noreferrer">${I("cloud")}<span>雲端硬碟</span>
+       + (s.cloud && safeUrl(cloudHref(s.cloud)) ? `<a class="cloudm" data-key="cl" href="${esc(cloudHref(s.cloud))}"${ssoAttr(s)} target="_blank" rel="noopener noreferrer">${I("cloud")}<span>雲端硬碟</span>
           ${s.cloud.total ? `<b>${size(s.cloud.used)}<small> / ${size(s.cloud.total)}</small></b>` : ""}${I("ext")}</a>` : "");
   if (PREF.show.chart && s.hist) { const hh = histFor(s);
     b += `<div class="spark" data-key="sp"><div class="lbl"><span><i style="background:${COL.cpu};margin-left:0"></i>處理器<i style="background:${COL.mem}"></i>記憶體</span>${rangeSeg()}</div>
@@ -536,10 +553,10 @@ function hostItem(s, on){
 }
 /* 雲端硬碟入口：放在磁碟卡片標題旁，點了直接打開 */
 function cloudChip(s){
-  const c = s.cloud, href = c && (c.login || c.url); if (!c || !safeUrl(href)) return "";
+  const c = s.cloud, href = c && cloudHref(c); if (!c || !safeUrl(href)) return "";
   const L = (s.links || []).find(x => x.fixed), down = L && L.up === false;
   const use = c.total ? `${size(c.used)} / ${size(c.total)}` : "";
-  return `<a class="cchip ${down ? "down" : c.pct >= 90 ? "warn" : ""}" href="${esc(href)}" target="_blank" rel="noopener noreferrer"
+  return `<a class="cchip ${down ? "down" : c.pct >= 90 ? "warn" : ""}" href="${esc(href)}"${ssoAttr(s)} target="_blank" rel="noopener noreferrer"
     title="打開雲端硬碟${use ? `（已用 ${use}）` : ""}${down ? `・目前打不開：${esc(L.err || "")}` : ""}">${I("cloud")}<span>雲端${c.total ? ` ${num(c.pct)}%` : ""}</span>${I("ext")}</a>`;
 }
 function ring(icon, label, pct, sub, i, extra = ""){
@@ -1279,7 +1296,7 @@ function hostModal(name, links){
 function linksMenu(btn, s){
   closeMenu();
   const m = document.createElement("div"); m.className = "lmenu glass pop";
-  m.innerHTML = linksOf(s).map(x => `<a href="${esc(x.url)}" target="_blank" rel="noopener noreferrer"><i class="ld ${x.up===false?"bad":x.up?"ok":""}"></i><span>${esc(x.name)}<small>${esc(linkSt(x))}</small></span>${I("ext")}</a>`).join("");
+  m.innerHTML = linksOf(s).map(x => `<a href="${esc(x.url)}"${x.sso ? ` data-sso="${esc(x.sso)}"` : ""} target="_blank" rel="noopener noreferrer"><i class="ld ${x.up===false?"bad":x.up?"ok":""}"></i><span>${esc(x.name)}<small>${esc(linkSt(x))}</small></span>${I("ext")}</a>`).join("");
   document.body.appendChild(m);
   const r = btn.getBoundingClientRect(), w = m.offsetWidth;
   m.style.left = Math.max(8, Math.min(innerWidth - w - 8, r.left + r.width / 2 - w / 2)) + "px";
