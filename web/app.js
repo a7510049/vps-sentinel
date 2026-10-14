@@ -63,6 +63,7 @@ const P = {
   warn:'<path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3z"/><path d="M12 9v4M12 17h.01"/>',
   ok:'<circle cx="12" cy="12" r="9.5"/><path d="m8.5 12 2.5 2.5 4.5-5"/>',
   upd:'<path d="M21 12a9 9 0 1 1-9-9c2.52 0 4.93 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/>',
+  power:'<path d="M12 2v10"/><path d="M18.4 6.6a9 9 0 1 1-12.77.04"/>',
   off:'<path d="M12 20h.01M8.5 16.43a5 5 0 0 1 7 0M2 8.82a15 15 0 0 1 4.17-2.65M10.66 5c4.01-.36 8.14.9 11.34 3.76M16.85 11.25a10 10 0 0 1 2.22 1.68M5 13a10 10 0 0 1 5.24-2.76M2 2l20 20"/>',
 };
 const I = n => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${P[n]}</svg>`;
@@ -221,10 +222,11 @@ const linksOf = s => (s.links || (s.panel ? [{name:"管理後台", url:s.panel}]
   .map(x => x.fixed && s.cloud && s.cloud.login ? {...x, url: s.cloud.login} : x).filter(x => safeUrl(x.url));   // 雲端硬碟用一鍵登入網址
 const linkSt = x => x.up === false ? `打不開：${x.err || "連不上"}` : x.up ? `正常・${x.ms} 毫秒` : x.err ? "剛剛沒回應，再確認一次中…" : "還沒檢查";
 const rmBtn = s => s.node ? `<button class="iconbtn rmhost" title="移除主機" data-rmhost="${esc(s.node)}" data-name="${esc(s.name)}">${I("trash")}</button>` : "";
+const bootBtn = s => `<button class="iconbtn rmhost" title="重新開機" data-reboot="${esc(s.node||"")}" data-name="${esc(s.name)}">${I("power")}</button>`;
 const editBtn = s => { if (!s.online) return rmBtn(s); const L = linksOf(s);
   return `<button class="iconbtn" title="編輯名稱與常用連結" data-rename="${esc(s.node||"")}" data-name="${esc(s.name)}">${I("edit")}</button>`
   + (L.length === 1 ? `<a class="iconbtn plink ${L[0].up===false?"down":""}" href="${esc(L[0].url)}" target="_blank" rel="noopener noreferrer" title="打開 ${esc(L[0].name)}（${esc(linkSt(L[0]))}）">${I("ext")}</a>`
-    : L.length > 1 ? `<button class="iconbtn plink ${L.some(x=>x.up===false)?"down":""}" data-links="${esc(keyOf(s))}" title="常用連結">${I("ext")}</button>` : "") + rmBtn(s); };
+    : L.length > 1 ? `<button class="iconbtn plink ${L.some(x=>x.up===false)?"down":""}" data-links="${esc(keyOf(s))}" title="常用連結">${I("ext")}</button>` : "") + bootBtn(s) + rmBtn(s); };
 function alerts(s){
   const k = t => esc(String(t).replace(/^\d+\s*|\s*[（(]?\d+(\.\d+)?\s*%[）)]?$/g, ""));   // 只拿掉會變的數字，名稱裡的數字要留（app-1、app-2 是兩件事）
   const al = (s.problems||[]).map(p=>`<div class="alert bad" data-key="b:${k(p)}">${I("warn")}${esc(p)}</div>`)
@@ -1801,6 +1803,47 @@ async function rmHost(node, name){
   if (SEL === node) { SEL = ""; store("vps-sel", ""); }
   return tick();
 }
+/* 重新開機：先傳驗證碼到 Telegram，輸入對了才重開（沒設定 Telegram 就輸入那台的密碼或 PIN 碼） */
+function rebootModal(node, name){
+  const v = document.createElement("div"); v.className = "veil";
+  v.innerHTML = `<div class="dialog glass pop"><div class="ico big bell">${I("power")}</div><h3>重新開機「${esc(name)}」？</h3>
+    <p data-t>會先傳驗證碼到 Telegram</p>
+    <div class="form" hidden><input class="field" data-k="code" autocomplete="one-time-code" autocapitalize="off" spellcheck="false"><div class="msg"></div></div>
+    <div class="btns"><button class="ubtn ghost" data-r="0">取消</button><button class="ubtn" data-go>傳送驗證碼</button></div></div>`;
+  $("#layer").appendChild(v);
+  const form = v.querySelector(".form"), inp = v.querySelector("input"), msg = v.querySelector(".msg"), go = v.querySelector("[data-go]"), txt = v.querySelector("[data-t]");
+  const call = body => pkCall("/api/reboot" + (node ? "?node=" + encodeURIComponent(node) : ""), body, 1).catch(err => ({message:err.message}));
+  let busy = false, asked = false;
+  const done = () => { if (v._d) return; v._d = 1; v.classList.add("closing"); setTimeout(() => v.remove(), 360); };
+  v._esc = done;
+  const wait = t => { busy = true; go.disabled = true; go.innerHTML = `<span class="spin"></span>${t}`; msg.className = "msg"; msg.textContent = ""; };
+  const say = (t, bad) => { msg.className = "msg" + (bad ? " bad" : ""); msg.textContent = t || ""; };
+  const ask = async () => {
+    wait("傳送中…");
+    const d = await call({action:"ask"});
+    busy = false; go.disabled = false; go.textContent = asked ? "重新開機" : "傳送驗證碼";
+    if (!d.ok) { form.hidden = false; return say(d.message || "傳送失敗", 1); }
+    asked = true; go.textContent = "重新開機"; form.hidden = false;
+    if (d.mode === "pw") { txt.textContent = "沒設定 Telegram，請輸入這台的密碼或 PIN 碼"; inp.type = "password"; inp.placeholder = "密碼或 PIN 碼"; }
+    else { txt.innerHTML = `請輸入 Telegram 收到的驗證碼 <a href="#" data-again>重傳</a>`; inp.inputMode = "numeric"; inp.maxLength = 6; inp.placeholder = "6 位數驗證碼"; say(d.message); }
+    inp.value = ""; setTimeout(() => inp.focus(), 60);
+  };
+  const boot = async () => {
+    const code = inp.value.trim();
+    if (!code) return inp.focus();
+    wait("重新開機中…");
+    const d = await call({action:"go", code});
+    busy = false; go.disabled = false; go.textContent = "重新開機";
+    if (d.ok) { toast(`「${name}」正在重新開機`); done(); } else { say(d.message || "沒有成功", 1); inp.select(); }
+  };
+  inp.addEventListener("input", () => { if (inp.inputMode === "numeric") inp.value = inp.value.replace(/\D/g, ""); });
+  inp.addEventListener("keydown", e => { if (e.key === "Enter" && !busy) { e.preventDefault(); boot(); } });
+  v.addEventListener("click", e => {
+    if (e.target === v || e.target.closest("[data-r]")) return done();
+    if (e.target.closest("[data-again]")) { e.preventDefault(); if (!busy) ask(); return; }
+    if (e.target.closest("[data-go]") && !busy) asked ? boot() : ask();
+  });
+}
 async function addHostModal(){
   const v = document.createElement("div"); v.className = "veil";
   v.innerHTML = `<div class="dialog glass pop">${IC("link","big")}<h3>新增主機</h3>
@@ -2195,6 +2238,8 @@ document.addEventListener("click", async e => {
   const lk = t.closest("[data-links]");
   if (lk) { e.stopPropagation(); const s = LIST.find(x => keyOf(x) === lk.dataset.links); if (window._menu) return closeMenu(); return s && linksMenu(lk, s); }
   if (window._menu && !t.closest(".lmenu")) closeMenu();
+  const rb = t.closest("[data-reboot]");
+  if (rb) { e.stopPropagation(); return rebootModal(rb.dataset.reboot, rb.dataset.name); }
   const rm = t.closest("[data-rmhost]");
   if (rm) { e.stopPropagation(); return rmHost(rm.dataset.rmhost, rm.dataset.name); }
   const rn = t.closest("[data-rename]");
