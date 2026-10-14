@@ -520,7 +520,7 @@ function renderMobile(list, n, time){
     <div class="hero"><h1 data-x>${g.hi}</h1><div class="quote" data-x>${g.quote}</div><div class="meta"><span class="live"></span>更新於 ${time}</div><div class="wxw" data-x>${g.wx}</div></div>
     ${summary(n, many)}
     <div class="grid${w ? " wallet" : ""}" data-keyed>${shown.length ? shown.map((s, i) => mcard(s, i, w)).join("") : `<div class="empty" data-key="empty">這個分類目前沒有主機 👍</div>`}</div>
-    ${FILTER ? "" : addHostBtn("addhost glass m-add")}</div>`;
+    ${FILTER ? "" : addHostBtn("addhost m-add")}</div>`;
 }
 
 /* 主機列表最後的「新增主機」：貼上新主機的配對暗號 */
