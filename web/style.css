@@ -564,6 +564,13 @@ a.plink,button.plink{color:var(--sub);text-decoration:none}
 .lmenu a:hover{background:var(--track)}
 .lmenu a svg{width:14px;height:14px;color:var(--faint);flex:none;margin-left:auto}
 .lmenu a span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;display:flex;flex-direction:column;min-width:0}
+.hmenu{min-width:180px}
+.hmenu button{display:flex;align-items:center;gap:10px;padding:10px 12px;border:0;background:transparent;border-radius:var(--r-md);color:var(--text);cursor:pointer;
+  font:inherit;font-size:var(--fs-m);font-weight:700;text-align:left;transition:background var(--t-fast)}
+.hmenu button:hover{background:var(--track)}
+.hmenu button svg{width:16px;height:16px;flex:none;color:var(--sub)}
+.hmenu button.warn svg{color:var(--warn)}
+.hmenu button.bad,.hmenu button.bad svg{color:var(--bad)}
 .lmenu a small{font-size:var(--fs-xs);color:var(--sub);font-weight:600}
 .ld{width:8px;height:8px;border-radius:50%;flex:none;background:var(--faint)}.ld.ok{background:var(--ok)}.ld.bad{background:var(--bad)}
 .plink{position:relative}
@@ -859,4 +866,3 @@ html::-webkit-scrollbar-thumb{background:color-mix(in srgb,var(--text) 22%,trans
 .quote{font-size:var(--fs-m);font-weight:700;color:var(--sub);margin-top:4px}
 .quote:empty{display:none}
 .greet .quote{font-size:var(--fs-s);margin-top:2px}
-.iconbtn.rmhost{color:var(--faint)}.iconbtn.rmhost:hover{color:var(--bad)}
