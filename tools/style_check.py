@@ -47,6 +47,26 @@ for m in re.finditer(r'"cubic-bezier\([^)]*\)"', js):
     if "const EASE" not in line:
         report("app.js", jline0, js, m.start(), f"曲線請用 EASE／SPRING／EXIT：{m.group(0)}")
 
+# 方塊圖示的顏色只能用 style.css 裡定義好的 .ico.樣式（規則見 CLAUDE.md「圖示顏色」）
+tiles = set(re.findall(r"\.ico\.([a-z]+)\{background", css))
+used = [(m.start(), c) for m in re.finditer(r'\b[a-z]+:\["([a-z]+)","[a-z]+"\]', js) for c in [m.group(1)]]
+used += [(m.start(), m.group(1)) for m in re.finditer(r'class="ico big ([a-z]+)"', js)]
+used += [(m.start(), m.group(1)) for m in re.finditer(r'modal\(\{icon:"[a-z]+", cls:"([a-z]+)"', js)]
+for idx, c in used:
+    if c not in tiles:
+        report("app.js", jline0, js, idx, f"方塊圖示沒有「{c}」這個顏色，請用：{'、'.join(sorted(tiles))}")
+# 每個概念要有自己的色調：ICO 裡不能兩個概念共用一個顏色，style.css 裡也不能兩個 .ico 樣式長得一樣
+seen = {}
+for m in re.finditer(r'\b([a-z]+):\["([a-z]+)","[a-z]+"\]', js):
+    if m.group(2) in seen:
+        report("app.js", jline0, js, m.start(), f"「{m.group(1)}」跟「{seen[m.group(2)]}」用了同一個顏色，請給它自己的色調")
+    seen.setdefault(m.group(2), m.group(1))
+bgs = {}
+for m in re.finditer(r"\.ico\.([a-z]+)\{background:([^}]+)\}", body_css):
+    if m.group(2) in bgs:
+        report("style.css", line0, body_css, m.start(), f".ico.{m.group(1)} 跟 .ico.{bgs[m.group(2)]} 顏色一樣")
+    bgs.setdefault(m.group(2), m.group(1))
+
 if bad:
     print(f"有 {len(bad)} 個地方沒照共用規則：")
     print("\n".join(bad))
