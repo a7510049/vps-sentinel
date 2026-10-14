@@ -602,7 +602,7 @@ function detail(s){
   if (cp || np) h += `<div class="charts" data-key="ch" data-keyed style="${cp&&np?"":"grid-template-columns:1fr"}">${cp}${np}</div>`;
   const items = itemsOf(s);
   const ip = PREF.show.items ? `<div class="panel glass" data-key="ip" style="--i:6"><div class="ph">${IC("box")}<h3>容器與服務</h3><span class="sub" style="margin-left:auto;font-weight:700">${items.length?itemsSummary(items).replace("<b>",'<b style="color:var(--bad)">'):""}</span></div>
-      ${items.length ? `<div class="tbl" data-keyed>${itemsHTML(items)}</div>` : `<div class="sub">沒有偵測到容器或服務</div>`}</div>` : "";
+      ${items.length ? `<div class="tbl" data-key="tbl" data-keyed>${itemsHTML(items)}</div>` : `<div class="sub" data-key="none">沒有偵測到容器或服務</div>`}</div>` : "";
   const ep = eventsPanel(s), tp = trafficPanel(s);
   if (ip || ep || tp) h += `<div class="lower" data-key="lw" data-keyed>${tp}${ep}${ip}</div>`;
   return h + `</div>`;
@@ -685,8 +685,8 @@ function eventsPanel(s){
   if (!ev) return "";
   const word = {bad:"異常", warn:"注意", ok:"恢復", info:"通知"};
   return `<div class="panel glass" data-key="ep" style="--i:8"><div class="ph">${IC("bell")}<h3>事件紀錄</h3><span class="sub" style="margin-left:auto;font-weight:700">最近 ${ev.length} 筆</span></div>
-    ${ev.length ? `<div class="evs" data-keyed>${mergeEv(ev).map(e=>`<div class="ev" data-key="${e.kind}:${esc(e.text)}"><span class="dot ${e.kind}"></span><div><div>${esc(e.text)}</div><div class="sub">${word[e.kind]||""}・${ago(e.t)}${e.n>1?`・共 ${e.n} 次`:""}</div></div></div>`).join("")}</div>`
-      : `<div class="calm">目前沒有事件</div>`}</div>`;
+    ${ev.length ? `<div class="evs" data-key="evs" data-keyed>${mergeEv(ev).map(e=>`<div class="ev" data-key="${e.kind}:${esc(e.text)}"><span class="dot ${e.kind}"></span><div><div>${esc(e.text)}</div><div class="sub">${word[e.kind]||""}・${ago(e.t)}${e.n>1?`・共 ${e.n} 次`:""}</div></div></div>`).join("")}</div>`
+      : `<div class="calm" data-key="calm">目前沒有事件</div>`}</div>`;
 }
 function renderDesk(list, n, time){
   const sel = list.find(s=>keyOf(s)===SEL) || list[0], g = greet(n, list.length);
@@ -1055,7 +1055,7 @@ function smooth(fn, theme, relayout){
     if (theme || relayout) {
       const x = document.createElement("div"); x.className = "xfade";
       x.style.background = getComputedStyle(document.documentElement).backgroundColor;
-      if (!theme) x.style.animationDuration = ".38s";
+      if (!theme) x.style.animationDuration = T.mid + "ms";
       document.body.appendChild(x); setTimeout(() => x.remove(), 500);
       window._vt = (window._vt || 0) + 1; setTimeout(() => window._vt--, 420);
     }
@@ -1095,8 +1095,8 @@ function toast(msg, type="ok"){
 function settingsBody(){
   const seg = (k, opts) => `<div class="seg"><span class="ind"></span>${opts.map(([v,l])=>`<button class="${String(getP(k))===String(v)?"on":""}" data-pref="${k}" data-val="${v}">${l}</button>`).join("")}</div>`;
   const tog = k => `<input type="checkbox" class="tog" data-pref="${k}" ${getP(k)?"checked":""}>`;
-  const sw = [["blue","#38bdf8,#6366f1"],["purple","#a78bfa,#d946ef"],["green","#34d399,#14b8a6"],["orange","#fbbf24,#f97316"],["pink","#f472b6,#f43f5e"]]
-    .map(([v,c])=>`<button class="${PREF.accent===v?"on":""}" data-pref="accent" data-val="${v}" style="background:linear-gradient(135deg,${c})"></button>`).join("")
+  const sw = ["blue","purple","green","orange","pink"]      // 顏色直接用 style.css 的主題色，不另外寫一份
+    .map(v=>`<button class="${PREF.accent===v?"on":""}" data-pref="accent" data-val="${v}" data-accent="${v}" style="background:linear-gradient(135deg,var(--a1),var(--a2))"></button>`).join("")
     + (() => { const p = FLAGPAL[flagCC()] || FLAGDEF;
       return `<button class="flagsw ${PREF.accent==="flag"?"on":""}" data-pref="accent" data-val="flag" title="跟著國旗" style="background:conic-gradient(${p[1]} 0 33%,${p[0]} 0 66%,${p[2]} 0)"><span>旗</span></button>`; })();
   return `
@@ -1104,7 +1104,7 @@ function settingsBody(){
     <div class="opt"><span class="lab">主題</span>${seg("theme",[["auto","自動"],["light","淺色"],["dark","深色"]])}</div>
     <div class="opt" style="flex-wrap:wrap"><span class="lab">主題色<small>「旗」會跟著主機的國旗變色</small></span><div class="sw" style="flex-basis:100%;padding:4px 2px 2px">${sw}</div></div>
     <div class="opt" style="flex-wrap:wrap"><span class="lab">玻璃效果</span>
-      <div class="slider" style="flex-basis:100%"><span>清透</span><input type="range" min="0" max="100" value="${PREF.glass}" data-pref="glass"><span>霧面</span></div></div>
+      <div class="slider" style="flex-basis:100%"><span>清透</span><input type="range" min="0" max="100" value="${PREF.glass}" data-pref="glass" style="--v:${PREF.glass}%"><span>霧面</span></div></div>
     <div class="opt"><span class="lab">背景</span>${seg("bg",[["aurora","流光"],["mesh","漸層"],["plain","純色"]])}</div>
   </div></div>
   <div class="sec"><h4>版面</h4><div class="group">
@@ -1530,7 +1530,7 @@ function openSettings(){
     }
   });
   v.addEventListener("change", e => { const t = e.target; if (t.classList.contains("tog")) { setP(t.dataset.pref, t.checked); setTimeout(() => changed(t.dataset.pref), 180); } });
-  v.addEventListener("input", e => { const t = e.target; if (t.type === "range") { setP("glass", +t.value); applyPrefs(); } });
+  v.addEventListener("input", e => { const t = e.target; if (t.type === "range") { t.style.setProperty("--v", t.value + "%"); setP("glass", +t.value); applyPrefs(); } });
 
   // 手機：往下滑關閉
   let y0 = null, dy = 0, t0 = 0;

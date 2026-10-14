@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""樣式規則檢查：找出沒有使用共用規則（圓角、字級、動畫時間、曲線）的地方。
+"""樣式規則檢查：找出沒有使用共用規則（圓角、字級、動畫時間、曲線、顏色、疊放順序、陰影）的地方。
 
 用法：python3 tools/style_check.py
 全部符合會印出「全部符合規則」，否則列出要修的地方並回傳錯誤碼 1。
@@ -66,6 +66,30 @@ for m in re.finditer(r"\.ico\.([a-z]+)\{background:([^}]+)\}", body_css):
     if m.group(2) in bgs:
         report("style.css", line0, body_css, m.start(), f".ico.{m.group(1)} 跟 .ico.{bgs[m.group(2)]} 顏色一樣")
     bgs.setdefault(m.group(2), m.group(1))
+
+# 顏色只能寫在顏色變數（--名稱:）和方塊圖示（.ico.名稱）裡，其他地方一律用變數；白色、黑色不算
+HEX = re.compile(r"#(?![fF]{3}\b|[fF]{6}\b|000\b|000000\b)[0-9a-fA-F]{3,8}\b")
+for m in re.finditer(r"([^{}]+)\{([^{}]*)\}", body_css):
+    sel = re.sub(r"/\*.*?\*/", "", m.group(1), flags=re.S).strip()
+    if re.fullmatch(r"\.ico\.[a-z]+", sel) or sel.startswith("@property"):
+        continue
+    for d in re.finditer(r"([\w-]+)\s*:([^;]+)", m.group(2)):
+        if not d.group(1).startswith("--") and HEX.search(d.group(2)):
+            report("style.css", line0, body_css, m.start(2) + d.start(), f"顏色請用變數（var(--ok)、var(--warn-hi)…）：{d.group(0).strip()[:60]}")
+for m in re.finditer(r"(?:background|color|stroke|fill|stop-color)\s*[:=]\s*\"?[^\";`]*#[0-9a-fA-F]{3,8}", js):
+    if HEX.search(m.group(0)):
+        report("app.js", jline0, js, m.start(), f"顏色請用 style.css 的變數：{m.group(0)[:60]}")
+html_src = open(os.path.join(WEB, "index.html"), encoding="utf-8").read()
+for m in re.finditer(r"stop-color=\"(#[0-9a-fA-F]{3,8})\"", html_src):
+    if HEX.search(m.group(1)):
+        report("index.html", 1, html_src, m.start(), f"漸層顏色請用 style=\"stop-color:var(--…)\"：{m.group(0)}")
+# 疊放順序只能用 --z-* （0、1、2、-1 這種區塊內的小數字不算）
+for m in re.finditer(r"z-index:\s*(-?\d+)", body_css):
+    if abs(int(m.group(1))) > 2:
+        report("style.css", line0, body_css, m.start(), f"疊放順序請用 var(--z-*)：{m.group(0)}")
+# 浮動玻璃和方塊圖示的陰影用共用的 --sh-*，不要每個地方各寫一份
+for m in re.finditer(r"box-shadow:inset 0 1px 0 rgba\(255,255,255,\.[34]5?\)", body_css):
+    report("style.css", line0, body_css, m.start(), f"上緣亮邊請用 var(--hl) 或 var(--sh-tile)：{m.group(0)}")
 
 if bad:
     print(f"有 {len(bad)} 個地方沒照共用規則：")
