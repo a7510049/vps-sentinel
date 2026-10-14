@@ -47,6 +47,7 @@ const P = {
   gear:'<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>',
   logout:'<path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9"/>',
   edit:'<path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/>',
+  more:'<circle cx="5" cy="12" r="1.2"/><circle cx="12" cy="12" r="1.2"/><circle cx="19" cy="12" r="1.2"/>',
   ext:'<path d="M14 4h6v6"/><path d="M20 4 11 13"/><path d="M19 14v4.5a1.5 1.5 0 0 1-1.5 1.5h-12A1.5 1.5 0 0 1 4 18.5v-12A1.5 1.5 0 0 1 5.5 5H10"/>',
   cloud:'<path d="M17.5 19a4.5 4.5 0 1 0-1.3-8.8A6 6 0 0 0 4.6 12.5 3.5 3.5 0 0 0 6.5 19Z"/>',
   search:'<circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/>',
@@ -221,12 +222,11 @@ const safeUrl = u => /^https?:\/\/[^\s"'<>]+$/i.test(u || "") ? u : "";
 const linksOf = s => (s.links || (s.panel ? [{name:"管理後台", url:s.panel}] : []))
   .map(x => x.fixed && s.cloud && s.cloud.login ? {...x, url: s.cloud.login} : x).filter(x => safeUrl(x.url));   // 雲端硬碟用一鍵登入網址
 const linkSt = x => x.up === false ? `打不開：${x.err || "連不上"}` : x.up ? `正常・${x.ms} 毫秒` : x.err ? "剛剛沒回應，再確認一次中…" : "還沒檢查";
-const rmBtn = s => s.node ? `<button class="iconbtn rmhost" title="移除主機" data-rmhost="${esc(s.node)}" data-name="${esc(s.name)}">${I("trash")}</button>` : "";
-const bootBtn = s => `<button class="iconbtn rmhost" title="重新開機" data-reboot="${esc(s.node||"")}" data-name="${esc(s.name)}">${I("power")}</button>`;
-const editBtn = s => { if (!s.online) return rmBtn(s); const L = linksOf(s);
-  return `<button class="iconbtn" title="編輯名稱與常用連結" data-rename="${esc(s.node||"")}" data-name="${esc(s.name)}">${I("edit")}</button>`
-  + (L.length === 1 ? `<a class="iconbtn plink ${L[0].up===false?"down":""}" href="${esc(L[0].url)}" target="_blank" rel="noopener noreferrer" title="打開 ${esc(L[0].name)}（${esc(linkSt(L[0]))}）">${I("ext")}</a>`
-    : L.length > 1 ? `<button class="iconbtn plink ${L.some(x=>x.up===false)?"down":""}" data-links="${esc(keyOf(s))}" title="常用連結">${I("ext")}</button>` : "") + bootBtn(s) + rmBtn(s); };
+/* 主機名稱旁：常用連結一直都在，編輯、重新開機、移除收進「⋯」選單 */
+const moreBtn = s => (s.online || s.node) ? `<button class="iconbtn" title="更多" data-more="${esc(keyOf(s))}">${I("more")}</button>` : "";
+const editBtn = s => { const L = s.online ? linksOf(s) : [];
+  return (L.length === 1 ? `<a class="iconbtn plink ${L[0].up===false?"down":""}" href="${esc(L[0].url)}" target="_blank" rel="noopener noreferrer" title="打開 ${esc(L[0].name)}（${esc(linkSt(L[0]))}）">${I("ext")}</a>`
+    : L.length > 1 ? `<button class="iconbtn plink ${L.some(x=>x.up===false)?"down":""}" data-links="${esc(keyOf(s))}" title="常用連結">${I("ext")}</button>` : "") + moreBtn(s); };
 function alerts(s){
   const k = t => esc(String(t).replace(/^\d+\s*|\s*[（(]?\d+(\.\d+)?\s*%[）)]?$/g, ""));   // 只拿掉會變的數字，名稱裡的數字要留（app-1、app-2 是兩件事）
   const al = (s.problems||[]).map(p=>`<div class="alert bad" data-key="b:${k(p)}">${I("warn")}${esc(p)}</div>`)
@@ -1288,6 +1288,21 @@ function linksMenu(btn, s){
   window._menu = m;
   setTimeout(() => m.addEventListener("click", () => closeMenu()), 0);
 }
+function moreMenu(btn, s){
+  closeMenu();
+  const node = esc(s.node || ""), name = esc(s.name);
+  const it = (attr, icon, label, cls="") => `<button class="${cls}" ${attr}="${node}" data-name="${name}">${I(icon)}<span>${label}</span></button>`;
+  const m = document.createElement("div"); m.className = "lmenu hmenu glass pop";
+  m.innerHTML = (s.online ? it("data-rename", "edit", "編輯名稱與連結") + it("data-reboot", "power", "重新開機", "warn") : "")
+    + (s.node ? it("data-rmhost", "trash", "移除主機", "bad") : "");
+  document.body.appendChild(m);
+  const r = btn.getBoundingClientRect(), w = m.offsetWidth;
+  m.style.left = Math.max(8, Math.min(innerWidth - w - 8, r.right - w)) + "px";
+  m.style.top = (r.bottom + 8) + "px";
+  if (canAnim()) m.animate([{opacity:0, transform:"translateY(-6px) scale(.97)"}, {opacity:1, transform:"none"}], {duration:T.fast, easing:EASE});
+  window._menu = m;
+  setTimeout(() => m.addEventListener("click", () => closeMenu()), 0);
+}
 function closeMenu(){
   const m = window._menu; if (!m) return; window._menu = null;
   if (!canAnim()) return m.remove();
@@ -2237,6 +2252,8 @@ document.addEventListener("click", async e => {
   if (pe) { e.stopPropagation(); const s = LIST.find(x => (x.node || "") === pe.dataset.peeredit); return s && peerModal(s); }
   const lk = t.closest("[data-links]");
   if (lk) { e.stopPropagation(); const s = LIST.find(x => keyOf(x) === lk.dataset.links); if (window._menu) return closeMenu(); return s && linksMenu(lk, s); }
+  const mo = t.closest("[data-more]");
+  if (mo) { e.stopPropagation(); const s = LIST.find(x => keyOf(x) === mo.dataset.more); if (window._menu) return closeMenu(); return s && moreMenu(mo, s); }
   if (window._menu && !t.closest(".lmenu")) closeMenu();
   const rb = t.closest("[data-reboot]");
   if (rb) { e.stopPropagation(); return rebootModal(rb.dataset.reboot, rb.dataset.name); }
