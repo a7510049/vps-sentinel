@@ -29,6 +29,13 @@ class TgIcons(unittest.TestCase):
         msg = S.tg_host_msg("主機A", [S.ev_line({"kind": "info", "text": "存取密碼已換新"})])
         self.assertEqual(msg, "🔐 <b>主機A</b>　存取密碼已換新")
 
+    def test_similar_problems_stay_apart(self):
+        """名稱只差一個數字的容器、磁碟是兩件事；百分比變了還是同一件事"""
+        self.assertNotEqual(S.ev_key("容器 app-worker-1 停止"), S.ev_key("容器 app-worker-2 停止"))
+        self.assertNotEqual(S.ev_key("磁碟 /data1 剩下不多（91%）"), S.ev_key("磁碟 /data2 剩下不多（91%）"))
+        self.assertEqual(S.ev_key("記憶體 91%"), S.ev_key("記憶體 95.5%"))
+        self.assertEqual(S.ev_key("3 個安全更新"), S.ev_key("12 個安全更新"))
+
     def test_pairing_icon(self):
         self.assertEqual(S.ev_line({"kind": "info", "text": "開始監看「新主機」"}), "🔗 開始監看「新主機」")
         self.assertEqual(S.ev_line({"kind": "info", "text": "哨兵開始監看這台主機"}), "")

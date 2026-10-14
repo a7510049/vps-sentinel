@@ -153,6 +153,8 @@ fi
 
 # ── 1. 安裝主程式 ──
 step "安裝主程式"
+rm -rf "$DIR.prev"
+[ -f "$DIR/sentinel.py" ] && cp -a "$DIR" "$DIR.prev"   # 留一份舊版：新版啟動失敗就換回來
 install -d "$DIR"
 install -m 755 "$HERE/sentinel.py" "$DIR/sentinel.py"
 install -d "$DIR/web"
@@ -350,21 +352,24 @@ EOF
     nginx -t >/dev/null 2>&1 && { systemctl reload nginx 2>/dev/null || nginx -s reload; }
   fi
 
-  set_conf BIND 127.0.0.1      # 只讓 Caddy 從本機連，外面一律走 https
-  set_conf DOMAIN "$DOMAIN"
-  set_conf HTTPS_PORT "$HTTPS_PORT"
-
   if ! caddy validate --config /etc/caddy/Caddyfile --adapter caddyfile >/dev/null 2>&1; then
     die "Caddy 設定有問題" "請看：caddy validate --config /etc/caddy/Caddyfile"
   fi
   systemctl enable caddy >/dev/null 2>&1
-  systemctl reload caddy 2>/dev/null || systemctl restart caddy
+  systemctl reload caddy 2>/dev/null || systemctl restart caddy || die "Caddy 啟動失敗" "請看：journalctl -u caddy -n 30"
+
+  # Caddy 確定好了才改成只讓本機連（不然 Caddy 壞掉時，哨兵重新啟動後就完全打不開）
+  set_conf BIND 127.0.0.1      # 只讓 Caddy 從本機連，外面一律走 https
+  set_conf DOMAIN "$DOMAIN"
+  set_conf HTTPS_PORT "$HTTPS_PORT"
   ok "網址：$SHOWURL"
 
   # 檢查網域是不是指向這台 VPS
   MYIP="$(curl -s4 --max-time 4 https://ifconfig.me || true)"
   DNSIP="$(getent ahostsv4 "$DOMAIN" | awk 'NR==1{print $1}' || true)"
-  if [ -n "$MYIP" ] && [ "$DNSIP" != "$MYIP" ]; then
+  if [ -z "$MYIP" ]; then
+    warn "查不到這台的對外 IP，沒辦法確認網域有沒有指向這台"
+  elif [ "$DNSIP" != "$MYIP" ]; then
     warn "網域 $DOMAIN 目前指向「${DNSIP:-找不到}」，但這台 VPS 是「$MYIP」"
     echo "    請到網域商把 A 紀錄設成 $MYIP，生效後 Caddy 會自動申請憑證（不用重新安裝）"
   else
@@ -413,6 +418,11 @@ systemctl restart vps-sentinel-lite
 sleep 2
 
 if ! systemctl is-active --quiet vps-sentinel-lite; then
+  if [ -f "$DIR.prev/sentinel.py" ]; then          # 新版起不來：換回舊版，網頁至少還打得開
+    rm -rf "$DIR" && mv "$DIR.prev" "$DIR"
+    systemctl restart vps-sentinel-lite
+    die "新版啟動失敗，已換回原本的版本" "請看：journalctl -u vps-sentinel-lite -n 30"
+  fi
   die "啟動失敗" "請看：journalctl -u vps-sentinel-lite -n 30"
 fi
 ok "已啟動，開機也會自動啟動"
