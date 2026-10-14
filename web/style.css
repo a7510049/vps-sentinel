@@ -361,14 +361,14 @@ button{font:inherit;color:inherit}
 .host.on{background:var(--glass);position:relative;box-shadow:0 10px 26px -14px rgba(0,0,0,.5)}
 .host .head{gap:11px}.host .avatar .flag{width:26px;height:19px;border-radius:var(--r-sm)}.host .fw{border-radius:var(--r-sm)}.host .fw.round{border-radius:50%}
 .host h2{font-size:var(--fs-l)}
-/* 新增主機：主機列表最後一個，虛線框 */
+/* 新增主機：主機列表最後一個，跟其他按鈕一樣是實心底＋細框（不用虛線） */
 .addhost{display:flex;align-items:center;justify-content:center;gap:8px;cursor:pointer;color:var(--sub);font-weight:800;font-size:var(--fs-m);
-  border:1.5px dashed var(--line);background:transparent;border-radius:var(--r-lg);padding:11px 12px;
-  transition:color var(--t-mid),border-color var(--t-mid),background var(--t-mid),transform var(--t-mid) var(--spring)}
+  border:0;background:var(--inset);box-shadow:var(--ring);border-radius:var(--r-lg);padding:11px 12px;
+  transition:color var(--t-mid),background var(--t-mid),transform var(--t-mid) var(--spring)}
 .addhost svg{width:16px;height:16px;flex:none}
-@media (hover:hover){.addhost:hover{color:var(--text);border-color:var(--faint);background:var(--track)}}.addhost:active{transform:scale(.98)}
+@media (hover:hover){.addhost:hover{color:var(--text);background:var(--track)}}.addhost:active{transform:scale(.98)}
 .host.addhost{flex-direction:row}
-.m-add{width:100%;margin-top:var(--gap);border-radius:var(--r-xl);padding:15px;background:var(--inset)}   /* 手機：跟其他按鈕一樣是實心底，不是玻璃泡泡 */
+.m-add{width:100%;margin-top:var(--gap);border-radius:var(--r-xl);padding:15px}
 .m-add:active{transform:scale(.94)}
 .minis{display:grid;grid-template-columns:1fr 1fr;gap:10px}
 .minis .k{display:flex;justify-content:space-between;font-size:var(--fs-xs);color:var(--sub);margin-bottom:4px;font-weight:700}
