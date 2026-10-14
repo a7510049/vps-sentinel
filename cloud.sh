@@ -40,7 +40,7 @@ run_container() {
     -v "$MNT":/folder \
     -v "$APP/data":/home/filebrowser/data \
     -e FILEBROWSER_CONFIG=/home/filebrowser/data/config.yaml \
-    "$IMAGE" >/dev/null
+    "${1:-$IMAGE}" >/dev/null
 }
 
 # 等雲端硬碟真的能連上（最多 60 秒）；連不上就把原因印出來
@@ -152,10 +152,17 @@ case "${1:-}" in
   更新|update)
     [ -f "$APP/data/config.yaml" ] || { echo "還沒安裝雲端硬碟"; exit 1; }
     echo "▶ 下載官方最新的穩定版…"
+    OLD_IMG="$(docker inspect -f '{{.Image}}' "$NAME" 2>/dev/null || true)"
     docker pull -q "$IMAGE" >/dev/null || { echo "❌ 下載失敗"; exit 1; }
     top_up "$(saved_gb)"; fix_owner; give_back
     run_container
-    wait_ready || exit 1
+    if ! wait_ready; then                             # 新版跑不起來：換回原本那一版
+      [ -n "$OLD_IMG" ] || exit 1
+      echo "▶ 新版打不開，換回原本的版本…"
+      run_container "$OLD_IMG"
+      wait_ready && echo "↩️ 已換回原本的版本，雲端硬碟照常可以用"
+      exit 1
+    fi
     docker image prune -f >/dev/null 2>&1 || true      # 清掉舊版的映像檔，省空間
     echo "✅ 雲端硬碟已更新到最新版（檔案和帳號都保留）"; exit 0 ;;
   整理|tidy)                                         # 哨兵更新時會自動跑：補足容量、修好刪不掉的檔案
@@ -216,6 +223,7 @@ elif [ "$SIZE" -ne "$cur_gb" ]; then
     fi
   fi
   echo "▶ 把雲端硬碟從 ${cur_gb} GB 改成 ${SIZE} GB（大約幾秒鐘，期間暫時打不開）…"
+  trap 'echo "❌ 調整容量沒有成功，已把雲端硬碟重新打開"; systemctl start srv-cloud.mount 2>/dev/null; docker start "$NAME" >/dev/null 2>&1' EXIT   # 中途失敗：掛回去、重新打開
   docker stop "$NAME" >/dev/null 2>&1 || true
   systemctl stop srv-cloud.mount 2>/dev/null || true
   mountpoint -q "$MNT" && umount "$MNT"
@@ -226,6 +234,7 @@ elif [ "$SIZE" -ne "$cur_gb" ]; then
   else
     resize2fs "$IMG" "${SIZE}G" >/dev/null; truncate -s "${SIZE}G" "$IMG"
   fi
+  trap - EXIT
 fi
 
 cat > "$MOUNT_UNIT" <<EOF
@@ -320,7 +329,9 @@ handle /cloud* {
 	reverse_proxy 127.0.0.1:$(get_conf PORT | grep . || echo 8787)
 }
 EOF
-  caddy validate --config /etc/caddy/Caddyfile --adapter caddyfile >/dev/null 2>&1 || { echo "❌ Caddy 設定有問題：caddy validate --config /etc/caddy/Caddyfile"; exit 1; }
+  caddy validate --config /etc/caddy/Caddyfile --adapter caddyfile >/dev/null 2>&1 || {
+    rm -f /etc/caddy/sites/vps-sentinel.d/cloud.caddy        # 不留下壞掉的設定，免得下次 Caddy 重新啟動整個網站打不開
+    echo "❌ Caddy 設定有問題：caddy validate --config /etc/caddy/Caddyfile"; exit 1; }
   systemctl reload caddy 2>/dev/null || systemctl restart caddy
   if [ "$HTTPS_PORT" = 443 ]; then URL="https://$DOMAIN/cloud/"; else URL="https://$DOMAIN:$HTTPS_PORT/cloud/"; fi
 else
@@ -342,4 +353,4 @@ show_login
 echo
 echo "   改容量：  sudo bash cloud.sh 新的GB數"
 echo "   連不上時：sudo bash cloud.sh 檢查"
-if [ -z "$DOMAIN" ]; then echo "   ⚠️ 這台沒有設定網域，連線沒有加密；之前為雲端硬碟開的 8788 連接埠可以關掉了"; fi
+if [ -z "$DOMAIN" ]; then echo "   ⚠️ 這台沒有設定網域，連線沒有加密"; fi

@@ -36,6 +36,7 @@ class Crypto(unittest.TestCase):
         S.tg_api = lambda bot, m, d: (sent.append(d["text"]) or ({}, ""))
         S.PEERS[:] = []
         S.pair_save({"keys": [{"id": "k1", "name": "主要主機", "hash": "x"}], "tg": {"bot": "1:x", "chat": "9"}})
+        S.WATCH.update(down=False, t0=S.time.time() - 3600)        # 哨兵早就開著了
         S.PAIR_SEEN["k1"] = S.time.time()
         S.watch_check()
         self.assertEqual(sent, [])
@@ -52,6 +53,42 @@ class Crypto(unittest.TestCase):
     def test_bad_url(self):
         self.assertFalse(S.pair_code("ftp://x")[0])
         self.assertFalse(S.pair_code("")[0])
+
+    def test_watch_alert_after_restart(self):
+        """被監看的主機重新開機時，主要主機剛好也掛了：從啟動時算起 5 分鐘一樣會通知"""
+        sent = []
+        S.tg_api = lambda bot, m, d: (sent.append(d["text"]) or ({}, ""))
+        S.PEERS[:] = []
+        S.PAIR_SEEN.clear()
+        S.WATCH.update(down=False, t0=S.time.time() - S.WATCH_SILENT - 5)
+        S.pair_save({"keys": [{"id": "k9", "name": "主要主機", "hash": "x"}], "tg": {"bot": "1:x", "chat": "9"}})
+        S.watch_check()
+        self.assertEqual(len(sent), 1)
+        self.assertTrue(sent[0].startswith("🔌"), sent[0])
+        S.WATCH.update(down=False, t0=S.time.time())
+        S.pair_save({})
+
+    def test_no_alert_right_after_pairing(self):
+        """剛重新配對好（主要主機還沒用新鑰匙連進來）：不能誤報主要主機失聯"""
+        sent = []
+        S.tg_api = lambda bot, m, d: (sent.append(d["text"]) or ({}, ""))
+        S.PEERS[:] = []
+        S.PAIR_SEEN.clear()
+        S.WATCH.update(down=False, t0=S.time.time() - 3600)
+        S.pair_save({"keys": [{"id": "new", "name": "主要主機", "hash": "x", "t": int(S.time.time())}], "tg": {"bot": "1:x", "chat": "9"}})
+        S.watch_check()
+        self.assertEqual(sent, [])
+        S.WATCH.update(t0=S.time.time())
+        S.pair_save({})
+
+    def test_own_code_refused(self):
+        """把這台自己的暗號貼回這台：直接擋下來，不會把自己加成另一台"""
+        ok, code = S.pair_code("https://example.com:9443")
+        self.assertTrue(ok)
+        ok, msg = S.peer_add(code)
+        self.assertFalse(ok)
+        self.assertIn("自己", msg)
+        S.pair_save({})
 
 
 def clean_env(conf):

@@ -189,10 +189,11 @@ function flag(cc){
   if (!/^[A-Z]{2}$/.test(cc||"")) return "";
   const emo = String.fromCodePoint(...[...cc].map(c=>127397+c.charCodeAt(0)));
   if (FLAGFAIL[cc]) return `<span class="emoji">${emo}</span>`;
-  return `<img class="flag" src="https://flagcdn.com/w80/${cc.toLowerCase()}.png" alt="${emo}" title="${esc(REGION?REGION.of(cc):cc)}"
+  return `<img class="flag" src="https://flagcdn.com/w80/${cc.toLowerCase()}.png" alt="${emo}" title="${esc(regionOf(cc))}"
     onerror="FLAGFAIL['${cc}']=1;this.outerHTML='<span class=emoji>${emo}</span>'">`;  /* 外層 .fw 會留著，發光不會跑掉 */
 }
-const place = s => s.geo ? [(REGION&&s.geo.cc)?REGION.of(s.geo.cc):s.geo.cc, s.geo.city].filter(Boolean).join(" ") : "";
+const regionOf = cc => { try { return REGION && /^[A-Z]{2}$/.test(cc) ? REGION.of(cc) : cc; } catch(e) { return cc; } };   // 國家代碼打錯也不會讓整頁打不開
+const place = s => s.geo ? [s.geo.cc ? regionOf(s.geo.cc) : "", s.geo.city].filter(Boolean).join(" ") : "";
 function when(t){ const d=new Date(t*1000), now=new Date();
   const hm=d.toLocaleTimeString("zh-TW",{hour:"2-digit",minute:"2-digit",hour12:false});
   return d.toDateString()===now.toDateString() ? `今天 ${hm}` : `${d.getMonth()+1}/${d.getDate()} ${hm}`; }
@@ -211,17 +212,9 @@ function ago(t){
 const seen = s => s.last_seen ? `最後連上：${ago(s.last_seen)}` : "";
 function avatar(s){
   const f = PREF.show.flag && s.geo ? flag(s.geo.cc) : "";
-  const lv = lvOf(s), tip = {ok:"運作正常", warn:"需要留意", bad:"出問題了"}[lv];
+  const lv = lvOf(s), tip = {ok:"", warn:"需要留意", bad:"出問題了"}[lv];
   const inner = f ? `<span class="fw">${f}</span>` : `<span class="fw round"><span class="letter">${esc([...(s.name||"?")][0])}</span></span>`;
   return `<div class="avatar ${lv}" title="${tip}">${inner}</div>`;
-}
-function stline(s){
-  const lv = lvOf(s), t = s.online ? {ok:"運作正常", warn:"需要留意", bad:"出問題了"}[lv] : "連不上這台主機";
-  return `<span class="stx ${lv}" data-x><span class="dot pulse ${lv}"></span>${t}</span>`;
-}
-function stchip(s){
-  const lv = lvOf(s), t = s.online ? {ok:"運作正常", warn:"需要留意", bad:"出問題了"}[lv] : "連不上";
-  return `<span class="stchip ${lv}" data-x><span class="dot pulse ${lv}"></span>${t}</span>`;
 }
 const safeUrl = u => /^https?:\/\/[^\s"'<>]+$/i.test(u || "") ? u : "";
 const linksOf = s => (s.links || (s.panel ? [{name:"管理後台", url:s.panel}] : []))
@@ -233,7 +226,7 @@ const editBtn = s => { if (!s.online) return rmBtn(s); const L = linksOf(s);
   + (L.length === 1 ? `<a class="iconbtn plink ${L[0].up===false?"down":""}" href="${esc(L[0].url)}" target="_blank" rel="noopener noreferrer" title="打開 ${esc(L[0].name)}（${esc(linkSt(L[0]))}）">${I("ext")}</a>`
     : L.length > 1 ? `<button class="iconbtn plink ${L.some(x=>x.up===false)?"down":""}" data-links="${esc(keyOf(s))}" title="常用連結">${I("ext")}</button>` : "") + rmBtn(s); };
 function alerts(s){
-  const k = t => esc(String(t).replace(/[\d.]+/g, ""));
+  const k = t => esc(String(t).replace(/^\d+\s*|\s*[（(]?\d+(\.\d+)?\s*%[）)]?$/g, ""));   // 只拿掉會變的數字，名稱裡的數字要留（app-1、app-2 是兩件事）
   const al = (s.problems||[]).map(p=>`<div class="alert bad" data-key="b:${k(p)}">${I("warn")}${esc(p)}</div>`)
     .concat((s.notices||[]).map(p=>`<div class="alert warn" data-key="w:${k(p)}">${I("alert")}${esc(p)}</div>`));
   return al.length ? `<div class="alerts" data-key="al" data-keyed>${al.join("")}</div>` : "";
@@ -441,7 +434,7 @@ function histRaw(s){
   if (!c || Date.now() - c.at > 60000) {
     if (!c || !c.loading) {
       HCACHE[k] = {...(c || {}), loading: true, at: c ? c.at : 0};
-      fetch(`/api/history?range=${RANGE}&node=${encodeURIComponent(s.node || "")}`, {headers:{"X-Token":getTok()}})
+      fetch(`/api/history?range=${RANGE}&node=${encodeURIComponent(s.node || "")}`, {headers:{"X-Token":getTok()}, signal: AbortSignal.timeout ? AbortSignal.timeout(20000) : undefined})
         .then(r => r.ok ? r.json() : r.json().then(d => Promise.reject(d.error || "讀取失敗")))
         .then(d => { HCACHE[k] = {at: Date.now(), data: d}; if (LIST.length) render(LIST); })
         .catch(err => { HCACHE[k] = {at: Date.now(), err: typeof err === "string" ? err : "暫時讀不到，稍後自動重試"}; if (LIST.length) render(LIST); });
@@ -925,6 +918,17 @@ function placePind(){
   });
 }
 const LVRANK = {bad:0, warn:1, ok:2};
+/* 其他主機傳來的資料：會直接放進畫面的數字一律轉成數字，免得被塞進網頁程式碼 */
+function tidy(s){
+  const n = v => +v || 0;
+  if (s.cores != null) s.cores = n(s.cores);
+  if (s.updates) { s.updates.total = n(s.updates.total); s.updates.security = n(s.updates.security); }
+  const t = s.traffic;
+  if (t) { t.reset_day = n(t.reset_day); t.days_left = n(t.days_left); t.start = String(t.start || "").replace(/[^\d-]/g, ""); t.end = String(t.end || "").replace(/[^\d-]/g, "");
+    (t.daily || []).forEach(d => { d.d = String(d.d || "").replace(/[^\d\/-]/g, ""); }); }
+  (s.events || []).forEach(e => { if (!["bad","warn","ok","info"].includes(e.kind)) e.kind = "info"; });
+  return s;
+}
 function render(list){
   // 更新剛完成：跳通知
   for (const s of list) {
@@ -936,7 +940,7 @@ function render(list){
     }
   }
   // 有紅色（異常）或橘色（注意）告警的主機排在最前面；同一級的照原本順序
-  list = [...list].sort((a, b) => LVRANK[lvOf(a)] - LVRANK[lvOf(b)]);
+  list = [...list].map(tidy).sort((a, b) => LVRANK[lvOf(a)] - LVRANK[lvOf(b)]);
   if (!LIST.length && list.length && lvOf(list[0]) !== "ok") { SEL = keyOf(list[0]); store("vps-sel", SEL); }   // 剛打開網頁就有告警：電腦版直接顯示出問題的那台
   LIST = list; flagAccent();
   const n = {ok:0,warn:0,bad:0}; list.forEach(s=>n[lvOf(s)]++);
@@ -1339,8 +1343,8 @@ async function selfUpdate(root, jobs){
       UPW.jobs.push({node: j.node, kind: j.kind, name: h.name || "主機", from: j.kind === "cloud" ? (d.cloud || {}).version || "" : d.build || "", t0: Date.now()});
     } catch(e) { fail.push(`${name}：${e.message}`); }
   }
-  if (okn.length) toast(okn.length > 1 ? `已開始更新 ${okn.length} 個項目` : `已開始更新「${okn[0]}」`);   // 只跳一則
-  if (fail.length) setTimeout(() => toast(fail.join("；"), "bad"), okn.length ? 600 : 0);
+  const started = okn.length ? (okn.length > 1 ? `已開始更新 ${okn.length} 個項目` : `已開始更新「${okn[0]}」`) : "";
+  if (okn.length || fail.length) toast([started, ...fail].filter(Boolean).join("；"), fail.length ? "bad" : "ok");   // 不管成功失敗都只跳一則
   setTimeout(() => selfStatus(root), 1500);
   upwSave(); upwRun();
 }
@@ -1384,8 +1388,8 @@ async function upwStep(){
   if (done.length) {
     UPW.jobs = UPW.jobs.filter(j => !done.some(x => x[0] === j)); upwSave();
     const bad = done.filter(x => !x[2]), good = done.filter(x => x[2]);
-    if (good.length) toast(good.length > 1 ? `${good.length} 個項目都更新好了 ✨` : good[0][1]);   // 一起好的只跳一則
-    if (bad.length) setTimeout(() => toast(bad.map(x => x[1]).join("；"), "bad"), good.length ? 600 : 0);
+    const gm = good.length ? (good.length > 1 ? `${good.length} 個項目都更新好了 ✨` : good[0][1]) : "";
+    toast([gm, ...bad.map(x => x[1])].filter(Boolean).join("；"), bad.length ? "bad" : "ok");   // 一起好的、失敗的都併成一則
     upwPanel(); tick();                                                 // 設定面板的版本號、齒輪上的紅點馬上跟著變
   }
   upwRun();
@@ -1748,8 +1752,19 @@ async function pairModal(){
   };
   try { keys = (await pairCall({action:"status"})).keys || []; draw(); }
   catch(e) { msg.className = "msg bad"; msg.textContent = e.message; }
+  // 暗號貼到主要主機、配對好了：這台改成被監看，重新載入換成被監看的那一頁
+  let watch = 0;
+  const check = async () => {
+    const d = await pairCall({action:"status"}).catch(() => null);
+    if (!d || v._d) return;
+    const n = (d.keys || []).find(k => !keys.some(x => x.id === k.id));
+    if (!n) return;
+    clearInterval(watch); toast(`已和「${n.name}」配對好了`);
+    if (LIST.length > 1) { keys = d.keys; code = ""; return draw(); }   // 這台自己也在看別台：不會被監看，留在這裡
+    setTimeout(() => location.reload(), 1400);
+  };
   return new Promise(res => {
-    const done = () => { if (v._d) return; v._d = 1; v.classList.add("closing"); setTimeout(() => { v.remove(); res(); }, 360); };
+    const done = () => { if (v._d) return; v._d = 1; clearInterval(watch); v.classList.add("closing"); setTimeout(() => { v.remove(); res(); }, 360); };
     v._esc = done;
     v.addEventListener("click", async e => {
       if (e.target === v || e.target.closest("[data-r]")) return done();
@@ -1773,7 +1788,8 @@ async function pairModal(){
       busy = true; gen.disabled = true; msg.className = "msg"; msg.textContent = "";
       const d = await pairCall({action:"code", url: location.origin + location.pathname.replace(/\/(index\.html)?$/, "")}).catch(err => ({message:err.message}));
       busy = false; gen.disabled = false;
-      if (d.ok) { code = d.code; draw(); } else { msg.className = "msg bad"; msg.textContent = d.message || "產生失敗"; }
+      if (d.ok) { code = d.code; draw(); clearInterval(watch); watch = setInterval(check, 3000); }
+      else { msg.className = "msg bad"; msg.textContent = d.message || "產生失敗"; }
     });
   });
 }
@@ -1849,7 +1865,7 @@ function bkRows(d){
   return h;
 }
 /* 這台存著哪些主機的備份（每台主機都存著每一台的） */
-const bkCopies = d => (d.copies || []).map(c => `<li>${I("archive")}<span><b>${esc(c.name)}${c.me ? "（這台）" : ""}</b>${c.count} 份<small>最新：${esc(when(c.t))}・${bkSize(c.size)}</small></span></li>`).join("")
+const bkCopies = d => (d.copies || []).map(c => `<li>${I("archive")}<span><b>${esc(c.name)}${c.me ? "（這台）" : ""}</b>${+c.count || 0} 份<small>最新：${esc(when(c.t))}・${bkSize(c.size)}</small></span></li>`).join("")
   || `<li><span>還沒有備份</span></li>`;
 async function bkModal(node, label){
   let d = await bkGet(node).catch(e => ({err:e.message}));
@@ -1857,7 +1873,7 @@ async function bkModal(node, label){
   const v = document.createElement("div"); v.className = "veil";
   const multi = LIST.length > 1;
   v.innerHTML = `<div class="dialog glass pop bkdlg">${IC("archive","big")}<h3>每日備份${multi ? `：${esc(label)}` : ""}</h3>
-    <p>每天自動打包加密，每台主機都存一份</p>
+    <p>每天自動加密備份，每台主機都存一份</p>
     <div class="form">
       <ul class="bkrows">${bkRows(d)}</ul>
       <div class="lbl">${d.where === "雲端硬碟" ? "這台的雲端硬碟裡有" : "這台主機上有"}${d.where === "雲端硬碟" ? `<small>「${esc(d.folder)}」資料夾</small>` : ""}<ul class="bkrows bkcopies">${bkCopies(d)}</ul>
@@ -1866,7 +1882,7 @@ async function bkModal(node, label){
         <small>沒有它誰都打不開，請另外記好</small>
         <button class="linkish bkchg" data-chg>改成自己的密碼</button>
         <span class="bknew" hidden><input class="field" type="password" maxlength="128" autocomplete="new-password" placeholder="至少 8 個字"><button class="ubtn sm" data-setkey>儲存</button></span></div>
-      <label class="bkon"><span>每天清晨 ${d.hour} 點自動備份</span><input type="checkbox" class="tog" ${d.on ? "checked" : ""}></label>
+      <label class="bkon"><span>每天清晨 ${+d.hour || 0} 點自動備份</span><input type="checkbox" class="tog" ${d.on ? "checked" : ""}></label>
       <div class="msg"></div></div>
     <div class="btns three"><button class="ubtn ghost" data-dl>下載</button><button class="ubtn ghost" data-r="0">關閉</button><button class="ubtn" data-run>立即備份</button></div></div>`;
   $("#layer").appendChild(v);
@@ -1964,7 +1980,7 @@ async function bkRestore(){
   const hosts = d.copies || [];
   const v = document.createElement("div"); v.className = "veil";
   v.innerHTML = `<div class="dialog glass pop bkdlg">${IC("archive","big")}<h3>還原備份</h3>
-    <p>原本的檔案會先另存一份，還原錯了也退得回去</p>
+    <p>原本的檔案會先另存一份</p>
     <div class="form">
       <div class="lbl">讓主機回到前幾天的樣子<small>在那台執行這行（點一下複製）</small>
         <code class="bkcmd" data-cmd="${esc(here)}">${esc(here)}</code></div>
@@ -2070,7 +2086,7 @@ function rswCodeForm(body, err){
 function rswForm(body){
   body.innerHTML = `<label class="ubtn ghost rswfile"><input type="file" accept=".vsbk" hidden>${IC("archive")}<span class="rswname">選擇備份檔（.vsbk）</span></label>
     <input class="field" id="rswpw" type="password" placeholder="解開密碼" autocomplete="off">
-    <small class="rswtip">備份檔可以從 Telegram，或另一台主機雲端硬碟裡的「哨兵備份」資料夾下載。密碼用網頁上的總密碼，或 Telegram 上那份備份附的密碼都可以</small>
+    <small class="rswtip">備份檔在 Telegram 或另一台的雲端硬碟「哨兵備份」裡；密碼用總密碼或 Telegram 附的都行</small>
     <div class="err"></div><button class="ubtn" data-rswgo>開始還原</button>`;
   const inp = body.querySelector("input[type=file]"), err = body.querySelector(".err"), go = body.querySelector("[data-rswgo]");
   const lab = body.querySelector(".rswname");
@@ -2128,8 +2144,7 @@ let REM = true, PIN_ON = false;
 /* 輸入 4～8 位數字、主機又有設定 PIN 碼：當成 PIN 碼；其他都當成存取密碼 */
 async function doLogin(){
   const v = $("#tok").value.trim();
-  window._fresh = true;
-  if (!(PIN_ON && /^\d{4,8}$/.test(v))) { setTok(v, REM); return tick(); }
+  if (!(PIN_ON && /^\d{4,8}$/.test(v))) { window._fresh = true; setTok(v, REM); return tick(); }   // 用密碼登入才把 PIN 碼輸錯的次數歸零
   const b = $("#app [data-login]"); b.disabled = true;
   let d = {};
   try { const r = await fetch("/api/pin-login", {method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({pin:v})});
@@ -2272,8 +2287,10 @@ async function settle(){
   while (uiBusy() && performance.now() - t0 < 900) await sleep(60);
   await new Promise(r => requestAnimationFrame(r));       // 對齊下一格畫面再改
 }
+let TICKID = 0;
 async function tick(){
   clearTimeout(timer);
+  const id = ++TICKID;                          // 同時有好幾個在讀：只用最新的那一次，舊的結果不畫
   const rq = new URLSearchParams(location.search).get("restore");
   if (rq) { RSW.code = rq.trim().toUpperCase(); sessionStorage.setItem("vs-rsw", RSW.code); history.replaceState(null, "", location.pathname); }
   if (RSW.code) return restoreScreen();
@@ -2283,6 +2300,7 @@ async function tick(){
     const r = await fetch("/api/all", {headers:{"X-Token":getTok()}, cache:"no-store"});
     if (r.status === 401) { setTok(""); LIST = []; endSplash(); return login("密碼不對，再試一次"); }
     const data = await r.json();
+    if (id !== TICKID || !getTok()) return true;
     const me = data.find(x => !x.node);
     if (window._fresh) { window._fresh = false; fetch("/api/pin", {method:"POST", headers:{"X-Token":getTok()}, body:'{"action":"login"}'}).catch(() => {}); }  // 登入成功：PIN 碼輸錯的次數歸零
     if (new URLSearchParams(location.search).get("go") === "cloud" && me && me.cloud && !window._goCloud) {   // 從雲端硬碟跳過來登入：登入好了就送回去
@@ -2310,8 +2328,10 @@ async function tick(){
       setTimeout(wxRun, 1200);                   // 畫面出來後再問位置、抓天氣，不拖慢開啟
     }
     if (BOOTED) await settle();
+    if (id !== TICKID || !getTok()) return true;  // 等的時候登出了，或已經有更新的一次
     render(data);
   } catch(e) {
+    if (id !== TICKID) return false;
     if (!BOOTED) splashMsg("連線不上，正在重試…");
     const m = document.querySelector(".meta"); if (m) m.innerHTML = `<span class="live off"></span>連線中斷，重試中…`;
     timer = setTimeout(tick, 3000); return false;
@@ -2357,5 +2377,5 @@ async function refreshNow(btn){
     setTimeout(() => show(-70, 0), 550);
   });
 })();
-document.addEventListener("visibilitychange",()=>{ if(!document.hidden) tick(); });
+document.addEventListener("visibilitychange",()=>{ if(!document.hidden && LIST.length && getTok()) tick(); });   // 登入、還原畫面不要重畫（打到一半的密碼、選好的檔案會不見）
 tick();

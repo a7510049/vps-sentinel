@@ -40,7 +40,7 @@ from collections import deque
 from concurrent.futures import ThreadPoolExecutor
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
-VERSION = "1.48"
+VERSION = "1.49"
 
 # ───────────────────────── 哨兵備份檔（.vsbk）─────────────────────────
 # 哨兵專用的備份格式：外面是自己的檔案格式，裡面用的是成熟、標準的加密方法（不自己發明加密）：
@@ -602,7 +602,8 @@ def cloud_cookie_value(exp=None):
 
 def cloud_cookie_ok(v):
     exp, _, sig = (v or "").partition(".")
-    return exp.isdigit() and int(exp) > time.time() and hmac.compare_digest(sig, _sign(f"cloud-cookie:v2:{exp}"))
+    return (bool(re.fullmatch(r"[0-9]{1,12}", exp)) and int(exp) > time.time()
+            and hmac.compare_digest(sig.encode(), _sign(f"cloud-cookie:v2:{exp}").encode()))
 
 
 def cloud_login_url():
@@ -713,6 +714,8 @@ def set_peer(name, url, token, force=False):
     if not url:
         return False, "網址不能是空白", False
     token = re.sub(r"[\s,|]", "", str(token or "")) or PEERS[i]["token"]
+    if PEERS[i]["token"].startswith("vsk_"):     # 用配對鑰匙連的：跟那台的登入密碼無關，鑰匙照留
+        token = PEERS[i]["token"]
     new = parse_peers(f"{name}={url}|{token}")[0]
     pu = urllib.parse.urlsplit(new["url"])
     try:
@@ -979,6 +982,14 @@ def git(d, *args, timeout=30):
 def src_dir():
     """找安裝來源資料夾（git clone 下來的那個）"""
     for d in [C.get("SRC_DIR", ""), "/root/vps-sentinel", *glob.glob("/home/*/vps-sentinel")]:
+        # 會用 root 身分執行裡面的 install.sh：只認 root 或資料夾所在家目錄的主人建立的，別的使用者放的不算
+        try:
+            own = os.stat(d).st_uid if d else -1
+            home = os.stat(os.path.dirname(d)).st_uid if d.startswith("/home/") else 0
+        except OSError:
+            continue
+        if own not in (0, home):
+            continue
         if d and os.path.isdir(os.path.join(d, ".git")) and os.path.isfile(os.path.join(d, "install.sh")):
             return d
     return ""
@@ -1037,14 +1048,17 @@ def self_update():
     q = shlex.quote(d)
     script = f"""set -u
 echo "=== 開始更新哨兵 $(date '+%F %T') ==="
-cd {q} && git -c safe.directory='*' fetch origin && git -c safe.directory='*' reset --hard '@{{u}}' \
-  && echo "__RESULT__ ok $(date +%s)" > /tmp/vps-sentinel-selfupdate.result \
-  || echo "__RESULT__ fail $(date +%s)" > /tmp/vps-sentinel-selfupdate.result
-if grep -q ok /tmp/vps-sentinel-selfupdate.result; then bash install.sh || echo "__RESULT__ fail $(date +%s)" > /tmp/vps-sentinel-selfupdate.result; fi
-cat /tmp/vps-sentinel-selfupdate.result"""
+res=fail
+cd {q} && git -c safe.directory='*' fetch origin && git -c safe.directory='*' reset --hard '@{{u}}' && bash install.sh && res=ok
+echo "__RESULT__ $res $(date +%s)"""
     try:
         if os.path.getsize(SELF_LOG) > 1_000_000:
             open(SELF_LOG, "w").close()
+    except OSError:
+        pass
+    try:                                          # 安裝畫面會印出登入網址（含密碼）：記錄檔只給 root 看
+        os.close(os.open(SELF_LOG, os.O_WRONLY | os.O_CREAT | os.O_APPEND, 0o600))
+        os.chmod(SELF_LOG, 0o600)
     except OSError:
         pass
     run(["systemctl", "reset-failed", SELF_UNIT], 5)
@@ -1167,12 +1181,13 @@ def check_link(url):
 
 
 def check_links():
-    urls = [x["url"] for x in all_links()]
+    links = all_links()
+    urls = [x["url"] for x in links]
     for u in list(LINK_STATE):
         if u not in urls:
             del LINK_STATE[u]
     # 雲端硬碟直接在本機檢查（從主機連自己的公開 IP，有些雲端主機會連不到，造成誤報）
-    targets = [f"http://127.0.0.1:{CLOUD_PORT}/cloud/health" if x.get("fixed") else x["url"] for x in all_links()]
+    targets = [f"http://127.0.0.1:{CLOUD_PORT}/cloud/health" if x.get("fixed") else x["url"] for x in links]
     for u, (up, ms, err) in zip(urls, POOL.map(check_link, targets)):
         st = LINK_STATE.setdefault(u, {"fails": 0})
         st["fails"] = 0 if up else st["fails"] + 1
@@ -1283,6 +1298,8 @@ def acme_renew_due():
             busy, unit = port80_holder()
             if not busy or not unit:
                 continue                              # 80 埠空著：acme.sh 自己就續得了
+            if unit in ("docker.service", "containerd.service"):
+                continue                              # 80 埠是容器在用：停掉會讓所有容器（n8n、雲端硬碟）一起停，不幫忙
             ACME["last"][c["domain"]] = now
             acme = shlex.quote(os.path.join(ACME_HOME, "acme.sh"))
             u = shlex.quote(unit)
@@ -1767,7 +1784,7 @@ def pin_login(pin):
         except (KeyError, ValueError, TypeError):
             ok = False
         if ok:
-            p.update(streak=0, fails=0)
+            p.update(streak=0)                    # 累計輸錯的次數要用密碼或手機金鑰登入才歸零，不然可以一直猜
             event = None
         else:
             p["streak"] = p.get("streak", 0) + 1
@@ -1797,8 +1814,16 @@ def pin_login(pin):
 
 # ───────────────────────── 改名 ─────────────────────────
 
+CONF_LOCK = threading.Lock()
+
+
 def write_conf(values):
     """把多個設定寫回設定檔（有就取代，沒有就加在最後）"""
+    with CONF_LOCK:                               # 兩邊同時改設定檔時，後寫的不會把先寫的蓋掉
+        _write_conf(values)
+
+
+def _write_conf(values):
     try:
         with open(CONF_PATH, encoding="utf-8") as f:
             text = f.read()
@@ -1811,7 +1836,8 @@ def write_conf(values):
         else:
             text = text.rstrip("\n") + "\n" + line + "\n"
     tmp = CONF_PATH + ".tmp"
-    with open(tmp, "w", encoding="utf-8") as f:
+    fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)   # 裡面有密碼：一開始就只有 root 讀得到
+    with os.fdopen(fd, "w", encoding="utf-8") as f:
         f.write(text)
     os.chmod(tmp, 0o600)
     os.replace(tmp, CONF_PATH)
@@ -1881,27 +1907,13 @@ def set_links(items):
 def set_name(new):
     """把新名稱寫回設定檔，並立刻生效"""
     global NAME
-    new = re.sub(r"[\x00-\x1f\x7f]", "", str(new or "")).strip().strip('"').strip("'")
+    new = re.sub(r"[\x00-\x1f\x7f-\x9f\u2028\u2029]", "", str(new or "")).strip().strip('"').strip("'")
     if not new:
         return False, "名稱不能是空白"
     if len(new) > 40:
         return False, "名稱太長了（最多 40 個字）"
     try:
-        with open(CONF_PATH, encoding="utf-8") as f:
-            text = f.read()
-    except OSError:
-        text = ""
-    line = f"NAME={new}"
-    if re.search(r"(?m)^NAME=.*$", text):
-        text = re.sub(r"(?m)^NAME=.*$", lambda _: line, text, count=1)
-    else:
-        text = text.rstrip("\n") + "\n" + line + "\n"
-    try:
-        tmp = CONF_PATH + ".tmp"
-        with open(tmp, "w", encoding="utf-8") as f:
-            f.write(text)
-        os.chmod(tmp, 0o600)
-        os.replace(tmp, CONF_PATH)
+        write_conf({"NAME": new})
     except OSError as e:
         return False, f"無法寫入設定檔：{e}"
     log(f"名稱改為：{new}")
@@ -2052,6 +2064,14 @@ def start_update():
 
 # ───────────────────────── 背景收集 ─────────────────────────
 
+SAVE_LOCK = threading.Lock()
+
+
+def ev_key(t):
+    """同一個問題的代號：拿掉會變動的數字（百分比、天數、個數），名稱裡的數字要留著（容器 app-1 和 app-2 是兩件事）"""
+    return re.sub(r"^\d+\s*|\s*[（(]?\d+(\.\d+)?\s*%[）)]?$", "", t)
+
+
 class Collector:
     def __init__(self):
         self.lock = threading.Lock()
@@ -2108,26 +2128,29 @@ class Collector:
             bk = st.get("backup") or {}
             BK.update({k: bk[k] for k in ("last", "ok_t", "day", "key_t", "names", "tg") if k in bk})
             if st.get("prev_keys") is not None:
-                self.prev_keys = {k: tuple(v) for k, v in st["prev_keys"].items()}
+                self.prev_keys = {("b:" if v[0] == "bad" else "w:") + ev_key(v[1]): tuple(v)   # 舊版存的代號格式不同：重新算
+                                  for v in st["prev_keys"].values()}
             log(f"已讀取存檔：歷史 {len(self.hist)}/{len(self.h24)}/{len(self.h7d)} 筆、事件 {len(self.events)} 筆、流量 {len(self.traffic['days'])} 天")
         except (TypeError, ValueError, IndexError, AttributeError) as e:
             log("存檔格式有問題，略過：", e)
 
     def save(self):
-        with self.lock:
-            st = {"v": 1, "saved": time.time(), "boot": boot_id(), "hist": list(self.hist), "h24": list(self.h24), "h7d": list(self.h7d),
-                  "events": list(self.events), "traffic": self.traffic,
-                  "prev_keys": self.prev_keys, "peer_seen": dict(PEER_SEEN),
-                  "tg_sent": dict(TG_SENT), "tg_msgs": list(TG_MSGS),
-                  "backup": {k: BK[k] for k in ("last", "ok_t", "day", "key_t", "names", "tg")}}
-        try:
-            os.makedirs(DATA_DIR, exist_ok=True)
-            tmp = self.state_path() + ".tmp"
-            with open(tmp, "w", encoding="utf-8") as f:
-                json.dump(st, f, ensure_ascii=False, separators=(",", ":"))
-            os.replace(tmp, self.state_path())
-        except OSError as e:
-            log("存檔失敗：", e)
+        with SAVE_LOCK:                           # 收集、備份、關機可能同時存檔：一次只存一個
+            with self.lock:
+                st = {"v": 1, "saved": time.time(), "boot": boot_id(), "hist": list(self.hist), "h24": list(self.h24), "h7d": list(self.h7d),
+                      "events": list(self.events), "traffic": self.traffic,
+                      "prev_keys": self.prev_keys, "peer_seen": dict(PEER_SEEN),
+                      "tg_sent": dict(TG_SENT), "tg_msgs": list(TG_MSGS),
+                      "backup": {k: BK[k] for k in ("last", "ok_t", "day", "key_t", "names", "tg")}}
+                st = json.dumps(st, ensure_ascii=False, separators=(",", ":"))   # 鎖著的時候就轉好，別的執行緒改到一半也不會出錯
+            try:
+                os.makedirs(DATA_DIR, exist_ok=True)
+                tmp = self.state_path() + ".tmp"
+                with open(tmp, "w", encoding="utf-8") as f:
+                    f.write(st)
+                os.replace(tmp, self.state_path())
+            except OSError as e:
+                log("存檔失敗：", e)
 
     # ── 長期歷史：每 5 分鐘、每 30 分鐘各取一次平均 ──
     @staticmethod
@@ -2375,9 +2398,9 @@ class Collector:
         snap = self.snapshot()
         cur = {}
         for t in snap["problems"]:
-            cur[re.sub(r"[\s（(]*[\d.]+\s*%?[）)]?", "", t)] = ("bad", t)
+            cur["b:" + ev_key(t)] = ("bad", t)
         for t in snap["notices"]:
-            cur[re.sub(r"[\d.]+\s*", "", t)] = ("warn", t)
+            cur["w:" + ev_key(t)] = ("warn", t)
         if self.prev_keys is None:
             self.add_event("info", "哨兵開始監看這台主機")
             for k, (kind, t) in cur.items():
@@ -2673,6 +2696,8 @@ def pair_accept(d):
         st["keys"] = keys[-PAIR_MAX:]
         st.pop("pending", None)
         pair_save(st)
+        PAIR_SEEN[keys[-1]["id"]] = time.time()
+        WATCH["down"] = False
     global PAGE
     PAGE = None                                   # 被監看就不用完整網頁，放掉記憶體
     log(f"「{name}」開始監看這台主機")
@@ -2690,6 +2715,8 @@ def pair_revoke(kid=None, given=None):
         if not gone:
             return False, "找不到這個配對"
         st["keys"] = [k for k in keys if k not in gone]
+        if not st["keys"]:
+            st.pop("tg", None)                    # 沒有人監看了：主要主機的 Telegram 設定也不用留
         pair_save(st)
     for k in gone:
         log(f"解除了「{k.get('name')}」的配對")
@@ -2703,6 +2730,12 @@ def peer_add(code):
     if not got:
         return False, "暗號不完整，請整串複製貼上"
     url, secret = got
+    u = urllib.parse.urlsplit(url)
+    if u.scheme not in ("http", "https") or not u.hostname or re.search(r"[\s,|?#]", url):
+        return False, "暗號裡的網址不對，請在新主機重新產生"
+    own = pair_load().get("pending") or {}
+    if hmac.compare_digest(str(own.get("s", "")), secret.hex()):
+        return False, "這是這台自己的暗號，請貼到主要主機"
     n1 = secrets.token_bytes(16)
     body = json.dumps({"n": b64u(n1), "name": NAME, "proof": b64u(pair_mac(secret, "req", n1, NAME))}).encode()
     try:
@@ -2774,7 +2807,7 @@ def peer_remove(node):
 # 不自己發事件通知（主要主機會轉發），只留主要主機拉資料需要的基本運作。
 # 主要主機每 10 分鐘傳一次「心跳」，順便帶上它的 Telegram 設定；主要主機太久沒連進來，這台就用那組設定通知。
 WATCH_SILENT = 300                              # 主要主機幾秒沒連進來就算失聯
-WATCH = {"down": False}
+WATCH = {"down": False, "t0": time.time()}       # t0：哨兵啟動的時間
 BEAT_SENT = {}                                  # 主要主機這邊：每台上次送心跳的 [時間, 內容]
 
 
@@ -2793,6 +2826,7 @@ def pair_unwatch():
         st["keys"] = []
         st.pop("tg", None)
         pair_save(st)
+        WATCH["down"] = False
     who = "、".join(gone)
     log(f"已取消被「{who}」監看")
     COL.add_event("info", f"已取消被「{who}」監看")
@@ -2831,9 +2865,8 @@ def watch_check():
     tg = pair_load().get("tg") or {}
     if not (tg.get("bot") and tg.get("chat")):
         return
-    seen = max((PAIR_SEEN.get(k.get("id"), 0) for k in pair_keys()), default=0)
-    if not seen:                                  # 剛重新啟動：等主要主機先連進來一次
-        return
+    # 最後一次連進來的時間；剛配對好、剛重新啟動也當成連過（主要主機剛好也掛了的話，5 分鐘後一樣會通知）
+    seen = max([WATCH["t0"]] + [max(PAIR_SEEN.get(k.get("id"), 0), k.get("t", 0)) for k in pair_keys()])
     gone = time.time() - seen > WATCH_SILENT
     if gone != WATCH["down"]:
         who = html.escape("、".join(watchers()))
@@ -3069,6 +3102,7 @@ def alert_loop():
         try:
             if watchers():                     # 被監看：事件由主要主機轉發，這邊只注意主要主機有沒有失聯
                 watch_check()
+                TG_SENT.clear()                         # 取消被監看後從那一刻開始通知，不補發被監看期間的事件
             elif TG_BOT and TG_CHAT:
                 for s in all_status():
                     key, name = s.get("node") or "", s.get("name") or "主機"
@@ -3082,7 +3116,8 @@ def alert_loop():
                     if key in down:
                         down.discard(key)
                         tg_send(f"✅ <b>{html.escape(name)}</b>　恢復連線了")
-                    evs = sorted(s.get("events") or [], key=lambda e: e.get("t", 0))
+                    evs = sorted((e for e in s.get("events") or [] if isinstance(e, dict) and isinstance(e.get("t"), (int, float))),
+                                 key=lambda e: e["t"])          # 格式不對的事件跳過，不要害全部通知停擺
                     if not evs:
                         continue
                     last = TG_SENT.get(key)
@@ -3243,16 +3278,19 @@ def bk_dir(name, aliases=()):
     """這台主機的備份資料夾（用主機自己的名稱）；aliases＝它以前可能用過的資料夾名稱，裡面的備份會搬過來並改成新的檔名"""
     d = os.path.join(bk_root(), bk_safe(name))
     cloud = bk_cloud()
+    for p in (bk_root(), d):                       # 雲端硬碟裡的東西別人改得到：資料夾被換成捷徑（例如指到 /etc）就拿掉重建
+        if os.path.islink(p):
+            os.remove(p)
     os.makedirs(d, mode=0o755 if cloud else 0o700, exist_ok=True)
     if cloud:                                      # 雲端硬碟程式用編號 1000 的使用者在跑：要改成它的，才刪得掉
         for p in (bk_root(), d):
             try:
-                os.chown(p, 1000, 1000)
+                os.lchown(p, 1000, 1000)
             except OSError:
                 pass
     olds = {os.path.join(bk_root(), x) for a in (name, *aliases) for x in (bk_safe(a), _bk_safe_v130(a))} - {d}
     for od in olds:
-        if not os.path.isdir(od):
+        if not os.path.isdir(od) or os.path.islink(od):
             continue
         for f in bk_list(od):
             try:
@@ -3283,7 +3321,7 @@ def bk_dir(name, aliases=()):
 def bk_own(path):
     if bk_cloud():
         try:
-            os.chown(path, 1000, 1000)
+            os.lchown(path, 1000, 1000)
         except OSError:
             pass
     else:
@@ -3295,7 +3333,13 @@ def bk_list(folder):
         fs = [os.path.join(folder, f) for f in os.listdir(folder) if f.endswith(".vsbk")]
     except OSError:
         return []
-    return sorted(fs, key=os.path.getmtime)
+
+    def mt(f):
+        try:
+            return os.lstat(f).st_mtime
+        except OSError:                            # 剛好被刪掉
+            return 0
+    return sorted((f for f in fs if not os.path.islink(f)), key=mt)
 
 
 def bk_prune(folder):
@@ -3511,7 +3555,7 @@ def make_backup():
     """打包並加密一份這台的備份，回傳 (檔案路徑, 包含哪些東西, 跳過的大檔)"""
     folder = bk_dir(NAME, bk_learn_name("", NAME))
     path = os.path.join(folder, bk_fname(NAME, time.time(), folder))
-    tmp = os.path.join(folder, "." + os.path.basename(path) + ".part")
+    tmp = os.path.join(folder, f".{secrets.token_hex(6)}.part")   # 猜不到的名字：雲端硬碟裡沒辦法先放好捷徑等著被寫
     try:
         with tempfile.TemporaryDirectory() as td:
             os.chmod(td, 0o700)
@@ -3553,6 +3597,7 @@ def tg_send_file(path, filename, caption):
     b = "----vs" + secrets.token_hex(12)
     fields = {"chat_id": TG_CHAT, "caption": caption, "parse_mode": "HTML", "disable_notification": "true"}
     head = "".join(f'--{b}\r\nContent-Disposition: form-data; name="{k}"\r\n\r\n{v}\r\n' for k, v in fields.items())
+    filename = re.sub(r'[\x00-\x1f"\\]', "_", filename)          # 檔名不能有換行、引號，不然會混進別的欄位
     head += (f'--{b}\r\nContent-Disposition: form-data; name="document"; filename="{filename}"\r\n'
              "Content-Type: application/octet-stream\r\n\r\n")
     with open(path, "rb") as f:
@@ -3606,8 +3651,11 @@ def bk_to_tg(path, owner=None):
 
 def bk_store(src, fname, stream, length, aliases=()):
     """把其他主機傳來的備份存在這台（src＝那台自己的名稱）；回傳 (成功, 說明, 存放位置)"""
-    if not re.fullmatch(r"[^/\\\x00]{1,120}\.vsbk", fname or "") or fname.startswith("."):
+    if not re.fullmatch(r'[^/\\\x00-\x1f"]{1,120}\.vsbk', fname or "") or fname.startswith("."):
         return False, "檔名不對", None
+    if bk_safe(src) == bk_safe(NAME):              # 那台跟這台同名：分開放，不然會跟這台自己的備份混在一起、被當成這台的刪掉
+        src = f"{src} 2"
+    aliases = tuple(a for a in aliases if bk_safe(a) != bk_safe(NAME))
     if not 0 < length <= BK_UPLOAD_MAX:
         return False, "檔案大小不對", None
     folder = bk_dir(src, aliases)
@@ -3615,10 +3663,10 @@ def bk_store(src, fname, stream, length, aliases=()):
     if shutil.disk_usage(folder).free < length + 50 * 1024 * 1024:
         return False, f"{where}的空間不夠", None
     dest = os.path.join(folder, fname if not os.path.exists(os.path.join(folder, fname)) else bk_fname(src, time.time(), folder))
-    tmp = os.path.join(folder, "." + fname + ".part")
+    tmp = os.path.join(folder, f".{secrets.token_hex(6)}.part")
     try:
         left = length
-        with open(tmp, "wb") as f:
+        with os.fdopen(os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600), "wb") as f:
             while left > 0:
                 chunk = stream.read(min(left, 1 << 20))
                 if not chunk:
@@ -3886,8 +3934,20 @@ def rsw_store(stream, length):
     return True, "已上傳"
 
 
+RSW_LOCK = threading.Lock()
+
+
 def rsw_start(pw):
-    """先確認密碼打得開，再在背景開始還原"""
+    """先確認密碼打得開，再在背景開始還原（兩個分頁同時按也只會開始一次）"""
+    if not RSW_LOCK.acquire(blocking=False):
+        return False, "已經在開始還原了"
+    try:
+        return _rsw_start(pw)
+    finally:
+        RSW_LOCK.release()
+
+
+def _rsw_start(pw):
     st = rsw_state()
     if not st or st.get("stage") != "wait":
         return False, "現在沒有在等待還原"
@@ -3913,8 +3973,13 @@ def rsw_start(pw):
                *(f"--setenv={k}={v}" for k, v in env.items() if v), *args]
     else:
         cmd = args
-    subprocess.Popen(cmd, env={**os.environ, **env}, stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
-                     stderr=subprocess.DEVNULL, start_new_session=True)
+    try:
+        subprocess.Popen(cmd, env={**os.environ, **env}, stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
+                         stderr=subprocess.DEVNULL, start_new_session=True)
+    except OSError as e:
+        st.update(stage="wait")                   # 沒開始成功：回到等待，可以再按一次
+        rsw_save(st)
+        return False, f"沒辦法開始還原：{e}"
     return True, "開始還原"
 
 
@@ -3982,7 +4047,8 @@ class Handler(BaseHTTPRequestHandler):
         if u.path == "/cloud-sso":                     # 從哨兵點進來：檢查簽章，發一張 30 天的通行證，再進雲端硬碟
             q = urllib.parse.parse_qs(u.query)
             e, sig = (q.get("e") or ["0"])[0], (q.get("s") or [""])[0]
-            ok = e.isdigit() and int(e) > time.time() and hmac.compare_digest(sig, _sign(f"cloud-sso:{e}"))
+            ok = (bool(re.fullmatch(r"[0-9]{1,12}", e)) and int(e) > time.time()
+                  and hmac.compare_digest(sig.encode(), _sign(f"cloud-sso:{e}").encode()))
             self.send_response(302)
             if ok:
                 self.send_header("Set-Cookie", self.cloud_cookie())
@@ -3999,6 +4065,8 @@ class Handler(BaseHTTPRequestHandler):
             self.end_headers()
             return
         self.close_connection = True
+        if not authed and not public and self.command not in ("GET", "HEAD", "OPTIONS"):
+            return self.send(401, '{"error":"請先登入"}')    # 還沒登入就想上傳、修改：內容不收，直接擋掉
         try:
             conn = http.client.HTTPConnection("127.0.0.1", CLOUD_PORT, timeout=3600)
             conn.putrequest(self.command, self.path, skip_host=True, skip_accept_encoding=True)
@@ -4020,7 +4088,12 @@ class Handler(BaseHTTPRequestHandler):
                         while self.rfile.readline().strip():
                             pass
                         break
-                    spool.write(self.rfile.read(n))
+                    while n > 0:                       # 一次最多讀 1 MB，對方說一段很大也不會一口氣吃掉記憶體
+                        buf = self.rfile.read(min(n, 1 << 20))
+                        if not buf:
+                            raise OSError("傳到一半斷掉了")
+                        spool.write(buf)
+                        n -= len(buf)
                     self.rfile.readline()
                 length = str(spool.tell())
                 spool.seek(0)
@@ -4064,7 +4137,7 @@ class Handler(BaseHTTPRequestHandler):
     def jbody(self, body):
         try:
             d = json.loads(body or b"{}")
-        except ValueError:
+        except (ValueError, RecursionError):
             d = {}
         return d if isinstance(d, dict) else {}
 
@@ -4109,7 +4182,9 @@ class Handler(BaseHTTPRequestHandler):
             return self.proxy_cloud()
         path = urllib.parse.urlsplit(self.path).path
         if path == "/":
-            w = watchers()
+            rs = rsw_state()
+            busy = rs and (rs.get("stage") == "wait" or rs.get("stage") == "running" and time.time() - rs.get("start_t", 0) < 7200)
+            w = [] if busy else watchers()        # 等著網頁還原、還原中：照樣給完整網頁
             return self.send(200, watch_page(w) if w else page(), "text/html; charset=utf-8")
         if path == "/manifest.webmanifest":
             return self.send(200, MANIFEST, "application/manifest+json", cache=True)
