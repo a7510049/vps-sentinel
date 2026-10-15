@@ -40,7 +40,7 @@ from collections import deque
 from concurrent.futures import ThreadPoolExecutor
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
-VERSION = "1.56"
+VERSION = "1.57"
 
 # ───────────────────────── 哨兵備份檔（.vsbk）─────────────────────────
 # 哨兵專用的備份格式：外面是自己的檔案格式，裡面用的是成熟、標準的加密方法（不自己發明加密）：
@@ -2087,6 +2087,208 @@ def start_update():
     return True, "已開始"
 
 
+# ───────────────────────── Oracle 免費主機防回收 ─────────────────────────
+# Oracle 的「永久免費」主機連續 7 天太閒（處理器第 95 百分位、網路、A1 的記憶體都低於 20%）就可能被收回。
+# 只要處理器那一項超過就不算閒置：每天 4 個整點（前後各多 5 分鐘）把整台的處理器用量補到 25%。
+# 補的工作用最低優先（SCHED_IDLE），其他程式要用處理器時會立刻讓出來；本來就夠忙時完全不補。
+
+KEEP_ON = C.get("KEEPALIVE", "on").lower() not in ("off", "0", "no")
+KEEP_TARGET = 25                                    # 補到整台 25%（Oracle 的門檻是 20%，留一點餘裕）
+KEEP_HOURS = sorted({int(h) % 24 for h in re.findall(r"\d+", C.get("KEEPALIVE_HOURS") or "1,7,13,19")})
+KEEP_MARGIN = 5                                     # 整點前後各多補幾分鐘（就算 Oracle 用每小時平均來算也穩）
+KEEP_FREE = ("VM.Standard.E2.1.Micro", "VM.Standard.A1.Flex")   # 永久免費的機型
+KEEP_LOW = 20                                       # 7 天第 95 百分位低於這個就提醒
+KEEP = {"oracle": None, "shape": "", "checked": 0, "days": {}, "proc": None, "base": None}   # days 會存檔
+KEEP_LK = threading.Lock()
+
+# 補處理器的小程式（另外開一個程序，才不會卡到哨兵自己）：每秒看整台用量，少多少補多少
+KEEP_CHILD = r"""
+import hashlib, os, sys, threading, time
+try:
+    os.sched_setscheduler(0, os.SCHED_IDLE, os.sched_param(0))
+except (AttributeError, OSError):
+    pass
+try:
+    os.nice(19)
+except OSError:
+    pass
+target, parent, n = float(sys.argv[1]) / 100, os.getppid(), os.cpu_count() or 1
+duty, buf = [0.0], os.urandom(1 << 16)
+def burn():
+    while True:
+        t0 = time.monotonic()
+        end = t0 + 0.1 * duty[0]
+        while time.monotonic() < end:
+            hashlib.sha256(buf).digest()            # 大塊資料的雜湊會放開 GIL，多個執行緒才能分到多核心
+        time.sleep(max(0.0, 0.1 - (time.monotonic() - t0)))
+def stat():
+    v = [int(x) for x in open("/proc/stat").readline().split()[1:9]]
+    return sum(v), v[3] + v[4]
+for _ in range(n):
+    threading.Thread(target=burn, daemon=True).start()
+last = stat()
+while os.getppid() == parent:
+    time.sleep(1)
+    cur = stat()
+    tot, idle = cur[0] - last[0], cur[1] - last[1]
+    last = cur
+    if tot > 0:
+        duty[0] = min(0.95, max(0.0, duty[0] + 0.6 * (target - (1 - idle / tot))))
+"""
+
+
+def keep_detect():
+    """是不是 Oracle 的免費主機：先看主機板上的雲端標記，再問 Oracle 的主機資訊服務是哪種機型"""
+    fake = C.get("ORACLE_SHAPE")                    # 測試用：SENTINEL_ORACLE_SHAPE=機型（none＝不是 Oracle）
+    if fake:
+        return (fake.lower() != "none"), ("" if fake.lower() == "none" else fake)
+    if read("/sys/class/dmi/id/chassis_asset_tag").strip() != "OracleCloud.com":
+        return False, ""
+    shape = ""
+    try:
+        req = urllib.request.Request("http://169.254.169.254/opc/v2/instance/shape", headers={"Authorization": "Bearer Oracle"})
+        with urllib.request.build_opener(urllib.request.ProxyHandler({})).open(req, timeout=3) as r:
+            shape = r.read(100).decode("ascii", "replace").strip()
+    except (OSError, ValueError):
+        pass
+    return True, shape
+
+
+def keep_free():
+    """要不要幫忙：Oracle 上的免費機型（問不到機型時也幫，寧可多補一點）"""
+    return bool(KEEP["oracle"]) and (not KEEP["shape"] or KEEP["shape"] in KEEP_FREE)
+
+
+def keep_window(now=None):
+    now = now or datetime.now()
+    m = now.hour * 60 + now.minute
+    for h in KEEP_HOURS:
+        d = (m - h * 60) % 1440                     # 從這個整點開始過了幾分鐘（跨午夜也算得對）
+        if d < 60 + KEEP_MARGIN or d >= 1440 - KEEP_MARGIN:
+            return True
+    return False
+
+
+def keep_ticks():
+    """補處理器的程序到現在用了多少處理器時間（跟 /proc/stat 一樣的單位）：(程序編號, 累計)"""
+    p = KEEP["proc"]
+    if not p or p.poll() is not None:
+        return None, 0
+    f = read(f"/proc/{p.pid}/stat").rsplit(")", 1)[-1].split()
+    try:
+        return p.pid, int(f[11]) + int(f[12])
+    except (IndexError, ValueError):
+        return p.pid, 0
+
+
+def keep_start():
+    with KEEP_LK:
+        p = KEEP["proc"]
+        if p and p.poll() is None:
+            return
+        try:
+            KEEP["proc"] = subprocess.Popen([sys.executable, "-I", "-c", KEEP_CHILD, str(KEEP_TARGET)],
+                                            stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        except OSError as e:
+            KEEP["proc"] = None
+            log("防回收：無法啟動：", e)
+
+
+def keep_stop():
+    with KEEP_LK:
+        p, KEEP["proc"] = KEEP["proc"], None
+    if p and p.poll() is None:
+        p.terminate()
+        try:
+            p.wait(5)
+        except subprocess.TimeoutExpired:
+            p.kill()
+
+
+def keep_record(pct, day=None):
+    """記一分鐘的整台處理器用量（每天一張 0–100% 的次數表，只留 8 天）"""
+    day = day or date.today().isoformat()
+    with KEEP_LK:
+        d = KEEP["days"].setdefault(day, [0] * 101)
+        d[min(100, max(0, int(pct)))] += 1
+        for k in sorted(KEEP["days"])[:-8]:
+            del KEEP["days"][k]
+
+
+def keep_p95():
+    """最近 7 天每分鐘處理器用量的第 95 百分位（Oracle 判斷閒置用的那個數字）、有幾天的資料"""
+    since = (date.today() - timedelta(days=6)).isoformat()
+    with KEEP_LK:
+        rows = [v for k, v in KEEP["days"].items() if k >= since]
+    cnt = [sum(r[i] for r in rows) for i in range(101)]
+    n = sum(cnt)
+    if not n:
+        return None, 0
+    need, acc = n * 0.95, 0
+    for i, c in enumerate(cnt):
+        acc += c
+        if acc >= need:
+            return i, round(n / 1440, 1)
+    return 100, round(n / 1440, 1)
+
+
+def keep_info():
+    """給網頁看的狀態；不是 Oracle 免費主機就不顯示"""
+    if not keep_free():
+        return None
+    p95, days = keep_p95()
+    p = KEEP["proc"]
+    return {"on": KEEP_ON, "shape": KEEP["shape"], "p95": p95, "days": days, "target": KEEP_TARGET,
+            "now": bool(p and p.poll() is None), "hours": KEEP_HOURS}
+
+
+def keep_notice():
+    """快要被當成閒置時的提醒（2 天以上的資料才判斷，免得剛裝好就誤報）"""
+    if not keep_free():
+        return ""
+    p95, days = keep_p95()
+    if p95 is not None and days >= 2 and p95 < KEEP_LOW:
+        return "處理器太閒，Oracle 可能會收回這台"
+    return ""
+
+
+def set_keepalive(on):
+    global KEEP_ON
+    try:
+        write_conf({"KEEPALIVE": "on" if on else "off"})
+    except OSError as e:
+        return False, f"無法寫入設定檔：{e}"
+    KEEP_ON = bool(on)
+    if not on:
+        keep_stop()
+    return True, "已開啟防回收" if on else "已關閉防回收"
+
+
+def keep_loop():
+    """每 10 秒看一次要不要補；每分鐘記一筆整台用量（含補的部分，這才是 Oracle 看到的）"""
+    last, t_rec = cpu_times(), time.time()
+    while True:
+        try:
+            now = time.time()
+            if now - KEEP["checked"] > 86400:       # 每天確認一次是不是 Oracle 免費主機
+                KEEP["oracle"], KEEP["shape"] = keep_detect()
+                KEEP["checked"] = now
+                if KEEP["oracle"]:
+                    log(f"防回收：這台是 Oracle（{KEEP['shape'] or '機型不明'}），{'會' if keep_free() else '不用'}幫忙")
+            if now - t_rec >= 60:
+                cur = cpu_times()
+                if keep_free() and cur[0] > last[0]:
+                    keep_record(100 * (1 - (cur[1] - last[1]) / (cur[0] - last[0])))
+                last, t_rec = cur, now
+            if KEEP_ON and keep_free() and keep_window():
+                keep_start()
+            elif KEEP["proc"]:
+                keep_stop()
+        except Exception as e:  # noqa: BLE001
+            log("防回收出錯：", repr(e))
+        time.sleep(10)
+
+
 # ───────────────────────── 背景收集 ─────────────────────────
 
 SAVE_LOCK = threading.Lock()
@@ -2152,6 +2354,7 @@ class Collector:
             self.saved_boot = st.get("boot")
             bk = st.get("backup") or {}
             BK.update({k: bk[k] for k in ("last", "ok_t", "day", "key_t", "names", "tg") if k in bk})
+            KEEP["days"].update({k: v for k, v in (st.get("keep") or {}).items() if isinstance(v, list) and len(v) == 101})
             if st.get("prev_keys") is not None:
                 self.prev_keys = {("b:" if v[0] == "bad" else "w:") + ev_key(v[1]): tuple(v)   # 舊版存的代號格式不同：重新算
                                   for v in st["prev_keys"].values()}
@@ -2167,6 +2370,8 @@ class Collector:
                       "prev_keys": self.prev_keys, "peer_seen": dict(PEER_SEEN),
                       "tg_sent": dict(TG_SENT), "tg_msgs": list(TG_MSGS),
                       "backup": {k: BK[k] for k in ("last", "ok_t", "day", "key_t", "names", "tg")}}
+                with KEEP_LK:
+                    st["keep"] = {k: list(v) for k, v in KEEP["days"].items()}
                 st = json.dumps(st, ensure_ascii=False, separators=(",", ":"))   # 鎖著的時候就轉好，別的執行緒改到一半也不會出錯
             try:
                 os.makedirs(DATA_DIR, exist_ok=True)
@@ -2284,19 +2489,22 @@ class Collector:
                 "rx": [h[3] for h in src], "tx": [h[4] for h in src]}
 
     def loop(self):
-        last_cpu = cpu_times()
+        last_cpu, last_keep = cpu_times(), keep_ticks()
         last_net, last_t = net_bytes(), time.time()
         tick, last_err = 0, None
         while True:
             time.sleep(2)
             try:
-                now_cpu, now_net, now_t = cpu_times(), net_bytes(), time.time()
+                now_cpu, now_net, now_t, now_keep = cpu_times(), net_bytes(), time.time(), keep_ticks()
                 dt_total = now_cpu[0] - last_cpu[0]
                 dt_idle = now_cpu[1] - last_cpu[1]
+                if now_keep[0]:                   # 防回收補的部分不算進畫面上的數字（只是讓 Oracle 看到，不是真的在忙）
+                    dt_idle += max(0, now_keep[1] - (last_keep[1] if last_keep[0] == now_keep[0] else 0))
+                last_keep = now_keep
                 dt = max(now_t - last_t, 0.001)
                 with self.lock:
                     if dt_total > 0:
-                        self.cpu_pct = round(100 * (1 - dt_idle / dt_total), 1)
+                        self.cpu_pct = round(max(0.0, 100 * (1 - dt_idle / dt_total)), 1)
                     self.net = {"rx": max(0, (now_net[0] - last_net[0]) / dt),
                                 "tx": max(0, (now_net[1] - last_net[1]) / dt)}
                     if self.cpu_pct >= ALERT_CPU:
@@ -2505,6 +2713,8 @@ class Collector:
         if BACKUP_ON and BK["ok_t"] and time.time() - BK["ok_t"] > 50 * 3600:
             notices.append(f"{int((time.time() - BK['ok_t']) // 86400)} 天沒有成功備份")
         notices += cert_soon
+        if keep_notice():
+            notices.append(keep_notice())
 
         return {
             "name": NAME, "node": "", "online": True, "version": VERSION, "time": time.time(), "links": links_status(), "build": BUILD, "self_has": bool(SELF["has"] or (CLOUD_URL and CLOUDUP["has"])),
@@ -2512,7 +2722,7 @@ class Collector:
             "uptime": float(read("/proc/uptime", "0").split()[0] or 0),
             "cores": os.cpu_count() or 1, "cpu": cpu, "load": [round(x, 2) for x in load],
             "ipv6": {"addr": v6["addr"], "ok": v6["ok"]} if v6["addr"] or v6["seen"] else None,
-            "cloud": cloud,
+            "cloud": cloud, "keep": keep_info(),
             "conns": tcp_conns(), "conns_avg": round(sum(self.conn_hist) / len(self.conn_hist), 1) if len(self.conn_hist) >= 30 else None, "procs": int((read("/proc/loadavg", "0 0 0 0/0").split()[3:4] or ["0/0"])[0].split("/")[-1] or 0),
             "mem": mem, "disks": disks, "net": net,
             "containers": containers, "services": services,
@@ -4432,7 +4642,7 @@ class Handler(BaseHTTPRequestHandler):
         u = urllib.parse.urlsplit(self.path)
         if u.path not in ("/api/update", "/api/rename", "/api/traffic", "/api/telegram", "/api/links", "/api/self", "/api/cloud-login", "/api/peer",
                           "/api/token", "/api/passkey", "/api/passkey-login", "/api/pin", "/api/pin-login", "/api/backup", "/api/backup-store",
-                          "/api/restore-upload", "/api/restore-run", "/api/pair", "/api/pair-admin", "/api/reboot"):
+                          "/api/restore-upload", "/api/restore-run", "/api/pair", "/api/pair-admin", "/api/reboot", "/api/keepalive"):
             return self.send(404, '{"error":"找不到"}')
         if u.path in ("/api/restore-upload", "/api/restore-run"):   # 網頁還原：要有安裝時給的代碼（或已經登入）
             if not (self.authed() or rsw_code_ok(self.headers.get("X-Restore-Code", ""))):
@@ -4588,6 +4798,9 @@ class Handler(BaseHTTPRequestHandler):
                 ok, msg = set_backup(bool(d.get("on")))
                 return self.send(200 if ok else 500, json.dumps({"ok": ok, "message": msg}, ensure_ascii=False))
             return self.send(400, '{"ok":false}')
+        if u.path == "/api/keepalive":               # 開關 Oracle 防回收
+            ok, msg = set_keepalive(bool(self.jbody(body).get("on")))
+            return self.send(200 if ok else 500, json.dumps({"ok": ok, "message": msg}, ensure_ascii=False))
         if u.path == "/api/pin":                     # 設定、關閉 PIN 碼（已登入才能用）
             d = self.jbody(body)
             if d.get("action") == "set":
@@ -4671,12 +4884,14 @@ def page():
 
 def main():
     def stop(*_):
+        keep_stop()
         COL.save()
         log("已存檔，結束")
         sys.exit(0)
     signal.signal(signal.SIGTERM, stop)
     signal.signal(signal.SIGINT, stop)
     threading.Thread(target=COL.loop, daemon=True).start()
+    threading.Thread(target=keep_loop, daemon=True).start()       # 只有 Oracle 免費主機才會真的做事
     threading.Thread(target=alert_loop, daemon=True).start()      # 沒設定時也會跑，網頁上一設定好就開始通知
     srv = ThreadingHTTPServer((BIND, PORT), Handler)
     log(f"VPS 哨兵 {VERSION} 已啟動：http://{BIND}:{PORT}  名稱={NAME}  其他主機={len(PEERS)} 台  "

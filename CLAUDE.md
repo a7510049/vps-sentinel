@@ -46,6 +46,7 @@ tests/             基本功能測試（只用 Python 內建模組）
 - 新增主機（配對暗號）：新主機產生 `VS-` 開頭的暗號（網址＋一次性 128 位元密鑰，24 小時、用一次就失效，存在 `DATA_DIR/pairing.json`，安裝畫面用 `--pair-code`）；主要主機在「新增主機」貼上，兩邊用 HMAC-SHA256 互相驗證、HKDF-SHA256 各自算出 `vsk_` 開頭的連線鑰匙（不在網路上傳），寫進 `PEERS`；新主機只存鑰匙的雜湊，可在「設定 → 配對暗號」解除；`pair_` 開頭的函式
 - 被監看模式：被配對、自己又沒有 PEERS 的主機（`watchers()`）不載入完整網頁，`/` 只給一頁說明＋「取消被監看」（密碼或 PIN 碼，或 `--unwatch`）；不自己發事件通知；主要主機每 10 分鐘送心跳（`peer_beats`，帶 Telegram 設定），主要主機 5 分鐘沒連進來就由被監看的主機通知（`watch_check`）
 - 從網頁重新開機（`reboot_` 開頭的函式）：先傳 6 位數一次性驗證碼到 Telegram（5 分鐘、錯 5 次失效；被監看的主機用主要主機給的 Telegram），沒有 Telegram 就改輸入那台的密碼或 PIN 碼；測試用 SENTINEL_REBOOT_CMD 換掉真正的重開指令
+- Oracle 防回收（`keep_` 開頭的函式）：偵測到 Oracle 免費機型（主機板標記 `OracleCloud.com`＋主機資訊服務的機型）才動作；每天 1、7、13、19 點前後各多 5 分鐘，另開一個最低優先（SCHED_IDLE）的程序把整台處理器補到 25%，畫面上的處理器數字會扣掉這部分；每分鐘的用量存成每天的次數表算 7 天第 95 百分位，2 天以上低於 20% 就提醒；設定檔 `KEEPALIVE=off` 關閉，測試用 `ORACLE_SHAPE`、`KEEPALIVE_HOURS`
 - Caddy：主設定用 `import /etc/caddy/sites/vps-sentinel.d/*.caddy`；雲端硬碟的轉接寫在 `cloud.caddy`
 
 ## 使用者的兩台主機
