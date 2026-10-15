@@ -777,8 +777,9 @@ html::-webkit-scrollbar-thumb{background:color-mix(in srgb,var(--text) 22%,trans
 .top .meta{margin:0 4px;white-space:nowrap}
 .tbtns{display:flex;gap:2px;flex:none}
 .board{flex:1 1 0;min-height:0;display:grid;grid-template-columns:minmax(0,1fr) 300px;gap:var(--gap)}
-.cols{display:grid;grid-auto-flow:column;grid-auto-columns:calc((100% - (var(--n) - 1) * var(--gap)) / var(--n));gap:var(--gap);min-height:0;
-  overflow-x:auto;overflow-y:hidden;scroll-snap-type:x mandatory;scrollbar-width:none;padding:14px 14px 28px;margin:-14px -14px -28px;scroll-padding:0 14px}   /* 留邊：有狀況的主機外圍光暈不會被切掉 */
+.cols{display:grid;grid-auto-flow:column;grid-auto-columns:calc((100% - (var(--n) - 1) * var(--gap)) / var(--n));gap:var(--gap);min-height:0}
+.cols.more{overflow-x:auto;overflow-y:hidden;scroll-snap-type:x mandatory;scrollbar-width:none;padding:14px 14px 56px;margin:-14px -14px -56px;scroll-padding:0 14px}   /* 只有放不下才能左右捲；留邊讓卡片陰影、光暈不會被切成一條 */
+.dash.d2:has(.cols.more){overflow-y:clip}   /* 上面留的邊超出畫面底部，不要讓整頁多出一段能捲 */
 .cols::-webkit-scrollbar{display:none}
 .cols>.empty{align-self:center}
 .cols.more{grid-auto-columns:calc((100% - var(--n) * var(--gap) - 56px) / var(--n));-webkit-mask:linear-gradient(90deg,#000 calc(100% - 70px),transparent);mask:linear-gradient(90deg,#000 calc(100% - 70px),transparent)}
@@ -843,11 +844,12 @@ html::-webkit-scrollbar-thumb{background:color-mix(in srgb,var(--text) 22%,trans
 
 /* ═════════ 手機版：左右滑的卡片＋下面的小圓點 ═════════ */
 .pager{display:flex;align-items:flex-start;gap:12px;overflow-x:auto;overflow-y:hidden;scroll-snap-type:x mandatory;scrollbar-width:none;
-  margin:-14px -16px 0;padding:14px 16px 26px;scroll-padding:0 16px;overscroll-behavior-x:contain;position:relative}
+  margin:-14px -16px -30px;padding:14px 16px 56px;scroll-padding:0 16px;overscroll-behavior-x:contain;position:relative}   /* 底下多留邊讓卡片陰影不會被切成一條，再用負邊距收回，版面不變 */
 .pager::-webkit-scrollbar{display:none}
 .pager>.card{flex:0 0 100%;scroll-snap-align:start;scroll-snap-stop:always;min-width:0}
 .pager.many>.card{flex-basis:calc(100% - 24px)}
-.pdots{display:flex;justify-content:center;margin:-22px 0 calc(var(--gap) - 10px)}
+.pdots{display:flex;justify-content:center;margin:-52px 0 calc(var(--gap) - 10px);position:relative}   /* 跟上面的 -30px 邊距重疊算，實際往上 22px；疊在捲動區上面才按得到 */
+.dash.m .pager+.m-add{margin-top:calc(var(--gap) + 30px)}   /* 抵掉 .pager 的 -30px，位置不變 */
 .pdots button{border:0;background:none;padding:10px 3px;cursor:pointer;display:grid;place-items:center}   /* 圓點很小，按的範圍放大 */
 .pdots i{width:7px;height:7px;border-radius:var(--r-pill);background:var(--faint);opacity:.5;transition:width var(--t-mid) var(--ease),background var(--t-mid),opacity var(--t-mid)}
 .pdots i.warn{background:var(--warn);opacity:1}.pdots i.bad{background:var(--bad);opacity:1}
