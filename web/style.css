@@ -841,22 +841,16 @@ html::-webkit-scrollbar-thumb{background:color-mix(in srgb,var(--text) 22%,trans
   .hcol .head h2{font-size:var(--fs-xl)}
 }
 
-/* ═════════ 手機版：上面的主機膠囊＋左右滑的卡片 ═════════ */
-.htabs{display:flex;gap:8px;overflow-x:auto;scrollbar-width:none;margin:0 -16px 2px;padding:4px 16px 14px}   /* 下面留空間給選中膠囊的光暈，不會被切成一直線 */
-.htabs::-webkit-scrollbar{display:none}
-.htab{flex:none;border:0;cursor:pointer;display:inline-flex;align-items:center;gap:7px;padding:8px 15px;border-radius:var(--r-pill);font-weight:800;font-size:var(--fs-m);
-  color:var(--sub);background:var(--inset);box-shadow:var(--ring);transition:background var(--t-mid),color var(--t-mid),box-shadow var(--t-mid),transform var(--t-mid) var(--spring)}
-.htab.on{background:var(--grad);color:#fff;box-shadow:var(--hl),0 8px 20px -10px var(--a1)}
-.htab:active{transform:scale(.94)}
-.htab .dot{width:7px;height:7px}
-.htab.on .dot{box-shadow:0 0 0 2px rgba(255,255,255,.85)}
+/* ═════════ 手機版：左右滑的卡片＋下面的小圓點 ═════════ */
 .pager{display:flex;align-items:flex-start;gap:12px;overflow-x:auto;overflow-y:hidden;scroll-snap-type:x mandatory;scrollbar-width:none;
   margin:-14px -16px 0;padding:14px 16px 26px;scroll-padding:0 16px;overscroll-behavior-x:contain;position:relative}
 .pager::-webkit-scrollbar{display:none}
 .pager>.card{flex:0 0 100%;scroll-snap-align:start;scroll-snap-stop:always;min-width:0}
 .pager.many>.card{flex-basis:calc(100% - 24px)}
-.pdots{display:flex;justify-content:center;gap:6px;margin:-12px 0 var(--gap)}
-.pdots i{width:7px;height:7px;border-radius:var(--r-pill);background:var(--faint);opacity:.5;transition:width var(--t-mid) var(--ease),background var(--t-mid)}
+.pdots{display:flex;justify-content:center;margin:-22px 0 calc(var(--gap) - 10px)}
+.pdots button{border:0;background:none;padding:10px 3px;cursor:pointer;display:grid;place-items:center}   /* 圓點很小，按的範圍放大 */
+.pdots i{width:7px;height:7px;border-radius:var(--r-pill);background:var(--faint);opacity:.5;transition:width var(--t-mid) var(--ease),background var(--t-mid),opacity var(--t-mid)}
+.pdots i.warn{background:var(--warn);opacity:1}.pdots i.bad{background:var(--bad);opacity:1}
 .pdots i.on{width:20px;background:var(--grad);opacity:1}
 .card .mts{margin-top:14px;gap:7px}
 .card .mt{padding:10px 2px 9px}
