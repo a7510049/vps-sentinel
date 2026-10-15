@@ -862,4 +862,14 @@ html::-webkit-scrollbar-thumb{background:color-mix(in srgb,var(--text) 22%,trans
 .card .fcs{margin-top:10px}
 .card .fc{font-size:var(--fs-xs);padding-top:4px;padding-bottom:4px}
 .dash.m .feed{margin-top:0}
+/* 手機頂部：問候跟設定鈕同一行，小語和更新時間同一行，天氣縮成一列 */
+.dash.m .bar+.hero{margin-top:-49px;padding-bottom:14px}
+.dash.m .bar+.hero h1{margin-right:120px}
+.qrow{display:flex;flex-wrap:wrap;align-items:baseline;column-gap:12px;row-gap:2px;margin-top:4px}
+.qrow .quote{margin:0;min-width:0}
+.qrow .meta{margin:0 0 0 auto}
+.dash.m .wxb{margin-top:12px;padding:9px 14px;gap:10px}
+.dash.m .wxb div{flex:1;display:flex;flex-wrap:wrap;align-items:baseline;column-gap:10px}
+.dash.m .wxb b{margin-right:0}
+.dash.m .wxb small{margin:0 0 0 auto;text-align:right}
 .dash.m .feed .evs{flex:none;max-height:320px}

@@ -643,7 +643,7 @@ function renderMobile(list, n, time){
   if (!list.some(s => keyOf(s) === PG)) PG = list.length ? keyOf(list[0]) : "";
   return `<div class="dash m" data-key="m"><header class="bar"><span class="mini">VPS 哨兵</span><span class="grow"></span>
     <button class="cap glass ${list.some(s=>s.self_has)?"hasnew":""}" data-settings title="設定">${I("gear")}</button><button class="cap glass" data-logout title="登出">${I("logout")}</button></header>
-    <div class="hero"><h1 data-x>${g.hi}</h1><div class="quote" data-x>${g.quote}</div><div class="meta"><span class="live"></span>更新於 ${time}</div><div class="wxw" data-x>${g.wx}</div></div>
+    <div class="hero"><h1 data-x>${g.hi}</h1><div class="qrow"><div class="quote" data-x>${g.quote}</div><div class="meta"><span class="live"></span>更新於 ${time}</div></div><div class="wxw" data-x>${g.wx}</div></div>
     <div class="pager${many ? " many" : ""}" data-key="pg" data-keyed>${list.map((s, i) => mcard(s, i)).join("")}</div>
     ${many ? `<div class="pdots" data-key="dots">${list.map(s => `<button data-pg="${esc(keyOf(s))}" title="${esc(s.name)}"><i class="${keyOf(s)===PG?"on":""} ${lvOf(s)==="ok"?"":lvOf(s)}"></i></button>`).join("")}</div>` : ""}
     ${feed(list)}${addHostBtn("addhost m-add")}</div>`;
