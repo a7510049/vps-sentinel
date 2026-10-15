@@ -326,7 +326,8 @@ function quoteOf(h){
 const WXK = "vps-wx";
 let WX = null, wxTimer = 0;
 const wxMem = () => { try { return JSON.parse(store(WXK) || "{}"); } catch(e) { return {}; } };
-(() => { const m = wxMem(); if (m.data && Date.now() - m.dt < 3 * 3600e3) WX = m.data; })();
+const WXV = 2;                                   // 提醒的寫法改過：舊版存的天氣不用，重新抓
+(() => { const m = wxMem(); if (m.data && m.data.v === WXV && Date.now() - m.dt < 3 * 3600e3) WX = m.data; })();
 function wxWord(c, day){
   const W = [[0, day ? "☀️" : "🌙", "晴朗"], [1, day ? "🌤️" : "🌙", "大致晴朗"], [2, "⛅", "多雲"], [3, "☁️", "陰天"], [48, "🌫️", "有霧"],
     [57, "🌦️", "毛毛雨"], [61, "🌧️", "小雨"], [63, "🌧️", "下雨"], [67, "🌧️", "大雨"], [77, "🌨️", "下雪"],
@@ -349,8 +350,9 @@ function wxTip(d){
   if (c.is_day && Math.max(...d.hourly.uv_index.slice(from, from + 4)) >= 8) return "紫外線很強，注意防曬";
   if (feel <= 5) return "很冷，注意保暖";
   if (feel <= 12) return "有點涼，多穿一件";
-  if (d.daily.temperature_2m_max[0] - d.daily.temperature_2m_min[0] >= 10) return "早晚溫差大，帶件外套";
-  return "";
+  const hi = Math.round(d.daily.temperature_2m_max[0]), lo = Math.round(d.daily.temperature_2m_min[0]);
+  if (hi - lo >= 10) return "早晚溫差大，帶件外套";
+  return `今天 ${lo}–${hi}°，適合出門`;              // 沒有要特別注意的：至少給今天的溫度範圍
 }
 function wxRun(){
   clearTimeout(wxTimer);
@@ -358,7 +360,7 @@ function wxRun(){
   wxTimer = setTimeout(wxRun, 30 * 60e3);
   const m = wxMem(), now = Date.now();
   if (m.deny && now - m.deny < 3 * 86400e3) return;            // 剛拒絕定位：3 天內不再問
-  if (m.data && now - m.dt < 30 * 60e3) return;
+  if (m.data && m.data.v === WXV && now - m.dt < 30 * 60e3) return;
   const go = async (lat, lon) => {
     try {
       const q = `latitude=${lat}&longitude=${lon}&current=temperature_2m,apparent_temperature,weather_code,is_day`
@@ -366,7 +368,7 @@ function wxRun(){
       const r = await fetch("https://api.open-meteo.com/v1/forecast?" + q, {signal: AbortSignal.timeout ? AbortSignal.timeout(8000) : undefined});
       if (!r.ok) return;
       const d = await r.json(), c = d.current, [, icon, word] = wxWord(c.weather_code, c.is_day);
-      WX = {icon, word, t: Math.round(c.temperature_2m), tip: wxTip(d)};
+      WX = {icon, word, t: Math.round(c.temperature_2m), tip: wxTip(d), v: WXV};
       store(WXK, JSON.stringify({lat, lon, at: m.lat === lat && m.lon === lon && m.at ? m.at : now, data: WX, dt: Date.now()}));
       if (LIST.length) render(LIST);
     } catch(e) {}
@@ -511,7 +513,7 @@ function factsRow(s, ph){
     if (c != null) f.push(`<span class="fc" data-key="cn" title="現在的網路連線數${avg != null ? `（平常約 ${Math.round(avg)} 條）` : ""}">連線<b class="num">${Number(c).toLocaleString("zh-TW")}</b>${cw ? `<em class="${cw.includes("多") ? "warn" : ""}">${cw}</em>` : ""}</span>`);
     const ip = s.geo && s.geo.ip, org = s.geo && s.geo.org;
     if (ip) f.push(`<span class="fc" data-key="ip">IP<b class="ipb ${shown ? "on" : ""}" ${shown ? `data-copy="${esc(ip)}" title="點一下複製（15 秒後會自動遮起來）"` : `data-reveal="${esc(k)}" title="點一下顯示"`}>${esc(ip)}</b></span>`);
-    if (s.ipv6) f.push(`<span class="fc" data-key="v6">${v6line(s, shown)}</span>`);
+    if (s.ipv6) f.push(`<span class="fc" data-key="v6" data-xw>${v6line(s, shown)}</span>`);
     if (org) f.push(`<span class="fc" data-key="org">${esc(org)}</span>`);
     s.disks.slice(1).forEach(d => f.push(`<span class="fc" data-key="dk:${esc(d.path)}">磁碟 ${esc(d.path)}<b class="num ${tier(d.pct)}">${num(d.pct)}%</b></span>`));
     if (s.mem.swap_total) f.push(`<span class="fc" data-key="sw">虛擬記憶體<b class="num">${num(s.mem.swap_pct)}%</b></span>`);
@@ -831,6 +833,19 @@ function morph(a, b){
   if (a.classList.contains("ubtn") && a.innerHTML !== b.innerHTML) {
     return flipWidth(a, () => { patch(a, b); a.animate([{opacity:.35}, {opacity:1}], {duration:T.mid, easing:EASE}); });
   }
+  if (a.hasAttribute("data-xw") && a.innerHTML !== b.innerHTML) {     // 小膠囊換內容（IPv6 狀態 ↔ 位址）：寬度平滑伸縮，新字淡入
+    if (!canAnim() || !a.isConnected) return patch(a, b);
+    // 位置一次排好（可能換到下一行），膠囊和旁邊的都從原位平滑移過去，整排高度也跟著變
+    const par = a.parentElement, h0 = par.offsetHeight, w0 = a.offsetWidth, o = {duration:T.mid, easing:EASE, id:"ui"};
+    a.getAnimations().forEach(x => x.cancel());
+    flipSiblings(par, () => patch(a, b));
+    const w1 = a.offsetWidth, h1 = par.offsetHeight, r = getComputedStyle(a).borderRadius;
+    if (Math.abs(h1 - h0) > 1) par.animate([{height:h0 + "px"}, {height:h1 + "px"}], o);
+    if (w1 > w0 + 1) a.animate([{clipPath:`inset(0 ${w1 - w0}px 0 0 round ${r})`}, {clipPath:`inset(0 0 0 0 round ${r})`}], o);   // 變長：從原本的寬度展開
+    else if (w1 < w0 - 1) a.animate([{opacity:.4, scale:".94"}, {opacity:1, scale:"1"}], o);
+    [...a.children].forEach(c => c.animate([{opacity:0, filter:"blur(4px)"}, {opacity:1, filter:"none"}], o));
+    return;
+  }
   if (a.hasAttribute("data-x") && a.innerHTML !== b.innerHTML) {
     if (!canAnim() || !a.isConnected) return patch(a, b);
     a._xb = b;                                    // 先淡出舊字、再換上新字淡入；高度跟著平順變化
@@ -1102,7 +1117,7 @@ function settingsBody(){
     <div class="opt">${IC("trend")}<span class="lab">歷史曲線圖</span>${tog("show.chart")}</div>
     <div class="opt">${IC("net")}<span class="lab">網路速度</span>${tog("show.net")}</div>
     <div class="opt">${IC("box")}<span class="lab">容器與服務</span>${tog("show.items")}</div>
-    <div class="opt">${IC("info")}<span class="lab">連線數與 IP<small>電腦版才有</small></span>${tog("show.info")}</div>
+    <div class="opt">${IC("info")}<span class="lab">連線數與 IP</span>${tog("show.info")}</div>
     <div class="opt">${IC("flag")}<span class="lab">國旗</span>${tog("show.flag")}</div>
     <div class="opt">${IC("month")}<span class="lab">每月流量</span>${tog("show.traffic")}</div>
     <div class="opt">${IC("sun")}<span class="lab">天氣<small>用這台裝置的位置</small></span>${tog("show.weather")}</div>

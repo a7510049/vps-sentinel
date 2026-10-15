@@ -778,7 +778,7 @@ html::-webkit-scrollbar-thumb{background:color-mix(in srgb,var(--text) 22%,trans
 .tbtns{display:flex;gap:2px;flex:none}
 .board{flex:1 1 0;min-height:0;display:grid;grid-template-columns:minmax(0,1fr) 300px;gap:var(--gap)}
 .cols{display:grid;grid-auto-flow:column;grid-auto-columns:calc((100% - (var(--n) - 1) * var(--gap)) / var(--n));gap:var(--gap);min-height:0;
-  overflow-x:auto;overflow-y:hidden;scroll-snap-type:x mandatory;scrollbar-width:none;padding:14px;margin:-14px;scroll-padding:0 14px}   /* 留邊：有狀況的主機外圍光暈不會被切掉 */
+  overflow-x:auto;overflow-y:hidden;scroll-snap-type:x mandatory;scrollbar-width:none;padding:14px 14px 28px;margin:-14px -14px -28px;scroll-padding:0 14px}   /* 留邊：有狀況的主機外圍光暈不會被切掉 */
 .cols::-webkit-scrollbar{display:none}
 .cols>.empty{align-self:center}
 .cols.more{grid-auto-columns:calc((100% - var(--n) * var(--gap) - 56px) / var(--n));-webkit-mask:linear-gradient(90deg,#000 calc(100% - 70px),transparent);mask:linear-gradient(90deg,#000 calc(100% - 70px),transparent)}
@@ -842,7 +842,7 @@ html::-webkit-scrollbar-thumb{background:color-mix(in srgb,var(--text) 22%,trans
 }
 
 /* ═════════ 手機版：上面的主機膠囊＋左右滑的卡片 ═════════ */
-.htabs{display:flex;gap:8px;overflow-x:auto;scrollbar-width:none;margin:0 -16px 12px;padding:4px 16px}
+.htabs{display:flex;gap:8px;overflow-x:auto;scrollbar-width:none;margin:0 -16px 2px;padding:4px 16px 14px}   /* 下面留空間給選中膠囊的光暈，不會被切成一直線 */
 .htabs::-webkit-scrollbar{display:none}
 .htab{flex:none;border:0;cursor:pointer;display:inline-flex;align-items:center;gap:7px;padding:8px 15px;border-radius:var(--r-pill);font-weight:800;font-size:var(--fs-m);
   color:var(--sub);background:var(--inset);box-shadow:var(--ring);transition:background var(--t-mid),color var(--t-mid),box-shadow var(--t-mid),transform var(--t-mid) var(--spring)}
