@@ -488,9 +488,10 @@ function mring(icon, label, pct, sub, o = {}){
 function ringsRow(s){
   const d0 = s.disks.find(x => x.path === "/") || s.disks[0] || {pct:0, used:0, total:0};
   const l = s.load[0], lr = l / (s.cores || 1), [lw, lc, lt] = LOADW(lr);
-  return `<div class="mts" data-key="mts">${mring("cpu", "處理器", s.cpu, `${s.cores} 核`)}${mring("mem", "記憶體", s.mem.pct, `${size(s.mem.used)} / ${size(s.mem.total)}`)}`
-    + `${mring("disk", "磁碟", d0.pct, `${size(d0.used)} / ${size(d0.total)}`)}`
-    + `${mring("load", "負載", Math.min(100, lr / 2 * 100), `${l.toFixed(2)}／${s.cores} 核`, {t: lt, word: lw, cls: lc})}</div>`;
+  const nb = v => String(v).replace(/ /g, "\u00a0"), of = (a, b) => `${nb(size(a))} / ${nb(size(b))}`;   // 欄位窄時從「/」換行，不會被砍成「…」
+  return `<div class="mts" data-key="mts">${mring("cpu", "處理器", s.cpu, nb(`${s.cores} 核`))}${mring("mem", "記憶體", s.mem.pct, of(s.mem.used, s.mem.total))}`
+    + `${mring("disk", "磁碟", d0.pct, of(d0.used, d0.total))}`
+    + `${mring("load", "負載", Math.min(100, lr / 2 * 100), nb(`${l.toFixed(2)}／${s.cores} 核`), {t: lt, word: lw, cls: lc})}</div>`;
 }
 /* IPv6：沒有 IPv6 的主機不顯示 */
 function v6line(s, shown){
@@ -503,7 +504,7 @@ function v6line(s, shown){
 }
 /* 主機名稱下面一排小膠囊：連線數、IP（霧化，點一下顯示）、IPv6、其他磁碟、雲端硬碟 */
 const IPSHOW = {};                    // 哪幾台的 IP 目前是顯示狀態（到期自動再遮起來）
-function factsRow(s){
+function factsRow(s, ph){
   const f = [], k = keyOf(s), shown = IPSHOW[k] > Date.now(), c = s.conns, avg = s.conns_avg;
   if (PREF.show.info) {
     const cw = c == null || avg == null ? "" : (c > avg * 2 && c - avg > 20) ? "比平常多很多" : (avg > 10 && c < avg * .3) ? "比平常少很多" : "";
@@ -515,7 +516,7 @@ function factsRow(s){
     s.disks.slice(1).forEach(d => f.push(`<span class="fc" data-key="dk:${esc(d.path)}">磁碟 ${esc(d.path)}<b class="num ${tier(d.pct)}">${num(d.pct)}%</b></span>`));
     if (s.mem.swap_total) f.push(`<span class="fc" data-key="sw">虛擬記憶體<b class="num">${num(s.mem.swap_pct)}%</b></span>`);
   }
-  const cc = cloudChip(s); if (cc) f.push(cc);
+  const cc = !ph && cloudChip(s); if (cc) f.push(cc);            // 手機另外有雲端硬碟那一行
   return f.length ? `<div class="fcs" data-key="fcs">${f.join("")}</div>` : "";
 }
 /* 雲端硬碟入口：放在磁碟卡片標題旁，點了直接打開 */
@@ -537,8 +538,13 @@ function trafficBox(s){
 function itemsBox(s){
   if (!PREF.show.items) return "";
   const items = itemsOf(s);
-  return `<div class="bx ibx" data-key="ib"><div class="r1">${IC("box")}<span>容器與服務</span><span class="sub">${items.length ? itemsSummary(items) : "沒有"}</span></div>
+  return `<div class="bx ibx" data-key="ib"><div class="r1">${IC("box")}<span>容器與服務</span><span class="sub">${items.length ? boxSummary(items) : "沒有"}</span></div>
     ${items.length ? `<div class="chips" data-key="chips" data-keyed>${items.map(x => `<span class="chip" data-key="${x.t}:${esc(x.n)}" title="${x.t}：${esc(x.n)}・${esc(x.s)}"><span class="dot ${x.st}"></span>${esc(x.sn || x.n)}</span>`).join("")}</div>` : ""}</div>`;
+}
+/* 方框裡位置小：有異常只說異常，沒有就說幾個正常 */
+function boxSummary(items){
+  const bad = items.filter(x => x.st === "bad").length;
+  return bad ? `<b>${bad} 個異常</b>` : `${items.filter(x => x.st === "ok").length} 個正常`;
 }
 const CNT = {both:"上傳＋下載", out:"只算上傳", in:"只算下載", max:"取較大的"};
 function trafficLine(s){
@@ -597,7 +603,7 @@ function feed(list){
       : `<div class="calm" data-key="calm">目前沒有事件</div>`}</div>`;
 }
 const head = (s, ph) => `<div class="head" data-key="hd">${avatar(s)}
-    <div class="nm"><h2><span>${esc(s.name)}</span>${editBtn(s)}</h2><div class="sub">${s.online ? `<span title="核心版本 ${esc(s.kernel)}">${esc(ph ? place(s) || s.os : [place(s), s.os].filter(Boolean).join("・"))}</span>・開機 ${up(s.uptime)}` : (s.last_seen ? `離線・${ago(s.last_seen)}` : "目前連不上")}</div></div>`;
+    <div class="nm"><h2><span>${esc(s.name)}</span>${editBtn(s)}</h2><div class="sub">${s.online ? `<span title="核心版本 ${esc(s.kernel)}">${esc(ph ? place(s) || s.os : [place(s), s.os].filter(Boolean).join("・"))}</span><span class="nw">・開機 ${up(s.uptime)}</span>` : (s.last_seen ? `離線・${ago(s.last_seen)}` : "目前連不上")}</div></div>`;
 const offBox = s => `<div class="offline" data-key="off">${I("off")}<div>連不上這台主機<div class="sub">${s.last_seen?esc(seen(s))+"<br>":""}${esc(s.error||"")}</div>${peerBtn(s)}</div></div>`;
 
 /* ═════════ 手機版：一台一張卡，左右滑換主機 ═════════ */
@@ -606,7 +612,7 @@ function mcard(s, i){
   const lv = lvOf(s), key = keyOf(s);
   let b = `<div class="card glass ${lv==="ok"?"":lv}" data-key="${esc(key)}" data-keyed style="--i:${i}">${head(s, 1)}</div>`;
   if (!s.online) return b + offBox(s) + `</div>`;
-  b += alerts(s) + ringsRow(s);
+  b += alerts(s) + ringsRow(s) + factsRow(s, 1);
   if (PREF.show.chart && s.hist) { const hh = histFor(s);
     b += `<div class="spark" data-key="sp"><div class="lbl"><span><i style="background:${COL.cpu};margin-left:0"></i>處理器<i style="background:${COL.mem}"></i>記憶體</span>${rangeSeg()}</div>
       ${chartOr(hh, cid(s,"m"), x => [{data:x.cpu,color:COL.cpu},{data:x.mem,color:COL.mem}], {max:100, h:72, fade:.25, sw:2, n:100})}</div>`; }
@@ -648,6 +654,16 @@ function pagerScroll(pg){
   document.querySelectorAll("#app .htab").forEach(b => { const on = b.dataset.pg === k; b.classList.toggle("on", on);
     if (on) { const t = b.parentElement; t.scrollTo({left: b.offsetLeft - (t.clientWidth - b.offsetWidth) / 2, behavior: canAnim() ? "smooth" : "auto"}); } });
   document.querySelectorAll("#app .pdots i").forEach((d, j) => d.classList.toggle("on", j === i));
+}
+/* 手機：主機重新排序（有狀況的排前面）或剛換成手機版面時，畫面要停在原本看的那一台 */
+function pageAt(){
+  const pg = $("#app .pager"), c = pg && [...pg.children].find(x => x.getAttribute("data-key") === PG);
+  return c ? c.offsetLeft : null;
+}
+function keepPage(at0){
+  const pg = $("#app .pager"); if (!pg || !PG) return;
+  const now = pageAt(); if (now == null) return;
+  if (now !== (at0 ?? 0)) pg.scrollLeft = now - (parseFloat(getComputedStyle(pg).scrollPaddingLeft) || 0);
 }
 function pagerGo(k){
   const pg = $("#app .pager"), c = pg && [...pg.children].find(x => x.getAttribute("data-key") === k);
@@ -740,15 +756,17 @@ function tween(el, from, to, d){
 }
 /* 共用動畫規則（跟 CSS 的 --t-*、--ease 一致） */
 const T = {fast:200, mid:350, slow:600};
+/* 文字大小是用 zoom 放大縮小的：量到的位置是螢幕上的，要除回去才能拿來定位 */
+const ZM = () => parseFloat(getComputedStyle(document.body).zoom) || 1;
 const EASE = "cubic-bezier(.22,1,.36,1)", SPRING = "cubic-bezier(.34,1.4,.64,1)", EXIT = "cubic-bezier(.4,0,1,1)";
 const canAnim = () => PREF.motion && !matchMedia("(prefers-reduced-motion: reduce)").matches;
 /* 讓元素平順地離開：先淡出、收起高度，再移除 */
 const BLOCK = ".alert,.item,.grp,.card,.empty,.spark,.ev,.more,.foot,.alerts,.offline,.strip,.fcs,.cpanel,.cbot,.mts";
 const TILE = ".panel,.stat,.tile,.chip,.tbx,.ibx";
 function flipSiblings(parent, change){
-  const kids = [...parent.children].filter(c => !c._leaving), r0 = kids.map(c => c.getBoundingClientRect());
+  const z = ZM(), kids = [...parent.children].filter(c => !c._leaving), r0 = kids.map(c => c.getBoundingClientRect());
   change();
-  kids.forEach((c, i) => { if (!c.isConnected) return; const r = c.getBoundingClientRect(), dx = r0[i].left - r.left, dy = r0[i].top - r.top;
+  kids.forEach((c, i) => { if (!c.isConnected) return; const r = c.getBoundingClientRect(), dx = (r0[i].left - r.left) / z, dy = (r0[i].top - r.top) / z;
     if (Math.abs(dx) > 1 || Math.abs(dy) > 1) c.animate([{transform:`translate(${dx}px,${dy}px)`}, {transform:"none"}], {duration:T.mid, easing:EASE, id:"ui"}); });
 }
 const gapOf = el => parseFloat(getComputedStyle(el).rowGap) || 0;
@@ -833,7 +851,7 @@ function keyedPatch(a, b){
   [...a.children].forEach(c => { if (!c._leaving) old.set(c.getAttribute("data-key") || "", c); });
   // 項目的順序、數量都沒變時，不會有東西移位，就不用量位置（量位置會逼瀏覽器整頁重新排版）
   const moved = [...old.keys()].join("\n") !== [...b.children].map(c => c.getAttribute("data-key") || "").join("\n");
-  const anim = canAnim(), first = new Map();
+  const anim = canAnim(), first = new Map(), z = anim && moved ? ZM() : 1;
   if (anim && moved) old.forEach((c, k) => first.set(k, c.getBoundingClientRect()));
   const keep = [], fresh = []; let prev = null;
   const want = new Set([...b.children].map(c => c.getAttribute("data-key") || ""));
@@ -858,7 +876,7 @@ function keyedPatch(a, b){
     else enterBlock(el, (leaving.length ? 200 : 0) + j*90);   // 有東西要離開時，等它先淡出再進來
   });
   if (anim && moved && !flowing) keep.forEach(([k, el]) => {   // 只有單純換位置時才平滑移位
-    const f = first.get(k), l = el.getBoundingClientRect(), dx = f.left - l.left, dy = f.top - l.top;
+    const f = first.get(k), l = el.getBoundingClientRect(), dx = (f.left - l.left) / z, dy = (f.top - l.top) / z;
     if (Math.abs(dx) > 1 || Math.abs(dy) > 1) el.animate([{transform:`translate(${dx}px,${dy}px)`}, {transform:"none"}], {duration:T.mid, easing:EASE, id:"ui"});
   });
 }
@@ -881,12 +899,29 @@ function paint(html){
   const cur = $("#app .dash");
   if (cur) morph(cur, tpl.content.firstElementChild); else { $("#app").innerHTML = ""; $("#app").appendChild(tpl.content.firstElementChild); }
 }
+function colsEdge(el){ el.classList.toggle("end", el.scrollLeft + el.clientWidth >= el.scrollWidth - 4); el.classList.toggle("st", el.scrollLeft > 4); }
 function edgeFades(el){
   const t = el.scrollTop > 2, b = el.scrollTop + el.clientHeight < el.scrollHeight - 2;
   if (el.classList.contains("ft") !== t) el.classList.toggle("ft", t);
   if (el.classList.contains("fb") !== b) el.classList.toggle("fb", b);
 }
-document.addEventListener("scroll", e => { const el = e.target; if (!el.matches) return; if (el.matches(".evs,.chips")) edgeFades(el); else if (el.matches(".cols")) el.classList.toggle("end", el.scrollLeft + el.clientWidth >= el.scrollWidth - 4); else if (el.matches(".pager")) pagerScroll(el); }, {capture:true, passive:true});
+document.addEventListener("scroll", e => { const el = e.target; if (!el.matches) return; if (el.matches(".evs,.chips")) edgeFades(el); else if (el.matches(".cols")) colsEdge(el); else if (el.matches(".pager")) pagerScroll(el); }, {capture:true, passive:true});
+/* 電腦版主機超過一頁：滑鼠滾輪上下滾，就一欄一欄往左右換（觸控板左右滑照原本的） */
+let wheelAcc = 0, wheelT = 0;
+document.addEventListener("wheel", e => {
+  const cols = e.target.closest && e.target.closest("#app .cols.more");
+  if (!cols || Math.abs(e.deltaX) >= Math.abs(e.deltaY) || e.ctrlKey) return;
+  const inner = e.target.closest(".evs,.chips");
+  if (inner && inner.scrollHeight > inner.clientHeight + 2) return;            // 框裡自己能捲的，讓它先捲
+  e.preventDefault();
+  const now = performance.now();
+  if (now - wheelT > 300) wheelAcc = 0;
+  wheelAcc += e.deltaY;
+  if (Math.abs(wheelAcc) < 40 || now - wheelT < 450) return;
+  const col = cols.querySelector(".hcol"), step = col ? col.offsetWidth + (parseFloat(getComputedStyle(cols).columnGap) || 0) : cols.clientWidth / 2;
+  cols.scrollBy({left: Math.sign(wheelAcc) * step, behavior: canAnim() ? "smooth" : "auto"});
+  wheelAcc = 0; wheelT = now;
+}, {passive:false});
 function placePind(){
   document.querySelectorAll("#app .summary").forEach(sm => {
     const ind = sm.querySelector(".pind"), on = sm.querySelector(".pill.on");
@@ -934,9 +969,12 @@ function render(list){
   LIST = list; flagAccent();
   const n = {ok:0,warn:0,bad:0}; list.forEach(s=>n[lvOf(s)]++);
   const time = new Date().toLocaleTimeString("zh-TW",{hour12:false});
+  const at0 = pageAt();
   paint(DESK.matches ? renderDesk(list, n, time) : renderMobile(list, n, time));
+  keepPage(at0);
   placePind();
   document.querySelectorAll("#app .evs,#app .chips").forEach(edgeFades);
+  document.querySelectorAll("#app .cols.more").forEach(colsEdge);       // 重畫會把左右淡出的狀態洗掉，補回來
   if (TIPX) drawTip(...TIPX);
   trackCenter();
 }
@@ -973,7 +1011,7 @@ function drawTip(x, y){
   const svg = box && box.querySelector("svg.chart[data-cid]"), d = svg && CHD[svg.dataset.cid];
   if (!d || !d.ser[0] || !d.ser[0].data || d.ser[0].data.length < 2) return hideTip();
   TIPX = [x, y];
-  const r = svg.getBoundingClientRect(), f = Math.max(0, Math.min(1, (x - r.left) / r.width));
+  const z = ZM(), b = svg.getBoundingClientRect(), r = {left:b.left/z, top:b.top/z, width:b.width/z, height:b.height/z}, f = Math.max(0, Math.min(1, (x/z - r.left) / r.width));
   const n = d.ser[0].data.length, i = Math.round(f * (n - 1)), t = d.t && d.t[i];
   const dt = t ? new Date(t * 1000) : null, hm = dt ? dt.toLocaleTimeString("zh-TW", {hour:"2-digit", minute:"2-digit", hour12:false}) : "";
   const when = !dt ? "" : RANGE === "7d" ? `${dt.getMonth()+1}/${dt.getDate()} ${hm}` : hm;
@@ -981,7 +1019,7 @@ function drawTip(x, y){
   tip.innerHTML = `<div class="tt">${when}</div>` + d.ser.map(s => `<div class="tr2"><i style="background:${s.color}"></i>${esc(s.name||"")}<b class="num">${d.fmt(s.data[i] ?? 0)}</b></div>`).join("");
   const lx = r.left + f * r.width;
   line.style.cssText = `left:${lx}px;top:${r.top}px;height:${r.height}px`;
-  const w = tip.offsetWidth || 150, left = lx + 14 + w > innerWidth - 8 ? lx - 14 - w : lx + 14;
+  const w = tip.offsetWidth || 150, left = lx + 14 + w > innerWidth / z - 8 ? lx - 14 - w : lx + 14;
   tip.style.left = left + "px"; tip.style.top = (r.top + 6) + "px";
   tip.classList.add("show"); line.classList.add("show");
 }
@@ -1099,11 +1137,11 @@ function moveInd(seg){
 function foldLite(more, on){
   const c = more.querySelector(".collapse");
   if (!c) return;
-  const h0 = c.getBoundingClientRect().height;
+  const z = ZM(), h0 = c.getBoundingClientRect().height / z;
   c.getAnimations().forEach(a => a.cancel());
   if (on) {
     more.classList.add("open");
-    const h1 = c.getBoundingClientRect().height;
+    const h1 = c.getBoundingClientRect().height / z;
     c.animate([{height:h0 + "px", overflow:"hidden"}, {height:h1 + "px", overflow:"hidden"}], {duration:T.mid, easing:EASE, id:"ui"});
   } else {                                        // 收起：動畫跑完才真的關上，裡面的字不會先消失
     c.animate([{height:h0 + "px", overflow:"hidden"}, {height:"0px", overflow:"hidden"}], {duration:T.mid, easing:EASE, fill:"forwards", id:"ui"})
@@ -1197,12 +1235,17 @@ function linksMenu(btn, s){
   const m = document.createElement("div"); m.className = "lmenu glass pop";
   m.innerHTML = linksOf(s).map(x => `<a href="${esc(x.url)}"${x.sso ? ` data-sso="${esc(x.sso)}"` : ""} target="_blank" rel="noopener noreferrer"><i class="ld ${x.up===false?"bad":x.up?"ok":""}"></i><span>${esc(x.name)}<small>${esc(linkSt(x))}</small></span>${I("ext")}</a>`).join("");
   document.body.appendChild(m);
-  const r = btn.getBoundingClientRect(), w = m.offsetWidth;
-  m.style.left = Math.max(8, Math.min(innerWidth - w - 8, r.left + r.width / 2 - w / 2)) + "px";
-  m.style.top = (r.bottom + 8) + "px";
+  placeMenu(m, btn, r => r.left + r.width / 2 - m.offsetWidth / 2);
   if (canAnim()) m.animate([{opacity:0, transform:"translateY(-6px) scale(.97)"}, {opacity:1, transform:"none"}], {duration:T.fast, easing:EASE});
   window._menu = m;
   setTimeout(() => m.addEventListener("click", () => closeMenu()), 0);
+}
+/* 選單放在按鈕下面；下面放不下就改放上面 */
+function placeMenu(m, btn, x){
+  const z = ZM(), b = btn.getBoundingClientRect(), r = {left:b.left/z, right:b.right/z, top:b.top/z, bottom:b.bottom/z, width:b.width/z};
+  const vw = innerWidth / z, vh = innerHeight / z, w = m.offsetWidth, h = m.offsetHeight;
+  m.style.left = Math.max(8, Math.min(vw - w - 8, x(r))) + "px";
+  m.style.top = (r.bottom + 8 + h > vh - 8 && r.top - 8 - h > 8 ? r.top - 8 - h : r.bottom + 8) + "px";
 }
 function moreMenu(btn, s){
   closeMenu();
@@ -1212,9 +1255,7 @@ function moreMenu(btn, s){
   m.innerHTML = (s.online ? it("data-rename", "edit", "編輯名稱與連結") + it("data-reboot", "power", "重新開機", "warn") : "")
     + (s.node ? it("data-rmhost", "trash", "移除主機", "bad") : "");
   document.body.appendChild(m);
-  const r = btn.getBoundingClientRect(), w = m.offsetWidth;
-  m.style.left = Math.max(8, Math.min(innerWidth - w - 8, r.right - w)) + "px";
-  m.style.top = (r.bottom + 8) + "px";
+  placeMenu(m, btn, r => r.left - 6);           // 從 ⋯ 往右下展開，不會蓋住主機名稱
   if (canAnim()) m.animate([{opacity:0, transform:"translateY(-6px) scale(.97)"}, {opacity:1, transform:"none"}], {duration:T.fast, easing:EASE});
   window._menu = m;
   setTimeout(() => m.addEventListener("click", () => closeMenu()), 0);
