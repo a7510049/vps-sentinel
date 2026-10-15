@@ -63,6 +63,7 @@ const P = {
   warn:'<path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3z"/><path d="M12 9v4M12 17h.01"/>',
   ok:'<circle cx="12" cy="12" r="9.5"/><path d="m8.5 12 2.5 2.5 4.5-5"/>',
   upd:'<path d="M21 12a9 9 0 1 1-9-9c2.52 0 4.93 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/>',
+  shield:'<path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="m8.5 12 2.5 2.5 4.5-5"/>',
   power:'<path d="M12 2v10"/><path d="M18.4 6.6a9 9 0 1 1-12.77.04"/>',
   off:'<path d="M12 20h.01M8.5 16.43a5 5 0 0 1 7 0M2 8.82a15 15 0 0 1 4.17-2.65M10.66 5c4.01-.36 8.14.9 11.34 3.76M16.85 11.25a10 10 0 0 1 2.22 1.68M5 13a10 10 0 0 1 5.24-2.76M2 2l20 20"/>',
 };
@@ -479,7 +480,7 @@ const COL = {cpu:"var(--c-cpu)", mem:"var(--c-mem)", rx:"var(--c-rx)", tx:"var(-
 /* 概念 → [顏色樣式, 圖示] */
 const ICO = {cpu:["cpu","cpu"], mem:["mem","mem"], disk:["disk","disk"], load:["load","gauge"], down:["down","down"], up:["up","up"],
   net:["net","net"], trend:["trend","trend"], month:["month","month"], box:["box","box"], bell:["bell","bell"], info:["info","info"],
-  flag:["flag","flag"], key:["key","key"], finger:["finger","finger"], pin:["pin","pin"], link:["link","link"], archive:["archive","archive"], sun:["sun","sun"], quote:["quote","quote"]};
+  flag:["flag","flag"], keep:["keep","shield"], key:["key","key"], finger:["finger","finger"], pin:["pin","pin"], link:["link","link"], archive:["archive","archive"], sun:["sun","sun"], quote:["quote","quote"]};
 const IC = (k, cls="sm") => `<span class="ico ${cls} ${ICO[k][0]}">${I(ICO[k][1])}</span>`;
 
 /* ═════════ 手機版 ═════════ */
@@ -1147,6 +1148,8 @@ function settingsBody(){
   </div></div>
   ${LIST.some(s => s.online) ? `<div class="sec"><h4>備份</h4><div class="group">${LIST.filter(s => s.online).map(s =>
     `<button class="opt optbtn" data-bk="${esc(s.node||"")}" data-label="${esc(s.name)}">${IC("archive")}<span class="lab">每日備份${LIST.length > 1 ? `：${esc(s.name)}` : ""}<small class="bkst" data-n="${esc(s.node||"")}">讀取中…</small></span><span class="chev">${I("chev")}</span></button>`).join("")}</div></div>` : ""}
+  ${LIST.some(s => s.online && s.keep) ? `<div class="sec"><h4>Oracle 防回收</h4><div class="group">${LIST.filter(s => s.online && s.keep).map(s =>
+    `<div class="opt">${IC("keep")}<span class="lab">${LIST.length > 1 ? esc(s.name) : "自動防回收"}${keepLine(s.keep)}</span><input type="checkbox" class="tog" data-keep="${esc(s.node||"")}" ${s.keep.on ? "checked" : ""}></div>`).join("")}</div></div>` : ""}
   ${LIST.some(s => s.online) ? `<div class="sec"><h4>安全</h4><div class="group">${PK_OK && LIST.some(s => !s.node && s.online) ?
     `<button class="opt optbtn" data-pk>${IC("finger")}<span class="lab">手機金鑰登入<small class="pkst">讀取中…</small></span><span class="chev">${I("chev")}</span></button>` : ""}${LIST.some(s => !s.node && s.online) ?
     `<button class="opt optbtn" data-pin>${IC("pin")}<span class="lab">PIN 碼登入<small class="pinst">讀取中…</small></span><span class="chev">${I("chev")}</span></button>` : ""}${LIST.some(s => !s.node && s.online) ?
@@ -1546,7 +1549,8 @@ function openSettings(){
       restart(); toast("已恢復預設值");
     }
   });
-  v.addEventListener("change", e => { const t = e.target; if (t.classList.contains("tog")) { setP(t.dataset.pref, t.checked); setTimeout(() => changed(t.dataset.pref), 180); } });
+  v.addEventListener("change", e => { const t = e.target; if (t.dataset.keep !== undefined) return keepSet(t);
+    if (t.classList.contains("tog")) { setP(t.dataset.pref, t.checked); setTimeout(() => changed(t.dataset.pref), 180); } });
   v.addEventListener("input", e => { const t = e.target; if (t.type === "range") { t.style.setProperty("--v", t.value + "%"); setP("glass", +t.value); applyPrefs(); } });
 
   // 手機：往下滑關閉
@@ -1902,6 +1906,28 @@ async function addHostModal(){
     if (e.target.closest("[data-go]") && !busy) send();
   });
   setTimeout(() => inp.focus(), 60);
+}
+
+/* ═════════ Oracle 防回收：免費主機太閒會被收回，每天固定時段把處理器補到門檻以上 ═════════ */
+function keepLine(k){
+  if (!k.on) return `<small>已關閉</small>`;
+  if (k.p95 == null) return `<small>收集資料中</small>`;
+  const low = k.p95 < 20 && k.days >= 2;
+  return `<small class="kpst${low ? " bad" : ""}">${Math.min(7, Math.max(1, Math.ceil(k.days)))} 天處理器 ${k.p95}%・門檻 20%${k.now ? "・補量中" : ""}</small>`;
+}
+async function keepSet(t){
+  const node = t.dataset.keep;
+  try {
+    const r = await api("/api/keepalive" + (node ? `?node=${encodeURIComponent(node)}` : ""), {method:"POST",
+      headers:{"X-Token":getTok(), "Content-Type":"application/json"}, body:JSON.stringify({on:t.checked})});
+    const x = await r.json().catch(() => ({}));
+    if (!r.ok) throw new Error(r.status === 404 ? "主機還沒更新到新版，先更新再試" : x.message || x.error || "失敗了，請再試一次");
+    const s = LIST.find(h => (h.node || "") === node);
+    if (s && s.keep) s.keep.on = t.checked;
+    const sm = t.parentElement.querySelector(".lab small");
+    if (s && s.keep && sm) sm.outerHTML = keepLine(s.keep);
+    toast(x.message);
+  } catch(err) { t.checked = !t.checked; toast(err.message, "bad"); }
 }
 
 /* ═════════ 每日備份：本機一份、Telegram 一份（有密碼）、其他主機的雲端硬碟一份 ═════════ */

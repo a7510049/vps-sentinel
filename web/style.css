@@ -132,6 +132,7 @@ button{font:inherit;color:inherit}
 .ico.flag{background:linear-gradient(160deg,#5fd6a0,#14895e)}      /* 國旗：翡翠 */
 .ico.sun{background:linear-gradient(160deg,#ffb27a,#f2643d)}       /* 天氣：夕陽 */
 .ico.quote{background:linear-gradient(160deg,#6cc4ff,#1f7fd6)}     /* 心情小語：海藍 */
+.ico.keep{background:linear-gradient(160deg,#f2a68c,#c0573a)}      /* Oracle 防回收：赤陶 */
 .ico.theme{background:var(--grad)}                                  /* 哨兵本身的動作（更新、編輯）：主題色 */
 /* 確認視窗的方塊：要小心的動作（重新開機、換密碼）橘色，刪除／移除紅色 */
 .ico.warn{background:linear-gradient(160deg,var(--warn-hi),var(--warn-lo))}
@@ -622,6 +623,7 @@ a.plink,button.plink{color:var(--sub);text-decoration:none}
 .optbtn .chev svg{width:16px;height:16px}
 .tgst.on,.pkst.on,.pinst.on{color:var(--ok)!important}
 .bkst.on{color:var(--ok)!important}.bkst.bad{color:var(--bad)!important}
+.kpst.bad{color:var(--bad)!important}
 .bkdlg{max-width:420px;max-height:calc(100dvh - 32px);overflow-y:auto;overscroll-behavior:contain}
 .dialog .msg.ok{color:var(--ok)}
 .bkrows{list-style:none;display:flex;flex-direction:column;gap:7px;padding:12px 14px;border-radius:var(--r-md);background:var(--inset);box-shadow:var(--ring);font-size:var(--fs-s);font-weight:600;color:var(--text)}
