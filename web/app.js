@@ -504,6 +504,10 @@ function v6line(s, shown){
   return shown ? `<span class="v6 a" data-copy="${esc(v.addr)}" title="點一下複製">${esc(v.addr)}</span>`
     : `<span class="v6 ${v.ok === false ? "warn" : ""}">IPv6 ${st}</span>`;
 }
+/* 電信商名稱跟主機名稱同一家（例如「Oracle Corporation」和「Oracle Cloud」）就不再顯示一次 */
+const ORGW = new Set("cloud corporation corp inc ltd llc limited company group network networks technology technologies hosting host server servers data services the".split(" "));
+const sameOrg = (org, name) => { const w = t => (String(t || "").toLowerCase().match(/[a-z]{3,}|[^\x00-\x7f]{2,}/g) || []).filter(x => !ORGW.has(x)), n = new Set(w(name));
+  return w(org).some(x => n.has(x)); };
 /* 主機名稱下面一排小膠囊：連線數、IP（霧化，點一下顯示）、IPv6、其他磁碟、雲端硬碟 */
 const IPSHOW = {};                    // 哪幾台的 IP 目前是顯示狀態（到期自動再遮起來）
 function factsRow(s, ph){
@@ -514,7 +518,7 @@ function factsRow(s, ph){
     const ip = s.geo && s.geo.ip, org = s.geo && s.geo.org;
     if (ip) f.push(`<span class="fc" data-key="ip">IP<b class="ipb ${shown ? "on" : ""}" ${shown ? `data-copy="${esc(ip)}" title="點一下複製（15 秒後會自動遮起來）"` : `data-reveal="${esc(k)}" title="點一下顯示"`}>${esc(ip)}</b></span>`);
     if (s.ipv6) f.push(`<span class="fc" data-key="v6" data-xw>${v6line(s, shown)}</span>`);
-    if (org) f.push(`<span class="fc" data-key="org">${esc(org)}</span>`);
+    if (org && !sameOrg(org, s.name)) f.push(`<span class="fc" data-key="org">${esc(org)}</span>`);
     s.disks.slice(1).forEach(d => f.push(`<span class="fc" data-key="dk:${esc(d.path)}">磁碟 ${esc(d.path)}<b class="num ${tier(d.pct)}">${num(d.pct)}%</b></span>`));
     if (s.mem.swap_total) f.push(`<span class="fc" data-key="sw">虛擬記憶體<b class="num">${num(s.mem.swap_pct)}%</b></span>`);
   }
@@ -637,24 +641,20 @@ function summary(n, clickable){
 function renderMobile(list, n, time){
   const g = greet(n, list.length), many = list.length > 1;
   if (!list.some(s => keyOf(s) === PG)) PG = list.length ? keyOf(list[0]) : "";
-  const tabs = many ? `<div class="htabs" data-key="tabs" data-keyed>${list.map(s => `<button class="htab ${keyOf(s)===PG?"on":""}" data-pg="${esc(keyOf(s))}" data-key="${esc(keyOf(s))}">${lvOf(s)!=="ok"?`<span class="dot ${lvOf(s)}"></span>`:""}<span>${esc(s.name)}</span></button>`).join("")}</div>` : "";
   return `<div class="dash m" data-key="m"><header class="bar"><span class="mini">VPS 哨兵</span><span class="grow"></span>
     <button class="cap glass ${list.some(s=>s.self_has)?"hasnew":""}" data-settings title="設定">${I("gear")}</button><button class="cap glass" data-logout title="登出">${I("logout")}</button></header>
     <div class="hero"><h1 data-x>${g.hi}</h1><div class="quote" data-x>${g.quote}</div><div class="meta"><span class="live"></span>更新於 ${time}</div><div class="wxw" data-x>${g.wx}</div></div>
-    ${tabs}
     <div class="pager${many ? " many" : ""}" data-key="pg" data-keyed>${list.map((s, i) => mcard(s, i)).join("")}</div>
-    ${many ? `<div class="pdots" data-key="dots">${list.map(s => `<i class="${keyOf(s)===PG?"on":""}"></i>`).join("")}</div>` : ""}
+    ${many ? `<div class="pdots" data-key="dots">${list.map(s => `<button data-pg="${esc(keyOf(s))}" title="${esc(s.name)}"><i class="${keyOf(s)===PG?"on":""} ${lvOf(s)==="ok"?"":lvOf(s)}"></i></button>`).join("")}</div>` : ""}
     ${feed(list)}${addHostBtn("addhost m-add")}</div>`;
 }
-/* 左右滑的時候：上面的主機膠囊、下面的小圓點跟著換 */
+/* 左右滑的時候：下面的小圓點跟著換 */
 function pagerScroll(pg){
   const cards = [...pg.children].filter(c => !c._leaving); if (!cards.length) return;
   const x = pg.scrollLeft + pg.clientWidth / 2;
   let i = cards.findIndex(c => c.offsetLeft + c.offsetWidth > x); if (i < 0) i = cards.length - 1;
   const k = cards[i].getAttribute("data-key"); if (k === PG) return;
   PG = k; MSEL = k; flagAccent();
-  document.querySelectorAll("#app .htab").forEach(b => { const on = b.dataset.pg === k; b.classList.toggle("on", on);
-    if (on) { const t = b.parentElement; t.scrollTo({left: b.offsetLeft - (t.clientWidth - b.offsetWidth) / 2, behavior: canAnim() ? "smooth" : "auto"}); } });
   document.querySelectorAll("#app .pdots i").forEach((d, j) => d.classList.toggle("on", j === i));
 }
 /* 手機：主機重新排序（有狀況的排前面）或剛換成手機版面時，畫面要停在原本看的那一台 */
