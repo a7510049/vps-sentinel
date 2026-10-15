@@ -117,21 +117,14 @@ const FLAGPAL = {
 const FLAGDEF = ["#38bdf8","#6366f1","#22d3ee"];
 let FLAGCC = null, MSEL = "";
 function flagCC(){
-  const k = DESK.matches ? SEL : (MSEL || SEL);
+  const k = DESK.matches ? "" : MSEL;
   const s = LIST.find(x=>keyOf(x)===k) || LIST[0]; return (s && s.geo && s.geo.cc) || "";
 }
-/* 手機：找出畫面中間的那張卡片 */
+/* 手機：國旗配色跟著目前看的那台 */
 let scrollRaf = 0;
 function trackCenter(){
   if (DESK.matches || PREF.accent !== "flag") return;
-  const mid = innerHeight * 0.45; let best = null, bestD = 1e9;
-  document.querySelectorAll("#app .grid > .card").forEach(c => {
-    const r = c.getBoundingClientRect();
-    const d = (r.top <= mid && r.bottom >= mid) ? 0 : Math.min(Math.abs(r.top - mid), Math.abs(r.bottom - mid));
-    if (d < bestD) { bestD = d; best = c; }
-  });
-  const k = best ? best.getAttribute("data-key") : "";
-  if (k && k !== MSEL) { MSEL = k; flagAccent(); }
+  if (PG && PG !== MSEL) { MSEL = PG; flagAccent(); }
 }
 let scrollStop = 0;
 addEventListener("scroll", () => {
@@ -172,7 +165,7 @@ addEventListener("touchstart", hush, {passive:true});
 
 /* ═════════ 小工具 ═════════ */
 const DESK = matchMedia("(min-width: 1024px)"), PHONE = matchMedia("(max-width: 700px)");
-let LIST = [], SEL = store("vps-sel"), FILTER = "", WAL = "";   // WAL：手機版目前打開的那張卡片（空的＝全部收起來；打開或重整網頁時一律收起來）
+let LIST = [], FILTER = "";
 const open = {};
 function size(b){ if(!b) return "0 B"; const u=["B","KB","MB","GB","TB"]; let i=0; while(b>=1024&&i<4){b/=1024;i++} return (b<10&&i?b.toFixed(1):Math.round(b))+" "+u[i]; }
 const rate = b => size(b)+"/s";
@@ -483,74 +476,47 @@ const ICO = {cpu:["cpu","cpu"], mem:["mem","mem"], disk:["disk","disk"], load:["
   flag:["flag","flag"], keep:["keep","shield"], key:["key","key"], finger:["finger","finger"], pin:["pin","pin"], link:["link","link"], archive:["archive","archive"], sun:["sun","sun"], quote:["quote","quote"]};
 const IC = (k, cls="sm") => `<span class="ico ${cls} ${ICO[k][0]}">${I(ICO[k][1])}</span>`;
 
-/* ═════════ 手機版 ═════════ */
-function metric(icon, label, pct, detail){
-  return `<div class="metric">${IC(icon, "")}
-    <div class="row"><span>${label}<span class="sub">${detail}</span></span><b>${num(pct)}<small>%</small></b></div>${track(pct)}</div>`;
+/* ═════════ 共用：四格圓環（處理器、記憶體、磁碟、負載） ═════════ */
+const LOADW = lr => lr < .7 ? ["輕鬆", "ok", ""] : lr < 1 ? ["有點忙", "warn", "w"] : lr < 2 ? ["忙碌", "warn", "w"] : ["超載", "bad", "b"];
+function mring(icon, label, pct, sub, o = {}){
+  const r = 42, C = 2*Math.PI*r, p = Math.max(0, Math.min(pct, 100));
+  return `<div class="mt" data-key="mt:${icon}"><div class="mr"><svg viewBox="0 0 100 100"><circle class="rt" cx="50" cy="50" r="${r}"/>
+    <circle class="rv ${o.t ?? tier(pct)}" cx="50" cy="50" r="${r}" style="--c:${C.toFixed(1)};stroke-dasharray:${C.toFixed(1)};stroke-dashoffset:${(C*(1-p/100)).toFixed(1)}"/></svg>
+    <b class="${o.word ? "wd " + o.cls : ""}">${o.word || `${num(pct)}<small>%</small>`}</b></div>
+    <div class="ml">${IC(icon)}<span>${label}</span></div><div class="ms">${sub}</div></div>`;
 }
-/* 手機卡片收起來時只露出的那一條（三個小進度條＋第一則警告） */
-function wpeek(s){
-  if (!s.online) return `<div class="wpeek" data-key="wp"><div></div></div>`;
-  const d = s.disks.find(x => x.path === "/") || s.disks[0], mi = (k, v) => `<div><div class="k">${k}<b>${num(v)}%</b></div>${track(v)}</div>`;
-  const al = (s.problems||[]).length ? ["bad", s.problems] : (s.notices||[]).length ? ["warn", s.notices] : null;
-  const note = al ? `<div class="wnote ${al[0]}" data-key="wn">${I(al[0]==="bad"?"warn":"alert")}<span data-x>${esc(al[1][0])}${al[1].length > 1 ? `，還有 ${al[1].length - 1} 項` : ""}</span></div>` : "";
-  return `<div class="wpeek" data-key="wp"><div data-keyed>${note}<div class="minis" data-key="mi">${mi("處理器", s.cpu)}${mi("記憶體", s.mem.pct)}${d ? mi("磁碟", d.pct) : ""}</div></div></div>`;
+function ringsRow(s){
+  const d0 = s.disks.find(x => x.path === "/") || s.disks[0] || {pct:0, used:0, total:0};
+  const l = s.load[0], lr = l / (s.cores || 1), [lw, lc, lt] = LOADW(lr);
+  return `<div class="mts" data-key="mts">${mring("cpu", "處理器", s.cpu, `${s.cores} 核`)}${mring("mem", "記憶體", s.mem.pct, `${size(s.mem.used)} / ${size(s.mem.total)}`)}`
+    + `${mring("disk", "磁碟", d0.pct, `${size(d0.used)} / ${size(d0.total)}`)}`
+    + `${mring("load", "負載", Math.min(100, lr / 2 * 100), `${l.toFixed(2)}／${s.cores} 核`, {t: lt, word: lw, cls: lc})}</div>`;
 }
-function mcard(s, i, w){
-  const lv = lvOf(s), key = keyOf(s), wc = w ? (WAL === key ? " open" : " peek") : "";
-  const ph = PHONE.matches;           // 手機：開機時間併到第二行，右邊空出來給名稱（名稱可以換行，不會被砍掉）
-  let h = `<div class="card glass ${lv==="ok"?"":lv}${wc}" data-key="${esc(key)}" data-keyed style="--i:${i}"><div class="head" data-key="hd">${avatar(s)}
-    <div class="nm"><h2><span>${esc(s.name)}</span>${editBtn(s)}</h2><div class="sub">${s.online ? esc(place(s) || s.os) + (ph ? `<span class="upx">・開機 ${up(s.uptime)}</span>` : "") : (s.last_seen ? `離線・${ago(s.last_seen)}` : "目前連不上")}</div></div>`;
-  const wchev = w ? `<span class="wchev">${I("chev")}</span>` : "";
-  const body = b => w ? `${wchev}</div>${wpeek(s)}<div class="wbody" data-key="wb" data-keyed>${b}</div></div>` : `</div>${b}</div>`;
-  if (!s.online) return h + body(`<div class="offline" data-key="off">${I("off")}<div>連不上這台主機<div class="sub">${s.last_seen?esc(seen(s))+"<br>":""}${esc(s.error||"")}</div>${peerBtn(s)}</div></div>`);
-  if (!ph) h += `<span class="uptime">開機 ${up(s.uptime)}</span>`;
-  let b = alerts(s);
-  b += `<div class="metrics" data-key="mt">` + metric("cpu", "處理器", s.cpu, `${s.cores} 核`) +
-       metric("mem", "記憶體", s.mem.pct, `${size(s.mem.used)} / ${size(s.mem.total)}`) +
-       s.disks.map(d=>metric("disk", "磁碟"+(d.path==="/"?"":" "+esc(d.path)), d.pct, `${size(d.used)} / ${size(d.total)}`)).join("") + `</div>`
-       + (s.cloud && safeUrl(cloudHref(s.cloud)) ? `<a class="cloudm" data-key="cl" href="${esc(cloudHref(s.cloud))}"${ssoAttr(s)} target="_blank" rel="noopener noreferrer">${I("cloud")}<span>雲端硬碟</span>
-          ${s.cloud.total ? `<b>${size(s.cloud.used)}<small> / ${size(s.cloud.total)}</small></b>` : ""}${I("ext")}</a>` : "");
-  if (PREF.show.chart && s.hist) { const hh = histFor(s);
-    b += `<div class="spark" data-key="sp"><div class="lbl"><span><i style="background:${COL.cpu};margin-left:0"></i>處理器<i style="background:${COL.mem}"></i>記憶體</span>${rangeSeg()}</div>
-      ${chartOr(hh, cid(s,"m"), x => [{data:x.cpu,color:COL.cpu},{data:x.mem,color:COL.mem}], {max:100, h:64, fade:.25, sw:2, n:100})}</div>`; }
-  b += `<div class="stats" data-key="st" data-keyed><div class="stat" data-key="load"><div class="k">${IC("load")}負載</div><div class="v">${num(s.load[0],2)}</div></div>` +
-       (PREF.show.net ? `<div class="stat" data-key="down"><div class="k">${IC("down")}下載</div><div class="v num">${rate(s.net.rx)}</div></div>
-        <div class="stat" data-key="up"><div class="k">${IC("up")}上傳</div><div class="v num">${rate(s.net.tx)}</div></div>` : "") + `</div>`;
-  b += trafficLine(s);
-  const items = itemsOf(s);
-  if (PREF.show.items && items.length) b += `<div class="more ${open[key]?"open":""}" data-key="mo"><button class="more-head" data-toggle="${esc(key)}">${IC("box")}<span>容器與服務：${itemsSummary(items)}</span><span class="chev">${I("chev")}</span></button>
-      <div class="collapse"><div><div class="list" data-keyed>${itemsHTML(items)}</div></div></div></div>`;
-  const info = updateInfo(s), btn = updateBtn(s);
-  if (info || btn) b += `<div class="foot" data-key="ft"><div class="sub" data-x>${info}</div>${btn}</div>`;
-  return h + body(b);
+/* IPv6：沒有 IPv6 的主機不顯示 */
+function v6line(s, shown){
+  const v = s.ipv6;
+  if (!v) return "";                                       // 沒有 IPv6：不特別顯示
+  if (!v.addr) return `<span class="v6 warn">IPv6 位址不見了</span>`;
+  const st = v.ok === false ? `<i class="ld bad"></i>連不出去` : v.ok ? `<i class="ld ok"></i>正常` : `<i class="ld"></i>檢查中`;
+  return shown ? `<span class="v6 a" data-copy="${esc(v.addr)}" title="點一下複製">${esc(v.addr)}</span>`
+    : `<span class="v6 ${v.ok === false ? "warn" : ""}">IPv6 ${st}</span>`;
 }
-function summary(n, clickable){
-  const p = (k, label) => `<button class="pill glass ${k} ${FILTER===k?"on":""} ${n[k]&&k!=="ok"?"has":""}" ${clickable?`data-filter="${k}"`:""}><span class="dot ${k}"></span>${label} <b class="num">${n[k]}</b></button>`;
-  return `<div class="summary ${FILTER&&clickable?"filtering":""}"><span class="pind" data-keep></span>${p("ok","正常")}${p("warn","注意")}${p("bad","異常")}</div>`;
-}
-function renderMobile(list, n, time){
-  const many = true;
-  const shown = FILTER ? list.filter(s=>lvOf(s)===FILTER) : list, g = greet(n, list.length);
-  const w = PHONE.matches && list.length > 1;     // 兩台以上的手機版：卡片平常只露出一條，點一張才展開
-  return `<div class="dash m" data-key="m"><header class="bar"><span class="mini">VPS 哨兵</span><span class="grow"></span>
-    <button class="cap glass ${list.some(s=>s.self_has)?"hasnew":""}" data-settings title="設定">${I("gear")}</button><button class="cap glass" data-logout title="登出">${I("logout")}</button></header>
-    <div class="hero"><h1 data-x>${g.hi}</h1><div class="quote" data-x>${g.quote}</div><div class="meta"><span class="live"></span>更新於 ${time}</div><div class="wxw" data-x>${g.wx}</div></div>
-    ${summary(n, many)}
-    <div class="grid${w ? " wallet" : ""}" data-keyed>${shown.length ? shown.map((s, i) => mcard(s, i, w)).join("") : `<div class="empty" data-key="empty">這個分類目前沒有主機 👍</div>`}</div>
-    ${FILTER ? "" : addHostBtn("addhost m-add")}</div>`;
-}
-
-/* 主機列表最後的「新增主機」：貼上新主機的配對暗號 */
-const addHostBtn = cls => `<button class="${cls}" data-addhost data-key="+add">${I("plus")}<span>新增主機</span></button>`;
-
-/* ═════════ 電腦版 ═════════ */
-function hostItem(s, on){
-  let h = `<button class="host ${on?"on":""}" data-sel="${esc(keyOf(s))}" data-key="${esc(keyOf(s))}"><div class="head">${avatar(s)}
-    <div class="nm"><h2><span>${esc(s.name)}</span></h2><div class="sub">${s.online ? esc(place(s) || s.os) : (s.last_seen ? `離線・${ago(s.last_seen)}` : "連不上")}</div></div></div>`;
-  if (s.online) h += `<div class="minis"><div><div class="k">處理器<b>${num(s.cpu)}%</b></div>${track(s.cpu)}</div>
-    <div><div class="k">記憶體<b>${num(s.mem.pct)}%</b></div>${track(s.mem.pct)}</div></div>`;
-  return h + `</button>`;
+/* 主機名稱下面一排小膠囊：連線數、IP（霧化，點一下顯示）、IPv6、其他磁碟、雲端硬碟 */
+const IPSHOW = {};                    // 哪幾台的 IP 目前是顯示狀態（到期自動再遮起來）
+function factsRow(s){
+  const f = [], k = keyOf(s), shown = IPSHOW[k] > Date.now(), c = s.conns, avg = s.conns_avg;
+  if (PREF.show.info) {
+    const cw = c == null || avg == null ? "" : (c > avg * 2 && c - avg > 20) ? "比平常多很多" : (avg > 10 && c < avg * .3) ? "比平常少很多" : "";
+    if (c != null) f.push(`<span class="fc" data-key="cn" title="現在的網路連線數${avg != null ? `（平常約 ${Math.round(avg)} 條）` : ""}">連線<b class="num">${Number(c).toLocaleString("zh-TW")}</b>${cw ? `<em class="${cw.includes("多") ? "warn" : ""}">${cw}</em>` : ""}</span>`);
+    const ip = s.geo && s.geo.ip, org = s.geo && s.geo.org;
+    if (ip) f.push(`<span class="fc" data-key="ip">IP<b class="ipb ${shown ? "on" : ""}" ${shown ? `data-copy="${esc(ip)}" title="點一下複製（15 秒後會自動遮起來）"` : `data-reveal="${esc(k)}" title="點一下顯示"`}>${esc(ip)}</b></span>`);
+    if (s.ipv6) f.push(`<span class="fc" data-key="v6">${v6line(s, shown)}</span>`);
+    if (org) f.push(`<span class="fc" data-key="org">${esc(org)}</span>`);
+    s.disks.slice(1).forEach(d => f.push(`<span class="fc" data-key="dk:${esc(d.path)}">磁碟 ${esc(d.path)}<b class="num ${tier(d.pct)}">${num(d.pct)}%</b></span>`));
+    if (s.mem.swap_total) f.push(`<span class="fc" data-key="sw">虛擬記憶體<b class="num">${num(s.mem.swap_pct)}%</b></span>`);
+  }
+  const cc = cloudChip(s); if (cc) f.push(cc);
+  return f.length ? `<div class="fcs" data-key="fcs">${f.join("")}</div>` : "";
 }
 /* 雲端硬碟入口：放在磁碟卡片標題旁，點了直接打開 */
 function cloudChip(s){
@@ -560,98 +526,21 @@ function cloudChip(s){
   return `<a class="cchip ${down ? "down" : c.pct >= 90 ? "warn" : ""}" href="${esc(href)}"${ssoAttr(s)} target="_blank" rel="noopener noreferrer"
     title="打開雲端硬碟${use ? `（已用 ${use}）` : ""}${down ? `・目前打不開：${esc(L.err || "")}` : ""}">${I("cloud")}<span>雲端${c.total ? ` ${num(c.pct)}%` : ""}</span>${I("ext")}</a>`;
 }
-function ring(icon, label, pct, sub, i, extra = ""){
-  const r = 52, Cc = 2*Math.PI*r, off = Cc*(1-Math.max(0,Math.min(pct,100))/100);
-  return `<div class="gauge glass panel" style="--i:${i}"><div class="ph">${IC(icon)}<h3>${label}</h3>${extra}</div>
-    <div class="gwrap"><svg viewBox="0 0 120 120"><circle class="rt" cx="60" cy="60" r="${r}"/>
-    <circle class="rv ${tier(pct)}" cx="60" cy="60" r="${r}" style="--c:${Cc.toFixed(1)};stroke-dasharray:${Cc.toFixed(1)};stroke-dashoffset:${off.toFixed(1)}"/></svg>
-    <div class="gin"><b>${num(pct)}<small>%</small></b><span>${sub}</span></div></div></div>`;
+/* 本月流量：小方框，點了開流量設定 */
+function trafficBox(s){
+  const t = s.traffic; if (!t || !PREF.show.traffic) return "";
+  return `<button class="bx tbx" data-key="tb" data-traffic="${esc(s.node||"")}" data-label="${esc(s.name)}" title="流量設定">
+    <div class="r1">${IC("month")}<span>本月流量</span><b class="num">${size(t.used)}</b></div>${t.limit ? track(t.pct) : ""}
+    <div class="r2"><span>${t.limit ? `上限 ${size(t.limit)}` : "沒有上限"}</span><span>${t.days_left} 天後重置</span></div></button>`;
 }
-/* 主機概況：只放上面沒出現過、又真的有用的數字 */
-/* IPv6：固定一行（有沒有設定都佔同樣位置，每台主機的版面一樣高） */
-function v6line(s, shown){
-  const v = s.ipv6;
-  if (!v) return "";                                       // 沒有 IPv6：不特別顯示
-  if (!v.addr) return `<span class="v6 warn">IPv6 位址不見了</span>`;
-  const st = v.ok === false ? `<i class="ld bad"></i>連不出去` : v.ok ? `<i class="ld ok"></i>正常` : `<i class="ld"></i>檢查中`;
-  return shown ? `<span class="v6 a" data-copy="${esc(v.addr)}" title="點一下複製">${esc(v.addr)}</span>`
-    : `<span class="v6 ${v.ok === false ? "warn" : ""}">IPv6 ${st}</span>`;
-}
-/* 主機概況：每個數字都附上「代表什麼」，一眼看懂 */
-const IPSHOW = {};                    // 哪幾台的 IP 目前是顯示狀態（到期自動再遮起來）
-function sysPanel(s){
-  const l = s.load[0], lr = l / (s.cores || 1);
-  const [lw, lt] = lr < .7 ? ["輕鬆", "ok"] : lr < 1 ? ["有點忙", "warn"] : lr < 2 ? ["忙碌", "warn"] : ["超載", "bad"];
-  const c = s.conns, avg = s.conns_avg;
-  const cw = c == null ? "" : avg == null ? "統計中" : (c > avg * 2 && c - avg > 20) ? "比平常多很多" : (avg > 10 && c < avg * .3) ? "比平常少很多" : "跟平常差不多";
-  const ip = s.geo && s.geo.ip, org = s.geo && s.geo.org, k = keyOf(s), shown = IPSHOW[k] > Date.now();
-  const extra = s.disks.slice(1).map(d => `磁碟 ${esc(d.path)} ${num(d.pct)}%`)
-    .concat(s.mem.swap_total ? [`虛擬記憶體 ${num(s.mem.swap_pct)}%`] : []);
-  return `<div class="panel glass sysp" data-key="fp" style="--i:4"><div class="ph">${IC("info")}<h3>主機概況</h3></div>
-    <div class="facts2">
-      <div class="fr" title="最近 1／5／15 分鐘的平均負載：${s.load.map(x=>x.toFixed(2)).join("／")}（${s.cores} 核心，超過 ${s.cores} 就算忙）">
-        <span class="k">負載</span><b class="${lt}">${lw}</b><span class="d">${l.toFixed(2)}／${s.cores} 核</span>
-        <div class="lbar"><i class="${lt}" style="width:${Math.min(100, lr / 2 * 100).toFixed(0)}%"></i></div></div>
-      <div class="fr" title="這台主機現在有多少條網路連線；「平常」是最近 1 小時的平均${avg != null ? `（約 ${Math.round(avg)} 條）` : ""}">
-        <span class="k">連線</span><b>${c == null ? "—" : Number(c).toLocaleString("zh-TW")} <small>條</small></b><span class="d ${cw.includes("多很多") ? "warn" : ""}">${cw}</span></div>
-      ${ip ? `<div class="fr"><span class="k">IP</span><b class="ipb ${shown ? "on" : ""}" ${shown ? `data-copy="${esc(ip)}" title="點一下複製（15 秒後會自動遮起來）"` : `data-reveal="${esc(k)}" title="點一下顯示"`}>${esc(ip)}</b>
-        ${s.ipv6 || org ? `<span class="d org">${v6line(s, shown)}${org ? `<span class="on2">${s.ipv6 ? "・" : ""}${esc(org)}</span>` : ""}</span>` : ""}</div>` : ""}
-    </div>${extra.length ? `<div class="fx">${extra.join("・")}</div>` : ""}</div>`;
-}
-function detail(s){
-  const key = keyOf(s), where = place(s);
-  let h = `<div class="detail" data-key="detail" data-keyed><div class="panel glass dhead" data-key="dh" style="--i:0">
-      <div style="min-width:0" data-key="dl" data-keyed><h2 class="nmh" data-key="nm" style="display:flex;align-items:center;gap:8px;flex-wrap:wrap"><span>${esc(s.name)}</span>${editBtn(s)}</h2>
-      <div class="sub dsub" data-key="ds">${s.online ? `<span title="核心版本 ${esc(s.kernel)}">${where?esc(where)+"・":""}${esc(s.os)}・開機 ${up(s.uptime)}</span>` : `<span>${s.last_seen ? esc(seen(s)) : "目前沒有回應"}</span>`}</div>${s.online ? alerts(s) : ""}</div>
-      ${s.online ? `<div class="act"><div class="sub" data-x style="line-height:1.6;font-weight:600">${updateInfo(s)}</div>${updateBtn(s)}</div>` : ""}</div>`;
-  if (!s.online) return h + `<div class="panel glass bigoff" data-key="off" style="--i:1"><b>連不上這台主機</b>${esc(s.error||"")}${peerBtn(s)}</div></div>`;
-  const fp = PREF.show.info ? sysPanel(s) : "";
-  const d0 = s.disks[0] || {pct:0, used:0, total:0};
-  h += `<div class="gauges" data-key="gg" style="${fp?"":"grid-template-columns:repeat(3,minmax(0,1fr))"}">${ring("cpu", "處理器", s.cpu, `${s.cores} 核心`, 1)}
-        ${ring("mem", "記憶體", s.mem.pct, `${size(s.mem.used)} / ${size(s.mem.total)}`, 2)}
-        ${ring("disk", "磁碟", d0.pct, `${size(d0.used)} / ${size(d0.total)}`, 3, cloudChip(s))}${fp}</div>`;
-  const hs = histFor(s), xl = `<div class="xl" style="align-items:center"><span>${xlabel(hs)}</span>${rangeSeg()}<span>現在</span></div>`;
-  const cp = PREF.show.chart ? `<div class="panel glass" data-key="cp" style="--i:4"><div class="ph">${IC("trend")}<h3>處理器與記憶體</h3><div class="legend">
-      <span><i style="background:${COL.cpu}"></i>處理器<b>${num(s.cpu)}%</b></span><span><i style="background:${COL.mem}"></i>記憶體<b>${num(s.mem.pct)}%</b></span></div></div>
-      <div class="cbox">${chartOr(hs, cid(s,"a"), x => [{data:x.cpu,color:COL.cpu,name:"處理器"},{data:x.mem,color:COL.mem,name:"記憶體"}], {max:100, grid:1, fmt:v=>Math.round(v)+"%"})}</div>${xl}</div>` : "";
-  const np = PREF.show.net ? `<div class="panel glass" data-key="np" style="--i:5"><div class="ph">${IC("net")}<h3>網路速度</h3><div class="legend">
-      <span><i style="background:${COL.rx}"></i>下載<b class="num">${rate(s.net.rx)}</b></span><span><i style="background:${COL.tx}"></i>上傳<b class="num">${rate(s.net.tx)}</b></span></div></div>
-      <div class="cbox">${chartOr(hs, cid(s,"b"), x => [{data:x.rx,color:COL.rx,name:"下載"},{data:x.tx,color:COL.tx,name:"上傳"}], {grid:1, bin:1, fmt:rate})}</div>${xl}</div>` : "";
-  if (cp || np) h += `<div class="charts" data-key="ch" data-keyed style="${cp&&np?"":"grid-template-columns:1fr"}">${cp}${np}</div>`;
+/* 容器與服務：一個一個小膠囊，太多就在框裡捲動 */
+function itemsBox(s){
+  if (!PREF.show.items) return "";
   const items = itemsOf(s);
-  const ip = PREF.show.items ? `<div class="panel glass" data-key="ip" style="--i:6"><div class="ph">${IC("box")}<h3>容器與服務</h3><span class="sub" style="margin-left:auto;font-weight:700">${items.length?itemsSummary(items).replace("<b>",'<b style="color:var(--bad)">'):""}</span></div>
-      ${items.length ? `<div class="tbl" data-key="tbl" data-keyed>${itemsHTML(items)}</div>` : `<div class="sub" data-key="none">沒有偵測到容器或服務</div>`}</div>` : "";
-  const ep = eventsPanel(s), tp = trafficPanel(s);
-  if (ip || ep || tp) h += `<div class="lower" data-key="lw" data-keyed>${tp}${ep}${ip}</div>`;
-  return h + `</div>`;
+  return `<div class="bx ibx" data-key="ib"><div class="r1">${IC("box")}<span>容器與服務</span><span class="sub">${items.length ? itemsSummary(items) : "沒有"}</span></div>
+    ${items.length ? `<div class="chips" data-key="chips" data-keyed>${items.map(x => `<span class="chip" data-key="${x.t}:${esc(x.n)}" title="${x.t}：${esc(x.n)}・${esc(x.s)}"><span class="dot ${x.st}"></span>${esc(x.sn || x.n)}</span>`).join("")}</div>` : ""}</div>`;
 }
 const CNT = {both:"上傳＋下載", out:"只算上傳", in:"只算下載", max:"取較大的"};
-function trafficBars(t, id){
-  const W = 600, H = 64, n = Math.max(t.cycle_days, t.daily.length), bw = W / n, gap = Math.min(4, bw * .25);
-  const max = Math.max(1, ...t.daily.map(d => d.rx + d.tx));
-  const rects = t.daily.map((d, i) => {
-    const x = i * bw + gap / 2, w = Math.max(1, bw - gap), hr = d.rx / max * (H - 2), ht = d.tx / max * (H - 2);
-    return `<rect x="${x.toFixed(1)}" y="${(H - hr - ht).toFixed(1)}" width="${w.toFixed(1)}" height="${ht.toFixed(1)}" rx="2" style="fill:${COL.tx}"><title>${d.d}：上傳 ${size(d.tx)}</title></rect>`
-         + `<rect x="${x.toFixed(1)}" y="${(H - hr).toFixed(1)}" width="${w.toFixed(1)}" height="${Math.max(0, hr).toFixed(1)}" rx="2" style="fill:${COL.rx}"><title>${d.d}：下載 ${size(d.rx)}</title></rect>`;
-  }).join("");
-  const rest = n > t.daily.length ? `<rect x="${(t.daily.length * bw).toFixed(1)}" y="${H-3}" width="${((n - t.daily.length) * bw).toFixed(1)}" height="3" rx="1.5" style="fill:var(--track)"/>` : "";
-  return `<svg class="bars" viewBox="0 0 ${W} ${H}" preserveAspectRatio="none">${rects}${rest}</svg>`;
-}
-function trafficPanel(s){
-  const t = s.traffic; if (!t || !PREF.show.traffic) return "";
-  const pct = t.pct, lim = t.limit;
-  const pp = t.projected && lim ? Math.round(t.projected / lim * 100) : null;
-  const proj = t.projected ? `${size(t.projected)}${pp != null ? `<div class="sub" style="font-weight:700;${pp>100?"color:var(--warn)":""}">上限的 ${pp}%</div>` : ""}` : "累積中";
-  return `<div class="panel glass trf" data-key="tp" style="--i:9"><div class="ph">${IC("month")}<h3>本月流量</h3>
-      <span class="sub" style="margin-left:auto;font-weight:700">${CNT[t.count]}</span><button class="iconbtn" data-traffic="${esc(s.node||"")}" data-label="${esc(s.name)}" title="流量設定">${I("gear")}</button></div>
-    <div class="tgrid"><div class="tl"><div class="big"><b class="num">${size(t.used)}</b><span>${lim ? `／ ${size(lim)}` : "沒有設定上限"}</span>${pct!=null?`<span style="margin-left:auto;color:var(--text)">${num(pct,1)}%</span>`:""}</div>
-    ${lim ? track(pct) : ""}
-    <div class="rows"><div><div class="k"><i class="kd" style="background:${COL.rx}"></i>下載</div><b class="num">${size(t.rx)}</b></div><div><div class="k"><i class="kd" style="background:${COL.tx}"></i>上傳</div><b class="num">${size(t.tx)}</b></div>
-      <div><div class="k">預估月底</div><b>${proj}</b></div><div><div class="k">${t.reset_day} 號重置</div><b>還有 ${t.days_left} 天</b></div></div></div>
-    <div class="tr">${trafficBars(t)}
-    <div class="xl"><span>${t.start.slice(5).replace("-","/")}</span><span>${t.prev!=null?`上個週期 ${size(t.prev)}`:""}</span><span>${t.end.slice(5).replace("-","/")}</span></div>
-    ${t.partial ? `<div class="note">從 ${new Date(t.since*1000).toLocaleDateString("zh-TW",{month:"numeric",day:"numeric"})} 開始統計</div>` : ""}</div></div></div>`;
-}
 function trafficLine(s){
   const t = s.traffic; if (!t || !PREF.show.traffic) return "";
   const lim = t.limit;
@@ -693,36 +582,117 @@ async function trafficModal(node, label){
   tick();
 }
 /* 同一件事反覆發生：只留最新一筆，標上次數 */
+/* 同一件事反覆發生：只留最新一筆，標上次數 */
 function mergeEv(ev){
   const m = new Map();
   for (const e of ev) { const k = e.kind + ":" + e.text, x = m.get(k); x ? x.n++ : m.set(k, {...e, n:1}); }
   return [...m.values()];
 }
-function eventsPanel(s){
-  const ev = s.events;
-  if (!ev) return "";
-  const word = {bad:"異常", warn:"注意", ok:"恢復", info:"通知"};
-  return `<div class="panel glass" data-key="ep" style="--i:8"><div class="ph">${IC("bell")}<h3>事件紀錄</h3><span class="sub" style="margin-left:auto;font-weight:700">最近 ${ev.length} 筆</span></div>
-    ${ev.length ? `<div class="evs" data-key="evs" data-keyed>${mergeEv(ev).map(e=>`<div class="ev" data-key="${e.kind}:${esc(e.text)}"><span class="dot ${e.kind}"></span><div><div>${esc(e.text)}</div><div class="sub">${word[e.kind]||""}・${ago(e.t)}${e.n>1?`・共 ${e.n} 次`:""}</div></div></div>`).join("")}</div>`
+/* 所有主機的事件合在一起，新的在上面 */
+function feed(list){
+  const word = {bad:"異常", warn:"注意", ok:"恢復", info:"通知"}, many = list.length > 1;
+  const ev = list.flatMap(s => mergeEv(s.events || []).map(e => ({...e, h: s.name, k: keyOf(s)}))).sort((a, b) => b.t - a.t).slice(0, 30);
+  return `<div class="panel glass feed" data-key="feed"><div class="ph">${IC("bell")}<h3>事件紀錄</h3></div>
+    ${ev.length ? `<div class="evs" data-key="evs" data-keyed>${ev.map(e => `<div class="ev" data-key="${esc(e.k)}|${e.kind}:${esc(e.text)}"><span class="dot ${e.kind}"></span><div><div>${many ? `<b class="eh">${esc(e.h)}</b>` : ""}${esc(e.text)}</div><div class="sub">${word[e.kind]||""}・${ago(e.t)}${e.n>1?`・共 ${e.n} 次`:""}</div></div></div>`).join("")}</div>`
       : `<div class="calm" data-key="calm">目前沒有事件</div>`}</div>`;
 }
+const head = (s, ph) => `<div class="head" data-key="hd">${avatar(s)}
+    <div class="nm"><h2><span>${esc(s.name)}</span>${editBtn(s)}</h2><div class="sub">${s.online ? `<span title="核心版本 ${esc(s.kernel)}">${esc(ph ? place(s) || s.os : [place(s), s.os].filter(Boolean).join("・"))}</span>・開機 ${up(s.uptime)}` : (s.last_seen ? `離線・${ago(s.last_seen)}` : "目前連不上")}</div></div>`;
+const offBox = s => `<div class="offline" data-key="off">${I("off")}<div>連不上這台主機<div class="sub">${s.last_seen?esc(seen(s))+"<br>":""}${esc(s.error||"")}</div>${peerBtn(s)}</div></div>`;
+
+/* ═════════ 手機版：一台一張卡，左右滑換主機 ═════════ */
+let PG = "";                                     // 手機：目前看的是哪一台
+function mcard(s, i){
+  const lv = lvOf(s), key = keyOf(s);
+  let b = `<div class="card glass ${lv==="ok"?"":lv}" data-key="${esc(key)}" data-keyed style="--i:${i}">${head(s, 1)}</div>`;
+  if (!s.online) return b + offBox(s) + `</div>`;
+  b += alerts(s) + ringsRow(s);
+  if (PREF.show.chart && s.hist) { const hh = histFor(s);
+    b += `<div class="spark" data-key="sp"><div class="lbl"><span><i style="background:${COL.cpu};margin-left:0"></i>處理器<i style="background:${COL.mem}"></i>記憶體</span>${rangeSeg()}</div>
+      ${chartOr(hh, cid(s,"m"), x => [{data:x.cpu,color:COL.cpu},{data:x.mem,color:COL.mem}], {max:100, h:72, fade:.25, sw:2, n:100})}</div>`; }
+  if (PREF.show.net) b += `<div class="stats" data-key="st" data-keyed><div class="stat" data-key="down"><div class="k">${IC("down")}下載</div><div class="v num">${rate(s.net.rx)}</div></div>
+        <div class="stat" data-key="up"><div class="k">${IC("up")}上傳</div><div class="v num">${rate(s.net.tx)}</div></div></div>`;
+  b += trafficLine(s);
+  if (s.cloud && safeUrl(cloudHref(s.cloud))) b += `<a class="cloudm" data-key="cl" href="${esc(cloudHref(s.cloud))}"${ssoAttr(s)} target="_blank" rel="noopener noreferrer">${I("cloud")}<span>雲端硬碟</span>
+          ${s.cloud.total ? `<b>${size(s.cloud.used)}<small> / ${size(s.cloud.total)}</small></b>` : ""}${I("ext")}</a>`;
+  const items = itemsOf(s);
+  if (PREF.show.items && items.length) b += `<div class="more ${open[key]?"open":""}" data-key="mo"><button class="more-head" data-toggle="${esc(key)}">${IC("box")}<span>容器與服務：${itemsSummary(items)}</span><span class="chev">${I("chev")}</span></button>
+      <div class="collapse"><div><div class="list" data-keyed>${itemsHTML(items)}</div></div></div></div>`;
+  const info = updateInfo(s), btn = updateBtn(s);
+  if (info || btn) b += `<div class="foot" data-key="ft"><div class="sub" data-x>${info}</div>${btn}</div>`;
+  return b + `</div>`;
+}
+function summary(n, clickable){
+  const p = (k, label) => `<button class="pill glass ${k} ${FILTER===k?"on":""} ${n[k]&&k!=="ok"?"has":""}" ${clickable?`data-filter="${k}"`:""}><span class="dot ${k}"></span>${label} <b class="num">${n[k]}</b></button>`;
+  return `<div class="summary ${FILTER&&clickable?"filtering":""}"><span class="pind" data-keep></span>${p("ok","正常")}${p("warn","注意")}${p("bad","異常")}</div>`;
+}
+function renderMobile(list, n, time){
+  const g = greet(n, list.length), many = list.length > 1;
+  if (!list.some(s => keyOf(s) === PG)) PG = list.length ? keyOf(list[0]) : "";
+  const tabs = many ? `<div class="htabs" data-key="tabs" data-keyed>${list.map(s => `<button class="htab ${keyOf(s)===PG?"on":""}" data-pg="${esc(keyOf(s))}" data-key="${esc(keyOf(s))}">${lvOf(s)!=="ok"?`<span class="dot ${lvOf(s)}"></span>`:""}<span>${esc(s.name)}</span></button>`).join("")}</div>` : "";
+  return `<div class="dash m" data-key="m"><header class="bar"><span class="mini">VPS 哨兵</span><span class="grow"></span>
+    <button class="cap glass ${list.some(s=>s.self_has)?"hasnew":""}" data-settings title="設定">${I("gear")}</button><button class="cap glass" data-logout title="登出">${I("logout")}</button></header>
+    <div class="hero"><h1 data-x>${g.hi}</h1><div class="quote" data-x>${g.quote}</div><div class="meta"><span class="live"></span>更新於 ${time}</div><div class="wxw" data-x>${g.wx}</div></div>
+    ${tabs}
+    <div class="pager${many ? " many" : ""}" data-key="pg" data-keyed>${list.map((s, i) => mcard(s, i)).join("")}</div>
+    ${many ? `<div class="pdots" data-key="dots">${list.map(s => `<i class="${keyOf(s)===PG?"on":""}"></i>`).join("")}</div>` : ""}
+    ${feed(list)}${addHostBtn("addhost m-add")}</div>`;
+}
+/* 左右滑的時候：上面的主機膠囊、下面的小圓點跟著換 */
+function pagerScroll(pg){
+  const cards = [...pg.children].filter(c => !c._leaving); if (!cards.length) return;
+  const x = pg.scrollLeft + pg.clientWidth / 2;
+  let i = cards.findIndex(c => c.offsetLeft + c.offsetWidth > x); if (i < 0) i = cards.length - 1;
+  const k = cards[i].getAttribute("data-key"); if (k === PG) return;
+  PG = k; MSEL = k; flagAccent();
+  document.querySelectorAll("#app .htab").forEach(b => { const on = b.dataset.pg === k; b.classList.toggle("on", on);
+    if (on) { const t = b.parentElement; t.scrollTo({left: b.offsetLeft - (t.clientWidth - b.offsetWidth) / 2, behavior: canAnim() ? "smooth" : "auto"}); } });
+  document.querySelectorAll("#app .pdots i").forEach((d, j) => d.classList.toggle("on", j === i));
+}
+function pagerGo(k){
+  const pg = $("#app .pager"), c = pg && [...pg.children].find(x => x.getAttribute("data-key") === k);
+  if (c) pg.scrollTo({left: c.offsetLeft - (parseFloat(getComputedStyle(pg).scrollPaddingLeft) || 0), behavior: canAnim() ? "smooth" : "auto"});
+}
+
+/* 主機列表最後的「新增主機」：貼上新主機的配對暗號 */
+const addHostBtn = cls => `<button class="${cls}" data-addhost data-key="+add">${I("plus")}<span>新增主機</span></button>`;
+
+/* ═════════ 電腦版：每台主機一欄並排，右邊是天氣和事件 ═════════ */
+function hostCol(s, i){
+  const lv = lvOf(s);
+  let h = `<section class="hcol panel glass ${lv==="ok"?"":lv}" data-key="${esc(keyOf(s))}" data-keyed style="--i:${i}">${head(s)}</div>`;
+  if (!s.online) return h + offBox(s) + `</section>`;
+  h += alerts(s) + ringsRow(s) + factsRow(s);
+  const hs = histFor(s);
+  if (PREF.show.chart) h += `<div class="bx cpanel" data-key="cp"><div class="cph">${IC("trend")}<span class="lg"><i style="background:${COL.cpu}"></i>處理器<b>${num(s.cpu)}%</b></span><span class="lg"><i style="background:${COL.mem}"></i>記憶體<b>${num(s.mem.pct)}%</b></span>${rangeSeg()}</div>
+      <div class="cbox">${chartOr(hs, cid(s,"a"), x => [{data:x.cpu,color:COL.cpu,name:"處理器"},{data:x.mem,color:COL.mem,name:"記憶體"}], {max:100, grid:1, fmt:v=>Math.round(v)+"%"})}</div></div>`;
+  if (PREF.show.net) h += `<div class="bx cpanel net" data-key="np"><div class="cph">${IC("net")}<span class="lg"><i style="background:${COL.rx}"></i>下載<b class="num">${rate(s.net.rx)}</b></span><span class="lg"><i style="background:${COL.tx}"></i>上傳<b class="num">${rate(s.net.tx)}</b></span></div>
+      <div class="cbox">${chartOr(hs, cid(s,"b"), x => [{data:x.rx,color:COL.rx,name:"下載"},{data:x.tx,color:COL.tx,name:"上傳"}], {grid:1, bin:1, fmt:rate})}</div></div>`;
+  const tb = trafficBox(s), ib = itemsBox(s);
+  if (tb || ib) h += `<div class="cbot" data-key="cb" data-keyed>${tb}${ib}</div>`;
+  const info = updateInfo(s), btn = updateBtn(s);
+  if (info || btn) h += `<div class="foot" data-key="ft"><div class="sub" data-x>${info}</div>${btn}</div>`;
+  return h + `</section>`;
+}
+const BRAND = `<svg class="" viewBox="0 0 512 512" aria-hidden="true"><defs><linearGradient id="lbbr" x1="0" y1="0" x2="0" y2="1"><stop offset="0" style="stop-color:color-mix(in srgb,var(--a1) 70%,#fff)"/><stop offset="1" style="stop-color:var(--a2)"/></linearGradient><linearGradient id="lhbr" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#fff" stop-opacity=".24"/><stop offset=".45" stop-color="#fff" stop-opacity="0"/></linearGradient><mask id="lmbr"><rect width="512" height="512" fill="#fff"/><path d="M204 258l36 36 72-76" fill="none" stroke="#000" stroke-width="30" stroke-linecap="round" stroke-linejoin="round"/></mask></defs><rect width="512" height="512" rx="115" fill="url(#lbbr)"/><rect width="512" height="512" rx="115" fill="url(#lhbr)"/><path d="M256 108 371 150c9 3 15 12 15 22v72c0 84-52 140-122 168-5 2-11 2-16 0-70-28-122-84-122-168v-72c0-10 6-19 15-22Z" fill="#fff" mask="url(#lmbr)" transform="translate(256 262) scale(.88) translate(-256 -258)"/></svg>`;
+/* 一次並排幾台：螢幕夠寬才放三台，其他的往右滑 */
+const colsFit = () => innerWidth >= 1800 ? 3 : 2;
+let FIT = colsFit();
+addEventListener("resize", () => { if (DESK.matches && LIST.length && colsFit() !== FIT) { FIT = colsFit(); render(LIST); } }, {passive:true});
 function renderDesk(list, n, time){
-  const sel = list.find(s=>keyOf(s)===SEL) || list[0], g = greet(n, list.length);
-  return `<div class="dash d" data-key="d"><aside class="side glass">
-      <div class="brand"><svg class="" viewBox="0 0 512 512" aria-hidden="true"><defs><linearGradient id="lbbr" x1="0" y1="0" x2="0" y2="1"><stop offset="0" style="stop-color:color-mix(in srgb,var(--a1) 70%,#fff)"/><stop offset="1" style="stop-color:var(--a2)"/></linearGradient><linearGradient id="lhbr" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#fff" stop-opacity=".24"/><stop offset=".45" stop-color="#fff" stop-opacity="0"/></linearGradient><mask id="lmbr"><rect width="512" height="512" fill="#fff"/><path d="M204 258l36 36 72-76" fill="none" stroke="#000" stroke-width="30" stroke-linecap="round" stroke-linejoin="round"/></mask></defs><rect width="512" height="512" rx="115" fill="url(#lbbr)"/><rect width="512" height="512" rx="115" fill="url(#lhbr)"/><path d="M256 108 371 150c9 3 15 12 15 22v72c0 84-52 140-122 168-5 2-11 2-16 0-70-28-122-84-122-168v-72c0-10 6-19 15-22Z" fill="#fff" mask="url(#lmbr)" transform="translate(256 262) scale(.88) translate(-256 -258)"/></svg><div><h1>VPS 哨兵</h1><div class="meta"><span class="live"></span>更新於 ${time}</div></div></div>
-      <div class="greet"><h2 data-x>${g.hi}</h2><div class="quote" data-x>${g.quote}</div></div>
-      <div class="wxw" data-x>${g.wx}</div>
-      ${summary(n, true)}
-      <div class="hosts" data-keyed>${(FILTER ? list.filter(s=>lvOf(s)===FILTER) : list).map(s=>hostItem(s, s===sel)).join("") || `<div class="empty" data-key="empty">這個分類目前沒有主機 👍</div>`}${FILTER ? "" : addHostBtn("host addhost")}</div>
-      <div class="side-foot"><span class="sub">${list.length} 台主機</span>
-        <button class="iconbtn ${REFRESHING?"spinning":""}" data-refresh title="重新整理">${I("upd")}</button>
-        <button class="iconbtn ${list.some(s=>s.self_has)?"hasnew":""}" data-settings title="設定">${I("gear")}</button><button class="iconbtn" data-logout title="登出">${I("logout")}</button></div>
-    </aside>${sel ? detail(sel) : ""}</div>`;
+  const g = greet(n, list.length), shown = FILTER ? list.filter(s => lvOf(s) === FILTER) : list;
+  return `<div class="dash d2" data-key="d2"><header class="top glass"><div class="brand">${BRAND}</div>
+      <div class="tg"><h2 data-x>${g.hi}</h2><div class="quote" data-x>${g.quote}</div></div><span class="grow"></span>
+      ${summary(n, true)}<div class="meta"><span class="live"></span>更新於 ${time}</div>
+      <div class="tbtns"><button class="iconbtn ${REFRESHING?"spinning":""}" data-refresh title="重新整理">${I("upd")}</button><button class="iconbtn" data-addhost title="新增主機">${I("plus")}</button>
+      <button class="iconbtn ${list.some(s=>s.self_has)?"hasnew":""}" data-settings title="設定">${I("gear")}</button><button class="iconbtn" data-logout title="登出">${I("logout")}</button></div></header>
+    <div class="board"><div class="cols${shown.length > colsFit() ? " more" : ""}" data-keyed style="--n:${Math.min(Math.max(shown.length, 1), colsFit())}">${shown.map(hostCol).join("") || `<div class="empty" data-key="empty">這個分類目前沒有主機 👍</div>`}</div>
+      <aside class="rside" data-key="rs"><div class="wxw" data-x>${g.wx}</div>${feed(list)}</aside></div></div>`;
 }
 function skeleton(){
   return DESK.matches
-    ? `<div class="dash d" data-key="sk"><aside class="side glass skel" style="height:520px"></aside><div class="detail"><div class="panel glass skel" style="height:96px"></div><div class="panel glass skel" style="height:240px"></div><div class="panel glass skel" style="height:260px"></div></div></div>`
-    : `<div class="dash m" data-key="sk"><div class="hero"><div class="hello">連線中…</div><h1>正在讀取<em>主機狀態</em></h1></div><div class="grid"><div class="card glass skel"></div></div></div>`;
+    ? `<div class="dash d2" data-key="sk"><header class="top glass skel"></header><div class="board"><div class="cols" style="--n:2"><div class="hcol panel glass skel"></div><div class="hcol panel glass skel"></div></div><aside class="rside"><div class="panel glass skel" style="flex:1"></div></aside></div></div>`
+    : `<div class="dash m" data-key="sk"><div class="hero"><div class="hello">連線中…</div><h1>正在讀取<em>主機狀態</em></h1></div><div class="pager"><div class="card glass skel"></div></div></div>`;
 }
 
 /* ═════════ 只更新有變動的地方 ═════════ */
@@ -773,8 +743,8 @@ const T = {fast:200, mid:350, slow:600};
 const EASE = "cubic-bezier(.22,1,.36,1)", SPRING = "cubic-bezier(.34,1.4,.64,1)", EXIT = "cubic-bezier(.4,0,1,1)";
 const canAnim = () => PREF.motion && !matchMedia("(prefers-reduced-motion: reduce)").matches;
 /* 讓元素平順地離開：先淡出、收起高度，再移除 */
-const BLOCK = ".alert,.wnote,.item,.grp,.card,.host,.empty,.spark,.ev,.more,.foot,.alerts,.offline,.strip,.charts,.lower,.gauges";
-const TILE = ".panel,.stat,.tile,.gauge";
+const BLOCK = ".alert,.item,.grp,.card,.empty,.spark,.ev,.more,.foot,.alerts,.offline,.strip,.fcs,.cpanel,.cbot,.mts";
+const TILE = ".panel,.stat,.tile,.chip,.tbx,.ibx";
 function flipSiblings(parent, change){
   const kids = [...parent.children].filter(c => !c._leaving), r0 = kids.map(c => c.getBoundingClientRect());
   change();
@@ -916,7 +886,7 @@ function edgeFades(el){
   if (el.classList.contains("ft") !== t) el.classList.toggle("ft", t);
   if (el.classList.contains("fb") !== b) el.classList.toggle("fb", b);
 }
-document.addEventListener("scroll", e => { const el = e.target; if (el.matches && el.matches(".hosts,.evs,.tbl,.kv")) edgeFades(el); }, {capture:true, passive:true});
+document.addEventListener("scroll", e => { const el = e.target; if (!el.matches) return; if (el.matches(".evs,.chips")) edgeFades(el); else if (el.matches(".cols")) el.classList.toggle("end", el.scrollLeft + el.clientWidth >= el.scrollWidth - 4); else if (el.matches(".pager")) pagerScroll(el); }, {capture:true, passive:true});
 function placePind(){
   document.querySelectorAll("#app .summary").forEach(sm => {
     const ind = sm.querySelector(".pind"), on = sm.querySelector(".pill.on");
@@ -961,13 +931,12 @@ function render(list){
   }
   // 有紅色（異常）或橘色（注意）告警的主機排在最前面；同一級的照原本順序
   list = [...list].map(tidy).sort((a, b) => LVRANK[lvOf(a)] - LVRANK[lvOf(b)]);
-  if (!LIST.length && list.length && lvOf(list[0]) !== "ok") { SEL = keyOf(list[0]); store("vps-sel", SEL); }   // 剛打開網頁就有告警：電腦版直接顯示出問題的那台
   LIST = list; flagAccent();
   const n = {ok:0,warn:0,bad:0}; list.forEach(s=>n[lvOf(s)]++);
   const time = new Date().toLocaleTimeString("zh-TW",{hour12:false});
   paint(DESK.matches ? renderDesk(list, n, time) : renderMobile(list, n, time));
   placePind();
-  document.querySelectorAll("#app .hosts,#app .evs,#app .tbl,#app .kv").forEach(edgeFades);
+  document.querySelectorAll("#app .evs,#app .chips").forEach(edgeFades);
   if (TIPX) drawTip(...TIPX);
   trackCenter();
 }
@@ -988,47 +957,6 @@ function modal({icon, cls="box", title, text, input, ok="確定", cancel="取消
     v._esc = () => done(0);
     if (inp) { setTimeout(()=>{ inp.focus(); inp.select(); }, 60); inp.addEventListener("keydown", e => { if (e.key==="Enter") done(1); if (e.key==="Escape") done(0); }); }
     v.addEventListener("click", e => { if (e.target === v) return done(0); const b = e.target.closest("[data-r]"); if (b) done(+b.dataset.r); });
-  });
-}
-/* 切換主機：舊內容先淡出，換成全新的一頁，再一塊一塊浮上來（不讓兩台的內容互相變形） */
-let SWID = 0;
-/* 要動的是每一塊玻璃本身：如果讓外層容器變透明，裡面玻璃的模糊會暫時「看不到」背景而變暗，結束時又突然亮起來 */
-function swParts(root){
-  const g = [...root.querySelectorAll(".glass")].filter(el => !el.parentElement.closest(".glass"));
-  return g.concat([...root.children].filter(c => !c.classList.contains("glass") && !c.querySelector(".glass")));
-}
-async function switchHost(){
-  const id = ++SWID, old = $("#app .detail");
-  if (!old || !DESK.matches || !canAnim()) return render(LIST);
-  old.setAttribute("data-keep", "");               // 淡出期間左邊選單照常更新，右邊先不動
-  const R = document.documentElement; R.classList.add("qacc");
-  clearTimeout(R._qacc); R._qacc = setTimeout(() => R.classList.remove("qacc"), 400);
-  render(LIST);
-  const t0 = performance.now();
-  const outs = swParts(old).map(el => {
-    const o0 = +getComputedStyle(el).opacity;     // 連點時從目前的透明度接著淡，不要閃回來
-    el.getAnimations().forEach(x => x.cancel());
-    return el.animate([{opacity:o0, transform:"none"}, {opacity:0, transform:"translateY(-6px)"}],
-      {duration:T.fast, easing:EXIT, fill:"forwards", id:"ui"}).finished.catch(()=>{});
-  });
-  await Promise.all(outs);
-  const sel = LIST.find(s => keyOf(s) === SEL);
-  if (sel && RANGE !== "30m") {                    // 24 小時／7 天：等新主機的資料一下，避免先看到「讀取中」
-    const k = keyOf(sel) + "|" + RANGE;
-    while (HCACHE[k] && HCACHE[k].loading && performance.now() - t0 < 600) await new Promise(r => setTimeout(r, 30));
-  }
-  if (id !== SWID || !old.isConnected) return;     // 又點了別台：交給最新那次處理
-  const tpl = document.createElement("template"); tpl.innerHTML = sel ? detail(sel).trim() : "";
-  const fresh = tpl.content.firstElementChild;
-  if (!fresh) { old.remove(); return render(LIST); }
-  old.replaceWith(fresh);
-  fresh.getAnimations({subtree:true}).forEach(x => x.animationName === "rise" && x.cancel());  // 不跑第一次載入的浮現，改用下面較快的版本
-  render(LIST);
-  const parts = swParts(fresh), tops = parts.map(el => Math.round(el.getBoundingClientRect().top / 40));
-  const rows = [...new Set(tops)].sort((x, y) => x - y);       // 同一排的一起出現，由上往下
-  parts.forEach((el, i) => {
-    el.animate([{opacity:0, transform:"translateY(10px)"}, {opacity:1, transform:"none"}],
-      {duration:T.mid, delay:rows.indexOf(tops[i]) * 50, easing:EASE, fill:"backwards", id:"ui"});
   });
 }
 /* 滑鼠移到曲線上：顯示那個時間點的數值 */
@@ -1136,7 +1064,7 @@ function settingsBody(){
     <div class="opt">${IC("trend")}<span class="lab">歷史曲線圖</span>${tog("show.chart")}</div>
     <div class="opt">${IC("net")}<span class="lab">網路速度</span>${tog("show.net")}</div>
     <div class="opt">${IC("box")}<span class="lab">容器與服務</span>${tog("show.items")}</div>
-    <div class="opt">${IC("info")}<span class="lab">主機概況<small>電腦版才有</small></span>${tog("show.info")}</div>
+    <div class="opt">${IC("info")}<span class="lab">連線數與 IP<small>電腦版才有</small></span>${tog("show.info")}</div>
     <div class="opt">${IC("flag")}<span class="lab">國旗</span>${tog("show.flag")}</div>
     <div class="opt">${IC("month")}<span class="lab">每月流量</span>${tog("show.traffic")}</div>
     <div class="opt">${IC("sun")}<span class="lab">天氣<small>用這台裝置的位置</small></span>${tog("show.weather")}</div>
@@ -1180,38 +1108,6 @@ function foldLite(more, on){
   } else {                                        // 收起：動畫跑完才真的關上，裡面的字不會先消失
     c.animate([{height:h0 + "px", overflow:"hidden"}, {height:"0px", overflow:"hidden"}], {duration:T.mid, easing:EASE, fill:"forwards", id:"ui"})
       .finished.then(a => { if (!open[more.querySelector("[data-toggle]").dataset.toggle]) more.classList.remove("open"); a.cancel(); }).catch(() => {});
-  }
-}
-/* 手機卡片：點一張展開、再點上面那一排收回去。
-   先記下每張卡片的間距、露出的那一條、內容的高度，換好以後再從舊的數字平順變到新的數字；
-   跟「容器與服務」一樣用固定的數字做高度動畫，iPhone 才不會卡 */
-function walletSet(k){
-  WAL = k;
-  const g = $("#app .grid.wallet");
-  if (!g || !canAnim()) return render(LIST);
-  const parts = [];
-  g.querySelectorAll(":scope>.card").forEach(c => {
-    parts.push([c, "marginTop"], [c, "paddingBottom"]);
-    c.querySelectorAll(":scope>.wpeek,:scope>.wbody").forEach(x => parts.push([x, "height"]));
-  });
-  const val = ([el, p]) => parseFloat(getComputedStyle(el)[p]) || 0;
-  const from = parts.map(val);                       // 上一次還沒動完的話，從目前的樣子接著動
-  parts.forEach(([el]) => { (el._wa || []).forEach(a => a.cancel()); el._wa = []; });
-  // 只換卡片的狀態，不整頁重畫（手機上整頁重畫會讓動畫第一格頓一下）；下次自動更新算出來的會一模一樣
-  const cs = [...g.children].filter(c => c.matches(".card") && !c._leaving);
-  cs.forEach(c => { const on = c.dataset.key === k; c.classList.toggle("open", on); c.classList.toggle("peek", !on); });
-  const to = parts.map(val), dur = T.slow;
-  const c = k && [...g.children].find(x => x.dataset.key === k), top = c ? c.getBoundingClientRect().top : 0;   // 動畫開始前量：這時是最後的位置
-  parts.forEach(([el, p], i) => {
-    if (!el.isConnected || Math.abs(to[i] - from[i]) < .5) return;
-    const fold = p === "height", show = to[i] > from[i];
-    const f0 = {[p]: from[i] + "px"}, f1 = {[p]: to[i] + "px"};
-    if (fold) Object.assign(f0, {overflow:"hidden", visibility:"visible", opacity:show ? 0 : 1}), Object.assign(f1, {overflow:"hidden", visibility:"visible", opacity:show ? 1 : 0});
-    el._wa.push(el.animate([f0, f1], {duration:dur, easing:EASE, id:"ui"}));
-  });
-  if (c) {                                           // 打開的卡片要看得到開頭：太上面或太下面就捲過去
-    const bar = 70;
-    if (top < bar || top > innerHeight * .45) scrollTo({top: scrollY + top - bar, behavior: "smooth"});
   }
 }
 function initSegs(root){
@@ -1836,7 +1732,6 @@ async function rmHost(node, name){
   const d = await pkCall("/api/peer", {action:"remove", name:node}, 1).catch(err => ({message:err.message}));
   if (!d.ok) return toast(d.message || "移除失敗", "bad");
   toast(`已移除「${name}」`);
-  if (SEL === node) { SEL = ""; store("vps-sel", ""); }
   return tick();
 }
 /* 重新開機：先傳驗證碼到 Telegram，輸入對了才重開（沒設定 Telegram 就輸入那台的密碼或 PIN 碼） */
@@ -2333,19 +2228,8 @@ document.addEventListener("click", async e => {
       document.body.appendChild(ta); ta.select(); try { document.execCommand("copy"); } catch(_) {} ta.remove(); }
     return toast(`已複製 ${txt}`);
   }
-  const hs = t.closest("[data-sel]");
-  if (hs) {
-    if (hs.dataset.sel === SEL) return;
-    SEL = hs.dataset.sel; store("vps-sel", SEL); scrollTo({top:0, behavior:"smooth"});
-    return switchHost();
-  }
-
-  const wc = t.closest(".wallet>.card");             // 手機卡片：點收著的卡片就打開；點打開那張的最上面一排就收回去
-  if (wc && !t.closest("button,a,input,[data-range]")) {
-    const k = wc.dataset.key;
-    if (WAL !== k) walletSet(k); else if (t.closest(".head")) walletSet("");
-    return;
-  }
+  const pt = t.closest("[data-pg]");
+  if (pt) return pagerGo(pt.dataset.pg);
   const ub = t.closest("[data-update]");
   if (ub) {
     const node = ub.dataset.update, label = ub.dataset.label, n = +ub.dataset.n;
