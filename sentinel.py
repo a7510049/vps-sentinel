@@ -40,7 +40,7 @@ from collections import deque
 from concurrent.futures import ThreadPoolExecutor
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
-VERSION = "1.55"
+VERSION = "1.56"
 
 # ───────────────────────── 哨兵備份檔（.vsbk）─────────────────────────
 # 哨兵專用的備份格式：外面是自己的檔案格式，裡面用的是成熟、標準的加密方法（不自己發明加密）：
@@ -606,17 +606,41 @@ def cloud_cookie_ok(v):
             and hmac.compare_digest(sig.encode(), _sign(f"cloud-cookie:v2:{exp}").encode()))
 
 
-def cloud_login_url():
-    """10 分鐘內有效的一鍵登入網址（每次讀狀態都會重新產生）"""
+CLOUD_TK_MIN = 15                               # 一次性登入票的有效分鐘數
+CLOUD_TK_USED = {}                              # 用過的票（到期前都記著，同一張不能用第二次）
+CLOUD_TK_LOCK = threading.Lock()
+
+
+def cloud_sso_url():
     base = CLOUD_URL[:-len("cloud/")] if CLOUD_URL.endswith("cloud/") else CLOUD_URL.rstrip("/") + "/"
-    exp = (int(time.time()) // 300 + 3) * 300     # 每 5 分鐘才換一次網址（10～15 分鐘內有效），畫面不用一直重畫
-    return f"{base}cloud-sso?e={exp}&s={_sign(f'cloud-sso:{exp}')}"
+    return base + "cloud-sso"
+
+
+def cloud_ticket():
+    """一次性登入票：網頁點雲端硬碟時用表單送出（不放在網址裡），用過一次或 15 分鐘後就失效"""
+    n, exp = secrets.token_urlsafe(12), int(time.time()) + CLOUD_TK_MIN * 60
+    return f"{n}.{exp}.{_sign(f'cloud-sso:v3:{n}:{exp}')}"
+
+
+def cloud_ticket_use(t):
+    n, exp, sig = (str(t or "").split(".") + ["", "", ""])[:3]
+    if not (re.fullmatch(r"[A-Za-z0-9_-]{8,40}", n) and re.fullmatch(r"[0-9]{1,12}", exp)
+            and hmac.compare_digest(sig.encode(), _sign(f"cloud-sso:v3:{n}:{exp}").encode())):
+        return False
+    now = time.time()
+    with CLOUD_TK_LOCK:
+        for k in [k for k, v in CLOUD_TK_USED.items() if v < now]:
+            del CLOUD_TK_USED[k]
+        if int(exp) < now or n in CLOUD_TK_USED:
+            return False
+        CLOUD_TK_USED[n] = int(exp)
+    return True
 
 
 def cloud_info():
     if not CLOUD_URL:
         return None
-    info = {"url": CLOUD_URL, "login": cloud_login_url()}
+    info = {"url": CLOUD_URL, "login": cloud_sso_url(), "ticket": cloud_ticket()}
     if os.path.ismount(CLOUD_DIR):
         d = disk(CLOUD_DIR)          # 跟 df 一樣的算法：系統預留的一小塊（約 16 MB）不算「已用」
         if d:
@@ -685,9 +709,10 @@ def parse_peers(raw):
         url = url.strip()
         if "://" not in url:
             url = "http://" + url
-        # 容錯：直接貼上手機用的網址（含 ?t=密碼）也可以
+        # 容錯：直接貼上手機用的網址（含 #t=密碼 或舊的 ?t=密碼）也可以
         u = urllib.parse.urlsplit(url)
-        qtok = urllib.parse.parse_qs(u.query).get("t", [""])[0]
+        qtok = (urllib.parse.parse_qs(u.query).get("t", [""])[0]
+                or urllib.parse.parse_qs(u.fragment).get("t", [""])[0])
         path = u.path.rstrip("/")
         for tail in ("/api/status", "/api/all", "/index.html"):
             if path.endswith(tail):
@@ -4147,15 +4172,21 @@ class Handler(BaseHTTPRequestHandler):
 
     def proxy_cloud(self):
         u = urllib.parse.urlsplit(self.path)
-        if u.path == "/cloud-sso":                     # 從哨兵點進來：檢查簽章，發一張 30 天的通行證，再進雲端硬碟
-            q = urllib.parse.parse_qs(u.query)
-            e, sig = (q.get("e") or ["0"])[0], (q.get("s") or [""])[0]
-            ok = (bool(re.fullmatch(r"[0-9]{1,12}", e)) and int(e) > time.time()
-                  and hmac.compare_digest(sig.encode(), _sign(f"cloud-sso:{e}").encode()))
-            self.send_response(302)
+        if u.path == "/cloud-sso":                     # 從哨兵點進來：一次性登入票（表單送的，不在網址上）換一張 30 天的通行證
+            ok = False
+            if self.command == "POST":
+                try:
+                    n = min(int(self.headers.get("Content-Length") or 0), 4096)
+                    t = urllib.parse.parse_qs(self.rfile.read(n).decode("utf-8", "replace")).get("t", [""])[0]
+                except (ValueError, OSError):
+                    t = ""
+                ok = cloud_ticket_use(t)
+            go = ok or self.cloud_authed()             # 票用過了，但已經有通行證：一樣直接進去
+            self.send_response(303)
             if ok:
                 self.send_header("Set-Cookie", self.cloud_cookie())
-            self.send_header("Location", "/cloud/" if ok else "/?go=cloud")
+            self.send_header("Location", "/cloud/" if go else "/?go=cloud")
+            self.send_header("Cache-Control", "no-store")
             self.send_header("Content-Length", "0")
             self.end_headers()
             return

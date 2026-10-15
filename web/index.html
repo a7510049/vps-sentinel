@@ -2,6 +2,13 @@
 <html lang="zh-Hant-TW" data-mode="dark" data-accent="blue">
 <head>
 <meta charset="utf-8">
+<script>
+/* 安裝時給的網址（#t=密碼）：一打開就把密碼從網址拿掉，網址列和瀏覽紀錄都不會留著 */
+(function(){ try {
+  var u = new URL(location.href), h = new URLSearchParams(location.hash.slice(1)), t = h.get("t") || u.searchParams.get("t");
+  if (t) { window._t0 = t; u.searchParams.delete("t"); h.delete("t"); history.replaceState(null, "", u.pathname + (u.search.length > 1 ? u.search : "") + (h.toString() ? "#" + h : "")); }
+} catch(e){} })();
+</script>
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <title>VPS 哨兵</title>
 <link rel="manifest" href="/manifest.webmanifest?v=2">

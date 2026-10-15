@@ -1,4 +1,4 @@
-"""雲端硬碟轉接的測試：沒登入要先去哨兵、簽章連結發通行證、通行證會過期、外面偽造的「主人」標頭會被丟掉。只用 Python 內建模組。"""
+"""雲端硬碟轉接的測試：沒登入要先去哨兵、一次性登入票發通行證、通行證會過期、外面偽造的「主人」標頭會被丟掉。只用 Python 內建模組。"""
 import hashlib
 import hmac
 import http.client
@@ -7,6 +7,7 @@ import json
 import threading
 import time
 import unittest
+import urllib.parse
 
 from test_smoke import TOKEN, Server, free_port
 
@@ -66,19 +67,45 @@ class CloudTest(Server):
     def test_forged_header_dropped(self):
         self.assertIsNone(self.user(extra={"X-Sentinel-User": "owner"}))
 
+    def post_sso(self, ticket, cookie=None):
+        c = http.client.HTTPConnection("127.0.0.1", self.port, timeout=15)
+        h = {"Content-Type": "application/x-www-form-urlencoded"}
+        if cookie:
+            h["Cookie"] = f"vs_cloud={cookie}"
+        c.request("POST", "/cloud-sso", body="t=" + urllib.parse.quote(ticket), headers=h)
+        r = c.getresponse()
+        r.read()
+        c.close()
+        return r
+
+    def ticket(self):
+        _, _, body = self.request("/api/status", token=TOKEN)
+        cloud = json.loads(body)["cloud"]
+        self.assertTrue(cloud["login"].endswith("/cloud-sso"))       # 網址裡沒有任何密碼或簽章
+        return cloud["ticket"]
+
     def test_sso_and_cookie(self):
-        exp = int(time.time()) + 600
-        r, _ = self.get(f"/cloud-sso?e={exp}&s={sign(f'cloud-sso:{exp}')}")
-        self.assertEqual(r.status, 302)
+        t = self.ticket()
+        r = self.post_sso(t)
+        self.assertEqual(r.status, 303)
         self.assertEqual(r.getheader("Location"), "/cloud/")
         cookie = r.getheader("Set-Cookie").split(";")[0].split("=", 1)[1]
         self.assertEqual(self.user(cookie), "owner")
-        # 簽章不對、過期的連結：不發通行證，回哨兵登入
-        r, _ = self.get(f"/cloud-sso?e={exp}&s=bad")
+        # 同一張票不能再用：沒有通行證就回哨兵登入；已經有通行證就直接進去
+        r = self.post_sso(t)
         self.assertIsNone(r.getheader("Set-Cookie"))
+        self.assertEqual(r.getheader("Location"), "/?go=cloud")
+        r = self.post_sso(t, cookie)
+        self.assertIsNone(r.getheader("Set-Cookie"))
+        self.assertEqual(r.getheader("Location"), "/cloud/")
+        # 偽造、過期的票，還有舊版放在網址上的簽章連結：都不發通行證
+        n, exp, _ = self.ticket().split(".")
+        self.assertIsNone(self.post_sso(f"{n}.{exp}.bad").getheader("Set-Cookie"))
         old = int(time.time()) - 10
-        r, _ = self.get(f"/cloud-sso?e={old}&s={sign(f'cloud-sso:{old}')}")
+        self.assertIsNone(self.post_sso(f"{n}.{old}.{sign(f'cloud-sso:v3:{n}:{old}')}").getheader("Set-Cookie"))
+        r, _ = self.get(f"/cloud-sso?e={exp}&s={sign(f'cloud-sso:{exp}')}")
         self.assertIsNone(r.getheader("Set-Cookie"))
+        self.assertEqual(r.getheader("Location"), "/?go=cloud")
 
     def test_cookie_expires(self):
         old = int(time.time()) - 10
