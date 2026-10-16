@@ -40,7 +40,7 @@ from collections import deque
 from concurrent.futures import ThreadPoolExecutor
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
-VERSION = "1.63"
+VERSION = "1.64"
 
 # ───────────────────────── 哨兵備份檔（.vsbk）─────────────────────────
 # 哨兵專用的備份格式：外面是自己的檔案格式，裡面用的是成熟、標準的加密方法（不自己發明加密）：
@@ -306,12 +306,18 @@ def rs_download(url, td):
 
 
 def rs_members(tar):
-    """檢查備份裡的每個檔案：只接受一般檔案、資料夾、捷徑，而且不能跑到別的地方去"""
-    out = []
+    """檢查備份裡的每個檔案：只接受一般檔案、資料夾、捷徑，而且不能跑到別的地方去
+    （也不能放在備份裡另一個捷徑「底下」：不然會順著捷徑寫到別的地方，例如 etc/x → /root 再放 etc/x/檔案）"""
+    out, links = [], set()
     for m in tar.getmembers():
         parts = m.name.split("/")
         if m.name.startswith("/") or ".." in parts or not (m.isfile() or m.isdir() or m.issym()):
             continue
+        norm = os.path.normpath(m.name).split("/")
+        if any("/".join(norm[:i]) in links for i in range(1, len(norm))):
+            continue
+        if m.issym():
+            links.add("/".join(norm))
         if m.name == RS_MANIFEST or (len(parts) == 1 and m.name.endswith(".txt")):
             continue                                    # 還原說明、還原資料：不用放到主機上
         out.append(m)
@@ -540,6 +546,22 @@ if __name__ == "__main__" and sys.argv[1:2] == ["--restore"]:
 CONF_PATH = os.environ.get("SENTINEL_CONF", "/etc/vps-sentinel-lite.conf")
 
 
+class _SafeRedirect(urllib.request.HTTPRedirectHandler):
+    """被轉址到別的網站（或從 https 降成 http）時，不把密碼、連線鑰匙一起帶過去"""
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        new = super().redirect_request(req, fp, code, msg, headers, newurl)
+        if new is not None:
+            a, b = urllib.parse.urlsplit(req.full_url), urllib.parse.urlsplit(new.full_url)
+            if (a.hostname, a.port) != (b.hostname, b.port) or (a.scheme == "https" and b.scheme != "https"):
+                for h in ("X-token", "X-Token", "Authorization"):
+                    new.headers.pop(h, None)
+                    new.unredirected_hdrs.pop(h, None)
+        return new
+
+
+urllib.request.install_opener(urllib.request.build_opener(_SafeRedirect))
+
+
 def load_config():
     path = CONF_PATH
     conf = {}
@@ -764,6 +786,7 @@ def set_peer(name, url, token, force=False):
     log(f"更改「{name}」的連線網址：{new['url']}")
     return True, f"已更新「{name}」的連線網址", False
 PEER_SEEN = {}                                  # 其他主機最後一次連上的時間（會存檔）
+PEER_NAME = {}                                  # 其他主機最後一次連上時的名稱（連不上時照樣用它自己的名稱稱呼，會存檔）
 TG_SENT = {}                                    # 每台主機已經通知到哪一筆事件（事件時間，會存檔）
 TG_MSGS = []                                    # 傳出去的通知 [時間, 聊天, 訊息編號]，到期自動刪除（會存檔）
 
@@ -1394,7 +1417,10 @@ def set_peer_token(name, token):
 
 PASSKEY_MAX = 5
 PK_LOCK = threading.Lock()
-PK_CHALLENGES = {}                              # 一次性的驗證題目 → 到期時間（2 分鐘）
+PK_TTL = 120                                    # 驗證題目 2 分鐘內有效
+PK_SECRET = secrets.token_bytes(32)             # 簽驗證題目用（每次啟動換一把）
+PK_USED_LK = threading.Lock()
+PK_USED = {}                                    # 驗證成功用過的題目 → 到期時間（只有真的登入成功才會記，塞不滿）
 
 
 def b64u(b):
@@ -1570,15 +1596,31 @@ def pk_list():
 
 
 def pk_challenge(kind):
+    """驗證題目：裡面寫著用途和到期時間並簽章，主機不用先記下來（有人一直要題目也塞不滿、擠不掉你的）"""
+    body = secrets.token_bytes(16) + int(time.time() + PK_TTL).to_bytes(5, "big")
+    return b64u(body + hmac.new(PK_SECRET, kind.encode() + body, hashlib.sha256).digest()[:16])
+
+
+def pk_challenge_ok(c, kind):
+    try:
+        raw = unb64u(c)
+    except (ValueError, TypeError):
+        return False
+    body, mac = raw[:21], raw[21:]
+    return (len(raw) == 37 and hmac.compare_digest(mac, hmac.new(PK_SECRET, kind.encode() + body, hashlib.sha256).digest()[:16])
+            and int.from_bytes(body[16:], "big") >= time.time())
+
+
+def pk_use(c):
+    """驗證通過後把題目記成用過（到期前同一題不能再用）；已經用過回傳 False"""
     now = time.time()
-    with PK_LOCK:
-        for c in [c for c, (_, t) in PK_CHALLENGES.items() if t < now]:
-            PK_CHALLENGES.pop(c, None)
-        while len(PK_CHALLENGES) >= 200:                                # 有人一直要題目：丟掉最舊的
-            PK_CHALLENGES.pop(min(PK_CHALLENGES, key=lambda c: PK_CHALLENGES[c][1]))
-        c = b64u(secrets.token_bytes(32))
-        PK_CHALLENGES[c] = (kind, now + 120)
-    return c
+    with PK_USED_LK:
+        for k in [k for k, t in PK_USED.items() if t < now]:
+            del PK_USED[k]
+        if c in PK_USED:
+            return False
+        PK_USED[c] = now + PK_TTL
+    return True
 
 
 def pk_rp(host):
@@ -1589,16 +1631,14 @@ def pk_rp(host):
 
 
 def _pk_client(cdj, kind):
-    """檢查瀏覽器送來的 clientDataJSON：題目要對、要是一次性、網址的主機名稱要對；回傳主機名稱"""
+    """檢查瀏覽器送來的 clientDataJSON：題目要對、沒過期、網址的主機名稱要對；回傳主機名稱（一次性在驗證成功後由 pk_use 擋）"""
     try:
         cd = json.loads(cdj)
     except ValueError:
         return None, "資料格式不對"
     if not isinstance(cd, dict) or cd.get("type") != kind:
         return None, "資料格式不對"
-    with PK_LOCK:
-        got = PK_CHALLENGES.pop(str(cd.get("challenge")), None)
-    if not got or got[0] != kind or got[1] < time.time():
+    if not pk_challenge_ok(str(cd.get("challenge") or ""), kind):
         return None, "等太久了，請再試一次"
     o = urllib.parse.urlsplit(str(cd.get("origin") or ""))
     host = (o.hostname or "").lower()
@@ -1653,6 +1693,8 @@ def pk_register_finish(d):
             return False, f"最多只能登記 {PASSKEY_MAX} 支，請先刪掉一支"
         if any(k["id"] == b64u(cid) for k in keys):
             return False, "這支已經登記過了"
+        if not pk_use(json.loads(cdj)["challenge"]):
+            return False, "等太久了，請再試一次"
         keys.append({"id": b64u(cid), "rp": rp, "key": key, "name": name, "added": int(time.time()), "used": None})
         try:
             pk_save(keys)
@@ -1682,6 +1724,8 @@ def pk_login_finish(d):
             return False, err
         if not pk_sig_ok(k["key"], ad + hashlib.sha256(cdj).digest(), sig):
             return False, "金鑰驗證失敗"
+        if not pk_use(json.loads(cdj)["challenge"]):     # 同一次登入的資料被拿來再送一次：擋掉
+            return False, "等太久了，請再試一次"
         k["used"] = int(time.time())
         try:
             pk_save(keys)
@@ -2349,6 +2393,7 @@ class Collector:
                 self.traffic = {"since": tr.get("since", now), "days": tr["days"], "last": tr.get("last")}
             names = {p["name"] for p in PEERS}           # 已經從設定拿掉的主機就不留了
             PEER_SEEN.update({k: float(v) for k, v in (st.get("peer_seen") or {}).items() if k in names})
+            PEER_NAME.update({k: str(v)[:40] for k, v in (st.get("peer_name") or {}).items() if k in names and v})
             TG_SENT.update({k: float(v) for k, v in (st.get("tg_sent") or {}).items() if k == "" or k in names})
             TG_MSGS.extend(list(m) for m in (st.get("tg_msgs") or []) if len(m) == 3)
             self.saved_boot = st.get("boot")
@@ -2367,7 +2412,7 @@ class Collector:
             with self.lock:
                 st = {"v": 1, "saved": time.time(), "boot": boot_id(), "hist": list(self.hist), "h24": list(self.h24), "h7d": list(self.h7d),
                       "events": list(self.events), "traffic": self.traffic,
-                      "prev_keys": self.prev_keys, "peer_seen": dict(PEER_SEEN),
+                      "prev_keys": self.prev_keys, "peer_seen": dict(PEER_SEEN), "peer_name": dict(PEER_NAME),
                       "tg_sent": dict(TG_SENT), "tg_msgs": list(TG_MSGS),
                       "backup": {k: BK[k] for k in ("last", "ok_t", "day", "key_t", "names", "tg")}}
                 with KEEP_LK:
@@ -2562,7 +2607,7 @@ class Collector:
                 if tick % 10800 == 0:                     # 每 6 小時：IP 所在國家
                     self.bg("geo", self.check_geo)
                 if tick % 30 == 7 and tick > 300 and BACKUP_ON:  # 每 1 分鐘看一下：今天到了備份時間還沒備份就開始（剛啟動先等 10 分鐘，讓其他台也更新好）
-                    now = datetime.now()
+                    now = bk_time(time.time())            # 用網頁那邊（你）的時區：主機多半用世界標準時間，不然「清晨 4 點」會變成中午
                     if now.hour >= BACKUP_HOUR and BK["day"] != now.strftime("%Y-%m-%d"):
                         BK["day"] = now.strftime("%Y-%m-%d")
                         self.bg("backup", backup_run)
@@ -2747,9 +2792,11 @@ def fetch_peer(p):
         data["node"] = p["name"]                  # 代號：用來把指令轉給這台
         data["name"] = data.get("name") or p["name"]   # 顯示：用那台自己的名稱
         PEER_SEEN[p["name"]] = time.time()
+        if isinstance(data["name"], str):
+            PEER_NAME[p["name"]] = data["name"][:40]
         return data
     except Exception as e:  # noqa: BLE001
-        return {"name": p["name"], "node": p["name"], "online": False, "level": "bad",
+        return {"name": PEER_NAME.get(p["name"]) or BK["names"].get(p["name"]) or p["name"], "node": p["name"], "online": False, "level": "bad",
                 "problems": ["連不上"], "error": peer_error(e, p["url"]), "last_seen": PEER_SEEN.get(p["name"]),
                 "peer_url": p["url"]}
 
@@ -3032,6 +3079,7 @@ def peer_remove(node):
         PEERS.append(p)
         return False, f"無法寫入設定檔：{e}"
     PEER_SEEN.pop(node, None)
+    PEER_NAME.pop(node, None)
     BEAT_SENT.pop(node, None)
     log(f"不再監看「{node}」")
     COL.add_event("info", f"不再監看「{node}」")
@@ -3938,12 +3986,20 @@ def tg_send_file(path, filename, caption):
     filename = re.sub(r'[\x00-\x1f"\\]', "_", filename)          # 檔名不能有換行、引號，不然會混進別的欄位
     head += (f'--{b}\r\nContent-Disposition: form-data; name="document"; filename="{filename}"\r\n'
              "Content-Type: application/octet-stream\r\n\r\n")
-    with open(path, "rb") as f:
-        data = head.encode() + f.read() + f"\r\n--{b}--\r\n".encode()
-    req = urllib.request.Request(TG_BASE + TG_BOT + "/sendDocument", data=data,
-                                 headers={"Content-Type": f"multipart/form-data; boundary={b}"})
+    head, tail = head.encode(), f"\r\n--{b}--\r\n".encode()
+
+    def body(f):                                   # 邊讀邊傳，不把整個檔案（最多 50 MB）放進記憶體
+        yield head
+        for chunk in iter(lambda: f.read(1 << 20), b""):
+            yield chunk
+        yield tail
     try:
-        with urllib.request.urlopen(req, timeout=300) as r:
+        with open(path, "rb") as f:
+            req = urllib.request.Request(TG_BASE + TG_BOT + "/sendDocument", data=body(f), headers={
+                "Content-Type": f"multipart/form-data; boundary={b}",
+                "Content-Length": str(len(head) + os.path.getsize(path) + len(tail))})
+            r = urllib.request.urlopen(req, timeout=300)
+        with r:
             d = json.loads(r.read())
         return "", (d.get("result") or {}).get("message_id")
     except urllib.error.HTTPError as e:
@@ -4186,7 +4242,8 @@ RSW_STATE = os.environ.get("SENTINEL_RESTORE_STATE", "/var/lib/vps-sentinel-rest
 RSW_DIR = os.path.dirname(RSW_STATE)
 RSW_FILE = os.path.join(RSW_DIR, "upload.vsbk")
 RSW_PROG = os.path.join(RSW_DIR, "progress.json")
-RSW_FAIL = {"n": 0, "until": 0.0}                  # 代碼輸錯 10 次就暫停 10 分鐘
+RSW_FAIL = {}                                      # 來源 → [輸錯次數, 暫停到]：同一個地方輸錯 10 次就暫停 10 分鐘（別人亂試不會把你鎖住）
+RSW_FAIL_LK = threading.Lock()
 
 
 def rsw_read(path):
@@ -4221,18 +4278,32 @@ def rsw_save(st):
     os.replace(tmp, RSW_STATE)
 
 
-def rsw_code_ok(code):
+def rsw_locked(ip):
+    """這個來源還要暫停幾秒（0＝可以試）"""
+    with RSW_FAIL_LK:
+        return max(0, int((RSW_FAIL.get(ip) or [0, 0])[1] - time.time()))
+
+
+def rsw_code_ok(code, ip=""):
     st = rsw_state()
-    if not st or not code or RSW_FAIL["until"] > time.time():
+    if not st or not code or rsw_locked(ip):
         return False
     norm = re.sub(r"[\s-]", "", code).upper()           # 有沒有打中間的「-」、大小寫都可以
     ok = hmac.compare_digest(hashlib.sha256(norm.encode()).hexdigest(), str(st.get("hash", "")))
-    if ok:
-        RSW_FAIL["n"] = 0
-    else:
-        RSW_FAIL["n"] += 1
-        if RSW_FAIL["n"] >= 10:
-            RSW_FAIL.update(n=0, until=time.time() + 600)
+    with RSW_FAIL_LK:
+        now = time.time()
+        for k in [k for k, v in RSW_FAIL.items() if v[1] and v[1] < now]:
+            del RSW_FAIL[k]
+        if ok:
+            RSW_FAIL.pop(ip, None)
+        else:
+            f = RSW_FAIL.setdefault(ip, [0, 0])
+            f[0] += 1
+            if f[0] >= 10:
+                f[:] = [0, now + 600]
+            if len(RSW_FAIL) > 5000:                       # 記太多來源：丟掉沒在暫停的
+                for k in [k for k, v in RSW_FAIL.items() if not v[1]][:2500]:
+                    del RSW_FAIL[k]
     return ok
 
 
@@ -4357,6 +4428,27 @@ class Handler(BaseHTTPRequestHandler):
         self.send_header("Referrer-Policy", "no-referrer")       # 點外部連結時不帶出哨兵的網址
         self.end_headers()
         self.wfile.write(data)
+
+    def client_ip(self):
+        """連進來的人在哪裡（經過本機的 Caddy 時看它轉來的；IPv6 同一段 /64 當成同一個人）"""
+        ip = self.client_address[0]
+        if ip in ("127.0.0.1", "::1", "::ffff:127.0.0.1"):
+            ip = ((self.headers.get("X-Forwarded-For") or "").split(",")[-1].strip()) or ip
+        try:
+            a = ipaddress.ip_address(ip)
+            return str(ipaddress.ip_network(f"{a}/64", strict=False)) if a.version == 6 else str(a)
+        except ValueError:
+            return ip[:64]
+
+    def restore_code_ok(self):
+        return rsw_code_ok(self.headers.get("X-Restore-Code", ""), self.client_ip())
+
+    def restore_denied(self, msg):
+        left = rsw_locked(self.client_ip())
+        time.sleep(1)
+        if left:
+            msg = f"輸錯太多次，請 {left // 60 + 1} 分鐘後再試"
+        return self.send(401, json.dumps({"active": bool(rsw_state()), "ok": False, "error": msg, "message": msg}, ensure_ascii=False))
 
     def authed(self):
         given = self.headers.get("X-Token", "")
@@ -4561,11 +4653,10 @@ class Handler(BaseHTTPRequestHandler):
         if path in ("/api/backup", "/api/backup-file"):
             return self.backup_get(path)
         if path == "/api/restore":                      # 網頁還原：沒有代碼只回答「有沒有在等待還原」
-            if self.authed() or rsw_code_ok(self.headers.get("X-Restore-Code", "")):
+            if self.authed() or self.restore_code_ok():
                 return self.send(200, json.dumps({"ok": True, **rsw_status()}, ensure_ascii=False))
             if self.headers.get("X-Restore-Code"):
-                time.sleep(1)
-                return self.send(401, json.dumps({"active": bool(rsw_state()), "error": "代碼不對"}, ensure_ascii=False))
+                return self.restore_denied("代碼不對")
             return self.send(200, json.dumps({"active": bool(rsw_state())}))
         if path == "/api/backup-dl":                    # 新主機還原：不用登入，靠連結上的簽章
             f = bk_link_file(urllib.parse.parse_qs(urllib.parse.urlsplit(self.path).query))
@@ -4645,9 +4736,8 @@ class Handler(BaseHTTPRequestHandler):
                           "/api/restore-upload", "/api/restore-run", "/api/pair", "/api/pair-admin", "/api/reboot", "/api/keepalive"):
             return self.send(404, '{"error":"找不到"}')
         if u.path in ("/api/restore-upload", "/api/restore-run"):   # 網頁還原：要有安裝時給的代碼（或已經登入）
-            if not (self.authed() or rsw_code_ok(self.headers.get("X-Restore-Code", ""))):
-                time.sleep(1)
-                return self.send(401, json.dumps({"error": "代碼不對，請看安裝完成時終端機上顯示的還原代碼"}, ensure_ascii=False))
+            if not (self.authed() or self.restore_code_ok()):
+                return self.restore_denied("代碼不對，請看安裝完成時終端機上顯示的還原代碼")
             if u.path == "/api/restore-upload":
                 try:
                     length = int(self.headers.get("Content-Length") or 0)
@@ -4657,7 +4747,10 @@ class Handler(BaseHTTPRequestHandler):
                 if not ok:
                     self.close_connection = True       # 沒讀完的內容不要留在連線裡
             else:
-                n = int(self.headers.get("Content-Length") or 0)
+                try:
+                    n = int(self.headers.get("Content-Length") or 0)
+                except ValueError:
+                    n = 0
                 ok, msg = rsw_start(self.jbody(self.rfile.read(min(n, 4096))).get("pw"))
             return self.send(200 if ok else 400, json.dumps({"ok": ok, "message": msg}, ensure_ascii=False))
         if u.path == "/api/backup-store":            # 其他主機傳來的備份（檔案很大，邊收邊存，不先讀進記憶體）

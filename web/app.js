@@ -197,7 +197,8 @@ function ago(t){
   const d = Date.now()/1000 - t, dt = new Date(t*1000), now = new Date();
   const hm = dt.toLocaleTimeString("zh-TW",{hour:"2-digit",minute:"2-digit",hour12:false});
   if (d < 45) return "剛剛";
-  if (d < 3600) return `${Math.round(d/60)} 分鐘前`;
+  if (d < 3570) return `${Math.max(1, Math.round(d/60))} 分鐘前`;
+  if (d < 3600) return "1 小時前";
   if (d < 6*3600) return `${Math.floor(d/3600)} 小時前`;
   if (dt.toDateString() === now.toDateString()) return `今天 ${hm}`;
   const y = new Date(now); y.setDate(now.getDate()-1);
@@ -2011,7 +2012,7 @@ async function bkModal(node, label){
         try {
           const r = await api("/api/backup-file" + bkQ(node), {headers:{"X-Token":getTok()}});
           if (!r.ok) { const x = await r.json().catch(() => ({})); throw new Error(x.error || "下載失敗"); }
-          const name = decodeURIComponent(r.headers.get("X-Backup-Name") || "backup.tar.gz");
+          const name = decodeURIComponent(r.headers.get("X-Backup-Name") || "backup.vsbk");
           const a = document.createElement("a"); a.href = URL.createObjectURL(await r.blob()); a.download = name;
           document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 60000);
           say(`已下載 ${name}`, "ok");
@@ -2117,7 +2118,7 @@ async function rswShow(){
   try {
     const r = await rswApi("/api/restore");
     d = await r.json();
-    if (r.status === 401 || !RSW.code) return rswCodeForm(body, RSW.code ? "還原代碼不對" : "");
+    if (r.status === 401 || !RSW.code) return rswCodeForm(body, RSW.code ? (/太多次/.test(d.error || "") ? d.error : "還原代碼不對") : "");
     RSW.down = 0;
   } catch(e) {                                   // 還原時哨兵會重新啟動：連不上一下是正常的
     RSW.down++;
