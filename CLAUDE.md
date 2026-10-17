@@ -47,6 +47,7 @@ tests/             基本功能測試（只用 Python 內建模組）
 - 被監看模式：被配對、自己又沒有 PEERS 的主機（`watchers()`）不載入完整網頁，`/` 只給一頁說明＋「取消被監看」（密碼或 PIN 碼，或 `--unwatch`）；不自己發事件通知；主要主機每 10 分鐘送心跳（`peer_beats`，帶 Telegram 設定），主要主機 5 分鐘沒連進來就由被監看的主機通知（`watch_check`）
 - 從網頁重新開機（`reboot_` 開頭的函式）：先傳 6 位數一次性驗證碼到 Telegram（5 分鐘、錯 5 次失效；被監看的主機用主要主機給的 Telegram），沒有 Telegram 就改輸入那台的密碼或 PIN 碼；測試用 SENTINEL_REBOOT_CMD 換掉真正的重開指令
 - Oracle 防回收（`keep_` 開頭的函式）：偵測到 Oracle 免費機型（主機板標記 `OracleCloud.com`＋主機資訊服務的機型）才動作；每天 1、7、13、19 點前後各多 5 分鐘，另開一個最低優先（SCHED_IDLE）的程序把整台處理器補到 25%，畫面上的處理器數字會扣掉這部分；每分鐘的用量存成每天的次數表算 7 天第 95 百分位，2 天以上低於 20% 就提醒；設定檔 `KEEPALIVE=off` 關閉，測試用 `ORACLE_SHAPE`、`KEEPALIVE_HOURS`
+- 遠端下載（`dl_` 開頭的函式）：主機 ⋯ 選單「遠端下載」，貼連結後由那台主機下載到雲端硬碟的「下載」資料夾；只連公開 IP（先查好再連，轉址也重查）、雲端硬碟留 200 MB／主機磁碟留 1 GB；清單存在 `DATA_DIR/downloads.json`，重新啟動後接續下載；測試用 SENTINEL_DL_DIR、SENTINEL_DL_LOCAL
 - Caddy：主設定用 `import /etc/caddy/sites/vps-sentinel.d/*.caddy`；雲端硬碟的轉接寫在 `cloud.caddy`
 
 ## 使用者的兩台主機

@@ -40,7 +40,7 @@ from collections import deque
 from concurrent.futures import ThreadPoolExecutor
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
-VERSION = "1.64"
+VERSION = "1.65"
 
 # ───────────────────────── 哨兵備份檔（.vsbk）─────────────────────────
 # 哨兵專用的備份格式：外面是自己的檔案格式，裡面用的是成熟、標準的加密方法（不自己發明加密）：
@@ -3461,6 +3461,10 @@ def ev_line(e):
         return ""
     if t == "重新開機失敗":
         return "❌ 重新開機失敗"
+    if t.startswith("下載失敗："):
+        return "❌ " + t
+    if t.startswith("下載好了："):
+        return "✅ " + t
     if k == "info" and "登入了主機" in t:
         return "🔑 " + t
     if k == "info" and ("配對" in t or "監看" in t):
@@ -3530,6 +3534,426 @@ def alert_loop():
         except Exception as e:  # noqa: BLE001
             log("通知檢查失敗：", e)
         time.sleep(30)
+
+
+# ───────────────────────── 遠端下載 ─────────────────────────
+# 網頁上貼一個下載連結，這台主機直接下載到雲端硬碟的「下載」資料夾；好了會記在事件紀錄（也就會傳到 Telegram）。
+# 安全：只能抓網路上公開的位址（連線前先查好 IP、只連那個 IP，不能拿來偷看這台或內部網路的東西）；
+# 雲端硬碟和主機本身的磁碟都要留空間，快滿了就停下來。哨兵重新啟動（例如更新）後會自動接著下載。
+DL_SUB = "下載"
+DL_MAX = 3                                        # 同時下載幾個，其他的排隊
+DL_LIST_MAX = 30                                  # 清單最多幾筆（太多就把最舊的已完成拿掉）
+DL_SPARE = 200 * 1024 * 1024                      # 雲端硬碟至少留這麼多
+DL_HOST_SPARE = 1024 ** 3                         # 主機的磁碟至少留這麼多（雲端硬碟的映像檔放在主機磁碟上，會跟著變大）
+DL_PART = ".下載中"                                # 還沒下載完的檔案後面加這個
+DL_FILE = os.path.join(DATA_DIR, "downloads.json")
+DL_LOCAL = os.environ.get("SENTINEL_DL_LOCAL") == "1"     # 測試用：允許下載本機的東西
+DL = []
+DL_LOCK = threading.Lock()
+
+
+class DlErr(Exception):
+    pass
+
+
+def dl_dir():
+    """下載資料夾；沒有雲端硬碟就回傳 None"""
+    test = os.environ.get("SENTINEL_DL_DIR")
+    if test:
+        os.makedirs(test, exist_ok=True)
+        return test
+    if not (CLOUD_URL and os.path.ismount(CLOUD_DIR)):
+        return None
+    d = os.path.join(CLOUD_DIR, DL_SUB)
+    if os.path.islink(d):                          # 雲端硬碟裡的東西別人改得到：被換成捷徑就拿掉重建
+        os.remove(d)
+    os.makedirs(d, mode=0o755, exist_ok=True)
+    try:
+        os.lchown(d, 1000, 1000)                   # 雲端硬碟程式用編號 1000 的使用者在跑，要是它的才刪得掉
+    except OSError:
+        pass
+    return d
+
+
+def dl_room(d):
+    """還能放多少：雲端硬碟的剩餘空間、主機磁碟的剩餘空間，取小的，各自扣掉要留的"""
+    def free(p):
+        try:
+            s = os.statvfs(p)
+            return s.f_bavail * s.f_frsize
+        except OSError:
+            return None
+    room = [x - DL_SPARE for x in [free(d)] if x is not None]
+    if os.path.isdir("/var/lib/vps-cloud") and not os.environ.get("SENTINEL_DL_DIR"):
+        h = free("/var/lib/vps-cloud")
+        if h is not None:
+            room.append(h - DL_HOST_SPARE)
+    return max(0, min(room)) if room else 0
+
+
+def dl_size(n):
+    n = float(n or 0)
+    for u in ("B", "KB", "MB", "GB"):
+        if n < 1024 or u == "GB":
+            return f"{n:.0f} {u}" if u in ("B", "KB") else f"{n:.1f} {u}"
+        n /= 1024
+    return ""
+
+
+def dl_addrs(host, port):
+    """查出網址的 IP，只留網路上公開的位址"""
+    try:
+        infos = socket.getaddrinfo(host, port, type=socket.SOCK_STREAM)
+    except (socket.gaierror, UnicodeError):
+        raise DlErr("找不到這個網址") from None
+    out = []
+    for *_, sa in infos:
+        try:
+            ip = ipaddress.ip_address(sa[0].split("%")[0])
+        except ValueError:
+            continue
+        if ip.version == 6 and ip.ipv4_mapped:
+            ip = ip.ipv4_mapped
+        if (DL_LOCAL or ip.is_global and not ip.is_multicast) and str(ip) not in out:
+            out.append(str(ip))
+    if not out:
+        raise DlErr("不能下載這台主機或內部網路的東西")
+    return out
+
+
+class _DlHTTP(http.client.HTTPConnection):
+    def __init__(self, host, port, ip, timeout):
+        super().__init__(host, port, timeout=timeout)
+        self.ip = ip
+
+    def connect(self):                             # 連到查好的那個 IP，不再重查一次（免得被換成內部位址）
+        self.sock = socket.create_connection((self.ip, self.port), self.timeout)
+
+
+class _DlHTTPS(http.client.HTTPSConnection):
+    def __init__(self, host, port, ip, timeout):
+        super().__init__(host, port, timeout=timeout, context=ssl.create_default_context())
+        self.ip = ip
+
+    def connect(self):
+        s = socket.create_connection((self.ip, self.port), self.timeout)
+        self.sock = self._context.wrap_socket(s, server_hostname=self.host)
+
+
+def dl_err(e):
+    if isinstance(e, DlErr):
+        return str(e)
+    if isinstance(e, ssl.SSLCertVerificationError):
+        return "對方的安全憑證有問題"
+    if isinstance(e, (socket.timeout, TimeoutError)):
+        return "對方太久沒回應"
+    if isinstance(e, ConnectionRefusedError):
+        return "對方拒絕連線"
+    if isinstance(e, (ConnectionError, http.client.IncompleteRead)):
+        return "連線中斷了"
+    if isinstance(e, OSError) and e.errno == 28:
+        return "空間不夠"
+    return "連不上"
+
+
+def dl_open(url, start=0):
+    """打開下載連結（自己處理轉址，每一次轉址都重新檢查位址）；start＞0 時從那裡接著下載"""
+    for _ in range(8):
+        u = urllib.parse.urlsplit(url)
+        if u.scheme not in ("http", "https") or not u.hostname:
+            raise DlErr("只能下載 http 或 https 開頭的連結")
+        try:
+            port = u.port or (443 if u.scheme == "https" else 80)
+        except ValueError:
+            raise DlErr("網址的連接埠不對") from None
+        path = urllib.parse.quote(u.path or "/", safe="/%:@!$&'()*+,;=-._~")
+        if u.query:
+            path += "?" + urllib.parse.quote(u.query, safe="/%:@!$&'()*+,;=-._~?")
+        head = {"User-Agent": f"Mozilla/5.0 (VPS Sentinel {VERSION})", "Accept": "*/*", "Accept-Encoding": "identity"}
+        if u.username:
+            head["Authorization"] = "Basic " + base64.b64encode(
+                f"{urllib.parse.unquote(u.username)}:{urllib.parse.unquote(u.password or '')}".encode()).decode()
+        if start:
+            head["Range"] = f"bytes={start}-"
+        err = None
+        for ip in dl_addrs(u.hostname, port):
+            c = (_DlHTTPS if u.scheme == "https" else _DlHTTP)(u.hostname, port, ip, 30)
+            try:
+                c.request("GET", path, headers=head)
+                r = c.getresponse()
+                break
+            except (OSError, http.client.HTTPException) as e:
+                err = e
+                c.close()
+        else:
+            raise DlErr(dl_err(err))
+        loc = r.getheader("Location")
+        if r.status in (301, 302, 303, 307, 308) and loc:
+            c.close()
+            url = urllib.parse.urljoin(url, loc.strip())
+            continue
+        if r.status >= 400:
+            c.close()
+            raise DlErr({404: "找不到這個檔案（404）", 403: "對方不讓下載（403）", 401: "要登入才能下載（401）",
+                         410: "檔案已經不在了（410）", 429: "下載太多次，對方暫時擋住了（429）"}.get(r.status, f"對方回應錯誤（{r.status}）"))
+        return r, c, url
+    raise DlErr("轉址太多次")
+
+
+def dl_name(r, url):
+    """檔名：先看對方給的，沒有就用網址最後一段"""
+    cd, n = r.getheader("Content-Disposition") or "", ""
+    m = re.search(r"filename\*\s*=\s*([\w-]*)'[^']*'([^;]+)", cd, re.I)
+    if m:
+        n = urllib.parse.unquote(m.group(2).strip().strip('"'), encoding=m.group(1) or "utf-8", errors="replace")
+    if not n:
+        m = re.search(r'filename\s*=\s*(?:"([^"]*)"|([^;]+))', cd, re.I)
+        if m:
+            n = (m.group(1) if m.group(1) is not None else m.group(2)).strip()
+            try:
+                n = n.encode("latin-1").decode("utf-8")
+            except (UnicodeError, ValueError):
+                pass
+    if not n:
+        n = urllib.parse.unquote(urllib.parse.urlsplit(url).path.rstrip("/").rsplit("/", 1)[-1])
+    return dl_safe(n)
+
+
+def dl_safe(n):
+    n = re.sub(r"[\x00-\x1f\x7f/\\]", "_", str(n or "")).strip().lstrip(".").strip()
+    while len(n.encode()) > 200:                   # 檔名太長：從中間截掉，副檔名留著
+        b, e = os.path.splitext(n)
+        n = (b[:-1] + e) if len(b) > 1 and len(e) < 20 else n[:-1]
+    if n.endswith(DL_PART):
+        n += "_"
+    return n or "下載的檔案"
+
+
+def dl_unique(d, n, me):
+    """同名的檔案已經在了（或別的下載正要用這個名稱）就加上 (2)、(3)…"""
+    b, e = os.path.splitext(n)
+    taken = {j["name"] for j in DL if j is not me and j["st"] in ("wait", "run")}
+    i, cand = 1, n
+    while cand in taken or os.path.lexists(os.path.join(d, cand)) or os.path.lexists(os.path.join(d, cand + DL_PART)):
+        i += 1
+        cand = f"{b} ({i}){e}"
+    return cand
+
+
+def dl_save():
+    """清單存檔（不存進度數字，只存要接著下載需要的）"""
+    with DL_LOCK:
+        keep = [{k: j.get(k) for k in ("id", "url", "name", "st", "done", "total", "err", "t", "t_end")} for j in DL]
+    try:
+        tmp = DL_FILE + ".tmp"
+        with open(os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600), "w") as f:
+            json.dump(keep, f, ensure_ascii=False)
+        os.replace(tmp, DL_FILE)
+    except OSError:
+        pass
+
+
+def dl_load():
+    """啟動時讀回清單；之前沒下載完的接著下載"""
+    try:
+        with open(DL_FILE, encoding="utf-8") as f:
+            items = json.load(f)
+    except (OSError, ValueError):
+        items = []
+    with DL_LOCK:
+        for x in items if isinstance(items, list) else []:
+            if isinstance(x, dict) and isinstance(x.get("url"), str) and x.get("id"):
+                j = {**x, "bps": 0, "stop": False}
+                if j.get("st") == "run":
+                    j["st"] = "wait"
+                DL.append(j)
+    dl_kick()
+
+
+def dl_kick():
+    """有空位就開始排隊中的下載"""
+    with DL_LOCK:
+        run = sum(j["st"] == "run" for j in DL)
+        for j in DL:
+            if run >= DL_MAX:
+                break
+            if j["st"] == "wait":
+                j["st"] = "run"
+                run += 1
+                threading.Thread(target=dl_run, args=(j,), daemon=True).start()
+
+
+def dl_run(j):
+    d, part, c = None, None, None
+    try:
+        d = dl_dir()
+        if not d:
+            raise DlErr("這台沒有雲端硬碟")
+        start = 0
+        if j.get("name") and os.path.isfile(os.path.join(d, j["name"] + DL_PART)):
+            start = os.path.getsize(os.path.join(d, j["name"] + DL_PART))   # 上次下載到一半：接著下載
+        r, c, final = dl_open(j["url"], start)
+        if start and r.status != 206:                # 對方不支援接續：從頭來
+            start = 0
+        if not j.get("name") or not start:
+            j["name"] = dl_unique(d, j.get("name") or dl_name(r, final), j)
+        part = os.path.join(d, j["name"] + DL_PART)
+        try:
+            rest = int(r.getheader("Content-Length") or 0)
+        except ValueError:
+            rest = 0
+        j["total"], j["done"] = (start + rest if rest else 0), start
+        dl_save()
+        room = dl_room(d)
+        if rest and rest > room:
+            raise DlErr(f"空間不夠（要 {dl_size(rest)}，只剩 {dl_size(room)}）")
+        if os.path.islink(part):
+            os.remove(part)
+        with open(part, "ab" if start else "wb") as f:
+            if d != os.environ.get("SENTINEL_DL_DIR"):
+                try:
+                    os.fchown(f.fileno(), 1000, 1000)
+                except OSError:
+                    pass
+            t0, d0, checked = time.monotonic(), j["done"], j["done"]
+            while True:
+                if j["stop"]:
+                    raise DlErr("已取消")
+                buf = r.read1(1 << 20) if hasattr(r, "read1") else r.read(1 << 16)
+                if not buf:
+                    break
+                f.write(buf)
+                j["done"] += len(buf)
+                now = time.monotonic()
+                if now - t0 >= 1:
+                    v = (j["done"] - d0) / (now - t0)
+                    j["bps"] = v if not j.get("bps") else j["bps"] * .6 + v * .4
+                    t0, d0 = now, j["done"]
+                if j["done"] - checked > 64 * 1024 * 1024:     # 每 64 MB 看一次還有沒有空間（可能同時在下載好幾個）
+                    checked = j["done"]
+                    if dl_room(d) <= 0:
+                        raise DlErr("空間不夠，先停下來了")
+        if rest and j["done"] < j["total"]:
+            raise DlErr("連線中斷了")
+        dst = os.path.join(d, dl_unique(d, j["name"], j) if os.path.lexists(os.path.join(d, j["name"])) else j["name"])
+        os.replace(part, dst)
+        j.update(name=os.path.basename(dst), st="ok", total=j["done"], t_end=time.time(), err="")
+        COL.add_event("info", f"下載好了：{j['name']}（{dl_size(j['done'])}）")
+        log(f"下載完成：{j['name']}")
+    except Exception as e:  # noqa: BLE001
+        msg = dl_err(e)
+        j.update(st="bad", err=msg, t_end=time.time())
+        if part and os.path.isfile(part) and (j["stop"] or msg.startswith("空間不夠")):
+            try:
+                os.remove(part)
+            except OSError:
+                pass
+        if not j["stop"]:
+            COL.add_event("bad", f"下載失敗：{dl_label(j)}，{msg}")
+            log(f"下載失敗：{j['url'][:100]}：{e!r}")
+    finally:
+        if c:
+            c.close()
+        j["bps"] = 0
+        if j["stop"]:                              # 取消的就不留在清單上
+            with DL_LOCK:
+                if j in DL:
+                    DL.remove(j)
+        dl_save()
+        dl_kick()
+
+
+def dl_label(j):
+    """還不知道檔名時，用網址最後一段（沒有就用網域）"""
+    u = urllib.parse.urlsplit(j["url"])
+    if j.get("name"):
+        return j["name"]
+    if u.path.strip("/"):
+        return dl_safe(urllib.parse.unquote(u.path.rstrip("/").rsplit("/", 1)[-1]))
+    return u.hostname or "檔案"
+
+
+def dl_public(j):
+    return {**{k: j.get(k) for k in ("id", "url", "name", "st", "done", "total", "bps", "err", "t", "t_end")},
+            "label": dl_label(j)}
+
+
+def dl_status():
+    d = None
+    try:
+        d = dl_dir()
+    except OSError:
+        pass
+    with DL_LOCK:
+        items = [dl_public(j) for j in reversed(DL)]
+    return {"ok": True, "list": items, "cloud": bool(d), "room": dl_room(d) if d else 0, "folder": DL_SUB}
+
+
+def dl_add(url):
+    url = str(url or "").strip()
+    if not re.match(r"(?i)https?://", url):
+        return False, "只能下載 http 或 https 開頭的連結"
+    if len(url) > 4000 or re.search(r"[\x00-\x20\x7f]", url):
+        return False, "這個連結不對"
+    try:
+        d = dl_dir()
+    except OSError as e:
+        return False, f"沒辦法建立下載資料夾：{e}"
+    if not d:
+        return False, "這台沒有雲端硬碟"
+    try:
+        dl_addrs(urllib.parse.urlsplit(url).hostname or "", 443)
+    except DlErr as e:
+        return False, str(e)
+    with DL_LOCK:
+        if sum(j["st"] in ("wait", "run") for j in DL) >= DL_LIST_MAX:
+            return False, "排隊的太多了，等一下再加"
+        if any(j["url"] == url and j["st"] in ("wait", "run") for j in DL):
+            return False, "這個連結已經在下載了"
+        DL.append({"id": secrets.token_hex(6), "url": url, "name": "", "st": "wait", "done": 0, "total": 0,
+                   "bps": 0, "err": "", "t": time.time(), "t_end": 0, "stop": False})
+        while len(DL) > DL_LIST_MAX:              # 太多了：拿掉最舊的已結束的
+            old = next((x for x in DL if x["st"] in ("ok", "bad")), None)
+            if not old:
+                break
+            DL.remove(old)
+    dl_save()
+    dl_kick()
+    return True, "開始下載"
+
+
+def dl_stop(jid):
+    """下載中＝取消；已結束＝從清單拿掉（檔案不會刪）"""
+    with DL_LOCK:
+        j = next((x for x in DL if x["id"] == jid), None)
+        if not j:
+            return False, "找不到這筆下載"
+        if j["st"] == "run":
+            j["stop"] = True
+            return True, "已取消"
+        if j["st"] == "wait":
+            j.update(st="bad", err="已取消", stop=True, t_end=time.time())
+        DL.remove(j)
+    if j.get("name") and j["st"] != "ok":         # 排隊中或失敗的：下載到一半的檔案也清掉
+        try:
+            d = dl_dir()
+            if d and os.path.isfile(os.path.join(d, j["name"] + DL_PART)):
+                os.remove(os.path.join(d, j["name"] + DL_PART))
+        except OSError:
+            pass
+    dl_save()
+    return True, "已移除"
+
+
+def dl_retry(jid):
+    with DL_LOCK:
+        j = next((x for x in DL if x["id"] == jid), None)
+        if not j or j["st"] != "bad":
+            return False, "找不到這筆下載"
+        j.update(st="wait", err="", stop=False, bps=0, t=time.time(), t_end=0)
+    dl_save()
+    dl_kick()
+    return True, "重新下載"
 
 
 # ───────────────────────── 每日備份 ─────────────────────────
@@ -4733,7 +5157,7 @@ class Handler(BaseHTTPRequestHandler):
         u = urllib.parse.urlsplit(self.path)
         if u.path not in ("/api/update", "/api/rename", "/api/traffic", "/api/telegram", "/api/links", "/api/self", "/api/cloud-login", "/api/peer",
                           "/api/token", "/api/passkey", "/api/passkey-login", "/api/pin", "/api/pin-login", "/api/backup", "/api/backup-store",
-                          "/api/restore-upload", "/api/restore-run", "/api/pair", "/api/pair-admin", "/api/reboot", "/api/keepalive"):
+                          "/api/restore-upload", "/api/restore-run", "/api/pair", "/api/pair-admin", "/api/reboot", "/api/keepalive", "/api/download"):
             return self.send(404, '{"error":"找不到"}')
         if u.path in ("/api/restore-upload", "/api/restore-run"):   # 網頁還原：要有安裝時給的代碼（或已經登入）
             if not (self.authed() or self.restore_code_ok()):
@@ -4891,6 +5315,14 @@ class Handler(BaseHTTPRequestHandler):
                 ok, msg = set_backup(bool(d.get("on")))
                 return self.send(200 if ok else 500, json.dumps({"ok": ok, "message": msg}, ensure_ascii=False))
             return self.send(400, '{"ok":false}')
+        if u.path == "/api/download":                # 遠端下載：加入、取消／移除、重試、看清單
+            d = self.jbody(body)
+            act = d.get("action")
+            if act in ("add", "stop", "retry"):
+                ok, msg = (dl_add(d.get("url")) if act == "add" else
+                           dl_stop(str(d.get("id") or "")) if act == "stop" else dl_retry(str(d.get("id") or "")))
+                return self.send(200 if ok else 400, json.dumps({**dl_status(), "ok": ok, "message": msg}, ensure_ascii=False))
+            return self.send(200, json.dumps(dl_status(), ensure_ascii=False))
         if u.path == "/api/keepalive":               # 開關 Oracle 防回收
             ok, msg = set_keepalive(bool(self.jbody(body).get("on")))
             return self.send(200 if ok else 500, json.dumps({"ok": ok, "message": msg}, ensure_ascii=False))
@@ -4986,6 +5418,7 @@ def main():
     threading.Thread(target=COL.loop, daemon=True).start()
     threading.Thread(target=keep_loop, daemon=True).start()       # 只有 Oracle 免費主機才會真的做事
     threading.Thread(target=alert_loop, daemon=True).start()      # 沒設定時也會跑，網頁上一設定好就開始通知
+    dl_load()                                                     # 上次沒下載完的接著下載
     srv = ThreadingHTTPServer((BIND, PORT), Handler)
     log(f"VPS 哨兵 {VERSION} 已啟動：http://{BIND}:{PORT}  名稱={NAME}  其他主機={len(PEERS)} 台  "
         f"Telegram={'開' if TG_BOT and TG_CHAT else '關'}")

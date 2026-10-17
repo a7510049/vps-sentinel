@@ -64,6 +64,7 @@ const P = {
   ok:'<circle cx="12" cy="12" r="9.5"/><path d="m8.5 12 2.5 2.5 4.5-5"/>',
   upd:'<path d="M21 12a9 9 0 1 1-9-9c2.52 0 4.93 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/>',
   shield:'<path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="m8.5 12 2.5 2.5 4.5-5"/>',
+  dl:'<path d="M12 3v12"/><path d="m7 10 5 5 5-5"/><path d="M5 21h14"/>',
   power:'<path d="M12 2v10"/><path d="M18.4 6.6a9 9 0 1 1-12.77.04"/>',
   off:'<path d="M12 20h.01M8.5 16.43a5 5 0 0 1 7 0M2 8.82a15 15 0 0 1 4.17-2.65M10.66 5c4.01-.36 8.14.9 11.34 3.76M16.85 11.25a10 10 0 0 1 2.22 1.68M5 13a10 10 0 0 1 5.24-2.76M2 2l20 20"/>',
 };
@@ -476,7 +477,7 @@ const COL = {cpu:"var(--c-cpu)", mem:"var(--c-mem)", rx:"var(--c-rx)", tx:"var(-
 /* 概念 → [顏色樣式, 圖示] */
 const ICO = {cpu:["cpu","cpu"], mem:["mem","mem"], disk:["disk","disk"], load:["load","gauge"], down:["down","down"], up:["up","up"],
   net:["net","net"], trend:["trend","trend"], month:["month","month"], box:["box","box"], bell:["bell","bell"], info:["info","info"],
-  flag:["flag","flag"], keep:["keep","shield"], key:["key","key"], finger:["finger","finger"], pin:["pin","pin"], link:["link","link"], archive:["archive","archive"], sun:["sun","sun"], quote:["quote","quote"]};
+  flag:["flag","flag"], keep:["keep","shield"], key:["key","key"], finger:["finger","finger"], pin:["pin","pin"], link:["link","link"], archive:["archive","archive"], sun:["sun","sun"], quote:["quote","quote"], dl:["dl","dl"]};
 const IC = (k, cls="sm") => `<span class="ico ${cls} ${ICO[k][0]}">${I(ICO[k][1])}</span>`;
 
 /* ═════════ 共用：四格圓環（處理器、記憶體、磁碟、負載） ═════════ */
@@ -1268,7 +1269,8 @@ function moreMenu(btn, s){
   const node = esc(s.node || ""), name = esc(s.name);
   const it = (attr, icon, label, cls="") => `<button class="${cls}" ${attr}="${node}" data-name="${name}">${I(icon)}<span>${label}</span></button>`;
   const m = document.createElement("div"); m.className = "lmenu hmenu glass pop";
-  m.innerHTML = (s.online ? it("data-rename", "edit", "編輯名稱與連結") + it("data-reboot", "power", "重新開機", "warn") : "")
+  m.innerHTML = (s.online ? it("data-rename", "edit", "編輯名稱與連結") + (s.cloud ? it("data-dl", "dl", "遠端下載") : "")
+    + it("data-reboot", "power", "重新開機", "warn") : "")
     + (s.node ? it("data-rmhost", "trash", "移除主機", "bad") : "");
   document.body.appendChild(m);
   placeMenu(m, btn, r => r.left - 6);           // 從 ⋯ 往右下展開，不會蓋住主機名稱
@@ -1832,6 +1834,78 @@ function rebootModal(node, name){
     if (e.target.closest("[data-go]") && !busy) asked ? boot() : ask();
   });
 }
+/* 遠端下載：貼上連結，主機直接下載到它的雲端硬碟「下載」資料夾；開著時每秒更新進度（只改有變的地方，不整塊重畫） */
+function dlModal(node, name){
+  const v = document.createElement("div"); v.className = "veil";
+  v.innerHTML = `<div class="dialog glass pop dld">${IC("dl","big")}<h3>遠端下載</h3>
+    <p>存到「${esc(name)}」雲端硬碟的「下載」資料夾</p>
+    <div class="form"><div class="dlnew"><input class="field" data-k="url" type="url" inputmode="url" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="貼上下載連結"><button class="ubtn" data-go>下載</button></div>
+      <div class="msg"></div><div class="dllist"></div><small class="dlroom"></small></div>
+    <div class="btns one"><button class="ubtn ghost" data-r="0">關閉</button></div></div>`;
+  $("#layer").appendChild(v);
+  const inp = v.querySelector("input"), msg = v.querySelector(".msg"), go = v.querySelector("[data-go]"), list = v.querySelector(".dllist"), room = v.querySelector(".dlroom");
+  const call = body => pkCall("/api/download" + (node ? "?node=" + encodeURIComponent(node) : ""), body, 1).catch(err => ({message:err.message}));
+  const say = (t, bad) => { msg.className = "msg" + (bad ? " bad" : ""); msg.textContent = t || ""; };
+  const left = s => s < 60 ? `${Math.max(1, Math.round(s))} 秒` : s < 3600 ? `${Math.round(s / 60)} 分鐘` : `${(s / 3600).toFixed(1)} 小時`;
+  const stOf = j => j.st === "wait" ? "排隊中" : j.st === "ok" ? `下載好了・${size(j.total)}` : j.st === "bad" ? j.err || "沒有成功"
+    : j.total ? `${Math.floor(j.done / j.total * 100)}%${j.bps ? `・${rate(j.bps)}・剩 ${left((j.total - j.done) / j.bps)}` : `・共 ${size(j.total)}`}`
+    : `${size(j.done)}${j.bps ? `・${rate(j.bps)}` : ""}`;
+  let timer = 0, busy = false;
+  const draw = d => {
+    if (!d || !Array.isArray(d.list)) return;
+    if (!d.cloud) { inp.disabled = go.disabled = true; say("這台沒有雲端硬碟", 1); }
+    room.textContent = d.cloud ? `還能放 ${size(d.room)}` : "";
+    const seen = new Set();
+    d.list.forEach((j, i) => {
+      seen.add(j.id);
+      let r = list.querySelector(`[data-id="${CSS.escape(j.id)}"]`);
+      if (!r) {
+        r = document.createElement("div"); r.className = "dlrow"; r.dataset.id = j.id;
+        r.innerHTML = `${I("dl")}<span><b></b><small></small><div class="track"><div class="fill"></div></div></span>
+          <button type="button" class="iconbtn" data-retry title="重新下載">${I("upd")}</button><button type="button" class="iconbtn" data-del>${I("x")}</button>`;
+        if (canAnim()) r.animate([{opacity:0, transform:"translateY(-4px)"}, {opacity:1, transform:"none"}], {duration:T.fast, easing:EASE});
+      }
+      if (list.children[i] !== r) list.insertBefore(r, list.children[i] || null);
+      const set = (el, t) => { if (el.textContent !== t) el.textContent = t; };
+      set(r.querySelector("b"), j.name || j.label || "檔案");
+      r.querySelector("b").title = j.url || "";
+      set(r.querySelector("small"), stOf(j));
+      r.className = "dlrow " + j.st;
+      const tr = r.querySelector(".track"), run = j.st === "run" || j.st === "wait";
+      tr.hidden = !run;
+      if (run) r.querySelector(".fill").style.width = (j.total ? Math.max(1, j.done / j.total * 100) : 0) + "%";
+      r.querySelector("[data-retry]").hidden = j.st !== "bad";
+      r.querySelector("[data-del]").title = run ? "取消下載" : "從清單拿掉（檔案不會刪）";
+    });
+    [...list.children].forEach(r => { if (!seen.has(r.dataset.id)) r.remove(); });
+    clearTimeout(timer);
+    if (!v._d) timer = setTimeout(load, d.list.some(j => j.st === "run" || j.st === "wait") ? 1000 : 5000);
+  };
+  const load = async () => { const d = await call({action:"list"}); if (!v._d) { if (d.list) draw(d); else { say(d.message || d.error || "讀取失敗", 1); timer = setTimeout(load, 5000); } } };
+  const done = () => { if (v._d) return; v._d = 1; clearTimeout(timer); v.classList.add("closing"); setTimeout(() => v.remove(), 360); };
+  v._esc = done;
+  const add = async () => {
+    const url = inp.value.trim();
+    if (!url) return inp.focus();
+    busy = true; go.disabled = true; say("");
+    const d = await call({action:"add", url});
+    busy = false; go.disabled = false;
+    if (d.ok) { inp.value = ""; } else say(d.message || "沒有成功", 1);
+    draw(d);
+  };
+  inp.addEventListener("keydown", e => { if (e.key === "Enter" && !busy) { e.preventDefault(); add(); } });
+  v.addEventListener("click", async e => {
+    if (e.target === v || e.target.closest("[data-r]")) return done();
+    if (e.target.closest("[data-go]") && !busy) return add();
+    const row = e.target.closest(".dlrow"), del = e.target.closest("[data-del]"), re = e.target.closest("[data-retry]");
+    if (!row || !(del || re)) return;
+    const d = await call({action: re ? "retry" : "stop", id: row.dataset.id});
+    if (!d.ok) say(d.message || "沒有成功", 1);
+    draw(d);
+  });
+  load();
+  if (!matchMedia("(hover:none)").matches) setTimeout(() => inp.focus(), 60);   // 手機不自動跳出鍵盤
+}
 async function addHostModal(){
   const v = document.createElement("div"); v.className = "veil";
   v.innerHTML = `<div class="dialog glass pop">${IC("link","big")}<h3>新增主機</h3>
@@ -2250,6 +2324,8 @@ document.addEventListener("click", async e => {
   const mo = t.closest("[data-more]");
   if (mo) { e.stopPropagation(); const s = LIST.find(x => keyOf(x) === mo.dataset.more); if (window._menu) return closeMenu(); return s && moreMenu(mo, s); }
   if (window._menu && !t.closest(".lmenu")) closeMenu();
+  const dl = t.closest("[data-dl]");
+  if (dl) { e.stopPropagation(); return dlModal(dl.dataset.dl, dl.dataset.name); }
   const rb = t.closest("[data-reboot]");
   if (rb) { e.stopPropagation(); return rebootModal(rb.dataset.reboot, rb.dataset.name); }
   const rm = t.closest("[data-rmhost]");
