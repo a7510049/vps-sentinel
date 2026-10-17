@@ -182,6 +182,15 @@ class PasskeyFlowTest(Server):
         self.assertEqual(code, 200, d)
         self.assertEqual(d["token"], TOKEN)
 
+        # 有人一直要題目：自己拿到的題目照樣能用
+        _, mine = self.call("/api/passkey-login", {"action": "begin"})
+        for _ in range(250):
+            self.call("/api/passkey-login", {"action": "begin"})
+        self.assertEqual(self.call("/api/passkey-login", phone.get(mine["challenge"]))[0], 200)
+        # 登記用的題目不能拿來登入
+        _, reg = self.call("/api/passkey", {"action": "begin"}, TOKEN)
+        self.assertEqual(self.call("/api/passkey-login", phone.get(reg["challenge"]))[0], 401)
+
         # 同一個題目不能用兩次
         _, b = self.call("/api/passkey-login", {"action": "begin"})
         req = phone.get(b["challenge"])
