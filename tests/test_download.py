@@ -8,10 +8,29 @@ import time
 import unittest
 
 DATA = os.urandom(300_000)
+BIG = os.urandom(20 * 1024 * 1024)
+RANGES = []
 
 
 class Files(http.server.BaseHTTPRequestHandler):
     def do_GET(self):
+        if self.path.startswith("/big"):               # 支援分段的大檔案
+            rg = self.headers.get("Range")
+            a, b = 0, len(BIG) - 1
+            if rg:
+                x, y = rg.split("=")[1].split("-")
+                a, b = int(x), int(y) if y else len(BIG) - 1
+                RANGES.append((a, b))
+            body = BIG[a:b + 1]
+            self.send_response(206 if rg else 200)
+            self.send_header("Accept-Ranges", "bytes")
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            try:
+                self.wfile.write(body)
+            except OSError:
+                pass
+            return
         if self.path.startswith("/go"):
             self.send_response(302)
             self.send_header("Location", "/file.bin")
@@ -97,6 +116,40 @@ class Download(unittest.TestCase):
         self.assertEqual(self.wait(url)["st"], "ok")
         with open(os.path.join(self.dir, "resume.bin"), "rb") as f:
             self.assertEqual(f.read(), DATA)
+
+    def test_segmented(self):
+        """大檔案分成 4 段同時下載，結果要跟原檔一模一樣"""
+        RANGES.clear()
+        url = self.base + "/big.bin"
+        self.S.dl_add(url)
+        j = self.wait(url)
+        self.assertEqual(j["st"], "ok", j["err"])
+        self.assertEqual(len(RANGES), 3)                   # 第一段用第一條連線，另外 3 段各開一條
+        with open(os.path.join(self.dir, "big.bin"), "rb") as f:
+            self.assertEqual(f.read(), BIG)
+
+    def test_segmented_resume(self):
+        """分段下載到一半（哨兵重新啟動）：每段從斷掉的地方接著下載"""
+        n = len(BIG)
+        step = n // 4
+        segs = [[i * step, n if i == 3 else (i + 1) * step, 0] for i in range(4)]
+        part = os.path.join(self.dir, "half.bin" + self.S.DL_PART)
+        with open(part, "wb") as f:
+            f.truncate(n)
+            for s in segs:
+                s[2] = 1000 * (segs.index(s) + 1)
+                f.seek(s[0])
+                f.write(BIG[s[0]:s[0] + s[2]])
+        RANGES.clear()
+        want = [s[0] + s[2] for s in segs]
+        url = self.base + "/big.bin?resume"
+        self.S.DL.append({"id": "s1", "url": url, "name": "half.bin", "st": "wait", "done": 0, "total": n, "segs": segs,
+                          "bps": 0, "err": "", "t": time.time(), "t_end": 0, "stop": False})
+        self.S.dl_kick()
+        self.assertEqual(self.wait(url)["st"], "ok")
+        self.assertEqual(sorted(a for a, _ in RANGES), want)
+        with open(os.path.join(self.dir, "half.bin"), "rb") as f:
+            self.assertEqual(f.read(), BIG)
 
     def test_errors(self):
         self.S.dl_add(self.base + "/missing")

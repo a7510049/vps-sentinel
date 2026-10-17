@@ -40,7 +40,7 @@ from collections import deque
 from concurrent.futures import ThreadPoolExecutor
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
-VERSION = "1.65"
+VERSION = "1.66"
 
 # ───────────────────────── 哨兵備份檔（.vsbk）─────────────────────────
 # 哨兵專用的備份格式：外面是自己的檔案格式，裡面用的是成熟、標準的加密方法（不自己發明加密）：
@@ -3545,6 +3545,8 @@ DL_MAX = 3                                        # 同時下載幾個，其他�
 DL_LIST_MAX = 30                                  # 清單最多幾筆（太多就把最舊的已完成拿掉）
 DL_SPARE = 200 * 1024 * 1024                      # 雲端硬碟至少留這麼多
 DL_HOST_SPARE = 1024 ** 3                         # 主機的磁碟至少留這麼多（雲端硬碟的映像檔放在主機磁碟上，會跟著變大）
+DL_SEGS = 4                                       # 檔案夠大、對方支援時，分成幾段同時下載（很多網站會限制每條連線的速度）
+DL_SEG_MIN = 16 * 1024 * 1024                     # 比這個小就不分段
 DL_PART = ".下載中"                                # 還沒下載完的檔案後面加這個
 DL_FILE = os.path.join(DATA_DIR, "downloads.json")
 DL_LOCAL = os.environ.get("SENTINEL_DL_LOCAL") == "1"     # 測試用：允許下載本機的東西
@@ -3656,8 +3658,8 @@ def dl_err(e):
     return "連不上"
 
 
-def dl_open(url, start=0):
-    """打開下載連結（自己處理轉址，每一次轉址都重新檢查位址）；start＞0 時從那裡接著下載"""
+def dl_open(url, start=0, end=None):
+    """打開下載連結（自己處理轉址，每一次轉址都重新檢查位址）；start＞0 時從那裡接著下載，end＝只要到哪裡（分段下載用）"""
     for _ in range(8):
         u = urllib.parse.urlsplit(url)
         if u.scheme not in ("http", "https") or not u.hostname:
@@ -3673,8 +3675,8 @@ def dl_open(url, start=0):
         if u.username:
             head["Authorization"] = "Basic " + base64.b64encode(
                 f"{urllib.parse.unquote(u.username)}:{urllib.parse.unquote(u.password or '')}".encode()).decode()
-        if start:
-            head["Range"] = f"bytes={start}-"
+        if start or end is not None:
+            head["Range"] = f"bytes={start}-{'' if end is None else end}"
         err = None
         for ip in dl_addrs(u.hostname, port):
             c = (_DlHTTPS if u.scheme == "https" else _DlHTTP)(u.hostname, port, ip, 30)
@@ -3743,7 +3745,7 @@ def dl_unique(d, n, me):
 def dl_save():
     """清單存檔（不存進度數字，只存要接著下載需要的）"""
     with DL_LOCK:
-        keep = [{k: j.get(k) for k in ("id", "url", "name", "st", "done", "total", "err", "t", "t_end")} for j in DL]
+        keep = [{k: j.get(k) for k in ("id", "url", "name", "st", "done", "total", "err", "t", "t_end", "segs")} for j in DL]
     try:
         tmp = DL_FILE + ".tmp"
         with open(os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600), "w") as f:
@@ -3783,61 +3785,125 @@ def dl_kick():
                 threading.Thread(target=dl_run, args=(j,), daemon=True).start()
 
 
+def dl_seg(j, seg, fd, errs, first=None):
+    """下載其中一段 [開始, 結束, 已下載]；斷了自己重連（最多再試 3 次）"""
+    tries = 0
+    while seg[2] < seg[1] - seg[0] and not j["stop"] and not errs:
+        r, c = first or (None, None)
+        first = None
+        try:
+            if not r:
+                r, c, _ = dl_open(j["url"], seg[0] + seg[2], seg[1] - 1)
+                if r.status != 206:
+                    raise DlErr("對方不支援分段下載")
+            while seg[2] < seg[1] - seg[0]:
+                if j["stop"] or errs:
+                    return
+                buf = r.read1(min(1 << 20, seg[1] - seg[0] - seg[2]))
+                if not buf:
+                    raise ConnectionError("連線中斷了")
+                os.pwrite(fd, buf, seg[0] + seg[2])
+                seg[2] += len(buf)
+        except Exception as e:  # noqa: BLE001
+            tries += 1
+            if tries > 3 or isinstance(e, OSError) and e.errno == 28:
+                errs.append(e)
+                return
+            time.sleep(2 * tries)
+        finally:
+            if c:
+                c.close()
+
+
+def dl_multi(j, d, part, first=None):
+    """分段同時下載：每段一條連線，各自寫進檔案的對應位置"""
+    fd = os.open(part, os.O_RDWR | os.O_CREAT, 0o644)
+    try:
+        if d != os.environ.get("SENTINEL_DL_DIR"):
+            try:
+                os.fchown(fd, 1000, 1000)
+            except OSError:
+                pass
+        if first:
+            os.ftruncate(fd, j["total"])
+        errs, ths = [], []
+        for i, seg in enumerate(j["segs"]):
+            if seg[2] < seg[1] - seg[0]:
+                t = threading.Thread(target=dl_seg, args=(j, seg, fd, errs, first if i == 0 else None), daemon=True)
+                t.start()
+                ths.append(t)
+        t0, d0, saved = time.monotonic(), sum(s[2] for s in j["segs"]), time.monotonic()
+        checked = d0
+        while any(t.is_alive() for t in ths):
+            time.sleep(.5)
+            j["done"] = sum(s[2] for s in j["segs"])
+            now = time.monotonic()
+            if now - t0 >= 1:
+                v = (j["done"] - d0) / (now - t0)
+                j["bps"] = v if not j.get("bps") else j["bps"] * .6 + v * .4
+                t0, d0 = now, j["done"]
+            if now - saved > 10:                   # 存一下進度，哨兵重新啟動後每段從斷掉的地方接著
+                saved = now
+                dl_save()
+            if j["done"] - checked > 64 * 1024 * 1024:
+                checked = j["done"]
+                if dl_room(d) <= 0 and not errs:
+                    errs.append(DlErr("空間不夠，先停下來了"))
+        for t in ths:
+            t.join()
+        j["done"] = sum(s[2] for s in j["segs"])
+        if j["stop"]:
+            raise DlErr("已取消")
+        if errs:
+            raise errs[0]
+    finally:
+        os.close(fd)
+
+
 def dl_run(j):
     d, part, c = None, None, None
     try:
         d = dl_dir()
         if not d:
             raise DlErr("這台沒有雲端硬碟")
-        start = 0
-        if j.get("name") and os.path.isfile(os.path.join(d, j["name"] + DL_PART)):
-            start = os.path.getsize(os.path.join(d, j["name"] + DL_PART))   # 上次下載到一半：接著下載
-        r, c, final = dl_open(j["url"], start)
-        if start and r.status != 206:                # 對方不支援接續：從頭來
-            start = 0
-        if not j.get("name") or not start:
-            j["name"] = dl_unique(d, j.get("name") or dl_name(r, final), j)
-        part = os.path.join(d, j["name"] + DL_PART)
-        try:
-            rest = int(r.getheader("Content-Length") or 0)
-        except ValueError:
-            rest = 0
-        j["total"], j["done"] = (start + rest if rest else 0), start
-        dl_save()
-        room = dl_room(d)
-        if rest and rest > room:
-            raise DlErr(f"空間不夠（要 {dl_size(rest)}，只剩 {dl_size(room)}）")
-        if os.path.islink(part):
-            os.remove(part)
-        with open(part, "ab" if start else "wb") as f:
-            if d != os.environ.get("SENTINEL_DL_DIR"):
-                try:
-                    os.fchown(f.fileno(), 1000, 1000)
-                except OSError:
-                    pass
-            t0, d0, checked = time.monotonic(), j["done"], j["done"]
-            while True:
-                if j["stop"]:
-                    raise DlErr("已取消")
-                buf = r.read1(1 << 20) if hasattr(r, "read1") else r.read(1 << 16)
-                if not buf:
-                    break
-                f.write(buf)
-                j["done"] += len(buf)
-                now = time.monotonic()
-                if now - t0 >= 1:
-                    v = (j["done"] - d0) / (now - t0)
-                    j["bps"] = v if not j.get("bps") else j["bps"] * .6 + v * .4
-                    t0, d0 = now, j["done"]
-                if j["done"] - checked > 64 * 1024 * 1024:     # 每 64 MB 看一次還有沒有空間（可能同時在下載好幾個）
-                    checked = j["done"]
-                    if dl_room(d) <= 0:
-                        raise DlErr("空間不夠，先停下來了")
-        if rest and j["done"] < j["total"]:
+        old = os.path.join(d, j["name"] + DL_PART) if j.get("name") else None
+        if j.get("segs") and old and os.path.isfile(old) and os.path.getsize(old) == j.get("total"):
+            part = old                                 # 上次分段下載到一半：每段接著下載
+            dl_multi(j, d, part)
+        else:
+            if j.get("segs") and old and os.path.isfile(old):
+                os.remove(old)                         # 分段的進度對不上：從頭來
+            j["segs"] = None
+            start = os.path.getsize(old) if old and os.path.isfile(old) else 0   # 上次下載到一半：接著下載
+            r, c, final = dl_open(j["url"], start)
+            if start and r.status != 206:              # 對方不支援接續：從頭來
+                start = 0
+            if not j.get("name") or not start:
+                j["name"] = dl_unique(d, j.get("name") or dl_name(r, final), j)
+            part = os.path.join(d, j["name"] + DL_PART)
+            try:
+                rest = int(r.getheader("Content-Length") or 0)
+            except ValueError:
+                rest = 0
+            j["total"], j["done"] = (start + rest if rest else 0), start
+            room = dl_room(d)
+            if rest and rest > room:
+                raise DlErr(f"空間不夠（要 {dl_size(rest)}，只剩 {dl_size(room)}）")
+            if os.path.islink(part):
+                os.remove(part)
+            if not start and r.status == 200 and rest >= DL_SEG_MIN and (r.getheader("Accept-Ranges") or "").lower() == "bytes":
+                step = -(-rest // DL_SEGS)             # 檔案夠大、對方支援分段：分成幾段同時下載
+                j["segs"] = [[i * step, min(rest, (i + 1) * step), 0] for i in range(DL_SEGS) if i * step < rest]
+                dl_save()
+                dl_multi(j, d, part, (r, c))
+            else:
+                dl_save()
+                dl_one(j, d, part, r, start, rest)
+        if j["total"] and j["done"] < j["total"]:
             raise DlErr("連線中斷了")
         dst = os.path.join(d, dl_unique(d, j["name"], j) if os.path.lexists(os.path.join(d, j["name"])) else j["name"])
         os.replace(part, dst)
-        j.update(name=os.path.basename(dst), st="ok", total=j["done"], t_end=time.time(), err="")
+        j.update(name=os.path.basename(dst), st="ok", total=j["done"], t_end=time.time(), err="", segs=None)
         COL.add_event("info", f"下載好了：{j['name']}（{dl_size(j['done'])}）")
         log(f"下載完成：{j['name']}")
     except Exception as e:  # noqa: BLE001
@@ -3848,6 +3914,7 @@ def dl_run(j):
                 os.remove(part)
             except OSError:
                 pass
+            j["segs"] = None
         if not j["stop"]:
             COL.add_event("bad", f"下載失敗：{dl_label(j)}，{msg}")
             log(f"下載失敗：{j['url'][:100]}：{e!r}")
@@ -3861,6 +3928,34 @@ def dl_run(j):
                     DL.remove(j)
         dl_save()
         dl_kick()
+
+
+def dl_one(j, d, part, r, start, rest):
+    """一條連線從頭（或從 start）下載到完"""
+    with open(part, "ab" if start else "wb") as f:
+        if d != os.environ.get("SENTINEL_DL_DIR"):
+            try:
+                os.fchown(f.fileno(), 1000, 1000)
+            except OSError:
+                pass
+        t0, d0, checked = time.monotonic(), j["done"], j["done"]
+        while True:
+            if j["stop"]:
+                raise DlErr("已取消")
+            buf = r.read1(1 << 20) if hasattr(r, "read1") else r.read(1 << 16)
+            if not buf:
+                break
+            f.write(buf)
+            j["done"] += len(buf)
+            now = time.monotonic()
+            if now - t0 >= 1:
+                v = (j["done"] - d0) / (now - t0)
+                j["bps"] = v if not j.get("bps") else j["bps"] * .6 + v * .4
+                t0, d0 = now, j["done"]
+            if j["done"] - checked > 64 * 1024 * 1024:     # 每 64 MB 看一次還有沒有空間（可能同時在下載好幾個）
+                checked = j["done"]
+                if dl_room(d) <= 0:
+                    raise DlErr("空間不夠，先停下來了")
 
 
 def dl_label(j):
