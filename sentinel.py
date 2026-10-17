@@ -40,7 +40,7 @@ from collections import deque
 from concurrent.futures import ThreadPoolExecutor
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
-VERSION = "1.66"
+VERSION = "1.67"
 
 # ───────────────────────── 哨兵備份檔（.vsbk）─────────────────────────
 # 哨兵專用的備份格式：外面是自己的檔案格式，裡面用的是成熟、標準的加密方法（不自己發明加密）：
@@ -3745,7 +3745,7 @@ def dl_unique(d, n, me):
 def dl_save():
     """清單存檔（不存進度數字，只存要接著下載需要的）"""
     with DL_LOCK:
-        keep = [{k: j.get(k) for k in ("id", "url", "name", "st", "done", "total", "err", "t", "t_end", "segs")} for j in DL]
+        keep = [{k: j.get(k) for k in ("id", "url", "name", "st", "done", "total", "err", "t", "t_end", "segs", "kind")} for j in DL]
     try:
         tmp = DL_FILE + ".tmp"
         with open(os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600), "w") as f:
@@ -3860,55 +3860,165 @@ def dl_multi(j, d, part, first=None):
         os.close(fd)
 
 
+# 影片網站（YouTube、Bilibili、X…）：主機上有裝開源的 yt-dlp 就交給它下載（哨兵不會自己下載或安裝程式，要在主機上裝好）。
+# 有 ffmpeg 就下載最好畫質（影像、聲音分開下載再合併），沒有就下載單一檔案的最好畫質。用雲端硬碟的使用者（1000）身分執行。
+YT_SITES = ("youtube.com", "youtu.be", "bilibili.com", "b23.tv", "twitter.com", "x.com", "instagram.com", "tiktok.com",
+            "vimeo.com", "facebook.com", "fb.watch", "twitch.tv", "dailymotion.com", "nicovideo.jp", "threads.net", "reddit.com")
+
+
+def yt_site(url):
+    h = (urllib.parse.urlsplit(url).hostname or "").lower()
+    return any(h == s or h.endswith("." + s) for s in YT_SITES)
+
+
+def yt_bin():
+    return os.environ.get("SENTINEL_YTDLP") or shutil.which("yt-dlp")
+
+
+def yt_err(lines):
+    t = "\n".join(lines[-20:])
+    for k, v in (("confirm you", "影片網站擋了這台主機（要登入驗證）"), ("Sign in", "要登入才能看這部影片"),
+                 ("Unsupported URL", "這個網址不是檔案，也找不到影片"), ("Private video", "這是私人影片"),
+                 ("not available in your country", "這台主機所在的地區看不到這部影片"), ("unavailable", "影片看不到了"),
+                 ("HTTP Error 404", "找不到這部影片（404）"), ("No space left", "空間不夠")):
+        if k in t:
+            return v
+    return "影片下載失敗"
+
+
+def dl_video(j, d):
+    """用 yt-dlp 下載影片，邊下載邊讀進度"""
+    b = yt_bin()
+    if not b:
+        raise DlErr("要先在主機上裝 yt-dlp 才能下載影片")
+    ff = bool(shutil.which("ffmpeg"))
+    cmd = [b, "--no-playlist", "--newline", "--progress", "--no-simulate", "--no-cache-dir", "--no-mtime", "--no-colors",
+           "-N", str(DL_SEGS), "-f", "bv*+ba/b" if ff else "b", *(["--merge-output-format", "mp4"] if ff else []),
+           "--progress-template", "download:VSP %(progress.downloaded_bytes)s %(progress.total_bytes)s "
+                                  "%(progress.total_bytes_estimate)s %(progress.speed)s",
+           "--print", "video:VSN %(id)s %(title)s", "--print", "after_move:VSF %(filepath)s",
+           "-o", os.path.join(d, "%(title).80s [%(id)s].%(ext)s"), "--", j["url"]]
+    kw = {}
+    if os.geteuid() == 0 and d != os.environ.get("SENTINEL_DL_DIR"):
+        kw = {"user": 1000, "group": 1000, "extra_groups": []}   # 用雲端硬碟的使用者身分執行，下載的檔案也是它的
+    p = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, stdin=subprocess.DEVNULL, cwd=d,
+                         env={"PATH": os.environ.get("PATH", "/usr/bin:/bin"), "HOME": "/tmp", "LANG": "C.UTF-8"}, **kw)
+    why = []
+
+    def watch():                                   # 取消、空間不夠：直接停掉 yt-dlp
+        while p.poll() is None:
+            if j["stop"] or dl_room(d) <= 0:
+                why.append("已取消" if j["stop"] else "空間不夠，先停下來了")
+                p.kill()
+                return
+            time.sleep(1)
+    threading.Thread(target=watch, daemon=True).start()
+    lines, vid, base, last, final = deque(maxlen=40), "", 0, 0, ""
+    for raw in p.stdout:
+        line = raw.decode("utf-8", "replace").strip()
+        if line.startswith("VSN "):
+            vid, _, title = line[4:].partition(" ")
+            j["name"] = dl_safe(title) if title else j.get("name")
+        elif line.startswith("VSP "):
+            n = [_num(x, 0) for x in line[4:].split()]
+            got, tot, est, spd = (n + [0, 0, 0, 0])[:4]
+            if got < last * .5:                    # 影像下載完換聲音：前面的算進已下載
+                base += last
+            last = got
+            j["done"] = int(base + got)
+            j["total"] = int(base + (tot or est)) if tot or est else 0
+            j["bps"] = spd
+        elif line.startswith("VSF "):
+            final = line[4:]
+        elif line:
+            lines.append(line)
+    p.wait()
+    if why or p.returncode or not final:
+        if vid:                                    # 清掉下載到一半的檔案
+            for f in glob.glob(os.path.join(glob.escape(d), f"*[[]{glob.escape(vid)}[]]*")):
+                if why or f.endswith((".part", ".ytdl")) or re.search(r"\.f\d+\.\w+$", f):
+                    try:
+                        os.remove(f)
+                    except OSError:
+                        pass
+        raise DlErr(why[0] if why else yt_err(list(lines)))
+    j["name"] = os.path.basename(final)
+    try:
+        j["done"] = j["total"] = os.path.getsize(final)
+    except OSError:
+        pass
+
+
+def dl_file(j, d):
+    """一般檔案：下載到「檔名.下載中」，回傳 (這個檔案, 連線)；是網頁而且主機有 yt-dlp 就改當影片"""
+    part, c = None, None
+    old = os.path.join(d, j["name"] + DL_PART) if j.get("name") else None
+    if j.get("segs") and old and os.path.isfile(old) and os.path.getsize(old) == j.get("total"):
+        part = old                                 # 上次分段下載到一半：每段接著下載
+        dl_multi(j, d, part)
+    else:
+        if j.get("segs") and old and os.path.isfile(old):
+            os.remove(old)                         # 分段的進度對不上：從頭來
+        j["segs"] = None
+        start = os.path.getsize(old) if old and os.path.isfile(old) else 0   # 上次下載到一半：接著下載
+        r, c, final = dl_open(j["url"], start)
+        page = not start and (r.getheader("Content-Type") or "").lower().startswith("text/html")
+        if page and yt_bin():                      # 是網頁不是檔案：交給 yt-dlp 看看裡面有沒有影片
+            c.close()
+            j["kind"] = "video"
+            return None, None
+        if start and r.status != 206:           # 對方不支援接續：從頭來
+            start = 0
+        if not j.get("name") or not start:
+            j["name"] = dl_unique(d, j.get("name") or dl_name(r, final), j)
+        part = os.path.join(d, j["name"] + DL_PART)
+        try:
+            rest = int(r.getheader("Content-Length") or 0)
+        except ValueError:
+            rest = 0
+        j["total"], j["done"] = (start + rest if rest else 0), start
+        room = dl_room(d)
+        if rest and rest > room:
+            raise DlErr(f"空間不夠（要 {dl_size(rest)}，只剩 {dl_size(room)}）")
+        if os.path.islink(part):
+            os.remove(part)
+        if not start and r.status == 200 and rest >= DL_SEG_MIN and (r.getheader("Accept-Ranges") or "").lower() == "bytes":
+            step = -(-rest // DL_SEGS)             # 檔案夠大、對方支援分段：分成幾段同時下載
+            j["segs"] = [[i * step, min(rest, (i + 1) * step), 0] for i in range(DL_SEGS) if i * step < rest]
+            dl_save()
+            dl_multi(j, d, part, (r, c))
+        else:
+            dl_save()
+            dl_one(j, d, part, r, start, rest)
+    return part, c
+
+
 def dl_run(j):
     d, part, c = None, None, None
     try:
         d = dl_dir()
         if not d:
             raise DlErr("這台沒有雲端硬碟")
-        old = os.path.join(d, j["name"] + DL_PART) if j.get("name") else None
-        if j.get("segs") and old and os.path.isfile(old) and os.path.getsize(old) == j.get("total"):
-            part = old                                 # 上次分段下載到一半：每段接著下載
-            dl_multi(j, d, part)
+        if yt_site(j["url"]):
+            j["kind"] = "video"
+        if j.get("kind") != "video":
+            part, c = dl_file(j, d)
+        if j.get("kind") == "video":
+            dl_video(j, d)
         else:
-            if j.get("segs") and old and os.path.isfile(old):
-                os.remove(old)                         # 分段的進度對不上：從頭來
-            j["segs"] = None
-            start = os.path.getsize(old) if old and os.path.isfile(old) else 0   # 上次下載到一半：接著下載
-            r, c, final = dl_open(j["url"], start)
-            if start and r.status != 206:              # 對方不支援接續：從頭來
-                start = 0
-            if not j.get("name") or not start:
-                j["name"] = dl_unique(d, j.get("name") or dl_name(r, final), j)
-            part = os.path.join(d, j["name"] + DL_PART)
-            try:
-                rest = int(r.getheader("Content-Length") or 0)
-            except ValueError:
-                rest = 0
-            j["total"], j["done"] = (start + rest if rest else 0), start
-            room = dl_room(d)
-            if rest and rest > room:
-                raise DlErr(f"空間不夠（要 {dl_size(rest)}，只剩 {dl_size(room)}）")
-            if os.path.islink(part):
-                os.remove(part)
-            if not start and r.status == 200 and rest >= DL_SEG_MIN and (r.getheader("Accept-Ranges") or "").lower() == "bytes":
-                step = -(-rest // DL_SEGS)             # 檔案夠大、對方支援分段：分成幾段同時下載
-                j["segs"] = [[i * step, min(rest, (i + 1) * step), 0] for i in range(DL_SEGS) if i * step < rest]
-                dl_save()
-                dl_multi(j, d, part, (r, c))
-            else:
-                dl_save()
-                dl_one(j, d, part, r, start, rest)
-        if j["total"] and j["done"] < j["total"]:
-            raise DlErr("連線中斷了")
-        dst = os.path.join(d, dl_unique(d, j["name"], j) if os.path.lexists(os.path.join(d, j["name"])) else j["name"])
-        os.replace(part, dst)
-        j.update(name=os.path.basename(dst), st="ok", total=j["done"], t_end=time.time(), err="", segs=None)
+            if j["total"] and j["done"] < j["total"]:
+                raise DlErr("連線中斷了")
+            dst = os.path.join(d, dl_unique(d, j["name"], j) if os.path.lexists(os.path.join(d, j["name"])) else j["name"])
+            os.replace(part, dst)
+            j["name"] = os.path.basename(dst)
+        j.update(st="ok", total=j["done"], t_end=time.time(), err="", segs=None)
         COL.add_event("info", f"下載好了：{j['name']}（{dl_size(j['done'])}）")
         log(f"下載完成：{j['name']}")
     except Exception as e:  # noqa: BLE001
         msg = dl_err(e)
         j.update(st="bad", err=msg, t_end=time.time())
+        if not part and d and j.get("name") and j.get("kind") != "video":
+            part = os.path.join(d, j["name"] + DL_PART)
         if part and os.path.isfile(part) and (j["stop"] or msg.startswith("空間不夠")):
             try:
                 os.remove(part)

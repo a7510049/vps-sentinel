@@ -1839,7 +1839,7 @@ function dlModal(node, name){
   const v = document.createElement("div"); v.className = "veil";
   v.innerHTML = `<div class="dialog glass pop dld">${IC("dl","big")}<h3>遠端下載</h3>
     <p>存到「${esc(name)}」雲端硬碟的「下載」資料夾</p>
-    <div class="form"><div class="dlnew"><input class="field" data-k="url" type="url" inputmode="url" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="貼上下載連結"><button class="ubtn" data-go>下載</button></div>
+    <div class="form"><div class="dlnew"><input class="field" data-k="url" type="url" inputmode="url" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="貼上檔案或影片連結"><button class="ubtn" data-go>下載</button></div>
       <div class="msg"></div><div class="dllist"></div><small class="dlroom"></small></div>
     <div class="btns one"><button class="ubtn ghost" data-r="0">關閉</button></div></div>`;
   $("#layer").appendChild(v);

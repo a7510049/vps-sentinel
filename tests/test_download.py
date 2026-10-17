@@ -12,6 +12,22 @@ BIG = os.urandom(20 * 1024 * 1024)
 RANGES = []
 
 
+FAKE_YT = """#!/usr/bin/env python3
+import os, sys
+url = sys.argv[-1]
+if url.endswith("bad"):
+    print("ERROR: [youtube] bad: Video unavailable", flush=True)
+    sys.exit(1)
+tmpl = sys.argv[sys.argv.index("-o") + 1]
+path = tmpl.replace("%(title).80s", "測試影片").replace("%(id)s", "abc").replace("%(ext)s", "mp4")
+print("VSN abc 測試影片", flush=True)
+for n in (1000, 3000, 5000):
+    print(f"VSP {n} 5000 NA 1000.5", flush=True)
+open(path, "wb").write(b"x" * 5000)
+print("VSF " + path, flush=True)
+"""
+
+
 class Files(http.server.BaseHTTPRequestHandler):
     def do_GET(self):
         if self.path.startswith("/big"):               # 支援分段的大檔案
@@ -30,6 +46,14 @@ class Files(http.server.BaseHTTPRequestHandler):
                 self.wfile.write(body)
             except OSError:
                 pass
+            return
+        if self.path.startswith("/watch"):           # 網頁：裡面有影片
+            body = b"<html>video</html>"
+            self.send_response(200)
+            self.send_header("Content-Type", "text/html; charset=utf-8")
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
             return
         if self.path.startswith("/go"):
             self.send_response(302)
@@ -150,6 +174,28 @@ class Download(unittest.TestCase):
         self.assertEqual(sorted(a for a, _ in RANGES), want)
         with open(os.path.join(self.dir, "half.bin"), "rb") as f:
             self.assertEqual(f.read(), BIG)
+
+    def test_video(self):
+        """網頁連結交給 yt-dlp（用一支假的），讀得到進度、檔名，下載好的檔案在資料夾裡"""
+        fake = os.path.join(tempfile.mkdtemp(), "yt-dlp")
+        with open(fake, "w") as f:
+            f.write(FAKE_YT)
+        os.chmod(fake, 0o755)
+        os.environ["SENTINEL_YTDLP"] = fake
+        try:
+            url = self.base + "/watch?v=abc"
+            self.S.dl_add(url)
+            j = self.wait(url)
+            self.assertEqual((j["st"], j["kind"], j["name"]), ("ok", "video", "測試影片 [abc].mp4"), j["err"])
+            self.assertEqual(os.path.getsize(os.path.join(self.dir, j["name"])), 5000)
+            url = self.base + "/watch?v=bad"
+            self.S.dl_add(url)
+            self.assertEqual(self.wait(url)["err"], "影片看不到了")
+        finally:
+            os.environ.pop("SENTINEL_YTDLP", None)
+        self.assertTrue(self.S.yt_site("https://www.youtube.com/watch?v=x"))
+        self.assertTrue(self.S.yt_site("https://youtu.be/x"))
+        self.assertFalse(self.S.yt_site("https://notyoutube.com/x"))
 
     def test_errors(self):
         self.S.dl_add(self.base + "/missing")
