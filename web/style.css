@@ -133,6 +133,7 @@ button{font:inherit;color:inherit}
 .ico.sun{background:linear-gradient(160deg,#ffb27a,#f2643d)}       /* 天氣：夕陽 */
 .ico.quote{background:linear-gradient(160deg,#6cc4ff,#1f7fd6)}     /* 心情小語：海藍 */
 .ico.keep{background:linear-gradient(160deg,#f2a68c,#c0573a)}      /* Oracle 防回收：赤陶 */
+.ico.dl{background:linear-gradient(160deg,#d9cc55,#8f8215)}        /* 遠端下載：芥末 */
 .ico.theme{background:var(--grad)}                                  /* 哨兵本身的動作（更新、編輯）：主題色 */
 /* 確認視窗的方塊：要小心的動作（重新開機、換密碼）橘色，刪除／移除紅色 */
 .ico.warn{background:linear-gradient(160deg,var(--warn-hi),var(--warn-lo))}
@@ -387,6 +388,20 @@ button{font:inherit;color:inherit}
 .codebox code{flex:1;min-width:0;font:700 var(--fs-s)/1.45 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;word-break:break-all;user-select:all;color:var(--text)}
 .dialog .form .pfield{resize:none;font:700 var(--fs-m)/1.45 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;word-break:break-all}
 .pklist:empty{display:none}
+.dlnew{display:flex;gap:8px;align-items:center}
+.dialog .form .dlnew .field{flex:1;min-width:0;font-size:var(--fs-m);padding:10px 12px}
+.dllist{display:flex;flex-direction:column;gap:8px;max-height:300px;overflow-y:auto;margin:-4px -4px 0;padding:4px}
+.dllist:empty,.dialog .form .dlroom:empty,.dld .msg:empty{display:none}
+.dlrow{display:flex;align-items:center;gap:10px;padding:10px 6px 10px 13px;border-radius:var(--r-md);background:var(--inset);box-shadow:var(--ring);flex-shrink:0;
+  font-size:var(--fs-m);font-weight:800;color:var(--text)}
+.dlrow>svg{width:18px;height:18px;flex:none;color:var(--ink)}
+.dlrow.ok>svg{color:var(--ok)}.dlrow.bad>svg{color:var(--bad)}
+.dlrow span{flex:1;min-width:0;display:flex;flex-direction:column;gap:3px}
+.dlrow b{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.dlrow small{font-weight:600;color:var(--faint);font-size:var(--fs-xs);font-variant-numeric:tabular-nums}
+.dlrow.bad small{color:var(--bad)}
+.dlrow .track{height:5px;margin-top:3px}.dlrow .track[hidden],.dlrow .iconbtn[hidden]{display:none}
+.dlrow .iconbtn{width:30px;height:30px;flex:none}
 .pkrow{display:flex;align-items:center;gap:10px;padding:10px 8px 10px 13px;border-radius:var(--r-md);background:var(--inset);box-shadow:var(--ring);
   font-size:var(--fs-m);font-weight:800;color:var(--text)}
 .pkrow>svg{width:18px;height:18px;flex:none;color:var(--ink)}
