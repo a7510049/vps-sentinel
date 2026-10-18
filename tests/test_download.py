@@ -220,6 +220,7 @@ class Download(unittest.TestCase):
                          "https://www.douyin.com/video/7312345678901234567")
         self.assertEqual(self.S.yt_err(["ERROR: Unsupported URL: https://www.xiaohongshu.com/404/sec_a?x=1"]),
                          "這個網址不是檔案，也找不到影片（www.xiaohongshu.com/404/sec_a）")
+        self.assertTrue(self.S.yt_err(["ERROR: Unsupported URL: https://www.xiaohongshu.com/login?redirect=x"]).startswith("要登入"))
 
     def test_pick_url(self):
         """從分享文字裡挑出網址"""
