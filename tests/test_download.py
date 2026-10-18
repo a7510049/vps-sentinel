@@ -185,6 +185,15 @@ class Download(unittest.TestCase):
         with open(os.path.join(self.dir, "half.bin"), "rb") as f:
             self.assertEqual(f.read(), BIG)
 
+    def test_pick_url(self):
+        """從分享文字裡挑出網址"""
+        for t, want in (("7.92 复制打开抖音，看看【作品】 https://v.douyin.com/iAbC/ k@B.Ag 01/11", "https://v.douyin.com/iAbC/"),
+                        ("【标题-哔哩哔哩】 https://b23.tv/xYz12", "https://b23.tv/xYz12"),
+                        ("笔记 http://xhslink.com/a/AbC，复制本条信息", "http://xhslink.com/a/AbC"),
+                        ("https://example.com/a.zip", "https://example.com/a.zip"),
+                        ("看看https://v.douyin.com/x/复制此链接", "https://v.douyin.com/x/")):
+            self.assertEqual(self.S.dl_pick(t), want)
+
     def test_segment_steal(self):
         """先下載完的連線會把還剩很多的那段切一半來幫忙"""
         n = len(BIG)
@@ -230,6 +239,13 @@ class Download(unittest.TestCase):
             self.assertTrue(S.dl_retry("y1")[0])
             j = self.wait(yurl)
             self.assertEqual(j["st"], "ok", j["err"])                # 被擋 → 自動改用登入資料再試一次
+            S.yt_cookies_set(".douyin.com\tTRUE\t/\tFALSE\t0\tttwid\ta")    # 不同網站分開貼：合在一起
+            S.yt_cookies_set(".douyin.com\tTRUE\t/\tFALSE\t0\tttwid\tb")    # 同一個網站再貼：換掉舊的
+            with open(S.YT_COOKIES) as f:
+                t = f.read()
+            self.assertIn("SID\tx", t)
+            self.assertIn("ttwid\tb", t)
+            self.assertNotIn("ttwid\ta", t)
             self.assertTrue(S.yt_cookies_set("")[0])
             self.assertFalse(os.path.exists(S.YT_COOKIES))
         finally:
