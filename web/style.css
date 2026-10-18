@@ -544,6 +544,8 @@ button.li:active,a.li:active{border-radius:var(--r-lg);transform:scale(.98);back
 @media (hover:hover){.dialog .btns .ubtn.ghost:hover{background:color-mix(in srgb,var(--p) 8%,transparent)}}
 .form{display:flex;flex-direction:column;gap:14px;margin-top:18px;text-align:left}
 .form label,.form .lbl{font-size:var(--fs-s);font-weight:500;color:var(--tx3);display:flex;flex-direction:column;gap:8px;margin:0;align-items:stretch;justify-content:flex-start}
+.form label.li{flex-direction:row;align-items:center;gap:14px;font-size:inherit;font-weight:400;color:var(--tx)}
+.form .li .lab small{font-size:var(--fs-s)}
 .form small{color:var(--tx3);font-size:var(--fs-xs);line-height:1.5;font-weight:400}
 .form small b{color:var(--tx2)}
 .form .seg{width:100%;flex-wrap:nowrap}
@@ -642,7 +644,11 @@ textarea.field{height:auto;padding:12px 16px;resize:none}
 .cl2>span svg{width:15px;height:15px;color:var(--p);vertical-align:-2px;margin-right:6px;display:inline}
 .cl2 small{display:block;font-size:var(--fs-s);color:var(--tx3)}
 .chg{margin:6px 0 0;padding-left:16px;font-size:var(--fs-xs);color:var(--tx3);line-height:1.6}
-.selfall{display:flex;justify-content:flex-end;padding:12px 16px;background:var(--card);border-radius:var(--r-xs)}
+.group>.selfbox>:last-child{border-bottom-left-radius:var(--r-xs);border-bottom-right-radius:var(--r-xs)}
+.selfrow>.cl2.first{margin-top:0}
+.selfsum:empty{display:none}
+.selfsum{display:flex;align-items:center;gap:12px;margin:0 0 16px;padding:12px 12px 12px 16px;background:var(--card);border-radius:var(--r-lg);font-size:var(--fs-m)}
+.selfsum>span{flex:1;min-width:0;color:var(--p);font-weight:500}
 .selfwait{padding:18px 16px;background:var(--card);color:var(--tx3);border-radius:var(--r-lg)}
 
 /* ═════════ 選單 ═════════ */
