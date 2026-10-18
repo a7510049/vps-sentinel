@@ -96,12 +96,13 @@
 
 /* ═════════ 基本 ═════════ */
 *{box-sizing:border-box;margin:0;-webkit-tap-highlight-color:transparent}
-html{background:var(--bg);color:var(--tx);touch-action:manipulation;scrollbar-gutter:stable;
+html{background:var(--bg);color:var(--tx);touch-action:manipulation;scrollbar-gutter:stable;accent-color:var(--p);caret-color:var(--p);
   scrollbar-width:thin;scrollbar-color:color-mix(in srgb,var(--tx) 22%,transparent) transparent;
   transition:background-color var(--t-mid) var(--ease),color var(--t-mid) var(--ease)}
 html.lock{overflow:hidden}
 body{font:400 var(--fs-m)/1.5 var(--font);zoom:var(--zoom);min-height:100vh;-webkit-font-smoothing:antialiased;overflow-x:hidden;overscroll-behavior-y:contain}
 [hidden]{display:none!important}
+::selection{background:color-mix(in srgb,var(--p) 32%,transparent)}
 button{font:inherit;color:inherit;border:0;background:none;padding:0;cursor:pointer;text-align:inherit}
 a{color:inherit}
 svg{display:block}
@@ -116,6 +117,11 @@ b,strong{font-weight:500}
 @keyframes rise{from{opacity:0;transform:translateY(24px) scale(.97)}}
 @keyframes pop{from{opacity:0;transform:scale(.4) rotate(-40deg)}}
 @keyframes through{from{opacity:0;transform:scale(.97)}}
+
+/* 按下去的水波紋（Android 的觸控回饋）：從手指的位置擴散，形狀跟著按鈕 */
+:is(.li,.ubtn,.iconbtn,.icbtn,.hmenu button,.rb .ri,.seg button,.rng button,.fchip,.addhost,.trf,.chats button){position:relative}
+.rip{position:absolute;inset:0;border-radius:inherit;overflow:hidden;pointer-events:none}
+.rip i{position:absolute;border-radius:50%;background:currentColor;opacity:.14}
 
 /* 小圖示按鈕：圓的，按下去變圓角方形 */
 .iconbtn{width:40px;height:40px;border-radius:50%;display:inline-grid;place-items:center;color:var(--tx2);flex:none;position:relative;text-decoration:none;
@@ -299,7 +305,17 @@ img.flag{width:28px;height:21px;object-fit:cover;border-radius:var(--r-xs);flex:
 .dscroll::-webkit-scrollbar{display:none}
 .dscroll>*{max-width:760px;margin-left:auto;margin-right:auto}
 .det .hb{animation:fadeIn var(--t-mid) var(--ease) .08s backwards}
-.dtop{display:flex;align-items:center;gap:4px;padding:6px 0 4px}
+.dscroll>.dtop{position:sticky;top:calc(-10px - env(safe-area-inset-top));z-index:1;max-width:none;display:flex;align-items:center;gap:12px;background:var(--bg);
+  margin:calc(-10px - env(safe-area-inset-top)) -16px 0;padding:calc(env(safe-area-inset-top) + 16px) 16px 8px}
+.dtt{flex:1;min-width:0;font-size:var(--fs-xl);font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;opacity:0}
+/* 往上捲：標題列換上色塊、出現主機名稱（瀏覽器不支援就維持底色，不顯示名稱） */
+@supports (animation-timeline:scroll()){
+  .dscroll{scroll-timeline:--ds block}
+  .dscroll>.dtop{animation:barOn linear both;animation-timeline:--ds;animation-range:0 56px}
+  .dtt{animation:ttlOn linear both;animation-timeline:--ds;animation-range:70px 120px}
+}
+@keyframes barOn{from{background-color:var(--bg)}to{background-color:var(--s2)}}
+@keyframes ttlOn{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:none}}
 
 /* ═════════ 一台主機的內容（手機整頁、電腦欄位共用） ═════════ */
 .hb{display:flex;flex-direction:column;gap:10px}
@@ -408,6 +424,10 @@ button.li:active,a.li:active{border-radius:var(--r-lg);transform:scale(.98);back
   transition:border-radius var(--t-slow) var(--spring),background-color var(--t-fast) var(--ease),box-shadow var(--t-fast) var(--ease),transform var(--t-mid) var(--spring)}
 .fchip.on{background:var(--pc);color:var(--on-pc);box-shadow:none;border-radius:var(--r-pill)}
 .fchip:active{transform:scale(.95)}
+.fchips .fchip{display:inline-flex;align-items:center}
+.fchip .ck{display:inline-grid;width:0;opacity:0;overflow:hidden;transition:width var(--t-mid) var(--spring),margin var(--t-mid) var(--spring),opacity var(--t-fast) var(--ease)}
+.fchip .ck svg{width:18px;height:18px;flex:none}
+.fchip.on .ck{width:18px;opacity:1;margin:0 6px 0 -4px}
 /* 工具：選主機（很多台時左右滑） */
 .hpick{display:flex;gap:8px;overflow-x:auto;scrollbar-width:none;margin:0 -16px 16px;padding:2px 20px;
   -webkit-mask-image:linear-gradient(90deg,transparent,#000 16px,#000 calc(100% - 16px),transparent);mask-image:linear-gradient(90deg,transparent,#000 16px,#000 calc(100% - 16px),transparent)}
@@ -500,24 +520,38 @@ button.li:active,a.li:active{border-radius:var(--r-lg);transform:scale(.98);back
 .dialog::-webkit-scrollbar{display:none}
 .closing .dialog{animation:dlgout var(--t-fast) var(--exit) forwards}
 @keyframes dlgin{from{opacity:0;transform:scale(.85)}}
+/* 手機：要填東西的視窗從下面滑上來（上面有拉桿，往下拉就關掉） */
+@media (max-width:599px){
+  .veil:has(.form){align-items:flex-end;padding:48px 0 0}
+  .veil:has(.form) .dialog{max-width:none;max-height:calc((100dvh - 48px) / var(--zoom));border-radius:var(--r-xl) var(--r-xl) 0 0;
+    padding:30px 20px calc(env(safe-area-inset-bottom) + 20px);animation:sheetIn var(--t-slow) var(--dec) backwards;touch-action:pan-y}
+  .veil:has(.form) .dialog::before{content:"";position:absolute;top:10px;left:50%;width:32px;height:4px;margin-left:-16px;border-radius:var(--r-pill);background:var(--tx3);opacity:.6}
+  .veil:has(.form) .dialog{position:relative}
+  .veil.closing:has(.form) .dialog{animation:sheetOut var(--t-mid) var(--exit) forwards}
+}
+@keyframes sheetIn{from{transform:translateY(100%)}}
+@keyframes sheetOut{to{transform:translateY(100%)}}
 @keyframes dlgout{to{opacity:0;transform:scale(.92)}}
 .dialog .ico.big{margin:0 auto 14px}
 .dialog h3{font-size:var(--fs-2xl);font-weight:500;line-height:1.3}
 .dialog p{color:var(--tx3);font-size:var(--fs-m);margin-top:6px;white-space:pre-line}
 .dialog p a{color:var(--p);font-weight:500;text-decoration:none;margin-left:4px}
 .dialog>.field{margin-top:18px;text-align:center}
-.dialog .btns{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:22px}
-.dialog .btns.one{grid-template-columns:1fr}
-.dialog .btns.three{grid-template-columns:1fr 1fr 1.3fr}
-.dialog .btns button{height:48px}
+/* 按鈕列：跟 Android 一樣靠右；次要的是沒有底色的文字按鈕 */
+.dialog .btns{display:flex;flex-wrap:wrap;justify-content:flex-end;gap:8px;margin-top:24px}
+.dialog .btns button{height:44px;min-width:72px}
+.dialog .btns .ubtn.ghost{background:none;color:var(--p);padding:0 14px}
+@media (hover:hover){.dialog .btns .ubtn.ghost:hover{background:color-mix(in srgb,var(--p) 8%,transparent)}}
 .form{display:flex;flex-direction:column;gap:14px;margin-top:18px;text-align:left}
 .form label,.form .lbl{font-size:var(--fs-s);font-weight:500;color:var(--tx3);display:flex;flex-direction:column;gap:8px;margin:0;align-items:stretch;justify-content:flex-start}
 .form small{color:var(--tx3);font-size:var(--fs-xs);line-height:1.5;font-weight:400}
 .form small b{color:var(--tx2)}
-.form .seg{width:100%}
+.form .seg{width:100%;flex-wrap:nowrap}
+.form .seg button{padding:0 6px;min-width:0}
 .form select.field{appearance:none;-webkit-appearance:none}
-.field{display:block;width:100%;height:52px;padding:0 16px;border:0;border-radius:var(--r-md);font:inherit;font-size:var(--fs-l);color:var(--tx);
-  background:var(--s3);box-shadow:inset 0 0 0 1px var(--s4);outline:none;transition:box-shadow var(--t-fast) var(--ease)}
+.field{display:block;width:100%;height:52px;padding:0 16px;border:0;border-radius:var(--r-xs);font:inherit;font-size:var(--fs-l);color:var(--tx);
+  background:none;box-shadow:inset 0 0 0 1px var(--tx3);outline:none;transition:box-shadow var(--t-fast) var(--ease)}
+@media (hover:hover){.field:hover{box-shadow:inset 0 0 0 1px var(--tx)}}
 textarea.field{height:auto;padding:12px 16px;resize:none}
 .field:focus{box-shadow:inset 0 0 0 2px var(--p)}
 .field::placeholder{color:var(--tx3)}
@@ -535,7 +569,6 @@ textarea.field{height:auto;padding:12px 16px;resize:none}
 .tgd .chats button.on{background:var(--pc);color:var(--on-pc);box-shadow:none;border-radius:var(--r-pill)}
 /* 手機金鑰、PIN 碼、配對暗號 */
 .pkd,.pindlg{max-width:420px}
-.pindlg .btns.three{grid-template-columns:1.2fr 1fr 1fr}
 .pklist{display:flex;flex-direction:column;gap:3px}
 .pklist:empty{display:none}
 .pkrow{display:flex;align-items:center;gap:12px;padding:12px 8px 12px 16px;border-radius:var(--r-xs);background:var(--s3);font-size:var(--fs-m);color:var(--tx)}
@@ -613,9 +646,9 @@ textarea.field{height:auto;padding:12px 16px;resize:none}
 .selfwait{padding:18px 16px;background:var(--card);color:var(--tx3);border-radius:var(--r-lg)}
 
 /* ═════════ 選單 ═════════ */
-.lmenu{position:fixed;z-index:var(--z-menu);min-width:210px;max-width:290px;padding:8px 0;border-radius:var(--r-md);display:flex;flex-direction:column;
+.lmenu{position:fixed;z-index:var(--z-menu);min-width:210px;max-width:290px;padding:4px;gap:2px;border-radius:var(--r-md);display:flex;flex-direction:column;
   background:var(--s2);box-shadow:var(--sh-2)}
-.hmenu button{display:flex;align-items:center;gap:12px;min-height:48px;padding:8px 16px;color:var(--tx);text-decoration:none;font-size:var(--fs-m);text-align:left;
+.hmenu button{display:flex;align-items:center;gap:12px;min-height:48px;padding:8px 12px;border-radius:var(--r-sm);color:var(--tx);text-decoration:none;font-size:var(--fs-m);text-align:left;
   transition:background-color var(--t-fast) var(--ease)}
 @media (hover:hover){.hmenu button:hover{background:color-mix(in srgb,var(--tx) 8%,transparent)}}
 .hmenu button:active{background:color-mix(in srgb,var(--tx) 12%,transparent)}
@@ -627,7 +660,8 @@ textarea.field{height:auto;padding:12px 16px;resize:none}
 .toasts{position:fixed;left:50%;bottom:calc(env(safe-area-inset-bottom) + 96px);transform:translateX(-50%);z-index:var(--z-toast);
   display:flex;flex-direction:column;align-items:center;gap:8px;pointer-events:none;width:max-content;max-width:calc(100vw - 32px)}
 @media (min-width:1024px){.toasts{bottom:28px}}
-.toast{border-radius:var(--r-sm);padding:14px 18px 14px 14px;font-size:var(--fs-m);display:flex;align-items:center;gap:10px;
+@media (max-width:599px){.toasts{left:16px;right:16px;width:auto;max-width:none;transform:none;align-items:stretch}}
+.toast{border-radius:var(--r-xs);padding:14px 18px 14px 16px;font-size:var(--fs-m);display:flex;align-items:center;gap:10px;
   background:var(--inv);color:var(--on-inv);box-shadow:var(--sh-2);animation:toastin var(--t-slow) var(--spring) backwards}
 .toast.out{animation:toastOut var(--t-mid) var(--exit) forwards}
 .toast svg{width:20px;height:20px;flex:none}

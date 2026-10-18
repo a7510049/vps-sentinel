@@ -628,7 +628,7 @@ function homeDesk(list, time){
 function detail(s){
   const r = OPENR || {t:0, b:0, l:0, r:0};
   return `<div class="det${DETX ? " closing" : ""}" data-key="det:${esc(keyOf(s))}" style="--ct:${r.t}px;--cb:${r.b}px;--cl:${r.l}px;--cr:${r.r}px"><div class="dscroll">
-    <div class="dtop"><button class="icbtn" data-back title="返回">${I("back")}</button><span class="grow"></span><span class="hacts">${moreBtn(s)}</span></div>
+    <div class="dtop"><button class="icbtn" data-back title="返回">${I("back")}</button><span class="dtt">${esc(s.name)}</span><span class="hacts">${moreBtn(s)}</span></div>
     ${hostBody(s, true)}</div></div>`;
 }
 /* 工具：雲端硬碟、遠端下載、每日備份、常用連結；好幾台時上面一排主機名稱（可以左右滑）選一台，只顯示那台的 */
@@ -660,7 +660,7 @@ let LOGF = "";
 function logPage(list){
   const all = allEvents(list), many = list.length > 1;
   const ev = LOGF === "bad" ? all.filter(e => e.kind === "bad" || e.kind === "warn") : LOGF === "other" ? all.filter(e => e.kind === "ok" || e.kind === "info") : all;
-  const chip = (k, l) => `<button class="fchip${LOGF === k ? " on" : ""}" data-logf="${k}">${l}</button>`;
+  const chip = (k, l) => `<button class="fchip${LOGF === k ? " on" : ""}" data-logf="${k}"><span class="ck">${I("check")}</span>${l}</button>`;
   let h = `<div class="narrow" data-key="log"><h1 class="ptitle">紀錄</h1><div class="fchips">${chip("", "全部")}${chip("bad", "有狀況")}${chip("other", "恢復與通知")}</div>`;
   if (!ev.length) return h + `<div class="calm">目前沒有事件</div></div>`;
   let day = "", rows = "";
@@ -1186,7 +1186,9 @@ function placeMenu(m, btn, x){
   const z = ZM(), b = btn.getBoundingClientRect(), r = {left:b.left/z, right:b.right/z, top:b.top/z, bottom:b.bottom/z, width:b.width/z};
   const vw = innerWidth / z, vh = innerHeight / z, w = m.offsetWidth, h = m.offsetHeight;
   m.style.left = Math.max(8, Math.min(vw - w - 8, x(r))) + "px";
-  m.style.top = (r.bottom + 8 + h > vh - 8 && r.top - 8 - h > 8 ? r.top - 8 - h : r.bottom + 8) + "px";
+  const above = r.bottom + 8 + h > vh - 8 && r.top - 8 - h > 8;
+  m.style.top = (above ? r.top - 8 - h : r.bottom + 8) + "px";
+  m.style.transformOrigin = (above ? "bottom " : "top ") + (r.left + r.width / 2 - parseFloat(m.style.left)) + "px";
 }
 function moreMenu(btn, s){
   closeMenu();
@@ -1198,14 +1200,14 @@ function moreMenu(btn, s){
     + (s.node ? it("data-rmhost", "trash", "移除主機", "bad") : "");
   document.body.appendChild(m);
   placeMenu(m, btn, r => r.left - 6);           // 從 ⋯ 往右下展開，不會蓋住主機名稱
-  if (canAnim()) m.animate([{opacity:0, transform:"translateY(-6px) scale(.97)"}, {opacity:1, transform:"none"}], {duration:T.mid, easing:SPRING});
+  if (canAnim()) m.animate([{opacity:0, transform:"scale(.85,.4)"}, {opacity:1, transform:"none"}], {duration:T.mid, easing:SPRING});   // 從 ⋯ 的位置往外長出來
   window._menu = m;
   setTimeout(() => m.addEventListener("click", () => closeMenu()), 0);
 }
 function closeMenu(){
   const m = window._menu; if (!m) return; window._menu = null;
   if (!canAnim()) return m.remove();
-  m.animate([{opacity:1}, {opacity:0, transform:"translateY(-4px) scale(.98)"}], {duration:T.fast, easing:EXIT, fill:"forwards"}).finished.then(() => m.remove());
+  m.animate([{opacity:1}, {opacity:0, transform:"scale(.95,.8)"}], {duration:T.fast, easing:EXIT, fill:"forwards"}).finished.then(() => m.remove());
 }
 addEventListener("scroll", closeMenu, {passive:true, capture:true});
 addEventListener("keydown", e => { if (e.key === "Escape") closeMenu(); });
@@ -2384,6 +2386,58 @@ async function refreshNow(btn){
     ptr.classList.remove("spin"); if (ok) ptr.classList.add("done");
     ptr.innerHTML = I(ok ? "ok" : "warn");
     setTimeout(() => show(-70, 0), 550);
+  });
+})();
+/* 按下去的水波紋：手指一碰就從那個點擴散；手機上等一下下，確定不是要捲動才出現 */
+(function(){
+  const SEL = ".hcard,.tb,.li:not(div),.ubtn,.iconbtn,.icbtn,.hmenu button,.seg button,.rng button,.fchip,.addhost,.trf,.chats button";
+  addEventListener("pointerdown", e => {
+    if (e.button || !canAnim()) return;
+    const rb = e.target.closest(".rb"), el = rb ? rb.querySelector(".ri") : e.target.closest(SEL);
+    if (!el || el.disabled) return;
+    let box = null, up = false;
+    const start = () => {
+      const r = el.getBoundingClientRect(), w = el.offsetWidth, h = el.offsetHeight;   // 按下去會縮一點：換回原本的大小來算
+      const x = (e.clientX - r.left) * w / (r.width || 1), y = (e.clientY - r.top) * h / (r.height || 1);
+      const R = Math.hypot(Math.max(x, w - x), Math.max(y, h - y));
+      box = document.createElement("span"); box.className = "rip"; box._leaving = 1;   // 畫面更新時不要把它當成內容
+      const dot = document.createElement("i"); dot.style.cssText = `left:${x - R}px;top:${y - R}px;width:${2 * R}px;height:${2 * R}px`;
+      box.appendChild(dot); el.appendChild(box);
+      dot.animate([{transform:"scale(.15)"}, {transform:"scale(1)"}], {duration:T.slow, easing:EASE, fill:"forwards"});
+    };
+    const fade = () => box && box.animate([{opacity:1}, {opacity:0}], {duration:T.mid, delay:T.fast / 2, easing:EASE, fill:"forwards"}).finished.then(() => box.remove(), () => box.remove());
+    const t = e.pointerType === "mouse" ? (start(), 0) : setTimeout(() => { if (!up) start(); }, 70);
+    const end = ev => {
+      up = true; removeEventListener("pointerup", end); removeEventListener("pointercancel", end);
+      if (ev.type === "pointercancel") { clearTimeout(t); if (!box) return; }   // 其實是在捲動：不出現
+      else if (!box) { clearTimeout(t); start(); }
+      fade();
+    };
+    addEventListener("pointerup", end); addEventListener("pointercancel", end);
+  }, {passive:true});
+})();
+/* 手機：從下面滑上來的面板，從頂端往下拉就關掉 */
+(function(){
+  const SHEET = matchMedia("(max-width:599px)");
+  let d = null;
+  addEventListener("touchstart", e => {
+    const dl = e.target.closest("#layer .veil .dialog"), v = dl && dl.parentNode;
+    if (!SHEET.matches || !dl || dl.scrollTop > 0 || !dl.querySelector(".form") || v.classList.contains("closing") || e.target.closest("input,textarea,select")) return;
+    d = {dl, v, y0:e.touches[0].clientY, t0:performance.now(), dy:0, on:false};
+  }, {passive:true});
+  addEventListener("touchmove", e => {
+    if (!d) return;
+    d.dy = (e.touches[0].clientY - d.y0) / ZM();
+    if (!d.on && (d.dy < 0 || d.dl.scrollTop > 0)) { d = null; return; }      // 往上滑：是要捲動內容
+    if (d.dy > 6) d.on = true;
+    if (d.on) d.dl.style.transform = `translateY(${Math.max(0, d.dy)}px)`;
+  }, {passive:true});
+  addEventListener("touchend", () => {
+    if (!d) return; const {dl, v, dy, t0, on} = d; d = null;
+    if (!on) return;
+    if (dy > 110 || dy / (performance.now() - t0) > .6) { if (v._esc) return v._esc(); }   // 拉得夠遠或甩得夠快：關掉
+    dl.style.transform = "";
+    if (canAnim()) dl.animate([{transform:`translateY(${dy}px)`}, {transform:"none"}], {duration:T.mid, easing:SPRING});
   });
 })();
 document.addEventListener("visibilitychange",()=>{ if(!document.hidden && LIST.length && getTok()) tick(); });   // 登入、還原畫面不要重畫（打到一半的密碼、選好的檔案會不見）
