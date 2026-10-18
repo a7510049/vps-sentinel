@@ -40,7 +40,7 @@ from collections import deque
 from concurrent.futures import ThreadPoolExecutor
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
-VERSION = "1.70"
+VERSION = "1.71"
 
 # ───────────────────────── 哨兵備份檔（.vsbk）─────────────────────────
 # 哨兵專用的備份格式：外面是自己的檔案格式，裡面用的是成熟、標準的加密方法（不自己發明加密）：
@@ -3881,7 +3881,8 @@ def dl_multi(j, d, part, first=None):
 # 影片網站（YouTube、Bilibili、X…）：主機上有裝開源的 yt-dlp 就交給它下載（哨兵不會自己下載或安裝程式，要在主機上裝好）。
 # 有 ffmpeg 就下載最好畫質（影像、聲音分開下載再合併），沒有就下載單一檔案的最好畫質。用雲端硬碟的使用者（1000）身分執行。
 YT_SITES = ("youtube.com", "youtu.be", "bilibili.com", "b23.tv", "twitter.com", "x.com", "instagram.com", "tiktok.com",
-            "vimeo.com", "facebook.com", "fb.watch", "twitch.tv", "dailymotion.com", "nicovideo.jp", "threads.net", "reddit.com")
+            "vimeo.com", "facebook.com", "fb.watch", "twitch.tv", "dailymotion.com", "nicovideo.jp", "threads.net", "reddit.com",
+            "douyin.com", "iesdouyin.com", "xiaohongshu.com", "xhslink.com", "kuaishou.com", "weibo.com")
 
 
 def yt_site(url):
@@ -3896,11 +3897,6 @@ def yt_bin():
 YT_COOKIES = os.path.join(DATA_DIR, "yt-cookies.txt")   # YouTube 登入資料（cookies.txt），YouTube 擋機房主機時用
 YT_WARP = 40000                                   # 主機上的 Cloudflare WARP（代理模式）用的連接埠；有開就讓影片經過它下載
 YT_PX = {"t": 0, "v": ""}
-
-
-def yt_youtube(url):
-    h = (urllib.parse.urlsplit(url).hostname or "").lower()
-    return any(h == s or h.endswith("." + s) for s in ("youtube.com", "youtu.be"))
 
 
 def yt_proxy():
@@ -3918,7 +3914,7 @@ def yt_proxy():
 
 
 def yt_cookies_set(text):
-    """存（或清掉）YouTube 登入資料：瀏覽器擴充功能匯出的 cookies.txt 內容"""
+    """存（或清掉）網站登入資料：瀏覽器擴充功能匯出的 cookies.txt 內容；不同網站的分開貼，會合在一起"""
     text = str(text or "").strip()
     if not text:
         try:
@@ -3926,11 +3922,19 @@ def yt_cookies_set(text):
         except FileNotFoundError:
             pass
         return True, "已清除登入資料"
-    if len(text) > 300000 or "youtube.com" not in text or not re.search(r"^\S+\t(TRUE|FALSE)\t", text, re.M):
+    rows = [x for x in text.splitlines() if re.match(r"^\S+\t(TRUE|FALSE)\t", x)]
+    if len(text) > 300000 or not rows:
         return False, "格式不對，請貼上 cookies.txt 的內容"
+    site = lambda x: x.split("\t", 1)[0].removeprefix("#HttpOnly_").lstrip(".").lower()
+    new = {site(x) for x in rows}
+    try:
+        with open(YT_COOKIES, encoding="utf-8") as f:
+            old = [x for x in f.read().splitlines() if re.match(r"^\S+\t(TRUE|FALSE)\t", x) and site(x) not in new]
+    except OSError:
+        old = []
     tmp = YT_COOKIES + ".tmp"
     with open(os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600), "w", encoding="utf-8") as f:
-        f.write(("" if text.startswith("# Netscape") else "# Netscape HTTP Cookie File\n") + text + "\n")
+        f.write("# Netscape HTTP Cookie File\n" + "\n".join(old + rows) + "\n")
     os.replace(tmp, YT_COOKIES)
     return True, "已儲存登入資料"
 
@@ -3938,7 +3942,7 @@ def yt_cookies_set(text):
 def yt_err(lines):
     t = "\n".join(lines[-20:])
     for k, v in (("confirm you", "YouTube 擋了這台主機，請開 WARP 或貼上登入資料"),
-                 ("Fresh cookies", "抖音擋了這台主機，目前沒辦法下載"),
+                 ("Fresh cookies", "抖音擋了這台主機，請貼上抖音的登入資料"),
                  ("JavaScript runtime", "YouTube 要先在主機上裝 deno 才能下載"),
                  ("nsig extraction", "yt-dlp 太舊了，請更新"), ("Unable to extract", "yt-dlp 太舊了，請更新"),
                  ("Requested format is not available", "yt-dlp 太舊了，請更新"), ("Sign in", "要登入才能看這部影片"),
@@ -3952,11 +3956,11 @@ def yt_err(lines):
 
 
 def dl_video(j, d):
-    """先不用登入資料下載（有 WARP 就經過它）；YouTube 擋了、又有登入資料，再用登入資料試一次"""
+    """先不用登入資料下載（有 WARP 就經過它）；被擋了、又有登入資料，再用登入資料試一次"""
     try:
         yt_run(j, d, False)
     except DlErr as e:
-        if not (str(e).startswith(("YouTube 擋了", "要登入")) and yt_youtube(j["url"]) and os.path.isfile(YT_COOKIES)):
+        if not (str(e).startswith(("YouTube 擋了", "抖音擋了", "要登入")) and os.path.isfile(YT_COOKIES)):
             raise
         yt_run(j, d, True)
 
@@ -4187,8 +4191,14 @@ def dl_status():
             "yt": {"tool": bool(yt_bin()), "cookies": os.path.isfile(YT_COOKIES), "warp": bool(yt_proxy())}}
 
 
+def dl_pick(text):
+    """從分享文字（抖音、小紅書、B 站複製出來會帶標題）裡挑出網址"""
+    m = re.search(r"(?i)https?://[!#-&(-;=?-~]+", str(text or ""))
+    return m.group(0).rstrip(".,;:!?)]}'\"") if m else str(text or "").strip()
+
+
 def dl_add(url):
-    url = str(url or "").strip()
+    url = dl_pick(url)
     if not re.match(r"(?i)https?://", url):
         return False, "只能下載 http 或 https 開頭的連結"
     if len(url) > 4000 or re.search(r"[\x00-\x20\x7f]", url):

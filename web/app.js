@@ -1839,11 +1839,11 @@ function dlModal(node, name){
   const v = document.createElement("div"); v.className = "veil";
   v.innerHTML = `<div class="dialog glass pop dld">${IC("dl","big")}<h3>遠端下載</h3>
     <p>存到「${esc(name)}」雲端硬碟的「下載」資料夾</p>
-    <div class="form"><div class="dlnew"><input class="field" data-k="url" type="url" inputmode="url" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="貼上檔案或影片連結"><button class="ubtn" data-go>下載</button></div>
+    <div class="form"><div class="dlnew"><input class="field" data-k="url" type="text" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="貼上連結或分享文字"><button class="ubtn" data-go>下載</button></div>
       <div class="msg"></div><div class="dllist"></div><small class="dlroom"></small>
-      <div class="dlyt" hidden><small><a href="#" data-yt>YouTube 登入資料</a><span></span></small>
+      <div class="dlyt" hidden><small><a href="#" data-yt>網站登入資料</a><span></span></small>
         <div class="dlck" hidden><textarea class="field pfield" rows="3" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="貼上 cookies.txt 的內容"></textarea>
-          <small>YouTube 擋這台時才會用；建議用備用 Google 帳號</small>
+          <small>被擋時才會用；建議用備用帳號；不同網站分開貼</small>
           <div class="dlnew"><button type="button" class="ubtn sm ghost" data-ckdel>清除</button><button type="button" class="ubtn sm" data-cksave>儲存</button></div></div></div></div>
     <div class="btns one"><button class="ubtn ghost" data-r="0">關閉</button></div></div>`;
   $("#layer").appendChild(v);
