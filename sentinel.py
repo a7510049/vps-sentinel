@@ -40,7 +40,7 @@ from collections import deque
 from concurrent.futures import ThreadPoolExecutor
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
-VERSION = "1.73"
+VERSION = "2.0"
 
 # ───────────────────────── 哨兵備份檔（.vsbk）─────────────────────────
 # 哨兵專用的備份格式：外面是自己的檔案格式，裡面用的是成熟、標準的加密方法（不自己發明加密）：
@@ -3266,17 +3266,16 @@ def watch_page(names):
     return f"""<!doctype html><html lang="zh-Hant"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>{html.escape(NAME)}・VPS 哨兵</title><link rel="icon" href="/icon.svg"><link rel="apple-touch-icon" href="/apple-touch-icon.png">
 <style>
-:root{{color-scheme:light dark;--bg:#eef1f7;--card:rgba(255,255,255,.7);--text:#101828;--sub:rgba(16,24,40,.6);--line:rgba(16,24,40,.1);--bad:#d92d20}}
-@media (prefers-color-scheme:dark){{:root{{--bg:#06080f;--card:rgba(255,255,255,.06);--text:#f1f4fa;--sub:rgba(226,232,245,.58);--line:rgba(255,255,255,.1);--bad:#f97066}}}}
+:root{{color-scheme:light dark;--bg:#fbfbfe;--card:#eef0f8;--field:#e2e5f0;--text:#1a1c22;--sub:#5b5f6b;--p:#3b62d9;--on-p:#fff;--bad:#ba1a1a}}
+@media (prefers-color-scheme:dark){{:root{{--bg:#121317;--card:#1d1f25;--field:#2a2d35;--text:#e6e7ee;--sub:#a3a6b2;--p:#b4c5ff;--on-p:#0b2a6b;--bad:#ffb4ab}}}}
 *{{box-sizing:border-box}}
 body{{margin:0;min-height:100vh;display:grid;place-items:center;padding:16px;background:var(--bg);color:var(--text);
-  font:15px/1.6 ui-rounded,-apple-system,BlinkMacSystemFont,"PingFang TC","Noto Sans TC","Microsoft JhengHei",sans-serif}}
-.c{{width:100%;max-width:360px;padding:30px 24px 22px;border-radius:30px;background:var(--card);text-align:center;
-  box-shadow:inset 0 0 0 1px var(--line),0 14px 36px -16px rgba(30,50,110,.3)}}
-h1{{margin:12px 0 4px;font-size:27px}}p{{margin:0;color:var(--sub);font-weight:600}}
-details{{margin-top:20px}}summary{{cursor:pointer;color:var(--sub);font-size:13.5px;font-weight:700;list-style:none}}
-input,button{{width:100%;font:inherit;font-size:16px;border:0;border-radius:14px;padding:12px 14px;margin-top:10px}}
-input{{background:var(--line);color:var(--text)}}button{{cursor:pointer;font-weight:800;color:#fff;background:linear-gradient(135deg,#38bdf8,#6366f1)}}
+  font:15px/1.6 -apple-system,BlinkMacSystemFont,"PingFang TC","Noto Sans TC","Microsoft JhengHei",sans-serif}}
+.c{{width:100%;max-width:360px;padding:32px 24px 24px;border-radius:28px;background:var(--card);text-align:center}}
+h1{{margin:14px 0 4px;font-size:26px;font-weight:500}}p{{margin:0;color:var(--sub)}}
+details{{margin-top:22px}}summary{{cursor:pointer;color:var(--p);font-size:14px;font-weight:500;list-style:none}}
+input,button{{width:100%;font:inherit;font-size:16px;border:0;padding:14px 16px;margin-top:10px}}
+input{{background:var(--field);color:var(--text);border-radius:16px}}button{{cursor:pointer;font-weight:500;color:var(--on-p);background:var(--p);border-radius:999px}}
 .m{{min-height:20px;margin-top:8px;font-size:13.5px;color:var(--bad)}}
 </style></head><body><div class="c"><img src="/icon.svg" width="60" height="60" alt="">
 <h1>{html.escape(NAME)}</h1><p>由「{who}」監看中，請到那邊看這台</p>
@@ -5207,7 +5206,7 @@ ICON_PNG_512 = base64.b64decode('iVBORw0KGgoAAAANSUhEUgAAAgAAAAIACAIAAAB7GkOtAAA
 
 MANIFEST = json.dumps({
     "name": "VPS 哨兵", "short_name": "VPS 哨兵", "start_url": "/", "display": "standalone",
-    "background_color": "#06080f", "theme_color": "#06080f",
+    "background_color": "#121317", "theme_color": "#121317",
     "icons": [{"src": "/icon.svg?v=2", "sizes": "any", "type": "image/svg+xml"},
               {"src": "/icon-512.png?v=2", "sizes": "512x512", "type": "image/png", "purpose": "any maskable"},
               {"src": "/apple-touch-icon.png?v=2", "sizes": "180x180", "type": "image/png"}],
