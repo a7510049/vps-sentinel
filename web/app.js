@@ -706,7 +706,7 @@ function renderDesk(list, n, time){
       ${summary(n, true)}<div class="meta"><span class="live"></span>更新於 ${time}</div>
       <div class="tbtns"><button class="iconbtn ${REFRESHING?"spinning":""}" data-refresh title="重新整理">${I("upd")}</button><button class="iconbtn" data-addhost title="新增主機">${I("plus")}</button>
       <button class="iconbtn ${list.some(s=>s.self_has)?"hasnew":""}" data-settings title="設定">${I("gear")}</button><button class="iconbtn" data-logout title="登出">${I("logout")}</button></div></header>
-    <div class="board"><div class="cols${shown.length > colsFit() ? " more" : ""}" data-keyed style="--n:${Math.min(Math.max(shown.length, 1), colsFit())}">${shown.map(hostCol).join("") || `<div class="empty" data-key="empty">這個分類目前沒有主機 👍</div>`}</div>
+    <div class="board"><div class="cols${shown.length > colsFit() ? " more" : ""}" data-keyed data-grid style="--n:${Math.min(Math.max(shown.length, 1), colsFit())}">${shown.map(hostCol).join("") || `<div class="empty" data-key="empty">這個分類目前沒有主機 👍</div>`}</div>
       <aside class="rside" data-key="rs"><div class="wxw" data-x>${g.wx}</div>${feed(list)}</aside></div></div>`;
 }
 function skeleton(){
@@ -863,13 +863,17 @@ function morph(a, b){
   }
   patch(a, b);
 }
-function keyedPatch(a, b){
+/* 搬動位置的元素：瀏覽器會把它（和裡面）的 CSS 進場動畫從頭重播，看起來像整塊閃一下，直接跳到結尾 */
+const skipIntro = (el, deep) => el.getAnimations({subtree:deep}).forEach(x => { if (x.animationName && isFinite(x.effect.getComputedTiming().endTime)) x.finish(); });
+function keyedPatch(a, b, attrs){
   const old = new Map();
   [...a.children].forEach(c => { if (!c._leaving) old.set(c.getAttribute("data-key") || "", c); });
   // 項目的順序、數量都沒變時，不會有東西移位，就不用量位置（量位置會逼瀏覽器整頁重新排版）
   const moved = [...old.keys()].join("\n") !== [...b.children].map(c => c.getAttribute("data-key") || "").join("\n");
-  const anim = canAnim(), first = new Map(), z = anim && moved ? ZM() : 1;
-  if (anim && moved) old.forEach((c, k) => first.set(k, c.getBoundingClientRect()));
+  const anim = canAnim(), first = new Map(), z = anim && moved ? ZM() : 1, grid = a.hasAttribute("data-grid");
+  if (anim && moved) old.forEach((c, k) => first.set(k, c.getBoundingClientRect()));   // 要在換欄數（屬性）之前量，才是原本的位置
+  const order = [...old.keys()], sx = a.scrollLeft, port = grid && anim && moved ? a.getBoundingClientRect() : null;
+  if (attrs) attrs();
   const keep = [], fresh = []; let prev = null;
   const want = new Set([...b.children].map(c => c.getAttribute("data-key") || ""));
   // 找下一個「真正要留下的」元素：跳過空白、正在離開的、等一下要移除的
@@ -880,16 +884,17 @@ function keyedPatch(a, b){
     if (el) { old.delete(k); morph(el, nb); el = el.isConnected ? el : nb; if (el !== nb) keep.push([k, el]); }
     else { el = nb; el.style.setProperty("--i", i); fresh.push(el); }
     const ref = nextReal(prev ? prev.nextSibling : a.firstChild);
-    if (el !== ref) a.insertBefore(el, ref || null);
+    if (el !== ref) { const back = el.isConnected; a.insertBefore(el, ref || null); if (back) skipIntro(el, true); }
     prev = el;
   });
   const leaving = [...old.values()];
+  if (port) return gridFlip(a, {sx, z, port, first, order}, keep, fresh, leaving);
   // 會撐開／收起空間的進出場，留下的項目會跟著空間自然移動，不另外移位
   const flowing = anim && [...leaving, ...fresh].some(x => x.nodeType === 1 && !x.matches(TILE));
   leaving.forEach(c => leave(c));
   if (anim) fresh.forEach((el, j) => {
     if (el.nodeType !== 1) return;
-    if (el.matches(TILE)) el.animate([{opacity:0, transform:"scale(.95)"}, {opacity:1, transform:"none"}], {duration:T.mid, delay:j*50, easing:EASE, fill:"backwards", id:"ui"});
+    if (el.matches(TILE)) { skipIntro(el); el.animate([{opacity:0, transform:"scale(.95)"}, {opacity:1, transform:"none"}], {duration:T.mid, delay:j*50, easing:EASE, fill:"backwards", id:"ui"}); }
     else enterBlock(el, (leaving.length ? 200 : 0) + j*90);   // 有東西要離開時，等它先淡出再進來
   });
   if (anim && moved && !flowing) keep.forEach(([k, el]) => {   // 只有單純換位置時才平滑移位
@@ -897,16 +902,52 @@ function keyedPatch(a, b){
     if (Math.abs(dx) > 1 || Math.abs(dy) > 1) el.animate([{transform:`translate(${dx}px,${dy}px)`}, {transform:"none"}], {duration:T.mid, easing:EASE, id:"ui"});
   });
 }
+/* 電腦版主機欄（篩選、換順序）：離開的留在原地淡出，不佔位置；留下的從原本的位置和寬度平滑移到新的；新的在自己的位置浮現 */
+function gridFlip(a, {sx, z, port, first, order}, keep, fresh, leaving){
+  a.scrollLeft = sx;                              // 換順序時瀏覽器會跟著原本對齊的那一欄捲走，捲回原處
+  const box = a.getBoundingClientRect();
+  leaving.forEach(c => {
+    const f = c.nodeType === 1 && first.get(c.getAttribute("data-key") || "");
+    const cl = f ? Math.max(0, port.left - f.left) / z : 0, cr = f ? Math.max(0, f.right - port.right) / z : 0;
+    if (!f || cl + cr > f.width / z / 2) return c.remove();      // 原本就在畫面外（要往旁邊捲才看得到）：直接拿掉
+    c._leaving = 1;
+    // 拿出排版、留在原地，旁邊的欄馬上可以開始移動；超出原本可見範圍的部分切掉，不會露到右邊的事件紀錄上
+    Object.assign(c.style, {position:"absolute", margin:"0", pointerEvents:"none", left:(f.left - box.left) / z + a.scrollLeft + "px", top:(f.top - box.top) / z + a.scrollTop + "px",
+      width:f.width / z + "px", height:f.height / z + "px", clipPath:cl || cr ? `inset(-40px ${cr}px -40px ${cl}px)` : ""});
+    c.animate([{opacity:1, transform:"none"}, {opacity:0, transform:"scale(.94)"}], {duration:T.mid, easing:EXIT, fill:"forwards", id:"ui"}).onfinish = () => c.remove();
+  });
+  const o = {duration:T.slow, easing:EASE, id:"ui"}, now = keep.map(x => x[0]), was = order.filter(k => now.includes(k));
+  keep.forEach(([k, el]) => {
+    const f = first.get(k), l = el.getBoundingClientRect(), dx = (f.left - l.left) / z, dy = (f.top - l.top) / z, w0 = f.width / z, w1 = l.width / z;
+    if (Math.abs(dx) < 1 && Math.abs(dy) < 1 && Math.abs(w1 - w0) < 1) return;
+    const from = {transform:`translate(${dx}px,${dy}px)`, width:w0 + "px"}, to = {transform:"none", width:w1 + "px"};
+    const fwd = now.indexOf(k) < was.indexOf(k), back = now.indexOf(k) > was.indexOf(k);
+    // 換順序時：往前排的（剛出狀況的）浮在上面，往後退的稍微縮小變淡從底下穿過，兩欄的字不會疊在一起
+    const midf = fwd ? {transform:`translate(${dx / 2}px,${dy / 2}px) scale(1.02)`, width:(w0 + w1) / 2 + "px", offset:.5}
+               : back ? {transform:`translate(${dx / 2}px,${dy / 2}px) scale(.95)`, width:(w0 + w1) / 2 + "px", opacity:.25, offset:.5} : null;
+    el.style.zIndex = fwd ? 2 : 1;               // 離開的欄壓在底下，被玻璃霧化
+    el.animate(midf ? [from, midf, to] : [from, to], o).finished.catch(() => {}).then(() => { el.style.zIndex = ""; });
+  });
+  fresh.forEach((el, j) => {
+    if (el.nodeType !== 1) return;
+    skipIntro(el); el.style.zIndex = 1;
+    el.animate([{opacity:0, transform:"translateY(14px) scale(.97)"}, {opacity:1, transform:"none"}], {...o, delay:(leaving.length ? 120 : 0) + j*70, fill:"backwards"})
+      .finished.catch(() => {}).then(() => { el.style.zIndex = ""; });
+  });
+}
 function patch(a, b){
   if (a.hasAttribute("data-keep")) return;     /* 由程式自己控制的元素（例如滑動光圈），不要被重畫蓋掉 */
-  for (const at of [...a.attributes]) if (!b.hasAttribute(at.name)) a.removeAttribute(at.name);
-  for (const at of [...b.attributes]) if (a.getAttribute(at.name)!==at.value){
-    if (at.name==="data-v") tween(a, parseFloat(a.getAttribute("data-v"))||0, parseFloat(at.value)||0, +b.getAttribute("data-d")||0);
-    if (at.name==="d" && a.tagName==="path" && morphPath(a, a.getAttribute("d"), at.value)) continue;
-    a.setAttribute(at.name, at.value);
-  }
+  const attrs = () => {
+    for (const at of [...a.attributes]) if (!b.hasAttribute(at.name)) a.removeAttribute(at.name);
+    for (const at of [...b.attributes]) if (a.getAttribute(at.name)!==at.value){
+      if (at.name==="data-v") tween(a, parseFloat(a.getAttribute("data-v"))||0, parseFloat(at.value)||0, +b.getAttribute("data-d")||0);
+      if (at.name==="d" && a.tagName==="path" && morphPath(a, a.getAttribute("d"), at.value)) continue;
+      a.setAttribute(at.name, at.value);
+    }
+  };
+  if (a.hasAttribute("data-keyed")) return keyedPatch(a, b, attrs);
+  attrs();
   if (a.hasAttribute("data-v")) return;
-  if (a.hasAttribute("data-keyed")) return keyedPatch(a, b);
   const ac=[...a.childNodes].filter(n=>!n._leaving), bc=[...b.childNodes];
   bc.forEach((n,i)=>{ if (ac[i]) morph(ac[i], n); else a.appendChild(n); });
   for (let i=bc.length;i<ac.length;i++) leave(ac[i]);
