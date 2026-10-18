@@ -3974,6 +3974,8 @@ def yt_err(lines):
         if k in t:
             if k == "Unsupported URL":             # 附上被轉到哪裡（不含 ? 後面），方便查原因
                 m = re.search(r"Unsupported URL: https?://([^\s?#]+)", t)
+                if m and re.search(r"/(login|passport|signin)", m.group(1)):
+                    return "要登入才能下載，請貼上那個網站的登入資料"   # 被轉到登入頁：跟被擋一樣，有登入資料就再試
                 return v + (f"（{m.group(1)[:80]}）" if m else "")
             return v
     last = next((x for x in reversed(lines) if x.startswith("ERROR:")), "")
