@@ -15,6 +15,11 @@ RANGES = []
 FAKE_YT = """#!/usr/bin/env python3
 import os, sys
 url = sys.argv[-1]
+if "youtube" in url and "--cookies" not in sys.argv:
+    print("ERROR: [youtube] x: Sign in to confirm you're not a bot", flush=True)
+    sys.exit(1)
+if "--cookies" in sys.argv and "SID" not in open(sys.argv[sys.argv.index("--cookies") + 1]).read():
+    sys.exit(2)
 if url.endswith("bad"):
     print("ERROR: [youtube] bad: Video unavailable", flush=True)
     sys.exit(1)
@@ -191,6 +196,20 @@ class Download(unittest.TestCase):
             url = self.base + "/watch?v=bad"
             self.S.dl_add(url)
             self.assertEqual(self.wait(url)["err"], "影片看不到了")
+            S = self.S
+            self.assertFalse(S.yt_cookies_set("hello")[0])
+            yurl = "https://www.youtube.com/watch?v=abc"
+            S.DL.append({"id": "y1", "url": yurl, "name": "", "st": "wait", "done": 0, "total": 0,
+                         "bps": 0, "err": "", "t": time.time(), "t_end": 0, "stop": False})
+            S.dl_kick()
+            self.assertEqual(self.wait(yurl)["err"], "YouTube 擋了這台主機，請開 WARP 或貼上登入資料")
+            ok, _ = S.yt_cookies_set(".youtube.com\tTRUE\t/\tTRUE\t0\tSID\tx")
+            self.assertTrue(ok)
+            self.assertTrue(S.dl_retry("y1")[0])
+            j = self.wait(yurl)
+            self.assertEqual(j["st"], "ok", j["err"])                # 被擋 → 自動改用登入資料再試一次
+            self.assertTrue(S.yt_cookies_set("")[0])
+            self.assertFalse(os.path.exists(S.YT_COOKIES))
         finally:
             os.environ.pop("SENTINEL_YTDLP", None)
         self.assertTrue(self.S.yt_site("https://www.youtube.com/watch?v=x"))

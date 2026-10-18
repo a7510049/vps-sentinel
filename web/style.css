@@ -402,6 +402,9 @@ button{font:inherit;color:inherit}
 .dlrow.bad small{color:var(--bad)}
 .dlrow .track{height:5px;margin-top:3px}.dlrow .track[hidden],.dlrow .iconbtn[hidden]{display:none}
 .dlrow .iconbtn{width:30px;height:30px;flex:none}
+.dlyt{display:flex;flex-direction:column;gap:8px}.dlyt[hidden],.dlck[hidden]{display:none}
+.dlyt a{color:var(--ink);font-weight:800;text-decoration:none}
+.dlck{display:flex;flex-direction:column;gap:8px}.dlck .dlnew{justify-content:flex-end}
 .pkrow{display:flex;align-items:center;gap:10px;padding:10px 8px 10px 13px;border-radius:var(--r-md);background:var(--inset);box-shadow:var(--ring);
   font-size:var(--fs-m);font-weight:800;color:var(--text)}
 .pkrow>svg{width:18px;height:18px;flex:none;color:var(--ink)}
