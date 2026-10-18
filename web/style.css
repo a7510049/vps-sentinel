@@ -408,6 +408,12 @@ button.li:active,a.li:active{border-radius:var(--r-lg);transform:scale(.98);back
   transition:border-radius var(--t-slow) var(--spring),background-color var(--t-fast) var(--ease),box-shadow var(--t-fast) var(--ease),transform var(--t-mid) var(--spring)}
 .fchip.on{background:var(--pc);color:var(--on-pc);box-shadow:none;border-radius:var(--r-pill)}
 .fchip:active{transform:scale(.95)}
+/* 工具：選主機（很多台時左右滑） */
+.hpick{display:flex;gap:8px;overflow-x:auto;scrollbar-width:none;margin:0 -16px 16px;padding:2px 20px;
+  -webkit-mask-image:linear-gradient(90deg,transparent,#000 16px,#000 calc(100% - 16px),transparent);mask-image:linear-gradient(90deg,transparent,#000 16px,#000 calc(100% - 16px),transparent)}
+.dash.d .hpick{flex-wrap:wrap;overflow:visible;margin:0 4px 16px;padding:0;-webkit-mask-image:none;mask-image:none}
+.hpick::-webkit-scrollbar{display:none}
+.hpick .fchip{flex:none;display:inline-flex;align-items:center;gap:8px;white-space:nowrap}
 
 /* ═════════ 設定的控制項 ═════════ */
 /* 連在一起的選項：選到的那顆變膠囊 */
