@@ -40,7 +40,7 @@ from collections import deque
 from concurrent.futures import ThreadPoolExecutor
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
-VERSION = "1.69"
+VERSION = "1.70"
 
 # ───────────────────────── 哨兵備份檔（.vsbk）─────────────────────────
 # 哨兵專用的備份格式：外面是自己的檔案格式，裡面用的是成熟、標準的加密方法（不自己發明加密）：
@@ -3937,13 +3937,18 @@ def yt_cookies_set(text):
 
 def yt_err(lines):
     t = "\n".join(lines[-20:])
-    for k, v in (("confirm you", "YouTube 擋了這台主機，請開 WARP 或貼上登入資料"), ("Sign in", "要登入才能看這部影片"),
+    for k, v in (("confirm you", "YouTube 擋了這台主機，請開 WARP 或貼上登入資料"),
+                 ("Fresh cookies", "抖音擋了這台主機，目前沒辦法下載"),
+                 ("JavaScript runtime", "YouTube 要先在主機上裝 deno 才能下載"),
+                 ("nsig extraction", "yt-dlp 太舊了，請更新"), ("Unable to extract", "yt-dlp 太舊了，請更新"),
+                 ("Requested format is not available", "yt-dlp 太舊了，請更新"), ("Sign in", "要登入才能看這部影片"),
                  ("Unsupported URL", "這個網址不是檔案，也找不到影片"), ("Private video", "這是私人影片"),
                  ("not available in your country", "這台主機所在的地區看不到這部影片"), ("unavailable", "影片看不到了"),
                  ("HTTP Error 404", "找不到這部影片（404）"), ("No space left", "空間不夠")):
         if k in t:
             return v
-    return "影片下載失敗"
+    last = next((x for x in reversed(lines) if x.startswith("ERROR:")), "")
+    return "影片下載失敗" + (f"（{last[6:].strip()[:120]}）" if last else "")   # 看不懂的錯誤附原文，方便查
 
 
 def dl_video(j, d):
