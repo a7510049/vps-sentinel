@@ -40,7 +40,7 @@ from collections import deque
 from concurrent.futures import ThreadPoolExecutor
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
-VERSION = "1.67"
+VERSION = "1.68"
 
 # ───────────────────────── 哨兵備份檔（.vsbk）─────────────────────────
 # 哨兵專用的備份格式：外面是自己的檔案格式，裡面用的是成熟、標準的加密方法（不自己發明加密）：
@@ -3875,9 +3875,51 @@ def yt_bin():
     return os.environ.get("SENTINEL_YTDLP") or shutil.which("yt-dlp")
 
 
+YT_COOKIES = os.path.join(DATA_DIR, "yt-cookies.txt")   # YouTube 登入資料（cookies.txt），YouTube 擋機房主機時用
+YT_WARP = 40000                                   # 主機上的 Cloudflare WARP（代理模式）用的連接埠；有開就讓影片經過它下載
+YT_PX = {"t": 0, "v": ""}
+
+
+def yt_youtube(url):
+    h = (urllib.parse.urlsplit(url).hostname or "").lower()
+    return any(h == s or h.endswith("." + s) for s in ("youtube.com", "youtu.be"))
+
+
+def yt_proxy():
+    """設定檔的 YT_PROXY；沒設定就看主機上有沒有開 WARP（結果記 30 秒）"""
+    if C.get("YT_PROXY"):
+        return C["YT_PROXY"]
+    if time.time() - YT_PX["t"] > 30:
+        try:
+            socket.create_connection(("127.0.0.1", YT_WARP), .5).close()
+            YT_PX["v"] = f"socks5://127.0.0.1:{YT_WARP}"
+        except OSError:
+            YT_PX["v"] = ""
+        YT_PX["t"] = time.time()
+    return YT_PX["v"]
+
+
+def yt_cookies_set(text):
+    """存（或清掉）YouTube 登入資料：瀏覽器擴充功能匯出的 cookies.txt 內容"""
+    text = str(text or "").strip()
+    if not text:
+        try:
+            os.remove(YT_COOKIES)
+        except FileNotFoundError:
+            pass
+        return True, "已清除登入資料"
+    if len(text) > 300000 or "youtube.com" not in text or not re.search(r"^\S+\t(TRUE|FALSE)\t", text, re.M):
+        return False, "格式不對，請貼上 cookies.txt 的內容"
+    tmp = YT_COOKIES + ".tmp"
+    with open(os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600), "w", encoding="utf-8") as f:
+        f.write(("" if text.startswith("# Netscape") else "# Netscape HTTP Cookie File\n") + text + "\n")
+    os.replace(tmp, YT_COOKIES)
+    return True, "已儲存登入資料"
+
+
 def yt_err(lines):
     t = "\n".join(lines[-20:])
-    for k, v in (("confirm you", "影片網站擋了這台主機（要登入驗證）"), ("Sign in", "要登入才能看這部影片"),
+    for k, v in (("confirm you", "YouTube 擋了這台主機，請開 WARP 或貼上登入資料"), ("Sign in", "要登入才能看這部影片"),
                  ("Unsupported URL", "這個網址不是檔案，也找不到影片"), ("Private video", "這是私人影片"),
                  ("not available in your country", "這台主機所在的地區看不到這部影片"), ("unavailable", "影片看不到了"),
                  ("HTTP Error 404", "找不到這部影片（404）"), ("No space left", "空間不夠")):
@@ -3887,6 +3929,16 @@ def yt_err(lines):
 
 
 def dl_video(j, d):
+    """先不用登入資料下載（有 WARP 就經過它）；YouTube 擋了、又有登入資料，再用登入資料試一次"""
+    try:
+        yt_run(j, d, False)
+    except DlErr as e:
+        if not (str(e).startswith(("YouTube 擋了", "要登入")) and yt_youtube(j["url"]) and os.path.isfile(YT_COOKIES)):
+            raise
+        yt_run(j, d, True)
+
+
+def yt_run(j, d, cookies):
     """用 yt-dlp 下載影片，邊下載邊讀進度"""
     b = yt_bin()
     if not b:
@@ -3897,10 +3949,21 @@ def dl_video(j, d):
            "--progress-template", "download:VSP %(progress.downloaded_bytes)s %(progress.total_bytes)s "
                                   "%(progress.total_bytes_estimate)s %(progress.speed)s",
            "--print", "video:VSN %(id)s %(title)s", "--print", "after_move:VSF %(filepath)s",
-           "-o", os.path.join(d, "%(title).80s [%(id)s].%(ext)s"), "--", j["url"]]
+           "-o", os.path.join(d, "%(title).80s [%(id)s].%(ext)s")]
+    px, ck = yt_proxy(), None
+    if px:
+        cmd += ["--proxy", px]
+    if cookies:                                    # 登入資料只給 YouTube 用；複製一份給 yt-dlp（它會改寫）
+        fd, ck = tempfile.mkstemp(prefix="vs-yt-", suffix=".txt")
+        with os.fdopen(fd, "w") as f, open(YT_COOKIES, encoding="utf-8") as src:
+            f.write(src.read())
+        cmd += ["--cookies", ck]
+    cmd += ["--", j["url"]]
     kw = {}
     if os.geteuid() == 0 and d != os.environ.get("SENTINEL_DL_DIR"):
         kw = {"user": 1000, "group": 1000, "extra_groups": []}   # 用雲端硬碟的使用者身分執行，下載的檔案也是它的
+        if ck:
+            os.chown(ck, 1000, 1000)
     p = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, stdin=subprocess.DEVNULL, cwd=d,
                          env={"PATH": os.environ.get("PATH", "/usr/bin:/bin"), "HOME": "/tmp", "LANG": "C.UTF-8"}, **kw)
     why = []
@@ -3933,6 +3996,11 @@ def dl_video(j, d):
         elif line:
             lines.append(line)
     p.wait()
+    if ck:
+        try:
+            os.remove(ck)
+        except OSError:
+            pass
     if why or p.returncode or not final:
         if vid:                                    # 清掉下載到一半的檔案
             for f in glob.glob(os.path.join(glob.escape(d), f"*[[]{glob.escape(vid)}[]]*")):
@@ -4091,7 +4159,8 @@ def dl_status():
         pass
     with DL_LOCK:
         items = [dl_public(j) for j in reversed(DL)]
-    return {"ok": True, "list": items, "cloud": bool(d), "room": dl_room(d) if d else 0, "folder": DL_SUB}
+    return {"ok": True, "list": items, "cloud": bool(d), "room": dl_room(d) if d else 0, "folder": DL_SUB,
+            "yt": {"tool": bool(yt_bin()), "cookies": os.path.isfile(YT_COOKIES), "warp": bool(yt_proxy())}}
 
 
 def dl_add(url):
@@ -5398,7 +5467,8 @@ class Handler(BaseHTTPRequestHandler):
                 self.close_connection = True       # 沒收完的資料不要留在連線上
             return self.send(200 if ok else 400, json.dumps({"ok": ok, "message": msg}, ensure_ascii=False))
         try:
-            size = min(int(self.headers.get("Content-Length") or 0), 16384 if u.path.startswith("/api/passkey") else 4096)
+            size = min(int(self.headers.get("Content-Length") or 0),
+                       16384 if u.path.startswith("/api/passkey") else 400000 if u.path == "/api/download" else 4096)
             body = self.rfile.read(size) if size else b""
         except (ValueError, OSError):
             body = b""
@@ -5523,8 +5593,8 @@ class Handler(BaseHTTPRequestHandler):
         if u.path == "/api/download":                # 遠端下載：加入、取消／移除、重試、看清單
             d = self.jbody(body)
             act = d.get("action")
-            if act in ("add", "stop", "retry"):
-                ok, msg = (dl_add(d.get("url")) if act == "add" else
+            if act in ("add", "stop", "retry", "cookies"):
+                ok, msg = (dl_add(d.get("url")) if act == "add" else yt_cookies_set(d.get("text")) if act == "cookies" else
                            dl_stop(str(d.get("id") or "")) if act == "stop" else dl_retry(str(d.get("id") or "")))
                 return self.send(200 if ok else 400, json.dumps({**dl_status(), "ok": ok, "message": msg}, ensure_ascii=False))
             return self.send(200, json.dumps(dl_status(), ensure_ascii=False))
