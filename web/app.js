@@ -631,20 +631,29 @@ function detail(s){
     <div class="dtop"><button class="icbtn" data-back title="返回">${I("back")}</button><span class="grow"></span><span class="hacts">${moreBtn(s)}</span></div>
     ${hostBody(s, true)}</div></div>`;
 }
-/* 工具：雲端硬碟、遠端下載、常用連結、每日備份 */
+/* 工具：雲端硬碟、遠端下載、每日備份、常用連結；好幾台時上面一排主機名稱（可以左右滑）選一台，只顯示那台的 */
+let TOOLH = store("vs-toolh"), ORDER = [];
 function toolsPage(list){
-  const on = list.filter(s => s.online), multi = list.length > 1, nm = (s, l) => multi ? esc(s.name) : l;   // 好幾台時，小標題已經寫了功能名稱，每一列只寫主機名稱
-  const cl = on.filter(s => s.cloud && safeUrl(cloudHref(s.cloud)));
+  const on = list.filter(s => s.online).sort((a, b) => ORDER.indexOf(keyOf(a)) - ORDER.indexOf(keyOf(b)));
   let h = `<div class="narrow" data-key="tools"><h1 class="ptitle">工具</h1>`;
-  if (cl.length) h += `<div class="lbl">雲端硬碟</div><div class="group" data-key="g-cl">${cl.map(s => { const c = s.cloud;
-    return `<a class="li col" data-key="cl:${esc(keyOf(s))}" href="${esc(cloudHref(c))}"${ssoAttr(s)} target="_blank" rel="noopener noreferrer"><span class="rt">${IC("cloud", "")}<span class="lab">${nm(s, "雲端硬碟")}<small>${c.total ? `已用 ${size(c.used)} / ${size(c.total)}` : "點一下打開"}</small></span>${EXT}</span>${c.total ? wave(c.pct) : ""}</a>`; }).join("")}</div>`;
-  if (cl.length) h += `<div class="lbl">遠端下載</div><div class="group" data-key="g-dl">${cl.map(s =>
-    `<button class="li" data-key="dl:${esc(keyOf(s))}" data-dl="${esc(s.node || "")}" data-name="${esc(s.name)}">${IC("dl", "")}<span class="lab">${nm(s, "遠端下載")}<small>貼上連結，存到雲端硬碟</small></span>${CHEV}</button>`).join("")}</div>`;
-  const L = on.flatMap(s => linksOf(s).filter(x => !x.fixed).map(x => ({...x, h: s.name})));
-  if (L.length) h += `<div class="lbl">常用連結</div><div class="group" data-key="g-lk">${L.map(x => linkRow(x, `${multi ? esc(x.h) + "・" : ""}${esc(linkSt(x))}`)).join("")}</div>`;
-  if (on.length) h += `<div class="lbl">每日備份</div><div class="group" data-key="g-bk">${on.map(s =>
-    `<button class="li" data-key="bk:${esc(keyOf(s))}" data-bk="${esc(s.node || "")}" data-label="${esc(s.name)}">${IC("archive", "")}<span class="lab">${nm(s, "每日備份")}<small class="bkst" data-n="${esc(s.node || "")}" data-keep data-ld>讀取中…</small></span>${CHEV}</button>`).join("")}</div>`;
+  if (!on.length) return h + `<div class="calm">連不上任何主機</div></div>`;
+  const s = on.find(x => keyOf(x) === TOOLH) || on.find(x => !x.node) || on[0], k = esc(keyOf(s)), node = esc(s.node || ""), name = esc(s.name);
+  if (on.length > 1) h += `<div class="hpick" data-key="hpick" data-keyed>${on.map(x => `<button class="fchip${x === s ? " on" : ""}" data-key="hp:${esc(keyOf(x))}" data-toolh="${esc(keyOf(x))}">${lvOf(x) === "ok" ? "" : `<span class="dot ${lvOf(x)}"></span>`}${esc(x.name)}</button>`).join("")}</div>`;
+  const c = s.cloud && safeUrl(cloudHref(s.cloud)) ? s.cloud : null;
+  h += `<div class="group" data-key="g-t:${k}">`;
+  if (c) h += `<a class="li col" data-key="cl" href="${esc(cloudHref(c))}"${ssoAttr(s)} target="_blank" rel="noopener noreferrer"><span class="rt">${IC("cloud", "")}<span class="lab">雲端硬碟<small>${c.total ? `已用 ${size(c.used)} / ${size(c.total)}` : "點一下打開"}</small></span>${EXT}</span>${c.total ? wave(c.pct) : ""}</a>
+    <button class="li" data-key="dl" data-dl="${node}" data-name="${name}">${IC("dl", "")}<span class="lab">遠端下載<small>貼上連結，存到雲端硬碟</small></span>${CHEV}</button>`;
+  h += `<button class="li" data-key="bk" data-bk="${node}" data-label="${name}">${IC("archive", "")}<span class="lab">每日備份<small class="bkst" data-n="${node}" data-keep data-ld>讀取中…</small></span>${CHEV}</button></div>`;
+  const L = linksOf(s).filter(x => !x.fixed);
+  if (L.length) h += `<div class="lbl" data-key="ll">常用連結</div><div class="group" data-key="g-lk:${k}">${L.map(x => linkRow(x, esc(linkSt(x)))).join("")}</div>`;
   return h + `</div>`;
+}
+/* 選到的主機名稱被擠到邊邊或看不到時，把那一排滑到它在中間（只滑那一排，頁面不動） */
+function pickShow(anim){
+  const r = $(".hpick"), b = r && r.querySelector(".on"); if (!b || r.scrollWidth <= r.clientWidth) return;
+  const z = ZM(), l = (b.getBoundingClientRect().left - r.getBoundingClientRect().left) / z + r.scrollLeft, pad = 40;
+  if (l < r.scrollLeft + pad || l + b.offsetWidth > r.scrollLeft + r.clientWidth - pad)        // 滑到正中間
+    r.scrollTo({left: l - (r.clientWidth - b.offsetWidth) / 2, behavior: anim && canAnim() ? "smooth" : "auto"});
 }
 /* 紀錄：所有主機的事件，依日期分組 */
 let LOGF = "";
@@ -955,13 +964,14 @@ function render(list){
     }
   }
   // 有紅色（異常）或橘色（注意）告警的主機排在最前面；同一級的照原本順序
+  ORDER = list.map(keyOf);                     // 原本的順序（工具的主機列不跟著告警重排，免得按到別台）
   list = [...list].map(tidy).sort((a, b) => LVRANK[lvOf(a)] - LVRANK[lvOf(b)]);
   LIST = list; flagAccent();
   if (DET && (DESK.matches || !list.some(s => keyOf(s) === DET))) { DET = ""; DETX = false; document.documentElement.classList.remove("lock"); }
   const time = new Date().toLocaleTimeString("zh-TW", {hour12:false});
   paint(DESK.matches ? renderDesk(list, time) : renderPhone(list, time));
   if (TIPX) drawTip(...TIPX);
-  loadStatus();
+  loadStatus(); pickShow();
 }
 DESK.addEventListener("change", () => { applyPrefs(); if (LIST.length) render(LIST); });
 /* 電腦版一次並排幾台：螢幕夠寬才放三台 */
@@ -2167,6 +2177,8 @@ document.addEventListener("click", async e => {
     if (await modal({icon:"logout", cls:"info", title:"要登出嗎？", text:"", ok:"登出"})) { setTok(""); LIST = []; clearTimeout(timer); DET = ""; document.documentElement.classList.remove("lock"); login(); }
     return;
   }
+  const th = t.closest("[data-toolh]");
+  if (th) { if (TOOLH !== th.dataset.toolh) { TOOLH = th.dataset.toolh; store("vs-toolh", TOOLH); render(LIST); } pickShow(true); return; }
   const lf = t.closest("[data-logf]");
   if (lf) { if (LOGF !== lf.dataset.logf) { LOGF = lf.dataset.logf; render(LIST); } return; }
 
