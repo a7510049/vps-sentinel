@@ -1851,7 +1851,7 @@ function dlModal(node, name){
   const call = body => pkCall("/api/download" + (node ? "?node=" + encodeURIComponent(node) : ""), body, 1).catch(err => ({message:err.message}));
   const say = (t, bad) => { msg.className = "msg" + (bad ? " bad" : ""); msg.textContent = t || ""; };
   const left = s => s < 60 ? `${Math.max(1, Math.round(s))} 秒` : s < 3600 ? `${Math.round(s / 60)} 分鐘` : `${(s / 3600).toFixed(1)} 小時`;
-  const stOf = j => j.st === "wait" ? "排隊中" : j.st === "ok" ? `下載好了・${size(j.total)}` : j.st === "bad" ? j.err || "沒有成功"
+  const stOf = j => j.st === "wait" ? j.err || "排隊中" : j.st === "ok" ? `下載好了・${size(j.total)}` : j.st === "bad" ? j.err || "沒有成功"
     : j.total ? `${Math.floor(j.done / j.total * 100)}%${j.bps ? `・${rate(j.bps)}・剩 ${left((j.total - j.done) / j.bps)}` : `・共 ${size(j.total)}`}`
     : `${size(j.done)}${j.bps ? `・${rate(j.bps)}` : ""}`;
   let timer = 0, busy = false;

@@ -10,6 +10,7 @@ import unittest
 DATA = os.urandom(300_000)
 BIG = os.urandom(20 * 1024 * 1024)
 RANGES = []
+FLAKY = []
 
 
 FAKE_YT = """#!/usr/bin/env python3
@@ -80,6 +81,16 @@ class Files(http.server.BaseHTTPRequestHandler):
             except OSError:
                 pass
             return
+        if self.path.startswith("/flaky"):            # 第一次給一半就斷線，之後支援接續
+            rg = self.headers.get("Range")
+            start = int(rg.split("=")[1].split("-")[0]) if rg else 0
+            FLAKY.append(start)
+            self.send_response(206 if start else 200)
+            self.send_header("Content-Length", str(len(DATA) - start))
+            self.end_headers()
+            self.wfile.write(DATA[start:] if len(FLAKY) > 1 else DATA[:len(DATA) // 2])
+            self.close_connection = True
+            return
         if self.path.startswith("/missing"):
             self.send_response(404)
             self.send_header("Content-Length", "0")
@@ -106,6 +117,7 @@ class Download(unittest.TestCase):
         cls.dir = tempfile.mkdtemp()
         os.environ["SENTINEL_DL_DIR"] = cls.dir
         os.environ["SENTINEL_DL_LOCAL"] = "1"
+        os.environ["SENTINEL_DL_AGAIN"] = "0.3"
         from test_passkey import load_sentinel
         cls.S = load_sentinel()
         cls.srv = http.server.ThreadingHTTPServer(("127.0.0.1", 0), Files)
@@ -184,6 +196,16 @@ class Download(unittest.TestCase):
         self.assertEqual(sorted(a for a, _ in RANGES), want)
         with open(os.path.join(self.dir, "half.bin"), "rb") as f:
             self.assertEqual(f.read(), BIG)
+
+    def test_auto_retry(self):
+        """下載到一半斷線：等一下自己接著下載，不用按重試"""
+        url = self.base + "/flaky.bin"
+        self.S.dl_add(url)
+        j = self.wait(url)
+        self.assertEqual(j["st"], "ok", j["err"])
+        self.assertEqual(FLAKY, [0, len(DATA) // 2])
+        with open(os.path.join(self.dir, "flaky.bin"), "rb") as f:
+            self.assertEqual(f.read(), DATA)
 
     def test_pick_url(self):
         """從分享文字裡挑出網址"""

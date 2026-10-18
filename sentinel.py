@@ -40,7 +40,7 @@ from collections import deque
 from concurrent.futures import ThreadPoolExecutor
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
-VERSION = "1.71"
+VERSION = "1.72"
 
 # ───────────────────────── 哨兵備份檔（.vsbk）─────────────────────────
 # 哨兵專用的備份格式：外面是自己的檔案格式，裡面用的是成熟、標準的加密方法（不自己發明加密）：
@@ -3549,6 +3549,8 @@ DL_SEGS = 4                                       # 檔案夠大、對方支援�
 DL_SEGS_MAX = 16                                  # 大檔案每 32 MB 多一段，最多 16 段
 DL_SEG_MIN = 16 * 1024 * 1024                     # 比這個小就不分段
 DL_STEAL = 8 * 1024 * 1024                        # 先下載完的連線去幫忙還剩這麼多以上的段
+DL_AGAIN = ("連線中斷了", "對方太久沒回應", "連不上")    # 這些錯誤先自己重試
+DL_AGAIN_WAIT = float(os.environ.get("SENTINEL_DL_AGAIN", 30))   # 第 n 次重試前等 n 倍這麼多秒
 DL_PART = ".下載中"                                # 還沒下載完的檔案後面加這個
 DL_FILE = os.path.join(DATA_DIR, "downloads.json")
 DL_LOCAL = os.environ.get("SENTINEL_DL_LOCAL") == "1"     # 測試用：允許下載本機的東西
@@ -3781,8 +3783,8 @@ def dl_kick():
         for j in DL:
             if run >= DL_MAX:
                 break
-            if j["st"] == "wait":
-                j["st"] = "run"
+            if j["st"] == "wait" and j.get("after", 0) <= time.time():
+                j.update(st="run", err="")
                 run += 1
                 threading.Thread(target=dl_run, args=(j,), daemon=True).start()
 
@@ -3897,6 +3899,23 @@ def yt_bin():
 YT_COOKIES = os.path.join(DATA_DIR, "yt-cookies.txt")   # YouTube 登入資料（cookies.txt），YouTube 擋機房主機時用
 YT_WARP = 40000                                   # 主機上的 Cloudflare WARP（代理模式）用的連接埠；有開就讓影片經過它下載
 YT_PX = {"t": 0, "v": ""}
+
+
+def yt_update_loop():
+    """yt-dlp、deno 每天用它們自己的更新功能更新一次（網站一改版，舊版就下載不了）"""
+    time.sleep(600)
+    while True:
+        b = None if os.environ.get("SENTINEL_YTDLP") else shutil.which("yt-dlp")
+        for cmd in ([b, "-U"] if b else None, [shutil.which("deno"), "upgrade"] if shutil.which("deno") else None):
+            if not cmd:
+                continue
+            try:
+                r = subprocess.run(cmd, capture_output=True, text=True, timeout=600, stdin=subprocess.DEVNULL)
+                out = (r.stdout + r.stderr).strip().splitlines()
+                log(f"更新 {os.path.basename(cmd[0])}：{out[-1][:150] if out else r.returncode}")
+            except (OSError, subprocess.SubprocessError) as e:
+                log(f"更新 {os.path.basename(cmd[0])} 失敗：{e!r}")
+        time.sleep(86400)
 
 
 def yt_proxy():
@@ -4107,11 +4126,17 @@ def dl_run(j):
             dst = os.path.join(d, dl_unique(d, j["name"], j) if os.path.lexists(os.path.join(d, j["name"])) else j["name"])
             os.replace(part, dst)
             j["name"] = os.path.basename(dst)
-        j.update(st="ok", total=j["done"], t_end=time.time(), err="", segs=None)
+        j.update(st="ok", total=j["done"], t_end=time.time(), err="", segs=None, tries=0)
         COL.add_event("info", f"下載好了：{j['name']}（{dl_size(j['done'])}）")
         log(f"下載完成：{j['name']}")
     except Exception as e:  # noqa: BLE001
         msg = dl_err(e)
+        if not j["stop"] and j.get("kind") != "video" and msg in DL_AGAIN and j.get("tries", 0) < 3:
+            j["tries"] = j.get("tries", 0) + 1     # 網路不穩：等一下自己再接著下載（最多 3 次）
+            j.update(st="wait", err=f"{msg}，等一下會自己再試", bps=0, after=time.time() + DL_AGAIN_WAIT * j["tries"])
+            threading.Timer(DL_AGAIN_WAIT * j["tries"] + .1, dl_kick).start()
+            log(f"下載中斷，稍後再試：{j['url'][:100]}：{e!r}")
+            return
         j.update(st="bad", err=msg, t_end=time.time())
         if not part and d and j.get("name") and j.get("kind") != "video":
             part = os.path.join(d, j["name"] + DL_PART)
@@ -4258,7 +4283,7 @@ def dl_retry(jid):
         j = next((x for x in DL if x["id"] == jid), None)
         if not j or j["st"] != "bad":
             return False, "找不到這筆下載"
-        j.update(st="wait", err="", stop=False, bps=0, t=time.time(), t_end=0)
+        j.update(st="wait", err="", stop=False, bps=0, t=time.time(), t_end=0, tries=0)
     dl_save()
     dl_kick()
     return True, "重新下載"
@@ -5726,6 +5751,7 @@ def main():
     signal.signal(signal.SIGINT, stop)
     threading.Thread(target=COL.loop, daemon=True).start()
     threading.Thread(target=keep_loop, daemon=True).start()       # 只有 Oracle 免費主機才會真的做事
+    threading.Thread(target=yt_update_loop, daemon=True).start()  # 有裝 yt-dlp／deno 才會真的做事
     threading.Thread(target=alert_loop, daemon=True).start()      # 沒設定時也會跑，網頁上一設定好就開始通知
     dl_load()                                                     # 上次沒下載完的接著下載
     srv = ThreadingHTTPServer((BIND, PORT), Handler)
