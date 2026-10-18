@@ -40,7 +40,7 @@ from collections import deque
 from concurrent.futures import ThreadPoolExecutor
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
-VERSION = "1.72"
+VERSION = "1.73"
 
 # ───────────────────────── 哨兵備份檔（.vsbk）─────────────────────────
 # 哨兵專用的備份格式：外面是自己的檔案格式，裡面用的是成熟、標準的加密方法（不自己發明加密）：
@@ -3662,9 +3662,11 @@ def dl_err(e):
     return "連不上"
 
 
-def dl_open(url, start=0, end=None):
+def dl_open(url, start=0, end=None, ua=None, stop=None):
     """打開下載連結（自己處理轉址，每一次轉址都重新檢查位址）；start＞0 時從那裡接著下載，end＝只要到哪裡（分段下載用）"""
     for _ in range(8):
+        if stop and stop(url):                     # 只要轉址到哪裡，不打開最後的網頁
+            return None, None, url
         u = urllib.parse.urlsplit(url)
         if u.scheme not in ("http", "https") or not u.hostname:
             raise DlErr("只能下載 http 或 https 開頭的連結")
@@ -3675,7 +3677,7 @@ def dl_open(url, start=0, end=None):
         path = urllib.parse.quote(u.path or "/", safe="/%:@!$&'()*+,;=-._~")
         if u.query:
             path += "?" + urllib.parse.quote(u.query, safe="/%:@!$&'()*+,;=-._~?")
-        head = {"User-Agent": f"Mozilla/5.0 (VPS Sentinel {VERSION})", "Accept": "*/*", "Accept-Encoding": "identity"}
+        head = {"User-Agent": ua or f"Mozilla/5.0 (VPS Sentinel {VERSION})", "Accept": "*/*", "Accept-Encoding": "identity"}
         if u.username:
             head["Authorization"] = "Basic " + base64.b64encode(
                 f"{urllib.parse.unquote(u.username)}:{urllib.parse.unquote(u.password or '')}".encode()).decode()
@@ -3962,6 +3964,7 @@ def yt_err(lines):
     t = "\n".join(lines[-20:])
     for k, v in (("confirm you", "YouTube 擋了這台主機，請開 WARP 或貼上登入資料"),
                  ("Fresh cookies", "抖音擋了這台主機，請貼上抖音的登入資料"),
+                 ("HTTP Error 412", "網站擋了這台主機，請貼上那個網站的登入資料"),
                  ("JavaScript runtime", "YouTube 要先在主機上裝 deno 才能下載"),
                  ("nsig extraction", "yt-dlp 太舊了，請更新"), ("Unable to extract", "yt-dlp 太舊了，請更新"),
                  ("Requested format is not available", "yt-dlp 太舊了，請更新"), ("Sign in", "要登入才能看這部影片"),
@@ -3969,6 +3972,9 @@ def yt_err(lines):
                  ("not available in your country", "這台主機所在的地區看不到這部影片"), ("unavailable", "影片看不到了"),
                  ("HTTP Error 404", "找不到這部影片（404）"), ("No space left", "空間不夠")):
         if k in t:
+            if k == "Unsupported URL":             # 附上被轉到哪裡（不含 ? 後面），方便查原因
+                m = re.search(r"Unsupported URL: https?://([^\s?#]+)", t)
+                return v + (f"（{m.group(1)[:80]}）" if m else "")
             return v
     last = next((x for x in reversed(lines) if x.startswith("ERROR:")), "")
     return "影片下載失敗" + (f"（{last[6:].strip()[:120]}）" if last else "")   # 看不懂的錯誤附原文，方便查
@@ -3979,9 +3985,49 @@ def dl_video(j, d):
     try:
         yt_run(j, d, False)
     except DlErr as e:
-        if not (str(e).startswith(("YouTube 擋了", "抖音擋了", "要登入")) and os.path.isfile(YT_COOKIES)):
+        if not (str(e).startswith(("YouTube 擋了", "抖音擋了", "網站擋了", "要登入")) and os.path.isfile(YT_COOKIES)):
             raise
         yt_run(j, d, True)
+
+
+YT_SHORT = ("xhslink.com", "b23.tv", "v.douyin.com", "bili2233.cn")
+
+
+def yt_host(url):
+    h = (urllib.parse.urlsplit(url).hostname or "").lower()
+    return h[4:] if h.startswith("www.") else h
+
+
+def yt_fix(url):
+    """短網址（小紅書、B 站、抖音）先自己轉址，再換成 yt-dlp 認得的標準網址（短網址常常擋 yt-dlp，或 yt-dlp 認不得）"""
+    final = url
+    if yt_host(url) in YT_SHORT:
+        try:
+            r, c, final = dl_open(url, ua="Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 "
+                                          "(KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1",
+                                  stop=lambda u: yt_host(u) not in YT_SHORT)
+            if c:
+                c.close()
+        except DlErr:
+            return url
+    h = yt_host(final)
+    flat = urllib.parse.unquote(urllib.parse.unquote(final))
+    if h == "xiaohongshu.com" or h.endswith(".xiaohongshu.com"):
+        m = re.search(r"/(?:explore|discovery/item|item|profile/[0-9a-f]+)/([0-9a-f]{24})", flat) or \
+            re.search(r"(?<![0-9a-f])([0-9a-f]{24})(?![0-9a-f])", urllib.parse.urlsplit(flat).path)
+        if m:
+            tok = re.search(r"xsec_token=([\w=-]+)", flat)
+            return f"https://www.xiaohongshu.com/explore/{m.group(1)}" + (f"?xsec_token={tok.group(1)}&xsec_source=pc_share" if tok else "")
+    elif h.endswith("bilibili.com"):
+        m = re.search(r"/video/(BV\w{10}|av\d+)", flat)
+        if m:
+            p = re.search(r"[?&]p=(\d+)", flat)
+            return f"https://www.bilibili.com/video/{m.group(1)}/" + (f"?p={p.group(1)}" if p else "")
+    elif h.endswith("douyin.com"):
+        m = re.search(r"/(?:video|note)/(\d{8,})", flat) or re.search(r"modal_id=(\d{8,})", flat)
+        if m:
+            return f"https://www.douyin.com/video/{m.group(1)}"
+    return final
 
 
 def yt_run(j, d, cookies):
@@ -4004,7 +4050,7 @@ def yt_run(j, d, cookies):
         with os.fdopen(fd, "w") as f, open(YT_COOKIES, encoding="utf-8") as src:
             f.write(src.read())
         cmd += ["--cookies", ck]
-    cmd += ["--", j["url"]]
+    cmd += ["--", yt_fix(j["url"])]
     kw = {}
     if os.geteuid() == 0 and d != os.environ.get("SENTINEL_DL_DIR"):
         kw = {"user": 1000, "group": 1000, "extra_groups": []}   # 用雲端硬碟的使用者身分執行，下載的檔案也是它的

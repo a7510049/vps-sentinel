@@ -207,6 +207,20 @@ class Download(unittest.TestCase):
         with open(os.path.join(self.dir, "flaky.bin"), "rb") as f:
             self.assertEqual(f.read(), DATA)
 
+    def test_xhs_url(self):
+        """小紅書、B 站、抖音的各種網址換成 yt-dlp 認得的標準網址"""
+        want = "https://www.xiaohongshu.com/explore/65a1b2c3d4e5f60718293a4b?xsec_token=AB=&xsec_source=pc_share"
+        for u in ("https://www.xiaohongshu.com/user/profile/5f1a2b3c4d5e6f7a8b9c0d1e/65a1b2c3d4e5f60718293a4b?xsec_token=AB=",
+                  "https://www.xiaohongshu.com/discovery/item/65a1b2c3d4e5f60718293a4b?app_platform=ios&xsec_token=AB="):
+            self.assertEqual(self.S.yt_fix(u), want)
+        self.assertEqual(self.S.yt_fix("https://www.youtube.com/watch?v=1"), "https://www.youtube.com/watch?v=1")
+        self.assertEqual(self.S.yt_fix("https://m.bilibili.com/video/BV1xx411c7mD?share_source=copy&p=2"),
+                         "https://www.bilibili.com/video/BV1xx411c7mD/?p=2")
+        self.assertEqual(self.S.yt_fix("https://www.iesdouyin.com/share/video/7312345678901234567/?region=CN"),
+                         "https://www.douyin.com/video/7312345678901234567")
+        self.assertEqual(self.S.yt_err(["ERROR: Unsupported URL: https://www.xiaohongshu.com/404/sec_a?x=1"]),
+                         "這個網址不是檔案，也找不到影片（www.xiaohongshu.com/404/sec_a）")
+
     def test_pick_url(self):
         """從分享文字裡挑出網址"""
         for t, want in (("7.92 复制打开抖音，看看【作品】 https://v.douyin.com/iAbC/ k@B.Ag 01/11", "https://v.douyin.com/iAbC/"),
