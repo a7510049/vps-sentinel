@@ -188,11 +188,8 @@ document.addEventListener("click", e => {
   if (a && !e.ctrlKey && !e.metaKey && !e.shiftKey && e.button === 0 && openCloud(LIST.find(x => keyOf(x) === a.dataset.sso))) e.preventDefault();
 }, true);
 const linkSt = x => x.up === false ? `打不開：${x.err || "連不上"}` : x.up ? `正常・${x.ms} 毫秒` : x.err ? "剛剛沒回應，再確認一次中…" : "還沒檢查";
-/* 主機名稱旁：常用連結一直都在，編輯、重新開機、移除收進「⋯」選單 */
+/* 主機名稱旁的「⋯」：編輯、重新開機、移除（雲端硬碟、下載、連結都在「工具」） */
 const moreBtn = s => (s.online || s.node) ? `<button class="iconbtn" title="更多" data-more="${esc(keyOf(s))}">${I("more")}</button>` : "";
-const editBtn = s => { const L = s.online ? linksOf(s) : [];
-  return (L.length === 1 ? `<a class="iconbtn plink ${L[0].up===false?"down":""}" href="${esc(L[0].url)}"${L[0].sso ? ` data-sso="${esc(L[0].sso)}"` : ""} target="_blank" rel="noopener noreferrer" title="打開 ${esc(L[0].name)}（${esc(linkSt(L[0]))}）">${I("ext")}</a>`
-    : L.length > 1 ? `<button class="iconbtn plink ${L.some(x=>x.up===false)?"down":""}" data-links="${esc(keyOf(s))}" title="常用連結">${I("ext")}</button>` : "") + moreBtn(s); };
 function alerts(s){
   const k = t => esc(String(t).replace(/^\d+\s*|\s*[（(]?\d+(\.\d+)?\s*%[）)]?$/g, ""));   // 只拿掉會變的數字，名稱裡的數字要留（app-1、app-2 是兩件事）
   const al = (s.problems||[]).map(p=>`<div class="alert bad" data-key="b:${k(p)}">${I("warn")}${esc(p)}</div>`)
@@ -484,27 +481,18 @@ const addHostBtn = cls => `<button class="${cls}" data-addhost data-key="+add">$
 const subOf = s => s.online ? `<span title="核心版本 ${esc(s.kernel)}">${esc([place(s), s.os].filter(Boolean).join("・"))}</span>・開機 ${up(s.uptime)}`
   : (s.last_seen ? `離線・${ago(s.last_seen)}` : "目前連不上");
 function hostBody(s, ph){
-  let h = `<div class="hb" data-key="hb" data-keyed><div class="hhead" data-key="hh">${avatar(s)}<div class="nm"><h2 class="hname">${esc(s.name)}</h2><div class="hsub">${subOf(s)}</div></div>${ph ? "" : `<span class="hacts">${editBtn(s)}</span>`}</div>`;
+  let h = `<div class="hb" data-key="hb" data-keyed><div class="hhead" data-key="hh">${avatar(s)}<div class="nm"><h2 class="hname">${esc(s.name)}</h2><div class="hsub">${subOf(s)}</div></div>${ph ? "" : `<span class="hacts">${moreBtn(s)}</span>`}</div>`;
   if (!s.online) return h + offBox(s) + `</div>`;
-  if (ph) h += actions(s);
   h += alerts(s) + tiles(s) + factsRow(s, ph);
   const hs = PREF.show.chart ? histFor(s) : null;
-  if (PREF.show.chart) h += `<div class="cc" data-key="cp"><div class="cch"><span class="lg"><i style="background:${COL.cpu}"></i>處理器<b>${num(s.cpu)}%</b></span><span class="lg"><i style="background:${COL.mem}"></i>記憶體<b>${num(s.mem.pct)}%</b></span>${rangeSeg()}</div>
+  if (PREF.show.chart) h += `<div class="cc" data-key="cp"><div class="cch"><span class="lg"><i style="background:${COL.cpu}"></i>處理器</span><span class="lg"><i style="background:${COL.mem}"></i>記憶體</span>${rangeSeg()}</div>
     <div class="cbox">${chartOr(hs, cid(s, ph ? "m" : "a"), x => [{data:x.cpu, color:COL.cpu, name:"處理器"}, {data:x.mem, color:COL.mem, name:"記憶體"}], {max:100, grid:1, fmt:v => Math.round(v) + "%", h: ph ? 130 : 150})}</div></div>`;
   if (PREF.show.net) h += `<div class="cc" data-key="np"><div class="nets"><div class="nt">${IC("down")}<div><div class="nv">${rate(s.net.rx)}</div><div class="nl">下載</div></div></div><div class="nt">${IC("up")}<div><div class="nv">${rate(s.net.tx)}</div><div class="nl">上傳</div></div></div></div>
     ${hs ? `<div class="cbox wide">${chartOr(hs, cid(s, ph ? "n" : "b"), x => [{data:x.rx, color:COL.rx, name:"下載"}, {data:x.tx, color:COL.tx, name:"上傳"}], {grid:1, bin:1, fmt:rate, h: ph ? 96 : 110})}</div>` : ""}</div>`;
-  h += trafficCard(s) + itemsCard(s) + (ph ? linksCard(s) : "");
+  h += trafficCard(s) + itemsCard(s);
   const info = updateInfo(s), btn = updateBtn(s);
   if (info || btn) h += `<div class="foot" data-key="ft"><div class="sub" data-x>${info}</div>${btn}</div>`;
   return h + `</div>`;
-}
-/* 手機整頁上面的三顆按鈕：雲端硬碟、遠端下載、重新開機 */
-function actions(s){
-  const b = [], node = esc(s.node || ""), name = esc(s.name);
-  if (s.cloud && safeUrl(cloudHref(s.cloud))) b.push(`<a class="bgb" href="${esc(cloudHref(s.cloud))}"${ssoAttr(s)} target="_blank" rel="noopener noreferrer">${I("cloud")}<span>雲端硬碟</span></a>`);
-  if (s.cloud) b.push(`<button class="bgb" data-dl="${node}" data-name="${name}">${I("dl")}<span>下載</span></button>`);
-  b.push(`<button class="bgb w" data-reboot="${node}" data-name="${name}">${I("power")}<span>重開機</span></button>`);
-  return `<div class="bgroup" data-key="ac">${b.join("")}</div>`;
 }
 /* 四格：處理器、記憶體、磁碟、負載 */
 function tiles(s){
@@ -543,16 +531,7 @@ function factsRow(s, ph){
     (s.disks || []).slice(1).forEach(d => f.push(`<span class="fc">磁碟 ${esc(d.path)}<b class="num ${tier(d.pct)}">${num(d.pct)}%</b></span>`));
     if (s.mem.swap_total) f.push(`<span class="fc">虛擬記憶體<b class="num">${num(s.mem.swap_pct)}%</b></span>`);
   }
-  const cc = !ph && cloudChip(s); if (cc) f.push(cc);            // 手機整頁上面另外有雲端硬碟按鈕
   return f.length ? `<div class="fcs" data-key="fcs">${f.join("")}</div>` : "";
-}
-/* 雲端硬碟入口（電腦版）：點了直接打開 */
-function cloudChip(s){
-  const c = s.cloud, href = c && cloudHref(c); if (!c || !safeUrl(href)) return "";
-  const L = (s.links || []).find(x => x.fixed), down = L && L.up === false;
-  const use = c.total ? `${size(c.used)} / ${size(c.total)}` : "";
-  return `<a class="cchip ${down ? "down" : c.pct >= 90 ? "warn" : ""}" href="${esc(href)}"${ssoAttr(s)} target="_blank" rel="noopener noreferrer"
-    title="打開雲端硬碟${use ? `（已用 ${use}）` : ""}${down ? `・目前打不開：${esc(L.err || "")}` : ""}">${I("cloud")}<span>雲端硬碟${c.total ? ` ${num(c.pct)}%` : ""}</span>${I("ext")}</a>`;
 }
 /* 本月流量：點了開流量設定 */
 function trafficCard(s){
@@ -575,12 +554,8 @@ function itemsCard(s){
   }
   return `<div class="cc" data-key="ib"><div class="cch"><span class="ct2">${IC("box")}容器與服務</span><span class="sum">${boxSummary(items)}</span></div><div class="chips" data-key="chips" data-keyed>${c}</div></div>`;
 }
-/* 常用連結（手機整頁）：每個連結多久打得開 */
+/* 常用連結（工具分頁）：每個連結多久打得開 */
 const linkRow = (x, sub) => `<a class="li" data-key="lk:${esc(x.url)}" href="${esc(x.url)}"${x.sso ? ` data-sso="${esc(x.sso)}"` : ""} target="_blank" rel="noopener noreferrer"><span class="lk"><i class="ld ${x.up === false ? "bad" : x.up ? "ok" : ""}"></i></span><span class="lab">${esc(x.name)}<small>${sub}</small></span>${EXT}</a>`;
-function linksCard(s){
-  const L = linksOf(s).filter(x => !x.fixed); if (!L.length) return "";
-  return `<div class="lbl" data-key="ll">常用連結</div><div class="group" data-key="lk">${L.map(x => linkRow(x, esc(linkSt(x)))).join("")}</div>`;
-}
 const CNT = {both:"上傳＋下載", out:"只算上傳", in:"只算下載", max:"取較大的"};
 async function trafficModal(node, label){
   const s = LIST.find(x => (x.node || "") === node), t = s && s.traffic;
@@ -653,23 +628,22 @@ function homeDesk(list, time){
 function detail(s){
   const r = OPENR || {t:0, b:0, l:0, r:0};
   return `<div class="det${DETX ? " closing" : ""}" data-key="det:${esc(keyOf(s))}" style="--ct:${r.t}px;--cb:${r.b}px;--cl:${r.l}px;--cr:${r.r}px"><div class="dscroll">
-    <div class="dtop"><button class="icbtn" data-back title="返回">${I("back")}</button><span class="grow"></span><span class="hacts">${editBtn(s)}</span></div>
+    <div class="dtop"><button class="icbtn" data-back title="返回">${I("back")}</button><span class="grow"></span><span class="hacts">${moreBtn(s)}</span></div>
     ${hostBody(s, true)}</div></div>`;
 }
-/* 工具：雲端硬碟、遠端下載、常用連結、每日備份、新增主機 */
+/* 工具：雲端硬碟、遠端下載、常用連結、每日備份 */
 function toolsPage(list){
-  const on = list.filter(s => s.online), multi = list.length > 1, nm = s => multi ? `：${esc(s.name)}` : "";
+  const on = list.filter(s => s.online), multi = list.length > 1, nm = (s, l) => multi ? esc(s.name) : l;   // 好幾台時，小標題已經寫了功能名稱，每一列只寫主機名稱
   const cl = on.filter(s => s.cloud && safeUrl(cloudHref(s.cloud)));
   let h = `<div class="narrow" data-key="tools"><h1 class="ptitle">工具</h1>`;
   if (cl.length) h += `<div class="lbl">雲端硬碟</div><div class="group" data-key="g-cl">${cl.map(s => { const c = s.cloud;
-    return `<a class="li col" data-key="cl:${esc(keyOf(s))}" href="${esc(cloudHref(c))}"${ssoAttr(s)} target="_blank" rel="noopener noreferrer"><span class="rt">${IC("cloud", "")}<span class="lab">雲端硬碟${nm(s)}<small>${c.total ? `已用 ${size(c.used)} / ${size(c.total)}` : "點一下打開"}</small></span>${EXT}</span>${c.total ? wave(c.pct) : ""}</a>`; }).join("")}</div>`;
+    return `<a class="li col" data-key="cl:${esc(keyOf(s))}" href="${esc(cloudHref(c))}"${ssoAttr(s)} target="_blank" rel="noopener noreferrer"><span class="rt">${IC("cloud", "")}<span class="lab">${nm(s, "雲端硬碟")}<small>${c.total ? `已用 ${size(c.used)} / ${size(c.total)}` : "點一下打開"}</small></span>${EXT}</span>${c.total ? wave(c.pct) : ""}</a>`; }).join("")}</div>`;
   if (cl.length) h += `<div class="lbl">遠端下載</div><div class="group" data-key="g-dl">${cl.map(s =>
-    `<button class="li" data-key="dl:${esc(keyOf(s))}" data-dl="${esc(s.node || "")}" data-name="${esc(s.name)}">${IC("dl", "")}<span class="lab">遠端下載${nm(s)}<small>貼上連結，存到雲端硬碟</small></span>${CHEV}</button>`).join("")}</div>`;
+    `<button class="li" data-key="dl:${esc(keyOf(s))}" data-dl="${esc(s.node || "")}" data-name="${esc(s.name)}">${IC("dl", "")}<span class="lab">${nm(s, "遠端下載")}<small>貼上連結，存到雲端硬碟</small></span>${CHEV}</button>`).join("")}</div>`;
   const L = on.flatMap(s => linksOf(s).filter(x => !x.fixed).map(x => ({...x, h: s.name})));
   if (L.length) h += `<div class="lbl">常用連結</div><div class="group" data-key="g-lk">${L.map(x => linkRow(x, `${multi ? esc(x.h) + "・" : ""}${esc(linkSt(x))}`)).join("")}</div>`;
   if (on.length) h += `<div class="lbl">每日備份</div><div class="group" data-key="g-bk">${on.map(s =>
-    `<button class="li" data-key="bk:${esc(keyOf(s))}" data-bk="${esc(s.node || "")}" data-label="${esc(s.name)}">${IC("archive", "")}<span class="lab">每日備份${nm(s)}<small class="bkst" data-n="${esc(s.node || "")}" data-keep data-ld>讀取中…</small></span>${CHEV}</button>`).join("")}</div>`;
-  h += `<div class="lbl">主機</div><div class="group" data-key="g-host"><button class="li" data-addhost>${IC("link", "")}<span class="lab">新增主機<small>貼上新主機的配對暗號</small></span>${CHEV}</button></div>`;
+    `<button class="li" data-key="bk:${esc(keyOf(s))}" data-bk="${esc(s.node || "")}" data-label="${esc(s.name)}">${IC("archive", "")}<span class="lab">${nm(s, "每日備份")}<small class="bkst" data-n="${esc(s.node || "")}" data-keep data-ld>讀取中…</small></span>${CHEV}</button>`).join("")}</div>`;
   return h + `</div>`;
 }
 /* 紀錄：所有主機的事件，依日期分組 */
@@ -766,8 +740,8 @@ const ZM = () => parseFloat(getComputedStyle(document.body).zoom) || 1;
 const EASE = "cubic-bezier(.2,0,0,1)", EXIT = "cubic-bezier(.3,0,.8,.15)", SPRING = CSS.supports("transition-timing-function", "linear(0,1)") ? "linear(0,.07 3%,.26 8%,.55 15%,.83 23%,1.02 31%,1.1 38%,1.11 43%,1.08 50%,1.03 58%,1 66%,.99 74%,1 85%,1)" : "cubic-bezier(.34,1.4,.64,1)";
 const canAnim = () => PREF.motion && !matchMedia("(prefers-reduced-motion: reduce)").matches;
 /* 讓元素平順地離開：先淡出、收起高度，再移除 */
-const BLOCK = ".alert,.alerts,.ev,.day,.calm,.empty,.foot,.offline,.fcs,.cc,.grp,.lbl,.group,.bgroup,.tiles,.mrows,.cfoot";
-const TILE = ".hcard,.hp,.tile,.chip,.fc,.li,.cchip,.addhost";
+const BLOCK = ".alert,.alerts,.ev,.day,.calm,.empty,.foot,.offline,.fcs,.cc,.grp,.lbl,.group,.tiles,.mrows,.cfoot";
+const TILE = ".hcard,.hp,.tile,.chip,.fc,.li,.addhost";
 function flipSiblings(parent, change){
   const z = ZM(), kids = [...parent.children].filter(c => !c._leaving), r0 = kids.map(c => c.getBoundingClientRect());
   change();
@@ -1197,16 +1171,6 @@ function hostModal(name, links){
   });
 }
 /* 有好幾個常用連結：點 ↗ 出現小選單 */
-function linksMenu(btn, s){
-  closeMenu();
-  const m = document.createElement("div"); m.className = "lmenu";
-  m.innerHTML = linksOf(s).map(x => `<a href="${esc(x.url)}"${x.sso ? ` data-sso="${esc(x.sso)}"` : ""} target="_blank" rel="noopener noreferrer"><i class="ld ${x.up===false?"bad":x.up?"ok":""}"></i><span>${esc(x.name)}<small>${esc(linkSt(x))}</small></span>${I("ext")}</a>`).join("");
-  document.body.appendChild(m);
-  placeMenu(m, btn, r => r.left + r.width / 2 - m.offsetWidth / 2);
-  if (canAnim()) m.animate([{opacity:0, transform:"translateY(-6px) scale(.97)"}, {opacity:1, transform:"none"}], {duration:T.mid, easing:SPRING});
-  window._menu = m;
-  setTimeout(() => m.addEventListener("click", () => closeMenu()), 0);
-}
 /* 選單放在按鈕下面；下面放不下就改放上面 */
 function placeMenu(m, btn, x){
   const z = ZM(), b = btn.getBoundingClientRect(), r = {left:b.left/z, right:b.right/z, top:b.top/z, bottom:b.bottom/z, width:b.width/z};
@@ -1219,7 +1183,7 @@ function moreMenu(btn, s){
   const node = esc(s.node || ""), name = esc(s.name);
   const it = (attr, icon, label, cls="") => `<button class="${cls}" ${attr}="${node}" data-name="${name}">${I(icon)}<span>${label}</span></button>`;
   const m = document.createElement("div"); m.className = "lmenu hmenu";
-  m.innerHTML = (s.online ? it("data-rename", "edit", "編輯名稱與連結") + (s.cloud ? it("data-dl", "dl", "遠端下載") : "")
+  m.innerHTML = (s.online ? it("data-rename", "edit", "編輯名稱與連結")
     + it("data-reboot", "power", "重新開機", "warn") : "")
     + (s.node ? it("data-rmhost", "trash", "移除主機", "bad") : "");
   document.body.appendChild(m);
@@ -2208,8 +2172,6 @@ document.addEventListener("click", async e => {
 
   const pe = t.closest("[data-peeredit]");
   if (pe) { const s = LIST.find(x => (x.node || "") === pe.dataset.peeredit); return s && peerModal(s); }
-  const lk = t.closest("[data-links]");
-  if (lk) { const s = LIST.find(x => keyOf(x) === lk.dataset.links); if (window._menu) return closeMenu(); return s && linksMenu(lk, s); }
   const mo = t.closest("[data-more]");
   if (mo) { const s = LIST.find(x => keyOf(x) === mo.dataset.more); if (window._menu) return closeMenu(); return s && moreMenu(mo, s); }
   if (window._menu && !t.closest(".lmenu")) closeMenu();

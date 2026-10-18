@@ -127,7 +127,7 @@ b,strong{font-weight:500}
   transition:border-radius var(--t-mid) var(--spring),transform var(--t-mid) var(--spring)}
 .icbtn svg{width:22px;height:22px}
 .icbtn:active{border-radius:var(--r-md);transform:scale(.92)}
-.plink.down::after,.hasnew::after{content:"";position:absolute;top:6px;right:6px;width:8px;height:8px;border-radius:50%;background:var(--bad);box-shadow:0 0 0 2px var(--bg)}
+.hasnew::after{content:"";position:absolute;top:6px;right:6px;width:8px;height:8px;border-radius:50%;background:var(--bad);box-shadow:0 0 0 2px var(--bg)}
 .hasnew::after{background:var(--p);box-shadow:0 0 0 2px var(--s3)}
 
 /* 按鈕：膠囊形，按下去圓角變小、縮一點 */
@@ -310,16 +310,6 @@ img.flag{width:28px;height:21px;object-fit:cover;border-radius:var(--r-xs);flex:
 .hhead img.flag{width:36px;height:27px;margin-top:7px}
 .hp .hhead img.flag{width:30px;height:22px;margin-top:3px}
 .hacts{display:flex;align-items:center;flex:none}
-/* 連在一起的按鈕：按下去的那顆變寬、變圓 */
-.bgroup{display:flex;gap:4px}
-.bgb{flex:1;height:56px;display:flex;align-items:center;justify-content:center;gap:8px;background:var(--s2);border-radius:var(--r-sm);font-weight:500;text-decoration:none;min-width:0;
-  transition:border-radius var(--t-mid) var(--spring),flex-grow var(--t-mid) var(--spring),background-color var(--t-fast) var(--ease)}
-.bgb:first-child{border-radius:var(--r-xl) var(--r-sm) var(--r-sm) var(--r-xl)}
-.bgb:last-child{border-radius:var(--r-sm) var(--r-xl) var(--r-xl) var(--r-sm)}
-.bgb:only-child{border-radius:var(--r-xl)}
-.bgroup .bgb:active{border-radius:var(--r-xl);flex-grow:1.35}
-.bgb svg{width:20px;height:20px;flex:none}
-.bgb.w{background:var(--warnc);color:var(--on-warnc)}
 /* 四格數字 */
 .tiles{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
 .tile{background:var(--card);border-radius:var(--r-lg);padding:14px 14px 12px;display:flex;flex-direction:column;gap:6px;min-width:0;
@@ -344,18 +334,12 @@ img.flag{width:28px;height:21px;object-fit:cover;border-radius:var(--r-xs);flex:
 .v6{display:inline-flex;align-items:center;gap:6px}
 .v6.warn{color:var(--warn)}
 .v6.a{display:block;max-width:240px;overflow:hidden;text-overflow:ellipsis;cursor:pointer;color:var(--tx);font-variant-numeric:tabular-nums}
-.cchip{display:inline-flex;align-items:center;gap:6px;height:34px;padding:0 12px;border-radius:var(--r-sm);background:var(--card);font-size:var(--fs-s);text-decoration:none;
-  transition:border-radius var(--t-mid) var(--spring),transform var(--t-mid) var(--spring)}
-.cchip:active{border-radius:var(--r-lg);transform:scale(.95)}
-.cchip svg{width:16px;height:16px;flex:none;color:var(--p)}.cchip svg:last-child{color:var(--tx3);width:14px;height:14px}
-.cchip.warn span{color:var(--warn)}.cchip.down svg:first-child{color:var(--bad)}
 /* 卡片（曲線、網路、流量、容器、連結） */
 .cc{background:var(--card);border-radius:var(--r-lg);padding:14px 16px 12px;min-width:0}
 .cch{display:flex;align-items:center;gap:6px 12px;flex-wrap:wrap;margin-bottom:10px;min-height:32px}
 .cch .ct2{font-size:var(--fs-m);font-weight:500;display:flex;align-items:center;gap:10px}
 .lg{display:inline-flex;align-items:center;gap:6px;font-size:var(--fs-s);color:var(--tx2);white-space:nowrap}
 .lg i{width:8px;height:8px;border-radius:50%;flex:none}
-.lg b{color:var(--tx);font-variant-numeric:tabular-nums}
 .cbox{position:relative;cursor:crosshair}
 .chart{width:100%;display:block;overflow:visible}
 .gl{stroke:var(--line);stroke-width:1;vector-effect:non-scaling-stroke;stroke-dasharray:3 5}
@@ -625,13 +609,10 @@ textarea.field{height:auto;padding:12px 16px;resize:none}
 /* ═════════ 選單 ═════════ */
 .lmenu{position:fixed;z-index:var(--z-menu);min-width:210px;max-width:290px;padding:8px 0;border-radius:var(--r-md);display:flex;flex-direction:column;
   background:var(--s2);box-shadow:var(--sh-2)}
-.lmenu a,.hmenu button{display:flex;align-items:center;gap:12px;min-height:48px;padding:8px 16px;color:var(--tx);text-decoration:none;font-size:var(--fs-m);text-align:left;
+.hmenu button{display:flex;align-items:center;gap:12px;min-height:48px;padding:8px 16px;color:var(--tx);text-decoration:none;font-size:var(--fs-m);text-align:left;
   transition:background-color var(--t-fast) var(--ease)}
-@media (hover:hover){.lmenu a:hover,.hmenu button:hover{background:color-mix(in srgb,var(--tx) 8%,transparent)}}
-.lmenu a:active,.hmenu button:active{background:color-mix(in srgb,var(--tx) 12%,transparent)}
-.lmenu a svg{width:16px;height:16px;color:var(--tx3);flex:none;margin-left:auto}
-.lmenu a span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;display:flex;flex-direction:column;min-width:0}
-.lmenu a small{font-size:var(--fs-xs);color:var(--tx3)}
+@media (hover:hover){.hmenu button:hover{background:color-mix(in srgb,var(--tx) 8%,transparent)}}
+.hmenu button:active{background:color-mix(in srgb,var(--tx) 12%,transparent)}
 .hmenu button svg{width:20px;height:20px;flex:none;color:var(--tx2)}
 .hmenu button.warn,.hmenu button.warn svg{color:var(--warn)}
 .hmenu button.bad,.hmenu button.bad svg{color:var(--bad)}
