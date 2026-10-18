@@ -48,7 +48,12 @@ class Files(http.server.BaseHTTPRequestHandler):
             self.send_header("Content-Length", str(len(body)))
             self.end_headers()
             try:
-                self.wfile.write(body)
+                if "slow" in self.path:                # 慢慢給：讓先下載完的連線有機會去幫忙
+                    for i in range(0, len(body), 256 * 1024):
+                        self.wfile.write(body[i:i + 256 * 1024])
+                        time.sleep(.01)
+                else:
+                    self.wfile.write(body)
             except OSError:
                 pass
             return
@@ -178,6 +183,23 @@ class Download(unittest.TestCase):
         self.assertEqual(self.wait(url)["st"], "ok")
         self.assertEqual(sorted(a for a, _ in RANGES), want)
         with open(os.path.join(self.dir, "half.bin"), "rb") as f:
+            self.assertEqual(f.read(), BIG)
+
+    def test_segment_steal(self):
+        """先下載完的連線會把還剩很多的那段切一半來幫忙"""
+        n = len(BIG)
+        segs = [[0, 1, 0], [1, n, 0]]
+        with open(os.path.join(self.dir, "steal.bin" + self.S.DL_PART), "wb") as f:
+            f.truncate(n)
+        RANGES.clear()
+        url = self.base + "/big.bin?slow"
+        self.S.DL.append({"id": "s2", "url": url, "name": "steal.bin", "st": "wait", "done": 0, "total": n, "segs": segs,
+                          "bps": 0, "err": "", "t": time.time(), "t_end": 0, "stop": False})
+        self.S.dl_kick()
+        j = self.wait(url)
+        self.assertEqual(j["st"], "ok", j["err"])
+        self.assertGreater(len(segs), 2)
+        with open(os.path.join(self.dir, "steal.bin"), "rb") as f:
             self.assertEqual(f.read(), BIG)
 
     def test_video(self):

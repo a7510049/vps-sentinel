@@ -40,7 +40,7 @@ from collections import deque
 from concurrent.futures import ThreadPoolExecutor
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
-VERSION = "1.68"
+VERSION = "1.69"
 
 # ───────────────────────── 哨兵備份檔（.vsbk）─────────────────────────
 # 哨兵專用的備份格式：外面是自己的檔案格式，裡面用的是成熟、標準的加密方法（不自己發明加密）：
@@ -3546,7 +3546,9 @@ DL_LIST_MAX = 30                                  # 清單最多幾筆（太多�
 DL_SPARE = 200 * 1024 * 1024                      # 雲端硬碟至少留這麼多
 DL_HOST_SPARE = 1024 ** 3                         # 主機的磁碟至少留這麼多（雲端硬碟的映像檔放在主機磁碟上，會跟著變大）
 DL_SEGS = 4                                       # 檔案夠大、對方支援時，分成幾段同時下載（很多網站會限制每條連線的速度）
+DL_SEGS_MAX = 16                                  # 大檔案每 32 MB 多一段，最多 16 段
 DL_SEG_MIN = 16 * 1024 * 1024                     # 比這個小就不分段
+DL_STEAL = 8 * 1024 * 1024                        # 先下載完的連線去幫忙還剩這麼多以上的段
 DL_PART = ".下載中"                                # 還沒下載完的檔案後面加這個
 DL_FILE = os.path.join(DATA_DIR, "downloads.json")
 DL_LOCAL = os.environ.get("SENTINEL_DL_LOCAL") == "1"     # 測試用：允許下載本機的東西
@@ -3826,17 +3828,33 @@ def dl_multi(j, d, part, first=None):
                 pass
         if first:
             os.ftruncate(fd, j["total"])
-        errs, ths = [], []
-        for i, seg in enumerate(j["segs"]):
+        errs, ths, lock = [], [], threading.Lock()
+
+        def work(seg, first):
+            while True:
+                dl_seg(j, seg, fd, errs, first)
+                first = None
+                if j["stop"] or errs:
+                    return
+                with lock:                         # 自己這段好了：把還剩最多的那段切一半來下載
+                    big = max(j["segs"], key=lambda s: s[1] - s[0] - s[2])
+                    left = big[1] - big[0] - big[2]
+                    if left < DL_STEAL:
+                        return
+                    mid = big[0] + big[2] + left // 2
+                    seg = [mid, big[1], 0]
+                    big[1] = mid
+                    j["segs"].append(seg)
+        for i, seg in enumerate(list(j["segs"])):
             if seg[2] < seg[1] - seg[0]:
-                t = threading.Thread(target=dl_seg, args=(j, seg, fd, errs, first if i == 0 else None), daemon=True)
+                t = threading.Thread(target=work, args=(seg, first if i == 0 else None), daemon=True)
                 t.start()
                 ths.append(t)
-        t0, d0, saved = time.monotonic(), sum(s[2] for s in j["segs"]), time.monotonic()
+        t0, d0, saved = time.monotonic(), sum(min(s[2], s[1] - s[0]) for s in j["segs"]), time.monotonic()
         checked = d0
         while any(t.is_alive() for t in ths):
             time.sleep(.5)
-            j["done"] = sum(s[2] for s in j["segs"])
+            j["done"] = sum(min(s[2], s[1] - s[0]) for s in j["segs"])
             now = time.monotonic()
             if now - t0 >= 1:
                 v = (j["done"] - d0) / (now - t0)
@@ -3851,7 +3869,7 @@ def dl_multi(j, d, part, first=None):
                     errs.append(DlErr("空間不夠，先停下來了"))
         for t in ths:
             t.join()
-        j["done"] = sum(s[2] for s in j["segs"])
+        j["done"] = sum(min(s[2], s[1] - s[0]) for s in j["segs"])
         if j["stop"]:
             raise DlErr("已取消")
         if errs:
@@ -4051,8 +4069,9 @@ def dl_file(j, d):
         if os.path.islink(part):
             os.remove(part)
         if not start and r.status == 200 and rest >= DL_SEG_MIN and (r.getheader("Accept-Ranges") or "").lower() == "bytes":
-            step = -(-rest // DL_SEGS)             # 檔案夠大、對方支援分段：分成幾段同時下載
-            j["segs"] = [[i * step, min(rest, (i + 1) * step), 0] for i in range(DL_SEGS) if i * step < rest]
+            n = min(DL_SEGS_MAX, max(DL_SEGS, rest >> 25))   # 檔案夠大、對方支援分段：分成幾段同時下載
+            step = -(-rest // n)
+            j["segs"] = [[i * step, min(rest, (i + 1) * step), 0] for i in range(n) if i * step < rest]
             dl_save()
             dl_multi(j, d, part, (r, c))
         else:
