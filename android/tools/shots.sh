@@ -21,9 +21,9 @@ shot 2-home 10
 adb shell screenrecord --bit-rate 8000000 --time-limit 20 /sdcard/flow.mp4 &
 REC=$!
 sleep 1
-tap "工具" || adb shell input tap 400 2300
+adb shell input tap 517 2211
 shot 3-tools 2.5
-tap "設定" || adb shell input tap 900 2300
+adb shell input tap 815 2211
 shot 4-settings 2.5
 adb shell input keyevent 4
 shot 5-back 2
@@ -32,7 +32,7 @@ adb pull /sdcard/flow.mp4 "$OUT/flow.mp4"
 adb shell cmd uimode night yes
 sleep 2
 start "http://10.0.2.2:8080/"
-shot 6-home-dark 10
+shot 6-home-dark 20
 start "http://10.0.2.2:9999/"
 shot 7-failed 8
 ls -la "$OUT"

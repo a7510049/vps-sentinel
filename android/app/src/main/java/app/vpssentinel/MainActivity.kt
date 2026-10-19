@@ -103,13 +103,13 @@ class MainActivity : ComponentActivity() {
         })
         setContent {
             SentinelTheme(false) {
-                Surface(Modifier.fillMaxSize(), color = pageBg ?: MaterialTheme.colorScheme.surface) {
+                Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.surface) {
                     AnimatedContent(url.isEmpty() to failed, label = "page",
                         transitionSpec = { fadeIn(tween(300)) togetherWith fadeOut(tween(200)) }) { (empty, bad) ->
                         when {
                             empty -> Setup(store.url) { web?.destroy(); web = null; store.url = it; failed = false; url = it }
                             bad -> Failed({ failed = false; web?.reload() }, { url = "" })
-                            else -> Web()
+                            else -> Box(Modifier.fillMaxSize().background(pageBg ?: MaterialTheme.colorScheme.surface)) { Web() }
                         }
                     }
                 }
@@ -153,7 +153,7 @@ class MainActivity : ComponentActivity() {
                     override fun onPageStarted(view: WebView, u: String?, favicon: Bitmap?) { failed = false }
 
                     override fun onPageFinished(view: WebView, u: String?) {
-                        view.evaluateJavascript("getComputedStyle(document.body).backgroundColor") { s -> parse(s)?.let(::tint) }
+                        view.evaluateJavascript(BG) { s -> parse(s)?.let(::tint) }
                     }
 
                     override fun onReceivedError(view: WebView, req: WebResourceRequest, err: WebResourceError) {
@@ -181,14 +181,15 @@ class MainActivity : ComponentActivity() {
             }).also { (it.parent as? ViewGroup)?.removeView(it) }
         }, update = { w ->
             // 網頁切換深淺色、換主題色時通知 App
-            w.evaluateJavascript("""(function(){if(window.__vsbg)return;window.__vsbg=1;var f=function(){VSApp.bg(getComputedStyle(document.body).backgroundColor)};
+            w.evaluateJavascript("""(function(){if(window.__vsbg)return;window.__vsbg=1;var f=function(){VSApp.bg($BG)};
                 new MutationObserver(f).observe(document.documentElement,{attributes:true});f();})()""", null)
         })
     }
 
     private fun parse(s: String?): Color? {
-        val m = Regex("rgba?\\((\\d+),\\s*(\\d+),\\s*(\\d+)").find(s ?: return null) ?: return null
-        val (r, g, b) = m.destructured
+        val m = Regex("rgba?\\((\\d+),\\s*(\\d+),\\s*(\\d+)(?:,\\s*([\\d.]+))?").find(s ?: return null) ?: return null
+        val (r, g, b, a) = m.destructured
+        if (a.isNotEmpty() && a.toFloat() < 0.5f) return null          // 透明：還沒載入完
         return Color(r.toInt(), g.toInt(), b.toInt())
     }
 
@@ -197,6 +198,10 @@ class MainActivity : ComponentActivity() {
         super.onDestroy()
     }
 }
+
+/** 網頁的底色：body 是透明的就看 html */
+private const val BG = "(function(){var c=getComputedStyle(document.body).backgroundColor;" +
+    "if(/rgba\\(.*,\\s*0\\)/.test(c))c=getComputedStyle(document.documentElement).backgroundColor;return c})()"
 
 /* 第一次打開：輸入主機網址 */
 @Composable
