@@ -415,11 +415,27 @@ EOF
 systemctl daemon-reload
 systemctl enable vps-sentinel-lite >/dev/null 2>&1
 systemctl restart vps-sentinel-lite
-sleep 2
 
-if ! systemctl is-active --quiet vps-sentinel-lite; then
+# 確認新版真的打得開網頁（最多等 40 秒）：只看「服務在跑」不夠，可能跑起來了卻沒在回應
+alive() {
+  local port bind
+  port="$(grep -E '^PORT=' "$CONF" | cut -d= -f2)"
+  bind="$(grep -E '^BIND=' "$CONF" | cut -d= -f2)"
+  case "$bind" in ""|0.0.0.0|::) bind=127.0.0.1 ;; esac
+  systemctl is-active --quiet vps-sentinel-lite &&
+    python3 -c 'import sys,urllib.request;urllib.request.urlopen(sys.argv[1],timeout=3).read(64)' "http://$bind:${port:-8787}/" >/dev/null 2>&1
+}
+UP=""
+for _ in $(seq 1 20); do
+  sleep 2
+  if alive; then sleep 3; alive && UP=1; break; fi    # 過幾秒再確認一次，免得一啟動就當掉
+done
+
+if [ -z "$UP" ]; then
   if [ -f "$DIR.prev/sentinel.py" ]; then          # 新版起不來：換回舊版，網頁至少還打得開
+    NEWV="$(grep -m1 -E '^VERSION' "$DIR/sentinel.py" | cut -d'"' -f2)"
     rm -rf "$DIR" && mv "$DIR.prev" "$DIR"
+    printf '%s\n' "$NEWV" > "$DIR/.rolled-back"     # 哨兵重新啟動後會記一筆、傳 Telegram
     systemctl restart vps-sentinel-lite
     die "新版啟動失敗，已換回原本的版本" "請看：journalctl -u vps-sentinel-lite -n 30"
   fi

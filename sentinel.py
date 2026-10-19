@@ -40,7 +40,7 @@ from collections import deque
 from concurrent.futures import ThreadPoolExecutor
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
-VERSION = "2.9"
+VERSION = "3.0"
 
 # ───────────────────────── 哨兵備份檔（.vsbk）─────────────────────────
 # 哨兵專用的備份格式：外面是自己的檔案格式，裡面用的是成熟、標準的加密方法（不自己發明加密）：
@@ -2371,6 +2371,15 @@ class Collector:
         self.load()
         if self.saved_boot and self.saved_boot != boot_id():
             self.add_event("warn", "主機重新開機了")
+        flag = os.path.join(HERE, ".rolled-back")      # 安裝程式留的：新版起不來，已經換回這一版
+        if os.path.isfile(flag):
+            try:
+                with open(flag, encoding="utf-8") as f:
+                    v = f.read().strip()[:20]
+                os.remove(flag)
+                self.add_event("bad", f"哨兵更新{f'到 {v} ' if v else ''}失敗，已退回 {VERSION}")
+            except OSError:
+                pass
 
     # ── 存檔 ──
     def state_path(self):
@@ -3458,6 +3467,8 @@ def ev_line(e):
         return "🔄 主機重新開機了"
     if t == "從網頁重新開機":                       # 重開前已經直接傳了，不用再傳一次
         return ""
+    if t.startswith("哨兵更新") and "失敗" in t:
+        return "❌ " + t
     if t == "重新開機失敗":
         return "❌ 重新開機失敗"
     if t.startswith("下載失敗："):

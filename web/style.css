@@ -228,7 +228,10 @@ img.flag{width:28px;height:21px;object-fit:cover;border-radius:var(--r-xs);flex:
 .tb.hasnew::after{top:10px;right:10px}
 
 /* ═════════ 首頁上面：狀態圖形＋一句話 ═════════ */
-.hero{padding:calc(env(safe-area-inset-top) + 34px) 4px 6px}
+.hero{padding:calc(env(safe-area-inset-top) + 18px) 4px 6px}
+.dash.m .blob{width:60px;height:60px}
+.dash.m .blob .bg svg{width:28px;height:28px}
+.dash.m .hello{margin-top:12px}
 .hrow{display:flex;align-items:center;gap:16px}
 .blob{position:relative;width:80px;height:80px;flex:none;transition:transform var(--t-slow) var(--spring)}
 .blob.prs{transform:scale(.86)}
@@ -539,10 +542,6 @@ button.li.prs,a.li.prs{border-radius:var(--r-lg);transform:scale(.98);background
 .dash.d .v-tools .group{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
 .dash.d .v-tools .group>.li{border-radius:var(--r-lg);min-height:84px;padding:16px 20px}
 .dash.d .v-tools .group>.li.col{grid-column:1/-1}
-.dash.d .v-tools .split>.pane{display:flex;gap:3px}
-.dash.d .v-tools .split>.pane>.li{min-height:52px;padding:10px 16px;border-radius:var(--r-xs)}
-.dash.d .v-tools .split>.pane>.li:first-child{border-top-left-radius:var(--r-lg);border-top-right-radius:var(--r-lg)}
-.dash.d .v-tools .split>.pane>.li:last-child{border-bottom-left-radius:var(--r-lg);border-bottom-right-radius:var(--r-lg)}
 .dhome{display:grid;grid-template-columns:minmax(0,1fr) 340px;gap:28px;align-items:start}
 .dmain{min-width:0}
 .dhome .hero{padding:6px 4px 26px}
@@ -561,6 +560,14 @@ button.li.prs,a.li.prs{border-radius:var(--r-lg);transform:scale(.98);background
 .aside .wxw{justify-content:stretch}
 .aside .wx{padding:16px 18px;flex:1}
 .cols .addhost{grid-column:1/-1;height:52px}
+/* 主機比一排放得下的多：每台一張小卡片，點了從卡片長出整頁 */
+.hosts.wall{grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:12px}
+.wall .addhost{height:52px}
+@media (hover:hover){.hcard:not(.prs):hover{background:var(--s2)}}
+.dash.d .det{left:96px}
+.dash.d .dscroll{padding:24px 32px 48px}
+.dash.d .dscroll>*{max-width:1080px}
+.dash.d .dscroll>.dtop{top:-24px;margin:-24px -32px 0;padding:24px max(32px,calc((100% - 1080px) / 2 + 32px)) 10px}
 @media (min-width:700px){.dscroll .tiles{grid-template-columns:repeat(4,minmax(0,1fr))}}
 
 /* ═════════ 對話框 ═════════ */
