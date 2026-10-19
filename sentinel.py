@@ -40,7 +40,7 @@ from collections import deque
 from concurrent.futures import ThreadPoolExecutor
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
-VERSION = "3.2"
+VERSION = "3.3"
 
 # ───────────────────────── 哨兵備份檔（.vsbk）─────────────────────────
 # 哨兵專用的備份格式：外面是自己的檔案格式，裡面用的是成熟、標準的加密方法（不自己發明加密）：
@@ -3277,7 +3277,7 @@ def watch_page(names):
 <style>
 :root{{color-scheme:light dark;--bg:#fbfbfe;--card:#eef0f8;--field:#e2e5f0;--text:#1a1c22;--sub:#5b5f6b;--p:#3b62d9;--on-p:#fff;--bad:#ba1a1a}}
 @media (prefers-color-scheme:dark){{:root{{--bg:#121317;--card:#1d1f25;--field:#2a2d35;--text:#e6e7ee;--sub:#a3a6b2;--p:#b4c5ff;--on-p:#0b2a6b;--bad:#ffb4ab}}}}
-*{{box-sizing:border-box}}
+*{{box-sizing:border-box;scrollbar-width:none}}*::-webkit-scrollbar{{display:none}}
 body{{margin:0;min-height:100vh;display:grid;place-items:center;padding:16px;background:var(--bg);color:var(--text);
   font:15px/1.6 -apple-system,BlinkMacSystemFont,"PingFang TC","Noto Sans TC","Microsoft JhengHei",sans-serif}}
 .c{{width:100%;max-width:360px;padding:32px 24px 24px;border-radius:28px;background:var(--card);text-align:center}}
