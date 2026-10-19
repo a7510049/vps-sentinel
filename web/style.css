@@ -434,6 +434,7 @@ button.li:active,a.li:active{border-radius:var(--r-lg);transform:scale(.98);back
 .dash.d .hpick{flex-wrap:wrap;overflow:visible;margin:0 4px 16px;padding:0;-webkit-mask-image:none;mask-image:none}
 .hpick::-webkit-scrollbar{display:none}
 .hpick .fchip{flex:none;display:inline-flex;align-items:center;gap:8px;white-space:nowrap}
+.hpick .dot,.pane .dot{animation:pop var(--t-mid) var(--spring) backwards}
 
 /* ═════════ 設定的控制項 ═════════ */
 /* 連在一起的選項：選到的那顆變膠囊 */
@@ -497,6 +498,7 @@ button.li:active,a.li:active{border-radius:var(--r-lg);transform:scale(.98);back
 .smain{min-width:0}
 .split>.pane,.side{position:sticky;top:24px;max-height:calc(100vh / var(--zoom) - 48px);overflow-y:auto;scrollbar-width:thin}
 .pane .li{min-height:52px;padding:10px 16px;gap:10px}
+.pane .li{transition:border-radius var(--t-mid) var(--spring),transform var(--t-mid) var(--spring),background-color var(--t-mid) var(--ease),color var(--t-mid) var(--ease)}
 .pane .li.on{background:var(--pc);color:var(--on-pc)}
 .pane .li .val{color:inherit;opacity:.75}
 .scols{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:24px;align-items:start}

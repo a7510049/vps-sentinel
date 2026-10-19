@@ -645,13 +645,13 @@ function toolsPage(list){
 }
 function toolsBody(s, k, node, name){
   const c = s.cloud && safeUrl(cloudHref(s.cloud)) ? s.cloud : null;
-  let h = `<div class="group" data-key="g-t:${k}">`;
+  let h = `<div data-key="tb:${k}" data-sw><div class="group" data-key="g-t:${k}">`;
   if (c) h += `<a class="li col" data-key="cl" href="${esc(cloudHref(c))}"${ssoAttr(s)} target="_blank" rel="noopener noreferrer"><span class="rt">${IC("cloud", "")}<span class="lab">雲端硬碟<small>${c.total ? `已用 ${size(c.used)} / ${size(c.total)}` : "點一下打開"}</small></span>${EXT}</span>${c.total ? wave(c.pct) : ""}</a>
     <button class="li" data-key="dl" data-dl="${node}" data-name="${name}">${IC("dl", "")}<span class="lab">遠端下載<small>貼上連結，存到雲端硬碟</small></span>${CHEV}</button>`;
   h += `<button class="li" data-key="bk" data-bk="${node}" data-label="${name}">${IC("archive", "")}<span class="lab">每日備份<small class="bkst" data-n="${node}" data-keep data-ld>讀取中…</small></span>${CHEV}</button></div>`;
   const L = linksOf(s).filter(x => !x.fixed);
   if (L.length) h += `<div class="lbl" data-key="ll">常用連結</div><div class="group" data-key="g-lk:${k}">${L.map(x => linkRow(x, esc(linkSt(x)))).join("")}</div>`;
-  return h;
+  return h + `</div>`;
 }
 /* 一排主機名稱選一台（工具、設定共用，選了哪台兩邊都記得）；dot：名稱前面的小圓點 */
 const hpick = (on, s, dot) => `<div class="hpick" data-key="hpick" data-keyed>${on.map(x => `<button class="fchip${x === s ? " on" : ""}" data-key="hp:${esc(keyOf(x))}" data-toolh="${esc(keyOf(x))}">${dot(x)}${esc(x.name)}</button>`).join("")}</div>`;
@@ -673,7 +673,7 @@ function logPage(list){
   const F = [["", "全部"], ["bad", "有狀況"], ["other", "恢復與通知"]];
   let rows = "", day = "";
   for (const e of ev) { const d = dayOf(e.t); if (d !== day) { day = d; rows += `<div class="day" data-key="d:${d}">${d}</div>`; } rows += evRow(e, many, hm); }
-  const body = ev.length ? `<div class="evs" data-key="evs" data-keyed>${rows}</div>` : `<div class="calm" data-key="calm">目前沒有事件</div>`;
+  const body = ev.length ? `<div class="evs" data-key="evs" data-keyed data-sw>${rows}</div>` : `<div class="calm" data-key="calm" data-sw>目前沒有事件</div>`;
   if (D) {   // 電腦：右邊放篩選和各台的則數
     const row = (attr, on, l, n) => `<button class="li${on ? " on" : ""}" ${attr}><span class="lab">${l}</span><span class="val num">${n}</span></button>`;
     const kf = LOGK[LOGF] || LOGK[""];
@@ -711,7 +711,7 @@ function setPage(list){
     const s = on.find(x => keyOf(x) === TOOLH) || on.find(x => !x.node) || on[0], k = esc(keyOf(s)), node = esc(s.node || "");
     h += `<div class="lbl" data-key="lh">主機<button data-selfcheck>檢查新版</button></div><div class="selfsum" data-key="selfsum" data-keep data-ld></div>`;
     if (on.length > 1) h += hpick(on, s, x => x.self_has ? `<span class="dot info"></span>` : "");
-    h += `<div class="group" data-key="g-h:${k}"><div class="selfbox" data-key="self" data-n="${node}" data-keep data-ld><div class="selfwait">讀取中…</div></div><button class="li" data-newtok="${node}" data-label="${esc(s.name)}">${IC("key", "")}<span class="lab">換一組新密碼<small>舊密碼會立刻失效</small></span>${CHEV}</button>`
+    h += `<div class="group" data-key="g-h:${k}" data-sw><div class="selfbox" data-key="self" data-n="${node}" data-keep data-ld><div class="selfwait">讀取中…</div></div><button class="li" data-newtok="${node}" data-label="${esc(s.name)}">${IC("key", "")}<span class="lab">換一組新密碼<small>舊密碼會立刻失效</small></span>${CHEV}</button>`
       + (s.keep ? `<label class="li">${IC("keep", "")}<span class="lab">Oracle 防回收${keepLine(s.keep)}</span><input type="checkbox" class="tog" data-keepalive="${node}" aria-label="Oracle 防回收" ${s.keep.on ? "checked" : ""}></label>` : "")
       + (s.node ? "" : go("data-pair", "link", "配對暗號", "pairst")) + `</div>`;
   }
@@ -847,7 +847,22 @@ function flipWidth(el, change){
   const w0 = el.offsetWidth; change(); const w1 = el.offsetWidth;
   if (canAnim() && Math.abs(w1 - w0) > 1) el.animate([{width:w0+"px"}, {width:w1+"px"}], {duration:T.mid, easing:EASE});
 }
+/* 換成另一台主機的內容（data-sw）：新的淡入浮上來，高度平滑變化 */
+function swapIn(a, b){
+  if (!canAnim() || !a.isConnected) return a.replaceWith(b);
+  const h0 = a.offsetHeight, o = {duration:T.mid, easing:EASE, id:"ui"};
+  a.replaceWith(b); skipIntro(b, true);
+  b.animate([{opacity:0, transform:"translateY(10px) scale(.985)"}, {opacity:1, transform:"none"}], o);
+  b.style.height = h0 + "px"; b.style.overflow = "hidden";
+  requestAnimationFrame(() => {                  // 等讀好的狀態填進去再量新的高度
+    b.style.height = ""; b.style.overflow = "";
+    const h1 = b.offsetHeight;
+    if (Math.abs(h1 - h0) > 1) b.animate([{height:h0 + "px", overflow:"hidden"}, {height:h1 + "px", overflow:"hidden"}], o);
+  });
+}
 function morph(a, b){
+  if (a.nodeType===1 && b.nodeType===1 && (a.hasAttribute("data-sw") && b.hasAttribute("data-sw") && a.getAttribute("data-key") !== b.getAttribute("data-key")
+      || a.nodeName !== b.nodeName && (a.classList.contains("wait") || b.classList.contains("wait")))) return swapIn(a, b);   // 曲線圖「讀取中」↔ 圖
   if (a.nodeType!==b.nodeType || a.nodeName!==b.nodeName ||
       (a.nodeType===1 && (a.getAttribute("data-key")||"")!==(b.getAttribute("data-key")||""))) { a.replaceWith(b); return; }
   if (a.nodeType===3 || a.nodeType===8){ if (a.nodeValue!==b.nodeValue) a.nodeValue=b.nodeValue; return; }
@@ -1268,11 +1283,28 @@ async function selfStatus(root, mode){
   }
   selfPaint(root);
 }
+/* 讀到的狀態換上去：新字淡入（字一樣就不動） */
+function txt(el, t){
+  if (el.textContent === t) return;
+  el.textContent = t;
+  if (canAnim() && el.isConnected) el.animate([{opacity:0}, {opacity:1}], {duration:T.mid, easing:EASE, id:"ui"});
+}
+/* 整塊內容換掉：新出現的淡入（沒變的不動）、高度平滑變化；本來是空的就從 0 撐開 */
+function settle(el, html){
+  if (el.innerHTML === html) return;
+  if (!canAnim() || !el.isConnected) { el.innerHTML = html; return; }
+  const h0 = el.offsetHeight, was = new Set([...el.children].map(c => c.outerHTML)); el.innerHTML = html;
+  if (!html.trim()) return;
+  if (!h0) return enterBlock(el, 0);
+  const h1 = el.offsetHeight, o = {duration:T.mid, easing:EASE, id:"ui"};
+  [...el.children].forEach(c => { if (!was.has(c.outerHTML)) c.animate([{opacity:0, transform:"translateY(4px)"}, {opacity:1, transform:"none"}], o); });
+  if (Math.abs(h1 - h0) > 1) el.animate([{height:h0 + "px", overflow:"hidden"}, {height:h1 + "px", overflow:"hidden"}], o);
+}
 function selfPaint(root){
   const box = root.querySelector(".selfbox"), sum = root.querySelector(".selfsum"); if (!box) return;
   const hosts = LIST.filter(x => x.online && SELFST[keyOf(x)]);
   const pend = hosts.reduce((n, h) => { const d = SELFST[keyOf(h)]; return n + (d.has && !d.running ? 1 : 0) + (d.cloud && d.cloud.has && !d.cloud.running ? 1 : 0); }, 0);
-  if (sum) sum.innerHTML = pend > 1 ? `<span>${pend} 項有新版</span><button class="ubtn sm" data-selfup="*">全部更新</button>` : "";
+  if (sum) settle(sum, pend > 1 ? `<span>${pend} 項有新版</span><button class="ubtn sm" data-selfup="*">全部更新</button>` : "");
   const h = LIST.find(x => (x.node || "") === box.dataset.n), d = h && SELFST[keyOf(h)];
   if (!d) return;
   const node = esc(h.node || "");
@@ -1285,7 +1317,7 @@ function selfPaint(root){
     ${c.has && !c.running ? `<button class="ubtn sm" data-cloudup="${node}">更新</button>` : ""}</div>` : "";
   const srow = `<div class="cl2 first"><span>${I("upd")}哨兵<small>${d.version ? `版本 ${esc(d.version)}・${esc(d.build || "")}・` : ""}${st}</small>${ch}</span>
     ${d.has && !d.running ? `<button class="ubtn sm" data-selfup="${node}">更新</button>` : ""}</div>`;
-  box.innerHTML = `<div class="selfrow">${srow}${crow}</div>`;
+  settle(box, `<div class="selfrow">${srow}${crow}</div>`);
 }
 /* jobs：[{node, kind:"self"|"cloud"}]；不給就是「全部更新」 */
 async function selfUpdate(root, jobs){
@@ -1368,9 +1400,9 @@ async function tgCall(body){
 async function tgStatus(root){
   const el = root.querySelector(".tgst"); if (!el) return;
   try { const d = await tgCall({action:"status"});
-    el.textContent = d.on ? `已開啟・由 ${d.bot || "機器人"} 傳送・${d.keep ? `保留 ${d.keep >= 24 ? Math.round(d.keep/24) + " 天" : d.keep + " 小時"}` : "不自動刪除"}` : d.has_token ? "還沒選要傳到哪裡" : "還沒設定";
+    txt(el, d.on ? `已開啟・由 ${d.bot || "機器人"} 傳送・${d.keep ? `保留 ${d.keep >= 24 ? Math.round(d.keep/24) + " 天" : d.keep + " 小時"}` : "不自動刪除"}` : d.has_token ? "還沒選要傳到哪裡" : "還沒設定");
     el.classList.toggle("on", !!d.on);
-  } catch(e) { el.textContent = e.message; }
+  } catch(e) { txt(el, e.message); }
 }
 async function tgModal(){
   const st = await tgCall({action:"status"}).catch(() => ({}));
@@ -1413,7 +1445,7 @@ async function tgModal(){
       if (f) return run(f, "尋找中…", async () => {
         const d = await tgCall({action:"find", token: vals().token});
         const box = v.querySelector(".chats");
-        box.innerHTML = d.chats.map(c => `<button type="button" data-chat="${esc(c.id)}">${esc(c.name)}</button>`).join("");
+        settle(box, d.chats.map(c => `<button type="button" data-chat="${esc(c.id)}">${esc(c.name)}</button>`).join(""));
         if (d.chats.length === 1) { q("chat").value = d.chats[0].id; box.firstChild.classList.add("on"); }
         say(d.chats.length > 1 ? `找到 ${d.chats.length} 個聊天，點一下要傳去哪裡` : `會傳到「${d.chats[0].name}」`, "ok");
       });
@@ -1505,9 +1537,9 @@ async function pkLogin(){
 async function pkStatus(root){
   const el = root.querySelector(".pkst"); if (!el) return;
   try { const d = await pkCall("/api/passkey", {action:"list"}, 1);
-    el.textContent = d.keys && d.keys.length ? `已登記 ${d.keys.length} 支` : "還沒登記";
+    txt(el, d.keys && d.keys.length ? `已登記 ${d.keys.length} 支` : "還沒登記");
     el.classList.toggle("on", !!(d.keys && d.keys.length));
-  } catch(e) { el.textContent = e.message; }
+  } catch(e) { txt(el, e.message); }
 }
 async function pkModal(){
   const v = document.createElement("div"); v.className = "veil";
@@ -1524,8 +1556,8 @@ async function pkModal(){
   const day = t => { const d = new Date(t * 1000); return `${d.getMonth()+1}/${d.getDate()}`; };
   let keys = [], max = 5, busy = false;
   const draw = () => {
-    list.innerHTML = keys.map(k => `<div class="pkrow">${I("finger")}<span>${esc(k.name)}<small>${day(k.added)} 登記${k.used ? `・${day(k.used)} 用過` : "・還沒用過"}</small></span>
-      <button type="button" class="iconbtn" data-del="${esc(k.id)}" data-name="${esc(k.name)}" title="刪掉這支">${I("x")}</button></div>`).join("");
+    settle(list, keys.map(k => `<div class="pkrow">${I("finger")}<span>${esc(k.name)}<small>${day(k.added)} 登記${k.used ? `・${day(k.used)} 用過` : "・還沒用過"}</small></span>
+      <button type="button" class="iconbtn" data-del="${esc(k.id)}" data-name="${esc(k.name)}" title="刪掉這支">${I("x")}</button></div>`).join(""));
     const full = keys.length >= max;
     lab.style.display = full ? "none" : "";
     add.disabled = full; add.textContent = full ? `已經登記滿 ${max} 支` : `登記${me}`;
@@ -1563,9 +1595,9 @@ const pinCall = body => pkCall("/api/pin", body, 1);
 async function pinStatus(root){
   const el = root.querySelector(".pinst"); if (!el) return;
   try { const d = await pinCall({action:"status"});
-    el.textContent = !d.on ? "還沒設定" : d.locked ? `輸錯太多次，暫停中（還有 ${Math.ceil(d.locked / 60)} 分鐘）` : "已設定";
+    txt(el, !d.on ? "還沒設定" : d.locked ? `輸錯太多次，暫停中（還有 ${Math.ceil(d.locked / 60)} 分鐘）` : "已設定");
     el.classList.toggle("on", !!d.on && !d.locked);
-  } catch(e) { el.textContent = e.message; }
+  } catch(e) { txt(el, e.message); }
 }
 async function pinModal(){
   const st = await pinCall({action:"status"}).catch(() => ({}));
@@ -1621,9 +1653,9 @@ const pairDay = t => { const d = new Date(t * 1000); return `${d.getMonth()+1}/$
 async function pairStatus(root){
   const el = root.querySelector(".pairst"); if (!el) return;
   try { const d = await pairCall({action:"status"}), n = (d.keys || []).length;
-    el.textContent = n ? `已配對 ${n} 台` : "還沒配對";
+    txt(el, n ? `已配對 ${n} 台` : "還沒配對");
     el.classList.toggle("on", n > 0);
-  } catch(e) { el.textContent = e.message; }
+  } catch(e) { txt(el, e.message); }
 }
 async function pairModal(){
   const v = document.createElement("div"); v.className = "veil";
@@ -1635,10 +1667,10 @@ async function pairModal(){
   const list = v.querySelector(".pklist"), box = v.querySelector(".pcode"), msg = v.querySelector(".msg"), gen = v.querySelector("[data-gen]");
   let keys = [], code = "", busy = false;
   const draw = () => {
-    list.innerHTML = keys.map(k => `<div class="pkrow">${I("link")}<span>${esc(k.name)}<small>${pairDay(k.t)} 配對${k.seen ? `・${ago(k.seen).replace(/\d$/, "$& ")}連過` : ""}</small></span>
-      <button type="button" class="iconbtn" data-del="${esc(k.id)}" data-name="${esc(k.name)}" title="解除配對">${I("x")}</button></div>`).join("");
-    box.innerHTML = code ? `<div class="codebox" data-x><code>${esc(code)}</code><button type="button" class="ubtn sm" data-cp>複製</button></div>
-      <small>24 小時內有效，用一次就失效</small>` : "";
+    settle(list, keys.map(k => `<div class="pkrow">${I("link")}<span>${esc(k.name)}<small>${pairDay(k.t)} 配對${k.seen ? `・${ago(k.seen).replace(/\d$/, "$& ")}連過` : ""}</small></span>
+      <button type="button" class="iconbtn" data-del="${esc(k.id)}" data-name="${esc(k.name)}" title="解除配對">${I("x")}</button></div>`).join(""));
+    settle(box, code ? `<div class="codebox" data-x><code>${esc(code)}</code><button type="button" class="ubtn sm" data-cp>複製</button></div>
+      <small>24 小時內有效，用一次就失效</small>` : "");
     gen.textContent = code ? "重新產生" : "產生暗號";
   };
   try { keys = (await pairCall({action:"status"})).keys || []; draw(); }
@@ -1889,8 +1921,8 @@ function bkLine(d){
 }
 async function bkStatus(root){
   await Promise.all([...root.querySelectorAll(".bkst")].map(async el => {
-    try { const [t, c] = bkLine(await bkGet(el.dataset.n)); el.textContent = t; el.className = "bkst " + c; }
-    catch(e) { el.textContent = e.message; el.className = "bkst"; }
+    try { const [t, c] = bkLine(await bkGet(el.dataset.n)); txt(el, t); el.className = "bkst " + c; }
+    catch(e) { txt(el, e.message); el.className = "bkst"; }
   }));
 }
 function bkRows(d){
@@ -1950,7 +1982,7 @@ async function bkModal(node, label){
         if (!d.running) break;
       }
       if (!live) return;
-      busy(runb); rows.innerHTML = bkRows(d); v.querySelector(".bkcopies").innerHTML = bkCopies(d);
+      busy(runb); settle(rows, bkRows(d)); settle(v.querySelector(".bkcopies"), bkCopies(d));
       d.last && d.last.ok ? say("備份好了", "ok") : say("有地方沒備份成功，看上面的說明", "bad");
     };
     if (d.running) watch();
@@ -2168,13 +2200,13 @@ function rswRunning(body, pg){
 }
 function rswEnd(body, pg, msg){
   clearTimeout(RSW.poll);
-  if (!pg) { body.innerHTML = `<small class="rswtip">${esc(msg)}</small><button class="ubtn" data-rswdone>前往登入</button>`; }
+  if (!pg) { settle(body, `<small class="rswtip">${esc(msg)}</small><button class="ubtn" data-rswdone>前往登入</button>`); }
   else {
     const res = (pg.result || []).map(x => `<li class="${x.ok ? "ok" : "bad"}">${I(x.ok ? "ok" : "warn")}<span>${esc(x.label)}${x.ok ? "" : " 沒有跑起來"}</span></li>`).join("");
-    body.innerHTML = `<div class="rswnow ${pg.ok ? "ok" : "bad"}">${pg.error ? "沒有還原成功" : pg.ok ? "還原完成" : "還原完成，但有地方沒跑起來"}</div>
+    settle(body, `<div class="rswnow ${pg.ok ? "ok" : "bad"}">${pg.error ? "沒有還原成功" : pg.ok ? "還原完成" : "還原完成，但有地方沒跑起來"}</div>
       ${pg.error ? `<small class="rswtip">${esc(pg.error)}</small>` : `<ul class="bkrows">${res || "<li>（這份備份裡沒有需要啟動的服務）</li>"}</ul>`}
       <small class="rswtip">${pg.error ? "可以在主機上執行 sudo bash install.sh --restore 重新產生代碼再試一次" : "登入時用原本那台的密碼、PIN 碼或手機金鑰"}</small>
-      <button class="ubtn" data-rswdone>前往登入</button>`;
+      <button class="ubtn" data-rswdone>前往登入</button>`);
   }
   body.querySelector("[data-rswdone]").onclick = () => {
     sessionStorage.removeItem("vs-rsw"); RSW.code = ""; setTok("");
