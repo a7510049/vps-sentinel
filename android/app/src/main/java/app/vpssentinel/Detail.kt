@@ -157,7 +157,7 @@ private fun Range(vm: Vm) {
     val opts = listOf("30m" to "30 分", "24h" to "24 時", "7d" to "7 天")
     SingleChoiceSegmentedButtonRow {
         opts.forEachIndexed { i, (v, l) ->
-            SegmentedButton(selected = vm.range == v, onClick = { vm.setRange(v) }, shape = SegmentedButtonDefaults.itemShape(i, opts.size), label = { Text(l) })
+            SegmentedButton(selected = vm.range == v, onClick = { vm.changeRange(v) }, shape = SegmentedButtonDefaults.itemShape(i, opts.size), label = { Text(l) })
         }
     }
 }

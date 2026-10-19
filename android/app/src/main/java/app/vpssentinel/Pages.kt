@@ -112,14 +112,14 @@ fun SettingsPage(vm: Vm) {
             val opts = listOf(5, 10, 30)
             SingleChoiceSegmentedButtonRow(Modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, bottom = 16.dp)) {
                 opts.forEachIndexed { i, v ->
-                    SegmentedButton(vm.refresh == v, { vm.setRefresh(v) }, SegmentedButtonDefaults.itemShape(i, opts.size)) { Text("$v 秒") }
+                    SegmentedButton(vm.refresh == v, { vm.changeRefresh(v) }, SegmentedButtonDefaults.itemShape(i, opts.size)) { Text("$v 秒") }
                 }
             }
         }
         if (Build.VERSION.SDK_INT >= 31) {
             ListItem(headlineContent = { Text("跟著桌布換顏色") },
-                trailingContent = { Switch(vm.dynamic, { vm.setDynamic(it) }) },
-                modifier = Modifier.clip(RoundedCornerShape(24.dp)).clickable { vm.setDynamic(!vm.dynamic) }, colors = item)
+                trailingContent = { Switch(vm.dynamic, { vm.changeDynamic(it) }) },
+                modifier = Modifier.clip(RoundedCornerShape(24.dp)).clickable { vm.changeDynamic(!vm.dynamic) }, colors = item)
         }
         ListItem(headlineContent = { Text("主機") }, supportingContent = { Text(vm.store.url) }, modifier = Modifier.clip(RoundedCornerShape(24.dp)), colors = item)
         ListItem(headlineContent = { Text("登出", color = St.c.bad) }, modifier = Modifier.clip(RoundedCornerShape(24.dp)).clickable { vm.logout() }, colors = item)

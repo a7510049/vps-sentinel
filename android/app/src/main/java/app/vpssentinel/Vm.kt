@@ -96,9 +96,9 @@ class Vm(app: Application) : AndroidViewModel(app) {
         loginMsg = msg
     }
 
-    fun setRefresh(v: Int) { refresh = v; store.refresh = v }
-    fun setDynamic(v: Boolean) { dynamic = v; store.dynamic = v }
-    fun setRange(v: String) { range = v; store.range = v }
+    fun changeRefresh(v: Int) { refresh = v; store.refresh = v }
+    fun changeDynamic(v: Boolean) { dynamic = v; store.dynamic = v }
+    fun changeRange(v: String) { range = v; store.range = v }
 
     /** 這台主機目前選的時間範圍要畫的曲線；30 分鐘直接用即時資料 */
     fun histFor(h: Host): Hist? {
