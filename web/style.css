@@ -122,17 +122,19 @@ b,strong{font-weight:500}
 :is(.li,.ubtn,.iconbtn,.icbtn,.hmenu button,.rb .ri,.seg button,.rng button,.fchip,.addhost,.trf,.chats button){position:relative}
 .rip{position:absolute;inset:0;border-radius:inherit;overflow:hidden;pointer-events:none}
 .rip i{position:absolute;border-radius:50%;background:currentColor;opacity:.14}
+/* 按下去（.prs，程式控制，輕點也至少看得到一下）：快速縮進去；放開時才用彈性曲線彈回來 */
+:is(.hcard,.tb,.li,.ubtn,.iconbtn,.icbtn,.hmenu button,.seg button,.rng button,.fchip,.addhost,.trf,.chats button,.blob,.sw button,.rb .ri).prs,.rb.prs .ri{transition-duration:var(--t-fast);transition-timing-function:var(--ease)}
 
 /* 小圖示按鈕：圓的，按下去變圓角方形 */
 .iconbtn{width:40px;height:40px;border-radius:50%;display:inline-grid;place-items:center;color:var(--tx2);flex:none;position:relative;text-decoration:none;
   transition:border-radius var(--t-mid) var(--spring),transform var(--t-mid) var(--spring),background-color var(--t-fast) var(--ease)}
 .iconbtn svg{width:20px;height:20px}
 @media (hover:hover){.iconbtn:hover{background:color-mix(in srgb,var(--tx) 8%,transparent)}}
-.iconbtn:active{border-radius:var(--r-sm);transform:scale(.9)}
+.iconbtn.prs{border-radius:var(--r-sm);transform:scale(.9)}
 .icbtn{width:48px;height:48px;border-radius:50%;background:var(--s2);display:grid;place-items:center;flex:none;
   transition:border-radius var(--t-mid) var(--spring),transform var(--t-mid) var(--spring)}
 .icbtn svg{width:22px;height:22px}
-.icbtn:active{border-radius:var(--r-md);transform:scale(.92)}
+.icbtn.prs{border-radius:var(--r-md);transform:scale(.92)}
 .hasnew::after{content:"";position:absolute;top:6px;right:6px;width:8px;height:8px;border-radius:50%;background:var(--bad);box-shadow:0 0 0 2px var(--bg)}
 .hasnew::after{background:var(--p);box-shadow:0 0 0 2px var(--s3)}
 
@@ -141,7 +143,7 @@ b,strong{font-weight:500}
   display:inline-flex;align-items:center;justify-content:center;gap:8px;white-space:nowrap;text-decoration:none;
   transition:border-radius var(--t-mid) var(--spring),transform var(--t-mid) var(--spring),background-color var(--t-mid) var(--ease),opacity var(--t-mid) var(--ease)}
 .ubtn svg{width:18px;height:18px;flex:none}
-.ubtn:active{border-radius:var(--r-sm);transform:scale(.96)}
+.ubtn.prs{border-radius:var(--r-sm);transform:scale(.96)}
 .ubtn[disabled]{opacity:.5;cursor:default}
 .ubtn.ghost{background:var(--s3);color:var(--tx)}
 .ubtn.warn{background:var(--warn);color:var(--on-warn)}
@@ -206,14 +208,14 @@ img.flag{width:28px;height:21px;object-fit:cover;border-radius:var(--r-xs);flex:
   transition:max-width var(--t-slow) var(--spring),opacity var(--t-mid) var(--ease),margin var(--t-slow) var(--spring)}
 .tb.on{background:var(--pc);color:var(--on-pc);padding:0 20px 0 18px}
 .tb.on .t{max-width:3em;opacity:1;margin-left:8px}
-.tb:active{border-radius:var(--r-md)}
+.tb.prs{border-radius:var(--r-md)}
 .tb.hasnew::after{top:10px;right:10px}
 
 /* ═════════ 首頁上面：狀態圖形＋一句話 ═════════ */
 .hero{padding:calc(env(safe-area-inset-top) + 34px) 4px 6px}
 .hrow{display:flex;align-items:center;gap:16px}
 .blob{position:relative;width:80px;height:80px;flex:none;transition:transform var(--t-slow) var(--spring)}
-.blob:active{transform:scale(.86)}
+.blob.prs{transform:scale(.86)}
 .blob .bs{position:absolute;inset:0;animation:spin 32s linear infinite}
 .blob .bf{position:absolute;inset:0;background:var(--pc);transition:clip-path var(--t-long) var(--spring),background-color var(--t-slow) var(--ease)}
 .blob.warn .bf{background:var(--warnc)}.blob.bad .bf{background:var(--badc)}
@@ -242,7 +244,7 @@ img.flag{width:28px;height:21px;object-fit:cover;border-radius:var(--r-xs);flex:
 .hcard{display:block;width:100%;background:var(--s1);border-radius:var(--r-xl);padding:18px 18px 16px;cursor:pointer;position:relative;
   transition:border-radius var(--t-slow) var(--spring),transform var(--t-slow) var(--spring),background-color var(--t-mid) var(--ease),box-shadow var(--t-mid) var(--ease);
   animation:rise var(--t-slow) var(--spring) backwards;animation-delay:calc(60ms + var(--i,0) * 60ms)}
-.hcard:active{border-radius:var(--r-2xl);transform:scale(.97);background:var(--s2)}
+.hcard.prs{border-radius:var(--r-2xl);transform:scale(.97);background:var(--s2)}
 .hcard.warn{box-shadow:inset 0 0 0 2px color-mix(in oklab,var(--warn) 55%,transparent)}
 .hcard.bad{box-shadow:inset 0 0 0 2px color-mix(in oklab,var(--bad) 60%,transparent)}
 .hcard:focus-visible{outline:2px solid var(--p);outline-offset:2px}
@@ -263,7 +265,7 @@ img.flag{width:28px;height:21px;object-fit:cover;border-radius:var(--r-xs);flex:
   box-shadow:inset 0 0 0 1px var(--s4);font-weight:500;
   transition:border-radius var(--t-mid) var(--spring),transform var(--t-mid) var(--spring),background-color var(--t-fast) var(--ease)}
 .addhost svg{width:20px;height:20px}
-.addhost:active{border-radius:var(--r-md);transform:scale(.97);background:var(--s1)}
+.addhost.prs{border-radius:var(--r-md);transform:scale(.97);background:var(--s1)}
 .hosts .addhost{grid-column:1/-1}
 .offline{display:flex;align-items:flex-start;gap:12px;margin-top:12px;padding:14px;border-radius:var(--r-md);background:var(--badc);color:var(--on-badc)}
 .offline>svg{width:22px;height:22px;flex:none}
@@ -377,7 +379,7 @@ img.flag{width:28px;height:21px;object-fit:cover;border-radius:var(--r-xs);flex:
 .nt .nl{font-size:var(--fs-xs);color:var(--tx3)}
 /* 本月流量 */
 .trf{display:block;width:100%;text-align:left;transition:border-radius var(--t-slow) var(--spring),transform var(--t-slow) var(--spring)}
-.trf:active{border-radius:var(--r-xl);transform:scale(.98)}
+.trf.prs{border-radius:var(--r-xl);transform:scale(.98)}
 .trow{display:flex;align-items:center;gap:10px}
 .trow .tbig{margin-left:auto;font-size:var(--fs-2xl);font-weight:500;font-variant-numeric:tabular-nums}
 .trow .tbig small{font-size:var(--fs-s);color:var(--tx3);margin-left:4px}
@@ -403,7 +405,7 @@ img.flag{width:28px;height:21px;object-fit:cover;border-radius:var(--r-xs);flex:
   transition:border-radius var(--t-mid) var(--spring),transform var(--t-mid) var(--spring),background-color var(--t-fast) var(--ease)}
 .group>.li:first-child{border-top-left-radius:var(--r-lg);border-top-right-radius:var(--r-lg)}
 .group>.li:last-child{border-bottom-left-radius:var(--r-lg);border-bottom-right-radius:var(--r-lg)}
-button.li:active,a.li:active{border-radius:var(--r-lg);transform:scale(.98);background:var(--s2)}
+button.li.prs,a.li.prs{border-radius:var(--r-lg);transform:scale(.98);background:var(--s2)}
 @media (hover:hover){button.li:hover,a.li:hover{background:color-mix(in oklab,var(--card) 92%,var(--tx))}}
 .li .lab{flex:1;min-width:0;font-size:var(--fs-l);overflow-wrap:anywhere}
 .li .lab small{display:block;font-size:var(--fs-s);color:var(--tx3);margin-top:1px}
@@ -423,7 +425,7 @@ button.li:active,a.li:active{border-radius:var(--r-lg);transform:scale(.98);back
 .fchip{height:36px;padding:0 16px;border-radius:var(--r-sm);box-shadow:inset 0 0 0 1px var(--s4);color:var(--tx2);font-size:var(--fs-m);
   transition:border-radius var(--t-slow) var(--spring),background-color var(--t-fast) var(--ease),box-shadow var(--t-fast) var(--ease),transform var(--t-mid) var(--spring)}
 .fchip.on{background:var(--pc);color:var(--on-pc);box-shadow:none;border-radius:var(--r-pill)}
-.fchip:active{transform:scale(.95)}
+.fchip.prs{transform:scale(.95)}
 .fchips .fchip{display:inline-flex;align-items:center}
 .fchip .ck{display:inline-grid;width:0;opacity:0;overflow:hidden;transition:width var(--t-mid) var(--spring),margin var(--t-mid) var(--spring),opacity var(--t-fast) var(--ease)}
 .fchip .ck svg{width:18px;height:18px;flex:none}
@@ -445,7 +447,7 @@ button.li:active,a.li:active{border-radius:var(--r-lg);transform:scale(.98);back
 .seg button:first-child{border-radius:var(--r-pill) var(--r-xs) var(--r-xs) var(--r-pill)}
 .seg button:last-child{border-radius:var(--r-xs) var(--r-pill) var(--r-pill) var(--r-xs)}
 .seg button.on{background:var(--p);color:var(--on-p);border-radius:var(--r-pill)}
-.seg button:active{transform:scale(.94)}
+.seg button.prs{transform:scale(.94)}
 .li .seg{flex:none}
 .li.col .seg{width:100%}
 /* 主題色 */
@@ -455,7 +457,7 @@ button.li:active,a.li:active{border-radius:var(--r-lg);transform:scale(.98);back
 .sw button svg{width:20px;height:20px;color:#fff;opacity:0;transform:scale(.3);transition:opacity var(--t-fast) var(--ease),transform var(--t-mid) var(--spring)}
 .sw button.on{border-radius:var(--r-md)}
 .sw button.on svg{opacity:1;transform:none}
-.sw button:active{transform:scale(.88)}
+.sw button.prs{transform:scale(.88)}
 .sw .flagsw span{font-size:var(--fs-s);font-weight:500;color:#fff;text-shadow:0 1px 3px rgba(0,0,0,.5);position:absolute;transition:opacity var(--t-fast) var(--ease)}
 .sw .flagsw.on span{opacity:0}
 /* 開關：打開時圓點變大、出現勾勾 */
@@ -484,7 +486,7 @@ button.li:active,a.li:active{border-radius:var(--r-lg);transform:scale(.98);back
 .rb.on{color:var(--tx)}
 .rb.on .ri{width:56px;background:var(--pc);color:var(--on-pc)}
 @media (hover:hover){.rb:not(.on):hover .ri{width:56px;background:color-mix(in srgb,var(--tx) 8%,transparent)}}
-.rb:active .ri{transform:scale(.9)}
+.rb.prs .ri{transform:scale(.9)}
 .rb.hasnew::after{top:-2px;right:16px}
 .rail .rfoot{margin-top:auto;display:flex;flex-direction:column;align-items:center;gap:6px}
 .iconbtn.spinning svg{animation:spin .9s linear infinite}
@@ -678,7 +680,7 @@ textarea.field{height:auto;padding:12px 16px;resize:none}
 .hmenu button{display:flex;align-items:center;gap:12px;min-height:48px;padding:8px 12px;border-radius:var(--r-sm);color:var(--tx);text-decoration:none;font-size:var(--fs-m);text-align:left;
   transition:background-color var(--t-fast) var(--ease)}
 @media (hover:hover){.hmenu button:hover{background:color-mix(in srgb,var(--tx) 8%,transparent)}}
-.hmenu button:active{background:color-mix(in srgb,var(--tx) 12%,transparent)}
+.hmenu button.prs{background:color-mix(in srgb,var(--tx) 12%,transparent)}
 .hmenu button svg{width:20px;height:20px;flex:none;color:var(--tx2)}
 .hmenu button.warn,.hmenu button.warn svg{color:var(--warn)}
 .hmenu button.bad,.hmenu button.bad svg{color:var(--bad)}

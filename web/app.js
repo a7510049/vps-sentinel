@@ -721,7 +721,7 @@ function setPage(list){
 /* 要顯示的內容、畫面更新頻率：收在一個視窗裡（手機從下面滑上來） */
 function showsModal(){
   const v = document.createElement("div"); v.className = "veil";
-  v.innerHTML = `<div class="dialog showsd">${IC("trend", "big")}<h3>要顯示的內容</h3>
+  v.innerHTML = `<div class="dialog showsd"><h3>要顯示的內容</h3>
     <div class="form"><div class="group">${SHOWS.map(([ic, l, k, sm]) => `<label class="li">${IC(ic, "")}<span class="lab">${l}${sm ? `<small>${sm}</small>` : ""}</span>${tog("show." + k, l)}</label>`).join("")}</div>
       <div class="group"><div class="li col"><span class="lab">畫面更新頻率</span>${seg("refresh", [[3, "3 秒"], [5, "5 秒"], [10, "10 秒"], [30, "30 秒"]])}</div></div></div>
     <div class="btns"><button class="ubtn" data-r="0">完成</button></div></div>`;
@@ -1290,7 +1290,7 @@ function txt(el, t){
   if (canAnim() && el.isConnected) el.animate([{opacity:0}, {opacity:1}], {duration:T.mid, easing:EASE, id:"ui"});
 }
 /* 整塊內容換掉：新出現的淡入（沒變的不動）、高度平滑變化；本來是空的就從 0 撐開 */
-function settle(el, html){
+function swapHTML(el, html){
   if (el.innerHTML === html) return;
   if (!canAnim() || !el.isConnected) { el.innerHTML = html; return; }
   const h0 = el.offsetHeight, was = new Set([...el.children].map(c => c.outerHTML)); el.innerHTML = html;
@@ -1300,11 +1300,25 @@ function settle(el, html){
   [...el.children].forEach(c => { if (!was.has(c.outerHTML)) c.animate([{opacity:0, transform:"translateY(4px)"}, {opacity:1, transform:"none"}], o); });
   if (Math.abs(h1 - h0) > 1) el.animate([{height:h0 + "px", overflow:"hidden"}, {height:h1 + "px", overflow:"hidden"}], o);
 }
+/* 顯示／收起一塊（取代直接改 hidden）：撐開後淡入；淡出後收起 */
+function reveal(el, on){
+  if (!el) return;
+  if (on === (!el.hidden && !el._hiding)) return;
+  el.getAnimations().forEach(a => a.cancel()); el._hiding = false; el.style.overflow = "";
+  if (!canAnim() || !el.isConnected) { el.hidden = !on; return; }
+  if (on) { el.hidden = false; return enterBlock(el, 0); }
+  el._hiding = true; el.style.overflow = "hidden";
+  el.animate([{height:el.offsetHeight + "px", opacity:1, easing:EXIT}, {height:el.offsetHeight + "px", opacity:0, offset:.35, easing:EASE},
+    {height:"0px", opacity:0, paddingTop:"0px", paddingBottom:"0px", marginTop:"0px", marginBottom:"0px"}], {duration:T.mid, easing:"linear", id:"ui"})
+    .finished.then(() => { if (el._hiding) { el.hidden = true; el._hiding = false; } el.style.overflow = ""; }, () => {});
+}
+/* 視窗裡的提示字：新的字淡入，從沒有字變成有字時慢慢撐開 */
+function sayTo(msg, t){ t ? swapHTML(msg, `<span>${esc(t)}</span>`) : msg.textContent = ""; }
 function selfPaint(root){
   const box = root.querySelector(".selfbox"), sum = root.querySelector(".selfsum"); if (!box) return;
   const hosts = LIST.filter(x => x.online && SELFST[keyOf(x)]);
   const pend = hosts.reduce((n, h) => { const d = SELFST[keyOf(h)]; return n + (d.has && !d.running ? 1 : 0) + (d.cloud && d.cloud.has && !d.cloud.running ? 1 : 0); }, 0);
-  if (sum) settle(sum, pend > 1 ? `<span>${pend} 項有新版</span><button class="ubtn sm" data-selfup="*">全部更新</button>` : "");
+  if (sum) swapHTML(sum, pend > 1 ? `<span>${pend} 項有新版</span><button class="ubtn sm" data-selfup="*">全部更新</button>` : "");
   const h = LIST.find(x => (x.node || "") === box.dataset.n), d = h && SELFST[keyOf(h)];
   if (!d) return;
   const node = esc(h.node || "");
@@ -1317,7 +1331,7 @@ function selfPaint(root){
     ${c.has && !c.running ? `<button class="ubtn sm" data-cloudup="${node}">更新</button>` : ""}</div>` : "";
   const srow = `<div class="cl2 first"><span>${I("upd")}哨兵<small>${d.version ? `版本 ${esc(d.version)}・${esc(d.build || "")}・` : ""}${st}</small>${ch}</span>
     ${d.has && !d.running ? `<button class="ubtn sm" data-selfup="${node}">更新</button>` : ""}</div>`;
-  settle(box, `<div class="selfrow">${srow}${crow}</div>`);
+  swapHTML(box, `<div class="selfrow">${srow}${crow}</div>`);
 }
 /* jobs：[{node, kind:"self"|"cloud"}]；不給就是「全部更新」 */
 async function selfUpdate(root, jobs){
@@ -1426,7 +1440,7 @@ async function tgModal(){
     ${st.on ? `<button class="linkbtn" data-off>關閉 Telegram 通知</button>` : ""}</div>`;
   $("#layer").appendChild(v);
   const q = k => v.querySelector(`[data-k="${k}"]`), msg = v.querySelector(".msg");
-  const say = (t, cls) => { msg.textContent = t || ""; msg.className = "msg " + (cls || ""); };
+  const say = (t, cls) => { sayTo(msg, t); msg.className = "msg " + (cls || ""); };
   const vals = () => ({token: q("token").value.trim(), chat: q("chat").value.trim(), keep: +((v.querySelector("[data-keep].on") || {}).dataset || {keep:0}).keep});
   let busy = false;
   const run = async (btn, label, fn) => {
@@ -1445,7 +1459,7 @@ async function tgModal(){
       if (f) return run(f, "尋找中…", async () => {
         const d = await tgCall({action:"find", token: vals().token});
         const box = v.querySelector(".chats");
-        settle(box, d.chats.map(c => `<button type="button" data-chat="${esc(c.id)}">${esc(c.name)}</button>`).join(""));
+        swapHTML(box, d.chats.map(c => `<button type="button" data-chat="${esc(c.id)}">${esc(c.name)}</button>`).join(""));
         if (d.chats.length === 1) { q("chat").value = d.chats[0].id; box.firstChild.classList.add("on"); }
         say(d.chats.length > 1 ? `找到 ${d.chats.length} 個聊天，點一下要傳去哪裡` : `會傳到「${d.chats[0].name}」`, "ok");
       });
@@ -1556,7 +1570,7 @@ async function pkModal(){
   const day = t => { const d = new Date(t * 1000); return `${d.getMonth()+1}/${d.getDate()}`; };
   let keys = [], max = 5, busy = false;
   const draw = () => {
-    settle(list, keys.map(k => `<div class="pkrow">${I("finger")}<span>${esc(k.name)}<small>${day(k.added)} 登記${k.used ? `・${day(k.used)} 用過` : "・還沒用過"}</small></span>
+    swapHTML(list, keys.map(k => `<div class="pkrow"><span>${esc(k.name)}<small>${day(k.added)} 登記${k.used ? `・${day(k.used)} 用過` : "・還沒用過"}</small></span>
       <button type="button" class="iconbtn" data-del="${esc(k.id)}" data-name="${esc(k.name)}" title="刪掉這支">${I("x")}</button></div>`).join(""));
     const full = keys.length >= max;
     lab.style.display = full ? "none" : "";
@@ -1667,9 +1681,9 @@ async function pairModal(){
   const list = v.querySelector(".pklist"), box = v.querySelector(".pcode"), msg = v.querySelector(".msg"), gen = v.querySelector("[data-gen]");
   let keys = [], code = "", busy = false;
   const draw = () => {
-    settle(list, keys.map(k => `<div class="pkrow">${I("link")}<span>${esc(k.name)}<small>${pairDay(k.t)} 配對${k.seen ? `・${ago(k.seen).replace(/\d$/, "$& ")}連過` : ""}</small></span>
+    swapHTML(list, keys.map(k => `<div class="pkrow"><span>${esc(k.name)}<small>${pairDay(k.t)} 配對${k.seen ? `・${ago(k.seen).replace(/\d$/, "$& ")}連過` : ""}</small></span>
       <button type="button" class="iconbtn" data-del="${esc(k.id)}" data-name="${esc(k.name)}" title="解除配對">${I("x")}</button></div>`).join(""));
-    settle(box, code ? `<div class="codebox" data-x><code>${esc(code)}</code><button type="button" class="ubtn sm" data-cp>複製</button></div>
+    swapHTML(box, code ? `<div class="codebox" data-x><code>${esc(code)}</code><button type="button" class="ubtn sm" data-cp>複製</button></div>
       <small>24 小時內有效，用一次就失效</small>` : "");
     gen.textContent = code ? "重新產生" : "產生暗號";
   };
@@ -1737,13 +1751,13 @@ function rebootModal(node, name){
   const done = () => { if (v._d) return; v._d = 1; v.classList.add("closing"); setTimeout(() => v.remove(), 360); };
   v._esc = done;
   const wait = t => { busy = true; go.disabled = true; go.innerHTML = `<span class="spin"></span>${t}`; msg.className = "msg"; msg.textContent = ""; };
-  const say = (t, bad) => { msg.className = "msg" + (bad ? " bad" : ""); msg.textContent = t || ""; };
+  const say = (t, bad) => { msg.className = "msg" + (bad ? " bad" : ""); sayTo(msg, t); };
   const ask = async () => {
     wait("傳送中…");
     const d = await call({action:"ask"});
     busy = false; go.disabled = false; go.textContent = asked ? "重新開機" : "傳送驗證碼";
-    if (!d.ok) { form.hidden = false; return say(d.message || "傳送失敗", 1); }
-    asked = true; go.textContent = "重新開機"; form.hidden = false;
+    if (!d.ok) { reveal(form, true); return say(d.message || "傳送失敗", 1); }
+    asked = true; go.textContent = "重新開機"; reveal(form, true);
     if (d.mode === "pw") { txt.textContent = "沒設定 Telegram，請輸入這台的密碼或 PIN 碼"; inp.type = "password"; inp.placeholder = "密碼或 PIN 碼"; }
     else { txt.innerHTML = `請輸入 Telegram 收到的驗證碼 <a href="#" data-again>重傳</a>`; inp.inputMode = "numeric"; inp.maxLength = 6; inp.placeholder = "6 位數驗證碼"; say(d.message); }
     inp.value = ""; setTimeout(() => inp.focus(), 60);
@@ -1779,7 +1793,7 @@ function dlModal(node, name){
   $("#layer").appendChild(v);
   const inp = v.querySelector("input"), msg = v.querySelector(".msg"), go = v.querySelector("[data-go]"), list = v.querySelector(".dllist"), room = v.querySelector(".dlroom");
   const call = body => pkCall("/api/download" + (node ? "?node=" + encodeURIComponent(node) : ""), body, 1).catch(err => ({message:err.message}));
-  const say = (t, bad) => { msg.className = "msg" + (bad ? " bad" : ""); msg.textContent = t || ""; };
+  const say = (t, bad) => { msg.className = "msg" + (bad ? " bad" : ""); sayTo(msg, t); };
   const left = s => s < 60 ? `${Math.max(1, Math.round(s))} 秒` : s < 3600 ? `${Math.round(s / 60)} 分鐘` : `${(s / 3600).toFixed(1)} 小時`;
   const stOf = j => j.st === "wait" ? j.err || "排隊中" : j.st === "ok" ? `下載好了・${size(j.total)}` : j.st === "bad" ? j.err || "沒有成功"
     : j.total ? `${Math.floor(j.done / j.total * 100)}%${j.bps ? `・${rate(j.bps)}・剩 ${left((j.total - j.done) / j.bps)}` : `・共 ${size(j.total)}`}`
@@ -1790,7 +1804,7 @@ function dlModal(node, name){
     if (!d.cloud) { inp.disabled = go.disabled = true; say("這台沒有雲端硬碟", 1); }
     room.textContent = d.cloud ? `還能放 ${size(d.room)}` : "";
     const yt = d.yt || {}, ys = v.querySelector(".dlyt");
-    ys.hidden = !yt.tool;
+    reveal(ys, !!yt.tool);
     ys.querySelector("span").textContent = `：${yt.cookies ? "已設定" : "還沒設定"}${yt.warp ? "・WARP 已開" : ""}`;
     const seen = new Set();
     d.list.forEach((j, i) => {
@@ -1809,7 +1823,7 @@ function dlModal(node, name){
       set(r.querySelector("small"), stOf(j));
       r.className = "dlrow " + j.st;
       const tr = r.querySelector(".track"), run = j.st === "run" || j.st === "wait";
-      tr.hidden = !run;
+      reveal(tr, run);
       if (run) r.querySelector(".fill").style.width = (j.total ? Math.max(1, j.done / j.total * 100) : 0) + "%";
       r.querySelector("[data-retry]").hidden = j.st !== "bad";
       r.querySelector("[data-del]").title = run ? "取消下載" : "從清單拿掉（檔案不會刪）";
@@ -1834,14 +1848,14 @@ function dlModal(node, name){
   v.addEventListener("click", async e => {
     if (e.target === v || e.target.closest("[data-r]")) return done();
     if (e.target.closest("[data-go]") && !busy) return add();
-    if (e.target.closest("[data-yt]")) { e.preventDefault(); const ck = v.querySelector(".dlck"); ck.hidden = !ck.hidden; if (!ck.hidden) ck.querySelector("textarea").focus(); return; }
+    if (e.target.closest("[data-yt]")) { e.preventDefault(); const ck = v.querySelector(".dlck"), on = ck.hidden || ck._hiding; reveal(ck, on); if (on) ck.querySelector("textarea").focus({preventScroll:true}); return; }
     const cs = e.target.closest("[data-cksave],[data-ckdel]");
     if (cs) {
       const ta = v.querySelector(".dlck textarea"), text = cs.matches("[data-ckdel]") ? "" : ta.value.trim();
       if (!text && cs.matches("[data-cksave]")) return ta.focus();
       const d = await call({action:"cookies", text});
       say(d.message || "沒有成功", !d.ok);
-      if (d.ok) { ta.value = ""; v.querySelector(".dlck").hidden = true; }
+      if (d.ok) { ta.value = ""; reveal(v.querySelector(".dlck"), false); }
       return draw(d);
     }
     const row = e.target.closest(".dlrow"), del = e.target.closest("[data-del]"), re = e.target.closest("[data-retry]");
@@ -1961,7 +1975,7 @@ async function bkModal(node, label){
     <div class="btns three"><button class="ubtn ghost" data-dl>下載</button><button class="ubtn ghost" data-r="0">關閉</button><button class="ubtn" data-run>立即備份</button></div></div>`;
   $("#layer").appendChild(v);
   const msg = v.querySelector(".msg"), rows = v.querySelector(".bkrows"), runb = v.querySelector("[data-run]");
-  const say = (t, c = "") => { msg.className = "msg " + c; msg.textContent = t; };
+  const say = (t, c = "") => { msg.className = "msg " + c; sayTo(msg, t); };
   const post = async (body, here) => {           // here：送給目前開著的這台（換密碼由它負責通知其他台）
     const r = await api("/api/backup" + (here ? "" : bkQ(node)), {method:"POST", headers:{"X-Token":getTok(), "Content-Type":"application/json"}, body:JSON.stringify(body)});
     const x = await r.json().catch(() => ({}));
@@ -1982,7 +1996,7 @@ async function bkModal(node, label){
         if (!d.running) break;
       }
       if (!live) return;
-      busy(runb); settle(rows, bkRows(d)); settle(v.querySelector(".bkcopies"), bkCopies(d));
+      busy(runb); swapHTML(rows, bkRows(d)); swapHTML(v.querySelector(".bkcopies"), bkCopies(d));
       d.last && d.last.ok ? say("備份好了", "ok") : say("有地方沒備份成功，看上面的說明", "bad");
     };
     if (d.running) watch();
@@ -1999,7 +2013,7 @@ async function bkModal(node, label){
         return;
       }
       if (e.target.closest("[data-chg]")) {
-        const box = v.querySelector(".bknew"); box.hidden = false; e.target.closest("[data-chg]").hidden = true;
+        const box = v.querySelector(".bknew"); reveal(box, true); reveal(e.target.closest("[data-chg]"), false);
         return box.querySelector("input").focus();
       }
       const sk = e.target.closest("[data-setkey]");
@@ -2011,7 +2025,7 @@ async function bkModal(node, label){
         try {
           const x = await post({action:"key", key, sync:true}, true); d.key = key;
           const kb = v.querySelector(".bkkey"); kb.textContent = key; kb.classList.add("on");
-          inp.value = ""; v.querySelector(".bknew").hidden = true; v.querySelector("[data-chg]").hidden = false; say(x.message, "ok");
+          inp.value = ""; reveal(v.querySelector(".bknew"), false); reveal(v.querySelector("[data-chg]"), true); say(x.message, "ok");
         } catch(err) { say(err.message, "bad"); }
         busy(sk);
         return;
@@ -2065,7 +2079,7 @@ async function bkRestore(){
     <div class="btns one"><button class="ubtn" data-r="0">關閉</button></div></div>`;
   $("#layer").appendChild(v);
   const msg = v.querySelector(".msg");
-  const say = (t, c = "") => { msg.className = "msg " + c; msg.textContent = t; };
+  const say = (t, c = "") => { msg.className = "msg " + c; sayTo(msg, t); };
   return new Promise(res => {
     const done = () => { if (v._d) return; v._d = 1; v.classList.add("closing"); setTimeout(() => { v.remove(); res(); }, 360); };
     v._esc = done;
@@ -2087,7 +2101,7 @@ async function bkRestore(){
         const url = `${location.origin}/api/backup-dl?${x.q}`;
         const cmd = `sudo apt-get install -y -qq git; git clone ${BK_REPO} ~/vps-sentinel; sudo python3 ~/vps-sentinel/sentinel.py --restore '${url}'`;
         const box = v.querySelector(".bkhosts + .bkcmd");
-        box.dataset.cmd = cmd; box.textContent = cmd; box.hidden = false;
+        box.dataset.cmd = cmd; txt(box, cmd); reveal(box, true);
         v.querySelectorAll("[data-link]").forEach(x => x.classList.toggle("on", x === b));
         say(`這是「${b.dataset.link}」的還原指令，點一下複製`, "ok");
       } catch(err) { say(err.message, "bad"); }
@@ -2200,10 +2214,10 @@ function rswRunning(body, pg){
 }
 function rswEnd(body, pg, msg){
   clearTimeout(RSW.poll);
-  if (!pg) { settle(body, `<small class="rswtip">${esc(msg)}</small><button class="ubtn" data-rswdone>前往登入</button>`); }
+  if (!pg) { swapHTML(body, `<small class="rswtip">${esc(msg)}</small><button class="ubtn" data-rswdone>前往登入</button>`); }
   else {
     const res = (pg.result || []).map(x => `<li class="${x.ok ? "ok" : "bad"}">${I(x.ok ? "ok" : "warn")}<span>${esc(x.label)}${x.ok ? "" : " 沒有跑起來"}</span></li>`).join("");
-    settle(body, `<div class="rswnow ${pg.ok ? "ok" : "bad"}">${pg.error ? "沒有還原成功" : pg.ok ? "還原完成" : "還原完成，但有地方沒跑起來"}</div>
+    swapHTML(body, `<div class="rswnow ${pg.ok ? "ok" : "bad"}">${pg.error ? "沒有還原成功" : pg.ok ? "還原完成" : "還原完成，但有地方沒跑起來"}</div>
       ${pg.error ? `<small class="rswtip">${esc(pg.error)}</small>` : `<ul class="bkrows">${res || "<li>（這份備份裡沒有需要啟動的服務）</li>"}</ul>`}
       <small class="rswtip">${pg.error ? "可以在主機上執行 sudo bash install.sh --restore 重新產生代碼再試一次" : "登入時用原本那台的密碼、PIN 碼或手機金鑰"}</small>
       <button class="ubtn" data-rswdone>前往登入</button>`);
@@ -2471,13 +2485,18 @@ async function refreshNow(btn){
 })();
 /* 按下去的水波紋：手指一碰就從那個點擴散；手機上等一下下，確定不是要捲動才出現 */
 (function(){
-  const SEL = ".hcard,.tb,.li:not(div),.ubtn,.iconbtn,.icbtn,.hmenu button,.seg button,.rng button,.fchip,.addhost,.trf,.chats button";
+  const SEL = ".hcard,.tb,.li:not(div),.ubtn,.iconbtn,.icbtn,.hmenu button,.seg button,.rng button,.fchip,.addhost,.trf,.chats button,.blob,.sw button";
   addEventListener("pointerdown", e => {
     if (e.button || !canAnim()) return;
     const rb = e.target.closest(".rb"), el = rb ? rb.querySelector(".ri") : e.target.closest(SEL);
     if (!el || el.disabled) return;
-    let box = null, up = false;
+    let box = null, up = false, t0 = 0;
+    const pr = rb || el;                          // 按下去的樣子（縮一點）至少留 0.16 秒，輕點也看得到
+    const press = () => { pr.classList.add("prs"); t0 = performance.now(); };
+    const release = now => setTimeout(() => pr.classList.remove("prs"), now ? 0 : Math.max(0, 160 - (performance.now() - t0)));
     const start = () => {
+      press();
+      if (el.classList.contains("blob") || el.closest(".sw")) return;   // 圓形色塊不放水波紋
       const r = el.getBoundingClientRect(), w = el.offsetWidth, h = el.offsetHeight;   // 按下去會縮一點：換回原本的大小來算
       const x = (e.clientX - r.left) * w / (r.width || 1), y = (e.clientY - r.top) * h / (r.height || 1);
       const R = Math.hypot(Math.max(x, w - x), Math.max(y, h - y));
@@ -2490,8 +2509,8 @@ async function refreshNow(btn){
     const t = e.pointerType === "mouse" ? (start(), 0) : setTimeout(() => { if (!up) start(); }, 70);
     const end = ev => {
       up = true; removeEventListener("pointerup", end); removeEventListener("pointercancel", end);
-      if (ev.type === "pointercancel") { clearTimeout(t); if (!box) return; }   // 其實是在捲動：不出現
-      else if (!box) { clearTimeout(t); start(); }
+      if (ev.type === "pointercancel") { clearTimeout(t); release(true); if (!box) return; }   // 其實是在捲動：不出現
+      else { if (!t0) { clearTimeout(t); start(); } release(false); }
       fade();
     };
     addEventListener("pointerup", end); addEventListener("pointercancel", end);
