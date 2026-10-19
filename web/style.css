@@ -490,6 +490,25 @@ button.li:active,a.li:active{border-radius:var(--r-lg);transform:scale(.98);back
 .dash.d .view{padding:30px 32px 48px 8px;min-width:0}
 .dash.d .ptitle{padding:30px 4px 22px}
 .dash.d .narrow{max-width:760px}
+/* 工具、紀錄、設定：電腦上用兩欄把寬度用滿 */
+.dash.d .wide{max-width:1480px}
+.split{display:grid;grid-template-columns:240px minmax(0,1fr);gap:24px;align-items:start}
+.split.rside{grid-template-columns:minmax(0,1fr) 300px}
+.smain{min-width:0}
+.split>.pane,.side{position:sticky;top:24px;max-height:calc(100vh / var(--zoom) - 48px);overflow-y:auto;scrollbar-width:thin}
+.pane .li{min-height:52px;padding:10px 16px;gap:10px}
+.pane .li.on{background:var(--pc);color:var(--on-pc)}
+.pane .li .val{color:inherit;opacity:.75}
+.scols{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:24px;align-items:start}
+.scol{min-width:0}
+/* 工具的每一項各自一個框框，兩個一排；雲端硬碟（有容量條）佔滿一排 */
+.dash.d .v-tools .group{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+.dash.d .v-tools .group>.li{border-radius:var(--r-lg);min-height:84px;padding:16px 20px}
+.dash.d .v-tools .group>.li.col{grid-column:1/-1}
+.dash.d .v-tools .split>.pane{display:flex;gap:3px}
+.dash.d .v-tools .split>.pane>.li{min-height:52px;padding:10px 16px;border-radius:var(--r-xs)}
+.dash.d .v-tools .split>.pane>.li:first-child{border-top-left-radius:var(--r-lg);border-top-right-radius:var(--r-lg)}
+.dash.d .v-tools .split>.pane>.li:last-child{border-bottom-left-radius:var(--r-lg);border-bottom-right-radius:var(--r-lg)}
 .dhome{display:grid;grid-template-columns:minmax(0,1fr) 340px;gap:28px;align-items:start}
 .dmain{min-width:0}
 .dhome .hero{padding:6px 4px 26px}

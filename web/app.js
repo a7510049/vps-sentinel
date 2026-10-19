@@ -635,21 +635,28 @@ function detail(s){
 let TOOLH = store("vs-toolh"), ORDER = [];
 function toolsPage(list){
   const on = list.filter(s => s.online).sort((a, b) => ORDER.indexOf(keyOf(a)) - ORDER.indexOf(keyOf(b)));
-  let h = `<div class="narrow" data-key="tools"><h1 class="ptitle">工具</h1>`;
+  let h = `<div class="${DESK.matches ? "wide" : "narrow"}" data-key="tools"><h1 class="ptitle">工具</h1>`;
   if (!on.length) return h + `<div class="calm">連不上任何主機</div></div>`;
   const s = on.find(x => keyOf(x) === TOOLH) || on.find(x => !x.node) || on[0], k = esc(keyOf(s)), node = esc(s.node || ""), name = esc(s.name);
-  if (on.length > 1) h += hpick(on, s, x => lvOf(x) === "ok" ? "" : `<span class="dot ${lvOf(x)}"></span>`);
+  const dot = x => lvOf(x) === "ok" ? "" : `<span class="dot ${lvOf(x)}"></span>`;
+  if (on.length > 1 && DESK.matches) return h + `<div class="split" data-key="tsplit">${hlist(on, s, dot)}<div class="smain" data-key="tm">${toolsBody(s, k, node, name)}</div></div></div>`;
+  if (on.length > 1) h += hpick(on, s, dot);
+  return h + toolsBody(s, k, node, name) + `</div>`;
+}
+function toolsBody(s, k, node, name){
   const c = s.cloud && safeUrl(cloudHref(s.cloud)) ? s.cloud : null;
-  h += `<div class="group" data-key="g-t:${k}">`;
+  let h = `<div class="group" data-key="g-t:${k}">`;
   if (c) h += `<a class="li col" data-key="cl" href="${esc(cloudHref(c))}"${ssoAttr(s)} target="_blank" rel="noopener noreferrer"><span class="rt">${IC("cloud", "")}<span class="lab">雲端硬碟<small>${c.total ? `已用 ${size(c.used)} / ${size(c.total)}` : "點一下打開"}</small></span>${EXT}</span>${c.total ? wave(c.pct) : ""}</a>
     <button class="li" data-key="dl" data-dl="${node}" data-name="${name}">${IC("dl", "")}<span class="lab">遠端下載<small>貼上連結，存到雲端硬碟</small></span>${CHEV}</button>`;
   h += `<button class="li" data-key="bk" data-bk="${node}" data-label="${name}">${IC("archive", "")}<span class="lab">每日備份<small class="bkst" data-n="${node}" data-keep data-ld>讀取中…</small></span>${CHEV}</button></div>`;
   const L = linksOf(s).filter(x => !x.fixed);
   if (L.length) h += `<div class="lbl" data-key="ll">常用連結</div><div class="group" data-key="g-lk:${k}">${L.map(x => linkRow(x, esc(linkSt(x)))).join("")}</div>`;
-  return h + `</div>`;
+  return h;
 }
 /* 一排主機名稱選一台（工具、設定共用，選了哪台兩邊都記得）；dot：名稱前面的小圓點 */
 const hpick = (on, s, dot) => `<div class="hpick" data-key="hpick" data-keyed>${on.map(x => `<button class="fchip${x === s ? " on" : ""}" data-key="hp:${esc(keyOf(x))}" data-toolh="${esc(keyOf(x))}">${dot(x)}${esc(x.name)}</button>`).join("")}</div>`;
+/* 電腦：主機名稱直排在左邊（像 Gmail 的資料夾），右邊是選到那台的內容 */
+const hlist = (on, s, dot) => `<div class="pane group" data-key="hlist" data-keyed>${on.map(x => `<button class="li${x === s ? " on" : ""}" data-key="hl:${esc(keyOf(x))}" data-toolh="${esc(keyOf(x))}"><span class="lab">${esc(x.name)}</span>${dot(x)}</button>`).join("")}</div>`;
 /* 選到的主機名稱被擠到邊邊或看不到時，把那一排滑到它在中間（只滑那一排，頁面不動） */
 function pickShow(anim){
   const r = $(".hpick"), b = r && r.querySelector(".on"); if (!b || r.scrollWidth <= r.clientWidth) return;
@@ -658,16 +665,24 @@ function pickShow(anim){
     r.scrollTo({left: l - (r.clientWidth - b.offsetWidth) / 2, behavior: anim && canAnim() ? "smooth" : "auto"});
 }
 /* 紀錄：所有主機的事件，依日期分組 */
-let LOGF = "";
+let LOGF = "", LOGH = "";
+const LOGK = {"": () => true, bad: e => e.kind === "bad" || e.kind === "warn", other: e => e.kind === "ok" || e.kind === "info"};
 function logPage(list){
-  const all = allEvents(list), many = list.length > 1;
-  const ev = LOGF === "bad" ? all.filter(e => e.kind === "bad" || e.kind === "warn") : LOGF === "other" ? all.filter(e => e.kind === "ok" || e.kind === "info") : all;
-  const chip = (k, l) => `<button class="fchip${LOGF === k ? " on" : ""}" data-logf="${k}"><span class="ck">${I("check")}</span>${l}</button>`;
-  let h = `<div class="narrow" data-key="log"><h1 class="ptitle">紀錄</h1><div class="fchips">${chip("", "全部")}${chip("bad", "有狀況")}${chip("other", "恢復與通知")}</div>`;
-  if (!ev.length) return h + `<div class="calm">目前沒有事件</div></div>`;
-  let day = "", rows = "";
+  const D = DESK.matches, many = list.length > 1, hk = D && many && list.some(x => keyOf(x) === LOGH) ? LOGH : "";
+  const all = allEvents(list), byH = all.filter(e => !hk || e.k === hk), ev = byH.filter(LOGK[LOGF] || LOGK[""]);
+  const F = [["", "全部"], ["bad", "有狀況"], ["other", "恢復與通知"]];
+  let rows = "", day = "";
   for (const e of ev) { const d = dayOf(e.t); if (d !== day) { day = d; rows += `<div class="day" data-key="d:${d}">${d}</div>`; } rows += evRow(e, many, hm); }
-  return h + `<div class="evs" data-key="evs" data-keyed>${rows}</div></div>`;
+  const body = ev.length ? `<div class="evs" data-key="evs" data-keyed>${rows}</div>` : `<div class="calm" data-key="calm">目前沒有事件</div>`;
+  if (D) {   // 電腦：右邊放篩選和各台的則數
+    const row = (attr, on, l, n) => `<button class="li${on ? " on" : ""}" ${attr}><span class="lab">${l}</span><span class="val num">${n}</span></button>`;
+    const kf = LOGK[LOGF] || LOGK[""];
+    let side = `<div class="lbl">篩選</div><div class="pane group" data-key="lf">${F.map(([k, l]) => row(`data-logf="${k}"`, LOGF === k, l, byH.filter(LOGK[k]).length)).join("")}</div>`;
+    if (many) side += `<div class="lbl" data-key="lhh">主機</div><div class="pane group" data-key="lhs" data-keyed>${row(`data-logh="" data-key="lh:"`, !hk, "全部主機", all.filter(kf).length)}${list.map(x => row(`data-logh="${esc(keyOf(x))}" data-key="lh:${esc(keyOf(x))}"`, hk === keyOf(x), esc(x.name), all.filter(e => e.k === keyOf(x) && kf(e)).length)).join("")}</div>`;
+    return `<div class="wide" data-key="log"><h1 class="ptitle">紀錄</h1><div class="split rside" data-key="lsplit"><div class="smain" data-key="lm">${body}</div><aside class="side" data-key="ls">${side}</aside></div></div>`;
+  }
+  const chip = (k, l) => `<button class="fchip${LOGF === k ? " on" : ""}" data-logf="${k}"><span class="ck">${I("check")}</span>${l}</button>`;
+  return `<div class="narrow" data-key="log"><h1 class="ptitle">紀錄</h1><div class="fchips">${F.map(([k, l]) => chip(k, l)).join("")}</div>${body}</div>`;
 }
 /* 設定：上面是這台裝置的外觀、通知與登入；下面「主機」好幾台時跟工具一樣一排主機名稱選一台，只顯示那台的 */
 const SHOWS = [["trend", "歷史曲線圖", "chart"], ["net", "網路速度", "net"], ["box", "容器與服務", "items"], ["info", "連線數與 IP", "info"],
@@ -681,14 +696,17 @@ function setPage(list){
   const fp = FLAGPAL[flagCC()] || FLAGPAL.TW;
   const sw = ["blue", "purple", "green", "orange", "pink"].map(v => `<button class="${PREF.accent === v ? "on" : ""}" data-pref="accent" data-val="${v}" data-accent="${v}">${I("check")}</button>`).join("")
     + `<button class="flagsw${PREF.accent === "flag" ? " on" : ""}" data-pref="accent" data-val="flag" title="跟著國旗" style="background:conic-gradient(${fp[1]} 0 33%,${fp[0]} 0 66%,${fp[2]} 0)"><span>旗</span>${I("check")}</button>`;
-  let h = `<div class="narrow" data-key="set"><h1 class="ptitle">設定</h1>
-    <div class="lbl">外觀</div><div class="group">
+  const D = DESK.matches;   // 電腦：左欄是這台裝置的設定，右欄是主機
+  const look = `<div class="lbl">外觀</div><div class="group">
       <div class="li col"><span class="lab">主題</span>${seg("theme", [["auto", "自動"], ["light", "淺色"], ["dark", "深色"]])}</div>
       <div class="li col"><span class="lab">主題色<small>「旗」跟著這台主機的國旗</small></span><div class="sw">${sw}</div></div>
       <div class="li col"><span class="lab">文字大小</span>${seg("size", [["s", "小"], ["m", "中"], ["l", "大"]])}</div>
       <label class="li"><span class="lab">動畫</span>${tog("motion", "動畫")}</label>
-      <button class="li" data-shows>${IC("trend", "")}<span class="lab">要顯示的內容<small class="showst">${showSum()}</small></span>${CHEV}</button></div>
-    <div class="lbl">通知與登入</div><div class="group" data-key="g-sec">${go("data-tg", "bell", "Telegram 通知", "tgst")}${PK_OK && self ? go("data-pk", "finger", "手機金鑰登入", "pkst") : ""}${self ? go("data-pin", "pin", "PIN 碼登入", "pinst") : ""}</div>`;
+      <button class="li" data-shows>${IC("trend", "")}<span class="lab">要顯示的內容<small class="showst">${showSum()}</small></span>${CHEV}</button></div>`;
+  const sec = `<div class="lbl" data-key="lsec">通知與登入</div><div class="group" data-key="g-sec">${go("data-tg", "bell", "Telegram 通知", "tgst")}${PK_OK && self ? go("data-pk", "finger", "手機金鑰登入", "pkst") : ""}${self ? go("data-pin", "pin", "PIN 碼登入", "pinst") : ""}</div>`;
+  const out = `<div class="sp" data-key="sp"></div><div class="group" data-key="g-out"><button class="li" data-logout><span class="ico info">${I("logout")}</span><span class="lab">登出</span></button>
+      <button class="li" data-reset><span class="ico info">${I("upd")}</span><span class="lab">恢復預設值<small>外觀設定只存在這台裝置</small></span></button></div>`;
+  let h = "";
   if (on.length) {
     const s = on.find(x => keyOf(x) === TOOLH) || on.find(x => !x.node) || on[0], k = esc(keyOf(s)), node = esc(s.node || "");
     h += `<div class="lbl" data-key="lh">主機<button data-selfcheck>檢查新版</button></div><div class="selfsum" data-key="selfsum" data-keep data-ld></div>`;
@@ -697,9 +715,8 @@ function setPage(list){
       + (s.keep ? `<label class="li">${IC("keep", "")}<span class="lab">Oracle 防回收${keepLine(s.keep)}</span><input type="checkbox" class="tog" data-keepalive="${node}" aria-label="Oracle 防回收" ${s.keep.on ? "checked" : ""}></label>` : "")
       + (s.node ? "" : go("data-pair", "link", "配對暗號", "pairst")) + `</div>`;
   }
-  h += `<div class="sp"></div><div class="group"><button class="li" data-logout><span class="ico info">${I("logout")}</span><span class="lab">登出</span></button>
-      <button class="li" data-reset><span class="ico info">${I("upd")}</span><span class="lab">恢復預設值<small>外觀設定只存在這台裝置</small></span></button></div>`;
-  return h + `</div>`;
+  return `<div class="${D ? "wide" : "narrow"}" data-key="set"><h1 class="ptitle">設定</h1>`
+    + (D ? `<div class="scols" data-key="scols"><div class="scol" data-key="sc1">${look}${out}</div><div class="scol" data-key="sc2">${sec}${h}</div></div>` : look + sec + h + out) + `</div>`;
 }
 /* 要顯示的內容、畫面更新頻率：收在一個視窗裡（手機從下面滑上來） */
 function showsModal(){
@@ -2212,6 +2229,8 @@ document.addEventListener("click", async e => {
   if (th) { if (TOOLH !== th.dataset.toolh) { TOOLH = th.dataset.toolh; store("vs-toolh", TOOLH); render(LIST); } pickShow(true); return; }
   const lf = t.closest("[data-logf]");
   if (lf) { if (LOGF !== lf.dataset.logf) { LOGF = lf.dataset.logf; render(LIST); } return; }
+  const lh = t.closest("[data-logh]");
+  if (lh) { if (LOGH !== lh.dataset.logh) { LOGH = lh.dataset.logh; render(LIST); } return; }
 
   const pe = t.closest("[data-peeredit]");
   if (pe) { const s = LIST.find(x => (x.node || "") === pe.dataset.peeredit); return s && peerModal(s); }
