@@ -2524,7 +2524,7 @@ async function tick(){
   if (!getTok()) { endSplash(); return login(); }
   try {
     if (!BOOTED) splashMsg("讀取主機狀態…");
-    const r = await fetch("/api/all", {headers:{"X-Token":getTok()}, cache:"no-store"});
+    const r = await fetch("/api/all", {headers:{"X-Token":getTok()}, cache:"no-store", signal: AbortSignal.timeout ? AbortSignal.timeout(20000) : undefined});   // 網路卡住最多等 20 秒，不會一直轉
     if (r.status === 401) { setTok(""); LIST = []; endSplash(); return login("密碼不對，再試一次"); }
     const data = await r.json();
     if (id !== TICKID || !getTok()) return true;
@@ -2613,29 +2613,28 @@ function busy(btn){
 async function refreshNow(btn){
   if (REFRESHING) return; REFRESHING = true;
   const stop = btn ? busy(btn) : () => {};
-  const [ok] = await Promise.all([tick(), sleep(T.long)]);
-  REFRESHING = false; stop();
-  return ok;
+  try { const [ok] = await Promise.all([tick(), sleep(T.long)]); return ok; }
+  finally { REFRESHING = false; stop(); }   // 出錯也一定要停下來，不然之後都不能再重新整理
 }
 /* 手機：下拉重新整理。圓形跟著手指長大、旋轉，拉夠了彈一下變形；放開就變成載入中的形狀，好了畫出勾勾再收起來 */
 (function(){
   const ptr = $("#ptr"), RND = blobSh(9, 0), CK = blobSh(9, .14);
   ptr.innerHTML = `<span class="pl" style="clip-path:${RND}"></span><span class="pg"></span>`;
   const pl = ptr.querySelector(".pl"), pg = ptr.querySelector(".pg");
-  let y0 = null, d = 0, armed = false, rot = 0;
+  let y0 = null, d = 0, armed = false, rot = 0, gen = 0;   // gen：每拉一次加一，舊的那次收尾時不會動到新的這次
   const show = y => { ptr.style.transform = `translateY(${y}px)`; ptr.style.opacity = String(Math.max(0, Math.min(1, (y + 70) / 50))); };
   const shape = (p, r) => { rot = r; pl.style.transform = `rotate(${r}deg) scale(${.3 + .7 * p})`; };
   const hideUp = () => { ptr.classList.add("back"); show(-70); shape(0, rot); };
   addEventListener("touchstart", e => {
     if (DESK.matches || DET || scrollY > 0 || REFRESHING || document.querySelector("#layer .veil") || !LIST.length) return;
-    y0 = e.touches[0].clientY; d = 0; armed = false;
+    y0 = e.touches[0].clientY; d = 0; armed = false; gen++;
     ptr.getAnimations({subtree: true}).forEach(a => a.cancel());
     ptr.classList.remove("back", "armed", "bad"); pl.style.clipPath = RND; pg.innerHTML = "";
   }, {passive:true});
   addEventListener("touchmove", e => {
     if (y0 === null) return;
     d = Math.max(0, e.touches[0].clientY - y0);
-    if (scrollY > 0) { y0 = null; return; }
+    if (scrollY > 0) { y0 = null; return hideUp(); }       // 變成往下捲：收起來，不要卡在半空中
     const pull = Math.min(110, d * .5), was = armed;
     armed = pull >= 64;
     if (armed !== was) {
@@ -2644,18 +2643,22 @@ async function refreshNow(btn){
     }
     show(pull - 70); shape(Math.min(1, pull / 64), pull * 2.4);
   }, {passive:true});
-  addEventListener("touchend", async () => {
-    if (y0 === null) return; y0 = null;
+  /* 手指被系統搶走（touchcancel）也要收起來，不然圖示會停在拉到一半的地方 */
+  addEventListener("touchcancel", () => { if (y0 === null) return; y0 = null; hideUp(); });
+  addEventListener("touchend", async e => {
+    if (y0 === null || e.touches.length) return; y0 = null;
     if (!armed) return hideUp();
+    const g = gen;
     ptr.classList.add("back"); show(10); shape(1, rot);
     const stop = loader(pl, rot);
-    const ok = await refreshNow();
+    let ok = false;
+    try { ok = await refreshNow(); } catch(err) {}
+    if (g !== gen) return;
     ptr.classList.toggle("bad", !ok);
     const st = stop(RND);
     pg.innerHTML = drawable(I(ok ? "chk" : "bang")); drawIn(pg.firstChild, T.fast);
-    await st;
-    await sleep(T.long);
-    hideUp();
+    await st; await sleep(T.long);
+    if (g === gen) hideUp();
   });
 })();
 /* 按下去的水波紋：手指一碰就從那個點擴散；手機上等一下下，確定不是要捲動才出現 */
