@@ -169,7 +169,7 @@ fun Login(vm: Vm) {
                 Text(err.orEmpty(), Modifier.padding(top = 12.dp), color = St.c.bad, style = MaterialTheme.typography.bodyMedium)
             }
             Spacer(Modifier.height(20.dp))
-            Button(go, Modifier.fillMaxWidth().height(56.dp), enabled = url.isNotBlank(), shapes = ButtonDefaults.shapes()) {
+            Button(onClick = go, modifier = Modifier.fillMaxWidth().height(56.dp), enabled = url.isNotBlank(), shapes = ButtonDefaults.shapes()) {
                 if (busy) LoadingIndicator(Modifier.size(28.dp), color = MaterialTheme.colorScheme.onPrimary) else Text("進入", style = MaterialTheme.typography.titleMedium)
             }
         }
