@@ -1,0 +1,22 @@
+# 安卓 App：自動做出安裝檔
+name: 安卓 App
+
+on:
+  push:
+    paths: ["android/**", ".github/workflows/android.yml"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    steps:
+      - name: versions
+        run: |
+          for p in androidx/compose/material3/material3 com/android/tools/build/gradle androidx/compose/compose-bom androidx/activity/activity-compose androidx/navigation/navigation-compose androidx/compose/animation/animation androidx/lifecycle/lifecycle-runtime-compose androidx/core/core-ktx androidx/compose/ui/ui-test-junit4; do
+            echo "== $p"; curl -s https://dl.google.com/dl/android/maven2/$p/maven-metadata.xml | grep -o "<version>[^<]*" | sed 's/<version>//' | tail -12 | tr '\n' ' '; echo; done
+          for p in org/jetbrains/kotlin/kotlin-gradle-plugin org/jetbrains/kotlinx/kotlinx-serialization-json org/robolectric/robolectric io/github/takahirom/roborazzi/roborazzi org/jetbrains/kotlin/plugin/compose/org.jetbrains.kotlin.plugin.compose.gradle.plugin; do
+            echo "== $p"; curl -s https://repo1.maven.org/maven2/$p/maven-metadata.xml | grep -o "<version>[^<]*" | sed 's/<version>//' | tail -8 | tr '\n' ' '; echo; done
+          ls $ANDROID_HOME/platforms $ANDROID_HOME/build-tools; ls /dev/kvm; java -version 2>&1
