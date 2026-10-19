@@ -20,40 +20,55 @@
 
 /* ═════════ 顏色：全部從主題色（--seed）算出來 ═════════ */
 @property --seed{syntax:"<color>";inherits:true;initial-value:#4a7dff}
-[data-accent="blue"]{--seed:#4a7dff}
-[data-accent="purple"]{--seed:#8b5cf6}
-[data-accent="green"]{--seed:#10b981}
+/* 色相一圈 11 個（照 Android 的基本色），加上跟著國旗的「旗」 */
+[data-accent="red"]{--seed:#e5484d}
 [data-accent="orange"]{--seed:#f97316}
+[data-accent="amber"]{--seed:#d99a06}
+[data-accent="lime"]{--seed:#7cb518}
+[data-accent="green"]{--seed:#10b981}
+[data-accent="teal"]{--seed:#0fa3a3}
+[data-accent="cyan"]{--seed:#1a9fd8}
+[data-accent="blue"]{--seed:#4a7dff}
+[data-accent="indigo"]{--seed:#6366f1}
+[data-accent="purple"]{--seed:#8b5cf6}
 [data-accent="pink"]{--seed:#ec4899}
 [data-accent="flag"]{--seed:#4a7dff}
-:root{transition:--seed var(--t-slow) var(--ease)}
+/* 配色風格（Android 的「色彩風格」）：--vs 底色染多少主題色、--vc 選中色塊多濃、--mute 主色混多少灰 */
+:root{--vs:1; --vc:1; --mute:0%}
+[data-tone="vivid"]{--vs:2.6; --vc:1.45}
+[data-tone="calm"]{--vs:.15; --vc:.5; --mute:55%}
+@property --vs{syntax:"<number>";inherits:true;initial-value:1}
+@property --vc{syntax:"<number>";inherits:true;initial-value:1}
+@property --mute{syntax:"<percentage>";inherits:true;initial-value:0%}
+:root{transition:--seed var(--t-slow) var(--ease),--vs var(--t-slow) var(--ease),--vc var(--t-slow) var(--ease),--mute var(--t-slow) var(--ease)}
 
-[data-mode="dark"]{
+/* 第二個選擇器：主題色的色票用自己的 --seed 重算一次，預覽就是選了之後的樣子 */
+[data-mode="dark"],[data-mode="dark"] .sw [data-accent]{
   color-scheme:dark;
-  --bg:color-mix(in oklab,var(--seed) 5%,#101114);
-  --s1:color-mix(in oklab,var(--seed) 7%,#18191d);
-  --s2:color-mix(in oklab,var(--seed) 8%,#1e2024);
-  --s3:color-mix(in oklab,var(--seed) 10%,#26282d);
-  --s4:color-mix(in oklab,var(--seed) 11%,#33353b);
+  --bg:color-mix(in oklab,var(--seed) calc(5% * var(--vs)),#101114);
+  --s1:color-mix(in oklab,var(--seed) calc(7% * var(--vs)),#18191d);
+  --s2:color-mix(in oklab,var(--seed) calc(8% * var(--vs)),#1e2024);
+  --s3:color-mix(in oklab,var(--seed) calc(10% * var(--vs)),#26282d);
+  --s4:color-mix(in oklab,var(--seed) calc(11% * var(--vs)),#33353b);
   --tx:#e4e4e9; --tx2:#c5c7ce; --tx3:#8f929a; --line:rgba(255,255,255,.08); --scrim:rgba(0,0,0,.55);
-  --p:color-mix(in oklab,var(--seed) 52%,#fff); --on-p:color-mix(in oklab,var(--seed) 40%,#050816);
-  --pc:color-mix(in oklab,var(--seed) 38%,#14161c); --on-pc:color-mix(in oklab,var(--seed) 16%,#fff);
+  --p:color-mix(in oklab,color-mix(in oklab,var(--seed) 52%,#fff),#c6c8cf var(--mute)); --on-p:color-mix(in oklab,var(--seed) 40%,#050816);
+  --pc:color-mix(in oklab,var(--seed) calc(38% * var(--vc)),#14161c); --on-pc:color-mix(in oklab,var(--seed) 16%,#fff);
   --ok:#7fd99f; --warn:#ffb77c; --on-warn:#4a2800; --warnc:#5a3612; --on-warnc:#ffdcc2;
   --bad:#ffb4ab; --on-bad:#690005; --badc:#73201b; --on-badc:#ffdad6;
   --inv:#e4e4e9; --on-inv:#1b1c20; --inv-ok:#1f7a45; --inv-bad:#ba1a1a;
   --tl:.33; --tc:.075; --fl:.9; --fc:.08;                /* 方塊圖示：底色亮度、彩度／圖案亮度、彩度 */
   --c-cpu:oklch(.74 .14 255); --c-mem:oklch(.74 .15 305); --c-rx:oklch(.8 .12 200); --c-tx:oklch(.74 .16 355);
 }
-[data-mode="light"]{
+[data-mode="light"],[data-mode="light"] .sw [data-accent]{
   color-scheme:light;
-  --bg:color-mix(in oklab,var(--seed) 3%,#fbfbfe);
-  --s1:color-mix(in oklab,var(--seed) 5%,#f0f1f5);
-  --s2:color-mix(in oklab,var(--seed) 6%,#e8e9ee);
-  --s3:color-mix(in oklab,var(--seed) 7%,#e1e2e8);
-  --s4:color-mix(in oklab,var(--seed) 8%,#d3d5dc);
+  --bg:color-mix(in oklab,var(--seed) calc(3% * var(--vs)),#fbfbfe);
+  --s1:color-mix(in oklab,var(--seed) calc(5% * var(--vs)),#f0f1f5);
+  --s2:color-mix(in oklab,var(--seed) calc(6% * var(--vs)),#e8e9ee);
+  --s3:color-mix(in oklab,var(--seed) calc(7% * var(--vs)),#e1e2e8);
+  --s4:color-mix(in oklab,var(--seed) calc(8% * var(--vs)),#d3d5dc);
   --tx:#1a1b20; --tx2:#44464e; --tx3:#6c6f78; --line:rgba(20,24,40,.09); --scrim:rgba(0,0,0,.32);
-  --p:color-mix(in oklab,var(--seed) 82%,#000); --on-p:#fff;
-  --pc:color-mix(in oklab,var(--seed) 20%,#fff); --on-pc:color-mix(in oklab,var(--seed) 50%,#000);
+  --p:color-mix(in oklab,color-mix(in oklab,var(--seed) 82%,#000),#50525a var(--mute)); --on-p:#fff;
+  --pc:color-mix(in oklab,var(--seed) calc(20% * var(--vc)),#fff); --on-pc:color-mix(in oklab,var(--seed) 50%,#000);
   --ok:#1f7a45; --warn:#8b5000; --on-warn:#fff; --warnc:#ffdcc2; --on-warnc:#2e1500;
   --bad:#ba1a1a; --on-bad:#fff; --badc:#ffdad6; --on-badc:#410002;
   --inv:#2f3036; --on-inv:#f1f0f5; --inv-ok:#7fd99f; --inv-bad:#ffb4ab;
@@ -462,10 +477,14 @@ button.li.prs,a.li.prs{border-radius:var(--r-lg);transform:scale(.98);background
 .li .seg{flex:none}
 .li.col .seg{width:100%}
 /* 主題色 */
-.sw{display:flex;gap:8px;flex-wrap:wrap}
-.sw button{width:44px;height:44px;border-radius:50%;background:var(--seed);position:relative;display:grid;place-items:center;
+/* 色票像 Android：上半主色、右下選中色塊、左下主題色本身；選中時變圓角方塊，中間出現勾勾 */
+.sw{display:grid;grid-template-columns:repeat(6,44px);justify-content:space-between;gap:12px 8px}
+.dash.d .sw{justify-content:start;gap:12px 14px}
+.sw button{width:44px;height:44px;border-radius:50%;position:relative;display:grid;place-items:center;overflow:hidden;
+  background:conic-gradient(from -90deg,var(--p) 0 50%,var(--pc) 0 75%,var(--seed) 0);
   transition:border-radius var(--t-slow) var(--spring),transform var(--t-mid) var(--spring)}
-.sw button svg{width:20px;height:20px;color:#fff;opacity:0;transform:scale(.3);transition:opacity var(--t-fast) var(--ease),transform var(--t-mid) var(--spring)}
+.sw button svg{width:24px;height:24px;padding:4px;border-radius:50%;background:var(--p);color:var(--on-p);opacity:0;transform:scale(.3);
+  transition:opacity var(--t-fast) var(--ease),transform var(--t-mid) var(--spring)}
 .sw button.on{border-radius:var(--r-md)}
 .sw button.on svg{opacity:1;transform:none}
 .sw button.prs{transform:scale(.88)}
