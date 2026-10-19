@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <style name="Theme.Sentinel" parent="android:Theme.Material.Light.NoActionBar">
+        <item name="android:windowBackground">@color/bg</item>
+    </style>
+    <color name="bg">#F9F9FF</color>
+    <color name="icon_bg">#3A63E8</color>
+</resources>
