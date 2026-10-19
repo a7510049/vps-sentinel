@@ -74,7 +74,7 @@ const P = {
 const I = n => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${P[n]}</svg>`;
 
 /* ═════════ 個人設定（存在這台裝置） ═════════ */
-const DEF = {theme:"auto", accent:"blue", motion:true, size:"m", refresh:5,
+const DEF = {theme:"auto", accent:"blue", tone:"soft", motion:true, size:"m", refresh:5,
   show:{chart:true, net:true, items:true, info:true, flag:true, traffic:true, weather:true, quote:true}};
 let PREF = (() => { try { const p = JSON.parse(store("vps-prefs") || "{}"); return {...DEF, ...p, show:{...DEF.show, ...(p.show||{})}}; } catch(e){ return JSON.parse(JSON.stringify(DEF)); } })();
 const getP = k => k.split(".").reduce((o,x)=>o && o[x], PREF);
@@ -111,7 +111,7 @@ function flagAccent(){
 }
 function applyPrefs(){
   const h = document.documentElement, dark = PREF.theme === "dark" || (PREF.theme === "auto" && DARKQ.matches);
-  h.dataset.mode = dark ? "dark" : "light"; h.dataset.accent = PREF.accent; h.dataset.motion = PREF.motion ? "on" : "off";
+  h.dataset.mode = dark ? "dark" : "light"; h.dataset.accent = PREF.accent; h.dataset.tone = PREF.tone; h.dataset.motion = PREF.motion ? "on" : "off";
   h.style.setProperty("--zoom", {s:.92, m:1, l:1.1}[PREF.size] || 1);
   document.querySelector('meta[name="theme-color"]').content = dark ? "#121317" : "#fbfbfe";
   try { flagAccent(); } catch(e) {}   /* 第一次執行時主機清單還沒準備好 */
@@ -728,6 +728,9 @@ function logPage(list){
   const chip = (k, l) => `<button class="fchip${LOGF === k ? " on" : ""}" data-logf="${k}"><span class="ck">${I("check")}</span>${l}</button>`;
   return `<div class="narrow" data-key="log"><h1 class="ptitle">紀錄</h1><div class="fchips" data-key="lfc" data-slide>${F.map(([k, l]) => chip(k, l)).join("")}</div>${body}</div>`;
 }
+/* 主題色：照色相排一圈（色票本身用 style.css 的 [data-accent] 算出預覽） */
+const ACCENTS = [["red", "紅"], ["orange", "橘"], ["amber", "琥珀"], ["lime", "萊姆"], ["green", "綠"], ["teal", "青綠"],
+  ["cyan", "天藍"], ["blue", "藍"], ["indigo", "靛藍"], ["purple", "紫"], ["pink", "粉紅"]];
 /* 設定：上面是這台裝置的外觀、通知與登入；下面「主機」好幾台時跟工具一樣一排主機名稱選一台，只顯示那台的 */
 const SHOWS = [["trend", "歷史曲線圖", "chart"], ["net", "網路速度", "net"], ["box", "容器與服務", "items"], ["info", "連線數與 IP", "info"],
   ["flag", "國旗", "flag"], ["month", "每月流量", "traffic"], ["sun", "天氣", "weather", "用這台裝置的位置"], ["quote", "心情小語", "quote"]];
@@ -738,12 +741,13 @@ function setPage(list){
   const on = list.filter(s => s.online).sort((a, b) => ORDER.indexOf(keyOf(a)) - ORDER.indexOf(keyOf(b))), self = on.some(s => !s.node);
   const go = (attr, ic, l, st) => `<button class="li" ${attr}>${IC(ic, "")}<span class="lab">${l}<small class="${st}" data-keep data-ld>讀取中…</small></span>${CHEV}</button>`;
   const fp = FLAGPAL[flagCC()] || FLAGPAL.TW;
-  const sw = ["blue", "purple", "green", "orange", "pink"].map(v => `<button class="${PREF.accent === v ? "on" : ""}" data-pref="accent" data-val="${v}" data-accent="${v}">${I("check")}</button>`).join("")
+  const sw = ACCENTS.map(([v, l]) => `<button class="${PREF.accent === v ? "on" : ""}" data-pref="accent" data-val="${v}" data-accent="${v}" title="${l}" aria-label="${l}">${I("check")}</button>`).join("")
     + `<button class="flagsw${PREF.accent === "flag" ? " on" : ""}" data-pref="accent" data-val="flag" title="跟著國旗" style="background:conic-gradient(${fp[1]} 0 33%,${fp[0]} 0 66%,${fp[2]} 0)"><span>旗</span>${I("check")}</button>`;
   const D = DESK.matches;   // 電腦：左欄是這台裝置的設定，右欄是主機
   const look = `<div class="lbl">外觀</div><div class="group">
       <div class="li col"><span class="lab">主題</span>${seg("theme", [["auto", "自動"], ["light", "淺色"], ["dark", "深色"]])}</div>
       <div class="li col"><span class="lab">主題色<small>「旗」跟著這台主機的國旗</small></span><div class="sw">${sw}</div></div>
+      <div class="li col"><span class="lab">配色風格</span>${seg("tone", [["soft", "柔和"], ["vivid", "鮮明"], ["calm", "素雅"]])}</div>
       <div class="li col"><span class="lab">文字大小</span>${seg("size", [["s", "小"], ["m", "中"], ["l", "大"]])}</div>
       <label class="li"><span class="lab">動畫</span>${tog("motion", "動畫")}</label>
       <button class="li" data-shows>${IC("trend", "")}<span class="lab">要顯示的內容<small class="showst">${showSum()}</small></span>${CHEV}</button></div>`;
