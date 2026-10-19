@@ -110,9 +110,9 @@
 .ico.bad{background:var(--badc);color:var(--on-badc)}               /* 刪除、移除、解除配對 */
 
 /* ═════════ 基本 ═════════ */
-*{box-sizing:border-box;margin:0;-webkit-tap-highlight-color:transparent}
-html{background:var(--bg);color:var(--tx);touch-action:manipulation;scrollbar-gutter:stable;accent-color:var(--p);caret-color:var(--p);
-  scrollbar-width:thin;scrollbar-color:color-mix(in srgb,var(--tx) 22%,transparent) transparent;
+*{box-sizing:border-box;margin:0;-webkit-tap-highlight-color:transparent;scrollbar-width:none}
+*::-webkit-scrollbar{display:none}                                     /* 不顯示拉條，照樣能捲 */
+html{background:var(--bg);color:var(--tx);touch-action:manipulation;accent-color:var(--p);caret-color:var(--p);
   transition:background-color var(--t-mid) var(--ease),color var(--t-mid) var(--ease)}
 html.lock{overflow:hidden}
 body{font:400 var(--fs-m)/1.5 var(--font);zoom:var(--zoom);min-height:100vh;-webkit-font-smoothing:antialiased;overflow-x:hidden;overscroll-behavior-y:contain}
@@ -320,9 +320,8 @@ img.flag{width:28px;height:21px;object-fit:cover;border-radius:var(--r-xs);flex:
 .det.closing{animation:collapse var(--t-mid) var(--exit) forwards;pointer-events:none}
 @keyframes expand{from{clip-path:inset(var(--ct) var(--cr) var(--cb) var(--cl) round var(--r-xl))}to{clip-path:inset(0 0 0 0 round 0)}}
 @keyframes collapse{from{clip-path:inset(0 0 0 0 round 0)}70%{opacity:1}to{clip-path:inset(var(--ct) var(--cr) var(--cb) var(--cl) round var(--r-xl));opacity:0}}
-.dscroll{position:absolute;inset:0;overflow-y:auto;overscroll-behavior:contain;scrollbar-width:none;
+.dscroll{position:absolute;inset:0;overflow-y:auto;overscroll-behavior:contain;
   padding:calc(env(safe-area-inset-top) + 10px) 16px calc(env(safe-area-inset-bottom) + 40px)}
-.dscroll::-webkit-scrollbar{display:none}
 .dscroll>*{max-width:760px;margin-left:auto;margin-right:auto}
 .det .hb{animation:fadeIn var(--t-mid) var(--ease) .08s backwards}
 .dscroll>.dtop{position:sticky;top:calc(-10px - env(safe-area-inset-top));z-index:1;max-width:none;display:flex;align-items:center;gap:12px;background:var(--bg);
@@ -449,10 +448,9 @@ button.li.prs,a.li.prs{border-radius:var(--r-lg);transform:scale(.98);background
 .fchip .ck svg{width:18px;height:18px;flex:none}
 .fchip.on .ck{width:18px;opacity:1;margin:0 6px 0 -4px}
 /* 工具：選主機（很多台時左右滑） */
-.hpick{display:flex;gap:8px;overflow-x:auto;scrollbar-width:none;margin:0 -16px 16px;padding:2px 20px;
+.hpick{display:flex;gap:8px;overflow-x:auto;margin:0 -16px 16px;padding:2px 20px;
   -webkit-mask-image:linear-gradient(90deg,transparent,#000 16px,#000 calc(100% - 16px),transparent);mask-image:linear-gradient(90deg,transparent,#000 16px,#000 calc(100% - 16px),transparent)}
 .dash.d .hpick{flex-wrap:wrap;overflow:visible;margin:0 4px 16px;padding:0;-webkit-mask-image:none;mask-image:none}
-.hpick::-webkit-scrollbar{display:none}
 .hpick .fchip{flex:none;display:inline-flex;align-items:center;gap:8px;white-space:nowrap}
 .hpick .dot,.pane .dot{animation:pop var(--t-mid) var(--spring) backwards}
 /* 單選的一排／一列（主機名稱、紀錄篩選）：選取底色從舊的滑到新的（slideSel） */
@@ -529,7 +527,7 @@ button.li.prs,a.li.prs{border-radius:var(--r-lg);transform:scale(.98);background
 .split{display:grid;grid-template-columns:240px minmax(0,1fr);gap:24px;align-items:start}
 .split.rside{grid-template-columns:minmax(0,1fr) 300px}
 .smain{min-width:0}
-.split>.pane,.side{position:sticky;top:24px;max-height:calc(100vh / var(--zoom) - 48px);overflow-y:auto;scrollbar-width:thin}
+.split>.pane,.side{position:sticky;top:24px;max-height:calc(100vh / var(--zoom) - 48px);overflow-y:auto}
 .pane .li{min-height:52px;padding:10px 16px;gap:10px}
 .pane .li{transition:border-radius var(--t-mid) var(--spring),transform var(--t-mid) var(--spring),background-color var(--t-mid) var(--ease),color var(--t-mid) var(--ease)}
 .pane .li.on{background:var(--pc);color:var(--on-pc)}
@@ -574,10 +572,9 @@ button.li.prs,a.li.prs{border-radius:var(--r-lg);transform:scale(.98);background
 .veil::before{content:"";position:absolute;inset:0;z-index:-1;background:var(--scrim);animation:fadeIn var(--t-mid) var(--ease) backwards}
 .veil.closing{pointer-events:none}
 .veil.closing::before{animation:fadeOut var(--t-fast) var(--ease) forwards}   /* 要在 360ms 移除前跑完 */
-.dialog{width:100%;max-width:380px;max-height:calc((100dvh - 40px) / var(--zoom));overflow-y:auto;overscroll-behavior:contain;scrollbar-width:none;
+.dialog{width:100%;max-width:380px;max-height:calc((100dvh - 40px) / var(--zoom));overflow-y:auto;overscroll-behavior:contain;
   background:var(--s2);border-radius:var(--r-xl);padding:24px;text-align:center;animation:dlgin var(--t-slow) var(--spring) backwards;
   --card:var(--s3);--chip:var(--s3)}
-.dialog::-webkit-scrollbar{display:none}
 .closing .dialog{animation:dlgout var(--t-fast) var(--exit) forwards}
 @keyframes dlgin{from{opacity:0;transform:scale(.85)}}
 /* 手機：要填東西的視窗從下面滑上來（上面有拉桿，往下拉就關掉） */
@@ -648,7 +645,7 @@ textarea.field{height:auto;padding:12px 16px;resize:none}
 .dld{max-width:440px}
 .dlnew{display:flex;gap:8px;align-items:center}
 .dlnew .field{flex:1;min-width:0;height:44px;font-size:var(--fs-m)}
-.dllist{display:flex;flex-direction:column;gap:3px;max-height:300px;overflow-y:auto;scrollbar-width:none}
+.dllist{display:flex;flex-direction:column;gap:3px;max-height:300px;overflow-y:auto}
 .dllist:empty,.dlroom:empty,.dld .msg:empty{display:none}
 .dlrow{display:flex;align-items:center;gap:12px;padding:12px 6px 12px 14px;border-radius:var(--r-xs);background:var(--s3);flex-shrink:0;font-size:var(--fs-m);color:var(--tx)}
 .dlrow:first-child{border-top-left-radius:var(--r-md);border-top-right-radius:var(--r-md)}
