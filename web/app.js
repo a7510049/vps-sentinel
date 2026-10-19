@@ -605,11 +605,11 @@ function page(list, time){
 /* 手機：首頁是每台一張卡片，點了從卡片長出那台的整頁 */
 function renderPhone(list, time){
   const s = DET && list.find(x => keyOf(x) === DET);
-  return `<div class="dash m" data-key="m"><main class="view v-${TAB}" data-key="v:${TAB}">${page(list, time)}</main><nav class="dock" data-key="dock">${navBtns(false, list)}</nav>${s ? detail(s) : ""}</div>`;
+  return `<div class="dash m" data-key="m"><main class="view v-${TAB}" data-key="v:${TAB}">${page(list, time)}</main><nav class="dock" data-key="dock" data-slide>${navBtns(false, list)}</nav>${s ? detail(s) : ""}</div>`;
 }
 /* 電腦：左邊直排分頁；首頁每台主機一欄並排，右邊是天氣和最近發生的事 */
 function renderDesk(list, time){
-  return `<div class="dash d" data-key="d"><nav class="rail" data-key="rail"><div class="brand">${BRAND}</div>${navBtns(true, list)}
+  return `<div class="dash d" data-key="d"><nav class="rail" data-key="rail" data-slide=".ri"><div class="brand">${BRAND}</div>${navBtns(true, list)}
     <div class="rfoot"><button class="iconbtn${REFRESHING ? " spinning" : ""}" data-refresh title="重新整理">${I("upd")}</button></div></nav>
     <main class="view v-${TAB}" data-key="v:${TAB}">${page(list, time)}</main></div>`;
 }
@@ -654,15 +654,59 @@ function toolsBody(s, k, node, name){
   return h + `</div>`;
 }
 /* 一排主機名稱選一台（工具、設定共用，選了哪台兩邊都記得）；dot：名稱前面的小圓點 */
-const hpick = (on, s, dot) => `<div class="hpick" data-key="hpick" data-keyed>${on.map(x => `<button class="fchip${x === s ? " on" : ""}" data-key="hp:${esc(keyOf(x))}" data-toolh="${esc(keyOf(x))}">${dot(x)}${esc(x.name)}</button>`).join("")}</div>`;
+const hpick = (on, s, dot) => `<div class="hpick" data-key="hpick" data-keyed data-slide>${on.map(x => `<button class="fchip${x === s ? " on" : ""}" data-key="hp:${esc(keyOf(x))}" data-toolh="${esc(keyOf(x))}">${dot(x)}${esc(x.name)}</button>`).join("")}</div>`;
 /* 電腦：主機名稱直排在左邊（像 Gmail 的資料夾），右邊是選到那台的內容 */
-const hlist = (on, s, dot) => `<div class="pane group" data-key="hlist" data-keyed>${on.map(x => `<button class="li${x === s ? " on" : ""}" data-key="hl:${esc(keyOf(x))}" data-toolh="${esc(keyOf(x))}"><span class="lab">${esc(x.name)}</span>${dot(x)}</button>`).join("")}</div>`;
+const hlist = (on, s, dot) => `<div class="pane group" data-key="hlist" data-keyed data-slide>${on.map(x => `<button class="li${x === s ? " on" : ""}" data-key="hl:${esc(keyOf(x))}" data-toolh="${esc(keyOf(x))}"><span class="lab">${esc(x.name)}</span>${dot(x)}</button>`).join("")}</div>`;
 /* 選到的主機名稱被擠到邊邊或看不到時，把那一排滑到它在中間（只滑那一排，頁面不動） */
 function pickShow(anim){
   const r = $(".hpick"), b = r && r.querySelector(".on"); if (!b || r.scrollWidth <= r.clientWidth) return;
   const z = ZM(), l = (b.getBoundingClientRect().left - r.getBoundingClientRect().left) / z + r.scrollLeft, pad = 40;
   if (l < r.scrollLeft + pad || l + b.offsetWidth > r.scrollLeft + r.clientWidth - pad)        // 滑到正中間
     r.scrollTo({left: l - (r.clientWidth - b.offsetWidth) / 2, behavior: anim && canAnim() ? "smooth" : "auto"});
+}
+/* 單選的一排（data-slide）：選取底色從舊的那一個彈性滑到新的，跟著新的大小、圓角變形；滑的途中再按別的就從現在的位置轉向 */
+let SPTS;   // SPRING 曲線的轉折點（JS 自己算動畫時用）
+function springAt(t){
+  if (!SPTS) { const m = SPRING.match(/^linear\((.*)\)$/);
+    SPTS = m ? m[1].split(",").map((x, i, a) => { const [v, p] = x.trim().split(/\s+/); return [p ? parseFloat(p) / 100 : i / (a.length - 1), +v]; }) : [[0, 0], [.3, .8], [.6, 1.04], [1, 1]]; }
+  for (let i = 1; i < SPTS.length; i++) if (t <= SPTS[i][0]) { const [p0, v0] = SPTS[i - 1], [p1, v1] = SPTS[i]; return v0 + (v1 - v0) * (t - p0) / ((p1 - p0) || 1); }
+  return 1;
+}
+function slideSel(change){
+  const z = ZM(), was = canAnim() ? [...document.querySelectorAll("[data-slide]")].map(b => {
+    const g = b.querySelector(":scope>.slide"), on = selOf(b);
+    return [b.dataset.key, g ? g._now : on && boxIn(b, on, z)];
+  }) : [];
+  change();
+  was.forEach(([k, from]) => {
+    const b = document.querySelector(`[data-slide][data-key="${k}"]`), on = b && selOf(b);
+    if (!from || !on) return;
+    const old = b.querySelector(":scope>.slide"); if (old) { old._stop = 1; old.remove(); }
+    const to0 = boxIn(b, on, z);
+    if (Math.abs(to0.x - from.x) < 1 && Math.abs(to0.y - from.y) < 1) return;
+    const g = document.createElement("i"); g.className = "slide"; g._leaving = 1; b.prepend(g); b.classList.add("sliding");   // _leaving：重畫時不要把它當成內容
+    const dur = T.slow, t0 = performance.now(), lerp = (a, c, p) => a + (c - a) * p;
+    g.animate([{opacity:1}, {opacity:1}], {duration:dur, id:"ui"});              // 滑完之前，自動更新先等一下
+    const step = now => {
+      if (g._stop || !g.isConnected) return;
+      const p = Math.min(1, (now - t0) / dur), e = springAt(p), on2 = selOf(b);
+      if (!on2 || !b.isConnected) return g.remove();
+      const to = boxIn(b, on2, z), c = {x:lerp(from.x, to.x, e), y:lerp(from.y, to.y, e), w:lerp(from.w, to.w, e), h:lerp(from.h, to.h, e), r:from.r.map((r, i) => Math.max(0, lerp(r, to.r[i], e)))};
+      g._now = c;
+      Object.assign(g.style, {transform:`translate(${c.x}px,${c.y}px)`, width:c.w + "px", height:c.h + "px", borderRadius:c.r.map(r => r + "px").join(" ")});
+      if (p < 1) return requestAnimationFrame(step);
+      on2.style.transition = "none"; b.classList.remove("sliding"); on2.offsetWidth; on2.style.transition = ""; g.remove();   // 換回它自己的底色，同一格畫面，不會閃
+    };
+    step(t0);
+  });
+}
+/* 選到的那一個；data-slide=".ri" 這種是底色在它裡面的那一塊（電腦左邊分頁的圖示底） */
+const selOf = b => { const on = b.querySelector(":scope>.on"); return on && b.dataset.slide ? on.querySelector(b.dataset.slide) : on; };
+/* 元素在容器裡的位置（容器可以左右捲；圓角換成實際看得到的大小，999px 的膠囊不會讓變形慢半拍） */
+function boxIn(b, el, z){
+  const R = b.getBoundingClientRect(), r = el.getBoundingClientRect(), cs = getComputedStyle(el), w = r.width / z, h = r.height / z;
+  const rad = ["borderTopLeftRadius", "borderTopRightRadius", "borderBottomRightRadius", "borderBottomLeftRadius"].map(k => Math.min(parseFloat(cs[k]) || 0, w / 2, h / 2));
+  return {x:(r.left - R.left) / z - b.clientLeft + b.scrollLeft, y:(r.top - R.top) / z - b.clientTop + b.scrollTop, w, h, r:rad};
 }
 /* 紀錄：所有主機的事件，依日期分組 */
 let LOGF = "", LOGH = "";
@@ -677,12 +721,12 @@ function logPage(list){
   if (D) {   // 電腦：右邊放篩選和各台的則數
     const row = (attr, on, l, n) => `<button class="li${on ? " on" : ""}" ${attr}><span class="lab">${l}</span><span class="val num">${n}</span></button>`;
     const kf = LOGK[LOGF] || LOGK[""];
-    let side = `<div class="lbl">篩選</div><div class="pane group" data-key="lf">${F.map(([k, l]) => row(`data-logf="${k}"`, LOGF === k, l, byH.filter(LOGK[k]).length)).join("")}</div>`;
-    if (many) side += `<div class="lbl" data-key="lhh">主機</div><div class="pane group" data-key="lhs" data-keyed>${row(`data-logh="" data-key="lh:"`, !hk, "全部主機", all.filter(kf).length)}${list.map(x => row(`data-logh="${esc(keyOf(x))}" data-key="lh:${esc(keyOf(x))}"`, hk === keyOf(x), esc(x.name), all.filter(e => e.k === keyOf(x) && kf(e)).length)).join("")}</div>`;
+    let side = `<div class="lbl">篩選</div><div class="pane group" data-key="lf" data-slide>${F.map(([k, l]) => row(`data-logf="${k}"`, LOGF === k, l, byH.filter(LOGK[k]).length)).join("")}</div>`;
+    if (many) side += `<div class="lbl" data-key="lhh">主機</div><div class="pane group" data-key="lhs" data-keyed data-slide>${row(`data-logh="" data-key="lh:"`, !hk, "全部主機", all.filter(kf).length)}${list.map(x => row(`data-logh="${esc(keyOf(x))}" data-key="lh:${esc(keyOf(x))}"`, hk === keyOf(x), esc(x.name), all.filter(e => e.k === keyOf(x) && kf(e)).length)).join("")}</div>`;
     return `<div class="wide" data-key="log"><h1 class="ptitle">紀錄</h1><div class="split rside" data-key="lsplit"><div class="smain" data-key="lm">${body}</div><aside class="side" data-key="ls">${side}</aside></div></div>`;
   }
   const chip = (k, l) => `<button class="fchip${LOGF === k ? " on" : ""}" data-logf="${k}"><span class="ck">${I("check")}</span>${l}</button>`;
-  return `<div class="narrow" data-key="log"><h1 class="ptitle">紀錄</h1><div class="fchips">${F.map(([k, l]) => chip(k, l)).join("")}</div>${body}</div>`;
+  return `<div class="narrow" data-key="log"><h1 class="ptitle">紀錄</h1><div class="fchips" data-key="lfc" data-slide>${F.map(([k, l]) => chip(k, l)).join("")}</div>${body}</div>`;
 }
 /* 設定：上面是這台裝置的外觀、通知與登入；下面「主機」好幾台時跟工具一樣一排主機名稱選一台，只顯示那台的 */
 const SHOWS = [["trend", "歷史曲線圖", "chart"], ["net", "網路速度", "net"], ["box", "容器與服務", "items"], ["info", "連線數與 IP", "info"],
@@ -847,20 +891,49 @@ function flipWidth(el, change){
   const w0 = el.offsetWidth; change(); const w1 = el.offsetWidth;
   if (canAnim() && Math.abs(w1 - w0) > 1) el.animate([{width:w0+"px"}, {width:w1+"px"}], {duration:T.mid, easing:EASE});
 }
-/* 換成另一台主機的內容（data-sw）：新的淡入浮上來，高度平滑變化 */
+/* 拿出來又放回去的元素：瀏覽器會把裡面的進場動畫從頭重播（卡片會突然不見），全部停在結尾 */
+const still = el => el.getAnimations({subtree:true}).forEach(n => { if (!n.animationName) n.cancel(); else if (isFinite(n.effect.getComputedTiming().endTime)) n.finish(); });
+/* 換分頁：舊的那頁留在原地很快淡出（不佔位置），新的那頁接著淡入（CSS 的 through） */
+function through(a, b){
+  const par = a.offsetParent;
+  if (!canAnim() || !par) return a.replaceWith(b);
+  const z = ZM(), r = a.getBoundingClientRect(), R = par.getBoundingClientRect();
+  a.replaceWith(b);
+  a._leaving = 1;
+  Object.assign(a.style, {position:"absolute", left:(r.left - R.left) / z - par.clientLeft + "px", top:(r.top - R.top) / z - par.clientTop + "px", width:r.width / z + "px",
+    height:Math.min(r.height / z, innerHeight / z * 2) + "px", overflow:"hidden", margin:"0", pointerEvents:"none", animation:"none"});
+  b.after(a); still(a);
+  a.animate([{opacity:1}, {opacity:0}], {duration:T.fast / 2, easing:EXIT, fill:"forwards", id:"ui"}).onfinish = () => a.remove();
+  b.style.animationDelay = T.fast / 2 + "ms";
+}
+/* 換成另一台主機的內容（data-sw）：舊的留在原地很快淡出，新的接著淡入浮上來；
+   高度每一格都跟著新內容實際的高度走（裡面讀到狀態又長高也一起跟上，不會最後才跳一下） */
 function swapIn(a, b){
   if (!canAnim() || !a.isConnected) return a.replaceWith(b);
-  const h0 = a.offsetHeight, o = {duration:T.mid, easing:EASE, id:"ui"};
+  const h0 = a.offsetHeight, par = a.offsetParent, x = a.offsetLeft, y = a.offsetTop, w = a.offsetWidth;
   a.replaceWith(b); skipIntro(b, true);
-  b.animate([{opacity:0, transform:"translateY(10px) scale(.985)"}, {opacity:1, transform:"none"}], o);
+  if (par) {
+    a._leaving = 1;
+    Object.assign(a.style, {position:"absolute", left:x + "px", top:y + "px", width:w + "px", height:h0 + "px", margin:"0", pointerEvents:"none", overflow:"hidden", zIndex:1});
+    b.after(a); still(a);
+    a.animate([{opacity:1}, {opacity:0}], {duration:T.fast / 2, easing:EXIT, fill:"forwards", id:"ui"}).onfinish = () => a.remove();
+  }
+  b.animate([{opacity:0, transform:"translateY(8px) scale(.985)"}, {opacity:1, transform:"none"}], {duration:T.mid, delay:T.fast / 2, easing:EASE, fill:"backwards", id:"ui"});
+  const own = [b.style.height, b.style.overflow];         // 自己本來就有的高度（例如曲線圖「讀取中」那格）要留著
   b.style.height = h0 + "px"; b.style.overflow = "hidden";
-  requestAnimationFrame(() => {                  // 等讀好的狀態填進去再量新的高度
-    b.style.height = ""; b.style.overflow = "";
-    const h1 = b.offsetHeight;
-    if (Math.abs(h1 - h0) > 1) b.animate([{height:h0 + "px", overflow:"hidden"}, {height:h1 + "px", overflow:"hidden"}], o);
-  });
+  const t0 = performance.now(), dur = T.mid + T.fast / 2;
+  const step = now => {
+    if (!b.isConnected) return;
+    const p = Math.min(1, (now - t0) / dur), e = 1 - Math.pow(1 - p, 4);
+    if (p >= 1) { [b.style.height, b.style.overflow] = own; return; }
+    b.style.height = own[0]; const h1 = b.offsetHeight;      // 新內容現在真正的高度
+    b.style.height = h0 + (h1 - h0) * e + "px";
+    requestAnimationFrame(step);
+  };
+  requestAnimationFrame(step);
 }
 function morph(a, b){
+  if (a.nodeType === 1 && b.nodeType === 1 && a.matches("main.view") && b.matches("main.view") && a.getAttribute("data-key") !== b.getAttribute("data-key")) return through(a, b);
   if (a.nodeType===1 && b.nodeType===1 && (a.hasAttribute("data-sw") && b.hasAttribute("data-sw") && a.getAttribute("data-key") !== b.getAttribute("data-key")
       || a.nodeName !== b.nodeName && (a.classList.contains("wait") || b.classList.contains("wait")))) return swapIn(a, b);   // 曲線圖「讀取中」↔ 圖
   if (a.nodeType!==b.nodeType || a.nodeName!==b.nodeName ||
@@ -1023,8 +1096,9 @@ function render(list){
   const time = new Date().toLocaleTimeString("zh-TW", {hour12:false});
   paint(DESK.matches ? renderDesk(list, time) : renderPhone(list, time));
   if (TIPX) drawTip(...TIPX);
-  loadStatus(); pickShow();
+  loadStatus(); pickShow(PSMOOTH);
 }
+let PSMOOTH = false;   // 點主機名稱換台時，那一排平順地滑到選到的那台
 DESK.addEventListener("change", () => { applyPrefs(); if (LIST.length) render(LIST); });
 /* 電腦版一次並排幾台：螢幕夠寬才放三台 */
 let WIDE = innerWidth >= 1800;
@@ -1106,7 +1180,7 @@ function setTab(k){
   closeMenu(); hideTip();
   if (TAB === k) { if (scrollY > 0) scrollTo({top:0, behavior: canAnim() ? "smooth" : "auto"}); return; }
   TAB = k; sstore("vs-tab", k);
-  scrollTo(0, 0); render(LIST);
+  scrollTo(0, 0); slideSel(() => render(LIST));
 }
 /* 工具、設定頁上「讀取中…」的狀態：換到那一頁時讀一次（之後自動更新不會蓋掉） */
 const view = () => $("#app .view");
@@ -1210,10 +1284,11 @@ function hostModal(name, links){
       <div class="btns"><button class="ubtn ghost" data-r="0">取消</button><button class="ubtn" data-r="1">儲存</button></div></div>`;
     $("#layer").appendChild(v);
     const box = v.querySelector(".lrows");
-    const sync = () => { v.querySelector("[data-add]").style.display = box.children.length >= 6 ? "none" : ""; };
+    const rows = () => [...box.children].filter(r => !r._leaving);
+    const sync = () => reveal(v.querySelector("[data-add]"), rows().length < 6);
     const done = ok => { if (v._d) return; v._d = 1; v.classList.add("closing");
       const val = ok ? {name: v.querySelector('[data-k="name"]').value.trim(),
-        links: [...box.querySelectorAll(".lrow")].map(r => ({name: r.querySelector(".ln").value.trim(), url: r.querySelector(".lu").value.trim()})).filter(x => x.url)} : null;
+        links: rows().map(r => ({name: r.querySelector(".ln").value.trim(), url: r.querySelector(".lu").value.trim()})).filter(x => x.url)} : null;
       setTimeout(() => { v.remove(); res(val); }, 360); };
     v._esc = () => done(0);
     setTimeout(() => v.querySelector('[data-k="name"]').focus(), 60);
@@ -1222,12 +1297,12 @@ function hostModal(name, links){
       if (e.target === v) return done(0);
       const b = e.target.closest("[data-r]"); if (b) return done(+b.dataset.r);
       if (e.target.closest("[data-add]")) { box.insertAdjacentHTML("beforeend", row()); const r = box.lastElementChild;
-        if (canAnim()) r.animate([{opacity:0, transform:"translateY(-4px)"}, {opacity:1, transform:"none"}], {duration:T.mid, easing:EASE});
-        r.querySelector(".ln").focus(); return sync(); }
+        if (canAnim()) enterBlock(r, 0);
+        r.querySelector(".ln").focus({preventScroll:true}); return sync(); }
       const d = e.target.closest("[data-del]");
       if (d) { const r = d.closest(".lrow");
-        if (box.children.length === 1) { r.querySelectorAll("input").forEach(i => i.value = ""); return; }
-        r.remove(); sync(); }
+        if (rows().length === 1) { r.querySelectorAll("input").forEach(i => i.value = ""); return; }
+        r._leaving = 1; if (canAnim()) leaveBlock(r); else r.remove(); sync(); }
     });
     sync();
   });
@@ -1274,6 +1349,7 @@ const SELFST = {};
 let SELFT = 0;
 /* 每台的版本都讀一次（算「全部更新」要用）；換選別台時直接用剛讀到的，不用再等 */
 /* mode：true＝去檢查有沒有新版；"fresh"＝重新讀一次；不給＝一分鐘內讀過就直接用 */
+let SELFCHK = false;   // 按了「檢查新版」、還在問的時候
 async function selfStatus(root, mode){
   if (!root.querySelector(".selfbox")) return;
   const hosts = LIST.filter(x => x.online);
@@ -1293,11 +1369,16 @@ function txt(el, t){
 function swapHTML(el, html){
   if (el.innerHTML === html) return;
   if (!canAnim() || !el.isConnected) { el.innerHTML = html; return; }
-  const h0 = el.offsetHeight, was = new Set([...el.children].map(c => c.outerHTML)); el.innerHTML = html;
+  const h0 = el.offsetHeight, olds = [...el.children]; el.innerHTML = html;
   if (!html.trim()) return;
   if (!h0) return enterBlock(el, 0);
   const h1 = el.offsetHeight, o = {duration:T.mid, easing:EASE, id:"ui"};
-  [...el.children].forEach(c => { if (!was.has(c.outerHTML)) c.animate([{opacity:0, transform:"translateY(4px)"}, {opacity:1, transform:"none"}], o); });
+  // 只有真的變了的那一行淡入；包在同一個外框裡的，往裡面一層比
+  const fade = (was, now) => { const same = new Set(was.map(c => c.outerHTML));
+    now.forEach((c, i) => { if (same.has(c.outerHTML)) return; const p = was[i];
+      if (p && p.tagName === c.tagName && p.className === c.className && p.children.length && c.children.length) return fade([...p.children], [...c.children]);
+      c.animate([{opacity:0, transform:"translateY(4px)"}, {opacity:1, transform:"none"}], o); }); };
+  fade(olds, [...el.children]);
   if (Math.abs(h1 - h0) > 1) el.animate([{height:h0 + "px", overflow:"hidden"}, {height:h1 + "px", overflow:"hidden"}], o);
 }
 /* 顯示／收起一塊（取代直接改 hidden）：撐開後淡入；淡出後收起 */
@@ -1322,7 +1403,7 @@ function selfPaint(root){
   const h = LIST.find(x => (x.node || "") === box.dataset.n), d = h && SELFST[keyOf(h)];
   if (!d) return;
   const node = esc(h.node || "");
-  const st = d.running ? `<span class="spin"></span>更新中…` : d.old || d.supported === false ? `<span class="warn">${esc(d.err)}</span>`
+  const st = d.running ? `<span class="spin"></span>更新中…` : SELFCHK ? `<span class="spin"></span>檢查中…` : d.old || d.supported === false ? `<span class="warn">${esc(d.err)}</span>`
     : d.has ? `<span class="new">有新版可以更新</span>` : d.err ? esc(d.err) : "已經是最新版 ✨";
   const ch = d.has && d.changes && d.changes.length ? `<ul class="chg">${d.changes.slice(0, 5).map(c => `<li>${esc(c.split("\n")[0])}</li>`).join("")}</ul>` : "";
   const c = d.cloud;
@@ -1814,9 +1895,11 @@ function dlModal(node, name){
         r = document.createElement("div"); r.className = "dlrow"; r.dataset.id = j.id;
         r.innerHTML = `${I("dl")}<span><b></b><small></small><div class="track"><div class="fill"></div></div></span>
           <button type="button" class="iconbtn" data-retry title="重新下載">${I("upd")}</button><button type="button" class="iconbtn" data-del>${I("x")}</button>`;
-        if (canAnim()) r.animate([{opacity:0, transform:"translateY(-4px)"}, {opacity:1, transform:"none"}], {duration:T.fast, easing:EASE});
+        r._new = 1;
       }
-      if (list.children[i] !== r) list.insertBefore(r, list.children[i] || null);
+      const now = [...list.children].filter(x => !x._leaving);
+      if (now[i] !== r) list.insertBefore(r, now[i] || null);
+      if (r._new) { r._new = 0; if (canAnim()) enterBlock(r, 0); }
       const set = (el, t) => { if (el.textContent !== t) el.textContent = t; };
       set(r.querySelector("b"), j.name || j.label || "檔案");
       r.querySelector("b").title = j.url || "";
@@ -1825,10 +1908,11 @@ function dlModal(node, name){
       const tr = r.querySelector(".track"), run = j.st === "run" || j.st === "wait";
       reveal(tr, run);
       if (run) r.querySelector(".fill").style.width = (j.total ? Math.max(1, j.done / j.total * 100) : 0) + "%";
-      r.querySelector("[data-retry]").hidden = j.st !== "bad";
+      const rb = r.querySelector("[data-retry]");
+      if (rb.hidden !== (j.st !== "bad")) { rb.hidden = j.st !== "bad"; if (!rb.hidden && canAnim()) rb.animate([{opacity:0, transform:"scale(.6)"}, {opacity:1, transform:"none"}], {duration:T.mid, easing:SPRING}); }
       r.querySelector("[data-del]").title = run ? "取消下載" : "從清單拿掉（檔案不會刪）";
     });
-    [...list.children].forEach(r => { if (!seen.has(r.dataset.id)) r.remove(); });
+    [...list.children].forEach(r => { if (!seen.has(r.dataset.id) && !r._leaving) { r._leaving = 1; canAnim() ? leaveBlock(r) : r.remove(); } });
     clearTimeout(timer);
     if (!v._d) timer = setTimeout(load, d.list.some(j => j.st === "run" || j.st === "wait") ? 1000 : 5000);
   };
@@ -2272,11 +2356,11 @@ document.addEventListener("click", async e => {
     return;
   }
   const th = t.closest("[data-toolh]");
-  if (th) { if (TOOLH !== th.dataset.toolh) { TOOLH = th.dataset.toolh; store("vs-toolh", TOOLH); render(LIST); } pickShow(true); return; }
+  if (th) { if (TOOLH !== th.dataset.toolh) { TOOLH = th.dataset.toolh; store("vs-toolh", TOOLH); PSMOOTH = true; slideSel(() => render(LIST)); PSMOOTH = false; } pickShow(true); return; }
   const lf = t.closest("[data-logf]");
-  if (lf) { if (LOGF !== lf.dataset.logf) { LOGF = lf.dataset.logf; render(LIST); } return; }
+  if (lf) { if (LOGF !== lf.dataset.logf) { LOGF = lf.dataset.logf; slideSel(() => render(LIST)); } return; }
   const lh = t.closest("[data-logh]");
-  if (lh) { if (LOGH !== lh.dataset.logh) { LOGH = lh.dataset.logh; render(LIST); } return; }
+  if (lh) { if (LOGH !== lh.dataset.logh) { LOGH = lh.dataset.logh; slideSel(() => render(LIST)); } return; }
 
   const pe = t.closest("[data-peeredit]");
   if (pe) { const s = LIST.find(x => (x.node || "") === pe.dataset.peeredit); return s && peerModal(s); }
@@ -2344,7 +2428,7 @@ document.addEventListener("click", async e => {
   const nt = t.closest("[data-newtok]");
   if (nt) return newToken(nt.dataset.newtok, nt.dataset.label);
   const sc = t.closest("[data-selfcheck]");
-  if (sc) { sc.disabled = true; sc.textContent = "檢查中…"; return selfStatus(view(), true).finally(() => { sc.disabled = false; sc.textContent = "檢查新版"; }); }
+  if (sc) { sc.disabled = true; SELFCHK = true; selfPaint(view()); return selfStatus(view(), true).finally(() => { sc.disabled = false; SELFCHK = false; selfPaint(view()); }); }   // 按鈕的字不變（使用者要求），狀態寫在下面
   const su = t.closest("[data-selfup]");
   if (su) return selfUpdate(view(), su.dataset.selfup === "*" ? null : [{node: su.dataset.selfup, kind:"self"}]);
   const cu = t.closest("[data-cloudup]");
@@ -2535,7 +2619,7 @@ async function refreshNow(btn){
   addEventListener("touchend", () => {
     if (!d) return; const {dl, v, dy, t0, on} = d; d = null;
     if (!on) return;
-    if (dy > 110 || dy / (performance.now() - t0) > .6) { if (v._esc) return v._esc(); }   // 拉得夠遠或甩得夠快：關掉
+    if (dy > 110 || dy / (performance.now() - t0) > .6) { if (v._esc) { v.classList.add("flung"); return v._esc(); } }   // 拉得夠遠或甩得夠快：關掉
     dl.style.transform = "";
     if (canAnim()) dl.animate([{transform:`translateY(${dy}px)`}, {transform:"none"}], {duration:T.mid, easing:SPRING});
   });
