@@ -61,8 +61,11 @@ jobs:
           disable-animations: false
           emulator-options: -no-window -gpu swiftshader_indirect -no-snapshot -noaudio -no-boot-anim
           script: bash android/tools/shots.sh
-      - uses: actions/upload-artifact@v4
+      - name: 放上截圖（給自動檢查看）
         if: always()
-        with:
-          name: shots
-          path: shots/
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          cd shots && zip -q ../shots.zip * && cd ..
+          gh release view android-shots >/dev/null 2>&1 || gh release create android-shots --prerelease --title "安卓 App 自動截圖" --notes "自動測試用的截圖，不用理它。" --latest=false
+          gh release upload android-shots shots.zip --clobber

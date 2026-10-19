@@ -4,7 +4,8 @@ set -x
 cd "$(dirname "$0")"
 mkdir -p ../../shots
 OUT=../../shots
-python3 fake_server.py &
+python3 fake_server.py > /dev/null 2>&1 &
+SRV=$!
 sleep 1
 adb install -r ../app/build/outputs/apk/debug/app-debug.apk
 adb shell settings put global window_animation_scale 1
@@ -65,3 +66,4 @@ adb shell input text 1234
 adb shell input keyevent 66
 shot 13-登入後 5
 ls -la "$OUT"
+kill $SRV
