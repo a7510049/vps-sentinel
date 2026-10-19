@@ -23,7 +23,7 @@ REC=$!
 sleep 1
 adb shell input tap 517 2211
 shot 3-tools 2.5
-adb shell input tap 815 2211
+sleep 1; adb shell input tap 815 2211
 shot 4-settings 2.5
 adb shell input keyevent 4
 shot 5-back 2

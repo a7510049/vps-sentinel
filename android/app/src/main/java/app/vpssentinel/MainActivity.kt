@@ -97,8 +97,12 @@ class MainActivity : ComponentActivity() {
         onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
             override fun handleOnBackPressed() {
                 val w = web
-                if (w != null && w.canGoBack() && !failed) w.goBack()
-                else { isEnabled = false; onBackPressedDispatcher.onBackPressed(); isEnabled = true }
+                if (w == null || failed) return quit()
+                if (w.canGoBack()) return w.goBack()
+                // 不在首頁：先回首頁，在首頁才離開 App
+                w.evaluateJavascript("(typeof TAB!=='undefined'&&TAB!=='home'&&typeof setTab==='function')?(setTab('home'),1):0") { r ->
+                    if (r != "1") quit()
+                }
             }
         })
         setContent {
@@ -115,6 +119,10 @@ class MainActivity : ComponentActivity() {
                 }
             }
         }
+    }
+
+    private fun quit() {
+        moveTaskToBack(true)
     }
 
     /* 網頁換深淺色時，狀態列的字跟著換黑白 */
