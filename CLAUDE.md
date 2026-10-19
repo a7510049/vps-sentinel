@@ -26,7 +26,10 @@ cloud.sh           雲端硬碟（FileBrowser Quantum）安裝、調整容量、
 cleanup-old.sh     清除舊版 Home Assistant 版本
 tools/style_check.py  檢查樣式有沒有照共用規則
 tests/             基本功能測試（只用 Python 內建模組）
+android/           安卓 App（Kotlin＋Jetpack Compose＋Material 3 Expressive），只讀主機的 API，主機端不用改
 ```
+
+**安卓 App**：這台開發機連不到 Google 的套件庫，只能靠 GitHub 自動建置（`.github/workflows/android.yml`）：推上去就會做安裝檔、放到 `android` 下載頁，再用模擬手機截圖＋錄影，打包放到 `android-shots`（用 `curl -L https://github.com/a7510049/vps-sentinel/releases/download/android-shots/shots.zip` 拿回來看）。模擬手機沒有顯示卡，錄影只有每秒幾格，不能拿來判斷動畫順不順。假資料在 `android/tools/fake_server.py`，操作步驟在 `android/tools/shots.sh`。改了 API 的欄位要一起改 `android/.../Api.kt`。簽章檔 `android/app/sentinel.jks` 固定不換，換了手機上就不能直接更新。
 
 **新增網頁檔案時要一起改三個地方**：
 1. `sentinel.py` 的 `SRC_FILES`（版本指紋）

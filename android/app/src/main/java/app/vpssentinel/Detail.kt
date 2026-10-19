@@ -3,6 +3,9 @@
 package app.vpssentinel
 
 import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.togetherWith
@@ -64,7 +67,12 @@ fun Detail(vm: Vm, key: String, back: () -> Unit) {
         Modifier.fillMaxSize().sharedCard(key).nestedScroll(bar.nestedScrollConnection),
         containerColor = MaterialTheme.colorScheme.surface,
         topBar = {
-            TopAppBar(title = { Text(h?.name.orEmpty(), maxLines = 1) }, scrollBehavior = bar,
+            // 往下捲、大標題看不到了，上面才出現名稱
+            TopAppBar(title = {
+                AnimatedVisibility(bar.state.overlappedFraction > 0f, enter = fadeIn() + slideInVertically { it / 2 }, exit = fadeOut() + slideOutVertically { it / 2 }) {
+                    Text(h?.name.orEmpty(), maxLines = 1)
+                }
+            }, scrollBehavior = bar,
                 navigationIcon = { IconButton(back) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "返回") } })
         },
     ) { pad ->

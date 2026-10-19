@@ -29,6 +29,7 @@ import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Surface
 import androidx.compose.material3.ShortNavigationBar
 import androidx.compose.material3.ShortNavigationBarItem
 import androidx.compose.material3.Text
@@ -70,8 +71,10 @@ val LocalNavScope = compositionLocalOf<AnimatedVisibilityScope?> { null }
 @Composable
 fun App(vm: Vm) {
     val api = vm.api
-    AnimatedContent(api == null, transitionSpec = { fadeIn(tween(300)) togetherWith fadeOut(tween(200)) }, label = "auth") { out ->
-        if (out) Login(vm) else Signed(vm)
+    Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.surface) {
+        AnimatedContent(api == null, transitionSpec = { fadeIn(tween(300)) togetherWith fadeOut(tween(200)) }, label = "auth") { out ->
+            if (out) Login(vm) else Signed(vm)
+        }
     }
 }
 
