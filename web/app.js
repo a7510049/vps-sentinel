@@ -64,7 +64,7 @@ const P = {
   tools:'<rect x="3.5" y="3.5" width="7" height="7" rx="2"/><rect x="13.5" y="3.5" width="7" height="7" rx="2"/><rect x="3.5" y="13.5" width="7" height="7" rx="2"/><rect x="13.5" y="13.5" width="7" height="7" rx="2"/>',
   log:'<path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/><path d="M12 7v5l3 2"/>', x:'<path d="M18 6 6 18M6 6l12 12"/>',
   warn:'<path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3z"/><path d="M12 9v4M12 17h.01"/>',
-  ok:'<circle cx="12" cy="12" r="9.5"/><path d="m8.5 12 2.5 2.5 4.5-5"/>',
+  ok:'<circle cx="12" cy="12" r="9.5"/><path d="m8.5 12 2.5 2.5 4.5-5"/>', chk:'<path d="m5.5 12.5 4.5 4.5 8.5-9.5"/>', bang:'<path d="M12 5v9M12 19h.01"/>',
   upd:'<path d="M21 12a9 9 0 1 1-9-9c2.52 0 4.93 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/>',
   shield:'<path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="m8.5 12 2.5 2.5 4.5-5"/>',
   dl:'<path d="M12 3v12"/><path d="m7 10 5 5 5-5"/><path d="M5 21h14"/>',
@@ -406,12 +406,12 @@ const WAVE = (() => { let d = "M0 6"; for (let x = 0; x < 480; x += 12) d += ` Q
   return `<svg viewBox="0 0 480 12" aria-hidden="true"><path d="${d}"/></svg>`; })();
 const wave = (pct, t = tier(pct)) => `<div class="wv ${t}" style="--v:${Math.max(0, Math.min(100, +pct || 0)).toFixed(1)}%"><div class="wf">${WAVE}</div><i class="wr"></i></div>`;
 /* 首頁的狀態圖形：正常是圓潤的餅乾形、注意是尖一點的太陽形、異常是更尖的星形；點數一樣，換狀態時會平順變形 */
-const BLOB = (() => {
-  const sh = (k, a) => `polygon(${Array.from({length:96}, (_, i) => { const t = i / 96 * 2 * Math.PI, r = 50 * (1 - a * (1 - Math.cos(k * t)) / 2);
-    return `${(50 + r * Math.sin(t)).toFixed(2)}% ${(50 - r * Math.cos(t)).toFixed(2)}%`; }).join(",")})`;
-  return {ok: sh(9, .1), warn: sh(12, .2), bad: sh(6, .32)};
-})();
-const blobBtn = lv => `<button class="blob ${lv}${REFRESHING ? " spinning" : ""}" data-key="blob" data-refresh title="重新整理"><span class="bs"><span class="bf" style="clip-path:${BLOB[lv]}"></span></span><span class="bg" data-key="g:${lv}">${I({ok:"ok", warn:"alert", bad:"warn"}[lv])}</span></button>`;
+const blobSh = (k, a) => `polygon(${Array.from({length:96}, (_, i) => { const t = i / 96 * 2 * Math.PI, r = 50 * (1 - a * (1 - Math.cos(k * t)) / 2);
+  return `${(50 + r * Math.sin(t)).toFixed(2)}% ${(50 - r * Math.cos(t)).toFixed(2)}%`; }).join(",")})`;
+const BLOB = {ok: blobSh(9, .1), warn: blobSh(12, .2), bad: blobSh(6, .32)};
+/* 圖示的線條加上 pathLength，才能做「一筆畫出來」的動畫 */
+const drawable = svg => svg.replace(/<(path|circle)/g, '<$1 pathLength="1"');
+const blobBtn = lv => `<button class="blob ${lv}" data-key="blob" data-refresh title="重新整理"><span class="bs"><span class="bf" style="clip-path:${BLOB[lv]}"></span></span><span class="bg" data-key="g:${lv}">${drawable(I({ok:"ok", warn:"alert", bad:"warn"}[lv]))}</span></button>`;
 const disk0 = s => (s.disks || []).find(x => x.path === "/") || (s.disks || [])[0] || {pct:0, used:0, total:0};
 const LOADW = lr => lr < .7 ? ["輕鬆", ""] : lr < 1 ? ["有點忙", "w"] : lr < 2 ? ["忙碌", "w"] : ["超載", "b"];
 const WORD = {bad:"異常", warn:"注意", ok:"恢復", info:"通知"};
@@ -609,7 +609,7 @@ function renderPhone(list, time){
 function renderDesk(list, time){
   const s = DET && list.find(x => keyOf(x) === DET);
   return `<div class="dash d" data-key="d"><nav class="rail" data-key="rail" data-slide=".ri"><div class="brand">${BRAND}</div>${navBtns(true, list)}
-    <div class="rfoot"><button class="iconbtn${REFRESHING ? " spinning" : ""}" data-refresh title="重新整理">${I("upd")}</button></div></nav>
+    <div class="rfoot"><button class="iconbtn" data-refresh title="重新整理">${I("upd")}</button></div></nav>
     <main class="view v-${TAB}" data-key="v:${TAB}">${page(list, time)}</main>${s ? detail(s) : ""}</div>`;
 }
 function homePhone(list, time){
@@ -2567,41 +2567,95 @@ async function tick(){
   timer = setTimeout(tick, busy ? 2000 : (PREF.refresh || 5) * 1000);
   return true;
 }
+/* 載入中的形狀（Material 3 的載入圖形）：一邊轉一邊在幾種圓潤形狀之間彈性變形；
+   停下來時從當下的角度繼續往前轉到定位、形狀平順變回去，不會一下子跳回原樣 */
+const LDSH = [blobSh(4, .2), blobSh(6, .3), blobSh(12, .18), blobSh(5, .24)];
+const angOf = el => { const m = new DOMMatrix(getComputedStyle(el).transform); return (Math.atan2(m.b, m.a) * 180 / Math.PI + 360) % 360; };
+function loader(el, a0 = 0){
+  if (!canAnim() || !el) return () => {};
+  const rest = el.style.clipPath || getComputedStyle(el).clipPath, seq = [rest, ...LDSH], n = seq.length;
+  const k = seq.map((c, i) => ({clipPath: c, transform: `rotate(${a0 + i * 144}deg)`, easing: SPRING}));
+  k.push({clipPath: rest, transform: `rotate(${a0 + n * 144}deg)`});
+  const an = el.animate(k, {duration: T.mid * 1.2 * n, iterations: Infinity});
+  return (to = el.style.clipPath || rest) => {
+    const cp = getComputedStyle(el).clipPath, ang = angOf(el);
+    let end = ang - ((ang - a0) % 360 + 360) % 360 + 360; if (end - ang < 60) end += 360;   // 往前轉到跟原本一樣的角度
+    an.cancel(); el.style.clipPath = to;
+    return el.animate([{clipPath: cp, transform: `rotate(${ang}deg)`}, {clipPath: to, transform: `rotate(${end}deg)`}],
+      {duration: T.slow, easing: SPRING}).finished.catch(() => {});
+  };
+}
+/* 圖示一筆一筆畫出來（線條要先用 drawable() 加上 pathLength） */
+function drawIn(svg, delay = 0){
+  if (!canAnim() || !svg) return;
+  svg.querySelectorAll("path,circle").forEach((x, i) => x.animate([{strokeDasharray: "1 1", strokeDashoffset: 1}, {strokeDasharray: "1 1", strokeDashoffset: 0}],
+    {duration: T.slow, delay: delay + i * T.fast * .6, easing: EASE, fill: "backwards"}));
+}
+/* 按鈕在載入中的樣子；回傳「停下來」 */
+function busy(btn){
+  if (!canAnim()) return () => {};
+  if (btn.classList.contains("blob")) {
+    const bf = btn.querySelector(".bf"), g0 = btn.querySelector(".bg"), stop = loader(bf);
+    const hide = g0.animate([{opacity: 1, transform: "none"}, {opacity: 0, transform: "scale(.4)"}], {duration: T.fast, easing: EASE, fill: "forwards"});
+    return () => {
+      stop(); hide.cancel();
+      const g = btn.querySelector(".bg");
+      g.animate([{opacity: 0, transform: "scale(.4)"}, {opacity: 1, transform: "none"}], {duration: T.slow, easing: SPRING, fill: "backwards", delay: T.fast * .5});
+      drawIn(g.querySelector("svg"), T.fast * .5);
+    };
+  }
+  const svg = btn.querySelector("svg");
+  if (!svg) return () => {};
+  const an = svg.animate([{transform: "rotate(0)"}, {transform: "rotate(360deg)"}], {duration: T.long, iterations: Infinity, easing: EASE});
+  return () => { const ang = angOf(svg); an.cancel(); svg.animate([{transform: `rotate(${ang}deg)`}, {transform: "rotate(360deg)"}], {duration: T.slow, easing: SPRING}); };
+}
 /* 手動重新整理（按鈕或下拉） */
 async function refreshNow(btn){
   if (REFRESHING) return; REFRESHING = true;
-  btn && btn.classList.add("spinning");
-  const [ok] = await Promise.all([tick(), sleep(600)]);
-  REFRESHING = false; btn && btn.classList.remove("spinning");
-  document.querySelectorAll("[data-refresh]").forEach(b => b.classList.remove("spinning"));
+  const stop = btn ? busy(btn) : () => {};
+  const [ok] = await Promise.all([tick(), sleep(T.long)]);
+  REFRESHING = false; stop();
   return ok;
 }
-/* 手機：下拉重新整理 */
+/* 手機：下拉重新整理。圓形跟著手指長大、旋轉，拉夠了彈一下變形；放開就變成載入中的形狀，好了畫出勾勾再收起來 */
 (function(){
-  const ptr = $("#ptr"); ptr.innerHTML = I("down");
-  let y0 = null, d = 0, armed = false;
-  const show = (y, rot) => { ptr.style.transform = `translateY(${y}px) rotate(${rot}deg)`; ptr.style.opacity = String(Math.min(1, (y + 70) / 60)); };
+  const ptr = $("#ptr"), RND = blobSh(9, 0), CK = blobSh(9, .14);
+  ptr.innerHTML = `<span class="pl" style="clip-path:${RND}"></span><span class="pg"></span>`;
+  const pl = ptr.querySelector(".pl"), pg = ptr.querySelector(".pg");
+  let y0 = null, d = 0, armed = false, rot = 0;
+  const show = y => { ptr.style.transform = `translateY(${y}px)`; ptr.style.opacity = String(Math.max(0, Math.min(1, (y + 70) / 50))); };
+  const shape = (p, r) => { rot = r; pl.style.transform = `rotate(${r}deg) scale(${.3 + .7 * p})`; };
+  const hideUp = () => { ptr.classList.add("back"); show(-70); shape(0, rot); };
   addEventListener("touchstart", e => {
     if (DESK.matches || DET || scrollY > 0 || REFRESHING || document.querySelector("#layer .veil") || !LIST.length) return;
-    y0 = e.touches[0].clientY; d = 0; armed = false; ptr.classList.remove("back","spin","done"); ptr.innerHTML = I("down");
+    y0 = e.touches[0].clientY; d = 0; armed = false;
+    ptr.getAnimations({subtree: true}).forEach(a => a.cancel());
+    ptr.classList.remove("back", "armed", "bad"); pl.style.clipPath = RND; pg.innerHTML = "";
   }, {passive:true});
   addEventListener("touchmove", e => {
     if (y0 === null) return;
     d = Math.max(0, e.touches[0].clientY - y0);
     if (scrollY > 0) { y0 = null; return; }
-    const pull = Math.min(110, d * .5);
+    const pull = Math.min(110, d * .5), was = armed;
     armed = pull >= 64;
-    show(pull - 70, armed ? 180 : pull * 2.6);
+    if (armed !== was) {
+      ptr.classList.toggle("armed", armed); pl.style.clipPath = armed ? CK : RND;
+      if (armed && canAnim()) ptr.animate([{scale: 1}, {scale: 1.14}, {scale: 1}], {duration: T.mid, easing: EASE});
+    }
+    show(pull - 70); shape(Math.min(1, pull / 64), pull * 2.4);
   }, {passive:true});
   addEventListener("touchend", async () => {
     if (y0 === null) return; y0 = null;
-    ptr.classList.add("back");
-    if (!armed) { show(-70, 0); return; }
-    ptr.innerHTML = I("upd"); ptr.classList.add("spin"); show(10, 0);
+    if (!armed) return hideUp();
+    ptr.classList.add("back"); show(10); shape(1, rot);
+    const stop = loader(pl, rot);
     const ok = await refreshNow();
-    ptr.classList.remove("spin"); if (ok) ptr.classList.add("done");
-    ptr.innerHTML = I(ok ? "ok" : "warn");
-    setTimeout(() => show(-70, 0), 550);
+    ptr.classList.toggle("bad", !ok);
+    const st = stop(RND);
+    pg.innerHTML = drawable(I(ok ? "chk" : "bang")); drawIn(pg.firstChild, T.fast);
+    await st;
+    await sleep(T.long);
+    hideUp();
   });
 })();
 /* 按下去的水波紋：手指一碰就從那個點擴散；手機上等一下下，確定不是要捲動才出現 */

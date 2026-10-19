@@ -241,7 +241,6 @@ img.flag{width:28px;height:21px;object-fit:cover;border-radius:var(--r-xs);flex:
 .blob .bg{position:absolute;inset:0;display:grid;place-items:center;color:var(--on-pc);animation:pop var(--t-slow) var(--spring) backwards}
 .blob.warn .bg{color:var(--on-warnc)}.blob.bad .bg{color:var(--on-badc)}
 .blob .bg svg{width:34px;height:34px;stroke-width:2.4}
-.blob.spinning .bg svg{animation:spin .9s linear infinite}
 .htx{flex:1;min-width:0}
 .htx .hello{margin-top:2px}
 .hello{display:flex;align-items:center;gap:8px;color:var(--tx3);font-size:var(--fs-s);margin-top:18px}
@@ -522,7 +521,6 @@ button.li.prs,a.li.prs{border-radius:var(--r-lg);transform:scale(.98);background
 .rb.prs .ri{transform:scale(.9)}
 .rb.hasnew::after{top:-2px;right:16px}
 .rail .rfoot{margin-top:auto;display:flex;flex-direction:column;align-items:center;gap:6px}
-.iconbtn.spinning svg{animation:spin .9s linear infinite}
 .dash.d .view{padding:30px 32px 48px 8px;min-width:0}
 .dash.d .ptitle{padding:30px 4px 22px}
 .dash.d .narrow{max-width:760px}
@@ -791,11 +789,13 @@ textarea.field{height:auto;padding:12px 16px;resize:none}
 
 /* ═════════ 下拉重新整理 ═════════ */
 #ptr{position:fixed;left:50%;top:calc(env(safe-area-inset-top) + 8px);z-index:var(--z-ptr);width:44px;height:44px;margin-left:-22px;border-radius:50%;
-  display:grid;place-items:center;color:var(--p);background:var(--s3);box-shadow:var(--sh-2);transform:translateY(-70px);opacity:0;pointer-events:none}
-#ptr svg{width:20px;height:20px}
-#ptr.back{transition:transform var(--t-mid) var(--spring),opacity var(--t-mid) var(--ease)}
-#ptr.spin svg{animation:spin .8s linear infinite}
-#ptr.done{color:var(--ok)}
+  display:grid;place-items:center;background:var(--s3);box-shadow:var(--sh-2);transform:translateY(-70px);opacity:0;pointer-events:none}
+#ptr>span{grid-area:1/1}
+#ptr .pl{width:30px;height:30px;background:var(--p);transition:clip-path var(--t-mid) var(--spring),background-color var(--t-mid) var(--ease)}
+#ptr .pg{position:relative;color:var(--on-p)}
+#ptr .pg svg{width:18px;height:18px;stroke-width:2.6}
+#ptr.bad .pl{background:var(--badc)}#ptr.bad .pg{color:var(--on-badc)}
+#ptr.back,#ptr.back .pl{transition:transform var(--t-mid) var(--spring),opacity var(--t-mid) var(--ease),clip-path var(--t-mid) var(--spring),background-color var(--t-mid) var(--ease)}
 
 /* ═════════ 整頁切換（主題、文字大小） ═════════ */
 ::view-transition-old(root),::view-transition-new(root){animation-duration:var(--t-mid);animation-timing-function:var(--ease)}
