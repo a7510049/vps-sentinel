@@ -143,6 +143,8 @@ class MainActivity : ComponentActivity() {
                 web = w
                 w.layoutParams = ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)
                 w.setBackgroundColor(android.graphics.Color.TRANSPARENT)
+                w.isVerticalScrollBarEnabled = false       // 不顯示拉條（網頁本身也不顯示）
+                w.isHorizontalScrollBarEnabled = false
                 w.settings.apply {
                     javaScriptEnabled = true
                     domStorageEnabled = true
