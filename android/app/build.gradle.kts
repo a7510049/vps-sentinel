@@ -12,7 +12,7 @@ android {
         minSdk = 26
         targetSdk = 36
         versionCode = (System.getenv("APP_BUILD") ?: "1").toInt()
-        versionName = "2.0"
+        versionName = "2.1"
     }
 
     // 固定的簽章：新版才能直接蓋過舊版安裝
