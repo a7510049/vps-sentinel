@@ -220,7 +220,7 @@ function updateInfo(s){
 function updateBtn(s){
   const u = s.update, n = s.updates ? s.updates.total : 0;
   if (!u || !u.supported) return "";
-  return `<button class="ubtn" data-update="${esc(s.node||"")}" data-label="${esc(s.name)}" data-n="${n}" ${u.running ? "disabled" : ""}>${I("upd").replace("<svg","<svg style=\"width:15px;height:15px\"")}檢查更新</button>`;
+  return `<button class="ubtn sm" data-update="${esc(s.node||"")}" data-label="${esc(s.name)}" data-n="${n}" ${u.running ? "disabled" : ""}>${I("upd").replace("<svg","<svg style=\"width:15px;height:15px\"")}檢查更新</button>`;
 }
 /* ═════════ 心情小語：問候下面一句，依時段挑；同一天同一時段固定同一句，自動更新時不會一直換 ═════════ */
 const QUOTES = {
@@ -490,8 +490,6 @@ function hostBody(s, ph){
   if (PREF.show.net) h += `<div class="cc" data-key="np"><div class="nets"><div class="nt">${IC("down")}<div><div class="nv">${rate(s.net.rx)}</div><div class="nl">下載</div></div></div><div class="nt">${IC("up")}<div><div class="nv">${rate(s.net.tx)}</div><div class="nl">上傳</div></div></div></div>
     ${hs ? `<div class="cbox wide">${chartOr(hs, cid(s, ph ? "n" : "b"), x => [{data:x.rx, color:COL.rx, name:"下載"}, {data:x.tx, color:COL.tx, name:"上傳"}], {grid:1, bin:1, fmt:rate, h: ph ? 96 : 110})}</div>` : ""}</div>`;
   h += trafficCard(s) + itemsCard(s);
-  const info = updateInfo(s), btn = updateBtn(s);
-  if (info || btn) h += `<div class="foot" data-key="ft"><div class="sub" data-x>${info}</div>${btn}</div>`;
   return h + `</div>`;
 }
 /* 四格：處理器、記憶體、磁碟、負載 */
@@ -607,24 +605,30 @@ function renderPhone(list, time){
   const s = DET && list.find(x => keyOf(x) === DET);
   return `<div class="dash m" data-key="m"><main class="view v-${TAB}" data-key="v:${TAB}">${page(list, time)}</main><nav class="dock" data-key="dock" data-slide>${navBtns(false, list)}</nav>${s ? detail(s) : ""}</div>`;
 }
-/* 電腦：左邊直排分頁；首頁每台主機一欄並排，右邊是天氣和最近發生的事 */
+/* 電腦：左邊直排分頁；首頁每台主機一欄並排（主機多就是小卡片），右邊是天氣和最近發生的事 */
 function renderDesk(list, time){
+  const s = DET && list.find(x => keyOf(x) === DET);
   return `<div class="dash d" data-key="d"><nav class="rail" data-key="rail" data-slide=".ri"><div class="brand">${BRAND}</div>${navBtns(true, list)}
     <div class="rfoot"><button class="iconbtn${REFRESHING ? " spinning" : ""}" data-refresh title="重新整理">${I("upd")}</button></div></nav>
-    <main class="view v-${TAB}" data-key="v:${TAB}">${page(list, time)}</main></div>`;
+    <main class="view v-${TAB}" data-key="v:${TAB}">${page(list, time)}</main>${s ? detail(s) : ""}</div>`;
 }
 function homePhone(list, time){
   const ev = allEvents(list).slice(0, 3);
   return hero(list, time) + `<div class="lbl" data-key="lh">主機</div><div class="hosts" data-key="hosts" data-keyed>${list.map(hostCard).join("")}${addHostBtn("addhost")}</div>
     <div class="lbl" data-key="le">最近發生${ev.length ? `<button data-tab="log">全部紀錄</button>` : ""}</div>${evList(ev, list.length > 1)}`;
 }
+/* 電腦一排放得下幾台：螢幕夠寬放三台；主機比這個多就改成小卡片，點了才看整頁 */
+const deskCols = () => innerWidth >= 1800 ? 3 : 2;
+const cardMode = list => !DESK.matches || list.length > deskCols();
 function homeDesk(list, time){
-  const n = list.length >= 3 && innerWidth >= 1800 ? 3 : Math.min(2, Math.max(1, list.length)), ev = allEvents(list).slice(0, 8);
-  return `<div class="dhome" data-key="dh"><div class="dmain" data-key="dm">${hero(list, time)}
-      <div class="cols" data-key="cols" data-keyed data-grid style="--n:${n}">${list.map((s, i) => `<section class="hp ${lvOf(s)}" data-key="${esc(keyOf(s))}" style="--i:${i}">${hostBody(s, false)}</section>`).join("")}${addHostBtn("addhost")}</div></div>
+  const n = Math.min(deskCols(), Math.max(1, list.length)), ev = allEvents(list).slice(0, 8);
+  const hosts = cardMode(list)
+    ? `<div class="hosts wall" data-key="wall" data-keyed data-grid>${list.map(hostCard).join("")}${addHostBtn("addhost")}</div>`
+    : `<div class="cols" data-key="cols" data-keyed data-grid style="--n:${n}">${list.map((s, i) => `<section class="hp ${lvOf(s)}" data-key="${esc(keyOf(s))}" style="--i:${i}">${hostBody(s, false)}</section>`).join("")}${addHostBtn("addhost")}</div>`;
+  return `<div class="dhome" data-key="dh"><div class="dmain" data-key="dm">${hero(list, time)}${hosts}</div>
     <aside class="aside" data-key="as"><div class="wxw">${greet().wx}</div><div class="lbl">最近發生${ev.length ? `<button data-tab="log">全部紀錄</button>` : ""}</div>${evList(ev, list.length > 1)}</aside></div>`;
 }
-/* 手機：那台主機的整頁（從卡片的位置展開） */
+/* 那台主機的整頁（從卡片的位置展開；電腦上左邊的分頁列留著） */
 function detail(s){
   const r = OPENR || {t:0, b:0, l:0, r:0};
   return `<div class="det${DETX ? " closing" : ""}" data-key="det:${esc(keyOf(s))}" style="--ct:${r.t}px;--cb:${r.b}px;--cl:${r.l}px;--cr:${r.r}px"><div class="dscroll">
@@ -639,7 +643,6 @@ function toolsPage(list){
   if (!on.length) return h + `<div class="calm">連不上任何主機</div></div>`;
   const s = on.find(x => keyOf(x) === TOOLH) || on.find(x => !x.node) || on[0], k = esc(keyOf(s)), node = esc(s.node || ""), name = esc(s.name);
   const dot = x => lvOf(x) === "ok" ? "" : `<span class="dot ${lvOf(x)}"></span>`;
-  if (on.length > 1 && DESK.matches) return h + `<div class="split" data-key="tsplit">${hlist(on, s, dot)}<div class="smain" data-key="tm">${toolsBody(s, k, node, name)}</div></div></div>`;
   if (on.length > 1) h += hpick(on, s, dot);
   return h + toolsBody(s, k, node, name) + `</div>`;
 }
@@ -655,8 +658,6 @@ function toolsBody(s, k, node, name){
 }
 /* 一排主機名稱選一台（工具、設定共用，選了哪台兩邊都記得）；dot：名稱前面的小圓點 */
 const hpick = (on, s, dot) => `<div class="hpick" data-key="hpick" data-keyed data-slide>${on.map(x => `<button class="fchip${x === s ? " on" : ""}" data-key="hp:${esc(keyOf(x))}" data-toolh="${esc(keyOf(x))}">${dot(x)}${esc(x.name)}</button>`).join("")}</div>`;
-/* 電腦：主機名稱直排在左邊（像 Gmail 的資料夾），右邊是選到那台的內容 */
-const hlist = (on, s, dot) => `<div class="pane group" data-key="hlist" data-keyed data-slide>${on.map(x => `<button class="li${x === s ? " on" : ""}" data-key="hl:${esc(keyOf(x))}" data-toolh="${esc(keyOf(x))}"><span class="lab">${esc(x.name)}</span>${dot(x)}</button>`).join("")}</div>`;
 /* 選到的主機名稱被擠到邊邊或看不到時，把那一排滑到它在中間（只滑那一排，頁面不動） */
 function pickShow(anim){
   const r = $(".hpick"), b = r && r.querySelector(".on"); if (!b || r.scrollWidth <= r.clientWidth) return;
@@ -759,13 +760,15 @@ function setPage(list){
     const s = on.find(x => keyOf(x) === TOOLH) || on.find(x => !x.node) || on[0], k = esc(keyOf(s)), node = esc(s.node || "");
     h += `<div class="lbl" data-key="lh">主機<button data-selfcheck>檢查新版</button></div><div class="selfsum" data-key="selfsum" data-keep data-ld></div>`;
     if (on.length > 1) h += hpick(on, s, x => x.self_has ? `<span class="dot info"></span>` : "");
-    h += `<div class="group" data-key="g-h:${k}" data-sw><div class="selfbox" data-key="self" data-n="${node}" data-keep data-ld><div class="selfwait">讀取中…</div></div><button class="li" data-newtok="${node}" data-label="${esc(s.name)}">${IC("key", "")}<span class="lab">換一組新密碼<small>舊密碼會立刻失效</small></span>${CHEV}</button>`
+    h += `<div class="group" data-key="g-h:${k}" data-sw><div class="selfbox" data-key="self" data-n="${node}" data-keep data-ld><div class="selfwait">讀取中…</div></div>${sysRow(s)}<button class="li" data-newtok="${node}" data-label="${esc(s.name)}">${IC("key", "")}<span class="lab">換一組新密碼<small>舊密碼會立刻失效</small></span>${CHEV}</button>`
       + (s.keep ? `<label class="li">${IC("keep", "")}<span class="lab">Oracle 防回收${keepLine(s.keep)}</span><input type="checkbox" class="tog" data-keepalive="${node}" aria-label="Oracle 防回收" ${s.keep.on ? "checked" : ""}></label>` : "")
       + (s.node ? "" : go("data-pair", "link", "配對暗號", "pairst")) + `</div>`;
   }
   return `<div class="${D ? "wide" : "narrow"}" data-key="set"><h1 class="ptitle">設定</h1>`
     + (D ? `<div class="scols" data-key="scols"><div class="scol" data-key="sc1">${look}${out}</div><div class="scol" data-key="sc2">${sec}${h}</div></div>` : look + sec + h + out) + `</div>`;
 }
+/* 系統更新（作業系統的套件）：跟哨兵、雲端硬碟的版本放在一起 */
+const sysRow = s => s.update && s.update.supported ? `<div class="selfrow" data-key="sys"><div class="cl2 first"><span>${I("layers")}系統<small data-x>${updateInfo(s) || "還沒檢查"}</small></span>${updateBtn(s)}</div></div>` : "";
 /* 要顯示的內容、畫面更新頻率：收在一個視窗裡（手機從下面滑上來） */
 function showsModal(){
   const v = document.createElement("div"); v.className = "veil";
@@ -1096,7 +1099,7 @@ function render(list){
   ORDER = list.map(keyOf);                     // 原本的順序（工具的主機列不跟著告警重排，免得按到別台）
   list = [...list].map(tidy).sort((a, b) => LVRANK[lvOf(a)] - LVRANK[lvOf(b)]);
   LIST = list; flagAccent();
-  if (DET && (DESK.matches || !list.some(s => keyOf(s) === DET))) { DET = ""; DETX = false; document.documentElement.classList.remove("lock"); }
+  if (DET && (!cardMode(list) || !list.some(s => keyOf(s) === DET))) { DET = ""; DETX = false; document.documentElement.classList.remove("lock"); }
   const time = new Date().toLocaleTimeString("zh-TW", {hour12:false});
   paint(DESK.matches ? renderDesk(list, time) : renderPhone(list, time));
   if (TIPX) drawTip(...TIPX);
@@ -1182,6 +1185,11 @@ function toast(msg, type="ok"){
 let TAB = ["home", "tools", "log", "set"].includes(sstore("vs-tab")) ? sstore("vs-tab") : "home";
 function setTab(k){
   closeMenu(); hideTip();
+  if (DET) {                                     // 電腦上開著主機整頁時按分頁列：同一頁就收起來，別頁直接換過去
+    if (TAB === k) return closeDet();
+    DET = ""; DETX = false; document.documentElement.classList.remove("lock");
+    if (history.state && history.state.det) history.replaceState(null, "");
+  }
   if (TAB === k) { if (scrollY > 0) scrollTo({top:0, behavior: canAnim() ? "smooth" : "auto"}); return; }
   TAB = k; sstore("vs-tab", k);
   scrollTo(0, 0); slideSel(() => render(LIST));
@@ -1197,11 +1205,11 @@ function loadStatus(){
 let DET = "", DETX = false, OPENR = null;
 function cardRect(k){
   const c = [...document.querySelectorAll("#app .hcard")].find(x => x.dataset.open === k); if (!c) return null;
-  const z = ZM(), r = c.getBoundingClientRect();
-  return {t: Math.max(0, r.top / z), b: Math.max(0, (innerHeight - r.bottom) / z), l: Math.max(0, r.left / z), r: Math.max(0, (innerWidth - r.right) / z)};
+  const z = ZM(), r = c.getBoundingClientRect(), x = DESK.matches ? 96 : 0;          // 電腦：整頁從分頁列右邊開始
+  return {t: Math.max(0, r.top / z), b: Math.max(0, (innerHeight - r.bottom) / z), l: Math.max(0, r.left / z - x), r: Math.max(0, (innerWidth - r.right) / z)};
 }
 function openDet(k){
-  if (DESK.matches || DET) return;
+  if (!cardMode(LIST) || DET) return;
   OPENR = cardRect(k) || {t:0, b:0, l:0, r:0}; DET = k; DETX = false;
   history.pushState({det: k}, "");
   closeMenu(); document.documentElement.classList.add("lock");
@@ -1429,29 +1437,47 @@ async function selfUpdate(root, jobs){
     text: onlyCloud ? "約 1 分鐘，期間暫時打不開，檔案都會保留。"
       : "約 1 分鐘，設定和檔案都會保留。", ok:"開始更新"});
   if (!ok) return;
-  const okn = [], fail = [];
   jobs.sort((a, b) => (a.node === "" && a.kind === "self") - (b.node === "" && b.kind === "self"));   // 這台的哨兵最後更新（更新完畫面會重新載入）
-  for (const j of jobs) {
-    const h = LIST.find(x => (x.node || "") === j.node) || {}, name = (h.name || "主機") + (j.kind === "cloud" ? " 的雲端硬碟" : "");
-    const d = SELFST[keyOf(h)] || {};
-    try { await selfCall(j.node, j.kind === "cloud" ? "cloud_update" : "update"); okn.push(name);
-      UPW.jobs.push({node: j.node, kind: j.kind, name: h.name || "主機", from: j.kind === "cloud" ? (d.cloud || {}).version || "" : d.build || "", t0: Date.now()});
-    } catch(e) { fail.push(`${name}：${e.message}`); }
-  }
-  const started = okn.length ? (okn.length > 1 ? `已開始更新 ${okn.length} 個項目` : `已開始更新「${okn[0]}」`) : "";
-  if (okn.length || fail.length) toast([started, ...fail].filter(Boolean).join("；"), fail.length ? "bad" : "ok");   // 不管成功失敗都只跳一則
+  /* 好幾台的哨兵一起更新：先更新一台別的主機，確定新版跑得起來再更新其他台 */
+  const selfs = jobs.filter(j => j.kind === "self"), first = selfs.length > 1 && selfs.find(j => j.node);
+  const later = first ? selfs.filter(j => j !== first) : [];
+  const fail = [], go = await upwStart(jobs.filter(j => !later.includes(j)), fail);
+  if (go.includes(first)) { UPW.wait = later; UPW.first = first.node; }
+  const all = go.length + (go.includes(first) ? later.length : 0);
+  const started = all ? (all > 1 ? `已開始更新 ${all} 個項目` : `已開始更新「${jobName(go[0])}」`) : "";
+  if (all || fail.length) toast([started, ...fail].filter(Boolean).join("；"), fail.length ? "bad" : "ok");   // 不管成功失敗都只跳一則
   setTimeout(() => selfStatus(root, "fresh"), 1500);
   upwSave(); upwRun();
 }
-/* 更新完自動套用：盯著剛開始更新的項目，好了就跳通知、更新設定面板上的版本號；
-   這台的哨兵換新版時自動重新載入網頁。記在分頁裡，重新載入後會接著盯 */
-const UPW = {jobs: (() => { try { return JSON.parse(sstore("vs-upw") || "[]"); } catch(e) { return []; } })(), timer: 0};
-function upwSave(){ sstore("vs-upw", UPW.jobs.length ? JSON.stringify(UPW.jobs) : ""); }
+const jobName = j => ((LIST.find(x => (x.node || "") === j.node) || {}).name || "主機") + (j.kind === "cloud" ? " 的雲端硬碟" : "");
+/* 開始更新這幾項，回傳成功開始的；失敗的原因放進 fail */
+async function upwStart(jobs, fail){
+  const go = [];
+  for (const j of jobs) {
+    const h = LIST.find(x => (x.node || "") === j.node) || {}, d = SELFST[keyOf(h)] || {};
+    try { await selfCall(j.node, j.kind === "cloud" ? "cloud_update" : "update"); go.push(j);
+      UPW.jobs.push({node: j.node, kind: j.kind, name: h.name || "主機", from: j.kind === "cloud" ? (d.cloud || {}).version || "" : d.build || "", t0: Date.now()});
+    } catch(e) { fail.push(`${jobName(j)}：${e.message}`); }
+  }
+  return go;
+}
+/* 更新完自動套用：盯著剛開始更新的項目，全部好了才跳一則通知、更新設定面板上的版本號；
+   這台的哨兵換新版時自動重新載入網頁。記在分頁裡，重新載入後會接著盯
+   wait：等第一台（first）確定沒問題才更新的；held：已經有結果、等全部好了一起說的 */
+const UPW = (() => { let o = {}; try { o = JSON.parse(sstore("vs-upw") || "{}"); } catch(e) {}
+  if (Array.isArray(o)) o = {jobs: o};
+  return {jobs: o.jobs || [], wait: o.wait || [], first: o.first || "", held: o.held || [], timer: 0}; })();
+function upwSave(){ const {jobs, wait, first, held} = UPW; sstore("vs-upw", jobs.length || wait.length || held.length ? JSON.stringify({jobs, wait, first, held}) : ""); }
 function upwPanel(){ const b = TAB === "set" && view(); if (b) selfStatus(b, "fresh"); }
+const upwSay = (list) => { const bad = list.filter(x => !x[1]), good = list.filter(x => x[1]);
+  return [good.length ? (good.length > 1 ? `${good.length} 個項目都更新好了 ✨` : good[0][0]) : "", ...bad.map(x => x[0])].filter(Boolean).join("；"); };
 function upwReload(msg){
   if (window._reloading) return; window._reloading = true;
-  UPW.jobs = UPW.jobs.filter(j => j.node || j.kind !== "self"); upwSave();   // 這台的哨兵已經好了，重新載入後不用再盯
-  sstore("vs-upmsg", msg); toast("哨兵已更新到新版，重新載入中…");
+  if (!UPW.jobs.length && !UPW.wait.length) { msg = upwSay([...UPW.held, [msg, true]]); UPW.held = []; }
+  else UPW.held.push([msg, true]);
+  upwSave();
+  if (msg) sstore("vs-upmsg", msg);
+  toast("哨兵已更新到新版，重新載入中…");
   setTimeout(() => location.reload(), 1400);
 }
 function upwRun(){
@@ -1461,6 +1487,7 @@ function upwRun(){
 }
 async function upwStep(){
   const nodes = [...new Set(UPW.jobs.map(j => j.node))], done = [];
+  let mine = "";                                                        // 這台的哨兵換好的新版本號
   await Promise.all(nodes.map(async node => {
     let d; try { d = await selfCall(node, "status"); } catch(e) { return; }   // 正在重新啟動，連不上是正常的
     for (const j of UPW.jobs.filter(x => x.node === node)) {
@@ -1471,21 +1498,27 @@ async function upwStep(){
         const v = c.version || "";
         done.push([j, c.err && !v ? `「${j.name}」的雲端硬碟更新失敗：${c.err}` : v && v !== j.from ? `「${j.name}」的雲端硬碟已更新到 ${v} ✨` : `「${j.name}」的雲端硬碟更新完成 ✨`, !(c.err && !v)]);
       } else if (j.from && d.build && d.build !== j.from) {
-        if (!node) return upwReload(`哨兵已更新到 ${d.version} ✨`);    // 這台：換上新畫面
+        if (!node) { mine = d.version; done.push([j, "", true]); continue; }   // 這台：等一下換上新畫面
         done.push([j, `「${j.name}」的哨兵已更新到 ${d.version} ✨`, true]);
       } else if (!d.running && age > 15000) {
-        done.push([j, d.last && d.last.ok === false ? `「${j.name}」的哨兵更新失敗，可以再試一次` : `「${j.name}」的哨兵${j.from ? "已經是最新版" : "更新完成"} ✨`, !(d.last && d.last.ok === false)]);
+        done.push([j, d.last && d.last.ok === false ? `「${j.name}」的哨兵更新失敗，已保留原本的版本` : `「${j.name}」的哨兵${j.from ? "已經是最新版" : "更新完成"} ✨`, !(d.last && d.last.ok === false)]);
       }
     }
   }));
   if (window._reloading) return;
+  if (mine) { UPW.jobs = UPW.jobs.filter(j => !done.some(x => x[0] === j)); UPW.held.push(...done.filter(x => x[1]).map(x => [x[1], x[2]])); return upwReload(`哨兵已更新到 ${mine} ✨`); }
   for (const j of UPW.jobs) if (Date.now() - j.t0 > 15 * 60000 && !done.some(x => x[0] === j)) done.push([j, `「${j.name}」${j.kind === "cloud" ? "的雲端硬碟" : "的哨兵"}更新太久沒回應，請到主機上看看`, false]);
   if (done.length) {
-    UPW.jobs = UPW.jobs.filter(j => !done.some(x => x[0] === j)); upwSave();
-    const bad = done.filter(x => !x[2]), good = done.filter(x => x[2]);
-    const gm = good.length ? (good.length > 1 ? `${good.length} 個項目都更新好了 ✨` : good[0][1]) : "";
-    toast([gm, ...bad.map(x => x[1])].filter(Boolean).join("；"), bad.length ? "bad" : "ok");   // 一起好的、失敗的都併成一則
-    upwPanel(); tick();                                                 // 設定面板的版本號、齒輪上的紅點馬上跟著變
+    UPW.jobs = UPW.jobs.filter(j => !done.some(x => x[0] === j));
+    UPW.held.push(...done.map(x => [x[1], x[2]]));
+    const fx = UPW.wait.length && done.find(x => x[0].kind === "self" && x[0].node === UPW.first);
+    if (fx && fx[2]) { const fail = []; await upwStart(UPW.wait, fail); fail.forEach(f => UPW.held.push([f, false])); UPW.wait = []; }   // 第一台沒問題：換其他台
+    else if (fx) { UPW.held.push([`其他 ${UPW.wait.length} 台先不更新`, false]); UPW.wait = []; }
+    if (!UPW.jobs.length && !UPW.wait.length) {                         // 全部都有結果了：合成一則
+      const bad = UPW.held.some(x => !x[1]);
+      toast(upwSay(UPW.held), bad ? "bad" : "ok"); UPW.held = [];
+    }
+    upwSave(); upwPanel(); tick();                                      // 設定面板的版本號、齒輪上的紅點馬上跟著變
   }
   upwRun();
 }
