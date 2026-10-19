@@ -1,7 +1,7 @@
 /* ═════════ 共用規則（所有元件只能用這些值；完整說明見 DESIGN.md） ═════════ */
 :root{
   --font:"Lexend",-apple-system,BlinkMacSystemFont,"PingFang TC","Noto Sans TC","Microsoft JhengHei",sans-serif;
-  --r-xs:6px; --r-sm:12px; --r-md:16px; --r-lg:24px; --r-xl:28px; --r-2xl:40px; --r-pill:999px;   /* 圓角：連在一起的按鈕中間／小元件／欄位、選單／小卡片／卡片／按下去的卡片／膠囊 */
+  --r-xs:6px; --r-sm:12px; --r-md:16px; --r-lg:24px; --r-xl:28px; --r-2xl:40px; --r-pill:999px; --r-full:24px;   /* 圓角：連在一起的按鈕中間／小元件／欄位、選單／小卡片／卡片／按下去的卡片／膠囊／會變形的小按鈕變膠囊（48px 高以內；數字接近一半高度，變形才不會慢半拍） */
   --fs-xs:12px; --fs-s:13px; --fs-m:14.5px; --fs-l:16px; --fs-xl:19px; --fs-2xl:23px; --fs-3xl:30px; --fs-4xl:36px;   /* 字級 */
   --fs-input:16px;                                       /* 手機輸入框最小字級：小於這個 iPhone 一點輸入框就會自己放大畫面 */
   --t-fast:.2s; --t-mid:.38s; --t-slow:.62s; --t-long:.9s;   /* 動畫時間：按下、淡出／切換／進場、彈性／變形 */
@@ -138,8 +138,8 @@ b,strong{font-weight:500}
 .hasnew::after{content:"";position:absolute;top:6px;right:6px;width:8px;height:8px;border-radius:50%;background:var(--bad);box-shadow:0 0 0 2px var(--bg)}
 .hasnew::after{background:var(--p);box-shadow:0 0 0 2px var(--s3)}
 
-/* 按鈕：膠囊形，按下去圓角變小、縮一點 */
-.ubtn{height:44px;padding:0 20px;border-radius:var(--r-pill);background:var(--p);color:var(--on-p);font-weight:500;font-size:var(--fs-m);
+/* 按鈕：膠囊形，按下去圓角變小、縮一點（圓角用一半高度 --h，不用 999px，變形才看得到） */
+.ubtn{--h:44px;height:var(--h);padding:0 20px;border-radius:calc(var(--h) / 2);background:var(--p);color:var(--on-p);font-weight:500;font-size:var(--fs-m);
   display:inline-flex;align-items:center;justify-content:center;gap:8px;white-space:nowrap;text-decoration:none;
   transition:border-radius var(--t-mid) var(--spring),transform var(--t-mid) var(--spring),background-color var(--t-mid) var(--ease),opacity var(--t-mid) var(--ease)}
 .ubtn svg{width:18px;height:18px;flex:none}
@@ -148,7 +148,7 @@ b,strong{font-weight:500}
 .ubtn.ghost{background:var(--s3);color:var(--tx)}
 .ubtn.warn{background:var(--warn);color:var(--on-warn)}
 .ubtn.bad{background:var(--bad);color:var(--on-bad)}
-.ubtn.sm{height:34px;padding:0 14px;font-size:var(--fs-s);flex:none}
+.ubtn.sm{--h:34px;padding:0 14px;font-size:var(--fs-s);flex:none}
 .spin{width:14px;height:14px;border:2px solid currentColor;border-right-color:transparent;border-radius:50%;animation:spin .8s linear infinite;flex:none;display:inline-block}
 .linkish{color:var(--p);font-size:var(--fs-s);font-weight:500;padding:4px 6px;border-radius:var(--r-xs)}
 .linkish:disabled{color:var(--tx3)}
@@ -193,7 +193,8 @@ img.flag{width:28px;height:21px;object-fit:cover;border-radius:var(--r-xs);flex:
 .sp{height:22px}
 .hb .lbl,.aside .lbl{margin:18px 4px 10px}
 .aside .lbl:first-child{margin-top:4px}
-.lbl button{color:var(--p);font-weight:500;padding:2px 4px}
+.lbl button{color:var(--p);font-weight:500;padding:2px 4px;transition:opacity var(--t-mid) var(--ease)}
+.lbl button[disabled]{opacity:.45;cursor:default}
 .empty{color:var(--tx3);padding:28px 8px;text-align:center}
 
 /* ═════════ 浮在下面的分頁列（手機）：選到的那格變寬、露出文字 ═════════ */
@@ -201,7 +202,7 @@ img.flag{width:28px;height:21px;object-fit:cover;border-radius:var(--r-xs);flex:
   display:flex;gap:4px;padding:8px;border-radius:var(--r-pill);background:var(--s3);box-shadow:var(--sh-3);
   transition:transform var(--t-slow) var(--spring),opacity var(--t-mid) var(--ease)}
 .lock .dock{transform:translate(-50%,150%);opacity:0}
-.tb{height:52px;padding:0 15px;border-radius:var(--r-pill);display:flex;align-items:center;color:var(--tx2);position:relative;
+.tb{--h:52px;height:var(--h);padding:0 15px;border-radius:calc(var(--h) / 2);display:flex;align-items:center;color:var(--tx2);position:relative;
   transition:padding var(--t-slow) var(--spring),border-radius var(--t-mid) var(--spring),background-color var(--t-mid) var(--ease),color var(--t-mid) var(--ease)}
 .tb svg{width:22px;height:22px;flex:none}
 .tb .t{max-width:0;opacity:0;overflow:hidden;white-space:nowrap;font-weight:500;font-size:var(--fs-m);
@@ -369,9 +370,9 @@ img.flag{width:28px;height:21px;object-fit:cover;border-radius:var(--r-xs);flex:
 .rng{display:inline-flex;gap:2px;margin-left:auto;flex:none}
 .rng button{height:30px;padding:0 11px;font-size:var(--fs-xs);font-weight:500;background:var(--chip);color:var(--tx2);border-radius:var(--r-xs);white-space:nowrap;
   transition:border-radius var(--t-slow) var(--spring),background-color var(--t-fast) var(--ease),color var(--t-fast) var(--ease)}
-.rng button:first-child{border-radius:var(--r-pill) var(--r-xs) var(--r-xs) var(--r-pill)}
-.rng button:last-child{border-radius:var(--r-xs) var(--r-pill) var(--r-pill) var(--r-xs)}
-.rng button.on{background:var(--p);color:var(--on-p);border-radius:var(--r-pill)}
+.rng button:first-child{border-radius:var(--r-full) var(--r-xs) var(--r-xs) var(--r-full)}
+.rng button:last-child{border-radius:var(--r-xs) var(--r-full) var(--r-full) var(--r-xs)}
+.rng button.on{background:var(--p);color:var(--on-p);border-radius:var(--r-full)}
 /* 網路速度：兩格 */
 .nets{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin-bottom:10px}
 .nt{display:flex;gap:10px;align-items:center;min-width:0}
@@ -423,8 +424,8 @@ button.li.prs,a.li.prs{border-radius:var(--r-lg);transform:scale(.98);background
 /* 篩選小按鈕 */
 .fchips{display:flex;gap:8px;margin:0 4px 12px;flex-wrap:wrap}
 .fchip{height:36px;padding:0 16px;border-radius:var(--r-sm);box-shadow:inset 0 0 0 1px var(--s4);color:var(--tx2);font-size:var(--fs-m);
-  transition:border-radius var(--t-slow) var(--spring),background-color var(--t-fast) var(--ease),box-shadow var(--t-fast) var(--ease),transform var(--t-mid) var(--spring)}
-.fchip.on{background:var(--pc);color:var(--on-pc);box-shadow:none;border-radius:var(--r-pill)}
+  transition:border-radius var(--t-slow) var(--spring),background-color var(--t-fast) var(--ease),box-shadow var(--t-fast) var(--ease),color var(--t-mid) var(--ease),transform var(--t-mid) var(--spring)}
+.fchip.on{background:var(--pc);color:var(--on-pc);box-shadow:none;border-radius:var(--r-full)}
 .fchip.prs{transform:scale(.95)}
 .fchips .fchip{display:inline-flex;align-items:center}
 .fchip .ck{display:inline-grid;width:0;opacity:0;overflow:hidden;transition:width var(--t-mid) var(--spring),margin var(--t-mid) var(--spring),opacity var(--t-fast) var(--ease)}
@@ -437,6 +438,16 @@ button.li.prs,a.li.prs{border-radius:var(--r-lg);transform:scale(.98);background
 .hpick::-webkit-scrollbar{display:none}
 .hpick .fchip{flex:none;display:inline-flex;align-items:center;gap:8px;white-space:nowrap}
 .hpick .dot,.pane .dot{animation:pop var(--t-mid) var(--spring) backwards}
+/* 單選的一排／一列（主機名稱、紀錄篩選）：選取底色從舊的滑到新的（slideSel） */
+:where([data-slide]){position:relative;isolation:isolate}   /* :where：分頁列本來的 fixed／sticky 優先 */
+[data-slide]>.slide{position:absolute;left:0;top:0;background:var(--pc);pointer-events:none}
+.pane[data-slide]>.slide{z-index:1}   /* 一列一列是不透明的方塊：底色蓋在方塊上、字再蓋在底色上 */
+[data-slide].sliding>*{transition-property:color,box-shadow,transform,padding}
+[data-slide].sliding>.on{background:transparent}
+.pane[data-slide].sliding>.on{background:var(--card)}
+.rail.sliding>.on .ri{background:transparent}
+.rail.sliding .ri{transition-property:width,color,transform}
+.pane[data-slide].sliding>.li>*{position:relative;z-index:2}
 
 /* ═════════ 設定的控制項 ═════════ */
 /* 連在一起的選項：選到的那顆變膠囊 */
@@ -444,9 +455,9 @@ button.li.prs,a.li.prs{border-radius:var(--r-lg);transform:scale(.98);background
 .seg button{flex:1;height:40px;padding:0 12px;background:var(--chip);border-radius:var(--r-xs);font-size:var(--fs-s);font-weight:500;color:var(--tx2);white-space:nowrap;
   display:flex;align-items:center;justify-content:center;gap:6px;
   transition:border-radius var(--t-slow) var(--spring),background-color var(--t-fast) var(--ease),color var(--t-fast) var(--ease),transform var(--t-mid) var(--spring)}
-.seg button:first-child{border-radius:var(--r-pill) var(--r-xs) var(--r-xs) var(--r-pill)}
-.seg button:last-child{border-radius:var(--r-xs) var(--r-pill) var(--r-pill) var(--r-xs)}
-.seg button.on{background:var(--p);color:var(--on-p);border-radius:var(--r-pill)}
+.seg button:first-child{border-radius:var(--r-full) var(--r-xs) var(--r-xs) var(--r-full)}
+.seg button:last-child{border-radius:var(--r-xs) var(--r-full) var(--r-full) var(--r-xs)}
+.seg button.on{background:var(--p);color:var(--on-p);border-radius:var(--r-full)}
 .seg button.prs{transform:scale(.94)}
 .li .seg{flex:none}
 .li.col .seg{width:100%}
@@ -534,9 +545,11 @@ button.li.prs,a.li.prs{border-radius:var(--r-lg);transform:scale(.98);background
 @media (min-width:700px){.dscroll .tiles{grid-template-columns:repeat(4,minmax(0,1fr))}}
 
 /* ═════════ 對話框 ═════════ */
-.veil{position:fixed;inset:0;z-index:var(--z-veil);background:var(--scrim);display:flex;align-items:center;justify-content:center;padding:20px;
-  animation:fadeIn var(--t-mid) var(--ease) backwards}
-.veil.closing{animation:fadeOut var(--t-mid) var(--ease) forwards;pointer-events:none}
+.veil{position:fixed;inset:0;z-index:var(--z-veil);display:flex;align-items:center;justify-content:center;padding:20px}
+/* 只有後面那層暗色淡入淡出；視窗本身不跟著變透明（面板關掉時是整片滑下去，不是化開） */
+.veil::before{content:"";position:absolute;inset:0;z-index:-1;background:var(--scrim);animation:fadeIn var(--t-mid) var(--ease) backwards}
+.veil.closing{pointer-events:none}
+.veil.closing::before{animation:fadeOut var(--t-fast) var(--ease) forwards}   /* 要在 360ms 移除前跑完 */
 .dialog{width:100%;max-width:380px;max-height:calc((100dvh - 40px) / var(--zoom));overflow-y:auto;overscroll-behavior:contain;scrollbar-width:none;
   background:var(--s2);border-radius:var(--r-xl);padding:24px;text-align:center;animation:dlgin var(--t-slow) var(--spring) backwards;
   --card:var(--s3);--chip:var(--s3)}
@@ -550,7 +563,8 @@ button.li.prs,a.li.prs{border-radius:var(--r-lg);transform:scale(.98);background
     padding:30px 20px calc(env(safe-area-inset-bottom) + 20px);animation:sheetIn var(--t-slow) var(--dec) backwards;touch-action:pan-y}
   .veil:has(.form) .dialog::before{content:"";position:absolute;top:10px;left:50%;width:32px;height:4px;margin-left:-16px;border-radius:var(--r-pill);background:var(--tx3);opacity:.6}
   .veil:has(.form) .dialog{position:relative}
-  .veil.closing:has(.form) .dialog{animation:sheetOut var(--t-mid) var(--exit) forwards}
+  .veil.closing:has(.form) .dialog{animation:sheetOut calc(var(--t-fast) * 1.5) var(--exit) forwards}
+  .veil.closing.flung:has(.form) .dialog{animation-timing-function:var(--dec)}   /* 往下拉放手：順著手指的速度滑走，不會先停一下 */
 }
 @keyframes sheetIn{from{transform:translateY(100%)}}
 @keyframes sheetOut{to{transform:translateY(100%)}}
@@ -590,8 +604,8 @@ textarea.field{height:auto;padding:12px 16px;resize:none}
 .tgd .chats{display:flex;flex-wrap:wrap;gap:6px}
 .tgd .chats:empty{display:none}
 .tgd .chats button{height:34px;padding:0 14px;border-radius:var(--r-sm);box-shadow:inset 0 0 0 1px var(--s4);font-size:var(--fs-s);
-  transition:border-radius var(--t-slow) var(--spring),background-color var(--t-fast) var(--ease)}
-.tgd .chats button.on{background:var(--pc);color:var(--on-pc);box-shadow:none;border-radius:var(--r-pill)}
+  transition:border-radius var(--t-slow) var(--spring),background-color var(--t-fast) var(--ease),box-shadow var(--t-fast) var(--ease),color var(--t-mid) var(--ease)}
+.tgd .chats button.on{background:var(--pc);color:var(--on-pc);box-shadow:none;border-radius:var(--r-full)}
 /* 手機金鑰、PIN 碼、配對暗號 */
 .pkd,.pindlg{max-width:420px}
 .pklist{display:flex;flex-direction:column;gap:3px}
@@ -721,7 +735,7 @@ textarea.field{height:auto;padding:12px 16px;resize:none}
 .remember input:checked{background:var(--p);box-shadow:none}
 .remember input:checked::after{transform:translateY(-1px) rotate(-45deg) scale(1)}
 .login .err{min-height:22px;margin-bottom:8px;color:var(--bad);font-size:var(--fs-s)}
-.login .ubtn{width:100%;height:52px;font-size:var(--fs-l)}
+.login .ubtn{width:100%;--h:52px;font-size:var(--fs-l)}
 .login .pkbtn{margin-top:10px}.login .pkbtn svg{color:var(--p)}
 .login .rswgo{display:block;margin:14px auto 0}
 .login.rsw{max-width:460px}
