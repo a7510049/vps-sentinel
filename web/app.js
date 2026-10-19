@@ -638,7 +638,7 @@ function toolsPage(list){
   let h = `<div class="narrow" data-key="tools"><h1 class="ptitle">工具</h1>`;
   if (!on.length) return h + `<div class="calm">連不上任何主機</div></div>`;
   const s = on.find(x => keyOf(x) === TOOLH) || on.find(x => !x.node) || on[0], k = esc(keyOf(s)), node = esc(s.node || ""), name = esc(s.name);
-  if (on.length > 1) h += `<div class="hpick" data-key="hpick" data-keyed>${on.map(x => `<button class="fchip${x === s ? " on" : ""}" data-key="hp:${esc(keyOf(x))}" data-toolh="${esc(keyOf(x))}">${lvOf(x) === "ok" ? "" : `<span class="dot ${lvOf(x)}"></span>`}${esc(x.name)}</button>`).join("")}</div>`;
+  if (on.length > 1) h += hpick(on, s, x => lvOf(x) === "ok" ? "" : `<span class="dot ${lvOf(x)}"></span>`);
   const c = s.cloud && safeUrl(cloudHref(s.cloud)) ? s.cloud : null;
   h += `<div class="group" data-key="g-t:${k}">`;
   if (c) h += `<a class="li col" data-key="cl" href="${esc(cloudHref(c))}"${ssoAttr(s)} target="_blank" rel="noopener noreferrer"><span class="rt">${IC("cloud", "")}<span class="lab">雲端硬碟<small>${c.total ? `已用 ${size(c.used)} / ${size(c.total)}` : "點一下打開"}</small></span>${EXT}</span>${c.total ? wave(c.pct) : ""}</a>
@@ -648,6 +648,8 @@ function toolsPage(list){
   if (L.length) h += `<div class="lbl" data-key="ll">常用連結</div><div class="group" data-key="g-lk:${k}">${L.map(x => linkRow(x, esc(linkSt(x)))).join("")}</div>`;
   return h + `</div>`;
 }
+/* 一排主機名稱選一台（工具、設定共用，選了哪台兩邊都記得）；dot：名稱前面的小圓點 */
+const hpick = (on, s, dot) => `<div class="hpick" data-key="hpick" data-keyed>${on.map(x => `<button class="fchip${x === s ? " on" : ""}" data-key="hp:${esc(keyOf(x))}" data-toolh="${esc(keyOf(x))}">${dot(x)}${esc(x.name)}</button>`).join("")}</div>`;
 /* 選到的主機名稱被擠到邊邊或看不到時，把那一排滑到它在中間（只滑那一排，頁面不動） */
 function pickShow(anim){
   const r = $(".hpick"), b = r && r.querySelector(".on"); if (!b || r.scrollWidth <= r.clientWidth) return;
@@ -667,12 +669,14 @@ function logPage(list){
   for (const e of ev) { const d = dayOf(e.t); if (d !== day) { day = d; rows += `<div class="day" data-key="d:${d}">${d}</div>`; } rows += evRow(e, many, hm); }
   return h + `<div class="evs" data-key="evs" data-keyed>${rows}</div></div>`;
 }
-/* 設定 */
+/* 設定：上面是這台裝置的外觀、通知與登入；下面「主機」好幾台時跟工具一樣一排主機名稱選一台，只顯示那台的 */
+const SHOWS = [["trend", "歷史曲線圖", "chart"], ["net", "網路速度", "net"], ["box", "容器與服務", "items"], ["info", "連線數與 IP", "info"],
+  ["flag", "國旗", "flag"], ["month", "每月流量", "traffic"], ["sun", "天氣", "weather", "用這台裝置的位置"], ["quote", "心情小語", "quote"]];
+const showSum = () => { const n = SHOWS.filter(x => PREF.show[x[2]]).length; return n === SHOWS.length ? "全部顯示" : n ? `顯示 ${n} 項` : "全部隱藏"; };
+const seg = (k, opts) => `<div class="seg">${opts.map(([v, l]) => `<button class="${String(getP(k)) === String(v) ? "on" : ""}" data-pref="${k}" data-val="${v}">${l}</button>`).join("")}</div>`;
+const tog = (k, l) => `<input type="checkbox" class="tog" data-pref="${k}" aria-label="${l}" ${getP(k) ? "checked" : ""}>`;
 function setPage(list){
-  const on = list.filter(s => s.online), multi = list.length > 1, nm = s => multi ? `：${esc(s.name)}` : "", self = on.some(s => !s.node);
-  const seg = (k, opts) => `<div class="seg">${opts.map(([v, l]) => `<button class="${String(getP(k)) === String(v) ? "on" : ""}" data-pref="${k}" data-val="${v}">${l}</button>`).join("")}</div>`;
-  const tog = (k, l) => `<input type="checkbox" class="tog" data-pref="${k}" aria-label="${l}" ${getP(k) ? "checked" : ""}>`;
-  const row = (ic, l, k, sm) => `<label class="li">${IC(ic, "")}<span class="lab">${l}${sm ? `<small>${sm}</small>` : ""}</span>${tog(k, l)}</label>`;
+  const on = list.filter(s => s.online).sort((a, b) => ORDER.indexOf(keyOf(a)) - ORDER.indexOf(keyOf(b))), self = on.some(s => !s.node);
   const go = (attr, ic, l, st) => `<button class="li" ${attr}>${IC(ic, "")}<span class="lab">${l}<small class="${st}" data-keep data-ld>讀取中…</small></span>${CHEV}</button>`;
   const fp = FLAGPAL[flagCC()] || FLAGPAL.TW;
   const sw = ["blue", "purple", "green", "orange", "pink"].map(v => `<button class="${PREF.accent === v ? "on" : ""}" data-pref="accent" data-val="${v}" data-accent="${v}">${I("check")}</button>`).join("")
@@ -682,21 +686,37 @@ function setPage(list){
       <div class="li col"><span class="lab">主題</span>${seg("theme", [["auto", "自動"], ["light", "淺色"], ["dark", "深色"]])}</div>
       <div class="li col"><span class="lab">主題色<small>「旗」跟著這台主機的國旗</small></span><div class="sw">${sw}</div></div>
       <div class="li col"><span class="lab">文字大小</span>${seg("size", [["s", "小"], ["m", "中"], ["l", "大"]])}</div>
-      <label class="li"><span class="lab">動畫</span>${tog("motion", "動畫")}</label></div>
-    <div class="lbl">要顯示的內容</div><div class="group">${[["trend", "歷史曲線圖", "show.chart"], ["net", "網路速度", "show.net"], ["box", "容器與服務", "show.items"],
-      ["info", "連線數與 IP", "show.info"], ["flag", "國旗", "show.flag"], ["month", "每月流量", "show.traffic"], ["sun", "天氣", "show.weather", "用這台裝置的位置"],
-      ["quote", "心情小語", "show.quote"]].map(([ic, l, k, sm]) => row(ic, l, k, sm)).join("")}</div>
-    <div class="lbl">通知</div><div class="group">${go("data-tg", "bell", "Telegram 通知", "tgst")}</div>`;
-  if (on.length) h += `<div class="lbl">安全</div><div class="group" data-key="g-sec">${PK_OK && self ? go("data-pk", "finger", "手機金鑰登入", "pkst") : ""}${self ? go("data-pin", "pin", "PIN 碼登入", "pinst") + go("data-pair", "link", "配對暗號", "pairst") : ""}${on.map(s =>
-    `<button class="li" data-newtok="${esc(s.node || "")}" data-label="${esc(s.name)}">${IC("key", "")}<span class="lab">換一組新密碼${nm(s)}<small>舊密碼會立刻失效</small></span>${CHEV}</button>`).join("")}</div>`;
-  const kp = on.filter(s => s.keep);
-  if (kp.length) h += `<div class="lbl">Oracle 防回收</div><div class="group" data-key="g-keep">${kp.map(s =>
-    `<label class="li">${IC("keep", "")}<span class="lab">${multi ? esc(s.name) : "自動防回收"}${keepLine(s.keep)}</span><input type="checkbox" class="tog" data-keepalive="${esc(s.node || "")}" aria-label="Oracle 防回收" ${s.keep.on ? "checked" : ""}></label>`).join("")}</div>`;
-  if (on.length) h += `<div class="lbl">軟體更新<button data-selfcheck>檢查新版</button></div><div class="selfbox" data-key="g-self" data-keep data-ld><div class="selfwait">讀取中…</div></div>`;
-  h += `<div class="lbl">資料</div><div class="group"><div class="li col"><span class="lab">畫面更新頻率</span>${seg("refresh", [[3, "3 秒"], [5, "5 秒"], [10, "10 秒"], [30, "30 秒"]])}</div></div>
-    <div class="sp"></div><div class="group"><button class="li" data-logout><span class="ico info">${I("logout")}</span><span class="lab">登出</span></button>
+      <label class="li"><span class="lab">動畫</span>${tog("motion", "動畫")}</label>
+      <button class="li" data-shows>${IC("trend", "")}<span class="lab">要顯示的內容<small class="showst">${showSum()}</small></span>${CHEV}</button></div>
+    <div class="lbl">通知與登入</div><div class="group" data-key="g-sec">${go("data-tg", "bell", "Telegram 通知", "tgst")}${PK_OK && self ? go("data-pk", "finger", "手機金鑰登入", "pkst") : ""}${self ? go("data-pin", "pin", "PIN 碼登入", "pinst") : ""}</div>`;
+  if (on.length) {
+    const s = on.find(x => keyOf(x) === TOOLH) || on.find(x => !x.node) || on[0], k = esc(keyOf(s)), node = esc(s.node || "");
+    h += `<div class="lbl" data-key="lh">主機<button data-selfcheck>檢查新版</button></div><div class="selfsum" data-key="selfsum" data-keep data-ld></div>`;
+    if (on.length > 1) h += hpick(on, s, x => x.self_has ? `<span class="dot info"></span>` : "");
+    h += `<div class="group" data-key="g-h:${k}"><div class="selfbox" data-key="self" data-n="${node}" data-keep data-ld><div class="selfwait">讀取中…</div></div><button class="li" data-newtok="${node}" data-label="${esc(s.name)}">${IC("key", "")}<span class="lab">換一組新密碼<small>舊密碼會立刻失效</small></span>${CHEV}</button>`
+      + (s.keep ? `<label class="li">${IC("keep", "")}<span class="lab">Oracle 防回收${keepLine(s.keep)}</span><input type="checkbox" class="tog" data-keepalive="${node}" aria-label="Oracle 防回收" ${s.keep.on ? "checked" : ""}></label>` : "")
+      + (s.node ? "" : go("data-pair", "link", "配對暗號", "pairst")) + `</div>`;
+  }
+  h += `<div class="sp"></div><div class="group"><button class="li" data-logout><span class="ico info">${I("logout")}</span><span class="lab">登出</span></button>
       <button class="li" data-reset><span class="ico info">${I("upd")}</span><span class="lab">恢復預設值<small>外觀設定只存在這台裝置</small></span></button></div>`;
   return h + `</div>`;
+}
+/* 要顯示的內容、畫面更新頻率：收在一個視窗裡（手機從下面滑上來） */
+function showsModal(){
+  const v = document.createElement("div"); v.className = "veil";
+  v.innerHTML = `<div class="dialog showsd">${IC("trend", "big")}<h3>要顯示的內容</h3>
+    <div class="form"><div class="group">${SHOWS.map(([ic, l, k, sm]) => `<label class="li">${IC(ic, "")}<span class="lab">${l}${sm ? `<small>${sm}</small>` : ""}</span>${tog("show." + k, l)}</label>`).join("")}</div>
+      <div class="group"><div class="li col"><span class="lab">畫面更新頻率</span>${seg("refresh", [[3, "3 秒"], [5, "5 秒"], [10, "10 秒"], [30, "30 秒"]])}</div></div></div>
+    <div class="btns"><button class="ubtn" data-r="0">完成</button></div></div>`;
+  $("#layer").appendChild(v);
+  const done = () => { if (v._d) return; v._d = 1; v.classList.add("closing"); setTimeout(() => v.remove(), 360); };
+  v._esc = done;
+  v.addEventListener("change", e => { const t = e.target; if (!t.dataset.pref) return; setP(t.dataset.pref, t.checked); setTimeout(() => changed(t.dataset.pref), 180); });
+  v.addEventListener("click", e => {
+    if (e.target === v || e.target.closest("[data-r]")) return done();
+    const b = e.target.closest("[data-val]"); if (!b) return;
+    setP(b.dataset.pref, +b.dataset.val); b.parentNode.querySelectorAll("button").forEach(x => x.classList.toggle("on", x === b)); changed(b.dataset.pref);
+  });
 }
 
 /* ═════════ 只更新有變動的地方 ═════════ */
@@ -1219,27 +1239,36 @@ async function selfCall(node, action){
   return d;
 }
 const SELFST = {};
-async function selfStatus(root, force){
-  const box = root.querySelector(".selfbox"); if (!box) return;
+let SELFT = 0;
+/* 每台的版本都讀一次（算「全部更新」要用）；換選別台時直接用剛讀到的，不用再等 */
+/* mode：true＝去檢查有沒有新版；"fresh"＝重新讀一次；不給＝一分鐘內讀過就直接用 */
+async function selfStatus(root, mode){
+  if (!root.querySelector(".selfbox")) return;
   const hosts = LIST.filter(x => x.online);
-  const res = await Promise.all(hosts.map(h => selfCall(h.node || "", force ? "check" : "status").then(d => [h, d]).catch(e => [h, {err: e.message, old: true}])));
-  if (!box.isConnected) return;
-  res.forEach(([h, d]) => SELFST[keyOf(h)] = d);
-  const pend = res.reduce((n, [, d]) => n + (d.has && !d.running ? 1 : 0) + (d.cloud && d.cloud.has && !d.cloud.running ? 1 : 0), 0);
-  const rows = res.map(([h, d]) => {
-    const node = esc(h.node || "");
-    const st = d.running ? `<span class="spin"></span>更新中…` : d.old || d.supported === false ? `<span class="warn">${esc(d.err)}</span>`
-      : d.has ? `<span class="new">有新版可以更新</span>` : d.err ? esc(d.err) : "已經是最新版 ✨";
-    const ch = d.has && d.changes && d.changes.length ? `<ul class="chg">${d.changes.slice(0, 5).map(c => `<li>${esc(c.split("\n")[0])}</li>`).join("")}</ul>` : "";
-    const c = d.cloud;
-    const cst = !c ? "" : c.running ? `<span class="spin"></span>更新中…` : c.has ? `<span class="new">官方有新版可以更新</span>` : c.err ? `<span class="warn">${esc(c.err)}</span>` : c.has === false ? "已經是最新版 ✨" : "還沒檢查";
-    const crow = c ? `<div class="cl2"><span>${I("cloud")}雲端硬碟<small>${c.version ? `版本 ${esc(c.version)}・` : ""}${cst}</small></span>
-      ${c.has && !c.running ? `<button class="ubtn sm" data-cloudup="${node}">更新</button>` : ""}</div>` : "";
-    const srow = `<div class="cl2 first"><span>${I("upd")}哨兵<small>${d.version ? `版本 ${esc(d.version)}・${esc(d.build || "")}・` : ""}${st}</small>${ch}</span>
-      ${d.has && !d.running ? `<button class="ubtn sm" data-selfup="${node}">更新</button>` : ""}</div>`;
-    return `<div class="selfrow"><b class="hn">${esc(h.name)}</b>${srow}${crow}</div>`;
-  }).join("");
-  box.innerHTML = rows + (pend > 1 ? `<div class="selfall"><button class="ubtn sm" data-selfup="*">全部更新</button></div>` : "");
+  if (mode || Date.now() - SELFT > 60000 || hosts.some(h => !SELFST[keyOf(h)])) {
+    const res = await Promise.all(hosts.map(h => selfCall(h.node || "", mode === true ? "check" : "status").then(d => [h, d]).catch(e => [h, {err: e.message, old: true}])));
+    res.forEach(([h, d]) => SELFST[keyOf(h)] = d); SELFT = Date.now();
+  }
+  selfPaint(root);
+}
+function selfPaint(root){
+  const box = root.querySelector(".selfbox"), sum = root.querySelector(".selfsum"); if (!box) return;
+  const hosts = LIST.filter(x => x.online && SELFST[keyOf(x)]);
+  const pend = hosts.reduce((n, h) => { const d = SELFST[keyOf(h)]; return n + (d.has && !d.running ? 1 : 0) + (d.cloud && d.cloud.has && !d.cloud.running ? 1 : 0); }, 0);
+  if (sum) sum.innerHTML = pend > 1 ? `<span>${pend} 項有新版</span><button class="ubtn sm" data-selfup="*">全部更新</button>` : "";
+  const h = LIST.find(x => (x.node || "") === box.dataset.n), d = h && SELFST[keyOf(h)];
+  if (!d) return;
+  const node = esc(h.node || "");
+  const st = d.running ? `<span class="spin"></span>更新中…` : d.old || d.supported === false ? `<span class="warn">${esc(d.err)}</span>`
+    : d.has ? `<span class="new">有新版可以更新</span>` : d.err ? esc(d.err) : "已經是最新版 ✨";
+  const ch = d.has && d.changes && d.changes.length ? `<ul class="chg">${d.changes.slice(0, 5).map(c => `<li>${esc(c.split("\n")[0])}</li>`).join("")}</ul>` : "";
+  const c = d.cloud;
+  const cst = !c ? "" : c.running ? `<span class="spin"></span>更新中…` : c.has ? `<span class="new">官方有新版可以更新</span>` : c.err ? `<span class="warn">${esc(c.err)}</span>` : c.has === false ? "已經是最新版 ✨" : "還沒檢查";
+  const crow = c ? `<div class="cl2"><span>${I("cloud")}雲端硬碟<small>${c.version ? `版本 ${esc(c.version)}・` : ""}${cst}</small></span>
+    ${c.has && !c.running ? `<button class="ubtn sm" data-cloudup="${node}">更新</button>` : ""}</div>` : "";
+  const srow = `<div class="cl2 first"><span>${I("upd")}哨兵<small>${d.version ? `版本 ${esc(d.version)}・${esc(d.build || "")}・` : ""}${st}</small>${ch}</span>
+    ${d.has && !d.running ? `<button class="ubtn sm" data-selfup="${node}">更新</button>` : ""}</div>`;
+  box.innerHTML = `<div class="selfrow">${srow}${crow}</div>`;
 }
 /* jobs：[{node, kind:"self"|"cloud"}]；不給就是「全部更新」 */
 async function selfUpdate(root, jobs){
@@ -1263,14 +1292,14 @@ async function selfUpdate(root, jobs){
   }
   const started = okn.length ? (okn.length > 1 ? `已開始更新 ${okn.length} 個項目` : `已開始更新「${okn[0]}」`) : "";
   if (okn.length || fail.length) toast([started, ...fail].filter(Boolean).join("；"), fail.length ? "bad" : "ok");   // 不管成功失敗都只跳一則
-  setTimeout(() => selfStatus(root), 1500);
+  setTimeout(() => selfStatus(root, "fresh"), 1500);
   upwSave(); upwRun();
 }
 /* 更新完自動套用：盯著剛開始更新的項目，好了就跳通知、更新設定面板上的版本號；
    這台的哨兵換新版時自動重新載入網頁。記在分頁裡，重新載入後會接著盯 */
 const UPW = {jobs: (() => { try { return JSON.parse(sstore("vs-upw") || "[]"); } catch(e) { return []; } })(), timer: 0};
 function upwSave(){ sstore("vs-upw", UPW.jobs.length ? JSON.stringify(UPW.jobs) : ""); }
-function upwPanel(){ const b = TAB === "set" && view(); if (b) selfStatus(b); }
+function upwPanel(){ const b = TAB === "set" && view(); if (b) selfStatus(b, "fresh"); }
 function upwReload(msg){
   if (window._reloading) return; window._reloading = true;
   UPW.jobs = UPW.jobs.filter(j => j.node || j.kind !== "self"); upwSave();   // 這台的哨兵已經好了，重新載入後不用再盯
@@ -2243,6 +2272,7 @@ document.addEventListener("click", async e => {
   if (t.closest("[data-tg]")) return tgModal().then(() => tgStatus(view()));
   if (t.closest("[data-pk]")) return pkModal().then(() => pkStatus(view()));
   if (t.closest("[data-pin]")) return pinModal().then(() => pinStatus(view()));
+  if (t.closest("[data-shows]")) return showsModal();
   if (t.closest("[data-pair]")) return pairModal().then(() => pairStatus(view()));
   const bk = t.closest("[data-bk]");
   if (bk) return bkModal(bk.dataset.bk, bk.dataset.label).then(() => bkStatus(view()));
