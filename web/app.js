@@ -376,8 +376,8 @@ function histRaw(s){
       HCACHE[k] = {...(c || {}), loading: true, at: c ? c.at : 0};
       fetch(`/api/history?range=${RANGE}&node=${encodeURIComponent(s.node || "")}`, {headers:{"X-Token":getTok()}, signal: AbortSignal.timeout ? AbortSignal.timeout(20000) : undefined})
         .then(r => r.ok ? r.json() : r.json().then(d => Promise.reject(d.error || "讀取失敗")))
-        .then(d => { HCACHE[k] = {at: Date.now(), data: d}; if (LIST.length) render(LIST); })
-        .catch(err => { HCACHE[k] = {at: Date.now(), err: typeof err === "string" ? err : "暫時讀不到，稍後自動重試"}; if (LIST.length) render(LIST); });
+        .then(d => { HCACHE[k] = {at: Date.now(), data: d}; whenIdle(); })
+        .catch(err => { HCACHE[k] = {at: Date.now(), err: typeof err === "string" ? err : "暫時讀不到，稍後自動重試"}; whenIdle(); });
     }
   }
   return c && c.data ? c.data : (c && c.err ? {err: c.err} : null);
@@ -793,8 +793,11 @@ const NUM = /-?\d+(?:\.\d+)?/g;
 /* 不在畫面上的曲線就不做變形動畫，直接換成新的（手機上兩台主機的曲線常常有一半在畫面外） */
 const SEEN = new WeakMap();
 const seenIO = window.IntersectionObserver ? new IntersectionObserver(es => es.forEach(e => SEEN.set(e.target, e.isIntersecting))) : null;
+/* 主機整頁打開時，後面那一頁看不到：不用動畫，直接換成新的值 */
+const behind = el => !!DET && !el.closest(".det");
 function onScreen(el){
   const svg = el.ownerSVGElement || el;
+  if (behind(svg)) return false;
   if (!seenIO) return true;
   if (!SEEN.has(svg)) { SEEN.set(svg, true); seenIO.observe(svg); }
   return SEEN.get(svg);
@@ -809,7 +812,7 @@ function morphPath(el, from, to){
   let t0 = null;
   const step = now => {
     if (t0 === null) t0 = now;
-    const k = Math.min(1, (now - t0) / dur), e = 1 - Math.pow(1 - k, 3);
+    const k = scrolling() ? 1 : Math.min(1, (now - t0) / dur), e = 1 - Math.pow(1 - k, 3);   // 開始滑動：直接變到最後的樣子，不跟捲動搶時間
     let d = parts[0];
     for (let i = 0; i < B.length; i++) d += (A[i] + (B[i] - A[i]) * e).toFixed(1) + parts[i + 1];
     el.setAttribute("d", d); el._pcur = d;
@@ -820,11 +823,11 @@ function morphPath(el, from, to){
 }
 function tween(el, from, to, d){
   cancelAnimationFrame(el._raf);
-  if (!isFinite(from) || !isFinite(to) || !canAnim()) { el.textContent = (+to).toFixed(d); return; }
+  if (!isFinite(from) || !isFinite(to) || !canAnim() || behind(el)) { el.textContent = (+to).toFixed(d); return; }
   let t0 = null; const dur = T.slow;
   const stepf = now => {
     if (t0 === null) t0 = now;                                   // 用第一格畫面當起點，時間不會倒退
-    const k = Math.min(1, Math.max(0, (now - t0) / dur)), e = 1 - Math.pow(1 - k, 3);
+    const k = scrolling() ? 1 : Math.min(1, Math.max(0, (now - t0) / dur)), e = 1 - Math.pow(1 - k, 3);
     el.textContent = (from + (to - from) * e).toFixed(d);
     if (k < 1) el._raf = requestAnimationFrame(stepf); else el.textContent = (+to).toFixed(d);
   };
@@ -1099,7 +1102,7 @@ function render(list){
   ORDER = list.map(keyOf);                     // 原本的順序（工具的主機列不跟著告警重排，免得按到別台）
   list = [...list].map(tidy).sort((a, b) => LVRANK[lvOf(a)] - LVRANK[lvOf(b)]);
   LIST = list; flagAccent();
-  if (DET && (!cardMode(list) || !list.some(s => keyOf(s) === DET))) { DET = ""; DETX = false; document.documentElement.classList.remove("lock"); }
+  if (DET && (!cardMode(list) || !list.some(s => keyOf(s) === DET))) { DET = ""; DETX = false; showBack(); document.documentElement.classList.remove("lock"); }
   const time = new Date().toLocaleTimeString("zh-TW", {hour12:false});
   paint(DESK.matches ? renderDesk(list, time) : renderPhone(list, time));
   if (TIPX) drawTip(...TIPX);
@@ -1187,7 +1190,7 @@ function setTab(k){
   closeMenu(); hideTip();
   if (DET) {                                     // 電腦上開著主機整頁時按分頁列：同一頁就收起來，別頁直接換過去
     if (TAB === k) return closeDet();
-    DET = ""; DETX = false; document.documentElement.classList.remove("lock");
+    DET = ""; DETX = false; showBack(); document.documentElement.classList.remove("lock");
     if (history.state && history.state.det) history.replaceState(null, "");
   }
   if (TAB === k) { if (scrollY > 0) scrollTo({top:0, behavior: canAnim() ? "smooth" : "auto"}); return; }
@@ -1214,17 +1217,21 @@ function openDet(k){
   history.pushState({det: k}, "");
   closeMenu(); document.documentElement.classList.add("lock");
   render(LIST);
+  clearTimeout(DETH); DETH = setTimeout(() => { if (DET && !DETX) document.documentElement.classList.add("dhid"); }, T.slow + 80);   // 展開完才藏
 }
+let DETH;
+const showBack = () => { clearTimeout(DETH); document.documentElement.classList.remove("dhid"); };
 function closeDet(){ if (!DET) return; if (history.state && history.state.det) history.back(); else shutDet(); }
 function shutDet(){
   if (!DET || DETX) return;
+  showBack();
   const r = cardRect(DET); if (r) OPENR = r;
   closeMenu(); hideTip();
   if (!canAnim()) return endDet();
   DETX = true; render(LIST);
   setTimeout(endDet, T.mid);
 }
-function endDet(){ DET = ""; DETX = false; document.documentElement.classList.remove("lock"); render(LIST); }
+function endDet(){ DET = ""; DETX = false; showBack(); document.documentElement.classList.remove("lock"); render(LIST); }
 addEventListener("popstate", () => { if (DET) shutDet(); });
 document.addEventListener("keydown", e => {
   if ((e.key === "Enter" || e.key === " ") && e.target.matches && e.target.matches("[data-open]")) { e.preventDefault(); openDet(e.target.dataset.open); }
@@ -2389,7 +2396,7 @@ document.addEventListener("click", async e => {
   if (tf) return trafficModal(tf.dataset.traffic, tf.dataset.label);
   if (t.closest("[data-refresh]")) return refreshNow(t.closest("[data-refresh]"));
   if (t.closest("[data-logout]")) {
-    if (await modal({icon:"logout", cls:"info", title:"要登出嗎？", text:"", ok:"登出"})) { setTok(""); LIST = []; clearTimeout(timer); DET = ""; document.documentElement.classList.remove("lock"); login(); }
+    if (await modal({icon:"logout", cls:"info", title:"要登出嗎？", text:"", ok:"登出"})) { setTok(""); LIST = []; clearTimeout(timer); DET = ""; showBack(); document.documentElement.classList.remove("lock"); login(); }
     return;
   }
   const th = t.closest("[data-toolh]");
@@ -2507,11 +2514,28 @@ function preloadFlags(list){
     im.onerror = () => { FLAGFAIL[cc] = 1; res(); }; im.src = `https://flagcdn.com/w80/${cc.toLowerCase()}.png`;
   })));
 }
+/* 背景讀到的資料（24 小時／7 天的曲線）：等畫面空下來再換上去 */
+async function whenIdle(){ await settle(); if (LIST.length) render(LIST); }
 /* 等介面動畫（收起、展開、移位）播完再更新畫面，最多等 0.9 秒，避免兩邊搶著動 */
 function uiBusy(){ return document.getAnimations().some(a => a.id === "ui" && a.playState === "running"); }
+/* 手指還在畫面上、或頁面還在滑：新資料先等一下，滑停了才換上去，捲動時不會卡一下 */
+let SCRT = 0, TOUCH = 0;
+document.addEventListener("scroll", () => {
+  const now = performance.now();
+  if (now - SCRT > 200) for (const a of document.getAnimations()) if (a.transitionProperty === "width") a.finish();   // 剛開始滑：還在伸縮的進度條直接到位
+  SCRT = now;
+}, {passive:true, capture:true});
+addEventListener("touchstart", () => { TOUCH = 1; }, {passive:true});
+addEventListener("touchend", e => { if (!e.touches.length) TOUCH = 0; }, {passive:true});
+addEventListener("touchcancel", () => { TOUCH = 0; }, {passive:true});
+const scrolling = () => TOUCH || performance.now() - SCRT < 200;
 async function settle(){
   const t0 = performance.now();
-  while (uiBusy() && performance.now() - t0 < 900) await sleep(60);
+  for (;;) {
+    const w = performance.now() - t0;
+    if (!(uiBusy() && w < 900) && !(scrolling() && w < 4000)) break;
+    await sleep(60);
+  }
   await new Promise(r => requestAnimationFrame(r));       // 對齊下一格畫面再改
 }
 let TICKID = 0;
@@ -2644,7 +2668,7 @@ async function refreshNow(btn){
     show(pull - 70); shape(Math.min(1, pull / 64), pull * 2.4);
   }, {passive:true});
   /* 手指被系統搶走（touchcancel）也要收起來，不然圖示會停在拉到一半的地方 */
-  addEventListener("touchcancel", () => { if (y0 === null) return; y0 = null; hideUp(); });
+  addEventListener("touchcancel", () => { if (y0 === null) return; y0 = null; hideUp(); }, {passive:true});
   addEventListener("touchend", async e => {
     if (y0 === null || e.touches.length) return; y0 = null;
     if (!armed) return hideUp();
@@ -2659,7 +2683,7 @@ async function refreshNow(btn){
     pg.innerHTML = drawable(I(ok ? "chk" : "bang")); drawIn(pg.firstChild, T.fast);
     await st; await sleep(T.long);
     if (g === gen) hideUp();
-  });
+  }, {passive:true});
 })();
 /* 按下去的水波紋：手指一碰就從那個點擴散；手機上等一下下，確定不是要捲動才出現 */
 (function(){
@@ -2716,7 +2740,7 @@ async function refreshNow(btn){
     if (dy > 110 || dy / (performance.now() - t0) > .6) { if (v._esc) { v.classList.add("flung"); return v._esc(); } }   // 拉得夠遠或甩得夠快：關掉
     dl.style.transform = "";
     if (canAnim()) dl.animate([{transform:`translateY(${dy}px)`}, {transform:"none"}], {duration:T.mid, easing:SPRING});
-  });
+  }, {passive:true});
 })();
 document.addEventListener("visibilitychange",()=>{ if(!document.hidden && LIST.length && getTok()) tick(); });   // 登入、還原畫面不要重畫（打到一半的密碼、選好的檔案會不見）
 tick();

@@ -188,7 +188,7 @@ img.flag{width:28px;height:21px;object-fit:cover;border-radius:var(--r-xs);flex:
 /* ═════════ 波浪進度條 ═════════ */
 .wv{--v:0%;flex:1;min-width:0;display:flex;align-items:center;gap:5px;height:12px;color:var(--p)}
 .wv.w{color:var(--warn)}.wv.b{color:var(--bad)}
-.wf{flex:0 1 auto;width:clamp(6px,var(--v),100%);height:12px;overflow:hidden;position:relative;min-width:0;border-radius:var(--r-xs);transition:width var(--t-long) var(--spring)}
+.wf{flex:0 1 auto;width:clamp(6px,var(--v),100%);height:12px;overflow:hidden;position:relative;min-width:0;transition:width var(--t-long) var(--spring)}
 .wf svg{position:absolute;left:0;top:0;width:480px;height:12px;fill:none;stroke:currentColor;stroke-width:3.4;stroke-linecap:round;animation:wave 1.8s linear infinite}
 @keyframes wave{to{transform:translateX(-24px)}}
 .wr{flex:1;min-width:4px;height:4px;border-radius:var(--r-pill);background:var(--s4)}
@@ -317,6 +317,8 @@ img.flag{width:28px;height:21px;object-fit:cover;border-radius:var(--r-xs);flex:
 
 /* ═════════ 主機整頁（手機）：從卡片的位置長出來 ═════════ */
 .det{position:fixed;inset:0;z-index:var(--z-det);background:var(--bg);animation:expand var(--t-slow) var(--dec) backwards}
+/* 整頁完全蓋住之後，後面那一頁先不畫（動畫、更新都停下來，捲動只要顧整頁）；收起時立刻回來 */
+html.dhid .dash>.view{content-visibility:hidden;contain-intrinsic-size:auto none}
 .det.closing{animation:collapse var(--t-mid) var(--exit) forwards;pointer-events:none}
 @keyframes expand{from{clip-path:inset(var(--ct) var(--cr) var(--cb) var(--cl) round var(--r-xl))}to{clip-path:inset(0 0 0 0 round 0)}}
 @keyframes collapse{from{clip-path:inset(0 0 0 0 round 0)}70%{opacity:1}to{clip-path:inset(var(--ct) var(--cr) var(--cb) var(--cl) round var(--r-xl));opacity:0}}
@@ -327,13 +329,16 @@ img.flag{width:28px;height:21px;object-fit:cover;border-radius:var(--r-xs);flex:
 .dscroll>.dtop{position:sticky;top:calc(-10px - env(safe-area-inset-top));z-index:1;max-width:none;display:flex;align-items:center;gap:12px;background:var(--bg);
   margin:calc(-10px - env(safe-area-inset-top)) -16px 0;padding:calc(env(safe-area-inset-top) + 16px) 16px 8px}
 .dtt{flex:1;min-width:0;font-size:var(--fs-xl);font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;opacity:0}
-/* 往上捲：標題列換上色塊、出現主機名稱（瀏覽器不支援就維持底色，不顯示名稱） */
-@supports (animation-timeline:scroll()){
-  .dscroll{scroll-timeline:--ds block}
-  .dscroll>.dtop{animation:barOn linear both;animation-timeline:--ds;animation-range:0 56px}
-  .dtt{animation:ttlOn linear both;animation-timeline:--ds;animation-range:70px 120px}
+/* 往上捲：大標題鑽進標題列的同時，標題列換上色塊、小標題浮上來（跟著手指走，由顯示卡處理，不佔主程式）；
+   瀏覽器不支援就維持底色，不顯示名稱 */
+.dtop::before{content:"";position:absolute;inset:0;z-index:-1;background:var(--s2);opacity:0;pointer-events:none}
+@supports (animation-timeline:view()) and (timeline-scope:--a){
+  .dscroll{--bar:62px;timeline-scope:--hn}
+  .det .hname{view-timeline:--hn block;view-timeline-inset:var(--bar) 0}
+  .dtop::before{animation:barOn linear both;animation-timeline:--hn;animation-range:exit 0% exit 70%}
+  .dtt{animation:ttlOn linear both;animation-timeline:--hn;animation-range:exit 25% exit 100%}
 }
-@keyframes barOn{from{background-color:var(--bg)}to{background-color:var(--s2)}}
+@keyframes barOn{from{opacity:0}to{opacity:1}}
 @keyframes ttlOn{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:none}}
 
 /* ═════════ 一台主機的內容（手機整頁、電腦欄位共用） ═════════ */
@@ -563,7 +568,8 @@ button.li.prs,a.li.prs{border-radius:var(--r-lg);transform:scale(.98);background
 .dash.d .det{left:96px}
 .dash.d .dscroll{padding:24px 32px 48px}
 .dash.d .dscroll>*{max-width:1080px}
-.dash.d .dscroll>.dtop{top:-24px;margin:-24px -32px 0;padding:24px max(32px,calc((100% - 1080px) / 2 + 32px)) 10px}
+.dash.d .dscroll{--bar:58px}
+.dash.d .dscroll>.dtop{max-width:none;top:-24px;margin:-24px -32px 0;padding:24px max(32px,calc((100% - 1080px) / 2 + 32px)) 10px}
 @media (min-width:700px){.dscroll .tiles{grid-template-columns:repeat(4,minmax(0,1fr))}}
 
 /* ═════════ 對話框 ═════════ */
