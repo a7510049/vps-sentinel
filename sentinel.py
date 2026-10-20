@@ -40,7 +40,7 @@ from collections import deque
 from concurrent.futures import ThreadPoolExecutor
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
-VERSION = "3.4"
+VERSION = "3.5"
 
 # ───────────────────────── 哨兵備份檔（.vsbk）─────────────────────────
 # 哨兵專用的備份格式：外面是自己的檔案格式，裡面用的是成熟、標準的加密方法（不自己發明加密）：
@@ -163,6 +163,7 @@ def vsbk_cli(args):
     """python3 sentinel.py --decrypt 備份檔.vsbk [解開後的檔名]：在任何有 Python 和 openssl 的主機上都能用"""
     if not args or not os.path.isfile(args[0]):
         sys.exit("用法：python3 sentinel.py --decrypt 備份檔.vsbk")
+    os.umask(0o077)                                # 解開的檔案裡有密碼：只有自己讀得到
     src = args[0]
     dst = args[1] if len(args) > 1 else re.sub(r"\.vsbk$", "", src) + (".tar.gz" if not src.endswith(".tar.gz.vsbk") else "")
     if os.path.exists(dst):
@@ -2340,7 +2341,7 @@ SAVE_LOCK = threading.Lock()
 
 def ev_key(t):
     """同一個問題的代號：拿掉會變動的數字（百分比、天數、個數），名稱裡的數字要留著（容器 app-1 和 app-2 是兩件事）"""
-    return re.sub(r"^\d+\s*|\s*[（(]?\d+(\.\d+)?\s*%[）)]?$", "", t)
+    return re.sub(r"^\d+\s*|\s*[（(]?\d+(\.\d+)?\s*%[）)]?$| \d+ 天後", "", t)
 
 
 class Collector:
@@ -2849,7 +2850,6 @@ def all_status():
 # 每台配對過來的主機各有一把鑰匙（新主機只存雜湊），可以單獨解除，不影響登入密碼；換登入密碼也不會斷線。
 PAIR_FILE = os.path.join(DATA_DIR, "pairing.json")
 PAIR_HOURS = 24
-PAIR_FAILS = 5                                  # 對錯幾次就作廢這組暗號
 PAIR_MAX = 10                                   # 最多幾台主機可以配對過來
 PAIR_LOCK = threading.Lock()
 PAIR_CACHE = {"mt": None, "d": {}}
@@ -2965,21 +2965,16 @@ def pair_accept(d):
         proof = unb64u(d.get("proof"))
     except (ValueError, TypeError):
         return False, "暗號不對", None
-    name = re.sub(r"[\s,=|]+", " ", str(d.get("name") or "")).strip()[:40] or "主要主機"
+    raw = str(d.get("name") or "")                 # 主要主機用原本的名稱簽，要用原本的來對
+    name = re.sub(r"[\s,=|]+", " ", raw).strip()[:40] or "主要主機"
     with PAIR_LOCK:
         st = dict(pair_load())
         p = st.get("pending")
         if not p or p.get("exp", 0) < time.time():
             return False, "暗號已失效，請在新主機重新產生", None
         secret = bytes.fromhex(p["s"])
-        if len(n1) != 16 or not hmac.compare_digest(pair_mac(secret, "req", n1, name), proof):
-            p = {**p, "fails": p.get("fails", 0) + 1}
-            if p["fails"] >= PAIR_FAILS:
-                st.pop("pending", None)
-            else:
-                st["pending"] = p
-            pair_save(st)
-            return False, "暗號不對", None
+        if len(n1) != 16 or not hmac.compare_digest(pair_mac(secret, "req", n1, raw), proof):
+            return False, "暗號不對", None           # 密鑰有 128 位元，猜不到；不算錯幾次，免得別人亂送就把暗號作廢
         n2 = secrets.token_bytes(16)
         key = pair_key(secret, n1, n2)
         keys = [k for k in pair_keys() if k.get("name") != name]      # 同一台重新配對：舊鑰匙作廢
@@ -3831,9 +3826,27 @@ def dl_seg(j, seg, fd, errs, first=None):
                 c.close()
 
 
+def dl_at(d, name, flags, mode=0o644):
+    """在下載資料夾裡開檔：資料夾和檔案被換成捷徑（例如指到 /etc）都不跟過去；雲端硬碟裡的東西別人改得到"""
+    dfd = os.open(d, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
+    try:
+        return os.open(name, flags | os.O_NOFOLLOW, mode, dir_fd=dfd)
+    finally:
+        os.close(dfd)
+
+
+def dl_move(d, src, dst):
+    """在下載資料夾裡改名（一樣不跟著捷徑走）"""
+    dfd = os.open(d, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
+    try:
+        os.replace(src, dst, src_dir_fd=dfd, dst_dir_fd=dfd)
+    finally:
+        os.close(dfd)
+
+
 def dl_multi(j, d, part, first=None):
     """分段同時下載：每段一條連線，各自寫進檔案的對應位置"""
-    fd = os.open(part, os.O_RDWR | os.O_CREAT, 0o644)
+    fd = dl_at(d, os.path.basename(part), os.O_RDWR | os.O_CREAT)
     try:
         if d != os.environ.get("SENTINEL_DL_DIR"):
             try:
@@ -3857,8 +3870,8 @@ def dl_multi(j, d, part, first=None):
                         return
                     mid = big[0] + big[2] + left // 2
                     seg = [mid, big[1], 0]
+                    j["segs"].append(seg)          # 先加新的一段再縮短舊的：中途存檔也不會少一塊
                     big[1] = mid
-                    j["segs"].append(seg)
         for i, seg in enumerate(list(j["segs"])):
             if seg[2] < seg[1] - seg[0]:
                 t = threading.Thread(target=work, args=(seg, first if i == 0 else None), daemon=True)
@@ -4139,8 +4152,9 @@ def dl_file(j, d):
             c.close()
             j["kind"] = "video"
             return None, None
-        if start and r.status != 206:           # 對方不支援接續：從頭來
+        if start and r.status != 206:           # 對方不支援接續：從頭來（舊的半個檔案刪掉，不然會一直佔著空間）
             start = 0
+            os.remove(old)
         if not j.get("name") or not start:
             j["name"] = dl_unique(d, j.get("name") or dl_name(r, final), j)
         part = os.path.join(d, j["name"] + DL_PART)
@@ -4182,7 +4196,7 @@ def dl_run(j):
             if j["total"] and j["done"] < j["total"]:
                 raise DlErr("連線中斷了")
             dst = os.path.join(d, dl_unique(d, j["name"], j) if os.path.lexists(os.path.join(d, j["name"])) else j["name"])
-            os.replace(part, dst)
+            dl_move(d, os.path.basename(part), os.path.basename(dst))
             j["name"] = os.path.basename(dst)
         j.update(st="ok", total=j["done"], t_end=time.time(), err="", segs=None, tries=0)
         COL.add_event("info", f"下載好了：{j['name']}（{dl_size(j['done'])}）")
@@ -4221,7 +4235,7 @@ def dl_run(j):
 
 def dl_one(j, d, part, r, start, rest):
     """一條連線從頭（或從 start）下載到完"""
-    with open(part, "ab" if start else "wb") as f:
+    with os.fdopen(dl_at(d, os.path.basename(part), os.O_WRONLY | os.O_CREAT | (os.O_APPEND if start else os.O_TRUNC)), "ab" if start else "wb") as f:
         if d != os.environ.get("SENTINEL_DL_DIR"):
             try:
                 os.fchown(f.fileno(), 1000, 1000)
@@ -5368,6 +5382,9 @@ class Handler(BaseHTTPRequestHandler):
         for k, v in r.getheaders():
             if k.lower() not in self.HOP:
                 self.send_header(k, v)
+        if re.match(r"/cloud/(public/)?api/", self.path):   # 雲端硬碟裡的檔案（可能是網路上下載來的網頁）直接打開時不能跑程式，不然讀得到哨兵的登入
+            self.send_header("Content-Security-Policy", "sandbox")
+            self.send_header("X-Content-Type-Options", "nosniff")
         self.end_headers()
         try:
             while True:

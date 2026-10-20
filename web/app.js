@@ -127,8 +127,8 @@ const rate = b => size(b)+"/s";
 function up(s){ const d=Math.floor(s/86400), h=Math.floor(s%86400/3600), m=Math.floor(s%3600/60);
   return d ? `${d} 天 ${h} 小時` : h ? `${h} 小時 ${m} 分` : `${m} 分鐘`; }
 const num = (v, d=0) => `<span class="num" data-v="${(+v).toFixed(d)}" data-d="${d}">${(+v).toFixed(d)}</span>`;
-const keyOf = s => s.node || s.name || "";
-const lvOf = s => s.level || (s.online ? "ok" : "bad");
+const keyOf = s => s.node || "@self";            // 這台自己用固定代號：改名後打開的頁面、選的主機都不會跑掉
+const lvOf = s => ["ok","warn","bad"].includes(s.level) ? s.level : s.online ? "ok" : "bad";
 const tier = p => p>=90 ? "b" : p>=75 ? "w" : "";
 const STATE = {running:"執行中",exited:"已停止",restarting:"重啟中",paused:"暫停",created:"未啟動",dead:"故障",
   active:"執行中",inactive:"未執行",failed:"失敗",activating:"啟動中",unknown:"未知"};
@@ -473,7 +473,7 @@ function hostCard(s, i){
   const d0 = disk0(s), ft = [PREF.show.traffic && s.traffic ? `本月 ${size(s.traffic.used)}` : "", `開機 ${up(s.uptime)}`].filter(Boolean).join("・");
   return b + alerts(s) + `<div class="mrows" data-key="mr">${mrow("處理器", s.cpu)}${mrow("記憶體", s.mem.pct)}${mrow("磁碟", d0.pct)}</div><div class="cfoot" data-key="cf">${ft}</div></div>`;
 }
-const offBox = s => `<div class="offline" data-key="off">${I("off")}<div>連不上這台主機<div class="sub">${s.last_seen ? esc(seen(s)) + "<br>" : ""}${esc(s.error || "")}</div>${peerBtn(s)}</div></div>`;
+const offBox = (s, sub) => `<div class="offline" data-key="off">${I("off")}<div>連不上這台主機<div class="sub">${s.last_seen && !sub ? esc(seen(s)) + "<br>" : ""}${esc(s.error || "")}</div>${peerBtn(s)}</div></div>`;
 /* 主機列表最後的「新增主機」：貼上新主機的配對暗號 */
 const addHostBtn = cls => `<button class="${cls}" data-addhost data-key="+add">${I("plus")}<span>新增主機</span></button>`;
 
@@ -482,7 +482,7 @@ const subOf = s => s.online ? `<span title="核心版本 ${esc(s.kernel)}">${esc
   : (s.last_seen ? `離線・${ago(s.last_seen)}` : "目前連不上");
 function hostBody(s, ph){
   let h = `<div class="hb" data-key="hb" data-keyed><div class="hhead" data-key="hh">${avatar(s)}<div class="nm"><h2 class="hname">${esc(s.name)}</h2><div class="hsub">${subOf(s)}</div></div>${ph ? "" : `<span class="hacts">${moreBtn(s)}</span>`}</div>`;
-  if (!s.online) return h + offBox(s) + `</div>`;
+  if (!s.online) return h + offBox(s, 1) + `</div>`;   // 標題下面已經寫了「離線・多久前」
   h += alerts(s) + tiles(s) + factsRow(s, ph);
   const hs = PREF.show.chart ? histFor(s) : null;
   if (PREF.show.chart) h += `<div class="cc" data-key="cp"><div class="cch"><span class="lg"><i style="background:${COL.cpu}"></i>處理器</span><span class="lg"><i style="background:${COL.mem}"></i>記憶體</span>${rangeSeg()}</div>
@@ -523,7 +523,7 @@ function factsRow(s, ph){
     const cw = c == null || avg == null ? "" : (c > avg * 2 && c - avg > 20) ? "比平常多很多" : (avg > 10 && c < avg * .3) ? "比平常少很多" : "";
     if (c != null) f.push(`<span class="fc" title="現在的網路連線數${avg != null ? `（平常約 ${Math.round(avg)} 條）` : ""}">連線<b class="num">${Number(c).toLocaleString("zh-TW")}</b>${cw ? `<em class="${cw.includes("多") ? "warn" : ""}">${cw}</em>` : ""}</span>`);
     const ip = s.geo && s.geo.ip, org = s.geo && s.geo.org;
-    if (ip) f.push(`<span class="fc">IP<b class="ipb ${shown ? "on" : ""}" ${shown ? `data-copy="${esc(ip)}" title="點一下複製（15 秒後會自動遮起來）"` : `data-reveal="${esc(k)}" title="點一下顯示"`}>${esc(ip)}</b></span>`);
+    if (ip) f.push(`<span class="fc">IP<b class="ipb ${shown ? "on" : ""}" tabindex="0" role="button" ${shown ? `data-copy="${esc(ip)}" title="點一下複製（15 秒後會自動遮起來）"` : `data-reveal="${esc(k)}" title="點一下顯示"`}>${esc(ip)}</b></span>`);
     if (s.ipv6) f.push(`<span class="fc" data-xw>${v6line(s, shown)}</span>`);
     if (org && !sameOrg(org, s.name)) f.push(`<span class="fc">${esc(org)}</span>`);
     (s.disks || []).slice(1).forEach(d => f.push(`<span class="fc">磁碟 ${esc(d.path)}<b class="num ${tier(d.pct)}">${num(d.pct)}%</b></span>`));
@@ -649,7 +649,7 @@ function toolsPage(list){
 function toolsBody(s, k, node, name){
   const c = s.cloud && safeUrl(cloudHref(s.cloud)) ? s.cloud : null;
   let h = `<div data-key="tb:${k}" data-sw><div class="group" data-key="g-t:${k}">`;
-  if (c) h += `<a class="li col" data-key="cl" href="${esc(cloudHref(c))}"${ssoAttr(s)} target="_blank" rel="noopener noreferrer"><span class="rt">${IC("cloud", "")}<span class="lab">雲端硬碟<small>${c.total ? `已用 ${size(c.used)} / ${size(c.total)}` : "點一下打開"}</small></span>${EXT}</span>${c.total ? wave(c.pct) : ""}</a>
+  if (c) h += `<a class="li col" data-key="cl" href="${esc(cloudHref(c))}"${ssoAttr(s)} target="_blank" rel="noopener noreferrer"><span class="rt">${IC("cloud", "")}<span class="lab">雲端硬碟<small>${c.total ? `已用 ${size(c.used)} / ${size(c.total)}` : ""}</small></span>${EXT}</span>${c.total ? wave(c.pct) : ""}</a>
     <button class="li" data-key="dl" data-dl="${node}" data-name="${name}">${IC("dl", "")}<span class="lab">遠端下載<small>貼上連結，存到雲端硬碟</small></span>${CHEV}</button>`;
   h += `<button class="li" data-key="bk" data-bk="${node}" data-label="${name}">${IC("archive", "")}<span class="lab">每日備份<small class="bkst" data-n="${node}" data-keep data-ld>讀取中…</small></span>${CHEV}</button></div>`;
   const L = linksOf(s).filter(x => !x.fixed);
@@ -984,7 +984,15 @@ function morph(a, b){
 }
 /* 搬動位置的元素：瀏覽器會把它（和裡面）的 CSS 進場動畫從頭重播，看起來像整塊閃一下，直接跳到結尾 */
 const skipIntro = (el, deep) => el.getAnimations({subtree:deep}).forEach(x => { if (x.animationName && isFinite(x.effect.getComputedTiming().endTime)) x.finish(); });
+/* 同一層有重複的代號（例如兩個連結同名）：後面的加上 #2、#3，不然每次更新都會多出一列 */
+function dedupKeys(p){
+  const seen = new Map();
+  for (const c of p.children) { if (c._leaving || !c.hasAttribute("data-key")) continue;
+    const k = c.getAttribute("data-key").replace(/#\d+$/, ""), n = (seen.get(k) || 0) + 1; seen.set(k, n);
+    c.setAttribute("data-key", n > 1 ? `${k}#${n}` : k); }
+}
 function keyedPatch(a, b, attrs){
+  dedupKeys(a); dedupKeys(b);
   const old = new Map();
   [...a.children].forEach(c => { if (!c._leaving) old.set(c.getAttribute("data-key") || "", c); });
   // 項目的順序、數量都沒變時，不會有東西移位，就不用量位置（量位置會逼瀏覽器整頁重新排版）
@@ -1085,6 +1093,8 @@ function tidy(s){
   const t = s.traffic;
   if (t) { t.reset_day = n(t.reset_day); t.days_left = n(t.days_left); t.start = String(t.start || "").replace(/[^\d-]/g, ""); t.end = String(t.end || "").replace(/[^\d-]/g, "");
     (t.daily || []).forEach(d => { d.d = String(d.d || "").replace(/[^\d\/-]/g, ""); }); }
+  if (!["ok","warn","bad"].includes(s.level)) s.level = s.online ? "ok" : "bad";
+  if (s.keep) { s.keep.p95 = s.keep.p95 == null ? null : n(s.keep.p95); s.keep.days = n(s.keep.days); }
   (s.events || []).forEach(e => { if (!["bad","warn","ok","info"].includes(e.kind)) e.kind = "info"; });
   return s;
 }
@@ -1296,7 +1306,7 @@ function hostModal(name, links){
       <div class="form">
         <label>名稱<input class="field" data-k="name" maxlength="40" value="${esc(name)}"></label>
         <div class="lbl">常用連結
-          <small>例如 3x-ui 後台、n8n，點名稱旁的 ↗ 打開</small>
+          <small>例如 3x-ui 後台、n8n，會放在「工具」</small>
           <div class="lrows">${(links.length ? links : [{name:"", url:""}]).map(row).join("")}</div>
           <button type="button" class="ubtn ghost addl" data-add>＋ 新增連結</button></div>
       </div>
@@ -1326,7 +1336,7 @@ function hostModal(name, links){
     sync();
   });
 }
-/* 有好幾個常用連結：點 ↗ 出現小選單 */
+/* 有好幾個常用連結：出現小選單 */
 /* 選單放在按鈕下面；下面放不下就改放上面 */
 function placeMenu(m, btn, x){
   const z = ZM(), b = btn.getBoundingClientRect(), r = {left:b.left/z, right:b.right/z, top:b.top/z, bottom:b.bottom/z, width:b.width/z};
@@ -1436,7 +1446,7 @@ function selfPaint(root){
 /* jobs：[{node, kind:"self"|"cloud"}]；不給就是「全部更新」 */
 async function selfUpdate(root, jobs){
   if (!jobs) { jobs = [];
-    for (const [k, d] of Object.entries(SELFST)) { const node = (LIST.find(x => keyOf(x) === k) || {}).node || "";
+    for (const h of LIST.filter(x => x.online)) { const d = SELFST[keyOf(h)], node = h.node || ""; if (!d) continue;   // 只看現在連得上的主機
       if (d.has && !d.running) jobs.push({node, kind:"self"});
       if (d.cloud && d.cloud.has && !d.cloud.running) jobs.push({node, kind:"cloud"}); } }
   const onlyCloud = jobs.every(j => j.kind === "cloud");
@@ -1450,6 +1460,7 @@ async function selfUpdate(root, jobs){
   const later = first ? selfs.filter(j => j !== first) : [];
   const fail = [], go = await upwStart(jobs.filter(j => !later.includes(j)), fail);
   if (go.includes(first)) { UPW.wait = later; UPW.first = first.node; }
+  else if (later.length) go.push(...await upwStart(later, fail));     // 先試的那台根本沒開始（例如剛好斷線）：其他台照常更新
   const all = go.length + (go.includes(first) ? later.length : 0);
   const started = all ? (all > 1 ? `已開始更新 ${all} 個項目` : `已開始更新「${jobName(go[0])}」`) : "";
   if (all || fail.length) toast([started, ...fail].filter(Boolean).join("；"), fail.length ? "bad" : "ok");   // 不管成功失敗都只跳一則
@@ -1866,9 +1877,9 @@ async function rmHost(node, name){
 function rebootModal(node, name){
   const v = document.createElement("div"); v.className = "veil";
   v.innerHTML = `<div class="dialog"><div class="ico big warn">${I("power")}</div><h3>重新開機「${esc(name)}」？</h3>
-    <p data-t>會先傳驗證碼到 Telegram</p>
+    <p data-t>要先確認是你本人</p>
     <div class="form" hidden><input class="field" data-k="code" autocomplete="one-time-code" autocapitalize="off" spellcheck="false"><div class="msg"></div></div>
-    <div class="btns"><button class="ubtn ghost" data-r="0">取消</button><button class="ubtn warn" data-go>傳送驗證碼</button></div></div>`;
+    <div class="btns"><button class="ubtn ghost" data-r="0">取消</button><button class="ubtn warn" data-go>繼續</button></div></div>`;
   $("#layer").appendChild(v);
   const form = v.querySelector(".form"), inp = v.querySelector("input"), msg = v.querySelector(".msg"), go = v.querySelector("[data-go]"), txt = v.querySelector("[data-t]");
   const call = body => pkCall("/api/reboot" + (node ? "?node=" + encodeURIComponent(node) : ""), body, 1).catch(err => ({message:err.message}));
@@ -1880,7 +1891,7 @@ function rebootModal(node, name){
   const ask = async () => {
     wait("傳送中…");
     const d = await call({action:"ask"});
-    busy = false; go.disabled = false; go.textContent = asked ? "重新開機" : "傳送驗證碼";
+    busy = false; go.disabled = false; go.textContent = asked ? "重新開機" : "繼續";
     if (!d.ok) { reveal(form, true); return say(d.message || "傳送失敗", 1); }
     asked = true; go.textContent = "重新開機"; reveal(form, true);
     if (d.mode === "pw") { txt.textContent = "沒設定 Telegram，請輸入這台的密碼或 PIN 碼"; inp.type = "password"; inp.placeholder = "密碼或 PIN 碼"; }
@@ -2094,11 +2105,11 @@ async function bkModal(node, label){
       <ul class="bkrows">${bkRows(d)}</ul>
       <div class="lbl">${d.where === "雲端硬碟" ? "這台的雲端硬碟裡有" : "這台主機上有"}${d.where === "雲端硬碟" ? `<small>「${esc(d.folder)}」資料夾</small>` : ""}<ul class="bkrows bkcopies">${bkCopies(d)}</ul>
         <button class="linkish bkchg" data-restore>怎麼還原？</button></div>
-      <div class="lbl">解開密碼（所有主機共用）<b class="bkkey" title="點一下顯示">${esc(d.key)}</b>
+      <div class="lbl">解開密碼（所有主機共用）<b class="bkkey" tabindex="0" role="button" title="點一下顯示">${esc(d.key)}</b>
         <small>沒有它誰都打不開，請另外記好</small>
         <button class="linkish bkchg" data-chg>改成自己的密碼</button>
         <span class="bknew" hidden><input class="field" type="password" maxlength="128" autocomplete="new-password" placeholder="至少 8 個字"><button class="ubtn sm" data-setkey>儲存</button></span></div>
-      <label class="bkon"><span>每天清晨 ${+d.hour || 0} 點自動備份</span><input type="checkbox" class="tog" ${d.on ? "checked" : ""}></label>
+      <label class="bkon"><span>每天 ${+d.hour || 0} 點自動備份</span><input type="checkbox" class="tog" ${d.on ? "checked" : ""}></label>
       <div class="msg"></div></div>
     <div class="btns three"><button class="ubtn ghost" data-dl>下載</button><button class="ubtn ghost" data-r="0">關閉</button><button class="ubtn" data-run>立即備份</button></div></div>`;
   $("#layer").appendChild(v);
@@ -2199,10 +2210,10 @@ async function bkRestore(){
     <p>原本的檔案會先另存一份</p>
     <div class="form">
       <div class="lbl">讓主機回到前幾天的樣子<small>在那台執行這行（點一下複製）</small>
-        <code class="bkcmd" data-cmd="${esc(here)}">${esc(here)}</code></div>
+        <code class="bkcmd" tabindex="0" role="button" data-cmd="${esc(here)}">${esc(here)}</code></div>
       ${hosts.length ? `<div class="lbl">整台搬到新主機（原本那台壞掉時）<small>網域先指向新主機，選一台，把指令貼到新主機執行（24 小時內有效）</small>
         <div class="bkhosts">${hosts.map(h => `<button class="ubtn ghost sm" data-link="${esc(h.name)}">${esc(h.name)}</button>`).join("")}</div>
-        <code class="bkcmd" data-cmd="" hidden></code></div>` : ""}
+        <code class="bkcmd" tabindex="0" role="button" data-cmd="" hidden></code></div>` : ""}
       <div class="msg"></div></div>
     <div class="btns one"><button class="ubtn" data-r="0">關閉</button></div></div>`;
   $("#layer").appendChild(v);
@@ -2396,7 +2407,7 @@ document.addEventListener("click", async e => {
   if (tf) return trafficModal(tf.dataset.traffic, tf.dataset.label);
   if (t.closest("[data-refresh]")) return refreshNow(t.closest("[data-refresh]"));
   if (t.closest("[data-logout]")) {
-    if (await modal({icon:"logout", cls:"info", title:"要登出嗎？", text:"", ok:"登出"})) { setTok(""); LIST = []; clearTimeout(timer); DET = ""; showBack(); document.documentElement.classList.remove("lock"); login(); }
+    if (await modal({icon:"logout", cls:"theme", title:"要登出嗎？", text:"", ok:"登出"})) { setTok(""); LIST = []; clearTimeout(timer); DET = ""; showBack(); document.documentElement.classList.remove("lock"); login(); }
     return;
   }
   const th = t.closest("[data-toolh]");
@@ -2409,7 +2420,9 @@ document.addEventListener("click", async e => {
   const pe = t.closest("[data-peeredit]");
   if (pe) { const s = LIST.find(x => (x.node || "") === pe.dataset.peeredit); return s && peerModal(s); }
   const mo = t.closest("[data-more]");
-  if (mo) { const s = LIST.find(x => keyOf(x) === mo.dataset.more); if (window._menu) return closeMenu(); return s && moreMenu(mo, s); }
+  if (mo) { const s = LIST.find(x => keyOf(x) === mo.dataset.more), same = window._menu && window._menu._by === mo;
+    if (window._menu) closeMenu(); if (same || !s) return;            // 按同一個「⋯」是關掉；按別台的直接換過去
+    moreMenu(mo, s); if (window._menu) window._menu._by = mo; return; }
   if (window._menu && !t.closest(".lmenu")) closeMenu();
   const dl = t.closest("[data-dl]");
   if (dl) return dlModal(dl.dataset.dl, dl.dataset.name);
@@ -2436,7 +2449,7 @@ document.addEventListener("click", async e => {
   const rv = t.closest("[data-reveal]");
   if (rv) {
     const k = rv.dataset.reveal;
-    IPSHOW[k] = Date.now() + 15000; setTimeout(() => { if (IPSHOW[k] <= Date.now()) { delete IPSHOW[k]; render(LIST); } }, 15100);   // 15 秒後自動再遮起來
+    IPSHOW[k] = Date.now() + 15000; setTimeout(() => { if (IPSHOW[k] <= Date.now()) { delete IPSHOW[k]; if (LIST.length && getTok()) render(LIST); } }, 15100);   // 15 秒後自動再遮起來
     return render(LIST);
   }
   const cp = t.closest("[data-copy]");
@@ -2744,3 +2757,8 @@ async function refreshNow(btn){
 })();
 document.addEventListener("visibilitychange",()=>{ if(!document.hidden && LIST.length && getTok()) tick(); });   // 登入、還原畫面不要重畫（打到一半的密碼、選好的檔案會不見）
 tick();
+/* 不是按鈕但點得動的（IP、備份密碼、還原指令）：用鍵盤選到後按 Enter 或空白鍵也行 */
+document.addEventListener("keydown", e => {
+  const t = e.target;
+  if ((e.key === "Enter" || e.key === " ") && t.matches && t.matches('[role="button"]:not(button)')) { e.preventDefault(); t.click(); }
+});
