@@ -21,6 +21,7 @@ web/index.html     網頁骨架；/*@style.css*/ 和 /*@app.js*/ 兩個記號會
 web/style.css      所有樣式，最前面的 :root 是共用設計規則
 web/app.js         所有畫面邏輯與動畫
 DESIGN.md          美術設計規範
+README.md          GitHub 首頁的介紹（功能改了要跟著改）；docs/ 放介紹用的截圖
 install.sh         安裝／更新哨兵（複製到 /opt/vps-sentinel-lite、設定檔、Caddy、systemd）
 cloud.sh           雲端硬碟（FileBrowser Quantum）安裝、調整容量、檢查、更新、移除
 cleanup-old.sh     清除舊版 Home Assistant 版本

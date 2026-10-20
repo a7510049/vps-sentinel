@@ -17,6 +17,21 @@ S = load_sentinel()
 
 
 class HardeningTest(unittest.TestCase):
+    def test_cert_warning_same_key_every_day(self):
+        """憑證快到期：天數每天變，還是同一件事（不會每天通知一次「已解決」又一次「快到期」）"""
+        self.assertEqual(S.ev_key("「面板」的安全憑證 14 天後到期"), S.ev_key("「面板」的安全憑證 3 天後到期"))
+        self.assertNotEqual(S.ev_key("容器 app-1 停了"), S.ev_key("容器 app-2 停了"))
+
+    def test_download_dir_link_not_followed(self):
+        """下載資料夾被換成捷徑：不會跟過去寫檔"""
+        with tempfile.TemporaryDirectory() as t:
+            real, link = os.path.join(t, "real"), os.path.join(t, "下載")
+            os.mkdir(real)
+            os.symlink(real, link)
+            with self.assertRaises(OSError):
+                S.dl_at(link, "x.下載中", os.O_WRONLY | os.O_CREAT)
+            self.assertEqual(os.listdir(real), [])
+
     def test_restore_skips_files_under_links(self):
         buf = io.BytesIO()
         with tarfile.open(fileobj=buf, mode="w") as t:

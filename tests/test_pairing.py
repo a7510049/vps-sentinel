@@ -30,6 +30,17 @@ class Crypto(unittest.TestCase):
         self.assertIsNone(S.pair_decode(bad))                                       # 少抄錯一個字也看得出來
         self.assertIsNone(S.pair_decode("亂打的"))
 
+    def test_name_with_comma(self):
+        """主要主機名稱有逗號、兩個空白也配得上（簽的是原本的名稱）；送錯幾次也不會把暗號作廢"""
+        ok, code = S.pair_code("https://example.com:9443/")
+        url, secret = S.pair_decode(code)
+        for _ in range(8):
+            ok, msg, _x = S.pair_accept({"n": S.b64u(b"x" * 16), "name": "亂送", "proof": S.b64u(b"y" * 32)})
+            self.assertFalse(ok)
+        n1, name = b"n" * 16, "主機, 一號  A|B"
+        ok, msg, d = S.pair_accept({"n": S.b64u(n1), "name": name, "proof": S.b64u(S.pair_mac(secret, "req", n1, name))})
+        self.assertTrue(ok, msg)
+
     def test_watch_alert(self):
         """被監看的主機：主要主機太久沒連進來就通知，回來了再通知一次"""
         sent = []
