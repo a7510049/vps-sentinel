@@ -20,7 +20,7 @@
 
 /* ═════════ 顏色：全部從主題色（--seed）算出來 ═════════ */
 @property --seed{syntax:"<color>";inherits:true;initial-value:#4a7dff}
-/* 色相一圈 11 個（照 Android 的基本色），加上跟著國旗的「旗」 */
+/* 色相一圈 11 個（照 Android 的基本色），加上彩虹 */
 [data-accent="red"]{--seed:#e5484d}
 [data-accent="orange"]{--seed:#f97316}
 [data-accent="amber"]{--seed:#d99a06}
@@ -32,7 +32,13 @@
 [data-accent="indigo"]{--seed:#6366f1}
 [data-accent="purple"]{--seed:#8b5cf6}
 [data-accent="pink"]{--seed:#ec4899}
-[data-accent="flag"]{--seed:#4a7dff}
+[data-accent="rainbow"]{--seed:#a855f7}
+/* 彩虹主題：選到的分頁、選項、開關、首頁狀態圖形換成彩虹（配色風格一樣有效）；--pride 是色票上的彩虹旗 */
+:root{--pride:linear-gradient(#e40303 0 17%,#ff8c00 0 33%,#ffed00 0 50%,#008026 0 67%,#004dff 0 83%,#750787 0)}
+[data-accent="rainbow"]{--rbl:.8; --on-rbw:color-mix(in oklab,var(--seed) 22%,#000);
+  --rbw:linear-gradient(90deg,oklch(var(--rbl) calc(.13 * var(--vc)) 25),oklch(var(--rbl) calc(.13 * var(--vc)) 65),oklch(var(--rbl) calc(.13 * var(--vc)) 100),
+    oklch(var(--rbl) calc(.13 * var(--vc)) 150),oklch(var(--rbl) calc(.13 * var(--vc)) 245),oklch(var(--rbl) calc(.13 * var(--vc)) 310))}
+[data-mode="light"][data-accent="rainbow"]{--rbl:.83}
 /* 配色風格（Android 的「色彩風格」）：--vs 底色染多少主題色、--vc 選中色塊多濃、--mute 主色混多少灰 */
 :root{--vs:1; --vc:1; --mute:0%}
 [data-tone="vivid"]{--vs:2.6; --vc:1.45}
@@ -493,8 +499,7 @@ button.li.prs,a.li.prs{border-radius:var(--r-lg);transform:scale(.98);background
 .sw button.on{border-radius:var(--r-md)}
 .sw button.on svg{opacity:1;transform:none}
 .sw button.prs{transform:scale(.88)}
-.sw .flagsw span{font-size:var(--fs-s);font-weight:500;color:#fff;text-shadow:0 1px 3px rgba(0,0,0,.5);position:absolute;transition:opacity var(--t-fast) var(--ease)}
-.sw .flagsw.on span{opacity:0}
+.sw .rbsw{background:var(--pride)}
 /* 開關：打開時圓點變大、出現勾勾 */
 .tog{appearance:none;-webkit-appearance:none;width:52px;height:32px;border-radius:var(--r-pill);background:var(--s4);box-shadow:inset 0 0 0 2px var(--tx3);
   position:relative;flex:none;cursor:pointer;margin:0;transition:background-color var(--t-mid) var(--ease),box-shadow var(--t-mid) var(--ease)}
@@ -508,6 +513,13 @@ button.li.prs,a.li.prs{border-radius:var(--r-lg);transform:scale(.98);background
 .tog:checked::after{left:36px;width:24px;height:24px;background:var(--on-p)}
 .tog:checked::before{left:36px;opacity:1;transform:translate(-50%,-50%)}
 .tog:active::after{width:28px;height:28px}
+/* 彩虹主題：選到的東西換成彩虹底、深色字（滑動中的那一格交給 .slide） */
+[data-accent="rainbow"] :is(.tb.on,.rb.on .ri,[data-slide]>.slide,.fchip.on,.seg button.on,.rng button.on,.pane .li.on,.chats button.on,.bkhosts .ubtn.on,
+  .tog:checked,.remember input:checked,.blob:not(.warn,.bad) .bf,.sp-blob){background-image:var(--rbw);color:var(--on-rbw)}
+[data-accent="rainbow"] :is([data-slide].sliding>.on,.rail.sliding>.on .ri){background-image:none}
+[data-accent="rainbow"] .blob:not(.warn,.bad) .bg{color:var(--on-rbw)}
+[data-accent="rainbow"] .tog:checked::after{background:#fff}
+[data-accent="rainbow"] .tog:checked::before{background:var(--on-rbw)}
 
 /* ═════════ 電腦版：左邊直排分頁，右邊內容 ═════════ */
 .dash.d{display:grid;grid-template-columns:96px minmax(0,1fr);min-height:100vh}

@@ -76,45 +76,15 @@ const I = n => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strok
 /* ═════════ 個人設定（存在這台裝置） ═════════ */
 const DEF = {theme:"auto", accent:"blue", tone:"soft", motion:true, size:"m", refresh:5,
   show:{chart:true, net:true, items:true, info:true, flag:true, traffic:true, weather:true, quote:true}};
-let PREF = (() => { try { const p = JSON.parse(store("vps-prefs") || "{}"); return {...DEF, ...p, show:{...DEF.show, ...(p.show||{})}}; } catch(e){ return JSON.parse(JSON.stringify(DEF)); } })();
+let PREF = (() => { try { const p = JSON.parse(store("vps-prefs") || "{}"); if (p.accent === "flag") p.accent = "rainbow";   /* 舊的「旗」換成彩虹 */ return {...DEF, ...p, show:{...DEF.show, ...(p.show||{})}}; } catch(e){ return JSON.parse(JSON.stringify(DEF)); } })();
 const getP = k => k.split(".").reduce((o,x)=>o && o[x], PREF);
 function setP(k, v){ const ks = k.split("."); let o = PREF; while (ks.length > 1) o = o[ks.shift()]; o[ks[0]] = v; store("vps-prefs", JSON.stringify(PREF)); }
 const DARKQ = matchMedia("(prefers-color-scheme: dark)");
-/* 各國國旗配色：[亮色, 主色, 輔助色] */
-const FLAGPAL = {
-  JP:["#ff7a8a","#d3002d","#ffb3c1"], HK:["#ff7b6e","#de2910","#ffc4bd"], SG:["#ff6b7a","#ef3340","#ffc2c9"],
-  TW:["#ff5a5a","#1f3fbf","#6b8cff"], CN:["#ffde00","#de2910","#ff8a3d"], KR:["#5b9bff","#cd2e3a","#0047a0"],
-  US:["#6b8cff","#b22234","#3c3b6e"], GB:["#5b7cff","#c8102e","#012169"], CA:["#ff6b6b","#d80621","#ffb3b3"],
-  AU:["#5b7cff","#e4002b","#012169"], NZ:["#5b7cff","#c8102e","#012169"], DE:["#ffce00","#dd0000","#ff8a00"],
-  FR:["#5b8cff","#ef4135","#0055a4"], NL:["#ff8a3d","#21468b","#ae1c28"], BE:["#fdda24","#ef3340","#ff9a3d"],
-  LU:["#00a1de","#ef3340","#7fd3f5"], CH:["#ff6b5e","#da291c","#ffc2bd"], AT:["#ff6b7a","#ed2939","#ffc2c9"],
-  IT:["#4ccf86","#ce2b37","#009246"], ES:["#f1bf00","#aa151b","#ff7a45"], PT:["#ffcc00","#da291c","#046a38"],
-  IE:["#ff883e","#169b62","#7fd6a8"], SE:["#fecc00","#006aa7","#4dabff"], NO:["#ff6b7a","#ba0c2f","#00205b"],
-  FI:["#7fb2ff","#002f6c","#cfe0ff"], DK:["#ff6b7a","#c8102e","#ffc2cc"], PL:["#ff6b8a","#dc143c","#ffc2cf"],
-  CZ:["#5b8cff","#d7141a","#11457e"], UA:["#ffd500","#0057b7","#4d9bff"], RU:["#5b8cff","#d52b1e","#0039a6"],
-  TR:["#ff5a63","#e30a17","#ffc2c5"], IL:["#6b9bff","#0038b8","#a8c8ff"], AE:["#4cc38a","#ff0000","#00732f"],
-  IN:["#ff9933","#138808","#4dd0a0"], VN:["#ffcd00","#da251d","#ff7a3d"], TH:["#6b7bff","#a51931","#2d2a4a"],
-  MY:["#ffcc00","#cc0001","#2b4bd9"], ID:["#ff6b6b","#ce1126","#ffc2c2"], PH:["#fcd116","#0038a8","#ce1126"],
-  BR:["#ffdf00","#009c3b","#3e7bff"], MX:["#4cc38a","#ce1126","#006847"], AR:["#74acdf","#2f6fb5","#f6b40e"],
-  CL:["#5b8cff","#d52b1e","#0039a6"], ZA:["#ffb612","#007749","#de3831"],
-};
-const FLAGDEF = ["#38bdf8","#6366f1","#22d3ee"];
-/* 主題色「旗」：跟著這台主機（自己）的國旗主色，所有顏色都從它算出來 */
-let FLAGCC = null;
-function flagCC(){ const s = LIST.find(x => !x.node) || LIST[0]; return (s && s.geo && s.geo.cc) || ""; }
-function flagAccent(){
-  const h = document.documentElement;
-  if (PREF.accent !== "flag") { if (FLAGCC !== null) { h.style.removeProperty("--seed"); FLAGCC = null; } return; }
-  const cc = flagCC(); if (cc === FLAGCC) return;
-  FLAGCC = cc; const p = FLAGPAL[cc] || FLAGDEF;
-  h.style.setProperty("--seed", p[1]);
-}
 function applyPrefs(){
   const h = document.documentElement, dark = PREF.theme === "dark" || (PREF.theme === "auto" && DARKQ.matches);
   h.dataset.mode = dark ? "dark" : "light"; h.dataset.accent = PREF.accent; h.dataset.tone = PREF.tone; h.dataset.motion = PREF.motion ? "on" : "off";
   h.style.setProperty("--zoom", {s:.92, m:1, l:1.1}[PREF.size] || 1);
   document.querySelector('meta[name="theme-color"]').content = dark ? "#121317" : "#fbfbfe";
-  try { flagAccent(); } catch(e) {}   /* 第一次執行時主機清單還沒準備好 */
 }
 DARKQ.addEventListener("change", applyPrefs);
 applyPrefs();
@@ -741,13 +711,12 @@ const tog = (k, l) => `<input type="checkbox" class="tog" data-pref="${k}" aria-
 function setPage(list){
   const on = list.filter(s => s.online).sort((a, b) => ORDER.indexOf(keyOf(a)) - ORDER.indexOf(keyOf(b))), self = on.some(s => !s.node);
   const go = (attr, ic, l, st) => `<button class="li" ${attr}>${IC(ic, "")}<span class="lab">${l}<small class="${st}" data-keep data-ld>讀取中…</small></span>${CHEV}</button>`;
-  const fp = FLAGPAL[flagCC()] || FLAGPAL.TW;
   const sw = ACCENTS.map(([v, l]) => `<button class="${PREF.accent === v ? "on" : ""}" data-pref="accent" data-val="${v}" data-accent="${v}" title="${l}" aria-label="${l}">${I("check")}</button>`).join("")
-    + `<button class="flagsw${PREF.accent === "flag" ? " on" : ""}" data-pref="accent" data-val="flag" title="跟著國旗" style="background:conic-gradient(${fp[1]} 0 33%,${fp[0]} 0 66%,${fp[2]} 0)"><span>旗</span>${I("check")}</button>`;
+    + `<button class="rbsw${PREF.accent === "rainbow" ? " on" : ""}" data-pref="accent" data-val="rainbow" title="彩虹" aria-label="彩虹">${I("check")}</button>`;
   const D = DESK.matches;   // 電腦：左欄是這台裝置的設定，右欄是主機
   const look = `<div class="lbl">外觀</div><div class="group">
       <div class="li col"><span class="lab">主題</span>${seg("theme", [["auto", "自動"], ["light", "淺色"], ["dark", "深色"]])}</div>
-      <div class="li col"><span class="lab">主題色<small>「旗」跟著這台主機的國旗</small></span><div class="sw">${sw}</div></div>
+      <div class="li col"><span class="lab">主題色</span><div class="sw">${sw}</div></div>
       <div class="li col"><span class="lab">配色風格</span>${seg("tone", [["soft", "柔和"], ["vivid", "鮮明"], ["calm", "素雅"]])}</div>
       <div class="li col"><span class="lab">文字大小</span>${seg("size", [["s", "小"], ["m", "中"], ["l", "大"]])}</div>
       <label class="li"><span class="lab">動畫</span>${tog("motion", "動畫")}</label>
@@ -1111,7 +1080,7 @@ function render(list){
   // 有紅色（異常）或橘色（注意）告警的主機排在最前面；同一級的照原本順序
   ORDER = list.map(keyOf);                     // 原本的順序（工具的主機列不跟著告警重排，免得按到別台）
   list = [...list].map(tidy).sort((a, b) => LVRANK[lvOf(a)] - LVRANK[lvOf(b)]);
-  LIST = list; flagAccent();
+  LIST = list;
   if (DET && (!cardMode(list) || !list.some(s => keyOf(s) === DET))) { DET = ""; DETX = false; showBack(); document.documentElement.classList.remove("lock"); }
   const time = new Date().toLocaleTimeString("zh-TW", {hour12:false});
   paint(DESK.matches ? renderDesk(list, time) : renderPhone(list, time));
