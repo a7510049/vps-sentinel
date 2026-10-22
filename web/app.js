@@ -182,7 +182,7 @@ function itemsOf(s){
 function updateInfo(s){
   const n = s.updates ? s.updates.total : 0, u = s.update;
   if (u && u.running) return n ? `正在安裝 ${n} 個更新…` : `正在檢查更新…`;
-  let info = s.updates ? (n ? `${n} 個更新可安裝${s.updates.security?`（${s.updates.security} 個安全性）`:""}` : "已是最新 ✨") : "";
+  let info = s.updates ? (n ? `${n} 個更新可安裝${s.updates.security?`（${s.updates.security} 個安全性）`:""}` : "已經是最新版 ✨") : "";
   if (u && u.last) info += `${info?"<br>":""}上次更新${u.last.ok?"成功":`<span style="color:var(--bad)">失敗</span>`}・${when(u.last.time)}`;
   return info;
 }
@@ -737,7 +737,7 @@ function setPage(list){
     + (D ? `<div class="scols" data-key="scols"><div class="scol" data-key="sc1">${look}${out}</div><div class="scol" data-key="sc2">${sec}${h}</div></div>` : look + sec + h + out) + `</div>`;
 }
 /* 系統更新（作業系統的套件）：跟哨兵、雲端硬碟的版本放在一起 */
-const sysRow = s => s.update && s.update.supported ? `<div class="selfrow" data-key="sys"><div class="cl2 first"><span>${I("layers")}系統<small data-x>${updateInfo(s) || "還沒檢查"}</small></span>${updateBtn(s)}</div></div>` : "";
+const sysRow = s => s.update && s.update.supported ? `<div class="selfrow" data-key="sys"><div class="cl2 first"><span class="ico info">${I("layers")}</span><span>系統<small data-x>${updateInfo(s) || "還沒檢查"}</small></span>${updateBtn(s)}</div></div>` : "";
 /* 要顯示的內容、畫面更新頻率：收在一個視窗裡（手機從下面滑上來） */
 function showsModal(){
   const v = document.createElement("div"); v.className = "veil";
@@ -1406,9 +1406,9 @@ function selfPaint(root){
   const ch = d.has && d.changes && d.changes.length ? `<ul class="chg">${d.changes.slice(0, 5).map(c => `<li>${esc(c.split("\n")[0])}</li>`).join("")}</ul>` : "";
   const c = d.cloud;
   const cst = !c ? "" : c.running ? `<span class="spin"></span>更新中…` : c.has ? `<span class="new">官方有新版可以更新</span>` : c.err ? `<span class="warn">${esc(c.err)}</span>` : c.has === false ? "已經是最新版 ✨" : "還沒檢查";
-  const crow = c ? `<div class="cl2"><span>${I("cloud")}雲端硬碟<small>${c.version ? `版本 ${esc(c.version)}・` : ""}${cst}</small></span>
+  const crow = c ? `<div class="cl2">${IC("cloud", "")}<span>雲端硬碟<small>${c.version ? `版本 ${esc(c.version)}・` : ""}${cst}</small></span>
     ${c.has && !c.running ? `<button class="ubtn sm" data-cloudup="${node}">更新</button>` : ""}</div>` : "";
-  const srow = `<div class="cl2 first"><span>${I("upd")}哨兵<small>${d.version ? `版本 ${esc(d.version)}・${esc(d.build || "")}・` : ""}${st}</small>${ch}</span>
+  const srow = `<div class="cl2 first"><span class="ico theme">${I("upd")}</span><span>哨兵<small>${d.version ? `版本 ${esc(d.version)}・${esc(d.build || "")}・` : ""}${st}</small>${ch}</span>
     ${d.has && !d.running ? `<button class="ubtn sm" data-selfup="${node}">更新</button>` : ""}</div>`;
   swapHTML(box, `<div class="selfrow">${srow}${crow}</div>`);
 }
