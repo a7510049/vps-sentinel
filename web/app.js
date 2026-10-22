@@ -656,7 +656,7 @@ function slideSel(change){
     const to0 = boxIn(b, on, z);
     if (Math.abs(to0.x - from.x) < 1 && Math.abs(to0.y - from.y) < 1) return;
     const g = document.createElement("i"); g.className = "slide"; g._leaving = 1; b.prepend(g); b.classList.add("sliding");   // _leaving：重畫時不要把它當成內容
-    const dur = T.slow, t0 = performance.now(), lerp = (a, c, p) => a + (c - a) * p;
+    const dur = T.sp, t0 = performance.now(), lerp = (a, c, p) => a + (c - a) * p;
     g.animate([{opacity:1}, {opacity:1}], {duration:dur, id:"ui"});              // 滑完之前，自動更新先等一下
     const step = now => {
       if (g._stop || !g.isConnected) return;
@@ -803,10 +803,13 @@ function tween(el, from, to, d){
   el._raf = requestAnimationFrame(stepf);
 }
 /* 共用動畫規則（跟 CSS 的 --t-*、--ease 一致） */
-const T = {fast:200, mid:380, slow:620, long:900};
+const T = {fast:200, mid:380, slow:620, long:900, spf:330, sp:380, sps:530};
 /* 文字大小是用 zoom 放大縮小的：量到的位置是螢幕上的，要除回去才能拿來定位 */
 const ZM = () => parseFloat(getComputedStyle(document.body).zoom) || 1;
-const EASE = "cubic-bezier(.2,0,0,1)", EXIT = "cubic-bezier(.3,0,.8,.15)", SPRING = CSS.supports("transition-timing-function", "linear(0,1)") ? "linear(0,.07 3%,.26 8%,.55 15%,.83 23%,1.02 31%,1.1 38%,1.11 43%,1.08 50%,1.03 58%,1 66%,.99 74%,1 85%,1)" : "cubic-bezier(.34,1.4,.64,1)";
+const EASE = "cubic-bezier(.2,0,0,1)", EXIT = "cubic-bezier(.3,0,.8,.15)", LIN = CSS.supports("transition-timing-function", "linear(0,1)");
+/* 彈簧（Material 3 Expressive 官方數值，跟 CSS 的 --sp-fast／--sp／--sp-slow 一樣）：時間用 T.spf／T.sp／T.sps */
+const SPRING_F = LIN ? "linear(0,.022 2%,.088 5%,.221 8%,.658 18%,.821 22%,.94 26%,1.024 31%,1.075 36%,1.093 41%,1.069 51%,1.006 68%,.991 84%,1)" : "cubic-bezier(.34,1.4,.64,1)",
+      SPRING = LIN ? "linear(0,.022 3%,.093 7%,.259 12%,.554 22%,.713 28%,.83 35%,.917 42%,.976 50%,1.009 61%,1.011 83%,1)" : "cubic-bezier(.3,1.1,.55,1)";
 const canAnim = () => PREF.motion && !matchMedia("(prefers-reduced-motion: reduce)").matches;
 /* 讓元素平順地離開：先淡出、收起高度，再移除 */
 const BLOCK = ".alert,.alerts,.ev,.day,.calm,.empty,.foot,.offline,.fcs,.cc,.grp,.lbl,.group,.tiles,.mrows,.cfoot";
@@ -815,7 +818,7 @@ function flipSiblings(parent, change){
   const z = ZM(), kids = [...parent.children].filter(c => !c._leaving), r0 = kids.map(c => c.getBoundingClientRect());
   change();
   kids.forEach((c, i) => { if (!c.isConnected) return; const r = c.getBoundingClientRect(), dx = (r0[i].left - r.left) / z, dy = (r0[i].top - r.top) / z;
-    if (Math.abs(dx) > 1 || Math.abs(dy) > 1) c.animate([{transform:`translate(${dx}px,${dy}px)`}, {transform:"none"}], {duration:T.mid, easing:SPRING, id:"ui"}); });
+    if (Math.abs(dx) > 1 || Math.abs(dy) > 1) c.animate([{transform:`translate(${dx}px,${dy}px)`}, {transform:"none"}], {duration:T.spf, easing:SPRING_F, id:"ui"}); });
 }
 const gapOf = el => parseFloat(getComputedStyle(el).rowGap) || 0;
 /* 前後有沒有「真正留著」的鄰居，決定要收哪一邊的間距 */
@@ -995,7 +998,7 @@ function keyedPatch(a, b, attrs){
   });
   if (anim && moved && !flowing) keep.forEach(([k, el]) => {   // 只有單純換位置時才平滑移位
     const f = first.get(k), l = el.getBoundingClientRect(), dx = (f.left - l.left) / z, dy = (f.top - l.top) / z;
-    if (Math.abs(dx) > 1 || Math.abs(dy) > 1) el.animate([{transform:`translate(${dx}px,${dy}px)`}, {transform:"none"}], {duration:T.mid, easing:SPRING, id:"ui"});
+    if (Math.abs(dx) > 1 || Math.abs(dy) > 1) el.animate([{transform:`translate(${dx}px,${dy}px)`}, {transform:"none"}], {duration:T.spf, easing:SPRING_F, id:"ui"});
   });
 }
 /* 電腦版主機欄（篩選、換順序）：離開的留在原地淡出，不佔位置；留下的從原本的位置和寬度平滑移到新的；新的在自己的位置浮現 */
@@ -1325,7 +1328,7 @@ function moreMenu(btn, s){
     + (s.node ? it("data-rmhost", "trash", "移除主機", "bad") : "");
   document.body.appendChild(m);
   placeMenu(m, btn, r => r.left - 6);           // 從 ⋯ 往右下展開，不會蓋住主機名稱
-  if (canAnim()) m.animate([{opacity:0, transform:"scale(.85,.4)"}, {opacity:1, transform:"none"}], {duration:T.mid, easing:SPRING});   // 從 ⋯ 的位置往外長出來
+  if (canAnim()) m.animate([{opacity:0, transform:"scale(.85,.4)"}, {opacity:1, transform:"none"}], {duration:T.spf, easing:SPRING_F});   // 從 ⋯ 的位置往外長出來
   window._menu = m;
   setTimeout(() => m.addEventListener("click", () => closeMenu()), 0);
 }
@@ -1933,7 +1936,7 @@ function dlModal(node, name){
       reveal(tr, run);
       if (run) r.querySelector(".fill").style.width = (j.total ? Math.max(1, j.done / j.total * 100) : 0) + "%";
       const rb = r.querySelector("[data-retry]");
-      if (rb.hidden !== (j.st !== "bad")) { rb.hidden = j.st !== "bad"; if (!rb.hidden && canAnim()) rb.animate([{opacity:0, transform:"scale(.6)"}, {opacity:1, transform:"none"}], {duration:T.mid, easing:SPRING}); }
+      if (rb.hidden !== (j.st !== "bad")) { rb.hidden = j.st !== "bad"; if (!rb.hidden && canAnim()) rb.animate([{opacity:0, transform:"scale(.6)"}, {opacity:1, transform:"none"}], {duration:T.spf, easing:SPRING_F}); }
       r.querySelector("[data-del]").title = run ? "取消下載" : "從清單拿掉（檔案不會刪）";
     });
     [...list.children].forEach(r => { if (!seen.has(r.dataset.id) && !r._leaving) { r._leaving = 1; canAnim() ? leaveBlock(r) : r.remove(); } });
@@ -2588,7 +2591,7 @@ function loader(el, a0 = 0){
     let end = ang - ((ang - a0) % 360 + 360) % 360 + 360; if (end - ang < 60) end += 360;   // 往前轉到跟原本一樣的角度
     an.cancel(); el.style.clipPath = to;
     return el.animate([{clipPath: cp, transform: `rotate(${ang}deg)`}, {clipPath: to, transform: `rotate(${end}deg)`}],
-      {duration: T.slow, easing: SPRING}).finished.catch(() => {});
+      {duration: T.sp, easing: SPRING}).finished.catch(() => {});
   };
 }
 /* 圖示一筆一筆畫出來（線條要先用 drawable() 加上 pathLength） */
@@ -2606,14 +2609,14 @@ function busy(btn){
     return () => {
       stop(); hide.cancel();
       const g = btn.querySelector(".bg");
-      g.animate([{opacity: 0, transform: "scale(.4)"}, {opacity: 1, transform: "none"}], {duration: T.slow, easing: SPRING, fill: "backwards", delay: T.fast * .5});
+      g.animate([{opacity: 0, transform: "scale(.4)"}, {opacity: 1, transform: "none"}], {duration: T.sp, easing: SPRING, fill: "backwards", delay: T.fast * .5});
       drawIn(g.querySelector("svg"), T.fast * .5);
     };
   }
   const svg = btn.querySelector("svg");
   if (!svg) return () => {};
   const an = svg.animate([{transform: "rotate(0)"}, {transform: "rotate(360deg)"}], {duration: T.long, iterations: Infinity, easing: EASE});
-  return () => { const ang = angOf(svg); an.cancel(); svg.animate([{transform: `rotate(${ang}deg)`}, {transform: "rotate(360deg)"}], {duration: T.slow, easing: SPRING}); };
+  return () => { const ang = angOf(svg); an.cancel(); svg.animate([{transform: `rotate(${ang}deg)`}, {transform: "rotate(360deg)"}], {duration: T.sp, easing: SPRING}); };
 }
 /* 手動重新整理（按鈕或下拉） */
 async function refreshNow(btn){
@@ -2721,7 +2724,7 @@ async function refreshNow(btn){
     if (!on) return;
     if (dy > 110 || dy / (performance.now() - t0) > .6) { if (v._esc) { v.classList.add("flung"); return v._esc(); } }   // 拉得夠遠或甩得夠快：關掉
     dl.style.transform = "";
-    if (canAnim()) dl.animate([{transform:`translateY(${dy}px)`}, {transform:"none"}], {duration:T.mid, easing:SPRING});
+    if (canAnim()) dl.animate([{transform:`translateY(${dy}px)`}, {transform:"none"}], {duration:T.spf, easing:SPRING_F});
   }, {passive:true});
 })();
 document.addEventListener("visibilitychange",()=>{ if(!document.hidden && LIST.length && getTok()) tick(); });   // 登入、還原畫面不要重畫（打到一半的密碼、選好的檔案會不見）
