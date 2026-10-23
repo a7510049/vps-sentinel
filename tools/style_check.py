@@ -29,7 +29,7 @@ for m in re.finditer(r"border-radius:([^;}]+)", body_css):
 for m in re.finditer(r"font-size:\s*\d+(\.\d+)?px", body_css):
     report("style.css", line0, body_css, m.start(), f"字級請用 var(--fs-*)：{m.group(0)}")
 for m in re.finditer(r"cubic-bezier\([^)]*\)", body_css):
-    report("style.css", line0, body_css, m.start(), f"曲線請用 var(--ease)／var(--spring)／var(--exit)：{m.group(0)}")
+    report("style.css", line0, body_css, m.start(), f"曲線請用 var(--ease)／var(--exit)，彈簧用 var(--sp-fast)／var(--sp)／var(--sp-slow)：{m.group(0)}")
 for m in re.finditer(r"((?:transition|animation)(?:-duration)?):([^;}]+)", body_css):
     if "infinite" in m.group(2):
         continue
@@ -44,8 +44,8 @@ for m in re.finditer(r"(?:duration:|\bdur\s*=)\s*(\d+)", js):
         report("app.js", jline0, js, m.start(), f"動畫時間請用 T.fast／T.mid／T.slow：{m.group(0)}")
 for m in re.finditer(r'"cubic-bezier\([^)]*\)"', js):
     line = js[js.rfind("\n", 0, m.start()) + 1:js.find("\n", m.start())]
-    if "const EASE" not in line:
-        report("app.js", jline0, js, m.start(), f"曲線請用 EASE／SPRING／EXIT：{m.group(0)}")
+    if "const EASE" not in line and "SPRING" not in line:
+        report("app.js", jline0, js, m.start(), f"曲線請用 EASE／EXIT，彈簧用 SPRING_F／SPRING：{m.group(0)}")
 
 # 方塊圖示的顏色只能用 style.css 裡定義好的 .ico.樣式（規則見 CLAUDE.md「圖示顏色」）
 tiles = set(re.findall(r"\.ico\.([a-z]+)\{background", css))
