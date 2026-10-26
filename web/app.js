@@ -2563,8 +2563,7 @@ function flyShell(){
     <div class="fmain"><div class="fleft">
       <div class="seg ftabs" data-slide>${FLYTAB.map(([k, l]) => `<button class="${FLYS.tab === k ? "on" : ""}" data-ftab="${k}">${l}<span class="fn" data-k="n-${k}"></span></button>`).join("")}</div>
       <div class="fhrs" data-slide hidden></div>
-      <div class="board"><div class="fh">${FLYCOL.map(k => `<span class="fk ${k}"></span>`).join("")}</div><div class="frows"></div><div class="fload"><i></i></div></div>
-      <div class="fmsg sub" hidden></div></div>
+      <div class="board"><div class="fh">${FLYCOL.map(k => `<span class="fk ${k}"></span>`).join("")}</div><div class="frows"></div><div class="fmsg sub" hidden></div><div class="fload"><i></i></div></div></div>
       <div class="radar"><div class="rbox"><canvas class="rcv" aria-label="雷達"></canvas><button class="icbtn rfull" data-rfull title="整頁雷達">${I("full")}</button></div>
         <div class="rleg"><span><i class="arr"></i>抵達</span><span><i class="dep"></i>出發</span><span><i></i>其他</span>
           <span class="rng fzm">${FLYZM.map(k => `<button data-fzm="${k}">${k}</button>`).join("")}</span></div></div>
@@ -2702,23 +2701,26 @@ function radarView(cv, full){
       ctx.fillStyle = g; ctx.beginPath(); ctx.arc(W / 2, H / 2, rr, 0, Math.PI * 2); ctx.fill();
     }
     /* 地名、其他機場 */
+    const tw = [];
     if (R.geo) {
       ctx.globalAlpha = (canAnim() ? ga : 1) * .8; ctx.textAlign = "center"; ctx.textBaseline = "middle"; ctx.fillStyle = col.tx3;
       ctx.font = `${Math.round(fs * (full ? 1 : .9))}px ${font}`;
       const tier = full ? (s > 9 ? 2 : 1) : 1;
-      R.geo.towns.forEach(([n, x, y, lv]) => {
+      R.geo.towns.forEach(([n, x, y, lv]) => {                // 地名等飛機名字放好之後再寫，跟名字撞到的先不寫
         if ((lv || 1) > tier || (R.geo.aps || []).some(a => Math.hypot(a[2] - x, a[3] - y) < 6)) return;   // 跟機場名字疊在一起的地名不放
         const [sx, sy] = R.xy(x, y);
         if (!full && Math.hypot(sx - W / 2, sy - H / 2) > rr - fs) return;
         if (sx < -40 || sx > W + 40 || sy < -20 || sy > H + 20) return;
-        ctx.fillText(n, sx, sy);
+        tw.push([n, sx, sy]);
       });
       ctx.fillStyle = col.tx2; ctx.font = `600 ${Math.round(fs * (full ? 1 : .85))}px ${font}`;
       (R.geo.aps || []).forEach(([c, n, x, y]) => {
         const [sx, sy] = R.xy(x, y);
         if (!full && Math.hypot(sx - W / 2, sy - H / 2) > rr - fs) return;
+        if (full && sy < (R.top || 0) + fs) return;
+        const t = full ? n : n.replace("機場", ""), w = ctx.measureText(t).width;
         ctx.beginPath(); ctx.arc(sx, sy, 3, 0, Math.PI * 2); ctx.fill();
-        ctx.fillText(full ? n : n.replace("機場", ""), sx, sy + fs);
+        ctx.fillText(t, sx, sy + fs); rb.push([sx - w / 2, sy - 4, sx + w / 2, sy + fs * 1.6]);   // 飛機名字也要避開機場名字
       });
       ctx.globalAlpha = 1; ctx.textAlign = "left"; ctx.textBaseline = "alphabetic";
     }
@@ -2761,7 +2763,18 @@ function radarView(cv, full){
     });
     /* 名字：擠在一起時換邊放，放不下先不顯示 */
     const lf = Math.round(full ? fs : Math.max(9, rr / 21)), lab = vis.filter(o => o.vis && (o.id === R.sel || o.p.emg || o.p.ph === "arr" || o.p.ph === "dep" || (full && o.p.ph === "over" && s > 3)));
-    flyPlace(ctx, lab, lf, ps * 3.4, full, font, R.sel, W, H, rb, R.top || 0);
+    const used = flyPlace(ctx, lab, lf, ps * 3.4, full, font, R.sel, W, H, rb, R.top || 0);
+    if (tw.length) {
+      ctx.globalAlpha = (canAnim() ? ga : 1) * .8; ctx.textAlign = "center"; ctx.textBaseline = "middle"; ctx.fillStyle = col.tx3;
+      ctx.font = `${Math.round(fs * (full ? 1 : .9))}px ${font}`;
+      const pb = vis.filter(o => o.a > .3).map(o => [o.sx - ps * 3, o.sy - ps * 3, o.sx + ps * 3, o.sy + ps * 3]);
+      tw.forEach(([n, x, y]) => {
+        const w = ctx.measureText(n).width / 2, a = [x - w, y - fs * .6, x + w, y + fs * .6];
+        if (full && y < (R.top || 0) + fs) return;
+        if (![...used, ...pb].some(b => a[0] < b[2] && a[2] > b[0] && a[1] < b[3] && a[3] > b[1])) ctx.fillText(n, x, y);
+      });
+      ctx.textAlign = "left"; ctx.textBaseline = "alphabetic";
+    }
     lab.forEach(o => {
       if (!o.lp) return;
       ctx.globalAlpha = o.a * (R.sel && full && o.id !== R.sel ? .6 : 1);
@@ -2795,6 +2808,7 @@ function flyPlace(ctx, lab, lf, gap, full, font, sel, W, H, rb, top){
     o.lk = k; o.lp = k ? c[k] : null;
     if (k) box.push([c[k][0], c[k][1], c[k][0] + w, c[k][1] + h]);
   });
+  return box;
 }
 async function flyGeo(f, code){
   if (f._geoq === code) return;
@@ -2828,7 +2842,7 @@ function flyRadar(f, d){
 async function flySwitch(hr){
   const f = $("#fly"), b = f && f.querySelector(".board"), id = ++FLYSW;
   if (!b || !canAnim()) return flyPaint();
-  const pick = () => [b, hr ? null : f.querySelector(".fhrs"), f.querySelector(".fmsg")].filter(e => e && !e.hidden);   // 換時段：上面那排時間不動，只換看板
+  const pick = () => [b, hr ? null : f.querySelector(".fhrs")].filter(e => e && !e.hidden);   // 換時段：上面那排時間不動，只換看板
   const els = pick();
   (b._fo || []).forEach(a => a.cancel());
   const fo = b._fo = els.map(e => e.animate([{opacity:1}, {opacity:0}], {duration:T.fast * .6, easing:EXIT, fill:"forwards"}));
@@ -2901,6 +2915,7 @@ function flyPaint(anim){
   const bd = f.querySelector(".board"), was = FLYSTILL;
   if (bd._h0 != null) FLYSTILL = true;                      // 資料剛到：整塊看板直接換好字再淡入，不要幾百格一起翻（會卡）
   try { flyRows(f, d, list, n, byHr, tz, anim); } finally { FLYSTILL = was; }
+  bd.classList.toggle("none", !n);
   if (!was) flyRadar(f, d);                                 // 換分頁、換時段時雷達沒變，不用重畫
   if (d.ap && d.ap.code && f._geo !== d.ap.code) flyGeo(f, d.ap.code);
   const via = (d.srcs || [[d.src, d.home]]).filter(x => x[0]).map(([n, h]) => h ? `<a href="${esc(h)}" target="_blank" rel="noopener noreferrer">${esc(n)}</a>` : esc(n)).join("、");
@@ -2908,7 +2923,7 @@ function flyPaint(anim){
   f.querySelector(".ffoot").innerHTML = d.night ? "" : `${via ? `資料來自 ${via}・` : ""}路過 ${d.over ? d.over.length : 0} 架・每 10 秒更新`;
 }
 function flyRows(f, d, list, n, byHr, tz, anim){
-  const box = f.querySelector(".frows"), want = Math.min(40, byHr ? n : Math.max(DESK.matches ? 8 : 6, n));   // 照時段看：有幾班就幾列，不放一堆空格
+  const box = f.querySelector(".frows"), want = !n ? 0 : Math.min(40, byHr ? n : Math.max(DESK.matches ? 8 : 6, n));   // 照時段看：有幾班就幾列，不放一堆空格；一班都沒有就只留一句話
   if (FLYSTILL) anim = false;
   const put = FLYSTILL ? (el, t) => { if (el.textContent !== t) el.textContent = t; } : txt;   // 看板淡出時直接換字，不用每格各自淡入
   const grow = r => { if (canAnim() && anim !== false) r.animate([{opacity:0, transform:"translateY(8px)"}, {opacity:1, transform:"none"}], {duration:T.mid, easing:EASE}); };
@@ -2942,7 +2957,7 @@ async function flyLoad(anim){
     if (SHARE && r.status === 401) return shareGone("連結已經失效");
     const d = await r.json();
     if (!same()) return;
-    FLYD = !d.ok && mine && FLYD.ok ? {...FLYD, ok:false, error:d.error} : !d.ok ? {...FLYD, arr:[], dep:[], gnd:[], over:[], loading:false, ok:false, error:d.error} : d;
+    FLYD = !d.ok && mine && FLYD.ok && !FLYD.loading ? {...FLYD, ok:false, error:d.error} : !d.ok ? {...FLYD, arr:[], dep:[], gnd:[], over:[], loading:false, ok:false, error:d.error} : d;
     if (d.ok && FLYS.name !== d.ap.name) { FLYS.name = d.ap.name; flySave(); }
   } catch(e) { if (!same()) return; FLYD = {...(mine ? FLYD : {arr:[], dep:[], gnd:[], over:[], ap:FLYD && FLYD.ap}), loading:false, ok:false, error:e.message}; }
   flyPaint(anim);
@@ -3036,7 +3051,7 @@ function flyInfo(id){
     ${note ? `<div class="fnr sub">${esc(note)}</div>` : ""}
     ${air ? `<div class="fkvs">${kv("機型", esc(p.model || p.t || "—"))}${kv("註冊號", esc(p.reg || "—"))}${kv("高度", p.alt ? `${p.alt.toLocaleString()} 公尺` : "地面")}
       ${kv("速度", `${p.spd} 公里/時`)}${kv("每秒升降", p.ph === "gnd" ? "—" : `${vr}${Math.abs(p.vr) > .5 ? " 公尺" : ""}`)}${kv("距離機場", `${p.d} 公里`)}
-      ${kv("機型代碼", esc(p.t || "—"))}${kv("識別碼", esc((p.id || "").toUpperCase()))}${kv("應答碼", esc(p.sq || "—"))}</div>` : ""}
+      ${p.t && p.t !== p.model ? kv("機型代碼", esc(p.t)) : ""}${p.sq ? kv("應答碼", esc(p.sq)) : ""}</div>` : ""}
     ${reg ? `<div class="group"><a class="li" href="https://www.jetphotos.com/registration/${reg}" target="_blank" rel="noopener noreferrer"><span class="lab">看這架的照片<small>JetPhotos</small></span>${EXT}</a>
       <a class="li" href="https://www.flightradar24.com/data/aircraft/${reg.toLowerCase()}" target="_blank" rel="noopener noreferrer"><span class="lab">飛行紀錄<small>Flightradar24</small></span>${EXT}</a></div>` : ""}
     </div><div class="btns"><button class="ubtn ghost" data-r="0">關閉</button></div></div>`;
@@ -3079,7 +3094,7 @@ function fradOpen(){
   const r = f.querySelector(".rbox").getBoundingClientRect(), z = ZM();
   const v = document.createElement("div"); v.className = "frad"; v.id = "frad";
   v.style.cssText = `--ct:${r.top / z}px;--cb:${(innerHeight - r.bottom) / z}px;--cl:${r.left / z}px;--cr:${(innerWidth - r.right) / z}px`;
-  v.innerHTML = `<div class="frmap"><canvas aria-label="雷達"></canvas>
+  v.innerHTML = `<div class="frmap"><canvas aria-label="雷達"></canvas><div class="frsc"></div>
     <div class="frtop"><button class="icbtn" data-rback title="返回">${I("back")}</button><b class="frname"></b></div>
     <div class="frbar"><div class="seg frchips" data-slide>${FRADT.map(([k, l]) => `<button class="${FRADF === k ? "on" : ""}" data-rf="${k}">${l}</button>`).join("")}</div></div>
     <div class="frzm"><button class="icbtn" data-rz="1" title="放大">${I("plus")}</button><button class="icbtn" data-rz="-1" title="縮小">${I("minus")}</button></div>

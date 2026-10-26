@@ -884,7 +884,8 @@ html.flyon .dash>.view{content-visibility:hidden;contain-intrinsic-size:auto non
 .ftag{justify-self:start;font-size:var(--fs-xs);font-weight:500;border-radius:var(--r-pill);padding:0;opacity:0;transition:opacity var(--t-mid) var(--ease)}
 .ftag.on{opacity:1;padding:3px 9px;background:var(--pc);color:var(--on-pc)}
 .ftag.bad{background:var(--badc);color:var(--on-badc)}
-.fmsg{background:var(--card);border-radius:var(--r-lg);padding:16px;text-align:center}
+.fmsg{grid-column:1/-1;padding:24px 16px;text-align:center}
+.board.none .fh{display:none}
 .board{position:relative}
 .board .fh,.board .frows{transition:opacity var(--t-mid) var(--ease)}
 .board.wait{min-height:14em}.board.wait .fh,.board.wait .frows{opacity:0}
@@ -904,6 +905,7 @@ html.flyon .dash>.view{content-visibility:hidden;contain-intrinsic-size:auto non
 .frad.closing{animation:collapse var(--t-mid) var(--exit) forwards;pointer-events:none}
 .frmap{position:relative;flex:1;min-width:0}
 .frmap canvas{position:absolute;inset:0;width:100%;height:100%;touch-action:none;cursor:grab}
+.frsc{position:absolute;left:0;right:0;top:0;height:calc(env(safe-area-inset-top) + 150px);background:linear-gradient(var(--bg) 40%,transparent);pointer-events:none}
 .frtop{position:absolute;top:calc(env(safe-area-inset-top) + 12px);left:12px;right:120px;display:flex;align-items:center;gap:10px;pointer-events:none}
 .frtop>*{pointer-events:auto}.frtop .icbtn{background:var(--s2);box-shadow:var(--sh-1)}
 .frname{font-size:var(--fs-l);font-weight:600;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;text-shadow:0 0 6px var(--bg)}
@@ -915,14 +917,13 @@ html.flyon .dash>.view{content-visibility:hidden;contain-intrinsic-size:auto non
 .frch{display:flex;align-items:center;gap:10px}.frch>div{flex:1;min-width:0;display:flex;align-items:baseline;gap:8px}
 .frfn{font-size:var(--fs-xl);font-weight:600}.frch .fst{font-size:var(--fs-s);color:var(--p)}
 .frrt{display:flex;align-items:center;gap:12px;margin:10px 0}.frrt>div{display:flex;flex-direction:column}.frrt>div:last-child{align-items:flex-end;margin-left:auto}
-.frrt b{font-size:var(--fs-l)}.frrt small{color:var(--tx2);font-size:var(--fs-s)}.frrt .sub svg{width:18px;height:18px;transform:rotate(90deg)}
-.frkv{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}
-@media (max-width:520px){.frkv{grid-template-columns:repeat(2,1fr)}}
+.frrt b{font-size:var(--fs-l)}.frrt small{color:var(--tx2);font-size:var(--fs-s)}.frrt .sub svg{width:18px;height:18px;transform:rotate(45deg)}
+.frkv{display:grid;grid-template-columns:repeat(2,1fr);gap:8px}
 .frlist{position:absolute;left:0;right:0;bottom:0;background:var(--s1);border-radius:var(--r-lg) var(--r-lg) 0 0;box-shadow:var(--sh-2);padding-bottom:env(safe-area-inset-bottom);
   display:flex;flex-direction:column;max-height:56px;transition:max-height var(--t-mid) var(--ease);overflow:hidden}
 .frad.lopen .frlist{max-height:55vh}
 .frlh{display:flex;align-items:center;gap:8px;height:56px;padding:0 20px;flex:none;font-weight:600;color:var(--tx)}
-.frlh .chv svg{width:18px;height:18px;transform:rotate(-90deg);transition:transform var(--t-mid) var(--ease)}.frad.lopen .frlh .chv svg{transform:rotate(90deg)}
+.frlh .chv svg{width:18px;height:18px;transform:rotate(180deg);transition:transform var(--t-mid) var(--ease)}.frad.lopen .frlh .chv svg{transform:none}
 .frli{overflow-y:auto;padding:0 8px 12px;display:flex;flex-direction:column;gap:2px}
 .frr{display:flex;align-items:center;gap:12px;text-align:left;border-radius:var(--r-md);padding:10px 12px}
 .frr.on{background:var(--s3)}.frr .lab small{display:block;color:var(--tx3);font-size:var(--fs-s)}
@@ -969,6 +970,7 @@ html.flyon .dash>.view{content-visibility:hidden;contain-intrinsic-size:auto non
 .fih .lab{flex:1;min-width:0;font-size:var(--fs-l)}
 .fih .lab small{display:block;font-size:var(--fs-s);color:var(--tx3)}
 .fpc{display:inline-grid;place-items:center;min-width:52px;padding:6px 10px;border-radius:var(--r-sm);background:var(--pc);color:var(--on-pc);font-weight:500;font-variant-numeric:tabular-nums;flex:none}
+.fpick .fpc{width:4.4em}
 .fpc.big{font-size:var(--fs-xl);padding:8px 14px}
 .fbad{display:flex;align-items:center;gap:8px;margin-top:12px;padding:10px 14px;border-radius:var(--r-md);background:var(--pc);color:var(--on-pc);font-weight:500}
 .fbad.bad{background:var(--badc);color:var(--on-badc)}
