@@ -41,7 +41,7 @@ from collections import deque
 from concurrent.futures import ThreadPoolExecutor
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
-VERSION = "3.9"
+VERSION = "3.10"
 
 # ───────────────────────── 哨兵備份檔（.vsbk）─────────────────────────
 # 哨兵專用的備份格式：外面是自己的檔案格式，裡面用的是成熟、標準的加密方法（不自己發明加密）：
@@ -5696,6 +5696,10 @@ def fly_routes():
                 got[c] = rt
         for c, _, _ in todo:
             FLY["routes"][c] = (now, got.get(c))
+        if len(FLY["routes"]) > 3000:            # 過期的航線丟掉，不然開久了會越存越多
+            for c, v in list(FLY["routes"].items()):
+                if now - v[0] > 6 * 3600:
+                    FLY["routes"].pop(c, None)
 
 
 def fly_route(cs, lat, lon):
