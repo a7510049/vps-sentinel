@@ -2606,7 +2606,8 @@ function flyPaint(anim){
     if (te.textContent !== tag) { te.textContent = tag; te.className = "ftag" + (tag ? " on" + (p.emg ? " bad" : "") : ""); }
   });
   flyRadar(f, d);
-  f.querySelector(".ffoot").innerHTML = `資料來自 ${d.home ? `<a href="${esc(d.home)}" target="_blank" rel="noopener noreferrer">${esc(d.src)}</a>` : esc(d.src || "")}（各地愛好者的接收站）・路過 ${d.over ? d.over.length : 0} 架・每 10 秒更新`;
+  const via = (d.srcs || [[d.src, d.home]]).filter(x => x[0]).map(([n, h]) => h ? `<a href="${esc(h)}" target="_blank" rel="noopener noreferrer">${esc(n)}</a>` : esc(n)).join("、");
+  f.querySelector(".ffoot").innerHTML = `資料來自 ${via}（各地愛好者的接收站）・路過 ${d.over ? d.over.length : 0} 架・每 10 秒更新`;
 }
 async function flyLoad(anim){
   clearTimeout(FLYT);

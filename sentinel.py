@@ -5250,6 +5250,9 @@ FLY_SRC = [x for x in [os.environ.get("SENTINEL_FLY_API", "")] if x] or [
 FLY_SRC = [("測試", x, "") if isinstance(x, str) else x for x in FLY_SRC]
 FLY_ROUTE = os.environ.get("SENTINEL_FLY_ROUTE", "https://api.adsb.lol/api/0/routeset")
 FLY_ROUTE2 = os.environ.get("SENTINEL_FLY_ROUTE2", "https://api.adsbdb.com/v0/callsign/")
+# OpenSky：南台灣這類愛好者接收站收不到的地方補上；不登入每天只能問 400 次，所以同一個機場 30 秒才問一次
+FLY_SKY = os.environ.get("SENTINEL_FLY_SKY", "https://opensky-network.org/api/states/all?lamin={la0}&lomin={lo0}&lamax={la1}&lomax={lo1}")
+FLY_SKY_EVERY = 30
 FLY_NM = 40                                   # 抓機場方圓幾海里（約 74 公里）
 FLY_EVERY = 8                                 # 同一個機場幾秒內不重抓
 # 常用機場的中文名稱（代碼、名稱、城市、緯度、經度）；其他機場用 data/airports.tsv 的英文名稱
@@ -5287,6 +5290,7 @@ FLY_PIN = ["TPE", "TSA", "RMQ", "KHH"]          # 台灣主要機場：選單最
 FLY_POP = ["TPE", "TSA", "RMQ", "KHH", "HKG", "MFM", "NRT", "HND", "KIX", "FUK", "OKA", "CTS", "ICN", "PVG", "PEK",
            "BKK", "SIN", "KUL", "MNL", "SGN", "DXB", "DOH", "IST", "LHR", "CDG", "FRA", "AMS", "JFK", "LAX", "SFO", "SYD"]
 FLY_DB = {}
+FLY_NEAR = {}
 
 
 def fly_db():
@@ -5368,6 +5372,7 @@ FLY_TYPES = {
 }
 FLY_RARE = {"A388", "B744", "B748", "B742", "MD11", "A343", "A346", "A3ST", "A337", "A124", "A225", "IL76", "C17",
             "C5M", "K35R", "A400", "B52", "E3TF", "B77L", "B764", "A306", "A339", "A338", "B779", "B778", "C919", "BCS1", "BCS3"}
+FLY_SKYS = {"cache": {}, "until": 0}
 FLY = {"cache": {}, "routes": {}, "lock": threading.Lock(), "last": 0.0, "bad": {}, "rq": set(), "rbusy": False, "fetch": threading.Lock(), "logged": {}}
 
 
@@ -5406,6 +5411,52 @@ def fly_fetch(ap):
             err = f"{name}：{str(e)[:60]}"
             fly_log(err)
     raise RuntimeError(err)
+
+
+def fly_sky(ap):
+    """OpenSky 的飛機，換成跟 adsb.fi 一樣的格式；位置照速度推算到現在"""
+    hit = FLY_SKYS["cache"].get(ap[0])
+    now = time.time()
+    if (not hit or now - hit[0] >= FLY_SKY_EVERY) and now >= FLY_SKYS["until"]:
+        r = FLY_NM * 1.852 / 111
+        q = {"la0": round(ap[3] - r, 3), "la1": round(ap[3] + r, 3),
+             "lo0": round(ap[4] - r / max(.2, math.cos(math.radians(ap[3]))), 3), "lo1": round(ap[4] + r / max(.2, math.cos(math.radians(ap[3]))), 3)}
+        try:
+            req = urllib.request.Request(FLY_SKY.format(**q), headers={"User-Agent": "vps-sentinel"})
+            with urllib.request.urlopen(req, timeout=6) as res:
+                d = json.loads(res.read())
+            hit = FLY_SKYS["cache"][ap[0]] = (now, float(d.get("time") or now), d.get("states") or [])
+        except Exception as e:  # noqa: BLE001
+            wait = 60
+            if isinstance(e, urllib.error.HTTPError) and e.code == 429:      # 今天的次數用完了
+                try:
+                    wait = int(e.headers.get("X-Rate-Limit-Retry-After-Seconds") or 3600)
+                except ValueError:
+                    wait = 3600
+            FLY_SKYS["until"] = now + min(wait, 86400)
+            fly_log(f"OpenSky：{str(e)[:60]}")
+    if not hit or now - hit[0] > 120:
+        return []
+    out = []
+    for x in hit[2]:
+        try:
+            if not isinstance(x, list) or len(x) < 15 or x[5] is None or x[6] is None:
+                continue
+            seen = max(0, now - float(x[3] or hit[1]))
+            v, trk = float(x[9] or 0), x[10]
+            lat, lon = float(x[6]), float(x[5])
+            if trk is not None and v and seen < 90:               # 推算到現在的位置
+                k = v * seen / 111320
+                lat += k * math.cos(math.radians(trk))
+                lon += k * math.sin(math.radians(trk)) / max(.2, math.cos(math.radians(lat)))
+            alt = x[7] if x[7] is not None else x[13]
+            out.append({"hex": str(x[0] or ""), "flight": str(x[1] or "").strip(), "lat": lat, "lon": lon,
+                        "alt_baro": "ground" if x[8] else (round(float(alt) / 0.3048) if alt is not None else None),
+                        "gs": v * 1.94384, "track": trk, "baro_rate": float(x[11] or 0) * 196.85,
+                        "squawk": x[14], "seen_pos": seen if seen < 90 else 999})
+        except (TypeError, ValueError):
+            continue
+    return out
 
 
 def fly_log(msg):
@@ -5485,6 +5536,27 @@ def fly_route(cs, lat, lon):
     return hit[1] if hit else None
 
 
+def fly_nearby(ap):
+    """附近 100 公里內的其他機場（只算一次）"""
+    hit = FLY_NEAR.get(ap[0])
+    if hit is None:
+        hit = FLY_NEAR[ap[0]] = [(x[0], x[3], x[4]) for x in fly_db().values()
+                                 if x[0] != ap[0] and abs(x[3] - ap[3]) < 1 and fly_dist(ap[3], ap[4], x[3], x[4])[0] < 100]
+    return hit
+
+
+def fly_closest(ap, lat, lon, trk=None, way=0):
+    """飛機是哪個機場的：way=1 找前方最近的（要降落），-1 找後方最近的（剛起飛），0 就是最近的"""
+    best, bd = None, 1e9
+    for c, la, lo in [(ap[0], ap[3], ap[4])] + fly_nearby(ap):
+        d, b = fly_dist(la, lo, lat, lon)
+        if way and trk is not None and abs((float(trk) - (b + (180 if way > 0 else 0)) % 360 + 540) % 360 - 180) >= 60:
+            continue
+        if d < bd:
+            best, bd = c, d
+    return best
+
+
 def fly_plane(a, ap):
     """一架飛機：整理成看板一列；判斷是要降落、剛起飛、在地面還是路過"""
     try:
@@ -5511,18 +5583,20 @@ def fly_plane(a, ap):
     org, dst = (rt[0]["code"], rt[1]["code"]) if rt else ("", "")
     toward = trk is not None and abs((float(trk) - (brg + 180) % 360 + 540) % 360 - 180) < 60
     if gnd or (alt < 400 and gs < 60):
-        if d > 6:
-            return None
+        if d > 6 or not (cs or reg) or fly_closest(ap, lat, lon) != code:
+            return None                       # 太遠、別的機場的，或沒名字的停機
         ph = "gnd"
     elif dst == code and org != code:
         ph = "arr"
     elif org == code and dst != code:
         ph = "dep"
+    elif rt and org and dst:
+        ph = "over"                           # 查得到航線、又不是這個機場的
     elif alt < 14000 and vr < -250 and toward:
-        ph = "arr"
+        ph = "arr" if fly_closest(ap, lat, lon, trk, 1) == code else "over"
     elif alt < 14000 and vr > 250 and not toward:
-        ph = "dep"
-    elif alt < 5000 and d < 20:
+        ph = "dep" if fly_closest(ap, lat, lon, trk, -1) == code else "over"
+    elif alt < 5000 and d < 20 and fly_closest(ap, lat, lon) == code:
         ph = "arr" if toward else "dep"
     else:
         ph = "over"
@@ -5557,7 +5631,20 @@ def fly_board(code):
         hit = FLY["cache"].get(ap[0])
         if hit and time.time() - hit["t"] < FLY_EVERY:
             return hit
-        ac, src, home = fly_fetch(ap)
+        try:
+            ac, src, home = fly_fetch(ap)
+        except RuntimeError as e:
+            ac, src, home, err = None, "", "", e
+        more = fly_sky(ap)
+        if ac is None and not more:
+            raise err
+        ac = ac or []
+        have = {str(a.get("hex") or "").lower() for a in ac if isinstance(a, dict)}
+        add = [a for a in more if a["hex"].lower() not in have]
+        ac = ac + add
+    srcs = [[src, home]] if src else []
+    if add:
+        srcs.append(["OpenSky", "https://opensky-network.org"])
     rows = []
     for a in ac:                              # 一架資料怪怪的就跳過，不要整個看板都出不來
         try:
@@ -5572,7 +5659,7 @@ def fly_board(code):
     dep = sorted(by("dep"), key=lambda p: p["d"])
     gnd = sorted(by("gnd"), key=lambda p: (-p["spd"], p["fn"]))
     over = by("over")
-    out = {"ok": True, "t": time.time(), "ap": fly_ap(ap), "src": src, "home": home,
+    out = {"ok": True, "t": time.time(), "ap": fly_ap(ap), "src": src or "OpenSky", "home": home, "srcs": srcs,
            "arr": arr, "dep": dep, "gnd": gnd, "over": over}
     FLY["cache"][ap[0]] = out
     return out

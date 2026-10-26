@@ -20,7 +20,13 @@ AC = [
     # 緊急狀況
     {"hex": "899004", "flight": "CES2017 ", "r": "B-1234", "t": "A21N", "alt_baro": 2500, "gs": 150, "track": 53,
      "baro_rate": -700, "squawk": "7700", "lat": TPE[0] - .05, "lon": TPE[1] - .06, "seen": 1},
+    # 從松山剛起飛（就在松山上空往東南爬升），不能算成桃園的
+    {"hex": "899005", "flight": "EVA261  ", "alt_baro": 3200, "gs": 170, "track": 147, "baro_rate": 1500,
+     "lat": 25.050, "lon": 121.570, "seen": 1},
 ]
+# OpenSky：高雄附近愛好者收不到的，正要降落小港（在機場西邊往東飛、下降中）
+SKY = [["8990b5", "EVA850  ", "Taiwan", 0, 0, 120.2387, 22.5805, 502.92, False, 99.85, 91.77, -3.9, None, 586.74, None, False, 0],
+       ["780abe", "", "China", 0, 0, 120.341, 22.5733, None, True, 1.54, 115.31, None, None, None, None, False, 0]]
 
 
 class Fake(BaseHTTPRequestHandler):
@@ -36,6 +42,10 @@ class Fake(BaseHTTPRequestHandler):
         self.wfile.write(b)
 
     def do_GET(self):
+        if self.path.startswith("/sky"):
+            q = urllib.parse.parse_qs(urllib.parse.urlparse(self.path).query)
+            t = int(time.time())
+            return self.reply({"time": t, "states": [[*x[:3], t, t, *x[5:]] for x in SKY] if float(q["lamin"][0]) < 23 else None})
         if self.path.startswith("/cs/"):             # adsbdb：一班一班問
             if self.path == "/cs/CAL101":
                 return self.reply({"response": {"flightroute": {"origin": {"iata_code": "TPE", "municipality": "Taipei"},
@@ -61,6 +71,7 @@ class Flights(unittest.TestCase):
         S.FLY_SRC = [("測試", base + "/lat/{lat}/lon/{lon}/dist/{d}", "")]
         S.FLY_ROUTE = base + "/route"
         S.FLY_ROUTE2 = base + "/cs/"
+        S.FLY_SKY = base + "/sky?lamin={la0}&lomin={lo0}&lamax={la1}&lomax={lo1}"
 
     @classmethod
     def tearDownClass(cls):
@@ -90,6 +101,17 @@ class Flights(unittest.TestCase):
         self.assertEqual(d["gnd"][0]["st"], "滑行中")
         self.assertTrue(arr["MU2017"]["emg"])
         self.assertEqual(arr["MU2017"]["st"], "緊急狀況")
+        self.assertNotIn("BR261", [p["fn"] for p in d["arr"] + d["dep"] + d["gnd"]])   # 松山的
+        self.assertEqual([x[0] for x in d["srcs"]], ["測試"])
+
+    def test_opensky(self):
+        S = self.S
+        S.FLY_SKYS["cache"].clear()
+        d = self.get("ap=KHH")                # 愛好者那邊只有桃園附近的飛機
+        self.assertTrue(d["ok"], d)
+        self.assertIn("BR850", [p["fn"] for p in d["arr"]])
+        self.assertEqual(d["gnd"], [])            # 沒名字的停機不顯示
+        self.assertEqual([x[0] for x in d["srcs"]], ["測試", "OpenSky"])
 
     def test_search(self):
         d = self.get("q=")
@@ -101,10 +123,14 @@ class Flights(unittest.TestCase):
     def test_source_down(self):
         S = self.S
         old, S.FLY_SRC = S.FLY_SRC, [("壞掉", "http://127.0.0.1:9/{lat}{lon}{d}", "")]
+        sky, S.FLY_SKY = S.FLY_SKY, "http://127.0.0.1:9/{la0}{lo0}{la1}{lo1}"
+        S.FLY_SKYS["cache"].clear()
+        S.FLY["cache"].clear()
         try:
             d = self.get("ap=KHH")
         finally:
-            S.FLY_SRC = old
+            S.FLY_SRC, S.FLY_SKY = old, sky
+            S.FLY_SKYS["until"] = 0
         self.assertFalse(d["ok"])
         self.assertIn("暫時拿不到", d["error"])
 
