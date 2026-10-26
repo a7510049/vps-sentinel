@@ -1,4 +1,4 @@
-# 暫時的：從 GitHub 的機器試台灣機場官方航班表（查完就刪）
+# 暫時的：用真的資料跑一次看板（查完就刪）
 name: flydebug
 on:
   push:
@@ -7,16 +7,25 @@ jobs:
   probe:
     runs-on: ubuntu-latest
     steps:
+      - uses: actions/checkout@v5
       - run: |
-          UA="Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130 Safari/537.36"
-          get() { echo "=== $1"; curl -sSL -m 20 -A "$UA" -o o.bin -w "code %{http_code} type %{content_type} size %{size_download} final %{url_effective}\n" "$1" || true; head -c ${2:-700} o.bin | tr -d '\r'; echo; }
-          get "https://www.taoyuan-airport.com/uploads/flightx/a_flight_v4.txt" 900
-          get "https://www.kia.gov.tw/API/InstantSchedule.ashx?AirFlyLine=2&AirFlyIO=2"
-          get "https://www.kia.gov.tw/API/InstantSchedule.ashx?AirFlyLine=1&AirFlyIO=1"
-          for h in https://www.kia.gov.tw/ https://www.tca.gov.tw/ https://www.tsa.gov.tw/ https://www.tna.gov.tw/; do
-            get "$h" 200
-            grep -oiE "(href|src|url)[=:] *[\"'][^\"']*(schedule|flight|fids|航班|ashx|api)[^\"']*" o.bin | sort -u | head -30
-          done
-          curl -sS -m 20 -X POST -H 'Content-Type: application/json' -A vps-sentinel -d '{"planes":[{"callsign":"CAL762","lat":25.0,"lng":121.0}]}' -w "\nroute code %{http_code} %{content_type}\n" https://api.adsb.lol/api/0/routeset | head -c 600; echo
-          get "https://opensky-network.org/api/states/all?lamin=21.9&lomin=119.7&lamax=23.2&lomax=121.0" 1500
-          get "https://opensky-network.org/api/states/all?lamin=23.6&lomin=119.9&lamax=24.9&lomax=121.3" 1500
+          cat > p.py <<'P'
+          import sys, time
+          sys.path.insert(0, "tests")
+          from test_passkey import load_sentinel
+          s = load_sentinel()
+          for rnd in range(2):
+              for c in ["TPE", "TSA", "RMQ", "KHH"]:
+                  try:
+                      s.FLY["cache"].clear()
+                      b = s.fly_board(c)
+                      print(rnd, c, b["srcs"], {k: len(b[k]) for k in ("arr", "dep", "gnd", "over")})
+                      for k in ("arr", "dep", "gnd"):
+                          for p in b[k][:10]:
+                              print("  ", k, p["fn"], p["alt"], p["spd"], p["d"], p["st"], p["org"] and p["org"]["code"], p["dst"] and p["dst"]["code"])
+                  except Exception as e:
+                      print(c, "ERR", e)
+                  time.sleep(1.5)
+              time.sleep(25)
+          P
+          python3 p.py
