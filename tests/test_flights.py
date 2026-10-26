@@ -29,6 +29,36 @@ SKY = [["8990b5", "EVA850  ", "Taiwan", 0, 0, 120.2387, 22.5805, 502.92, False, 
        ["780abe", "", "China", 0, 0, 120.341, 22.5733, None, True, 1.54, 115.31, None, None, None, None, False, 0]]
 
 
+def tw(t):
+    """時間戳 → 台灣時間的日期、時刻"""
+    x = time.gmtime(t + 8 * 3600)
+    return time.strftime("%Y/%m/%d", x), time.strftime("%H:%M:00", x)
+
+
+def tpe_txt():
+    now = time.time()
+    rows = []
+    for io, al, alz, num, gate, t, pc, en, zh, st in [
+        ("A", "BR", "長榮航空", "2196", " C8", now + 600, "NRT", "Tokyo", "東京", "準時ON TIME"),
+        ("A", "NH", "全日空", "5800", " C8", now + 600, "NRT", "Tokyo", "東京", "準時ON TIME"),     # 共掛
+        ("D", "CI", "中華航空", "  27", " A5", now + 1800, "HKG", "Hong Kong", "香港", "登機BOARDING"),
+        ("D", "IT", "台灣虎航", " 200", " D1", now - 3 * 3600, "OKA", "Okinawa", "沖繩", "出發DEPARTED"),   # 太早了
+    ]:
+        d, h = tw(t)
+        rows.append(f"2,{io},{al},{alz:20},{num},{gate},{d},{h},{d},{h},{pc},{en},{zh},{st:20},B777-300ER,,,,06 ,    ")
+    return "\r\n".join(rows).encode("big5hkscs")
+
+
+def khh_json(io):
+    t = time.time() + 900
+    d, h = tw(t)
+    if io == "arr":
+        return [{"FDATE": d, "STA": f"{d.replace('/', '-')} {h}", "ATA": "", "arrtime": "", "airLineIATA": "CI", "airLineNum": "CI840",
+                 "CodeShare": "PG4905;AE5320", "DepartureAirportIATA": "BKK", "airPlaneType": "32Q", "Bay": "", "statusarr": 1, "notearr": ""}]
+    return [{"FDATE": d, "STD": f"{d.replace('/', '-')} {h}", "ATD": "", "deptime": "", "airLineIATA": "UO", "airLineNum": "UO135",
+             "CodeShare": "", "ArrivalAirportIATA": "HKG", "airPlaneType": "320", "Bay": "", "statusdep": 3, "notedep": ""}]
+
+
 class Fake(BaseHTTPRequestHandler):
     def log_message(self, *a):
         pass
@@ -42,6 +72,14 @@ class Fake(BaseHTTPRequestHandler):
         self.wfile.write(b)
 
     def do_GET(self):
+        if self.path == "/tpe":
+            b = tpe_txt()
+            self.send_response(200)
+            self.send_header("Content-Length", str(len(b)))
+            self.end_headers()
+            return self.wfile.write(b)
+        if self.path.startswith("/khh/"):
+            return self.reply(khh_json(self.path[5:8]))
         if self.path.startswith("/sky"):
             q = urllib.parse.parse_qs(urllib.parse.urlparse(self.path).query)
             t = int(time.time())
@@ -72,6 +110,8 @@ class Flights(unittest.TestCase):
         S.FLY_ROUTE = base + "/route"
         S.FLY_ROUTE2 = base + "/cs/"
         S.FLY_SKY = base + "/sky?lamin={la0}&lomin={lo0}&lamax={la1}&lomax={lo1}"
+        cls.night, S.fly_night = S.fly_night, lambda ap, now=None: False      # 測試不管現在幾點
+        S.FLY_FIDS_URL.update({"TPE": base + "/tpe", "KHH": base + "/khh/", "RMQ": "http://127.0.0.1:9/", "TSA": "http://127.0.0.1:9/"})
 
     @classmethod
     def tearDownClass(cls):
@@ -102,7 +142,15 @@ class Flights(unittest.TestCase):
         self.assertTrue(arr["MU2017"]["emg"])
         self.assertEqual(arr["MU2017"]["st"], "緊急狀況")
         self.assertNotIn("BR261", [p["fn"] for p in d["arr"] + d["dep"] + d["gnd"]])   # 松山的
-        self.assertEqual([x[0] for x in d["srcs"]], ["測試"])
+        self.assertEqual([x[0] for x in d["srcs"]], ["桃園機場官網", "測試"])
+        br = arr["BR2196"]                    # 官網的表定時間、登機門，加上收得到的即時位置
+        self.assertTrue(br["fids"] and br["live"])
+        self.assertEqual((br["gate"], br["share"], br["id"]), ("C8", ["NH5800"], "899001"))
+        self.assertEqual(br["term"], "第二航廈")
+        self.assertNotIn("NH5800", arr)
+        cdep = {p["fn"]: p for p in d["dep"]}
+        self.assertEqual((cdep["CI27"]["st"], cdep["CI27"]["dst"]["name"]), ("登機", "香港"))
+        self.assertNotIn("IT200", cdep)       # 三小時前就飛走的不顯示
 
     def test_opensky(self):
         S = self.S
@@ -111,7 +159,10 @@ class Flights(unittest.TestCase):
         self.assertTrue(d["ok"], d)
         self.assertIn("BR850", [p["fn"] for p in d["arr"]])
         self.assertEqual(d["gnd"], [])            # 沒名字的停機不顯示
-        self.assertEqual([x[0] for x in d["srcs"]], ["測試", "OpenSky"])
+        self.assertEqual([x[0] for x in d["srcs"]], ["高雄機場官網", "測試", "OpenSky"])
+        ci = [p for p in d["arr"] if p["fn"] == "CI840"][0]
+        self.assertEqual((ci["org"]["code"], ci["share"], ci["st"]), ("BKK", ["PG4905", "AE5320"], "準時"))
+        self.assertEqual([p["st"] for p in d["dep"] if p["fn"] == "UO135"], ["登機"])
 
     def test_search(self):
         d = self.get("q=")
@@ -120,6 +171,16 @@ class Flights(unittest.TestCase):
         self.assertIn("LHR", [a["code"] for a in self.get("q=london")["list"]])
         self.assertIn("NRT", [a["code"] for a in self.get("q=東京")["list"]])
 
+    def test_night(self):
+        S, night = self.S, type(self).night
+        ap = S.fly_db()["KHH"]
+        day = 1793016000 - 1793016000 % 86400
+        noon, three = day + 4 * 3600, day + 19 * 3600       # 台灣時間中午 12 點、半夜 3 點
+        self.assertFalse(night(ap, noon))
+        self.assertTrue(night(ap, three))
+        self.assertFalse(night(S.fly_db()["TPE"], three))           # 桃園半夜也有班機
+        self.assertFalse(night(S.fly_db()["NRT"], three))
+
     def test_source_down(self):
         S = self.S
         old, S.FLY_SRC = S.FLY_SRC, [("壞掉", "http://127.0.0.1:9/{lat}{lon}{d}", "")]
@@ -127,7 +188,7 @@ class Flights(unittest.TestCase):
         S.FLY_SKYS["cache"].clear()
         S.FLY["cache"].clear()
         try:
-            d = self.get("ap=KHH")
+            d = self.get("ap=RMQ")                # 台中官網也連不上
         finally:
             S.FLY_SRC, S.FLY_SKY = old, sky
             S.FLY_SKYS["until"] = 0

@@ -5459,6 +5459,165 @@ def fly_sky(ap):
     return out
 
 
+# 台灣機場官網的航班表（表定、預計時間、登機門、狀態）；台灣的機場附近愛好者常收不到飛機訊號，用官網補
+FLY_FIDS_URL = {
+    "TPE": os.environ.get("SENTINEL_FIDS_TPE", "https://www.taoyuan-airport.com/uploads/flightx/a_flight_v4.txt"),
+    "KHH": os.environ.get("SENTINEL_FIDS_KHH", "https://www.kia.gov.tw/data/"),
+    "RMQ": os.environ.get("SENTINEL_FIDS_RMQ", "https://www.tca.gov.tw/index.php?act=fids&code=api_departure_arrival&airFlyIO="),
+    "TSA": os.environ.get("SENTINEL_FIDS_TSA", "https://www.tsa.gov.tw/api/airFlyTab/Paging"),
+}
+FLY_FIDS_NAME = {"TPE": ("桃園機場", "https://www.taoyuan-airport.com"), "KHH": ("高雄機場", "https://www.kia.gov.tw"),
+                 "RMQ": ("台中機場", "https://www.tca.gov.tw"), "TSA": ("松山機場", "https://www.tsa.gov.tw")}
+FLY_FIDS_EVERY = 60
+FLY_FIDS = {}
+FLY_TW = timezone(timedelta(hours=8))
+KHH_ARR = {1: "準時", 2: "已到", 3: "延誤", 4: "轉降", 5: "取消", 6: "提早"}
+KHH_DEP = {1: "準時", 2: "報到", 3: "登機", 4: "已飛", 5: "延遲登機", 6: "延誤", 7: "取消", 8: "提早"}
+
+
+def fly_get(url, data=None, ua="Mozilla/5.0 (vps-sentinel)", timeout=10):
+    hd = {"User-Agent": ua}
+    if data is not None:
+        data = json.dumps(data).encode()
+        hd["Content-Type"] = "application/json"
+    with urllib.request.urlopen(urllib.request.Request(url, data=data, headers=hd), timeout=timeout) as r:
+        return r.read()
+
+
+def fly_ts(day, hm):
+    """「2026/10/25」「07:10」這類時間 → 時間戳（台灣時間）"""
+    hm = str(hm or "").strip().replace(":", "")[:4]
+    if not re.fullmatch(r"\d{4}", hm):
+        return None
+    try:
+        d = date.fromisoformat(str(day).replace("/", "-")[:10]) if day else datetime.now(FLY_TW).date()
+        return datetime(d.year, d.month, d.day, int(hm[:2]) % 24, int(hm[2:]) % 60, tzinfo=FLY_TW).timestamp()
+    except ValueError:                        # 「0000-00-00」這種空的日期
+        return None
+
+
+def fly_zh_code(name):
+    """官網只給中文地名（例如「沖繩」「仁川」）時，找出機場代碼"""
+    name = re.sub(r"[A-Z]{3}$", "", str(name or "").strip())
+    if not name:
+        return ""
+    for a in FLY_APS:
+        if name in (a[2], a[1], a[1].replace("機場", "")) or a[2].startswith(name):
+            return a[0]
+    return ""
+
+
+def fly_al_zh(iata):
+    for v in FLY_AL.values():
+        if v[0] == iata:
+            return v[1]
+    return iata
+
+
+def fly_st(st):
+    """官網的狀態文字只留中文、統一說法"""
+    st = re.sub(r"[A-Za-z ]+", "", str(st or "")).strip()
+    return {"延遲": "延誤", "抵達": "已到", "離站": "已飛", "出發": "已飛", "登機中": "登機"}.get(st, st)
+
+
+def fly_fids_tpe():
+    out = []
+    for line in fly_get(FLY_FIDS_URL["TPE"], timeout=15).decode("big5hkscs", "replace").splitlines():
+        x = [c.strip() for c in line.split(",")]
+        if len(x) < 15 or x[1] not in ("A", "D"):
+            continue
+        out.append({"io": "arr" if x[1] == "A" else "dep", "fn": x[2] + x[4].lstrip("0"), "al": x[3], "sch": fly_ts(x[6], x[7]),
+                    "est": fly_ts(x[8], x[9]), "pc": x[10], "pl": x[12] or x[11], "gate": x[5], "term": f"第{'一二三'[int(x[0]) - 1]}航廈" if x[0] in ("1", "2", "3") else "",
+                    "st": fly_st(x[13]), "type": x[14]})
+    return out
+
+
+def fly_fids_khh():
+    out = []
+    for io, f, st in (("arr", "arr.json", KHH_ARR), ("dep", "dep.json", KHH_DEP)):
+        for r in json.loads(fly_get(FLY_FIDS_URL["KHH"] + f).decode("utf-8-sig")):
+            if not isinstance(r, dict):
+                continue
+            k = "A" if io == "arr" else "D"
+            sch = str(r.get("ST" + k) or "")
+            est = str((r.get("arrtime") if io == "arr" else r.get("deptime")) or r.get("AT" + k) or "")
+            pc = str(r.get("DepartureAirportIATA" if io == "arr" else "ArrivalAirportIATA") or "")
+            ap = fly_db().get(pc)
+            out.append({"io": io, "fn": str(r.get("airLineNum") or ""), "al": fly_al_zh(str(r.get("airLineIATA") or "")),
+                        "sch": fly_ts(sch[:10], sch[11:16]), "est": fly_ts(est[:10], est[11:16]) if est else None, "pc": pc,
+                        "pl": ap[2] if ap else pc, "gate": "", "term": "",
+                        "st": st.get(int(r.get("status" + io) or 0), ""), "type": str(r.get("airPlaneType") or ""),
+                        "share": [c.strip() for c in str(r.get("CodeShare") or "").split(";") if c.strip()]})
+    return out
+
+
+def fly_fids_rmq():
+    out = []
+    for io, n in (("dep", 1), ("arr", 2)):
+        for r in json.loads(fly_get(FLY_FIDS_URL["RMQ"] + str(n), timeout=25).decode("utf-8-sig")).get("data") or []:
+            pl = str(r.get("opponentPort") or "").strip()
+            out.append({"io": io, "fn": str(r.get("AirLineIATA") or "").strip() + str(r.get("airLineNum") or "").strip(),
+                        "al": re.sub(r"<[^>]+>", "", str(r.get("mainAirlineHtml") or "")).strip(), "sch": fly_ts(None, r.get("scheduleTime")),
+                        "est": fly_ts(None, r.get("actualTime")), "pc": fly_zh_code(pl), "pl": pl, "gate": str(r.get("airBoardingGate") or ""),
+                        "term": "", "st": fly_st(r.get("airFlyStatus")), "type": "",
+                        "share": [re.sub(r"\s+", "", x) for x in re.findall(r"<div>([^<]+)</div>", str(r.get("codeShareFlightHtml") or ""))]})
+    return out
+
+
+def fly_fids_tsa():
+    out = []
+    for io, n in (("dep", 1), ("arr", 2)):
+        for line in (1, 2):
+            body = {"AirFlyLine": line, "AirFlyIO": n, "Limit": 999, "Culture": 1, "FlightNumber": None, "AirLineCode": None,
+                    "AirportCode": None, "Sort": "ExpectDepartureTime" if n == 1 else "ExpectArrivalTime", "Order": "asc"}
+            for r in json.loads(fly_get(FLY_FIDS_URL["TSA"], body).decode("utf-8-sig")).get("rows") or []:
+                k = "Departure" if io == "dep" else "Arrival"
+                pl = str(r.get("GoalAirportName" if io == "dep" else "UpAirportName") or "")
+                m = re.match(r"(.*?)([A-Z]{3})$", pl)
+                out.append({"io": io, "fn": str(r.get("FlightNumber") or "").strip(), "al": re.sub(r"(公司|股份有限公司)$", "", str(r.get("AirLineName") or "")),
+                            "sch": fly_ts(None, r.get("Expect" + k + "Time")), "est": fly_ts(None, r.get("Real" + k + "Time")),
+                            "pc": m.group(2) if m else "", "pl": m.group(1) if m else pl, "gate": "", "term": "",
+                            "st": fly_st(r.get("AirFlyStatus")), "type": str(r.get("AirPlaneType") or "")})
+    return out
+
+
+FLY_FIDS_GET = {"TPE": fly_fids_tpe, "KHH": fly_fids_khh, "RMQ": fly_fids_rmq, "TSA": fly_fids_tsa}
+
+
+def fly_fids_pull(code, hit):
+    try:
+        keep = {}
+        for r in FLY_FIDS_GET[code]():
+            if not r["fn"] or not r["sch"]:
+                continue
+            k = (r["io"], r["sch"], r["pc"] or r["pl"])
+            if k in keep:                              # 同一班飛機掛好幾個航班號
+                keep[k].setdefault("share", []).append(r["fn"])
+                keep[k]["type"] = keep[k]["type"] or r["type"]
+            else:
+                keep[k] = r
+        hit["rows"], hit["ok"] = list(keep.values()), time.time()
+    except Exception as e:  # noqa: BLE001
+        fly_log(f"{FLY_FIDS_NAME[code][0]}官網：{str(e)[:60]}")
+    finally:
+        hit["busy"] = False
+
+
+def fly_fids(code):
+    """官網航班表：1 分鐘更新一次（在背景抓，看板不用等）；抓不到就先用上一次的，15 分鐘內都算數"""
+    if code not in FLY_FIDS_GET:
+        return None
+    hit = FLY_FIDS.setdefault(code, {"ok": 0, "try": 0, "rows": [], "busy": False})
+    now = time.time()
+    if not hit["busy"] and now - hit["try"] >= (FLY_FIDS_EVERY if hit["ok"] >= hit["try"] else 20):    # 上次失敗的話 20 秒後再試
+        hit["try"], hit["busy"] = now, True
+        th = threading.Thread(target=fly_fids_pull, args=(code, hit), daemon=True)
+        th.start()
+        if not hit["ok"]:
+            th.join(20)                                # 第一次要等它抓完
+    return hit["rows"] if time.time() - hit["ok"] < 900 else None
+
+
 def fly_log(msg):
     """航班資料出錯記一筆（同樣的錯 30 分鐘記一次就好）"""
     if FLY["logged"].get(msg, 0) < time.time() - 1800:
@@ -5624,9 +5783,56 @@ def fly_plane(a, ap):
     }
 
 
+def fly_merge(ap, fids, rows, io, lives):
+    """官網的航班表配上收得到訊號的飛機：表上有的顯示即時位置、幾分鐘後落地；表上沒有的（貨機、私人飛機）照樣列出來"""
+    now = time.time()
+    live = {}
+    for p in rows:
+        if p["fn"]:
+            live.setdefault(p["fn"], p)
+    me, out, used = {"code": ap[0], "name": ap[2]}, [], set()
+    for r in fids:
+        if r["io"] != io:
+            continue
+        t = r["est"] or r["sch"]
+        done = r["st"] in ("已到", "已飛")
+        if t > now + 12 * 3600 or t < now - (20 if done else 30) * 60:
+            continue
+        pl = {"code": r["pc"], "name": r["pl"]}
+        row = {"id": f"f-{io}-{r['fn']}-{int(r['sch'])}", "fn": r["fn"], "cs": "", "al": r["al"], "reg": "", "t": r["type"], "model": r["type"],
+               "org": pl if io == "arr" else me, "dst": me if io == "arr" else pl, "ph": io, "st": r["st"], "emg": False, "mil": False, "rare": False,
+               "fids": True, "sch": r["sch"], "est": r["est"], "gate": r["gate"], "term": r["term"], "share": r.get("share") or []}
+        p = next((live[f] for f in [r["fn"], *row["share"]] if f in live), None)
+        if p:
+            used.add(p["id"])
+            row.update({k: p[k] for k in ("id", "cs", "reg", "t", "model", "alt", "spd", "vr", "d", "eta", "trk", "x", "y", "sq", "emg", "mil", "rare")})
+            row["live"] = True
+            if p["ph"] == io and not done and r["st"] != "取消":
+                row["st"] = p["st"]                    # 天上的飛機：用即時的「4 分鐘後」「剛起飛」
+                if io == "arr" and p["eta"] is not None:
+                    row["est"] = now + p["eta"] * 60
+            if p["emg"]:
+                row["st"] = p["st"]
+        out.append(row)
+    for p in lives:                                   # 表上沒有、但看得到正在降落／起飛的飛機
+        if p["id"] not in used and not any(p["fn"] and p["fn"] in [o["fn"], *(o.get("share") or [])] for o in out):
+            out.append(dict(p, sch=None, est=now + (p["eta"] or 0) * 60 if io == "arr" else now))
+    out.sort(key=lambda o: o["est"] or o["sch"] or now)
+    return out[:30]
+
+
+def fly_night(ap, now=None):
+    """桃園以外的台灣機場，半夜 0～6 點沒有班機，不用去抓"""
+    h = datetime.fromtimestamp(now or time.time(), FLY_TW).hour
+    return ap[5] == "TW" and ap[0] != "TPE" and h < 6
+
+
 def fly_board(code):
     db = fly_db()
     ap = db.get(code) or db["TPE"]
+    if fly_night(ap):
+        return {"ok": True, "t": time.time(), "ap": fly_ap(ap), "night": True, "src": "", "home": "", "srcs": [],
+                "fids": True, "arr": [], "dep": [], "gnd": [], "over": []}
     with FLY["fetch"]:                    # 好幾個人同時看：只抓一次
         hit = FLY["cache"].get(ap[0])
         if hit and time.time() - hit["t"] < FLY_EVERY:
@@ -5636,13 +5842,16 @@ def fly_board(code):
         except RuntimeError as e:
             ac, src, home, err = None, "", "", e
         more = fly_sky(ap)
-        if ac is None and not more:
+        fids = fly_fids(ap[0])
+        if ac is None and not more and fids is None:
             raise err
         ac = ac or []
         have = {str(a.get("hex") or "").lower() for a in ac if isinstance(a, dict)}
         add = [a for a in more if a["hex"].lower() not in have]
         ac = ac + add
     srcs = [[src, home]] if src else []
+    if fids is not None:
+        srcs.insert(0, [FLY_FIDS_NAME[ap[0]][0] + "官網", FLY_FIDS_NAME[ap[0]][1]])
     if add:
         srcs.append(["OpenSky", "https://opensky-network.org"])
     rows = []
@@ -5659,8 +5868,10 @@ def fly_board(code):
     dep = sorted(by("dep"), key=lambda p: p["d"])
     gnd = sorted(by("gnd"), key=lambda p: (-p["spd"], p["fn"]))
     over = by("over")
-    out = {"ok": True, "t": time.time(), "ap": fly_ap(ap), "src": src or "OpenSky", "home": home, "srcs": srcs,
-           "arr": arr, "dep": dep, "gnd": gnd, "over": over}
+    if fids is not None:
+        arr, dep = fly_merge(ap, fids, rows, "arr", arr), fly_merge(ap, fids, rows, "dep", dep)
+    out = {"ok": True, "t": time.time(), "ap": fly_ap(ap), "src": src or (srcs[0][0] if srcs else ""), "home": home, "srcs": srcs,
+           "fids": fids is not None, "arr": arr, "dep": dep, "gnd": gnd, "over": over}
     FLY["cache"][ap[0]] = out
     return out
 
