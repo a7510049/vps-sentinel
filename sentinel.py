@@ -16,6 +16,7 @@ import io
 import ipaddress
 import html
 import json
+import math
 import os
 import re
 import secrets
@@ -40,7 +41,7 @@ from collections import deque
 from concurrent.futures import ThreadPoolExecutor
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
-VERSION = "3.6"
+VERSION = "3.7"
 
 # ───────────────────────── 哨兵備份檔（.vsbk）─────────────────────────
 # 哨兵專用的備份格式：外面是自己的檔案格式，裡面用的是成熟、標準的加密方法（不自己發明加密）：
@@ -980,7 +981,7 @@ def apt_updates():
 # ───────────────────────── 更新哨兵本身 ─────────────────────────
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-SRC_FILES = ["sentinel.py", "web/index.html", "web/style.css", "web/app.js"]   # 程式本體＋網頁三個檔
+SRC_FILES = ["sentinel.py", "web/index.html", "web/style.css", "web/app.js", "data/airports.tsv"]   # 程式本體＋網頁三個檔＋機場資料
 
 
 def build_of(blobs):
@@ -5238,6 +5239,311 @@ MANIFEST = json.dumps({
 }, ensure_ascii=False)
 
 
+# ───────────────────────── 機場起降（飛機迷看板） ─────────────────────────
+# 資料來自業餘接收站共享的飛機廣播（adsb.fi、adsb.lol、airplanes.live，免註冊），航線用 adsb.lol 查；
+# 由主要主機去抓，網頁只問哨兵。測試用 SENTINEL_FLY_API（{lat}{lon}{d} 三個空格）、SENTINEL_FLY_ROUTE 換成假的
+FLY_SRC = [x for x in [os.environ.get("SENTINEL_FLY_API", "")] if x] or [
+    ("adsb.fi", "https://opendata.adsb.fi/api/v3/lat/{lat}/lon/{lon}/dist/{d}", "https://adsb.fi"),
+    ("adsb.lol", "https://api.adsb.lol/v2/point/{lat}/{lon}/{d}", "https://adsb.lol"),
+    ("airplanes.live", "https://api.airplanes.live/v2/point/{lat}/{lon}/{d}", "https://airplanes.live"),
+]
+FLY_SRC = [("測試", x, "") if isinstance(x, str) else x for x in FLY_SRC]
+FLY_ROUTE = os.environ.get("SENTINEL_FLY_ROUTE", "https://api.adsb.lol/api/0/routeset")
+FLY_NM = 40                                   # 抓機場方圓幾海里（約 74 公里）
+FLY_EVERY = 8                                 # 同一個機場幾秒內不重抓
+# 常用機場的中文名稱（代碼、名稱、城市、緯度、經度）；其他機場用 data/airports.tsv 的英文名稱
+FLY_APS = [
+    ("TNN", "台南機場", "台南", 22.9504, 120.2057), ("HUN", "花蓮機場", "花蓮", 24.0231, 121.6180),
+    ("TTT", "台東機場", "台東", 22.7550, 121.1018), ("MZG", "澎湖機場", "澎湖", 23.5687, 119.6280),
+    ("KNH", "金門機場", "金門", 24.4279, 118.3590), ("LZN", "南竿機場", "馬祖", 26.1598, 119.9580),
+    ("MFK", "北竿機場", "馬祖", 26.2242, 120.0030), ("CYI", "嘉義機場", "嘉義", 23.4618, 120.3930),
+    ("TPE", "桃園機場", "台北", 25.0777, 121.2328), ("TSA", "松山機場", "台北", 25.0694, 121.5525),
+    ("RMQ", "清泉崗機場", "台中", 24.2647, 120.6208), ("KHH", "小港機場", "高雄", 22.5771, 120.3500),
+    ("HKG", "赤鱲角機場", "香港", 22.3080, 113.9185), ("MFM", "澳門機場", "澳門", 22.1496, 113.5916),
+    ("NRT", "成田機場", "東京", 35.7647, 140.3864), ("HND", "羽田機場", "東京", 35.5494, 139.7798),
+    ("KIX", "關西機場", "大阪", 34.4320, 135.2304), ("ITM", "伊丹機場", "大阪", 34.7855, 135.4382),
+    ("NGO", "中部機場", "名古屋", 34.8584, 136.8054), ("FUK", "福岡機場", "福岡", 33.5859, 130.4511),
+    ("CTS", "新千歲機場", "札幌", 42.7752, 141.6923), ("OKA", "那霸機場", "沖繩", 26.1958, 127.6459),
+    ("ICN", "仁川機場", "首爾", 37.4602, 126.4407), ("GMP", "金浦機場", "首爾", 37.5583, 126.7906),
+    ("PUS", "金海機場", "釜山", 35.1795, 128.9382), ("PVG", "浦東機場", "上海", 31.1443, 121.8083),
+    ("SHA", "虹橋機場", "上海", 31.1979, 121.3363), ("PEK", "首都機場", "北京", 40.0799, 116.6031),
+    ("PKX", "大興機場", "北京", 39.5098, 116.4105), ("CAN", "白雲機場", "廣州", 23.3924, 113.2988),
+    ("SZX", "寶安機場", "深圳", 22.6393, 113.8107), ("XMN", "高崎機場", "廈門", 24.5440, 118.1277),
+    ("MNL", "馬尼拉機場", "馬尼拉", 14.5086, 121.0194), ("BKK", "蘇凡納布機場", "曼谷", 13.6900, 100.7501),
+    ("DMK", "廊曼機場", "曼谷", 13.9126, 100.6068), ("SGN", "新山一機場", "胡志明市", 10.8188, 106.6519),
+    ("HAN", "內排機場", "河內", 21.2212, 105.8072), ("SIN", "樟宜機場", "新加坡", 1.3644, 103.9915),
+    ("KUL", "吉隆坡機場", "吉隆坡", 2.7456, 101.7099), ("CGK", "蘇卡諾哈達機場", "雅加達", -6.1256, 106.6559),
+    ("DPS", "峇里島機場", "峇里島", -8.7482, 115.1670), ("DXB", "杜拜機場", "杜拜", 25.2532, 55.3657),
+    ("DOH", "哈馬德機場", "杜哈", 25.2731, 51.6081), ("IST", "伊斯坦堡機場", "伊斯坦堡", 41.2753, 28.7519),
+    ("LHR", "希斯洛機場", "倫敦", 51.4700, -0.4543), ("CDG", "戴高樂機場", "巴黎", 49.0097, 2.5479),
+    ("FRA", "法蘭克福機場", "法蘭克福", 50.0379, 8.5622), ("AMS", "史基浦機場", "阿姆斯特丹", 52.3105, 4.7683),
+    ("JFK", "甘迺迪機場", "紐約", 40.6413, -73.7781), ("LAX", "洛杉磯機場", "洛杉磯", 33.9416, -118.4085),
+    ("SFO", "舊金山機場", "舊金山", 37.6213, -122.3790), ("SEA", "西雅圖機場", "西雅圖", 47.4502, -122.3088),
+    ("YVR", "溫哥華機場", "溫哥華", 49.1967, -123.1815), ("SYD", "雪梨機場", "雪梨", -33.9399, 151.1753),
+    ("MEL", "墨爾本機場", "墨爾本", -37.6690, 144.8410), ("AKL", "奧克蘭機場", "奧克蘭", -37.0082, 174.7850),
+]
+FLY_PIN = ["TPE", "TSA", "RMQ", "KHH"]          # 台灣主要機場：選單最上面
+FLY_POP = ["TPE", "TSA", "RMQ", "KHH", "HKG", "MFM", "NRT", "HND", "KIX", "FUK", "OKA", "CTS", "ICN", "PVG", "PEK",
+           "BKK", "SIN", "KUL", "MNL", "SGN", "DXB", "DOH", "IST", "LHR", "CDG", "FRA", "AMS", "JFK", "LAX", "SFO", "SYD"]
+FLY_DB = {}
+
+
+def fly_db():
+    """全世界的機場（第一次用到才讀）：代碼 → 代碼、名稱、城市、緯度、經度、國家、時區"""
+    if not FLY_DB:
+        zh = {a[0]: a for a in FLY_APS}
+        try:
+            with open(os.path.join(HERE, "data", "airports.tsv"), encoding="utf-8") as f:
+                for line in f:
+                    x = line.rstrip("\n").split("\t")
+                    if len(x) < 7 or line.startswith("#"):
+                        continue
+                    z = zh.get(x[0])
+                    FLY_DB[x[0]] = (x[0], z[1] if z else x[1], z[2] if z else x[2], float(x[4]), float(x[5]), x[3], x[6], x[1] + " " + x[2])
+        except OSError:
+            pass
+        for a in FLY_APS:                       # 找不到資料檔也至少有常用的
+            FLY_DB.setdefault(a[0], (*a, "", "", ""))
+    return FLY_DB
+
+
+def fly_ap(a):
+    return {"code": a[0], "name": a[1], "city": a[2], "lat": a[3], "lon": a[4], "cc": a[5], "tz": a[6]}
+
+
+def fly_search(q):
+    db = fly_db()
+    q = q.strip().upper()[:40]
+    if not q:
+        return [fly_ap(db[c]) for c in FLY_POP if c in db]
+    hits = []
+    for a in db.values():
+        n, c, en = a[1].upper(), a[2].upper(), a[7].upper()
+        rank = 0 if a[0] == q else 1 if n.startswith(q) or c.startswith(q) else 2 if q in n or q in c or q in en else -1
+        if rank >= 0:
+            hits.append((rank > 0, a[0] not in FLY_POP, rank, a[0], a))
+    return [fly_ap(h[-1]) for h in sorted(hits, key=lambda h: h[:4])[:40]]
+# 呼號前三碼 → 航班代碼、中文名稱
+FLY_AL = {
+    "EVA": ("BR", "長榮航空"), "CAL": ("CI", "中華航空"), "SJX": ("JX", "星宇航空"), "TTW": ("IT", "台灣虎航"),
+    "MDA": ("AE", "華信航空"), "UIA": ("B7", "立榮航空"), "CPA": ("CX", "國泰航空"), "HKE": ("UO", "香港快運"),
+    "CRK": ("HX", "香港航空"), "AMU": ("NX", "澳門航空"), "HGB": ("HB", "大灣區航空"), "AHK": ("LD", "華民航空"),
+    "JAL": ("JL", "日本航空"), "ANA": ("NH", "全日空"), "APJ": ("MM", "樂桃航空"), "JJP": ("GK", "捷星日本"),
+    "SKY": ("BC", "天馬航空"), "ADO": ("HD", "北海道國際航空"), "SNJ": ("6J", "新日本航空"), "JTA": ("NU", "日本越洋航空"),
+    "NCA": ("KZ", "日本貨物航空"), "IBX": ("FW", "伊別克斯航空"), "KAL": ("KE", "大韓航空"), "AAR": ("OZ", "韓亞航空"),
+    "JNA": ("LJ", "真航空"), "TWB": ("TW", "德威航空"), "JJA": ("7C", "濟州航空"), "ABL": ("BX", "釜山航空"),
+    "ESR": ("ZE", "易斯達航空"), "TWY": ("RS", "首爾航空"), "CCA": ("CA", "中國國際航空"), "CES": ("MU", "東方航空"),
+    "CSN": ("CZ", "南方航空"), "CHH": ("HU", "海南航空"), "CXA": ("MF", "廈門航空"), "CSZ": ("ZH", "深圳航空"),
+    "CSC": ("3U", "四川航空"), "CQH": ("9C", "春秋航空"), "DKH": ("HO", "吉祥航空"), "CSH": ("FM", "上海航空"),
+    "CDG": ("SC", "山東航空"), "CAO": ("CA", "國貨航"), "CKK": ("CK", "中貨航"), "CSS": ("O3", "順豐航空"),
+    "SIA": ("SQ", "新加坡航空"), "TGW": ("TR", "酷航"), "SQC": ("SQ", "新航貨運"), "THA": ("TG", "泰國航空"),
+    "AIQ": ("FD", "泰國亞洲航空"), "TLM": ("SL", "泰獅航"), "NOK": ("DD", "皇雀航空"), "TVJ": ("VZ", "泰越捷"),
+    "AXM": ("AK", "亞洲航空"), "XAX": ("D7", "全亞洲航空"), "MAS": ("MH", "馬來西亞航空"), "MXD": ("OD", "馬印航空"),
+    "PAL": ("PR", "菲律賓航空"), "CEB": ("5J", "宿霧太平洋"), "APG": ("Z2", "菲律賓亞洲航空"), "HVN": ("VN", "越南航空"),
+    "VJC": ("VJ", "越捷航空"), "BAV": ("QH", "越竹航空"), "GIA": ("GA", "印尼航空"), "LNI": ("JT", "獅子航空"),
+    "UAE": ("EK", "阿聯酋航空"), "QTR": ("QR", "卡達航空"), "ETD": ("EY", "阿提哈德航空"), "THY": ("TK", "土耳其航空"),
+    "KLM": ("KL", "荷蘭皇家航空"), "AFR": ("AF", "法國航空"), "DLH": ("LH", "漢莎航空"), "BAW": ("BA", "英國航空"),
+    "FIN": ("AY", "芬蘭航空"), "SWR": ("LX", "瑞士航空"), "AUA": ("OS", "奧地利航空"), "ITY": ("AZ", "義大利航空"),
+    "UAL": ("UA", "聯合航空"), "AAL": ("AA", "美國航空"), "DAL": ("DL", "達美航空"), "ASA": ("AS", "阿拉斯加航空"),
+    "ACA": ("AC", "加拿大航空"), "QFA": ("QF", "澳洲航空"), "JST": ("JQ", "捷星航空"), "ANZ": ("NZ", "紐西蘭航空"),
+    "ETH": ("ET", "衣索比亞航空"), "FDX": ("FX", "聯邦快遞"), "UPS": ("5X", "優比速"), "GTI": ("5Y", "亞特拉斯航空"),
+    "CLX": ("CV", "盧森堡貨運"), "CKS": ("K4", "卡利塔航空"), "PAC": ("PO", "寶立航空"), "ABW": ("RU", "空橋貨運"),
+    "BOX": ("3S", "德國貨運"), "GEC": ("LH", "漢莎貨運"),
+}
+# 機型代碼 → 好讀的名稱（接收站沒給時用）
+FLY_TYPES = {
+    "A319": "A319", "A320": "A320", "A20N": "A320neo", "A321": "A321", "A21N": "A321neo", "BCS1": "A220-100", "BCS3": "A220-300",
+    "A306": "A300-600", "A332": "A330-200", "A333": "A330-300", "A338": "A330-800", "A339": "A330-900",
+    "A343": "A340-300", "A346": "A340-600", "A359": "A350-900", "A35K": "A350-1000", "A388": "A380",
+    "B737": "737-700", "B738": "737-800", "B739": "737-900", "B37M": "737 MAX 7", "B38M": "737 MAX 8", "B39M": "737 MAX 9",
+    "B3XM": "737 MAX 10", "B744": "747-400", "B748": "747-8", "B752": "757-200", "B763": "767-300", "B764": "767-400",
+    "B772": "777-200", "B77L": "777-200LR", "B77W": "777-300ER", "B773": "777-300", "B778": "777-8", "B779": "777-9",
+    "B788": "787-8", "B789": "787-9", "B78X": "787-10", "MD11": "MD-11", "C919": "C919", "AJ27": "ARJ21",
+    "E170": "E170", "E75L": "E175", "E190": "E190", "E195": "E195", "E290": "E190-E2", "E295": "E195-E2",
+    "AT72": "ATR 72", "AT76": "ATR 72-600", "DH8D": "Dash 8-400", "CRJ9": "CRJ900", "CRJ7": "CRJ700",
+    "A3ST": "Beluga", "A337": "BelugaXL", "A124": "An-124", "A225": "An-225", "IL76": "Il-76", "C17": "C-17",
+    "C130": "C-130", "C30J": "C-130J", "K35R": "KC-135", "P8": "P-8", "GLF6": "Gulfstream G650", "GLEX": "Global Express",
+    "B190": "Beech 1900", "C208": "Cessna 208", "H25B": "Hawker 800",
+}
+FLY_RARE = {"A388", "B744", "B748", "B742", "MD11", "A343", "A346", "A3ST", "A337", "A124", "A225", "IL76", "C17",
+            "C5M", "K35R", "A400", "B52", "E3TF", "B77L", "B764", "A306", "A339", "A338", "B779", "B778", "C919", "BCS1", "BCS3"}
+FLY = {"cache": {}, "routes": {}, "lock": threading.Lock(), "last": 0.0, "bad": {}, "rq": set(), "rbusy": False, "fetch": threading.Lock()}
+
+
+def fly_dist(la1, lo1, la2, lo2):
+    """兩點距離（公里）和方位角"""
+    p1, p2, dl = math.radians(la1), math.radians(la2), math.radians(lo2 - lo1)
+    a = math.sin((p2 - p1) / 2) ** 2 + math.cos(p1) * math.cos(p2) * math.sin(dl / 2) ** 2
+    d = 6371 * 2 * math.asin(min(1, math.sqrt(a)))
+    b = math.degrees(math.atan2(math.sin(dl) * math.cos(p2), math.cos(p1) * math.sin(p2) - math.sin(p1) * math.cos(p2) * math.cos(dl)))
+    return d, (b + 360) % 360
+
+
+def fly_fetch(ap):
+    """抓機場附近的飛機：一個來源失敗就換下一個；每個來源一秒最多一次"""
+    lat, lon = ap[3], ap[4]
+    err = "連不上"
+    for name, url, home in FLY_SRC:
+        if time.time() - FLY["bad"].get(name, 0) < 60:
+            continue
+        wait = FLY["last"] + 1.1 - time.time()
+        if wait > 0:
+            time.sleep(wait)
+        FLY["last"] = time.time()
+        try:
+            req = urllib.request.Request(url.format(lat=lat, lon=lon, d=FLY_NM), headers={"User-Agent": "vps-sentinel"})
+            with urllib.request.urlopen(req, timeout=8) as r:
+                d = json.loads(r.read())
+            ac = d.get("ac", d.get("aircraft"))
+            if not isinstance(ac, list):
+                raise ValueError("格式不對")
+            return ac, name, home
+        except Exception as e:  # noqa: BLE001
+            FLY["bad"][name] = time.time()
+            err = str(e)[:80]
+    raise RuntimeError(err)
+
+
+def fly_place(a):
+    code = str(a.get("iata") or a.get("icao") or "")[:4].upper()
+    known = fly_db().get(code) if code in {a[0] for a in FLY_APS} else None     # 有中文名稱的才換
+    return {"code": code, "name": known[2] if known else str(a.get("location") or a.get("name") or "")[:24]}
+
+
+def fly_routes():
+    """在背景查航線（從哪裡飛到哪裡）；查到的記 6 小時，查不到的 30 分鐘後再試"""
+    while True:
+        with FLY["lock"]:
+            todo = list(FLY["rq"])[:40]
+            FLY["rq"].difference_update(todo)
+            if not todo:
+                FLY["rbusy"] = False
+                return
+        now = time.time()
+        got = {}
+        try:
+            body = json.dumps({"planes": [{"callsign": c, "lat": la, "lng": lo} for c, la, lo in todo]}).encode()
+            req = urllib.request.Request(FLY_ROUTE, data=body, headers={"Content-Type": "application/json", "User-Agent": "vps-sentinel"})
+            with urllib.request.urlopen(req, timeout=10) as r:
+                for x in json.loads(r.read()) or []:
+                    cs = str(x.get("callsign") or "").strip().upper()
+                    aps = x.get("_airports") or []
+                    if cs and len(aps) >= 2 and x.get("plausible", 1) not in (0, False, "0"):
+                        got[cs] = [fly_place(a) for a in (aps[0], aps[-1])]
+        except Exception:  # noqa: BLE001
+            pass
+        for c, _, _ in todo:
+            FLY["routes"][c] = (now, got.get(c))
+
+
+def fly_route(cs, lat, lon):
+    if not re.fullmatch(r"[A-Z]{3}\d[A-Z0-9]{0,4}", cs):
+        return None                       # 私人飛機、註冊號當呼號的查不到
+    hit = FLY["routes"].get(cs)
+    if hit and time.time() - hit[0] < (6 * 3600 if hit[1] else 1800):
+        return hit[1]
+    with FLY["lock"]:
+        FLY["rq"].add((cs, lat, lon))
+        if not FLY["rbusy"]:
+            FLY["rbusy"] = True
+            threading.Thread(target=fly_routes, daemon=True).start()
+    return hit[1] if hit else None
+
+
+def fly_plane(a, ap):
+    """一架飛機：整理成看板一列；判斷是要降落、剛起飛、在地面還是路過"""
+    try:
+        lat, lon = float(a["lat"]), float(a["lon"])
+    except (KeyError, TypeError, ValueError):
+        return None
+    if float(a.get("seen_pos", a.get("seen", 0)) or 0) > 60:
+        return None
+    code = ap[0]
+    gnd = a.get("alt_baro") == "ground"
+    alt = 0 if gnd else a.get("alt_baro", a.get("alt_geom"))
+    if not isinstance(alt, (int, float)):
+        return None
+    gs = float(a.get("gs") or 0)
+    vr = a.get("baro_rate", a.get("geom_rate")) or 0
+    trk = a.get("track", a.get("true_heading"))
+    d, brg = fly_dist(ap[3], ap[4], lat, lon)
+    cs = str(a.get("flight") or "").strip().upper()
+    t = str(a.get("t") or "").upper()
+    reg = str(a.get("r") or "").upper()
+    al = FLY_AL.get(cs[:3]) if re.match(r"[A-Z]{3}\d", cs) else None
+    fn = (al[0] + cs[3:]) if al else cs
+    rt = fly_route(cs, lat, lon) if cs else None
+    org, dst = (rt[0]["code"], rt[1]["code"]) if rt else ("", "")
+    toward = trk is not None and abs((float(trk) - (brg + 180) % 360 + 540) % 360 - 180) < 60
+    if gnd or (alt < 400 and gs < 60):
+        if d > 6:
+            return None
+        ph = "gnd"
+    elif dst == code and org != code:
+        ph = "arr"
+    elif org == code and dst != code:
+        ph = "dep"
+    elif alt < 14000 and vr < -250 and toward:
+        ph = "arr"
+    elif alt < 14000 and vr > 250 and not toward:
+        ph = "dep"
+    elif alt < 5000 and d < 20:
+        ph = "arr" if toward else "dep"
+    else:
+        ph = "over"
+    eta = round(d / (gs * 1.852) * 60) if ph == "arr" and gs > 50 else None
+    if ph == "arr":
+        st = "即將落地" if alt < 2000 and d < 10 else f"{eta} 分鐘後" if eta is not None else "進場中"
+    elif ph == "dep":
+        st = "剛起飛" if d < 12 else "爬升中" if vr > 250 else "離開中"
+    elif ph == "gnd":
+        st = "在跑道上" if gs > 40 else "滑行中" if gs >= 5 else "停在機坪"
+    else:
+        st = "路過"
+    sq = str(a.get("squawk") or "")
+    emg = {"7700": "緊急狀況", "7600": "無線電故障", "7500": "劫機"}.get(sq) or (
+        "緊急狀況" if str(a.get("emergency") or "none") not in ("none", "") else "")
+    mil = bool(int(a.get("dbFlags") or 0) & 1)
+    return {
+        "id": str(a.get("hex") or "")[:8], "cs": cs, "fn": fn, "al": al[1] if al else str(a.get("ownOp") or "")[:24],
+        "reg": reg, "t": t, "model": FLY_TYPES.get(t) or str(a.get("desc") or t).title()[:28],
+        "org": rt[0] if rt else None, "dst": rt[1] if rt else None,
+        "alt": round(alt * 0.3048), "spd": round(gs * 1.852), "vr": round(float(vr) * 0.00508, 1),
+        "d": round(d, 1), "eta": eta, "trk": round(float(trk)) if trk is not None else None,
+        "x": round(d * math.sin(math.radians(brg)), 2), "y": round(d * math.cos(math.radians(brg)), 2),
+        "ph": ph, "st": emg or st, "emg": bool(emg), "sq": sq, "mil": mil, "rare": mil or t in FLY_RARE,
+    }
+
+
+def fly_board(code):
+    db = fly_db()
+    ap = db.get(code) or db["TPE"]
+    with FLY["fetch"]:                    # 好幾個人同時看：只抓一次
+        hit = FLY["cache"].get(ap[0])
+        if hit and time.time() - hit["t"] < FLY_EVERY:
+            return hit
+        ac, src, home = fly_fetch(ap)
+    rows = [p for p in (fly_plane(a, ap) for a in ac) if p]
+    by = lambda ph: [p for p in rows if p["ph"] == ph]           # noqa: E731
+    arr = sorted(by("arr"), key=lambda p: (p["eta"] if p["eta"] is not None else 999, p["d"]))
+    dep = sorted(by("dep"), key=lambda p: p["d"])
+    gnd = sorted(by("gnd"), key=lambda p: (-p["spd"], p["fn"]))
+    over = by("over")
+    out = {"ok": True, "t": time.time(), "ap": fly_ap(ap), "src": src, "home": home,
+           "arr": arr, "dep": dep, "gnd": gnd, "over": over}
+    FLY["cache"][ap[0]] = out
+    return out
+
+
+def fly_api(q):
+    if "q" in q:
+        return {"ok": True, "list": fly_search(q["q"][0]), "pin": [fly_ap(fly_db()[c]) for c in FLY_PIN if c in fly_db()]}
+    try:
+        return fly_board(str(q.get("ap", ["TPE"])[0]).upper()[:4])
+    except Exception as e:  # noqa: BLE001
+        return {"ok": False, "error": f"航班資料暫時拿不到（{e}）"}
+
+
 class Handler(BaseHTTPRequestHandler):
     server_version = "VPSSentinelLite"
     timeout = 120                               # 連上來卻一直不送資料的連線，2 分鐘後自動斷掉，不會越積越多把哨兵拖垮
@@ -5503,6 +5809,11 @@ class Handler(BaseHTTPRequestHandler):
             with open(f, "rb") as fh:
                 shutil.copyfileobj(fh, self.wfile, 1 << 20)
             return
+        if path == "/api/flights":
+            if not self.authed():
+                time.sleep(1)
+                return self.send(401, '{"error":"密碼錯誤"}')
+            return self.send(200, json.dumps(fly_api(urllib.parse.parse_qs(urllib.parse.urlsplit(self.path).query, keep_blank_values=True)), ensure_ascii=False))
         if path in ("/api/status", "/api/all"):
             if not self.authed():
                 time.sleep(1)
