@@ -110,7 +110,7 @@ class Flights(unittest.TestCase):
         d = self.get("ap=KHH")                # 愛好者那邊只有桃園附近的飛機
         self.assertTrue(d["ok"], d)
         self.assertIn("BR850", [p["fn"] for p in d["arr"]])
-        self.assertEqual(len(d["gnd"]), 1)
+        self.assertEqual(d["gnd"], [])            # 沒名字的停機不顯示
         self.assertEqual([x[0] for x in d["srcs"]], ["測試", "OpenSky"])
 
     def test_search(self):
