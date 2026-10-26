@@ -27,5 +27,7 @@ jobs:
                   print(" ", io, "rows", len(m), "live", len(live), [r["fn"] for r in live][:10])
               print(" live arr/dep", [(p["fn"], p["ph"], p["d"], p["alt"]) for p in rows if p["ph"] in ("arr", "dep")][:30])
               print(" over", [(p["fn"], p["d"], p["alt"]) for p in rows if p["ph"] == "over"][:30])
+              sky = s.fly_sky(ap); print(" opensky", len(sky))
+              b = s.fly_board(code); print(" board", {k: len(b[k]) for k in ("arr", "dep", "gnd", "over", "rest")}, "live arr", [r["fn"] for r in b["arr"] if r.get("live")], "rest", [(r["fn"], r["ph"]) for r in b["rest"]])
               if fids: print(" next fids arr", [(r["fn"], r["st"], r.get("share")) for r in fids if r["io"] == "arr"][:12])
           PY

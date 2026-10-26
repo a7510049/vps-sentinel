@@ -899,6 +899,11 @@ html.flyon .dash>.view{content-visibility:hidden;contain-intrinsic-size:auto non
 .radar .rbox{position:relative}
 .radar .pls{position:absolute;inset:0;pointer-events:none}
 .radar .rz{transform-origin:0 0}
+.radar .rwy{stroke:var(--tx3);stroke-width:2.4;stroke-linecap:round;vector-effect:non-scaling-stroke}
+.radar .tr{fill:none;stroke:var(--tx3);stroke-width:1.4;stroke-opacity:.45;stroke-linejoin:round;stroke-linecap:round;vector-effect:non-scaling-stroke}
+.radar .tr.arr{stroke:var(--p);stroke-opacity:.6}.radar .tr.dep{stroke:var(--tx);stroke-opacity:.5}.radar .tr.emg{stroke:var(--bad);stroke-opacity:.7}
+.radar .sweep{position:absolute;inset:.8%;border-radius:var(--r-pill);pointer-events:none;
+  background:conic-gradient(from 0deg,transparent 0 80%,color-mix(in oklab,var(--p) 18%,transparent) 100%);animation:spin calc(var(--t-long) * 5) linear infinite}
 .radar .coast{fill:var(--s2);stroke:var(--s4);stroke-width:1;vector-effect:non-scaling-stroke;stroke-linejoin:round}
 .radar .pl.gnd .pp{scale:.6}
 .radar .tws{position:absolute;inset:0;pointer-events:none}

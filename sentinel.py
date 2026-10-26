@@ -5754,7 +5754,7 @@ def fly_plane(a, ap):
     t = str(a.get("t") or "").upper()
     reg = str(a.get("r") or "").upper()
     al = FLY_AL.get(cs[:3]) if re.match(r"[A-Z]{3}\d", cs) else None
-    fn = (al[0] + cs[3:]) if al else cs
+    fn = fly_fn(al[0] + cs[3:]) if al else cs
     rt = fly_route(cs, lat, lon) if cs else None
     org, dst = (rt[0]["code"], rt[1]["code"]) if rt else ("", "")
     toward = trk is not None and abs((float(trk) - (brg + 180) % 360 + 540) % 360 - 180) < 60
@@ -5800,13 +5800,19 @@ def fly_plane(a, ap):
     }
 
 
+def fly_fn(fn):
+    """班機號碼統一寫法：CI054 → CI54（呼號會補 0，官網表不會，不統一就對不起來）"""
+    m = re.match(r"([A-Z0-9]{2})0*(\d+)([A-Z]?)$", fn or "")
+    return m.group(1) + m.group(2) + m.group(3) if m else fn
+
+
 def fly_merge(ap, fids, rows, io):
     """官網的航班表配上收得到訊號的飛機：表上有的顯示即時位置、幾分鐘後落地；表上沒有的（貨機、私人飛機）不列"""
     now = time.time()
     live = {}
     for p in rows:
         if p["fn"]:
-            live.setdefault(p["fn"], p)
+            live.setdefault(fly_fn(p["fn"]), p)
     me, out, used = {"code": ap[0], "name": ap[2]}, [], set()
     for r in fids:
         if r["io"] != io or fly_cargo(r["fn"]):
@@ -5819,7 +5825,7 @@ def fly_merge(ap, fids, rows, io):
         row = {"id": f"f-{io}-{r['fn']}-{int(r['sch'])}", "fn": r["fn"], "cs": "", "al": r["al"], "reg": "", "t": r["type"], "model": r["type"],
                "org": pl if io == "arr" else me, "dst": me if io == "arr" else pl, "ph": io, "st": r["st"], "emg": False, "mil": False, "rare": False,
                "fids": True, "sch": r["sch"], "est": r["est"], "gate": r["gate"], "term": r["term"], "share": r.get("share") or []}
-        p = next((live[f] for f in [r["fn"], *row["share"]] if f in live), None)
+        p = next((live[fly_fn(f)] for f in [r["fn"], *row["share"]] if fly_fn(f) in live), None)
         if p:
             used.add(p["id"])
             row.update({k: p[k] for k in ("id", "cs", "reg", "t", "model", "alt", "spd", "vr", "d", "eta", "trk", "x", "y", "sq", "emg", "mil", "rare") if p[k] or k not in ("t", "model")})   # 收到的訊號沒有機型：留官網的
@@ -5840,9 +5846,9 @@ def fly_gnd(ap, fids, gnd):
     me, by, out = {"code": ap[0], "name": ap[2]}, {}, []
     for r in fids:
         for f in [r["fn"], *(r.get("share") or [])]:
-            by.setdefault(f, r)
+            by.setdefault(fly_fn(f), r)
     for p in gnd:
-        r = by.get(p["fn"])
+        r = by.get(fly_fn(p["fn"]))
         if not r or fly_cargo(r["fn"]):
             continue
         pl = {"code": r["pc"], "name": r["pl"]}
@@ -5898,10 +5904,13 @@ def fly_board(code):
     dep = sorted(by("dep"), key=lambda p: p["d"])
     gnd = sorted(by("gnd"), key=lambda p: (-p["spd"], p["fn"]))
     over = by("over")
+    rest = []
     if fids is not None:
         arr, dep, gnd = fly_merge(ap, fids, rows, "arr"), fly_merge(ap, fids, rows, "dep"), fly_gnd(ap, fids, gnd)
+        got = {p["id"] for p in arr + dep + gnd}
+        rest = [p for p in rows if p["ph"] != "over" and p["id"] not in got]   # 對不上官網表的：不列在看板，但雷達上照樣畫出來
     out = {"ok": True, "t": time.time(), "ap": fly_ap(ap), "src": src or (srcs[0][0] if srcs else ""), "home": home, "srcs": srcs,
-           "fids": fids is not None, "arr": arr, "dep": dep, "gnd": gnd, "over": over}
+           "fids": fids is not None, "arr": arr, "dep": dep, "gnd": gnd, "over": over, "rest": rest}
     FLY["cache"][ap[0]] = out
     return out
 
@@ -5915,6 +5924,8 @@ FLY_TOWNS = [
     ("屏東", 22.67, 120.49), ("小琉球", 22.34, 120.37), ("宜蘭", 24.76, 121.75), ("花蓮", 23.99, 121.60),
     ("台東", 22.76, 121.14), ("馬公", 23.57, 119.58),
 ]
+# 跑道（大約）：方位角、長度（公里）、往左平移（公里），畫在雷達正中間
+FLY_RWY = {"TPE": [(53, 3.66, .75), (53, 3.8, -.75)], "TSA": [(96, 2.6, 0)], "RMQ": [(3, 3.66, 0)], "KHH": [(93, 3.15, 0)]}
 FLY_GEO = {}
 
 
@@ -5935,14 +5946,15 @@ def fly_geo(code):
                     continue
                 pts = [xy(float(p.split(",")[1]), float(p.split(",")[0])) for p in line.split()]
                 closed = len(pts) > 2 and pts[0] == pts[-1]
-                seg = []
-                for pt in pts + [None]:              # 範圍外的點切掉，線斷成好幾段
-                    if pt and abs(pt[0]) < lim and abs(pt[1]) < lim:
-                        seg.append(f"{pt[0]:.1f} {-pt[1]:.1f}")
-                        continue
-                    if len(seg) > 1:
-                        path.append("M" + "L".join(seg) + ("Z" if closed and len(seg) == len(pts) else ""))
-                    seg = []
+                if not any(abs(x) < lim and abs(y) < lim for x, y in pts):
+                    continue
+                seg = []                             # 範圍外的點壓到邊框上（不要直接切掉，不然陸地會斜斜地少一塊）
+                for x, y in pts:
+                    c = f"{max(-lim, min(lim, x)):.1f} {-max(-lim, min(lim, y)):.1f}"
+                    if not seg or seg[-1] != c:
+                        seg.append(c)
+                if len(seg) > 1:
+                    path.append("M" + "L".join(seg) + ("Z" if closed else ""))
     except OSError:
         pass
     towns = []
@@ -5950,7 +5962,13 @@ def fly_geo(code):
         x, y = xy(la, lo)
         if math.hypot(x, y) < 64:
             towns.append([n, round(x, 1), round(y, 1)])
-    FLY_GEO[code] = {"ok": True, "coast": "".join(path), "towns": towns}
+    rwy = []
+    for h, ln, off in FLY_RWY.get(code, []):
+        a, b = math.radians(h), math.radians(h - 90)
+        cx, cy = off * math.sin(b), off * math.cos(b)
+        dx, dy = ln / 2 * math.sin(a), ln / 2 * math.cos(a)
+        rwy.append([round(cx - dx, 2), round(cy - dy, 2), round(cx + dx, 2), round(cy + dy, 2)])
+    FLY_GEO[code] = {"ok": True, "coast": "".join(path), "towns": towns, "rwy": rwy}
     return FLY_GEO[code]
 
 
