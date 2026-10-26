@@ -10,12 +10,18 @@ jobs:
       - run: |
           UA="Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130 Safari/537.36"
           get() { echo; echo "=== $1"; curl -sSL -m 25 -A "$UA" -o o.bin -w "code %{http_code} type %{content_type} size %{size_download}\n" "$1" || true; }
-          get "https://www.taoyuan-airport.com/uploads/flightx/a_flight_v4.txt"
-          iconv -f BIG5-HKSCS -t UTF-8 -c o.bin | head -5; iconv -f BIG5-HKSCS -t UTF-8 -c o.bin | grep ",D," | tail -3; date -u
-          get "https://www.kia.gov.tw/API/InstantSchedule.ashx?AirFlyLine=1&AirFlyIO=1"; cat o.bin
-          get "https://www.kia.gov.tw/FIDS.html"; grep -oiE "[\"'][^\"']*(json|ashx|api|fids)[^\"']*[\"']" o.bin | sort -u | head -30; grep -oE "<script[^>]*src=[^>]*>" o.bin
-          get "https://www.tca.gov.tw/index.php?act=fids&code=departure_arrival"; grep -oiE "[\"'][^\"']*(json|ajax|api|fids|act=)[^\"']*[\"']" o.bin | sort -u | head -30; grep -n -iE "<table|<tr" o.bin | head -5; python3 -c "
-          import re;s=open('o.bin',encoding='utf-8',errors='replace').read();i=s.find('<table');print(re.sub(r'\s+',' ',s[i:i+2500]))"
-          get "https://www.tsa.gov.tw/flights/domestic/today?culture=1"; grep -oiE "[\"'][^\"']*(json|api|flight)[^\"']*[\"']" o.bin | sort -u | head -30; python3 -c "
-          import re;s=open('o.bin',encoding='utf-8',errors='replace').read();i=s.find('__NEXT_DATA__');print(s[i:i+2500])"
-          get "https://data.gov.tw/api/v2/rest/dataset?q=%E5%8D%B3%E6%99%82%E8%88%AA%E7%8F%AD"; head -c 3000 o.bin
+          get "https://www.kia.gov.tw/data/arr.json"; head -c 1500 o.bin; echo; python3 -c "import json;d=json.load(open('o.bin',encoding='utf-8-sig'));print(type(d), len(d), list(d)[:5] if isinstance(d,dict) else '')" || true
+          get "https://www.kia.gov.tw/data/dep.json"; head -c 1200 o.bin; echo
+          get "https://www.kia.gov.tw/data/airport2.json"; head -c 600 o.bin; echo
+          get "https://www.tca.gov.tw/index.php?act=fids&code=departure_arrival"
+          python3 - <<'P'
+          import re
+          s=open('o.bin',encoding='utf-8',errors='replace').read()
+          for k in ['dataView','apiCode','act=refresh','placeLabelTh','抵達','出發','arrival','departure']:
+              for m in list(re.finditer(re.escape(k),s))[:4]:
+                  print('---',k,m.start()); print(re.sub(r'\s+',' ',s[max(0,m.start()-300):m.start()+500]))
+          print('ROWS', s.count('class="itema"'))
+          P
+          get "https://www.tsa.gov.tw/_next/static/chunks/pages/flights/domestic/today-5ddfc89f067a5ff7.js"; grep -oE '"[^"]*(api|Api|API)[^"]*"' o.bin | sort -u | head -40; grep -oE 'https?://[^"]+' o.bin | sort -u | head
+          get "https://www.tsa.gov.tw/"; grep -oE '/_next/static/chunks/[^"]+\.js' o.bin | sort -u | head -20 > chunks.txt; cat chunks.txt
+          for c in $(cat chunks.txt); do curl -sSL -m 20 -A "$UA" "https://www.tsa.gov.tw$c" | grep -oE '"[^"]{0,60}(/api/|api\.|Flight|flight)[^"]{0,80}"' | sort -u | head -15; done
