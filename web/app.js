@@ -2523,18 +2523,22 @@ function flapSet(el, v, delay = 0){
 }
 const flyHM = (t, tz) => { try { return new Date(t).toLocaleTimeString("zh-TW", {hour:"2-digit", minute:"2-digit", hour12:false, timeZone: tz || undefined}); } catch(e) { return new Date(t).toLocaleTimeString("zh-TW", {hour:"2-digit", minute:"2-digit", hour12:false}); } };
 const FLYDEP = {};                                        // 每架飛機估出來的起飛時間（第一次看到就固定，不會一直跳）
-/* 一列看板的內容：時間、航班、航空公司、來自／前往、機型、註冊號、狀態 */
+/* 一列看板的內容：時間、航班、從哪來／去哪、航空公司、機型、註冊號、狀態 */
 function flyRowV(p, tab, tz){
-  if (!p) return {t:"", fn:"", al:"", pl:"", m:"", reg:"", st:"", cls:""};
+  if (!p) return {t:"", fn:"", pc:"", pl:"", al:"", m:"", reg:"", st:"", cls:""};
   let t = "";
   if (tab === "arr" && p.eta != null) t = flyHM(Date.now() + p.eta * 60e3, tz);
   if (tab === "dep") { if (!FLYDEP[p.id]) FLYDEP[p.id] = Date.now() - (p.spd > 50 ? p.d / p.spd * 3600e3 : 0); t = flyHM(FLYDEP[p.id], tz); }
   const pl = tab === "arr" ? p.org : tab === "dep" ? p.dst : (p.dst && p.dst.code !== FLYD.ap.code ? p.dst : p.org);
-  return {t, fn: p.fn || p.reg, al: p.al || "", pl: pl ? pl.name || pl.code : "", pc: pl ? pl.code : "", m: p.model || p.t, reg: p.reg, st: p.st,
+  return {t, fn: p.fn || p.reg, pc: pl ? pl.code : "", pl: pl ? pl.name || "" : "", al: p.al || "", m: p.model || p.t || "", reg: p.reg || "", st: p.st,
     cls: p.emg ? "bad" : /落地|剛起飛|跑道/.test(p.st) ? "hot" : ""};
 }
-const FLYW = {t:5, fn:7, al:6, pl:6, pc:3, m:10, reg:7, st:6};
-const flyRow = i => `<div class="fr" data-i="${i}" role="button" tabindex="0">${["t", "fn", "al", "pl", "pc", "m", "reg", "st"].map(k => `<span class="fk ${k}">${flap("", FLYW[k])}</span>`).join("")}<span class="ftag"></span><i class="br b1"></i><i class="br b2"></i></div>`;
+const FLYF = ["t", "fn", "pc", "st"], FLYX = ["pl", "al", "m", "reg"];   // 翻牌的欄位／一般文字的欄位（城市、航空公司、機型、註冊號用一般字比較好讀）
+const FLYW = {t:5, fn:7, pc:3, st:6};
+const FLYCOL = ["t", "fn", "pc", "pl", "al", "m", "reg", "st"];
+const FLYHEAD = {arr:["預計抵達", "航班", "出發地", "", "航空公司", "機型", "註冊號", "狀態"],
+  dep:["起飛", "航班", "目的地", "", "航空公司", "機型", "註冊號", "狀態"], gnd:["", "航班", "航線", "", "航空公司", "機型", "註冊號", "狀態"]};
+const flyRow = i => `<div class="fr" data-i="${i}" role="button" tabindex="0">${FLYCOL.map(k => `<span class="fk ${k}">${FLYW[k] ? flap("", FLYW[k]) : ""}</span>`).join("")}<span class="ftag"></span><i class="br b1"></i><i class="br b2"></i></div>`;
 function flyShell(){
   return `<div class="flyv" id="fly"><div class="fscroll"><div class="fwrap">
     <div class="ftop"><button class="icbtn" data-fback title="返回">${I("back")}</button><span class="grow"></span>
@@ -2543,7 +2547,7 @@ function flyShell(){
       <div class="fclock"><span class="sub">當地時間</span>${flap("", 5, "lg")}</div></div>
     <div class="fmain"><div class="fleft">
       <div class="seg ftabs" data-slide>${FLYTAB.map(([k, l]) => `<button class="${FLYS.tab === k ? "on" : ""}" data-ftab="${k}">${l}<span class="fn" data-k="n-${k}"></span></button>`).join("")}</div>
-      <div class="board"><div class="fh">${["時間", "航班", "航空公司", "地點", "", "機型", "註冊號", "狀態"].map((l, i) => `<span class="fk ${["t", "fn", "al", "pl", "pc", "m", "reg", "st"][i]}">${l}</span>`).join("")}</div><div class="frows"></div></div>
+      <div class="board"><div class="fh">${FLYCOL.map(k => `<span class="fk ${k}"></span>`).join("")}</div><div class="frows"></div></div>
       <div class="fmsg sub" hidden></div></div>
       <div class="radar"><svg viewBox="-62 -62 124 124" aria-label="雷達">
         ${[10, 30, 60].map(r => `<circle class="rg" r="${r}"/><text class="rt" font-size="3.4" x="${(r * .7071 + 1).toFixed(1)}" y="${(-r * .7071).toFixed(1)}">${r}</text>`).join("")}
@@ -2582,6 +2586,8 @@ function flyPaint(anim){
   txt(f.querySelector('[data-k="name"]'), d.ap.name); txt(f.querySelector('[data-k="city"]'), d.ap.city);
   flapSet(f.querySelector(".fclock .sf"), flyHM(Date.now(), tz));
   FLYTAB.forEach(([k]) => txt(f.querySelector(`[data-k="n-${k}"]`), String(d[k].length)));
+  f.querySelectorAll(".fh .fk").forEach((h, i) => txt(h, FLYHEAD[FLYS.tab][i]));
+  f.querySelector(".board").dataset.tab = FLYS.tab;
   const list = d[FLYS.tab] || [], box = f.querySelector(".frows"), want = Math.min(30, Math.max(DESK.matches ? 8 : 6, list.length));
   while (box.children.length < want) {               // 看板的列數跟著變：新的一列從下面長出來
     box.insertAdjacentHTML("beforeend", flyRow(box.children.length));
@@ -2592,7 +2598,8 @@ function flyPaint(anim){
   [...box.children].slice(0, want).forEach((r, i) => {
     const p = list[i], v = flyRowV(p, FLYS.tab, tz);
     r.dataset.id = p ? p.id : ""; r.classList.toggle("bad", v.cls === "bad"); r.classList.toggle("hot", v.cls === "hot"); r.classList.toggle("empty", !p); r.classList.toggle("sel", !!p && p.id === FLYSEL);
-    ["t", "fn", "al", "pl", "pc", "m", "reg", "st"].forEach((k, j) => flapSet(r.querySelector(`.fk.${k} .sf`), v[k], i * T.fast * .35 + j * T.fast * .2));
+    FLYF.forEach((k, j) => flapSet(r.querySelector(`.fk.${k} .sf`), v[k], i * T.fast * .35 + j * T.fast * .2));
+    FLYX.forEach(k => txt(r.querySelector(`.fk.${k}`), v[k]));
     const tag = p ? (p.emg ? "緊急" : p.mil ? "軍機" : p.rare ? "少見" : "") : "", te = r.querySelector(".ftag");
     if (te.textContent !== tag) { te.textContent = tag; te.className = "ftag" + (tag ? " on" + (p.emg ? " bad" : "") : ""); }
   });
@@ -2882,7 +2889,7 @@ async function refreshNow(btn){
   const shape = (p, r) => { rot = r; pl.style.transform = `rotate(${r}deg) scale(${.3 + .7 * p})`; };
   const hideUp = () => { ptr.classList.add("back"); show(-70); shape(0, rot); };
   addEventListener("touchstart", e => {
-    if (DESK.matches || DET || scrollY > 0 || REFRESHING || document.querySelector("#layer .veil") || !LIST.length) return;
+    if (DESK.matches || DET || $("#fly") || scrollY > 0 || REFRESHING || document.querySelector("#layer .veil") || !LIST.length) return;   // 機場起降打開時：往下滑是在捲看板
     y0 = e.touches[0].clientY; d = 0; armed = false; gen++;
     ptr.getAnimations({subtree: true}).forEach(a => a.cancel());
     ptr.classList.remove("back", "armed", "bad"); pl.style.clipPath = RND; pg.innerHTML = "";
