@@ -20,6 +20,9 @@ AC = [
     # 緊急狀況
     {"hex": "899004", "flight": "CES2017 ", "r": "B-1234", "t": "A21N", "alt_baro": 2500, "gs": 150, "track": 53,
      "baro_rate": -700, "squawk": "7700", "lat": TPE[0] - .05, "lon": TPE[1] - .06, "seen": 1},
+    # 聯邦快遞的貨機，不列出來
+    {"hex": "899006", "flight": "FDX5300 ", "t": "B77L", "alt_baro": 2800, "gs": 150, "track": 53,
+     "baro_rate": -700, "lat": TPE[0] - .06, "lon": TPE[1] - .07, "seen": 1},
     # 從松山剛起飛（就在松山上空往東南爬升），不能算成桃園的
     {"hex": "899005", "flight": "EVA261  ", "alt_baro": 3200, "gs": 170, "track": 147, "baro_rate": 1500,
      "lat": 25.050, "lon": 121.570, "seen": 1},
@@ -43,6 +46,9 @@ def tpe_txt():
         ("A", "NH", "全日空", "5800", " C8", now + 600, "NRT", "Tokyo", "東京", "準時ON TIME"),     # 共掛
         ("D", "CI", "中華航空", "  27", " A5", now + 1800, "HKG", "Hong Kong", "香港", "登機BOARDING"),
         ("D", "IT", "台灣虎航", " 200", " D1", now - 3 * 3600, "OKA", "Okinawa", "沖繩", "出發DEPARTED"),   # 太早了
+        ("D", "B7", "立榮航空", " 831", " D3", now + 900, "KIX", "Osaka", "大阪", "準時ON TIME"),        # 在地面滑行的那班
+        ("A", "MU", "東方航空", "2017", " B6", now + 300, "PVG", "Shanghai", "上海", "準時ON TIME"),
+        ("A", "CI", "中華航空", "5225", "D5R", now + 600, "ANC", "Anchorage", "安克拉治", "準時ON TIME"),  # 貨機
     ]:
         d, h = tw(t)
         rows.append(f"2,{io},{al},{alz:20},{num},{gate},{d},{h},{d},{h},{pc},{en},{zh},{st:20},B777-300ER,,,,06 ,    ")
@@ -53,7 +59,9 @@ def khh_json(io):
     t = time.time() + 900
     d, h = tw(t)
     if io == "arr":
-        return [{"FDATE": d, "STA": f"{d.replace('/', '-')} {h}", "ATA": "", "arrtime": "", "airLineIATA": "CI", "airLineNum": "CI840",
+        return [{"FDATE": d, "STA": f"{d.replace('/', '-')} {h}", "ATA": "", "arrtime": "", "airLineIATA": "BR", "airLineNum": "BR850",
+                 "CodeShare": "", "DepartureAirportIATA": "HKG", "airPlaneType": "333", "Bay": "", "statusarr": 1, "notearr": ""},
+                {"FDATE": d, "STA": f"{d.replace('/', '-')} {h}", "ATA": "", "arrtime": "", "airLineIATA": "CI", "airLineNum": "CI840",
                  "CodeShare": "PG4905;AE5320", "DepartureAirportIATA": "BKK", "airPlaneType": "32Q", "Bay": "", "statusarr": 1, "notearr": ""}]
     return [{"FDATE": d, "STD": f"{d.replace('/', '-')} {h}", "ATD": "", "deptime": "", "airLineIATA": "UO", "airLineNum": "UO135",
              "CodeShare": "", "ArrivalAirportIATA": "HKG", "airPlaneType": "320", "Bay": "", "statusdep": 3, "notedep": ""}]
@@ -135,10 +143,13 @@ class Flights(unittest.TestCase):
         self.assertEqual(arr["BR2196"]["al"], "長榮航空")
         self.assertEqual(arr["BR2196"]["model"], "777-300ER")
         self.assertEqual(arr["BR2196"]["org"]["name"], "東京")
-        dep = {p["fn"]: p for p in d["dep"]}
-        self.assertEqual(dep["CI101"]["dst"], {"code": "NRT", "name": "東京"})      # adsb.lol 沒有的，adsbdb 補上
+        self.assertEqual(self.S.fly_route("CAL101", *TPE)[1], {"code": "NRT", "name": "東京"})      # adsb.lol 沒有的，adsbdb 補上
+        self.assertNotIn("CI101", [p["fn"] for p in d["dep"]])       # 官網表上沒有的不列
         self.assertEqual([p["fn"] for p in d["gnd"]], ["B7831"])
-        self.assertEqual(d["gnd"][0]["st"], "滑行中")
+        self.assertEqual((d["gnd"][0]["st"], d["gnd"][0]["al"], d["gnd"][0]["dst"]["name"]), ("滑行中", "立榮航空", "大阪"))
+        every = [p["fn"] for p in d["arr"] + d["dep"] + d["gnd"] + d["over"]]
+        self.assertNotIn("CI5225", every)                          # 貨機不列
+        self.assertNotIn("FX5300", every)
         self.assertTrue(arr["MU2017"]["emg"])
         self.assertEqual(arr["MU2017"]["st"], "緊急狀況")
         self.assertNotIn("BR261", [p["fn"] for p in d["arr"] + d["dep"] + d["gnd"]])   # 松山的
@@ -157,7 +168,9 @@ class Flights(unittest.TestCase):
         S.FLY_SKYS["cache"].clear()
         d = self.get("ap=KHH")                # 愛好者那邊只有桃園附近的飛機
         self.assertTrue(d["ok"], d)
-        self.assertIn("BR850", [p["fn"] for p in d["arr"]])
+        br = [p for p in d["arr"] if p["fn"] == "BR850"][0]
+        self.assertTrue(br["live"])
+        self.assertEqual(br["model"], "A330-300")                # OpenSky 沒有機型：用官網的
         self.assertEqual(d["gnd"], [])            # 沒名字的停機不顯示
         self.assertEqual([x[0] for x in d["srcs"]], ["高雄機場官網", "測試", "OpenSky"])
         ci = [p for p in d["arr"] if p["fn"] == "CI840"][0]

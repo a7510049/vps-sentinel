@@ -840,7 +840,7 @@ html.flyon .dash>.view{content-visibility:hidden;contain-intrinsic-size:auto non
 .fap svg{width:18px;height:18px}
 /* 一格翻牌：上下兩半分開畫，中間一條縫 */
 .sf{display:inline-flex;gap:2px;line-height:1;font-weight:500;font-variant-numeric:tabular-nums;vertical-align:middle}
-.sf .c{position:relative;font-style:normal;width:.8em;height:1.4em;flex:none;border-radius:calc(var(--r-xs) / 2);background:var(--s3);perspective:5em}
+.sf .c{position:relative;contain:strict;font-style:normal;width:.8em;height:1.4em;flex:none;border-radius:calc(var(--r-xs) / 2);background:var(--s3);perspective:5em}
 .sf .c.w{width:1.2em}
 .sf b{position:absolute;inset:0;display:grid;place-items:center;border-radius:inherit;background:var(--s3);color:var(--tx);font-weight:500;backface-visibility:hidden;transform-origin:50% 50%;white-space:pre}
 .sf b.u{clip-path:inset(0 0 50% 0)}
@@ -876,19 +876,21 @@ html.flyon .dash>.view{content-visibility:hidden;contain-intrinsic-size:auto non
 .ftag.bad{background:var(--badc);color:var(--on-badc)}
 .fmsg{background:var(--card);border-radius:var(--r-lg);padding:16px;text-align:center}
 .radar{background:var(--card);border-radius:var(--r-xl);padding:16px;width:100%;max-width:480px;align-self:center}
-.radar svg{width:100%;height:auto;aspect-ratio:1;overflow:visible}
+.radar .rbox>svg{display:block;width:100%;height:auto;aspect-ratio:1;overflow:visible}
 .radar .rg{fill:none;stroke:var(--s4);stroke-width:.3}
 .radar .rx{stroke:var(--s4);stroke-width:.2;stroke-dasharray:1 1.5}
 .radar .rt,.radar .rn{fill:var(--tx3)}
 .radar .rn{text-anchor:middle}
 .radar .ap{fill:var(--p)}
-.radar .pl .pp{fill:var(--tx3);transition:fill var(--t-mid) var(--ease)}
-.radar .pl .pt{fill:var(--tx3)}
-.radar .pl.arr .pp{fill:var(--p)}.radar .pl.arr .pt{fill:var(--tx2)}
-.radar .pl.dep .pp{fill:var(--tx)}.radar .pl.dep .pt{fill:var(--tx2)}
-.radar .pl.emg .pp,.radar .pl.emg .pt{fill:var(--bad)}
+.radar .rbox{position:relative}
+.radar .pls{position:absolute;inset:0;pointer-events:none}
+.radar .pl{position:absolute;left:0;top:0;width:0;height:0;pointer-events:auto;cursor:pointer;will-change:transform}
+.radar .pl .pp{position:absolute;left:-4em;top:-4em;width:8em;height:8em;fill:var(--tx3);overflow:visible;transition:fill var(--t-mid) var(--ease)}
+.radar .pl .pt{position:absolute;left:1.27em;top:-.5em;font-size:3em;line-height:1;white-space:nowrap;color:var(--tx3);pointer-events:none}
+.radar .pl.arr .pp{fill:var(--p)}.radar .pl.arr .pt{color:var(--tx2)}
+.radar .pl.dep .pp{fill:var(--tx)}.radar .pl.dep .pt{color:var(--tx2)}
+.radar .pl.emg .pp{fill:var(--bad)}.radar .pl.emg .pt{color:var(--bad)}
 .radar .pl.sel .pp{stroke:var(--p);stroke-width:1.4;paint-order:stroke}
-.radar .pl{cursor:pointer}
 .rleg{display:flex;flex-wrap:wrap;gap:6px 14px;margin-top:10px;font-size:var(--fs-s);color:var(--tx2);align-items:center}
 .rleg span{display:inline-flex;align-items:center;gap:6px}
 .rleg i{width:10px;height:10px;border-radius:50%;background:var(--tx3)}
@@ -946,4 +948,4 @@ html.flyon .dash>.view{content-visibility:hidden;contain-intrinsic-size:auto non
 .fapl .lbl{justify-content:flex-start}
 .fapl .li{min-height:60px}
 .fon{color:var(--p)}.fon svg{width:20px;height:20px}
-.radar .pl.gnd .pt{display:none}
+.radar .pl.gnd .pt,.radar .pl.over:not(.sel) .pt{display:none}

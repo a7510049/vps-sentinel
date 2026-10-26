@@ -5372,8 +5372,22 @@ FLY_TYPES = {
 }
 FLY_RARE = {"A388", "B744", "B748", "B742", "MD11", "A343", "A346", "A3ST", "A337", "A124", "A225", "IL76", "C17",
             "C5M", "K35R", "A400", "B52", "E3TF", "B77L", "B764", "A306", "A339", "A338", "B779", "B778", "C919", "BCS1", "BCS3"}
+# 貨機：貨運航空公司，或華航、長榮的貨運航班號（5000～6999、長榮 600～699）；看板以客機為主，不列出來
+FLY_CARGO_ICAO = {"NCA", "CAO", "CKK", "CSS", "SQC", "FDX", "UPS", "GTI", "CLX", "CKS", "PAC", "ABW", "BOX", "GEC", "AHK",
+                  "DHK", "DHX", "BCS", "YZR", "CYZ", "ICV", "ATN", "ABX", "MPH", "TAY", "NPT", "SOO", "WGN", "AJT", "KYE", "YTO"}
+FLY_CARGO_IATA = {"KZ", "CK", "O3", "FX", "5X", "5Y", "CV", "K4", "PO", "RU", "3S", "LD", "QY", "D0", "Y8", "CF", "M6", "GB", "YG", "C8", "K9"}
 FLY_SKYS = {"cache": {}, "until": 0}
 FLY = {"cache": {}, "routes": {}, "lock": threading.Lock(), "last": 0.0, "bad": {}, "rq": set(), "rbusy": False, "fetch": threading.Lock(), "logged": {}}
+
+
+def fly_cargo(fn, cs=""):
+    if re.match(r"[A-Z]{3}\d", cs or "") and cs[:3] in FLY_CARGO_ICAO:
+        return True
+    m = re.fullmatch(r"([A-Z0-9]{2})(\d{1,4})[A-Z]?", fn or "")
+    if not m:
+        return False
+    al, n = m.group(1), int(m.group(2))
+    return al in FLY_CARGO_IATA or (al in ("CI", "BR") and 5000 <= n <= 6999) or (al == "BR" and 600 <= n <= 699)
 
 
 def fly_dist(la1, lo1, la2, lo2):
@@ -5471,6 +5485,10 @@ FLY_FIDS_NAME = {"TPE": ("桃園機場", "https://www.taoyuan-airport.com"), "KH
 FLY_FIDS_EVERY = 60
 FLY_FIDS = {}
 FLY_TW = timezone(timedelta(hours=8))
+FLY_IATA_T = {"319": "A319", "320": "A320", "32N": "A320neo", "321": "A321", "32Q": "A321neo", "330": "A330", "332": "A330-200",
+              "333": "A330-300", "339": "A330-900", "359": "A350-900", "351": "A350-1000", "388": "A380", "738": "737-800",
+              "7M8": "737 MAX 8", "772": "777-200", "77W": "777-300ER", "788": "787-8", "789": "787-9", "781": "787-10",
+              "AT7": "ATR 72", "ATR": "ATR 72", "E90": "E190", "E95": "E195"}
 KHH_ARR = {1: "準時", 2: "已到", 3: "延誤", 4: "轉降", 5: "取消", 6: "提早"}
 KHH_DEP = {1: "準時", 2: "報到", 3: "登機", 4: "已飛", 5: "延遲登機", 6: "延誤", 7: "取消", 8: "提早"}
 
@@ -5546,7 +5564,7 @@ def fly_fids_khh():
             out.append({"io": io, "fn": str(r.get("airLineNum") or ""), "al": fly_al_zh(str(r.get("airLineIATA") or "")),
                         "sch": fly_ts(sch[:10], sch[11:16]), "est": fly_ts(est[:10], est[11:16]) if est else None, "pc": pc,
                         "pl": ap[2] if ap else pc, "gate": "", "term": "",
-                        "st": st.get(int(r.get("status" + io) or 0), ""), "type": str(r.get("airPlaneType") or ""),
+                        "st": st.get(int(r.get("status" + io) or 0), ""), "type": FLY_IATA_T.get(str(r.get("airPlaneType") or ""), str(r.get("airPlaneType") or "")),
                         "share": [c.strip() for c in str(r.get("CodeShare") or "").split(";") if c.strip()]})
     return out
 
@@ -5783,8 +5801,8 @@ def fly_plane(a, ap):
     }
 
 
-def fly_merge(ap, fids, rows, io, lives):
-    """官網的航班表配上收得到訊號的飛機：表上有的顯示即時位置、幾分鐘後落地；表上沒有的（貨機、私人飛機）照樣列出來"""
+def fly_merge(ap, fids, rows, io):
+    """官網的航班表配上收得到訊號的飛機：表上有的顯示即時位置、幾分鐘後落地；表上沒有的（貨機、私人飛機）不列"""
     now = time.time()
     live = {}
     for p in rows:
@@ -5792,7 +5810,7 @@ def fly_merge(ap, fids, rows, io, lives):
             live.setdefault(p["fn"], p)
     me, out, used = {"code": ap[0], "name": ap[2]}, [], set()
     for r in fids:
-        if r["io"] != io:
+        if r["io"] != io or fly_cargo(r["fn"]):
             continue
         t = r["est"] or r["sch"]
         done = r["st"] in ("已到", "已飛")
@@ -5805,7 +5823,7 @@ def fly_merge(ap, fids, rows, io, lives):
         p = next((live[f] for f in [r["fn"], *row["share"]] if f in live), None)
         if p:
             used.add(p["id"])
-            row.update({k: p[k] for k in ("id", "cs", "reg", "t", "model", "alt", "spd", "vr", "d", "eta", "trk", "x", "y", "sq", "emg", "mil", "rare")})
+            row.update({k: p[k] for k in ("id", "cs", "reg", "t", "model", "alt", "spd", "vr", "d", "eta", "trk", "x", "y", "sq", "emg", "mil", "rare") if p[k] or k not in ("t", "model")})   # 收到的訊號沒有機型：留官網的
             row["live"] = True
             if p["ph"] == io and not done and r["st"] != "取消":
                 row["st"] = p["st"]                    # 天上的飛機：用即時的「4 分鐘後」「剛起飛」
@@ -5814,11 +5832,24 @@ def fly_merge(ap, fids, rows, io, lives):
             if p["emg"]:
                 row["st"] = p["st"]
         out.append(row)
-    for p in lives:                                   # 表上沒有、但看得到正在降落／起飛的飛機
-        if p["id"] not in used and not any(p["fn"] and p["fn"] in [o["fn"], *(o.get("share") or [])] for o in out):
-            out.append(dict(p, sch=None, est=now + (p["eta"] or 0) * 60 if io == "arr" else now))
     out.sort(key=lambda o: o["est"] or o["sch"] or now)
     return out[:30]
+
+
+def fly_gnd(ap, fids, gnd):
+    """地面的飛機：只留官網表上有的班機，補上航線和航空公司"""
+    me, by, out = {"code": ap[0], "name": ap[2]}, {}, []
+    for r in fids:
+        for f in [r["fn"], *(r.get("share") or [])]:
+            by.setdefault(f, r)
+    for p in gnd:
+        r = by.get(p["fn"])
+        if not r or fly_cargo(r["fn"]):
+            continue
+        pl = {"code": r["pc"], "name": r["pl"]}
+        out.append(dict(p, fn=r["fn"], al=r["al"], org=pl if r["io"] == "arr" else me, dst=me if r["io"] == "arr" else pl,
+                        model=p["model"] or r["type"], gate=r["gate"]))
+    return out
 
 
 def fly_night(ap, now=None):
@@ -5861,7 +5892,7 @@ def fly_board(code):
         except Exception as e:  # noqa: BLE001
             fly_log(f"有一架資料讀不懂（{type(e).__name__}）")
             p = None
-        if p:
+        if p and not fly_cargo(p["fn"], p["cs"]):
             rows.append(p)
     by = lambda ph: [p for p in rows if p["ph"] == ph]           # noqa: E731
     arr = sorted(by("arr"), key=lambda p: (p["eta"] if p["eta"] is not None else 999, p["d"]))
@@ -5869,7 +5900,7 @@ def fly_board(code):
     gnd = sorted(by("gnd"), key=lambda p: (-p["spd"], p["fn"]))
     over = by("over")
     if fids is not None:
-        arr, dep = fly_merge(ap, fids, rows, "arr", arr), fly_merge(ap, fids, rows, "dep", dep)
+        arr, dep, gnd = fly_merge(ap, fids, rows, "arr"), fly_merge(ap, fids, rows, "dep"), fly_gnd(ap, fids, gnd)
     out = {"ok": True, "t": time.time(), "ap": fly_ap(ap), "src": src or (srcs[0][0] if srcs else ""), "home": home, "srcs": srcs,
            "fids": fids is not None, "arr": arr, "dep": dep, "gnd": gnd, "over": over}
     FLY["cache"][ap[0]] = out
