@@ -41,7 +41,7 @@ from collections import deque
 from concurrent.futures import ThreadPoolExecutor
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
-VERSION = "3.8"
+VERSION = "3.9"
 
 # ───────────────────────── 哨兵備份檔（.vsbk）─────────────────────────
 # 哨兵專用的備份格式：外面是自己的檔案格式，裡面用的是成熟、標準的加密方法（不自己發明加密）：
@@ -6011,6 +6011,71 @@ def fly_api(q):
         return {"ok": False, "error": f"航班資料暫時拿不到（{e}）"}
 
 
+# ── 機場起降分享：1 小時內有效，第一支打開的手機才看得到（只能看機場起降） ──
+SHARE_FILE = os.path.join(DATA_DIR, "fly-share.json")
+SHARE_LOCK = threading.Lock()
+SHARE_SECS = int(os.environ.get("SENTINEL_SHARE_SECS") or 3600)
+
+
+def share_load():
+    try:
+        with open(SHARE_FILE, encoding="utf-8") as f:
+            d = json.load(f)
+    except (OSError, ValueError):
+        d = {}
+    now = time.time()
+    return {k: v for k, v in d.items() if isinstance(v, dict) and v.get("exp", 0) > now} if isinstance(d, dict) else {}
+
+
+def share_save(d):
+    os.makedirs(DATA_DIR, exist_ok=True)
+    tmp = SHARE_FILE + ".tmp"
+    fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+    with os.fdopen(fd, "w", encoding="utf-8") as f:
+        json.dump(d, f)
+    os.replace(tmp, SHARE_FILE)
+
+
+def share_new():
+    """新的分享連結代碼（只存雜湊）"""
+    code = "fs_" + secrets.token_urlsafe(16)
+    with SHARE_LOCK:
+        d = share_load()
+        if len(d) >= 50:                         # 太多還沒過期的：最舊的先失效
+            for k in sorted(d, key=lambda k: d[k]["exp"])[:len(d) - 49]:
+                d.pop(k)
+        d[hashlib.sha256(code.encode()).hexdigest()] = {"exp": time.time() + SHARE_SECS, "dev": ""}
+        share_save(d)
+    return code, SHARE_SECS
+
+
+def share_claim(code, dev):
+    """朋友打開連結：第一次打開的裝置拿到自己的通行碼，之後只認這個裝置"""
+    h = hashlib.sha256(str(code or "").encode()).hexdigest()
+    with SHARE_LOCK:
+        d = share_load()
+        e = d.get(h)
+        if not e:
+            return None, "連結已經失效"
+        if e["dev"]:
+            if dev and hmac.compare_digest(hashlib.sha256(str(dev).encode()).hexdigest(), e["dev"]):
+                return dev, int(e["exp"] - time.time())
+            return None, "這個連結已經在別的手機打開過"
+        dev = secrets.token_urlsafe(16)
+        e["dev"] = hashlib.sha256(dev.encode()).hexdigest()
+        share_save(d)
+    return dev, int(e["exp"] - time.time())
+
+
+def share_ok(given):
+    """X-Share：代碼:通行碼"""
+    code, _, dev = str(given or "").partition(":")
+    if not code.startswith("fs_") or not dev:
+        return False
+    e = share_load().get(hashlib.sha256(code.encode()).hexdigest())
+    return bool(e and e["dev"]) and hmac.compare_digest(hashlib.sha256(dev.encode()).hexdigest(), e["dev"])
+
+
 class Handler(BaseHTTPRequestHandler):
     server_version = "VPSSentinelLite"
     timeout = 120                               # 連上來卻一直不送資料的連線，2 分鐘後自動斷掉，不會越積越多把哨兵拖垮
@@ -6222,6 +6287,8 @@ class Handler(BaseHTTPRequestHandler):
         if self.is_cloud():
             return self.proxy_cloud()
         path = urllib.parse.urlsplit(self.path).path
+        if path == "/fly":                           # 機場起降分享連結：只給網頁，資料要靠連結上的代碼
+            return self.send(200, page(), "text/html; charset=utf-8")
         if path == "/":
             rs = rsw_state()
             busy = rs and (rs.get("stage") == "wait" or rs.get("stage") == "running" and time.time() - rs.get("start_t", 0) < 7200)
@@ -6277,7 +6344,7 @@ class Handler(BaseHTTPRequestHandler):
                 shutil.copyfileobj(fh, self.wfile, 1 << 20)
             return
         if path == "/api/flights":
-            if not self.authed():
+            if not (self.authed() or share_ok(self.headers.get("X-Share"))):
                 time.sleep(1)
                 return self.send(401, '{"error":"密碼錯誤"}')
             return self.send(200, json.dumps(fly_api(urllib.parse.parse_qs(urllib.parse.urlsplit(self.path).query, keep_blank_values=True)), ensure_ascii=False))
@@ -6343,7 +6410,7 @@ class Handler(BaseHTTPRequestHandler):
         u = urllib.parse.urlsplit(self.path)
         if u.path not in ("/api/update", "/api/rename", "/api/traffic", "/api/telegram", "/api/links", "/api/self", "/api/cloud-login", "/api/peer",
                           "/api/token", "/api/passkey", "/api/passkey-login", "/api/pin", "/api/pin-login", "/api/backup", "/api/backup-store",
-                          "/api/restore-upload", "/api/restore-run", "/api/pair", "/api/pair-admin", "/api/reboot", "/api/keepalive", "/api/download"):
+                          "/api/restore-upload", "/api/restore-run", "/api/pair", "/api/pair-admin", "/api/reboot", "/api/keepalive", "/api/download", "/api/fly-share", "/api/fly-claim"):
             return self.send(404, '{"error":"找不到"}')
         if u.path in ("/api/restore-upload", "/api/restore-run"):   # 網頁還原：要有安裝時給的代碼（或已經登入）
             if not (self.authed() or self.restore_code_ok()):
@@ -6363,6 +6430,23 @@ class Handler(BaseHTTPRequestHandler):
                     n = 0
                 ok, msg = rsw_start(self.jbody(self.rfile.read(min(n, 4096))).get("pw"))
             return self.send(200 if ok else 400, json.dumps({"ok": ok, "message": msg}, ensure_ascii=False))
+        if u.path == "/api/fly-claim":               # 朋友打開分享連結（不用登入）
+            try:
+                n = int(self.headers.get("Content-Length") or 0)
+            except ValueError:
+                n = 0
+            b = self.jbody(self.rfile.read(min(n, 4096)))
+            dev, left = share_claim(b.get("code"), b.get("dev"))
+            if not dev:
+                time.sleep(1)
+                return self.send(403, json.dumps({"ok": False, "error": left}, ensure_ascii=False))
+            return self.send(200, json.dumps({"ok": True, "dev": dev, "left": left}))
+        if u.path == "/api/fly-share":
+            if not self.authed():
+                time.sleep(1)
+                return self.send(401, '{"error":"密碼錯誤"}')
+            code, secs = share_new()
+            return self.send(200, json.dumps({"ok": True, "code": code, "secs": secs}))
         if u.path == "/api/backup-store":            # 其他主機傳來的備份（檔案很大，邊收邊存，不先讀進記憶體）
             if not self.authed():
                 time.sleep(1)
