@@ -1,4 +1,4 @@
-# 暫時的：看台灣機場官網航班表的格式（查完就刪）
+# 暫時的：看松山機場官網航班表的格式（查完就刪）
 name: flydebug
 on:
   push:
@@ -8,20 +8,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - run: |
-          UA="Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130 Safari/537.36"
-          get() { echo; echo "=== $1"; curl -sSL -m 60 -A "$UA" -o o.bin -w "code %{http_code} type %{content_type} size %{size_download} time %{time_total}\n" "$@" || true; }
-          get "https://www.kia.gov.tw/FIDS.html"; python3 -c "
-          import re;s=open('o.bin',encoding='utf-8',errors='replace').read()
-          for k in ['arrstatusMap =','depstatusMap =','arrstatusMap=','depstatusMap=']:
-              for m in list(re.finditer(re.escape(k),s))[:1]: print('---',k); print(re.sub(r'\s+',' ',s[m.start():m.start()+600]))"
-          for io in 1 2; do for line in 1 2; do get "https://www.tsa.gov.tw/api/airFlyTab/Paging" -X POST -H "Content-Type: application/json" -H "Referer: https://www.tsa.gov.tw/flights/domestic/today?culture=1" -d "{\"AirFlyLine\":$line,\"AirFlyIO\":$io,\"Limit\":999,\"Culture\":1,\"FlightNumber\":null,\"AirLineCode\":null,\"AirportCode\":null,\"Sort\":\"ExpectDepartureTime\",\"Order\":\"asc\"}"; python3 -c "
-          import json;d=json.load(open('o.bin',encoding='utf-8-sig'));print(type(d), list(d)[:8] if isinstance(d,dict) else len(d))
-          r=d.get('data') if isinstance(d,dict) else d
-          r=r.get('data', r) if isinstance(r,dict) else r
-          print('n', len(r) if isinstance(r,list) else r)
-          [print(json.dumps(x,ensure_ascii=False)[:1200]) for x in (r[:2] if isinstance(r,list) else [])]" || head -c 600 o.bin; done; done
-          get "https://www.tca.gov.tw/index.php?act=fids&code=departure_arrival"; grep -oE '<(input|select)[^>]*name="[^"]*"[^>]*>' o.bin | sort -u | head -20; python3 -c "
-          import re;s=open('o.bin',encoding='utf-8',errors='replace').read();i=s.find('function renderFlightTable');print(re.sub(r'\s+',' ',s[i:i+2600]))"
-          for io in 1 2; do get "https://www.tca.gov.tw/index.php?act=fids&code=api_departure_arrival&airFlyIO=$io"; python3 -c "
-          import json;d=json.load(open('o.bin',encoding='utf-8-sig'));print(d.get('status'),d.get('update_time'),len(d.get('data') or []))
-          for r in (d.get('data') or [])[:3]: print(json.dumps(r,ensure_ascii=False)[:1500])" || head -c 500 o.bin; done
+          for io in 1 2; do for line in 1 2; do echo "== line $line io $io"; curl -sS -m 60 -X POST -H "Content-Type: application/json" -d "{\"AirFlyLine\":$line,\"AirFlyIO\":$io,\"Limit\":999,\"Culture\":1,\"FlightNumber\":null,\"AirLineCode\":null,\"AirportCode\":null,\"Sort\":\"ExpectDepartureTime\",\"Order\":\"asc\"}" https://www.tsa.gov.tw/api/airFlyTab/Paging -o o.bin; python3 -c "
+          import json,collections;d=json.load(open('o.bin',encoding='utf-8-sig'));print(d['total'], d.get('Floor'));r=d['rows']
+          [print(json.dumps(x,ensure_ascii=False)[:1500]) for x in r[:2]+r[-1:]]
+          print(collections.Counter(str(x.get('AirFlyStatus') or x.get('Status') or x.get('airFlyStatus')) for x in r))"; done; done
