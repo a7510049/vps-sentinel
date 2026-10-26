@@ -5868,7 +5868,7 @@ def fly_board(code):
     ap = db.get(code) or db["TPE"]
     if fly_night(ap):
         return {"ok": True, "t": time.time(), "ap": fly_ap(ap), "night": True, "src": "", "home": "", "srcs": [],
-                "fids": True, "arr": [], "dep": [], "gnd": [], "over": []}
+                "fids": True, "arr": [], "dep": [], "gnd": [], "over": [], "rest": []}
     with FLY["fetch"]:                    # 好幾個人同時看：只抓一次
         hit = FLY["cache"].get(ap[0])
         if hit and time.time() - hit["t"] < FLY_EVERY:

@@ -2565,7 +2565,7 @@ function flyShell(){
       <div class="fmsg sub" hidden></div></div>
       <div class="radar"><div class="rbox"><svg viewBox="-62 -62 124 124" aria-label="雷達">
         <defs><clipPath id="rclip"><circle r="61"/></clipPath></defs><g clip-path="url(#rclip)"><g class="rz"><path class="coast"/><path class="rwy"/><g class="trl"></g></g></g>
-        ${[20, 40, 60].map(r => `<circle class="rg" r="${r}"/><text class="rt" font-size="3.4" x="${(r * .7071 + 1).toFixed(1)}" y="${(-r * .7071).toFixed(1)}"></text>`).join("")}
+        <g class="rgs">${[20, 40, 60].map(r => `<circle class="rg" r="${r}"/><text class="rt" font-size="3.4" x="${(r * .7071 + 1).toFixed(1)}" y="${(-r * .7071).toFixed(1)}"></text>`).join("")}</g>
         <path class="rx" d="M-60 0H60M0 -60V60"/><text class="rn" font-size="3.6" x="0" y="-56">北</text><circle class="ap" r="1.6"/></svg><div class="sweep"></div><div class="tws"></div><div class="pls"></div></div>
         <div class="rleg"><span><i class="arr"></i>抵達</span><span><i class="dep"></i>出發</span><span><i></i>其他</span>
           <span class="rng fzm">${FLYZM.map(k => `<button data-fzm="${k}">${k}</button>`).join("")}</span></div></div>
@@ -2599,9 +2599,12 @@ function flyGeoOff(f){
   an.length ? Promise.all(an.map(a => a.finished)).then(end, end) : end();
 }
 /* 放大縮小：底圖、地名、飛機一起慢慢縮放到新的比例 */
-function flyZoom(f, anim){
+function flyZoom(f, anim, k0){
   const k = flyK(), g = f.querySelector(".pls"), t = f.querySelector(".tws"), u = g._w / 124, z = f.querySelector(".rz");
   if (!u) return;
+  if (anim && canAnim() && k0 && k0 !== k) {               // 距離圈也跟著縮放：新的圈從原本的大小長過來，數字淡入
+    f.querySelector(".rgs").animate([{transform:`scale(${k0 / k})`, opacity:0}, {transform:"none", opacity:1}], {duration:T.mid, easing:EASE});
+  }
   const tr = anim && canAnim() ? `transform ${T.mid}ms ${EASE},opacity ${T.mid}ms ${EASE}` : "none";
   z.style.transition = tr; z.style.transform = `scale(${k})`;
   f.querySelectorAll(".rt").forEach((e, i) => { const v = 60 / k * (i + 1) / 3 + (i === 2 ? " 公里" : ""); if (e.textContent !== v) e.textContent = v; });
@@ -2652,17 +2655,23 @@ function flyRadar(f, d){
   }
   const first = !m.size, k = flyK(), zm = g._k !== k && !first, lab = [];   // 剛打開：飛機直接出現，不用一架一架淡入
   if (g._u !== u) { g._u = u; g.style.fontSize = f.querySelector(".tws").style.fontSize = u + "px"; } // 1em = 雷達上的 1 格
-  g._k = k; flyZoom(f, zm);
+  const k0 = g._k || k, pos = (p, k) => `translate(${((p.x * k + 62) * u).toFixed(1)}px,${((62 - p.y * k) * u).toFixed(1)}px)`;
+  g._k = k; flyZoom(f, zm, k0);
   all.forEach(p => {
-    if (p.x == null || seen.has(p.id) || Math.hypot(p.x, p.y) * k > 61) return;     // 官網表上、收不到訊號的班機不在雷達上
+    if (p.x == null || seen.has(p.id)) return;              // 官網表上、收不到訊號的班機不在雷達上
+    if (Math.hypot(p.x, p.y) * k > 61) {                    // 範圍外：放大時順著往外飛出去再消失
+      const e = m.get(p.id);
+      if (e && zm && canAnim()) { e.style.transition = e._tr = `transform ${T.mid}ms ${EASE}`; e.style.transform = e._at = pos(p, k); }
+      return;
+    }
     seen.add(p.id);
     let e = m.get(p.id);
-    const x = p.x * k, y = p.y * k, at = `translate(${((x + 62) * u).toFixed(1)}px,${((62 - y) * u).toFixed(1)}px)`;
+    const x = p.x * k, y = p.y * k, at = pos(p, k);
     if (!e) {
       e = document.createElement("div"); e.dataset.id = p.id; m.set(p.id, e);
       e.innerHTML = `<svg class="pp" viewBox="-4 -4 8 8"><path d="${FLYPL}"/></svg><span class="pt"></span>`;
       e.style.transform = e._at = at; g.appendChild(e);
-      if (canAnim() && !first) e.animate([{opacity:0}, {opacity:1}], {duration:T.mid, easing:EASE});
+      if (canAnim() && !first) e.animate(zm ? [{opacity:0, transform:pos(p, k0)}, {opacity:1, transform:at}] : [{opacity:0}, {opacity:1}], {duration:T.mid, easing:EASE});   // 縮小時從外面飛進來
     } else if (e._at !== at) {                              // 有動才改：跟下一次更新同一個節奏慢慢飛過去
       const tr = zm && canAnim() ? `transform ${T.mid}ms ${EASE}` : mv ? `transform ${FLYEV}ms linear` : "none";   // 縮放時跟底圖一起動
       if (e._tr !== tr) e.style.transition = e._tr = tr;
@@ -2684,13 +2693,14 @@ async function flySwitch(hr){
   if (!b || !canAnim()) return flyPaint();
   const pick = () => [b, hr ? null : f.querySelector(".fhrs"), f.querySelector(".fmsg")].filter(e => e && !e.hidden);   // 換時段：上面那排時間不動，只換看板
   const els = pick();
-  els.forEach(e => e.getAnimations().forEach(a => a.cancel()));
-  await Promise.all(els.map(e => e.animate([{opacity:1}, {opacity:0}], {duration:T.fast * .6, easing:EXIT, fill:"forwards"}).finished.catch(() => {})));
+  (b._fo || []).forEach(a => a.cancel());
+  const fo = b._fo = els.map(e => e.animate([{opacity:1}, {opacity:0}], {duration:T.fast * .6, easing:EXIT, fill:"forwards"}));
+  await Promise.all(fo.map(a => a.finished.catch(() => {})));
   if (id !== FLYSW) return;
   const h0 = b.offsetHeight;
   FLYSTILL = true; try { flyPaint(false); } finally { FLYSTILL = false; }
   const h1 = b.offsetHeight;
-  els.forEach(e => e.getAnimations().forEach(a => a.cancel()));
+  fo.forEach(a => a.cancel()); b._fo = null;               // 只收掉自己的淡出（時段那排收起來的動畫要留著）
   pick().forEach(e => { e.animate([{opacity:0, transform:"translateY(8px)"}, {opacity:1, transform:"none"}], {duration:T.mid, easing:EASE}); });
   if (h0 !== h1) b.animate([{height:h0 + "px", overflow:"hidden"}, {height:h1 + "px", overflow:"hidden"}], {duration:T.mid, easing:EASE});   // 列數變了：看板高度慢慢變
 }
@@ -2704,7 +2714,14 @@ function flyHours(list, tz){
 /* 資料還沒到：看板先藏起來、中間轉載入圖形，到了再一次翻出來（不然會看到一半空白一半舊的） */
 function flyWait(f, on){
   const b = f.querySelector(".board"), ld = b.querySelector(".fload i");
-  if (on) { b._h0 = null; b._sh = (b._sh || 0) + 1; if (b.classList.contains("wait")) return; b.classList.add("wait"); ld.style.clipPath = blobSh(9, 0); b._ld = loader(ld); return; }
+  if (on) {
+    b._h0 = null; b._sh = (b._sh || 0) + 1;
+    if (b.classList.contains("wait")) return;
+    const h = b.offsetHeight, full = b.querySelector(".fr:not([hidden])");
+    b.getAnimations().forEach(a => a.cancel());
+    if (full) b.style.height = h + "px";                    // 等資料時高度先定住（不要一下子撐大或縮小）
+    b.classList.add("wait"); ld.style.clipPath = blobSh(9, 0); b._ld = loader(ld); return;
+  }
   if (b.classList.contains("wait") && b._h0 == null) b._h0 = b.offsetHeight;   // 列換好之後（flyPaint 最後）再拿掉 wait、從原本的高度長到新的高度
 }
 /* 字都換好了才開始淡入（換字那一下比較久，動畫放在後面才不會一開始就跳格） */
@@ -2712,9 +2729,9 @@ function flyShow(b){
   const h0 = b._h0, id = b._sh = (b._sh || 0) + 1; b._h0 = null;
   requestAnimationFrame(() => {
     if (b._sh !== id) return;
-    b.classList.remove("wait"); if (b._ld) { b._ld(); b._ld = null; }
+    b.classList.remove("wait"); b.style.height = ""; if (b._ld) { b._ld(); b._ld = null; }
     const h1 = b.offsetHeight;
-    if (canAnim() && h0 !== h1) b.animate([{height: h0 + "px"}, {height: h1 + "px"}], {duration: T.mid, easing: EASE});
+    if (canAnim() && h0 !== h1) b.animate([{height: h0 + "px"}, {height: h1 + "px"}], {duration: T.sp, easing: SPRING});   // 彈簧：跟其他地方變大變小一樣的手感
   });
 }
 function flyPaint(anim){
@@ -2724,7 +2741,8 @@ function flyPaint(anim){
   const byHr = d.fids && FLYS.tab !== "gnd" && d[FLYS.tab].length > 0, hrs = byHr ? flyHours(d[FLYS.tab], d.ap.tz) : [];
   if (byHr && !hrs.some(x => x.k === FLYHR)) FLYHR = hrs[0].k;
   const hb = f.querySelector(".fhrs"), sig = hrs.map(x => x.k + ":" + x.n).join(",");
-  reveal(hb, byHr);
+  f.classList.toggle("fwait", !!d.loading);
+  if (!d.loading) reveal(hb, byHr);                         // 等資料時時段那排留著（淡掉），不要收起來又長出來
   if (byHr && hb._sig !== sig) {                      // 時段有變（整點過了、班機變多變少）才重排這一排
     hb._sig = sig;
     hb.innerHTML = hrs.map(x => `<button class="fchip${x.k === FLYHR ? " on" : ""}" data-fhr="${x.k}">${+x.k} 點<span class="n">${x.n} 班</span></button>`).join("");

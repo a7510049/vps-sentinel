@@ -886,6 +886,7 @@ html.flyon .dash>.view{content-visibility:hidden;contain-intrinsic-size:auto non
 .board.wait{min-height:14em}.board.wait .fh,.board.wait .frows{opacity:0}
 .fload{position:absolute;inset:0;display:grid;place-items:center;pointer-events:none;opacity:0;transition:opacity var(--t-mid) var(--ease)}
 .board.wait .fload{opacity:1}
+.flyv .fhrs{transition:opacity var(--t-mid) var(--ease)}.flyv.fwait .fhrs{opacity:0;pointer-events:none}
 .fload i{width:40px;height:40px;background:var(--p)}
 .radar{background:var(--card);border-radius:var(--r-xl);padding:16px;width:100%;max-width:480px;align-self:center}
 .fr.sel .sf .c[data-c=" "],.fr.sel .sf .c[data-c=" "] b{background:transparent}   /* 選到的那列：空格子不要變成深色方塊 */
@@ -907,6 +908,7 @@ html.flyon .dash>.view{content-visibility:hidden;contain-intrinsic-size:auto non
 .radar .coast{fill:var(--s2);stroke:var(--s4);stroke-width:1;vector-effect:non-scaling-stroke;stroke-linejoin:round}
 .radar .pl.gnd .pp{scale:.6}
 .radar .tws{position:absolute;inset:0;pointer-events:none}
+.radar .tws,.radar .pls{clip-path:circle(52%)}                       /* 放大時飛出雷達圈的飛機、地名不要跑到外面 */
 .radar .tw{position:absolute;left:0;top:0;width:0;height:0;transition:opacity var(--t-mid) var(--ease)}
 .radar .tw span{position:absolute;transform:translate(-50%,-50%);font-size:var(--fs-xs);color:var(--tx3);white-space:nowrap;opacity:.8}
 .radar .tw.out{opacity:0}
