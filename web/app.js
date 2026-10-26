@@ -2485,7 +2485,7 @@ document.addEventListener("click", async e => {
 /* ═════════ 機場起降：像機場那種會翻牌的看板（飛機即時位置來自業餘接收站，主要主機去抓） ═════════ */
 const FLYK = "vs-fly", FLYEV = 10000;                     // 記住選的機場和分頁；每 10 秒更新
 const FLYS = (() => { try { return {ap:"", tab:"arr", ...JSON.parse(store(FLYK) || "{}")}; } catch(e) { return {ap:"", tab:"arr"}; } })();
-let FLYD = null, FLYT = 0, FLYSEL = "";
+let FLYD = null, FLYT = 0, FLYSEL = "", FLYSEQ = 0;
 const flySave = () => store(FLYK, JSON.stringify({ap: FLYS.ap, tab: FLYS.tab, name: FLYS.name}));
 const FLYTAB = [["arr", "抵達"], ["dep", "出發"], ["gnd", "地面"]];
 const FLYCH = " ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-:.";
@@ -2578,14 +2578,16 @@ function flyRadar(f, d){
 }
 function flyPaint(anim){
   const f = $("#fly"); if (!f || !FLYD) return;
-  const d = FLYD, msg = f.querySelector(".fmsg");
-  if (!d.ok) { reveal(msg, true); txt(msg, d.error || "航班資料暫時拿不到"); if (!d.arr) return; }
-  else { const n = (d[FLYS.tab] || []).length; reveal(msg, !n); if (!n) txt(msg, `附近現在沒有${{arr:"要降落", dep:"剛起飛", gnd:"在地面"}[FLYS.tab]}的飛機`); }
+  const d = {arr:[], dep:[], gnd:[], over:[], ...FLYD}, msg = f.querySelector(".fmsg");
+  if (!d.ap) d.ap = {code: FLYS.ap, name: FLYS.name || "", city: "", tz: ""};
+  const n = d[FLYS.tab].length;
+  reveal(msg, !d.ok || d.loading || !n);
+  txt(msg, !d.ok ? d.error || "航班資料暫時拿不到" : d.loading ? "讀取中…" : n ? "" : `附近現在沒有${{arr:"要降落", dep:"剛起飛", gnd:"在地面"}[FLYS.tab]}的飛機`);
   const tz = d.ap.tz;
   flapSet(f.querySelector(".fcode .sf"), d.ap.code);
   txt(f.querySelector('[data-k="name"]'), d.ap.name); txt(f.querySelector('[data-k="city"]'), d.ap.city);
   flapSet(f.querySelector(".fclock .sf"), flyHM(Date.now(), tz));
-  FLYTAB.forEach(([k]) => txt(f.querySelector(`[data-k="n-${k}"]`), String(d[k].length)));
+  FLYTAB.forEach(([k]) => txt(f.querySelector(`[data-k="n-${k}"]`), d.loading ? "" : String(d[k].length)));
   f.querySelectorAll(".fh .fk").forEach((h, i) => txt(h, FLYHEAD[FLYS.tab][i]));
   f.querySelector(".board").dataset.tab = FLYS.tab;
   const list = d[FLYS.tab] || [], box = f.querySelector(".frows"), want = Math.min(30, Math.max(DESK.matches ? 8 : 6, list.length));
@@ -2612,13 +2614,15 @@ async function flyLoad(anim){
   FLYT = setTimeout(() => flyLoad(), FLYEV);
   if (document.hidden) return;
   if (!FLYS.ap) { FLYS.ap = await flyNear() || "TPE"; flySave(); }
+  const ap = FLYS.ap, seq = ++FLYSEQ, same = () => seq === FLYSEQ && ap === FLYS.ap && $("#fly");   // 換了機場：之前還沒回來的不要蓋掉新的
+  const mine = FLYD && FLYD.ap && FLYD.ap.code === ap;
   try {
-    const r = await api("/api/flights?ap=" + encodeURIComponent(FLYS.ap), {headers:{"X-Token":getTok()}});
+    const r = await api("/api/flights?ap=" + encodeURIComponent(ap), {headers:{"X-Token":getTok()}});
     const d = await r.json();
-    if (!d.ok && FLYD && FLYD.ok && FLYD.ap.code === FLYS.ap) FLYD = {...FLYD, ok:false, error:d.error};
-    else FLYD = d;
+    if (!same()) return;
+    FLYD = !d.ok && mine && FLYD.ok ? {...FLYD, ok:false, error:d.error} : !d.ok ? {...FLYD, arr:[], dep:[], gnd:[], over:[], loading:false, ok:false, error:d.error} : d;
     if (d.ok && FLYS.name !== d.ap.name) { FLYS.name = d.ap.name; flySave(); }
-  } catch(e) { FLYD = {...(FLYD || {}), ok:false, error:e.message}; }
+  } catch(e) { if (!same()) return; FLYD = {...(mine ? FLYD : {arr:[], dep:[], gnd:[], over:[], ap:FLYD && FLYD.ap}), loading:false, ok:false, error:e.message}; }
   flyPaint(anim);
 }
 let FLYAPS = [], FLYPIN = [];
@@ -2684,7 +2688,11 @@ async function flyPick(){
     const b = e.target.closest("[data-ap]"); if (!b) return;
     const code = b.dataset.ap, name = b.querySelector(".lab").firstChild.textContent, sm = b.querySelector("small").textContent;
     store("vs-fly-rec", JSON.stringify([{code, name, city: sm}, ...flyRec().filter(a => a.code !== code)].slice(0, 8)));
-    if (FLYS.ap !== code) { FLYS.ap = code; flySave(); FLYSEL = ""; flyLoad(); }
+    if (FLYS.ap !== code) {                // 先把看板翻成空的、標題換成新機場，等資料回來
+      FLYS.ap = code; FLYS.name = name; flySave(); FLYSEL = "";
+      FLYD = {ok:true, loading:true, ap:{code, name, city: sm.split("・")[0], tz:""}, arr:[], dep:[], gnd:[], over:[]};
+      flyPaint(); flyLoad();
+    }
     done();
   });
   if (!isPhone()) setTimeout(() => inp.focus(), 60);
@@ -2701,7 +2709,7 @@ function flyInfo(id){
   v.innerHTML = `<div class="dialog finfo"><div class="form">
     <div class="fih"><span class="fpc big">${esc(p.fn || p.reg || "—")}</span><span class="lab">${esc(p.al || "航空公司不明")}<small>${esc(p.st)}${p.cs && p.cs !== p.fn ? `・呼號 ${esc(p.cs)}` : ""}</small></span></div>
     ${p.emg || p.mil || p.rare ? `<div class="fbad${p.emg ? " bad" : ""}">${p.emg ? `${I("warn")}${esc(p.st)}（應答碼 ${esc(p.sq)}）` : p.mil ? "軍機" : "少見機型"}</div>` : ""}
-    <div class="froute"><span>${pl(p.org)}</span><span class="fln">${I("plane")}</span><span>${pl(p.dst)}</span></div>
+    ${p.org || p.dst ? `<div class="froute"><span>${pl(p.org)}</span><span class="fln">${I("plane")}</span><span>${pl(p.dst)}</span></div>` : `<div class="fnr sub">查不到這班的航線</div>`}
     <div class="fkvs">${kv("機型", esc(p.model || p.t || "—"))}${kv("註冊號", esc(p.reg || "—"))}${kv("高度", p.alt ? `${p.alt.toLocaleString()} 公尺` : "地面")}
       ${kv("速度", `${p.spd} 公里/時`)}${kv("每秒升降", p.ph === "gnd" ? "—" : `${vr}${Math.abs(p.vr) > .5 ? " 公尺" : ""}`)}${kv("距離機場", `${p.d} 公里`)}
       ${kv("機型代碼", esc(p.t || "—"))}${kv("識別碼", esc((p.id || "").toUpperCase()))}${kv("應答碼", esc(p.sq || "—"))}</div>

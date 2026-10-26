@@ -36,7 +36,14 @@ class Fake(BaseHTTPRequestHandler):
         self.wfile.write(b)
 
     def do_GET(self):
-        self.reply({"ac": AC})
+        if self.path.startswith("/cs/"):             # adsbdb：一班一班問
+            if self.path == "/cs/CAL101":
+                return self.reply({"response": {"flightroute": {"origin": {"iata_code": "TPE", "municipality": "Taipei"},
+                                                                "destination": {"iata_code": "NRT", "municipality": "Tokyo"}}}})
+            self.send_response(404)
+            self.end_headers()
+            return
+        self.reply({"ac": AC + [{"hex": "bad", "lat": "x"}, "怪怪的", {"hex": "bad2", "lat": 25, "lon": 121, "alt_baro": 3000, "gs": "快"}]})
 
     def do_POST(self):
         self.rfile.read(int(self.headers["Content-Length"]))
@@ -53,6 +60,7 @@ class Flights(unittest.TestCase):
         cls.S = S = load_sentinel()
         S.FLY_SRC = [("測試", base + "/lat/{lat}/lon/{lon}/dist/{d}", "")]
         S.FLY_ROUTE = base + "/route"
+        S.FLY_ROUTE2 = base + "/cs/"
 
     @classmethod
     def tearDownClass(cls):
@@ -64,7 +72,7 @@ class Flights(unittest.TestCase):
     def test_board(self):
         self.get("ap=TPE")
         for _ in range(50):                   # 航線在背景查，查到之後下一次就有
-            if self.S.FLY["routes"].get("EVA2196"):
+            if self.S.FLY["routes"].get("EVA2196") and "CAL101" in self.S.FLY["routes"]:
                 break
             time.sleep(.1)
         self.S.FLY["cache"].clear()
@@ -76,7 +84,8 @@ class Flights(unittest.TestCase):
         self.assertEqual(arr["BR2196"]["al"], "長榮航空")
         self.assertEqual(arr["BR2196"]["model"], "777-300ER")
         self.assertEqual(arr["BR2196"]["org"]["name"], "東京")
-        self.assertIn("CI101", [p["fn"] for p in d["dep"]])
+        dep = {p["fn"]: p for p in d["dep"]}
+        self.assertEqual(dep["CI101"]["dst"], {"code": "NRT", "name": "東京"})      # adsb.lol 沒有的，adsbdb 補上
         self.assertEqual([p["fn"] for p in d["gnd"]], ["B7831"])
         self.assertEqual(d["gnd"][0]["st"], "滑行中")
         self.assertTrue(arr["MU2017"]["emg"])
