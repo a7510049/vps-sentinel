@@ -41,7 +41,7 @@ from collections import deque
 from concurrent.futures import ThreadPoolExecutor
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
-VERSION = "3.7"
+VERSION = "3.8"
 
 # ───────────────────────── 哨兵備份檔（.vsbk）─────────────────────────
 # 哨兵專用的備份格式：外面是自己的檔案格式，裡面用的是成熟、標準的加密方法（不自己發明加密）：
@@ -5924,6 +5924,23 @@ FLY_TOWNS = [
     ("屏東", 22.67, 120.49), ("小琉球", 22.34, 120.37), ("宜蘭", 24.76, 121.75), ("花蓮", 23.99, 121.60),
     ("台東", 22.76, 121.14), ("馬公", 23.57, 119.58),
 ]
+# 放大後才出現的鄉鎮
+FLY_TOWNS2 = [
+    ("大園", 25.06, 121.20), ("蘆竹", 25.05, 121.29), ("龜山", 25.00, 121.34), ("八德", 24.93, 121.29),
+    ("平鎮", 24.92, 121.21), ("楊梅", 24.91, 121.15), ("新屋", 24.97, 121.10), ("觀音", 25.03, 121.08),
+    ("林口", 25.08, 121.39), ("新莊", 25.04, 121.45), ("三重", 25.06, 121.49), ("士林", 25.09, 121.52),
+    ("內湖", 25.08, 121.59), ("汐止", 25.07, 121.66), ("新店", 24.97, 121.54), ("三峽", 24.93, 121.37),
+    ("大溪", 24.88, 121.29), ("竹北", 24.84, 121.00), ("湖口", 24.90, 121.04), ("八里", 25.15, 121.40),
+    ("金山", 25.22, 121.64), ("沙鹿", 24.23, 120.57), ("大甲", 24.35, 120.62), ("豐原", 24.25, 120.72),
+    ("后里", 24.31, 120.71), ("潭子", 24.21, 120.71), ("大雅", 24.23, 120.65), ("梧棲", 24.25, 120.53),
+    ("大肚", 24.15, 120.54), ("太平", 24.13, 120.72), ("大里", 24.10, 120.68), ("烏日", 24.10, 120.62),
+    ("鹿港", 24.06, 120.43), ("員林", 23.96, 120.57), ("通霄", 24.49, 120.68), ("苑裡", 24.44, 120.65),
+    ("東勢", 24.26, 120.83), ("草屯", 23.97, 120.68), ("鳳山", 22.63, 120.36), ("岡山", 22.80, 120.30),
+    ("楠梓", 22.73, 120.33), ("左營", 22.69, 120.29), ("前鎮", 22.59, 120.31), ("林園", 22.50, 120.39),
+    ("大寮", 22.61, 120.40), ("旗山", 22.89, 120.48), ("東港", 22.47, 120.45), ("仁武", 22.70, 120.35),
+    ("路竹", 22.86, 120.26), ("永康", 23.03, 120.25), ("美濃", 22.90, 120.54), ("潮州", 22.55, 120.54),
+    ("枋寮", 22.37, 120.59),
+]
 # 跑道（大約）：方位角、長度（公里）、往左平移（公里），畫在雷達正中間
 FLY_RWY = {"TPE": [(53, 3.66, .75), (53, 3.8, -.75)], "TSA": [(96, 2.6, 0)], "RMQ": [(3, 3.66, 0)], "KHH": [(93, 3.15, 0)]}
 FLY_GEO = {}
@@ -5936,7 +5953,7 @@ def fly_geo(code):
     a = fly_db().get(code)
     if not a:
         return {"ok": False, "error": "沒有這個機場"}
-    lat0, lon0, kx, ky, lim = a[3], a[4], 111.32 * math.cos(math.radians(a[3])), 110.57, 90
+    lat0, lon0, kx, ky, lim = a[3], a[4], 111.32 * math.cos(math.radians(a[3])), 110.57, 140
     xy = lambda la, lo: ((lo - lon0) * kx, (la - lat0) * ky)  # noqa: E731
     path = []
     try:
@@ -5958,17 +5975,24 @@ def fly_geo(code):
     except OSError:
         pass
     towns = []
-    for n, la, lo in FLY_TOWNS:
-        x, y = xy(la, lo)
-        if math.hypot(x, y) < 64:
-            towns.append([n, round(x, 1), round(y, 1)])
-    rwy = []
-    for h, ln, off in FLY_RWY.get(code, []):
-        a, b = math.radians(h), math.radians(h - 90)
-        cx, cy = off * math.sin(b), off * math.cos(b)
-        dx, dy = ln / 2 * math.sin(a), ln / 2 * math.cos(a)
-        rwy.append([round(cx - dx, 2), round(cy - dy, 2), round(cx + dx, 2), round(cy + dy, 2)])
-    FLY_GEO[code] = {"ok": True, "coast": "".join(path), "towns": towns, "rwy": rwy}
+    for lv, lst in ((1, FLY_TOWNS), (2, FLY_TOWNS2)):
+        for n, la, lo in lst:
+            x, y = xy(la, lo)
+            if math.hypot(x, y) < lim:
+                towns.append([n, round(x, 1), round(y, 1), lv])
+    aps, rwy = [], []                                # 附近的機場和它們的跑道
+    for c, n, _, la, lo in FLY_APS:
+        x, y = (0, 0) if c == code else xy(la, lo)
+        if c != code and (math.hypot(x, y) >= lim or not (21.5 < la < 26.5 and 118 < lo < 122.5)):
+            continue
+        if c != code:
+            aps.append([c, n, round(x, 1), round(y, 1)])
+        for h, ln, off in FLY_RWY.get(c, []):
+            a, b = math.radians(h), math.radians(h - 90)
+            cx, cy = x + off * math.sin(b), y + off * math.cos(b)
+            dx, dy = ln / 2 * math.sin(a), ln / 2 * math.cos(a)
+            rwy.append([round(cx - dx, 2), round(cy - dy, 2), round(cx + dx, 2), round(cy + dy, 2)])
+    FLY_GEO[code] = {"ok": True, "coast": "".join(path), "towns": towns, "aps": aps, "rwy": rwy}
     return FLY_GEO[code]
 
 

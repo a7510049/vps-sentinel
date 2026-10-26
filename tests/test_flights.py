@@ -194,6 +194,9 @@ class Flights(unittest.TestCase):
         self.assertIn("桃園", [t[0] for t in d["towns"]])
         self.assertIn("高雄", [t[0] for t in self.get("geo=KHH")["towns"]])
         self.assertNotIn("高雄", [t[0] for t in d["towns"]])                          # 太遠的地名不放
+        self.assertIn("大園", [t[0] for t in d["towns"] if t[3] == 2])               # 放大後才出現的鄉鎮
+        self.assertIn("TSA", [a[0] for a in d["aps"]])                               # 附近的機場
+        self.assertNotIn("TPE", [a[0] for a in d["aps"]])
 
     def test_night(self):
         S, night = self.S, type(self).night
