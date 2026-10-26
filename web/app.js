@@ -2584,7 +2584,7 @@ function flyPaint(anim){
   if (!d.ap) d.ap = {code: FLYS.ap, name: FLYS.name || "", city: "", tz: ""};
   const n = d[FLYS.tab].length;
   reveal(msg, !d.ok || d.loading || !n);
-  txt(msg, !d.ok ? d.error || "航班資料暫時拿不到" : d.loading ? "讀取中…" : n ? "" : d.fids && FLYS.tab !== "gnd" ? `接下來沒有${FLYS.tab === "arr" ? "抵達" : "起飛"}的班機` : `附近現在沒有${{arr:"要降落", dep:"剛起飛", gnd:"在地面"}[FLYS.tab]}的飛機`);
+  txt(msg, !d.ok ? d.error || "航班資料暫時拿不到" : d.loading ? "讀取中…" : n ? "" : d.night ? "半夜沒有班機，6 點後再來看" : d.fids && FLYS.tab !== "gnd" ? `接下來沒有${FLYS.tab === "arr" ? "抵達" : "起飛"}的班機` : `附近現在沒有${{arr:"要降落", dep:"剛起飛", gnd:"在地面"}[FLYS.tab]}的飛機`);
   const tz = d.ap.tz;
   flapSet(f.querySelector(".fcode .sf"), d.ap.code);
   txt(f.querySelector('[data-k="name"]'), d.ap.name); txt(f.querySelector('[data-k="city"]'), d.ap.city);
@@ -2609,7 +2609,7 @@ function flyPaint(anim){
   });
   flyRadar(f, d);
   const via = (d.srcs || [[d.src, d.home]]).filter(x => x[0]).map(([n, h]) => h ? `<a href="${esc(h)}" target="_blank" rel="noopener noreferrer">${esc(n)}</a>` : esc(n)).join("、");
-  f.querySelector(".ffoot").innerHTML = `資料來自 ${via}・路過 ${d.over ? d.over.length : 0} 架・每 10 秒更新`;
+  f.querySelector(".ffoot").innerHTML = d.night ? "" : `${via ? `資料來自 ${via}・` : ""}路過 ${d.over ? d.over.length : 0} 架・每 10 秒更新`;
 }
 async function flyLoad(anim){
   clearTimeout(FLYT);
@@ -2708,17 +2708,18 @@ function flyInfo(id){
   const pl = x => x ? `<b>${esc(x.code)}</b><small>${esc(x.name)}</small>` : `<b>—</b><small>不明</small>`;
   const kv = (k, val) => `<div class="fkv"><small>${k}</small><b class="num">${val}</b></div>`;
   const hm = t => t ? flyHM(t * 1000, d.ap.tz) : "—", air = p.alt != null;
+  const note = p.fids ? [air ? "" : p.model, p.term, p.share && p.share.length ? `共掛 ${p.share.join("、")}` : "", air ? "" : "收不到飛機訊號"].filter(Boolean).join("・") : "";
   const vr = p.vr > 0.5 ? `↑ ${p.vr}` : p.vr < -0.5 ? `↓ ${-p.vr}` : "平飛";
   const reg = encodeURIComponent(p.reg || "");
   v.innerHTML = `<div class="dialog finfo"><div class="form">
     <div class="fih"><span class="fpc big">${esc(p.fn || p.reg || "—")}</span><span class="lab">${esc(p.al || "航空公司不明")}<small>${esc(p.st)}${p.cs && p.cs !== p.fn ? `・呼號 ${esc(p.cs)}` : ""}</small></span></div>
     ${p.emg || p.mil || p.rare ? `<div class="fbad${p.emg ? " bad" : ""}">${p.emg ? `${I("warn")}${esc(p.st)}（應答碼 ${esc(p.sq)}）` : p.mil ? "軍機" : "少見機型"}</div>` : ""}
     ${p.org || p.dst ? `<div class="froute"><span>${pl(p.org)}</span><span class="fln">${I("plane")}</span><span>${pl(p.dst)}</span></div>` : `<div class="fnr sub">查不到這班的航線</div>`}
-    ${p.fids ? `<div class="fkvs">${kv("表定", hm(p.sch))}${kv(p.ph === "arr" ? "預計抵達" : "預計起飛", hm(p.est))}${kv("登機門", esc(p.gate || "—"))}</div>
-      ${p.term || (p.share && p.share.length) ? `<div class="fnr sub">${esc([p.term, p.share && p.share.length ? `共掛 ${p.share.join("、")}` : ""].filter(Boolean).join("・"))}</div>` : ""}` : ""}
+    ${p.fids ? `<div class="fkvs">${kv("表定", hm(p.sch))}${kv(p.ph === "arr" ? "預計抵達" : "預計起飛", hm(p.est))}${kv("登機門", esc(p.gate || "—"))}</div>` : ""}
+    ${note ? `<div class="fnr sub">${esc(note)}</div>` : ""}
     ${air ? `<div class="fkvs">${kv("機型", esc(p.model || p.t || "—"))}${kv("註冊號", esc(p.reg || "—"))}${kv("高度", p.alt ? `${p.alt.toLocaleString()} 公尺` : "地面")}
       ${kv("速度", `${p.spd} 公里/時`)}${kv("每秒升降", p.ph === "gnd" ? "—" : `${vr}${Math.abs(p.vr) > .5 ? " 公尺" : ""}`)}${kv("距離機場", `${p.d} 公里`)}
-      ${kv("機型代碼", esc(p.t || "—"))}${kv("識別碼", esc((p.id || "").toUpperCase()))}${kv("應答碼", esc(p.sq || "—"))}</div>` : `<div class="fnr sub">收不到這班的飛機訊號</div>`}
+      ${kv("機型代碼", esc(p.t || "—"))}${kv("識別碼", esc((p.id || "").toUpperCase()))}${kv("應答碼", esc(p.sq || "—"))}</div>` : ""}
     ${reg ? `<div class="group"><a class="li" href="https://www.jetphotos.com/registration/${reg}" target="_blank" rel="noopener noreferrer"><span class="lab">看這架的照片<small>JetPhotos</small></span>${EXT}</a>
       <a class="li" href="https://www.flightradar24.com/data/aircraft/${reg.toLowerCase()}" target="_blank" rel="noopener noreferrer"><span class="lab">飛行紀錄<small>Flightradar24</small></span>${EXT}</a></div>` : ""}
     </div><div class="btns"><button class="ubtn ghost" data-r="0">關閉</button></div></div>`;

@@ -110,6 +110,7 @@ class Flights(unittest.TestCase):
         S.FLY_ROUTE = base + "/route"
         S.FLY_ROUTE2 = base + "/cs/"
         S.FLY_SKY = base + "/sky?lamin={la0}&lomin={lo0}&lamax={la1}&lomax={lo1}"
+        cls.night, S.fly_night = S.fly_night, lambda ap, now=None: False      # 測試不管現在幾點
         S.FLY_FIDS_URL.update({"TPE": base + "/tpe", "KHH": base + "/khh/", "RMQ": "http://127.0.0.1:9/", "TSA": "http://127.0.0.1:9/"})
 
     @classmethod
@@ -145,7 +146,7 @@ class Flights(unittest.TestCase):
         br = arr["BR2196"]                    # 官網的表定時間、登機門，加上收得到的即時位置
         self.assertTrue(br["fids"] and br["live"])
         self.assertEqual((br["gate"], br["share"], br["id"]), ("C8", ["NH5800"], "899001"))
-        self.assertEqual(br["term"], "第2航廈")
+        self.assertEqual(br["term"], "第二航廈")
         self.assertNotIn("NH5800", arr)
         cdep = {p["fn"]: p for p in d["dep"]}
         self.assertEqual((cdep["CI27"]["st"], cdep["CI27"]["dst"]["name"]), ("登機", "香港"))
@@ -169,6 +170,16 @@ class Flights(unittest.TestCase):
         self.assertEqual(self.get("q=nrt")["list"][0]["code"], "NRT")
         self.assertIn("LHR", [a["code"] for a in self.get("q=london")["list"]])
         self.assertIn("NRT", [a["code"] for a in self.get("q=東京")["list"]])
+
+    def test_night(self):
+        S, night = self.S, type(self).night
+        ap = S.fly_db()["KHH"]
+        day = 1793016000 - 1793016000 % 86400
+        noon, three = day + 4 * 3600, day + 19 * 3600       # 台灣時間中午 12 點、半夜 3 點
+        self.assertFalse(night(ap, noon))
+        self.assertTrue(night(ap, three))
+        self.assertFalse(night(S.fly_db()["TPE"], three))           # 桃園半夜也有班機
+        self.assertFalse(night(S.fly_db()["NRT"], three))
 
     def test_source_down(self):
         S = self.S

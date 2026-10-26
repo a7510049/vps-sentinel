@@ -5527,7 +5527,7 @@ def fly_fids_tpe():
         if len(x) < 15 or x[1] not in ("A", "D"):
             continue
         out.append({"io": "arr" if x[1] == "A" else "dep", "fn": x[2] + x[4].lstrip("0"), "al": x[3], "sch": fly_ts(x[6], x[7]),
-                    "est": fly_ts(x[8], x[9]), "pc": x[10], "pl": x[12] or x[11], "gate": x[5], "term": f"第{x[0]}航廈" if x[0] in ("1", "2", "3") else "",
+                    "est": fly_ts(x[8], x[9]), "pc": x[10], "pl": x[12] or x[11], "gate": x[5], "term": f"第{'一二三'[int(x[0]) - 1]}航廈" if x[0] in ("1", "2", "3") else "",
                     "st": fly_st(x[13]), "type": x[14]})
     return out
 
@@ -5554,7 +5554,7 @@ def fly_fids_khh():
 def fly_fids_rmq():
     out = []
     for io, n in (("dep", 1), ("arr", 2)):
-        for r in json.loads(fly_get(FLY_FIDS_URL["RMQ"] + str(n)).decode("utf-8-sig")).get("data") or []:
+        for r in json.loads(fly_get(FLY_FIDS_URL["RMQ"] + str(n), timeout=25).decode("utf-8-sig")).get("data") or []:
             pl = str(r.get("opponentPort") or "").strip()
             out.append({"io": io, "fn": str(r.get("AirLineIATA") or "").strip() + str(r.get("airLineNum") or "").strip(),
                         "al": re.sub(r"<[^>]+>", "", str(r.get("mainAirlineHtml") or "")).strip(), "sch": fly_ts(None, r.get("scheduleTime")),
@@ -5796,7 +5796,7 @@ def fly_merge(ap, fids, rows, io, lives):
             continue
         t = r["est"] or r["sch"]
         done = r["st"] in ("已到", "已飛")
-        if t > now + 6 * 3600 or t < now - (20 if done else 60) * 60:
+        if t > now + 12 * 3600 or t < now - (20 if done else 30) * 60:
             continue
         pl = {"code": r["pc"], "name": r["pl"]}
         row = {"id": f"f-{io}-{r['fn']}-{int(r['sch'])}", "fn": r["fn"], "cs": "", "al": r["al"], "reg": "", "t": r["type"], "model": r["type"],
@@ -5821,9 +5821,18 @@ def fly_merge(ap, fids, rows, io, lives):
     return out[:30]
 
 
+def fly_night(ap, now=None):
+    """桃園以外的台灣機場，半夜 0～6 點沒有班機，不用去抓"""
+    h = datetime.fromtimestamp(now or time.time(), FLY_TW).hour
+    return ap[5] == "TW" and ap[0] != "TPE" and h < 6
+
+
 def fly_board(code):
     db = fly_db()
     ap = db.get(code) or db["TPE"]
+    if fly_night(ap):
+        return {"ok": True, "t": time.time(), "ap": fly_ap(ap), "night": True, "src": "", "home": "", "srcs": [],
+                "fids": True, "arr": [], "dep": [], "gnd": [], "over": []}
     with FLY["fetch"]:                    # 好幾個人同時看：只抓一次
         hit = FLY["cache"].get(ap[0])
         if hit and time.time() - hit["t"] < FLY_EVERY:
