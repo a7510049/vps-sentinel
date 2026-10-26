@@ -5390,6 +5390,18 @@ def fly_cargo(fn, cs=""):
     return al in FLY_CARGO_IATA or (al in ("CI", "BR") and 5000 <= n <= 6999) or (al == "BR" and 600 <= n <= 699)
 
 
+def fly_model(m):
+    """機型寫法統一：官網的「B777-300」「A320-271」和收到的「777-300ER」「A320neo」用同一種寫法"""
+    m = re.sub(r"\s+", " ", str(m or "")).strip()
+    b = re.fullmatch(r"B?(7[0-8]7)[- ]?(\d{1,3}(?:ER|LR|F)?|MAX ?\d+)", m, re.I)
+    if b:
+        return f"{b.group(1)}-{b.group(2).upper()}" if not b.group(2).upper().startswith("MAX") else f"{b.group(1)} MAX {b.group(2)[3:].strip()}"
+    a = re.fullmatch(r"(A3[12][019])[- ]?\d{3}(N)?X?", m, re.I)
+    if a:
+        return a.group(1).upper() + ("neo" if a.group(2) else "")
+    return {"A350-100": "A350-1000"}.get(m.upper(), m)
+
+
 def fly_dist(la1, lo1, la2, lo2):
     """兩點距離（公里）和方位角"""
     p1, p2, dl = math.radians(la1), math.radians(la2), math.radians(lo2 - lo1)
@@ -5608,6 +5620,7 @@ def fly_fids_pull(code, hit):
         for r in FLY_FIDS_GET[code]():
             if not r["fn"] or not r["sch"]:
                 continue
+            r["type"] = fly_model(r["type"])
             k = (r["io"], r["sch"], r["pc"] or r["pl"])
             if k in keep:                              # 同一班飛機掛好幾個航班號
                 keep[k].setdefault("share", []).append(r["fn"])
@@ -5779,7 +5792,7 @@ def fly_plane(a, ap):
         ph = "over"
     eta = round(d / (gs * 1.852) * 60) if ph == "arr" and gs > 50 else None
     if ph == "arr":
-        st = "即將落地" if alt < 2000 and d < 10 else f"{eta} 分鐘後" if eta is not None else "進場中"
+        st = "即將落地" if alt < 2000 and d < 10 else "進場中"           # 幾點落地看時間那欄
     elif ph == "dep":
         st = "剛起飛" if d < 12 else "爬升中" if vr > 250 else "離開中"
     elif ph == "gnd":
@@ -5787,12 +5800,12 @@ def fly_plane(a, ap):
     else:
         st = "路過"
     sq = str(a.get("squawk") or "")
-    emg = {"7700": "緊急狀況", "7600": "無線電故障", "7500": "劫機"}.get(sq) or (
+    emg = {"7700": "緊急狀況", "7600": "通訊故障", "7500": "劫機"}.get(sq) or (
         "緊急狀況" if str(a.get("emergency") or "none") not in ("none", "") else "")
     mil = bool(int(a.get("dbFlags") or 0) & 1)
     return {
         "id": str(a.get("hex") or "")[:8], "cs": cs, "fn": fn, "al": al[1] if al else str(a.get("ownOp") or "")[:24],
-        "reg": reg, "t": t, "model": FLY_TYPES.get(t) or str(a.get("desc") or t).title()[:28],
+        "reg": reg, "t": t, "model": FLY_TYPES.get(t) or fly_model(str(a.get("desc") or t).title()[:28]),
         "org": rt[0] if rt else None, "dst": rt[1] if rt else None,
         "alt": round(alt * 0.3048), "spd": round(gs * 1.852), "vr": round(float(vr) * 0.00508, 1),
         "d": round(d, 1), "eta": eta, "trk": round(float(trk)) if trk is not None else None,
@@ -5826,7 +5839,7 @@ def fly_merge(ap, fids, rows, io):
             row.update({k: p[k] for k in ("id", "cs", "reg", "t", "model", "alt", "spd", "vr", "d", "eta", "trk", "x", "y", "sq", "emg", "mil", "rare") if p[k] or k not in ("t", "model")})   # 收到的訊號沒有機型：留官網的
             row["live"] = True
             if p["ph"] == io and not done and r["st"] != "取消":
-                row["st"] = p["st"]                    # 天上的飛機：用即時的「4 分鐘後」「剛起飛」
+                row["st"] = p["st"]                    # 天上的飛機：用即時的「即將落地」「剛起飛」
                 if io == "arr" and p["eta"] is not None:
                     row["est"] = now + p["eta"] * 60
             if p["emg"]:

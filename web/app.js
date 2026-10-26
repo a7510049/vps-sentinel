@@ -2539,12 +2539,12 @@ function flyRowV(p, tab, tz){
     cls: p.emg || p.st === "取消" ? "bad" : /落地|剛起飛|跑道|登機/.test(p.st) ? "hot" : ""};
 }
 const FLYF = ["t", "fn", "pc", "st"], FLYX = ["pl", "al", "m", "reg"];   // 翻牌的欄位／一般文字的欄位（城市、航空公司、機型、註冊號用一般字比較好讀）
-const FLYW = {t:5, fn:7, pc:3, st:6};
+const FLYW = {t:5, fn:7, pc:3, st:4};             // 狀態最多四個中文字，每格都是中文字寬，長短不一也對齊
 const FLYCOL = ["t", "fn", "pc", "pl", "al", "m", "reg", "st"];
 const FLYHEAD = {arr:["預計抵達", "航班", "出發地", "", "航空公司", "機型", "註冊號", "狀態"],
   dep:["起飛", "航班", "目的地", "", "航空公司", "機型", "註冊號", "狀態"], gnd:["", "航班", "航線", "", "航空公司", "機型", "註冊號", "狀態"]};
 const FLYHEADF = {arr:["抵達", "航班", "出發地", "", "航空公司", "機型", "登機門", "狀態"], dep:["起飛", "航班", "目的地", "", "航空公司", "機型", "登機門", "狀態"]};   // 有機場官網航班表時
-const flyRow = i => `<div class="fr" data-i="${i}" role="button" tabindex="0">${FLYCOL.map(k => `<span class="fk ${k}">${FLYW[k] ? flap("", FLYW[k]) : ""}</span>`).join("")}<span class="ftag"></span><i class="br b1"></i><i class="br b2"></i></div>`;
+const flyRow = i => `<div class="fr" data-i="${i}" role="button" tabindex="0">${FLYCOL.map(k => `<span class="fk ${k}">${FLYW[k] ? flap("", FLYW[k], k === "st" ? "zh" : "") : ""}</span>`).join("")}<span class="ftag"></span><i class="br b1"></i><i class="br b2"></i></div>`;
 function flyShell(){
   return `<div class="flyv" id="fly"><div class="fscroll"><div class="fwrap">
     <div class="ftop"><button class="icbtn" data-fback title="返回">${I("back")}</button><span class="grow"></span>
