@@ -184,6 +184,10 @@ class Flights(unittest.TestCase):
         self.S.FLY["cache"].clear()
         self.assertEqual(self.get("ap=NRT")["ap"]["code"], "TPE")                   # 國外機場換成桃園
 
+    def test_fn(self):
+        f = self.S.fly_fn
+        self.assertEqual([f("CI054"), f("BR015"), f("CI504D"), f("B78690")], ["CI54", "BR15", "CI504D", "B78690"])   # 呼號補的 0 拿掉才對得上官網表
+
     def test_geo(self):
         d = self.get("geo=TPE")
         self.assertTrue(d["coast"].startswith("M"))                                  # 雷達底圖有海岸線
