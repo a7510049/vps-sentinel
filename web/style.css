@@ -826,3 +826,119 @@ textarea.field{height:auto;padding:12px 16px;resize:none}
 /* ═════════ 關閉動畫 ═════════ */
 [data-motion="off"] *,[data-motion="off"] *::before,[data-motion="off"] *::after{animation:none!important;transition:none!important}
 @media (prefers-reduced-motion:reduce){*,*::before,*::after{animation:none!important;transition:none!important}}
+
+/* ═════════ 機場起降：翻牌看板 ═════════ */
+.ico.fly{background:oklch(var(--tl) var(--tc) 268);color:oklch(var(--fl) var(--fc) 268)}
+.group.fly1{margin-bottom:16px}
+html.flyon .dash>.view{content-visibility:hidden;contain-intrinsic-size:auto none}
+.flyv{position:fixed;inset:0;z-index:var(--z-det);background:var(--bg);--ct:0px;--cb:0px;--cl:0px;--cr:0px;animation:expand var(--t-slow) var(--dec) backwards}
+.flyv.closing{animation:collapse var(--t-mid) var(--exit) forwards;pointer-events:none}
+.fscroll{position:absolute;inset:0;overflow-y:auto;overscroll-behavior:contain;padding:calc(env(safe-area-inset-top) + 16px) 16px calc(env(safe-area-inset-bottom) + 40px)}
+.fwrap{max-width:1280px;margin:0 auto;display:flex;flex-direction:column;gap:12px}
+.ftop{display:flex;align-items:center;gap:12px}
+.fap{display:inline-flex;align-items:center;gap:8px;height:40px}
+.fap svg{width:18px;height:18px}
+/* 一格翻牌：上下兩半分開畫，中間一條縫 */
+.sf{display:inline-flex;gap:2px;line-height:1;font-weight:500;font-variant-numeric:tabular-nums;vertical-align:middle}
+.sf .c{position:relative;font-style:normal;width:.8em;height:1.4em;flex:none;border-radius:calc(var(--r-xs) / 2);background:var(--s3);perspective:5em}
+.sf .c.w{width:1.2em}
+.sf b{position:absolute;inset:0;display:grid;place-items:center;border-radius:inherit;background:var(--s3);color:var(--tx);font-weight:500;backface-visibility:hidden;transform-origin:50% 50%;white-space:pre}
+.sf b.u{clip-path:inset(0 0 50% 0)}
+.sf b.d{clip-path:inset(50% 0 0 0)}
+.sf b.d.f{transform:rotateX(90deg)}
+.sf .c::after{content:"";position:absolute;left:0;right:0;top:50%;height:1px;margin-top:-.5px;background:var(--bg);opacity:.55;z-index:1;pointer-events:none}
+.sf.xl{font-size:var(--fs-4xl)}
+.sf.lg{font-size:var(--fs-2xl)}
+.fhead{display:flex;align-items:center;gap:16px;background:var(--card);border-radius:var(--r-xl);padding:18px 20px}
+.fname{flex:1;min-width:0;display:flex;flex-direction:column}
+.fname b{font-size:var(--fs-2xl);font-weight:500;line-height:1.2}
+.fclock{display:flex;flex-direction:column;align-items:flex-end;gap:6px}
+.fmain{display:flex;flex-direction:column;gap:12px}
+.fleft{min-width:0;display:flex;flex-direction:column;gap:12px}
+.ftabs .fn{margin-left:6px;opacity:.75;font-variant-numeric:tabular-nums}
+.board{background:var(--card);border-radius:var(--r-xl);padding:10px;display:grid;grid-template-columns:repeat(8,auto) minmax(0,1fr);column-gap:14px;overflow:hidden}
+.fh,.frows,.fr{display:grid;grid-column:1/-1;grid-template-columns:subgrid}
+.fh{padding:4px 10px 8px;font-size:var(--fs-xs);color:var(--tx3);font-weight:500}
+.fr{padding:7px 10px;border-radius:var(--r-sm);align-items:center;cursor:pointer;font-size:var(--fs-l);transition:background-color var(--t-fast) var(--ease)}
+.fr.empty{pointer-events:none}
+.fr.sel{background:var(--pc)}
+@media (hover:hover){.fr:not(.empty):not(.sel):hover{background:var(--s2)}}
+.fr .br{display:none}
+.fr.hot .st b{color:var(--p)}
+.fr.bad .st b{color:var(--bad)}
+.fr .pc b,.fr .reg b{color:var(--tx2)}
+.ftag{justify-self:start;font-size:var(--fs-xs);font-weight:500;border-radius:var(--r-pill);padding:0;opacity:0;transition:opacity var(--t-mid) var(--ease)}
+.ftag.on{opacity:1;padding:3px 9px;background:var(--pc);color:var(--on-pc)}
+.ftag.bad{background:var(--badc);color:var(--on-badc)}
+.fmsg{background:var(--card);border-radius:var(--r-lg);padding:16px;text-align:center}
+.radar{background:var(--card);border-radius:var(--r-xl);padding:16px;width:100%;max-width:480px;align-self:center}
+.radar svg{width:100%;height:auto;aspect-ratio:1;overflow:visible}
+.radar .rg{fill:none;stroke:var(--s4);stroke-width:.3}
+.radar .rx{stroke:var(--s4);stroke-width:.2;stroke-dasharray:1 1.5}
+.radar .rt,.radar .rn{fill:var(--tx3)}
+.radar .rn{text-anchor:middle}
+.radar .ap{fill:var(--p)}
+.radar .pl .pp{fill:var(--tx3);transition:fill var(--t-mid) var(--ease)}
+.radar .pl .pt{fill:var(--tx3)}
+.radar .pl.arr .pp{fill:var(--p)}.radar .pl.arr .pt{fill:var(--tx2)}
+.radar .pl.dep .pp{fill:var(--tx)}.radar .pl.dep .pt{fill:var(--tx2)}
+.radar .pl.emg .pp,.radar .pl.emg .pt{fill:var(--bad)}
+.radar .pl.sel .pp{stroke:var(--p);stroke-width:1.4;paint-order:stroke}
+.radar .pl{cursor:pointer}
+.rleg{display:flex;flex-wrap:wrap;gap:6px 14px;margin-top:10px;font-size:var(--fs-s);color:var(--tx2);align-items:center}
+.rleg span{display:inline-flex;align-items:center;gap:6px}
+.rleg i{width:10px;height:10px;border-radius:50%;background:var(--tx3)}
+.rleg i.arr{background:var(--p)}.rleg i.dep{background:var(--tx)}
+.rleg .sub{margin-left:auto}
+.ffoot{text-align:center;padding:4px 16px}
+.ffoot a{color:var(--p);text-decoration:none}
+@media (min-width:1280px){
+  .fscroll{padding-left:32px;padding-right:32px}
+  .fmain{display:grid;grid-template-columns:minmax(0,1fr) 360px;align-items:start}
+  .radar{position:sticky;top:0;max-width:none}
+}
+/* 手機：每一列分三行，第一行時間、航班、狀態 */
+@media (max-width:899px){
+  .board{display:flex;flex-direction:column;gap:2px;padding:8px}
+  .fh{display:none}
+  .fr{display:flex;flex-wrap:wrap;align-items:center;gap:6px 8px;padding:10px;font-size:var(--fs-m)}
+  .fr .br{display:block;flex-basis:100%;height:0}
+  .fr .t{order:1}.fr .fn{order:2}.fr .st{order:3;margin-left:auto}.fr .b1{order:4}
+  .fr .pc{order:5}.fr .pl{order:6}.fr .al{order:7;margin-left:auto}.fr .b2{order:8}
+  .fr .m{order:9}.fr .reg{order:10}.fr .ftag{order:11;margin-left:auto}
+  .fr .pc,.fr .pl,.fr .al,.fr .m,.fr .reg{font-size:var(--fs-xs)}
+  .fr .pl .c[data-c=" "],.fr .al .c[data-c=" "],.fr .m .c[data-c=" "],.fr .reg .c[data-c=" "]{display:none}   /* 小字那兩行：空的格子不佔位置 */
+  .fr .sf .c::after{opacity:.3}
+  .fr.empty .b2,.fr.empty .m,.fr.empty .reg,.fr.empty .ftag{display:none}
+  .fhead{padding:14px 16px;gap:12px}
+  .fhead .sf.xl{font-size:var(--fs-3xl)}
+  .fname b{font-size:var(--fs-xl)}
+  .fclock .sf.lg{font-size:var(--fs-l)}
+}
+/* 點一架：詳細資料 */
+.fih{display:flex;align-items:center;gap:14px}
+.fih .lab{flex:1;min-width:0;font-size:var(--fs-l)}
+.fih .lab small{display:block;font-size:var(--fs-s);color:var(--tx3)}
+.fpc{display:inline-grid;place-items:center;min-width:52px;padding:6px 10px;border-radius:var(--r-sm);background:var(--pc);color:var(--on-pc);font-weight:500;font-variant-numeric:tabular-nums;flex:none}
+.fpc.big{font-size:var(--fs-xl);padding:8px 14px}
+.fbad{display:flex;align-items:center;gap:8px;margin-top:12px;padding:10px 14px;border-radius:var(--r-md);background:var(--pc);color:var(--on-pc);font-weight:500}
+.fbad.bad{background:var(--badc);color:var(--on-badc)}
+.fbad svg{width:18px;height:18px}
+.froute{display:grid;grid-template-columns:1fr auto 1fr;align-items:center;gap:8px;margin:12px 0;padding:14px;background:var(--chip);border-radius:var(--r-lg);text-align:center}
+.froute b{display:block;font-size:var(--fs-2xl);font-weight:500;line-height:1.2}
+.froute small{color:var(--tx3);font-size:var(--fs-s)}
+.froute .fln{color:var(--p)}
+.froute .fln svg{width:22px;height:22px;transform:rotate(45deg)}
+.fkvs{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:3px;margin-bottom:12px}
+.fkv{background:var(--chip);border-radius:var(--r-xs);padding:10px 12px;min-width:0}
+.fkv small{display:block;font-size:var(--fs-xs);color:var(--tx3)}
+.fkv b{display:block;font-size:var(--fs-m);overflow-wrap:anywhere}
+.fkvs .fkv:first-child{border-top-left-radius:var(--r-lg)}.fkvs .fkv:nth-child(3){border-top-right-radius:var(--r-lg)}
+.fkvs .fkv:nth-last-child(3){border-bottom-left-radius:var(--r-lg)}.fkvs .fkv:last-child{border-bottom-right-radius:var(--r-lg)}
+.finfo,.fpick{max-width:460px}
+.fpick .form{margin-bottom:8px}
+.fapl .lbl svg{width:14px;height:14px}
+.fapl .lbl{justify-content:flex-start}
+.fapl .li{min-height:60px}
+.fon{color:var(--p)}.fon svg{width:20px;height:20px}
+.radar .pl.gnd .pt{display:none}
