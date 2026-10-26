@@ -981,7 +981,7 @@ def apt_updates():
 # ───────────────────────── 更新哨兵本身 ─────────────────────────
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-SRC_FILES = ["sentinel.py", "web/index.html", "web/style.css", "web/app.js", "data/airports.tsv"]   # 程式本體＋網頁三個檔＋機場資料
+SRC_FILES = ["sentinel.py", "web/index.html", "web/style.css", "web/app.js", "data/airports.tsv", "data/coast.tsv"]   # 程式本體＋網頁三個檔＋機場資料、海岸線
 
 
 def build_of(blobs):
@@ -5906,11 +5906,62 @@ def fly_board(code):
     return out
 
 
+# 雷達底圖上標的地名（名稱、緯度、經度）
+FLY_TOWNS = [
+    ("台北", 25.04, 121.56), ("板橋", 25.01, 121.46), ("基隆", 25.13, 121.74), ("淡水", 25.17, 121.44),
+    ("桃園", 24.99, 121.31), ("中壢", 24.96, 121.22), ("新竹", 24.80, 120.97), ("苗栗", 24.56, 120.82),
+    ("台中", 24.15, 120.67), ("清水", 24.27, 120.57), ("彰化", 24.08, 120.54), ("南投", 23.91, 120.68),
+    ("斗六", 23.71, 120.54), ("嘉義", 23.48, 120.45), ("台南", 22.99, 120.21), ("高雄", 22.63, 120.30),
+    ("屏東", 22.67, 120.49), ("小琉球", 22.34, 120.37), ("宜蘭", 24.76, 121.75), ("花蓮", 23.99, 121.60),
+    ("台東", 22.76, 121.14), ("馬公", 23.57, 119.58),
+]
+FLY_GEO = {}
+
+
+def fly_geo(code):
+    """雷達底圖：機場附近的海岸線和地名，換算成離機場幾公里（往東、往北為正）"""
+    if code in FLY_GEO:
+        return FLY_GEO[code]
+    a = fly_db().get(code)
+    if not a:
+        return {"ok": False, "error": "沒有這個機場"}
+    lat0, lon0, kx, ky, lim = a[3], a[4], 111.32 * math.cos(math.radians(a[3])), 110.57, 90
+    xy = lambda la, lo: ((lo - lon0) * kx, (la - lat0) * ky)  # noqa: E731
+    path = []
+    try:
+        with open(os.path.join(HERE, "data", "coast.tsv"), encoding="utf-8") as f:
+            for line in f:
+                if line.startswith("#") or not line.strip():
+                    continue
+                pts = [xy(float(p.split(",")[1]), float(p.split(",")[0])) for p in line.split()]
+                closed = len(pts) > 2 and pts[0] == pts[-1]
+                seg = []
+                for pt in pts + [None]:              # 範圍外的點切掉，線斷成好幾段
+                    if pt and abs(pt[0]) < lim and abs(pt[1]) < lim:
+                        seg.append(f"{pt[0]:.1f} {-pt[1]:.1f}")
+                        continue
+                    if len(seg) > 1:
+                        path.append("M" + "L".join(seg) + ("Z" if closed and len(seg) == len(pts) else ""))
+                    seg = []
+    except OSError:
+        pass
+    towns = []
+    for n, la, lo in FLY_TOWNS:
+        x, y = xy(la, lo)
+        if math.hypot(x, y) < 64:
+            towns.append([n, round(x, 1), round(y, 1)])
+    FLY_GEO[code] = {"ok": True, "coast": "".join(path), "towns": towns}
+    return FLY_GEO[code]
+
+
 def fly_api(q):
     """只開放台灣的四個機場（官網航班表準）；國外的資料不夠準，先不給選"""
     pin = [fly_ap(fly_db()[c]) for c in FLY_PIN if c in fly_db()]
     if "q" in q:
         return {"ok": True, "list": pin, "pin": pin}
+    if "geo" in q:
+        c = str(q["geo"][0]).upper()[:4]
+        return fly_geo(c if c in FLY_PIN else "TPE")
     code = str(q.get("ap", ["TPE"])[0]).upper()[:4]
     try:
         return fly_board(code if code in FLY_PIN else "TPE")

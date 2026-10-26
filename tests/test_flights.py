@@ -184,6 +184,13 @@ class Flights(unittest.TestCase):
         self.S.FLY["cache"].clear()
         self.assertEqual(self.get("ap=NRT")["ap"]["code"], "TPE")                   # 國外機場換成桃園
 
+    def test_geo(self):
+        d = self.get("geo=TPE")
+        self.assertTrue(d["coast"].startswith("M"))                                  # 雷達底圖有海岸線
+        self.assertIn("桃園", [t[0] for t in d["towns"]])
+        self.assertIn("高雄", [t[0] for t in self.get("geo=KHH")["towns"]])
+        self.assertNotIn("高雄", [t[0] for t in d["towns"]])                          # 太遠的地名不放
+
     def test_night(self):
         S, night = self.S, type(self).night
         ap = S.fly_db()["KHH"]
