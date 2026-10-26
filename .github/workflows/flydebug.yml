@@ -9,27 +9,19 @@ jobs:
     steps:
       - run: |
           UA="Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130 Safari/537.36"
-          get() { echo; echo "=== $1"; curl -sSL -m 25 -A "$UA" -o o.bin -w "code %{http_code} type %{content_type} size %{size_download}\n" "$1" || true; }
-          for f in arr dep note_arr note_dep; do get "https://www.kia.gov.tw/data/$f.json"; python3 -c "
-          import json;d=json.load(open('o.bin',encoding='utf-8-sig'))
-          def walk(d):
-              if isinstance(d,list):
-                  for x in d:
-                      if isinstance(x,dict) and 'data' in x: return x['data']
-                  return d
-              return d
-          rows=walk(d); print('n',len(rows)); [print(json.dumps(r,ensure_ascii=False)) for r in rows[-3:]]
-          import collections; print(collections.Counter(str(r.get('statusdep',r.get('statusarr',''))) for r in rows if isinstance(r,dict)))" || head -c 800 o.bin; done
+          get() { echo; echo "=== $1"; curl -sSL -m 60 -A "$UA" -o o.bin -w "code %{http_code} type %{content_type} size %{size_download} time %{time_total}\n" "$@" || true; }
           get "https://www.kia.gov.tw/FIDS.html"; python3 -c "
           import re;s=open('o.bin',encoding='utf-8',errors='replace').read()
-          for k in ['statusdep','statusarr','note_dep','STA','ETA']:
-              for m in list(re.finditer(k,s))[:2]: print('---',k); print(re.sub(r'\s+',' ',s[max(0,m.start()-200):m.start()+700]))"
-          get "https://www.tca.gov.tw/index.php?act=fids&code=departure_arrival"; grep -oE '<(input|select)[^>]*name="[^"]*"[^>]*>' o.bin | head -20
+          for k in ['arrstatusMap =','depstatusMap =','arrstatusMap=','depstatusMap=']:
+              for m in list(re.finditer(re.escape(k),s))[:1]: print('---',k); print(re.sub(r'\s+',' ',s[m.start():m.start()+600]))"
+          for io in 1 2; do for line in 1 2; do get "https://www.tsa.gov.tw/api/airFlyTab/Paging" -X POST -H "Content-Type: application/json" -H "Referer: https://www.tsa.gov.tw/flights/domestic/today?culture=1" -d "{\"AirFlyLine\":$line,\"AirFlyIO\":$io,\"Limit\":999,\"Culture\":1,\"FlightNumber\":null,\"AirLineCode\":null,\"AirportCode\":null,\"Sort\":\"ExpectDepartureTime\",\"Order\":\"asc\"}"; python3 -c "
+          import json;d=json.load(open('o.bin',encoding='utf-8-sig'));print(type(d), list(d)[:8] if isinstance(d,dict) else len(d))
+          r=d.get('data') if isinstance(d,dict) else d
+          r=r.get('data', r) if isinstance(r,dict) else r
+          print('n', len(r) if isinstance(r,list) else r)
+          [print(json.dumps(x,ensure_ascii=False)[:1200]) for x in (r[:2] if isinstance(r,list) else [])]" || head -c 600 o.bin; done; done
+          get "https://www.tca.gov.tw/index.php?act=fids&code=departure_arrival"; grep -oE '<(input|select)[^>]*name="[^"]*"[^>]*>' o.bin | sort -u | head -20; python3 -c "
+          import re;s=open('o.bin',encoding='utf-8',errors='replace').read();i=s.find('function renderFlightTable');print(re.sub(r'\s+',' ',s[i:i+2600]))"
           for io in 1 2; do get "https://www.tca.gov.tw/index.php?act=fids&code=api_departure_arrival&airFlyIO=$io"; python3 -c "
-          import json;d=json.load(open('o.bin'));print(d.get('status'),d.get('update_time'),len(d.get('data') or []))
-          for r in (d.get('data') or [])[:3]: print(json.dumps(r,ensure_ascii=False)[:900])" || head -c 500 o.bin; done
-          get "https://www.tsa.gov.tw/_next/static/chunks/pages/flights/domestic/today-5ddfc89f067a5ff7.js"; python3 -c "
-          import re;s=open('o.bin',encoding='utf-8',errors='replace').read()
-          for k in ['airFlyTab/Paging','airFlyTab/Index']:
-              for m in re.finditer(re.escape(k),s): print('---',k); print(s[max(0,m.start()-600):m.start()+900])"
-          get "https://www.tsa.gov.tw/api/airFlyTab/Index?culture=1"; head -c 1500 o.bin; echo
+          import json;d=json.load(open('o.bin',encoding='utf-8-sig'));print(d.get('status'),d.get('update_time'),len(d.get('data') or []))
+          for r in (d.get('data') or [])[:3]: print(json.dumps(r,ensure_ascii=False)[:1500])" || head -c 500 o.bin; done
