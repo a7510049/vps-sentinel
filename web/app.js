@@ -2591,7 +2591,7 @@ function flyPaint(anim){
   flapSet(f.querySelector(".fclock .sf"), flyHM(Date.now(), tz));
   FLYTAB.forEach(([k]) => txt(f.querySelector(`[data-k="n-${k}"]`), d.loading ? "" : String(d[k].length)));
   f.querySelectorAll(".fh .fk").forEach((h, i) => txt(h, d.fids && FLYS.tab !== "gnd" ? FLYHEADF[FLYS.tab][i] : FLYHEAD[FLYS.tab][i]));
-  f.querySelector(".board").dataset.tab = FLYS.tab;
+  f.querySelector(".board").dataset.tab = FLYS.tab; f.querySelector(".board").dataset.fids = d.fids ? "1" : "";
   const list = d[FLYS.tab] || [], box = f.querySelector(".frows"), want = Math.min(30, Math.max(DESK.matches ? 8 : 6, list.length));
   while (box.children.length < want) {               // 看板的列數跟著變：新的一列從下面長出來
     box.insertAdjacentHTML("beforeend", flyRow(box.children.length));
@@ -2609,7 +2609,7 @@ function flyPaint(anim){
   });
   flyRadar(f, d);
   const via = (d.srcs || [[d.src, d.home]]).filter(x => x[0]).map(([n, h]) => h ? `<a href="${esc(h)}" target="_blank" rel="noopener noreferrer">${esc(n)}</a>` : esc(n)).join("、");
-  f.querySelector(".ffoot").innerHTML = `資料來自 ${via}（各地愛好者的接收站）・路過 ${d.over ? d.over.length : 0} 架・每 10 秒更新`;
+  f.querySelector(".ffoot").innerHTML = `資料來自 ${via}・路過 ${d.over ? d.over.length : 0} 架・每 10 秒更新`;
 }
 async function flyLoad(anim){
   clearTimeout(FLYT);

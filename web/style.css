@@ -912,6 +912,7 @@ html.flyon .dash>.view{content-visibility:hidden;contain-intrinsic-size:auto non
   .fr .m{order:9;font-size:var(--fs-s);color:var(--tx3)}.fr .reg{order:10;font-size:var(--fs-s);color:var(--tx3)}.fr .ftag{order:11;margin-left:auto}
   .board[data-tab="arr"] .fr:not(.empty) .pl:not(:empty)::before{content:"從 ";color:var(--tx3)}
   .board[data-tab="dep"] .fr:not(.empty) .pl:not(:empty)::before{content:"往 ";color:var(--tx3)}
+  .board[data-fids="1"]:not([data-tab="gnd"]) .fr:not(.empty) .reg:not(:empty)::before{content:"登機門 ";color:var(--tx3)}
   .fr.empty .b2,.fr.empty .pc,.fr.empty .pl,.fr.empty .al,.fr.empty .m,.fr.empty .reg,.fr.empty .ftag,.fr.empty .b1{display:none}
   .fhead{padding:14px 16px;gap:12px}
   .fhead .sf.xl{font-size:var(--fs-3xl)}

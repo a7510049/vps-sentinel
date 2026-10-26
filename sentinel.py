@@ -5489,8 +5489,11 @@ def fly_ts(day, hm):
     hm = str(hm or "").strip().replace(":", "")[:4]
     if not re.fullmatch(r"\d{4}", hm):
         return None
-    d = date.fromisoformat(str(day).replace("/", "-")[:10]) if day else datetime.now(FLY_TW).date()
-    return datetime(d.year, d.month, d.day, int(hm[:2]) % 24, int(hm[2:]) % 60, tzinfo=FLY_TW).timestamp()
+    try:
+        d = date.fromisoformat(str(day).replace("/", "-")[:10]) if day else datetime.now(FLY_TW).date()
+        return datetime(d.year, d.month, d.day, int(hm[:2]) % 24, int(hm[2:]) % 60, tzinfo=FLY_TW).timestamp()
+    except ValueError:                        # 「0000-00-00」這種空的日期
+        return None
 
 
 def fly_zh_code(name):
@@ -5581,29 +5584,38 @@ def fly_fids_tsa():
 FLY_FIDS_GET = {"TPE": fly_fids_tpe, "KHH": fly_fids_khh, "RMQ": fly_fids_rmq, "TSA": fly_fids_tsa}
 
 
+def fly_fids_pull(code, hit):
+    try:
+        keep = {}
+        for r in FLY_FIDS_GET[code]():
+            if not r["fn"] or not r["sch"]:
+                continue
+            k = (r["io"], r["sch"], r["pc"] or r["pl"])
+            if k in keep:                              # 同一班飛機掛好幾個航班號
+                keep[k].setdefault("share", []).append(r["fn"])
+                keep[k]["type"] = keep[k]["type"] or r["type"]
+            else:
+                keep[k] = r
+        hit["rows"], hit["ok"] = list(keep.values()), time.time()
+    except Exception as e:  # noqa: BLE001
+        fly_log(f"{FLY_FIDS_NAME[code][0]}官網：{str(e)[:60]}")
+    finally:
+        hit["busy"] = False
+
+
 def fly_fids(code):
-    """抓官網航班表（同一個機場 1 分鐘抓一次；抓不到就先用上一次的，15 分鐘內都算數）；共掛航班只留一班"""
+    """官網航班表：1 分鐘更新一次（在背景抓，看板不用等）；抓不到就先用上一次的，15 分鐘內都算數"""
     if code not in FLY_FIDS_GET:
         return None
-    hit = FLY_FIDS.setdefault(code, {"ok": 0, "try": 0, "rows": []})
+    hit = FLY_FIDS.setdefault(code, {"ok": 0, "try": 0, "rows": [], "busy": False})
     now = time.time()
-    if now - hit["try"] >= (FLY_FIDS_EVERY if hit["ok"] == hit["try"] else 20):     # 上次失敗的話 20 秒後再試
-        hit["try"] = now
-        try:
-            keep = {}
-            for r in FLY_FIDS_GET[code]():
-                if not r["fn"] or not r["sch"]:
-                    continue
-                k = (r["io"], r["sch"], r["pc"] or r["pl"])
-                if k in keep:                          # 同一班飛機掛好幾個航班號
-                    keep[k].setdefault("share", []).append(r["fn"])
-                    keep[k]["type"] = keep[k]["type"] or r["type"]
-                else:
-                    keep[k] = r
-            hit["rows"], hit["ok"] = list(keep.values()), now
-        except Exception as e:  # noqa: BLE001
-            fly_log(f"{FLY_FIDS_NAME[code][0]}官網：{str(e)[:60]}")
-    return hit["rows"] if now - hit["ok"] < 900 else None
+    if not hit["busy"] and now - hit["try"] >= (FLY_FIDS_EVERY if hit["ok"] >= hit["try"] else 20):    # 上次失敗的話 20 秒後再試
+        hit["try"], hit["busy"] = now, True
+        th = threading.Thread(target=fly_fids_pull, args=(code, hit), daemon=True)
+        th.start()
+        if not hit["ok"]:
+            th.join(20)                                # 第一次要等它抓完
+    return hit["rows"] if time.time() - hit["ok"] < 900 else None
 
 
 def fly_log(msg):
@@ -5803,7 +5815,7 @@ def fly_merge(ap, fids, rows, io, lives):
                 row["st"] = p["st"]
         out.append(row)
     for p in lives:                                   # 表上沒有、但看得到正在降落／起飛的飛機
-        if p["id"] not in used and not any(p["fn"] and p["fn"] in [o["fn"], *o["share"]] for o in out):
+        if p["id"] not in used and not any(p["fn"] and p["fn"] in [o["fn"], *(o.get("share") or [])] for o in out):
             out.append(dict(p, sch=None, est=now + (p["eta"] or 0) * 60 if io == "arr" else now))
     out.sort(key=lambda o: o["est"] or o["sch"] or now)
     return out[:30]

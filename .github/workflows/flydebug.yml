@@ -16,6 +16,9 @@ jobs:
           s = load_sentinel()
           for c in ["TPE", "TSA", "RMQ", "KHH"]:
               t0 = time.time()
+              f = s.fly_fids(c) or []
+              print(c, "fids", len(f), round(time.time() - t0, 1), "s", [(r["io"], r["fn"], r["st"], r["pl"], r["pc"], r.get("share")) for r in f[-4:]], flush=True)
+              s.FLY["cache"].clear()
               try:
                   b = s.fly_board(c)
                   print(c, round(time.time() - t0, 1), "s", b["srcs"], b["fids"], {k: len(b[k]) for k in ("arr", "dep", "gnd", "over")}, flush=True)
