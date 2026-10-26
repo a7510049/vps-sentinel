@@ -1,0 +1,31 @@
+name: flydebug
+on: push
+jobs:
+  probe:
+    if: github.ref == 'refs/heads/claude/project-thread-wqdvmy'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: |
+          mkdir -p /tmp/d && printf 'PORT=1\nTOKEN=x\nNAME=t\nDATA_DIR=/tmp/d\n' > /tmp/t.conf
+          SENTINEL_CONF=/tmp/t.conf python3 - <<'PY'
+          import importlib.util, sys, collections, json
+          sys.argv = ["x"]
+          spec = importlib.util.spec_from_file_location("s", "sentinel.py"); s = importlib.util.module_from_spec(spec); spec.loader.exec_module(s)
+          for code in ["TPE", "KHH"]:
+              ap = s.fly_db()[code]
+              ac, src, home = s.fly_fetch(ap)
+              print(code, "raw", src, len(ac))
+              rows = [p for p in (s.fly_plane(a, ap) for a in ac) if p]
+              print(" planes", len(rows), collections.Counter(p["ph"] for p in rows))
+              print(" dropped", len(ac) - len(rows), [ (a.get("flight"), a.get("alt_baro"), a.get("seen_pos", a.get("seen"))) for a in ac if not s.fly_plane(a, ap)][:15])
+              fids = s.fly_fids(code)
+              print(" fids", None if fids is None else len(fids))
+              for io in ["arr", "dep"]:
+                  m = s.fly_merge(ap, fids or [], rows, io) if fids else []
+                  live = [r for r in m if r.get("live")]
+                  print(" ", io, "rows", len(m), "live", len(live), [r["fn"] for r in live][:10])
+              print(" live arr/dep", [(p["fn"], p["ph"], p["d"], p["alt"]) for p in rows if p["ph"] in ("arr", "dep")][:30])
+              print(" over", [(p["fn"], p["d"], p["alt"]) for p in rows if p["ph"] == "over"][:30])
+              if fids: print(" next fids arr", [(r["fn"], r["st"], r.get("share")) for r in fids if r["io"] == "arr"][:12])
+          PY
