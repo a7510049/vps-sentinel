@@ -1,4 +1,4 @@
-# 暫時的：從 GitHub 的機器抓真的飛機資料，查台中、高雄為什麼沒有航班（查完就刪）
+# 暫時的：從 GitHub 的機器試台灣機場官方航班表（查完就刪）
 name: flydebug
 on:
   push:
@@ -7,35 +7,16 @@ jobs:
   probe:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v5
       - run: |
-          for ap in "TPE 25.0777 121.2328" "RMQ 24.2647 120.6208" "KHH 22.5771 120.3500"; do
-            set -- $ap
-            for u in "https://opendata.adsb.fi/api/v3/lat/$2/lon/$3/dist/40" "https://api.adsb.lol/v2/point/$2/$3/40" "https://api.airplanes.live/v2/point/$2/$3/40"; do
-              curl -sS -m 15 -A vps-sentinel -o o.json -w "$1 %{http_code} %{size_download} $u\n" "$u" || true
-              python3 -c "
-          import json;d=json.load(open('o.json'));ac=d.get('ac') or d.get('aircraft') or []
-          print('  n',len(ac),'keys',sorted(d)[:8])
-          for a in ac[:40]: print('  ',a.get('flight'),a.get('alt_baro'),a.get('gs'),a.get('baro_rate'),a.get('track'),a.get('lat'),a.get('lon'),a.get('seen_pos'),a.get('seen'))
-          " || head -c 300 o.json
-              sleep 1.2
-            done
+          UA="Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130 Safari/537.36"
+          get() { echo "=== $1"; curl -sSL -m 20 -A "$UA" -o o.bin -w "code %{http_code} type %{content_type} size %{size_download} final %{url_effective}\n" "$1" || true; head -c ${2:-700} o.bin | tr -d '\r'; echo; }
+          get "https://www.taoyuan-airport.com/uploads/flightx/a_flight_v4.txt" 900
+          get "https://www.kia.gov.tw/API/InstantSchedule.ashx?AirFlyLine=2&AirFlyIO=2"
+          get "https://www.kia.gov.tw/API/InstantSchedule.ashx?AirFlyLine=1&AirFlyIO=1"
+          for h in https://www.kia.gov.tw/ https://www.tca.gov.tw/ https://www.tsa.gov.tw/ https://www.tna.gov.tw/; do
+            get "$h" 200
+            grep -oiE "(href|src|url)[=:] *[\"'][^\"']*(schedule|flight|fids|航班|ashx|api)[^\"']*" o.bin | sort -u | head -30
           done
-      - run: |
-          cat > p.py <<'P'
-          import json, sys, time
-          sys.path.insert(0, "tests")
-          from test_passkey import load_sentinel
-          s = load_sentinel()
-          for c in ["TPE", "RMQ", "KHH"]:
-              try:
-                  b = s.fly_board(c)
-                  print(c, b["src"], {k: len(b[k]) for k in ("arr", "dep", "gnd", "over")})
-                  for k in ("arr", "dep", "gnd", "over"):
-                      for p in b[k][:12]:
-                          print("  ", k, p["fn"], p["alt"], p["spd"], p["vr"], p["d"], p["st"], p["org"], p["dst"])
-              except Exception as e:
-                  print(c, "ERR", e)
-              time.sleep(2)
-          P
-          python3 p.py
+          curl -sS -m 20 -X POST -H 'Content-Type: application/json' -A vps-sentinel -d '{"planes":[{"callsign":"CAL762","lat":25.0,"lng":121.0}]}' -w "\nroute code %{http_code} %{content_type}\n" https://api.adsb.lol/api/0/routeset | head -c 600; echo
+          get "https://opensky-network.org/api/states/all?lamin=21.9&lomin=119.7&lamax=23.2&lomax=121.0" 1500
+          get "https://opensky-network.org/api/states/all?lamin=23.6&lomin=119.9&lamax=24.9&lomax=121.3" 1500
