@@ -1,0 +1,41 @@
+# 暫時的：從 GitHub 的機器抓真的飛機資料，查台中、高雄為什麼沒有航班（查完就刪）
+name: flydebug
+on:
+  push:
+    branches: [claude/project-thread-wqdvmy]
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - run: |
+          for ap in "TPE 25.0777 121.2328" "RMQ 24.2647 120.6208" "KHH 22.5771 120.3500"; do
+            set -- $ap
+            for u in "https://opendata.adsb.fi/api/v3/lat/$2/lon/$3/dist/40" "https://api.adsb.lol/v2/point/$2/$3/40" "https://api.airplanes.live/v2/point/$2/$3/40"; do
+              curl -sS -m 15 -A vps-sentinel -o o.json -w "$1 %{http_code} %{size_download} $u\n" "$u" || true
+              python3 -c "
+          import json;d=json.load(open('o.json'));ac=d.get('ac') or d.get('aircraft') or []
+          print('  n',len(ac),'keys',sorted(d)[:8])
+          for a in ac[:40]: print('  ',a.get('flight'),a.get('alt_baro'),a.get('gs'),a.get('baro_rate'),a.get('track'),a.get('lat'),a.get('lon'),a.get('seen_pos'),a.get('seen'))
+          " || head -c 300 o.json
+              sleep 1.2
+            done
+          done
+      - run: |
+          cat > p.py <<'P'
+          import json, sys, time
+          sys.path.insert(0, "tests")
+          from test_passkey import load_sentinel
+          s = load_sentinel()
+          for c in ["TPE", "RMQ", "KHH"]:
+              try:
+                  b = s.fly_board(c)
+                  print(c, b["src"], {k: len(b[k]) for k in ("arr", "dep", "gnd", "over")})
+                  for k in ("arr", "dep", "gnd", "over"):
+                      for p in b[k][:12]:
+                          print("  ", k, p["fn"], p["alt"], p["spd"], p["vr"], p["d"], p["st"], p["org"], p["dst"])
+              except Exception as e:
+                  print(c, "ERR", e)
+              time.sleep(2)
+          P
+          python3 p.py
