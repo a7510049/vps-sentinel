@@ -881,6 +881,12 @@ html.flyon .dash>.view{content-visibility:hidden;contain-intrinsic-size:auto non
 .ftag.on{opacity:1;padding:3px 9px;background:var(--pc);color:var(--on-pc)}
 .ftag.bad{background:var(--badc);color:var(--on-badc)}
 .fmsg{background:var(--card);border-radius:var(--r-lg);padding:16px;text-align:center}
+.board{position:relative}
+.board .fh,.board .frows{transition:opacity var(--t-mid) var(--ease)}
+.board.wait{min-height:14em}.board.wait .fh,.board.wait .frows{opacity:0}
+.fload{position:absolute;inset:0;display:grid;place-items:center;pointer-events:none;opacity:0;transition:opacity var(--t-mid) var(--ease)}
+.board.wait .fload{opacity:1}
+.fload i{width:40px;height:40px;background:var(--p)}
 .radar{background:var(--card);border-radius:var(--r-xl);padding:16px;width:100%;max-width:480px;align-self:center}
 .fr.sel .sf .c[data-c=" "],.fr.sel .sf .c[data-c=" "] b{background:transparent}   /* 選到的那列：空格子不要變成深色方塊 */
 .board[data-tab="gnd"] .fr .t .sf{visibility:hidden}                              /* 地面沒有時間：不放空格子 */
@@ -954,9 +960,6 @@ html.flyon .dash>.view{content-visibility:hidden;contain-intrinsic-size:auto non
 .fkvs .fkv:nth-last-child(3){border-bottom-left-radius:var(--r-lg)}.fkvs .fkv:last-child{border-bottom-right-radius:var(--r-lg)}
 .finfo,.fpick{max-width:460px}
 .finfo .form{gap:12px}                          /* 資訊頁每一塊的間距都一樣 */
-.fpick .form{margin-bottom:8px}
-.fapl .lbl svg{width:14px;height:14px}
-.fapl .lbl{justify-content:flex-start}
 .fapl .li{min-height:60px}
 .fon{color:var(--p)}.fon svg{width:20px;height:20px}
 .radar .pl.gnd .pt,.radar .pl.over:not(.sel) .pt{display:none}

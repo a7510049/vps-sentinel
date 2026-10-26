@@ -180,9 +180,9 @@ class Flights(unittest.TestCase):
     def test_search(self):
         d = self.get("q=")
         self.assertEqual([a["code"] for a in d["pin"]], ["TPE", "TSA", "RMQ", "KHH"])
-        self.assertEqual(self.get("q=nrt")["list"][0]["code"], "NRT")
-        self.assertIn("LHR", [a["code"] for a in self.get("q=london")["list"]])
-        self.assertIn("NRT", [a["code"] for a in self.get("q=東京")["list"]])
+        self.assertEqual([a["code"] for a in self.get("q=nrt")["list"]], ["TPE", "TSA", "RMQ", "KHH"])   # 只有台灣的機場
+        self.S.FLY["cache"].clear()
+        self.assertEqual(self.get("ap=NRT")["ap"]["code"], "TPE")                   # 國外機場換成桃園
 
     def test_night(self):
         S, night = self.S, type(self).night

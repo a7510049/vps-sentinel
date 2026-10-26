@@ -5287,8 +5287,6 @@ FLY_APS = [
     ("MEL", "墨爾本機場", "墨爾本", -37.6690, 144.8410), ("AKL", "奧克蘭機場", "奧克蘭", -37.0082, 174.7850),
 ]
 FLY_PIN = ["TPE", "TSA", "RMQ", "KHH"]          # 台灣主要機場：選單最上面
-FLY_POP = ["TPE", "TSA", "RMQ", "KHH", "HKG", "MFM", "NRT", "HND", "KIX", "FUK", "OKA", "CTS", "ICN", "PVG", "PEK",
-           "BKK", "SIN", "KUL", "MNL", "SGN", "DXB", "DOH", "IST", "LHR", "CDG", "FRA", "AMS", "JFK", "LAX", "SFO", "SYD"]
 FLY_DB = {}
 FLY_NEAR = {}
 
@@ -5316,18 +5314,6 @@ def fly_ap(a):
     return {"code": a[0], "name": a[1], "city": a[2], "lat": a[3], "lon": a[4], "cc": a[5], "tz": a[6]}
 
 
-def fly_search(q):
-    db = fly_db()
-    q = q.strip().upper()[:40]
-    if not q:
-        return [fly_ap(db[c]) for c in FLY_POP if c in db]
-    hits = []
-    for a in db.values():
-        n, c, en = a[1].upper(), a[2].upper(), a[7].upper()
-        rank = 0 if a[0] == q else 1 if n.startswith(q) or c.startswith(q) else 2 if q in n or q in c or q in en else -1
-        if rank >= 0:
-            hits.append((rank > 0, a[0] not in FLY_POP, rank, a[0], a))
-    return [fly_ap(h[-1]) for h in sorted(hits, key=lambda h: h[:4])[:40]]
 # 呼號前三碼 → 航班代碼、中文名稱
 FLY_AL = {
     "EVA": ("BR", "長榮航空"), "CAL": ("CI", "中華航空"), "SJX": ("JX", "星宇航空"), "TTW": ("IT", "台灣虎航"),
@@ -5921,10 +5907,13 @@ def fly_board(code):
 
 
 def fly_api(q):
+    """只開放台灣的四個機場（官網航班表準）；國外的資料不夠準，先不給選"""
+    pin = [fly_ap(fly_db()[c]) for c in FLY_PIN if c in fly_db()]
     if "q" in q:
-        return {"ok": True, "list": fly_search(q["q"][0]), "pin": [fly_ap(fly_db()[c]) for c in FLY_PIN if c in fly_db()]}
+        return {"ok": True, "list": pin, "pin": pin}
+    code = str(q.get("ap", ["TPE"])[0]).upper()[:4]
     try:
-        return fly_board(str(q.get("ap", ["TPE"])[0]).upper()[:4])
+        return fly_board(code if code in FLY_PIN else "TPE")
     except Exception as e:  # noqa: BLE001
         return {"ok": False, "error": f"航班資料暫時拿不到（{e}）"}
 
