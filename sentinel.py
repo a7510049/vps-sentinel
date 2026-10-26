@@ -5583,8 +5583,8 @@ def fly_plane(a, ap):
     org, dst = (rt[0]["code"], rt[1]["code"]) if rt else ("", "")
     toward = trk is not None and abs((float(trk) - (brg + 180) % 360 + 540) % 360 - 180) < 60
     if gnd or (alt < 400 and gs < 60):
-        if d > 6 or fly_closest(ap, lat, lon) != code:
-            return None
+        if d > 6 or not (cs or reg) or fly_closest(ap, lat, lon) != code:
+            return None                       # 太遠、別的機場的，或沒名字的停機
         ph = "gnd"
     elif dst == code and org != code:
         ph = "arr"
