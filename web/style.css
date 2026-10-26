@@ -833,11 +833,15 @@ textarea.field{height:auto;padding:12px 16px;resize:none}
 html.flyon .dash>.view{content-visibility:hidden;contain-intrinsic-size:auto none}
 .flyv{position:fixed;inset:0;z-index:var(--z-det);background:var(--bg);--ct:0px;--cb:0px;--cl:0px;--cr:0px;animation:expand var(--t-slow) var(--dec) backwards}
 .flyv.closing{animation:collapse var(--t-mid) var(--exit) forwards;pointer-events:none}
-.fscroll{position:absolute;inset:0;overflow-y:auto;overscroll-behavior:contain;padding:calc(env(safe-area-inset-top) + 16px) 16px calc(env(safe-area-inset-bottom) + 40px)}
+.fscroll{position:absolute;inset:0;overflow-y:auto;overflow-x:hidden;touch-action:pan-y pinch-zoom;overscroll-behavior:contain;padding:calc(env(safe-area-inset-top) + 16px) 16px calc(env(safe-area-inset-bottom) + 40px)}
 .fwrap{max-width:1280px;margin:0 auto;display:flex;flex-direction:column;gap:12px}
 .ftop{display:flex;align-items:center;gap:12px}
 .fap{display:inline-flex;align-items:center;gap:8px;height:40px}
 .fap svg{width:18px;height:18px}
+.fexp{font-size:var(--fs-s);padding-left:4px}
+.sgone{min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;text-align:center;padding:24px}
+.sgone .ico{width:64px;height:64px}.sgone .ico svg{width:30px;height:30px}
+.sgone b{font-size:var(--fs-xl);font-weight:600}
 /* 一格翻牌：上下兩半分開畫，中間一條縫 */
 .sf{display:inline-flex;gap:2px;line-height:1;font-weight:500;font-variant-numeric:tabular-nums;vertical-align:middle}
 .sf .c{position:relative;contain:strict;font-style:normal;width:.8em;height:1.4em;flex:none;border-radius:calc(var(--r-xs) / 2);background:var(--s3);perspective:5em}
@@ -892,6 +896,7 @@ html.flyon .dash>.view{content-visibility:hidden;contain-intrinsic-size:auto non
 .fr.sel .sf .c[data-c=" "],.fr.sel .sf .c[data-c=" "] b{background:transparent}   /* 選到的那列：空格子不要變成深色方塊 */
 .board[data-tab="gnd"] .fr .t .sf{visibility:hidden}                              /* 地面沒有時間：不放空格子 */
 .radar .rbox{position:relative}
+.rbox .rfull{position:absolute;top:0;right:0;background:var(--s2);box-shadow:var(--sh-1)}.rfull svg{width:18px;height:18px}
 .radar .rcv{display:block;width:100%;height:auto;aspect-ratio:1;cursor:pointer;touch-action:manipulation}
 .fzm{margin-left:auto}.fzm button{height:26px;padding:0 10px}
 /* 整頁雷達 */

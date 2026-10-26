@@ -198,6 +198,25 @@ class Flights(unittest.TestCase):
         self.assertIn("TSA", [a[0] for a in d["aps"]])                               # 附近的機場
         self.assertNotIn("TPE", [a[0] for a in d["aps"]])
 
+    def test_share(self):
+        S = self.S
+        code, secs = S.share_new()
+        self.assertEqual(secs, 3600)
+        self.assertFalse(S.share_ok(code + ":"))
+        dev, left = S.share_claim(code, "")                         # 第一支手機打開
+        self.assertTrue(dev and left > 3500)
+        self.assertTrue(S.share_ok(code + ":" + dev))
+        self.assertEqual(S.share_claim(code, dev)[0], dev)          # 同一支手機再打開
+        self.assertEqual(S.share_claim(code, ""), (None, "這個連結已經在別的手機打開過"))
+        self.assertIsNone(S.share_claim(code, "別人的")[0])
+        self.assertFalse(S.share_ok(code + ":別人的"))
+        self.assertEqual(S.share_claim("fs_亂打", ""), (None, "連結已經失效"))
+        d = S.share_load()
+        for e in d.values():
+            e["exp"] = time.time() - 1                              # 過了一小時
+        S.share_save(d)
+        self.assertFalse(S.share_ok(code + ":" + dev))
+
     def test_night(self):
         S, night = self.S, type(self).night
         ap = S.fly_db()["KHH"]
