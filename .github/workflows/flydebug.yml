@@ -1,0 +1,21 @@
+# 暫時的：看台灣機場官網航班表的格式（查完就刪）
+name: flydebug
+on:
+  push:
+    branches: [claude/project-thread-wqdvmy]
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    steps:
+      - run: |
+          UA="Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130 Safari/537.36"
+          get() { echo; echo "=== $1"; curl -sSL -m 25 -A "$UA" -o o.bin -w "code %{http_code} type %{content_type} size %{size_download}\n" "$1" || true; }
+          get "https://www.taoyuan-airport.com/uploads/flightx/a_flight_v4.txt"
+          iconv -f BIG5-HKSCS -t UTF-8 -c o.bin | head -5; iconv -f BIG5-HKSCS -t UTF-8 -c o.bin | grep ",D," | tail -3; date -u
+          get "https://www.kia.gov.tw/API/InstantSchedule.ashx?AirFlyLine=1&AirFlyIO=1"; cat o.bin
+          get "https://www.kia.gov.tw/FIDS.html"; grep -oiE "[\"'][^\"']*(json|ashx|api|fids)[^\"']*[\"']" o.bin | sort -u | head -30; grep -oE "<script[^>]*src=[^>]*>" o.bin
+          get "https://www.tca.gov.tw/index.php?act=fids&code=departure_arrival"; grep -oiE "[\"'][^\"']*(json|ajax|api|fids|act=)[^\"']*[\"']" o.bin | sort -u | head -30; grep -n -iE "<table|<tr" o.bin | head -5; python3 -c "
+          import re;s=open('o.bin',encoding='utf-8',errors='replace').read();i=s.find('<table');print(re.sub(r'\s+',' ',s[i:i+2500]))"
+          get "https://www.tsa.gov.tw/flights/domestic/today?culture=1"; grep -oiE "[\"'][^\"']*(json|api|flight)[^\"']*[\"']" o.bin | sort -u | head -30; python3 -c "
+          import re;s=open('o.bin',encoding='utf-8',errors='replace').read();i=s.find('__NEXT_DATA__');print(s[i:i+2500])"
+          get "https://data.gov.tw/api/v2/rest/dataset?q=%E5%8D%B3%E6%99%82%E8%88%AA%E7%8F%AD"; head -c 3000 o.bin
