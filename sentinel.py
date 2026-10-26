@@ -5846,7 +5846,7 @@ def fly_merge(ap, fids, rows, io):
                 row["st"] = p["st"]
         out.append(row)
     out.sort(key=lambda o: o["est"] or o["sch"] or now)
-    return out[:30]
+    return out[:300]                                   # 網頁照時段分開看，可以多給一點
 
 
 def fly_gnd(ap, fids, gnd):

@@ -855,6 +855,12 @@ html.flyon .dash>.view{content-visibility:hidden;contain-intrinsic-size:auto non
 .fclock{display:flex;flex-direction:column;align-items:flex-end;gap:6px}
 .fmain{display:flex;flex-direction:column;gap:12px}
 .fleft{min-width:0;display:flex;flex-direction:column;gap:12px}
+/* 看板的時段：幾點有幾班，點了只看那一小時 */
+.fhrs{display:flex;gap:8px;overflow-x:auto;scrollbar-width:none;margin:0 -16px;padding:2px 16px;
+  -webkit-mask-image:linear-gradient(90deg,transparent,#000 16px,#000 calc(100% - 16px),transparent);mask-image:linear-gradient(90deg,transparent,#000 16px,#000 calc(100% - 16px),transparent)}
+.fhrs::-webkit-scrollbar{display:none}
+.fhrs .fchip{flex:none;display:inline-flex;align-items:center;gap:6px;white-space:nowrap}
+.fhrs .n{font-size:var(--fs-s);opacity:.7}
 .ftabs .fn{margin-left:6px;opacity:.75;font-variant-numeric:tabular-nums}
 .board{background:var(--card);border-radius:var(--r-xl);padding:10px;display:grid;grid-template-columns:auto auto auto minmax(4em,1fr) minmax(5em,1fr) auto auto auto auto;column-gap:16px;overflow:hidden}
 .fh,.frows,.fr{display:grid;grid-column:1/-1;grid-template-columns:subgrid}
@@ -886,7 +892,7 @@ html.flyon .dash>.view{content-visibility:hidden;contain-intrinsic-size:auto non
 .radar .ap{fill:var(--p)}
 .radar .rbox{position:relative}
 .radar .pls{position:absolute;inset:0;pointer-events:none}
-.radar .pl{position:absolute;left:0;top:0;width:0;height:0;pointer-events:auto;cursor:pointer;will-change:transform}
+.radar .pl{position:absolute;left:0;top:0;width:0;height:0;pointer-events:auto;cursor:pointer}
 .radar .pl .pp{position:absolute;left:-4em;top:-4em;width:8em;height:8em;fill:var(--tx3);overflow:visible;transition:fill var(--t-mid) var(--ease)}
 .radar .pl .pt{position:absolute;left:1.27em;top:-.5em;font-size:3em;line-height:1;white-space:nowrap;color:var(--tx3);pointer-events:none}
 .radar .pl.arr .pp{fill:var(--p)}.radar .pl.arr .pt{color:var(--tx2)}
@@ -912,6 +918,7 @@ html.flyon .dash>.view{content-visibility:hidden;contain-intrinsic-size:auto non
   .fr{display:flex;flex-wrap:wrap;align-items:center;gap:6px 8px;padding:12px 10px;font-size:var(--fs-m)}
   .fr .br{display:block;flex-basis:100%;height:0}
   .board[data-tab="gnd"] .fr .t{display:none}
+  .fr{content-visibility:auto;contain-intrinsic-size:auto 110px}       /* 手機：畫面外的列先不排版，換時段比較快 */
   .fr .t{order:1}.fr .fn{order:2}.fr .st{order:3;margin-left:auto}.fr .b1{order:4}
   .fr .pc{order:5;font-size:var(--fs-s)}.fr .pl{order:6;flex:1}.fr .al{order:7;font-size:var(--fs-s)}.fr .b2{order:8}
   .fr .m{order:9;font-size:var(--fs-s);color:var(--tx3)}.fr .reg{order:10;font-size:var(--fs-s);color:var(--tx3)}.fr .ftag{order:11;margin-left:auto}
