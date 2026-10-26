@@ -1,4 +1,4 @@
-# 暫時的：看松山機場官網航班表的格式（查完就刪）
+# 暫時的：用真的資料跑一次看板（查完就刪）
 name: flydebug
 on:
   push:
@@ -7,8 +7,24 @@ jobs:
   probe:
     runs-on: ubuntu-latest
     steps:
+      - uses: actions/checkout@v5
       - run: |
-          for io in 1 2; do for line in 1 2; do echo "== line $line io $io"; curl -sS -m 60 -X POST -H "Content-Type: application/json" -d "{\"AirFlyLine\":$line,\"AirFlyIO\":$io,\"Limit\":999,\"Culture\":1,\"FlightNumber\":null,\"AirLineCode\":null,\"AirportCode\":null,\"Sort\":\"ExpectDepartureTime\",\"Order\":\"asc\"}" https://www.tsa.gov.tw/api/airFlyTab/Paging -o o.bin; python3 -c "
-          import json,collections;d=json.load(open('o.bin',encoding='utf-8-sig'));print(d['total'], d.get('Floor'));r=d['rows']
-          [print(json.dumps(x,ensure_ascii=False)[:1500]) for x in r[:2]+r[-1:]]
-          print(collections.Counter(str(x.get('AirFlyStatus') or x.get('Status') or x.get('airFlyStatus')) for x in r))"; done; done
+          cat > p.py <<'P'
+          import sys, time
+          sys.path.insert(0, "tests")
+          from test_passkey import load_sentinel
+          s = load_sentinel()
+          for c in ["TPE", "TSA", "RMQ", "KHH"]:
+              t0 = time.time()
+              try:
+                  b = s.fly_board(c)
+                  print(c, round(time.time() - t0, 1), "s", b["srcs"], b["fids"], {k: len(b[k]) for k in ("arr", "dep", "gnd", "over")}, flush=True)
+                  for k in ("arr", "dep"):
+                      for p in b[k][:8]:
+                          hm = lambda t: time.strftime("%H:%M", time.gmtime(t + 8 * 3600)) if t else "-"
+                          print("  ", k, hm(p.get("sch")), hm(p.get("est")), p["fn"], p["al"], p["org"] and p["org"]["code"], p["dst"] and p["dst"]["code"], p.get("gate"), p["st"], p.get("share"), "LIVE" if p.get("live") or not p.get("fids") else "", flush=True)
+              except Exception as e:
+                  import traceback; traceback.print_exc()
+              time.sleep(1.5)
+          P
+          python3 p.py

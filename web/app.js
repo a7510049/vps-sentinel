@@ -2527,17 +2527,19 @@ const FLYDEP = {};                                        // 每架飛機估出�
 function flyRowV(p, tab, tz){
   if (!p) return {t:"", fn:"", pc:"", pl:"", al:"", m:"", reg:"", st:"", cls:""};
   let t = "";
-  if (tab === "arr" && p.eta != null) t = flyHM(Date.now() + p.eta * 60e3, tz);
-  if (tab === "dep") { if (!FLYDEP[p.id]) FLYDEP[p.id] = Date.now() - (p.spd > 50 ? p.d / p.spd * 3600e3 : 0); t = flyHM(FLYDEP[p.id], tz); }
+  if (p.fids && tab !== "gnd") t = flyHM((p.est || p.sch) * 1000, tz);
+  else if (tab === "arr" && p.eta != null) t = flyHM(Date.now() + p.eta * 60e3, tz);
+  else if (tab === "dep") { if (!FLYDEP[p.id]) FLYDEP[p.id] = Date.now() - (p.spd > 50 ? p.d / p.spd * 3600e3 : 0); t = flyHM(FLYDEP[p.id], tz); }
   const pl = tab === "arr" ? p.org : tab === "dep" ? p.dst : (p.dst && p.dst.code !== FLYD.ap.code ? p.dst : p.org);
-  return {t, fn: p.fn || p.reg, pc: pl ? pl.code : "", pl: pl ? pl.name || "" : "", al: p.al || "", m: p.model || p.t || "", reg: p.reg || "", st: p.st,
-    cls: p.emg ? "bad" : /落地|剛起飛|跑道/.test(p.st) ? "hot" : ""};
+  return {t, fn: p.fn || p.reg, pc: pl ? pl.code : "", pl: pl ? pl.name || "" : "", al: p.al || "", m: p.model || p.t || "", reg: (FLYD.fids && tab !== "gnd" ? p.gate : p.reg) || "", st: p.st,
+    cls: p.emg || p.st === "取消" ? "bad" : /落地|剛起飛|跑道|登機/.test(p.st) ? "hot" : ""};
 }
 const FLYF = ["t", "fn", "pc", "st"], FLYX = ["pl", "al", "m", "reg"];   // 翻牌的欄位／一般文字的欄位（城市、航空公司、機型、註冊號用一般字比較好讀）
 const FLYW = {t:5, fn:7, pc:3, st:6};
 const FLYCOL = ["t", "fn", "pc", "pl", "al", "m", "reg", "st"];
 const FLYHEAD = {arr:["預計抵達", "航班", "出發地", "", "航空公司", "機型", "註冊號", "狀態"],
   dep:["起飛", "航班", "目的地", "", "航空公司", "機型", "註冊號", "狀態"], gnd:["", "航班", "航線", "", "航空公司", "機型", "註冊號", "狀態"]};
+const FLYHEADF = {arr:["抵達", "航班", "出發地", "", "航空公司", "機型", "登機門", "狀態"], dep:["起飛", "航班", "目的地", "", "航空公司", "機型", "登機門", "狀態"]};   // 有機場官網航班表時
 const flyRow = i => `<div class="fr" data-i="${i}" role="button" tabindex="0">${FLYCOL.map(k => `<span class="fk ${k}">${FLYW[k] ? flap("", FLYW[k]) : ""}</span>`).join("")}<span class="ftag"></span><i class="br b1"></i><i class="br b2"></i></div>`;
 function flyShell(){
   return `<div class="flyv" id="fly"><div class="fscroll"><div class="fwrap">
@@ -2560,7 +2562,7 @@ const FLYPL = "M0-3.4.55-1.3 3.2.3v.65L.55.25.42 2.1 1.4 2.8v.4L0 2.8-1.4 3.2v-.
 function flyRadar(f, d){
   const g = f.querySelector(".pls"), all = [...d.arr, ...d.dep, ...d.gnd, ...d.over], seen = new Set();
   all.forEach(p => {
-    if (Math.hypot(p.x, p.y) > 61) return;
+    if (p.x == null || seen.has(p.id) || Math.hypot(p.x, p.y) > 61) return;     // 官網表上、收不到訊號的班機不在雷達上
     seen.add(p.id);
     let e = g.querySelector(`[data-id="${CSS.escape(p.id)}"]`);
     if (!e) {
@@ -2582,13 +2584,13 @@ function flyPaint(anim){
   if (!d.ap) d.ap = {code: FLYS.ap, name: FLYS.name || "", city: "", tz: ""};
   const n = d[FLYS.tab].length;
   reveal(msg, !d.ok || d.loading || !n);
-  txt(msg, !d.ok ? d.error || "航班資料暫時拿不到" : d.loading ? "讀取中…" : n ? "" : `附近現在沒有${{arr:"要降落", dep:"剛起飛", gnd:"在地面"}[FLYS.tab]}的飛機`);
+  txt(msg, !d.ok ? d.error || "航班資料暫時拿不到" : d.loading ? "讀取中…" : n ? "" : d.fids && FLYS.tab !== "gnd" ? `接下來沒有${FLYS.tab === "arr" ? "抵達" : "起飛"}的班機` : `附近現在沒有${{arr:"要降落", dep:"剛起飛", gnd:"在地面"}[FLYS.tab]}的飛機`);
   const tz = d.ap.tz;
   flapSet(f.querySelector(".fcode .sf"), d.ap.code);
   txt(f.querySelector('[data-k="name"]'), d.ap.name); txt(f.querySelector('[data-k="city"]'), d.ap.city);
   flapSet(f.querySelector(".fclock .sf"), flyHM(Date.now(), tz));
   FLYTAB.forEach(([k]) => txt(f.querySelector(`[data-k="n-${k}"]`), d.loading ? "" : String(d[k].length)));
-  f.querySelectorAll(".fh .fk").forEach((h, i) => txt(h, FLYHEAD[FLYS.tab][i]));
+  f.querySelectorAll(".fh .fk").forEach((h, i) => txt(h, d.fids && FLYS.tab !== "gnd" ? FLYHEADF[FLYS.tab][i] : FLYHEAD[FLYS.tab][i]));
   f.querySelector(".board").dataset.tab = FLYS.tab;
   const list = d[FLYS.tab] || [], box = f.querySelector(".frows"), want = Math.min(30, Math.max(DESK.matches ? 8 : 6, list.length));
   while (box.children.length < want) {               // 看板的列數跟著變：新的一列從下面長出來
@@ -2705,15 +2707,18 @@ function flyInfo(id){
   const v = document.createElement("div"); v.className = "veil";
   const pl = x => x ? `<b>${esc(x.code)}</b><small>${esc(x.name)}</small>` : `<b>—</b><small>不明</small>`;
   const kv = (k, val) => `<div class="fkv"><small>${k}</small><b class="num">${val}</b></div>`;
+  const hm = t => t ? flyHM(t * 1000, d.ap.tz) : "—", air = p.alt != null;
   const vr = p.vr > 0.5 ? `↑ ${p.vr}` : p.vr < -0.5 ? `↓ ${-p.vr}` : "平飛";
   const reg = encodeURIComponent(p.reg || "");
   v.innerHTML = `<div class="dialog finfo"><div class="form">
     <div class="fih"><span class="fpc big">${esc(p.fn || p.reg || "—")}</span><span class="lab">${esc(p.al || "航空公司不明")}<small>${esc(p.st)}${p.cs && p.cs !== p.fn ? `・呼號 ${esc(p.cs)}` : ""}</small></span></div>
     ${p.emg || p.mil || p.rare ? `<div class="fbad${p.emg ? " bad" : ""}">${p.emg ? `${I("warn")}${esc(p.st)}（應答碼 ${esc(p.sq)}）` : p.mil ? "軍機" : "少見機型"}</div>` : ""}
     ${p.org || p.dst ? `<div class="froute"><span>${pl(p.org)}</span><span class="fln">${I("plane")}</span><span>${pl(p.dst)}</span></div>` : `<div class="fnr sub">查不到這班的航線</div>`}
-    <div class="fkvs">${kv("機型", esc(p.model || p.t || "—"))}${kv("註冊號", esc(p.reg || "—"))}${kv("高度", p.alt ? `${p.alt.toLocaleString()} 公尺` : "地面")}
+    ${p.fids ? `<div class="fkvs">${kv("表定", hm(p.sch))}${kv(p.ph === "arr" ? "預計抵達" : "預計起飛", hm(p.est))}${kv("登機門", esc(p.gate || "—"))}</div>
+      ${p.term || (p.share && p.share.length) ? `<div class="fnr sub">${esc([p.term, p.share && p.share.length ? `共掛 ${p.share.join("、")}` : ""].filter(Boolean).join("・"))}</div>` : ""}` : ""}
+    ${air ? `<div class="fkvs">${kv("機型", esc(p.model || p.t || "—"))}${kv("註冊號", esc(p.reg || "—"))}${kv("高度", p.alt ? `${p.alt.toLocaleString()} 公尺` : "地面")}
       ${kv("速度", `${p.spd} 公里/時`)}${kv("每秒升降", p.ph === "gnd" ? "—" : `${vr}${Math.abs(p.vr) > .5 ? " 公尺" : ""}`)}${kv("距離機場", `${p.d} 公里`)}
-      ${kv("機型代碼", esc(p.t || "—"))}${kv("識別碼", esc((p.id || "").toUpperCase()))}${kv("應答碼", esc(p.sq || "—"))}</div>
+      ${kv("機型代碼", esc(p.t || "—"))}${kv("識別碼", esc((p.id || "").toUpperCase()))}${kv("應答碼", esc(p.sq || "—"))}</div>` : `<div class="fnr sub">收不到這班的飛機訊號</div>`}
     ${reg ? `<div class="group"><a class="li" href="https://www.jetphotos.com/registration/${reg}" target="_blank" rel="noopener noreferrer"><span class="lab">看這架的照片<small>JetPhotos</small></span>${EXT}</a>
       <a class="li" href="https://www.flightradar24.com/data/aircraft/${reg.toLowerCase()}" target="_blank" rel="noopener noreferrer"><span class="lab">飛行紀錄<small>Flightradar24</small></span>${EXT}</a></div>` : ""}
     </div><div class="btns"><button class="ubtn ghost" data-r="0">關閉</button></div></div>`;
