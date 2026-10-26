@@ -160,7 +160,7 @@ install -m 755 "$HERE/sentinel.py" "$DIR/sentinel.py"
 install -d "$DIR/web"
 install -m 644 "$HERE"/web/index.html "$HERE"/web/style.css "$HERE"/web/app.js "$DIR/web/"
 install -d "$DIR/data"
-install -m 644 "$HERE/data/airports.tsv" "$DIR/data/"
+install -m 644 "$HERE/data/airports.tsv" "$HERE/data/coast.tsv" "$DIR/data/"
 ok "放在 $DIR"
 
 # ── 2. 設定檔（已存在就保留） ──

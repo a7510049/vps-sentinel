@@ -898,6 +898,18 @@ html.flyon .dash>.view{content-visibility:hidden;contain-intrinsic-size:auto non
 .radar .ap{fill:var(--p)}
 .radar .rbox{position:relative}
 .radar .pls{position:absolute;inset:0;pointer-events:none}
+.radar .rz{transform-origin:0 0}
+.radar .coast{fill:var(--s2);stroke:var(--s4);stroke-width:1;vector-effect:non-scaling-stroke;stroke-linejoin:round}
+.radar .pl.gnd .pp{scale:.6}
+.radar .tws{position:absolute;inset:0;pointer-events:none}
+.radar .tw{position:absolute;left:0;top:0;width:0;height:0;transition:opacity var(--t-mid) var(--ease)}
+.radar .tw span{position:absolute;transform:translate(-50%,-50%);font-size:var(--fs-xs);color:var(--tx3);white-space:nowrap;opacity:.8}
+.radar .tw.out{opacity:0}
+.radar .pl[data-lp="l"] .pt{left:auto;right:1.2em}
+.radar .pl[data-lp="t"] .pt{left:0;top:-1.8em;transform:translateX(-50%)}
+.radar .pl[data-lp="b"] .pt{left:0;top:.75em;transform:translateX(-50%)}
+.radar .pl[data-lp="n"]:not(.sel) .pt{visibility:hidden}
+.fzm{margin-left:auto}.fzm button{height:26px;padding:0 10px}
 .radar .pl{position:absolute;left:0;top:0;width:0;height:0;pointer-events:auto;cursor:pointer}
 .radar .pl .pp{position:absolute;left:-4em;top:-4em;width:8em;height:8em;fill:var(--tx3);overflow:visible;transition:fill var(--t-mid) var(--ease)}
 .radar .pl .pt{position:absolute;left:1.27em;top:-.5em;font-size:3em;line-height:1;white-space:nowrap;color:var(--tx3);pointer-events:none}

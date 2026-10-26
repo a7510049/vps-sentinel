@@ -26,6 +26,7 @@ install.sh         安裝／更新哨兵（複製到 /opt/vps-sentinel-lite、�
 cloud.sh           雲端硬碟（FileBrowser Quantum）安裝、調整容量、檢查、更新、移除
 cleanup-old.sh     清除舊版 Home Assistant 版本
 data/airports.tsv  全世界的機場（機場起降用；改了也要在 SRC_FILES、install.sh）
+data/coast.tsv     台灣附近的海岸線（Natural Earth，雷達底圖；同上）
 tools/style_check.py  檢查樣式有沒有照共用規則
 tests/             基本功能測試（只用 Python 內建模組）
 android/           安卓 App：全螢幕打開主機的網頁（記住網址），畫面全部來自網頁，主力是網頁
@@ -55,7 +56,7 @@ android/           安卓 App：全螢幕打開主機的網頁（記住網址）
 - 遠端下載（`dl_` 開頭的函式）：主機 ⋯ 選單「遠端下載」，貼連結後由那台主機下載到雲端硬碟的「下載」資料夾；只連公開 IP（先查好再連，轉址也重查）、雲端硬碟留 200 MB／主機磁碟留 1 GB；檔案 16 MB 以上且對方支援時分段同時下載（每 32 MB 一段，4～16 段；先下載完的連線會把還剩最多的那段切一半來幫忙）；清單存在 `DATA_DIR/downloads.json`，重新啟動後接續下載（分段的每段各自接續）；斷線、逾時會自己等一下再接著下載（最多 3 次，`DL_AGAIN`）；測試用 SENTINEL_DL_DIR、SENTINEL_DL_LOCAL、SENTINEL_DL_AGAIN
 - 影片網站下載（`yt_`、`dl_video`）：YouTube 等網址、或連結打開是網頁時，交給主機上使用者自己裝的 yt-dlp（哨兵不會自己下載或安裝程式）；有 ffmpeg 才下載最好畫質；用 1000 身分執行；yt-dlp、deno 每天用它們自己的更新指令更新一次（`yt_update_loop`）；測試用 SENTINEL_YTDLP 換成假的
 - YouTube 擋機房：設定檔 `YT_PROXY` 或自動偵測 WARP（127.0.0.1:40000 的 socks5）就走代理；還被擋才用網頁貼上的網站登入資料（`DATA_DIR/yt-cookies.txt`，不同網站分開貼會合併，`yt_` 開頭的函式）；貼上的分享文字會自動挑出網址（`dl_pick`）；小紅書、B 站、抖音的短網址先自己轉址、換成標準網址（`yt_fix`）
-- 機場起降（`fly_` 開頭的函式、app.js 的 `FLY` 那段）：工具分頁最上面「機場起降」，打開一頁翻牌看板＋雷達；主要主機抓 adsb.fi（失敗換 adsb.lol、airplanes.live）的飛機位置，再用 OpenSky 補愛好者收不到的（南台灣；不登入每天 400 次，同一個機場 30 秒問一次，`fly_sky`）；沒有航線時飛機算到最近的機場（`fly_closest`），航線在背景問 adsb.lol，同一個機場 8 秒內不重抓；只開放台灣四個機場 `FLY_PIN`（使用者說國外的抓不準，`fly_api` 會把其他代碼換成桃園）；`data/airports.tsv`（airportsdata，MIT）和 `FLY_APS` 中文名稱留著給航線地名用；測試用 SENTINEL_FLY_API（網址裡放 {lat}{lon}{d}）、SENTINEL_FLY_ROUTE、SENTINEL_FLY_ROUTE2、SENTINEL_FLY_SKY 換成假的；航線 adsb.lol 查不到再一班一班問 adsbdb；桃園、松山、台中、高雄另外抓機場官網的航班表（`fly_fids_` 開頭，背景每分鐘一次），抵達／出發改照官網的表定時間、登機門、狀態，收得到訊號的班機再配上即時位置（`fly_merge`）；表上沒有的飛機和貨機（`fly_cargo`）不列，地面只留表上有的（`fly_gnd`）；雷達上的飛機是疊在 SVG 上的一般方塊（移動交給顯示卡），看板只翻畫面上看得到的列；官網表照「幾點」分時段看（`flyHours`、`FLYHR`），換分頁／時段是整塊淡出淡入（`flySwitch`），不一格一格翻，測試用 SENTINEL_FIDS_TPE／KHH／RMQ／TSA
+- 機場起降（`fly_` 開頭的函式、app.js 的 `FLY` 那段）：工具分頁最上面「機場起降」，打開一頁翻牌看板＋雷達；主要主機抓 adsb.fi（失敗換 adsb.lol、airplanes.live）的飛機位置，再用 OpenSky 補愛好者收不到的（南台灣；不登入每天 400 次，同一個機場 30 秒問一次，`fly_sky`）；沒有航線時飛機算到最近的機場（`fly_closest`），航線在背景問 adsb.lol，同一個機場 8 秒內不重抓；只開放台灣四個機場 `FLY_PIN`（使用者說國外的抓不準，`fly_api` 會把其他代碼換成桃園）；`data/airports.tsv`（airportsdata，MIT）和 `FLY_APS` 中文名稱留著給航線地名用；測試用 SENTINEL_FLY_API（網址裡放 {lat}{lon}{d}）、SENTINEL_FLY_ROUTE、SENTINEL_FLY_ROUTE2、SENTINEL_FLY_SKY 換成假的；航線 adsb.lol 查不到再一班一班問 adsbdb；桃園、松山、台中、高雄另外抓機場官網的航班表（`fly_fids_` 開頭，背景每分鐘一次），抵達／出發改照官網的表定時間、登機門、狀態，收得到訊號的班機再配上即時位置（`fly_merge`）；表上沒有的飛機和貨機（`fly_cargo`）不列，地面只留表上有的（`fly_gnd`）；雷達上的飛機是疊在 SVG 上的一般方塊（移動交給顯示卡），看板只翻畫面上看得到的列；官網表照「幾點」分時段看（`flyHours`、`FLYHR`），換分頁／時段是整塊淡出淡入（`flySwitch`），不一格一格翻，資料剛到也是先換好字再淡入（`flyWait`／`flyShow`）；雷達底圖 `?geo=` 回傳換算成公里的海岸線和 `FLY_TOWNS` 地名（`fly_geo`），60／30／15 公里縮放（`FLYS.zm`、`flyZoom`），航班代號擠在一起時換邊或先藏起來（`flyLabels`）；測試用 SENTINEL_FIDS_TPE／KHH／RMQ／TSA
 - Caddy：主設定用 `import /etc/caddy/sites/vps-sentinel.d/*.caddy`；雲端硬碟的轉接寫在 `cloud.caddy`
 
 ## 使用者的兩台主機
