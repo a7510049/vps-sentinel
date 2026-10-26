@@ -5249,6 +5249,7 @@ FLY_SRC = [x for x in [os.environ.get("SENTINEL_FLY_API", "")] if x] or [
 ]
 FLY_SRC = [("測試", x, "") if isinstance(x, str) else x for x in FLY_SRC]
 FLY_ROUTE = os.environ.get("SENTINEL_FLY_ROUTE", "https://api.adsb.lol/api/0/routeset")
+FLY_ROUTE2 = os.environ.get("SENTINEL_FLY_ROUTE2", "https://api.adsbdb.com/v0/callsign/")
 FLY_NM = 40                                   # 抓機場方圓幾海里（約 74 公里）
 FLY_EVERY = 8                                 # 同一個機場幾秒內不重抓
 # 常用機場的中文名稱（代碼、名稱、城市、緯度、經度）；其他機場用 data/airports.tsv 的英文名稱
@@ -5367,7 +5368,7 @@ FLY_TYPES = {
 }
 FLY_RARE = {"A388", "B744", "B748", "B742", "MD11", "A343", "A346", "A3ST", "A337", "A124", "A225", "IL76", "C17",
             "C5M", "K35R", "A400", "B52", "E3TF", "B77L", "B764", "A306", "A339", "A338", "B779", "B778", "C919", "BCS1", "BCS3"}
-FLY = {"cache": {}, "routes": {}, "lock": threading.Lock(), "last": 0.0, "bad": {}, "rq": set(), "rbusy": False, "fetch": threading.Lock()}
+FLY = {"cache": {}, "routes": {}, "lock": threading.Lock(), "last": 0.0, "bad": {}, "rq": set(), "rbusy": False, "fetch": threading.Lock(), "logged": {}}
 
 
 def fly_dist(la1, lo1, la2, lo2):
@@ -5380,12 +5381,11 @@ def fly_dist(la1, lo1, la2, lo2):
 
 
 def fly_fetch(ap):
-    """抓機場附近的飛機：一個來源失敗就換下一個；每個來源一秒最多一次"""
+    """抓機場附近的飛機：一個來源失敗就換下一個（剛失敗的先跳過一下，全都失敗過就照順序再試）；每秒最多問一次"""
     lat, lon = ap[3], ap[4]
     err = "連不上"
-    for name, url, home in FLY_SRC:
-        if time.time() - FLY["bad"].get(name, 0) < 60:
-            continue
+    srcs = [s for s in FLY_SRC if time.time() < FLY["bad"].get(s[0], 0)]
+    for name, url, home in [s for s in FLY_SRC if s not in srcs] + srcs:
         wait = FLY["last"] + 1.1 - time.time()
         if wait > 0:
             time.sleep(wait)
@@ -5394,20 +5394,47 @@ def fly_fetch(ap):
             req = urllib.request.Request(url.format(lat=lat, lon=lon, d=FLY_NM), headers={"User-Agent": "vps-sentinel"})
             with urllib.request.urlopen(req, timeout=8) as r:
                 d = json.loads(r.read())
-            ac = d.get("ac", d.get("aircraft"))
+            ac = d.get("ac", d.get("aircraft")) if isinstance(d, dict) else None
+            if ac is None and isinstance(d, dict) and ("now" in d or "total" in d):
+                ac = []                       # 附近一架都沒有
             if not isinstance(ac, list):
                 raise ValueError("格式不對")
+            FLY["bad"].pop(name, None)
             return ac, name, home
         except Exception as e:  # noqa: BLE001
-            FLY["bad"][name] = time.time()
-            err = str(e)[:80]
+            FLY["bad"][name] = time.time() + (15 if isinstance(e, urllib.error.HTTPError) and e.code == 429 else 60)
+            err = f"{name}：{str(e)[:60]}"
+            fly_log(err)
     raise RuntimeError(err)
 
 
+def fly_log(msg):
+    """航班資料出錯記一筆（同樣的錯 30 分鐘記一次就好）"""
+    if FLY["logged"].get(msg, 0) < time.time() - 1800:
+        FLY["logged"][msg] = time.time()
+        log(f"機場起降：{msg}")
+
+
 def fly_place(a):
-    code = str(a.get("iata") or a.get("icao") or "")[:4].upper()
-    known = fly_db().get(code) if code in {a[0] for a in FLY_APS} else None     # 有中文名稱的才換
-    return {"code": code, "name": known[2] if known else str(a.get("location") or a.get("name") or "")[:24]}
+    code = str(a.get("iata") or a.get("iata_code") or a.get("icao") or a.get("icao_code") or "")[:4].upper()
+    known = fly_db().get(code) if code in {x[0] for x in FLY_APS} else None     # 有中文名稱的才換
+    return {"code": code, "name": known[2] if known else str(a.get("location") or a.get("municipality") or a.get("name") or "")[:24]}
+
+
+def fly_adsbdb(cs):
+    """adsb.lol 查不到的航線，再問 adsbdb（一班一班問）"""
+    try:
+        req = urllib.request.Request(FLY_ROUTE2 + urllib.parse.quote(cs), headers={"User-Agent": "vps-sentinel"})
+        with urllib.request.urlopen(req, timeout=6) as r:
+            fr = (json.loads(r.read()).get("response") or {}).get("flightroute") or {}
+    except urllib.error.HTTPError as e:
+        if e.code == 404:
+            return None, True                 # 這班沒有資料
+        return None, False
+    except Exception:  # noqa: BLE001
+        return None, False
+    o, d = fr.get("origin"), fr.get("destination")
+    return ([fly_place(o), fly_place(d)] if isinstance(o, dict) and isinstance(d, dict) else None), True
 
 
 def fly_routes():
@@ -5430,8 +5457,16 @@ def fly_routes():
                     aps = x.get("_airports") or []
                     if cs and len(aps) >= 2 and x.get("plausible", 1) not in (0, False, "0"):
                         got[cs] = [fly_place(a) for a in (aps[0], aps[-1])]
-        except Exception:  # noqa: BLE001
-            pass
+        except Exception as e:  # noqa: BLE001
+            fly_log(f"adsb.lol 航線：{str(e)[:60]}")
+        miss = 0
+        for c, _, _ in todo:
+            if c in got or miss >= 3:
+                continue
+            rt, ok = fly_adsbdb(c)
+            miss = 0 if ok else miss + 1      # 連續三次連不上就先不問了
+            if rt:
+                got[c] = rt
         for c, _, _ in todo:
             FLY["routes"][c] = (now, got.get(c))
 
@@ -5523,7 +5558,15 @@ def fly_board(code):
         if hit and time.time() - hit["t"] < FLY_EVERY:
             return hit
         ac, src, home = fly_fetch(ap)
-    rows = [p for p in (fly_plane(a, ap) for a in ac) if p]
+    rows = []
+    for a in ac:                              # 一架資料怪怪的就跳過，不要整個看板都出不來
+        try:
+            p = fly_plane(a, ap) if isinstance(a, dict) else None
+        except Exception as e:  # noqa: BLE001
+            fly_log(f"有一架資料讀不懂（{type(e).__name__}）")
+            p = None
+        if p:
+            rows.append(p)
     by = lambda ph: [p for p in rows if p["ph"] == ph]           # noqa: E731
     arr = sorted(by("arr"), key=lambda p: (p["eta"] if p["eta"] is not None else 999, p["d"]))
     dep = sorted(by("dep"), key=lambda p: p["d"])

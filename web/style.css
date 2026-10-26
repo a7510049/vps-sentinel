@@ -928,6 +928,7 @@ html.flyon .dash>.view{content-visibility:hidden;contain-intrinsic-size:auto non
 .fbad.bad{background:var(--badc);color:var(--on-badc)}
 .fbad svg{width:18px;height:18px}
 .froute{display:grid;grid-template-columns:1fr auto 1fr;align-items:center;gap:8px;margin:12px 0;padding:14px;background:var(--chip);border-radius:var(--r-lg);text-align:center}
+.fnr{margin:12px 0;padding:12px 14px;background:var(--chip);border-radius:var(--r-lg);text-align:center}
 .froute b{display:block;font-size:var(--fs-2xl);font-weight:500;line-height:1.2}
 .froute small{color:var(--tx3);font-size:var(--fs-s)}
 .froute .fln{color:var(--p)}
