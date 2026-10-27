@@ -42,7 +42,7 @@ from collections import deque
 from concurrent.futures import ThreadPoolExecutor
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
-VERSION = "3.16"
+VERSION = "3.17"
 
 # ───────────────────────── 哨兵備份檔（.vsbk）─────────────────────────
 # 哨兵專用的備份格式：外面是自己的檔案格式，裡面用的是成熟、標準的加密方法（不自己發明加密）：
@@ -6045,7 +6045,7 @@ def fly_plane(a, ap):
     reg = str(a.get("r") or "").upper()
     al = FLY_AL.get(cs[:3]) if re.match(r"[A-Z]{3}\d", cs) else None
     fn = fly_fn(al[0] + cs[3:]) if al else cs
-    rt = fly_route(cs, lat, lon) if cs else None
+    rt = (fly_route(cs, lat, lon) if cs else None) or fly_fids_route(fn)
     org, dst = (rt[0]["code"], rt[1]["code"]) if rt else ("", "")
     toward = trk is not None and abs((float(trk) - (brg + 180) % 360 + 540) % 360 - 180) < 60
     if gnd or (alt < 400 and gs < 60):
@@ -6089,6 +6089,24 @@ def fly_plane(a, ap):
         "ph": ph, "st": emg or st, "emg": bool(emg), "sq": sq, "mil": mil, "rare": mil or t in FLY_RARE,
         "cat": str(a.get("category") or "")[:2],
     }
+
+
+def fly_fids_route(fn):
+    """查不到航線的班機：去四個台灣機場的官網航班表找（例如在松山看到要飛桃園的那班），找最接近現在的那一筆"""
+    if not fn:
+        return None
+    now, best, bd = time.time(), None, 4 * 3600
+    for c in FLY_PIN:
+        hit = FLY_FIDS.get(c)
+        for r in (hit or {}).get("rows") or []:
+            if fly_fn(r.get("fn")) != fn and fn not in [fly_fn(x) for x in r.get("share") or []]:
+                continue
+            dt = abs((r.get("est") or r.get("sch") or 0) - now)
+            if dt < bd and r.get("pc"):
+                me = {"code": c, "name": fly_city(c)}
+                far = {"code": r["pc"], "name": fly_city(r["pc"]) or r.get("pl") or r["pc"]}
+                best, bd = (far, me) if r.get("io") == "arr" else (me, far), dt
+    return best
 
 
 def fly_fn(fn):
