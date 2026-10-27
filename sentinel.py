@@ -42,7 +42,7 @@ from collections import deque
 from concurrent.futures import ThreadPoolExecutor
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
-VERSION = "3.29"
+VERSION = "3.30"
 
 # ───────────────────────── 哨兵備份檔（.vsbk）─────────────────────────
 # 哨兵專用的備份格式：外面是自己的檔案格式，裡面用的是成熟、標準的加密方法（不自己發明加密）：
@@ -5429,6 +5429,38 @@ def fly_cargo(fn, cs=""):
     return al in FLY_CARGO_IATA or (al in ("CI", "BR") and 5000 <= n <= 6999) or (al == "BR" and 600 <= n <= 699)
 
 
+# 用途：貨運航空公司以外，客貨都飛的公司只有某些機型是貨機（例如國泰的 747 全部是貨機）
+FLY_FREIGHT = {("CPA", "B748"), ("CPA", "B744"), ("CAL", "B744"), ("CAL", "B77L"), ("EVA", "B77L"), ("SIA", "B744"), ("SIA", "B77L"),
+               ("KAL", "B744"), ("KAL", "B77L"), ("AAR", "B744"), ("ANA", "B763"), ("ANA", "B77L"), ("THA", "B77L"), ("CES", "B77L"),
+               ("CSN", "B77L"), ("CCA", "B77L"), ("UAE", "B77L"), ("QTR", "B77L"), ("ETD", "B77L"), ("THY", "B77L"), ("DLH", "B77L"),
+               ("AFR", "B77L"), ("KLM", "B77L"), ("JAL", "B763"), ("CAL", "B748"), ("KAL", "B748")}
+FLY_BIZ = r"^(GLF|GL[5-7XE]|GLEX|CL30|CL35|CL60|F2TH|F900|FA[5-8X]|C25|C5[0-9][0-9]|C68|C700|C750|E5[05]P|E35L|E545|E550|LJ|H25|PC24|BE40|PRM1|HDJT|SF50|EA50|C510|BBJ|ACJ|A318|B737BBJ)"
+FLY_GOV = r"(airborne service|coast guard|police|fire|government|ministry|navy|army|air force|空勤|海巡|警|消防)"
+
+
+def fly_use(cs, al, t, cat, mil, op="", fn=""):
+    """這架飛機做什麼用：客機、貨機、私人／公務機、直升機、軍機、公務、小飛機；看不出來回空字串"""
+    t, kind = str(t or "").upper(), fly_kind(t, "", cat)
+    if mil:
+        return "軍機"
+    if re.search(FLY_GOV, op or "", re.I):
+        return "公務飛機"
+    if kind == "heli":
+        return "直升機"
+    pre = cs[:3] if re.match(r"[A-Z]{3}\d", cs or "") else ""
+    if fly_cargo(fn, cs) or (pre, t) in FLY_FREIGHT or re.search(r"cargo|freight|express|logistics", op or "", re.I):
+        return "貨機"
+    if t and re.match(FLY_BIZ, t) and not al:
+        return "私人／公務機"
+    if al:
+        return "客機"
+    if kind in ("ga", "tp") or str(cat or "").upper() in ("A1", "B1", "B4"):
+        return "小飛機"
+    if t and re.match(FLY_BIZ, t):
+        return "私人／公務機"
+    return ""
+
+
 def fly_model(m):
     """機型寫法統一：官網的「B777-300」「A320-271」和收到的「777-300ER」「A320neo」用同一種寫法"""
     m = re.sub(r"\s+", " ", str(m or "")).strip()
@@ -6228,6 +6260,9 @@ def fly_plane(a, ap):
         ph = "arr" if toward else "dep"
     else:
         ph = "over"
+    if not rt and ph in ("arr", "dep") and d < 30 and alt < 10000:     # 查不到航線：很確定在這裡落地／剛從這裡起飛的，先寫這一頭
+        me, far = {"code": code, "name": fly_city(code) or ap[2], "guess": True}, None
+        rt = [far, me] if ph == "arr" else [me, far]
     eta = round(d / (gs * 1.852) * 60) if ph == "arr" and gs > 50 else None
     if ph == "arr":
         st = "即將落地" if alt < 2000 and d < 10 else "進場中"           # 幾點落地看時間那欄
@@ -6241,6 +6276,7 @@ def fly_plane(a, ap):
     emg = {"7700": "緊急狀況", "7600": "通訊故障", "7500": "劫機"}.get(sq) or (
         "緊急狀況" if str(a.get("emergency") or "none") not in ("none", "") else "")
     mil = bool(int(a.get("dbFlags") or 0) & 1)
+    op = str(a.get("ownOp") or "")
     return {
         "id": str(a.get("hex") or "")[:8], "cs": cs, "fn": fn, "al": al[1] if al else str(a.get("ownOp") or "")[:24],
         "reg": reg, "t": t, "model": FLY_TYPES.get(t) or fly_model(str(a.get("desc") or t).title()[:28]),
@@ -6249,7 +6285,7 @@ def fly_plane(a, ap):
         "d": round(d, 1), "eta": eta, "trk": round(float(trk)) if trk is not None else None,
         "x": round(d * math.sin(math.radians(brg)), 2), "y": round(d * math.cos(math.radians(brg)), 2),
         "ph": ph, "st": emg or st, "emg": bool(emg), "sq": sq, "mil": mil, "rare": mil or t in FLY_RARE,
-        "cat": str(a.get("category") or "")[:2],
+        "cat": str(a.get("category") or "")[:2], "use": fly_use(cs, al, t, a.get("category"), mil, op, fn),
     }
 
 
@@ -6436,18 +6472,24 @@ def fly_board(code, bg=False):
     if add:
         srcs.append(["OpenSky", "https://opensky-network.org"])
     fly_hex_fill(ac)
-    rows = []
+    rows, cargo = [], []
     for a in ac:                              # 一架資料怪怪的就跳過，不要整個看板都出不來
         try:
             p = fly_plane(a, ap) if isinstance(a, dict) else None
         except Exception as e:  # noqa: BLE001
             fly_log(f"有一架資料讀不懂（{type(e).__name__}）")
             p = None
-        if p and not fly_cargo(p["fn"], p["cs"]):
-            hit = fly_fids_find(p["fn"])
-            if hit:                                    # 任何一個台灣機場的官網表排了這班：機型照官網（路過的也是）
-                fly_fix_type(p, hit[1])
-            rows.append(p)
+        if not p:
+            continue
+        if p["use"] == "貨機":                        # 貨機不列在看板，只畫在雷達上
+            cargo.append(p)
+            continue
+        hit = fly_fids_find(p["fn"])
+        if hit:                                        # 任何一個台灣機場的官網表排了這班：機型照官網（路過的也是）
+            fly_fix_type(p, hit[1])
+            if not p["mil"]:
+                p["use"] = "客機"                      # 官網表只有客機
+        rows.append(p)
     by = lambda ph: [p for p in rows if p["ph"] == ph]           # noqa: E731
     arr = sorted(by("arr"), key=lambda p: (p["eta"] if p["eta"] is not None else 999, p["d"]))
     dep = sorted(by("dep"), key=lambda p: p["d"])
@@ -6458,6 +6500,7 @@ def fly_board(code, bg=False):
         arr, dep, gnd = fly_merge(ap, fids, rows, "arr"), fly_merge(ap, fids, rows, "dep"), fly_gnd(ap, fids, gnd)
         got = {p["id"] for p in arr + dep + gnd}
         rest = [p for p in rows if p["ph"] != "over" and p["id"] not in got]   # 對不上官網表的：不列在看板，但雷達上照樣畫出來
+    rest += cargo
     for p in arr + dep + gnd + over + rest:
         p["kind"] = fly_kind(p.get("t"), p.get("model"), p.get("cat"))
     out = {"ok": True, "t": time.time(), "ap": fly_ap(ap), "src": src or (srcs[0][0] if srcs else ""), "home": home, "srcs": srcs,
