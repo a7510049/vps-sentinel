@@ -1,22 +1,41 @@
 name: flydebug
 on: push
 jobs:
-  logos:
+  probe:
     runs-on: ubuntu-latest
     steps:
       - run: |
-          mkdir -p /tmp/l && cd /tmp/l
-          for a in BR CI JX IT AE B7 CX NH JL 5J; do
-            curl -s -L -o "1_$a.png" -w "%{http_code} %{content_type} %{size_download} g70 $a\n" "https://www.gstatic.com/flights/airline_logos/70px/$a.png"
-            curl -s -L -o "2_$a.png" -w "%{http_code} %{content_type} %{size_download} gdark $a\n" "https://www.gstatic.com/flights/airline_logos/70px/dark/$a.png"
-            curl -s -L -o "3_$a.png" -w "%{http_code} %{content_type} %{size_download} kiwi $a\n" "https://images.kiwi.com/airlines/64x64/$a.png"
-            curl -s -L -o "4_$a.png" -w "%{http_code} %{content_type} %{size_download} kayak $a\n" "https://content.r9cdn.net/rimg/provider-logos/airlines/v/$a.png?crop=false&width=108&height=92&fallback=default2.png"
-            curl -s -L -o "5_$a.png" -w "%{http_code} %{content_type} %{size_download} avs $a\n" "https://pics.avs.io/64/64/$a.png"
+          for n in 1 2; do
+            u="https://www.tca.gov.tw/index.php?act=fids&code=api_departure_arrival&airFlyIO=$n"
+            curl -s -D /tmp/h -o /tmp/b -A "Mozilla/5.0 (vps-sentinel)" -w "plain %{http_code} first=%{time_starttransfer} total=%{time_total} size=%{size_download} redirect=%{redirect_url}\n" --max-time 60 "$u"; grep -i "^location\|^server\|^set-cookie" /tmp/h | cut -c1-150
+            curl -s -L -o /tmp/b -A "Mozilla/5.0 (vps-sentinel)" -w "follow %{http_code} first=%{time_starttransfer} total=%{time_total} size=%{size_download} url=%{url_effective}\n" --max-time 60 "$u"; head -c 300 /tmp/b; echo
+            curl -s -L -o /tmp/b -A "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0 Safari/537.36" -w "browserUA %{http_code} first=%{time_starttransfer} total=%{time_total} size=%{size_download}\n" --max-time 60 "$u"
           done
-          curl -s -D - -o /dev/null "https://www.gstatic.com/flights/airline_logos/70px/BR.png" | grep -i "access-control\|cache-control\|content-type\|HTTP/"
-          curl -s -D - -o /dev/null "https://www.gstatic.com/flights/airline_logos/70px/ZZ.png" | head -1
-          curl -s -D - -o /dev/null "https://content.r9cdn.net/rimg/provider-logos/airlines/v/BR.png" | grep -i "access-control\|HTTP/"
-          for a in BR CI JX IT AE B7 CX NH JL 5J; do for s in 1 2 3 4 5; do convert "${s}_$a.png" -background '#ddd' -flatten -resize 40x40 -gravity center -extent 44x44 "t${a}_$s.png" 2>/dev/null || convert -size 44x44 xc:red "t${a}_$s.png"; done; done
-          montage $(for a in BR CI JX IT AE B7 CX NH JL 5J; do for s in 1 2 3 4 5; do echo "t${a}_$s.png"; done; done) -tile 5x -geometry +2+2 m.png
-          convert m.png -quality 85 m.jpg; ls -la m.jpg
-          echo "B64START"; base64 -w0 m.jpg; echo; echo "B64END"
+          curl -s -o /dev/null -L -w "home %{http_code} total=%{time_total} %{url_effective}\n" --max-time 60 "https://www.tca.gov.tw/"
+          curl -s -o /dev/null -L -w "khh-arr total=%{time_total}\n" https://www.kia.gov.tw/data/arr.json
+      - run: |
+          pip install -q pillow
+          mkdir -p /tmp/l && cd /tmp/l
+          A="BR CI JX IT AE B7 CX NH JL 5J"
+          for a in $A; do
+            curl -s -L -o "1_$a.png" "https://www.gstatic.com/flights/airline_logos/70px/$a.png"
+            curl -s -L -o "2_$a.png" "https://images.kiwi.com/airlines/64x64/$a.png"
+            curl -s -L -o "3_$a.png" "https://content.r9cdn.net/rimg/provider-logos/airlines/v/$a.png?crop=false&width=108&height=92&fallback=default2.png"
+            curl -s -L -o "4_$a.png" "https://pics.avs.io/64/64/$a.png"
+          done
+          curl -s -o 1_ZZ.png "https://www.gstatic.com/flights/airline_logos/70px/ZZ.png"; curl -s -L -o 2_ZZ.png "https://images.kiwi.com/airlines/64x64/ZZ.png"; curl -s -L -o 3_ZZ.png "https://content.r9cdn.net/rimg/provider-logos/airlines/v/ZZ.png?crop=false&width=108&height=92&fallback=default2.png"; curl -s -L -o 4_ZZ.png "https://pics.avs.io/64/64/ZZ.png"
+          md5sum *_ZZ.png 1_BR.png
+          python3 - <<'PY'
+          from PIL import Image
+          A="BR CI JX IT AE B7 CX NH JL 5J ZZ".split(); S=48
+          m=Image.new("RGB",(4*(S+4),len(A)*(S+4)),(200,200,200))
+          for i,a in enumerate(A):
+              for s in range(4):
+                  try:
+                      im=Image.open(f"{s+1}_{a}.png").convert("RGBA"); im.thumbnail((S,S))
+                      bg=Image.new("RGBA",(S,S),(255,255,255,255)); bg.alpha_composite(im,((S-im.width)//2,(S-im.height)//2)); t=bg.convert("RGB")
+                  except Exception: t=Image.new("RGB",(S,S),(255,0,0))
+                  m.paste(t,(s*(S+4)+2,i*(S+4)+2))
+          m.save("m.jpg",quality=80)
+          PY
+          ls -la m.jpg; echo "B64START"; base64 -w0 m.jpg; echo; echo "B64END"
