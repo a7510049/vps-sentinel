@@ -42,7 +42,7 @@ from collections import deque
 from concurrent.futures import ThreadPoolExecutor
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
-VERSION = "3.36"
+VERSION = "3.37"
 
 # ───────────────────────── 哨兵備份檔（.vsbk）─────────────────────────
 # 哨兵專用的備份格式：外面是自己的檔案格式，裡面用的是成熟、標準的加密方法（不自己發明加密）：
@@ -5907,7 +5907,7 @@ def fly_st(st):
 
 def fly_fids_tpe():
     out = []
-    for line in fly_get(FLY_FIDS_URL["TPE"], timeout=15).decode("big5hkscs", "replace").splitlines():
+    for line in fly_get(FLY_FIDS_URL["TPE"], ua="Mozilla/5.0", timeout=15).decode("big5hkscs", "replace").splitlines():   # 帶自己名字的有時候拿到空的
         x = [c.strip() for c in line.split(",")]
         if len(x) < 15 or x[1] not in ("A", "D"):
             continue
@@ -6014,7 +6014,10 @@ def fly_gate_track(code, rows, now=None):
 def fly_fids_pull(code, hit):
     try:
         keep = {}
-        for r in FLY_FIDS_GET[code]():
+        got = FLY_FIDS_GET[code]()
+        if not got:
+            raise ValueError("拿到空的航班表")      # 不要把上一次好好的表蓋掉
+        for r in got:
             if not r["fn"] or not r["sch"]:
                 continue
             r["type"] = fly_model(r["type"])
@@ -6314,8 +6317,9 @@ def fly_plane(a, ap):
     org, dst = (rt[0]["code"], rt[1]["code"]) if rt else ("", "")
     toward = trk is not None and abs((float(trk) - (brg + 180) % 360 + 540) % 360 - 180) < 60
     # 離機場不遠、正在下降靠近／爬升離開：照飛的樣子判斷，查到的航線可能是別的航段（同一個班號飛好幾段很常見）
-    land = not gnd and alt < 15000 and d < 60 and vr < -300 and toward and fly_closest(ap, lat, lon, trk, 1) == code
-    lift = not gnd and alt < 15000 and d < 60 and vr > 300 and not toward and fly_closest(ap, lat, lon, trk, -1) == code
+    near = {c for c, _, _ in fly_nearby(ap)}           # 查到的航線是附近別的機場（例如在松山看到要降落桃園的）：照航線
+    land = not gnd and alt < 15000 and d < 60 and vr < -300 and toward and dst not in near and fly_closest(ap, lat, lon, trk, 1) == code
+    lift = not gnd and alt < 15000 and d < 60 and vr > 300 and not toward and org not in near and fly_closest(ap, lat, lon, trk, -1) == code
     me = {"code": code, "name": fly_city(code) or ap[2]}
     if land and rt and dst != code:                    # 例如查到「達拉斯 → 安克拉治」，其實是安克拉治飛來的下一段
         rt, dst = [{**rt[1], "guess": True} if org != code else None, me], code
