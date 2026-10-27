@@ -289,6 +289,16 @@ class Flights(unittest.TestCase):
         S.fly_learn("QQQ", "Somewhere")               # 英文的不學
         self.assertEqual(S.fly_city("QQQ"), "某某")
 
+    def test_fids_route(self):
+        """在別的機場看到同一班：從桃園官網的表補上從哪飛到哪，不會寫不明"""
+        S = self.S
+        self.get("ap=TPE")
+        org, dst = S.fly_fids_route("CI27")
+        self.assertEqual((org["code"], dst["code"], dst["name"]), ("TPE", "HKG", "香港"))
+        org, dst = S.fly_fids_route("NH5800")             # 共掛班號也找得到
+        self.assertEqual((org["code"], dst["code"]), ("NRT", "TPE"))
+        self.assertIsNone(S.fly_fids_route("ZZ999"))
+
     def test_sky_need(self):
         """非必要不問 OpenSky：沒有班機要起降、或愛好者都收得到時不問"""
         S = self.S
