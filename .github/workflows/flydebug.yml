@@ -5,4 +5,5 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - run: |
-          curl -s -m 20 -A "Mozilla/5.0" https://www.taoyuan-airport.com/assets/img/logo.svg | gzip -9 | base64 -w0; echo
+          curl -s -m 20 -A "Mozilla/5.0" https://www.taoyuan-airport.com/assets/img/logo.svg > l.svg; head -c 600 l.svg; echo; grep -o '<g[^>]*>' l.svg | head; grep -c '<path' l.svg
+          sudo apt-get install -y -qq librsvg2-bin >/dev/null 2>&1; rsvg-convert -h 60 l.svg -o l.png && file l.png && echo B64 && base64 -w0 l.png; echo
