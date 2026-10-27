@@ -42,7 +42,7 @@ from collections import deque
 from concurrent.futures import ThreadPoolExecutor
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
-VERSION = "3.32"
+VERSION = "3.33"
 
 # ───────────────────────── 哨兵備份檔（.vsbk）─────────────────────────
 # 哨兵專用的備份格式：外面是自己的檔案格式，裡面用的是成熟、標準的加密方法（不自己發明加密）：
@@ -6610,8 +6610,12 @@ FLY_TOWNS = [
     ("台中", 24.15, 120.67), ("清水", 24.27, 120.57), ("彰化", 24.08, 120.54), ("南投", 23.91, 120.68),
     ("斗六", 23.71, 120.54), ("嘉義", 23.48, 120.45), ("台南", 22.99, 120.21), ("高雄", 22.63, 120.30),
     ("屏東", 22.67, 120.49), ("小琉球", 22.34, 120.37), ("宜蘭", 24.76, 121.75), ("花蓮", 23.99, 121.60),
-    ("台東", 22.76, 121.14), ("馬公", 23.57, 119.58),
+    ("台東", 22.76, 121.14), ("馬公", 23.57, 119.58), ("恆春", 22.00, 120.75), ("金門", 24.44, 118.36), ("馬祖", 26.16, 119.95),
+    ("蘭嶼", 22.05, 121.55), ("綠島", 22.66, 121.49),
 ]
+# 台灣附近的其他地方（拉遠才看得到，字比較淡）
+FLY_FAR = [("廈門", 24.48, 118.09), ("泉州", 24.87, 118.68), ("福州", 26.07, 119.30), ("莆田", 25.45, 119.01), ("汕頭", 23.35, 116.68),
+           ("溫州", 28.00, 120.67), ("與那國島", 24.46, 123.00), ("石垣島", 24.40, 124.18), ("宮古島", 24.78, 125.30), ("巴丹群島", 20.45, 121.97)]
 # 放大後才出現的鄉鎮
 FLY_TOWNS2 = [
     ("大園", 25.06, 121.20), ("蘆竹", 25.05, 121.29), ("龜山", 25.00, 121.34), ("八德", 24.93, 121.29),
@@ -6643,30 +6647,30 @@ def fly_geo(code):
         return {"ok": False, "error": "沒有這個機場"}
     lat0, lon0, kx, ky, lim = a[3], a[4], 111.32 * math.cos(math.radians(a[3])), 110.57, 140
     xy = lambda la, lo: ((lo - lon0) * kx, (la - lat0) * ky)  # noqa: E731
-    path = []
+    path = {"t": [], "f": []}                        # 台灣整座島和附近的陸地都給（不切成方框，拉遠也不會有假的直線）
     try:
         with open(os.path.join(HERE, "data", "coast.tsv"), encoding="utf-8") as f:
             for line in f:
                 if line.startswith("#") or not line.strip():
                     continue
-                pts = [xy(float(p.split(",")[1]), float(p.split(",")[0])) for p in line.split()]
-                closed = len(pts) > 2 and pts[0] == pts[-1]
-                if not any(abs(x) < lim and abs(y) < lim for x, y in pts):
+                k, *ps = line.split()
+                pts = [xy(float(p.split(",")[1]), float(p.split(",")[0])) for p in ps]
+                if k not in path or not any(math.hypot(x, y) < 900 for x, y in pts):
                     continue
-                seg = []                             # 範圍外的點壓到邊框上（不要直接切掉，不然陸地會斜斜地少一塊）
+                seg = []
                 for x, y in pts:
-                    c = f"{max(-lim, min(lim, x)):.1f} {-max(-lim, min(lim, y)):.1f}"
+                    c = f"{x:.1f} {-y:.1f}"
                     if not seg or seg[-1] != c:
                         seg.append(c)
-                if len(seg) > 1:
-                    path.append("M" + "L".join(seg) + ("Z" if closed else ""))
+                if len(seg) > 2:
+                    path[k].append("M" + "L".join(seg) + "Z")
     except OSError:
         pass
     towns = []
-    for lv, lst in ((1, FLY_TOWNS), (2, FLY_TOWNS2)):
+    for lv, lst in ((1, FLY_TOWNS), (2, FLY_TOWNS2), (0, FLY_FAR)):
         for n, la, lo in lst:
             x, y = xy(la, lo)
-            if math.hypot(x, y) < lim:
+            if math.hypot(x, y) < (lim if lv == 2 else 900):
                 towns.append([n, round(x, 1), round(y, 1), lv])
     aps, rwy = [], []                                # 附近的機場和它們的跑道
     for c, n, _, la, lo in FLY_APS:
@@ -6680,7 +6684,7 @@ def fly_geo(code):
             cx, cy = x + off * math.sin(b), y + off * math.cos(b)
             dx, dy = ln / 2 * math.sin(a), ln / 2 * math.cos(a)
             rwy.append([round(cx - dx, 2), round(cy - dy, 2), round(cx + dx, 2), round(cy + dy, 2)])
-    FLY_GEO[code] = {"ok": True, "coast": "".join(path), "towns": towns, "aps": aps, "rwy": rwy}
+    FLY_GEO[code] = {"ok": True, "coast": "".join(path["t"]), "far": "".join(path["f"]), "towns": towns, "aps": aps, "rwy": rwy}
     return FLY_GEO[code]
 
 
