@@ -2717,7 +2717,7 @@ const flySplash = () => `<div class="fsplash" aria-hidden="true"><div class="fsp
     <i class="fspl">${I("plane")}</i></div>
   <div class="fspc">${flap("", 3, "xl")}</div><div class="fspn sub"></div></div>`;
 function flySplashOn(f){
-  if (!canAnim()) return;
+  if (!canAnim()) return f.querySelector(".fsplash").remove();
   f.classList.add("splash"); f._sp0 = performance.now(); flyApBtn(f, {code: FLYS.ap});
   setTimeout(() => { if (f.classList.contains("splash")) { flapSet(f.querySelector(".fspc .sf"), FLYS.ap); txt(f.querySelector(".fspn"), FLYS.name || ""); } }, T.mid);
 }
@@ -2727,7 +2727,7 @@ function flySplashOff(f){
   f._spOff = 1;
   setTimeout(() => {
     const sp = f.querySelector(".fsplash");
-    sp.animate([{opacity:1}, {opacity:0, transform:"scale(1.04)"}], {duration:T.mid, easing:EXIT, fill:"forwards"}).finished.then(() => sp.remove(), () => {});
+    sp.animate([{opacity:1}, {opacity:0, transform:"scale(1.04)"}], {duration:T.mid, easing:EXIT, fill:"forwards"}).finished.then(() => sp.remove(), () => sp.remove());
     f.classList.remove("splash");
     [...f.querySelectorAll(".fwrap>:not(.ftop), .fmain>*")].filter(e => !e.classList.contains("fmain")).forEach((e, i) =>
       e.animate([{opacity:0, transform:"translateY(16px)"}, {opacity:1, transform:"none"}], {duration:T.slow, delay:T.fast * .5 + i * T.fast * .35, easing:EASE, fill:"backwards"}));
@@ -3401,7 +3401,7 @@ function flyOpen(btn){
   if (!SHARE) history.pushState({fly:1}, "");          // 分享連結只有這一頁，不能返回
   document.documentElement.classList.add("lock");
   setTimeout(() => { if ($("#fly")) document.documentElement.classList.add("flyon"); }, T.slow + 80);
-  if (FLYD && FLYD.ap && FLYD.ap.code === FLYS.ap) flyPaint(false); else { flySplashOn(f); flyWait(f, true); }
+  if (FLYD && FLYD.ap && FLYD.ap.code === FLYS.ap) { f.querySelector(".fsplash").remove(); flyPaint(false); } else { flySplashOn(f); flyWait(f, true); }
   flyLoad(false);
   f._rv = radarView(f.querySelector(".rcv"), false); f._rv.range = flyR(); flyZoom(f, false);
   f.querySelector(".rcv").addEventListener("click", e => {    // 點雷達打開整頁雷達；點到飛機就順便選好那一架
