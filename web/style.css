@@ -883,7 +883,7 @@ html.flyon .dash>.view{content-visibility:hidden;contain-intrinsic-size:auto non
 .fhrs::-webkit-scrollbar,.fterm::-webkit-scrollbar{display:none}
 .fhrs .fchip,.fterm .fchip{flex:none;display:inline-flex;align-items:center;gap:6px;white-space:nowrap}
 .fhrs .n{font-size:var(--fs-s);opacity:.7}
-.ftabs .fn{margin-left:6px;opacity:.75;font-variant-numeric:tabular-nums}
+.ftabs .fn{margin-left:6px;color:var(--tx3);font-variant-numeric:tabular-nums}.ftabs .on .fn{color:var(--on-p);opacity:.75}[data-accent="rainbow"] .ftabs .on .fn{color:var(--on-rbw)}   /* 數字自己給顏色，不跟著按鈕的變色動畫走（手機上有時會留著選到時的深色） */
 .board{background:var(--card);border-radius:var(--r-xl);padding:10px;display:grid;grid-template-columns:auto auto auto minmax(4em,1fr) auto minmax(5em,1fr) auto auto auto auto;column-gap:16px;overflow:hidden}
 .fh,.frows,.fr{display:grid;grid-column:1/-1;grid-template-columns:subgrid}
 .fh{padding:4px 10px 8px;font-size:var(--fs-xs);color:var(--tx3);font-weight:500;white-space:nowrap}
@@ -941,6 +941,10 @@ html.flyon .dash>.view{content-visibility:hidden;contain-intrinsic-size:auto non
 .fplr .fon{width:20px;opacity:0;transition:opacity var(--t-fast) var(--ease)}.fplr.on .fon{opacity:1;color:inherit}
 .fplr:not(.sub)[data-fpl^="@"] .lab{font-weight:600}             /* 國家那一列 */
 .fplr.sub{padding-left:calc(12px + 1.5em)}                         /* 城市：往裡縮一點 */
+.fpls{display:flex;flex-direction:column;gap:2px}
+.fplx{display:inline-grid;place-items:center;vertical-align:middle;width:32px;height:32px;margin:-8px -6px -8px 2px;border-radius:var(--r-pill);color:var(--tx2)}
+.fplx svg{width:18px;height:18px;transition:transform var(--t-mid) var(--ease)}.fplx.open svg{transform:rotate(180deg)}
+@media (hover:hover){.fplx:hover{background:var(--s3)}}
 .fplh{padding:10px 12px 4px;font-size:var(--fs-xs);font-weight:600;color:var(--tx3)}
 /* 延誤、改登機門橘框，取消紅框：慢慢呼吸（只動透明度；每一列對齊同一個節拍，flyBeat） */
 .fr{position:relative}

@@ -2647,7 +2647,7 @@ const flyLgOk = c => !FLYNOLG.has(c) && !!(FLYD && FLYD.als && FLYD.als.includes
 const flyAl = fn => { const m = /^([A-Z0-9]{2})\d/.exec(fn || ""); return m && /[A-Z]/.test(m[1]) ? m[1] : ""; };
 const flyLogo = (c, cls = "") => { if (!c) return ""; const ft = FLYFIT[c];    // 已經量過的標誌：直接用量好的樣子，不會先白底再跳
   return ft ? `<i class="alg ok ${ft.cls} ${cls}" data-c="${c}"${ft.bg ? ` style="background:${ft.bg}"` : ""}>${c}<img alt="" src="${ft.src}"></i>`
-    : `<i class="alg ${cls}" data-c="${c}">${c}${flyLgOk(c) ? `<img alt="" loading="lazy" src="/api/fly-logo?k=${c}">` : ""}</i>`; };
+    : `<i class="alg ${cls}" data-c="${c}">${c}${flyLgOk(c) ? `<img alt="" loading="lazy" src="/api/fly-logo?k=${c}&v=${FLYD.lgv || ""}">` : ""}</i>`; };
 /* 航空公司標誌（主機存好的，同一個網站才讀得到顏色）：本身是方形色塊的，裁掉白邊、整格填滿它的顏色；碰到四個角的縮小一點，圓角才不會切到 */
 const FLYFIT = {};
 function flyFit(img){
@@ -3165,7 +3165,8 @@ function flyWhere(){
   $("#layer").appendChild(v);
   const box = v.querySelector(".fpll"), inp = v.querySelector("input"), tz = d.ap && d.ap.tz;
   const ck = `<span class="fon">${I("check")}</span>`;
-  const row = (x, sub) => `<button class="fplr${sub ? " sub" : ""}${FLYPLC && FLYPLC.k === x.k ? " on" : ""}" data-fpl="${esc(x.k)}"><span class="lab">${esc(x.name)}${sub ? "" : flyFlag(x.cc)}</span><span class="n">${x.n} 班</span>${ck}</button>`;
+  const row = (x, sub, fx) => `<button class="fplr${sub ? " sub" : ""}${FLYPLC && FLYPLC.k === x.k ? " on" : ""}" data-fpl="${esc(x.k)}"><span class="lab">${esc(x.name)}${sub ? "" : flyFlag(x.cc)}${fx ? `<span class="fplx${fx > 1 ? " open" : ""}" data-fx="${esc(x.k)}" role="button" aria-label="展開城市">${I("chev")}</span>` : ""}</span><span class="n">${x.n} 班</span>${ck}</button>`;
+  const open = new Set();                                  // 有好幾個城市的國家每次打開都先收起來，點國旗旁邊的箭頭才展開
   const draw = first => {
     const q = inp.value.trim(), Q = flyFnN(q), gs = flyPlaces(), sum = gs.reduce((a, x) => a + x.n, 0);
     const hit = x => x.name.includes(q) || x.code && x.code.includes(q.toUpperCase());
@@ -3176,7 +3177,9 @@ function flyWhere(){
     const fl = p => { const t = tabOf(p), pl = flyPl(p, t), go = t === "dep" || t === "gnd" && flyOut(p);
       return `<button class="fplr" data-fid="${esc(p.id)}">${flyLogo(flyAl(p.fn))}<span class="lab">${esc(p.fn || p.reg || "")}<small>${pl ? `${go ? "往" : "從"} ${esc(pl.name || pl.code)}` : ""}${p.fids && t !== "gnd" ? `・${flyHM((p.est || p.sch) * 1000, tz)}` : ""}${p.st ? `・${esc(p.st)}` : ""}</small></span></button>`; };
     // 這個國家只有一個城市（香港、曼谷）：一列就好；其他國家先一列國家（點了看整國），下面是城市
-    const grp = g => g.items.length === 1 ? row({...g.items[0], cc: g.cc}) : row(g) + g.items.map(x => row(x, 1)).join("");
+    const grp = g => { if (g.items.length === 1) return row({...g.items[0], cc: g.cc});
+      const on = q || open.has(g.k);
+      return row(g, 0, q ? 0 : on ? 2 : 1) + `<div class="fpls" data-fs="${esc(g.k)}"${on ? "" : " hidden"}>${g.items.map(x => row(x, 1)).join("")}</div>`; };
     const html = (fs.length ? `<div class="fplh">航班</div>${fs.map(fl).join("")}` : "")
       + (fs.length && pls.length ? `<div class="fplh">地點</div>` : "")
       + (!q ? `<button class="fplr${FLYPLC ? "" : " on"}" data-fpl=""><span class="lab">全部地點</span><span class="n">${sum} 班</span>${ck}</button>` : "")
@@ -3190,6 +3193,9 @@ function flyWhere(){
   v._esc = done;
   v.addEventListener("click", e => {
     if (e.target === v) return done();
+    const fx = e.target.closest("[data-fx]");
+    if (fx) { const k = fx.dataset.fx, on = !open.has(k); on ? open.add(k) : open.delete(k);
+      fx.classList.toggle("open", on); return reveal(box.querySelector(`[data-fs="${CSS.escape(k)}"]`), on); }
     const a = e.target.closest("[data-fid]");
     if (a) { done(); return setTimeout(() => flyInfo(a.dataset.fid), canAnim() ? T.fast * 2 : 0); }
     const b = e.target.closest("[data-fpl]"); if (!b) return;
@@ -3263,7 +3269,7 @@ function flyPaint(anim){
   flapSet(f.querySelector(".fcode .sf"), d.ap.code); flyApBtn(f, d.ap);
   txt(f.querySelector('[data-k="name"]'), d.ap.name); txt(f.querySelector('[data-k="city"]'), d.ap.city);
   flapSet(f.querySelector(".fclock .sf"), flyHM(Date.now(), tz));
-  FLYTAB.forEach(([k]) => txt(f.querySelector(`[data-k="n-${k}"]`), d.loading ? "" : String(d[k].length)));
+  FLYTAB.forEach(([k]) => { f.querySelector(`[data-k="n-${k}"]`).textContent = d.loading ? "" : String(d[k].length); });   // 不淡入：手機上淡入中剛好換分頁，數字會留著選到時的深色
   f.querySelectorAll(".fh .fk").forEach((h, i) => (FLYSTILL ? (e, t) => { e.textContent = t; } : txt)(h, d.fids && FLYS.tab !== "gnd" ? FLYHEADF[FLYS.tab][i] : FLYHEAD[FLYS.tab][i]));
   f.querySelector(".board").dataset.tab = FLYS.tab; f.querySelector(".board").dataset.fids = d.fids ? "1" : "";
   if (d.loading && d.ok) { flyRadar(f, d); flyGeoOff(f); f.querySelector(".ffoot").textContent = ""; return; }   // 等資料：舊的列留著淡出（不先翻成空白），舊機場的飛機收掉
@@ -3413,7 +3419,7 @@ function flyOpen(btn){
 function flyClose(){ if (!$("#fly") || SHARE) return; if (history.state && history.state.fly) history.back(); else flyShut(); }
 function flyShut(){
   const f = $("#fly"); if (!f || f._bye) return; f._bye = 1;
-  clearTimeout(FLYT); FLYSEL = ""; FLYHR = "";
+  clearTimeout(FLYT); FLYSEL = ""; FLYHR = ""; FLYPLC = null;   // 關掉再打開：地點回到全部
   if (FRAD) fradShut();
   if (f._rv) f._rv.stop();
   document.documentElement.classList.remove("flyon");
