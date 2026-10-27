@@ -887,10 +887,20 @@ html.flyon .dash>.view{content-visibility:hidden;contain-intrinsic-size:auto non
 .fr .reg{font-variant-numeric:tabular-nums}
 .fr.hot .st b{color:var(--p)}
 .fr.bad .st b{color:var(--bad)}
+.fr .reg.gch,.fr .m.gch{color:var(--warn);font-weight:600}
 .sf .c[data-c=" "],.sf .c[data-c=" "] b{background:var(--s2)}     /* 空的格子淡一點，有字的才跳出來 */
 .ftag{justify-self:start;font-size:var(--fs-xs);font-weight:500;border-radius:var(--r-pill);padding:0;opacity:0;transition:opacity var(--t-mid) var(--ease)}
 .ftag.on{opacity:1;padding:3px 9px;background:var(--pc);color:var(--on-pc)}
 .ftag.bad{background:var(--badc);color:var(--on-badc)}
+.ftag.late{background:var(--warnc);color:var(--on-warnc)}
+.ftag.early{background:color-mix(in oklab,var(--ok) 18%,transparent);color:var(--ok)}
+/* 延誤、改登機門橘框，取消紅框：慢慢呼吸（只動透明度；畫面外的列停下來） */
+.fr{position:relative}
+.fr::after{content:"";position:absolute;inset:0;border-radius:inherit;border:2px solid transparent;pointer-events:none;opacity:0}
+.fr.warn::after,.fr.bad::after{animation:breathe calc(var(--t-long) * 1.6) var(--ease) infinite alternate}
+.fr.warn::after{border-color:var(--warn)}.fr.bad::after{border-color:var(--bad)}
+.fr:not(.vis)::after{animation-play-state:paused}
+@keyframes breathe{from{opacity:.2}to{opacity:1}}
 .fmsg{grid-column:1/-1;padding:24px 16px;text-align:center}
 .board.none .fh{display:none}
 .board{position:relative}
