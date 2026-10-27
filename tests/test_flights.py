@@ -516,3 +516,14 @@ class Kinds(unittest.TestCase):
                               ("EC35", "", "", "heli"), ("C172", "", "", "ga"), ("", "B777-300", "", "wb"), ("", "ATR72", "", "tp"),
                               ("", "", "A7", "heli"), ("ZZZZ", "", "", "")]:
             self.assertEqual(k(t, m, c), want, (t, m, c))
+
+    def test_use(self):
+        from test_passkey import load_sentinel
+        u = load_sentinel().fly_use
+        al = ["CX", "國泰航空"]
+        for args, want in [(("CPA9D", al, "B748", "A5", False), "貨機"), (("CPA451", al, "A35K", "A5", False), "客機"),
+                           (("FDX12", None, "B77L", "A5", False), "貨機"), (("", None, "C172", "A1", False), "小飛機"),
+                           (("N123", None, "GLF6", "A2", False), "私人／公務機"), (("", None, "EC35", "A7", False), "直升機"),
+                           (("RCAF1", None, "C130", "A5", True), "軍機"), (("", None, "B412", "A7", False, "National Airborne Service Corps"), "公務飛機"),
+                           (("", None, "ZZZZ", "", False), "")]:
+            self.assertEqual(u(*args), want, args)

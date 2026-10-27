@@ -3457,7 +3457,7 @@ function flyInfo(id){
   const v = document.createElement("div"); v.className = "veil";
   const hm = t => t ? flyHM(t * 1000, d.ap.tz) : "", air = p.alt != null, arr = p.ph === "arr" || (p.ph === "gnd" && p.dst && p.dst.code === d.ap.code);
   const tm = p.fids ? `<span class="frt"><b class="num">${hm(p.est || p.sch)}</b>${p.est && hm(p.est) !== hm(p.sch) ? `<s class="num">${hm(p.sch)}</s>` : ""}</span>` : "";
-  const end = (x, mine) => `<div class="fre"><b>${esc(x ? x.code : "—")}</b><small>${esc(x ? x.name : "不明")}${flyFlag(flyCc(x))}</small>${mine ? tm : ""}</div>`;
+  const end = (x, mine) => `<div class="fre"><b>${esc(x ? x.code : "—")}</b><small>${esc(x ? (x.guess ? "可能是 " : "") + x.name : "查不到")}${flyFlag(flyCc(x))}</small>${mine ? tm : ""}</div>`;
   const vr = p.vr > 0.5 ? `，上升 ${p.vr} 公尺/秒` : p.vr < -0.5 ? `，下降 ${-p.vr} 公尺/秒` : "";
   const rows = [
     ["機型", [p.model, p.t && p.t !== p.model ? p.t : ""].filter(Boolean).join("・") + (p.type0 && (p.model || p.t) ? `（原本 ${p.type0}）` : "")],
@@ -3473,10 +3473,10 @@ function flyInfo(id){
   ].filter(r => r[1]);
   const reg = encodeURIComponent(p.reg || "");
   v.innerHTML = `<div class="dialog finfo"><div class="form">
-    <div class="fih">${flyLogo(flyAl(p.fn), "lg")}<div class="lab"><b class="ffn">${esc(p.fn || p.reg || "—")}</b><small>${esc(p.al || "航空公司不明")}</small></div>
+    <div class="fih">${flyLogo(flyAl(p.fn), "lg")}<div class="lab"><b class="ffn">${esc(p.fn || p.reg || "—")}</b><small>${esc([p.al, p.use].filter(Boolean).join("・") || "航空公司不明")}</small></div>
       ${p.st ? `<span class="fst2${p.emg || /取消|轉降/.test(p.st) ? " bad" : ""}">${esc(p.st)}</span>` : ""}</div>
     ${p.emg || p.mil || p.rare ? `<div class="fbad${p.emg ? " bad" : ""}">${p.emg ? `${I("warn")}${esc(p.st)}（應答碼 ${esc(p.sq)}）` : p.mil ? "軍機" : "少見機型"}</div>` : ""}
-    ${p.org || p.dst ? `<div class="froute">${end(p.org, !arr)}<span class="fln"><i></i>${I("plane")}<i></i></span>${end(p.dst, arr)}</div>` : `<div class="fnr sub">查不到這班的航線</div>`}
+    ${p.org || p.dst ? `<div class="froute">${end(p.org, !arr)}<span class="fln"><i></i>${I("plane")}<i></i></span>${end(p.dst, arr)}</div>` : `<div class="fnr sub">航線不明</div>`}
     ${rows.length ? `<div class="fdl">${rows.map(([k, val]) => `<div><span>${k}</span><b>${esc(val)}</b></div>`).join("")}</div>` : ""}
     ${reg ? `<div class="group"><a class="li" href="https://www.jetphotos.com/registration/${reg}" target="_blank" rel="noopener noreferrer"><span class="lab">看這架的照片<small>JetPhotos</small></span>${EXT}</a>
       <a class="li" href="https://www.flightradar24.com/data/aircraft/${reg.toLowerCase()}" target="_blank" rel="noopener noreferrer"><span class="lab">飛行紀錄<small>Flightradar24</small></span>${EXT}</a></div>` : ""}
@@ -3576,7 +3576,7 @@ function fradList(){
   out.sort((a, b) => a[0] - b[0]);
   const pl = p => p.ph === "arr" ? (p.org ? "從 " + p.org.name : "") : p.ph === "dep" ? (p.dst ? "往 " + p.dst.name : "") : [p.org && p.org.name, p.dst && p.dst.name].filter(Boolean).join(" → ");
   const html = out.slice(0, 60).map(([, p]) => `<button class="li frr${p.id === FRAD.sel ? " on" : ""}" data-rid="${esc(p.id)}" data-key="${esc(p.id)}"><i class="frd ${p.emg ? "emg" : p.ph}"></i>
-    <span class="lab"><b>${esc(p.fn || p.reg || "—")}</b> ${esc(pl(p) || p.al || "")}<small>${[p.alt != null ? p.alt.toLocaleString() + " 公尺" + (p.vr > 1 ? " ↑" : p.vr < -1 ? " ↓" : "") : "", p.d != null ? p.d + " 公里" : ""].filter(Boolean).join("・")}</small></span></button>`).join("");
+    <span class="lab"><b>${esc(p.fn || p.reg || "—")}</b> ${esc(pl(p) || p.al || "")}<small>${[p.use, p.alt != null ? p.alt.toLocaleString() + " 公尺" + (p.vr > 1 ? " ↑" : p.vr < -1 ? " ↓" : "") : "", p.d != null ? p.d + " 公里" : ""].filter(Boolean).join("・")}</small></span></button>`).join("");
   const li = v.querySelector(".frli");
   if (li._h !== html) { li._h = html; li.innerHTML = html || `<div class="calm">畫面裡沒有飛機</div>`; }
   const h = v.querySelector(".frlh span"), t = `畫面裡 ${out.length} 架`;
@@ -3588,10 +3588,10 @@ function fradCard(){
   const c = FRAD.v.querySelector(".frcard"), o = FRAD.sel && FRAD.rv.pl.get(FRAD.sel), p = o && !o.gone && o.p;
   if (!p) { reveal(c, false); c._id = ""; return; }
   const kv = (k, val) => `<div class="fkv"><small>${k}</small><b class="num">${val}</b></div>`;
-  const ap = x => x ? `<b>${esc(x.code)}</b><small>${esc(x.name)}</small>` : `<b>—</b><small>不明</small>`;
-  const html = `<div class="frch">${flyLogo(flyAl(p.fn), "lg")}<div><b class="frfn">${esc(p.fn || p.reg || "—")}</b><span class="sub">${esc(p.al || "")}</span></div><span class="fst">${esc(p.st || "")}</span>
+  const ap = x => x ? `<b>${esc(x.code)}</b><small>${esc((x.guess ? "可能是 " : "") + x.name)}</small>` : `<b>—</b><small>查不到</small>`;
+  const html = `<div class="frch">${flyLogo(flyAl(p.fn), "lg")}<div><b class="frfn">${esc(p.fn || p.reg || "—")}</b><span class="sub">${esc([p.al, p.use].filter(Boolean).join("・"))}</span></div><span class="fst">${esc(p.st || "")}</span>
       <button class="icbtn" data-rx title="關閉">${I("x")}</button></div>
-    <div class="frrt"><div>${ap(p.org)}</div><span class="sub">${I("plane")}</span><div>${ap(p.dst)}</div></div>
+    ${p.org || p.dst ? `<div class="frrt"><div>${ap(p.org)}</div><span class="sub">${I("plane")}</span><div>${ap(p.dst)}</div></div>` : `<div class="frrt sub">航線不明</div>`}
     <div class="frkv">${kv("高度", p.alt != null ? p.alt.toLocaleString() + " 公尺" : "—")}${kv("速度", p.spd != null ? p.spd + " 公里" : "—")}${kv(p.ph === "arr" && p.eta != null ? "落地" : "離機場", p.ph === "arr" && p.eta != null ? (p.eta < 1 ? "快到了" : p.eta + " 分鐘後") : (p.d != null ? p.d + " 公里" : "—"))}${kv("機型", esc(p.model || p.t || "—"))}</div>`;
   if (c._h !== html) { c._h = html; c.innerHTML = html; }
   if (c._id !== p.id) { c._id = p.id; if (!c.hidden && canAnim()) c.animate([{opacity:.4, transform:"translateY(6px)"}, {opacity:1, transform:"none"}], {duration:T.mid, easing:EASE}); }
