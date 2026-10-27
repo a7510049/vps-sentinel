@@ -555,3 +555,22 @@ class Logos(unittest.TestCase):
         self.assertEqual(S.fly_logo("ZZ")[0], png(b"zz"))
         self.assertEqual(S.fly_logo("BR")[0], png(b"br"))
         self.assertTrue({"ZZ", "BR"} <= S.FLY_LGOK)
+
+
+class Legs(unittest.TestCase):
+    def test_wrong_leg(self):
+        """查到的航線是別的航段：很低、正要降落／剛起飛的照飛的樣子算"""
+        from test_passkey import load_sentinel
+        S = load_sentinel()
+        ap = S.fly_db()["TPE"]
+        S.fly_route = lambda cs, lat, lon: [{"code": "DFW", "name": "達拉斯"}, {"code": "ANC", "name": "安克拉治"}]
+        a = {"hex": "8990aa", "flight": "EVA697 ", "t": "B77L", "alt_baro": 1700, "gs": 135, "track": 53, "baro_rate": -700,
+             "lat": TPE[0] - .06, "lon": TPE[1] - .08, "seen": 1}
+        p = S.fly_plane(a, ap)
+        self.assertEqual(p["ph"], "arr")
+        self.assertEqual((p["org"]["code"], p["org"].get("guess"), p["dst"]["code"]), ("ANC", True, "TPE"))
+        b = {**a, "baro_rate": 1800, "lat": TPE[0] + .03, "lon": TPE[1] + .04}   # 機場東北邊、往東北爬升：剛起飛
+        p = S.fly_plane(b, ap)
+        self.assertEqual((p["ph"], p["org"]["code"], p["dst"]), ("dep", "TPE", None))
+        c = {**a, "alt_baro": 30000, "baro_rate": 0}           # 高空路過：照查到的航線
+        self.assertEqual(S.fly_plane(c, ap)["ph"], "over")
