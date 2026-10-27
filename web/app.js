@@ -2556,16 +2556,20 @@ const FLYTAB = [["arr", "抵達"], ["dep", "出發"], ["gnd", "地面"]];
 const FLYCH = " ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-:.";
 const flyWide = ch => /[⺀-￿]/.test(ch);
 /* 一格翻牌：上下兩半，換字時上半往下翻、下半接著翻下來 */
-const flyCell = ch => `<i class="c${flyWide(ch) ? " w" : ""}" data-c="${esc(ch)}"><b class="u">${ch === " " ? "&nbsp;" : esc(ch)}</b><b class="d">${ch === " " ? "&nbsp;" : esc(ch)}</b></i>`;
+const FLYNAR = {W:"nw", M:"nm"};                          // 比格子寬的字母：壓窄一點，不然左右會被切掉
+const flyTx = (b, ch) => { if (!FLYNAR[ch]) return void (b.textContent = ch === " " ? "\u00a0" : ch);
+  const n = document.createElement("span"); n.className = FLYNAR[ch]; n.textContent = ch; b.replaceChildren(n); };
+const flyCh = ch => ch === " " ? "&nbsp;" : FLYNAR[ch] ? `<span class="${FLYNAR[ch]}">${ch}</span>` : esc(ch);
+const flyCell = ch => `<i class="c${flyWide(ch) ? " w" : ""}" data-c="${esc(ch)}"><b class="u">${flyCh(ch)}</b><b class="d">${flyCh(ch)}</b></i>`;
 const flyPad = (v, n) => { const a = [...String(v || "").toUpperCase()].slice(0, n); while (a.length < n) a.push(" "); return a; };
 const flap = (v, n, cls = "") => `<span class="sf ${cls}" data-n="${n}">${flyPad(v, n).map(flyCell).join("")}</span>`;
 function flyOnce(c, a, b, tok){
-  const u = c.children[0], d = c.children[1], dur = T.fast * .5, sh = ch => ch === " " ? " " : ch;
+  const u = c.children[0], d = c.children[1], dur = T.fast * .5;
   c.dataset.c = b; c.classList.toggle("w", flyWide(b) || flyWide(a));
   const fu = document.createElement("b"), fd = document.createElement("b");
-  fu.className = "u f"; fu.textContent = sh(a); fd.className = "d f"; fd.textContent = sh(b);
-  u.textContent = sh(b); c.append(fu, fd);
-  const end = () => { fu.remove(); fd.remove(); if (c._tok === tok) { d.textContent = sh(b); c.classList.toggle("w", flyWide(b)); } };   // 中途被換掉的就不要再寫回舊字
+  fu.className = "u f"; flyTx(fu, a); fd.className = "d f"; flyTx(fd, b);
+  flyTx(u, b); c.append(fu, fd);
+  const end = () => { fu.remove(); fd.remove(); if (c._tok === tok) { flyTx(d, b); c.classList.toggle("w", flyWide(b)); } };   // 中途被換掉的就不要再寫回舊字
   return fu.animate([{transform:"perspective(5em) rotateX(0)"}, {transform:"perspective(5em) rotateX(-90deg)"}], {duration:dur, easing:EXIT}).finished
     .then(() => { fu.remove(); return fd.animate([{transform:"perspective(5em) rotateX(90deg)"}, {transform:"perspective(5em) rotateX(0)"}], {duration:dur, easing:EASE}).finished; })
     .then(end, end);
@@ -2575,10 +2579,10 @@ async function flyFlip(c, to, delay, still){
   const tok = c._tok = (c._tok || 0) + 1, from = c.dataset.c, fl = c.querySelectorAll(".f");
   if (fl.length) {                                        // 還在翻的牌先收掉、字擺正，不然切換時會留下舊字
     fl.forEach(e => { e.getAnimations().forEach(a => a.cancel()); e.remove(); });
-    c.children[0].textContent = c.children[1].textContent = from === " " ? " " : from; c.classList.toggle("w", flyWide(from));
+    flyTx(c.children[0], from); flyTx(c.children[1], from); c.classList.toggle("w", flyWide(from));
   }
   if (from === to) return;
-  if (still || !canAnim() || document.hidden) { c.children[0].textContent = c.children[1].textContent = to === " " ? " " : to; c.dataset.c = to; c.classList.toggle("w", flyWide(to)); return; }
+  if (still || !canAnim() || document.hidden) { flyTx(c.children[0], to); flyTx(c.children[1], to); c.dataset.c = to; c.classList.toggle("w", flyWide(to)); return; }
   let seq = [to];
   const i = FLYCH.indexOf(from), j = FLYCH.indexOf(to);
   if (i >= 0 && j >= 0 && FLYN < 60) { seq = []; for (let k = (i + 1) % FLYCH.length; ; k = (k + 1) % FLYCH.length) { seq.push(FLYCH[k]); if (k === j) break; } seq = seq.slice(-2); }   // 照字母順序翻過去（只翻最後幾張）
@@ -2670,7 +2674,9 @@ function flyFit(img){
     document.querySelectorAll(`.alg[data-c="${c}"]`).forEach(e => { if (ft.cls) e.classList.add(ft.cls); if (ft.bg) e.style.background = ft.bg; const im = e.querySelector("img"); if (im && im.src !== ft.src) im.src = ft.src; });
   } catch(e) {}
 }
-function flyLogoSet(el, c){ if (el.dataset.c === (c || "")) return; el.dataset.c = c || ""; el.outerHTML = c ? flyLogo(c) : `<i class="alg none" data-c=""></i>`; }
+function flyLogoSet(el, c){   // 換了航空公司，或主機剛抓到這家的標誌：換上去
+  if (el.dataset.c === (c || "") && !(c && flyLgOk(c) && !el.querySelector("img"))) return;
+  el.dataset.c = c || ""; el.outerHTML = c ? flyLogo(c) : `<i class="alg none" data-c=""></i>`; }
 document.addEventListener("load", e => { const t = e.target; if (t.tagName !== "IMG" || !t.parentNode) return;
   if (t.parentNode.classList.contains("alg")) { flyFit(t); t.parentNode.classList.add("ok"); }
   if (t.parentNode.classList.contains("faplg")) t.parentNode.classList.add("ok");

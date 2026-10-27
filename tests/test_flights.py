@@ -50,6 +50,7 @@ def tpe_txt():
         ("D", "IT", "台灣虎航", " 200", " D1", now - 3 * 3600, "OKA", "Okinawa", "沖繩", "出發DEPARTED"),   # 太早了
         ("D", "B7", "立榮航空", " 831", " D3", now + 900, "KIX", "Osaka", "大阪", "準時ON TIME"),        # 在地面滑行的那班
         ("A", "MU", "東方航空", "2017", " B6", now + 300, "PVG", "Shanghai", "上海", "準時ON TIME"),
+        ("D", "EK", "阿聯酋航空", " 367", " D6", now + 2400, "DXB", "Dubai", "杜拜(DXB)", "準時ON TIME"),   # 地名後面多了代碼
         ("A", "CI", "中華航空", "5225", "D5R", now + 600, "ANC", "Anchorage", "安克拉治", "準時ON TIME"),  # 貨機
     ]:
         d, h = tw(t)
@@ -183,6 +184,7 @@ class Flights(unittest.TestCase):
         self.assertEqual(arr["BR2196"]["model"], "777-300ER")
         self.assertEqual(arr["BR2196"]["org"]["name"], "東京")
         self.assertEqual(self.S.fly_route("CAL101", *TPE)[1], {"code": "NRT", "name": "東京"})      # adsb.lol 沒有的，adsbdb 補上
+        self.assertEqual({p["fn"]: p for p in d["dep"]}["EK367"]["dst"]["name"], "杜拜")
         self.assertNotIn("CI101", [p["fn"] for p in d["dep"]])       # 官網表上沒有的不列
         self.assertEqual([p["fn"] for p in d["gnd"]], ["B7831"])
         self.assertEqual((d["gnd"][0]["st"], d["gnd"][0]["al"], d["gnd"][0]["dst"]["name"]), ("滑行中", "立榮航空", "大阪"))
@@ -532,3 +534,24 @@ class Kinds(unittest.TestCase):
                            (("JAL1", ["JL", "日本航空"], "B763", "A5", False), "客機"),
                            (("HKE601", ["UO", "香港快運"], "A21N", "A3", False, "Hong Kong Express Airways"), "客機")]:
             self.assertEqual(u(*args), want, args)
+
+
+class Logos(unittest.TestCase):
+    def test_fallback(self):
+        """Google 給假圖的航空公司：換下一個標誌庫；看板上沒出現過的不抓"""
+        from test_passkey import load_sentinel
+        S = load_sentinel()
+        png = lambda s: b"\x89PNG\r\n\x1a\n" + s
+        web = {"g/0Q": png(b"fake"), "g/Q0": png(b"fake"), "g/ZZ": png(b"fake"), "g/BR": png(b"br"), "k/ZZ": png(b"zz")}
+
+        def get(url, timeout=10):
+            if url not in web:
+                raise S.urllib.error.HTTPError(url, 404, "", {}, None)
+            return web[url]
+        S.fly_get, S.FLY_LGSRC = get, ["g/{c}", "k/{c}"]
+        self.assertIsNone(S.fly_logo("ZZ"))                        # 還沒出現在看板上
+        S.fly_logo_new([{"fn": "ZZ988"}, {"fn": "BR12"}])
+        time.sleep(.3)
+        self.assertEqual(S.fly_logo("ZZ")[0], png(b"zz"))
+        self.assertEqual(S.fly_logo("BR")[0], png(b"br"))
+        self.assertTrue({"ZZ", "BR"} <= S.FLY_LGOK)
