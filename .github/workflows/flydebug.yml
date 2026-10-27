@@ -1,0 +1,32 @@
+name: flydebug
+on: push
+jobs:
+  p:
+    runs-on: ubuntu-latest
+    steps:
+      - run: |
+          set +e
+          curl -s https://opendata.adsb.fi/api/v3/lat/25.08/lon/121.23/dist/150 > ac.json
+          python3 - <<'PY'
+          import json, time, urllib.request
+          ac = [a for a in json.load(open('ac.json'))['ac'] if (a.get('flight') or '').strip()]
+          print(len(ac), 'planes')
+          pl = [{"callsign": a['flight'].strip(), "lat": a['lat'], "lng": a['lon']} for a in ac if 'lat' in a][:40]
+          t = time.time()
+          try:
+              r = urllib.request.urlopen(urllib.request.Request("https://api.adsb.lol/api/0/routeset", data=json.dumps({"planes": pl}).encode(), headers={"Content-Type": "application/json", "User-Agent": "vps-sentinel"}), timeout=15)
+              b = r.read(); print('routeset', r.status, len(b), round(time.time()-t, 2)); d = json.loads(b or b'[]')
+              ok = [x for x in d if len(x.get('_airports') or []) >= 2]
+              print('routeset with airports', len(ok), 'of', len(d)); print([(x['callsign'], x.get('airport_codes'), x.get('plausible')) for x in d[:15]])
+          except Exception as e: print('routeset err', e)
+          n = ok2 = 0
+          for p in pl[:25]:
+              t = time.time()
+              try:
+                  r = urllib.request.urlopen(urllib.request.Request("https://api.adsbdb.com/v0/callsign/" + p['callsign'], headers={"User-Agent": "vps-sentinel"}), timeout=10)
+                  d = json.loads(r.read()); fr = (d.get('response') or {}).get('flightroute') if isinstance(d.get('response'), dict) else None
+                  ok2 += bool(fr); print(p['callsign'], r.status, round(time.time()-t,2), (fr['origin']['iata_code'], fr['destination']['iata_code']) if fr else d.get('response'))
+              except Exception as e: print(p['callsign'], 'ERR', e, round(time.time()-t,2))
+              n += 1
+          print('adsbdb ok', ok2, 'of', n)
+          PY
