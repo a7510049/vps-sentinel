@@ -42,7 +42,7 @@ from collections import deque
 from concurrent.futures import ThreadPoolExecutor
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
-VERSION = "3.20"
+VERSION = "3.22"
 
 # ───────────────────────── 哨兵備份檔（.vsbk）─────────────────────────
 # 哨兵專用的備份格式：外面是自己的檔案格式，裡面用的是成熟、標準的加密方法（不自己發明加密）：
@@ -5885,15 +5885,18 @@ def fly_adsbdb(cs):
     except urllib.error.HTTPError as e:
         if e.code == 404:
             return None, True                 # 這班沒有資料
-        return None, False
-    except Exception:  # noqa: BLE001
-        return None, False
+        return None, f"HTTP {e.code}"
+    except Exception as e:  # noqa: BLE001
+        return None, str(e)[:60] or type(e).__name__
     o, d = fr.get("origin"), fr.get("destination")
     return ([fly_place(o), fly_place(d)] if isinstance(o, dict) and isinstance(d, dict) else None), True
 
 
+FLY_RTP = {"until": 0.0, "gap": 60}                  # adsbdb 被擋時先停多久
+
+
 def fly_routes():
-    """在背景查航線（從哪裡飛到哪裡）；查到的記 6 小時，查不到的 30 分鐘後再試"""
+    """在背景查航線（從哪裡飛到哪裡）；查到的記 6 小時，查不到的 30 分鐘後再試，沒問成功的 5 分鐘後再試"""
     while True:
         with FLY["lock"]:
             todo = list(FLY["rq"])[:40]
@@ -5914,16 +5917,22 @@ def fly_routes():
                         got[cs] = [fly_place(a) for a in (aps[0], aps[-1])]
         except Exception as e:  # noqa: BLE001
             fly_log(f"adsb.lol 航線：{str(e)[:60]}")
-        miss = 0
+        ask = [c for c, _, _ in todo if c not in got]
+        bad, wait = "", time.time() < FLY_RTP["until"]
+        if ask and not wait:
+            with ThreadPoolExecutor(3) as ex:          # 一班一班問，三個一起問比較快
+                for c, (rt, ok) in zip(ask, ex.map(fly_adsbdb, ask)):
+                    if rt:
+                        got[c] = rt
+                    if ok is not True:
+                        bad = bad or ok
+            if bad:                                    # 被擋或連不上：先停一下（越停越久），沒問到的過幾分鐘再問，不要記成查不到
+                FLY_RTP["until"], FLY_RTP["gap"] = time.time() + FLY_RTP["gap"], min(FLY_RTP["gap"] * 2, 900)
+                fly_log(f"adsbdb 航線：{bad}")
+            else:
+                FLY_RTP["gap"] = 60
         for c, _, _ in todo:
-            if c in got or miss >= 3:
-                continue
-            rt, ok = fly_adsbdb(c)
-            miss = 0 if ok else miss + 1      # 連續三次連不上就先不問了
-            if rt:
-                got[c] = rt
-        for c, _, _ in todo:
-            FLY["routes"][c] = (now, got.get(c))
+            FLY["routes"][c] = (now, got[c]) if c in got else (now - 1500 if bad or wait else now, None)   # 沒問成功的 5 分鐘後再試
         if len(FLY["routes"]) > 3000:            # 過期的航線丟掉，不然開久了會越存越多
             for c, v in list(FLY["routes"].items()):
                 if now - v[0] > 6 * 3600:
@@ -6125,22 +6134,36 @@ def fly_plane(a, ap):
     }
 
 
-def fly_fids_route(fn):
-    """查不到航線的班機：去四個台灣機場的官網航班表找（例如在松山看到要飛桃園的那班），找最接近現在的那一筆"""
+def fly_fids_find(fn):
+    """在四個台灣機場的官網航班表找這班（共掛班號也算），回傳最接近現在的 (機場, 那一筆)"""
     if not fn:
         return None
     now, best, bd = time.time(), None, 4 * 3600
     for c in FLY_PIN:
-        hit = FLY_FIDS.get(c)
-        for r in (hit or {}).get("rows") or []:
-            if fly_fn(r.get("fn")) != fn and fn not in [fly_fn(x) for x in r.get("share") or []]:
-                continue
+        hit = FLY_FIDS.get(c) or {}
+        rows = hit.get("rows") or []
+        if hit.get("_ix") is None or hit["_ix"][0] is not rows:     # 表換過才重建索引
+            ix = {}
+            for r in rows:
+                for f in [r.get("fn"), *(r.get("share") or [])]:
+                    ix.setdefault(fly_fn(f), []).append(r)
+            hit["_ix"] = (rows, ix)
+        for r in hit["_ix"][1].get(fn, []):
             dt = abs((r.get("est") or r.get("sch") or 0) - now)
-            if dt < bd and r.get("pc"):
-                me = {"code": c, "name": fly_city(c)}
-                far = {"code": r["pc"], "name": fly_city(r["pc"]) or r.get("pl") or r["pc"]}
-                best, bd = (far, me) if r.get("io") == "arr" else (me, far), dt
+            if dt < bd:
+                best, bd = (c, r), dt
     return best
+
+
+def fly_fids_route(fn):
+    """查不到航線的班機：去四個台灣機場的官網航班表找（例如在松山看到要飛桃園的那班）"""
+    hit = fly_fids_find(fn)
+    if not hit or not hit[1].get("pc"):
+        return None
+    c, r = hit
+    me = {"code": c, "name": fly_city(c)}
+    far = {"code": r["pc"], "name": fly_city(r["pc"]) or r.get("pl") or r["pc"]}
+    return (far, me) if r.get("io") == "arr" else (me, far)
 
 
 def fly_fn(fn):
@@ -6159,7 +6182,11 @@ def fly_fam(m):
         return FLY_FAM[m]
     m = re.sub(r"^(7[0-8]7)", r"B\1", m)
     x = re.match(r"([AB])(3[0-8]|7[0-8])", m)
-    return x.group(1) + x.group(2) if x else ""
+    if x:
+        return x.group(1) + x.group(2)
+    if m.startswith("AT"):
+        return "ATR"
+    return "X" + m[:3] if re.search(r"[A-Z]", m) and re.search(r"\d", m) else ""     # 其他機型（E190、DH8D…）：各自一類
 
 
 def fly_fix_type(p, r):
@@ -6286,6 +6313,9 @@ def fly_board(code, bg=False):
             fly_log(f"有一架資料讀不懂（{type(e).__name__}）")
             p = None
         if p and not fly_cargo(p["fn"], p["cs"]):
+            hit = fly_fids_find(p["fn"])
+            if hit:                                    # 任何一個台灣機場的官網表排了這班：機型照官網（路過的也是）
+                fly_fix_type(p, hit[1])
             rows.append(p)
     by = lambda ph: [p for p in rows if p["ph"] == ph]           # noqa: E731
     arr = sorted(by("arr"), key=lambda p: (p["eta"] if p["eta"] is not None else 999, p["d"]))

@@ -308,6 +308,12 @@ class Flights(unittest.TestCase):
         p = {"t": "A21N", "model": "A321neo", "reg": "B-18101"}
         S.fly_fix_type(p, {"type": "A321"})                  # 同一類：留著比較詳細的
         self.assertEqual(p["reg"], "B-18101")
+        p = {"t": "AT76", "model": "ATR 72-600", "reg": "B-17011"}
+        S.fly_fix_type(p, {"type": "A321"})                  # 星宇沒有 ATR
+        self.assertEqual((p["t"], p["model"]), ("", "A321"))
+        p = {"t": "AT76", "model": "ATR 72-600", "reg": "B-17011"}
+        S.fly_fix_type(p, {"type": "ATR72-600"})
+        self.assertEqual(p["reg"], "B-17011")
         p = {"t": "B77W", "model": "777-300ER", "reg": "B-18002"}
         S.fly_fix_type(p, {"type": ""})                      # 官網沒寫：不動
         self.assertEqual(p["t"], "B77W")

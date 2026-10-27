@@ -2633,8 +2633,9 @@ const flyLgOk = c => !FLYNOLG.has(c) && !!(FLYD && FLYD.als && FLYD.als.includes
 const flyAl = fn => { const m = /^([A-Z0-9]{2})\d/.exec(fn || ""); return m && /[A-Z]/.test(m[1]) ? m[1] : ""; };
 const flyLogo = (c, cls = "") => c ? `<i class="alg ${cls}" data-c="${c}">${c}${flyLgOk(c) ? `<img alt="" loading="lazy" referrerpolicy="no-referrer" src="https://www.gstatic.com/flights/airline_logos/70px/${c}.png">` : ""}</i>` : "";
 function flyLogoSet(el, c){ if (el.dataset.c === (c || "")) return; el.dataset.c = c || ""; el.outerHTML = c ? flyLogo(c) : `<i class="alg none" data-c=""></i>`; }
-document.addEventListener("load", e => { const t = e.target; if (t.tagName === "IMG" && t.parentNode && t.parentNode.classList.contains("alg")) t.parentNode.classList.add("ok"); }, true);
-document.addEventListener("error", e => { const t = e.target; if (t.tagName === "IMG" && t.parentNode && t.parentNode.classList.contains("alg")) { FLYNOLG.add(t.parentNode.dataset.c); t.remove(); } }, true);
+document.addEventListener("load", e => { const t = e.target; if (t.tagName === "IMG" && t.parentNode && (t.parentNode.classList.contains("alg") || t.parentNode.classList.contains("faplg"))) t.parentNode.classList.add("ok"); }, true);
+document.addEventListener("error", e => { const t = e.target; if (t.tagName === "IMG" && t.parentNode && t.parentNode.classList.contains("faplg")) t.remove();
+  if (t.tagName === "IMG" && t.parentNode && t.parentNode.classList.contains("alg")) { FLYNOLG.add(t.parentNode.dataset.c); t.remove(); } }, true);
 const FLYF = ["t", "fn", "pc", "st"], FLYX = ["pl", "al", "m", "reg"];   // 翻牌的欄位／一般文字的欄位（城市、航空公司、機型、註冊號用一般字比較好讀）
 const FLYW = {t:5, fn:7, pc:3, st:4};             // 狀態最多四個中文字，每格都是中文字寬，長短不一也對齊
 const FLYCOL = ["t", "fn", "pc", "pl", "fal", "al", "m", "reg", "st"];   // fal：航空公司標誌自己一欄，每列都對齊
@@ -3139,11 +3140,17 @@ function flyShut(){
 }
 addEventListener("popstate", () => { if ($("#fly") && !SHARE && !(history.state && history.state.fly)) flyShut(); });
 document.addEventListener("visibilitychange", () => { if (!document.hidden && $("#fly")) flyLoad(); });
-/* 換機場：只有台灣四個機場（官網航班表準） */
+/* 換機場：只有台灣四個機場（官網航班表準）；標誌由瀏覽器從各機場官網抓，抓不到就留代碼 */
+const FLYAPLG = {TPE: ["https://www.taoyuan-airport.com/assets/img/logo.svg", 2], TSA: ["https://www.tsa.gov.tw/static/img/pavicon.png"],
+  RMQ: ["https://www.tca.gov.tw/assets/images/icon.ico"], KHH: ["https://www.kia.gov.tw/images/apple-touch-icon.png", 1]};
+// 1：圖本身就是滿版的方塊，不留白邊；2：橫的標誌，只露出左邊的圖案（右邊是白字，白底上看不到）
+const FLYAPC = ["", " full", " crop"];
 async function flyPick(){
   const v = document.createElement("div"); v.className = "veil";
-  const row = a => `<button class="li" data-ap="${esc(a.code)}" data-key="${esc(a.code)}"><span class="fpc">${esc(a.code)}</span><span class="lab">${esc(a.name)}<small>${esc(a.city)}</small></span>${a.code === FLYS.ap ? `<span class="fon">${I("check")}</span>` : ""}</button>`;
-  const home = () => `<div class="group">${FLYPIN.map(row).join("")}</div>`;
+  const row = a => `<button class="fapc${a.code === FLYS.ap ? " on" : ""}" data-ap="${esc(a.code)}" data-key="${esc(a.code)}">
+    <span class="faplg${FLYAPC[(FLYAPLG[a.code] || [])[1] || 0]}" data-c="${esc(a.code)}">${esc(a.code)}${FLYAPLG[a.code] ? `<img alt="" referrerpolicy="no-referrer" src="${FLYAPLG[a.code][0]}">` : ""}</span>
+    <span class="lab">${esc(a.name)}<small>${esc(a.city)}・${esc(a.code)}</small></span><span class="fon">${I("check")}</span></button>`;
+  const home = () => `<div class="fapg">${FLYPIN.map(row).join("")}</div>`;
   v.innerHTML = `<div class="dialog fpick"><h3>選機場</h3>
     <div class="fapl" data-sw>${FLYPIN.length ? home() : `<div class="calm">讀取中…</div>`}</div><div class="btns"><button class="ubtn ghost" data-r="0">關閉</button></div></div>`;
   $("#layer").appendChild(v);
@@ -3154,13 +3161,14 @@ async function flyPick(){
   v.addEventListener("click", e => {
     if (e.target === v || e.target.closest("[data-r]")) return done();
     const b = e.target.closest("[data-ap]"); if (!b) return;
-    const code = b.dataset.ap, name = b.querySelector(".lab").firstChild.textContent, sm = b.querySelector("small").textContent;
+    const code = b.dataset.ap, a = FLYPIN.find(x => x.code === code) || {}, name = a.name || code, sm = a.city || "";
+    v.querySelectorAll(".fapc").forEach(x => x.classList.toggle("on", x === b));   // 勾勾先移過去再關
     if (FLYS.ap !== code) {                // 先把看板翻成空的、標題換成新機場，等資料回來
       FLYS.ap = code; FLYS.name = name; flySave(); FLYSEL = ""; FLYHR = "";
       FLYD = {ok:true, loading:true, ap:{code, name, city: sm, tz:""}, arr:[], dep:[], gnd:[], over:[]};
       flyPaint(); flyLoad();
     }
-    done();
+    setTimeout(done, canAnim() ? T.fast : 0);
   });
 }
 /* 點一架：飛機迷想看的都在這（照片、註冊號、機型、高度、速度） */
@@ -3610,7 +3618,7 @@ async function refreshNow(btn){
 })();
 /* 按下去的水波紋：手指一碰就從那個點擴散；手機上等一下下，確定不是要捲動才出現 */
 (function(){
-  const SEL = ".hcard,.tb,.li:not(div),.ubtn,.iconbtn,.icbtn,.hmenu button,.seg button,.rng button,.fchip,.addhost,.trf,.chats button,.blob,.sw button";
+  const SEL = ".hcard,.tb,.li:not(div),.fapc,.ubtn,.iconbtn,.icbtn,.hmenu button,.seg button,.rng button,.fchip,.addhost,.trf,.chats button,.blob,.sw button";
   addEventListener("pointerdown", e => {
     if (e.button || !canAnim()) return;
     const rb = e.target.closest(".rb"), el = rb ? rb.querySelector(".ri") : e.target.closest(SEL);
