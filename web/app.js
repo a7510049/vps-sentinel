@@ -2932,24 +2932,30 @@ function radarView(cv, full){
       if (o.a > 0) vis.push(o);
     });
     const pc = o => o.p.emg ? col.bad : o.p.ph === "arr" ? col.p : o.p.ph === "dep" ? col.tx : col.tx3;
-    /* 尾跡：畫到飛機現在的位置，選到的那架比較亮 */
+    /* 尾跡：跟飛機同色、越舊越淡；路過的不畫；選到的那架照高度上色 */
     ctx.lineJoin = ctx.lineCap = "round";
-    const ac = a => col.alt[a == null ? 0 : a < 1000 ? 0 : a < 3000 ? 1 : a < 6000 ? 2 : 3];   // 尾跡照高度上色：低的淺青、高的紫
+    const ac = a => col.alt[a == null ? 0 : a < 1000 ? 0 : a < 3000 ? 1 : a < 6000 ? 2 : 3];   // 低的淺青、高的紫
     vis.forEach(o => {
+      const sel = o.id === R.sel;
+      if (!sel && o.p.ph === "over") return;
       if (o.h.length < 2 && !(o.h.length && o.p.ph !== "gnd")) return;
-      const sel = o.id === R.sel, pts = [...o.h.slice(0, -1).map(([x, y, a]) => [...R.xy(x, y), a]), [o.sx, o.sy, o.p.alt]];
-      ctx.globalAlpha = o.a * (sel ? 1 : R.sel && full ? .25 : .7); ctx.lineWidth = sel ? 2.6 : 1.6;
+      const pts = [...o.h.slice(0, -1).map(([x, y, a]) => [...R.xy(x, y), a]), [o.sx, o.sy, o.p.alt]], n = pts.length - 1;
+      const base = o.a * (sel ? 1 : R.sel && full ? .2 : .55);
+      ctx.lineWidth = sel ? 2.4 : 1.1;
+      if (!sel) ctx.strokeStyle = pc(o);
       for (let i = 1; i < pts.length; i++) {
-        ctx.strokeStyle = ac(pts[i - 1][2]); ctx.beginPath(); ctx.moveTo(pts[i - 1][0], pts[i - 1][1]); ctx.lineTo(pts[i][0], pts[i][1]); ctx.stroke();
+        ctx.globalAlpha = base * (sel ? 1 : .15 + .85 * i / n);
+        if (sel) ctx.strokeStyle = ac(pts[i - 1][2]);
+        ctx.beginPath(); ctx.moveTo(pts[i - 1][0], pts[i - 1][1]); ctx.lineTo(pts[i][0], pts[i][1]); ctx.stroke();
       }
     });
-    /* 機頭前面的短線：照現在的速度，一分鐘後會飛到哪 */
-    vis.forEach(o => {
-      if (o.p.ph === "gnd" || !o.p.alt || !(o.p.spd > 0) || (o.p.ph === "over" && o.id !== R.sel)) return;   // 路過的不畫（太亂）
-      const d = o.p.spd / 60, hd = (o.p.trk || 0) * Math.PI / 180, [ex, ey] = R.xy(o.x + Math.sin(hd) * d, o.y + Math.cos(hd) * d);
-      ctx.globalAlpha = o.a * (R.sel && full && o.id !== R.sel ? .25 : .65); ctx.strokeStyle = pc(o); ctx.lineWidth = 1;
-      ctx.beginPath(); ctx.moveTo(o.sx, o.sy); ctx.lineTo(ex, ey); ctx.stroke();
-    });
+    /* 機頭前面的短線：只畫選到的那架，一分鐘後會飛到哪 */
+    const vo = R.sel && pl.get(R.sel);
+    if (vo && vo.a > 0 && vo.p.ph !== "gnd" && vo.p.alt && vo.p.spd > 0) {
+      const d = vo.p.spd / 60, hd = (vo.p.trk || 0) * Math.PI / 180, [ex, ey] = R.xy(vo.x + Math.sin(hd) * d, vo.y + Math.cos(hd) * d);
+      ctx.globalAlpha = vo.a * .8; ctx.strokeStyle = pc(vo); ctx.lineWidth = 1.2;
+      ctx.beginPath(); ctx.moveTo(vo.sx, vo.sy); ctx.lineTo(ex, ey); ctx.stroke();
+    }
     /* 選到的抵達班機：虛線連到機場 */
     const so = R.sel && pl.get(R.sel);
     if (so && full && so.p.ph === "arr" && so.a > 0) {
@@ -3008,7 +3014,8 @@ function flyPlace(ctx, lab, lf, gap, full, font, sel, W, H, rb, top){
   lab.map(o => [o, o.id === sel ? -2 : o.p.emg ? -1 : Math.hypot(o.x, o.y)]).sort((a, b) => a[1] - b[1]).forEach(([o]) => {
     o.l1 = o.p.fn || o.p.reg || "";
     const vr = o.p.vr > 1 ? " ↑" : o.p.vr < -1 ? " ↓" : "";     // 爬升／下降
-    o.l2 = o.p.alt != null && o.p.alt > 0 && o.p.ph !== "gnd" ? full ? `${o.p.alt.toLocaleString()} 公尺${vr}・${o.p.spd} 公里/時` : `${o.p.alt.toLocaleString()}${vr}` : "";
+    const near = (o.p.ph === "arr" || o.p.ph === "dep") && Math.hypot(o.x, o.y) < 12;   // 高度、速度只寫選到的、快落地／剛起飛的
+    o.l2 = (o.id === sel || near) && o.p.alt != null && o.p.alt > 0 && o.p.ph !== "gnd" ? full ? `${o.p.alt.toLocaleString()} 公尺${vr}・${o.p.spd} 公里/時` : `${o.p.alt.toLocaleString()}${vr}` : "";
     const w = Math.max(ctx.measureText(o.l1).width, o.l2 ? ctx.measureText(o.l2).width * .85 : 0) + 2, h = lf * (o.l2 ? 2.1 : 1.1), x = o.sx, y = o.sy;
     const c = {r:[x + gap, y - h / 2], l:[x - gap - w, y - h / 2], t:[x - w / 2, y - gap - h], b:[x - w / 2, y + gap * .9]};
     const order = [o.lk, "r", "l", "t", "b"].filter((v, i, a) => v && a.indexOf(v) === i);
@@ -3555,7 +3562,7 @@ function fradData(){
   v.querySelector(".frname").textContent = d.ap ? d.ap.name : "";
   fradList(); fradCard();
 }
-/* 畫面裡的飛機，照離中心多遠排 */
+/* 畫面裡的飛機，照離機場多遠排 */
 function fradList(){
   if (!FRAD) return;
   const {v, rv} = FRAD, V = rv.V, half = [rv.W / 2 / V.s, rv.H / 2 / V.s], out = [];
@@ -3564,12 +3571,12 @@ function fradList(){
     if (o.gone || !p || p.ph === "gnd" || (FRADF && p.ph !== FRADF)) return;
     const [x, y] = rv.at(o, performance.now());
     if (Math.abs(x - V.cx) > half[0] || Math.abs(y - V.cy) > half[1]) return;
-    out.push([Math.hypot(x - V.cx, y - V.cy), p]);
+    out.push([p.d != null ? p.d : Math.hypot(x, y), p]);      // 離機場由近到遠
   });
   out.sort((a, b) => a[0] - b[0]);
   const pl = p => p.ph === "arr" ? (p.org ? "從 " + p.org.name : "") : p.ph === "dep" ? (p.dst ? "往 " + p.dst.name : "") : [p.org && p.org.name, p.dst && p.dst.name].filter(Boolean).join(" → ");
   const html = out.slice(0, 60).map(([, p]) => `<button class="li frr${p.id === FRAD.sel ? " on" : ""}" data-rid="${esc(p.id)}" data-key="${esc(p.id)}"><i class="frd ${p.emg ? "emg" : p.ph}"></i>
-    <span class="lab"><b>${esc(p.fn || p.reg || "—")}</b> ${esc(pl(p) || p.al || "")}<small>${p.alt != null ? `${p.alt.toLocaleString()} 公尺・${p.spd} 公里・離機場 ${p.d} 公里` : ""}</small></span></button>`).join("");
+    <span class="lab"><b>${esc(p.fn || p.reg || "—")}</b> ${esc(pl(p) || p.al || "")}<small>${[p.alt != null ? p.alt.toLocaleString() + " 公尺" + (p.vr > 1 ? " ↑" : p.vr < -1 ? " ↓" : "") : "", p.d != null ? p.d + " 公里" : ""].filter(Boolean).join("・")}</small></span></button>`).join("");
   const li = v.querySelector(".frli");
   if (li._h !== html) { li._h = html; li.innerHTML = html || `<div class="calm">畫面裡沒有飛機</div>`; }
   const h = v.querySelector(".frlh span"), t = `畫面裡 ${out.length} 架`;
