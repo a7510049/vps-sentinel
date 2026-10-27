@@ -1025,6 +1025,7 @@ html.flyon .dash>.view{content-visibility:hidden;contain-intrinsic-size:auto non
   .fr .br{display:block;flex-basis:100%;height:0}
   .board[data-tab="gnd"] .fr .t{display:none}
   .fr{content-visibility:auto;contain-intrinsic-size:auto 110px}       /* 手機：畫面外的列先不排版，換時段比較快 */
+  .fr.warn,.fr.bad{content-visibility:visible}                         /* 有閃框的列照常處理，捲出來時節拍才不會慢半拍 */
   .fr .t{order:1}.fr .fn{order:2}.fr .ftag{order:3;margin-left:auto}.fr .b1{order:4}
   .fr .pc{order:5;font-size:var(--fs-s)}.fr .pl{order:6;flex:1}.fr .st{order:7}.fr .b2{order:8}
   .fr .al{order:9;font-size:var(--fs-s)}.fr .m{order:10;font-size:var(--fs-s);color:var(--tx3)}.fr .reg{order:11;font-size:var(--fs-s);color:var(--tx3)}

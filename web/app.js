@@ -2630,6 +2630,7 @@ function flyObs(f){
     es.forEach(e => {
       const r = e.target; r.classList.toggle("vis", e.isIntersecting);
       if (!e.isIntersecting) { r._out = 1; return; }
+      flyBeat(r);                                            // 捲進畫面的列：閃框對回同一個節拍
       const go = r._out && !r.hidden && !r.classList.contains("empty") && canAnim() && !r.getAnimations().length && !f.querySelector(".board.wait");
       r._out = 0;
       if (go) r.animate([{opacity:0, transform:"translateY(16px)"}, {opacity:1, transform:"none"}], {duration:T.mid, delay:Math.min(k++, 6) * T.fast * .3, easing:EASE, fill:"backwards"});
