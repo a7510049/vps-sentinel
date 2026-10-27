@@ -866,6 +866,7 @@ html.flyon .dash>.view{content-visibility:hidden;contain-intrinsic-size:auto non
 .sf b{position:absolute;inset:0;display:grid;place-items:center;border-radius:inherit;background:var(--s3);color:var(--tx);font-weight:500;backface-visibility:hidden;transform-origin:50% 50%;white-space:pre}
 .sf b.u{clip-path:inset(0 0 50% 0)}
 .sf b.d{clip-path:inset(50% 0 0 0)}
+.sf b>span{display:inline-block}.sf .nw{scale:.74 1}.sf .nm{scale:.86 1}                         /* W、M 比格子寬：壓窄塞進去，翻牌還是對齊 */
 .sf b.d.f{transform:rotateX(90deg)}
 .sf .c::after{content:"";position:absolute;left:0;right:0;top:50%;height:1px;margin-top:-.5px;background:var(--bg);opacity:.4;z-index:1;pointer-events:none}
 .sf.xl{font-size:var(--fs-4xl)}

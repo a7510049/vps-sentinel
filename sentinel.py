@@ -42,7 +42,7 @@ from collections import deque
 from concurrent.futures import ThreadPoolExecutor
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
-VERSION = "3.34"
+VERSION = "3.35"
 
 # ───────────────────────── 哨兵備份檔（.vsbk）─────────────────────────
 # 哨兵專用的備份格式：外面是自己的檔案格式，裡面用的是成熟、標準的加密方法（不自己發明加密）：
@@ -5389,12 +5389,15 @@ FLY_AL = {
     "ETH": ("ET", "衣索比亞航空"), "FDX": ("FX", "聯邦快遞"), "UPS": ("5X", "優比速"), "GTI": ("5Y", "亞特拉斯航空"),
     "CLX": ("CV", "盧森堡貨運"), "CKS": ("K4", "卡利塔航空"), "PAC": ("PO", "寶立航空"), "ABW": ("RU", "空橋貨運"),
     "BOX": ("3S", "德國貨運"), "GEC": ("LH", "漢莎貨運"),
+    "DHK": ("D0", "DHL 航空"), "BCS": ("QY", "DHL 歐洲航空"), "DHX": ("ES", "DHL 國際航空"), "YZR": ("Y8", "揚子江快運"),
+    "CYZ": ("8Y", "中國郵政航空"), "HYT": ("YG", "圓通航空"), "ABX": ("GB", "ABX 航空"), "ATN": ("8C", "ATI 航空"),
+    "AZG": ("7L", "絲路西方航空"), "WGN": ("KD", "西方環球航空"), "NCR": ("N8", "國家航空"),
 }
 # 機型代碼 → 好讀的名稱（接收站沒給時用）
-# 這些航空公司網頁會顯示標誌（其他的只顯示代碼）：台灣四個機場官網表上有的，一家一家確認過 Google 有標誌（沒有的會拿到灰色假圖，例如 ZE、RF）
+# 台灣四個機場官網表上常見的航空公司：主機在背景先把標誌抓好（其他的出現在看板上才抓）
 FLY_ALS = sorted(({v[0] for v in FLY_AL.values()} | set(
     "5J 7C 7G 9C 9G AA AC AE AF AI AK AS AV B7 BI BR BX CA CI CM CX CZ DL EK EY FD GK HB HO HU HX IT JL JX KE KL LJ LO MF MH MM MU "
-    "NH NU NX NZ OD OZ PG PR QF SC SL SQ TG TK TR TW UA UO UX VJ VN VU VZ Z2 ZH QV".split())) - {"ZE", "RF"})
+    "NH NU NX NZ OD OZ PG PR QF SC SL SQ TG TK TR TW UA UO UX VJ VN VU VZ Z2 ZH QV ZE RF".split())))
 FLY_TYPES = {
     "A319": "A319", "A320": "A320", "A20N": "A320neo", "A321": "A321", "A21N": "A321neo", "BCS1": "A220-100", "BCS3": "A220-300",
     "A306": "A300-600", "A332": "A330-200", "A333": "A330-300", "A338": "A330-800", "A339": "A330-900",
@@ -5413,8 +5416,8 @@ FLY_RARE = {"A388", "B744", "B748", "B742", "MD11", "A343", "A346", "A3ST", "A33
             "C5M", "K35R", "A400", "B52", "E3TF", "B77L", "B764", "A306", "A339", "A338", "B779", "B778", "C919", "BCS1", "BCS3"}
 # 貨機：貨運航空公司，或華航、長榮的貨運航班號（5000～6999、長榮 600～699）；看板以客機為主，不列出來
 FLY_CARGO_ICAO = {"NCA", "CAO", "CKK", "CSS", "SQC", "FDX", "UPS", "GTI", "CLX", "CKS", "PAC", "ABW", "BOX", "GEC", "AHK",
-                  "DHK", "DHX", "BCS", "YZR", "CYZ", "ICV", "ATN", "ABX", "MPH", "TAY", "NPT", "SOO", "WGN", "AJT", "KYE", "YTO"}
-FLY_CARGO_IATA = {"KZ", "CK", "O3", "FX", "5X", "5Y", "CV", "K4", "PO", "RU", "3S", "LD", "QY", "D0", "Y8", "CF", "M6", "GB", "YG", "C8", "K9"}
+                  "DHK", "DHX", "BCS", "YZR", "CYZ", "ICV", "ATN", "ABX", "MPH", "TAY", "NPT", "SOO", "WGN", "AJT", "KYE", "YTO", "AZG", "NCR", "HYT"}
+FLY_CARGO_IATA = {"KZ", "CK", "O3", "FX", "5X", "5Y", "CV", "K4", "PO", "RU", "3S", "LD", "QY", "D0", "Y8", "CF", "M6", "GB", "YG", "C8", "K9", "7L", "KD", "N8", "8Y", "ES", "8C"}
 FLY_SKYS = {"cache": {}, "until": 0, "left": None, "out": 0, "tok": "", "texp": 0, "tbad": 0, "err": ""}
 FLY = {"cache": {}, "routes": {}, "lock": threading.Lock(), "last": 0.0, "bad": {}, "rq": set(), "rbusy": False, "fetch": threading.Lock(), "logged": {}, "seen": {}, "view": {}, "used": 0, "hex": {}, "hq": set(), "hbusy": False, "zh": {}, "gate": {}}
 
@@ -5753,12 +5756,55 @@ def fly_logo_type(b):
     return ""
 
 
+# 航空公司標誌：先問 Google，沒有的再問下一個；各家沒有這間公司時會給一張假圖，要認出來丟掉
+FLY_LGSRC = [x for x in os.environ.get("SENTINEL_FLY_LGSRC", "").split() if x] or [
+    "https://www.gstatic.com/flights/airline_logos/70px/{c}.png", "https://images.kiwi.com/airlines/128/{c}.png", "https://pics.avs.io/200/200/{c}.png"]
+FLY_LGFAKE = {}                               # 標誌庫 → 它的假圖（拿不存在的代碼問一次記下來）
+FLY_LGFAKE0 = {"36bdb8b3212413fb100da318789d0e9fa716b0a5",    # Google 認得這家、但沒有標誌時給的灰色機尾（不認得的回 404，問不出來）
+               "f95495733fa572408fb4ce898c7935d2ad33e15a"}    # Kiwi 的灰色小飛機
+FLY_ALSEEN = set()                            # 看板上出現過的航空公司（標誌只抓這些，不讓人亂問）
+FLY_LGOK = set()                              # 主機上有真的標誌的航空公司
+
+
+def fly_lg_fake(src):
+    if src not in FLY_LGFAKE:
+        fakes, ok = set(), False
+        for c in ("0Q", "Q0"):
+            try:
+                fakes.add(hashlib.sha1(fly_get(src.format(c=c), timeout=10)).hexdigest())
+                ok = True
+            except urllib.error.HTTPError:
+                ok = True                     # 沒有就回錯誤：不用認假圖
+            except Exception:  # noqa: BLE001
+                pass
+        if not ok:
+            return None                       # 連不上：這次先不用這個標誌庫
+        FLY_LGFAKE[src] = fakes | FLY_LGFAKE0
+    return FLY_LGFAKE[src]
+
+
+def fly_lg_get(code):
+    """一個一個標誌庫問，第一張真的標誌就用"""
+    for src in FLY_LGSRC:
+        fakes = fly_lg_fake(src)
+        if fakes is None:
+            continue
+        try:
+            b = fly_get(src.format(c=code), timeout=10)
+        except Exception:  # noqa: BLE001
+            continue
+        if fly_logo_type(b) and len(b) <= 512 * 1024 and hashlib.sha1(b).hexdigest() not in fakes:
+            return b
+    raise ValueError("沒有標誌")
+
+
 def fly_logo(key):
-    """回傳 (圖片, 種類)；只給認得的機場（FLY_APLG）和航空公司（FLY_ALS），30 天重抓一次"""
-    url = FLY_APLG.get(key) or (f"https://www.gstatic.com/flights/airline_logos/70px/{key}.png" if key in FLY_ALS else "")
+    """回傳 (圖片, 種類)；只給認得的機場（FLY_APLG）、國旗和看板上出現過的航空公司，30 天重抓一次"""
+    url = FLY_APLG.get(key, "")
     if key[:1] == "@" and key[1:] in fly_ccs():                # 國旗（@JP）
         url = f"https://flagcdn.com/w80/{key[1:].lower()}.png"
-    if not url:
+    al = not url and re.fullmatch(r"[A-Z0-9]{2}", key) and (key in FLY_ALS or key in FLY_ALSEEN)
+    if not url and not al:
         return None
     url = os.environ.get("SENTINEL_FLY_LOGO", "").replace("{key}", key) or url
     fn = os.path.join(DATA_DIR, "fly-logos", key.replace("@", "flag-"))
@@ -5766,6 +5812,8 @@ def fly_logo(key):
     try:
         with open(fn, "rb") as f:
             old = f.read()
+        if al:
+            FLY_LGOK.add(key)
         if time.time() - os.path.getmtime(fn) < 30 * 86400:
             return old, fly_logo_type(old)
     except OSError:
@@ -5773,21 +5821,43 @@ def fly_logo(key):
     if FLY_LOGO_MISS.get(key, 0) > time.time():
         return (old, fly_logo_type(old)) if old else None
     try:
-        b = fly_get(url, timeout=10)
+        b = fly_get(url, timeout=10) if url else fly_lg_get(key)
         if len(b) > 512 * 1024 or not fly_logo_type(b):
             raise ValueError("不是圖片")
         os.makedirs(os.path.dirname(fn), exist_ok=True)
         with open(fn + ".tmp", "wb") as f:
             f.write(b)
         os.replace(fn + ".tmp", fn)
+        if al:
+            FLY_LGOK.add(key)
         return b, fly_logo_type(b)
     except Exception:  # noqa: BLE001
-        FLY_LOGO_MISS[key] = time.time() + 3600
+        FLY_LOGO_MISS[key] = time.time() + (86400 if al else 3600)
         return (old, fly_logo_type(old)) if old else None
+
+
+def fly_logo_new(rows):
+    """看板上第一次出現的航空公司：背景去抓標誌，下次更新網頁就看得到"""
+    new = {m[1] for p in rows if (m := re.match(r"([A-Z0-9]{2})\d", p.get("fn") or "")) and re.search(r"[A-Z]", m[1])} - FLY_ALSEEN
+    if new:
+        FLY_ALSEEN.update(new)
+        threading.Thread(target=lambda: [fly_logo(c) for c in sorted(new)], daemon=True).start()
 
 
 def fly_logo_warm():
     """背景先把標誌都抓好存著（打開看板就是現成的）"""
+    d = os.path.join(DATA_DIR, "fly-logos")
+    fakes = set().union(*[fly_lg_fake(x) or set() for x in FLY_LGSRC])
+    try:
+        for k in os.listdir(d):
+            if re.fullmatch(r"[A-Z0-9]{2}", k):
+                with open(os.path.join(d, k), "rb") as f:
+                    if hashlib.sha1(f.read()).hexdigest() in fakes | FLY_LGFAKE0:   # 以前存到的假圖：丟掉重抓
+                        os.remove(os.path.join(d, k))
+                        continue
+                FLY_LGOK.add(k)
+    except OSError:
+        pass
     for k in [*FLY_APLG, *FLY_ALS]:
         fly_logo(k)
         time.sleep(0.2)
@@ -5841,6 +5911,7 @@ def fly_fids_tpe():
         x = [c.strip() for c in line.split(",")]
         if len(x) < 15 or x[1] not in ("A", "D"):
             continue
+        x[12] = re.sub(r"\s*[(（]\s*[A-Z]{3}\s*[)）]\s*$", "", x[12])   # 「杜拜(DXB)」：代碼前面已經有了
         fly_learn(x[10], x[12])
         out.append({"io": "arr" if x[1] == "A" else "dep", "fn": x[2] + x[4].lstrip("0"), "al": x[3], "sch": fly_ts(x[6], x[7]),
                     "est": fly_ts(x[8], x[9]), "pc": x[10], "pl": x[12] or fly_city(x[10]) or x[11], "gate": x[5], "term": f"第{'一二三'[int(x[0]) - 1]}航廈" if x[0] in ("1", "2", "3") else "",
@@ -6503,8 +6574,9 @@ def fly_board(code, bg=False):
     rest += cargo
     for p in arr + dep + gnd + over + rest:
         p["kind"] = fly_kind(p.get("t"), p.get("model"), p.get("cat"))
+    fly_logo_new(arr + dep + gnd + over + rest)
     out = {"ok": True, "t": time.time(), "ap": fly_ap(ap), "src": src or (srcs[0][0] if srcs else ""), "home": home, "srcs": srcs,
-           "fids": fids is not None, "arr": arr, "dep": dep, "gnd": gnd, "over": over, "rest": rest, "als": FLY_ALS,
+           "fids": fids is not None, "arr": arr, "dep": dep, "gnd": gnd, "over": over, "rest": rest, "als": sorted(FLY_LGOK),
            "skyout": FLY_SKYS["out"] if FLY_SKYS["out"] > time.time() and fly_sky_need(ap, fids, ac) else 0}   # OpenSky 今天的次數用完了：網頁寫幾點恢復
     out["ccs"] = {x["code"]: db[x["code"]][5] for p in arr + dep + gnd + over + rest for x in (p.get("org"), p.get("dst"))
                   if x and x.get("code") in db and db[x["code"]][5]}   # 地名旁邊的國旗：機場代碼 → 國家
