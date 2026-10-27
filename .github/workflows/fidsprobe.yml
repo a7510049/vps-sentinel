@@ -1,0 +1,18 @@
+name: fidsprobe
+on: push
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    steps:
+      - name: probe
+        shell: python3 {0}
+        run: |
+          import urllib.request as U
+          t = U.urlopen(U.Request("https://www.taoyuan-airport.com/uploads/flightx/a_flight_v4.txt", headers={"User-Agent": "Mozilla/5.0"}), timeout=40).read().decode("big5hkscs", "replace")
+          ls = t.splitlines()
+          print("LINES", len(ls))
+          for l in ls:
+              x = l.split(",")
+              if len(x) > 14 and (x[2].strip() + x[4].strip().lstrip("0")) in ("CI61", "CI63", "CI67", "AK177", "CI32", "BR697"):
+                  print("ROW", l)
+          print("FIRST", ls[0]); print("LAST", ls[-1])
