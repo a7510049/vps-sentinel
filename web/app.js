@@ -2795,7 +2795,7 @@ function radarView(cv, full){
   };
   R.V = V;
   R.zoom = (r, anim) => { R.range = r; if (!full) R.view(0, 0, R.fit(r), anim); };
-  R.setGeo = g => { if (R.geo === g) return; R.geo = g; R.gp = g && new Path2D(g.coast); R.ga = 0; R.gt = now(); R.kick(); };
+  R.setGeo = g => { if (R.geo === g) return; R.geo = g; R.gp = g && new Path2D(g.coast); R.gf = g && g.far ? new Path2D(g.far) : null; R.ga = 0; R.gt = now(); R.kick(); };
   /* 新資料：每架飛機從現在畫的位置，花一次更新的時間慢慢移到新的位置 */
   R.setData = list => {
     const t = now(), seen = new Set();
@@ -2857,7 +2857,9 @@ function radarView(cv, full){
     if (R.geo && R.gp) {
       ctx.save(); ctx.globalAlpha = canAnim() ? ga : 1;
       ctx.translate(W / 2 - V.cx * s, H / 2 + V.cy * s); ctx.scale(s, s);
-      ctx.fillStyle = col.s2; ctx.fill(R.gp); ctx.lineWidth = 1 / s; ctx.strokeStyle = col.s4; ctx.stroke(R.gp);
+      ctx.lineWidth = 1 / s;
+      if (R.gf) { const ba = ctx.globalAlpha; ctx.globalAlpha = ba * .55; ctx.fillStyle = col.s2; ctx.fill(R.gf); ctx.strokeStyle = col.s4; ctx.stroke(R.gf); ctx.globalAlpha = ba; }   // 台灣以外的陸地：淡淡的
+      ctx.fillStyle = col.s2; ctx.fill(R.gp); ctx.strokeStyle = col.s4; ctx.stroke(R.gp);
       ctx.lineCap = "round"; ctx.strokeStyle = col.tx3; ctx.lineWidth = (full ? 3 : 2.2) / s;
       ctx.beginPath(); (R.geo.rwy || []).forEach(([a, b, c, d]) => { ctx.moveTo(a, -b); ctx.lineTo(c, -d); }); ctx.stroke();
       ctx.restore();
@@ -2907,7 +2909,7 @@ function radarView(cv, full){
         const [sx, sy] = R.xy(x, y);
         if (!full && Math.hypot(sx - W / 2, sy - H / 2) > rr - fs) return;
         if (sx < -40 || sx > W + 40 || sy < -20 || sy > H + 20) return;
-        tw.push([n, sx, sy]);
+        tw.push([n, sx, sy, lv]);
       });
       ctx.fillStyle = col.tx2; ctx.font = `600 ${Math.round(fs * (full ? 1 : .85))}px ${font}`;
       (R.geo.aps || []).forEach(([c, n, x, y]) => {
@@ -2981,10 +2983,12 @@ function radarView(cv, full){
       ctx.globalAlpha = (canAnim() ? ga : 1) * .8; ctx.textAlign = "center"; ctx.textBaseline = "middle"; ctx.fillStyle = col.tx3;
       ctx.font = `${Math.round(fs * (full ? 1 : .9))}px ${font}`;
       const pb = vis.filter(o => o.a > .3).map(o => [o.sx - ps * 3, o.sy - ps * 3, o.sx + ps * 3, o.sy + ps * 3]);
-      tw.forEach(([n, x, y]) => {
+      const ta = ctx.globalAlpha, done = [];
+      tw.forEach(([n, x, y, lv]) => {                       // 地名彼此也不重疊；台灣以外的字淡一點
         const w = ctx.measureText(n).width / 2, a = [x - w, y - fs * .6, x + w, y + fs * .6];
         if (full && y < (R.top || 0) + fs) return;
-        if (![...used, ...pb].some(b => a[0] < b[2] && a[2] > b[0] && a[1] < b[3] && a[3] > b[1])) ctx.fillText(n, x, y);
+        if (a[0] < 2 || a[2] > W - 2 || [...used, ...pb, ...done].some(b => a[0] < b[2] && a[2] > b[0] && a[1] < b[3] && a[3] > b[1])) return;
+        ctx.globalAlpha = ta * (lv === 0 ? .6 : 1); ctx.fillText(n, x, y); done.push(a);
       });
       ctx.textAlign = "left"; ctx.textBaseline = "alphabetic";
     }
