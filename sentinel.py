@@ -6018,6 +6018,8 @@ def fly_fids_pull(code, hit):
             if not r["fn"] or not r["sch"]:
                 continue
             r["type"] = fly_model(r["type"])
+            while r.get("est") and r["est"] < r["sch"] - 12 * 3600:   # 跨過半夜：官網的預計日期沒跟著換（或沒給日期），補一天
+                r["est"] += 86400
             k = (r["io"], r["sch"], r["pc"] or r["pl"])
             if k in keep:                              # 同一班飛機掛好幾個航班號
                 keep[k].setdefault("share", []).append(r["fn"])
@@ -6311,9 +6313,9 @@ def fly_plane(a, ap):
     rt = (fly_route(cs, lat, lon) if cs else None) or fly_fids_route(fn)
     org, dst = (rt[0]["code"], rt[1]["code"]) if rt else ("", "")
     toward = trk is not None and abs((float(trk) - (brg + 180) % 360 + 540) % 360 - 180) < 60
-    low = not gnd and alt < 3000 and d < 15            # 很低、離機場很近：照飛的樣子判斷，查到的航線可能是別的航段
-    land = low and vr < -200 and toward and fly_closest(ap, lat, lon, trk, 1) == code
-    lift = low and vr > 200 and not toward and fly_closest(ap, lat, lon, trk, -1) == code
+    # 離機場不遠、正在下降靠近／爬升離開：照飛的樣子判斷，查到的航線可能是別的航段（同一個班號飛好幾段很常見）
+    land = not gnd and alt < 10000 and d < 40 and vr < -300 and toward and fly_closest(ap, lat, lon, trk, 1) == code
+    lift = not gnd and alt < 15000 and d < 60 and vr > 300 and not toward and fly_closest(ap, lat, lon, trk, -1) == code
     me = {"code": code, "name": fly_city(code) or ap[2]}
     if land and rt and dst != code:                    # 例如查到「達拉斯 → 安克拉治」，其實是安克拉治飛來的下一段
         rt, dst = [{**rt[1], "guess": True} if org != code else None, me], code
@@ -6436,6 +6438,7 @@ def fly_merge(ap, fids, rows, io):
         if p["fn"]:
             live.setdefault(fly_fn(p["fn"]), p)
     me, out, used = {"code": ap[0], "name": ap[2]}, [], set()
+    show = []
     for r in fids:
         if r["io"] != io or fly_cargo(r["fn"]):
             continue
@@ -6443,11 +6446,21 @@ def fly_merge(ap, fids, rows, io):
         done = r["st"] in ("已到", "已飛")
         if t > now + 12 * 3600 or t < now - (20 if done else 90) * 60:   # 還沒到、還沒飛的留久一點（官網常常慢半拍）
             continue
+        show.append(r)
+    pick = {}                                          # 同一班號今天、明天都在表上：天上那架只配給時間最接近的那一筆
+    for i, r in enumerate(show):
+        p = next((live[fly_fn(f)] for f in [r["fn"], *(r.get("share") or [])] if fly_fn(f) in live), None)
+        if p and abs((r["est"] or r["sch"]) - now) < pick.get(p["id"], (1e18, 0))[0]:
+            pick[p["id"]] = (abs((r["est"] or r["sch"]) - now), i)
+    for i, r in enumerate(show):
+        done = r["st"] in ("已到", "已飛")
         pl = {"code": r["pc"], "name": r["pl"]}
         row = {"id": f"f-{io}-{r['fn']}-{int(r['sch'])}", "fn": r["fn"], "cs": "", "al": r["al"], "reg": "", "t": r["type"], "model": r["type"],
                "org": pl if io == "arr" else me, "dst": me if io == "arr" else pl, "ph": io, "st": r["st"], "emg": False, "mil": False, "rare": False,
                "use": "客機", "fids": True, "sch": r["sch"], "est": r["est"], "gate": r["gate"], "gate0": r.get("gate0") or "", "type0": r.get("type0") or "", "term": r["term"], "share": r.get("share") or []}
         p = next((live[fly_fn(f)] for f in [r["fn"], *row["share"]] if fly_fn(f) in live), None)
+        if p and pick.get(p["id"], (0, -1))[1] != i:
+            p = None
         sk = io + ":" + fly_fn(r["fn"])
         seen = FLY["seen"].get(sk)
         if p:
@@ -6459,7 +6472,9 @@ def fly_merge(ap, fids, rows, io):
             row["live"] = True
             if p["mil"]:
                 row["use"] = "軍機"
-            if p["ph"] == io and not done and r["st"] != "取消":
+            if io == "dep" and p["ph"] == "over" and (p.get("vr") or 0) >= 0 and now > (r["est"] or r["sch"]) - 900 and r["st"] != "取消":
+                row["st"] = "已飛"                     # 已經在天上了（查到的航線不對，沒算成出發）
+            elif p["ph"] == io and not done and r["st"] != "取消":
                 row["st"] = p["st"]                    # 天上的飛機：用即時的「即將落地」「剛起飛」
                 if io == "arr" and p["eta"] is not None:
                     row["est"] = now + p["eta"] * 60
@@ -6475,7 +6490,7 @@ def fly_merge(ap, fids, rows, io):
                     row["st"] = "已到"                 # 已經停在這個機場了
                 elif (p.get("spd") or 0) > 5 and now > t0 - 1800:
                     row["st"] = "滑行中"
-            if row["st"] not in ("已到", "滑行中") and not (p and p["ph"] == io) and now > t0 + 300:
+            if row["st"] not in ("已到", "已飛", "滑行中") and not (p and p["ph"] == io) and now > t0 + 300:
                 row["lag"] = True                      # 過了時間還沒到／還沒飛：照現在的時間排，網頁算晚幾分
                 if row["st"] in ("準時", "提早", "時間更改", ""):
                     row["st"] = "還沒到" if io == "arr" else "還沒飛"
@@ -6579,6 +6594,7 @@ def fly_board(code, bg=False):
         arr, dep, gnd = fly_merge(ap, fids, rows, "arr"), fly_merge(ap, fids, rows, "dep"), fly_gnd(ap, fids, gnd)
         got = {p["id"] for p in arr + dep + gnd}
         rest = [p for p in rows if p["ph"] != "over" and p["id"] not in got]   # 對不上官網表的：不列在看板，但雷達上照樣畫出來
+        over = [p for p in over if p["id"] not in got]                       # 配上官網表的就不是路過
     rest += cargo
     for p in arr + dep + gnd + over + rest:
         p["kind"] = fly_kind(p.get("t"), p.get("model"), p.get("cat"))
