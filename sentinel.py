@@ -6314,7 +6314,7 @@ def fly_plane(a, ap):
     org, dst = (rt[0]["code"], rt[1]["code"]) if rt else ("", "")
     toward = trk is not None and abs((float(trk) - (brg + 180) % 360 + 540) % 360 - 180) < 60
     # 離機場不遠、正在下降靠近／爬升離開：照飛的樣子判斷，查到的航線可能是別的航段（同一個班號飛好幾段很常見）
-    land = not gnd and alt < 10000 and d < 40 and vr < -300 and toward and fly_closest(ap, lat, lon, trk, 1) == code
+    land = not gnd and alt < 15000 and d < 60 and vr < -300 and toward and fly_closest(ap, lat, lon, trk, 1) == code
     lift = not gnd and alt < 15000 and d < 60 and vr > 300 and not toward and fly_closest(ap, lat, lon, trk, -1) == code
     me = {"code": code, "name": fly_city(code) or ap[2]}
     if land and rt and dst != code:                    # 例如查到「達拉斯 → 安克拉治」，其實是安克拉治飛來的下一段

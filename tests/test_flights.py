@@ -572,5 +572,32 @@ class Legs(unittest.TestCase):
         b = {**a, "baro_rate": 1800, "lat": TPE[0] + .03, "lon": TPE[1] + .04}   # 機場東北邊、往東北爬升：剛起飛
         p = S.fly_plane(b, ap)
         self.assertEqual((p["ph"], p["org"]["code"], p["dst"]), ("dep", "TPE", None))
+        S.fly_route = lambda cs, lat, lon: [{"code": "KIX", "name": "大阪"}, {"code": "TPE", "name": "台北"}]   # 同一個班號的上一段
+        e = {**a, "flight": "AXM177 ", "alt_baro": 12000, "baro_rate": 2500, "lat": TPE[0] + .12, "lon": TPE[1] + .15}
+        p = S.fly_plane(e, ap)
+        self.assertEqual((p["ph"], p["org"]["code"], p["dst"]), ("dep", "TPE", None))
+        S.fly_route = lambda cs, lat, lon: [{"code": "DFW", "name": "達拉斯"}, {"code": "ANC", "name": "安克拉治"}]
         c = {**a, "alt_baro": 30000, "baro_rate": 0}           # 高空路過：照查到的航線
         self.assertEqual(S.fly_plane(c, ap)["ph"], "over")
+
+
+class Midnight(unittest.TestCase):
+    def test_next_day(self):
+        """跨過半夜：預計時間少一天的補回來；同一班號今天、明天都在表上，天上那架只配給今天的"""
+        from test_passkey import load_sentinel
+        S = load_sentinel()
+        now = time.time()
+        S.FLY_FIDS_GET["TPE"] = lambda: [
+            {"io": "dep", "fn": "CI61", "al": "中華航空", "sch": now - 3600, "est": now - 600, "pc": "FRA", "pl": "法蘭克福", "gate": "A5", "term": "", "st": "已飛", "type": ""},
+            {"io": "dep", "fn": "CI61", "al": "中華航空", "sch": now + 22 * 3600, "est": now + 900, "pc": "FRA", "pl": "法蘭克福", "gate": "A5", "term": "", "st": "時間更改", "type": ""}]
+        hit = {"rows": [], "busy": True, "done": False}
+        S.fly_fids_pull("TPE", hit)
+        self.assertEqual(hit["rows"][1]["est"], now + 900 + 86400)
+        ap = S.fly_db()["TPE"]
+        live = {"id": "abc", "fn": "CI61", "cs": "CAL61", "reg": "B-1", "t": "A359", "model": "A350-900", "alt": 3000, "spd": 500, "vr": 10,
+                "d": 20, "eta": None, "trk": 230, "x": 0, "y": 0, "sq": "", "emg": False, "mil": False, "rare": False, "ph": "dep", "st": "剛起飛"}
+        out = S.fly_merge(ap, hit["rows"], [live], "dep")
+        self.assertEqual([o.get("live", False) for o in out], [True])     # 明天那班超過 12 小時不列，今天的配上天上那架
+        hit["rows"][1]["est"] = hit["rows"][1]["sch"] = now + 3 * 3600     # 就算兩筆都在表上，也只配一筆
+        out = S.fly_merge(ap, hit["rows"], [live], "dep")
+        self.assertEqual(sum(1 for o in out if o.get("live")), 1)

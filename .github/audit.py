@@ -20,6 +20,14 @@ for c in ["TPE", "TSA", "KHH", "RMQ"]:
     print(f"\n===== {c} srcs={d.get('srcs')} arr={len(d['arr'])} dep={len(d['dep'])} gnd={len(d['gnd'])} over={len(d['over'])} rest={len(d['rest'])} now={hm(now)}")
     issues = []
     fids = S.FLY_FIDS.get(c, {}).get("rows") or []
+    print("  FIDS rows", len(fids), "ok", hm(S.FLY_FIDS.get(c, {}).get("ok")), "near", sum(1 for r in fids if abs((r.get("est") or r["sch"]) - now) < 3 * 3600))
+    if c == "TPE":
+        b = S.fly_get(S.FLY_FIDS_URL["TPE"], timeout=30)
+        print("  TPE raw", len(b), b[:200])
+        try:
+            print("  parsed", len(S.fly_fids_tpe()))
+        except Exception as e:
+            print("  parse error", repr(e))
     for r in fids:
         if r.get("est") and abs(r["est"] - r["sch"]) > 6 * 3600:
             issues.append(f"FIDS 時間差很大 {r['fn']} sch={hm(r['sch'])} est={hm(r['est'])} st={r['st']}")
