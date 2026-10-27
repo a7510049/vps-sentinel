@@ -42,7 +42,7 @@ from collections import deque
 from concurrent.futures import ThreadPoolExecutor
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
-VERSION = "3.25"
+VERSION = "3.26"
 
 # ───────────────────────── 哨兵備份檔（.vsbk）─────────────────────────
 # 哨兵專用的備份格式：外面是自己的檔案格式，裡面用的是成熟、標準的加密方法（不自己發明加密）：
@@ -5650,6 +5650,16 @@ FLY_APLG = {"TPE": "https://www.taoyuan-airport.com/assets/img/logo.svg", "TSA":
 FLY_LOGO_MISS = {}                            # 抓不到的：一小時內不再問
 
 
+def fly_ccs():
+    """機場資料裡有的國家代碼（國旗只給這些）"""
+    if not FLY_CC:
+        FLY_CC.update(a[5] for a in fly_db().values() if re.fullmatch(r"[A-Z]{2}", a[5] or ""))
+    return FLY_CC
+
+
+FLY_CC = set()
+
+
 def fly_logo_type(b):
     """看檔頭認圖片種類（只收圖片）"""
     if b[:8] == b"\x89PNG\r\n\x1a\n":
@@ -5668,10 +5678,12 @@ def fly_logo_type(b):
 def fly_logo(key):
     """回傳 (圖片, 種類)；只給認得的機場（FLY_APLG）和航空公司（FLY_ALS），30 天重抓一次"""
     url = FLY_APLG.get(key) or (f"https://www.gstatic.com/flights/airline_logos/70px/{key}.png" if key in FLY_ALS else "")
+    if key[:1] == "@" and key[1:] in fly_ccs():                # 國旗（@JP）
+        url = f"https://flagcdn.com/w80/{key[1:].lower()}.png"
     if not url:
         return None
     url = os.environ.get("SENTINEL_FLY_LOGO", "").replace("{key}", key) or url
-    fn = os.path.join(DATA_DIR, "fly-logos", key)
+    fn = os.path.join(DATA_DIR, "fly-logos", key.replace("@", "flag-"))
     old = None
     try:
         with open(fn, "rb") as f:
@@ -6326,7 +6338,7 @@ def fly_gnd(ap, fids, gnd):
             continue
         fly_fix_type(p, r)
         pl = {"code": r["pc"], "name": r["pl"]}
-        out.append(dict(p, fn=r["fn"], al=r["al"], org=pl if r["io"] == "arr" else me, dst=me if r["io"] == "arr" else pl,
+        out.append(dict(p, fn=r["fn"], al=r["al"], io=r["io"], org=pl if r["io"] == "arr" else me, dst=me if r["io"] == "arr" else pl,
                         model=p["model"] or r["type"], gate=r["gate"]))
     return out
 
@@ -6403,6 +6415,8 @@ def fly_board(code, bg=False):
     out = {"ok": True, "t": time.time(), "ap": fly_ap(ap), "src": src or (srcs[0][0] if srcs else ""), "home": home, "srcs": srcs,
            "fids": fids is not None, "arr": arr, "dep": dep, "gnd": gnd, "over": over, "rest": rest, "als": FLY_ALS,
            "skyout": FLY_SKYS["out"] if FLY_SKYS["out"] > time.time() and fly_sky_need(ap, fids, ac) else 0}   # OpenSky 今天的次數用完了：網頁寫幾點恢復
+    out["ccs"] = {x["code"]: db[x["code"]][5] for p in arr + dep + gnd + over + rest for x in (p.get("org"), p.get("dst"))
+                  if x and x.get("code") in db and db[x["code"]][5]}   # 地名旁邊的國旗：機場代碼 → 國家
     FLY["cache"][ap[0]] = out
     return out
 
@@ -6926,7 +6940,7 @@ class Handler(BaseHTTPRequestHandler):
             return
         if path == "/api/fly-logo":                   # 標誌圖：只給固定清單裡的，不用登入（分享連結也看得到）
             key = urllib.parse.parse_qs(urllib.parse.urlsplit(self.path).query).get("k", [""])[0][:3].upper()
-            r = fly_logo(key) if re.fullmatch(r"[A-Z0-9]{2,3}", key) else None
+            r = fly_logo(key) if re.fullmatch(r"[A-Z0-9]{2,3}|@[A-Z]{2}", key) else None
             if not r:
                 return self.send(404, '{"error":"找不到"}')
             return self.send(200, r[0], r[1], cache=True, csp="; default-src 'none'; style-src 'unsafe-inline'; sandbox")   # 官網的 SVG 不能跑程式
