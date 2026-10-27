@@ -1,0 +1,14 @@
+name: flydebug
+on: push
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    steps:
+      - run: |
+          set +e
+          for f in arr dep; do curl -s -m 20 https://www.kia.gov.tw/data/$f.json | python3 -c "import sys,json;d=json.loads(sys.stdin.buffer.read().decode('utf-8-sig'));print('KHH', sorted({r.get('DepartureAirportIATA') or r.get('ArrivalAirportIATA') for r in d}))"; done
+          curl -s -m 20 https://www.taoyuan-airport.com/uploads/flightx/a_flight_v4.txt | python3 -c "import sys;t=sys.stdin.buffer.read().decode('big5hkscs','replace');s=set()
+          for l in t.splitlines():
+            x=[c.strip() for c in l.split(',')]
+            if len(x)>12: s.add((x[10],x[12],x[11]))
+          print('TPE', sorted(s))"
