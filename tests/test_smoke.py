@@ -147,7 +147,10 @@ class SmokeTest(Server):
         self.assertEqual(body, png)
         self.assertEqual(headers["Content-Type"], "image/png")
         self.assertIn("sandbox", headers["Content-Security-Policy"])
-        for k in ("ZZ", "..%2Fstate", ""):
+        with open(os.path.join(d, "flag-JP"), "wb") as f:   # 國旗：@國家代碼
+            f.write(png)
+        self.assertEqual(self.request("/api/fly-logo?k=%40JP")[:3:2], (200, png))
+        for k in ("ZZ", "..%2Fstate", "", "%40ZZ", "%40J"):
             with self.subTest(k=k):
                 self.assertEqual(self.request("/api/fly-logo?k=" + k)[0], 404)
 
