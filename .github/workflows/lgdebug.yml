@@ -1,0 +1,12 @@
+name: lgdebug
+on: push
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    steps:
+      - run: |
+          for c in FX 5X CI BR CV KZ PO 5Y K4 CK QR 0Q Q0 ZZ; do
+            for u in "https://www.gstatic.com/flights/airline_logos/70px/$c.png" "https://images.kiwi.com/airlines/128/$c.png" "https://pics.avs.io/200/200/$c.png"; do
+              curl -sL -A "Mozilla/5.0" -o x.png -w "%{http_code} %{size_download}" "$u"; echo " $(sha1sum x.png | cut -c1-40) $u"
+            done
+          done
