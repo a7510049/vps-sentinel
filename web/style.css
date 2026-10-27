@@ -907,10 +907,11 @@ html.flyon .dash>.view{content-visibility:hidden;contain-intrinsic-size:auto non
 .board[data-tab="gnd"] .fr.go:not(.nopl) .pl::before{content:"↑ 往 ";color:var(--tx3)}
 .fr.gh{margin-top:calc(var(--fs-s) * 2.6);content-visibility:visible}
 .fr.gh:first-child{margin-top:calc(var(--fs-s) * 2)}
-.fr.gh::before{content:attr(data-gh);position:absolute;left:10px;bottom:100%;padding-bottom:6px;font-size:var(--fs-s);font-weight:600;color:var(--tx2);pointer-events:none}
+.fr.gh::before{content:attr(data-gh);position:absolute;left:10px;bottom:100%;padding-bottom:6px;font-size:var(--fs-s);font-weight:600;color:var(--tx2);pointer-events:none;animation:fadeIn var(--t-mid) var(--ease) backwards}   /* 標題換到另一列：淡入 */
 /* 「地點 ▾」 */
 .fplace{gap:4px}.fplace .chv{width:16px;height:16px;opacity:.7}
 .fplace.set{background:var(--pc);color:var(--on-pc)}
+.fplace .fpn{display:inline-flex;align-items:center;white-space:nowrap}
 .fplc{max-width:460px}
 .fplc .form{margin-top:0}
 .fpll{display:flex;flex-direction:column;gap:2px;max-height:min(60vh,520px);overflow-y:auto;margin:0 -8px}
@@ -920,6 +921,8 @@ html.flyon .dash>.view{content-visibility:hidden;contain-intrinsic-size:auto non
 .fplr .lab{flex:1;min-width:0;font-size:var(--fs-m)}.fplr .lab small{display:block;color:var(--tx3);font-size:var(--fs-s)}
 .fplr .n{font-size:var(--fs-s);color:var(--tx3);font-variant-numeric:tabular-nums}.fplr.on .n,.fplr.on .lab small{color:inherit;opacity:.75}
 .fplr .fon{width:20px;opacity:0;transition:opacity var(--t-fast) var(--ease)}.fplr.on .fon{opacity:1;color:inherit}
+.fplr:not(.sub)[data-fpl^="@"] .lab{font-weight:600}             /* 國家那一列 */
+.fplr.sub{padding-left:calc(12px + 1.5em)}                         /* 城市：往裡縮一點 */
 .fplh{padding:10px 12px 4px;font-size:var(--fs-xs);font-weight:600;color:var(--tx3)}
 /* 延誤、改登機門橘框，取消紅框：慢慢呼吸（只動透明度；每一列對齊同一個節拍，flyBeat） */
 .fr{position:relative}

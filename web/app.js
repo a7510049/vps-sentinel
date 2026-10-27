@@ -3023,21 +3023,39 @@ function flyTerms(f, d){
   const on = ts.length > 1;
   if (!d.loading) reveal(tb, on || src.length > 1 || !!FLYPLC);
   if (FLYS.term && !ts.includes(FLYS.term)) FLYS.term = "";
-  const pb = FLYPLC ? `${esc(FLYPLC.name)}${flyFlag(FLYPLC.cc)}` : "地點";
-  const sig = pb + "|" + (on ? ts.join(",") : "");
-  if (tb._sig !== sig) { tb._sig = sig;
-    tb.innerHTML = `<button class="fchip fplace${FLYPLC ? " set" : ""}" data-fplace>${pb}${I("chev").replace("<svg", '<svg class="chv"')}</button>`
-      + (on ? ["", ...ts].map(t => `<button class="fchip" data-fterm="${esc(t)}">${t ? esc(t) : "全部"}</button>`).join("") : ""); }
+  const pb = FLYPLC ? `<span class="fpn">${esc(FLYPLC.name)}${flyFlag(FLYPLC.cc)}</span>` : `<span class="fpn">地點</span>`;
+  let b = tb.querySelector("[data-fplace]");
+  if (!b) { tb.insertAdjacentHTML("afterbegin", `<button class="fchip fplace" data-fplace>${pb}${I("chev").replace("<svg", '<svg class="chv"')}</button>`); b = tb.firstElementChild; b._pb = pb; }
+  b.classList.toggle("set", !!FLYPLC);
+  if (b._pb !== pb) {                                       // 換了地點：按鈕的字淡入、寬度慢慢變（不是整排重畫）
+    const w0 = b.offsetWidth; b._pb = pb; b.querySelector(".fpn").outerHTML = pb;
+    if (canAnim() && tb.isConnected && !tb.hidden) { const w1 = b.offsetWidth;
+      if (w0 !== w1) b.animate([{width: w0 + "px", overflow: "hidden"}, {width: w1 + "px", overflow: "hidden"}], {duration: T.sp, easing: SPRING});
+      b.querySelector(".fpn").animate([{opacity: 0}, {opacity: 1}], {duration: T.mid, easing: EASE}); }
+  }
+  const sig = on ? ts.join(",") : "";
+  if (tb._sig !== sig) { tb._sig = sig;                      // 航廈有變（換分頁、換機場）：只換航廈那幾顆，新的淡入
+    tb.querySelectorAll("[data-fterm]").forEach(x => x.remove());
+    b.insertAdjacentHTML("afterend", (on ? ["", ...ts] : []).map(t => `<button class="fchip" data-fterm="${esc(t)}">${t ? esc(t) : "全部"}</button>`).join(""));
+    if (canAnim() && !tb.hidden) tb.querySelectorAll("[data-fterm]").forEach((x, i) => x.animate([{opacity: 0, transform: "scale(.9)"}, {opacity: 1, transform: "none"}], {duration: T.mid, delay: i * T.fast * .2, easing: EASE, fill: "backwards"})); }
   tb.querySelectorAll("[data-fterm]").forEach(b => b.classList.toggle("on", b.dataset.fterm === (FLYS.term || "")));
   return on;
 }
-/* 現在這個分頁（和航廈）有哪些地點、各幾班 */
+/* 現在這個分頁（和航廈）有哪些地點、各幾班：同一國的放在一起（班機多的國家在前），城市由北到南 */
+const FLYCN = (() => { try { return new Intl.DisplayNames(["zh-Hant-TW"], {type: "region"}); } catch(e) { return null; } })();
+const FLYCNX = {HK: "香港", MO: "澳門", KR: "韓國", AE: "阿聯"};
+const flyCnName = c => FLYCNX[c] || (FLYCN && c ? FLYCN.of(c) : c) || "其他";
+const flyCtry = pl => (pl && FLYD && FLYD.ccs && FLYD.ccs[pl.code]) || "";
+const flyPlIs = (p, tab, sel) => { const pl = flyPl(p, tab); return sel.k[0] === "@" ? "@" + flyCtry(pl) === sel.k : flyPk(pl) === sel.k; };   // 「@JP」是整個國家
 function flyPlaces(){
-  const d = FLYD, tab = FLYS.tab, m = new Map();
+  const d = FLYD, tab = FLYS.tab, m = new Map(), g = new Map();
   (d && d[tab] || []).filter(p => !FLYS.term || p.term === FLYS.term).forEach(p => {
     const pl = flyPl(p, tab), k = flyPk(pl); if (!k) return;
-    const o = m.get(k) || {k, name: pl.name || pl.code, code: pl.code || "", cc: flyCc(pl), n: 0}; o.n++; m.set(k, o); });
-  return [...m.values()].sort((a, b) => b.n - a.n || a.name.localeCompare(b.name, "zh-TW"));
+    const o = m.get(k) || {k, name: pl.name || pl.code, code: pl.code || "", cc: flyCc(pl), c: flyCtry(pl), lat: d.lat && d.lat[pl.code], n: 0}; o.n++; m.set(k, o); });
+  m.forEach(o => { const x = g.get(o.c) || {k: "@" + o.c, c: o.c, cc: o.c && o.c !== "TW" && !FLYNOFL.has(o.c) ? o.c : "", name: flyCnName(o.c), n: 0, items: []}; x.n += o.n; x.items.push(o); g.set(o.c, x); });
+  const gs = [...g.values()].sort((a, b) => !a.c - !b.c || b.n - a.n || a.name.localeCompare(b.name, "zh-TW"));
+  gs.forEach(x => x.items.sort((a, b) => (b.lat ?? -99) - (a.lat ?? -99) || b.n - a.n));
+  return gs;
 }
 const flyFnN = s => (s || "").toUpperCase().replace(/\s+/g, "").replace(/^([A-Z0-9]{2})0+(?=\d)/, "$1");   // CI054、ci 54 都算同一班
 /* 「地點 ▾」：上面搜尋（航班號或地名），下面是地點清單 */
@@ -3048,21 +3066,26 @@ function flyWhere(){
   $("#layer").appendChild(v);
   const box = v.querySelector(".fpll"), inp = v.querySelector("input"), tz = d.ap && d.ap.tz;
   const ck = `<span class="fon">${I("check")}</span>`;
-  const draw = () => {
-    const q = inp.value.trim(), Q = flyFnN(q), all = flyPlaces(), sum = all.reduce((a, x) => a + x.n, 0);
-    const pls = all.filter(x => !q || x.name.includes(q) || x.code.includes(q.toUpperCase()));
+  const row = (x, sub) => `<button class="fplr${sub ? " sub" : ""}${FLYPLC && FLYPLC.k === x.k ? " on" : ""}" data-fpl="${esc(x.k)}"><span class="lab">${esc(x.name)}${sub ? "" : flyFlag(x.cc)}</span><span class="n">${x.n} 班</span>${ck}</button>`;
+  const draw = first => {
+    const q = inp.value.trim(), Q = flyFnN(q), gs = flyPlaces(), sum = gs.reduce((a, x) => a + x.n, 0);
+    const hit = x => x.name.includes(q) || x.code && x.code.includes(q.toUpperCase());
+    const pls = gs.map(g => !q || g.name.includes(q) ? g : {...g, items: g.items.filter(hit)}).filter(g => g.items.length);
     const seen = new Set(), fs = Q.length < 2 ? [] : [...d.arr, ...d.dep, ...d.gnd].filter(p => {
       if (seen.has(p.id) || ![p.fn, ...(p.share || [])].some(x => flyFnN(x).includes(Q))) return false; seen.add(p.id); return true; }).slice(0, 8);
     const tabOf = p => d.arr.includes(p) ? "arr" : d.dep.includes(p) ? "dep" : "gnd";
     const fl = p => { const t = tabOf(p), pl = flyPl(p, t), go = t === "dep" || t === "gnd" && flyOut(p);
       return `<button class="fplr" data-fid="${esc(p.id)}">${flyLogo(flyAl(p.fn))}<span class="lab">${esc(p.fn || p.reg || "")}<small>${pl ? `${go ? "往" : "從"} ${esc(pl.name || pl.code)}` : ""}${p.fids && t !== "gnd" ? `・${flyHM((p.est || p.sch) * 1000, tz)}` : ""}${p.st ? `・${esc(p.st)}` : ""}</small></span></button>`; };
-    box.innerHTML = (fs.length ? `<div class="fplh">航班</div>${fs.map(fl).join("")}` : "")
+    // 這個國家只有一個城市（香港、曼谷）：一列就好；其他國家先一列國家（點了看整國），下面是城市
+    const grp = g => g.items.length === 1 ? row({...g.items[0], cc: g.cc}) : row(g) + g.items.map(x => row(x, 1)).join("");
+    const html = (fs.length ? `<div class="fplh">航班</div>${fs.map(fl).join("")}` : "")
       + (fs.length && pls.length ? `<div class="fplh">地點</div>` : "")
       + (!q ? `<button class="fplr${FLYPLC ? "" : " on"}" data-fpl=""><span class="lab">全部地點</span><span class="n">${sum} 班</span>${ck}</button>` : "")
-      + pls.map(x => `<button class="fplr${FLYPLC && FLYPLC.k === x.k ? " on" : ""}" data-fpl="${esc(x.k)}"><span class="lab">${esc(x.name)}${flyFlag(x.cc)}</span><span class="n">${x.n} 班</span>${ck}</button>`).join("")
+      + pls.map(grp).join("")
       + (!fs.length && !pls.length ? `<div class="calm">找不到「${esc(q)}」</div>` : "");
+    first ? box.innerHTML = html : swapHTML(box, html);       // 打字時：新出現的淡入，清單高度慢慢變
   };
-  draw(); inp.addEventListener("input", draw);
+  draw(true); inp.addEventListener("input", () => draw());
   if (DESK.matches) inp.focus();                            // 手機不自己跳出鍵盤
   const done = () => { if (v._d) return; v._d = 1; v.classList.add("closing"); setTimeout(() => v.remove(), 360); };
   v._esc = done;
@@ -3071,10 +3094,10 @@ function flyWhere(){
     const a = e.target.closest("[data-fid]");
     if (a) { done(); return setTimeout(() => flyInfo(a.dataset.fid), canAnim() ? T.fast * 2 : 0); }
     const b = e.target.closest("[data-fpl]"); if (!b) return;
-    const k = b.dataset.fpl, x = flyPlaces().find(y => y.k === k);
+    const k = b.dataset.fpl, x = flyPlaces().flatMap(g => [g, ...g.items]).find(y => y.k === k);
     v.querySelectorAll(".fplr").forEach(y => y.classList.toggle("on", y === b));
     setTimeout(() => { done(); if ((FLYPLC ? FLYPLC.k : "") === k) return;
-      FLYPLC = k && x ? {k, name: x.name, cc: x.cc} : null; FLYHR = "";
+      FLYPLC = k && x ? {k, name: x.name, cc: x.cc || flyCc({code: x.code})} : null; FLYHR = "";
       setTimeout(flySwitch, canAnim() ? T.fast * 2 : 0); }, canAnim() ? T.fast : 0);   // 勾勾先移過去、視窗關完才換看板
   });
 }
@@ -3120,7 +3143,7 @@ function flyPaint(anim){
   const d = {arr:[], dep:[], gnd:[], over:[], ...FLYD}, msg = f.querySelector(".fmsg");
   if (!d.ap) d.ap = {code: FLYS.ap, name: FLYS.name || "", city: "", tz: ""};
   const tl = flyTerms(f, d), src = tl ? d[FLYS.tab].filter(p => !FLYS.term || p.term === FLYS.term) : d[FLYS.tab] || [];   // 桃園：照航廈分
-  let all = FLYPLC ? src.filter(p => flyPk(flyPl(p, FLYS.tab)) === FLYPLC.k) : src;   // 只看某個地點
+  let all = FLYPLC ? src.filter(p => flyPlIs(p, FLYS.tab, FLYPLC)) : src;   // 只看某個地點
   if (FLYS.tab === "gnd") all = [...all].sort((a, b) => flyOut(a) - flyOut(b));      // 地面：剛降落的在前、準備起飛的在後
   const byHr = d.fids && FLYS.tab !== "gnd" && all.length > 0, hrs = byHr ? flyHours(all, d.ap.tz) : [];
   if (byHr && !hrs.some(x => x.k === FLYHR)) FLYHR = hrs[0].k;
@@ -3158,13 +3181,13 @@ function flyPaint(anim){
   f.querySelector(".ffoot").innerHTML = d.night ? "" : `${via ? `資料來自 ${via}・` : ""}路過 ${d.over ? d.over.length : 0} 架・每 10 秒更新`;
 }
 function flyRows(f, d, list, n, byHr, tz, anim){
-  const box = f.querySelector(".frows"), want = !n ? 0 : Math.min(40, byHr ? n : Math.max(DESK.matches ? 8 : 6, n));   // 照時段看：有幾班就幾列，不放一堆空格；一班都沒有就只留一句話
+  const box = f.querySelector(".frows"), want = Math.min(40, n);   // 有幾班就幾列，不放空格子；一班都沒有就只留一句話
   if (FLYSTILL) anim = false;
   const put = FLYSTILL ? (el, t) => { if (el.textContent !== t) el.textContent = t; } : txt;   // 看板淡出時直接換字，不用每格各自淡入
   const grow = r => { if (canAnim() && anim !== false) r.animate([{opacity:0, transform:"translateY(8px)"}, {opacity:1, transform:"none"}], {duration:T.mid, easing:EASE}); };
   const cur = [...box.children].filter(r => !r.hidden && !r._bye), items = list.slice(0, want), fresh = new Set();
   // 自動更新、照時段看：同一班機留在自己那一列，換時段或狀態離開的慢慢收起來、新來的長出來（不是每列往上翻成下一班）
-  const keyed = byHr && canAnim() && anim !== false && cur.some(r => items.some(p => p.id === r.dataset.id));
+  const keyed = canAnim() && anim !== false && cur.some(r => items.some(p => p.id === r.dataset.id));
   let rows;
   if (keyed) rows = flyKeyed(box, cur, items, fresh);
   else {
@@ -3181,7 +3204,7 @@ function flyRows(f, d, list, n, byHr, tz, anim){
     const p = items[i], v = flyRowV(p, FLYS.tab, tz), off = offs[i] || FLYSTILL || fresh.has(r);   // 新長出來的列直接寫好字
     if (io && !r._obs) { r._obs = 1; io.observe(r); }
     // 已經到了、飛了：淡一點、只留小標籤，不再閃
-    r.dataset.id = p ? p.id : ""; r.classList.toggle("bad", v.cls === "bad"); r.classList.toggle("hot", v.cls === "hot"); r.classList.toggle("warn", (!!v.late || v.gch || v.mch) && v.cls !== "bad" && !/已到|已飛/.test(v.st || "")); r.querySelector(".fk.reg").classList.toggle("gch", !!v.gch); r.querySelector(".fk.m").classList.toggle("gch", !!v.mch); r.classList.toggle("done", /已到|已飛/.test(v.st || "")); r.classList.toggle("empty", !p); r.classList.toggle("nopc", !!p && !v.pc); r.classList.toggle("nopl", !v.pl); r.classList.toggle("sel", !!p && p.id === FLYSEL);
+    r.dataset.id = p ? p.id : ""; r.classList.toggle("bad", v.cls === "bad"); r.classList.toggle("hot", v.cls === "hot"); r.classList.toggle("warn", !!(v.late || v.gch || v.mch) && v.cls !== "bad" && !/已到|已飛/.test(v.st || "")); r.querySelector(".fk.reg").classList.toggle("gch", !!v.gch); r.querySelector(".fk.m").classList.toggle("gch", !!v.mch); r.classList.toggle("done", /已到|已飛/.test(v.st || "")); r.classList.toggle("empty", !p); r.classList.toggle("nopc", !!p && !v.pc); r.classList.toggle("nopl", !v.pl); r.classList.toggle("sel", !!p && p.id === FLYSEL);
     const g = FLYS.tab === "gnd" && !!p, gh = g && (i === 0 || items[i - 1] && flyOut(items[i - 1]) !== v.gout) ? (v.gout ? "準備起飛" : "剛降落") : "";   // 地面：剛降落、準備起飛分兩段，每段第一列上面寫標題
     r.classList.toggle("gi", g && !v.gout); r.classList.toggle("go", g && v.gout); r.classList.toggle("gh", !!gh); if ((r.dataset.gh || "") !== gh) r.dataset.gh = gh;
     FLYF.forEach((k, j) => flapSet(r.querySelector(`.fk.${k} .sf`), k === "st" ? flyRight(v.st, FLYW.st) : v[k], i * T.fast * .35 + j * T.fast * .2, off));
@@ -3191,9 +3214,11 @@ function flyRows(f, d, list, n, byHr, tz, anim){
     flyLogoSet(r.querySelector(".fk.fal .alg"), p ? flyAl(p.fn) : "");
     const tag = p ? (p.emg ? "緊急" : p.mil ? "軍機" : p.rare ? "少見" : v.late ? `晚 ${flyMin(v.late)}` : v.gch ? "改登機門" : v.mch ? "換機型" : v.early ? `早 ${flyMin(v.early)}` : v.soon ? `${v.soon} 分後` : "") : "", te = r.querySelector(".ftag");
     const tc = "ftag" + (tag ? " on" + (p.emg ? " bad" : p.mil || p.rare ? "" : v.late || v.gch || v.mch ? " late" : v.early ? " early" : v.soon ? " soon" : "") : "");
-    if (te.textContent !== tag || te.className !== tc) { te.textContent = tag; te.className = tc; }
+    if (te.textContent !== tag || te.className !== tc) { const was = te.textContent; te.textContent = tag; te.className = tc;
+      if (was && tag && canAnim() && !off) te.animate([{opacity:0, transform:"scale(.9)"}, {opacity:1, transform:"none"}], {duration:T.mid, easing:EASE}); }   // 換字（例如 12 分後 → 11 分後）：淡入
   });
   fresh.forEach(r => { const h = r.offsetHeight; r.animate([{height:"0px", opacity:0, paddingTop:0, paddingBottom:0, overflow:"hidden"}, {height:h + "px", opacity:1, overflow:"hidden"}], {duration:T.mid, easing:EASE}); });
+  if (box._flip) { box._flip(); box._flip = null; }
   flyBeat(box);
 }
 /* 一列收起來（藏起來留著，下次直接拿來用） */
@@ -3222,9 +3247,9 @@ function flyKeyed(box, cur, items, fresh){
   });
   order.forEach((r, i) => { if (box.children[i] !== r) box.insertBefore(r, box.children[i]); });
   gone.forEach(flyBye);
-  const z = ZM();
-  rows.forEach(r => { if (fresh.has(r) || !y0.has(r)) return; const dy = (y0.get(r) - r.getBoundingClientRect().top) / z;
-    if (Math.abs(dy) > 1) r.animate([{transform:`translateY(${dy}px)`}, {transform:"none"}], {duration:T.mid, easing:EASE}); });
+  box._flip = () => { const z = ZM();                      // 每列的字和分段標題都換好之後才量（標題多出來的空間也一起滑過去）
+    rows.forEach(r => { if (fresh.has(r) || !y0.has(r)) return; const dy = (y0.get(r) - r.getBoundingClientRect().top) / z;
+      if (Math.abs(dy) > 1) r.animate([{transform:`translateY(${dy}px)`}, {transform:"none"}], {duration:T.mid, easing:EASE}); }); };
   return rows;
 }
 /* 橘框、紅框的呼吸全部對齊同一個節拍（各列開始的時間不同，不然會一閃一閃不同步） */
