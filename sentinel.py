@@ -41,7 +41,7 @@ from collections import deque
 from concurrent.futures import ThreadPoolExecutor
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
-VERSION = "3.11"
+VERSION = "3.12"
 
 # ───────────────────────── 哨兵備份檔（.vsbk）─────────────────────────
 # 哨兵專用的備份格式：外面是自己的檔案格式，裡面用的是成熟、標準的加密方法（不自己發明加密）：
@@ -5342,6 +5342,7 @@ FLY_AL = {
     "BOX": ("3S", "德國貨運"), "GEC": ("LH", "漢莎貨運"),
 }
 # 機型代碼 → 好讀的名稱（接收站沒給時用）
+FLY_ALS = sorted({v[0] for v in FLY_AL.values()})      # 這些航空公司網頁會顯示標誌（其他的只顯示代碼）
 FLY_TYPES = {
     "A319": "A319", "A320": "A320", "A20N": "A320neo", "A321": "A321", "A21N": "A321neo", "BCS1": "A220-100", "BCS3": "A220-300",
     "A306": "A300-600", "A332": "A330-200", "A333": "A330-300", "A338": "A330-800", "A339": "A330-900",
@@ -5975,7 +5976,7 @@ def fly_board(code):
     for p in arr + dep + gnd + over + rest:
         p["kind"] = fly_kind(p.get("t"), p.get("model"), p.get("cat"))
     out = {"ok": True, "t": time.time(), "ap": fly_ap(ap), "src": src or (srcs[0][0] if srcs else ""), "home": home, "srcs": srcs,
-           "fids": fids is not None, "arr": arr, "dep": dep, "gnd": gnd, "over": over, "rest": rest}
+           "fids": fids is not None, "arr": arr, "dep": dep, "gnd": gnd, "over": over, "rest": rest, "als": FLY_ALS}
     FLY["cache"][ap[0]] = out
     return out
 

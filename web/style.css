@@ -878,11 +878,11 @@ html.flyon .dash>.view{content-visibility:hidden;contain-intrinsic-size:auto non
 .fr .pl{color:var(--tx)}
 .fr .al,.fr .reg{color:var(--tx2)}
 .fr .al{display:flex;align-items:center;gap:6px}.fr .al span{min-width:0;overflow:hidden;text-overflow:ellipsis}
-.alg{position:relative;display:inline-grid;place-items:center;flex:none;width:1.7em;height:1.7em;border-radius:var(--r-xs);background:var(--s3);color:var(--tx2);font-size:var(--fs-xs);font-style:normal;font-weight:600;overflow:hidden;vertical-align:middle;transition:background-color var(--t-fast) var(--ease)}
+.alg{position:relative;display:inline-grid;place-items:center;flex:none;width:2.6em;height:2.6em;border-radius:var(--r-xs);background:var(--s3);color:var(--tx2);font-size:var(--fs-xs);font-style:normal;font-weight:600;overflow:hidden;vertical-align:middle;transition:background-color var(--t-fast) var(--ease)}
 .alg.none{display:none}
-.alg img{position:absolute;inset:2px;width:calc(100% - 4px);height:calc(100% - 4px);object-fit:contain;opacity:0;transition:opacity var(--t-fast) var(--ease)}
+.alg img{position:absolute;inset:3px;width:calc(100% - 6px);height:calc(100% - 6px);object-fit:contain;opacity:0;transition:opacity var(--t-fast) var(--ease)}
 .alg.ok{background:#fff;color:transparent}.alg.ok img{opacity:1}
-.alg.lg{width:2.6em;height:2.6em;border-radius:var(--r-sm);font-size:var(--fs-s)}
+.alg.lg{width:3.2em;height:3.2em;border-radius:var(--r-md);font-size:var(--fs-s)}
 .fr .reg{font-variant-numeric:tabular-nums}
 .fr.hot .st b{color:var(--p)}
 .fr.bad .st b{color:var(--bad)}
