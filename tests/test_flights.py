@@ -525,5 +525,7 @@ class Kinds(unittest.TestCase):
                            (("FDX12", None, "B77L", "A5", False), "貨機"), (("", None, "C172", "A1", False), "小飛機"),
                            (("N123", None, "GLF6", "A2", False), "私人／公務機"), (("", None, "EC35", "A7", False), "直升機"),
                            (("RCAF1", None, "C130", "A5", True), "軍機"), (("", None, "B412", "A7", False, "National Airborne Service Corps"), "公務飛機"),
-                           (("", None, "ZZZZ", "", False), "")]:
+                           (("", None, "ZZZZ", "", False), ""), (("KAL17", ["KE", "大韓航空"], "B748", "A5", False), "客機"),
+                           (("JAL1", ["JL", "日本航空"], "B763", "A5", False), "客機"),
+                           (("HKE601", ["UO", "香港快運"], "A21N", "A3", False, "Hong Kong Express Airways"), "客機")]:
             self.assertEqual(u(*args), want, args)

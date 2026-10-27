@@ -42,7 +42,7 @@ from collections import deque
 from concurrent.futures import ThreadPoolExecutor
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
-VERSION = "3.30"
+VERSION = "3.31"
 
 # ───────────────────────── 哨兵備份檔（.vsbk）─────────────────────────
 # 哨兵專用的備份格式：外面是自己的檔案格式，裡面用的是成熟、標準的加密方法（不自己發明加密）：
@@ -5431,9 +5431,7 @@ def fly_cargo(fn, cs=""):
 
 # 用途：貨運航空公司以外，客貨都飛的公司只有某些機型是貨機（例如國泰的 747 全部是貨機）
 FLY_FREIGHT = {("CPA", "B748"), ("CPA", "B744"), ("CAL", "B744"), ("CAL", "B77L"), ("EVA", "B77L"), ("SIA", "B744"), ("SIA", "B77L"),
-               ("KAL", "B744"), ("KAL", "B77L"), ("AAR", "B744"), ("ANA", "B763"), ("ANA", "B77L"), ("THA", "B77L"), ("CES", "B77L"),
-               ("CSN", "B77L"), ("CCA", "B77L"), ("UAE", "B77L"), ("QTR", "B77L"), ("ETD", "B77L"), ("THY", "B77L"), ("DLH", "B77L"),
-               ("AFR", "B77L"), ("KLM", "B77L"), ("JAL", "B763"), ("CAL", "B748"), ("KAL", "B748")}
+               ("CES", "B77L"), ("CSN", "B77L"), ("ETD", "B77L"), ("AFR", "B77L")}   # 只放這家公司這種機型「全部」都是貨機的
 FLY_BIZ = r"^(GLF|GL[5-7XE]|GLEX|CL30|CL35|CL60|F2TH|F900|FA[5-8X]|C25|C5[0-9][0-9]|C68|C700|C750|E5[05]P|E35L|E545|E550|LJ|H25|PC24|BE40|PRM1|HDJT|SF50|EA50|C510|BBJ|ACJ|A318|B737BBJ)"
 FLY_GOV = r"(airborne service|coast guard|police|fire|government|ministry|navy|army|air force|空勤|海巡|警|消防)"
 
@@ -5448,7 +5446,7 @@ def fly_use(cs, al, t, cat, mil, op="", fn=""):
     if kind == "heli":
         return "直升機"
     pre = cs[:3] if re.match(r"[A-Z]{3}\d", cs or "") else ""
-    if fly_cargo(fn, cs) or (pre, t) in FLY_FREIGHT or re.search(r"cargo|freight|express|logistics", op or "", re.I):
+    if fly_cargo(fn, cs) or (pre, t) in FLY_FREIGHT or (not al and re.search(r"cargo|freight|logistics", op or "", re.I)):
         return "貨機"
     if t and re.match(FLY_BIZ, t) and not al:
         return "私人／公務機"
