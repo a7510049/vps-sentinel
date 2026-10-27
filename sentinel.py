@@ -42,7 +42,7 @@ from collections import deque
 from concurrent.futures import ThreadPoolExecutor
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
-VERSION = "3.23"
+VERSION = "3.24"
 
 # ───────────────────────── 哨兵備份檔（.vsbk）─────────────────────────
 # 哨兵專用的備份格式：外面是自己的檔案格式，裡面用的是成熟、標準的加密方法（不自己發明加密）：
@@ -5644,6 +5644,65 @@ def fly_get(url, data=None, ua="Mozilla/5.0 (vps-sentinel)", timeout=10):
         return r.read()
 
 
+# 機場、航空公司標誌：第一次跟官網／Google 抓，存在主機上（DATA_DIR/fly-logos），之後網頁直接跟主機拿，不會一張一張慢慢冒出來
+FLY_APLG = {"TPE": "https://www.taoyuan-airport.com/assets/img/logo.svg", "TSA": "https://www.tsa.gov.tw/static/img/pavicon.png",
+            "RMQ": "https://www.tca.gov.tw/assets/images/icon.ico", "KHH": "https://www.kia.gov.tw/images/apple-touch-icon.png"}
+FLY_LOGO_MISS = {}                            # 抓不到的：一小時內不再問
+
+
+def fly_logo_type(b):
+    """看檔頭認圖片種類（只收圖片）"""
+    if b[:8] == b"\x89PNG\r\n\x1a\n":
+        return "image/png"
+    if b[:3] == b"\xff\xd8\xff":
+        return "image/jpeg"
+    if b[:4] == b"\x00\x00\x01\x00":
+        return "image/x-icon"
+    if b[:4] == b"GIF8":
+        return "image/gif"
+    if b"<svg" in b[:1024]:
+        return "image/svg+xml"
+    return ""
+
+
+def fly_logo(key):
+    """回傳 (圖片, 種類)；只給認得的機場（FLY_APLG）和航空公司（FLY_ALS），30 天重抓一次"""
+    url = FLY_APLG.get(key) or (f"https://www.gstatic.com/flights/airline_logos/70px/{key}.png" if key in FLY_ALS else "")
+    if not url:
+        return None
+    url = os.environ.get("SENTINEL_FLY_LOGO", "").replace("{key}", key) or url
+    fn = os.path.join(DATA_DIR, "fly-logos", key)
+    old = None
+    try:
+        with open(fn, "rb") as f:
+            old = f.read()
+        if time.time() - os.path.getmtime(fn) < 30 * 86400:
+            return old, fly_logo_type(old)
+    except OSError:
+        pass
+    if FLY_LOGO_MISS.get(key, 0) > time.time():
+        return (old, fly_logo_type(old)) if old else None
+    try:
+        b = fly_get(url, timeout=10)
+        if len(b) > 512 * 1024 or not fly_logo_type(b):
+            raise ValueError("不是圖片")
+        os.makedirs(os.path.dirname(fn), exist_ok=True)
+        with open(fn + ".tmp", "wb") as f:
+            f.write(b)
+        os.replace(fn + ".tmp", fn)
+        return b, fly_logo_type(b)
+    except Exception:  # noqa: BLE001
+        FLY_LOGO_MISS[key] = time.time() + 3600
+        return (old, fly_logo_type(old)) if old else None
+
+
+def fly_logo_warm():
+    """背景先把標誌都抓好存著（打開看板就是現成的）"""
+    for k in [*FLY_APLG, *FLY_ALS]:
+        fly_logo(k)
+        time.sleep(0.2)
+
+
 def fly_ts(day, hm):
     """「2026/10/25」「07:10」這類時間 → 時間戳（台灣時間）"""
     hm = str(hm or "").strip().replace(":", "")[:4]
@@ -6409,6 +6468,7 @@ def fly_bg_start():
 def fly_loop():
     """用過機場起降之後，主機就一直在背景抓四個機場（官網表、飛機位置）：打開就是新的，停好的飛機也記得；7 天沒人看就停"""
     saved = time.time()
+    threading.Thread(target=fly_logo_warm, daemon=True).start()
     while time.time() - FLY["used"] < 7 * 86400:
         time.sleep(FLY_BG)
         if not watchers():                    # 被監看的主機不用自己抓
@@ -6592,7 +6652,7 @@ class Handler(BaseHTTPRequestHandler):
     def log_message(self, *a):
         pass
 
-    def send(self, code, body, ctype="application/json; charset=utf-8", cache=False):
+    def send(self, code, body, ctype="application/json; charset=utf-8", cache=False, csp=""):
         data = body if isinstance(body, bytes) else body.encode("utf-8")
         self.send_response(code)
         self.send_header("Content-Type", ctype)
@@ -6600,7 +6660,7 @@ class Handler(BaseHTTPRequestHandler):
         self.send_header("Cache-Control", "max-age=86400" if cache else "no-store")
         self.send_header("X-Content-Type-Options", "nosniff")
         self.send_header("X-Frame-Options", "DENY")              # 不讓別的網站把哨兵嵌進去騙你點按鈕
-        self.send_header("Content-Security-Policy", "frame-ancestors 'none'")
+        self.send_header("Content-Security-Policy", "frame-ancestors 'none'" + csp)
         self.send_header("Referrer-Policy", "no-referrer")       # 點外部連結時不帶出哨兵的網址
         self.end_headers()
         self.wfile.write(data)
@@ -6852,6 +6912,12 @@ class Handler(BaseHTTPRequestHandler):
             with open(f, "rb") as fh:
                 shutil.copyfileobj(fh, self.wfile, 1 << 20)
             return
+        if path == "/api/fly-logo":                   # 標誌圖：只給固定清單裡的，不用登入（分享連結也看得到）
+            key = urllib.parse.parse_qs(urllib.parse.urlsplit(self.path).query).get("k", [""])[0][:3].upper()
+            r = fly_logo(key) if re.fullmatch(r"[A-Z0-9]{2,3}", key) else None
+            if not r:
+                return self.send(404, '{"error":"找不到"}')
+            return self.send(200, r[0], r[1], cache=True, csp="; default-src 'none'; style-src 'unsafe-inline'; sandbox")   # 官網的 SVG 不能跑程式
         if path == "/api/flights":
             if not (self.authed() or share_ok(self.headers.get("X-Share"))):
                 time.sleep(1)
