@@ -42,7 +42,7 @@ from collections import deque
 from concurrent.futures import ThreadPoolExecutor
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
-VERSION = "3.35"
+VERSION = "3.36"
 
 # ───────────────────────── 哨兵備份檔（.vsbk）─────────────────────────
 # 哨兵專用的備份格式：外面是自己的檔案格式，裡面用的是成熟、標準的加密方法（不自己發明加密）：
@@ -6311,13 +6311,21 @@ def fly_plane(a, ap):
     rt = (fly_route(cs, lat, lon) if cs else None) or fly_fids_route(fn)
     org, dst = (rt[0]["code"], rt[1]["code"]) if rt else ("", "")
     toward = trk is not None and abs((float(trk) - (brg + 180) % 360 + 540) % 360 - 180) < 60
+    low = not gnd and alt < 3000 and d < 15            # 很低、離機場很近：照飛的樣子判斷，查到的航線可能是別的航段
+    land = low and vr < -200 and toward and fly_closest(ap, lat, lon, trk, 1) == code
+    lift = low and vr > 200 and not toward and fly_closest(ap, lat, lon, trk, -1) == code
+    me = {"code": code, "name": fly_city(code) or ap[2]}
+    if land and rt and dst != code:                    # 例如查到「達拉斯 → 安克拉治」，其實是安克拉治飛來的下一段
+        rt, dst = [{**rt[1], "guess": True} if org != code else None, me], code
+    elif lift and rt and org != code:
+        rt, org = [me, None], code                   # 下一站猜不到
     if gnd or (alt < 400 and gs < 60):
         if d > 6 or not (cs or reg) or fly_closest(ap, lat, lon) != code:
             return None                       # 太遠、別的機場的，或沒名字的停機
         ph = "gnd"
-    elif dst == code and org != code:
+    elif land or (dst == code and org != code):
         ph = "arr"
-    elif org == code and dst != code:
+    elif lift or (org == code and dst != code):
         ph = "dep"
     elif rt and org and dst:
         ph = "over"                           # 查得到航線、又不是這個機場的
