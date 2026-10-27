@@ -726,7 +726,8 @@ function setPage(list){
       <div class="li col"><span class="lab">文字大小</span>${seg("size", [["s", "小"], ["m", "中"], ["l", "大"]])}</div>
       <label class="li"><span class="lab">動畫</span>${tog("motion", "動畫")}</label>
       <button class="li" data-shows>${IC("trend", "")}<span class="lab">要顯示的內容<small class="showst">${showSum()}</small></span>${CHEV}</button></div>`;
-  const sec = `<div class="lbl" data-key="lsec">通知與登入</div><div class="group" data-key="g-sec">${go("data-tg", "bell", "Telegram 通知", "tgst")}${PK_OK && self ? go("data-pk", "finger", "手機金鑰登入", "pkst") : ""}${self ? go("data-pin", "pin", "PIN 碼登入", "pinst") : ""}</div>`;
+  const sec = `<div class="lbl" data-key="lsec">通知與登入</div><div class="group" data-key="g-sec">${go("data-tg", "bell", "Telegram 通知", "tgst")}${PK_OK && self ? go("data-pk", "finger", "手機金鑰登入", "pkst") : ""}${self ? go("data-pin", "pin", "PIN 碼登入", "pinst") : ""}</div>`
+    + (self && !SHARE ? `<div class="lbl" data-key="lsky">機場起降</div><div class="group" data-key="g-sky">${go("data-sky", "fly", "OpenSky 帳號", "skyst")}</div>` : "");
   const out = `<div class="sp" data-key="sp"></div><div class="group" data-key="g-out"><button class="li" data-logout><span class="ico info">${I("logout")}</span><span class="lab">登出</span></button>
       <button class="li" data-reset><span class="ico info">${I("upd")}</span><span class="lab">恢復預設值<small>外觀設定只存在這台裝置</small></span></button></div>`;
   let h = "";
@@ -1189,7 +1190,7 @@ const view = () => $("#app .view");
 function loadStatus(){
   const r = view(); if (!r || !r.querySelector("[data-ld]")) return;
   r.querySelectorAll("[data-ld]").forEach(x => x.removeAttribute("data-ld"));
-  tgStatus(r); selfStatus(r); pkStatus(r); pinStatus(r); pairStatus(r); bkStatus(r);
+  tgStatus(r); selfStatus(r); pkStatus(r); pinStatus(r); pairStatus(r); bkStatus(r); skyStatus(r);
 }
 /* 手機：點主機卡片，那台的整頁從卡片的位置長出來；返回時縮回卡片 */
 let DET = "", DETX = false, OPENR = null;
@@ -1588,6 +1589,67 @@ async function tgModal(){
       if (ob) return run(ob, "關閉中…", async () => { const d = await tgCall({action:"save", off:true}); toast(d.message); done(); });
     });
     q("chat").addEventListener("input", () => v.querySelectorAll("[data-chat]").forEach(x => x.classList.remove("on")));
+  });
+}
+/* ═════════ OpenSky 帳號（機場起降：高雄、台中的飛機靠它補） ═════════ */
+async function skyCall(body){
+  const r = await api("/api/opensky", {method:"POST", headers:{"X-Token":getTok(), "Content-Type":"application/json"}, body:JSON.stringify(body)});
+  const d = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(d.message || d.error || (r.status === 404 ? "這台主機還沒更新到新版" : "發生錯誤"));
+  return d;
+}
+const skyLine = d => d.on ? d.err ? d.err : d.out ? `今天的次數用完了，${flyHM(d.out * 1000)} 恢復` : d.left != null ? `已設定・今天還能查 ${d.left.toLocaleString()} 次` : "已設定"
+  : d.out ? `今天的次數用完了，${flyHM(d.out * 1000)} 恢復` : "還沒設定・每天只能查 400 次";
+async function skyStatus(root){
+  const el = root.querySelector(".skyst"); if (!el) return;
+  try { const d = await skyCall({action:"status"}); txt(el, skyLine(d)); el.classList.toggle("on", !!d.on && !d.err); }
+  catch(e) { txt(el, e.message); }
+}
+async function skyModal(){
+  const st = await skyCall({action:"status"}).catch(() => ({}));
+  const v = document.createElement("div"); v.className = "veil";
+  v.innerHTML = `<div class="dialog skyd">${IC("fly","big")}<h3>OpenSky 帳號</h3>
+    <p>填了每天可以查 4000 次（沒填 400 次）</p>
+    <div class="form">
+      <button type="button" class="ubtn ghost find" data-file>${I("archive")}選帳號檔（credentials.json）</button>
+      <input type="file" accept=".json,application/json" hidden>
+      <label>client_id<input class="field" data-k="id" autocomplete="off" spellcheck="false" value="${esc(st.id || "")}"></label>
+      <label>client_secret<input class="field" data-k="secret" type="password" autocomplete="off" spellcheck="false" placeholder="${st.on ? "已經設定過" : ""}"></label>
+      <div class="msg" aria-live="polite"></div>
+    </div>
+    <div class="btns"><button class="ubtn ghost" data-r="0">取消</button><button class="ubtn" data-save>儲存</button></div>
+    ${st.on ? `<button class="linkbtn" data-off>移除帳號</button>` : ""}</div>`;
+  $("#layer").appendChild(v);
+  const q = k => v.querySelector(`[data-k="${k}"]`), msg = v.querySelector(".msg"), file = v.querySelector("input[type=file]");
+  const say = (t, cls) => { sayTo(msg, t); msg.className = "msg " + (cls || ""); };
+  const fill = text => {                     // 貼上或選了整個帳號檔：自動拆成兩格
+    try { const j = JSON.parse(text); if (j && (j.clientId || j.client_id)) { q("id").value = j.clientId || j.client_id; q("secret").value = j.clientSecret || j.client_secret || ""; say(""); return true; } } catch(e) {}
+    return false;
+  };
+  q("id").addEventListener("paste", e => { const t = (e.clipboardData || {}).getData ? e.clipboardData.getData("text") : ""; if (fill(t)) e.preventDefault(); });
+  file.addEventListener("change", async () => { const f = file.files[0]; if (!f) return; if (!fill(await f.text())) say("這不是 OpenSky 的帳號檔", "bad"); file.value = ""; });
+  let busy = false;
+  const run = async (btn, label, fn) => {
+    if (busy) return; busy = true; const old = btn.innerHTML;
+    btn.disabled = true; btn.innerHTML = `<span class="spin"></span>${label}`; say("");
+    try { await fn(); } catch(e) { say(e.message, "bad"); }
+    btn.disabled = false; btn.innerHTML = old; busy = false;
+  };
+  return new Promise(res => {
+    const done = () => { if (v._d) return; v._d = 1; v.classList.add("closing"); setTimeout(() => { v.remove(); res(); }, 360); };
+    v._esc = done;
+    v.addEventListener("click", e => {
+      const t = e.target;
+      if (t === v || t.closest("[data-r]")) return done();
+      if (t.closest("[data-file]")) return file.click();
+      const sb = t.closest("[data-save]");
+      if (sb) return run(sb, "登入中…", async () => {
+        if (st.on && !q("secret").value.trim() && q("id").value.trim() === st.id) return done();
+        await skyCall({action:"save", id:q("id").value.trim(), secret:q("secret").value.trim()}); toast("OpenSky 帳號已設定"); done();
+      });
+      const ob = t.closest("[data-off]");
+      if (ob) return run(ob, "移除中…", async () => { await skyCall({action:"off"}); toast("已移除 OpenSky 帳號"); done(); });
+    });
   });
 }
 /* 換密碼：換好後顯示新密碼給你複製，這台裝置會自動改用新密碼 */
@@ -2454,6 +2516,7 @@ document.addEventListener("click", async e => {
   }
   // 設定頁
   if (t.closest("[data-tg]")) return tgModal().then(() => tgStatus(view()));
+  if (t.closest("[data-sky]")) return skyModal().then(() => skyStatus(view()));
   if (t.closest("[data-pk]")) return pkModal().then(() => pkStatus(view()));
   if (t.closest("[data-pin]")) return pinModal().then(() => pinStatus(view()));
   if (t.closest("[data-shows]")) return showsModal();
@@ -2557,11 +2620,11 @@ document.addEventListener("load", e => { const t = e.target; if (t.tagName === "
 document.addEventListener("error", e => { const t = e.target; if (t.tagName === "IMG" && t.parentNode && t.parentNode.classList.contains("alg")) { FLYNOLG.add(t.parentNode.dataset.c); t.remove(); } }, true);
 const FLYF = ["t", "fn", "pc", "st"], FLYX = ["pl", "al", "m", "reg"];   // 翻牌的欄位／一般文字的欄位（城市、航空公司、機型、註冊號用一般字比較好讀）
 const FLYW = {t:5, fn:7, pc:3, st:4};             // 狀態最多四個中文字，每格都是中文字寬，長短不一也對齊
-const FLYCOL = ["t", "fn", "pc", "pl", "al", "m", "reg", "st"];
-const FLYHEAD = {arr:["預計抵達", "航班", "出發地", "", "航空公司", "機型", "註冊號", "狀態"],
-  dep:["起飛", "航班", "目的地", "", "航空公司", "機型", "註冊號", "狀態"], gnd:["", "航班", "航線", "", "航空公司", "機型", "註冊號", "狀態"]};
-const FLYHEADF = {arr:["抵達", "航班", "出發地", "", "航空公司", "機型", "登機門", "狀態"], dep:["起飛", "航班", "目的地", "", "航空公司", "機型", "登機門", "狀態"]};   // 有機場官網航班表時
-const flyRow = i => `<div class="fr" data-i="${i}" role="button" tabindex="0">${FLYCOL.map(k => `<span class="fk ${k}">${FLYW[k] ? flap("", FLYW[k], k === "st" ? "zh" : "") : k === "al" ? `<i class="alg none" data-c=""></i><span></span>` : ""}</span>`).join("")}<span class="ftag"></span><i class="br b1"></i><i class="br b2"></i></div>`;
+const FLYCOL = ["t", "fn", "pc", "pl", "fal", "al", "m", "reg", "st"];   // fal：航空公司標誌自己一欄，每列都對齊
+const FLYHEAD = {arr:["預計抵達", "航班", "出發地", "", "", "航空公司", "機型", "註冊號", "狀態"],
+  dep:["起飛", "航班", "目的地", "", "", "航空公司", "機型", "註冊號", "狀態"], gnd:["", "航班", "航線", "", "", "航空公司", "機型", "註冊號", "狀態"]};
+const FLYHEADF = {arr:["抵達", "航班", "出發地", "", "", "航空公司", "機型", "登機門", "狀態"], dep:["起飛", "航班", "目的地", "", "", "航空公司", "機型", "登機門", "狀態"]};   // 有機場官網航班表時
+const flyRow = i => `<div class="fr" data-i="${i}" role="button" tabindex="0">${FLYCOL.map(k => `<span class="fk ${k}">${FLYW[k] ? flap("", FLYW[k], k === "st" ? "zh" : "") : k === "fal" ? `<i class="alg none" data-c=""></i>` : ""}</span>`).join("")}<span class="ftag"></span><i class="br b1"></i><i class="br b2"></i></div>`;
 function flyShell(){
   return `<div class="flyv" id="fly"><div class="fscroll"><div class="fwrap">
     <div class="ftop">${SHARE ? `<span class="fexp sub" data-k="left"></span>` : `<button class="icbtn" data-fback title="返回">${I("back")}</button>`}<span class="grow"></span>
@@ -2573,6 +2636,7 @@ function flyShell(){
       <div class="fhrs" data-slide hidden></div>
       <div class="board"><div class="fh">${FLYCOL.map(k => `<span class="fk ${k}"></span>`).join("")}</div><div class="frows"></div><div class="fmsg sub" hidden></div><div class="fload"><i></i></div></div></div>
       <div class="radar"><div class="rbox"><canvas class="rcv" aria-label="雷達"></canvas><button class="icbtn rfull" data-rfull title="整頁雷達">${I("full")}</button></div>
+        <div class="rnote sub" hidden></div>
         <div class="rleg"><span><i class="arr"></i>抵達</span><span><i class="dep"></i>出發</span><span><i></i>其他</span>
           <span class="rng fzm">${FLYZM.map(k => `<button data-fzm="${k}">${k}</button>`).join("")}</span></div></div>
     </div>
@@ -2958,6 +3022,8 @@ function flyPaint(anim){
   try { flyRows(f, d, list, n, byHr, tz, anim); } finally { FLYSTILL = was; }
   bd.classList.toggle("none", !n);
   if (!was) flyRadar(f, d);                                 // 換分頁、換時段時雷達沒變，不用重畫
+  const rn = f.querySelector(".rnote");                     // OpenSky 今天的次數用完：雷達上的飛機會少很多
+  reveal(rn, !!d.skyout); if (d.skyout) txt(rn, `OpenSky 今天的查詢次數用完了，${flyHM(d.skyout * 1000, tz)} 恢復`);
   if (d.ap && d.ap.code && f._geo !== d.ap.code) flyGeo(f, d.ap.code);
   const via = (d.srcs || [[d.src, d.home]]).filter(x => x[0]).map(([n, h]) => h ? `<a href="${esc(h)}" target="_blank" rel="noopener noreferrer">${esc(n)}</a>` : esc(n)).join("、");
   if (bd._h0 != null) flyShow(bd);
@@ -2980,8 +3046,8 @@ function flyRows(f, d, list, n, byHr, tz, anim){
     const p = list[i], v = flyRowV(p, FLYS.tab, tz), off = offs[i] || FLYSTILL;
     r.dataset.id = p ? p.id : ""; r.classList.toggle("bad", v.cls === "bad"); r.classList.toggle("hot", v.cls === "hot"); r.classList.toggle("empty", !p); r.classList.toggle("sel", !!p && p.id === FLYSEL);
     FLYF.forEach((k, j) => flapSet(r.querySelector(`.fk.${k} .sf`), v[k], i * T.fast * .35 + j * T.fast * .2, off));
-    FLYX.forEach(k => put(r.querySelector(k === "al" ? ".fk.al span" : `.fk.${k}`), v[k]));
-    flyLogoSet(r.querySelector(".fk.al .alg"), p ? flyAl(p.fn) : "");
+    FLYX.forEach(k => put(r.querySelector(`.fk.${k}`), v[k]));
+    flyLogoSet(r.querySelector(".fk.fal .alg"), p ? flyAl(p.fn) : "");
     const tag = p ? (p.emg ? "緊急" : p.mil ? "軍機" : p.rare ? "少見" : "") : "", te = r.querySelector(".ftag");
     if (te.textContent !== tag) { te.textContent = tag; te.className = "ftag" + (tag ? " on" + (p.emg ? " bad" : "") : ""); }
   });
@@ -3080,21 +3146,29 @@ function flyInfo(id){
   const d = FLYD, p = d && [...d.arr, ...d.dep, ...d.gnd, ...d.over, ...(d.rest || [])].find(x => x.id === id); if (!p) return;
   FLYSEL = id; flyPaint();
   const v = document.createElement("div"); v.className = "veil";
-  const pl = x => x ? `<b>${esc(x.code)}</b><small>${esc(x.name)}</small>` : `<b>—</b><small>不明</small>`;
-  const kv = (k, val) => `<div class="fkv"><small>${k}</small><b class="num">${val}</b></div>`;
-  const hm = t => t ? flyHM(t * 1000, d.ap.tz) : "—", air = p.alt != null;
-  const note = p.fids ? [air ? "" : p.model, p.term, p.share && p.share.length ? `共掛 ${p.share.join("、")}` : "", air ? "" : "收不到飛機訊號"].filter(Boolean).join("・") : "";
-  const vr = p.vr > 0.5 ? `↑ ${p.vr}` : p.vr < -0.5 ? `↓ ${-p.vr}` : "平飛";
+  const hm = t => t ? flyHM(t * 1000, d.ap.tz) : "", air = p.alt != null, arr = p.ph === "arr" || (p.ph === "gnd" && p.dst && p.dst.code === d.ap.code);
+  const tm = p.fids ? `<span class="frt"><b class="num">${hm(p.est || p.sch)}</b>${p.est && hm(p.est) !== hm(p.sch) ? `<s class="num">${hm(p.sch)}</s>` : ""}</span>` : "";
+  const end = (x, mine) => `<div class="fre"><b>${esc(x ? x.code : "—")}</b><small>${esc(x ? x.name : "不明")}</small>${mine ? tm : ""}</div>`;
+  const vr = p.vr > 0.5 ? `，上升 ${p.vr} 公尺/秒` : p.vr < -0.5 ? `，下降 ${-p.vr} 公尺/秒` : "";
+  const rows = [
+    ["機型", [p.model, p.t && p.t !== p.model ? p.t : ""].filter(Boolean).join("・")],
+    ["註冊號", p.reg],
+    [arr ? "抵達登機門" : "登機門", [p.gate, p.term].filter(Boolean).join("・")],
+    ["共掛班號", p.share && p.share.length ? p.share.join("、") : ""],
+    ["高度", air ? (p.alt ? `${p.alt.toLocaleString()} 公尺${p.ph === "gnd" ? "" : vr}` : "地面") : ""],
+    ["速度", air ? `${p.spd} 公里/時` : ""],
+    ["離機場", air ? `${p.d} 公里` : ""],
+    ["呼號", p.cs && p.cs !== p.fn ? p.cs : ""],
+    ["應答碼", p.sq],
+    ["飛機訊號", air ? "" : p.seen ? `${hm(p.seen)} 之後收不到` : p.fids ? "收不到" : ""],
+  ].filter(r => r[1]);
   const reg = encodeURIComponent(p.reg || "");
   v.innerHTML = `<div class="dialog finfo"><div class="form">
-    <div class="fih"><span class="fpc big">${esc(p.fn || p.reg || "—")}</span>${flyLogo(flyAl(p.fn), "lg")}<span class="lab">${esc(p.al || "航空公司不明")}<small>${esc(p.st)}${p.cs && p.cs !== p.fn ? `・呼號 ${esc(p.cs)}` : ""}</small></span></div>
+    <div class="fih">${flyLogo(flyAl(p.fn), "lg")}<div class="lab"><b class="ffn">${esc(p.fn || p.reg || "—")}</b><small>${esc(p.al || "航空公司不明")}</small></div>
+      ${p.st ? `<span class="fst2${p.emg || p.st === "取消" ? " bad" : ""}">${esc(p.st)}</span>` : ""}</div>
     ${p.emg || p.mil || p.rare ? `<div class="fbad${p.emg ? " bad" : ""}">${p.emg ? `${I("warn")}${esc(p.st)}（應答碼 ${esc(p.sq)}）` : p.mil ? "軍機" : "少見機型"}</div>` : ""}
-    ${p.org || p.dst ? `<div class="froute"><span>${pl(p.org)}</span><span class="fln">${I("plane")}</span><span>${pl(p.dst)}</span></div>` : `<div class="fnr sub">查不到這班的航線</div>`}
-    ${p.fids ? `<div class="fkvs">${kv("表定", hm(p.sch))}${kv(p.ph === "arr" ? "預計抵達" : "預計起飛", hm(p.est))}${kv("登機門", esc(p.gate || "—"))}</div>` : ""}
-    ${note ? `<div class="fnr sub">${esc(note)}</div>` : ""}
-    ${air ? `<div class="fkvs">${kv("機型", esc(p.model || p.t || "—"))}${kv("註冊號", esc(p.reg || "—"))}${kv("高度", p.alt ? `${p.alt.toLocaleString()} 公尺` : "地面")}
-      ${kv("速度", `${p.spd} 公里/時`)}${kv("每秒升降", p.ph === "gnd" ? "—" : `${vr}${Math.abs(p.vr) > .5 ? " 公尺" : ""}`)}${kv("距離機場", `${p.d} 公里`)}
-      ${p.t && p.t !== p.model ? kv("機型代碼", esc(p.t)) : ""}${p.sq ? kv("應答碼", esc(p.sq)) : ""}</div>` : ""}
+    ${p.org || p.dst ? `<div class="froute">${end(p.org, !arr)}<span class="fln"><i></i>${I("plane")}<i></i></span>${end(p.dst, arr)}</div>` : `<div class="fnr sub">查不到這班的航線</div>`}
+    ${rows.length ? `<div class="fdl">${rows.map(([k, val]) => `<div><span>${k}</span><b>${esc(val)}</b></div>`).join("")}</div>` : ""}
     ${reg ? `<div class="group"><a class="li" href="https://www.jetphotos.com/registration/${reg}" target="_blank" rel="noopener noreferrer"><span class="lab">看這架的照片<small>JetPhotos</small></span>${EXT}</a>
       <a class="li" href="https://www.flightradar24.com/data/aircraft/${reg.toLowerCase()}" target="_blank" rel="noopener noreferrer"><span class="lab">飛行紀錄<small>Flightradar24</small></span>${EXT}</a></div>` : ""}
     </div><div class="btns"><button class="ubtn ghost" data-r="0">關閉</button></div></div>`;
