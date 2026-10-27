@@ -3043,7 +3043,7 @@ async function flyGeo(f, code){
     try { const r = await api("/api/flights?geo=" + encodeURIComponent(code), {headers:flyHdr()}); const d = await r.json(); if (!d.ok) { f._geoq = ""; return; } FLYGEO[code] = d; }
     catch(e) { f._geoq = ""; return; }
   }
-  if (!$("#fly") || f._geo === code || !FLYD || !FLYD.ap || FLYD.ap.code !== code) return;
+  if (!$("#fly") || f._geo === code || !FLYD || !FLYD.ap || FLYD.ap.code !== code) { if (f._geoq === code) f._geoq = ""; return; }   // 抓到時已換機場：下次換回來要能再放
   f._geo = code;
   [f._rv, FRAD && FRAD.rv].forEach(v => v && v.setGeo(FLYGEO[code]));
 }
@@ -3407,9 +3407,9 @@ function flyOpen(btn){
   if (!SHARE) history.pushState({fly:1}, "");          // 分享連結只有這一頁，不能返回
   document.documentElement.classList.add("lock");
   setTimeout(() => { if ($("#fly")) document.documentElement.classList.add("flyon"); }, T.slow + 80);
+  f._rv = radarView(f.querySelector(".rcv"), false); f._rv.range = flyR(); flyZoom(f, false);   // 雷達先建好：下面用現成資料畫的時候，底圖才放得上去
   if (FLYD && FLYD.ap && FLYD.ap.code === FLYS.ap) { f.querySelector(".fsplash").remove(); flyPaint(false); } else { flySplashOn(f); flyWait(f, true); }
   flyLoad(false);
-  f._rv = radarView(f.querySelector(".rcv"), false); f._rv.range = flyR(); flyZoom(f, false);
   f.querySelector(".rcv").addEventListener("click", e => {    // 點雷達打開整頁雷達；點到飛機就順便選好那一架
     const r = e.currentTarget.getBoundingClientRect(), z = ZM(), p = f._rv.hit((e.clientX - r.left) / z, (e.clientY - r.top) / z);
     fradOpen(); if (p) fradPick(p.id);
