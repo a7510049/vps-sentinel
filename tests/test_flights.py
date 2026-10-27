@@ -342,6 +342,28 @@ class Flights(unittest.TestCase):
         x = t("A350-900"); S.fly_gate_track("TPE", x, 1000)
         self.assertEqual(x[0]["type0"], "A321neo")
 
+    def test_lag(self):
+        """官網慢半拍：過了時間還寫準時的改成還沒到／還沒飛，停在機場的改成已到，照現在的時間排"""
+        S, now = self.S, time.time()
+        ap = S.fly_db()["TPE"]
+        f = lambda fn, io, t, st="準時": {"io": io, "fn": fn, "al": "", "sch": t, "est": t, "pc": "NRT", "pl": "東京", "gate": "", "term": "", "st": st, "type": ""}
+        pl = lambda fn, ph, **k: {"fn": fn, "id": fn, "cs": fn, "reg": "", "t": "", "model": "", "alt": None, "spd": 0, "vr": 0, "d": 1, "eta": None,
+                                  "trk": 0, "x": 0, "y": 0, "sq": "", "emg": False, "mil": False, "rare": False, "ph": ph, "st": "", **k}
+        fids = [f("BR1", "arr", now - 900), f("BR2", "arr", now - 600, "已到"), f("BR3", "arr", now - 1200), f("BR4", "dep", now - 900),
+                f("BR5", "dep", now - 600, "登機"), f("BR6", "dep", now - 300), f("BR7", "arr", now + 600)]
+        live = [pl("BR3", "gnd"), pl("BR6", "gnd", spd=20)]
+        arr = {r["fn"]: r for r in S.fly_merge(ap, fids, live, "arr")}
+        dep = {r["fn"]: r for r in S.fly_merge(ap, fids, live, "dep")}
+        self.assertEqual((arr["BR1"]["st"], arr["BR1"].get("lag")), ("還沒到", True))
+        self.assertEqual(arr["BR2"]["st"], "已到")
+        self.assertEqual(arr["BR3"]["st"], "已到")          # 雷達看到已經停在機場
+        self.assertNotIn("lag", arr["BR7"])
+        self.assertEqual(dep["BR4"]["st"], "還沒飛")
+        self.assertEqual((dep["BR5"]["st"], dep["BR5"].get("lag")), ("登機", True))
+        self.assertEqual(dep["BR6"]["st"], "滑行中")
+        order = [r["fn"] for r in S.fly_merge(ap, fids, live, "arr")]
+        self.assertLess(order.index("BR2"), order.index("BR1"))   # 已經到的排在還沒到的前面
+
     def test_sky_need(self):
         """非必要不問 OpenSky：沒有班機要起降、或愛好者都收得到時不問"""
         S = self.S

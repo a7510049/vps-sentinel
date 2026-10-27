@@ -2608,9 +2608,9 @@ function flyRowV(p, tab, tz){
   else if (tab === "dep") { if (!FLYDEP[p.id]) FLYDEP[p.id] = Date.now() - (p.spd > 50 ? p.d / p.spd * 3600e3 : 0); t = flyHM(FLYDEP[p.id], tz); }
   const pl = tab === "arr" ? p.org : tab === "dep" ? p.dst : (p.dst && p.dst.code !== FLYD.ap.code ? p.dst : p.org);
   const mch = !!(p.fids && tab !== "gnd" && p.type0 && (p.model || p.t) && p.st !== "取消");   // 換機型
-  const gap = p.fids && tab !== "gnd" && p.est && p.sch && p.st !== "取消" ? Math.round((p.est - p.sch) / 60) : 0;   // 比表定晚（正）或早（負）幾分鐘
+  const gap = p.fids && tab !== "gnd" && p.sch && p.st !== "取消" ? Math.round(((p.lag ? Date.now() / 1000 : p.est || p.sch) - p.sch) / 60) : 0;   // 比表定晚（正）或早（負）幾分鐘；過了時間還沒到的算到現在
   return {t, fn: p.fn || p.reg, pc: pl ? pl.code : "", pl: pl ? pl.name || "" : "", al: p.al || "", m: (mch ? `${p.type0} → ` : "") + (p.model || p.t || ""), mch, reg: (FLYD.fids && tab !== "gnd" ? (p.gate0 && p.gate ? `${p.gate0} → ${p.gate}` : p.gate) : p.reg) || "", st: p.st, gch: !!(FLYD.fids && tab !== "gnd" && p.gate0 && p.gate && p.st !== "取消"),
-    cls: p.emg || /取消|轉降/.test(p.st) ? "bad" : /落地|剛起飛|跑道|登機/.test(p.st) ? "hot" : "", late: gap >= 15 ? gap : 0, early: gap <= -10 ? -gap : 0};
+    cls: p.emg || /取消|轉降/.test(p.st) ? "bad" : /落地|剛起飛|跑道|登機|滑行/.test(p.st) ? "hot" : "", late: gap >= 15 ? gap : 0, early: gap <= -10 ? -gap : 0};
 }
 const flyRight = (v, n) => " ".repeat(Math.max(0, n - [...(v || "")].length)) + (v || "");   // 狀態靠右
 const flyMin = m => m >= 60 ? `${Math.floor(m / 60)} 小時${m % 60 ? ` ${m % 60} 分` : ""}` : `${m} 分`;
@@ -3021,7 +3021,7 @@ function flyTerms(f, d){
 /* 官網航班表照「幾點」分成一段一段：已經過了的算在這一小時 */
 function flyHours(list, tz){
   const now = Date.now() / 1000, h0 = flyHM(Date.now(), tz).slice(0, 2), out = [];
-  list.forEach(p => { const t = p.est || p.sch || now, k = t <= now ? h0 : flyHM(t * 1000, tz).slice(0, 2);
+  list.forEach(p => { const t = p.at || p.est || p.sch || now, k = t <= now ? h0 : flyHM(t * 1000, tz).slice(0, 2);
     p._hr = k; const o = out.find(x => x.k === k); o ? (o.n++, o.t = Math.min(o.t, t)) : out.push({k, n:1, t}); });
   return out.sort((a, b) => a.t - b.t);                    // 延誤到後面時段的班機：時段還是照時間排
 }
@@ -3070,7 +3070,7 @@ function flyPaint(anim){
     hb.innerHTML = hrs.map(x => `<button class="fchip${x.k === FLYHR ? " on" : ""}" data-fhr="${x.k}">${+x.k} 點<span class="n">${x.n} 班</span></button>`).join("");
   }
   if (byHr) hb.querySelectorAll("button").forEach(b => b.classList.toggle("on", b.dataset.fhr === FLYHR));
-  const list = byHr ? all.filter(p => p._hr === FLYHR).sort((a, b) => (a.est || a.sch) - (b.est || b.sch)) : all;
+  const list = byHr ? all.filter(p => p._hr === FLYHR).sort((a, b) => (a.at || a.est || a.sch) - (b.at || b.est || b.sch)) : all;
   const n = list.length;
   flyWait(f, !!d.loading && d.ok);
   reveal(msg, !d.ok || (!d.loading && !n));
