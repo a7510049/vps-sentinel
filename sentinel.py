@@ -41,7 +41,7 @@ from collections import deque
 from concurrent.futures import ThreadPoolExecutor
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
-VERSION = "3.10"
+VERSION = "3.11"
 
 # ───────────────────────── 哨兵備份檔（.vsbk）─────────────────────────
 # 哨兵專用的備份格式：外面是自己的檔案格式，裡面用的是成熟、標準的加密方法（不自己發明加密）：
@@ -5388,6 +5388,28 @@ def fly_model(m):
     return {"A350-100": "A350-1000"}.get(m.upper(), m)
 
 
+# 雷達上飛機的樣子：q4 四發、wb 雙發廣體、nb 窄體、tp 螺旋槳、ga 小飛機、heli 直升機（看機型代碼，沒有就看機型名稱、訊號裡的大小分類）
+FLY_KINDS = [("heli", r"^(EC\d|H1\d\d|H[1-6]\d|AS3|AS5|AS6|B06|B407|B412|B429|R22|R44|R66|S76|S92|AW1|A1[0-6]9|BK17|UH\d|H60|MI8|EH10|NH90)"),
+             ("q4", r"^(A38|B74|A34|IL9|IL7|A124|A225|C17$|C5M|K35|E3[TC]F|A400|B52|BA46|RJ[178]|P3$|C130|C30J)"),
+             ("wb", r"^(A30|A31|A33|A35|B76|B77|B78|MD1|DC10|L101|IL86|A3ST|A337)"),
+             ("tp", r"^(AT[4-7]|DH8|DHC|F50|SF34|D328|B190|C208|JS\d|ATP|Y12|AN2|AN24|AN26|L410|BE20|BE9|PC12|C212|CN35|E120|SW4|DO28)"),
+             ("ga", r"^(C1\d\d|C2[0-9][0-9]|P28|PA\d|SR2|DA[2-6]|BE3|BE[56]\d|M20|TB\d|RV\d|G115|ULAC|GLID|C42)"),
+             ("nb", r"^(A1[89]N|A2[01]N|A3[12]\d|B7[0-5]|B3[789]M|B3XM|BCS|E1\d|E2\d|E7|E9|CRJ|C919|AJ27|MD8|MD9|B71|SU95|F70|F100|GLF|GLEX|CL|LJ|FA|H25|C5[0-9][0-9]|C68|E5[05]|PC24)")]
+FLY_KIND_M = [("q4", r"(A380|747|A340|Il-76|An-124|C-17|C-130)"), ("wb", r"(A330|A350|777|787|767|A300|MD-11)"),
+              ("tp", r"(ATR|Dash 8|Q400|Beech 1900|Cessna 208)"), ("nb", r"(A31[89]|A32[01]|737|757|A220|E1[79]\d|CRJ|C919|ARJ)")]
+
+
+def fly_kind(t, model="", cat=""):
+    t, model = str(t or "").upper(), str(model or "")
+    for k, rx in FLY_KINDS:
+        if t and re.match(rx, t):
+            return k
+    for k, rx in FLY_KIND_M:
+        if re.search(rx, model, re.I):
+            return k
+    return {"A7": "heli", "A5": "wb", "A4": "nb", "A3": "nb", "A2": "ga", "A1": "ga"}.get(str(cat or "").upper(), "")
+
+
 def fly_dist(la1, lo1, la2, lo2):
     """兩點距離（公里）和方位角"""
     p1, p2, dl = math.radians(la1), math.radians(la2), math.radians(lo2 - lo1)
@@ -5801,6 +5823,7 @@ def fly_plane(a, ap):
         "d": round(d, 1), "eta": eta, "trk": round(float(trk)) if trk is not None else None,
         "x": round(d * math.sin(math.radians(brg)), 2), "y": round(d * math.cos(math.radians(brg)), 2),
         "ph": ph, "st": emg or st, "emg": bool(emg), "sq": sq, "mil": mil, "rare": mil or t in FLY_RARE,
+        "cat": str(a.get("category") or "")[:2],
     }
 
 
@@ -5913,6 +5936,8 @@ def fly_board(code):
         arr, dep, gnd = fly_merge(ap, fids, rows, "arr"), fly_merge(ap, fids, rows, "dep"), fly_gnd(ap, fids, gnd)
         got = {p["id"] for p in arr + dep + gnd}
         rest = [p for p in rows if p["ph"] != "over" and p["id"] not in got]   # 對不上官網表的：不列在看板，但雷達上照樣畫出來
+    for p in arr + dep + gnd + over + rest:
+        p["kind"] = fly_kind(p.get("t"), p.get("model"), p.get("cat"))
     out = {"ok": True, "t": time.time(), "ap": fly_ap(ap), "src": src or (srcs[0][0] if srcs else ""), "home": home, "srcs": srcs,
            "fids": fids is not None, "arr": arr, "dep": dep, "gnd": gnd, "over": over, "rest": rest}
     FLY["cache"][ap[0]] = out
