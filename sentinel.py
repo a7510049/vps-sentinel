@@ -41,7 +41,7 @@ from collections import deque
 from concurrent.futures import ThreadPoolExecutor
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
-VERSION = "3.14"
+VERSION = "3.15"
 
 # ───────────────────────── 哨兵備份檔（.vsbk）─────────────────────────
 # 哨兵專用的備份格式：外面是自己的檔案格式，裡面用的是成熟、標準的加密方法（不自己發明加密）：
@@ -5293,6 +5293,43 @@ FLY_APS = [
     ("YVR", "溫哥華機場", "溫哥華", 49.1967, -123.1815), ("SYD", "雪梨機場", "雪梨", -33.9399, 151.1753),
     ("MEL", "墨爾本機場", "墨爾本", -37.6690, 144.8410), ("AKL", "奧克蘭機場", "奧克蘭", -37.0082, 174.7850),
 ]
+# 其他常飛的機場：中文名稱、城市（台灣飛得到的；沒列到的，從官網航班表學中文名稱，FLY["zh"]）
+FLY_ZH = {
+    "KMQ": ("小松機場", "小松"), "HIJ": ("廣島機場", "廣島"), "OKJ": ("岡山機場", "岡山"), "TAK": ("高松機場", "高松"), "MYJ": ("愛媛松山機場", "愛媛"),
+    "KOJ": ("鹿兒島機場", "鹿兒島"), "KMJ": ("熊本機場", "熊本"), "NGS": ("長崎機場", "長崎"), "OIT": ("大分機場", "大分"), "KKJ": ("北九州機場", "北九州"),
+    "UBJ": ("山口宇部機場", "山口"), "SDJ": ("仙台機場", "仙台"), "AOJ": ("青森機場", "青森"), "AXT": ("秋田機場", "秋田"), "HKD": ("函館機場", "函館"),
+    "ASJ": ("奄美機場", "奄美"), "ISG": ("石垣機場", "石垣島"), "MMY": ("宮古機場", "宮古島"), "SHI": ("下地島機場", "宮古島"), "FSZ": ("靜岡機場", "靜岡"),
+    "IBR": ("茨城機場", "茨城"), "KIJ": ("新潟機場", "新潟"), "TOY": ("富山機場", "富山"), "HNA": ("花卷機場", "岩手"), "FKS": ("福島機場", "福島"),
+    "YGJ": ("米子機場", "米子"), "IZO": ("出雲機場", "出雲"), "KCZ": ("高知機場", "高知"), "TKS": ("德島機場", "德島"), "UKB": ("神戶機場", "神戶"),
+    "KMI": ("宮崎機場", "宮崎"), "AKJ": ("旭川機場", "旭川"), "KUH": ("釧路機場", "釧路"), "OBO": ("帶廣機場", "帶廣"), "MMB": ("女滿別機場", "女滿別"),
+    "CJU": ("濟州機場", "濟州"), "TAE": ("大邱機場", "大邱"), "CJJ": ("清州機場", "清州"), "MWX": ("務安機場", "務安"), "YNY": ("襄陽機場", "襄陽"),
+    "CTU": ("雙流機場", "成都"), "TFU": ("天府機場", "成都"), "CKG": ("江北機場", "重慶"), "KMG": ("長水機場", "昆明"), "XIY": ("咸陽機場", "西安"),
+    "WUH": ("天河機場", "武漢"), "CSX": ("黃花機場", "長沙"), "HGH": ("蕭山機場", "杭州"), "NKG": ("祿口機場", "南京"), "TAO": ("膠東機場", "青島"),
+    "TSN": ("濱海機場", "天津"), "DLC": ("周水子機場", "大連"), "SHE": ("桃仙機場", "瀋陽"), "HRB": ("太平機場", "哈爾濱"), "FOC": ("長樂機場", "福州"),
+    "NGB": ("櫟社機場", "寧波"), "WNZ": ("龍灣機場", "溫州"), "CGO": ("新鄭機場", "鄭州"), "HAK": ("美蘭機場", "海口"), "SYX": ("鳳凰機場", "三亞"),
+    "NNG": ("吳圩機場", "南寧"), "KWE": ("龍洞堡機場", "貴陽"), "TYN": ("武宿機場", "太原"), "HFE": ("新橋機場", "合肥"), "KWL": ("兩江機場", "桂林"),
+    "JJN": ("晉江機場", "泉州"), "SWA": ("潮汕機場", "揭陽"), "YNT": ("蓬萊機場", "煙台"), "WUX": ("碩放機場", "無錫"), "CZX": ("奔牛機場", "常州"),
+    "NTG": ("興東機場", "南通"), "YNZ": ("南洋機場", "鹽城"), "KHN": ("昌北機場", "南昌"), "ZUH": ("金灣機場", "珠海"), "LHW": ("中川機場", "蘭州"),
+    "URC": ("地窩堡機場", "烏魯木齊"), "TNA": ("遙牆機場", "濟南"), "SJW": ("正定機場", "石家莊"), "HET": ("白塔機場", "呼和浩特"), "CGQ": ("龍嘉機場", "長春"),
+    "YIW": ("義烏機場", "義烏"), "XUZ": ("觀音機場", "徐州"), "CEB": ("麥克坦機場", "宿霧"), "CRK": ("克拉克機場", "克拉克"), "KLO": ("卡利博機場", "長灘島"),
+    "MPH": ("長灘島機場", "長灘島"), "PPS": ("公主港機場", "公主港"), "DVO": ("納卯機場", "納卯"), "ILO": ("怡朗機場", "怡朗"), "BCD": ("巴科洛德機場", "巴科洛德"),
+    "DAD": ("峴港機場", "峴港"), "CXR": ("金蘭機場", "芽莊"), "PQC": ("富國機場", "富國島"), "HPH": ("吉碑機場", "海防"), "VCA": ("芹苴機場", "芹苴"),
+    "HUI": ("富牌機場", "順化"), "VDO": ("雲屯機場", "下龍灣"), "VII": ("榮市機場", "榮市"), "CNX": ("清邁機場", "清邁"), "HKT": ("普吉機場", "普吉島"),
+    "USM": ("蘇美機場", "蘇美島"), "KBV": ("喀比機場", "喀比"), "UTP": ("烏打拋機場", "芭達雅"), "CEI": ("清萊機場", "清萊"), "PNH": ("金邊機場", "金邊"),
+    "KTI": ("德崇機場", "金邊"), "REP": ("暹粒機場", "暹粒"), "SAI": ("吳哥機場", "暹粒"), "RGN": ("仰光機場", "仰光"), "VTE": ("瓦岱機場", "永珍"),
+    "LPQ": ("龍坡邦機場", "龍坡邦"), "PEN": ("檳城機場", "檳城"), "BKI": ("亞庇機場", "亞庇"), "KCH": ("古晉機場", "古晉"), "LGK": ("蘭卡威機場", "蘭卡威"),
+    "JHB": ("士乃機場", "新山"), "SUB": ("朱安達機場", "泗水"), "KNO": ("瓜拉納姆機場", "棉蘭"), "BWN": ("汶萊機場", "汶萊"), "MLE": ("馬列機場", "馬爾地夫"),
+    "CMB": ("可倫坡機場", "可倫坡"), "DEL": ("德里機場", "德里"), "BOM": ("孟買機場", "孟買"), "BLR": ("班加羅爾機場", "班加羅爾"), "KTM": ("加德滿都機場", "加德滿都"),
+    "ROR": ("帛琉機場", "帛琉"), "GUM": ("關島機場", "關島"), "SPN": ("塞班機場", "塞班"), "ULN": ("烏蘭巴托機場", "烏蘭巴托"), "UBN": ("成吉思汗機場", "烏蘭巴托"),
+    "VVO": ("海參崴機場", "海參崴"), "AUH": ("阿布達比機場", "阿布達比"), "VIE": ("維也納機場", "維也納"), "MUC": ("慕尼黑機場", "慕尼黑"), "PRG": ("布拉格機場", "布拉格"),
+    "FCO": ("羅馬機場", "羅馬"), "MXP": ("米蘭機場", "米蘭"), "ZRH": ("蘇黎世機場", "蘇黎世"), "MAD": ("馬德里機場", "馬德里"), "BCN": ("巴塞隆納機場", "巴塞隆納"),
+    "HEL": ("赫爾辛基機場", "赫爾辛基"), "CPH": ("哥本哈根機場", "哥本哈根"), "BRU": ("布魯塞爾機場", "布魯塞爾"), "LGW": ("蓋威克機場", "倫敦"), "ORD": ("芝加哥機場", "芝加哥"),
+    "IAH": ("休士頓機場", "休士頓"), "DFW": ("達拉斯機場", "達拉斯"), "ONT": ("安大略機場", "洛杉磯"), "EWR": ("紐華克機場", "紐約"), "YYZ": ("多倫多機場", "多倫多"),
+    "PHX": ("鳳凰城機場", "鳳凰城"), "HNL": ("檀香山機場", "檀香山"), "BOS": ("波士頓機場", "波士頓"), "ATL": ("亞特蘭大機場", "亞特蘭大"), "IAD": ("杜勒斯機場", "華盛頓"),
+    "ANC": ("安克拉治機場", "安克拉治"), "YYC": ("卡加利機場", "卡加利"), "BNE": ("布里斯本機場", "布里斯本"), "PER": ("伯斯機場", "伯斯"), "CNS": ("凱恩斯機場", "凱恩斯"),
+    "OOL": ("黃金海岸機場", "黃金海岸"), "CHC": ("基督城機場", "基督城"), "NAN": ("楠迪機場", "斐濟"), "KYD": ("蘭嶼機場", "蘭嶼"),
+    "CMJ": ("七美機場", "七美"), "DSX": ("東沙機場", "東沙"), "HSG": ("佐賀機場", "佐賀"), "SYO": ("庄內機場", "庄內"), "WOT": ("望安機場", "望安"), "GNI": ("綠島機場", "綠島")
+}
 FLY_PIN = ["TPE", "TSA", "RMQ", "KHH"]          # 台灣主要機場：選單最上面
 FLY_DB = {}
 FLY_NEAR = {}
@@ -5302,6 +5339,7 @@ def fly_db():
     """全世界的機場（第一次用到才讀）：代碼 → 代碼、名稱、城市、緯度、經度、國家、時區"""
     if not FLY_DB:
         zh = {a[0]: a for a in FLY_APS}
+        zh.update({c: (c, *v) for c, v in FLY_ZH.items() if c not in zh})
         try:
             with open(os.path.join(HERE, "data", "airports.tsv"), encoding="utf-8") as f:
                 for line in f:
@@ -5371,7 +5409,7 @@ FLY_CARGO_ICAO = {"NCA", "CAO", "CKK", "CSS", "SQC", "FDX", "UPS", "GTI", "CLX",
                   "DHK", "DHX", "BCS", "YZR", "CYZ", "ICV", "ATN", "ABX", "MPH", "TAY", "NPT", "SOO", "WGN", "AJT", "KYE", "YTO"}
 FLY_CARGO_IATA = {"KZ", "CK", "O3", "FX", "5X", "5Y", "CV", "K4", "PO", "RU", "3S", "LD", "QY", "D0", "Y8", "CF", "M6", "GB", "YG", "C8", "K9"}
 FLY_SKYS = {"cache": {}, "until": 0, "left": None, "out": 0, "tok": "", "texp": 0, "tbad": 0, "err": ""}
-FLY = {"cache": {}, "routes": {}, "lock": threading.Lock(), "last": 0.0, "bad": {}, "rq": set(), "rbusy": False, "fetch": threading.Lock(), "logged": {}, "seen": {}, "view": {}, "used": 0, "hex": {}, "hq": set(), "hbusy": False}
+FLY = {"cache": {}, "routes": {}, "lock": threading.Lock(), "last": 0.0, "bad": {}, "rq": set(), "rbusy": False, "fetch": threading.Lock(), "logged": {}, "seen": {}, "view": {}, "used": 0, "hex": {}, "hq": set(), "hbusy": False, "zh": {}}
 
 
 def fly_cargo(fn, cs=""):
@@ -5616,10 +5654,10 @@ def fly_zh_code(name):
     name = re.sub(r"[A-Z]{3}$", "", str(name or "").strip())
     if not name:
         return ""
-    for a in FLY_APS:
+    for a in [*FLY_APS, *((c, *v) for c, v in FLY_ZH.items())]:
         if name in (a[2], a[1], a[1].replace("機場", "")) or a[2].startswith(name):
             return a[0]
-    return ""
+    return next((c for c, v in FLY["zh"].items() if v == name), "")
 
 
 def fly_al_zh(iata):
@@ -5641,8 +5679,9 @@ def fly_fids_tpe():
         x = [c.strip() for c in line.split(",")]
         if len(x) < 15 or x[1] not in ("A", "D"):
             continue
+        fly_learn(x[10], x[12])
         out.append({"io": "arr" if x[1] == "A" else "dep", "fn": x[2] + x[4].lstrip("0"), "al": x[3], "sch": fly_ts(x[6], x[7]),
-                    "est": fly_ts(x[8], x[9]), "pc": x[10], "pl": x[12] or x[11], "gate": x[5], "term": f"第{'一二三'[int(x[0]) - 1]}航廈" if x[0] in ("1", "2", "3") else "",
+                    "est": fly_ts(x[8], x[9]), "pc": x[10], "pl": x[12] or fly_city(x[10]) or x[11], "gate": x[5], "term": f"第{'一二三'[int(x[0]) - 1]}航廈" if x[0] in ("1", "2", "3") else "",
                     "st": fly_st(x[13]), "type": x[14]})
     return out
 
@@ -5657,10 +5696,9 @@ def fly_fids_khh():
             sch = str(r.get("ST" + k) or "")
             est = str((r.get("arrtime") if io == "arr" else r.get("deptime")) or r.get("AT" + k) or "")
             pc = str(r.get("DepartureAirportIATA" if io == "arr" else "ArrivalAirportIATA") or "")
-            ap = fly_db().get(pc)
             out.append({"io": io, "fn": str(r.get("airLineNum") or ""), "al": fly_al_zh(str(r.get("airLineIATA") or "")),
                         "sch": fly_ts(sch[:10], sch[11:16]), "est": fly_ts(est[:10], est[11:16]) if est else None, "pc": pc,
-                        "pl": ap[2] if ap else pc, "gate": "", "term": "",
+                        "pl": fly_city(pc) or (fly_db().get(pc) or [0, 0, pc])[2], "gate": "", "term": "",
                         "st": st.get(int(r.get("status" + io) or 0), ""), "type": FLY_IATA_T.get(str(r.get("airPlaneType") or ""), str(r.get("airPlaneType") or "")),
                         "share": [c.strip() for c in str(r.get("CodeShare") or "").split(";") if c.strip()]})
     return out
@@ -5701,6 +5739,8 @@ def fly_fids_tsa():
                 k = "Departure" if io == "dep" else "Arrival"
                 pl = str(r.get("GoalAirportName" if io == "dep" else "UpAirportName") or "")
                 m = re.match(r"(.*?)([A-Z]{3})$", pl)
+                if m:
+                    fly_learn(m.group(2), m.group(1))
                 out.append({"io": io, "fn": str(r.get("FlightNumber") or "").strip(), "al": re.sub(r"(公司|股份有限公司)$", "", str(r.get("AirLineName") or "")),
                             "sch": fly_ts(None, r.get("Expect" + k + "Time")), "est": fly_ts(None, r.get("Real" + k + "Time")),
                             "pc": m.group(2) if m else "", "pl": m.group(1) if m else pl, "gate": "", "term": "",
@@ -5773,8 +5813,23 @@ def fly_log(msg):
 
 def fly_place(a):
     code = str(a.get("iata") or a.get("iata_code") or a.get("icao") or a.get("icao_code") or "")[:4].upper()
-    known = fly_db().get(code) if code in {x[0] for x in FLY_APS} else None     # 有中文名稱的才換
-    return {"code": code, "name": known[2] if known else str(a.get("location") or a.get("municipality") or a.get("name") or "")[:24]}
+    return {"code": code, "name": fly_city(code) or str(a.get("location") or a.get("municipality") or a.get("name") or "")[:24]}
+
+
+def fly_city(code):
+    """機場代碼 → 中文城市名（常用表、官網航班表學到的）；都沒有就回空字串"""
+    if code in FLY_ZH:
+        return FLY_ZH[code][1]
+    for a in FLY_APS:
+        if a[0] == code:
+            return a[2]
+    return FLY["zh"].get(code, "")
+
+
+def fly_learn(code, name):
+    """官網航班表上有代碼又有中文名稱：記下來，高雄官網、航線查詢只給代碼時就用得到"""
+    if re.fullmatch(r"[A-Z]{3}", code or "") and re.search(r"[\u4e00-\u9fff]", name or "") and FLY["zh"].get(code) != name:
+        FLY["zh"][code] = name[:12]
 
 
 def fly_adsbdb(cs):
@@ -6167,6 +6222,7 @@ def fly_seen_load():
         with open(FLY_SEEN_FILE, encoding="utf-8") as f:
             d = json.load(f)
         FLY["seen"].update({k: v for k, v in (d.get("seen") or {}).items() if isinstance(v, dict) and time.time() - v.get("at", 0) < 6 * 3600})
+        FLY["zh"].update({k: v for k, v in (d.get("zh") or {}).items() if isinstance(v, str)})
         FLY["used"] = float(d.get("used") or 0)
     except (OSError, ValueError, AttributeError, TypeError):
         return
@@ -6179,7 +6235,7 @@ def fly_seen_save():
         os.makedirs(DATA_DIR, exist_ok=True)
         tmp = FLY_SEEN_FILE + ".tmp"
         with open(tmp, "w", encoding="utf-8") as f:
-            json.dump({"used": FLY["used"], "seen": dict(FLY["seen"])}, f, ensure_ascii=False)
+            json.dump({"used": FLY["used"], "seen": dict(FLY["seen"]), "zh": dict(FLY["zh"])}, f, ensure_ascii=False)
         os.replace(tmp, FLY_SEEN_FILE)
         with open(FLY_HEX_FILE + ".tmp", "w", encoding="utf-8") as f:
             json.dump(dict(FLY["hex"]), f)
