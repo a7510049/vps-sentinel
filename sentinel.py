@@ -42,7 +42,7 @@ from collections import deque
 from concurrent.futures import ThreadPoolExecutor
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
-VERSION = "3.24"
+VERSION = "3.25"
 
 # ───────────────────────── 哨兵備份檔（.vsbk）─────────────────────────
 # 哨兵專用的備份格式：外面是自己的檔案格式，裡面用的是成熟、標準的加密方法（不自己發明加密）：
@@ -6268,7 +6268,7 @@ def fly_merge(ap, fids, rows, io):
             continue
         t = r["est"] or r["sch"]
         done = r["st"] in ("已到", "已飛")
-        if t > now + 12 * 3600 or t < now - (20 if done else 30) * 60:
+        if t > now + 12 * 3600 or t < now - (20 if done else 90) * 60:   # 還沒到、還沒飛的留久一點（官網常常慢半拍）
             continue
         pl = {"code": r["pc"], "name": r["pl"]}
         row = {"id": f"f-{io}-{r['fn']}-{int(r['sch'])}", "fn": r["fn"], "cs": "", "al": r["al"], "reg": "", "t": r["type"], "model": r["type"],
@@ -6293,8 +6293,20 @@ def fly_merge(ap, fids, rows, io):
         elif seen and seen.get("sch") == r["sch"] and now - seen.get("at", 0) < 6 * 3600:
             row.update(reg=seen.get("reg") or "", t=seen.get("t") or row["t"], model=seen.get("model") or row["model"], seen=seen["at"])
             fly_fix_type(row, r)
+        if not done and r["st"] != "取消" and not row["emg"]:    # 官網常常慢半拍：用雷達上真的飛機校正
+            t0 = row["est"] or row["sch"]
+            if p and p["ph"] == "gnd" and (p.get("d") or 99) < 6:
+                if io == "arr":
+                    row["st"] = "已到"                 # 已經停在這個機場了
+                elif (p.get("spd") or 0) > 5 and now > t0 - 1800:
+                    row["st"] = "滑行中"
+            if row["st"] not in ("已到", "滑行中") and not (p and p["ph"] == io) and now > t0 + 300:
+                row["lag"] = True                      # 過了時間還沒到／還沒飛：照現在的時間排，網頁算晚幾分
+                if row["st"] in ("準時", "提早", "時間更改", ""):
+                    row["st"] = "還沒到" if io == "arr" else "還沒飛"
+        row["at"] = now if row.get("lag") else (row["est"] or row["sch"] or now)   # 排序用的時間
         out.append(row)
-    out.sort(key=lambda o: o["est"] or o["sch"] or now)
+    out.sort(key=lambda o: o["at"])
     if len(FLY["seen"]) > 2000:
         for k, v in list(FLY["seen"].items()):
             if now - v.get("at", 0) > 6 * 3600:
