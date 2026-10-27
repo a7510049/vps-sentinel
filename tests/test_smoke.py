@@ -127,6 +127,14 @@ class SmokeTest(Server):
         code, _, _ = self.request("/api/rename", method="POST", data=b'{"name":"x"}')
         self.assertEqual(code, 401)
 
+    def test_api_opensky(self):
+        """設定 → OpenSky 帳號：網頁要問得到（不能被當成不存在的網址）"""
+        code, _, _ = self.request("/api/opensky", method="POST", data=b'{"action":"status"}')
+        self.assertEqual(code, 401)
+        code, _, body = self.request("/api/opensky", token=TOKEN, method="POST", data=b'{"action":"status"}')
+        self.assertEqual(code, 200, body)
+        self.assertFalse(json.loads(body)["on"])
+
     def test_api_status(self):
         code, headers, body = self.request("/api/status", token=TOKEN)
         self.assertEqual(code, 200)
