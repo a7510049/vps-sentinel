@@ -1,24 +1,19 @@
 name: flydebug
 on: push
 jobs:
-  probe:
+  logos:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
       - run: |
-          mkdir -p /tmp/d && printf 'PORT=18899\nTOKEN=tt\nNAME=x\nDATA_DIR=/tmp/d\n' > /tmp/t.conf
-          for u in "https://www.kia.gov.tw/data/arr.json" "https://www.kia.gov.tw/data/dep.json" "https://www.tca.gov.tw/index.php?act=fids&code=api_departure_arrival&airFlyIO=1" "https://www.taoyuan-airport.com/uploads/flightx/a_flight_v4.txt" "https://api.adsb.fi/v2/lat/22.57/lon/120.35/dist/40" "https://opensky-network.org/api/states/all?lamin=22.2&lomin=119.9&lamax=22.9&lomax=120.8"; do
-            curl -s -o /dev/null -A "Mozilla/5.0 (vps-sentinel)" -w "%{http_code} conn=%{time_connect} tls=%{time_appconnect} first=%{time_starttransfer} total=%{time_total} size=%{size_download} $u\n" --max-time 30 "$u"
+          mkdir -p /tmp/l && cd /tmp/l
+          for a in BR CI JX IT AE B7 CX NH JL KE TR VJ MM 5J UA; do
+            curl -s -L -o "g70_$a.png" -w "%{http_code} %{content_type} %{size_download} g70 $a\n" "https://www.gstatic.com/flights/airline_logos/70px/$a.png"
+            curl -s -L -o "gd_$a.png" -w "%{http_code} %{content_type} %{size_download} gdark $a\n" "https://www.gstatic.com/flights/airline_logos/70px/dark/$a.png"
+            curl -s -L -o "kw_$a.png" -w "%{http_code} %{content_type} %{size_download} kiwi $a\n" "https://images.kiwi.com/airlines/64x64/$a.png"
+            curl -s -L -o "ky_$a.png" -w "%{http_code} %{content_type} %{size_download} kayak $a\n" "https://content.r9cdn.net/rimg/provider-logos/airlines/v/$a.png?crop=false&width=108&height=92&fallback=default2.png"
+            curl -s -L -o "al_$a.png" -w "%{http_code} %{content_type} %{size_download} airlabs $a\n" "https://airlabs.co/img/airline/m/$a.png"
           done
-          SENTINEL_CONF=/tmp/t.conf python3 sentinel.py > /tmp/s.log 2>&1 &
-          sleep 3
-          for ap in TPE KHH RMQ TSA; do
-            for i in 1 2 3 4 5 6 7 8; do
-              s=$(date +%s.%N)
-              curl -s -H "X-Token: tt" "http://127.0.0.1:18899/api/flights?ap=$ap" > /tmp/r.json
-              e=$(date +%s.%N)
-              python3 -c "import json,sys;d=json.load(open('/tmp/r.json'));print('$ap',$i,round($e-$s,2),'ok',d.get('ok'),d.get('error',''),'fids',d.get('fids'),'arr',len(d.get('arr',[])),'dep',len(d.get('dep',[])),'gnd',len(d.get('gnd',[])),'over',len(d.get('over',[])),'rest',len(d.get('rest',[])),'live',sum(1 for k in ('arr','dep','gnd') for p in d.get(k,[]) if p.get('alt') is not None or p.get('lat') is not None),'srcs',[x[0] for x in d.get('srcs',[])])"
-              sleep 3
-            done
-          done
-          cat /tmp/s.log | tail -30
+          curl -s -D - -o /dev/null "https://www.gstatic.com/flights/airline_logos/70px/BR.png" | grep -i "access-control\|cache-control\|content-type"
+          curl -s -D - -o /dev/null "https://www.gstatic.com/flights/airline_logos/70px/ZZ.png" | head -3
+          md5sum *.png | sort | uniq -c -w8 | sort -rn | head -5
+          tar czf - *.png | base64 -w0 > /tmp/b64; echo; echo "B64LEN $(wc -c < /tmp/b64)"; fold -w 4000 /tmp/b64

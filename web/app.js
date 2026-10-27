@@ -2906,8 +2906,12 @@ function flyWait(f, on){
     if (b.classList.contains("wait")) return;
     const h = b.offsetHeight, full = b.querySelector(".fr:not([hidden])");
     b.getAnimations().forEach(a => a.cancel());
-    if (full) b.style.height = h + "px";                    // 等資料時高度先定住（不要一下子撐大或縮小）
-    b.classList.add("wait"); ld.style.clipPath = blobSh(9, 0); b._ld = loader(ld); return;
+    b.classList.add("wait"); ld.style.clipPath = blobSh(9, 0); b._ld = loader(ld);
+    if (full) {                                             // 換機場：舊的列先淡掉、看板縮回載入的大小，載入圖形最後才出來
+      const lh = parseFloat(getComputedStyle(b).minHeight) || h; b.style.height = lh + "px";
+      if (canAnim() && h !== lh) b.animate([{height:h + "px"}, {height:lh + "px"}], {duration:T.sp, delay:T.fast, easing:SPRING, fill:"backwards"});
+    }
+    return;
   }
   if (b.classList.contains("wait") && b._h0 == null) b._h0 = b.offsetHeight;   // 列換好之後（flyPaint 最後）再拿掉 wait、從原本的高度長到新的高度
 }
