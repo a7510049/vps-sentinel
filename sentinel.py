@@ -42,7 +42,7 @@ from collections import deque
 from concurrent.futures import ThreadPoolExecutor
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
-VERSION = "3.19"
+VERSION = "3.20"
 
 # ───────────────────────── 哨兵備份檔（.vsbk）─────────────────────────
 # 哨兵專用的備份格式：外面是自己的檔案格式，裡面用的是成熟、標準的加密方法（不自己發明加密）：
@@ -5416,7 +5416,7 @@ FLY_CARGO_ICAO = {"NCA", "CAO", "CKK", "CSS", "SQC", "FDX", "UPS", "GTI", "CLX",
                   "DHK", "DHX", "BCS", "YZR", "CYZ", "ICV", "ATN", "ABX", "MPH", "TAY", "NPT", "SOO", "WGN", "AJT", "KYE", "YTO"}
 FLY_CARGO_IATA = {"KZ", "CK", "O3", "FX", "5X", "5Y", "CV", "K4", "PO", "RU", "3S", "LD", "QY", "D0", "Y8", "CF", "M6", "GB", "YG", "C8", "K9"}
 FLY_SKYS = {"cache": {}, "until": 0, "left": None, "out": 0, "tok": "", "texp": 0, "tbad": 0, "err": ""}
-FLY = {"cache": {}, "routes": {}, "lock": threading.Lock(), "last": 0.0, "bad": {}, "rq": set(), "rbusy": False, "fetch": threading.Lock(), "logged": {}, "seen": {}, "view": {}, "used": 0, "hex": {}, "hq": set(), "hbusy": False, "zh": {}}
+FLY = {"cache": {}, "routes": {}, "lock": threading.Lock(), "last": 0.0, "bad": {}, "rq": set(), "rbusy": False, "fetch": threading.Lock(), "logged": {}, "seen": {}, "view": {}, "used": 0, "hex": {}, "hq": set(), "hbusy": False, "zh": {}, "gate": {}}
 
 
 def fly_cargo(fn, cs=""):
@@ -5683,7 +5683,7 @@ def fly_al_zh(iata):
 def fly_st(st):
     """官網的狀態文字只留中文、統一說法"""
     st = re.sub(r"[A-Za-z ]+", "", str(st or "")).strip()
-    return {"延遲": "延誤", "抵達": "已到", "離站": "已飛", "出發": "已飛", "登機中": "登機"}.get(st, st)
+    return {"延遲": "延誤", "抵達": "已到", "離站": "已飛", "出發": "已飛", "登機中": "登機", "備降": "轉降", "改降": "轉降"}.get(st, st)
 
 
 def fly_fids_tpe():
@@ -5764,6 +5764,33 @@ def fly_fids_tsa():
 FLY_FIDS_GET = {"TPE": fly_fids_tpe, "KHH": fly_fids_khh, "RMQ": fly_fids_rmq, "TSA": fly_fids_tsa}
 
 
+def fly_gate_track(code, rows, now=None):
+    """記住每班的登機門、機型：被改了（A5 → D3、A321 → A350）就在這班加上原本的 gate0、type0；改回原本的不算"""
+    now, mem = now or time.time(), FLY["gate"]
+    for r in rows:
+        k = f"{code}:{r['io']}:{fly_fn(r['fn'])}:{int(r['sch'])}"
+        m = mem.setdefault(k, {"t": r["sch"]})
+        for f, ok in (("gate", bool), ("type", fly_fam)):
+            v = r.get(f) or ""
+            if not ok(v):                              # 暫時沒寫：不算改
+                continue
+            was = m.get(f)
+            if was is None:
+                m[f] = v
+            elif (was != v) if f == "gate" else (fly_fam(was) != fly_fam(v)):
+                m[f], m[f + "0"] = v, m.get(f + "0") or was
+                if (m[f + "0"] == v) if f == "gate" else (fly_fam(m[f + "0"]) == fly_fam(v)):
+                    m.pop(f + "0")
+            else:
+                m[f] = v
+            if m.get(f + "0"):
+                r[f + "0"] = m[f + "0"]
+    if len(mem) > 3000:
+        for k, m in list(mem.items()):
+            if m.get("t", 0) < now - 12 * 3600:
+                mem.pop(k, None)
+
+
 def fly_fids_pull(code, hit):
     try:
         keep = {}
@@ -5778,6 +5805,7 @@ def fly_fids_pull(code, hit):
             else:
                 keep[k] = r
         hit["rows"], hit["ok"] = list(keep.values()), time.time()
+        fly_gate_track(code, hit["rows"])
         try:                                           # 存一份：重新啟動（更新）後不用再等官網
             os.makedirs(os.path.join(DATA_DIR, "fids"), exist_ok=True)
             with open(os.path.join(DATA_DIR, "fids", code + ".json"), "w", encoding="utf-8") as f:
@@ -6159,7 +6187,7 @@ def fly_merge(ap, fids, rows, io):
         pl = {"code": r["pc"], "name": r["pl"]}
         row = {"id": f"f-{io}-{r['fn']}-{int(r['sch'])}", "fn": r["fn"], "cs": "", "al": r["al"], "reg": "", "t": r["type"], "model": r["type"],
                "org": pl if io == "arr" else me, "dst": me if io == "arr" else pl, "ph": io, "st": r["st"], "emg": False, "mil": False, "rare": False,
-               "fids": True, "sch": r["sch"], "est": r["est"], "gate": r["gate"], "term": r["term"], "share": r.get("share") or []}
+               "fids": True, "sch": r["sch"], "est": r["est"], "gate": r["gate"], "gate0": r.get("gate0") or "", "type0": r.get("type0") or "", "term": r["term"], "share": r.get("share") or []}
         p = next((live[fly_fn(f)] for f in [r["fn"], *row["share"]] if fly_fn(f) in live), None)
         sk = io + ":" + fly_fn(r["fn"])
         seen = FLY["seen"].get(sk)
@@ -6318,6 +6346,7 @@ def fly_seen_load():
         if d.get("v") == 2:                   # 舊版用 hexdb 查到的機型有過時的，不沿用
             FLY["seen"].update({k: v for k, v in (d.get("seen") or {}).items() if isinstance(v, dict) and time.time() - v.get("at", 0) < 6 * 3600})
         FLY["zh"].update({k: v for k, v in (d.get("zh") or {}).items() if isinstance(v, str)})
+        FLY["gate"].update({k: v for k, v in (d.get("gate") or {}).items() if isinstance(v, dict) and time.time() - v.get("t", 0) < 12 * 3600})
         FLY["used"] = float(d.get("used") or 0)
     except (OSError, ValueError, AttributeError, TypeError):
         return
@@ -6330,7 +6359,7 @@ def fly_seen_save():
         os.makedirs(DATA_DIR, exist_ok=True)
         tmp = FLY_SEEN_FILE + ".tmp"
         with open(tmp, "w", encoding="utf-8") as f:
-            json.dump({"v": 2, "used": FLY["used"], "seen": dict(FLY["seen"]), "zh": dict(FLY["zh"])}, f, ensure_ascii=False)
+            json.dump({"v": 2, "used": FLY["used"], "seen": dict(FLY["seen"]), "zh": dict(FLY["zh"]), "gate": dict(FLY["gate"])}, f, ensure_ascii=False)
         os.replace(tmp, FLY_SEEN_FILE)
         with open(FLY_HEX_FILE + ".tmp", "w", encoding="utf-8") as f:
             json.dump(dict(FLY["hex"]), f)

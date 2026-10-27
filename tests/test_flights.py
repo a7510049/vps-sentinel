@@ -312,6 +312,30 @@ class Flights(unittest.TestCase):
         S.fly_fix_type(p, {"type": ""})                      # 官網沒寫：不動
         self.assertEqual(p["t"], "B77W")
 
+    def test_gate_change(self):
+        """登機門被改了：記住原本的，改回原本的就不算"""
+        S = self.S
+        S.FLY["gate"].clear()
+        r = lambda g: [{"io": "dep", "fn": "BR198", "sch": 1000.0, "gate": g}]
+        a = r("A5"); S.fly_gate_track("TPE", a, 1000)
+        self.assertNotIn("gate0", a[0])
+        b = r(""); S.fly_gate_track("TPE", b, 1000)        # 暫時沒寫：不算改
+        self.assertNotIn("gate0", b[0])
+        c = r("D3"); S.fly_gate_track("TPE", c, 1000)
+        self.assertEqual(c[0]["gate0"], "A5")
+        d = r("D3"); S.fly_gate_track("TPE", d, 1000)       # 下一次抓還記得
+        self.assertEqual(d[0]["gate0"], "A5")
+        e = r("A5"); S.fly_gate_track("TPE", e, 1000)
+        self.assertNotIn("gate0", e[0])
+        t = lambda m: [{"io": "dep", "fn": "BR198", "sch": 1000.0, "gate": "A5", "type": m}]
+        S.fly_gate_track("TPE", t("A321"), 1000)
+        x = t("A321neo"); S.fly_gate_track("TPE", x, 1000)    # 同一類：不算換
+        self.assertNotIn("type0", x[0])
+        x = t("-"); S.fly_gate_track("TPE", x, 1000)
+        self.assertNotIn("type0", x[0])
+        x = t("A350-900"); S.fly_gate_track("TPE", x, 1000)
+        self.assertEqual(x[0]["type0"], "A321neo")
+
     def test_sky_need(self):
         """非必要不問 OpenSky：沒有班機要起降、或愛好者都收得到時不問"""
         S = self.S
