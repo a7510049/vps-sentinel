@@ -5639,21 +5639,24 @@ def fly_fids_pull(code, hit):
     except Exception as e:  # noqa: BLE001
         fly_log(f"{FLY_FIDS_NAME[code][0]}官網：{str(e)[:60]}")
     finally:
-        hit["busy"] = False
+        hit["busy"], hit["done"] = False, True
 
 
-def fly_fids(code):
-    """官網航班表：1 分鐘更新一次（在背景抓，看板不用等）；抓不到就先用上一次的，15 分鐘內都算數"""
+def fly_fids(code, wait=1.5):
+    """官網航班表：1 分鐘更新一次（在背景抓，看板不用等）；抓不到就先用上一次的，15 分鐘內都算數。
+    第一次還沒抓完回傳 "wait"：網頁先轉圈圈，不要先秀幾架收得到訊號的、過幾秒又冒出一大堆"""
     if code not in FLY_FIDS_GET:
         return None
-    hit = FLY_FIDS.setdefault(code, {"ok": 0, "try": 0, "rows": [], "busy": False})
+    hit = FLY_FIDS.setdefault(code, {"ok": 0, "try": 0, "rows": [], "busy": False, "done": False})
     now = time.time()
     if not hit["busy"] and now - hit["try"] >= (FLY_FIDS_EVERY if hit["ok"] >= hit["try"] else 20):    # 上次失敗的話 20 秒後再試
         hit["try"], hit["busy"] = now, True
         th = threading.Thread(target=fly_fids_pull, args=(code, hit), daemon=True)
         th.start()
-        if not hit["ok"]:
-            th.join(20)                                # 第一次要等它抓完
+        if not hit["done"] and wait:
+            th.join(wait)                              # 通常一下子就好，順便等一下
+    if not hit["done"]:
+        return "wait"
     return hit["rows"] if time.time() - hit["ok"] < 900 else None
 
 
@@ -5896,16 +5899,22 @@ def fly_board(code):
     if fly_night(ap):
         return {"ok": True, "t": time.time(), "ap": fly_ap(ap), "night": True, "src": "", "home": "", "srcs": [],
                 "fids": True, "arr": [], "dep": [], "gnd": [], "over": [], "rest": []}
+    for c in FLY_PIN:                     # 其他台灣機場的官網表也在背景先抓好，換機場就不用等
+        if c != ap[0] and c in db and not fly_night(db[c]):
+            fly_fids(c, 0)
     with FLY["fetch"]:                    # 好幾個人同時看：只抓一次
         hit = FLY["cache"].get(ap[0])
         if hit and time.time() - hit["t"] < FLY_EVERY:
             return hit
+        fids = fly_fids(ap[0])
+        if fids == "wait":                    # 官網表第一次還沒抓到：先叫網頁等一下，到齊了再一次給
+            return {"ok": True, "loading": True, "t": time.time(), "ap": fly_ap(ap), "src": "", "home": "", "srcs": [],
+                    "fids": True, "arr": [], "dep": [], "gnd": [], "over": [], "rest": []}
         try:
             ac, src, home = fly_fetch(ap)
         except RuntimeError as e:
             ac, src, home, err = None, "", "", e
         more = fly_sky(ap)
-        fids = fly_fids(ap[0])
         if ac is None and not more and fids is None:
             raise err
         ac = ac or []

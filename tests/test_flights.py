@@ -86,6 +86,13 @@ class Fake(BaseHTTPRequestHandler):
             self.send_header("Content-Length", str(len(b)))
             self.end_headers()
             return self.wfile.write(b)
+        if self.path == "/slow":                     # 官網很慢：等 2 秒才回
+            time.sleep(2)
+            b = tpe_txt()
+            self.send_response(200)
+            self.send_header("Content-Length", str(len(b)))
+            self.end_headers()
+            return self.wfile.write(b)
         if self.path.startswith("/khh/"):
             return self.reply(khh_json(self.path[5:8]))
         if self.path.startswith("/sky"):
@@ -226,6 +233,27 @@ class Flights(unittest.TestCase):
         self.assertTrue(night(ap, three))
         self.assertFalse(night(S.fly_db()["TPE"], three))           # 桃園半夜也有班機
         self.assertFalse(night(S.fly_db()["NRT"], three))
+
+    def test_fids_wait(self):
+        """官網表第一次還沒抓到：先回「等一下」，抓到了才一次給全部（不會先秀幾架、等一下又冒出一大堆）"""
+        S = self.S
+        S.FLY_FIDS.pop("TPE", None)
+        S.FLY["cache"].clear()
+        old = S.FLY_FIDS_URL["TPE"]
+        S.FLY_FIDS_URL["TPE"] = old.rsplit("/", 1)[0] + "/slow"
+        try:
+            d = self.get("ap=TPE")
+            self.assertTrue(d["ok"] and d.get("loading"), d)
+            self.assertEqual(d["arr"], [])
+            for _ in range(40):
+                d = self.get("ap=TPE")
+                if not d.get("loading"):
+                    break
+                time.sleep(.2)
+            self.assertFalse(d.get("loading"))
+            self.assertTrue(d["fids"] and d["arr"], d)
+        finally:
+            S.FLY_FIDS_URL["TPE"] = old
 
     def test_source_down(self):
         S = self.S

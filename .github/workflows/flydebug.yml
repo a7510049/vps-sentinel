@@ -5,14 +5,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - run: |
-          for n in 1 2; do
-            u="https://www.tca.gov.tw/index.php?act=fids&code=api_departure_arrival&airFlyIO=$n"
-            curl -s -D /tmp/h -o /tmp/b -A "Mozilla/5.0 (vps-sentinel)" -w "plain %{http_code} first=%{time_starttransfer} total=%{time_total} size=%{size_download} redirect=%{redirect_url}\n" --max-time 60 "$u"; grep -i "^location\|^server\|^set-cookie" /tmp/h | cut -c1-150
-            curl -s -L -o /tmp/b -A "Mozilla/5.0 (vps-sentinel)" -w "follow %{http_code} first=%{time_starttransfer} total=%{time_total} size=%{size_download} url=%{url_effective}\n" --max-time 60 "$u"; head -c 300 /tmp/b; echo
-            curl -s -L -o /tmp/b -A "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0 Safari/537.36" -w "browserUA %{http_code} first=%{time_starttransfer} total=%{time_total} size=%{size_download}\n" --max-time 60 "$u"
-          done
-          curl -s -o /dev/null -L -w "home %{http_code} total=%{time_total} %{url_effective}\n" --max-time 60 "https://www.tca.gov.tw/"
-          curl -s -o /dev/null -L -w "khh-arr total=%{time_total}\n" https://www.kia.gov.tw/data/arr.json
+          set +e
+          for n in 1 2; do curl -s -L -o /tmp/b -A "Mozilla/5.0 (vps-sentinel)" -w "rmq$n %{http_code} first=%{time_starttransfer} total=%{time_total} size=%{size_download}\n" --max-time 40 "https://www.tca.gov.tw/index.php?act=fids&code=api_departure_arrival&airFlyIO=$n"; done
+          curl -s -o /dev/null -L -w "home %{http_code} total=%{time_total}\n" --max-time 40 "https://www.tca.gov.tw/"
+          true
       - run: |
           pip install -q pillow
           mkdir -p /tmp/l && cd /tmp/l
