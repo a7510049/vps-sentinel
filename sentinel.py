@@ -41,7 +41,7 @@ from collections import deque
 from concurrent.futures import ThreadPoolExecutor
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
-VERSION = "3.11"
+VERSION = "3.12"
 
 # ───────────────────────── 哨兵備份檔（.vsbk）─────────────────────────
 # 哨兵專用的備份格式：外面是自己的檔案格式，裡面用的是成熟、標準的加密方法（不自己發明加密）：
@@ -5342,6 +5342,7 @@ FLY_AL = {
     "BOX": ("3S", "德國貨運"), "GEC": ("LH", "漢莎貨運"),
 }
 # 機型代碼 → 好讀的名稱（接收站沒給時用）
+FLY_ALS = sorted({v[0] for v in FLY_AL.values()})      # 這些航空公司網頁會顯示標誌（其他的只顯示代碼）
 FLY_TYPES = {
     "A319": "A319", "A320": "A320", "A20N": "A320neo", "A321": "A321", "A21N": "A321neo", "BCS1": "A220-100", "BCS3": "A220-300",
     "A306": "A300-600", "A332": "A330-200", "A333": "A330-300", "A338": "A330-800", "A339": "A330-900",
@@ -5590,9 +5591,21 @@ def fly_fids_khh():
 
 
 def fly_fids_rmq():
-    out = []
+    out, got = [], {}
+
+    def one(n):
+        try:
+            got[n] = fly_get(FLY_FIDS_URL["RMQ"] + str(n), timeout=20)
+        except Exception as e:  # noqa: BLE001
+            got[n] = e
+    ths = [threading.Thread(target=one, args=(n,), daemon=True) for n in (1, 2)]      # 台中官網很慢：出發、抵達同時抓
+    [t.start() for t in ths]
+    [t.join(25) for t in ths]
     for io, n in (("dep", 1), ("arr", 2)):
-        for r in json.loads(fly_get(FLY_FIDS_URL["RMQ"] + str(n), timeout=25).decode("utf-8-sig")).get("data") or []:
+        b = got.get(n)
+        if not isinstance(b, bytes):
+            raise b or TimeoutError("逾時")
+        for r in json.loads(b.decode("utf-8-sig")).get("data") or []:
             pl = str(r.get("opponentPort") or "").strip()
             out.append({"io": io, "fn": str(r.get("AirLineIATA") or "").strip() + str(r.get("airLineNum") or "").strip(),
                         "al": re.sub(r"<[^>]+>", "", str(r.get("mainAirlineHtml") or "")).strip(), "sch": fly_ts(None, r.get("scheduleTime")),
@@ -5636,24 +5649,42 @@ def fly_fids_pull(code, hit):
             else:
                 keep[k] = r
         hit["rows"], hit["ok"] = list(keep.values()), time.time()
+        try:                                           # 存一份：重新啟動（更新）後不用再等官網
+            os.makedirs(os.path.join(DATA_DIR, "fids"), exist_ok=True)
+            with open(os.path.join(DATA_DIR, "fids", code + ".json"), "w", encoding="utf-8") as f:
+                json.dump(hit["rows"], f, ensure_ascii=False)
+        except OSError:
+            pass
     except Exception as e:  # noqa: BLE001
         fly_log(f"{FLY_FIDS_NAME[code][0]}官網：{str(e)[:60]}")
     finally:
-        hit["busy"] = False
+        hit["busy"], hit["done"] = False, True
 
 
-def fly_fids(code):
-    """官網航班表：1 分鐘更新一次（在背景抓，看板不用等）；抓不到就先用上一次的，15 分鐘內都算數"""
+def fly_fids(code, wait=1.5):
+    """官網航班表：1 分鐘更新一次（在背景抓，看板不用等）；抓不到就先用上一次的，15 分鐘內都算數。
+    第一次還沒抓完回傳 "wait"：網頁先轉圈圈，不要先秀幾架收得到訊號的、過幾秒又冒出一大堆"""
     if code not in FLY_FIDS_GET:
         return None
-    hit = FLY_FIDS.setdefault(code, {"ok": 0, "try": 0, "rows": [], "busy": False})
+    hit = FLY_FIDS.get(code)
     now = time.time()
+    if hit is None:
+        hit = FLY_FIDS[code] = {"ok": 0, "try": 0, "rows": [], "busy": False, "done": False}
+        fn = os.path.join(DATA_DIR, "fids", code + ".json")
+        try:                                           # 上次存的還新（15 分鐘內）：先拿來用，背景再更新
+            if now - os.path.getmtime(fn) < 900:
+                with open(fn, encoding="utf-8") as f:
+                    hit.update(rows=json.load(f), ok=os.path.getmtime(fn), done=True)
+        except (OSError, ValueError):
+            pass
     if not hit["busy"] and now - hit["try"] >= (FLY_FIDS_EVERY if hit["ok"] >= hit["try"] else 20):    # 上次失敗的話 20 秒後再試
         hit["try"], hit["busy"] = now, True
         th = threading.Thread(target=fly_fids_pull, args=(code, hit), daemon=True)
         th.start()
-        if not hit["ok"]:
-            th.join(20)                                # 第一次要等它抓完
+        if not hit["done"] and wait:
+            th.join(wait)                              # 通常一下子就好，順便等一下
+    if not hit["done"]:
+        return "wait"
     return hit["rows"] if time.time() - hit["ok"] < 900 else None
 
 
@@ -5896,16 +5927,22 @@ def fly_board(code):
     if fly_night(ap):
         return {"ok": True, "t": time.time(), "ap": fly_ap(ap), "night": True, "src": "", "home": "", "srcs": [],
                 "fids": True, "arr": [], "dep": [], "gnd": [], "over": [], "rest": []}
+    for c in FLY_PIN:                     # 其他台灣機場的官網表也在背景先抓好，換機場就不用等
+        if c != ap[0] and c in db and not fly_night(db[c]):
+            fly_fids(c, 0)
     with FLY["fetch"]:                    # 好幾個人同時看：只抓一次
         hit = FLY["cache"].get(ap[0])
         if hit and time.time() - hit["t"] < FLY_EVERY:
             return hit
+        fids = fly_fids(ap[0])
+        if fids == "wait":                    # 官網表第一次還沒抓到：先叫網頁等一下，到齊了再一次給
+            return {"ok": True, "loading": True, "t": time.time(), "ap": fly_ap(ap), "src": "", "home": "", "srcs": [],
+                    "fids": True, "arr": [], "dep": [], "gnd": [], "over": [], "rest": []}
         try:
             ac, src, home = fly_fetch(ap)
         except RuntimeError as e:
             ac, src, home, err = None, "", "", e
         more = fly_sky(ap)
-        fids = fly_fids(ap[0])
         if ac is None and not more and fids is None:
             raise err
         ac = ac or []
@@ -5939,7 +5976,7 @@ def fly_board(code):
     for p in arr + dep + gnd + over + rest:
         p["kind"] = fly_kind(p.get("t"), p.get("model"), p.get("cat"))
     out = {"ok": True, "t": time.time(), "ap": fly_ap(ap), "src": src or (srcs[0][0] if srcs else ""), "home": home, "srcs": srcs,
-           "fids": fids is not None, "arr": arr, "dep": dep, "gnd": gnd, "over": over, "rest": rest}
+           "fids": fids is not None, "arr": arr, "dep": dep, "gnd": gnd, "over": over, "rest": rest, "als": FLY_ALS}
     FLY["cache"][ap[0]] = out
     return out
 

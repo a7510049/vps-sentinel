@@ -2547,10 +2547,11 @@ function flyRowV(p, tab, tz){
   return {t, fn: p.fn || p.reg, pc: pl ? pl.code : "", pl: pl ? pl.name || "" : "", al: p.al || "", m: p.model || p.t || "", reg: (FLYD.fids && tab !== "gnd" ? p.gate : p.reg) || "", st: p.st,
     cls: p.emg || p.st === "取消" ? "bad" : /落地|剛起飛|跑道|登機/.test(p.st) ? "hot" : ""};
 }
-/* 航空公司標誌：從航班號前兩碼（BR、CI、5J）抓公開的標誌圖；抓不到就留著代碼小方塊 */
+/* 航空公司標誌：航班號前兩碼（BR、CI、5J）認得的航空公司，抓公開的標誌圖（只有標誌、不含字）；不認得或抓不到就留著代碼小方塊 */
 const FLYNOLG = new Set();
+const flyLgOk = c => !FLYNOLG.has(c) && !!(FLYD && FLYD.als && FLYD.als.includes(c));
 const flyAl = fn => { const m = /^([A-Z0-9]{2})\d/.exec(fn || ""); return m && /[A-Z]/.test(m[1]) ? m[1] : ""; };
-const flyLogo = (c, cls = "") => c ? `<i class="alg ${cls}" data-c="${c}">${c}${FLYNOLG.has(c) ? "" : `<img alt="" loading="lazy" referrerpolicy="no-referrer" src="https://pics.avs.io/64/64/${c}.png">`}</i>` : "";
+const flyLogo = (c, cls = "") => c ? `<i class="alg ${cls}" data-c="${c}">${c}${flyLgOk(c) ? `<img alt="" loading="lazy" referrerpolicy="no-referrer" src="https://www.gstatic.com/flights/airline_logos/70px/${c}.png">` : ""}</i>` : "";
 function flyLogoSet(el, c){ if (el.dataset.c === (c || "")) return; el.dataset.c = c || ""; el.outerHTML = c ? flyLogo(c) : `<i class="alg none" data-c=""></i>`; }
 document.addEventListener("load", e => { const t = e.target; if (t.tagName === "IMG" && t.parentNode && t.parentNode.classList.contains("alg")) t.parentNode.classList.add("ok"); }, true);
 document.addEventListener("error", e => { const t = e.target; if (t.tagName === "IMG" && t.parentNode && t.parentNode.classList.contains("alg")) { FLYNOLG.add(t.parentNode.dataset.c); t.remove(); } }, true);
@@ -2906,8 +2907,12 @@ function flyWait(f, on){
     if (b.classList.contains("wait")) return;
     const h = b.offsetHeight, full = b.querySelector(".fr:not([hidden])");
     b.getAnimations().forEach(a => a.cancel());
-    if (full) b.style.height = h + "px";                    // 等資料時高度先定住（不要一下子撐大或縮小）
-    b.classList.add("wait"); ld.style.clipPath = blobSh(9, 0); b._ld = loader(ld); return;
+    b.classList.add("wait"); ld.style.clipPath = blobSh(9, 0); b._ld = loader(ld);
+    if (full) {                                             // 換機場：舊的列先淡掉、看板縮回載入的大小，載入圖形最後才出來
+      const lh = parseFloat(getComputedStyle(b).minHeight) || h; b.style.height = lh + "px";
+      if (canAnim() && h !== lh) b.animate([{height:h + "px"}, {height:lh + "px"}], {duration:T.sp, delay:T.fast, easing:SPRING, fill:"backwards"});
+    }
+    return;
   }
   if (b.classList.contains("wait") && b._h0 == null) b._h0 = b.offsetHeight;   // 列換好之後（flyPaint 最後）再拿掉 wait、從原本的高度長到新的高度
 }
@@ -2996,6 +3001,7 @@ async function flyLoad(anim){
     if (!same()) return;
     FLYD = !d.ok && mine && FLYD.ok && !FLYD.loading ? {...FLYD, ok:false, error:d.error} : !d.ok ? {...FLYD, arr:[], dep:[], gnd:[], over:[], loading:false, ok:false, error:d.error} : d;
     if (d.ok && FLYS.name !== d.ap.name) { FLYS.name = d.ap.name; flySave(); }
+    if (d.ok && d.loading) { clearTimeout(FLYT); FLYT = setTimeout(() => flyLoad(), 1500); }   // 官網航班表還在抓：轉圈圈等一下再問
   } catch(e) { if (!same()) return; FLYD = {...(mine ? FLYD : {arr:[], dep:[], gnd:[], over:[], ap:FLYD && FLYD.ap}), loading:false, ok:false, error:e.message}; }
   flyPaint(anim);
 }
