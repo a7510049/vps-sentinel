@@ -6,14 +6,17 @@ jobs:
     steps:
       - run: |
           mkdir -p /tmp/l && cd /tmp/l
-          for a in BR CI JX IT AE B7 CX NH JL KE TR VJ MM 5J UA; do
-            curl -s -L -o "g70_$a.png" -w "%{http_code} %{content_type} %{size_download} g70 $a\n" "https://www.gstatic.com/flights/airline_logos/70px/$a.png"
-            curl -s -L -o "gd_$a.png" -w "%{http_code} %{content_type} %{size_download} gdark $a\n" "https://www.gstatic.com/flights/airline_logos/70px/dark/$a.png"
-            curl -s -L -o "kw_$a.png" -w "%{http_code} %{content_type} %{size_download} kiwi $a\n" "https://images.kiwi.com/airlines/64x64/$a.png"
-            curl -s -L -o "ky_$a.png" -w "%{http_code} %{content_type} %{size_download} kayak $a\n" "https://content.r9cdn.net/rimg/provider-logos/airlines/v/$a.png?crop=false&width=108&height=92&fallback=default2.png"
-            curl -s -L -o "al_$a.png" -w "%{http_code} %{content_type} %{size_download} airlabs $a\n" "https://airlabs.co/img/airline/m/$a.png"
+          for a in BR CI JX IT AE B7 CX NH JL 5J; do
+            curl -s -L -o "1_$a.png" -w "%{http_code} %{content_type} %{size_download} g70 $a\n" "https://www.gstatic.com/flights/airline_logos/70px/$a.png"
+            curl -s -L -o "2_$a.png" -w "%{http_code} %{content_type} %{size_download} gdark $a\n" "https://www.gstatic.com/flights/airline_logos/70px/dark/$a.png"
+            curl -s -L -o "3_$a.png" -w "%{http_code} %{content_type} %{size_download} kiwi $a\n" "https://images.kiwi.com/airlines/64x64/$a.png"
+            curl -s -L -o "4_$a.png" -w "%{http_code} %{content_type} %{size_download} kayak $a\n" "https://content.r9cdn.net/rimg/provider-logos/airlines/v/$a.png?crop=false&width=108&height=92&fallback=default2.png"
+            curl -s -L -o "5_$a.png" -w "%{http_code} %{content_type} %{size_download} avs $a\n" "https://pics.avs.io/64/64/$a.png"
           done
-          curl -s -D - -o /dev/null "https://www.gstatic.com/flights/airline_logos/70px/BR.png" | grep -i "access-control\|cache-control\|content-type"
-          curl -s -D - -o /dev/null "https://www.gstatic.com/flights/airline_logos/70px/ZZ.png" | head -3
-          md5sum *.png | sort | uniq -c -w8 | sort -rn | head -5
-          tar czf - *.png | base64 -w0 > /tmp/b64; echo; echo "B64LEN $(wc -c < /tmp/b64)"; fold -w 4000 /tmp/b64
+          curl -s -D - -o /dev/null "https://www.gstatic.com/flights/airline_logos/70px/BR.png" | grep -i "access-control\|cache-control\|content-type\|HTTP/"
+          curl -s -D - -o /dev/null "https://www.gstatic.com/flights/airline_logos/70px/ZZ.png" | head -1
+          curl -s -D - -o /dev/null "https://content.r9cdn.net/rimg/provider-logos/airlines/v/BR.png" | grep -i "access-control\|HTTP/"
+          for a in BR CI JX IT AE B7 CX NH JL 5J; do for s in 1 2 3 4 5; do convert "${s}_$a.png" -background '#ddd' -flatten -resize 40x40 -gravity center -extent 44x44 "t${a}_$s.png" 2>/dev/null || convert -size 44x44 xc:red "t${a}_$s.png"; done; done
+          montage $(for a in BR CI JX IT AE B7 CX NH JL 5J; do for s in 1 2 3 4 5; do echo "t${a}_$s.png"; done; done) -tile 5x -geometry +2+2 m.png
+          convert m.png -quality 85 m.jpg; ls -la m.jpg
+          echo "B64START"; base64 -w0 m.jpg; echo; echo "B64END"
