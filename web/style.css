@@ -86,6 +86,8 @@
   --c-cpu:oklch(.56 .17 255); --c-mem:oklch(.55 .19 305); --c-rx:oklch(.6 .12 200); --c-tx:oklch(.58 .2 355);
 }
 :root{--card:var(--s1); --chip:var(--s2)}
+:root{--alt0:oklch(.8 .1 195); --alt1:oklch(.7 .14 240); --alt2:oklch(.64 .17 280); --alt3:oklch(.62 .19 320)}   /* 雷達尾跡的顏色：高度（低 → 高） */
+[data-mode="light"]{--alt0:oklch(.72 .11 195); --alt1:oklch(.6 .15 240); --alt2:oklch(.52 .18 280); --alt3:oklch(.5 .2 320)}
 
 /* ═════════ 方塊圖示：每個概念一個自己的色調（底色淺、圖案深；深色模式相反） ═════════ */
 .ico{width:40px;height:40px;border-radius:50%;display:grid;place-items:center;flex:none}
@@ -833,6 +835,21 @@ textarea.field{height:auto;padding:12px 16px;resize:none}
 html.flyon .dash>.view{content-visibility:hidden;contain-intrinsic-size:auto none}
 .flyv{position:fixed;inset:0;z-index:var(--z-det);background:var(--bg);--ct:0px;--cb:0px;--cl:0px;--cr:0px;animation:expand var(--t-slow) var(--dec) backwards}
 .flyv.closing{animation:collapse var(--t-mid) var(--exit) forwards;pointer-events:none}
+/* 第一次打開的載入畫面：小飛機沿著虛線航線飛，下面翻出機場代碼 */
+.fsplash{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;pointer-events:none}
+.flyv:not(.splash) .fsplash{pointer-events:none}
+.flyv.splash .fwrap>:not(.ftop){opacity:0}
+.fsp{position:relative;width:220px;height:90px}
+.fsp svg{position:absolute;inset:0;overflow:visible}
+.fsp .fsd0,.fsp .fsd{fill:none;stroke-width:2.5;stroke-linecap:round;stroke-dasharray:1 7}
+.fsp .fsd0{stroke:var(--s3)}.fsp .fsd{stroke:var(--p)}
+.fsp circle{fill:var(--p)}
+.fsp .fspr{fill:none;stroke:#fff;stroke-width:8;stroke-dasharray:1;stroke-dashoffset:1;animation:fspTrail calc(var(--t-long) * 3) var(--ease) infinite}
+.fspl{position:absolute;left:0;top:0;width:26px;height:26px;color:var(--p);offset-path:path("M14 76 Q110 -14 206 76");offset-rotate:auto 45deg;animation:fspFly calc(var(--t-long) * 3) var(--ease) infinite}
+.fspl svg{width:26px;height:26px;fill:currentColor;stroke:none}
+@keyframes fspFly{0%{offset-distance:0%;opacity:0}12%{opacity:1}85%{opacity:1}100%{offset-distance:100%;opacity:0}}
+@keyframes fspTrail{0%{stroke-dashoffset:1;opacity:1}85%{opacity:1}100%{stroke-dashoffset:0;opacity:0}}
+.fspn{font-size:var(--fs-m)}
 .fscroll{position:absolute;inset:0;overflow-y:auto;overflow-x:hidden;touch-action:pan-y pinch-zoom;overscroll-behavior:contain;padding:calc(env(safe-area-inset-top) + 16px) 16px calc(env(safe-area-inset-bottom) + 40px)}
 .fwrap{max-width:1280px;margin:0 auto;display:flex;flex-direction:column;gap:12px}
 .ftop{display:flex;align-items:center;gap:12px}
@@ -985,6 +1002,14 @@ html.flyon .dash>.view{content-visibility:hidden;contain-intrinsic-size:auto non
 .rleg i{width:10px;height:10px;border-radius:50%;background:var(--tx3)}
 .rleg i.arr{background:var(--p)}.rleg i.dep{background:var(--tx)}
 .rleg .sub{margin-left:auto}
+.rleg b{font-weight:500;color:var(--tx);font-variant-numeric:tabular-nums;margin-left:2px}
+.rleg .ralt{gap:4px;color:var(--tx3);font-size:var(--fs-xs);order:8;flex:1 1 auto}.rleg .fzm{order:9}
+.rleg .ralt i{width:14px;height:4px;border-radius:var(--r-pill)}
+.rleg .ralt i:nth-of-type(1){background:var(--alt0)}.rleg .ralt i:nth-of-type(2){background:var(--alt1)}.rleg .ralt i:nth-of-type(3){background:var(--alt2)}.rleg .ralt i:nth-of-type(4){background:var(--alt3)}
+/* 雷達下面：跑道、風、能見度、溫度 */
+.rwx{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px}
+.rwx span{padding:4px 10px;border-radius:var(--r-pill);background:var(--s2);color:var(--tx2);font-size:var(--fs-s)}
+.rwx span.on{background:var(--pc);color:var(--on-pc);font-weight:500}
 .ffoot{text-align:center;padding:4px 16px}
 .ffoot a{color:var(--p);text-decoration:none}
 @media (min-width:1280px){

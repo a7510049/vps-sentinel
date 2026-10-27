@@ -42,7 +42,7 @@ from collections import deque
 from concurrent.futures import ThreadPoolExecutor
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
-VERSION = "3.27"
+VERSION = "3.28"
 
 # ───────────────────────── 哨兵備份檔（.vsbk）─────────────────────────
 # 哨兵專用的備份格式：外面是自己的檔案格式，裡面用的是成熟、標準的加密方法（不自己發明加密）：
@@ -5644,6 +5644,54 @@ def fly_get(url, data=None, ua="Mozilla/5.0 (vps-sentinel)", timeout=10):
         return r.read()
 
 
+# 機場天氣（METAR，美國航空氣象中心，不用註冊）：背景抓，10 分鐘一次
+FLY_ICAO = {"TPE": "RCTP", "TSA": "RCSS", "RMQ": "RCMQ", "KHH": "RCKH"}
+FLY_WX = {}                                   # 機場代碼 → [抓的時間, 整理好的天氣, 正在抓]
+FLY_METAR = os.environ.get("SENTINEL_FLY_METAR") or "https://aviationweather.gov/api/data/metar?ids={icao}&format=raw"
+
+
+def fly_metar(raw):
+    """整理 METAR：風向（度，-1 是不定）、風速／陣風（節）、能見度（公尺）、溫度"""
+    s, out = " " + raw.strip() + " ", {"raw": raw.strip()}
+    m = re.search(r" (\d{3}|VRB)(\d{2,3})(?:G(\d{2,3}))?(KT|MPS) ", s)
+    if m:
+        k = 1 if m[4] == "KT" else 1.944
+        out["wd"], out["ws"] = -1 if m[1] == "VRB" else int(m[1]), round(int(m[2]) * k)
+        if m[3]:
+            out["wg"] = round(int(m[3]) * k)
+    m = re.search(r" (\d{4}) ", s[s.find("KT ") if "KT " in s else 0:])
+    if " CAVOK " in s or m:
+        out["vis"] = 10000 if " CAVOK " in s else int(m[1])
+    m = re.search(r" (M?\d{2})/(?:M?\d{2})? ", s)
+    if m:
+        out["tmp"] = -int(m[1][1:]) if m[1][0] == "M" else int(m[1])
+    tk = re.findall(r" ([+-]?(?:VC)?[A-Z]{2,8})(?= )", s.split(" RMK ")[0].split(" NOSIG")[0])
+    for k, v in (("TS", "雷雨"), ("SH", "陣雨"), ("RA", "下雨"), ("DZ", "毛毛雨"), ("FG", "起霧"), ("BR", "薄霧"), ("HZ", "霾")):
+        if any(k in t and not t.startswith(("Q", "R", "NO", "CAV", "FEW", "SCT", "BKN", "OVC", "VC")) for t in tk[1:]):
+            out["wx"] = v
+            break
+    return out
+
+
+def fly_wx_pull(code):
+    try:
+        raw = fly_get(FLY_METAR.replace("{icao}", FLY_ICAO[code]), timeout=8).decode("utf-8", "replace").strip().splitlines()
+        FLY_WX[code] = [time.time(), fly_metar(raw[0]) if raw else None, False]
+    except Exception:
+        FLY_WX[code] = [time.time() - 480, (FLY_WX.get(code) or [0, None])[1], False]   # 抓不到：2 分鐘後再試，舊的先留著
+
+
+def fly_wx(code):
+    if code not in FLY_ICAO:
+        return None
+    c = FLY_WX.get(code)
+    if (not c or time.time() - c[0] > 600) and not (c and c[2]):
+        FLY_WX[code] = [c[0] if c else 0, c[1] if c else None, True]
+        threading.Thread(target=fly_wx_pull, args=(code,), daemon=True).start()
+    c = FLY_WX[code]
+    return c[1] if c[1] and time.time() - c[0] < 7200 else None   # 超過 2 小時的不給
+
+
 # 機場、航空公司標誌：第一次跟官網／Google 抓，存在主機上（DATA_DIR/fly-logos），之後網頁直接跟主機拿，不會一張一張慢慢冒出來
 FLY_APLG = {"TPE": "https://www.taoyuan-airport.com/assets/img/logo.svg", "TSA": "https://www.tsa.gov.tw/static/img/pavicon.png",
             "RMQ": "https://www.tca.gov.tw/assets/images/icon.ico", "KHH": "https://www.kia.gov.tw/images/apple-touch-icon.png"}
@@ -6417,7 +6465,8 @@ def fly_board(code, bg=False):
            "skyout": FLY_SKYS["out"] if FLY_SKYS["out"] > time.time() and fly_sky_need(ap, fids, ac) else 0}   # OpenSky 今天的次數用完了：網頁寫幾點恢復
     out["ccs"] = {x["code"]: db[x["code"]][5] for p in arr + dep + gnd + over + rest for x in (p.get("org"), p.get("dst"))
                   if x and x.get("code") in db and db[x["code"]][5]}   # 地名旁邊的國旗：機場代碼 → 國家
-    out["lat"] = {c: round(db[c][3], 2) for c in out["ccs"]}   # 地點選單：同一國的城市由北到南排
+    out["lat"] = {c: round(db[c][3], 2) for c in out["ccs"]}
+    out["wx"] = fly_wx(ap[0])   # 地點選單：同一國的城市由北到南排
     FLY["cache"][ap[0]] = out
     return out
 
