@@ -894,12 +894,11 @@ html.flyon .dash>.view{content-visibility:hidden;contain-intrinsic-size:auto non
 .ftag.bad{background:var(--badc);color:var(--on-badc)}
 .ftag.late{background:var(--warnc);color:var(--on-warnc)}
 .ftag.early{background:color-mix(in oklab,var(--ok) 18%,transparent);color:var(--ok)}
-/* 延誤、改登機門橘框，取消紅框：慢慢呼吸（只動透明度；畫面外的列停下來） */
+/* 延誤、改登機門橘框，取消紅框：慢慢呼吸（只動透明度；每一列對齊同一個節拍，flyBeat） */
 .fr{position:relative}
-.fr::after{content:"";position:absolute;inset:0;border-radius:inherit;border:2px solid transparent;pointer-events:none;opacity:0}
+.fr::after{content:"";position:absolute;inset:3px 0;border-radius:inherit;border:2px solid transparent;pointer-events:none;opacity:0}
 .fr.warn::after,.fr.bad::after{animation:breathe calc(var(--t-long) * 1.6) var(--ease) infinite alternate}
 .fr.warn::after{border-color:var(--warn)}.fr.bad::after{border-color:var(--bad)}
-.fr:not(.vis)::after{animation-play-state:paused}
 @keyframes breathe{from{opacity:.2}to{opacity:1}}
 .fmsg{grid-column:1/-1;padding:24px 16px;text-align:center}
 .board.none .fh{display:none}
@@ -1031,10 +1030,14 @@ html.flyon .dash>.view{content-visibility:hidden;contain-intrinsic-size:auto non
 .fapc.on{background:var(--pc);color:var(--on-pc);border-radius:var(--r-2xl)}
 .fapc.prs{border-radius:var(--r-md);transform:scale(.96)}
 .faplg{position:relative;display:grid;place-items:center;width:56px;height:56px;border-radius:var(--r-lg);background:var(--s3);color:var(--tx2);font-weight:600;font-size:var(--fs-s);overflow:hidden}
-.faplg img{position:absolute;inset:6px;width:calc(100% - 12px);height:calc(100% - 12px);object-fit:contain;opacity:0;transition:opacity var(--t-fast) var(--ease)}
+.faplg img{position:absolute;inset:11%;width:78%;height:78%;object-fit:contain;opacity:0;transition:opacity var(--t-fast) var(--ease)}
 .faplg.ok{background:#fff;color:transparent}.faplg.ok img{opacity:1}
 .faplg.full img{inset:0;width:100%;height:100%;object-fit:cover}
-.faplg.crop{place-items:start}.faplg.crop img{inset:auto;left:7px;top:6px;width:auto;height:calc((100% - 12px) * 1.19);object-fit:initial}
+.faplg.crop{place-items:start}.faplg.crop img{inset:auto;left:12%;top:11%;width:auto;height:93%;object-fit:initial}
+/* 看板右上角：現在的機場（小標誌＋地名＋向下箭頭），點了換機場 */
+.fapb{gap:8px;padding-left:6px}
+.fapb .faplg{width:28px;height:28px;border-radius:var(--r-sm);font-size:var(--fs-xs)}
+.fapb .chv{width:16px;height:16px;margin-left:-2px;opacity:.7}
 .fapc .lab{font-size:var(--fs-l);font-weight:600;line-height:1.25}
 .fapc .lab small{display:block;margin-top:2px;font-size:var(--fs-s);font-weight:400;color:var(--tx3)}
 .fapc.on .lab small{color:inherit;opacity:.75}
