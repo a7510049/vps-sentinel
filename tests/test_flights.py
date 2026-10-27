@@ -263,8 +263,11 @@ class Flights(unittest.TestCase):
         S.FLY["cache"].clear()
         self.get("ap=KHH")
         self.assertEqual(S.FLY_SKYS["left"], 350)
-        S.FLY_SKYS["left"] = 10                # 剩很少：要隔很久才問
-        self.assertGreater(S.fly_sky_gap(), 600)
+        many = S.fly_sky_gap()
+        S.FLY_SKYS["left"] = 10                # 剩很少：要隔很久才問（隔多久看離世界時間 0 點還多久）
+        few = S.fly_sky_gap()
+        self.assertGreaterEqual(few, many)
+        self.assertGreaterEqual(few, min(900, (86400 - time.time() % 86400) * .3 / 10) - 1)
         S.FLY_SKYS.update(out=time.time() + 3600, until=time.time() + 3600)
         S.FLY["cache"].clear()
         d = self.get("ap=KHH")
@@ -601,3 +604,12 @@ class Midnight(unittest.TestCase):
         hit["rows"][1]["est"] = hit["rows"][1]["sch"] = now + 3 * 3600     # 就算兩筆都在表上，也只配一筆
         out = S.fly_merge(ap, hit["rows"], [live], "dep")
         self.assertEqual(sum(1 for o in out if o.get("live")), 1)
+
+
+class CargoHubs(unittest.TestCase):
+    def test_city(self):
+        """常飛過台灣的貨機轉運中心：地名寫中文"""
+        from test_passkey import load_sentinel
+        S = load_sentinel()
+        self.assertEqual(S.fly_city("MEM"), "曼非斯")
+        self.assertEqual(S.fly_city("LGG"), "列日")

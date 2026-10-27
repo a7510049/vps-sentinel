@@ -42,7 +42,7 @@ from collections import deque
 from concurrent.futures import ThreadPoolExecutor
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
-VERSION = "3.38"
+VERSION = "3.39"
 
 # ───────────────────────── 哨兵備份檔（.vsbk）─────────────────────────
 # 哨兵專用的備份格式：外面是自己的檔案格式，裡面用的是成熟、標準的加密方法（不自己發明加密）：
@@ -5332,7 +5332,12 @@ FLY_ZH = {
     "PHX": ("鳳凰城機場", "鳳凰城"), "HNL": ("檀香山機場", "檀香山"), "BOS": ("波士頓機場", "波士頓"), "ATL": ("亞特蘭大機場", "亞特蘭大"), "IAD": ("杜勒斯機場", "華盛頓"),
     "ANC": ("安克拉治機場", "安克拉治"), "YYC": ("卡加利機場", "卡加利"), "BNE": ("布里斯本機場", "布里斯本"), "PER": ("伯斯機場", "伯斯"), "CNS": ("凱恩斯機場", "凱恩斯"),
     "OOL": ("黃金海岸機場", "黃金海岸"), "CHC": ("基督城機場", "基督城"), "NAN": ("楠迪機場", "斐濟"), "KYD": ("蘭嶼機場", "蘭嶼"),
-    "CMJ": ("七美機場", "七美"), "DSX": ("東沙機場", "東沙"), "HSG": ("佐賀機場", "佐賀"), "SYO": ("庄內機場", "庄內"), "WOT": ("望安機場", "望安"), "GNI": ("綠島機場", "綠島")
+    "CMJ": ("七美機場", "七美"), "DSX": ("東沙機場", "東沙"), "HSG": ("佐賀機場", "佐賀"), "SYO": ("庄內機場", "庄內"), "WOT": ("望安機場", "望安"), "GNI": ("綠島機場", "綠島"),
+    # 常飛過台灣的貨機轉運中心
+    "MEM": ("曼非斯機場", "曼非斯"), "LGG": ("列日機場", "列日"), "SDF": ("路易維爾機場", "路易維爾"), "CVG": ("辛辛那提機場", "辛辛那提"),
+    "LEJ": ("萊比錫機場", "萊比錫"), "IND": ("印第安納波利斯機場", "印第安納波利斯"), "OAK": ("奧克蘭機場", "舊金山灣區"), "RFD": ("洛克福機場", "洛克福"),
+    "CGN": ("科隆機場", "科隆"), "EMA": ("東米德蘭機場", "東米德蘭"), "MIA": ("邁阿密機場", "邁阿密"), "OKC": ("奧克拉荷馬市機場", "奧克拉荷馬市"),
+    "HHN": ("法蘭克福哈恩機場", "哈恩"), "NGO": ("中部國際機場", "名古屋"), "LUX": ("盧森堡機場", "盧森堡"),
 }
 FLY_PIN = ["TPE", "TSA", "RMQ", "KHH"]          # 台灣主要機場：選單最上面
 FLY_DB = {}
@@ -6606,7 +6611,7 @@ def fly_board(code, bg=False):
         p["kind"] = fly_kind(p.get("t"), p.get("model"), p.get("cat"))
     fly_logo_new(arr + dep + gnd + over + rest)
     out = {"ok": True, "t": time.time(), "ap": fly_ap(ap), "src": src or (srcs[0][0] if srcs else ""), "home": home, "srcs": srcs,
-           "fids": fids is not None, "arr": arr, "dep": dep, "gnd": gnd, "over": over, "rest": rest, "als": sorted(FLY_LGOK),
+           "fids": fids is not None, "arr": arr, "dep": dep, "gnd": gnd, "over": over, "rest": rest, "als": sorted(FLY_LGOK), "lgv": VERSION,
            "skyout": FLY_SKYS["out"] if FLY_SKYS["out"] > time.time() and fly_sky_need(ap, fids, ac) else 0}   # OpenSky 今天的次數用完了：網頁寫幾點恢復
     out["ccs"] = {x["code"]: db[x["code"]][5] for p in arr + dep + gnd + over + rest for x in (p.get("org"), p.get("dst"))
                   if x and x.get("code") in db and db[x["code"]][5]}   # 地名旁邊的國旗：機場代碼 → 國家
