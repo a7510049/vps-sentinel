@@ -6,8 +6,8 @@ jobs:
     steps:
       - run: |
           curl -s https://www.taoyuan-airport.com/uploads/flightx/a_flight_v4.txt | iconv -f big5-hkscs -t utf-8 -c > tpe.txt
-          echo "== TPE CI rows type column"; awk -F, '{print $3$5","$15}' tpe.txt | grep '^CI' | sort | uniq -c | sort -rn | head -60
-          echo "== CI706"; grep -E ',CI *,.*,0?706' tpe.txt; grep 'CI' tpe.txt | awk -F, '$5+0==706' 
+          set +e
+          echo "== CI706"; awk -F, '$3~/CI/ && $5+0>=700 && $5+0<=712' tpe.txt; echo == A34; grep -i 'A34\|340' tpe.txt
           echo "== type values"; awk -F, '{print $15}' tpe.txt | sort | uniq -c | sort -rn
           echo "== adsb CAL"; curl -s https://opendata.adsb.fi/api/v3/lat/25.08/lon/121.23/dist/150 | python3 -c "
           import json,sys
