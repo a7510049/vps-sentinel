@@ -23,15 +23,15 @@ jobs:
           md5sum *_ZZ.png 1_BR.png
           python3 - <<'PY'
           from PIL import Image
-          A="BR CI JX IT AE B7 CX NH JL 5J ZZ".split(); S=48
-          m=Image.new("RGB",(4*(S+4),len(A)*(S+4)),(200,200,200))
+          A="BR CI JX IT B7 CX ZZ".split(); S=36
+          m=Image.new("RGB",(2*(S+4),len(A)*(S+4)),(200,200,200))
           for i,a in enumerate(A):
-              for s in range(4):
+              for s in (0,1):
                   try:
                       im=Image.open(f"{s+1}_{a}.png").convert("RGBA"); im.thumbnail((S,S))
                       bg=Image.new("RGBA",(S,S),(255,255,255,255)); bg.alpha_composite(im,((S-im.width)//2,(S-im.height)//2)); t=bg.convert("RGB")
                   except Exception: t=Image.new("RGB",(S,S),(255,0,0))
                   m.paste(t,(s*(S+4)+2,i*(S+4)+2))
-          m.save("m.jpg",quality=80)
+          m=m.quantize(32); m.save("m.png",optimize=True)
           PY
-          ls -la m.jpg; echo "B64START"; base64 -w0 m.jpg; echo; echo "B64END"
+          ls -la m.png; echo "B64START"; base64 -w0 m.png; echo; echo "B64END"

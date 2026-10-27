@@ -1,5 +1,6 @@
 """機場起降：用假的飛機資料來源，確認看板會分成抵達、出發、地面，機場也找得到。"""
 import json
+import os
 import threading
 import time
 import unittest
@@ -238,6 +239,10 @@ class Flights(unittest.TestCase):
         """官網表第一次還沒抓到：先回「等一下」，抓到了才一次給全部（不會先秀幾架、等一下又冒出一大堆）"""
         S = self.S
         S.FLY_FIDS.pop("TPE", None)
+        try:
+            os.remove(os.path.join(S.DATA_DIR, "fids", "TPE.json"))
+        except OSError:
+            pass
         S.FLY["cache"].clear()
         old = S.FLY_FIDS_URL["TPE"]
         S.FLY_FIDS_URL["TPE"] = old.rsplit("/", 1)[0] + "/slow"
@@ -252,6 +257,11 @@ class Flights(unittest.TestCase):
                 time.sleep(.2)
             self.assertFalse(d.get("loading"))
             self.assertTrue(d["fids"] and d["arr"], d)
+            S.FLY_FIDS.pop("TPE", None)                # 重新啟動後：用存下來的表，不用再等
+            S.FLY["cache"].clear()
+            d = self.get("ap=TPE")
+            self.assertFalse(d.get("loading"))
+            self.assertTrue(d["arr"], d)
         finally:
             S.FLY_FIDS_URL["TPE"] = old
 

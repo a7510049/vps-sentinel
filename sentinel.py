@@ -5590,9 +5590,21 @@ def fly_fids_khh():
 
 
 def fly_fids_rmq():
-    out = []
+    out, got = [], {}
+
+    def one(n):
+        try:
+            got[n] = fly_get(FLY_FIDS_URL["RMQ"] + str(n), timeout=20)
+        except Exception as e:  # noqa: BLE001
+            got[n] = e
+    ths = [threading.Thread(target=one, args=(n,), daemon=True) for n in (1, 2)]      # 台中官網很慢：出發、抵達同時抓
+    [t.start() for t in ths]
+    [t.join(25) for t in ths]
     for io, n in (("dep", 1), ("arr", 2)):
-        for r in json.loads(fly_get(FLY_FIDS_URL["RMQ"] + str(n), timeout=25).decode("utf-8-sig")).get("data") or []:
+        b = got.get(n)
+        if not isinstance(b, bytes):
+            raise b or TimeoutError("逾時")
+        for r in json.loads(b.decode("utf-8-sig")).get("data") or []:
             pl = str(r.get("opponentPort") or "").strip()
             out.append({"io": io, "fn": str(r.get("AirLineIATA") or "").strip() + str(r.get("airLineNum") or "").strip(),
                         "al": re.sub(r"<[^>]+>", "", str(r.get("mainAirlineHtml") or "")).strip(), "sch": fly_ts(None, r.get("scheduleTime")),
@@ -5636,6 +5648,12 @@ def fly_fids_pull(code, hit):
             else:
                 keep[k] = r
         hit["rows"], hit["ok"] = list(keep.values()), time.time()
+        try:                                           # 存一份：重新啟動（更新）後不用再等官網
+            os.makedirs(os.path.join(DATA_DIR, "fids"), exist_ok=True)
+            with open(os.path.join(DATA_DIR, "fids", code + ".json"), "w", encoding="utf-8") as f:
+                json.dump(hit["rows"], f, ensure_ascii=False)
+        except OSError:
+            pass
     except Exception as e:  # noqa: BLE001
         fly_log(f"{FLY_FIDS_NAME[code][0]}官網：{str(e)[:60]}")
     finally:
@@ -5647,8 +5665,17 @@ def fly_fids(code, wait=1.5):
     第一次還沒抓完回傳 "wait"：網頁先轉圈圈，不要先秀幾架收得到訊號的、過幾秒又冒出一大堆"""
     if code not in FLY_FIDS_GET:
         return None
-    hit = FLY_FIDS.setdefault(code, {"ok": 0, "try": 0, "rows": [], "busy": False, "done": False})
+    hit = FLY_FIDS.get(code)
     now = time.time()
+    if hit is None:
+        hit = FLY_FIDS[code] = {"ok": 0, "try": 0, "rows": [], "busy": False, "done": False}
+        fn = os.path.join(DATA_DIR, "fids", code + ".json")
+        try:                                           # 上次存的還新（15 分鐘內）：先拿來用，背景再更新
+            if now - os.path.getmtime(fn) < 900:
+                with open(fn, encoding="utf-8") as f:
+                    hit.update(rows=json.load(f), ok=os.path.getmtime(fn), done=True)
+        except (OSError, ValueError):
+            pass
     if not hit["busy"] and now - hit["try"] >= (FLY_FIDS_EVERY if hit["ok"] >= hit["try"] else 20):    # 上次失敗的話 20 秒後再試
         hit["try"], hit["busy"] = now, True
         th = threading.Thread(target=fly_fids_pull, args=(code, hit), daemon=True)
