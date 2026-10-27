@@ -1,5 +1,6 @@
+"""機場起降：用真實資料把四個機場跑一遍，列出看起來不對的地方（GitHub 上手動執行 fly-audit）"""
 import sys, os, time, re, json, collections
-sys.path.insert(0, "tests")
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "tests"))
 from test_passkey import load_sentinel
 S = load_sentinel()
 S.fly_night = lambda ap, now=None: False
@@ -18,6 +19,9 @@ for c in ["TPE", "TSA", "KHH", "RMQ"]:
     S.FLY["cache"].clear()
     d = S.fly_board(c, bg=True)
     print(f"\n===== {c} srcs={d.get('srcs')} arr={len(d['arr'])} dep={len(d['dep'])} gnd={len(d['gnd'])} over={len(d['over'])} rest={len(d['rest'])} now={hm(now)}")
+    issues = []
+    fids = S.FLY_FIDS.get(c, {}).get("rows") or []
+    print("  FIDS rows", len(fids), "ok", hm(S.FLY_FIDS.get(c, {}).get("ok")), "near", sum(1 for r in fids if abs((r.get("est") or r["sch"]) - now) < 3 * 3600))
     issues = []
     fids = S.FLY_FIDS.get(c, {}).get("rows") or []
     print("  FIDS rows", len(fids), "ok", hm(S.FLY_FIDS.get(c, {}).get("ok")), "near", sum(1 for r in fids if abs((r.get("est") or r["sch"]) - now) < 3 * 3600))
