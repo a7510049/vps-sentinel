@@ -148,7 +148,7 @@ b,strong{font-weight:500}
 .rip{position:absolute;inset:0;border-radius:inherit;overflow:hidden;pointer-events:none}
 .rip i{position:absolute;border-radius:50%;background:currentColor;opacity:.14}
 /* 按下去（.prs，程式控制，輕點也至少看得到一下）：快速縮進去；放開時才用彈性曲線彈回來 */
-:is(.hcard,.tb,.li,.ubtn,.iconbtn,.icbtn,.hmenu button,.seg button,.rng button,.fchip,.addhost,.trf,.chats button,.blob,.sw button,.rb .ri).prs,.rb.prs .ri{transition-duration:var(--t-fast);transition-timing-function:var(--ease)}
+:is(.hcard,.tb,.li,.ubtn,.iconbtn,.icbtn,.hmenu button,.seg button,.rng button,.fchip,.addhost,.trf,.chats button,.blob,.sw button,.rb .ri,.fapc).prs,.rb.prs .ri{transition-duration:var(--t-fast);transition-timing-function:var(--ease)}
 
 /* 小圖示按鈕：圓的，按下去變圓角方形 */
 .iconbtn{width:40px;height:40px;border-radius:50%;display:inline-grid;place-items:center;color:var(--tx2);flex:none;position:relative;text-decoration:none;
@@ -1025,5 +1025,21 @@ html.flyon .dash>.view{content-visibility:hidden;contain-intrinsic-size:auto non
 .fkvs .fkv:nth-last-child(3){border-bottom-left-radius:var(--r-lg)}.fkvs .fkv:last-child{border-bottom-right-radius:var(--r-lg)}
 .finfo,.fpick{max-width:460px}
 .finfo .form{gap:12px}                          /* 資訊頁每一塊的間距都一樣 */
-.fapl .li{min-height:60px}
+.fapg{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+.fapc{position:relative;display:flex;flex-direction:column;align-items:flex-start;gap:12px;padding:16px;border-radius:var(--r-xl);background:var(--chip);color:var(--tx);text-align:left;overflow:hidden;
+  transition:background-color var(--t-mid) var(--ease),border-radius var(--sp-fast),transform var(--sp-fast)}
+.fapc.on{background:var(--pc);color:var(--on-pc);border-radius:var(--r-2xl)}
+.fapc.prs{border-radius:var(--r-md);transform:scale(.96)}
+.faplg{position:relative;display:grid;place-items:center;width:56px;height:56px;border-radius:var(--r-lg);background:var(--s3);color:var(--tx2);font-weight:600;font-size:var(--fs-s);overflow:hidden}
+.faplg img{position:absolute;inset:6px;width:calc(100% - 12px);height:calc(100% - 12px);object-fit:contain;opacity:0;transition:opacity var(--t-fast) var(--ease)}
+.faplg.ok{background:#fff;color:transparent}.faplg.ok img{opacity:1}
+.faplg.full img{inset:0;width:100%;height:100%;object-fit:cover}
+.faplg.crop{place-items:start}.faplg.crop img{inset:auto;left:7px;top:6px;width:auto;height:calc((100% - 12px) * 1.19);object-fit:initial}
+.fapc .lab{font-size:var(--fs-l);font-weight:600;line-height:1.25}
+.fapc .lab small{display:block;margin-top:2px;font-size:var(--fs-s);font-weight:400;color:var(--tx3)}
+.fapc.on .lab small{color:inherit;opacity:.75}
+.fapc .fon{position:absolute;top:14px;right:14px;display:grid;place-items:center;width:28px;height:28px;border-radius:var(--r-pill);background:var(--p);color:var(--on-p);opacity:0;transform:scale(.4);
+  transition:opacity var(--t-fast) var(--ease),transform var(--sp-fast)}
+.fapc .fon svg{width:16px;height:16px}
+.fapc.on .fon{opacity:1;transform:none}
 .fon{color:var(--p)}.fon svg{width:20px;height:20px}
