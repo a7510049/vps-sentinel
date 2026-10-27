@@ -1,4 +1,5 @@
 """機場起降：用假的飛機資料來源，確認看板會分成抵達、出發、地面，機場也找得到。"""
+import gzip
 import json
 import os
 import threading
@@ -104,10 +105,18 @@ class Fake(BaseHTTPRequestHandler):
             acct = self.headers.get("Authorization") == "Bearer tok-good"      # 有登入：次數比較多
             return self.reply({"time": t, "states": [[*x[:3], t, t, *x[5:]] for x in SKY] if float(q["lamin"][0]) < 23 else None},
                               hd={"X-Rate-Limit-Remaining": "3999" if acct else "350"})
-        if self.path.startswith("/hex/"):            # hexdb：飛機編號查註冊號、機型
-            if self.path == "/hex/8990b5":
-                return self.reply({"ModeS": "8990B5", "Registration": "B-16331", "ICAOTypeCode": "A333"})
-            return self.reply({"status": "404", "error": "Aircraft not found."}, 404)
+        if self.path.startswith("/tdb/"):            # 飛機資料庫的分檔（gzip 的 JSON；7 開頭的再分一層）
+            d = {"/tdb/8.js": {"990B5": ["B-16331", "A333", "00", "AIRBUS A-330-300"]}, "/tdb/7.js": {"children": ["78"]},
+                 "/tdb/78.js": {"0ABF": ["B-1", "A320", "00", ""]}}.get(self.path)
+            if d is None:
+                self.send_response(404)
+                self.end_headers()
+                return
+            b = gzip.compress(json.dumps(d).encode())
+            self.send_response(200)
+            self.send_header("Content-Length", str(len(b)))
+            self.end_headers()
+            return self.wfile.write(b)
         if self.path.startswith("/cs/"):             # adsbdb：一班一班問
             if self.path == "/cs/CAL101":
                 return self.reply({"response": {"flightroute": {"origin": {"iata_code": "TPE", "municipality": "Taipei"},
@@ -140,7 +149,7 @@ class Flights(unittest.TestCase):
         S.FLY_ROUTE2 = base + "/cs/"
         S.FLY_SKY = base + "/sky?lamin={la0}&lomin={lo0}&lamax={la1}&lomax={lo1}"
         S.FLY_SKY_AUTH = base + "/auth"
-        S.FLY_HEX = base + "/hex/"
+        S.FLY_TDB = base + "/tdb/"
         cls.night, S.fly_night = S.fly_night, lambda ap, now=None: False      # 測試不管現在幾點
         S.FLY_FIDS_URL.update({"TPE": base + "/tpe", "KHH": base + "/khh/", "RMQ": "http://127.0.0.1:9/", "TSA": "http://127.0.0.1:9/"})
 
@@ -264,6 +273,8 @@ class Flights(unittest.TestCase):
         br = [p for p in d["arr"] if p["fn"] == "BR850"][0]
         self.assertEqual((br["reg"], br["t"]), ("B-16331", "A333"))
         self.assertEqual(S.FLY["hex"]["780abe"].get("r"), None)      # 查不到的也記住，不會一直問
+        self.assertEqual(S.fly_tdb("780abf"), ("B-1", "A320"))          # 分好幾層的分檔
+        self.assertTrue(os.path.exists(os.path.join(S.FLY_TDB_DIR, "8.js")))
 
     def test_zh_names(self):
         """出發地、目的地都用中文：常飛的機場有中文表，沒列到的從官網航班表學"""
