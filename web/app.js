@@ -2971,10 +2971,10 @@ function flyWait(f, on){
     if (b.classList.contains("wait")) return;
     const h = b.offsetHeight, full = b.querySelector(".fr:not([hidden])");
     b.getAnimations().forEach(a => a.cancel());
-    b.classList.add("wait"); ld.style.clipPath = blobSh(9, 0); b._ld = loader(ld);
-    if (full) {                                             // 換機場：舊的列先淡掉、看板縮回載入的大小，載入圖形最後才出來
+    b.classList.add("wait"); ld.style.clipPath = blobSh(9, 0); b._ld = loader(ld); b._wt = performance.now();
+    if (full) {                                             // 換機場：舊的列先淡掉；等久了（T.long）看板才縮回載入的大小、載入圖形出來，很快就到的話直接換
       const lh = parseFloat(getComputedStyle(b).minHeight) || h; b.style.height = lh + "px";
-      if (canAnim() && h !== lh) b.animate([{height:h + "px"}, {height:lh + "px"}], {duration:T.sp, delay:T.fast, easing:SPRING, fill:"backwards"});
+      if (canAnim() && h !== lh) b._shr = b.animate([{height:h + "px"}, {height:lh + "px"}], {duration:T.sp, delay:T.long, easing:SPRING, fill:"backwards"});
     }
     return;
   }
@@ -2982,13 +2982,16 @@ function flyWait(f, on){
 }
 /* 字都換好了才開始淡入（換字那一下比較久，動畫放在後面才不會一開始就跳格） */
 function flyShow(b){
-  const h0 = b._h0, id = b._sh = (b._sh || 0) + 1; b._h0 = null;
-  requestAnimationFrame(() => {
+  const id = b._sh = (b._sh || 0) + 1; b._h0 = null;
+  const e = performance.now() - (b._wt || 0), at = !canAnim() ? 0 : e < T.mid ? T.mid : e >= T.long && e < T.long + T.sp ? T.long + T.sp : e;   // 舊的列淡完、看板縮完才換上新的（資料太快回來也不會半途折返）
+  setTimeout(() => requestAnimationFrame(() => {
     if (b._sh !== id) return;
+    const h0 = b.offsetHeight;                              // 現在看到的高度（縮到一半、還沒縮都對）
+    if (b._shr) { b._shr.cancel(); b._shr = null; }        // 還沒開始縮：不縮了，直接從原本的高度變成新的高度
     b.classList.remove("wait"); b.style.height = ""; if (b._ld) { b._ld(); b._ld = null; }
     const h1 = b.offsetHeight;
     if (canAnim() && h0 !== h1) b.animate([{height: h0 + "px"}, {height: h1 + "px"}], {duration: T.sp, easing: SPRING});   // 彈簧：跟其他地方變大變小一樣的手感
-  });
+  }), Math.max(0, at - e));
 }
 function flyPaint(anim){
   const f = $("#fly"); if (!f || !FLYD) return;

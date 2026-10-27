@@ -897,7 +897,7 @@ html.flyon .dash>.view{content-visibility:hidden;contain-intrinsic-size:auto non
 .board .fh,.board .frows{transition:opacity var(--t-mid) var(--ease)}
 .board.wait{min-height:14em}.board.wait .fh,.board.wait .frows{opacity:0}
 .fload{position:absolute;inset:0;display:grid;place-items:center;pointer-events:none;opacity:0;transition:opacity var(--t-mid) var(--ease)}
-.board.wait .fload{opacity:1;transition-delay:var(--t-mid)}
+.board.wait .fload{opacity:1;transition-delay:var(--t-long)}
 .flyv .fhrs{transition:opacity var(--t-mid) var(--ease)}.flyv.fwait .fhrs{opacity:0;pointer-events:none}
 .fload i{width:40px;height:40px;background:var(--p)}
 .radar{background:var(--card);border-radius:var(--r-xl);padding:16px;width:100%;max-width:480px;align-self:center}
