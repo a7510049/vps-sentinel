@@ -244,3 +244,13 @@ class Flights(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class Kinds(unittest.TestCase):
+    def test_kind(self):
+        from test_passkey import load_sentinel
+        k = load_sentinel().fly_kind
+        for t, m, c, want in [("B77W", "", "", "wb"), ("A388", "", "", "q4"), ("A21N", "", "", "nb"), ("AT76", "", "", "tp"),
+                              ("EC35", "", "", "heli"), ("C172", "", "", "ga"), ("", "B777-300", "", "wb"), ("", "ATR72", "", "tp"),
+                              ("", "", "A7", "heli"), ("ZZZZ", "", "", "")]:
+            self.assertEqual(k(t, m, c), want, (t, m, c))

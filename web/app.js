@@ -2547,13 +2547,20 @@ function flyRowV(p, tab, tz){
   return {t, fn: p.fn || p.reg, pc: pl ? pl.code : "", pl: pl ? pl.name || "" : "", al: p.al || "", m: p.model || p.t || "", reg: (FLYD.fids && tab !== "gnd" ? p.gate : p.reg) || "", st: p.st,
     cls: p.emg || p.st === "取消" ? "bad" : /落地|剛起飛|跑道|登機/.test(p.st) ? "hot" : ""};
 }
+/* 航空公司標誌：從航班號前兩碼（BR、CI、5J）抓公開的標誌圖；抓不到就留著代碼小方塊 */
+const FLYNOLG = new Set();
+const flyAl = fn => { const m = /^([A-Z0-9]{2})\d/.exec(fn || ""); return m && /[A-Z]/.test(m[1]) ? m[1] : ""; };
+const flyLogo = (c, cls = "") => c ? `<i class="alg ${cls}" data-c="${c}">${c}${FLYNOLG.has(c) ? "" : `<img alt="" loading="lazy" referrerpolicy="no-referrer" src="https://pics.avs.io/64/64/${c}.png">`}</i>` : "";
+function flyLogoSet(el, c){ if (el.dataset.c === (c || "")) return; el.dataset.c = c || ""; el.outerHTML = c ? flyLogo(c) : `<i class="alg none" data-c=""></i>`; }
+document.addEventListener("load", e => { const t = e.target; if (t.tagName === "IMG" && t.parentNode && t.parentNode.classList.contains("alg")) t.parentNode.classList.add("ok"); }, true);
+document.addEventListener("error", e => { const t = e.target; if (t.tagName === "IMG" && t.parentNode && t.parentNode.classList.contains("alg")) { FLYNOLG.add(t.parentNode.dataset.c); t.remove(); } }, true);
 const FLYF = ["t", "fn", "pc", "st"], FLYX = ["pl", "al", "m", "reg"];   // 翻牌的欄位／一般文字的欄位（城市、航空公司、機型、註冊號用一般字比較好讀）
 const FLYW = {t:5, fn:7, pc:3, st:4};             // 狀態最多四個中文字，每格都是中文字寬，長短不一也對齊
 const FLYCOL = ["t", "fn", "pc", "pl", "al", "m", "reg", "st"];
 const FLYHEAD = {arr:["預計抵達", "航班", "出發地", "", "航空公司", "機型", "註冊號", "狀態"],
   dep:["起飛", "航班", "目的地", "", "航空公司", "機型", "註冊號", "狀態"], gnd:["", "航班", "航線", "", "航空公司", "機型", "註冊號", "狀態"]};
 const FLYHEADF = {arr:["抵達", "航班", "出發地", "", "航空公司", "機型", "登機門", "狀態"], dep:["起飛", "航班", "目的地", "", "航空公司", "機型", "登機門", "狀態"]};   // 有機場官網航班表時
-const flyRow = i => `<div class="fr" data-i="${i}" role="button" tabindex="0">${FLYCOL.map(k => `<span class="fk ${k}">${FLYW[k] ? flap("", FLYW[k], k === "st" ? "zh" : "") : ""}</span>`).join("")}<span class="ftag"></span><i class="br b1"></i><i class="br b2"></i></div>`;
+const flyRow = i => `<div class="fr" data-i="${i}" role="button" tabindex="0">${FLYCOL.map(k => `<span class="fk ${k}">${FLYW[k] ? flap("", FLYW[k], k === "st" ? "zh" : "") : k === "al" ? `<i class="alg none" data-c=""></i><span></span>` : ""}</span>`).join("")}<span class="ftag"></span><i class="br b1"></i><i class="br b2"></i></div>`;
 function flyShell(){
   return `<div class="flyv" id="fly"><div class="fscroll"><div class="fwrap">
     <div class="ftop">${SHARE ? `<span class="fexp sub" data-k="left"></span>` : `<button class="icbtn" data-fback title="返回">${I("back")}</button>`}<span class="grow"></span>
@@ -2573,6 +2580,34 @@ function flyShell(){
 const FLYZM = [60, 30, 15], FLYGEO = {};                  // 雷達看多遠（公里）；底圖（海岸線、地名）每個機場抓一次
 const flyR = () => FLYZM.includes(+FLYS.zm) ? +FLYS.zm : 60;
 const FLYPL = new Path2D("M0-3.4.55-1.3 3.2.3v.65L.55.25.42 2.1 1.4 2.8v.4L0 2.8-1.4 3.2v-.4l.98-.7-.13-1.85L-3.2.95V.3L-.55-1.3Z");
+/* 各種機型的樣子（機頭朝上）：機身長 L、寬 w，機翼展開 S、往後掠 sw、翼根／翼尖寬 c／ct，尾翼展開 T，引擎位置 e，螺旋槳 pr */
+function flyShape(o){
+  const p = new Path2D(), {L, w, S, sw = 0, c, ct, wy = 0, T: tS, e = [], er = [.24, .5], pr = []} = o;
+  p.ellipse(0, 0, w / 2, L / 2, 0, 0, Math.PI * 2);
+  const poly = (k, pts) => { (k < 0 ? pts.slice().reverse() : pts).forEach(([x, y], i) => i ? p.lineTo(k * x, y) : p.moveTo(k * x, y)); p.closePath(); };   // 左右都順時針，疊在機身上才不會變成洞
+  const ty = L / 2 - c * .55;                                 // 水平尾翼的位置
+  [-1, 1].forEach(k => {
+    poly(k, [[w * .4, wy - c / 2], [S / 2, wy + sw - ct / 2], [S / 2, wy + sw + ct / 2], [w * .4, wy + c / 2]]);
+    poly(k, [[w * .3, ty - c * .3], [tS / 2, ty + sw * .3], [tS / 2, ty + sw * .3 + ct * .7], [w * .3, ty + c * .3]]);
+  });
+  e.forEach(([x, y]) => [-1, 1].forEach(k => { p.moveTo(k * x + er[0], y); p.ellipse(k * x, y, er[0], er[1], 0, 0, Math.PI * 2); }));
+  pr.forEach(([x, y, r]) => [-1, 1].forEach(k => { if (!x && k > 0) return; p.rect(k * x - r, y - .06, r * 2, .12); }));
+  return p;
+}
+function flyHeli(){
+  const p = new Path2D();
+  p.ellipse(0, -.4, .55, 1.1, 0, 0, Math.PI * 2); p.rect(-.12, .4, .24, 2.3); p.rect(-.5, 2.5, 1, .18);
+  [45, -45].forEach(a => { const b = new Path2D(); b.rect(-2.8, -.14, 5.6, .28); p.addPath(b, new DOMMatrix().translate(0, -.4).rotate(a)); });   // 主旋翼
+  return p;
+}
+const FLYSH = {
+  q4: flyShape({L:8.2, w:1.05, S:8, sw:1.8, c:2, ct:.45, wy:-.4, T:3, e:[[1.45, -.85], [2.65, -.25]], er:[.27, .55]}),
+  wb: flyShape({L:7.6, w:1, S:7.4, sw:1.6, c:1.9, ct:.45, wy:-.3, T:2.8, e:[[1.6, -.72]], er:[.34, .66]}),
+  nb: flyShape({L:6.4, w:.75, S:6, sw:1.25, c:1.5, ct:.4, wy:-.2, T:2.3, e:[[1.3, -.55]], er:[.25, .5]}),
+  tp: flyShape({L:5.4, w:.62, S:6.4, sw:0, c:.8, ct:.5, wy:-.6, T:2, e:[[1.35, -.8]], er:[.2, .55], pr:[[1.35, -1.38, .75]]}),
+  ga: flyShape({L:4, w:.5, S:4.8, sw:0, c:.7, ct:.5, wy:-.5, T:1.6, pr:[[0, -2.02, .65]]}),
+  heli: flyHeli(),
+};
 /* 曲線（跟 CSS 的 cubic-bezier 一樣），畫布上的動畫用 */
 function bez(x1, y1, x2, y2){
   const f = (a, b, t) => 3 * a * t * (1 - t) ** 2 + 3 * b * t * t * (1 - t) + t ** 3;
@@ -2758,8 +2793,9 @@ function radarView(cv, full){
       ctx.globalAlpha = o.a * (R.sel && full && o.id !== R.sel ? .55 : 1);
       ctx.save(); ctx.translate(o.sx, o.sy); ctx.rotate((o.p.trk || 0) * Math.PI / 180);
       const k = ps * (o.p.ph === "gnd" ? .6 : 1); ctx.scale(k, k);
-      if (o.id === R.sel) { ctx.lineWidth = 1.4 / k * 1.6; ctx.strokeStyle = col.p; ctx.stroke(FLYPL); }
-      ctx.fillStyle = pc(o); ctx.fill(FLYPL); ctx.restore();
+      const sh = FLYSH[o.p.kind] || FLYPL;                   // 照機型畫：四發、廣體、窄體、螺旋槳、小飛機、直升機
+      if (o.id === R.sel) { ctx.lineWidth = 1.4 / k * 1.6; ctx.strokeStyle = col.p; ctx.stroke(sh); }
+      ctx.fillStyle = pc(o); ctx.fill(sh); ctx.restore();
     });
     /* 名字：擠在一起時換邊放，放不下先不顯示 */
     const lf = Math.round(full ? fs : Math.max(9, rr / 21)), lab = vis.filter(o => o.vis && (o.id === R.sel || o.p.emg || o.p.ph === "arr" || o.p.ph === "dep" || (full && o.p.ph === "over" && s > 3)));
@@ -2939,7 +2975,8 @@ function flyRows(f, d, list, n, byHr, tz, anim){
     const p = list[i], v = flyRowV(p, FLYS.tab, tz), off = offs[i] || FLYSTILL;
     r.dataset.id = p ? p.id : ""; r.classList.toggle("bad", v.cls === "bad"); r.classList.toggle("hot", v.cls === "hot"); r.classList.toggle("empty", !p); r.classList.toggle("sel", !!p && p.id === FLYSEL);
     FLYF.forEach((k, j) => flapSet(r.querySelector(`.fk.${k} .sf`), v[k], i * T.fast * .35 + j * T.fast * .2, off));
-    FLYX.forEach(k => put(r.querySelector(`.fk.${k}`), v[k]));
+    FLYX.forEach(k => put(r.querySelector(k === "al" ? ".fk.al span" : `.fk.${k}`), v[k]));
+    flyLogoSet(r.querySelector(".fk.al .alg"), p ? flyAl(p.fn) : "");
     const tag = p ? (p.emg ? "緊急" : p.mil ? "軍機" : p.rare ? "少見" : "") : "", te = r.querySelector(".ftag");
     if (te.textContent !== tag) { te.textContent = tag; te.className = "ftag" + (tag ? " on" + (p.emg ? " bad" : "") : ""); }
   });
@@ -3044,7 +3081,7 @@ function flyInfo(id){
   const vr = p.vr > 0.5 ? `↑ ${p.vr}` : p.vr < -0.5 ? `↓ ${-p.vr}` : "平飛";
   const reg = encodeURIComponent(p.reg || "");
   v.innerHTML = `<div class="dialog finfo"><div class="form">
-    <div class="fih"><span class="fpc big">${esc(p.fn || p.reg || "—")}</span><span class="lab">${esc(p.al || "航空公司不明")}<small>${esc(p.st)}${p.cs && p.cs !== p.fn ? `・呼號 ${esc(p.cs)}` : ""}</small></span></div>
+    <div class="fih"><span class="fpc big">${esc(p.fn || p.reg || "—")}</span>${flyLogo(flyAl(p.fn), "lg")}<span class="lab">${esc(p.al || "航空公司不明")}<small>${esc(p.st)}${p.cs && p.cs !== p.fn ? `・呼號 ${esc(p.cs)}` : ""}</small></span></div>
     ${p.emg || p.mil || p.rare ? `<div class="fbad${p.emg ? " bad" : ""}">${p.emg ? `${I("warn")}${esc(p.st)}（應答碼 ${esc(p.sq)}）` : p.mil ? "軍機" : "少見機型"}</div>` : ""}
     ${p.org || p.dst ? `<div class="froute"><span>${pl(p.org)}</span><span class="fln">${I("plane")}</span><span>${pl(p.dst)}</span></div>` : `<div class="fnr sub">查不到這班的航線</div>`}
     ${p.fids ? `<div class="fkvs">${kv("表定", hm(p.sch))}${kv(p.ph === "arr" ? "預計抵達" : "預計起飛", hm(p.est))}${kv("登機門", esc(p.gate || "—"))}</div>` : ""}
@@ -3159,7 +3196,7 @@ function fradCard(){
   if (!p) { reveal(c, false); c._id = ""; return; }
   const kv = (k, val) => `<div class="fkv"><small>${k}</small><b class="num">${val}</b></div>`;
   const ap = x => x ? `<b>${esc(x.code)}</b><small>${esc(x.name)}</small>` : `<b>—</b><small>不明</small>`;
-  const html = `<div class="frch"><div><b class="frfn">${esc(p.fn || p.reg || "—")}</b><span class="sub">${esc(p.al || "")}</span></div><span class="fst">${esc(p.st || "")}</span>
+  const html = `<div class="frch">${flyLogo(flyAl(p.fn), "lg")}<div><b class="frfn">${esc(p.fn || p.reg || "—")}</b><span class="sub">${esc(p.al || "")}</span></div><span class="fst">${esc(p.st || "")}</span>
       <button class="icbtn" data-rx title="關閉">${I("x")}</button></div>
     <div class="frrt"><div>${ap(p.org)}</div><span class="sub">${I("plane")}</span><div>${ap(p.dst)}</div></div>
     <div class="frkv">${kv("高度", p.alt != null ? p.alt.toLocaleString() + " 公尺" : "—")}${kv("速度", p.spd != null ? p.spd + " 公里" : "—")}${kv(p.ph === "arr" && p.eta != null ? "落地" : "離機場", p.ph === "arr" && p.eta != null ? (p.eta < 1 ? "快到了" : p.eta + " 分鐘後") : (p.d != null ? p.d + " 公里" : "—"))}${kv("機型", esc(p.model || p.t || "—"))}</div>`;
@@ -3172,8 +3209,15 @@ function fradPick(id, center){
   FRAD.sel = FRAD.sel === id && !center ? "" : id || "";
   FRAD.rv.sel = FRAD.sel;
   const o = FRAD.sel && FRAD.rv.pl.get(FRAD.sel);
+  if (o && FRADF && o.p.ph !== FRADF) {                      // 選到的飛機被篩選藏起來了：換到它那一類
+    FRADF = FRADT.some(([k]) => k === o.p.ph) ? o.p.ph : "";
+    const box = FRAD.v.querySelector(".frchips");
+    slideSel(() => box.querySelectorAll("button").forEach(b => b.classList.toggle("on", b.dataset.rf === FRADF)));
+    FRAD.rv.only = FRADF; FRAD.rv.kick();
+  }
   if (o && center) { const [x, y] = FRAD.rv.at(o, performance.now()); FRAD.rv.view(x, y, Math.max(FRAD.rv.V.s, FRAD.rv.fit(20)), true); }
   FRAD.rv.kick(); fradList(); fradCard();
+  if (o && center) setTimeout(fradList, T.mid + T.fast);       // 畫面移過去之後再數一次
 }
 /* 手勢：一指拖曳、兩指縮放、滾輪縮放、點一下選飛機、點兩下回到機場 */
 function fradGest(rv, cv){
