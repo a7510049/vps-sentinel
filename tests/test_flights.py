@@ -97,6 +97,12 @@ class Fake(BaseHTTPRequestHandler):
             self.send_header("Content-Length", str(len(b)))
             self.end_headers()
             return self.wfile.write(b)
+        if self.path.startswith("/metar/"):          # 機場天氣
+            b = b"RCTP 270530Z 05012G22KT 9999 -SHRA FEW020 28/22 Q1012 NOSIG\n"
+            self.send_response(200)
+            self.send_header("Content-Length", str(len(b)))
+            self.end_headers()
+            return self.wfile.write(b)
         if self.path.startswith("/khh/"):
             return self.reply(khh_json(self.path[5:8]))
         if self.path.startswith("/sky"):
@@ -150,6 +156,7 @@ class Flights(unittest.TestCase):
         S.FLY_SKY = base + "/sky?lamin={la0}&lomin={lo0}&lamax={la1}&lomax={lo1}"
         S.FLY_SKY_AUTH = base + "/auth"
         S.FLY_TDB = base + "/tdb/"
+        S.FLY_METAR = base + "/metar/{icao}"
         cls.night, S.fly_night = S.fly_night, lambda ap, now=None: False      # 測試不管現在幾點
         S.FLY_FIDS_URL.update({"TPE": base + "/tpe", "KHH": base + "/khh/", "RMQ": "http://127.0.0.1:9/", "TSA": "http://127.0.0.1:9/"})
 
@@ -194,6 +201,21 @@ class Flights(unittest.TestCase):
         cdep = {p["fn"]: p for p in d["dep"]}
         self.assertEqual((cdep["CI27"]["st"], cdep["CI27"]["dst"]["name"]), ("登機", "香港"))
         self.assertNotIn("IT200", cdep)       # 三小時前就飛走的不顯示
+
+    def test_wx(self):
+        """機場天氣：背景抓 METAR，整理成風、能見度、溫度"""
+        self.S.FLY_WX.clear()
+        self.S.fly_wx("TPE")
+        for _ in range(50):
+            if self.S.fly_wx("TPE"):
+                break
+            time.sleep(.1)
+        w = self.S.fly_wx("TPE")
+        self.assertEqual((w["wd"], w["ws"], w["wg"], w["vis"], w["tmp"], w["wx"]), (50, 12, 22, 9999, 28, "陣雨"))
+        self.assertIsNone(self.S.fly_wx("NRT"))                   # 只有台灣四個機場
+        m = self.S.fly_metar("RCKH 270530Z VRB03KT CAVOK M02/M05 Q1010")
+        self.assertEqual((m["wd"], m["vis"], m["tmp"]), (-1, 10000, -2))
+        self.assertEqual(self.S.fly_metar("RCSS 270530Z 36008KT 0800 FG 18/18 Q1015")["wx"], "起霧")
 
     def test_opensky(self):
         S = self.S

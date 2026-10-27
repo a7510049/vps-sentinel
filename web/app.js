@@ -2696,10 +2696,35 @@ function flyShell(){
       <div class="board"><div class="fh">${FLYCOL.map(k => `<span class="fk ${k}"></span>`).join("")}</div><div class="frows"></div><div class="fmsg sub" hidden></div><div class="fload"><i></i></div></div></div>
       <div class="radar"><div class="rbox"><canvas class="rcv" aria-label="雷達"></canvas><button class="icbtn rfull" data-rfull title="整頁雷達">${I("full")}</button></div>
         <div class="rnote sub" hidden></div>
-        <div class="rleg"><span><i class="arr"></i>抵達</span><span><i class="dep"></i>出發</span><span><i></i>其他</span>
-          <span class="rng fzm">${FLYZM.map(k => `<button data-fzm="${k}">${k}</button>`).join("")}</span></div></div>
+        <div class="rwx" hidden></div>
+        <div class="rleg"><span><i class="arr"></i>抵達<b data-k="rc-arr"></b></span><span><i class="dep"></i>出發<b data-k="rc-dep"></b></span><span><i></i>地面<b data-k="rc-gnd"></b></span><span><i></i>路過<b data-k="rc-over"></b></span>
+          <span class="ralt">尾跡高度<i></i>1000<i></i>3000<i></i>6000<i></i>公尺</span><span class="rng fzm">${FLYZM.map(k => `<button data-fzm="${k}">${k}</button>`).join("")}</span></div></div>
     </div>
-    <div class="ffoot sub"></div></div></div></div>`;
+    <div class="ffoot sub"></div></div></div>${flySplash()}</div>`;
+}
+/* 第一次打開、資料還沒到：一架小飛機沿著虛線航線飛過去，下面翻出機場代碼 */
+const FLYARC = "M14 76 Q110 -14 206 76";
+const flySplash = () => `<div class="fsplash" aria-hidden="true"><div class="fsp">
+    <svg viewBox="0 0 220 90" width="220" height="90"><defs><mask id="fspm"><path class="fspr" d="${FLYARC}" pathLength="1"/></mask></defs>
+      <path class="fsd0" d="${FLYARC}"/><path class="fsd" d="${FLYARC}" mask="url(#fspm)"/><circle cx="14" cy="76" r="4"/><circle cx="206" cy="76" r="4"/></svg>
+    <i class="fspl">${I("plane")}</i></div>
+  <div class="fspc">${flap("", 3, "xl")}</div><div class="fspn sub"></div></div>`;
+function flySplashOn(f){
+  if (!canAnim()) return;
+  f.classList.add("splash"); f._sp0 = performance.now(); flyApBtn(f, {code: FLYS.ap});
+  setTimeout(() => { if (f.classList.contains("splash")) { flapSet(f.querySelector(".fspc .sf"), FLYS.ap); txt(f.querySelector(".fspn"), FLYS.name || ""); } }, T.mid);
+}
+/* 資料到了：載入畫面淡掉，上面到下面一塊一塊浮上來（至少讓飛機飛一段，不會一閃就不見） */
+function flySplashOff(f){
+  if (!f.classList.contains("splash") || f._spOff) return;
+  f._spOff = 1;
+  setTimeout(() => {
+    const sp = f.querySelector(".fsplash");
+    sp.animate([{opacity:1}, {opacity:0, transform:"scale(1.04)"}], {duration:T.mid, easing:EXIT, fill:"forwards"}).finished.then(() => sp.remove(), () => {});
+    f.classList.remove("splash");
+    [...f.querySelectorAll(".fwrap>:not(.ftop), .fmain>*")].filter(e => !e.classList.contains("fmain")).forEach((e, i) =>
+      e.animate([{opacity:0, transform:"translateY(16px)"}, {opacity:1, transform:"none"}], {duration:T.slow, delay:T.fast * .5 + i * T.fast * .35, easing:EASE, fill:"backwards"}));
+  }, Math.max(0, T.long * 2 - (performance.now() - f._sp0)));
 }
 const FLYZM = [60, 30, 15], FLYGEO = {};                  // 雷達看多遠（公里）；底圖（海岸線、地名）每個機場抓一次
 const flyR = () => FLYZM.includes(+FLYS.zm) ? +FLYS.zm : 60;
@@ -2749,7 +2774,7 @@ function radarView(cv, full){
   R.theme = () => {
     const pr = document.createElement("i"); pr.style.cssText = "position:absolute;visibility:hidden"; cv.parentNode.appendChild(pr);
     const c = v => { pr.style.color = `var(${v})`; return getComputedStyle(pr).color; };
-    col = {p:c("--p"), tx:c("--tx"), tx2:c("--tx2"), tx3:c("--tx3"), s2:c("--s2"), s3:c("--s3"), s4:c("--s4"), bad:c("--bad"), card:c("--card")};
+    col = {p:c("--p"), tx:c("--tx"), tx2:c("--tx2"), tx3:c("--tx3"), s2:c("--s2"), s3:c("--s3"), s4:c("--s4"), bad:c("--bad"), card:c("--card"), alt:[0, 1, 2, 3].map(i => c(`--alt${i}`))};
     pr.style.fontSize = "var(--fs-xs)"; fs = parseFloat(getComputedStyle(pr).fontSize) || 12;
     font = getComputedStyle(cv).fontFamily; pr.remove();
   };
@@ -2786,7 +2811,7 @@ function radarView(cv, full){
       }
       o.x1 = p.x; o.y1 = p.y; o.p = p; o.gone = false;
       const l = o.h[o.h.length - 1];
-      if (p.ph !== "gnd" && (!l || l[0] !== p.x || l[1] !== p.y)) { o.h.push([p.x, p.y]); if (o.h.length > 18) o.h.shift(); }
+      if (p.ph !== "gnd" && (!l || l[0] !== p.x || l[1] !== p.y)) { o.h.push([p.x, p.y, p.alt]); if (o.h.length > 18) o.h.shift(); }
     });
     pl.forEach(o => { if (!seen.has(o.id)) o.gone = true; });
     R.kick();
@@ -2836,6 +2861,18 @@ function radarView(cv, full){
       ctx.lineCap = "round"; ctx.strokeStyle = col.tx3; ctx.lineWidth = (full ? 3 : 2.2) / s;
       ctx.beginPath(); (R.geo.rwy || []).forEach(([a, b, c, d]) => { ctx.moveTo(a, -b); ctx.lineTo(c, -d); }); ctx.stroke();
       ctx.restore();
+    }
+    /* 現在用的跑道：進場那一頭往外畫一條虛線（飛機排隊降落的路線） */
+    if (R.geo && R.rwd != null) {
+      const hd = R.rwd * Math.PI / 180, ux = Math.sin(hd), uy = Math.cos(hd);
+      ctx.save(); ctx.globalAlpha = (canAnim() ? ga : 1) * .55; ctx.strokeStyle = col.p; ctx.lineWidth = full ? 1.6 : 1.2; ctx.setLineDash([6, 5]);
+      ctx.beginPath();
+      (R.geo.rwy || []).forEach(([a, b, c, d]) => {
+        if (Math.hypot((a + c) / 2, (b + d) / 2) > 4) return;   // 只畫這個機場的跑道
+        const [x, y] = a * ux + b * uy < c * ux + d * uy ? [a, b] : [c, d];   // 降落那一頭
+        ctx.moveTo(...R.xy(x, y)); ctx.lineTo(...R.xy(x - ux * 18, y - uy * 18));
+      });
+      ctx.stroke(); ctx.restore();
     }
     /* 距離圈：整頁的照比例挑好讀的距離；小雷達固定三圈 */
     ctx.strokeStyle = col.s4; ctx.lineWidth = 1; ctx.fillStyle = col.tx3; ctx.font = `${Math.round(fs * (full ? 1 : .85))}px ${font}`;
@@ -2897,11 +2934,21 @@ function radarView(cv, full){
     const pc = o => o.p.emg ? col.bad : o.p.ph === "arr" ? col.p : o.p.ph === "dep" ? col.tx : col.tx3;
     /* 尾跡：畫到飛機現在的位置，選到的那架比較亮 */
     ctx.lineJoin = ctx.lineCap = "round";
+    const ac = a => col.alt[a == null ? 0 : a < 1000 ? 0 : a < 3000 ? 1 : a < 6000 ? 2 : 3];   // 尾跡照高度上色：低的淺青、高的紫
     vis.forEach(o => {
       if (o.h.length < 2 && !(o.h.length && o.p.ph !== "gnd")) return;
-      const sel = o.id === R.sel;
-      ctx.globalAlpha = o.a * (sel ? .9 : R.sel && full ? .2 : .45); ctx.strokeStyle = pc(o); ctx.lineWidth = sel ? 2.4 : 1.4;
-      ctx.beginPath(); o.h.slice(0, -1).forEach(([x, y], i) => { const [a, b] = R.xy(x, y); i ? ctx.lineTo(a, b) : ctx.moveTo(a, b); }); ctx.lineTo(o.sx, o.sy); ctx.stroke();
+      const sel = o.id === R.sel, pts = [...o.h.slice(0, -1).map(([x, y, a]) => [...R.xy(x, y), a]), [o.sx, o.sy, o.p.alt]];
+      ctx.globalAlpha = o.a * (sel ? 1 : R.sel && full ? .25 : .7); ctx.lineWidth = sel ? 2.6 : 1.6;
+      for (let i = 1; i < pts.length; i++) {
+        ctx.strokeStyle = ac(pts[i - 1][2]); ctx.beginPath(); ctx.moveTo(pts[i - 1][0], pts[i - 1][1]); ctx.lineTo(pts[i][0], pts[i][1]); ctx.stroke();
+      }
+    });
+    /* 機頭前面的短線：照現在的速度，一分鐘後會飛到哪 */
+    vis.forEach(o => {
+      if (o.p.ph === "gnd" || !o.p.alt || !(o.p.spd > 0) || (o.p.ph === "over" && o.id !== R.sel)) return;   // 路過的不畫（太亂）
+      const d = o.p.spd / 60, hd = (o.p.trk || 0) * Math.PI / 180, [ex, ey] = R.xy(o.x + Math.sin(hd) * d, o.y + Math.cos(hd) * d);
+      ctx.globalAlpha = o.a * (R.sel && full && o.id !== R.sel ? .25 : .65); ctx.strokeStyle = pc(o); ctx.lineWidth = 1;
+      ctx.beginPath(); ctx.moveTo(o.sx, o.sy); ctx.lineTo(ex, ey); ctx.stroke();
     });
     /* 選到的抵達班機：虛線連到機場 */
     const so = R.sel && pl.get(R.sel);
@@ -2960,7 +3007,8 @@ function flyPlace(ctx, lab, lf, gap, full, font, sel, W, H, rb, top){
   ctx.font = `600 ${lf}px ${font}`;
   lab.map(o => [o, o.id === sel ? -2 : o.p.emg ? -1 : Math.hypot(o.x, o.y)]).sort((a, b) => a[1] - b[1]).forEach(([o]) => {
     o.l1 = o.p.fn || o.p.reg || "";
-    o.l2 = full && o.p.alt != null && o.p.ph !== "gnd" ? `${o.p.alt.toLocaleString()} 公尺・${o.p.spd} 公里` : "";
+    const vr = o.p.vr > 1 ? " ↑" : o.p.vr < -1 ? " ↓" : "";     // 爬升／下降
+    o.l2 = o.p.alt != null && o.p.alt > 0 && o.p.ph !== "gnd" ? full ? `${o.p.alt.toLocaleString()} 公尺${vr}・${o.p.spd} 公里/時` : `${o.p.alt.toLocaleString()}${vr}` : "";
     const w = Math.max(ctx.measureText(o.l1).width, o.l2 ? ctx.measureText(o.l2).width * .85 : 0) + 2, h = lf * (o.l2 ? 2.1 : 1.1), x = o.sx, y = o.sy;
     const c = {r:[x + gap, y - h / 2], l:[x - gap - w, y - h / 2], t:[x - w / 2, y - gap - h], b:[x - w / 2, y + gap * .9]};
     const order = [o.lk, "r", "l", "t", "b"].filter((v, i, a) => v && a.indexOf(v) === i);
@@ -2993,8 +3041,41 @@ function flyZoom(f, anim){
   f.querySelectorAll(".fzm button").forEach(b => b.classList.toggle("on", +b.dataset.fzm === flyR()));
 }
 const flyAll = d => [...d.arr, ...d.dep, ...d.gnd, ...d.over, ...(d.rest || [])];
+/* 現在用哪條跑道：機場附近低空的飛機往哪個方向飛；沒有飛機就看風向（逆風起降） */
+const FLYRWN = {TPE: [53, "05", "23"], TSA: [96, "10", "28"], RMQ: [3, "36", "18"], KHH: [93, "09", "27"]};   // 跑道方向（正北起算）、兩頭的編號
+const flyAdiff = (a, b) => { const k = Math.abs((((a - b) % 360) + 360) % 360); return k > 180 ? 360 - k : k; };
+function flyRwy(d){
+  const r = FLYRWN[d.ap && d.ap.code]; if (!r) return null;
+  let a = 0, b = 0;
+  [...d.arr, ...d.dep, ...d.gnd].forEach(p => {
+    if (p.x == null || p.trk == null || Math.hypot(p.x, p.y) > 15) return;
+    if (!(p.ph === "gnd" ? p.spd >= 60 : p.alt != null && p.alt < 1200)) return;
+    const k = flyAdiff(p.trk, r[0]); if (k < 30) a++; else if (k > 150) b++;
+  });
+  const w = d.wx, one = a || b ? a >= b : w && w.wd > 0 && w.ws >= 3 ? flyAdiff(w.wd, r[0]) < 90 : null;
+  return one == null ? null : {h: one ? r[0] : (r[0] + 180) % 360, n: one ? r[1] : r[2], wind: !(a || b)};
+}
+/* 雷達下面那排：跑道、風、能見度、天氣、溫度 */
+const FLYDIR = ["北", "東北", "東", "東南", "南", "西南", "西", "西北"];
+function flyWxRow(f, d, rw){
+  const w = d.wx, out = [], kmh = k => Math.round(k * 1.852);
+  if (rw) out.push(`<span class="on">${rw.wind ? `應該用 ${rw.n} 跑道` : `${rw.n} 跑道起降`}</span>`);
+  if (w && w.ws != null) out.push(`<span>${w.ws < 1 ? "無風" : `${w.wd < 0 ? "風向不定" : FLYDIR[Math.round(w.wd / 45) % 8] + "風"} ${kmh(w.ws)} 公里/時${w.wg ? `，陣風 ${kmh(w.wg)}` : ""}`}</span>`);
+  if (w && w.vis != null) out.push(`<span>${w.vis >= 9999 ? "能見度 10 公里以上" : `能見度 ${w.vis >= 1000 ? +(w.vis / 1000).toFixed(1) + " 公里" : w.vis + " 公尺"}`}</span>`);
+  if (w && w.wx) out.push(`<span>${esc(w.wx)}</span>`);
+  if (w && w.tmp != null) out.push(`<span>${w.tmp}°C</span>`);
+  const el = f.querySelector(".rwx"), html = out.join("");
+  if (el._h !== html) { el._h = html; html ? swapHTML(el, html) : el.innerHTML = ""; }
+  reveal(el, !!html);
+}
 function flyRadar(f, d){
   const v = f._rv; if (!v) return;
+  const rw = d.loading ? null : flyRwy(d);
+  v.rwd = rw ? rw.h : null; if (FRAD && FRAD.rv) FRAD.rv.rwd = v.rwd;
+  if (!d.loading) {
+    flyWxRow(f, d, rw);
+    [["arr", d.arr], ["dep", d.dep], ["gnd", d.gnd], ["over", [...d.over, ...(d.rest || [])]]].forEach(([k, l]) => txt(f.querySelector(`[data-k="rc-${k}"]`), String(l.filter(p => p.x != null).length)));
+  }
   v.sel = FLYSEL; v.setData(flyAll(d));
   if (FRAD) fradData();
 }
@@ -3276,6 +3357,7 @@ async function flyLoad(anim){
     if (d.ok && d.loading) { clearTimeout(FLYT); FLYT = setTimeout(() => flyLoad(), 1500); }   // 官網航班表還在抓：轉圈圈等一下再問
   } catch(e) { if (!same()) return; FLYD = {...(mine ? FLYD : {arr:[], dep:[], gnd:[], over:[], ap:FLYD && FLYD.ap}), loading:false, ok:false, error:e.message}; }
   flyPaint(anim);
+  const f = $("#fly"); if (f && FLYD && !FLYD.loading) flySplashOff(f);
 }
 let FLYPIN = [], FLYHOLD = Promise.resolve();
 async function flyList(q){
@@ -3301,7 +3383,7 @@ function flyOpen(btn){
   if (!SHARE) history.pushState({fly:1}, "");          // 分享連結只有這一頁，不能返回
   document.documentElement.classList.add("lock");
   setTimeout(() => { if ($("#fly")) document.documentElement.classList.add("flyon"); }, T.slow + 80);
-  if (FLYD && FLYD.ap && FLYD.ap.code === FLYS.ap) flyPaint(false); else flyWait(f, true);
+  if (FLYD && FLYD.ap && FLYD.ap.code === FLYS.ap) flyPaint(false); else { flySplashOn(f); flyWait(f, true); }
   flyLoad(false);
   f._rv = radarView(f.querySelector(".rcv"), false); f._rv.range = flyR(); flyZoom(f, false);
   f.querySelector(".rcv").addEventListener("click", e => {    // 點雷達打開整頁雷達；點到飛機就順便選好那一架
@@ -3445,7 +3527,7 @@ function fradOpen(){
   if (!canAnim()) v.style.animation = "none";
   history.pushState({fly:1, frad:1}, "");
   const cv = v.querySelector("canvas"), rv = radarView(cv, true);
-  FRAD = {v, rv, sel:""};
+  FRAD = {v, rv, sel:""}; rv.rwd = f._rv.rwd;
   const top = () => { const b = v.querySelector(".frbar").getBoundingClientRect(), m = cv.getBoundingClientRect(), z = ZM(); rv.top = (b.bottom - m.top) / z + 4; };
   rv.resize(); top(); rv.view(0, 0, rv.fit(flyR() * .95));           // 一開始跟小雷達看到的範圍差不多，看起來就像它長大
   if (f._geo) rv.setGeo(FLYGEO[f._geo]);
