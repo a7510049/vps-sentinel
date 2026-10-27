@@ -1,0 +1,14 @@
+name: flydebug
+on: push
+jobs:
+  p:
+    runs-on: ubuntu-latest
+    steps:
+      - run: |
+          set +e
+          for h in www.taoyuan-airport.com www.tsa.gov.tw www.tca.gov.tw www.kia.gov.tw; do
+            echo "== $h"
+            curl -sL -m 20 -A "Mozilla/5.0" https://$h/ | grep -oiE '<link[^>]+(icon|apple-touch)[^>]*>|<img[^>]+logo[^>]*>|<meta[^>]+og:image[^>]*>' | head -8
+            for p in apple-touch-icon.png favicon.ico; do curl -s -o x -w "$p %{http_code} %{content_type} %{size_download}\n" -m 15 -A "Mozilla/5.0" https://$h/$p; done
+            curl -s -o g.png -w "google %{http_code} %{size_download} " "https://www.google.com/s2/favicons?domain=$h&sz=256"; file g.png
+          done
