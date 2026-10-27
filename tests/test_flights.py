@@ -265,6 +265,17 @@ class Flights(unittest.TestCase):
         self.assertEqual((br["reg"], br["t"]), ("B-16331", "A333"))
         self.assertEqual(S.FLY["hex"]["780abe"].get("r"), None)      # 查不到的也記住，不會一直問
 
+    def test_zh_names(self):
+        """出發地、目的地都用中文：常飛的機場有中文表，沒列到的從官網航班表學"""
+        S = self.S
+        self.assertEqual(S.fly_place({"iata": "CEB", "location": "Lapu-Lapu"})["name"], "宿霧")
+        self.assertEqual(S.fly_place({"iata": "QQQ", "location": "Somewhere"})["name"], "Somewhere")
+        S.fly_learn("QQQ", "某某")
+        self.assertEqual(S.fly_place({"iata": "QQQ", "location": "Somewhere"})["name"], "某某")
+        self.assertEqual(S.fly_zh_code("某某"), "QQQ")
+        S.fly_learn("QQQ", "Somewhere")               # 英文的不學
+        self.assertEqual(S.fly_city("QQQ"), "某某")
+
     def test_sky_need(self):
         """非必要不問 OpenSky：沒有班機要起降、或愛好者都收得到時不問"""
         S = self.S
