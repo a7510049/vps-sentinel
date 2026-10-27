@@ -72,9 +72,11 @@ class Fake(BaseHTTPRequestHandler):
     def log_message(self, *a):
         pass
 
-    def reply(self, obj):
+    def reply(self, obj, code=200, hd=None):
         b = json.dumps(obj).encode()
-        self.send_response(200)
+        self.send_response(code)
+        for k, v in (hd or {}).items():
+            self.send_header(k, v)
         self.send_header("Content-Type", "application/json")
         self.send_header("Content-Length", str(len(b)))
         self.end_headers()
@@ -99,7 +101,13 @@ class Fake(BaseHTTPRequestHandler):
         if self.path.startswith("/sky"):
             q = urllib.parse.parse_qs(urllib.parse.urlparse(self.path).query)
             t = int(time.time())
-            return self.reply({"time": t, "states": [[*x[:3], t, t, *x[5:]] for x in SKY] if float(q["lamin"][0]) < 23 else None})
+            acct = self.headers.get("Authorization") == "Bearer tok-good"      # 有登入：次數比較多
+            return self.reply({"time": t, "states": [[*x[:3], t, t, *x[5:]] for x in SKY] if float(q["lamin"][0]) < 23 else None},
+                              hd={"X-Rate-Limit-Remaining": "3999" if acct else "350"})
+        if self.path.startswith("/hex/"):            # hexdb：飛機編號查註冊號、機型
+            if self.path == "/hex/8990b5":
+                return self.reply({"ModeS": "8990B5", "Registration": "B-16331", "ICAOTypeCode": "A333"})
+            return self.reply({"status": "404", "error": "Aircraft not found."}, 404)
         if self.path.startswith("/cs/"):             # adsbdb：一班一班問
             if self.path == "/cs/CAL101":
                 return self.reply({"response": {"flightroute": {"origin": {"iata_code": "TPE", "municipality": "Taipei"},
@@ -110,7 +118,12 @@ class Fake(BaseHTTPRequestHandler):
         self.reply({"ac": AC + [{"hex": "bad", "lat": "x"}, "怪怪的", {"hex": "bad2", "lat": 25, "lon": 121, "alt_baro": 3000, "gs": "快"}]})
 
     def do_POST(self):
-        self.rfile.read(int(self.headers["Content-Length"]))
+        body = self.rfile.read(int(self.headers["Content-Length"]))
+        if self.path == "/auth":                     # OpenSky 換通行證
+            q = urllib.parse.parse_qs(body.decode())
+            if q.get("client_id") == ["good"] and q.get("client_secret") == ["s3cret"]:
+                return self.reply({"access_token": "tok-good", "expires_in": 1800})
+            return self.reply({"error": "invalid_client"}, 401)
         self.reply([{"callsign": "EVA2196", "plausible": 1, "_airports": [{"iata": "NRT", "location": "Tokyo"}, {"iata": "TPE", "location": "Taipei"}]}])
 
 
@@ -126,6 +139,8 @@ class Flights(unittest.TestCase):
         S.FLY_ROUTE = base + "/route"
         S.FLY_ROUTE2 = base + "/cs/"
         S.FLY_SKY = base + "/sky?lamin={la0}&lomin={lo0}&lamax={la1}&lomax={lo1}"
+        S.FLY_SKY_AUTH = base + "/auth"
+        S.FLY_HEX = base + "/hex/"
         cls.night, S.fly_night = S.fly_night, lambda ap, now=None: False      # 測試不管現在幾點
         S.FLY_FIDS_URL.update({"TPE": base + "/tpe", "KHH": base + "/khh/", "RMQ": "http://127.0.0.1:9/", "TSA": "http://127.0.0.1:9/"})
 
@@ -184,6 +199,94 @@ class Flights(unittest.TestCase):
         ci = [p for p in d["arr"] if p["fn"] == "CI840"][0]
         self.assertEqual((ci["org"]["code"], ci["share"], ci["st"]), ("BKK", ["PG4905", "AE5320"], "準時"))
         self.assertEqual([p["st"] for p in d["dep"] if p["fn"] == "UO135"], ["登機"])
+
+    def test_seen(self):
+        """停好關掉訊號的班機：還是查得到降落前收到的註冊號、機型，也知道幾點之後收不到"""
+        S = self.S
+        S.FLY["cache"].clear()
+        d = self.get("ap=TPE")
+        br = [p for p in d["arr"] if p["fn"] == "BR2196"][0]
+        self.assertTrue(br.get("live"))
+        gone = AC.pop(0)                      # 長榮那架關掉訊號了
+        try:
+            S.FLY["cache"].clear()
+            d = self.get("ap=TPE")
+        finally:
+            AC.insert(0, gone)
+        br = [p for p in d["arr"] if p["fn"] == "BR2196"][0]
+        self.assertFalse(br.get("live"))
+        self.assertEqual(br["reg"], "B-16781")
+        self.assertTrue(br.get("seen"))
+        S.fly_seen_save()                     # 重新啟動後也記得
+        S.FLY["seen"].clear()
+        S.fly_seen_load()
+        self.assertEqual(S.FLY["seen"]["arr:BR2196"]["reg"], "B-16781")
+
+    def test_sky_budget(self):
+        """OpenSky：照今天剩幾次分著問；用完了看板會說幾點恢復；填了帳號就用帳號問"""
+        S = self.S
+        S.FLY_SKYS.update(cache={}, until=0, out=0, left=None)
+        S.FLY["cache"].clear()
+        self.get("ap=KHH")
+        self.assertEqual(S.FLY_SKYS["left"], 350)
+        S.FLY_SKYS["left"] = 10                # 剩很少：要隔很久才問
+        self.assertGreater(S.fly_sky_gap(), 600)
+        S.FLY_SKYS.update(out=time.time() + 3600, until=time.time() + 3600)
+        S.FLY["cache"].clear()
+        d = self.get("ap=KHH")
+        self.assertGreater(d["skyout"], time.time())
+        ok, msg = S.sky_conf({"action": "save", "id": "good", "secret": "nope"})
+        self.assertFalse(ok)
+        self.assertFalse(S.C.get("OPENSKY_ID"))
+        ok, st = S.sky_conf({"action": "save", "id": "good", "secret": "s3cret"})
+        self.assertTrue(ok and st["on"], st)
+        with open(S.CONF_PATH, encoding="utf-8") as f:
+            self.assertIn("OPENSKY_ID=good", f.read())
+        S.FLY_SKYS["cache"].clear()
+        S.FLY["cache"].clear()
+        d = self.get("ap=KHH")
+        self.assertEqual((S.FLY_SKYS["left"], d["skyout"]), (3999, 0))
+        self.assertTrue(S.sky_conf({"action": "off"})[0])
+        self.assertFalse(S.sky_conf({"action": "status"})[1]["on"])
+
+    def test_hex(self):
+        """OpenSky 只給飛機編號：背景查到註冊號、機型後補上，細節頁不會空白"""
+        S = self.S
+        S.FLY_SKYS.update(cache={}, until=0, out=0, left=None)
+        S.FLY["cache"].clear()
+        self.get("ap=KHH")
+        for _ in range(40):
+            if "8990b5" in S.FLY["hex"]:
+                break
+            time.sleep(.1)
+        S.FLY["cache"].clear()
+        d = self.get("ap=KHH")
+        br = [p for p in d["arr"] if p["fn"] == "BR850"][0]
+        self.assertEqual((br["reg"], br["t"]), ("B-16331", "A333"))
+        self.assertEqual(S.FLY["hex"]["780abe"].get("r"), None)      # 查不到的也記住，不會一直問
+
+    def test_sky_need(self):
+        """非必要不問 OpenSky：沒有班機要起降、或愛好者都收得到時不問"""
+        S = self.S
+        ap = S.fly_db()["KHH"]
+        now = time.time()
+        soon = [{"io": "arr", "fn": "BR850", "sch": now + 900, "est": None, "st": "準時"}]
+        self.assertTrue(S.fly_sky_need(ap, soon, []))
+        self.assertFalse(S.fly_sky_need(ap, [], []))
+        self.assertFalse(S.fly_sky_need(ap, [{**soon[0], "sch": now + 5 * 3600}], []))      # 還很久
+        heard = [{"lat": ap[3] + .1, "lon": ap[4], "alt_baro": 3000}]
+        self.assertFalse(S.fly_sky_need(ap, soon, heard))
+
+    def test_bg(self):
+        """背景抓：沒人在看的機場不花 OpenSky 的次數"""
+        S = self.S
+        S.FLY_SKYS.update(cache={}, until=0, out=0, left=None)
+        S.FLY["cache"].clear()
+        S.FLY["view"].pop("KHH", None)
+        d = S.fly_board("KHH", True)
+        self.assertTrue(d["ok"])
+        self.assertNotIn("KHH", S.FLY_SKYS["cache"])
+        self.assertIsNone(S.FLY_SKYS["left"])
 
     def test_search(self):
         d = self.get("q=")

@@ -41,7 +41,7 @@ from collections import deque
 from concurrent.futures import ThreadPoolExecutor
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
-VERSION = "3.12"
+VERSION = "3.13"
 
 # ───────────────────────── 哨兵備份檔（.vsbk）─────────────────────────
 # 哨兵專用的備份格式：外面是自己的檔案格式，裡面用的是成熟、標準的加密方法（不自己發明加密）：
@@ -5250,9 +5250,16 @@ FLY_SRC = [x for x in [os.environ.get("SENTINEL_FLY_API", "")] if x] or [
 FLY_SRC = [("測試", x, "") if isinstance(x, str) else x for x in FLY_SRC]
 FLY_ROUTE = os.environ.get("SENTINEL_FLY_ROUTE", "https://api.adsb.lol/api/0/routeset")
 FLY_ROUTE2 = os.environ.get("SENTINEL_FLY_ROUTE2", "https://api.adsbdb.com/v0/callsign/")
-# OpenSky：南台灣這類愛好者接收站收不到的地方補上；不登入每天只能問 400 次，所以同一個機場 30 秒才問一次
+# OpenSky：南台灣這類愛好者接收站收不到的地方補上；不登入每天只能問 400 次（填了帳號 4000 次），
+# 所以照今天還剩幾次平均分著問（fly_sky_gap），不會半天就用完
 FLY_SKY = os.environ.get("SENTINEL_FLY_SKY", "https://opensky-network.org/api/states/all?lamin={la0}&lomin={lo0}&lamax={la1}&lomax={lo1}")
+FLY_SKY_AUTH = os.environ.get("SENTINEL_SKY_AUTH", "https://auth.opensky-network.org/auth/realms/opensky-network/protocol/openid-connect/token")
 FLY_SKY_EVERY = 30
+FLY_BG = int(os.environ.get("SENTINEL_FLY_BG") or 30)    # 背景每幾秒把四個機場都抓一次
+FLY_SEEN_FILE = os.path.join(DATA_DIR, "fly-seen.json")
+# 飛機編號（hex）→ 註冊號、機型：OpenSky 只給編號，用 hexdb.io 補（免註冊）；查過的存在主機上
+FLY_HEX = os.environ.get("SENTINEL_FLY_HEX", "https://hexdb.io/api/v1/aircraft/")
+FLY_HEX_FILE = os.path.join(DATA_DIR, "fly-hex.json")
 FLY_NM = 40                                   # 抓機場方圓幾海里（約 74 公里）
 FLY_EVERY = 8                                 # 同一個機場幾秒內不重抓
 # 常用機場的中文名稱（代碼、名稱、城市、緯度、經度）；其他機場用 data/airports.tsv 的英文名稱
@@ -5363,8 +5370,8 @@ FLY_RARE = {"A388", "B744", "B748", "B742", "MD11", "A343", "A346", "A3ST", "A33
 FLY_CARGO_ICAO = {"NCA", "CAO", "CKK", "CSS", "SQC", "FDX", "UPS", "GTI", "CLX", "CKS", "PAC", "ABW", "BOX", "GEC", "AHK",
                   "DHK", "DHX", "BCS", "YZR", "CYZ", "ICV", "ATN", "ABX", "MPH", "TAY", "NPT", "SOO", "WGN", "AJT", "KYE", "YTO"}
 FLY_CARGO_IATA = {"KZ", "CK", "O3", "FX", "5X", "5Y", "CV", "K4", "PO", "RU", "3S", "LD", "QY", "D0", "Y8", "CF", "M6", "GB", "YG", "C8", "K9"}
-FLY_SKYS = {"cache": {}, "until": 0}
-FLY = {"cache": {}, "routes": {}, "lock": threading.Lock(), "last": 0.0, "bad": {}, "rq": set(), "rbusy": False, "fetch": threading.Lock(), "logged": {}}
+FLY_SKYS = {"cache": {}, "until": 0, "left": None, "out": 0, "tok": "", "texp": 0, "tbad": 0, "err": ""}
+FLY = {"cache": {}, "routes": {}, "lock": threading.Lock(), "last": 0.0, "bad": {}, "rq": set(), "rbusy": False, "fetch": threading.Lock(), "logged": {}, "seen": {}, "view": {}, "used": 0, "hex": {}, "hq": set(), "hbusy": False}
 
 
 def fly_cargo(fn, cs=""):
@@ -5448,19 +5455,81 @@ def fly_fetch(ap):
     raise RuntimeError(err)
 
 
-def fly_sky(ap):
-    """OpenSky 的飛機，換成跟 adsb.fi 一樣的格式；位置照速度推算到現在"""
+def fly_sky_tok():
+    """有填 OpenSky 帳號：換一張通行證（大約 30 分鐘，快過期才重換）；帳號不對就先不登入"""
+    cid, sec = C.get("OPENSKY_ID", ""), C.get("OPENSKY_SECRET", "")
+    now = time.time()
+    if not (cid and sec) or now < FLY_SKYS["tbad"]:
+        return ""
+    if FLY_SKYS["tok"] and now < FLY_SKYS["texp"]:
+        return FLY_SKYS["tok"]
+    body = urllib.parse.urlencode({"grant_type": "client_credentials", "client_id": cid, "client_secret": sec}).encode()
+    try:
+        req = urllib.request.Request(FLY_SKY_AUTH, data=body, headers={"User-Agent": "vps-sentinel", "Content-Type": "application/x-www-form-urlencoded"})
+        with urllib.request.urlopen(req, timeout=8) as r:
+            d = json.loads(r.read())
+        FLY_SKYS.update(tok=str(d["access_token"]), texp=now + max(60, int(d.get("expires_in") or 1800) - 60), err="")
+        return FLY_SKYS["tok"]
+    except urllib.error.HTTPError as e:
+        bad = e.code in (400, 401, 403)
+        FLY_SKYS.update(tbad=now + (600 if bad else 60), err="帳號不對" if bad else f"登入失敗（{e.code}）")
+    except Exception as e:  # noqa: BLE001
+        FLY_SKYS.update(tbad=now + 60, err=f"登入失敗（{str(e)[:40]}）")
+    fly_log(f"OpenSky 登入：{FLY_SKYS['err']}")
+    return ""
+
+
+def fly_sky_gap():
+    """OpenSky 隔幾秒問一次：今天剩下的次數，平均分給一天裡大約三成的時間（有人在看的時候）"""
+    gap = 20 if C.get("OPENSKY_ID") and C.get("OPENSKY_SECRET") else FLY_SKY_EVERY
+    if FLY_SKYS["left"] is not None:
+        gap = max(gap, (86400 - time.time() % 86400) * .3 / max(1, FLY_SKYS["left"]))   # 次數每天 0 點（世界時間）重算
+    return min(900, gap)
+
+
+def fly_sky_need(ap, fids, ac):
+    """非必要不問 OpenSky：官網表上快落地、剛起飛的班機，愛好者那邊收得到的飛機不夠多，才需要問"""
+    if fids is None:
+        return True                                    # 沒有官網表（或還沒抓到）：看不出來，照問
+    now = time.time()
+    want = 0
+    for r in fids:
+        t = r.get("est") or r.get("sch") or 0
+        if r.get("st") == "取消":
+            continue
+        if (r.get("io") == "arr" and now - 600 < t < now + 2400 and r.get("st") != "已到") \
+                or (r.get("io") == "dep" and now - 1200 < t < now + 300):
+            want += 1
+    if not want:
+        return False                                   # 這段時間沒有班機起降
+    near = 0
+    for a in ac or []:
+        try:
+            if a.get("alt_baro") != "ground" and fly_dist(ap[3], ap[4], float(a["lat"]), float(a["lon"]))[0] < 80:
+                near += 1
+        except (AttributeError, KeyError, TypeError, ValueError):
+            continue
+    return near < want                                 # 愛好者收得到的比要起降的少：才補
+
+
+def fly_sky(ap, use=True):
+    """OpenSky 的飛機，換成跟 adsb.fi 一樣的格式；位置照速度推算到現在。use=False：只用上次問到的（不花次數）"""
     hit = FLY_SKYS["cache"].get(ap[0])
     now = time.time()
-    if (not hit or now - hit[0] >= FLY_SKY_EVERY) and now >= FLY_SKYS["until"]:
+    gap = fly_sky_gap()
+    if use and (not hit or now - hit[0] >= gap) and now >= FLY_SKYS["until"]:
         r = FLY_NM * 1.852 / 111
         q = {"la0": round(ap[3] - r, 3), "la1": round(ap[3] + r, 3),
              "lo0": round(ap[4] - r / max(.2, math.cos(math.radians(ap[3]))), 3), "lo1": round(ap[4] + r / max(.2, math.cos(math.radians(ap[3]))), 3)}
+        tok = fly_sky_tok()
         try:
-            req = urllib.request.Request(FLY_SKY.format(**q), headers={"User-Agent": "vps-sentinel"})
+            hd = {"User-Agent": "vps-sentinel", **({"Authorization": "Bearer " + tok} if tok else {})}
+            req = urllib.request.Request(FLY_SKY.format(**q), headers=hd)
             with urllib.request.urlopen(req, timeout=6) as res:
                 d = json.loads(res.read())
+                left = res.headers.get("X-Rate-Limit-Remaining")
             hit = FLY_SKYS["cache"][ap[0]] = (now, float(d.get("time") or now), d.get("states") or [])
+            FLY_SKYS.update(out=0, left=int(left) if left and left.isdigit() else FLY_SKYS["left"])
         except Exception as e:  # noqa: BLE001
             wait = 60
             if isinstance(e, urllib.error.HTTPError) and e.code == 429:      # 今天的次數用完了
@@ -5468,9 +5537,14 @@ def fly_sky(ap):
                     wait = int(e.headers.get("X-Rate-Limit-Retry-After-Seconds") or 3600)
                 except ValueError:
                     wait = 3600
+                FLY_SKYS.update(out=now + min(wait, 86400), left=0)
+            elif isinstance(e, urllib.error.HTTPError) and e.code == 401 and tok:   # 通行證過期：下次重換
+                FLY_SKYS.update(tok="", texp=0)
+                wait = 5
             FLY_SKYS["until"] = now + min(wait, 86400)
             fly_log(f"OpenSky：{str(e)[:60]}")
-    if not hit or now - hit[0] > 120:
+    keep = min(600, max(120, gap * 2.5))           # 問得比較少的時候，上一次的位置留久一點（照速度推算）
+    if not hit or now - hit[0] > keep:
         return []
     out = []
     for x in hit[2]:
@@ -5480,15 +5554,17 @@ def fly_sky(ap):
             seen = max(0, now - float(x[3] or hit[1]))
             v, trk = float(x[9] or 0), x[10]
             lat, lon = float(x[6]), float(x[5])
-            if trk is not None and v and seen < 90:               # 推算到現在的位置
+            if trk is not None and v and seen < keep and not x[8]:   # 推算到現在的位置
                 k = v * seen / 111320
                 lat += k * math.cos(math.radians(trk))
                 lon += k * math.sin(math.radians(trk)) / max(.2, math.cos(math.radians(lat)))
             alt = x[7] if x[7] is not None else x[13]
+            if alt is not None and x[11] and seen < keep and not x[8]:
+                alt = max(0.0, float(alt) + float(x[11]) * seen)
             out.append({"hex": str(x[0] or ""), "flight": str(x[1] or "").strip(), "lat": lat, "lon": lon,
                         "alt_baro": "ground" if x[8] else (round(float(alt) / 0.3048) if alt is not None else None),
                         "gs": v * 1.94384, "track": trk, "baro_rate": float(x[11] or 0) * 196.85,
-                        "squawk": x[14], "seen_pos": seen if seen < 90 else 999})
+                        "squawk": x[14], "seen_pos": 0 if seen < keep else 999})   # 已經推算到現在了
         except (TypeError, ValueError):
             continue
     return out
@@ -5755,6 +5831,61 @@ def fly_routes():
                     FLY["routes"].pop(c, None)
 
 
+def fly_hex_fill(ac):
+    """收到的飛機沒有註冊號或機型：用之前查過的補上，沒查過的排進背景去查"""
+    now, want = time.time(), []
+    for a in ac:
+        if not isinstance(a, dict) or (a.get("r") and a.get("t")):
+            continue
+        h = str(a.get("hex") or "").lower().lstrip("~")
+        if not re.fullmatch(r"[0-9a-f]{6}", h):
+            continue
+        k = FLY["hex"].get(h)
+        if k and (k.get("r") or k.get("t")):
+            a["r"], a["t"] = a.get("r") or k.get("r") or "", a.get("t") or k.get("t") or ""
+        elif not k or now - k.get("at", 0) > 7 * 86400:      # 查不到的，一週後再試
+            want.append(h)
+    if want:
+        with FLY["lock"]:
+            FLY["hq"].update(want)
+            if FLY["hbusy"]:
+                return
+            FLY["hbusy"] = True
+        threading.Thread(target=fly_hexes, daemon=True).start()
+
+
+def fly_hexes():
+    """在背景一架一架問 hexdb.io（每秒最多兩架）；連不上就先停"""
+    bad = 0
+    while bad < 3:
+        with FLY["lock"]:
+            h = FLY["hq"].pop() if FLY["hq"] else ""
+            if not h:
+                break
+        try:
+            req = urllib.request.Request(FLY_HEX + h, headers={"User-Agent": "vps-sentinel"})
+            with urllib.request.urlopen(req, timeout=8) as r:
+                d = json.loads(r.read())
+            FLY["hex"][h] = {"at": time.time(), "r": str(d.get("Registration") or "")[:12].upper(), "t": str(d.get("ICAOTypeCode") or "")[:4].upper()}
+            bad = 0
+        except urllib.error.HTTPError as e:
+            if e.code == 404:
+                FLY["hex"][h] = {"at": time.time()}              # 資料庫裡沒有這架
+            else:
+                bad += 1
+        except Exception as e:  # noqa: BLE001
+            bad += 1
+            fly_log(f"hexdb：{str(e)[:60]}")
+        time.sleep(.5)
+    with FLY["lock"]:
+        if bad >= 3:
+            FLY["hq"].clear()
+        FLY["hbusy"] = False
+    if len(FLY["hex"]) > 20000:
+        for k in sorted(FLY["hex"], key=lambda k: FLY["hex"][k].get("at", 0))[:5000]:
+            FLY["hex"].pop(k, None)
+
+
 def fly_route(cs, lat, lon):
     if not re.fullmatch(r"[A-Z]{3}\d[A-Z0-9]{0,4}", cs):
         return None                       # 私人飛機、註冊號當呼號的查不到
@@ -5884,7 +6015,11 @@ def fly_merge(ap, fids, rows, io):
                "org": pl if io == "arr" else me, "dst": me if io == "arr" else pl, "ph": io, "st": r["st"], "emg": False, "mil": False, "rare": False,
                "fids": True, "sch": r["sch"], "est": r["est"], "gate": r["gate"], "term": r["term"], "share": r.get("share") or []}
         p = next((live[fly_fn(f)] for f in [r["fn"], *row["share"]] if fly_fn(f) in live), None)
+        sk = io + ":" + fly_fn(r["fn"])
+        seen = FLY["seen"].get(sk)
         if p:
+            if p.get("reg") or p.get("t"):            # 記住這班收到的飛機資料：停好關掉訊號後一樣查得到
+                FLY["seen"][sk] = {"at": now, "sch": r["sch"], "reg": p["reg"], "t": p["t"], "model": p["model"]}
             used.add(p["id"])
             row.update({k: p[k] for k in ("id", "cs", "reg", "t", "model", "alt", "spd", "vr", "d", "eta", "trk", "x", "y", "sq", "emg", "mil", "rare") if p[k] or k not in ("t", "model")})   # 收到的訊號沒有機型：留官網的
             row["live"] = True
@@ -5894,8 +6029,14 @@ def fly_merge(ap, fids, rows, io):
                     row["est"] = now + p["eta"] * 60
             if p["emg"]:
                 row["st"] = p["st"]
+        elif seen and seen.get("sch") == r["sch"] and now - seen.get("at", 0) < 6 * 3600:
+            row.update(reg=seen.get("reg") or "", t=seen.get("t") or row["t"], model=seen.get("model") or row["model"], seen=seen["at"])
         out.append(row)
     out.sort(key=lambda o: o["est"] or o["sch"] or now)
+    if len(FLY["seen"]) > 2000:
+        for k, v in list(FLY["seen"].items()):
+            if now - v.get("at", 0) > 6 * 3600:
+                FLY["seen"].pop(k, None)
     return out[:300]                                   # 網頁照時段分開看，可以多給一點
 
 
@@ -5921,14 +6062,18 @@ def fly_night(ap, now=None):
     return ap[5] == "TW" and ap[0] != "TPE" and h < 6
 
 
-def fly_board(code):
+def fly_board(code, bg=False):
+    """一個機場的看板；bg=True 是背景在抓（沒人在看這個機場就不花 OpenSky 的次數）"""
     db = fly_db()
     ap = db.get(code) or db["TPE"]
+    if not bg:
+        FLY["view"][ap[0]] = FLY["used"] = time.time()
+        fly_bg_start()
     if fly_night(ap):
         return {"ok": True, "t": time.time(), "ap": fly_ap(ap), "night": True, "src": "", "home": "", "srcs": [],
                 "fids": True, "arr": [], "dep": [], "gnd": [], "over": [], "rest": []}
     for c in FLY_PIN:                     # 其他台灣機場的官網表也在背景先抓好，換機場就不用等
-        if c != ap[0] and c in db and not fly_night(db[c]):
+        if c != ap[0] and c in db and not fly_night(db[c]) and not bg:
             fly_fids(c, 0)
     with FLY["fetch"]:                    # 好幾個人同時看：只抓一次
         hit = FLY["cache"].get(ap[0])
@@ -5942,7 +6087,8 @@ def fly_board(code):
             ac, src, home = fly_fetch(ap)
         except RuntimeError as e:
             ac, src, home, err = None, "", "", e
-        more = fly_sky(ap)
+        look = not bg or time.time() - FLY["view"].get(ap[0], 0) < 60      # 有人正在看這個機場
+        more = fly_sky(ap, look and fly_sky_need(ap, fids, ac))
         if ac is None and not more and fids is None:
             raise err
         ac = ac or []
@@ -5954,6 +6100,7 @@ def fly_board(code):
         srcs.insert(0, [FLY_FIDS_NAME[ap[0]][0] + "官網", FLY_FIDS_NAME[ap[0]][1]])
     if add:
         srcs.append(["OpenSky", "https://opensky-network.org"])
+    fly_hex_fill(ac)
     rows = []
     for a in ac:                              # 一架資料怪怪的就跳過，不要整個看板都出不來
         try:
@@ -5976,9 +6123,95 @@ def fly_board(code):
     for p in arr + dep + gnd + over + rest:
         p["kind"] = fly_kind(p.get("t"), p.get("model"), p.get("cat"))
     out = {"ok": True, "t": time.time(), "ap": fly_ap(ap), "src": src or (srcs[0][0] if srcs else ""), "home": home, "srcs": srcs,
-           "fids": fids is not None, "arr": arr, "dep": dep, "gnd": gnd, "over": over, "rest": rest, "als": FLY_ALS}
+           "fids": fids is not None, "arr": arr, "dep": dep, "gnd": gnd, "over": over, "rest": rest, "als": FLY_ALS,
+           "skyout": FLY_SKYS["out"] if FLY_SKYS["out"] > time.time() and fly_sky_need(ap, fids, ac) else 0}   # OpenSky 今天的次數用完了：網頁寫幾點恢復
     FLY["cache"][ap[0]] = out
     return out
+
+
+def sky_conf(cfg):
+    """設定 → OpenSky 帳號：看狀態、儲存（先試著登入一次）、移除"""
+    act = cfg.get("action")
+    if act == "save":
+        cid, sec = str(cfg.get("id") or "").strip(), str(cfg.get("secret") or "").strip()
+        if not cid or not sec or not re.fullmatch(r"[\w.@+-]{1,200}", cid) or not re.fullmatch(r"\S{1,400}", sec):
+            return False, "兩格都要貼上"
+        old = C.get("OPENSKY_ID", ""), C.get("OPENSKY_SECRET", "")
+        C["OPENSKY_ID"], C["OPENSKY_SECRET"] = cid, sec
+        FLY_SKYS.update(tok="", texp=0, tbad=0, err="")
+        if not fly_sky_tok():
+            C["OPENSKY_ID"], C["OPENSKY_SECRET"] = old
+            err, FLY_SKYS["tok"] = FLY_SKYS["err"] or "登入失敗", ""
+            FLY_SKYS.update(tbad=0, err="")
+            return False, "client_id 或 client_secret 不對" if err == "帳號不對" else err
+        write_conf({"OPENSKY_ID": cid, "OPENSKY_SECRET": sec})
+        FLY_SKYS.update(until=0, out=0, left=None)     # 次數變多了：馬上可以再問
+        log("機場起降：OpenSky 帳號已設定")
+    elif act == "off":
+        write_conf({"OPENSKY_ID": "", "OPENSKY_SECRET": ""})
+        C["OPENSKY_ID"] = C["OPENSKY_SECRET"] = ""
+        FLY_SKYS.update(tok="", texp=0, err="", left=None)
+    on = bool(C.get("OPENSKY_ID") and C.get("OPENSKY_SECRET"))
+    return True, {"ok": True, "on": on, "id": C.get("OPENSKY_ID", "") if on else "", "left": FLY_SKYS["left"],
+                  "out": FLY_SKYS["out"] if FLY_SKYS["out"] > time.time() else 0, "err": FLY_SKYS["err"] if on else ""}
+
+
+def fly_seen_load():
+    """上次記下的班機資料（停好關掉訊號的飛機）；最近 7 天有人看過機場起降，就接著在背景抓"""
+    try:
+        with open(FLY_HEX_FILE, encoding="utf-8") as f:
+            FLY["hex"].update({k: v for k, v in json.load(f).items() if isinstance(v, dict)})
+    except (OSError, ValueError, AttributeError):
+        pass
+    try:
+        with open(FLY_SEEN_FILE, encoding="utf-8") as f:
+            d = json.load(f)
+        FLY["seen"].update({k: v for k, v in (d.get("seen") or {}).items() if isinstance(v, dict) and time.time() - v.get("at", 0) < 6 * 3600})
+        FLY["used"] = float(d.get("used") or 0)
+    except (OSError, ValueError, AttributeError, TypeError):
+        return
+    if time.time() - FLY["used"] < 7 * 86400:
+        fly_bg_start()
+
+
+def fly_seen_save():
+    try:
+        os.makedirs(DATA_DIR, exist_ok=True)
+        tmp = FLY_SEEN_FILE + ".tmp"
+        with open(tmp, "w", encoding="utf-8") as f:
+            json.dump({"used": FLY["used"], "seen": dict(FLY["seen"])}, f, ensure_ascii=False)
+        os.replace(tmp, FLY_SEEN_FILE)
+        with open(FLY_HEX_FILE + ".tmp", "w", encoding="utf-8") as f:
+            json.dump(dict(FLY["hex"]), f)
+        os.replace(FLY_HEX_FILE + ".tmp", FLY_HEX_FILE)
+    except OSError as e:
+        fly_log(f"存不了班機資料：{e}")
+
+
+def fly_bg_start():
+    with FLY["lock"]:
+        if FLY.get("bg"):
+            return
+        FLY["bg"] = True
+    threading.Thread(target=fly_loop, daemon=True).start()
+
+
+def fly_loop():
+    """用過機場起降之後，主機就一直在背景抓四個機場（官網表、飛機位置）：打開就是新的，停好的飛機也記得；7 天沒人看就停"""
+    saved = time.time()
+    while time.time() - FLY["used"] < 7 * 86400:
+        time.sleep(FLY_BG)
+        if not watchers():                    # 被監看的主機不用自己抓
+            for c in FLY_PIN:
+                try:
+                    fly_board(c, True)
+                except Exception as e:  # noqa: BLE001
+                    fly_log(f"背景抓{c}：{str(e)[:60]}")
+        if time.time() - saved > 300:
+            saved = time.time()
+            fly_seen_save()
+    FLY["bg"] = False
+    fly_seen_save()
 
 
 # 雷達底圖上標的地名（名稱、緯度、經度）
@@ -6700,6 +6933,14 @@ class Handler(BaseHTTPRequestHandler):
                 return self.send(200, json.dumps({"ok": True, **self_check(act == "check"), "cloud": cloud_check(act == "check")},
                                                  ensure_ascii=False))
             return self.send(200 if ok else 400, json.dumps({"ok": ok, "message": msg}, ensure_ascii=False))
+        if u.path == "/api/opensky":
+            try:
+                cfg = json.loads(body or b"{}")
+            except ValueError:
+                cfg = {}
+            ok, res = sky_conf(cfg if isinstance(cfg, dict) else {})
+            out = res if isinstance(res, dict) else {"ok": ok, "message": res}
+            return self.send(200 if ok else 400, json.dumps(out, ensure_ascii=False))
         if u.path == "/api/telegram":
             try:
                 cfg = json.loads(body or b"{}")
@@ -6748,6 +6989,8 @@ def main():
     def stop(*_):
         keep_stop()
         COL.save()
+        if FLY["used"]:
+            fly_seen_save()
         log("已存檔，結束")
         sys.exit(0)
     signal.signal(signal.SIGTERM, stop)
@@ -6757,6 +7000,7 @@ def main():
     threading.Thread(target=yt_update_loop, daemon=True).start()  # 有裝 yt-dlp／deno 才會真的做事
     threading.Thread(target=alert_loop, daemon=True).start()      # 沒設定時也會跑，網頁上一設定好就開始通知
     dl_load()                                                     # 上次沒下載完的接著下載
+    fly_seen_load()                                               # 有在用機場起降：背景接著抓
     srv = ThreadingHTTPServer((BIND, PORT), Handler)
     log(f"VPS 哨兵 {VERSION} 已啟動：http://{BIND}:{PORT}  名稱={NAME}  其他主機={len(PEERS)} 台  "
         f"Telegram={'開' if TG_BOT and TG_CHAT else '關'}")
