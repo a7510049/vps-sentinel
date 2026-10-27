@@ -135,6 +135,22 @@ class SmokeTest(Server):
         self.assertEqual(code, 200, body)
         self.assertFalse(json.loads(body)["on"])
 
+    def test_fly_logo(self):
+        """標誌圖：主機存好的直接給（不用登入、官網的圖不能跑程式），清單外的不給"""
+        d = os.path.join(self.tmp.name, "data", "fly-logos")
+        os.makedirs(d, exist_ok=True)
+        png = b"\x89PNG\r\n\x1a\n" + b"0" * 32
+        with open(os.path.join(d, "BR"), "wb") as f:
+            f.write(png)
+        code, headers, body = self.request("/api/fly-logo?k=BR")
+        self.assertEqual(code, 200)
+        self.assertEqual(body, png)
+        self.assertEqual(headers["Content-Type"], "image/png")
+        self.assertIn("sandbox", headers["Content-Security-Policy"])
+        for k in ("ZZ", "..%2Fstate", ""):
+            with self.subTest(k=k):
+                self.assertEqual(self.request("/api/fly-logo?k=" + k)[0], 404)
+
     def test_api_status(self):
         code, headers, body = self.request("/api/status", token=TOKEN)
         self.assertEqual(code, 200)
