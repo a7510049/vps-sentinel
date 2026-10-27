@@ -5,6 +5,17 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - run: |
-          for c in FX ZZ 0Q 5X; do
-            curl -sL -A "Mozilla/5.0" -o x.png "https://pics.avs.io/200/200/$c.png"; echo "IMG $c $(base64 -w0 x.png)"
-          done
+          pip install -q pillow
+          for c in FX ZZ 0Q KZ CK K4 CI PO CV; do curl -sL -A "Mozilla/5.0" -o $c.png "https://pics.avs.io/200/200/$c.png"; done
+          python3 - <<'PY'
+          from PIL import Image
+          for c in "FX ZZ 0Q KZ CK K4 CI PO CV".split():
+              im = Image.open(c + ".png").convert("RGBA"); px = [p for p in im.getdata() if p[3] > 128]
+              cols = {}
+              for p in px: k = (p[0]//32, p[1]//32, p[2]//32); cols[k] = cols.get(k, 0) + 1
+              top = sorted(cols.items(), key=lambda x: -x[1])[:4]
+              print(c, len(px), len(cols), top, im.info.get("exif", b"")[:0])
+              # ascii art 40x20
+              sm = im.resize((40, 20))
+              for y in range(20): print("".join("#" if sm.getpixel((x, y))[3] > 128 else "." for x in range(40)))
+          PY
