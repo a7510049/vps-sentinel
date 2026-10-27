@@ -195,6 +195,7 @@ class Flights(unittest.TestCase):
         self.assertEqual([x[0] for x in d["srcs"]], ["桃園機場官網", "測試"])
         br = arr["BR2196"]                    # 官網的表定時間、登機門，加上收得到的即時位置
         self.assertTrue(br["fids"] and br["live"])
+        self.assertTrue(all(p["use"] == "客機" for p in d["arr"] + d["dep"]), d["arr"] + d["dep"])   # 官網表上的都標客機
         self.assertEqual((br["gate"], br["share"], br["id"]), ("C8", ["NH5800"], "899001"))
         self.assertEqual(br["term"], "第二航廈")
         self.assertNotIn("NH5800", arr)

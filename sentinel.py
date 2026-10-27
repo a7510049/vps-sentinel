@@ -42,7 +42,7 @@ from collections import deque
 from concurrent.futures import ThreadPoolExecutor
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
-VERSION = "3.31"
+VERSION = "3.32"
 
 # ───────────────────────── 哨兵備份檔（.vsbk）─────────────────────────
 # 哨兵專用的備份格式：外面是自己的檔案格式，裡面用的是成熟、標準的加密方法（不自己發明加密）：
@@ -6367,7 +6367,7 @@ def fly_merge(ap, fids, rows, io):
         pl = {"code": r["pc"], "name": r["pl"]}
         row = {"id": f"f-{io}-{r['fn']}-{int(r['sch'])}", "fn": r["fn"], "cs": "", "al": r["al"], "reg": "", "t": r["type"], "model": r["type"],
                "org": pl if io == "arr" else me, "dst": me if io == "arr" else pl, "ph": io, "st": r["st"], "emg": False, "mil": False, "rare": False,
-               "fids": True, "sch": r["sch"], "est": r["est"], "gate": r["gate"], "gate0": r.get("gate0") or "", "type0": r.get("type0") or "", "term": r["term"], "share": r.get("share") or []}
+               "use": "客機", "fids": True, "sch": r["sch"], "est": r["est"], "gate": r["gate"], "gate0": r.get("gate0") or "", "type0": r.get("type0") or "", "term": r["term"], "share": r.get("share") or []}
         p = next((live[fly_fn(f)] for f in [r["fn"], *row["share"]] if fly_fn(f) in live), None)
         sk = io + ":" + fly_fn(r["fn"])
         seen = FLY["seen"].get(sk)
@@ -6378,6 +6378,8 @@ def fly_merge(ap, fids, rows, io):
             used.add(p["id"])
             row.update({k: p[k] for k in ("id", "cs", "reg", "t", "model", "alt", "spd", "vr", "d", "eta", "trk", "x", "y", "sq", "emg", "mil", "rare") if p[k] or k not in ("t", "model")})   # 收到的訊號沒有機型：留官網的
             row["live"] = True
+            if p["mil"]:
+                row["use"] = "軍機"
             if p["ph"] == io and not done and r["st"] != "取消":
                 row["st"] = p["st"]                    # 天上的飛機：用即時的「即將落地」「剛起飛」
                 if io == "arr" and p["eta"] is not None:
