@@ -6,8 +6,6 @@ jobs:
     steps:
       - run: |
           set +e
-          curl -sL -m 20 -A "Mozilla/5.0" https://www.taoyuan-airport.com/ | grep -oE '(href|src)="[^"]+"' | head -40
-          for u in https://www.taoyuan-airport.com/favicon.ico https://www.tca.gov.tw/logo.png https://www.tca.gov.tw/assets/front/cht/base/images/logo.png https://www.tca.gov.tw/assets/images/icon.ico https://www.tsa.gov.tw/static/img/pavicon.png https://www.kia.gov.tw/images/apple-touch-icon.png; do
-            curl -s -o i -w "%{http_code} %{content_type} %{size_download} $u :: " -m 40 -A "Mozilla/5.0" "$u"; file -b i
-            n=$(stat -c %s i); if [ "$n" -lt 70000 ]; then echo "B64BEGIN $(basename $u)"; base64 -w0 i; echo; echo B64END; fi
-          done
+          curl -sL -m 20 -A "Mozilla/5.0" https://www.taoyuan-airport.com/ > t.html; grep -oE '(href|src)="[^"]+"' t.html
+          for j in $(grep -oE 'src="[^"]+\.js"' t.html | cut -d'"' -f2); do curl -sL -m 20 -A "Mozilla/5.0" "https://www.taoyuan-airport.com/$j" | grep -oE '[A-Za-z0-9_/.-]*(logo|Logo|LOGO)[A-Za-z0-9_/.-]*\.(png|svg|jpg|webp)' | sort -u | head -20; done
+          for u in https://www.taoyuan-airport.com/assets/images/logo.svg https://www.taoyuan-airport.com/assets/img/logo.svg https://www.taoyuan-airport.com/assets/images/logo.png https://www.taoyuan-airport.com/apple-touch-icon.png; do curl -s -o i -w "%{http_code} %{content_type} %{size_download} $u :: " -m 20 -A "Mozilla/5.0" "$u"; file -b i; done
