@@ -42,7 +42,7 @@ from collections import deque
 from concurrent.futures import ThreadPoolExecutor
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
-VERSION = "3.17"
+VERSION = "3.18"
 
 # ───────────────────────── 哨兵備份檔（.vsbk）─────────────────────────
 # 哨兵專用的備份格式：外面是自己的檔案格式，裡面用的是成熟、標準的加密方法（不自己發明加密）：
@@ -5391,7 +5391,10 @@ FLY_AL = {
     "BOX": ("3S", "德國貨運"), "GEC": ("LH", "漢莎貨運"),
 }
 # 機型代碼 → 好讀的名稱（接收站沒給時用）
-FLY_ALS = sorted({v[0] for v in FLY_AL.values()})      # 這些航空公司網頁會顯示標誌（其他的只顯示代碼）
+# 這些航空公司網頁會顯示標誌（其他的只顯示代碼）：台灣四個機場官網表上有的，一家一家確認過 Google 有標誌（沒有的會拿到灰色假圖，例如 ZE、RF）
+FLY_ALS = sorted(({v[0] for v in FLY_AL.values()} | set(
+    "5J 7C 7G 9C 9G AA AC AE AF AI AK AS AV B7 BI BR BX CA CI CM CX CZ DL EK EY FD GK HB HO HU HX IT JL JX KE KL LJ LO MF MH MM MU "
+    "NH NU NX NZ OD OZ PG PR QF SC SL SQ TG TK TR TW UA UO UX VJ VN VU VZ Z2 ZH QV".split())) - {"ZE", "RF"})
 FLY_TYPES = {
     "A319": "A319", "A320": "A320", "A20N": "A320neo", "A321": "A321", "A21N": "A321neo", "BCS1": "A220-100", "BCS3": "A220-300",
     "A306": "A300-600", "A332": "A330-200", "A333": "A330-300", "A338": "A330-800", "A339": "A330-900",
@@ -5616,7 +5619,7 @@ def fly_sky(ap, use=True):
 FLY_FIDS_URL = {
     "TPE": os.environ.get("SENTINEL_FIDS_TPE", "https://www.taoyuan-airport.com/uploads/flightx/a_flight_v4.txt"),
     "KHH": os.environ.get("SENTINEL_FIDS_KHH", "https://www.kia.gov.tw/data/"),
-    "RMQ": os.environ.get("SENTINEL_FIDS_RMQ", "https://www.tca.gov.tw/index.php?act=fids&code=api_departure_arrival&airFlyIO="),
+    "RMQ": os.environ.get("SENTINEL_FIDS_RMQ", "https://www.tca.gov.tw/?act=fids&code=api_departure_arrival&airFlyIO="),
     "TSA": os.environ.get("SENTINEL_FIDS_TSA", "https://www.tsa.gov.tw/api/airFlyTab/Paging"),
 }
 FLY_FIDS_NAME = {"TPE": ("桃園機場", "https://www.taoyuan-airport.com"), "KHH": ("高雄機場", "https://www.kia.gov.tw"),
@@ -5719,12 +5722,12 @@ def fly_fids_rmq():
 
     def one(n):
         try:
-            got[n] = fly_get(FLY_FIDS_URL["RMQ"] + str(n), timeout=20)
+            got[n] = fly_get(FLY_FIDS_URL["RMQ"] + str(n), timeout=60)
         except Exception as e:  # noqa: BLE001
             got[n] = e
     ths = [threading.Thread(target=one, args=(n,), daemon=True) for n in (1, 2)]      # 台中官網很慢：出發、抵達同時抓
     [t.start() for t in ths]
-    [t.join(25) for t in ths]
+    [t.join(70) for t in ths]
     for io, n in (("dep", 1), ("arr", 2)):
         b = got.get(n)
         if not isinstance(b, bytes):
@@ -5787,8 +5790,11 @@ def fly_fids_pull(code, hit):
         hit["busy"], hit["done"] = False, True
 
 
+FLY_FIDS_KEEP = {"RMQ": 3 * 3600}                    # 台中官網常常好一陣子連不上：上次抓到的表用久一點，總比只剩幾架好
+
+
 def fly_fids(code, wait=1.5):
-    """官網航班表：1 分鐘更新一次（在背景抓，看板不用等）；抓不到就先用上一次的，15 分鐘內都算數。
+    """官網航班表：1 分鐘更新一次（在背景抓，看板不用等）；抓不到就先用上一次的，15 分鐘內都算數（台中 3 小時）。
     第一次還沒抓完回傳 "wait"：網頁先轉圈圈，不要先秀幾架收得到訊號的、過幾秒又冒出一大堆"""
     if code not in FLY_FIDS_GET:
         return None
@@ -5798,7 +5804,7 @@ def fly_fids(code, wait=1.5):
         hit = FLY_FIDS[code] = {"ok": 0, "try": 0, "rows": [], "busy": False, "done": False}
         fn = os.path.join(DATA_DIR, "fids", code + ".json")
         try:                                           # 上次存的還新（15 分鐘內）：先拿來用，背景再更新
-            if now - os.path.getmtime(fn) < 900:
+            if now - os.path.getmtime(fn) < FLY_FIDS_KEEP.get(code, 900):
                 with open(fn, encoding="utf-8") as f:
                     hit.update(rows=json.load(f), ok=os.path.getmtime(fn), done=True)
         except (OSError, ValueError):
@@ -5811,7 +5817,7 @@ def fly_fids(code, wait=1.5):
             th.join(wait)                              # 通常一下子就好，順便等一下
     if not hit["done"]:
         return "wait"
-    return hit["rows"] if time.time() - hit["ok"] < 900 else None
+    return hit["rows"] if time.time() - hit["ok"] < FLY_FIDS_KEEP.get(code, 900) else None
 
 
 def fly_log(msg):
@@ -6115,6 +6121,26 @@ def fly_fn(fn):
     return m.group(1) + m.group(2) + m.group(3) if m else fn
 
 
+FLY_FAM = {"A19N": "A31", "A20N": "A32", "A21N": "A32", "B37M": "B73", "B38M": "B73", "B39M": "B73", "B3XM": "B73"}
+
+
+def fly_fam(m):
+    """機型的大類（A32、B77…），用來比對兩邊說的是不是同一種飛機；看不出來回空字串"""
+    m = re.sub(r"[^A-Z0-9]", "", str(m or "").upper())
+    if m in FLY_FAM:
+        return FLY_FAM[m]
+    m = re.sub(r"^(7[0-8]7)", r"B\1", m)
+    x = re.match(r"([AB])(3[0-8]|7[0-8])", m)
+    return x.group(1) + x.group(2) if x else ""
+
+
+def fly_fix_type(p, r):
+    """飛機資料庫的機型跟機場官網排的不同（例如舊註冊號留著四發的 A340）：照官網，註冊號也不可信"""
+    a, b = fly_fam(p.get("t") or p.get("model")), fly_fam(r.get("type"))
+    if a and b and a != b:
+        p.update(t="", model=r["type"], reg="")
+
+
 def fly_merge(ap, fids, rows, io):
     """官網的航班表配上收得到訊號的飛機：表上有的顯示即時位置、幾分鐘後落地；表上沒有的（貨機、私人飛機）不列"""
     now = time.time()
@@ -6138,6 +6164,7 @@ def fly_merge(ap, fids, rows, io):
         sk = io + ":" + fly_fn(r["fn"])
         seen = FLY["seen"].get(sk)
         if p:
+            fly_fix_type(p, r)
             if p.get("reg") or p.get("t"):            # 記住這班收到的飛機資料：停好關掉訊號後一樣查得到
                 FLY["seen"][sk] = {"at": now, "sch": r["sch"], "reg": p["reg"], "t": p["t"], "model": p["model"]}
             used.add(p["id"])
@@ -6151,6 +6178,7 @@ def fly_merge(ap, fids, rows, io):
                 row["st"] = p["st"]
         elif seen and seen.get("sch") == r["sch"] and now - seen.get("at", 0) < 6 * 3600:
             row.update(reg=seen.get("reg") or "", t=seen.get("t") or row["t"], model=seen.get("model") or row["model"], seen=seen["at"])
+            fly_fix_type(row, r)
         out.append(row)
     out.sort(key=lambda o: o["est"] or o["sch"] or now)
     if len(FLY["seen"]) > 2000:
@@ -6170,6 +6198,7 @@ def fly_gnd(ap, fids, gnd):
         r = by.get(fly_fn(p["fn"]))
         if not r or fly_cargo(r["fn"]):
             continue
+        fly_fix_type(p, r)
         pl = {"code": r["pc"], "name": r["pl"]}
         out.append(dict(p, fn=r["fn"], al=r["al"], org=pl if r["io"] == "arr" else me, dst=me if r["io"] == "arr" else pl,
                         model=p["model"] or r["type"], gate=r["gate"]))
