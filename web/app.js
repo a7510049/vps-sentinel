@@ -3044,7 +3044,7 @@ function flyRows(f, d, list, n, byHr, tz, anim){
   const rows = [...box.children].slice(0, want), vh = innerHeight, offs = FLYSTILL ? [] : rows.map(r => { const rc = r.getBoundingClientRect(); return rc.bottom < 0 || rc.top > vh; });   // 先一次量好哪幾列在畫面外
   rows.forEach((r, i) => {
     const p = list[i], v = flyRowV(p, FLYS.tab, tz), off = offs[i] || FLYSTILL;
-    r.dataset.id = p ? p.id : ""; r.classList.toggle("bad", v.cls === "bad"); r.classList.toggle("hot", v.cls === "hot"); r.classList.toggle("empty", !p); r.classList.toggle("sel", !!p && p.id === FLYSEL);
+    r.dataset.id = p ? p.id : ""; r.classList.toggle("bad", v.cls === "bad"); r.classList.toggle("hot", v.cls === "hot"); r.classList.toggle("empty", !p); r.classList.toggle("nopc", !!p && !v.pc); r.classList.toggle("sel", !!p && p.id === FLYSEL);
     FLYF.forEach((k, j) => flapSet(r.querySelector(`.fk.${k} .sf`), v[k], i * T.fast * .35 + j * T.fast * .2, off));
     FLYX.forEach(k => put(r.querySelector(`.fk.${k}`), v[k]));
     flyLogoSet(r.querySelector(".fk.fal .alg"), p ? flyAl(p.fn) : "");

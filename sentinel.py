@@ -41,7 +41,7 @@ from collections import deque
 from concurrent.futures import ThreadPoolExecutor
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
-VERSION = "3.15"
+VERSION = "3.16"
 
 # ───────────────────────── 哨兵備份檔（.vsbk）─────────────────────────
 # 哨兵專用的備份格式：外面是自己的檔案格式，裡面用的是成熟、標準的加密方法（不自己發明加密）：
@@ -5649,11 +5649,17 @@ def fly_ts(day, hm):
         return None
 
 
+FLY_ZH_ALIAS = {"馬公": "MZG", "南竿": "LZN", "北竿": "MFK", "台北松山": "TSA", "松山": "TSA", "台北桃園": "TPE", "小港": "KHH",
+                "金邊": "KTI", "暹粒": "SAI", "長灘島": "KLO", "沖繩": "OKA", "那霸": "OKA", "宮古島": "SHI"}   # 官網常用的其他叫法
+
+
 def fly_zh_code(name):
     """官網只給中文地名（例如「沖繩」「仁川」）時，找出機場代碼"""
     name = re.sub(r"[A-Z]{3}$", "", str(name or "").strip())
     if not name:
         return ""
+    if name in FLY_ZH_ALIAS:
+        return FLY_ZH_ALIAS[name]
     for a in [*FLY_APS, *((c, *v) for c, v in FLY_ZH.items())]:
         if name in (a[2], a[1], a[1].replace("機場", "")) or a[2].startswith(name):
             return a[0]

@@ -273,6 +273,8 @@ class Flights(unittest.TestCase):
         S.fly_learn("QQQ", "某某")
         self.assertEqual(S.fly_place({"iata": "QQQ", "location": "Somewhere"})["name"], "某某")
         self.assertEqual(S.fly_zh_code("某某"), "QQQ")
+        for n, c in (("熊本", "KMJ"), ("富國島", "PQC"), ("馬公", "MZG"), ("胡志明", "SGN")):   # 台中官網只給中文地名
+            self.assertEqual(S.fly_zh_code(n), c)
         S.fly_learn("QQQ", "Somewhere")               # 英文的不學
         self.assertEqual(S.fly_city("QQQ"), "某某")
 
