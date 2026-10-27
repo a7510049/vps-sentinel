@@ -9,6 +9,7 @@ VPS 哨兵：用手機或電腦隨時查看 VPS 狀態
 """
 import base64
 import glob
+import gzip
 import hashlib
 import hmac
 import http.client
@@ -41,7 +42,7 @@ from collections import deque
 from concurrent.futures import ThreadPoolExecutor
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
-VERSION = "3.15"
+VERSION = "3.16"
 
 # ───────────────────────── 哨兵備份檔（.vsbk）─────────────────────────
 # 哨兵專用的備份格式：外面是自己的檔案格式，裡面用的是成熟、標準的加密方法（不自己發明加密）：
@@ -5257,9 +5258,12 @@ FLY_SKY_AUTH = os.environ.get("SENTINEL_SKY_AUTH", "https://auth.opensky-network
 FLY_SKY_EVERY = 30
 FLY_BG = int(os.environ.get("SENTINEL_FLY_BG") or 30)    # 背景每幾秒把四個機場都抓一次
 FLY_SEEN_FILE = os.path.join(DATA_DIR, "fly-seen.json")
-# 飛機編號（hex）→ 註冊號、機型：OpenSky 只給編號，用 hexdb.io 補（免註冊）；查過的存在主機上
-FLY_HEX = os.environ.get("SENTINEL_FLY_HEX", "https://hexdb.io/api/v1/aircraft/")
-FLY_HEX_FILE = os.path.join(DATA_DIR, "fly-hex.json")
+# 飛機編號（hex）→ 註冊號、機型：OpenSky 只給編號，用 tar1090-db（愛好者接收站共用、一直在更新的飛機資料庫）補；
+# 資料庫照編號開頭分成好幾個檔，用到哪個抓哪個，存在主機上一週
+FLY_TDB = os.environ.get("SENTINEL_FLY_TDB", "https://raw.githubusercontent.com/wiedehopf/tar1090-db/master/db/")
+FLY_TDB_DIR = os.path.join(DATA_DIR, "aircraft-db")
+FLY_TDBS = {}
+FLY_HEX_FILE = os.path.join(DATA_DIR, "fly-aircraft.json")
 FLY_NM = 40                                   # 抓機場方圓幾海里（約 74 公里）
 FLY_EVERY = 8                                 # 同一個機場幾秒內不重抓
 # 常用機場的中文名稱（代碼、名稱、城市、緯度、經度）；其他機場用 data/airports.tsv 的英文名稱
@@ -5649,11 +5653,17 @@ def fly_ts(day, hm):
         return None
 
 
+FLY_ZH_ALIAS = {"馬公": "MZG", "南竿": "LZN", "北竿": "MFK", "台北松山": "TSA", "松山": "TSA", "台北桃園": "TPE", "小港": "KHH",
+                "金邊": "KTI", "暹粒": "SAI", "長灘島": "KLO", "沖繩": "OKA", "那霸": "OKA", "宮古島": "SHI"}   # 官網常用的其他叫法
+
+
 def fly_zh_code(name):
     """官網只給中文地名（例如「沖繩」「仁川」）時，找出機場代碼"""
     name = re.sub(r"[A-Z]{3}$", "", str(name or "").strip())
     if not name:
         return ""
+    if name in FLY_ZH_ALIAS:
+        return FLY_ZH_ALIAS[name]
     for a in [*FLY_APS, *((c, *v) for c, v in FLY_ZH.items())]:
         if name in (a[2], a[1], a[1].replace("機場", "")) or a[2].startswith(name):
             return a[0]
@@ -5909,8 +5919,52 @@ def fly_hex_fill(ac):
         threading.Thread(target=fly_hexes, daemon=True).start()
 
 
+def fly_tdb_part(name):
+    """資料庫的一個分檔（gzip 壓縮的 JSON）：主機上存的一週內就直接用"""
+    hit = FLY_TDBS.get(name)
+    if hit and time.time() - hit[0] < 7 * 86400:
+        return hit[1]
+    fn = os.path.join(FLY_TDB_DIR, name + ".js")
+    try:
+        if time.time() - os.path.getmtime(fn) < 7 * 86400:
+            with open(fn, "rb") as f:
+                d = json.loads(gzip.decompress(f.read()))
+            FLY_TDBS[name] = (os.path.getmtime(fn), d)
+            return d
+    except (OSError, ValueError, EOFError):
+        pass
+    req = urllib.request.Request(FLY_TDB + name + ".js", headers={"User-Agent": "vps-sentinel"})
+    with urllib.request.urlopen(req, timeout=20) as r:
+        raw = r.read(8 << 20)
+    d = json.loads(gzip.decompress(raw))
+    if not isinstance(d, dict):
+        raise ValueError("格式不對")
+    try:
+        os.makedirs(FLY_TDB_DIR, exist_ok=True)
+        with open(fn + ".tmp", "wb") as f:
+            f.write(raw)
+        os.replace(fn + ".tmp", fn)
+    except OSError:
+        pass
+    FLY_TDBS[name] = (time.time(), d)
+    return d
+
+
+def fly_tdb(h):
+    """飛機編號 → (註冊號, 機型)；資料庫裡沒有回 None"""
+    h, name = h.upper(), h[:1].upper()
+    while True:
+        d = fly_tdb_part(name)
+        nxt = h[:len(name) + 1]
+        if nxt in (d.get("children") or []) and len(nxt) < len(h):
+            name = nxt
+            continue
+        x = d.get(h[len(name):])
+        return (str(x[0] or "")[:12].upper(), str(x[1] or "")[:4].upper()) if isinstance(x, list) and len(x) >= 2 else None
+
+
 def fly_hexes():
-    """在背景一架一架問 hexdb.io（每秒最多兩架）；連不上就先停"""
+    """在背景查飛機編號；連不上就先停"""
     bad = 0
     while bad < 3:
         with FLY["lock"]:
@@ -5918,20 +5972,13 @@ def fly_hexes():
             if not h:
                 break
         try:
-            req = urllib.request.Request(FLY_HEX + h, headers={"User-Agent": "vps-sentinel"})
-            with urllib.request.urlopen(req, timeout=8) as r:
-                d = json.loads(r.read())
-            FLY["hex"][h] = {"at": time.time(), "r": str(d.get("Registration") or "")[:12].upper(), "t": str(d.get("ICAOTypeCode") or "")[:4].upper()}
+            x = fly_tdb(h)
+            FLY["hex"][h] = {"at": time.time(), "r": x[0], "t": x[1]} if x else {"at": time.time()}   # 沒有的也記住，一週後再查
             bad = 0
-        except urllib.error.HTTPError as e:
-            if e.code == 404:
-                FLY["hex"][h] = {"at": time.time()}              # 資料庫裡沒有這架
-            else:
-                bad += 1
         except Exception as e:  # noqa: BLE001
             bad += 1
-            fly_log(f"hexdb：{str(e)[:60]}")
-        time.sleep(.5)
+            fly_log(f"飛機資料庫：{str(e)[:60]}")
+            time.sleep(2)
     with FLY["lock"]:
         if bad >= 3:
             FLY["hq"].clear()
@@ -6221,7 +6268,8 @@ def fly_seen_load():
     try:
         with open(FLY_SEEN_FILE, encoding="utf-8") as f:
             d = json.load(f)
-        FLY["seen"].update({k: v for k, v in (d.get("seen") or {}).items() if isinstance(v, dict) and time.time() - v.get("at", 0) < 6 * 3600})
+        if d.get("v") == 2:                   # 舊版用 hexdb 查到的機型有過時的，不沿用
+            FLY["seen"].update({k: v for k, v in (d.get("seen") or {}).items() if isinstance(v, dict) and time.time() - v.get("at", 0) < 6 * 3600})
         FLY["zh"].update({k: v for k, v in (d.get("zh") or {}).items() if isinstance(v, str)})
         FLY["used"] = float(d.get("used") or 0)
     except (OSError, ValueError, AttributeError, TypeError):
@@ -6235,7 +6283,7 @@ def fly_seen_save():
         os.makedirs(DATA_DIR, exist_ok=True)
         tmp = FLY_SEEN_FILE + ".tmp"
         with open(tmp, "w", encoding="utf-8") as f:
-            json.dump({"used": FLY["used"], "seen": dict(FLY["seen"]), "zh": dict(FLY["zh"])}, f, ensure_ascii=False)
+            json.dump({"v": 2, "used": FLY["used"], "seen": dict(FLY["seen"]), "zh": dict(FLY["zh"])}, f, ensure_ascii=False)
         os.replace(tmp, FLY_SEEN_FILE)
         with open(FLY_HEX_FILE + ".tmp", "w", encoding="utf-8") as f:
             json.dump(dict(FLY["hex"]), f)

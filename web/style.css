@@ -874,6 +874,7 @@ html.flyon .dash>.view{content-visibility:hidden;contain-intrinsic-size:auto non
 .fr.sel{background:var(--pc)}
 @media (hover:hover){.fr:not(.empty):not(.sel):hover{background:var(--s2)}}
 .fr .br{display:none}
+.fr.nopc .pc{visibility:hidden}                                   /* 官網只給中文地名、查不到代碼：不留空格子 */
 .fr .pl,.fr .al,.fr .m,.fr .reg{font-size:var(--fs-m);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}
 .fr .pl{color:var(--tx)}
 .fr .al,.fr .reg{color:var(--tx2)}
@@ -966,6 +967,7 @@ html.flyon .dash>.view{content-visibility:hidden;contain-intrinsic-size:auto non
   .fr{position:relative;padding-left:calc(3em + 20px)}            /* 標誌固定在每列最左邊，上下對齊 */
   .fr .fal{position:absolute;left:10px;top:50%;transform:translateY(-50%);margin:0}
   .fr .fal .alg{width:3em;height:3em;border-radius:var(--r-md);font-size:var(--fs-s)}
+  .fr.nopc .pc{display:none}
   .fr.empty{padding-left:10px}.fr.empty .logo{display:none}
   .board[data-tab="arr"] .fr:not(.empty) .pl:not(:empty)::before{content:"從 ";color:var(--tx3)}
   .board[data-tab="dep"] .fr:not(.empty) .pl:not(:empty)::before{content:"往 ";color:var(--tx3)}
