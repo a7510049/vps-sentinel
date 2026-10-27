@@ -299,6 +299,19 @@ class Flights(unittest.TestCase):
         self.assertEqual((org["code"], dst["code"]), ("NRT", "TPE"))
         self.assertIsNone(S.fly_fids_route("ZZ999"))
 
+    def test_fix_type(self):
+        """飛機資料庫說 A340、官網排的是 A321：照官網，註冊號不顯示"""
+        S = self.S
+        p = {"t": "A343", "model": "A340-300", "reg": "B-18807"}
+        S.fly_fix_type(p, {"type": "A321"})
+        self.assertEqual((p["t"], p["model"], p["reg"]), ("", "A321", ""))
+        p = {"t": "A21N", "model": "A321neo", "reg": "B-18101"}
+        S.fly_fix_type(p, {"type": "A321"})                  # 同一類：留著比較詳細的
+        self.assertEqual(p["reg"], "B-18101")
+        p = {"t": "B77W", "model": "777-300ER", "reg": "B-18002"}
+        S.fly_fix_type(p, {"type": ""})                      # 官網沒寫：不動
+        self.assertEqual(p["t"], "B77W")
+
     def test_sky_need(self):
         """非必要不問 OpenSky：沒有班機要起降、或愛好者都收得到時不問"""
         S = self.S
