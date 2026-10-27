@@ -6,10 +6,5 @@ jobs:
     steps:
       - run: |
           set +e
-          for u in "https://opendata.adsb.fi/api/v3/lat/22.577/lon/120.35/dist/40" "https://api.adsb.lol/v2/point/22.577/120.35/40" "https://api.airplanes.live/v2/point/22.577/120.35/40"; do
-            echo "== $u"; curl -s -m 15 "$u" | python3 -c "import sys,json;d=json.load(sys.stdin);a=d.get('ac') or [];print(len(a),[x.get('flight') for x in a][:30])"
-          done
-          echo "== opensky"
-          curl -s -m 20 -D h.txt "https://opensky-network.org/api/states/all?lamin=21.9&lomin=119.6&lamax=23.2&lomax=121.1" -o s.json; grep -i "rate\|HTTP/" h.txt
-          python3 -c "import json;d=json.load(open('s.json'));s=d.get('states') or [];print(len(s),[x[1] for x in s][:40])"
-          echo "== TPE adsb.fi"; curl -s -m 15 "https://opendata.adsb.fi/api/v3/lat/25.08/lon/121.23/dist/40" | python3 -c "import sys,json;d=json.load(sys.stdin);print(len(d.get('ac') or []))"
+          curl -s -m 15 -w "\n%{http_code}\n" -d "grant_type=client_credentials&client_id=fake&client_secret=fake" "https://auth.opensky-network.org/auth/realms/opensky-network/protocol/openid-connect/token"
+          curl -s -m 20 -D - -o /dev/null "https://opensky-network.org/api/states/all?lamin=21.9&lomin=119.6&lamax=23.2&lomax=121.1" | grep -i "rate\|HTTP/"
