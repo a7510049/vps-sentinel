@@ -1,9 +1,9 @@
 """暫時：看桃園機場定期航班（客、貨機）資料"""
 import collections, urllib.request
 H = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0 Safari/537.36"}
-for u in ("https://odp.taoyuan-airport.com/dataset/2022110903?format=csv", "https://odp.taoyuan-airport.com/dataset/2025092301?format=csv"):
+for u in ("http://odp.taoyuan-airport.com/dataset/2022110903?format=csv", "https://odp.taoyuan-airport.com/dataset/2022110903?format=csv", "https://odp.taoyuan-airport.com/"):
     try:
-        with urllib.request.urlopen(urllib.request.Request(u, headers=H), timeout=60) as r:
+        with urllib.request.urlopen(urllib.request.Request(u, headers=H), timeout=150) as r:
             b = r.read()
     except Exception as e:
         print(u, e); continue
