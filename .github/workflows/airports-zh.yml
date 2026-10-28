@@ -1,0 +1,18 @@
+name: airports-zh
+on:
+  push:
+    branches: [claude/project-thread-wqdvmy]
+    paths: [.github/workflows/airports-zh.yml]
+permissions:
+  contents: write
+jobs:
+  zh:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: pip install opencc-python-reimplemented
+      - run: python3 tools/airports_zh.py
+      - run: grep -E "^(HOU|IAH|LAX|JFK|NRT|KIX|SYD|CDG|LHR|DXB|BKK|SGN|MNL|CGK|ICN|PVG|FRA|AMS|YVR|ANC|MEM|LGG|SFO|SEA|ORD|CTS|OKA|PUS|DAD|CEB|KUL|SIN|HKG|MFM)	" data/airports.tsv | cut -f1,3,8
+      - run: |
+          git config user.name github-actions && git config user.email github-actions@users.noreply.github.com
+          git add data/airports.tsv && git commit -m "機場資料補上中文城市名" && git push
