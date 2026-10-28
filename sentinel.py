@@ -42,7 +42,7 @@ from collections import deque
 from concurrent.futures import ThreadPoolExecutor
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
-VERSION = "3.39"
+VERSION = "3.40"
 
 # ───────────────────────── 哨兵備份檔（.vsbk）─────────────────────────
 # 哨兵專用的備份格式：外面是自己的檔案格式，裡面用的是成熟、標準的加密方法（不自己發明加密）：
@@ -6449,18 +6449,25 @@ def fly_merge(ap, fids, rows, io):
         if p["fn"]:
             live.setdefault(fly_fn(p["fn"]), p)
     me, out, used = {"code": ap[0], "name": ap[2]}, [], set()
+    other = "dep" if io == "arr" else "arr"
+
+    def plane(r):
+        """這一筆配得到的飛機（同一班號接著飛下一段時：正在降落的不算出發、正在起飛的不算抵達）"""
+        p = next((live[fly_fn(f)] for f in [r["fn"], *(r.get("share") or [])] if fly_fn(f) in live), None)
+        return None if p and p["ph"] == other else p
+
     show = []
     for r in fids:
         if r["io"] != io or fly_cargo(r["fn"]):
             continue
         t = r["est"] or r["sch"]
         done = r["st"] in ("已到", "已飛")
-        if t > now + 12 * 3600 or t < now - (20 if done else 90) * 60:   # 還沒到、還沒飛的留久一點（官網常常慢半拍）
-            continue
+        if t > now + 12 * 3600 or t < now - (20 if done else 90) * 60 and not (done and t > now - 90 * 60 and (plane(r) or {}).get("ph") == io):
+            continue                                   # 還沒到、還沒飛的留久一點（官網常常慢半拍）；寫已飛但其實剛起飛（排隊滑行很久）的也留著
         show.append(r)
     pick = {}                                          # 同一班號今天、明天都在表上：天上那架只配給時間最接近的那一筆
     for i, r in enumerate(show):
-        p = next((live[fly_fn(f)] for f in [r["fn"], *(r.get("share") or [])] if fly_fn(f) in live), None)
+        p = plane(r)
         if p and abs((r["est"] or r["sch"]) - now) < pick.get(p["id"], (1e18, 0))[0]:
             pick[p["id"]] = (abs((r["est"] or r["sch"]) - now), i)
     for i, r in enumerate(show):
@@ -6469,7 +6476,7 @@ def fly_merge(ap, fids, rows, io):
         row = {"id": f"f-{io}-{r['fn']}-{int(r['sch'])}", "fn": r["fn"], "cs": "", "al": r["al"], "reg": "", "t": r["type"], "model": r["type"],
                "org": pl if io == "arr" else me, "dst": me if io == "arr" else pl, "ph": io, "st": r["st"], "emg": False, "mil": False, "rare": False,
                "use": "客機", "fids": True, "sch": r["sch"], "est": r["est"], "gate": r["gate"], "gate0": r.get("gate0") or "", "type0": r.get("type0") or "", "term": r["term"], "share": r.get("share") or []}
-        p = next((live[fly_fn(f)] for f in [r["fn"], *row["share"]] if fly_fn(f) in live), None)
+        p = plane(r)
         if p and pick.get(p["id"], (0, -1))[1] != i:
             p = None
         sk = io + ":" + fly_fn(r["fn"])
