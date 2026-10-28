@@ -928,10 +928,10 @@ html.flyon .dash>.view{content-visibility:hidden;contain-intrinsic-size:auto non
 .flg.ok{opacity:1}.flg[hidden]{display:none}
 .flg.at{width:1.3em;height:.9em;object-fit:cover;margin:0 .5em 0 0}.flg.at[hidden],.flg.at.none{display:inline-block;visibility:hidden;box-shadow:none}   /* 國旗在名字前面、大小固定、沒有也留位置：每一列的名字對齊 */
 /* 地面：剛降落、準備起飛分兩段，每段第一列上面是標題 */
-.board:is([data-tab="gnd"],[data-tab="cargo"]) .fr.gi:not(.nopl) .pl::before{content:"↓ 從 ";color:var(--tx3)}
-.board:is([data-tab="gnd"],[data-tab="cargo"]) .fr.go:not(.nopl) .pl::before{content:"↑ 往 ";color:var(--tx3)}
 .fr.gh{margin-top:calc(var(--fs-s) * 2.6);content-visibility:visible}
 .fr.gh:first-child{margin-top:calc(var(--fs-s) * 2)}
+.fr.gh:not(:first-child){margin-top:calc(var(--fs-s) * 3.6)}
+.fr.gh:not(:first-child)::before{right:10px;padding-top:calc(var(--fs-s) * .8);border-top:1px solid var(--line)}   /* 降落、起飛中間一條分隔線 */
 .fr.gh::before{content:attr(data-gh);position:absolute;left:10px;bottom:100%;padding-bottom:6px;font-size:var(--fs-s);font-weight:600;color:var(--tx2);pointer-events:none;animation:fadeIn var(--t-mid) var(--ease) backwards}   /* 標題換到另一列：淡入 */
 /* 「地點 ▾」 */
 .fplace{gap:4px}.fplace .chv{width:16px;height:16px;opacity:.7}
@@ -1050,7 +1050,6 @@ html.flyon .dash>.view{content-visibility:hidden;contain-intrinsic-size:auto non
   .board[data-tab="arr"] .fr:not(.empty):not(.nopl) .pl::before{content:"從 ";color:var(--tx3)}
   .board[data-tab="dep"] .fr:not(.empty):not(.nopl) .pl::before{content:"往 ";color:var(--tx3)}
   .board[data-fids="1"]:is([data-tab="arr"],[data-tab="dep"]) .fr:not(.empty) .reg:not(:empty)::before{content:"登機門 ";color:var(--tx3)}
-  .board[data-tab="cargo"] .fr.gi:not(.nopl) .pl::before{content:"↓ "}.board[data-tab="cargo"] .fr.go:not(.nopl) .pl::before{content:"↑ "}   /* 手機貨機：只留箭頭，地名才放得下 */
   .fr .bx{display:none}                                                /* 手機：轉盤／櫃台接在登機門後面 */
   .fr:not(.empty) .reg:not([data-bx=""])[data-bx]::after{content:"・" attr(data-bx);color:var(--tx3);font-weight:400}.fr:not(.empty) .reg:empty:not([data-bx=""])[data-bx]::after{content:attr(data-bx)}
   .fr.empty .b2,.fr.empty .pc,.fr.empty .pl,.fr.empty .al,.fr.empty .m,.fr.empty .reg,.fr.empty .ftag,.fr.empty .b1{display:none}

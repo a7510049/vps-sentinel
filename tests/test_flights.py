@@ -649,6 +649,22 @@ class BoardBits(unittest.TestCase):
         self.assertEqual(S.fly_use("B16858", "", "AT76", "", False), "客機")
         self.assertEqual(S.fly_use("N123AB", "", "C172", "A1", False), "小飛機")
 
+    def test_rare(self):
+        """少見：還沒記滿 7 天用固定的表；記滿後照這個機場實際看到的天數"""
+        import time
+        from test_passkey import load_sentinel
+        S = load_sentinel()
+        S.FLY["types"].pop("XXX", None); S.FLY_RARE_OK.pop("XXX", None)
+        self.assertFalse(S.fly_rare("B77L", "XXX"))
+        self.assertTrue(S.fly_rare("B763", "XXX"))
+        days = [time.strftime("%Y%m%d", time.localtime(time.time() - i * 86400)) for i in range(10)]
+        S.FLY["types"]["XXX"] = {"A339": set(days), "B763": set(days[:8]), "B744": set(days[:2])}
+        S.FLY_RARE_OK.pop("XXX", None)
+        self.assertFalse(S.fly_rare("A339", "XXX"))
+        self.assertFalse(S.fly_rare("B763", "XXX"))
+        self.assertTrue(S.fly_rare("B744", "XXX"))
+        self.assertTrue(S.fly_rare("A388", "XXX"))
+
     def test_sched_cargo(self):
         """桃園機場客貨機班表：寫貨機的班次算貨機，看不懂的表不影響"""
         from test_passkey import load_sentinel

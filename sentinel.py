@@ -43,7 +43,7 @@ from collections import deque
 from concurrent.futures import ThreadPoolExecutor
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
-VERSION = "3.41"
+VERSION = "3.42"
 
 # ───────────────────────── 哨兵備份檔（.vsbk）─────────────────────────
 # 哨兵專用的備份格式：外面是自己的檔案格式，裡面用的是成熟、標準的加密方法（不自己發明加密）：
@@ -5853,7 +5853,8 @@ def fly_logo_type(b):
 
 # 航空公司標誌：先問 Google，沒有的再問下一個；各家沒有這間公司時會給一張假圖，要認出來丟掉
 FLY_LGSRC = [x for x in os.environ.get("SENTINEL_FLY_LGSRC", "").split() if x] or [
-    "https://www.gstatic.com/flights/airline_logos/70px/{c}.png", "https://images.kiwi.com/airlines/128/{c}.png", "https://pics.avs.io/200/200/{c}.png"]
+    "https://www.gstatic.com/flights/airline_logos/70px/{c}.png", "https://images.kiwi.com/airlines/128/{c}.png", "https://pics.avs.io/200/200/{c}.png",
+    "https://www.flightaware.com/images/airline_logos/90p/{i}.png"]   # {i}：國際民航組織的三碼（順豐只有這家有）
 FLY_LGFAKE = {}                               # 標誌庫 → 它的假圖（拿不存在的代碼問一次記下來）
 FLY_LGFAKE0 = {"36bdb8b3212413fb100da318789d0e9fa716b0a5",    # Google 認得這家、但沒有標誌時給的灰色機尾（不認得的回 404，問不出來）
                "f95495733fa572408fb4ce898c7935d2ad33e15a"}    # Kiwi 的灰色小飛機
@@ -5866,7 +5867,7 @@ def fly_lg_fake(src):
         fakes, ok = set(), False
         for c in ("0Q", "Q0"):
             try:
-                fakes.add(hashlib.sha1(fly_get(src.format(c=c), timeout=10)).hexdigest())
+                fakes.add(hashlib.sha1(fly_get(src.format(c=c, i="Q" + c), timeout=10)).hexdigest())
                 ok = True
             except urllib.error.HTTPError:
                 ok = True                     # 沒有就回錯誤：不用認假圖
@@ -5881,11 +5882,14 @@ def fly_lg_fake(src):
 def fly_lg_get(code):
     """一個一個標誌庫問，第一張真的標誌就用"""
     for src in FLY_LGSRC:
+        i = next((k for k, v in FLY_AL.items() if v[0] == code), "")
+        if "{i}" in src and not i:
+            continue
         fakes = fly_lg_fake(src)
         if fakes is None:
             continue
         try:
-            b = fly_get(src.format(c=code), timeout=10)
+            b = fly_get(src.format(c=code, i=i), timeout=10)
         except Exception:  # noqa: BLE001
             continue
         if fly_logo_type(b) and len(b) <= 512 * 1024 and hashlib.sha1(b).hexdigest() not in fakes:

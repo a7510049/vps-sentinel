@@ -2552,8 +2552,8 @@ const FLYK = "vs-fly", FLYEV = 10000;                     // 記住選的機場�
 const FLYS = (() => { try { return {ap:"", tab:"arr", ...JSON.parse(store(FLYK) || "{}")}; } catch(e) { return {ap:"", tab:"arr"}; } })();
 let FLYD = null, FLYT = 0, FLYSEL = "", FLYSEQ = 0, FLYHR = "", FLYSTILL = false, FLYSW = 0;   // FLYHR：看板現在看哪個時段（幾點）
 const flySave = () => store(FLYK, JSON.stringify({ap: FLYS.ap, tab: FLYS.tab, name: FLYS.name, term: FLYS.term || ""}));
-const FLYTAB = [["arr", "抵達"], ["dep", "出發"], ["gnd", "地面"], ["cargo", "貨機"]];
-const flyFT = tab => tab === "arr" || tab === "dep";       // 照官網表排的分頁（地面、貨機是收得到訊號的飛機）
+const FLYTAB = [["arr", "抵達"], ["dep", "出發"], ["gnd", "機坪"], ["cargo", "貨機"]];
+const flyFT = tab => tab === "arr" || tab === "dep";       // 照官網表排的分頁（機坪、貨機是收得到訊號的飛機）
 const FLYCH = " ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-:.";
 const flyWide = ch => /[⺀-￿]/.test(ch);
 /* 一格翻牌：上下兩半，換字時上半往下翻、下半接著翻下來 */
@@ -2604,7 +2604,8 @@ const flyHM = (t, tz) => { const k = tz || "";
   if (!FLYFMT[k]) { try { FLYFMT[k] = new Intl.DateTimeFormat("zh-TW", {hour:"2-digit", minute:"2-digit", hourCycle:"h23", timeZone: tz || undefined}); } catch(e) { FLYFMT[k] = new Intl.DateTimeFormat("zh-TW", {hour:"2-digit", minute:"2-digit", hourCycle:"h23"}); } }
   return FLYFMT[k].format(t); };
 const FLYDEP = {};                                        // 每架飛機估出來的起飛時間（第一次看到就固定，不會一直跳）
-const flyOut = p => p.io ? p.io === "dep" : !!(p.dst && FLYD && FLYD.ap && p.dst.code !== FLYD.ap.code);   // 地面這架是要飛走的（不是剛降落）
+const flyOut = p => p.io ? p.io === "dep" : !!(p.dst && FLYD && FLYD.ap && p.dst.code !== FLYD.ap.code);   // 機坪上這架是要飛走的（不是剛降落）
+const flyGo = (p, tab) => tab === "gnd" ? flyOut(p) : tab === "cargo" ? p.ph === "dep" || p.ph === "gnd" && flyOut(p) : false;   // 機坪、貨機：算在「起飛」那一段
 const flyPl = (p, tab) => tab === "cargo" ? flyPl(p, p.ph === "gnd" ? "gnd" : p.ph) : tab === "arr" ? p.org : tab === "dep" ? p.dst : flyOut(p) ? p.dst : p.org;   // 這一列要寫的地方（從哪來／去哪）
 const flyPk = pl => pl ? pl.code || pl.name || "" : "";
 const FLYNOFL = new Set();                                 // 抓不到的國旗
@@ -2626,7 +2627,7 @@ function flyRowV(p, tab, tz){
   const soon = p.fids && tab !== "gnd" && !p.lag && !/取消|轉降|已到|已飛/.test(p.st || "") ? Math.ceil(((p.est || p.sch) - Date.now() / 1000) / 60) : 0;   // 一小時內要到／要飛：還有幾分
   return {t, fn: p.fn || p.reg, pc: pl ? pl.code : "", pl: pl ? pl.name || "" : "", al: p.al || "", m: (mch && !FLYNARROW.matches ? `${p.type0} → ` : "") + (p.model || p.t || ""), mch, reg: (FLYD.fids && flyFT(tab) ? (p.gate0 && p.gate ? `${p.gate0} → ${p.gate}` : p.gate) : p.reg) || "", st: p.st, gch: !!(FLYD.fids && flyFT(tab) && p.gate0 && p.gate && p.st !== "取消"),
     cls: p.emg || /取消|轉降/.test(p.st) ? "bad" : /落地|剛起飛|跑道|登機|滑行/.test(p.st) ? "hot" : "", late: gap >= 15 ? gap : 0, early: gap <= -10 ? -gap : 0,
-    soon: soon > 0 && soon <= 60 ? soon : 0, cc: flyCc(pl), gout: tab === "gnd" ? flyOut(p) : tab === "cargo" ? p.ph === "dep" || p.ph === "gnd" && flyOut(p) : false, t0, sh: p.share && p.share.length ? `+${p.share.length}` : "", bx: p.fids && tab !== "gnd" && p.st !== "取消" ? p.bx || "" : ""};
+    soon: soon > 0 && soon <= 60 ? soon : 0, cc: flyCc(pl), gout: flyGo(p, tab), t0, sh: p.share && p.share.length ? `+${p.share.length}` : "", bx: p.fids && tab !== "gnd" && p.st !== "取消" ? p.bx || "" : ""};
 }
 const flyRight = (v, n) => " ".repeat(Math.max(0, n - [...(v || "")].length)) + (v || "");   // 狀態靠右
 const flyMin = m => m >= 60 ? `${Math.floor(m / 60)} 小時${m % 60 ? ` ${m % 60} 分` : ""}` : `${m} 分`;
@@ -2692,8 +2693,8 @@ const FLYF = ["t", "fn", "pc", "st"], FLYX = ["pl", "al", "m", "reg", "bx"];   /
 const FLYW = {t:5, fn:7, pc:3, st:4};             // 狀態最多四個中文字，每格都是中文字寬，長短不一也對齊
 const FLYCOL = ["t", "fn", "pc", "pl", "fal", "al", "m", "reg", "bx", "st"];   // fal：航空公司標誌自己一欄，每列都對齊
 const FLYHEAD = {arr:["預計抵達", "航班", "出發地", "", "", "航空公司", "機型", "註冊號", "", "狀態"],
-  dep:["起飛", "航班", "目的地", "", "", "航空公司", "機型", "註冊號", "", "狀態"], gnd:["", "航班", "航線", "", "", "航空公司", "機型", "註冊號", "", "狀態"],
-  cargo:["預計抵達", "航班", "從哪來／去哪", "", "", "航空公司", "機型", "註冊號", "", "狀態"]};
+  dep:["起飛", "航班", "目的地", "", "", "航空公司", "機型", "註冊號", "", "狀態"], gnd:["", "航班", "從哪來／去哪", "", "", "航空公司", "機型", "註冊號", "", "狀態"],
+  cargo:["時間", "航班", "從哪來／去哪", "", "", "航空公司", "機型", "註冊號", "", "狀態"]};
 const FLYHEADF = {arr:["抵達", "航班", "出發地", "", "", "航空公司", "機型", "登機門", "行李", "狀態"], dep:["起飛", "航班", "目的地", "", "", "航空公司", "機型", "登機門", "報到", "狀態"]};   // 有機場官網航班表時
 const flyRow = i => `<div class="fr" data-i="${i}" role="button" tabindex="0">${FLYCOL.map(k => `<span class="fk ${k}">${FLYW[k] ? flap("", FLYW[k], k === "st" ? "zh" : "") + (k === "t" ? `<s class="t0"></s>` : k === "fn" ? `<span class="fsh"></span>` : "") : k === "fal" ? `<i class="alg none" data-c=""></i>` : k === "pl" ? `<img class="flg at" alt="" hidden><span class="plt"></span>` : ""}</span>`).join("")}<span class="ftag"></span><i class="br b1"></i><i class="br b2"></i></div>`;
 function flyShell(){
@@ -2709,7 +2710,7 @@ function flyShell(){
       <div class="radar"><div class="rbox"><canvas class="rcv" aria-label="雷達"></canvas><button class="icbtn rfull" data-rfull title="整頁雷達">${I("full")}</button></div>
         <div class="rnote sub" hidden></div>
         <div class="rwx" hidden></div>
-        <div class="rleg"><span><i class="arr"></i>抵達<b data-k="rc-arr"></b></span><span><i class="dep"></i>出發<b data-k="rc-dep"></b></span><span><i></i>地面<b data-k="rc-gnd"></b></span><span><i></i>路過<b data-k="rc-over"></b></span>
+        <div class="rleg"><span><i class="arr"></i>抵達<b data-k="rc-arr"></b></span><span><i class="dep"></i>出發<b data-k="rc-dep"></b></span><span><i></i>機坪<b data-k="rc-gnd"></b></span><span><i></i>路過<b data-k="rc-over"></b></span>
           <span class="ralt">尾跡高度<i></i>1000<i></i>3000<i></i>6000<i></i>公尺</span><span class="rng fzm">${FLYZM.map(k => `<button data-fzm="${k}">${k}</button>`).join("")}</span></div></div>
     </div>
     <div class="ffoot sub"></div></div></div>${flySplash()}</div>`;
@@ -3254,7 +3255,7 @@ function flyPaint(anim){
   if (!d.ap) d.ap = {code: FLYS.ap, name: FLYS.name || "", city: "", tz: ""};
   const tl = flyTerms(f, d), src = tl && FLYS.tab !== "cargo" ? d[FLYS.tab].filter(p => !FLYS.term || p.term === FLYS.term) : d[FLYS.tab] || [];   // 桃園：照航廈分
   let all = FLYPLC ? src.filter(p => flyPlIs(p, FLYS.tab, FLYPLC)) : src;   // 只看某個地點
-  if (FLYS.tab === "gnd") all = [...all].sort((a, b) => flyOut(a) - flyOut(b));      // 地面：剛降落的在前、準備起飛的在後
+  if (FLYS.tab === "gnd" || FLYS.tab === "cargo") all = [...all].sort((a, b) => flyGo(a, FLYS.tab) - flyGo(b, FLYS.tab));   // 機坪、貨機：降落的在前、起飛的在後
   const byHr = d.fids && flyFT(FLYS.tab) && all.length > 0, hrs = byHr ? flyHours(all, d.ap.tz) : [];
   if (byHr && !hrs.some(x => x.k === FLYHR)) FLYHR = hrs[0].k;
   const hb = f.querySelector(".fhrs"), sig = hrs.map(x => x.k + ":" + x.n).join(",");
@@ -3271,7 +3272,7 @@ function flyPaint(anim){
   const n = list.length;
   flyWait(f, !!d.loading && d.ok);
   reveal(msg, !d.ok || (!d.loading && !n));
-  txt(msg, !d.ok ? d.error || "航班資料暫時拿不到" : d.loading ? "" : n ? "" : FLYPLC ? `沒有${FLYPLC.name}的班機` : d.night ? "半夜沒有班機，6 點後再來看" : d.fids && flyFT(FLYS.tab) ? `接下來沒有${FLYS.tab === "arr" ? "抵達" : "起飛"}的班機` : FLYS.tab === "cargo" ? "附近現在沒有貨機" : `附近現在沒有${{arr:"要降落", dep:"剛起飛", gnd:"在地面"}[FLYS.tab]}的飛機`);
+  txt(msg, !d.ok ? d.error || "航班資料暫時拿不到" : d.loading ? "" : n ? "" : FLYPLC ? `沒有${FLYPLC.name}的班機` : d.night ? "半夜沒有班機，6 點後再來看" : d.fids && flyFT(FLYS.tab) ? `接下來沒有${FLYS.tab === "arr" ? "抵達" : "起飛"}的班機` : FLYS.tab === "cargo" ? "附近現在沒有貨機" : `附近現在沒有${{arr:"要降落", dep:"剛起飛", gnd:"在機坪"}[FLYS.tab]}的飛機`);
   const tz = d.ap.tz;
   flapSet(f.querySelector(".fcode .sf"), d.ap.code); flyApBtn(f, d.ap);
   txt(f.querySelector('[data-k="name"]'), d.ap.name); txt(f.querySelector('[data-k="city"]'), d.ap.city);
@@ -3317,8 +3318,8 @@ function flyRows(f, d, list, n, byHr, tz, anim){
     if (io && !r._obs) { r._obs = 1; io.observe(r); }
     // 已經到了、飛了：淡一點、只留小標籤，不再閃
     r.dataset.id = p ? p.id : ""; r.classList.toggle("bad", v.cls === "bad"); r.classList.toggle("hot", v.cls === "hot"); r.classList.toggle("warn", !!(v.late || v.gch || v.mch) && v.cls !== "bad" && !/已到|已飛/.test(v.st || "")); r.querySelector(".fk.reg").classList.toggle("gch", !!v.gch); r.querySelector(".fk.m").classList.toggle("gch", !!v.mch); r.classList.toggle("done", /已到|已飛/.test(v.st || "")); r.classList.toggle("empty", !p); r.classList.toggle("nopc", !!p && !v.pc); r.classList.toggle("nopl", !v.pl); r.classList.toggle("sel", !!p && p.id === FLYSEL);
-    const g = FLYS.tab === "gnd" && !!p, gh = g && (i === 0 || items[i - 1] && flyOut(items[i - 1]) !== v.gout) ? (v.gout ? "準備起飛" : "剛降落") : "";   // 地面：剛降落、準備起飛分兩段，每段第一列上面寫標題
-    const way = (g || FLYS.tab === "cargo") && !!p; r.classList.toggle("gi", way && !v.gout); r.classList.toggle("go", way && v.gout);   // 地面、貨機：↓ 從／↑ 往 r.classList.toggle("gh", !!gh); if ((r.dataset.gh || "") !== gh) r.dataset.gh = gh;
+    const g = (FLYS.tab === "gnd" || FLYS.tab === "cargo") && !!p, gh = g && (i === 0 || items[i - 1] && flyGo(items[i - 1], FLYS.tab) !== v.gout) ? (FLYS.tab === "gnd" ? v.gout ? "準備起飛" : "剛降落" : v.gout ? "起飛" : "降落") : "";   // 機坪、貨機：降落、起飛分兩段，每段第一列上面寫標題
+    r.classList.toggle("gh", !!gh); if ((r.dataset.gh || "") !== gh) r.dataset.gh = gh;
     FLYF.forEach((k, j) => flapSet(r.querySelector(`.fk.${k} .sf`), k === "st" ? flyRight(v.st, FLYW.st) : v[k], i * T.fast * .35 + j * T.fast * .2, off));
     FLYX.forEach(k => put(r.querySelector(k === "pl" ? ".plt" : `.fk.${k}`), v[k]));
     const fl = r.querySelector(".flg");
