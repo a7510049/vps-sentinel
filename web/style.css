@@ -910,6 +910,8 @@ html.flyon .dash>.view{content-visibility:hidden;contain-intrinsic-size:auto non
 .fr .fn{position:relative}.fsh{position:absolute;right:0;top:50%;translate:0 -50%;font-size:var(--fs-xs);font-weight:500;color:var(--tx3)}     /* 共掛班號：+2 疊在翻牌最後一格（班號很少用滿七格），不多佔寬度 */
 .fh .st{justify-self:end}                                          /* 狀態靠右，標題也靠右 */
 .fsum{font-size:var(--fs-s);padding:0 4px}
+.fdone{grid-column:1/-1;display:flex;align-items:center;gap:6px;justify-self:start;margin:2px 0 4px;padding:8px 10px;border-radius:var(--r-sm);color:var(--tx2);font-size:var(--fs-s);font-weight:500}   /* 已到／已飛的收成一行 */
+.fdone .chv{width:16px;height:16px;transition:transform var(--t-mid) var(--ease)}.fdone.on .chv{transform:rotate(180deg)}
 .fr.hot .st b{color:var(--p)}
 .fr.bad .st b{color:var(--bad)}
 .fr .reg.gch,.fr .m.gch{color:var(--warn);font-weight:600}
