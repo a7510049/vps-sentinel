@@ -2737,13 +2737,33 @@ function flySplashOn(f){
 function flySplashOff(f){
   if (!f.classList.contains("splash") || f._spOff) return;
   f._spOff = 1;
-  setTimeout(() => {
+  f._spT = setTimeout(() => {
     const sp = f.querySelector(".fsplash");
     sp.animate([{opacity:1}, {opacity:0, transform:"scale(1.04)"}], {duration:T.mid, easing:EXIT, fill:"forwards"}).finished.then(() => sp.remove(), () => sp.remove());
     f.classList.remove("splash");
     [...f.querySelectorAll(".fwrap>:not(.ftop), .fmain>*")].filter(e => !e.classList.contains("fmain")).forEach((e, i) =>
       e.animate([{opacity:0, transform:"translateY(16px)"}, {opacity:1, transform:"none"}], {duration:T.slow, delay:T.fast * .5 + i * T.fast * .35, easing:EASE, fill:"backwards"}));
-  }, Math.max(0, T.long * 2 - (performance.now() - f._sp0)));
+  }, Math.max(T.mid, T.long * 2 - (performance.now() - f._sp0)));   // 資料到了也多等一下：看板先在後面排好、長好
+}
+/* 換機場：看板、雷達先淡掉，換成小飛機的載入畫面（翻出新機場代碼），資料在後面準備好才一塊一塊浮上來 */
+function flySplashSwap(f){
+  if (!canAnim()) return;
+  clearTimeout(f._spT); f._spOff = 0; f._sp0 = performance.now();
+  const set = () => { flapSet(f.querySelector(".fspc .sf"), FLYS.ap); txt(f.querySelector(".fspn"), FLYS.name || ""); };
+  if (f.classList.contains("splash")) return set();         // 載入畫面還在：只換代碼
+  f.querySelectorAll(".fsplash").forEach(e => e.remove());
+  const els = [...f.querySelectorAll(".fwrap>:not(.ftop)")];
+  els.forEach(e => e.getAnimations().forEach(a => a.cancel()));
+  els.forEach(e => e.animate([{opacity:1}, {opacity:0}], {duration:T.fast, easing:EXIT, fill:"forwards", id:"fsw"}));
+  f.insertAdjacentHTML("beforeend", flySplash());
+  const sp = f.querySelector(".fsplash");
+  f.classList.add("splash");
+  sp.animate([{opacity:0, transform:"scale(.96)"}, {opacity:1, transform:"none"}], {duration:T.mid, delay:T.fast * .5, easing:EASE, fill:"backwards"});
+  setTimeout(() => {                                          // 淡完：捲回最上面，拿掉淡出（splash 本身會藏著）
+    els.forEach(e => e.getAnimations().forEach(a => { if (a.id === "fsw") a.cancel(); }));
+    const sc = f.querySelector(".fscroll"); if (sc) sc.scrollTop = 0;
+    if (f.classList.contains("splash")) set();
+  }, T.fast + 20);
 }
 const FLYZM = [60, 30, 15], FLYGEO = {};                  // 雷達看多遠（公里）；底圖（海岸線、地名）每個機場抓一次
 const flyR = () => FLYZM.includes(+FLYS.zm) ? +FLYS.zm : 60;
@@ -3595,7 +3615,10 @@ async function flyPick(){
       FLYS.ap = code; FLYS.name = name; flySave(); FLYSEL = ""; FLYHR = ""; FLYPLC = null;
       FLYD = {ok:true, loading:true, ap:{code, name, city: sm, tz:""}, arr:[], dep:[], gnd:[], over:[]};
       const hold = canAnim() ? T.fast * 2 + 40 : 0;          // 視窗先關完，看板才開始換（同時做會卡）；資料照樣先去抓
-      FLYHOLD = new Promise(r => setTimeout(() => { if (FLYS.ap === code) flyPaint(); r(); }, hold));
+      FLYHOLD = new Promise(r => setTimeout(() => {           // 換成載入畫面、舊的淡完才把看板換成新機場（藏在後面換）
+        if (FLYS.ap !== code) return r();
+        flySplashSwap($("#fly")); setTimeout(() => { if (FLYS.ap === code) flyPaint(); r(); }, canAnim() ? T.fast + 30 : 0);
+      }, hold));
       flyLoad();
     }
     setTimeout(done, canAnim() ? T.fast : 0);
