@@ -629,3 +629,22 @@ class CargoHubs(unittest.TestCase):
         S = load_sentinel()
         self.assertEqual(S.fly_city("MEM"), "曼非斯")
         self.assertEqual(S.fly_city("LGG"), "列日")
+
+    def test_world(self):
+        """常用表沒有的機場：用資料檔裡的中文城市名"""
+        from test_passkey import load_sentinel
+        S = load_sentinel()
+        self.assertEqual(S.fly_city("HOU"), "休士頓")
+        self.assertEqual(S.fly_city("ZZZ"), "")
+
+
+class BoardBits(unittest.TestCase):
+    def test_bx_and_use(self):
+        """行李轉盤／報到櫃台的寫法、ATR 不算小飛機"""
+        from test_passkey import load_sentinel
+        S = load_sentinel()
+        self.assertEqual(S.fly_bx(True, "04", "8"), "轉盤 4")
+        self.assertEqual(S.fly_bx(False, "", "1A"), "櫃台 1A")
+        self.assertEqual(S.fly_bx(True, "", "8"), "")
+        self.assertEqual(S.fly_use("B16858", "", "AT76", "", False), "客機")
+        self.assertEqual(S.fly_use("N123AB", "", "C172", "A1", False), "小飛機")

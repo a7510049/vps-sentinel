@@ -28,6 +28,7 @@ cleanup-old.sh     清除舊版 Home Assistant 版本
 data/airports.tsv  全世界的機場（機場起降用；改了也要在 SRC_FILES、install.sh）
 data/coast.tsv     台灣附近的海岸線（Natural Earth，雷達底圖；同上）
 tools/style_check.py  檢查樣式有沒有照共用規則
+tools/airports_zh.py  幫 data/airports.tsv 補中文城市名（維基數據，連不到，要在 GitHub Actions 上跑）
 tools/fly_audit.py    機場起降：用真實資料把四個機場跑一遍、列出不合理的地方（這台連不到，到 GitHub Actions 手動執行 fly-audit）
 tests/             基本功能測試（只用 Python 內建模組）
 android/           安卓 App：全螢幕打開主機的網頁（記住網址），畫面全部來自網頁，主力是網頁

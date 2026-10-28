@@ -1051,7 +1051,7 @@ html.flyon .dash>.view{content-visibility:hidden;contain-intrinsic-size:auto non
   .board[data-tab="dep"] .fr:not(.empty):not(.nopl) .pl::before{content:"往 ";color:var(--tx3)}
   .board[data-fids="1"]:not([data-tab="gnd"]) .fr:not(.empty) .reg:not(:empty)::before{content:"登機門 ";color:var(--tx3)}
   .fr .bx{display:none}                                                /* 手機：轉盤／櫃台接在登機門後面 */
-  .fr:not(.empty) .reg:not([data-bx=""])[data-bx]::after{content:"・" attr(data-bx)}.fr:not(.empty) .reg:empty:not([data-bx=""])[data-bx]::after{content:attr(data-bx)}
+  .fr:not(.empty) .reg:not([data-bx=""])[data-bx]::after{content:"・" attr(data-bx);color:var(--tx3);font-weight:400}.fr:not(.empty) .reg:empty:not([data-bx=""])[data-bx]::after{content:attr(data-bx)}
   .fr.empty .b2,.fr.empty .pc,.fr.empty .pl,.fr.empty .al,.fr.empty .m,.fr.empty .reg,.fr.empty .ftag,.fr.empty .b1{display:none}
   .fhead{padding:14px 16px;gap:12px}
   .fhead .sf.xl{font-size:var(--fs-3xl)}
