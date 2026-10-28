@@ -1802,7 +1802,7 @@ EDW	Edwards Afb Airport	Edwards	US	34.9081	-117.8855	America/Los_Angeles	愛德�
 EED	Needles Airport	Needles	US	34.7663	-114.6233	America/Los_Angeles	尼德爾斯
 EEK	Eek Airport	Eek	US	60.2137	-162.0439	America/Anchorage	伊克
 EEN	Dillant/Hopkins Airport	Keene	US	42.8984	-72.2708	America/New_York	基恩
-EFD	Ellington Airport	Houston	US	29.6073	-95.1587	America/Chicago	艾靈頓聯合基地
+EFD	Ellington Airport	Houston	US	29.6073	-95.1587	America/Chicago	休士頓
 EFK	Northeast Kingdom International Airport	Newport	US	44.8882	-72.2286	America/New_York	紐波特
 EFL	Kefallinia Airport	Kefallinia Island	GR	38.1201	20.5005	Europe/Athens	凱法利尼亞島
 EFW	Jefferson Municipal Airport	Jefferson	US	42.0098	-94.3418	America/Chicago	
@@ -2584,7 +2584,7 @@ HHI	Wheeler Army Air Field	Wahiawa	US	21.4814	-158.0378	Pacific/Honolulu	惠勒�
 HHN	Frankfurt-Hahn Airport	Hahn	DE	49.9487	7.2639	Europe/Berlin	萊因蘭-法爾茲
 HHQ	Hua Hin Airport	Hua Hin	TH	12.6362	99.9515	Asia/Bangkok	華欣
 HHR	Jack Northrop Field/Hawthorne Municipal Airport	Hawthorne	US	33.9229	-118.3351	America/Los_Angeles	霍桑市際
-HHZ	Hikueru Atoll Airport	Hikueru Atoll	PF	-17.5447	-142.6140	Pacific/Tahiti	希庫埃魯
+HHZ	Hikueru Atoll Airport	Hikueru Atoll	PF	-17.5447	-142.6140	Pacific/Tahiti	希庫埃魯環礁
 HIA	Lianshui Airport	Huai'an	CN	33.7908	119.1250	Asia/Shanghai	淮安
 HIB	Range Regional Airport	Hibbing	US	47.3866	-92.8390	America/Chicago	希賓
 HID	Horn Island Airport	Horn Island	AU	-10.5864	142.2900	Australia/Brisbane	霍恩島
@@ -4593,7 +4593,7 @@ NGA	Young Airport		AU	-34.2556	148.2480	Australia/Sydney
 NGB	Ningbo Lishe International Airport	Ningbo	CN	29.8267	121.4620	Asia/Shanghai	寧波
 NGD	Captain Auguste George Airport	Anegada	VG	18.7272	-64.3297	America/Tortola	
 NGE	N'Gaoundere Airport	N'Gaoundere	CM	7.3570	13.5592	Africa/Douala	恩岡代雷
-NGF	Kaneohe Bay Mcas (Marion E Carl Field) Airport	Kaneohe	US	21.4505	-157.7679	Pacific/Honolulu	
+NGF	Kaneohe Bay Mcas (Marion E Carl Field) Airport	Kaneohe	US	21.4505	-157.7679	Pacific/Honolulu	卡內奧赫灣海軍陸戰隊
 NGI	Ngau Airport	Ngau	FJ	-18.1156	179.3400	Pacific/Fiji	恩高島
 NGL	Ngala Airport	Ngala	ZA	-24.3878	31.3258	Africa/Johannesburg	
 NGO	Chubu Centrair International Airport	Tokoname	JP	34.8584	136.8050	Asia/Tokyo	名古屋
@@ -5347,7 +5347,7 @@ PRB	Paso Robles Municipal Airport	Paso Robles	US	35.6729	-120.6271	America/Los_A
 PRC	Prescott Regional/Ernest A Love Field	Prescott	US	34.6548	-112.4192	America/Phoenix	普雷斯科特
 PRD	Pardoo Airport	Pardoo	AU	-20.1175	119.5900	Australia/Perth	
 PRG	Václav Havel Airport	Prague	CZ	50.1008	14.2600	Europe/Prague	布拉格
-PRH	Phrae Airport		TH	18.1322	100.1650	Asia/Bangkok	
+PRH	Phrae Airport		TH	18.1322	100.1650	Asia/Bangkok	帕市
 PRI	Praslin Airport	Praslin Island	SC	-4.3193	55.6914	Indian/Mahe	普拉蘭島
 PRK	Prieska Airport	Prieska	ZA	-29.6836	22.7706	Africa/Johannesburg	
 PRM	Portimão Airport	Portimão	PT	37.1493	-8.5840	Europe/Lisbon	波爾蒂芒
@@ -6775,7 +6775,7 @@ TYL	Capitan Montes Airport		PE	-4.5766	-81.2541	America/Lima	塔拉拉
 TYM	Staniel Cay Airport		BS	24.1691	-76.4391	America/Nassau	史坦尼爾礁
 TYN	Taiyuan Wusu Airport	Taiyuan	CN	37.7469	112.6280	Asia/Shanghai	太原
 TYP	Tobermorey Airport	Tobermorey	AU	-22.2558	137.9530	Australia/Darwin	
-TYR	Tyler Pounds Regional Airport	Tyler	US	32.3535	-95.4030	America/Chicago	泰勒
+TYR	Tyler Pounds Regional Airport	Tyler	US	32.3535	-95.4030	America/Chicago	基爾戈
 TYS	Mc Ghee Tyson Airport	Knoxville	US	35.8111	-83.9941	America/New_York	諾克斯維爾
 TYT	Treinta y Tres Airport	Treinta y Tres	UY	-33.2000	-54.3500	America/Montevideo	三十三人城
 TYZ	Taylor Airport	Taylor	US	34.4527	-110.1150	America/Phoenix	
