@@ -1041,7 +1041,8 @@ html.flyon .dash>.view{content-visibility:hidden;contain-intrinsic-size:auto non
   .fr{display:grid;grid-template-columns:4.6em minmax(0,1fr) auto;grid-template-areas:"t fn tag" "pc pl st" "al reg m";align-items:center;gap:6px 10px;padding:12px 10px;font-size:var(--fs-m)}
   .fr .br{display:none}
   .board[data-tab="gnd"] .fr .t{display:none}
-  .fr{content-visibility:auto;contain-intrinsic-size:auto 110px}       /* 手機：畫面外的列先不排版，換時段比較快 */
+  .fr{content-visibility:auto;contain-intrinsic-size:auto 110px}
+  .board.cvx .fr{content-visibility:visible}                         /* 換分頁時量高度：這一刻先全部排版，量到的才是真的高度 */       /* 手機：畫面外的列先不排版，換時段比較快 */
   .fr.bad{content-visibility:visible}                         /* 有閃框的列照常處理，捲出來時節拍才不會慢半拍 */
   .fr .t{grid-area:t;flex-direction:column;align-items:flex-start;gap:2px}.fr .t,.fr .fn,.fr .ftag{align-self:start}.fr .fsh{display:none}   /* 原本的時間在下面：同一行的航班、標籤照樣對齊上緣；共掛班號點開才看（手機放不下） */.fr .fn{grid-area:fn}.fr .ftag{grid-area:tag;justify-self:end}
   .fr .pc{grid-area:pc;font-size:var(--fs-s)}.fr .pl{grid-area:pl}.fr .st{grid-area:st;justify-self:end}
