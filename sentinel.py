@@ -8,6 +8,7 @@ VPS 哨兵：用手機或電腦隨時查看 VPS 狀態
 設定檔：/etc/vps-sentinel-lite.conf（可用環境變數 SENTINEL_CONF 指定別的位置）
 """
 import base64
+import csv
 import glob
 import gzip
 import hashlib
@@ -42,7 +43,7 @@ from collections import deque
 from concurrent.futures import ThreadPoolExecutor
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
-VERSION = "3.40"
+VERSION = "3.41"
 
 # ───────────────────────── 哨兵備份檔（.vsbk）─────────────────────────
 # 哨兵專用的備份格式：外面是自己的檔案格式，裡面用的是成熟、標準的加密方法（不自己發明加密）：
@@ -5356,11 +5357,12 @@ def fly_db():
                     if len(x) < 7 or line.startswith("#"):
                         continue
                     z = zh.get(x[0])
-                    FLY_DB[x[0]] = (x[0], z[1] if z else x[1], z[2] if z else x[2], float(x[4]), float(x[5]), x[3], x[6], x[1] + " " + x[2])
+                    zc = x[7] if len(x) > 7 else ""
+                    FLY_DB[x[0]] = (x[0], z[1] if z else x[1], z[2] if z else x[2], float(x[4]), float(x[5]), x[3], x[6], x[1] + " " + x[2] + " " + zc, zc)
         except OSError:
             pass
         for a in FLY_APS:                       # 找不到資料檔也至少有常用的
-            FLY_DB.setdefault(a[0], (*a, "", "", ""))
+            FLY_DB.setdefault(a[0], (*a, "", "", "", ""))
     return FLY_DB
 
 
@@ -5434,7 +5436,68 @@ def fly_cargo(fn, cs=""):
     if not m:
         return False
     al, n = m.group(1), int(m.group(2))
-    return al in FLY_CARGO_IATA or (al in ("CI", "BR") and 5000 <= n <= 6999) or (al == "BR" and 600 <= n <= 699)
+    return al in FLY_CARGO_IATA or (al in ("CI", "BR") and 5000 <= n <= 6999) or (al == "BR" and 600 <= n <= 699) or al + str(n) in FLY_SCHED["cargo"]
+
+
+# 桃園機場的客貨機定期班表（政府開放資料，每週更新）：表上寫貨機的班次一律算貨機；抓不到就照上面的規則
+FLY_SCHED_URL = os.environ.get("SENTINEL_TPE_SCHED", "https://odp.taoyuan-airport.com/dataset/2022110903?format=csv")
+FLY_SCHED = {"cargo": set(), "t": 0.0, "try": 0.0, "busy": False, "load": False}
+
+
+def fly_sched_parse(text):
+    """班表 CSV → 貨機班次（CI5148 這種寫法）；看不懂欄位就回空的"""
+    rows = list(csv.reader(io.StringIO(text)))
+    if not rows:
+        return set()
+    head = [h.strip().lower() for h in rows[0]]
+    col = lambda *ks: next((i for i, h in enumerate(head) if any(k in h for k in ks)), None)
+    kd, ka, kn = col("性質", "nature"), col("航空公司", "airline"), col("班次", "航班號", "flight")
+    if kd is None or ka is None or kn is None:
+        return set()
+    out = set()
+    for r in rows[1:]:
+        if len(r) <= max(kd, ka, kn):
+            continue
+        d = r[kd].strip()
+        if "貨" in d or d.upper() in ("C", "F", "CARGO", "FREIGHT", "FREIGHTER"):
+            out.add(fly_fn(r[ka].strip().upper() + r[kn].strip().upper()))
+    return out
+
+
+def fly_sched_pull():
+    try:
+        b = fly_get(FLY_SCHED_URL, ua="Mozilla/5.0", timeout=60)
+        try:
+            text = b.decode("utf-8-sig")
+        except UnicodeDecodeError:
+            text = b.decode("big5hkscs", "replace")
+        got = fly_sched_parse(text)
+        if not got:
+            raise ValueError("看不懂班表的欄位")
+        FLY_SCHED.update(cargo=got, t=time.time())
+        os.makedirs(os.path.join(DATA_DIR, "fids"), exist_ok=True)
+        with open(os.path.join(DATA_DIR, "fids", "tpe-cargo.json"), "w", encoding="utf-8") as f:
+            json.dump(sorted(got), f)
+    except Exception as e:  # noqa: BLE001
+        fly_log(f"桃園機場貨機班表：{str(e)[:60] or type(e).__name__}")
+    finally:
+        FLY_SCHED["busy"] = False
+
+
+def fly_sched_check():
+    """一週抓一次（失敗的話 6 小時後再試），上次抓到的存在 DATA_DIR/fids/tpe-cargo.json"""
+    now = time.time()
+    if not FLY_SCHED["load"]:
+        FLY_SCHED["load"] = True
+        fn = os.path.join(DATA_DIR, "fids", "tpe-cargo.json")
+        try:
+            with open(fn, encoding="utf-8") as f:
+                FLY_SCHED.update(cargo=set(json.load(f)), t=os.path.getmtime(fn))
+        except (OSError, ValueError, TypeError):
+            pass
+    if FLY_SCHED_URL and not FLY_SCHED["busy"] and now - FLY_SCHED["t"] > 7 * 86400 and now - FLY_SCHED["try"] > 6 * 3600:
+        FLY_SCHED.update({"busy": True, "try": now})
+        threading.Thread(target=fly_sched_pull, daemon=True).start()
 
 
 # 用途：貨運航空公司以外，客貨都飛的公司只有某些機型是貨機（例如國泰的 747 全部是貨機）
@@ -5442,6 +5505,9 @@ FLY_FREIGHT = {("CPA", "B748"), ("CPA", "B744"), ("CAL", "B744"), ("CAL", "B77L"
                ("CES", "B77L"), ("CSN", "B77L"), ("ETD", "B77L"), ("AFR", "B77L")}   # 只放這家公司這種機型「全部」都是貨機的
 FLY_BIZ = r"^(GLF|GL[5-7XE]|GLEX|CL30|CL35|CL60|F2TH|F900|FA[5-8X]|C25|C5[0-9][0-9]|C68|C700|C750|E5[05]P|E35L|E545|E550|LJ|H25|PC24|BE40|PRM1|HDJT|SF50|EA50|C510|BBJ|ACJ|A318|B737BBJ)"
 FLY_GOV = r"(airborne service|coast guard|police|fire|government|ministry|navy|army|air force|空勤|海巡|警|消防)"
+
+
+FLY_RGN = r"AT[4-7]\d|DH8|SF34|D328|E120|JS41|AN24|F50$"
 
 
 def fly_use(cs, al, t, cat, mil, op="", fn=""):
@@ -5459,6 +5525,8 @@ def fly_use(cs, al, t, cat, mil, op="", fn=""):
     if t and re.match(FLY_BIZ, t) and not al:
         return "私人／公務機"
     if al:
+        return "客機"
+    if re.match(FLY_RGN, t):                   # ATR、Dash 8 這類螺旋槳客機，沒有航班號也不是小飛機
         return "客機"
     if kind in ("ga", "tp") or str(cat or "").upper() in ("A1", "B1", "B4"):
         return "小飛機"
@@ -5910,6 +5978,12 @@ def fly_st(st):
     return {"延遲": "延誤", "抵達": "已到", "離站": "已飛", "出發": "已飛", "登機中": "登機", "備降": "轉降", "改降": "轉降"}.get(st, st)
 
 
+def fly_bx(arr, belt, desk):
+    """抵達寫行李轉盤、出發寫報到櫃台（官網有給才有）"""
+    v = str((belt if arr else desk) or "").strip().lstrip("0")
+    return f"{'轉盤' if arr else '櫃台'} {v}" if v and v not in ("-", "0") else ""
+
+
 def fly_fids_tpe():
     out = []
     for line in fly_get(FLY_FIDS_URL["TPE"], ua="Mozilla/5.0", timeout=15).decode("big5hkscs", "replace").splitlines():   # 帶自己名字的有時候拿到空的
@@ -5920,7 +5994,7 @@ def fly_fids_tpe():
         fly_learn(x[10], x[12])
         out.append({"io": "arr" if x[1] == "A" else "dep", "fn": x[2] + x[4].lstrip("0"), "al": x[3], "sch": fly_ts(x[6], x[7]),
                     "est": fly_ts(x[8], x[9]), "pc": x[10], "pl": x[12] or fly_city(x[10]) or x[11], "gate": x[5], "term": f"第{'一二三'[int(x[0]) - 1]}航廈" if x[0] in ("1", "2", "3") else "",
-                    "st": fly_st(x[13]), "type": x[14]})
+                    "st": fly_st(x[13]), "type": x[14], "bx": fly_bx(x[1] == "A", x[18] if len(x) > 18 else "", x[19] if len(x) > 19 else "")})
     return out
 
 
@@ -5937,6 +6011,7 @@ def fly_fids_khh():
             out.append({"io": io, "fn": str(r.get("airLineNum") or ""), "al": fly_al_zh(str(r.get("airLineIATA") or "")),
                         "sch": fly_ts(sch[:10], sch[11:16]), "est": fly_ts(est[:10], est[11:16]) if est else None, "pc": pc,
                         "pl": fly_city(pc) or (fly_db().get(pc) or [0, 0, pc])[2], "gate": "", "term": "",
+                        "bx": fly_bx(io == "arr", r.get("BHSNo"), r.get("ckinisland") or (f"{r.get('ckindeskstart')}–{r.get('ckindeskend')}" if r.get("ckindeskstart") else "")),
                         "st": st.get(int(r.get("status" + io) or 0), ""), "type": FLY_IATA_T.get(str(r.get("airPlaneType") or ""), str(r.get("airPlaneType") or "")),
                         "share": [c.strip() for c in str(r.get("CodeShare") or "").split(";") if c.strip()]})
     return out
@@ -5982,7 +6057,7 @@ def fly_fids_tsa():
                 out.append({"io": io, "fn": str(r.get("FlightNumber") or "").strip(), "al": re.sub(r"(公司|股份有限公司)$", "", str(r.get("AirLineName") or "")),
                             "sch": fly_ts(None, r.get("Expect" + k + "Time")), "est": fly_ts(None, r.get("Real" + k + "Time")),
                             "pc": m.group(2) if m else "", "pl": m.group(1) if m else pl, "gate": "", "term": "",
-                            "st": fly_st(r.get("AirFlyStatus")), "type": str(r.get("AirPlaneType") or "")})
+                            "st": fly_st(r.get("AirFlyStatus")), "type": str(r.get("AirPlaneType") or ""), "bx": fly_bx(io == "arr", "", r.get("CheckInCount"))})
     return out
 
 
@@ -6026,6 +6101,9 @@ def fly_fids_pull(code, hit):
             if not r["fn"] or not r["sch"]:
                 continue
             r["type"] = fly_model(r["type"])
+            al = fly_al_zh(r["fn"][:2])
+            if al != r["fn"][:2]:                       # 航空公司名稱照同一張表（官網有的寫「韓商泰瑞航空」，雷達寫「德威航空」）
+                r["al"] = al
             while r.get("est") and r["est"] < r["sch"] - 12 * 3600:   # 跨過半夜：官網的預計日期沒跟著換（或沒給日期），補一天
                 r["est"] += 86400
             k = (r["io"], r["sch"], r["pc"] or r["pl"])
@@ -6056,6 +6134,8 @@ def fly_fids(code, wait=1.5):
     第一次還沒抓完回傳 "wait"：網頁先轉圈圈，不要先秀幾架收得到訊號的、過幾秒又冒出一大堆"""
     if code not in FLY_FIDS_GET:
         return None
+    if code == "TPE":
+        fly_sched_check()
     hit = FLY_FIDS.get(code)
     now = time.time()
     if hit is None:
@@ -6097,7 +6177,7 @@ def fly_city(code):
     for a in FLY_APS:
         if a[0] == code:
             return a[2]
-    return FLY["zh"].get(code, "")
+    return FLY["zh"].get(code, "") or (fly_db().get(code) or ("",) * 9)[8]
 
 
 def fly_learn(code, name):
@@ -6475,7 +6555,7 @@ def fly_merge(ap, fids, rows, io):
         pl = {"code": r["pc"], "name": r["pl"]}
         row = {"id": f"f-{io}-{r['fn']}-{int(r['sch'])}", "fn": r["fn"], "cs": "", "al": r["al"], "reg": "", "t": r["type"], "model": r["type"],
                "org": pl if io == "arr" else me, "dst": me if io == "arr" else pl, "ph": io, "st": r["st"], "emg": False, "mil": False, "rare": False,
-               "use": "客機", "fids": True, "sch": r["sch"], "est": r["est"], "gate": r["gate"], "gate0": r.get("gate0") or "", "type0": r.get("type0") or "", "term": r["term"], "share": r.get("share") or []}
+               "use": "客機", "fids": True, "sch": r["sch"], "est": r["est"], "gate": r["gate"], "gate0": r.get("gate0") or "", "bx": r.get("bx") or "", "type0": r.get("type0") or "", "term": r["term"], "share": r.get("share") or []}
         p = plane(r)
         if p and pick.get(p["id"], (0, -1))[1] != i:
             p = None
@@ -6535,7 +6615,7 @@ def fly_gnd(ap, fids, gnd):
         fly_fix_type(p, r)
         pl = {"code": r["pc"], "name": r["pl"]}
         out.append(dict(p, fn=r["fn"], al=r["al"], io=r["io"], org=pl if r["io"] == "arr" else me, dst=me if r["io"] == "arr" else pl,
-                        model=p["model"] or r["type"], gate=r["gate"]))
+                        model=p["model"] or r["type"], gate=r["gate"], bx=r.get("bx") or ""))
     return out
 
 
@@ -6620,6 +6700,7 @@ def fly_board(code, bg=False):
     out = {"ok": True, "t": time.time(), "ap": fly_ap(ap), "src": src or (srcs[0][0] if srcs else ""), "home": home, "srcs": srcs,
            "fids": fids is not None, "arr": arr, "dep": dep, "gnd": gnd, "over": over, "rest": rest, "als": sorted(FLY_LGOK), "lgv": VERSION,
            "skyout": FLY_SKYS["out"] if FLY_SKYS["out"] > time.time() and fly_sky_need(ap, fids, ac) else 0}   # OpenSky 今天的次數用完了：網頁寫幾點恢復
+    out["cargo"] = sorted([p for p in cargo if p["ph"] != "over"], key=lambda p: ({"arr": 0, "gnd": 1}.get(p["ph"], 2), p["eta"] if p["eta"] is not None else 999, p["d"]))   # 「貨機」分頁：要降落、在地面、剛起飛的貨機
     out["ccs"] = {x["code"]: db[x["code"]][5] for p in arr + dep + gnd + over + rest for x in (p.get("org"), p.get("dst"))
                   if x and x.get("code") in db and db[x["code"]][5]}   # 地名旁邊的國旗：機場代碼 → 國家
     out["lat"] = {c: round(db[c][3], 2) for c in out["ccs"]}
