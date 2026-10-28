@@ -2609,6 +2609,8 @@ const flyPk = pl => pl ? pl.code || pl.name || "" : "";
 const FLYNOFL = new Set();                                 // 抓不到的國旗
 const flyCc = pl => { const c = pl && FLYD && FLYD.ccs && FLYD.ccs[pl.code]; return c && c !== "TW" && !FLYNOFL.has(c) ? c : ""; };   // 國內的不放國旗
 const flyFlag = c => c ? `<img class="flg" alt="" data-c="${c}" src="/api/fly-logo?k=@${c}">` : "";
+const flyFlagAt = c => c ? flyFlag(c).replace('class="flg"', 'class="flg at"') : `<i class="flg at none"></i>`;   // 清單裡：國旗放在名字前面、沒有國旗也留位置，名字才會對齊
+const FLYNARROW = matchMedia("(max-width:899px)");      // 手機：換機型只寫新的（標籤寫了換機型，點開看原本的），地名才不會被擠掉
 /* 一列看板的內容：時間、航班、從哪來／去哪、航空公司、機型、註冊號、狀態 */
 function flyRowV(p, tab, tz){
   if (!p) return {t:"", fn:"", pc:"", pl:"", al:"", m:"", reg:"", st:"", cls:""};
@@ -2621,7 +2623,7 @@ function flyRowV(p, tab, tz){
   const gap = p.fids && tab !== "gnd" && p.sch && p.st !== "取消" ? Math.round(((p.lag ? Date.now() / 1000 : p.est || p.sch) - p.sch) / 60) : 0;   // 比表定晚（正）或早（負）幾分鐘；過了時間還沒到的算到現在
   const t0 = p.fids && tab !== "gnd" && p.est && p.st !== "取消" && Math.abs(p.est - p.sch) >= 300 ? flyHM(p.sch * 1000, tz) : "";   // 時間改了：留原本的
   const soon = p.fids && tab !== "gnd" && !p.lag && !/取消|轉降|已到|已飛/.test(p.st || "") ? Math.ceil(((p.est || p.sch) - Date.now() / 1000) / 60) : 0;   // 一小時內要到／要飛：還有幾分
-  return {t, fn: p.fn || p.reg, pc: pl ? pl.code : "", pl: pl ? pl.name || "" : "", al: p.al || "", m: (mch ? `${p.type0} → ` : "") + (p.model || p.t || ""), mch, reg: (FLYD.fids && tab !== "gnd" ? (p.gate0 && p.gate ? `${p.gate0} → ${p.gate}` : p.gate) : p.reg) || "", st: p.st, gch: !!(FLYD.fids && tab !== "gnd" && p.gate0 && p.gate && p.st !== "取消"),
+  return {t, fn: p.fn || p.reg, pc: pl ? pl.code : "", pl: pl ? pl.name || "" : "", al: p.al || "", m: (mch && !FLYNARROW.matches ? `${p.type0} → ` : "") + (p.model || p.t || ""), mch, reg: (FLYD.fids && tab !== "gnd" ? (p.gate0 && p.gate ? `${p.gate0} → ${p.gate}` : p.gate) : p.reg) || "", st: p.st, gch: !!(FLYD.fids && tab !== "gnd" && p.gate0 && p.gate && p.st !== "取消"),
     cls: p.emg || /取消|轉降/.test(p.st) ? "bad" : /落地|剛起飛|跑道|登機|滑行/.test(p.st) ? "hot" : "", late: gap >= 15 ? gap : 0, early: gap <= -10 ? -gap : 0,
     soon: soon > 0 && soon <= 60 ? soon : 0, cc: flyCc(pl), gout: tab === "gnd" && flyOut(p), t0, sh: p.share && p.share.length ? `+${p.share.length}` : "", bx: p.fids && tab !== "gnd" && p.st !== "取消" ? p.bx || "" : ""};
 }
@@ -2691,7 +2693,7 @@ const FLYCOL = ["t", "fn", "pc", "pl", "fal", "al", "m", "reg", "bx", "st"];   /
 const FLYHEAD = {arr:["預計抵達", "航班", "出發地", "", "", "航空公司", "機型", "註冊號", "", "狀態"],
   dep:["起飛", "航班", "目的地", "", "", "航空公司", "機型", "註冊號", "", "狀態"], gnd:["", "航班", "航線", "", "", "航空公司", "機型", "註冊號", "", "狀態"]};
 const FLYHEADF = {arr:["抵達", "航班", "出發地", "", "", "航空公司", "機型", "登機門", "行李", "狀態"], dep:["起飛", "航班", "目的地", "", "", "航空公司", "機型", "登機門", "報到", "狀態"]};   // 有機場官網航班表時
-const flyRow = i => `<div class="fr" data-i="${i}" role="button" tabindex="0">${FLYCOL.map(k => `<span class="fk ${k}">${FLYW[k] ? flap("", FLYW[k], k === "st" ? "zh" : "") + (k === "t" ? `<s class="t0"></s>` : k === "fn" ? `<span class="fsh"></span>` : "") : k === "fal" ? `<i class="alg none" data-c=""></i>` : k === "pl" ? `<span class="plt"></span><img class="flg" alt="" hidden>` : ""}</span>`).join("")}<span class="ftag"></span><i class="br b1"></i><i class="br b2"></i></div>`;
+const flyRow = i => `<div class="fr" data-i="${i}" role="button" tabindex="0">${FLYCOL.map(k => `<span class="fk ${k}">${FLYW[k] ? flap("", FLYW[k], k === "st" ? "zh" : "") + (k === "t" ? `<s class="t0"></s>` : k === "fn" ? `<span class="fsh"></span>` : "") : k === "fal" ? `<i class="alg none" data-c=""></i>` : k === "pl" ? `<img class="flg at" alt="" hidden><span class="plt"></span>` : ""}</span>`).join("")}<span class="ftag"></span><i class="br b1"></i><i class="br b2"></i></div>`;
 function flyShell(){
   return `<div class="flyv" id="fly"><div class="fscroll"><div class="fwrap">
     <div class="ftop">${SHARE ? `<span class="fexp sub" data-k="left"></span>` : `<button class="icbtn" data-fback title="返回">${I("back")}</button>`}<span class="grow"></span>
@@ -3166,7 +3168,7 @@ function flyWhere(){
   $("#layer").appendChild(v);
   const box = v.querySelector(".fpll"), inp = v.querySelector("input"), tz = d.ap && d.ap.tz;
   const ck = `<span class="fon">${I("check")}</span>`;
-  const row = (x, sub, fx) => `<button class="fplr${sub ? " sub" : ""}${FLYPLC && FLYPLC.k === x.k ? " on" : ""}" data-fpl="${esc(x.k)}"><span class="lab">${esc(x.name)}${sub ? "" : flyFlag(x.cc)}${fx ? `<span class="fplx${fx > 1 ? " open" : ""}" data-fx="${esc(x.k)}" role="button" aria-label="展開城市">${I("chev")}</span>` : ""}</span><span class="n">${x.n} 班</span>${ck}</button>`;
+  const row = (x, sub, fx) => `<button class="fplr${sub ? " sub" : ""}${FLYPLC && FLYPLC.k === x.k ? " on" : ""}" data-fpl="${esc(x.k)}"><span class="lab">${sub ? "" : flyFlagAt(x.cc)}${esc(x.name)}${fx ? `<span class="fplx${fx > 1 ? " open" : ""}" data-fx="${esc(x.k)}" role="button" aria-label="展開城市">${I("chev")}</span>` : ""}</span><span class="n">${x.n} 班</span>${ck}</button>`;
   const open = new Set();                                  // 有好幾個城市的國家每次打開都先收起來，點國旗旁邊的箭頭才展開
   const draw = first => {
     const q = inp.value.trim(), Q = flyFnN(q), gs = flyPlaces(), sum = gs.reduce((a, x) => a + x.n, 0);
@@ -3183,7 +3185,7 @@ function flyWhere(){
       return row(g, 0, q ? 0 : on ? 2 : 1) + `<div class="fpls" data-fs="${esc(g.k)}"${on ? "" : " hidden"}>${g.items.map(x => row(x, 1)).join("")}</div>`; };
     const html = (fs.length ? `<div class="fplh">航班</div>${fs.map(fl).join("")}` : "")
       + (fs.length && pls.length ? `<div class="fplh">地點</div>` : "")
-      + (!q ? `<button class="fplr${FLYPLC ? "" : " on"}" data-fpl=""><span class="lab">全部地點</span><span class="n">${sum} 班</span>${ck}</button>` : "")
+      + (!q ? `<button class="fplr${FLYPLC ? "" : " on"}" data-fpl=""><span class="lab">${flyFlagAt("")}全部地點</span><span class="n">${sum} 班</span>${ck}</button>` : "")
       + pls.map(grp).join("")
       + (!fs.length && !pls.length ? `<div class="calm">找不到「${esc(q)}」</div>` : "");
     first ? box.innerHTML = html : swapHTML(box, html);       // 打字時：新出現的淡入，清單高度慢慢變

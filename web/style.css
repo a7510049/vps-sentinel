@@ -926,6 +926,7 @@ html.flyon .dash>.view{content-visibility:hidden;contain-intrinsic-size:auto non
 /* 國旗（地名後面；國內的不放） */
 .flg{display:inline-block;height:.85em;width:auto;margin-left:.4em;vertical-align:-.06em;border-radius:calc(var(--r-xs) / 3);box-shadow:0 0 0 1px color-mix(in oklab,var(--tx) 12%,transparent);opacity:0;transition:opacity var(--t-fast) var(--ease)}
 .flg.ok{opacity:1}.flg[hidden]{display:none}
+.flg.at{width:1.3em;height:.9em;object-fit:cover;margin:0 .5em 0 0}.flg.at[hidden],.flg.at.none{display:inline-block;visibility:hidden;box-shadow:none}   /* 國旗在名字前面、大小固定、沒有也留位置：每一列的名字對齊 */
 /* 地面：剛降落、準備起飛分兩段，每段第一列上面是標題 */
 .board[data-tab="gnd"] .fr.gi:not(.nopl) .pl::before{content:"↓ 從 ";color:var(--tx3)}
 .board[data-tab="gnd"] .fr.go:not(.nopl) .pl::before{content:"↑ 往 ";color:var(--tx3)}
@@ -946,7 +947,7 @@ html.flyon .dash>.view{content-visibility:hidden;contain-intrinsic-size:auto non
 .fplr .n{font-size:var(--fs-s);color:var(--tx3);font-variant-numeric:tabular-nums}.fplr.on .n,.fplr.on .lab small{color:inherit;opacity:.75}
 .fplr .fon{width:20px;opacity:0;transition:opacity var(--t-fast) var(--ease)}.fplr.on .fon{opacity:1;color:inherit}
 .fplr:not(.sub)[data-fpl^="@"] .lab{font-weight:600}             /* 國家那一列 */
-.fplr.sub{padding-left:calc(12px + 1.5em)}                         /* 城市：往裡縮一點 */
+.fplr.sub{padding-left:calc(12px + 1.8em)}                         /* 城市：往裡縮一點 */
 .fpls{display:flex;flex-direction:column;gap:2px}
 .fplx{display:inline-grid;place-items:center;vertical-align:middle;width:32px;height:32px;margin:-8px -6px -8px 2px;border-radius:var(--r-pill);color:var(--tx2)}
 .fplx svg{width:18px;height:18px;transition:transform var(--t-mid) var(--ease)}.fplx.open svg{transform:rotate(180deg)}
