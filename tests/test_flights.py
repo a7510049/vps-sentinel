@@ -392,6 +392,22 @@ class Flights(unittest.TestCase):
         order = [r["fn"] for r in S.fly_merge(ap, fids, live, "arr")]
         self.assertLess(order.index("BR2"), order.index("BR1"))   # 已經到的排在還沒到的前面
 
+    def test_next_leg(self):
+        """同一班號降落後接著飛下一段：正在降落的不配給出發那筆；寫已飛但排隊很久才剛起飛的，看板上還留著"""
+        S, now = self.S, time.time()
+        ap = S.fly_db()["TPE"]
+        f = lambda fn, io, t, st="準時": {"io": io, "fn": fn, "al": "", "sch": t, "est": t, "pc": "NGO", "pl": "名古屋", "gate": "", "term": "", "st": st, "type": ""}
+        pl = lambda fn, ph, **k: {"fn": fn, "id": fn, "cs": fn, "reg": "", "t": "", "model": "", "alt": 1900, "spd": 300, "vr": 0, "d": 40, "eta": 8,
+                                  "trk": 0, "x": 0, "y": 0, "sq": "", "emg": False, "mil": False, "rare": False, "ph": ph, "st": "", **k}
+        fids = [f("CX530", "arr", now + 900), f("CX530", "dep", now + 5400), f("CI831", "dep", now - 2400, "已飛")]
+        live = [pl("CX530", "arr", vr=-4), pl("CI831", "dep", vr=10, st="剛起飛")]
+        arr = {r["fn"]: r for r in S.fly_merge(ap, fids, live, "arr")}
+        dep = {r["fn"]: r for r in S.fly_merge(ap, fids, live, "dep")}
+        self.assertTrue(arr["CX530"].get("live"))
+        self.assertFalse(dep["CX530"].get("live"))
+        self.assertTrue(dep["CI831"].get("live"))
+        self.assertEqual(dep["CI831"]["st"], "已飛")
+
     def test_sky_need(self):
         """非必要不問 OpenSky：沒有班機要起降、或愛好者都收得到時不問"""
         S = self.S
