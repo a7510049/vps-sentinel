@@ -905,6 +905,11 @@ html.flyon .dash>.view{content-visibility:hidden;contain-intrinsic-size:auto non
 .alg.fill img{inset:0;width:100%;height:100%;object-fit:cover}  /* 本身是方形色塊：整格填滿（底色是它自己的顏色） */
 .alg.lg{width:3.2em;height:3.2em;border-radius:var(--r-md);font-size:var(--fs-s)}
 .fr .reg{font-variant-numeric:tabular-nums}
+.fr .t,.fr .fn{display:flex;align-items:center;gap:6px;white-space:nowrap}
+.t0{font-size:var(--fs-xs);color:var(--tx3);font-variant-numeric:tabular-nums}.t0:empty,.fsh:empty{display:none}   /* 時間改了：原本的時間劃掉 */
+.fsh{font-size:var(--fs-xs);font-weight:500;color:var(--tx3)}     /* 共掛班號：+2 */
+.fh .st{justify-self:end}                                          /* 狀態靠右，標題也靠右 */
+.fsum{font-size:var(--fs-s);padding:0 4px}
 .fr.hot .st b{color:var(--p)}
 .fr.bad .st b{color:var(--bad)}
 .fr .reg.gch,.fr .m.gch{color:var(--warn);font-weight:600}
@@ -1026,14 +1031,15 @@ html.flyon .dash>.view{content-visibility:hidden;contain-intrinsic-size:auto non
 @media (max-width:899px){
   .board{display:flex;flex-direction:column;gap:6px;padding:8px}
   .fh{display:none}
-  .fr{display:flex;flex-wrap:wrap;align-items:center;gap:6px 8px;padding:12px 10px;font-size:var(--fs-m)}
-  .fr .br{display:block;flex-basis:100%;height:0}
+  /* 三欄對齊：時間／出發地代碼／航空公司同一條線，航班／地名／機型同一條線，標籤／狀態／登機門靠右（登機門跨兩欄，不把地名擠窄） */
+  .fr{display:grid;grid-template-columns:4.6em minmax(0,1fr) auto;grid-template-areas:"t fn tag" "pc pl st" "al m .";align-items:center;gap:6px 10px;padding:12px 10px;font-size:var(--fs-m)}
+  .fr .br{display:none}
   .board[data-tab="gnd"] .fr .t{display:none}
   .fr{content-visibility:auto;contain-intrinsic-size:auto 110px}       /* 手機：畫面外的列先不排版，換時段比較快 */
   .fr.warn,.fr.bad{content-visibility:visible}                         /* 有閃框的列照常處理，捲出來時節拍才不會慢半拍 */
-  .fr .t{order:1}.fr .fn{order:2}.fr .ftag{order:3;margin-left:auto}.fr .b1{order:4}
-  .fr .pc{order:5;font-size:var(--fs-s)}.fr .pl{order:6;flex:1}.fr .st{order:7}.fr .b2{order:8}
-  .fr .al{order:9;font-size:var(--fs-s)}.fr .m{order:10;font-size:var(--fs-s);color:var(--tx3)}.fr .reg{order:11;font-size:var(--fs-s);color:var(--tx3)}
+  .fr .t{grid-area:t;flex-direction:column;align-items:flex-start;gap:2px}.fr .t,.fr .fn,.fr .ftag{align-self:start}.fr .fsh{display:none}   /* 原本的時間在下面：同一行的航班、標籤照樣對齊上緣；共掛班號點開才看（手機放不下） */.fr .fn{grid-area:fn}.fr .ftag{grid-area:tag;justify-self:end}
+  .fr .pc{grid-area:pc;font-size:var(--fs-s)}.fr .pl{grid-area:pl}.fr .st{grid-area:st;justify-self:end}
+  .fr .al{grid-area:al;font-size:var(--fs-s)}.fr .m{grid-area:m;font-size:var(--fs-s);color:var(--tx3)}.fr .reg{grid-row:3;grid-column:2/4;justify-self:end;font-size:var(--fs-s);color:var(--tx3)}
   .fr{position:relative;padding-left:calc(3em + 20px)}            /* 標誌固定在每列最左邊，上下對齊 */
   .fr .fal{position:absolute;left:10px;top:50%;transform:translateY(-50%);margin:0}
   .fr .fal .alg{width:3em;height:3em;border-radius:var(--r-md);font-size:var(--fs-s)}
