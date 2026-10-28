@@ -43,7 +43,7 @@ from collections import deque
 from concurrent.futures import ThreadPoolExecutor
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
-VERSION = "3.41"
+VERSION = "3.42"
 
 # ───────────────────────── 哨兵備份檔（.vsbk）─────────────────────────
 # 哨兵專用的備份格式：外面是自己的檔案格式，裡面用的是成熟、標準的加密方法（不自己發明加密）：
@@ -5419,14 +5419,36 @@ FLY_TYPES = {
     "C130": "C-130", "C30J": "C-130J", "K35R": "KC-135", "P8": "P-8", "GLF6": "Gulfstream G650", "GLEX": "Global Express",
     "B190": "Beech 1900", "C208": "Cessna 208", "H25B": "Hawker 800",
 }
-FLY_RARE = {"A388", "B744", "B748", "B742", "MD11", "A343", "A346", "A3ST", "A337", "A124", "A225", "IL76", "C17",
-            "C5M", "K35R", "A400", "B52", "E3TF", "B77L", "B764", "A306", "A339", "A338", "B779", "B778", "C919", "BCS1", "BCS3"}
+FLY_RARE = {"A388", "B748", "B742", "MD11", "A343", "A346", "A3ST", "A337", "A124", "A225", "IL76", "C17",
+            "C5M", "K35R", "A400", "B52", "E3TF", "B764", "B762", "B763", "A306", "A338", "B779", "B778", "C919", "BCS1", "BCS3"}   # 還沒記夠 7 天時先用這張
+
+
+FLY_RARE_OK = {}
+
+
+def fly_rare(t, code):
+    """少見的機型：照這個機場最近 30 天實際看到的天數算（3 天以下算少見）；還沒記滿 7 天就先用 FLY_RARE"""
+    if not t:
+        return False
+    days, old = FLY["types"].get(code) or {}, time.strftime("%Y%m%d", time.localtime(time.time() - 30 * 86400))
+    k = FLY_RARE_OK.get(code)
+    if not k or k[0] != old:                  # 記滿 7 天了沒（一天算一次就好）
+        k = FLY_RARE_OK[code] = (old, len({d for v in list(days.values()) for d in v if d > old}) >= 7)
+    if not k[1]:
+        return t in FLY_RARE
+    return sum(d > old for d in days.get(t) or ()) <= 3
+
+
+def fly_type_seen(code, t):
+    """記下這個機場今天看到哪些機型（要降落、在地面、剛起飛的；路過的不算）"""
+    if t:
+        FLY["types"].setdefault(code, {}).setdefault(t, set()).add(time.strftime("%Y%m%d"))
 # 貨機：貨運航空公司，或華航、長榮的貨運航班號（5000～6999、長榮 600～699）；看板以客機為主，不列出來
 FLY_CARGO_ICAO = {"NCA", "CAO", "CKK", "CSS", "SQC", "FDX", "UPS", "GTI", "CLX", "CKS", "PAC", "ABW", "BOX", "GEC", "AHK",
                   "DHK", "DHX", "BCS", "YZR", "CYZ", "ICV", "ATN", "ABX", "MPH", "TAY", "NPT", "SOO", "WGN", "AJT", "KYE", "YTO", "AZG", "NCR", "HYT"}
 FLY_CARGO_IATA = {"KZ", "CK", "O3", "FX", "5X", "5Y", "CV", "K4", "PO", "RU", "3S", "LD", "QY", "D0", "Y8", "CF", "M6", "GB", "YG", "C8", "K9", "7L", "KD", "N8", "8Y", "ES", "8C"}
 FLY_SKYS = {"cache": {}, "until": 0, "left": None, "out": 0, "tok": "", "texp": 0, "tbad": 0, "err": ""}
-FLY = {"cache": {}, "routes": {}, "lock": threading.Lock(), "last": 0.0, "bad": {}, "rq": set(), "rbusy": False, "fetch": threading.Lock(), "logged": {}, "seen": {}, "view": {}, "used": 0, "hex": {}, "hq": set(), "hbusy": False, "zh": {}, "gate": {}}
+FLY = {"cache": {}, "routes": {}, "lock": threading.Lock(), "last": 0.0, "bad": {}, "rq": set(), "rbusy": False, "fetch": threading.Lock(), "logged": {}, "seen": {}, "view": {}, "used": 0, "hex": {}, "hq": set(), "hbusy": False, "zh": {}, "gate": {}, "types": {}}
 
 
 def fly_cargo(fn, cs=""):
@@ -5831,7 +5853,8 @@ def fly_logo_type(b):
 
 # 航空公司標誌：先問 Google，沒有的再問下一個；各家沒有這間公司時會給一張假圖，要認出來丟掉
 FLY_LGSRC = [x for x in os.environ.get("SENTINEL_FLY_LGSRC", "").split() if x] or [
-    "https://www.gstatic.com/flights/airline_logos/70px/{c}.png", "https://images.kiwi.com/airlines/128/{c}.png", "https://pics.avs.io/200/200/{c}.png"]
+    "https://www.gstatic.com/flights/airline_logos/70px/{c}.png", "https://images.kiwi.com/airlines/128/{c}.png", "https://pics.avs.io/200/200/{c}.png",
+    "https://www.flightaware.com/images/airline_logos/90p/{i}.png"]   # {i}：國際民航組織的三碼（順豐只有這家有）
 FLY_LGFAKE = {}                               # 標誌庫 → 它的假圖（拿不存在的代碼問一次記下來）
 FLY_LGFAKE0 = {"36bdb8b3212413fb100da318789d0e9fa716b0a5",    # Google 認得這家、但沒有標誌時給的灰色機尾（不認得的回 404，問不出來）
                "f95495733fa572408fb4ce898c7935d2ad33e15a"}    # Kiwi 的灰色小飛機
@@ -5844,7 +5867,7 @@ def fly_lg_fake(src):
         fakes, ok = set(), False
         for c in ("0Q", "Q0"):
             try:
-                fakes.add(hashlib.sha1(fly_get(src.format(c=c), timeout=10)).hexdigest())
+                fakes.add(hashlib.sha1(fly_get(src.format(c=c, i="Q" + c), timeout=10)).hexdigest())
                 ok = True
             except urllib.error.HTTPError:
                 ok = True                     # 沒有就回錯誤：不用認假圖
@@ -5859,11 +5882,14 @@ def fly_lg_fake(src):
 def fly_lg_get(code):
     """一個一個標誌庫問，第一張真的標誌就用"""
     for src in FLY_LGSRC:
+        i = next((k for k, v in FLY_AL.items() if v[0] == code), "")
+        if "{i}" in src and not i:
+            continue
         fakes = fly_lg_fake(src)
         if fakes is None:
             continue
         try:
-            b = fly_get(src.format(c=code), timeout=10)
+            b = fly_get(src.format(c=code, i=i), timeout=10)
         except Exception:  # noqa: BLE001
             continue
         if fly_logo_type(b) and len(b) <= 512 * 1024 and hashlib.sha1(b).hexdigest() not in fakes:
@@ -6454,7 +6480,7 @@ def fly_plane(a, ap):
         "alt": round(alt * 0.3048), "spd": round(gs * 1.852), "vr": round(float(vr) * 0.00508, 1),
         "d": round(d, 1), "eta": eta, "trk": round(float(trk)) if trk is not None else None,
         "x": round(d * math.sin(math.radians(brg)), 2), "y": round(d * math.cos(math.radians(brg)), 2),
-        "ph": ph, "st": emg or st, "emg": bool(emg), "sq": sq, "mil": mil, "rare": mil or t in FLY_RARE,
+        "ph": ph, "st": emg or st, "emg": bool(emg), "sq": sq, "mil": mil, "rare": mil or fly_rare(t, ap[0]),
         "cat": str(a.get("category") or "")[:2], "use": fly_use(cs, al, t, a.get("category"), mil, op, fn),
     }
 
@@ -6673,6 +6699,8 @@ def fly_board(code, bg=False):
             p = None
         if not p:
             continue
+        if p["ph"] != "over":
+            fly_type_seen(ap[0], p["t"])
         if p["use"] == "貨機":                        # 貨機不列在看板，只畫在雷達上
             cargo.append(p)
             continue
@@ -6751,6 +6779,10 @@ def fly_seen_load():
         FLY["zh"].update({k: v for k, v in (d.get("zh") or {}).items() if isinstance(v, str)})
         FLY["gate"].update({k: v for k, v in (d.get("gate") or {}).items() if isinstance(v, dict) and time.time() - v.get("t", 0) < 12 * 3600})
         FLY["used"] = float(d.get("used") or 0)
+        old = time.strftime("%Y%m%d", time.localtime(time.time() - 30 * 86400))
+        for c, ts in (d.get("types") or {}).items():
+            if isinstance(ts, dict):
+                FLY["types"][c] = {t: {x for x in v if isinstance(x, str) and x > old} for t, v in ts.items() if isinstance(v, list)}
     except (OSError, ValueError, AttributeError, TypeError):
         return
     if time.time() - FLY["used"] < 7 * 86400:
@@ -6762,7 +6794,8 @@ def fly_seen_save():
         os.makedirs(DATA_DIR, exist_ok=True)
         tmp = FLY_SEEN_FILE + ".tmp"
         with open(tmp, "w", encoding="utf-8") as f:
-            json.dump({"v": 2, "used": FLY["used"], "seen": dict(FLY["seen"]), "zh": dict(FLY["zh"]), "gate": dict(FLY["gate"])}, f, ensure_ascii=False)
+            json.dump({"v": 2, "used": FLY["used"], "seen": dict(FLY["seen"]), "zh": dict(FLY["zh"]), "gate": dict(FLY["gate"]),
+                       "types": {c: {t: sorted(v)[-30:] for t, v in ts.items()} for c, ts in list(FLY["types"].items())}}, f, ensure_ascii=False)
         os.replace(tmp, FLY_SEEN_FILE)
         with open(FLY_HEX_FILE + ".tmp", "w", encoding="utf-8") as f:
             json.dump(dict(FLY["hex"]), f)
