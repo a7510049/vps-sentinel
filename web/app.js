@@ -2550,7 +2550,7 @@ document.addEventListener("click", async e => {
 /* ═════════ 機場起降：像機場那種會翻牌的看板（飛機即時位置來自業餘接收站，主要主機去抓） ═════════ */
 const FLYK = "vs-fly", FLYEV = 10000;                     // 記住選的機場和分頁；每 10 秒更新
 const FLYS = (() => { try { return {ap:"", tab:"arr", ...JSON.parse(store(FLYK) || "{}")}; } catch(e) { return {ap:"", tab:"arr"}; } })();
-let FLYD = null, FLYT = 0, FLYSEL = "", FLYSEQ = 0, FLYHR = "", FLYSTILL = false, FLYSW = 0, FLYDONE = false, FLYHUSH = 0;   // FLYDONE：已到／已飛的班機展開   // FLYHR：看板現在看哪個時段（幾點）
+let FLYD = null, FLYT = 0, FLYSEL = "", FLYSEQ = 0, FLYHR = "", FLYSTILL = false, FLYSW = 0, FLYDONE = false, FLYHUSH = 0, FLYBZ = 0, FLYLATER = 0;   // FLYBZ：切換動畫跑到什麼時候（這段時間新資料先等）   // FLYDONE：已到／已飛的班機展開   // FLYHR：看板現在看哪個時段（幾點）
 const flySave = () => store(FLYK, JSON.stringify({ap: FLYS.ap, tab: FLYS.tab, name: FLYS.name, term: FLYS.term || ""}));
 const FLYTAB = [["arr", "抵達"], ["dep", "出發"], ["gnd", "機坪"], ["cargo", "貨機"]];
 const flyFT = tab => tab === "arr" || tab === "dep";       // 照官網表排的分頁（機坪、貨機是收得到訊號的飛機）
@@ -2646,7 +2646,7 @@ function flyObs(f){
       const r = e.target; r.classList.toggle("vis", e.isIntersecting);
       if (!e.isIntersecting) { r._out = 1; return; }
       flyBeat(r);                                            // 捲進畫面的列：閃框對回同一個節拍
-      const go = r._out && !r.hidden && !r.classList.contains("empty") && canAnim() && !r.getAnimations().length && !f.querySelector(".board.wait");
+      const go = r._out && !r.hidden && !r.classList.contains("empty") && canAnim() && !r.getAnimations().length && !f.querySelector(".board.wait") && scrolling();   // 只有手指捲進來的才浮現（自動更新、切換時列被擠進畫面不算）
       r._out = 0;
       if (go) r.animate([{opacity:0, transform:"translateY(16px)"}, {opacity:1, transform:"none"}], {duration:T.mid, delay:Math.min(k++, 6) * T.fast * .3, easing:EASE, fill:"backwards"});
     });
@@ -3116,9 +3116,11 @@ async function flySwitch(hr){
   const els = pick();
   (b._fo || []).forEach(a => a.cancel());
   FLYHUSH = performance.now() + T.fast + T.mid * 2;        // 切換動畫跑完前雷達先少畫幾張
+  FLYBZ = performance.now() + T.fast * .6 + T.mid + 60;   // 淡出＋淡入跑完前，自動更新先等（不然舊的列還在收、新的列長出來會疊在一起）
   const fo = b._fo = els.map(e => e.animate([{opacity:1}, {opacity:0}], {duration:T.fast * .6, easing:EXIT, fill:"forwards"}));
   await Promise.all(fo.map(a => a.finished.catch(() => {})));
   if (id !== FLYSW) return;
+  b.querySelectorAll(".frows>.fr").forEach(r => r.getAnimations().forEach(a => a.finish()));   // 上一次更新還在收起、長出、滑動的列直接到位
   const h0 = b.offsetHeight;
   FLYSTILL = true; try { flyPaint(false); } finally { FLYSTILL = false; }
   const h1 = b.offsetHeight;
@@ -3257,6 +3259,7 @@ function flyShow(b){
 }
 function flyPaint(anim){
   const f = $("#fly"); if (!f || !FLYD) return;
+  clearTimeout(FLYLATER);
   const d = {arr:[], dep:[], gnd:[], over:[], ...FLYD}, msg = f.querySelector(".fmsg");
   if (!d.ap) d.ap = {code: FLYS.ap, name: FLYS.name || "", city: "", tz: ""};
   const tl = flyTerms(f, d), src = tl && FLYS.tab !== "cargo" ? d[FLYS.tab].filter(p => !FLYS.term || p.term === FLYS.term) : d[FLYS.tab] || [];   // 桃園：照航廈分
@@ -3340,7 +3343,8 @@ function flyRows(f, d, list, n, byHr, tz, anim){
     put(r.querySelector(".fsh"), v.sh);
     const rg = r.querySelector(".fk.reg"); if ((rg.dataset.bx || "") !== v.bx) rg.dataset.bx = v.bx;   // 手機：轉盤／櫃台接在登機門後面
   });
-  fresh.forEach(r => { const h = r.offsetHeight; r.animate([{height:"0px", opacity:0, paddingTop:0, paddingBottom:0, overflow:"hidden"}, {height:h + "px", opacity:1, overflow:"hidden"}], {duration:T.mid, easing:EASE}); });
+  fresh.forEach(r => { r.style.contentVisibility = "visible"; const h = getComputedStyle(r).height; r.style.contentVisibility = "";   // 手機的列平常畫面外不排版，量到的是預估高度，量之前先讓它排版
+    r.animate([{height:"0px", opacity:0, paddingTop:0, paddingBottom:0, overflow:"hidden"}, {height:h, opacity:1, overflow:"hidden"}], {duration:T.mid, easing:EASE}); });
   if (box._flip) { box._flip(); box._flip = null; }
   flyBeat(box);
 }
@@ -3365,11 +3369,13 @@ function flyTags(p, v){
 function flyBye(r){
   if (r._bye || r.hidden) return; r._bye = 1;
   const end = () => { if (r._bye) { r.hidden = true; r._bye = 0; r.dataset.id = ""; } };
-  canAnim() && !FLYSTILL ? r.animate([{opacity:1, height:r.offsetHeight + "px"}, {opacity:0, height:"0px", paddingTop:0, paddingBottom:0, marginTop:0}], {duration:T.mid, easing:EASE}).finished.then(end, () => {}) : end();
+  canAnim() && !FLYSTILL ? r.animate([{opacity:1, height:getComputedStyle(r).height}, {opacity:0, height:"0px", paddingTop:0, paddingBottom:0, marginTop:0}], {duration:T.mid, easing:EASE}).finished.then(end, () => {}) : end();
 }
 /* 照班機對列：留下來的列不動（順序變了就滑過去），走掉的在原地收起來，新來的拿空的列 */
 function flyKeyed(box, cur, items, fresh){
   const byId = new Map(cur.filter(r => r.dataset.id).map(r => [r.dataset.id, r])), ids = new Set(items.map(p => p.id));
+  cur.forEach(r => r.getAnimations().forEach(a => a.finish()));
+  FLYBZ = Math.max(FLYBZ, performance.now() + T.mid + 60);   // 還在浮現、滑動的列先到位再量位置（不然會從錯的地方滑過來、疊到別列）
   const pool = [...box.children].filter(r => r.hidden && !r._bye), y0 = new Map(cur.map(r => [r, r.getBoundingClientRect().top]));
   const rows = items.map(p => {
     let r = byId.get(p.id);
@@ -3415,8 +3421,14 @@ async function flyLoad(anim){
     if (d.ok && FLYS.name !== d.ap.name) { FLYS.name = d.ap.name; flySave(); }
     if (d.ok && d.loading) { clearTimeout(FLYT); FLYT = setTimeout(() => flyLoad(), 1500); }   // 官網航班表還在抓：轉圈圈等一下再問
   } catch(e) { if (!same()) return; FLYD = {...(mine ? FLYD : {arr:[], dep:[], gnd:[], over:[], ap:FLYD && FLYD.ap}), loading:false, ok:false, error:e.message}; }
-  flyPaint(anim);
+  flyLater(anim);
   const f = $("#fly"); if (f && FLYD && !FLYD.loading) flySplashOff(f);
+}
+/* 自動更新的新資料：正在切換或列還在滑動時先等，動完再換上（不然舊的列還在收、新的列長出來會疊在一起） */
+function flyLater(anim){
+  clearTimeout(FLYLATER);
+  const w = FLYBZ - performance.now();
+  if (w > 0) FLYLATER = setTimeout(() => flyLater(anim), w); else flyPaint(anim);
 }
 let FLYPIN = [], FLYHOLD = Promise.resolve();
 async function flyList(q){
@@ -3785,7 +3797,8 @@ function preloadFlags(list){
 /* 背景讀到的資料（24 小時／7 天的曲線）：等畫面空下來再換上去 */
 async function whenIdle(){ await settle(); if (LIST.length) render(LIST); }
 /* 等介面動畫（收起、展開、移位）播完再更新畫面，最多等 0.9 秒，避免兩邊搶著動 */
-function uiBusy(){ return document.getAnimations().some(a => a.id === "ui" && a.playState === "running"); }
+const UIIN = new Set(["through", "rise", "pop", "expand", "collapse"]);   // 換分頁、換主機時整頁、整塊進出場的 CSS 動畫
+function uiBusy(){ return document.getAnimations().some(a => (a.id === "ui" || UIIN.has(a.animationName)) && a.playState === "running"); }
 /* 手指還在畫面上、或頁面還在滑：新資料先等一下，滑停了才換上去，捲動時不會卡一下 */
 let SCRT = 0, TOUCH = 0;
 document.addEventListener("scroll", () => {
