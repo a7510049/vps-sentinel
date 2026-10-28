@@ -43,7 +43,7 @@ from collections import deque
 from concurrent.futures import ThreadPoolExecutor
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
-VERSION = "3.49"
+VERSION = "3.50"
 
 # ───────────────────────── 哨兵備份檔（.vsbk）─────────────────────────
 # 哨兵專用的備份格式：外面是自己的檔案格式，裡面用的是成熟、標準的加密方法（不自己發明加密）：
@@ -5763,7 +5763,7 @@ FLY_IATA_T = {"319": "A319", "320": "A320", "32N": "A320neo", "321": "A321", "32
               "7M8": "737 MAX 8", "772": "777-200", "77W": "777-300ER", "788": "787-8", "789": "787-9", "781": "787-10",
               "AT7": "ATR 72", "ATR": "ATR 72", "E90": "E190", "E95": "E195"}
 KHH_ARR = {1: "準時", 2: "已到", 3: "延誤", 4: "轉降", 5: "取消", 6: "提早"}
-KHH_DEP = {1: "準時", 2: "報到", 3: "登機", 4: "已飛", 5: "延遲登機", 6: "延誤", 7: "取消", 8: "提早"}
+KHH_DEP = {1: "準時", 2: "報到", 3: "登機", 4: "已飛", 5: "延誤", 6: "延誤", 7: "取消", 8: "提早"}
 
 
 def fly_get(url, data=None, ua="Mozilla/5.0 (vps-sentinel)", timeout=10):
@@ -6004,7 +6004,7 @@ def fly_al_zh(iata):
 def fly_st(st):
     """官網的狀態文字只留中文、統一說法"""
     st = re.sub(r"[A-Za-z ]+", "", str(st or "")).strip()
-    return {"延遲": "延誤", "抵達": "已到", "離站": "已飛", "出發": "已飛", "登機中": "登機", "備降": "轉降", "改降": "轉降"}.get(st, st)
+    return {"延遲": "延誤", "抵達": "已到", "離站": "已飛", "出發": "已飛", "登機中": "登機", "備降": "轉降", "改降": "轉降", "延遲登機": "延誤", "時間更改": "改時間"}.get(st, st)
 
 
 def fly_bx(arr, belt, desk):
@@ -6464,7 +6464,7 @@ def fly_plane(a, ap):
         rt = [far, me] if ph == "arr" else [me, far]
     eta = round(d / (gs * 1.852) * 60) if ph == "arr" and gs > 50 else None
     if ph == "arr":
-        st = "即將落地" if alt < 2000 and d < 10 else "進場中"           # 幾點落地看時間那欄
+        st = "即將降落" if alt < 2000 and d < 10 else "進場中"           # 幾點降落看時間那欄
     elif ph == "dep":
         st = "剛起飛" if d < 12 else "爬升中" if vr > 250 else "離開中"
     elif ph == "gnd":
@@ -6602,7 +6602,7 @@ def fly_merge(ap, fids, rows, io):
             if io == "dep" and p["ph"] == "over" and (p.get("vr") or 0) >= 0 and now > (r["est"] or r["sch"]) - 900 and r["st"] != "取消":
                 row["st"] = "已飛"                     # 已經在天上了（查到的航線不對，沒算成出發）
             elif p["ph"] == io and not done and r["st"] != "取消":
-                row["st"] = p["st"]                    # 天上的飛機：用即時的「即將落地」「剛起飛」
+                row["st"] = p["st"]                    # 天上的飛機：用即時的「即將降落」「剛起飛」
                 if io == "arr" and p["eta"] is not None:
                     row["est"] = now + p["eta"] * 60
             if p["emg"]:
@@ -6619,7 +6619,7 @@ def fly_merge(ap, fids, rows, io):
                     row["st"] = "滑行中"
             if row["st"] not in ("已到", "已飛", "滑行中") and not (p and p["ph"] == io) and now > t0 + 300:
                 row["lag"] = True                      # 過了時間還沒到／還沒飛：照現在的時間排，網頁算晚幾分
-                if row["st"] in ("準時", "提早", "時間更改", ""):
+                if row["st"] in ("準時", "提早", "改時間", "時間更改", ""):
                     row["st"] = "還沒到" if io == "arr" else "還沒飛"
         row["at"] = now if row.get("lag") else (row["est"] or row["sch"] or now)   # 排序用的時間
         out.append(row)
