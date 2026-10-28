@@ -43,7 +43,7 @@ from collections import deque
 from concurrent.futures import ThreadPoolExecutor
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
-VERSION = "3.42"
+VERSION = "3.43"
 
 # ───────────────────────── 哨兵備份檔（.vsbk）─────────────────────────
 # 哨兵專用的備份格式：外面是自己的檔案格式，裡面用的是成熟、標準的加密方法（不自己發明加密）：
@@ -5384,10 +5384,10 @@ FLY_AL = {
     "CSC": ("3U", "四川航空"), "CQH": ("9C", "春秋航空"), "DKH": ("HO", "吉祥航空"), "CSH": ("FM", "上海航空"),
     "CDG": ("SC", "山東航空"), "CAO": ("CA", "國貨航"), "CKK": ("CK", "中貨航"), "CSS": ("O3", "順豐航空"),
     "SIA": ("SQ", "新加坡航空"), "TGW": ("TR", "酷航"), "SQC": ("SQ", "新航貨運"), "THA": ("TG", "泰國航空"),
-    "AIQ": ("FD", "泰國亞洲航空"), "TLM": ("SL", "泰獅航"), "NOK": ("DD", "皇雀航空"), "TVJ": ("VZ", "泰越捷"),
+    "AIQ": ("FD", "泰國亞洲航空"), "TLM": ("SL", "泰國獅子航空"), "NOK": ("DD", "皇雀航空"), "TVJ": ("VZ", "泰國越捷航空"),
     "AXM": ("AK", "亞洲航空"), "XAX": ("D7", "全亞洲航空"), "MAS": ("MH", "馬來西亞航空"), "MXD": ("OD", "馬印航空"),
     "PAL": ("PR", "菲律賓航空"), "CEB": ("5J", "宿霧太平洋"), "APG": ("Z2", "菲律賓亞洲航空"), "HVN": ("VN", "越南航空"),
-    "VJC": ("VJ", "越捷航空"), "BAV": ("QH", "越竹航空"), "GIA": ("GA", "印尼航空"), "LNI": ("JT", "獅子航空"),
+    "VJC": ("VJ", "越捷航空"), "BAV": ("QH", "越竹航空"), "GIA": ("GA", "印尼航空"), "LNI": ("JT", "獅子航空"), "AWQ": ("QZ", "印尼亞洲航空"), "TAX": ("XJ", "泰國全亞洲航空"),
     "UAE": ("EK", "阿聯酋航空"), "QTR": ("QR", "卡達航空"), "ETD": ("EY", "阿提哈德航空"), "THY": ("TK", "土耳其航空"),
     "KLM": ("KL", "荷蘭皇家航空"), "AFR": ("AF", "法國航空"), "DLH": ("LH", "漢莎航空"), "BAW": ("BA", "英國航空"),
     "FIN": ("AY", "芬蘭航空"), "SWR": ("LX", "瑞士航空"), "AUA": ("OS", "奧地利航空"), "ITY": ("AZ", "義大利航空"),
@@ -5399,6 +5399,9 @@ FLY_AL = {
     "DHK": ("D0", "DHL 航空"), "BCS": ("QY", "DHL 歐洲航空"), "DHX": ("ES", "DHL 國際航空"), "YZR": ("Y8", "揚子江快運"),
     "CYZ": ("8Y", "中國郵政航空"), "HYT": ("YG", "圓通航空"), "ABX": ("GB", "ABX 航空"), "ATN": ("8C", "ATI 航空"),
     "AZG": ("7L", "絲路西方航空"), "WGN": ("KD", "西方環球航空"), "NCR": ("N8", "國家航空"),
+    "SFJ": ("7G", "星悅航空"), "-9G": ("9G", "太陽富國航空"), "AIC": ("AI", "印度航空"), "AVA": ("AV", "哥倫比亞航空"),   # 「-」開頭：查不到三碼
+    "RBA": ("BI", "汶萊航空"), "CMP": ("CM", "巴拿馬航空"), "LOT": ("LO", "波蘭航空"), "BKP": ("PG", "曼谷航空"),
+    "EOK": ("RF", "可依航空"), "AEA": ("UX", "歐洲航空"), "DAC": ("DA", "德安航空"),
 }
 # 機型代碼 → 好讀的名稱（接收站沒給時用）
 # 台灣四個機場官網表上常見的航空公司：主機在背景先把標誌抓好（其他的出現在看板上才抓）
@@ -5882,7 +5885,7 @@ def fly_lg_fake(src):
 def fly_lg_get(code):
     """一個一個標誌庫問，第一張真的標誌就用"""
     for src in FLY_LGSRC:
-        i = next((k for k, v in FLY_AL.items() if v[0] == code), "")
+        i = next((k for k, v in FLY_AL.items() if v[0] == code and k[:1] != "-"), "")
         if "{i}" in src and not i:
             continue
         fakes = fly_lg_fake(src)
