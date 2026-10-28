@@ -648,3 +648,14 @@ class BoardBits(unittest.TestCase):
         self.assertEqual(S.fly_bx(True, "", "8"), "")
         self.assertEqual(S.fly_use("B16858", "", "AT76", "", False), "客機")
         self.assertEqual(S.fly_use("N123AB", "", "C172", "A1", False), "小飛機")
+
+    def test_sched_cargo(self):
+        """桃園機場客貨機班表：寫貨機的班次算貨機，看不懂的表不影響"""
+        from test_passkey import load_sentinel
+        S = load_sentinel()
+        got = S.fly_sched_parse("班機性質,航空公司代碼,班次,預定時間\n貨機,CI,0123,0100\n客機,BR,0002,0200\n")
+        self.assertEqual(got, {"CI123"})
+        self.assertEqual(S.fly_sched_parse("a,b,c\n1,2,3\n"), set())
+        S.FLY_SCHED["cargo"] = got
+        self.assertTrue(S.fly_cargo("CI123"))
+        self.assertFalse(S.fly_cargo("CI124"))

@@ -8,6 +8,7 @@ VPS 哨兵：用手機或電腦隨時查看 VPS 狀態
 設定檔：/etc/vps-sentinel-lite.conf（可用環境變數 SENTINEL_CONF 指定別的位置）
 """
 import base64
+import csv
 import glob
 import gzip
 import hashlib
@@ -5435,7 +5436,68 @@ def fly_cargo(fn, cs=""):
     if not m:
         return False
     al, n = m.group(1), int(m.group(2))
-    return al in FLY_CARGO_IATA or (al in ("CI", "BR") and 5000 <= n <= 6999) or (al == "BR" and 600 <= n <= 699)
+    return al in FLY_CARGO_IATA or (al in ("CI", "BR") and 5000 <= n <= 6999) or (al == "BR" and 600 <= n <= 699) or al + str(n) in FLY_SCHED["cargo"]
+
+
+# 桃園機場的客貨機定期班表（政府開放資料，每週更新）：表上寫貨機的班次一律算貨機；抓不到就照上面的規則
+FLY_SCHED_URL = os.environ.get("SENTINEL_TPE_SCHED", "https://odp.taoyuan-airport.com/dataset/2022110903?format=csv")
+FLY_SCHED = {"cargo": set(), "t": 0.0, "try": 0.0, "busy": False, "load": False}
+
+
+def fly_sched_parse(text):
+    """班表 CSV → 貨機班次（CI5148 這種寫法）；看不懂欄位就回空的"""
+    rows = list(csv.reader(io.StringIO(text)))
+    if not rows:
+        return set()
+    head = [h.strip().lower() for h in rows[0]]
+    col = lambda *ks: next((i for i, h in enumerate(head) if any(k in h for k in ks)), None)
+    kd, ka, kn = col("性質", "nature"), col("航空公司", "airline"), col("班次", "航班號", "flight")
+    if kd is None or ka is None or kn is None:
+        return set()
+    out = set()
+    for r in rows[1:]:
+        if len(r) <= max(kd, ka, kn):
+            continue
+        d = r[kd].strip()
+        if "貨" in d or d.upper() in ("C", "F", "CARGO", "FREIGHT", "FREIGHTER"):
+            out.add(fly_fn(r[ka].strip().upper() + r[kn].strip().upper()))
+    return out
+
+
+def fly_sched_pull():
+    try:
+        b = fly_get(FLY_SCHED_URL, ua="Mozilla/5.0", timeout=60)
+        try:
+            text = b.decode("utf-8-sig")
+        except UnicodeDecodeError:
+            text = b.decode("big5hkscs", "replace")
+        got = fly_sched_parse(text)
+        if not got:
+            raise ValueError("看不懂班表的欄位")
+        FLY_SCHED.update(cargo=got, t=time.time())
+        os.makedirs(os.path.join(DATA_DIR, "fids"), exist_ok=True)
+        with open(os.path.join(DATA_DIR, "fids", "tpe-cargo.json"), "w", encoding="utf-8") as f:
+            json.dump(sorted(got), f)
+    except Exception as e:  # noqa: BLE001
+        fly_log(f"桃園機場貨機班表：{str(e)[:60] or type(e).__name__}")
+    finally:
+        FLY_SCHED["busy"] = False
+
+
+def fly_sched_check():
+    """一週抓一次（失敗的話 6 小時後再試），上次抓到的存在 DATA_DIR/fids/tpe-cargo.json"""
+    now = time.time()
+    if not FLY_SCHED["load"]:
+        FLY_SCHED["load"] = True
+        fn = os.path.join(DATA_DIR, "fids", "tpe-cargo.json")
+        try:
+            with open(fn, encoding="utf-8") as f:
+                FLY_SCHED.update(cargo=set(json.load(f)), t=os.path.getmtime(fn))
+        except (OSError, ValueError, TypeError):
+            pass
+    if FLY_SCHED_URL and not FLY_SCHED["busy"] and now - FLY_SCHED["t"] > 7 * 86400 and now - FLY_SCHED["try"] > 6 * 3600:
+        FLY_SCHED.update({"busy": True, "try": now})
+        threading.Thread(target=fly_sched_pull, daemon=True).start()
 
 
 # 用途：貨運航空公司以外，客貨都飛的公司只有某些機型是貨機（例如國泰的 747 全部是貨機）
@@ -6072,6 +6134,8 @@ def fly_fids(code, wait=1.5):
     第一次還沒抓完回傳 "wait"：網頁先轉圈圈，不要先秀幾架收得到訊號的、過幾秒又冒出一大堆"""
     if code not in FLY_FIDS_GET:
         return None
+    if code == "TPE":
+        fly_sched_check()
     hit = FLY_FIDS.get(code)
     now = time.time()
     if hit is None:
@@ -6636,6 +6700,7 @@ def fly_board(code, bg=False):
     out = {"ok": True, "t": time.time(), "ap": fly_ap(ap), "src": src or (srcs[0][0] if srcs else ""), "home": home, "srcs": srcs,
            "fids": fids is not None, "arr": arr, "dep": dep, "gnd": gnd, "over": over, "rest": rest, "als": sorted(FLY_LGOK), "lgv": VERSION,
            "skyout": FLY_SKYS["out"] if FLY_SKYS["out"] > time.time() and fly_sky_need(ap, fids, ac) else 0}   # OpenSky 今天的次數用完了：網頁寫幾點恢復
+    out["cargo"] = sorted([p for p in cargo if p["ph"] != "over"], key=lambda p: ({"arr": 0, "gnd": 1}.get(p["ph"], 2), p["eta"] if p["eta"] is not None else 999, p["d"]))   # 「貨機」分頁：要降落、在地面、剛起飛的貨機
     out["ccs"] = {x["code"]: db[x["code"]][5] for p in arr + dep + gnd + over + rest for x in (p.get("org"), p.get("dst"))
                   if x and x.get("code") in db and db[x["code"]][5]}   # 地名旁邊的國旗：機場代碼 → 國家
     out["lat"] = {c: round(db[c][3], 2) for c in out["ccs"]}
