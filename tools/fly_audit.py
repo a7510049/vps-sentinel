@@ -22,9 +22,8 @@ for c in ["TPE", "TSA", "KHH", "RMQ"]:
     issues = []
     fids = S.FLY_FIDS.get(c, {}).get("rows") or []
     print("  FIDS rows", len(fids), "ok", hm(S.FLY_FIDS.get(c, {}).get("ok")), "near", sum(1 for r in fids if abs((r.get("est") or r["sch"]) - now) < 3 * 3600))
-    issues = []
-    fids = S.FLY_FIDS.get(c, {}).get("rows") or []
-    print("  FIDS rows", len(fids), "ok", hm(S.FLY_FIDS.get(c, {}).get("ok")), "near", sum(1 for r in fids if abs((r.get("est") or r["sch"]) - now) < 3 * 3600))
+    if not fids:
+        issues.append("官網航班表是空的（連不上或解析失敗）")
     if c == "TPE":
         b = S.fly_get(S.FLY_FIDS_URL["TPE"], timeout=30)
         print("  TPE raw", len(b), b[:200])
@@ -50,6 +49,15 @@ for c in ["TPE", "TSA", "KHH", "RMQ"]:
             if abs(gap) > 300: issues.append(f"{io} {p['fn']} 早晚 {gap:.0f} 分 sch={hm(p.get('sch'))} est={hm(p.get('est'))}")
             if p.get("live") and p.get("lag"): issues.append(f"{io} {p['fn']} 收得到訊號但標還沒 st={p['st']} alt={p.get('alt')} d={p.get('d')}")
             if not p.get("al"): issues.append(f"{io} {p['fn']} 沒有航空公司")
+            if p.get("live"):
+                alt, dd, vr = p.get("alt") or 0, p.get("d") or 0, p.get("vr") or 0
+                if p["st"] == "已到" and alt > 600 and dd > 8: issues.append(f"arr {p['fn']} 寫已到但還在天上 alt={alt} d={dd}")
+                if p["st"] == "已飛" and alt < 50 and dd < 4 and (p.get("spd") or 0) < 30: issues.append(f"dep {p['fn']} 寫已飛但停在地上 alt={alt} d={dd}")
+                if io == "arr" and vr > 3 and alt > 300: issues.append(f"arr {p['fn']} 配到正在爬升的飛機 alt={alt} vr={vr} st={p['st']}")
+                if io == "dep" and vr < -3 and alt > 300: issues.append(f"dep {p['fn']} 配到正在下降的飛機 alt={alt} vr={vr} st={p['st']}")
+                if p["st"] in ("還沒到", "還沒飛"): issues.append(f"{io} {p['fn']} 收得到訊號卻寫{p['st']} alt={alt} d={dd}")
+            t = p.get("est") or p.get("sch") or now
+            if p["st"] not in ("已到", "已飛", "取消") and t < now - 3 * 3600: issues.append(f"{io} {p['fn']} 過了三小時還在看板 sch={hm(p.get('sch'))} st={p['st']}")
     allp = [(k, p) for k in ("arr", "dep", "gnd", "over", "rest") for p in d[k]]
     idc = collections.Counter(p["id"] for k, p in allp if not p.get("fids") or p.get("live"))
     for i, n in idc.items():
@@ -59,6 +67,8 @@ for c in ["TPE", "TSA", "KHH", "RMQ"]:
             issues.append(f"{k} {p['fn']} 出發地＝目的地 {pl(p['org'])}")
         if k in ("over", "rest") and p.get("alt") is not None and p["alt"] < 1500 and p.get("d", 99) < 25:
             issues.append(f"{k} {p['fn'] or p['reg']} 很低很近卻不在看板 alt={p['alt']} d={p['d']} vr={p.get('vr')} ph={p['ph']} st={p['st']} {pl(p.get('org'))}->{pl(p.get('dst'))} use={p.get('use')}")
+        if k in ("over", "rest") and p.get("use") == "客機" and (p.get("dst") or {}).get("code") == c and (p.get("vr") or 0) < -2 and (p.get("alt") or 99999) < 3000 and (p.get("d") or 99) < 40:
+            issues.append(f"{k} {p['fn']} 正在降落到這裡卻不在看板 alt={p['alt']} d={p['d']} {pl(p.get('org'))}")
         if k in ("arr", "dep") and p.get("live") and p.get("d", 0) > 400:
             issues.append(f"{k} {p['fn']} 配到很遠的飛機 d={p['d']}")
         if p.get("use") == "" and k != "over":
