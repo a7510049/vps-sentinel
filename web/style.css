@@ -974,6 +974,9 @@ html.flyon .dash>.view{content-visibility:hidden;contain-intrinsic-size:auto non
 .board[data-tab="gnd"] .fr .t .sf{visibility:hidden}                              /* 地面沒有時間：不放空格子 */
 .radar .rbox{position:relative}
 .rbox .rfull{position:absolute;top:0;right:0;background:var(--s2);box-shadow:var(--sh-1)}.rfull svg{width:18px;height:18px}
+.rsweep{position:absolute;left:50%;top:50%;width:calc(100% * 61 / 62);aspect-ratio:1;translate:-50% -50%;border-radius:50%;pointer-events:none;
+  background:conic-gradient(transparent 0 80%,color-mix(in oklab,var(--p) 18%,transparent));animation:spin calc(var(--t-long) * 5) linear infinite}   /* 雷達掃描：只轉動，交給顯示卡 */
+[data-motion="off"] .rsweep{display:none}@media (prefers-reduced-motion:reduce){.rsweep{display:none}}
 .radar .rcv{display:block;width:100%;height:auto;aspect-ratio:1;cursor:pointer;touch-action:manipulation}
 .fzm{margin-left:auto}.fzm button{height:26px;padding:0 10px}
 /* 整頁雷達 */
