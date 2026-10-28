@@ -955,7 +955,7 @@ html.flyon .dash>.view{content-visibility:hidden;contain-intrinsic-size:auto non
 @media (hover:hover){.fplx:hover{background:var(--s3)}}
 .fplh{padding:10px 12px 4px;font-size:var(--fs-xs);font-weight:600;color:var(--tx3)}
 /* 延誤、改登機門橘框，取消紅框：慢慢呼吸（只動透明度；每一列對齊同一個節拍，flyBeat） */
-.fr{position:relative}
+.fr{position:relative}.fr.pend{display:none}
 .fr::after{content:"";position:absolute;inset:3px 0;border-radius:inherit;border:2px solid transparent;pointer-events:none;opacity:0}
 .fr.bad::after{animation:breathe calc(var(--t-long) * 1.6) var(--ease) infinite alternate}
 .fr.bad::after{border-color:var(--bad)}

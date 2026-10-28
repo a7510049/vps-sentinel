@@ -2550,7 +2550,7 @@ document.addEventListener("click", async e => {
 /* ═════════ 機場起降：像機場那種會翻牌的看板（飛機即時位置來自業餘接收站，主要主機去抓） ═════════ */
 const FLYK = "vs-fly", FLYEV = 10000;                     // 記住選的機場和分頁；每 10 秒更新
 const FLYS = (() => { try { return {ap:"", tab:"arr", ...JSON.parse(store(FLYK) || "{}")}; } catch(e) { return {ap:"", tab:"arr"}; } })();
-let FLYD = null, FLYT = 0, FLYSEL = "", FLYSEQ = 0, FLYHR = "", FLYSTILL = false, FLYSW = 0, FLYDONE = false, FLYHUSH = 0, FLYBZ = 0, FLYLATER = 0;   // FLYBZ：切換動畫跑到什麼時候（這段時間新資料先等）   // FLYDONE：已到／已飛的班機展開   // FLYHR：看板現在看哪個時段（幾點）
+let FLYD = null, FLYT = 0, FLYSEL = "", FLYSEQ = 0, FLYHR = "", FLYSTILL = false, FLYSW = 0, FLYDONE = false, FLYHUSH = 0, FLYBZ = 0, FLYLATER = 0, FLYDT = 0;   // FLYBZ：切換動畫跑到什麼時候（這段時間新資料先等）   // FLYDONE：已到／已飛的班機展開   // FLYHR：看板現在看哪個時段（幾點）
 const flySave = () => store(FLYK, JSON.stringify({ap: FLYS.ap, tab: FLYS.tab, name: FLYS.name, term: FLYS.term || ""}));
 const FLYTAB = [["arr", "抵達"], ["dep", "出發"], ["gnd", "機坪"], ["cargo", "貨機"]];
 const flyFT = tab => tab === "arr" || tab === "dep";       // 照官網表排的分頁（機坪、貨機是收得到訊號的飛機）
@@ -3301,7 +3301,7 @@ function flyPaint(anim){
   const n = list.length;
   flyWait(f, !!d.loading && d.ok);
   flyRv(msg, !d.ok || (!d.loading && !n));
-  txt(msg, !d.ok ? d.error || "航班資料暫時拿不到" : d.loading ? "" : n ? "" : FLYPLC ? `沒有${FLYPLC.name}的班機` : d.night ? "半夜沒有班機，6 點後再來看" : d.fids && flyFT(FLYS.tab) ? `接下來沒有${FLYS.tab === "arr" ? "抵達" : "起飛"}的班機` : FLYS.tab === "cargo" ? "附近現在沒有貨機" : `附近現在沒有${{arr:"要降落", dep:"剛起飛", gnd:"在機坪"}[FLYS.tab]}的飛機`);
+  txt(msg, !d.ok ? d.error || "航班資料暫時拿不到" : d.loading ? "" : n ? "" : FLYPLC ? `沒有${FLYPLC.name}的班機` : d.night ? "半夜沒有班機，6 點後再來看" : d.fids && flyFT(FLYS.tab) ? `接下來沒有${FLYS.tab === "arr" ? "抵達" : "起飛"}的班機` : FLYS.tab === "cargo" ? "目前沒有貨機" : FLYS.tab === "gnd" ? "目前沒有客機" : `附近現在沒有${FLYS.tab === "arr" ? "要降落" : "剛起飛"}的飛機`);
   const tz = d.ap.tz;
   flapSet(f.querySelector(".fcode .sf"), d.ap.code); flyApBtn(f, d.ap);
   txt(f.querySelector('[data-k="name"]'), d.ap.name); txt(f.querySelector('[data-k="city"]'), d.ap.city);
@@ -3360,8 +3360,19 @@ function flyRows(f, d, list, n, byHr, tz, anim){
     put(r.querySelector(".fsh"), v.sh);
     const rg = r.querySelector(".fk.reg"); if ((rg.dataset.bx || "") !== v.bx) rg.dataset.bx = v.bx;   // 手機：轉盤／櫃台接在登機門後面
   });
-  fresh.forEach(r => { r.style.contentVisibility = "visible"; const h = getComputedStyle(r).height; r.style.contentVisibility = "";   // 手機的列平常畫面外不排版，量到的是預估高度，量之前先讓它排版
-    r.animate([{height:"0px", opacity:0, paddingTop:0, paddingBottom:0, overflow:"hidden"}, {height:h, opacity:1, overflow:"hidden"}], {duration:T.mid, easing:EASE}); });
+  const fr = [...fresh];
+  if (!FLYSTEP) { clearTimeout(FLYDT); box.querySelectorAll(":scope>.fr.pend").forEach(r => r.classList.remove("pend")); }   // 一般更新：還沒放出來的直接放出來
+  if (FLYSTEP) fr.forEach(r => r.classList.add("pend"));
+  else if (fr.length > 3) {                                      // 一次來很多列（例如展開「已飛 N 班」）：不撐高度，一列一列淡入，下面的列整塊滑下去（只動位置和透明度，手機不卡）
+    const gap = T.fast * .25, last = Math.min(fr.length - 1, 12);
+    fr.forEach((r, i) => r.animate([{opacity:0, transform:"translateY(-6px)"}, {opacity:1, transform:"none"}], {duration:T.mid, delay:Math.min(i, 12) * gap, easing:EASE, fill:"backwards"}));
+    FLYBZ = Math.max(FLYBZ, performance.now() + last * gap + T.mid + 60);
+  } else {                                                  // 一兩列：從 0 撐開（手機的列平常畫面外不排版，量到的是預估高度，先一起排版再一起量）
+    fr.forEach(r => { r.style.contentVisibility = "visible"; });
+    const hs = fr.map(r => getComputedStyle(r).height);
+    fr.forEach((r, i) => { r.style.contentVisibility = "";
+      r.animate([{height:"0px", opacity:0, paddingTop:0, paddingBottom:0, overflow:"hidden"}, {height:hs[i], opacity:1, overflow:"hidden"}], {duration:T.mid, easing:EASE}); });
+  }
   if (box._flip) { box._flip(); box._flip = null; }
   flyBeat(box);
 }
@@ -3388,6 +3399,36 @@ function flyBye(r){
   const end = () => { if (r._bye) { r.hidden = true; r._bye = 0; r.dataset.id = ""; } };
   canAnim() && !FLYSTILL ? r.animate([{opacity:1, height:getComputedStyle(r).height}, {opacity:0, height:"0px", paddingTop:0, paddingBottom:0, marginTop:0}], {duration:T.mid, easing:EASE}).finished.then(end, () => {}) : end();
 }
+/* 展開「已飛 N 班」：新的列先藏著（.pend），每一小段時間放兩列出來撐開（一次塞二十幾列、每列一起撐高度，手機會卡一下） */
+function flyDoneOpen(){
+  clearTimeout(FLYDT);
+  FLYSTEP = FLYDONE && canAnim(); try { flyPaint(); } finally { FLYSTEP = false; }
+  const f = $("#fly"), box = f && f.querySelector(".frows"); if (!box) return;
+  const step = () => {
+    const pend = [...box.querySelectorAll(":scope>.fr.pend")]; if (!pend.length) return;
+    const add = pend.slice(0, 2);
+    add.forEach(r => { r.classList.remove("pend"); r.style.contentVisibility = "visible"; });
+    const hs = add.map(r => getComputedStyle(r).height);   // 一起排版、一起量（不要量一列改一列）
+    add.forEach((r, i) => { r.style.contentVisibility = "";
+      r.animate([{height:"0px", opacity:0, paddingTop:0, paddingBottom:0, overflow:"hidden"}, {height:hs[i], opacity:1, overflow:"hidden"}], {duration:T.mid, easing:EASE}); });
+    FLYBZ = Math.max(FLYBZ, performance.now() + T.mid + 120);
+    if (pend.length > 2) FLYDT = setTimeout(step, T.fast * .5);
+  };
+  step();
+}
+let FLYSTEP = false;
+/* 一次走掉很多列（例如收起「已飛 N 班」）：一起淡出，再一次收起來，留下的列整塊滑上去（不是每列各自縮高度，手機會卡） */
+function flyByeMany(box, gone, keep){
+  gone.forEach(r => { r._bye = 1; });
+  const fs = gone.map(r => r.animate([{opacity:1}, {opacity:0}], {duration:T.fast, easing:EXIT, fill:"forwards"}));
+  FLYBZ = Math.max(FLYBZ, performance.now() + T.fast + T.mid + 60);
+  Promise.all(fs.map(a => a.finished)).then(() => {
+    const z = ZM(), live = keep.filter(r => r.isConnected && !r.hidden), y0 = live.map(r => r.getBoundingClientRect().top);
+    gone.forEach(r => { if (!r._bye) return; r.getAnimations().forEach(a => a.cancel()); r.hidden = true; r._bye = 0; r.dataset.id = ""; });
+    live.forEach((r, i) => { const dy = (y0[i] - r.getBoundingClientRect().top) / z;
+      if (Math.abs(dy) > 1) r.animate([{transform:`translateY(${dy}px)`}, {transform:"none"}], {duration:T.mid, easing:EASE}); });
+  }, () => {});
+}
 /* 照班機對列：留下來的列不動（順序變了就滑過去），走掉的在原地收起來，新來的拿空的列 */
 function flyKeyed(box, cur, items, fresh){
   const byId = new Map(cur.filter(r => r.dataset.id).map(r => [r.dataset.id, r])), ids = new Set(items.map(p => p.id));
@@ -3409,7 +3450,7 @@ function flyKeyed(box, cur, items, fresh){
     order.splice(k + 1, 0, g);
   });
   order.forEach((r, i) => { if (box.children[i] !== r) box.insertBefore(r, box.children[i]); });
-  gone.forEach(flyBye);
+  if (gone.length > 3 && canAnim() && !FLYSTILL) flyByeMany(box, gone, rows); else gone.forEach(flyBye);
   box._flip = () => { const z = ZM();                      // 每列的字和分段標題都換好之後才量（標題多出來的空間也一起滑過去）
     rows.forEach(r => { if (fresh.has(r) || !y0.has(r)) return; const dy = (y0.get(r) - r.getBoundingClientRect().top) / z;
       if (Math.abs(dy) > 1) r.animate([{transform:`translateY(${dy}px)`}, {transform:"none"}], {duration:T.mid, easing:EASE}); }); };
@@ -3584,7 +3625,7 @@ document.addEventListener("click", e => {
   const tm = t.closest("[data-fterm]");
   if (tm) { if ((FLYS.term || "") !== tm.dataset.fterm) { FLYS.term = tm.dataset.fterm; FLYHR = ""; flySave(); const s = tm.parentNode;
     slideSel(() => s.querySelectorAll("button").forEach(b => b.classList.toggle("on", b === tm))); flySwitch(); } return; }
-  if (t.closest("[data-fdone]")) { FLYDONE = !FLYDONE; return flyPaint(); }
+  if (t.closest("[data-fdone]")) { FLYDONE = !FLYDONE; return flyDoneOpen(); }
   const hr = t.closest("[data-fhr]");
   if (hr) { if (FLYHR !== hr.dataset.fhr) { FLYHR = hr.dataset.fhr; const s = hr.parentNode;
     slideSel(() => s.querySelectorAll("button").forEach(b => b.classList.toggle("on", b === hr))); flySwitch(true);
