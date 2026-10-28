@@ -816,7 +816,7 @@ const EASE = "cubic-bezier(.2,0,0,1)", EXIT = "cubic-bezier(.3,0,.8,.15)", LIN =
 /* 彈簧（Material 3 Expressive 官方數值，跟 CSS 的 --sp-fast／--sp／--sp-slow 一樣）：時間用 T.spf／T.sp／T.sps */
 const SPRING_F = LIN ? "linear(0,.022 2%,.088 5%,.221 8%,.658 18%,.821 22%,.94 26%,1.024 31%,1.075 36%,1.093 41%,1.069 51%,1.006 68%,.991 84%,1)" : "cubic-bezier(.34,1.4,.64,1)",
       SPRING = LIN ? "linear(0,.022 3%,.093 7%,.259 12%,.554 22%,.713 28%,.83 35%,.917 42%,.976 50%,1.009 61%,1.011 83%,1)" : "cubic-bezier(.3,1.1,.55,1)";
-const canAnim = () => PREF.motion && !matchMedia("(prefers-reduced-motion: reduce)").matches;
+const RMQ = matchMedia("(prefers-reduced-motion: reduce)"), canAnim = () => PREF.motion && !RMQ.matches;   // 同一個查詢留著用（每次新建很慢，動畫前都會問）
 /* 讓元素平順地離開：先淡出、收起高度，再移除 */
 const BLOCK = ".alert,.alerts,.ev,.day,.calm,.empty,.foot,.offline,.fcs,.cc,.grp,.lbl,.group,.tiles,.mrows,.cfoot";
 const TILE = ".hcard,.hp,.tile,.chip,.fc,.li,.addhost";
@@ -2550,7 +2550,7 @@ document.addEventListener("click", async e => {
 /* ═════════ 機場起降：像機場那種會翻牌的看板（飛機即時位置來自業餘接收站，主要主機去抓） ═════════ */
 const FLYK = "vs-fly", FLYEV = 10000;                     // 記住選的機場和分頁；每 10 秒更新
 const FLYS = (() => { try { return {ap:"", tab:"arr", ...JSON.parse(store(FLYK) || "{}")}; } catch(e) { return {ap:"", tab:"arr"}; } })();
-let FLYD = null, FLYT = 0, FLYSEL = "", FLYSEQ = 0, FLYHR = "", FLYSTILL = false, FLYSW = 0, FLYDONE = false;   // FLYDONE：已到／已飛的班機展開   // FLYHR：看板現在看哪個時段（幾點）
+let FLYD = null, FLYT = 0, FLYSEL = "", FLYSEQ = 0, FLYHR = "", FLYSTILL = false, FLYSW = 0, FLYDONE = false, FLYHUSH = 0;   // FLYDONE：已到／已飛的班機展開   // FLYHR：看板現在看哪個時段（幾點）
 const flySave = () => store(FLYK, JSON.stringify({ap: FLYS.ap, tab: FLYS.tab, name: FLYS.name, term: FLYS.term || ""}));
 const FLYTAB = [["arr", "抵達"], ["dep", "出發"], ["gnd", "機坪"], ["cargo", "貨機"]];
 const flyFT = tab => tab === "arr" || tab === "dep";       // 照官網表排的分頁（機坪、貨機是收得到訊號的飛機）
@@ -2713,7 +2713,7 @@ function flyShell(){
       <div class="seg ftabs" data-slide>${FLYTAB.map(([k, l]) => `<button class="${FLYS.tab === k ? "on" : ""}" data-ftab="${k}">${l}<span class="fn" data-k="n-${k}"></span></button>`).join("")}</div>
       <div class="fterm" data-slide hidden></div><div class="fhrs" data-slide hidden></div><div class="fsum sub" hidden></div>
       <div class="board"><div class="fh">${FLYCOL.map(k => `<span class="fk ${k}"></span>`).join("")}</div><button class="fdone" data-fdone hidden><span></span>${I("chev").replace("<svg", '<svg class="chv"')}</button><div class="frows"></div><div class="fmsg sub" hidden></div><div class="fload"><i></i></div></div></div>
-      <div class="radar"><div class="rbox"><canvas class="rcv" aria-label="雷達"></canvas><button class="icbtn rfull" data-rfull title="整頁雷達">${I("full")}</button></div>
+      <div class="radar"><div class="rbox"><canvas class="rcv" aria-label="雷達"></canvas><i class="rsweep"></i><button class="icbtn rfull" data-rfull title="整頁雷達">${I("full")}</button></div>
         <div class="rnote sub" hidden></div>
         <div class="rwx" hidden></div>
         <div class="rleg"><span><i class="arr"></i>抵達<b data-k="rc-arr"></b></span><span><i class="dep"></i>出發<b data-k="rc-dep"></b></span><span><i></i>機坪<b data-k="rc-gnd"></b></span><span><i></i>路過<b data-k="rc-over"></b></span>
@@ -2787,7 +2787,7 @@ const EASEF = bez(.2, 0, 0, 1);
 function radarView(cv, full){
   const ctx = cv.getContext("2d"), pl = new Map(), V = {cx:0, cy:0, s:1}, A = {};
   const R = {cv, full, pl, sel:"", only:"", geo:null, ga:0, gt:0, range:60, W:0, H:0, dpr:1, raf:0, last:0, busy:0, off:false};
-  let col = {}, font = "", fs = 12, t0 = performance.now();
+  let col = {}, font = "", fs = 12;
   const now = () => performance.now();
   /* 顏色、字型跟著主題（每次有新資料時重讀，換深淺模式也會跟上） */
   R.theme = () => {
@@ -2845,18 +2845,22 @@ function radarView(cv, full){
     pl.forEach(o => { if (!o.vis) return; const d = Math.hypot(o.sx - sx, o.sy - sy); if (d < bd) { bd = d; best = o; } });
     return best && best.p;
   };
-  R.kick = () => { if (!R.raf && !R.off) R.raf = requestAnimationFrame(R.frame); };
-  R.stop = () => { cancelAnimationFrame(R.raf); R.raf = 0; R.off = true; };
+  R.kick = () => { if (!R.raf && !R.off) { clearTimeout(R.tm); R.tm = 0; R.raf = requestAnimationFrame(R.frame); } };
+  R.stop = () => { cancelAnimationFrame(R.raf); clearTimeout(R.tm); R.raf = R.tm = 0; R.off = true; };
   R.frame = t => {
     R.raf = 0;
     if (R.off || !cv.isConnected) return;
     if (document.hidden) return;
-    const moving = A.t || R.busy || [...pl.values()].some(o => o.a < 1 || o.gone || t - o.t0 < FLYEV) || t - R.gt < T.mid;
-    const sweep = !full && canAnim();
-    if (!(A.t || R.busy) && t - R.last < 30 && (moving || sweep)) { R.raf = requestAnimationFrame(R.frame); return; }   // 只是慢慢飄、掃描時每秒 30 張就夠
+    const fading = o => o.gone || (o.on === false ? o.a > 0 : o.a < 1);   // 正在淡入淡出（雷達圈外的飛機一直是透明的，不算）
+    const moving = A.t || R.busy || [...pl.values()].some(o => fading(o) || t - o.t0 < FLYEV) || t - R.gt < T.mid;
+    const fade = R.busy || [...pl.values()].some(fading) || t - R.gt < T.mid;
+    let v = 0;                                              // 小雷達：照飛機在畫面上移動的快慢決定多久畫一次（移不到一點就不用重畫）
+    if (!fade && !full) pl.forEach(o => { if (o.vis && t - o.t0 < FLYEV) v = Math.max(v, Math.hypot(o.x1 - o.x0, o.y1 - o.y0)); });
+    const gap = A.t || R.busy ? 0 : t < FLYHUSH ? T.mid : fade || full ? 30 : Math.min(250, Math.max(33, .7 * FLYEV / (v * V.s || 1e-6)));   // 看板切換時先讓給切換動畫
+    if (gap && t - R.last < gap && moving) { R.tm = setTimeout(R.kick, gap - (t - R.last)); return; }   // 等的時候不佔每一格畫面（一直要畫面會讓整頁的動畫都跟著在主執行緒算）
     R.last = t;
     R.draw(t);
-    if (moving || sweep) R.raf = requestAnimationFrame(R.frame);
+    if (moving) R.raf = requestAnimationFrame(R.frame);
   };
   R.draw = t => {
     if (!R.W) return;
@@ -2911,12 +2915,7 @@ function radarView(cv, full){
     else { ctx.moveTo(W / 2 - rr, H / 2); ctx.lineTo(W / 2 + rr, H / 2); ctx.moveTo(W / 2, H / 2 - rr); ctx.lineTo(W / 2, H / 2 + rr); }
     ctx.stroke(); ctx.setLineDash([]);
     if (!full) { ctx.textAlign = "center"; ctx.fillText("北", W / 2, H / 2 - rr + fs); ctx.textAlign = "left"; }
-    /* 掃描 */
-    if (!full && canAnim() && ctx.createConicGradient) {
-      const a = (t - t0) / (T.long * 5) * Math.PI * 2, g = ctx.createConicGradient(a - Math.PI / 2, W / 2, H / 2);
-      g.addColorStop(0, "transparent"); g.addColorStop(.8, "transparent"); g.addColorStop(1, flyAlpha(col.p, .18));
-      ctx.fillStyle = g; ctx.beginPath(); ctx.arc(W / 2, H / 2, rr, 0, Math.PI * 2); ctx.fill();
-    }
+    /* 掃描：畫在上面那層 .rsweep（只是轉動，不用每格重畫整張雷達） */
     /* 地名、其他機場 */
     const tw = [];
     if (R.geo) {
@@ -2946,7 +2945,7 @@ function radarView(cv, full){
     const vis = [], step = canAnim() ? dt / T.mid : 1;
     pl.forEach(o => {
       const on = want(o) && (full || Math.hypot(...R.at(o, t)) * s <= rr);
-      o.a = on ? Math.min(1, o.a + step) : Math.max(0, o.a - step);
+      o.a = on ? Math.min(1, o.a + step) : Math.max(0, o.a - step); o.on = on;
       if (o.gone && o.a <= 0) { pl.delete(o.id); return; }
       const [x, y] = R.at(o, t), [sx, sy] = R.xy(x, y);
       o.sx = sx; o.sy = sy; o.x = x; o.y = y; o.vis = o.a > .3 && sx > -20 && sx < W + 20 && sy > -20 && sy < H + 20;
@@ -3116,6 +3115,7 @@ async function flySwitch(hr){
   const pick = () => [b, hr ? null : f.querySelector(".fhrs")].filter(e => e && !e.hidden);   // 換時段：上面那排時間不動，只換看板
   const els = pick();
   (b._fo || []).forEach(a => a.cancel());
+  FLYHUSH = performance.now() + T.fast + T.mid * 2;        // 切換動畫跑完前雷達先少畫幾張
   const fo = b._fo = els.map(e => e.animate([{opacity:1}, {opacity:0}], {duration:T.fast * .6, easing:EXIT, fill:"forwards"}));
   await Promise.all(fo.map(a => a.finished.catch(() => {})));
   if (id !== FLYSW) return;
@@ -3395,7 +3395,7 @@ function flyKeyed(box, cur, items, fresh){
 /* 橘框、紅框的呼吸全部對齊同一個節拍（各列開始的時間不同，不然會一閃一閃不同步） */
 function flyBeat(box){
   if (!box.getAnimations) return;
-  box.getAnimations({subtree:true}).forEach(a => { if (a.animationName === "breathe" && a.startTime !== 0) a.startTime = 0; });
+  box.querySelectorAll(".fr.bad").forEach(r => r.getAnimations({subtree:true}).forEach(a => { if (a.animationName === "breathe" && a.startTime !== 0) a.startTime = 0; }));   // 只看有紅框的列（整塊看板的動畫很多，全部問一次很慢）
 }
 async function flyLoad(anim){
   clearTimeout(FLYT);
