@@ -963,11 +963,11 @@ html.flyon .dash>.view{content-visibility:hidden;contain-intrinsic-size:auto non
 .fmsg{grid-column:1/-1;padding:24px 16px;text-align:center}
 .board.none .fh{display:none}
 .board{position:relative}
-.board .fh,.board .frows{transition:opacity var(--t-mid) var(--ease)}
-.board.wait{min-height:14em}.board.wait .fh,.board.wait .frows{opacity:0}
+.board :is(.fh,.frows,.fdone,.fmsg){transition:opacity var(--t-mid) var(--ease)}
+.board.wait{min-height:14em}.board.wait :is(.fh,.frows,.fdone,.fmsg){opacity:0;pointer-events:none}   /* 換機場等資料：上一個機場的「已飛 N 班」、提示字也先淡掉 */
 .fload{position:absolute;inset:0;display:grid;place-items:center;pointer-events:none;opacity:0;transition:opacity var(--t-mid) var(--ease)}
 .board.wait .fload{opacity:1;transition-delay:var(--t-long)}
-.flyv :is(.fhrs,.fterm){transition:opacity var(--t-mid) var(--ease)}.flyv.fwait :is(.fhrs,.fterm){opacity:0;pointer-events:none}
+.flyv :is(.fhrs,.fterm,.fsum){transition:opacity var(--t-mid) var(--ease)}.flyv.fwait :is(.fhrs,.fterm,.fsum){opacity:0;pointer-events:none}
 .fload i{width:40px;height:40px;background:var(--p)}
 .radar{background:var(--card);border-radius:var(--r-xl);padding:16px;width:100%;max-width:480px;align-self:center}
 .fr.sel .sf .c[data-c=" "],.fr.sel .sf .c[data-c=" "] b{background:transparent}   /* 選到的那列：空格子不要變成深色方塊 */
