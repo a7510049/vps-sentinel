@@ -2597,7 +2597,7 @@ async function flyFlip(c, to, delay, still){
 function flapSet(el, v, delay = 0, still = false){
   if (!el) return;
   const cs = [...el.children], want = flyPad(v, cs.length);
-  cs.forEach((c, i) => { if (c.dataset.c !== want[i] || c._tok) flyFlip(c, want[i], delay + i * T.fast * .12, still); });
+  cs.forEach((c, i) => { if (c.dataset.c !== want[i] || c._tok) flyFlip(c, want[i], delay + i * T.fast * .12, still || FLYSTILL); });   // 整塊換的時候直接換字，不翻
 }
 const FLYFMT = {};                                         // 每個時區的時間格式只建一次（每次都建很慢）
 const flyHM = (t, tz) => { const k = tz || "";
@@ -3560,9 +3560,15 @@ function flyOpen(btn){
   if (!canAnim()) f.style.animation = "none";
   if (!SHARE) history.pushState({fly:1}, "");          // 分享連結只有這一頁，不能返回
   document.documentElement.classList.add("lock");
-  setTimeout(() => { if ($("#fly")) document.documentElement.classList.add("flyon"); }, T.slow + 80);
+  setTimeout(() => { if (f.isConnected && !f._bye) document.documentElement.classList.add("flyon"); }, T.slow + 80);   // 很快又關掉的話不要加（不然關完後面的畫面會整個藏著）
   f._rv = radarView(f.querySelector(".rcv"), false); f._rv.range = flyR(); flyZoom(f, false);   // 雷達先建好：下面用現成資料畫的時候，底圖才放得上去
-  if (FLYD && FLYD.ap && FLYD.ap.code === FLYS.ap) { f.querySelector(".fsplash").remove(); flyPaint(false); } else { flySplashOn(f); flyWait(f, true); }
+  if (FLYD && FLYD.ap && FLYD.ap.code === FLYS.ap) {         // 有上次的資料：直接排好（不一格一格翻、不一排一排長出來），跟著打開的動畫一塊一塊浮上來
+    f.querySelector(".fsplash").remove();
+    FLYSTILL = true; try { flyPaint(false); } finally { FLYSTILL = false; }
+    if (canAnim()) [...f.querySelectorAll(".fwrap>:not(.ftop), .fmain>*")].filter(e => !e.classList.contains("fmain")).forEach((e, i) =>
+      e.animate([{opacity:0, transform:"translateY(16px)"}, {opacity:1, transform:"none"}], {duration:T.slow, delay:T.fast + i * T.fast * .35, easing:EASE, fill:"backwards"}));
+    FLYBZ = performance.now() + T.slow + T.fast * 3;           // 浮完才換上剛抓到的新資料
+  } else { flySplashOn(f); flyWait(f, true); }
   flyLoad(false);
   f.querySelector(".rcv").addEventListener("click", e => {    // 點雷達打開整頁雷達；點到飛機就順便選好那一架
     const r = e.currentTarget.getBoundingClientRect(), z = ZM(), p = f._rv.hit((e.clientX - r.left) / z, (e.clientY - r.top) / z);
