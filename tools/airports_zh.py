@@ -79,6 +79,8 @@ def tidy(v, ap=False):
     v = re.sub(r"^.{1,4}河畔", "", v)           # 美茵河畔法蘭克福 → 法蘭克福
     v = re.sub(r"大都會(區)?$|(?<=..)都$", "", v)  # 馬尼拉大都會 → 馬尼拉、東京都 → 東京
     v = re.sub(r"(?<=..)[市縣郡]$", "", v)
+    if re.search(r"[A-Za-z]|站$", v):         # 夾英文的、火車站之類的：不用
+        return ""
     return v if 0 < len(v) <= 10 and re.search(r"[一-鿿]", v) else ""
 
 

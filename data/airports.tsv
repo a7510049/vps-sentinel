@@ -170,7 +170,7 @@ AIS	Arorae Island Airport	Arorae Island	KI	-2.6161	176.8030	Pacific/Tarawa	阿�
 AIT	Aitutaki Airport	Aitutaki	CK	-18.8309	-159.7640	Pacific/Rarotonga	阿伊圖塔基島
 AIU	Enua Airport	Atiu Island	CK	-19.9678	-158.1190	Pacific/Rarotonga	
 AIV	George Downer Airport	Aliceville	US	33.1067	-88.1972	America/Chicago	艾麗斯維爾
-AIZ	Lee C Fine Memorial Airport	Kaiser/Lake Ozark	US	38.0960	-92.5495	America/Chicago	李·C·費因紀念
+AIZ	Lee C Fine Memorial Airport	Kaiser/Lake Ozark	US	38.0960	-92.5495	America/Chicago	
 AJA	Ajaccio-Napoleon Bonaparte Airport	Ajaccio/Napoleon Bonaparte	FR	41.9236	8.8029	Europe/Paris	阿雅克肖
 AJF	Al-Jawf Domestic Airport	Al-Jawf	SA	29.7851	40.1000	Asia/Riyadh	塞卡凱
 AJI	Agri Airport	Agri	TR	39.6545	43.0260	Europe/Istanbul	阿勒
@@ -577,7 +577,7 @@ BFA	Bahia Negra Airport	Bahia Negra	PY	-20.2246	-58.1792	America/Asuncion
 BFD	Bradford Regional Airport	Bradford	US	41.8030	-78.6400	America/New_York	佈雷德福
 BFE	Bielefeld Airport	Bielefeld	DE	51.9647	8.5444	Europe/Berlin	
 BFF	Scottsbluff/Western Nebraska Regional/Wm  B Heilig Field	Scottsbluff	US	41.8740	-103.5956	America/Denver	斯科茨布拉夫
-BFG	Bullfrog Basin Airport	Glen Canyon Natl Rec Area	US	37.5458	-110.7132	America/Denver	Bullfrog盆地
+BFG	Bullfrog Basin Airport	Glen Canyon Natl Rec Area	US	37.5458	-110.7132	America/Denver	
 BFH	Bacacheri Airport	Curitiba	BR	-25.4051	-49.2320	America/Sao_Paulo	古里提巴
 BFI	Boeing Field/King County International Airport	Seattle	US	47.5300	-122.3019	America/Los_Angeles	西雅圖
 BFJ	Bijie Airport	Bijie	CN	27.2671	105.4716	Asia/Shanghai	畢節
@@ -641,7 +641,7 @@ BIA	Bastia-Poretta Airport	Bastia/Poretta	FR	42.5527	9.4837	Europe/Paris	巴斯�
 BIB	Baidoa Airport	Baidoa	SO	3.1022	43.6286	Africa/Mogadishu	拜多亞
 BID	Block Island State Airport	Block Island	US	41.1681	-71.5778	America/New_York	布洛克島
 BIE	Beatrice Municipal Airport	Beatrice	US	40.3013	-96.7541	America/Chicago	比阿特麗斯
-BIF	Biggs Army Air Field (Fort Bliss) Airport	Fort Bliss/El Paso/	US	31.8495	-106.3801	America/Denver	Biggs陸軍飛行場
+BIF	Biggs Army Air Field (Fort Bliss) Airport	Fort Bliss/El Paso/	US	31.8495	-106.3801	America/Denver	
 BIG	Allen Army Air Field	Delta Junction Ft Greely	US	63.9952	-145.7200	America/Anchorage	格里利堡
 BIH	Bishop Airport	Bishop	US	37.3731	-118.3636	America/Los_Angeles	畢曉普
 BIK	Frans Kaisiepo Airport	Biak-Supiori Island	ID	-1.1900	136.1080	Asia/Jayapura	比亞克島
@@ -757,7 +757,7 @@ BND	Bandar Abbas International Airport	Bandar Abbas	IR	27.2183	56.3778	Asia/Tehr
 BNE	Brisbane International Airport	Brisbane	AU	-27.3842	153.1170	Australia/Brisbane	布里斯本
 BNG	Banning Municipal Airport	Banning	US	33.9226	-116.8510	America/Los_Angeles	班寧
 BNI	Benin Airport	Benin	NG	6.3170	5.5995	Africa/Lagos	貝南城
-BNJ	Bonn-Hangelar Airport	Bonn	DE	50.7689	7.1633	Europe/Berlin	波恩火車總站
+BNJ	Bonn-Hangelar Airport	Bonn	DE	50.7689	7.1633	Europe/Berlin	
 BNK	Ballina Byron Gateway Airport	Ballina	AU	-28.8339	153.5620	Australia/Sydney	巴利納
 BNL	Barnwell Regional Airport	Barnwell	US	33.2577	-81.3882	America/New_York	巴恩韋爾
 BNN	Brønnøysund Airport	Brønnøy	NO	65.4611	12.2175	Europe/Oslo	布倫訥於松
@@ -817,7 +817,7 @@ BQQ	Barra Airport	Barra	BR	-11.0808	-43.1475	America/Bahia	巴拉
 BQS	Ignatyevo Airport	Blagoveschensk	RU	50.4254	127.4120	Asia/Yakutsk	海蘭泡
 BQT	Brest Airport	Brest	BY	52.1083	23.8981	Europe/Minsk	佈列斯特
 BQU	J F Mitchell Airport	Bequia	VC	12.9884	-61.2620	America/St_Vincent	貝基亞島
-BQW	Balgo Hill Airport		AU	-20.1483	127.9730	Australia/Perth	Balgo山
+BQW	Balgo Hill Airport		AU	-20.1483	127.9730	Australia/Perth	
 BRA	Barreiras Airport	Barreiras	BR	-12.0789	-45.0090	America/Fortaleza	巴雷拉斯
 BRB	Barreirinhas Airport	Barreirinhas	BR	-2.7556	-42.8100	America/Fortaleza	巴雷里尼亞斯
 BRC	San Carlos De Bariloche Airport	San Carlos de Bariloche	AR	-41.1512	-71.1575	America/Argentina/Salta	圣卡洛斯-德巴里洛切
@@ -855,7 +855,7 @@ BSR	Basrah International Airport	Basrah	IQ	30.5491	47.6621	Asia/Baghdad	巴斯�
 BSS	Balsas Airport	Balsas	BR	-7.5260	-46.0533	America/Fortaleza	巴爾薩斯
 BST	Bost Airport	Bost	AF	31.5597	64.3650	Asia/Kabul	拉什卡爾加
 BSU	Basankusu Airport	Basankusu	CD	1.2247	19.7889	Africa/Kinshasa	巴桑庫蘇
-BSW	Boswell Bay Airport	Boswell Bay	US	60.4231	-146.1459	America/Anchorage	Boswell灣
+BSW	Boswell Bay Airport	Boswell Bay	US	60.4231	-146.1459	America/Anchorage	
 BSX	Pathein Airport	Pathein	MM	16.8152	94.7799	Asia/Yangon	勃生
 BSY	Bardera Airport		SO	2.3361	42.3078	Africa/Mogadishu	巴爾代雷
 BSZ	Manas International Airport	Bishkek	KG	43.0613	74.4776	Asia/Bishkek	比斯凱克
@@ -867,7 +867,7 @@ BTE	Sherbro International Airport	Bonthe	SL	7.5324	-12.5189	Africa/Freetown	邦�
 BTF	Skypark Airport	Bountiful	US	40.8681	-111.9275	America/Denver	邦蒂富爾
 BTG	Batangafo Airport	Batangafo	CF	7.3141	18.3088	Africa/Bangui	
 BTH	Hang Nadim Airport	Batam, Batam Island	ID	1.1210	104.1190	Asia/Jakarta	巴淡
-BTI	Barter Island Airport	Barter Island	US	70.1131	-143.6536	America/Anchorage	巴特島長距雷達站
+BTI	Barter Island Airport	Barter Island	US	70.1131	-143.6536	America/Anchorage	
 BTJ	Sultan Iskandarmuda Airport	Banda Aceh, Sumatra Island	ID	5.5235	95.4204	Asia/Jakarta	班達亞齊
 BTK	Bratsk Airport	Bratsk	RU	56.3706	101.6980	Asia/Irkutsk	布拉茨克
 BTL	Battle Creek Executive At Kellogg Field	Battle Creek	US	42.3065	-85.2501	America/Detroit	巴特爾克里克
@@ -930,7 +930,7 @@ BWB	Barrow Island Airport		AU	-20.8644	115.4060	Australia/Perth	巴羅島
 BWC	Brawley Municipal Airport	Brawley	US	32.9929	-115.5173	America/Los_Angeles	布勞利市立
 BWD	Brownwood Regional Airport	Brownwood	US	31.7936	-98.9565	America/Chicago	布朗伍德
 BWE	Braunschweig Wolfsburg Airport		DE	52.3192	10.5561	Europe/Berlin	布倫瑞克
-BWF	Barrow Walney Island Airport	Barrow-in-Furness	GB	54.1312	-3.2637	Europe/London	巴羅/Walney島
+BWF	Barrow Walney Island Airport	Barrow-in-Furness	GB	54.1312	-3.2637	Europe/London	
 BWG	Bowling Green-Warren County Regional Airport	Bowling Green	US	36.9645	-86.4197	America/Chicago	鮑靈格林-沃倫縣支線
 BWH	Butterworth Airport	Butterworth	MY	5.4659	100.3910	Asia/Kuala_Lumpur	北海空軍基地
 BWI	Baltimore/Washington International Thurgood Marshall Airport	Baltimore	US	39.1757	-76.6690	America/New_York	巴爾的摩
@@ -952,7 +952,7 @@ BXH	Balkhash Airport	Balkhash	KZ	46.8933	75.0050	Asia/Qyzylorda	巴爾喀什
 BXI	Boundiali Airport	Boundiali	CI	9.5330	-6.4670	Africa/Abidjan	本賈利
 BXJ	Boralday Airport	Aima Ata	KZ	43.3526	76.8837	Asia/Almaty	
 BXK	Buckeye Municipal Airport	Buckeye	US	33.4225	-112.6862	America/Phoenix	巴克艾
-BXN	Imsik Airport	Bodrum	TR	37.1401	27.6697	Europe/Istanbul	博德魯姆-Imsik
+BXN	Imsik Airport	Bodrum	TR	37.1401	27.6697	Europe/Istanbul	
 BXO	Buochs Airport	Buochs	CH	46.9744	8.3969	Europe/Zurich	布奧克斯
 BXR	Bam Airport		IR	29.0842	58.4500	Asia/Tehran	巴姆
 BXS	Borrego Valley Airport	Borrego Springs	US	33.2590	-116.3210	America/Los_Angeles	博雷戈泉
@@ -992,7 +992,7 @@ BZO	Bolzano Airport	Bolzano	IT	46.4602	11.3264	Europe/Rome	波札諾
 BZP	Bizant Airport	Lakefield National Park	AU	-14.7403	144.1194	Australia/Brisbane	
 BZR	Beziers-Vias Airport	Beziers/Vias	FR	43.3235	3.3539	Europe/Paris	貝濟耶
 BZT	Eagle Air Park	Brazoria	US	28.9822	-95.5797	America/Chicago	
-BZU	Buta Zega Airport		CD	2.8184	24.7937	Africa/Lubumbashi	布塔Zega
+BZU	Buta Zega Airport		CD	2.8184	24.7937	Africa/Lubumbashi	
 BZV	Maya-Maya Airport	Brazzaville	CG	-4.2517	15.2530	Africa/Brazzaville	布拉柴維爾
 BZX	Bazhong Enyang Airport	Bazhong	CN	31.7380	106.6450	Asia/Shanghai	
 BZY	Balţi International Airport	Strymba	MD	47.8381	27.7815	Europe/Chisinau	伯爾齊
@@ -1013,7 +1013,7 @@ CAM	Camiri Airport	Camiri	BO	-20.0064	-63.5278	America/La_Paz	卡米里
 CAN	Guangzhou Baiyun International Airport	Guangzhou	CN	23.3924	113.2990	Asia/Shanghai	廣州
 CAO	Clayton Municipal Airpark	Clayton	US	36.4463	-103.1499	America/Denver	克萊頓
 CAP	Cap Haitien International Airport	Cap Haitien	HT	19.7330	-72.1947	America/Port-au-Prince	海地角
-CAQ	Juan H White Airport	Caucasia	CO	7.9685	-75.1985	America/Bogota	胡安·H·懷特
+CAQ	Juan H White Airport	Caucasia	CO	7.9685	-75.1985	America/Bogota	
 CAR	Caribou Municipal Airport	Caribou	US	46.8716	-68.0182	America/New_York	卡里布市立
 CAT	Cascais Airport	Cascais	PT	38.7250	-9.3552	Europe/Lisbon	卡斯凱什
 CAU	Caruaru Airport	Caruaru	BR	-8.2824	-36.0135	America/Fortaleza	卡魯阿魯
@@ -1066,7 +1066,7 @@ CCV	Craig Cove Airport	Craig Cove	VU	-16.2650	167.9240	Pacific/Efate	克雷格�
 CCW	Cowell Airport		AU	-33.6667	136.8920	Australia/Adelaide	考厄爾
 CCX	Caceres Airport	Caceres	BR	-16.0436	-57.6299	America/Cuiaba	卡塞雷斯
 CCY	Northeast Iowa Regional Airport	Charles City	US	43.0731	-92.6104	America/Chicago	查爾斯城
-CCZ	Chub Cay Airport		BS	25.4171	-77.8809	America/Nassau	Chub島
+CCZ	Chub Cay Airport		BS	25.4171	-77.8809	America/Nassau	
 CDA	Cooinda Airport		AU	-12.9033	132.5320	Australia/Darwin	
 CDB	Cold Bay Airport	Cold Bay	US	55.2059	-162.7262	America/Anchorage	冷灣
 CDC	Cedar City Regional Airport	Cedar City	US	37.7010	-113.0989	America/Denver	雪松城
@@ -1272,7 +1272,7 @@ CMU	Chimbu Airport	Kundiawa	PG	-6.0243	144.9710	Pacific/Port_Moresby	欽布
 CMV	Coromandel Aerodrome		NZ	-36.7917	175.5090	Pacific/Auckland	科羅曼德
 CMW	Ignacio Agramonte International Airport	Camaguey	CU	21.4203	-77.8475	America/Havana	卡馬圭
 CMX	Houghton County Memorial Airport	Hancock	US	47.1684	-88.4891	America/New_York	漢考克
-CMY	Sparta/Fort Mc Coy Airport	Sparta	US	43.9587	-90.7378	America/Chicago	斯巴達/McCoy堡
+CMY	Sparta/Fort Mc Coy Airport	Sparta	US	43.9587	-90.7378	America/Chicago	
 CNA	Cananea Airport		MX	31.0662	-110.0979	America/Hermosillo	卡納內阿
 CNB	Coonamble Airport		AU	-30.9833	148.3760	Australia/Sydney	庫南布林
 CNC	Coconut Island Airport		AU	-10.0500	143.0700	Australia/Brisbane	椰子島
@@ -1440,7 +1440,7 @@ CVM	General Pedro Jose Mendez International Airport	Ciudad Victoria	MX	23.7033	-
 CVN	Clovis Regional Airport	Clovis	US	34.4266	-103.0776	America/Denver	克洛維斯
 CVO	Corvallis Municipal Airport	Corvallis	US	44.4969	-123.2895	America/Los_Angeles	科瓦利斯
 CVQ	Carnarvon Airport		AU	-24.8806	113.6720	Australia/Perth	卡納芬
-CVS	Cannon Afb Airport	Clovis	US	34.3828	-103.3222	America/Denver	Cannon空軍基地
+CVS	Cannon Afb Airport	Clovis	US	34.3828	-103.3222	America/Denver	
 CVT	Coventry Airport	Coventry	GB	52.3697	-1.4797	Europe/London	考文垂
 CVU	Corvo Airport	Corvo	PT	39.6715	-31.1136	Atlantic/Azores	科爾武鎮
 CWA	Central Wisconsin Airport	Mosinee	US	44.7778	-89.6659	America/Chicago	沃索
@@ -1504,7 +1504,7 @@ DAB	Daytona Beach International Airport	Daytona Beach	US	29.1799	-81.0580	Americ
 DAC	Dhaka / Hazrat Shahjalal International Airport	Dhaka	BD	23.8434	90.3978	Asia/Dhaka	達卡
 DAD	Da Nang International Airport	Da Nang	VN	16.0439	108.1990	Asia/Ho_Chi_Minh	峴港
 DAG	Barstow-Daggett Airport	Daggett	US	34.8537	-116.7867	America/Los_Angeles	巴斯托
-DAK	Dakhla Airport		EG	25.4116	29.0031	Africa/Cairo	Dakhla綠洲
+DAK	Dakhla Airport		EG	25.4116	29.0031	Africa/Cairo	
 DAL	Dallas Love Field	Dallas	US	32.8459	-96.8509	America/Chicago	達拉斯
 DAM	Damascus International Airport	Damascus	SY	33.4115	36.5156	Asia/Damascus	大馬士革
 DAN	Danville Regional Airport	Danville	US	36.5725	-79.3363	America/New_York	丹維爾
@@ -1687,7 +1687,7 @@ DRF	Drift River Airport	Kenai	US	60.5889	-152.1620	America/Anchorage
 DRG	Deering Airport	Deering	US	66.0691	-162.7671	America/Anchorage	迪靈
 DRI	Beauregard Regional Airport	De Ridder	US	30.8317	-93.3399	America/Chicago	德里德
 DRJ	Drietabbetje Airport	Drietabbetje	SR	4.1167	-54.6667	America/Paramaribo	德里塔貝切
-DRK	Drake Bay Airport	Puntarenas	CR	8.7189	-83.6417	America/Costa_Rica	Drake灣
+DRK	Drake Bay Airport	Puntarenas	CR	8.7189	-83.6417	America/Costa_Rica	
 DRN	Dirranbandi Airport		AU	-28.5917	148.2170	Australia/Brisbane	迪蘭班代
 DRO	Durango-La Plata County Airport	Durango	US	37.1515	-107.7538	America/Denver	杜蘭戈
 DRP	Legazpi Bicol International Airport	Daraga	PH	13.1122	123.6772	Asia/Manila	黎牙實比
@@ -1754,7 +1754,7 @@ DYA	Dysart Airport		AU	-22.6222	148.3640	Australia/Brisbane
 DYG	Dayong Airport	Dayong	CN	29.1028	110.4430	Asia/Shanghai	張家界
 DYL	Doylestown Airport	Doylestown	US	40.3331	-75.1223	America/New_York	多伊爾斯敦
 DYR	Ugolny Airport	Anadyr	RU	64.7349	177.7410	Asia/Anadyr	阿納德爾
-DYS	Dyess Afb Airport	Abilene	US	32.4185	-99.8565	America/Chicago	Dyess空軍基地
+DYS	Dyess Afb Airport	Abilene	US	32.4185	-99.8565	America/Chicago	
 DYU	Dushanbe Airport	Dushanbe	TJ	38.5433	68.8250	Asia/Dushanbe	杜尚貝
 DYW	Daly Waters Airport	Daly Waters	AU	-16.2647	133.3834	Australia/Darwin	
 DZA	Dzaoudzi Pamandzi International Airport	Dzaoudzi	YT	-12.8047	45.2811	Indian/Mayotte	藻德濟
@@ -1808,7 +1808,7 @@ EFL	Kefallinia Airport	Kefallinia Island	GR	38.1201	20.5005	Europe/Athens	凱法
 EFW	Jefferson Municipal Airport	Jefferson	US	42.0098	-94.3418	America/Chicago	
 EGC	Bergerac-Roumaniere Airport	Bergerac/Roumaniere	FR	44.8253	0.5186	Europe/Paris	貝爾熱拉克
 EGE	Eagle County Regional Airport	Eagle	US	39.6427	-106.9159	America/Denver	伊格爾-韋爾
-EGI	Duke Field,(Eglin Af Aux Nr 3) Airport	Crestview	US	30.6486	-86.5220	America/Chicago	Duke飛行場
+EGI	Duke Field,(Eglin Af Aux Nr 3) Airport	Crestview	US	30.6486	-86.5220	America/Chicago	
 EGM	Sege Airport	Sege	SB	-8.5789	157.8760	Pacific/Guadalcanal	
 EGN	Geneina Airport	Geneina	SD	13.4817	22.4672	Africa/Khartoum	朱奈納
 EGO	Belgorod International Airport	Belgorod	RU	50.6438	36.5901	Europe/Moscow	別爾哥羅德
@@ -1918,7 +1918,7 @@ ESB	Esenboga International Airport	Ankara	TR	40.1281	32.9951	Europe/Istanbul	安
 ESC	Delta County Airport	Escanaba	US	45.7227	-87.0937	America/New_York	埃斯卡羅巴
 ESD	Orcas Island Airport	Eastsound	US	48.7083	-122.9106	America/Los_Angeles	奧卡斯島
 ESE	Ensenada Airport		MX	31.7953	-116.6030	America/Tijuana	恩塞納達
-ESF	Esler Regional Airport	Alexandria	US	31.3949	-92.2958	America/Chicago	Esler飛行場
+ESF	Esler Regional Airport	Alexandria	US	31.3949	-92.2958	America/Chicago	
 ESG	Dr. Luis Maria Argana International Airport	Mariscal Estigarribia	PY	-22.0500	-60.6200	America/Asuncion	博克龍省
 ESH	Shoreham Airport	Brighton	GB	50.8356	-0.2972	Europe/London	西薩塞克斯
 ESI	Espinosa Airport	Espinosa	BR	-14.9337	-42.8100	America/Sao_Paulo	埃斯皮諾薩
@@ -1969,7 +1969,7 @@ EXT	Exeter International Airport	Exeter	GB	50.7344	-3.4139	Europe/London	艾克�
 EYL	Yelimane Airport	Yelimane	ML	15.1330	-10.5670	Africa/Bamako	耶利馬內
 EYP	El Yopal Airport	El Yopal	CO	5.3191	-72.3840	America/Bogota	約帕爾
 EYR	Yerington Municipal Airport	Yerington	US	39.0054	-119.1565	America/Los_Angeles	耶靈頓
-EYS	Eliye Springs Airport	Eliye Springs	KE	3.2167	35.9667	Africa/Nairobi	Eliye泉
+EYS	Eliye Springs Airport	Eliye Springs	KE	3.2167	35.9667	Africa/Nairobi	
 EYW	Key West International Airport	Key West	US	24.5561	-81.7600	America/New_York	西嶼
 EZE	Ministro Pistarini International Airport	Ezeiza	AR	-34.8222	-58.5358	America/Argentina/Buenos_Aires	布宜諾斯艾利斯
 EZS	Elazig Airport	Elazig	TR	38.6069	39.2914	Europe/Istanbul	埃拉澤
@@ -1984,7 +1984,7 @@ FAH	Farah Airport	Farah	AF	32.3670	62.1830	Asia/Kabul	法拉
 FAI	Fairbanks International Airport	Fairbanks	US	64.8154	-147.8567	America/Anchorage	費爾班克斯
 FAM	Farmington Regional Airport	Farmington	US	37.7609	-90.4287	America/Chicago	法明頓支線
 FAO	Faro Airport	Faro	PT	37.0144	-7.9659	Europe/Lisbon	法魯
-FAQ	Frieda River Airport	Frieda River	PG	-4.6105	141.9601	Pacific/Port_Moresby	Frieda河
+FAQ	Frieda River Airport	Frieda River	PG	-4.6105	141.9601	Pacific/Port_Moresby	
 FAR	Hector International Airport	Fargo	US	46.9206	-96.8157	America/Chicago	法哥
 FAT	Fresno Yosemite International Airport	Fresno	US	36.7766	-119.7188	America/Los_Angeles	佛雷斯諾
 FAU	Fahud Airport	Fahud	OM	22.3548	56.4841	Asia/Muscat	費胡德
@@ -2146,7 +2146,7 @@ FTE	El Calafate Airport	El Calafate	AR	-50.2803	-72.0531	America/Argentina/Rio_G
 FTI	Fitiuta Airport	Fitiuta Village	AS	-14.2161	-169.4235	Pacific/Pago_Pago	菲圖塔
 FTK	Godman Army Air Field	Fort Knox	US	37.9071	-85.9720	America/New_York	
 FTU	Tolanaro Airport	Tolanaro	MG	-25.0381	46.9561	Indian/Antananarivo	陶拉納魯
-FTW	Fort Worth Meacham International Airport	Fort Worth	US	32.8198	-97.3624	America/Chicago	沃斯堡Meacham
+FTW	Fort Worth Meacham International Airport	Fort Worth	US	32.8198	-97.3624	America/Chicago	
 FTX	Owando Airport	Owando	CG	-0.5313	15.9501	Africa/Brazzaville	奧旺多
 FTY	Fulton County Executive/Charlie Brown Field	Atlanta	US	33.7801	-84.5207	America/New_York	亞特蘭大
 FUE	Fuerteventura Airport	Fuerteventura Island	ES	28.4527	-13.8638	Atlantic/Canary	富埃特文圖拉島
@@ -2196,7 +2196,7 @@ GBD	Great Bend Municipal Airport	Great Bend	US	38.3443	-98.8592	America/Chicago	
 GBE	Sir Seretse Khama International Airport	Gaborone	BW	-24.5552	25.9182	Africa/Gaborone	嘉柏隆里
 GBF	Negarbo(Negabo) Airport	Negarbo	PG	-6.5678	144.7031	Pacific/Port_Moresby	
 GBG	Harrel W Timmons Galesburg Regional Airport	Galesburg	US	40.9380	-90.4311	America/Chicago	蓋爾斯堡
-GBH	Galbraith Lake Airport	Galbraith Lake	US	68.4797	-149.4899	America/Anchorage	Galbraith湖
+GBH	Galbraith Lake Airport	Galbraith Lake	US	68.4797	-149.4899	America/Anchorage	
 GBI	Kalaburagi	Gulbarga	IN	17.3078	76.9581	Asia/Kolkata	古巴爾嘎
 GBJ	Les Bases Airport	Grand Bourg	GP	15.8687	-61.2700	America/Guadeloupe	格朗堡
 GBK	Gbangbatok Airport	Gbangbatok	SL	7.7670	-12.3830	Africa/Freetown	邦巴托克
@@ -2334,7 +2334,7 @@ GMO	Gombe Lawanti International Airport	Gombe	NG	10.2983	10.8964	Africa/Lagos	�
 GMP	Gimpo International Airport	Seoul	KR	37.5583	126.7910	Asia/Seoul	首爾
 GMR	Totegegie Airport		PF	-23.0799	-134.8900	Pacific/Gambier	甘比爾群島
 GMS	Fazenda Canada Airport	Uberlandia	BR	-18.8625	-48.4153	America/Sao_Paulo	
-GMT	Granite Mountain Air Station	Granite Mountain	US	65.4021	-161.2815	America/Anchorage	花崗山空中停靠站
+GMT	Granite Mountain Air Station	Granite Mountain	US	65.4021	-161.2815	America/Anchorage	
 GMU	Greenville Downtown Airport	Greenville	US	34.8479	-82.3500	America/New_York	格林維爾
 GMV	Monument Valley Airport	Monument Valley	US	37.0167	-110.2007	America/Denver	
 GMZ	La Gomera Airport	Alajero	ES	28.0296	-17.2146	Atlantic/Canary	戈梅拉島
@@ -4539,7 +4539,7 @@ NAW	Narathiwat Airport		TH	6.5199	101.7430	Asia/Bangkok	那拉提瓦
 NAY	Beijing Nanyuan Airport	Beijing	CN	39.7828	116.3880	Asia/Shanghai	北京
 NBC	Begishevo Airport	Nizhnekamsk	RU	55.5647	52.0925	Europe/Moscow	下卡姆斯克
 NBE	Enfidha-Hammamet International Airport	Enfidha	TN	36.0758	10.4386	Africa/Tunis	恩菲達維爾防線
-NBG	New Orleans Nas Jrb (Alvin Callender Field) Airport	New Orleans	US	29.8272	-90.0266	America/Chicago	新奧爾良站
+NBG	New Orleans Nas Jrb (Alvin Callender Field) Airport	New Orleans	US	29.8272	-90.0266	America/Chicago	
 NBH	Nambucca Heads Airport	Nambucca Heads	AU	-30.6500	153.0000	Australia/Sydney	
 NBJ	Dr. Antonio Agostinho Neto International Airport	Luanda	AO	-9.0468	13.5072	Africa/Luanda	魯安達
 NBL	San Blas Airport	Wannukandi	PA	9.4496	-78.9795	America/Panama	
@@ -4579,7 +4579,7 @@ NEF	Neftekamsk Airport	Neftekamsk	RU	56.1069	54.3472	Asia/Yekaterinburg
 NEG	Negril Airport	Negril	JM	18.3428	-78.3321	America/Jamaica	內格里爾
 NEJ	Nejjo Airport	Nejjo	ET	9.5500	35.4670	Africa/Addis_Ababa	內喬
 NEK	Nekemte Airport	Nekemte	ET	9.0500	36.6000	Africa/Addis_Ababa	蕾珂美
-NEL	Lakehurst Maxfield Field	Lakehurst	US	40.0358	-74.3514	America/New_York	萊克湖海軍航空總站
+NEL	Lakehurst Maxfield Field	Lakehurst	US	40.0358	-74.3514	America/New_York	
 NEN	Whitehouse Nolf Airport	Jacksonville	US	30.3495	-81.8670	America/New_York	
 NER	Chulman Neryungri Airport	Chulman	RU	56.9139	124.9140	Asia/Yakutsk	丘利曼
 NEU	Nong Khang Airport	Nong Khang	LA	20.6118	104.0682	Asia/Vientiane	納通
@@ -4593,7 +4593,7 @@ NGA	Young Airport		AU	-34.2556	148.2480	Australia/Sydney
 NGB	Ningbo Lishe International Airport	Ningbo	CN	29.8267	121.4620	Asia/Shanghai	寧波
 NGD	Captain Auguste George Airport	Anegada	VG	18.7272	-64.3297	America/Tortola	
 NGE	N'Gaoundere Airport	N'Gaoundere	CM	7.3570	13.5592	Africa/Douala	恩岡代雷
-NGF	Kaneohe Bay Mcas (Marion E Carl Field) Airport	Kaneohe	US	21.4505	-157.7679	Pacific/Honolulu	卡內奧赫站
+NGF	Kaneohe Bay Mcas (Marion E Carl Field) Airport	Kaneohe	US	21.4505	-157.7679	Pacific/Honolulu	
 NGI	Ngau Airport	Ngau	FJ	-18.1156	179.3400	Pacific/Fiji	恩高島
 NGL	Ngala Airport	Ngala	ZA	-24.3878	31.3258	Africa/Johannesburg	
 NGO	Chubu Centrair International Airport	Tokoname	JP	34.8584	136.8050	Asia/Tokyo	名古屋
@@ -4671,7 +4671,7 @@ NNT	Nan Airport		TH	18.8079	100.7830	Asia/Bangkok	難府府治
 NNU	Nanuque Airport	Nanuque	BR	-17.8233	-40.3299	America/Sao_Paulo	納努克
 NNX	Nunukan Airport	Nunukan-Nunukan Island	ID	4.1365	117.6670	Asia/Makassar	奴奴幹
 NNY	Nanyang Airport	Nanyang	CN	32.9808	112.6150	Asia/Shanghai	南陽
-NOA	Nowra Airport		AU	-34.9489	150.5370	Australia/Sydney	HMAS「信天翁」
+NOA	Nowra Airport		AU	-34.9489	150.5370	Australia/Sydney	
 NOB	Nosara Airport	Nicoya	CR	9.9765	-85.6530	America/Costa_Rica	諾薩拉區
 NOC	Ireland West Knock Airport	Charleston	IE	53.9103	-8.8185	Europe/Dublin	時鐘
 NOD	Norden-Norddeich Airport	Norddeich	DE	53.6331	7.1903	Europe/Berlin	
@@ -5341,13 +5341,13 @@ PQE	German Olano Air Base	La Dorada	CO	5.4836	-74.6574	America/Bogota
 PQI	Presque Isle International Airport	Presque Isle	US	46.6890	-68.0448	America/New_York	普雷斯克艾爾
 PQM	Palenque International Airport		MX	17.5334	-91.9845	America/Mexico_City	帕倫克
 PQQ	Port Macquarie Airport	Port Macquarie	AU	-31.4358	152.8630	Australia/Sydney	麥覺理港
-PQS	Pilot Station Airport	Pilot Station	US	61.9615	-162.9424	America/Nome	派勒特站
+PQS	Pilot Station Airport	Pilot Station	US	61.9615	-162.9424	America/Nome	
 PRA	General Urquiza Airport	Paraná	AR	-31.7948	-60.4804	America/Argentina/Cordoba	巴拉那
 PRB	Paso Robles Municipal Airport	Paso Robles	US	35.6729	-120.6271	America/Los_Angeles	
 PRC	Prescott Regional/Ernest A Love Field	Prescott	US	34.6548	-112.4192	America/Phoenix	普雷斯科特
 PRD	Pardoo Airport	Pardoo	AU	-20.1175	119.5900	Australia/Perth	
 PRG	Václav Havel Airport	Prague	CZ	50.1008	14.2600	Europe/Prague	布拉格
-PRH	Phrae Airport		TH	18.1322	100.1650	Asia/Bangkok	佩甲沙車站
+PRH	Phrae Airport		TH	18.1322	100.1650	Asia/Bangkok	
 PRI	Praslin Airport	Praslin Island	SC	-4.3193	55.6914	Indian/Mahe	普拉蘭島
 PRK	Prieska Airport	Prieska	ZA	-29.6836	22.7706	Africa/Johannesburg	
 PRM	Portimão Airport	Portimão	PT	37.1493	-8.5840	Europe/Lisbon	波爾蒂芒
@@ -6927,7 +6927,7 @@ UTH	Udon Thani Airport	Udon Thani	TH	17.3864	102.7880	Asia/Bangkok	烏隆府
 UTI	Utti Air Base	Utti / Valkeala	FI	60.8964	26.9384	Europe/Helsinki	烏蒂
 UTM	Tunica Municipal Airport	Tunica	US	34.6851	-90.3478	America/Chicago	蒂尼卡
 UTN	Pierre Van Ryneveld Airport	Upington	ZA	-28.3991	21.2602	Africa/Johannesburg	烏平通
-UTO	Indian Mountain Lrrs Airport	Utopia Creek	US	65.9928	-153.7035	America/Anchorage	印第安山長程雷達站
+UTO	Indian Mountain Lrrs Airport	Utopia Creek	US	65.9928	-153.7035	America/Anchorage	
 UTP	U-Tapao International Airport	Rayong	TH	12.6799	101.0050	Asia/Bangkok	春武里府
 UTR	Uttaradit Airport	Uttaradit	TH	17.6170	100.1000	Asia/Bangkok	
 UTS	Ust-Tsylma Airport	Ust-Tsylma	RU	65.4373	52.2003	Europe/Moscow	烏斯季齊利馬
@@ -7385,7 +7385,7 @@ YAB	Arctic Bay Airport		CA	73.0058	-85.0425	America/Rankin_Inlet
 YAC	Cat Lake Airport	Cat Lake	CA	51.7272	-91.8244	America/Winnipeg	
 YAD	Moose Lake (Lodge) Airport	Moose Lake	CA	53.0733	-125.4090	America/Vancouver	
 YAG	Fort Frances Municipal Airport	Fort Frances	CA	48.6542	-93.4397	America/Winnipeg	
-YAH	La Grande-4 Airport	La Grande-4	CA	53.7547	-73.6753	America/Toronto	拉格朗德4級水電站
+YAH	La Grande-4 Airport	La Grande-4	CA	53.7547	-73.6753	America/Toronto	
 YAI	Gral. Bernardo O´Higgins Airport	Chillan	CL	-36.5825	-72.0314	America/Santiago	奇陽
 YAK	Yakutat Airport	Yakutat	US	59.5033	-139.6603	America/Anchorage	亞庫塔特
 YAL	Alert Bay Airport	Alert Bay	CA	50.5822	-126.9160	America/Vancouver	
@@ -7393,7 +7393,7 @@ YAM	Sault Ste Marie Airport	Sault Sainte Marie	CA	46.4850	-84.5094	America/Toron
 YAN	Yangambi Airport	Yangambi	CD	0.7830	24.4670	Africa/Lubumbashi	
 YAO	Yaounde Airport	Yaounde	CM	3.8360	11.5235	Africa/Douala	巴門達
 YAP	Yap International Airport	Yap Island	FM	9.4989	138.0825	Pacific/Chuuk	科洛尼亞
-YAR	La Grande-3 Airport	La Grande-3	CA	53.5717	-76.1964	America/Toronto	拉格朗德3級水電站
+YAR	La Grande-3 Airport	La Grande-3	CA	53.5717	-76.1964	America/Toronto	
 YAS	Yasawa Island Airport	Yasawa Island	FJ	-16.7589	177.5450	Pacific/Fiji	亞薩瓦島
 YAT	Attawapiskat Airport	Attawapiskat	CA	52.9275	-82.4319	America/Toronto	
 YAU	Donaldson Airport	Kattiniq	CA	61.6622	-73.3214	America/Toronto	
@@ -7825,7 +7825,7 @@ ZIA	Ramenskoye Airport	Zhukovsky	RU	55.5533	38.1500	Europe/Moscow	莫斯科
 ZIC	Victoria Airport	Victoria	CL	-38.2456	-72.3486	America/Santiago	維多利亞
 ZIG	Ziguinchor Airport	Ziguinchor	SN	12.5556	-16.2818	Africa/Dakar	濟金紹爾
 ZIH	Ixtapa Zihuatanejo International Airport	Ixtapa	MX	17.6016	-101.4610	America/Mexico_City	芝華塔尼歐
-ZIN	Interlaken Air Base		CH	46.6766	7.8791	Europe/Zurich	因特拉肯東站
+ZIN	Interlaken Air Base		CH	46.6766	7.8791	Europe/Zurich	
 ZIX	Zhigansk Airport	Zhigansk	RU	66.7965	123.3610	Asia/Yakutsk	日甘斯克
 ZJG	Jenpeg Airport	Jenpeg	CA	54.5189	-98.0461	America/Winnipeg	
 ZJI	Locarno Airport		CH	46.1608	8.8786	Europe/Zurich	羅加諾
