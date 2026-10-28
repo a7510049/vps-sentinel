@@ -1,0 +1,11 @@
+name: lgprobe
+on:
+  push:
+    branches: [claude/project-thread-wqdvmy]
+    paths: [tools/lg_probe.py]
+jobs:
+  p:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: python3 tools/lg_probe.py
