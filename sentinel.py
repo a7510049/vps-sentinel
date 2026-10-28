@@ -5916,6 +5916,12 @@ def fly_st(st):
     return {"延遲": "延誤", "抵達": "已到", "離站": "已飛", "出發": "已飛", "登機中": "登機", "備降": "轉降", "改降": "轉降"}.get(st, st)
 
 
+def fly_bx(arr, belt, desk):
+    """抵達寫行李轉盤、出發寫報到櫃台（官網有給才有）"""
+    v = str((belt if arr else desk) or "").strip().lstrip("0")
+    return f"{'轉盤' if arr else '櫃台'} {v}" if v and v not in ("-", "0") else ""
+
+
 def fly_fids_tpe():
     out = []
     for line in fly_get(FLY_FIDS_URL["TPE"], ua="Mozilla/5.0", timeout=15).decode("big5hkscs", "replace").splitlines():   # 帶自己名字的有時候拿到空的
@@ -5926,7 +5932,7 @@ def fly_fids_tpe():
         fly_learn(x[10], x[12])
         out.append({"io": "arr" if x[1] == "A" else "dep", "fn": x[2] + x[4].lstrip("0"), "al": x[3], "sch": fly_ts(x[6], x[7]),
                     "est": fly_ts(x[8], x[9]), "pc": x[10], "pl": x[12] or fly_city(x[10]) or x[11], "gate": x[5], "term": f"第{'一二三'[int(x[0]) - 1]}航廈" if x[0] in ("1", "2", "3") else "",
-                    "st": fly_st(x[13]), "type": x[14]})
+                    "st": fly_st(x[13]), "type": x[14], "bx": fly_bx(x[1] == "A", x[18] if len(x) > 18 else "", x[19] if len(x) > 19 else "")})
     return out
 
 
@@ -5943,6 +5949,7 @@ def fly_fids_khh():
             out.append({"io": io, "fn": str(r.get("airLineNum") or ""), "al": fly_al_zh(str(r.get("airLineIATA") or "")),
                         "sch": fly_ts(sch[:10], sch[11:16]), "est": fly_ts(est[:10], est[11:16]) if est else None, "pc": pc,
                         "pl": fly_city(pc) or (fly_db().get(pc) or [0, 0, pc])[2], "gate": "", "term": "",
+                        "bx": fly_bx(io == "arr", r.get("BHSNo"), r.get("ckinisland") or (f"{r.get('ckindeskstart')}–{r.get('ckindeskend')}" if r.get("ckindeskstart") else "")),
                         "st": st.get(int(r.get("status" + io) or 0), ""), "type": FLY_IATA_T.get(str(r.get("airPlaneType") or ""), str(r.get("airPlaneType") or "")),
                         "share": [c.strip() for c in str(r.get("CodeShare") or "").split(";") if c.strip()]})
     return out
@@ -5988,7 +5995,7 @@ def fly_fids_tsa():
                 out.append({"io": io, "fn": str(r.get("FlightNumber") or "").strip(), "al": re.sub(r"(公司|股份有限公司)$", "", str(r.get("AirLineName") or "")),
                             "sch": fly_ts(None, r.get("Expect" + k + "Time")), "est": fly_ts(None, r.get("Real" + k + "Time")),
                             "pc": m.group(2) if m else "", "pl": m.group(1) if m else pl, "gate": "", "term": "",
-                            "st": fly_st(r.get("AirFlyStatus")), "type": str(r.get("AirPlaneType") or "")})
+                            "st": fly_st(r.get("AirFlyStatus")), "type": str(r.get("AirPlaneType") or ""), "bx": fly_bx(io == "arr", "", r.get("CheckInCount"))})
     return out
 
 
@@ -6484,7 +6491,7 @@ def fly_merge(ap, fids, rows, io):
         pl = {"code": r["pc"], "name": r["pl"]}
         row = {"id": f"f-{io}-{r['fn']}-{int(r['sch'])}", "fn": r["fn"], "cs": "", "al": r["al"], "reg": "", "t": r["type"], "model": r["type"],
                "org": pl if io == "arr" else me, "dst": me if io == "arr" else pl, "ph": io, "st": r["st"], "emg": False, "mil": False, "rare": False,
-               "use": "客機", "fids": True, "sch": r["sch"], "est": r["est"], "gate": r["gate"], "gate0": r.get("gate0") or "", "type0": r.get("type0") or "", "term": r["term"], "share": r.get("share") or []}
+               "use": "客機", "fids": True, "sch": r["sch"], "est": r["est"], "gate": r["gate"], "gate0": r.get("gate0") or "", "bx": r.get("bx") or "", "type0": r.get("type0") or "", "term": r["term"], "share": r.get("share") or []}
         p = plane(r)
         if p and pick.get(p["id"], (0, -1))[1] != i:
             p = None
@@ -6544,7 +6551,7 @@ def fly_gnd(ap, fids, gnd):
         fly_fix_type(p, r)
         pl = {"code": r["pc"], "name": r["pl"]}
         out.append(dict(p, fn=r["fn"], al=r["al"], io=r["io"], org=pl if r["io"] == "arr" else me, dst=me if r["io"] == "arr" else pl,
-                        model=p["model"] or r["type"], gate=r["gate"]))
+                        model=p["model"] or r["type"], gate=r["gate"], bx=r.get("bx") or ""))
     return out
 
 

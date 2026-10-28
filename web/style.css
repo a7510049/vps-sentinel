@@ -884,7 +884,7 @@ html.flyon .dash>.view{content-visibility:hidden;contain-intrinsic-size:auto non
 .fhrs .fchip,.fterm .fchip{flex:none;display:inline-flex;align-items:center;gap:6px;white-space:nowrap}
 .fhrs .n{font-size:var(--fs-s);opacity:.7}
 .ftabs .fn{margin-left:6px;color:var(--tx3);font-variant-numeric:tabular-nums}.ftabs .on .fn{color:var(--on-p);opacity:.75}[data-accent="rainbow"] .ftabs .on .fn{color:var(--on-rbw)}   /* 數字自己給顏色，不跟著按鈕的變色動畫走（手機上有時會留著選到時的深色） */
-.board{background:var(--card);border-radius:var(--r-xl);padding:10px;display:grid;grid-template-columns:auto auto auto minmax(4em,1fr) auto minmax(5em,1fr) auto auto auto auto;column-gap:16px;overflow:hidden}
+.board{background:var(--card);border-radius:var(--r-xl);padding:10px;display:grid;grid-template-columns:auto auto auto minmax(5.6em,1fr) auto minmax(5em,1fr) auto auto auto auto auto;column-gap:12px;overflow:hidden}
 .fh,.frows,.fr{display:grid;grid-column:1/-1;grid-template-columns:subgrid}
 .fh{padding:4px 10px 8px;font-size:var(--fs-xs);color:var(--tx3);font-weight:500;white-space:nowrap}
 .fr{padding:8px 10px;border-radius:var(--r-sm);align-items:center;cursor:pointer;font-size:var(--fs-l);transition:background-color var(--t-fast) var(--ease)}
@@ -893,9 +893,9 @@ html.flyon .dash>.view{content-visibility:hidden;contain-intrinsic-size:auto non
 @media (hover:hover){.fr:not(.empty):not(.sel):hover{background:var(--s2)}}
 .fr .br{display:none}
 .fr.nopc .pc{visibility:hidden}                                   /* 官網只給中文地名、查不到代碼：不留空格子 */
-.fr .pl,.fr .al,.fr .m,.fr .reg{font-size:var(--fs-m);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}
+.fr .pl,.fr .al,.fr .m,.fr .reg,.fr .bx{font-size:var(--fs-m);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}
 .fr .pl{color:var(--tx)}
-.fr .al,.fr .reg{color:var(--tx2)}
+.fr .al,.fr .reg,.fr .bx{color:var(--tx2)}
 .fr .fal{display:flex;margin-right:-6px}
 .alg{position:relative;display:inline-grid;place-items:center;flex:none;width:2.6em;height:2.6em;border-radius:var(--r-xs);background:var(--s3);color:var(--tx2);font-size:var(--fs-xs);font-style:normal;font-weight:600;overflow:hidden;vertical-align:middle;transition:background-color var(--t-fast) var(--ease)}
 .alg.none{display:none}
@@ -905,9 +905,10 @@ html.flyon .dash>.view{content-visibility:hidden;contain-intrinsic-size:auto non
 .alg.fill img{inset:0;width:100%;height:100%;object-fit:cover}  /* 本身是方形色塊：整格填滿（底色是它自己的顏色） */
 .alg.lg{width:3.2em;height:3.2em;border-radius:var(--r-md);font-size:var(--fs-s)}
 .fr .reg{font-variant-numeric:tabular-nums}
-.fr .t,.fr .fn{display:flex;align-items:center;gap:6px;white-space:nowrap}
+.fr .t,.fr .fn{display:flex;align-items:center;gap:6px;white-space:nowrap}.fr .t{position:relative}
+.fr .t .t0{position:absolute;left:0;top:calc(100% + 2px);line-height:1}.fr:has(.t0:not(:empty)){padding-bottom:calc(var(--fs-xs) + 10px)}   /* 原本的時間掛在下面：同一列其他欄照樣對齊 */
 .t0{font-size:var(--fs-xs);color:var(--tx3);font-variant-numeric:tabular-nums}.t0:empty,.fsh:empty{display:none}   /* 時間改了：原本的時間劃掉 */
-.fsh{font-size:var(--fs-xs);font-weight:500;color:var(--tx3)}     /* 共掛班號：+2 */
+.fr .fn{position:relative}.fsh{position:absolute;right:0;top:50%;translate:0 -50%;font-size:var(--fs-xs);font-weight:500;color:var(--tx3)}     /* 共掛班號：+2 疊在翻牌最後一格（班號很少用滿七格），不多佔寬度 */
 .fh .st{justify-self:end}                                          /* 狀態靠右，標題也靠右 */
 .fsum{font-size:var(--fs-s);padding:0 4px}
 .fr.hot .st b{color:var(--p)}
@@ -916,7 +917,7 @@ html.flyon .dash>.view{content-visibility:hidden;contain-intrinsic-size:auto non
 .sf .c[data-c=" "],.sf .c[data-c=" "] b{background:var(--s2)}     /* 空的格子淡一點，有字的才跳出來 */
 .fr .sf .c[data-c=" "],.fr .sf .c[data-c=" "] b{background:transparent}.fr .sf .c[data-c=" "]::after{display:none}   /* 看板的列：用不到的格子不畫出來 */
 .fr.done>:not(.ftag,.br){opacity:.5}                               /* 已到、已飛：淡一點，正要來的比較顯眼 */
-.ftag{justify-self:start;font-size:var(--fs-xs);font-weight:500;border-radius:var(--r-pill);padding:0;opacity:0;transition:opacity var(--t-mid) var(--ease)}
+.ftag{justify-self:start;white-space:nowrap;font-size:var(--fs-xs);font-weight:500;border-radius:var(--r-pill);padding:0;opacity:0;transition:opacity var(--t-mid) var(--ease)}
 .ftag.on{opacity:1;padding:3px 9px;background:var(--pc);color:var(--on-pc)}
 .ftag.bad{background:var(--badc);color:var(--on-badc)}
 .ftag.late{background:var(--warnc);color:var(--on-warnc)}
@@ -1031,15 +1032,15 @@ html.flyon .dash>.view{content-visibility:hidden;contain-intrinsic-size:auto non
 @media (max-width:899px){
   .board{display:flex;flex-direction:column;gap:6px;padding:8px}
   .fh{display:none}
-  /* 三欄對齊：時間／出發地代碼／航空公司同一條線，航班／地名／機型同一條線，標籤／狀態／登機門靠右（登機門跨兩欄，不把地名擠窄） */
-  .fr{display:grid;grid-template-columns:4.6em minmax(0,1fr) auto;grid-template-areas:"t fn tag" "pc pl st" "al m .";align-items:center;gap:6px 10px;padding:12px 10px;font-size:var(--fs-m)}
+  /* 三欄對齊：時間／出發地代碼／航空公司同一條線，航班／地名／登機門同一條線，標籤／狀態／機型靠右 */
+  .fr{display:grid;grid-template-columns:4.6em minmax(0,1fr) auto;grid-template-areas:"t fn tag" "pc pl st" "al reg m";align-items:center;gap:6px 10px;padding:12px 10px;font-size:var(--fs-m)}
   .fr .br{display:none}
   .board[data-tab="gnd"] .fr .t{display:none}
   .fr{content-visibility:auto;contain-intrinsic-size:auto 110px}       /* 手機：畫面外的列先不排版，換時段比較快 */
   .fr.warn,.fr.bad{content-visibility:visible}                         /* 有閃框的列照常處理，捲出來時節拍才不會慢半拍 */
-  .fr .t{grid-area:t;flex-direction:column;align-items:flex-start;gap:2px}.fr .t,.fr .fn,.fr .ftag{align-self:start}.fr .fsh{display:none}   /* 原本的時間在下面：同一行的航班、標籤照樣對齊上緣；共掛班號點開才看（手機放不下） */.fr .fn{grid-area:fn}.fr .ftag{grid-area:tag;justify-self:end}
+  .fr .t{grid-area:t;flex-direction:column;align-items:flex-start;gap:2px}.fr .t .t0{position:static}.fr:has(.t0:not(:empty)){padding-bottom:12px}.fr .t,.fr .fn,.fr .ftag{align-self:start}.fr .fsh{display:none}   /* 原本的時間在下面：同一行的航班、標籤照樣對齊上緣；共掛班號點開才看（手機放不下） */.fr .fn{grid-area:fn}.fr .ftag{grid-area:tag;justify-self:end}
   .fr .pc{grid-area:pc;font-size:var(--fs-s)}.fr .pl{grid-area:pl}.fr .st{grid-area:st;justify-self:end}
-  .fr .al{grid-area:al;font-size:var(--fs-s)}.fr .m{grid-area:m;font-size:var(--fs-s);color:var(--tx3)}.fr .reg{grid-row:3;grid-column:2/4;justify-self:end;font-size:var(--fs-s);color:var(--tx3)}
+  .fr .al{grid-area:al;font-size:var(--fs-s)}.fr .m{grid-area:m;justify-self:end;font-size:var(--fs-s);color:var(--tx3)}.fr .reg{grid-area:reg;font-size:var(--fs-s);color:var(--tx3)}
   .fr{position:relative;padding-left:calc(3em + 20px)}            /* 標誌固定在每列最左邊，上下對齊 */
   .fr .fal{position:absolute;left:10px;top:50%;transform:translateY(-50%);margin:0}
   .fr .fal .alg{width:3em;height:3em;border-radius:var(--r-md);font-size:var(--fs-s)}
@@ -1048,6 +1049,8 @@ html.flyon .dash>.view{content-visibility:hidden;contain-intrinsic-size:auto non
   .board[data-tab="arr"] .fr:not(.empty):not(.nopl) .pl::before{content:"從 ";color:var(--tx3)}
   .board[data-tab="dep"] .fr:not(.empty):not(.nopl) .pl::before{content:"往 ";color:var(--tx3)}
   .board[data-fids="1"]:not([data-tab="gnd"]) .fr:not(.empty) .reg:not(:empty)::before{content:"登機門 ";color:var(--tx3)}
+  .fr .bx{display:none}                                                /* 手機：轉盤／櫃台接在登機門後面 */
+  .fr:not(.empty) .reg:not([data-bx=""])[data-bx]::after{content:"・" attr(data-bx)}.fr:not(.empty) .reg:empty:not([data-bx=""])[data-bx]::after{content:attr(data-bx)}
   .fr.empty .b2,.fr.empty .pc,.fr.empty .pl,.fr.empty .al,.fr.empty .m,.fr.empty .reg,.fr.empty .ftag,.fr.empty .b1{display:none}
   .fhead{padding:14px 16px;gap:12px}
   .fhead .sf.xl{font-size:var(--fs-3xl)}
