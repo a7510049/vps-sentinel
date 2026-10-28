@@ -3370,6 +3370,7 @@ function flyRows(f, d, list, n, byHr, tz, anim){
   const fr = [...fresh];
   if (!FLYSTEP) { clearTimeout(FLYDT); box.querySelectorAll(":scope>.fr.pend").forEach(r => r.classList.remove("pend")); }   // 一般更新：還沒放出來的直接放出來
   if (FLYSTEP) fr.forEach(r => r.classList.add("pend"));
+  else if (FLYSTILL) {}                                     // 整塊換（看板淡出淡入）：列不用各自長出來
   else if (fr.length > 3) {                                      // 一次來很多列（例如展開「已飛 N 班」）：不撐高度，一列一列淡入，下面的列整塊滑下去（只動位置和透明度，手機不卡）
     const gap = T.fast * .25, last = Math.min(fr.length - 1, 12);
     fr.forEach((r, i) => r.animate([{opacity:0, transform:"translateY(-6px)"}, {opacity:1, transform:"none"}], {duration:T.mid, delay:Math.min(i, 12) * gap, easing:EASE, fill:"backwards"}));
@@ -3409,6 +3410,11 @@ function flyBye(r){
 /* 展開「已飛 N 班」：新的列先藏著（.pend），每一小段時間放兩列出來撐開（一次塞二十幾列、每列一起撐高度，手機會卡一下） */
 function flyDoneOpen(){
   clearTimeout(FLYDT);
+  const fb = $("#fly .board"), fx = fb && fb.querySelector(".frows"), fm = fb && fb.querySelector(".fmsg");
+  if (fx && canAnim()) {                                      // 只剩已到／已飛的班機：展開、收起會跟「接下來沒有…」互換，改成整塊換（不然會疊在一起、高度跳兩次）
+    const vis = [...fx.children].filter(r => !r.hidden && !r._bye);
+    if (FLYDONE ? !fm.hidden && !fm._hiding : vis.length && vis.every(r => r.classList.contains("done"))) return flyDoneSwap(fb, fx, fm);
+  }
   FLYSTEP = FLYDONE && canAnim(); try { flyPaint(); } finally { FLYSTEP = false; }
   const f = $("#fly"), box = f && f.querySelector(".frows"); if (!box) return;
   const step = () => {
@@ -3424,6 +3430,22 @@ function flyDoneOpen(){
   step();
 }
 let FLYSTEP = false;
+/* 「已到 N 班」跟「接下來沒有…」互換：舊的淡出，看板高度一次滑到新的高度，新的淡入；按鈕不動，只換字 */
+async function flyDoneSwap(b, box, msg){
+  const id = ++FLYSW, db = b.querySelector(".fdone"), old = [msg, ...box.children].filter(e => !e.hidden && !e._bye);
+  if (db && !db.hidden) txt(db.firstChild, FLYDONE ? "收起" + db.firstChild.textContent : db.firstChild.textContent.replace(/^收起/, ""));
+  FLYBZ = performance.now() + T.fast * .6 + T.mid + 60;
+  const fo = old.map(e => e.animate([{opacity:1}, {opacity:0}], {duration:T.fast * .6, easing:EXIT, fill:"forwards"}));
+  await Promise.all(fo.map(a => a.finished.catch(() => {})));
+  if (id !== FLYSW) return fo.forEach(a => a.cancel());
+  old.forEach(e => e.getAnimations().forEach(a => { if (!fo.includes(a)) a.finish(); }));
+  const h0 = b.offsetHeight;
+  FLYSTILL = true; try { flyPaint(false); } finally { FLYSTILL = false; }
+  b.classList.add("cvx"); const h1 = b.offsetHeight; b.classList.remove("cvx");
+  fo.forEach(a => a.cancel());
+  [msg, ...box.children].filter(e => !e.hidden && !old.includes(e)).forEach(e => e.animate([{opacity:0, transform:"translateY(8px)"}, {opacity:1, transform:"none"}], {duration:T.mid, easing:EASE}));
+  if (Math.abs(h1 - h0) > 1) b.animate([{height:h0 + "px", overflow:"hidden"}, {height:h1 + "px", overflow:"hidden"}], {duration:T.mid, easing:EASE});
+}
 /* 一次走掉很多列（例如收起「已飛 N 班」）：一起淡出，再一次收起來，留下的列整塊滑上去（不是每列各自縮高度，手機會卡） */
 function flyByeMany(box, gone, keep){
   gone.forEach(r => { r._bye = 1; });
