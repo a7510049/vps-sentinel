@@ -5356,11 +5356,12 @@ def fly_db():
                     if len(x) < 7 or line.startswith("#"):
                         continue
                     z = zh.get(x[0])
-                    FLY_DB[x[0]] = (x[0], z[1] if z else x[1], z[2] if z else x[2], float(x[4]), float(x[5]), x[3], x[6], x[1] + " " + x[2])
+                    zc = x[7] if len(x) > 7 else ""
+                    FLY_DB[x[0]] = (x[0], z[1] if z else x[1], z[2] if z else x[2], float(x[4]), float(x[5]), x[3], x[6], x[1] + " " + x[2] + " " + zc, zc)
         except OSError:
             pass
         for a in FLY_APS:                       # 找不到資料檔也至少有常用的
-            FLY_DB.setdefault(a[0], (*a, "", "", ""))
+            FLY_DB.setdefault(a[0], (*a, "", "", "", ""))
     return FLY_DB
 
 
@@ -5444,6 +5445,9 @@ FLY_BIZ = r"^(GLF|GL[5-7XE]|GLEX|CL30|CL35|CL60|F2TH|F900|FA[5-8X]|C25|C5[0-9][0
 FLY_GOV = r"(airborne service|coast guard|police|fire|government|ministry|navy|army|air force|空勤|海巡|警|消防)"
 
 
+FLY_RGN = r"AT[4-7]\d|DH8|SF34|D328|E120|JS41|AN24|F50$"
+
+
 def fly_use(cs, al, t, cat, mil, op="", fn=""):
     """這架飛機做什麼用：客機、貨機、私人／公務機、直升機、軍機、公務、小飛機；看不出來回空字串"""
     t, kind = str(t or "").upper(), fly_kind(t, "", cat)
@@ -5459,6 +5463,8 @@ def fly_use(cs, al, t, cat, mil, op="", fn=""):
     if t and re.match(FLY_BIZ, t) and not al:
         return "私人／公務機"
     if al:
+        return "客機"
+    if re.match(FLY_RGN, t):                   # ATR、Dash 8 這類螺旋槳客機，沒有航班號也不是小飛機
         return "客機"
     if kind in ("ga", "tp") or str(cat or "").upper() in ("A1", "B1", "B4"):
         return "小飛機"
@@ -6026,6 +6032,9 @@ def fly_fids_pull(code, hit):
             if not r["fn"] or not r["sch"]:
                 continue
             r["type"] = fly_model(r["type"])
+            al = fly_al_zh(r["fn"][:2])
+            if al != r["fn"][:2]:                       # 航空公司名稱照同一張表（官網有的寫「韓商泰瑞航空」，雷達寫「德威航空」）
+                r["al"] = al
             while r.get("est") and r["est"] < r["sch"] - 12 * 3600:   # 跨過半夜：官網的預計日期沒跟著換（或沒給日期），補一天
                 r["est"] += 86400
             k = (r["io"], r["sch"], r["pc"] or r["pl"])
@@ -6097,7 +6106,7 @@ def fly_city(code):
     for a in FLY_APS:
         if a[0] == code:
             return a[2]
-    return FLY["zh"].get(code, "")
+    return FLY["zh"].get(code, "") or (fly_db().get(code) or ("",) * 9)[8]
 
 
 def fly_learn(code, name):

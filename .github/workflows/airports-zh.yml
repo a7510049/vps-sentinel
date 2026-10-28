@@ -2,7 +2,7 @@ name: airports-zh
 on:
   push:
     branches: [claude/project-thread-wqdvmy]
-    paths: [.github/workflows/airports-zh.yml]
+    paths: [.github/workflows/airports-zh.yml, tools/airports_zh.py]
 permissions:
   contents: write
 jobs:

@@ -15,12 +15,12 @@ import urllib.request
 HERE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 TSV = os.path.join(HERE, "data", "airports.tsv")
 LANGS = ["zh-tw", "zh-hant", "zh-hk", "zh-mo", "zh", "zh-hans", "zh-cn"]
-Q = """SELECT ?ap ?iata ?co ?city %s %s WHERE {
+Q = """SELECT ?ap ?iata ?co ?city WHERE {
   ?ap wdt:P238 ?iata .
   OPTIONAL { ?ap wdt:P625 ?co }
-  OPTIONAL { ?ap wdt:P931 ?city . %s }
-  %s
+  OPTIONAL { ?ap wdt:P931 ?city }
 }"""
+UA = {"User-Agent": "vps-sentinel-build/1.0 (https://github.com/a7510049/vps-sentinel)"}
 
 try:
     import opencc
@@ -29,28 +29,37 @@ except ImportError:
     S2T = None
 
 
-def sparql():
-    cv = " ".join(f"?c{i}" for i in range(len(LANGS)))
-    av = " ".join(f"?a{i}" for i in range(len(LANGS)))
-    cl = " ".join(f'OPTIONAL {{ ?city rdfs:label ?c{i} FILTER(LANG(?c{i})="{lg}") }}' for i, lg in enumerate(LANGS))
-    al = " ".join(f'OPTIONAL {{ ?ap rdfs:label ?a{i} FILTER(LANG(?a{i})="{lg}") }}' for i, lg in enumerate(LANGS))
-    q = Q % (cv, av, cl, al)
-    for n in range(4):
+def get(url, tries=4):
+    for n in range(tries):
         try:
-            req = urllib.request.Request("https://query.wikidata.org/sparql?" + urllib.parse.urlencode({"query": q, "format": "json"}),
-                                         headers={"User-Agent": "vps-sentinel-build/1.0 (https://github.com/a7510049/vps-sentinel)"})
-            with urllib.request.urlopen(req, timeout=300) as r:
-                return json.loads(r.read())["results"]["bindings"]
+            with urllib.request.urlopen(urllib.request.Request(url, headers=UA), timeout=120) as r:
+                return json.loads(r.read())
         except Exception as e:  # noqa: BLE001
             print("維基數據查詢失敗，再試一次：", e, file=sys.stderr)
             time.sleep(10 * (n + 1))
     raise SystemExit("維基數據查不到")
 
 
-def zh(row, p):
+def sparql():
+    return get("https://query.wikidata.org/sparql?" + urllib.parse.urlencode({"query": Q, "format": "json"}))["results"]["bindings"]
+
+
+def labels(ids):
+    """一次問 50 個項目的中文名稱"""
+    out, ids = {}, sorted(ids)
+    for i in range(0, len(ids), 50):
+        r = get("https://www.wikidata.org/w/api.php?" + urllib.parse.urlencode({
+            "action": "wbgetentities", "ids": "|".join(ids[i:i + 50]), "props": "labels", "languages": "|".join(LANGS), "format": "json"}))
+        for k, e in (r.get("entities") or {}).items():
+            out[k] = {lg: v["value"] for lg, v in (e.get("labels") or {}).items()}
+        time.sleep(.2)
+    return out
+
+
+def zh(lb):
     """照台灣用字優先挑一個中文名稱"""
-    for i, lg in enumerate(LANGS):
-        v = (row.get(f"{p}{i}") or {}).get("value", "")
+    for lg in LANGS:
+        v = lb.get(lg, "")
         if not v or not re.search(r"[一-鿿]", v):
             continue
         if lg in ("zh", "zh-hans", "zh-cn"):
@@ -80,8 +89,10 @@ def main():
         x = ln.split("\t")
         if len(x) >= 7 and not ln.startswith("#"):
             pos[x[0]] = (float(x[4]), float(x[5]))
-    best = {}
-    for row in sparql():
+    best, rows = {}, sparql()
+    qid = lambda row, k: (row.get(k) or {}).get("value", "").rsplit("/", 1)[-1]
+    lb = labels({qid(r, k) for r in rows for k in ("ap", "city") if qid(r, k).startswith("Q") and r["iata"]["value"].upper() in pos})
+    for row in rows:
         code = row["iata"]["value"].upper()
         if code not in pos:
             continue
@@ -89,7 +100,7 @@ def main():
         d = dist(*pos[code], float(m[2]), float(m[1])) if m else .9
         if d > 1:                             # 同代碼的別座（已關閉、搬走的）
             continue
-        name = tidy(zh(row, "c")) or tidy(zh(row, "a"), True)
+        name = tidy(zh(lb.get(qid(row, "city"), {}))) or tidy(zh(lb.get(qid(row, "ap"), {})), True)
         if name and (code not in best or d < best[code][0]):
             best[code] = (d, name)
     out, n = [], 0
