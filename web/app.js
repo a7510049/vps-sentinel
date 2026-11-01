@@ -2693,7 +2693,7 @@ document.addEventListener("load", e => { const t = e.target; if (t.tagName !== "
   if (t.parentNode.classList.contains("faplg")) t.parentNode.classList.add("ok");
   if (t.classList.contains("flg")) t.classList.add("ok"); }, true);
 document.addEventListener("error", e => { const t = e.target; if (t.tagName === "IMG" && t.parentNode && t.parentNode.classList.contains("faplg")) t.remove();
-  if (t.tagName === "IMG" && t.classList.contains("flg")) { if (t.dataset.c) FLYNOFL.add(t.dataset.c); t.hidden = true; }
+  if (t.tagName === "IMG" && t.classList.contains("flg")) { if (t.dataset.c) FLYNOFL.add(t.dataset.c); if (t.classList.contains("at")) t.style.visibility = "hidden"; else t.hidden = true; }   // 清單裡抓不到國旗也留位置，名字才對齊
   if (t.tagName === "IMG" && t.parentNode && t.parentNode.classList.contains("alg")) { FLYNOLG.add(t.parentNode.dataset.c); t.remove(); } }, true);
 const FLYF = ["t", "fn", "pc", "st"], FLYX = ["pl", "al", "m", "reg", "bx"];   // 翻牌的欄位／一般文字的欄位（城市、航空公司、機型、註冊號用一般字比較好讀）
 const FLYW = {t:5, fn:7, pc:3, st:4};             // 狀態最多四個中文字，每格都是中文字寬，長短不一也對齊
@@ -2711,7 +2711,7 @@ function flyShell(){
       <div class="fclock"><span class="sub">當地時間</span>${flap("", 5, "lg")}</div></div>
     <div class="fmain"><div class="fleft">
       <div class="seg ftabs" data-slide>${FLYTAB.map(([k, l]) => `<button class="${FLYS.tab === k ? "on" : ""}" data-ftab="${k}">${l}<span class="fn" data-k="n-${k}"></span></button>`).join("")}</div>
-      <div class="fterm" data-slide hidden></div><div class="fhrs" data-slide hidden></div><div class="fsum sub" hidden></div>
+      <div class="fterm" data-slide hidden></div><div class="fhrs" data-slide hidden></div><div class="fsum sub" role="button" tabindex="0" hidden></div>
       <div class="board"><div class="fh">${FLYCOL.map(k => `<span class="fk ${k}"></span>`).join("")}</div><button class="fdone" data-fdone hidden><span></span>${I("chev").replace("<svg", '<svg class="chv"')}</button><div class="frows"></div><div class="fmsg sub" hidden></div><div class="fload"><i></i></div></div></div>
       <div class="radar"><div class="rbox"><canvas class="rcv" aria-label="雷達"></canvas><i class="rsweep"></i><button class="icbtn rfull" data-rfull title="整頁雷達">${I("full")}</button></div>
         <div class="rnote sub" hidden></div>
@@ -2802,6 +2802,53 @@ function bez(x1, y1, x2, y2){
   return x => { if (x <= 0) return 0; if (x >= 1) return 1; let lo = 0, hi = 1, t = x; for (let i = 0; i < 20; i++) { t = (lo + hi) / 2; f(x1, x2, t) < x ? lo = t : hi = t; } return f(y1, y2, t); };
 }
 const EASEF = bez(.2, 0, 0, 1);
+/* 地形（中央山脈這些）：高度表只抓一次，做成一張明暗圖（西北邊打光，山的東南面暗、西北面亮），畫在陸地上 */
+let FLYTER = null, FLYTERQ = null, FLYTERI = null;
+function flyTer(g){
+  const tr = g && g.ter; if (!tr) return null;
+  if (FLYTERI && FLYTERI._g === tr.join()) return FLYTERI;
+  if (!FLYTER) { if (!FLYTERQ) FLYTERQ = api("/api/fly-terrain").then(r => r.ok ? r.arrayBuffer() : null).then(b => { FLYTER = b && new Uint8Array(b); }, () => { FLYTERQ = null; }); return null; }
+  const [, , wk, hk, w, h] = tr, e = FLYTER; if (e.length !== w * h) return null;
+  const c = document.createElement("canvas"); c.width = w; c.height = h;
+  const cx = c.getContext("2d"), im = cx.createImageData(w, h), D = im.data;
+  const mx = 16 * 2.5 / (wk / w * 1000), my = 16 * 2.5 / (hk / h * 1000), L = [-.5, .5, .7071];   // 高度誇大 2.5 倍，平地看不出來的丘陵也有一點明暗
+  for (let j = 1; j < h - 1; j++) for (let i = 1; i < w - 1; i++) {
+    const k = j * w + i, z = e[k]; if (!z) continue;
+    const dx = (e[k + 1] - e[k - 1]) / 2 * mx, dy = (e[k - w] - e[k + w]) / 2 * my, n = Math.hypot(dx, dy, 1);
+    const sh = (-dx * L[0] - dy * L[1] + L[2]) / n - L[2], v = Math.max(-1, Math.min(1, sh * 1.6)) - Math.min(.5, z / 160) * .5;   // 越高越暗一點
+    const o = k * 4, a = Math.min(1, Math.abs(v));
+    D[o] = D[o + 1] = D[o + 2] = v > 0 ? 255 : 0; D[o + 3] = Math.round(a * (v > 0 ? 70 : 100));
+  }
+  cx.putImageData(im, 0, 0);
+  const b = document.createElement("canvas"), bx = b.getContext("2d"); b.width = w * 3; b.height = h * 3;   // 放大三倍再柔化：一公里一格放大後才不會一格一格的
+  bx.filter = "blur(2px)"; bx.imageSmoothingQuality = "high"; bx.drawImage(c, 0, 0, b.width, b.height);
+  b._g = tr.join(); FLYTERI = b;
+  return b;
+}
+/* 常走的航線（主機記下每天抵達、出發的飛機飛過哪裡）：一格一公里，越常飛越濃 */
+const FLYTRK = {};
+function flyTrkImg(d, color){
+  if (!d || !d.length) return null;
+  let x0 = 1e9, x1 = -1e9, y0 = 1e9, y1 = -1e9;
+  for (let i = 0; i < d.length; i += 3) { x0 = Math.min(x0, d[i]); x1 = Math.max(x1, d[i]); y0 = Math.min(y0, d[i + 1]); y1 = Math.max(y1, d[i + 1]); }
+  const w = x1 - x0 + 1, h = y1 - y0 + 1, c = document.createElement("canvas"); c.width = w; c.height = h;
+  const cx = c.getContext("2d"), im = cx.createImageData(w, h);
+  for (let i = 0; i < d.length; i += 3) im.data[((y1 - d[i + 1]) * w + d[i] - x0) * 4 + 3] = Math.round(Math.pow(d[i + 2] / 9, 1.4) * 255);
+  cx.putImageData(im, 0, 0);
+  const b = document.createElement("canvas"), bx = b.getContext("2d"); b.width = w * 4; b.height = h * 4;   // 一公里一格：放大四倍再柔化，看起來是一條條的線
+  bx.filter = "blur(3px)"; bx.imageSmoothingQuality = "high"; bx.drawImage(c, 0, 0, b.width, b.height);
+  bx.filter = "none"; bx.globalCompositeOperation = "source-in"; bx.fillStyle = color; bx.fillRect(0, 0, b.width, b.height);
+  b._b = [x0 - .5, -(y1 + .5), w, h];
+  return b;
+}
+function flyTrk(f, code){
+  const o = FLYTRK[code], use = () => [f._rv, FRAD && FRAD.rv].forEach(v => v && v.setTrk(FLYTRK[code] && FLYTRK[code].d));
+  use();
+  if (o && (o.q || Date.now() - o.t < 600000)) return;      // 10 分鐘問一次
+  FLYTRK[code] = {...o, q:1};
+  api("/api/flights?trk=" + encodeURIComponent(code), {headers:flyHdr()}).then(r => r.json()).then(d => { FLYTRK[code] = {t:Date.now(), d:d.ok ? d : o && o.d}; if (FLYD && FLYD.ap && FLYD.ap.code === code) use(); },
+    () => { FLYTRK[code] = {t:Date.now() - 480000, d:o && o.d}; });
+}
 /* 雷達：地圖、尾跡、飛機、名字全部畫在一張畫布上（幾百個小方塊各自動畫在手機上會卡）；
    飛機在兩次更新之間照時間慢慢移過去；mini 是看板旁邊的圓形雷達，full 是點進去的整頁雷達 */
 function radarView(cv, full){
@@ -2825,6 +2872,7 @@ function radarView(cv, full){
     if (!full) { V.s = R.fit(R.range); V.cx = V.cy = 0; }
     R.kick();
   };
+  if (!full && window.IntersectionObserver) new IntersectionObserver(es => { R.inv = !es[es.length - 1].isIntersecting; if (!R.inv) R.kick(); }).observe(cv);
   R.fit = r => Math.min(R.W, R.H) / 2 * (full ? .92 : 61 / 62) / r;   // 半徑 r 公里剛好放進畫面
   /* 視角：中心（公里）和比例（每公里幾點）；anim 時慢慢移過去 */
   R.view = (cx, cy, s, anim) => {
@@ -2834,7 +2882,8 @@ function radarView(cv, full){
   };
   R.V = V;
   R.zoom = (r, anim) => { R.range = r; if (!full) R.view(0, 0, R.fit(r), anim); };
-  R.setGeo = g => { if (R.geo === g) return; R.geo = g; R.gp = g && new Path2D(g.coast); R.gf = g && g.far ? new Path2D(g.far) : null; R.ga = 0; R.gt = now(); R.kick(); };
+  R.setGeo = g => { if (R.geo === g) return; R.geo = g; R.gk = (R.gk || 0) + 1; R.gp = g && new Path2D(g.coast); R.gf = g && g.far ? new Path2D(g.far) : null; R.ga = 0; R.gt = now(); R.kick(); };
+  R.setTrk = d => { if (R.trk === d) return; R.trk = d; R.gk = (R.gk || 0) + 1; R.ti = null; R.tt = now(); R.kick(); };
   /* 新資料：每架飛機從現在畫的位置，花一次更新的時間慢慢移到新的位置 */
   R.setData = list => {
     const t = now(), seen = new Set();
@@ -2871,6 +2920,8 @@ function radarView(cv, full){
     R.raf = 0;
     if (R.off || !cv.isConnected) return;
     if (document.hidden) return;
+    if (R.inv) return;                                      // 小雷達不在畫面上（手機上在看板下面）：不用畫，捲回來再畫
+    if (!full && !A.t && scrolling()) { R.tm = setTimeout(R.kick, 120); return; }   // 手指在捲看板：小雷達先停一下，捲完再畫（捲動才順）
     const fading = o => o.gone || (o.on === false ? o.a > 0 : o.a < 1);   // 正在淡入淡出（雷達圈外的飛機一直是透明的，不算）
     const moving = A.t || R.busy || [...pl.values()].some(o => fading(o) || t - o.t0 < FLYEV) || t - R.gt < T.mid;
     const fade = R.busy || [...pl.values()].some(fading) || t - R.gt < T.mid;
@@ -2895,16 +2946,47 @@ function radarView(cv, full){
     const [ox, oy] = R.xy(0, 0), rr = Math.min(W, H) / 2 * 61 / 62;
     ctx.save();
     if (!full) { ctx.beginPath(); ctx.arc(W / 2, H / 2, rr, 0, Math.PI * 2); ctx.clip(); }
-    /* 地圖 */
+    /* 地圖、山、常走的路線：不常變，先畫在另一張畫布上，之後直接貼上去（每次都重畫山和路線，手機會卡） */
     const ga = R.geo ? Math.min(1, (t - R.gt) / T.mid) : 0;
     if (R.geo && R.gp) {
-      ctx.save(); ctx.globalAlpha = canAnim() ? ga : 1;
-      ctx.translate(W / 2 - V.cx * s, H / 2 + V.cy * s); ctx.scale(s, s);
-      ctx.lineWidth = 1 / s;
-      if (R.gf) { const ba = ctx.globalAlpha; ctx.globalAlpha = ba * .55; ctx.fillStyle = col.s2; ctx.fill(R.gf); ctx.strokeStyle = col.s4; ctx.stroke(R.gf); ctx.globalAlpha = ba; }   // 台灣以外的陸地：淡淡的
-      ctx.fillStyle = col.s2; ctx.fill(R.gp); ctx.strokeStyle = col.s4; ctx.stroke(R.gp);
-      ctx.lineCap = "round"; ctx.strokeStyle = col.tx3; ctx.lineWidth = (full ? 3 : 2.2) / s;
-      ctx.beginPath(); (R.geo.rwy || []).forEach(([a, b, c, d]) => { ctx.moveTo(a, -b); ctx.lineTo(c, -d); }); ctx.stroke();
+      const ta = R.trk ? canAnim() ? Math.min(ga, (t - (R.tt || 0)) / T.mid) : 1 : 0, ti = flyTer(R.geo);
+      const bk = [V.cx, V.cy, s, W, H, R.dpr, canAnim() ? ga : 1, ta, col.s2, col.s4, col.p, col.tx2, R.gk, !!ti].join();
+      const B = R.bg || (R.bg = document.createElement("canvas"));
+      if (R.bk !== bk) {
+        R.bk = bk;
+        if (B.width !== cv.width || B.height !== cv.height) { B.width = cv.width; B.height = cv.height; }
+        const g = B.getContext("2d"); g.setTransform(R.dpr, 0, 0, R.dpr, 0, 0); g.clearRect(0, 0, W, H);
+        g.save(); g.globalAlpha = canAnim() ? ga : 1;
+        g.translate(W / 2 - V.cx * s, H / 2 + V.cy * s); g.scale(s, s);
+        g.lineWidth = 1 / s;
+        if (R.gf) { const ba = g.globalAlpha; g.globalAlpha = ba * .55; g.fillStyle = col.s2; g.fill(R.gf); g.strokeStyle = col.s4; g.stroke(R.gf); g.globalAlpha = ba; }   // 台灣以外的陸地：淡淡的
+        g.fillStyle = col.s2; g.fill(R.gp); g.strokeStyle = col.s4; g.stroke(R.gp);
+        const tr = R.geo.ter;                                   // 山
+        if (ti) { g.save(); g.clip(R.gp); g.imageSmoothingQuality = "high"; g.drawImage(ti, tr[0], -tr[1], tr[2], tr[3]); g.restore(); }
+        else if (tr && FLYTERQ && !R.tq) R.tq = FLYTERQ.then(() => { R.tq = null; R.gt = now(); R.kick(); });
+        g.lineCap = "round"; g.strokeStyle = col.tx3; g.lineWidth = (full ? 3 : 2.2) / s;
+        g.beginPath(); (R.geo.rwy || []).forEach(([a, b, c, d]) => { g.moveTo(a, -b); g.lineTo(c, -d); }); g.stroke();
+        if (R.trk) {                                          // 常走的進場、離場路線：抵達用主題色、出發用灰色，淡淡的
+          if (!R.ti || R.ti.k !== col.p + col.tx2) R.ti = {k:col.p + col.tx2, a:flyTrkImg(R.trk.arr, col.p), d:flyTrkImg(R.trk.dep, col.tx2)};
+          g.globalAlpha = ta * (full ? .5 : .4); g.imageSmoothingQuality = "high";
+          [R.ti.d, R.ti.a].forEach(c => c && g.drawImage(c, ...c._b));
+        }
+        g.restore();
+      }
+      ctx.save(); ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.drawImage(B, 0, 0); ctx.restore();
+    }
+    /* 導航台：整頁雷達放大時才畫（三角形是 VOR、點是 NDB） */
+    const nv = [];
+    if (R.geo && full && s > 3) {
+      ctx.save(); ctx.globalAlpha = (canAnim() ? ga : 1) * .7; ctx.strokeStyle = ctx.fillStyle = col.tx3; ctx.lineWidth = 1.2;
+      (R.geo.nav || []).forEach(([n, k, x, y]) => {
+        if ([[0, 0], ...(R.geo.aps || []).map(a => [a[2], a[3]])].some(([ax, ay]) => Math.hypot(x - ax, y - ay) < 5)) return;   // 機場裡的導航台跟跑道疊在一起，不畫
+        const [sx, sy] = R.xy(x, y); if (sx < -10 || sx > W + 10 || sy < (R.top || 0) || sy > H + 10) return;
+        ctx.beginPath();
+        if (k === "V") { ctx.moveTo(sx, sy - 4.5); ctx.lineTo(sx + 4, sy + 2.5); ctx.lineTo(sx - 4, sy + 2.5); ctx.closePath(); ctx.stroke(); }
+        else { ctx.arc(sx, sy, 2, 0, Math.PI * 2); ctx.fill(); }
+        if (k === "V" || s > 8) nv.push([n, sx, sy]);
+      });
       ctx.restore();
     }
     /* 現在用的跑道：進場那一頭往外畫一條虛線（飛機排隊降落的路線） */
@@ -2989,7 +3071,14 @@ function radarView(cv, full){
         ctx.beginPath(); ctx.moveTo(pts[i - 1][0], pts[i - 1][1]); ctx.lineTo(pts[i][0], pts[i][1]); ctx.stroke();
       }
     });
-    /* 機頭前面的短線：只畫選到的那架，一分鐘後會飛到哪 */
+    /* 機頭前面的短線：一分鐘後會飛到哪（小雷達半分鐘）；選到的那架比較清楚 */
+    ctx.lineWidth = 1;
+    vis.forEach(o => {
+      const p = o.p; if (o.id === R.sel || p.ph === "gnd" || !p.alt || !(p.spd > 0) || p.trk == null) return;
+      const d = p.spd / 60 * (full ? 1 : .5), hd = p.trk * Math.PI / 180, [ex, ey] = R.xy(o.x + Math.sin(hd) * d, o.y + Math.cos(hd) * d);
+      ctx.globalAlpha = o.a * (p.ph === "over" ? full ? .25 : .15 : .45) * (R.sel && full ? .4 : 1); ctx.strokeStyle = pc(o);
+      ctx.beginPath(); ctx.moveTo(o.sx, o.sy); ctx.lineTo(ex, ey); ctx.stroke();
+    });
     const vo = R.sel && pl.get(R.sel);
     if (vo && vo.a > 0 && vo.p.ph !== "gnd" && vo.p.alt && vo.p.spd > 0) {
       const d = vo.p.spd / 60, hd = (vo.p.trk || 0) * Math.PI / 180, [ex, ey] = R.xy(vo.x + Math.sin(hd) * d, vo.y + Math.cos(hd) * d);
@@ -3017,7 +3106,7 @@ function radarView(cv, full){
     /* 名字：擠在一起時換邊放，放不下先不顯示 */
     const lf = Math.round(full ? fs : Math.max(9, rr / 21)), lab = vis.filter(o => o.vis && (o.id === R.sel || o.p.emg || o.p.ph === "arr" || o.p.ph === "dep" || (full && o.p.ph === "over" && s > 3)));
     const used = flyPlace(ctx, lab, lf, ps * 3.4, full, font, R.sel, W, H, rb, R.top || 0);
-    if (tw.length) {
+    if (tw.length || nv.length) {
       ctx.globalAlpha = (canAnim() ? ga : 1) * .8; ctx.textAlign = "center"; ctx.textBaseline = "middle"; ctx.fillStyle = col.tx3;
       ctx.font = `${Math.round(fs * (full ? 1 : .9))}px ${font}`;
       const pb = vis.filter(o => o.a > .3).map(o => [o.sx - ps * 3, o.sy - ps * 3, o.sx + ps * 3, o.sy + ps * 3]);
@@ -3027,6 +3116,12 @@ function radarView(cv, full){
         if (full && y < (R.top || 0) + fs) return;
         if (a[0] < 2 || a[2] > W - 2 || [...used, ...pb, ...done].some(b => a[0] < b[2] && a[2] > b[0] && a[1] < b[3] && a[3] > b[1])) return;
         ctx.globalAlpha = ta * (lv === 0 ? .6 : 1); ctx.fillText(n, x, y); done.push(a);
+      });
+      ctx.globalAlpha = ta * .7; ctx.font = `${Math.round(fs * .8)}px ${font}`; ctx.textAlign = "left";
+      nv.forEach(([n, x, y]) => {                           // 導航台代碼：放在符號右下，跟別的字撞到就不寫
+        const w = ctx.measureText(n).width, a = [x + 6, y, x + 6 + w, y + fs * .9];
+        if ([...used, ...pb, ...done].some(b => a[0] < b[2] && a[2] > b[0] && a[1] < b[3] && a[3] > b[1])) return;
+        ctx.fillText(n, x + 6, y + fs * .45); done.push(a);
       });
       ctx.textAlign = "left"; ctx.textBaseline = "alphabetic";
     }
@@ -3108,6 +3203,8 @@ function flyRwy(d){
 const FLYDIR = ["北", "東北", "東", "東南", "南", "西南", "西", "西北"];
 function flyWxRow(f, d, rw){
   const w = d.wx, out = [], kmh = k => Math.round(k * 1.852);
+  const nx = (d.arr || []).filter(p => p.x != null && p.eta != null && p.alt > 0).sort((a, b) => a.eta - b.eta)[0];   // 下一班降落
+  if (nx) out.push(`<span class="on">下一班 ${esc(nx.fn || nx.reg || "")} ${nx.eta < 1 ? "快落地了" : `約 ${nx.eta} 分鐘後降落`}</span>`);
   if (rw) out.push(`<span class="on">${rw.wind ? `應該用 ${rw.n} 跑道` : `${rw.n} 跑道起降`}</span>`);
   if (w && w.ws != null) out.push(`<span>${w.ws < 1 ? "無風" : `${w.wd < 0 ? "風向不定" : FLYDIR[Math.round(w.wd / 45) % 8] + "風"} ${kmh(w.ws)} 公里/時${w.wg ? `，陣風 ${kmh(w.wg)}` : ""}`}</span>`);
   if (w && w.vis != null) out.push(`<span>${w.vis >= 9999 ? "能見度 10 公里以上" : `能見度 ${w.vis >= 1000 ? +(w.vis / 1000).toFixed(1) + " 公里" : w.vis + " 公尺"}`}</span>`);
@@ -3126,6 +3223,7 @@ function flyRadar(f, d){
     [["arr", d.arr], ["dep", d.dep], ["gnd", d.gnd], ["over", [...d.over, ...(d.rest || [])]]].forEach(([k, l]) => txt(f.querySelector(`[data-k="rc-${k}"]`), String(l.filter(p => p.x != null).length)));
   }
   v.sel = FLYSEL; v.setData(flyAll(d));
+  if (!d.loading && d.ap && d.ap.code) flyTrk(f, d.ap.code);
   if (FRAD) fradData();
 }
 /* 換分頁、換時段：航廈、時段那兩排和看板一起淡出，看不到的時候一次換好（收起、長出來都不用動畫），再一起淡入；
@@ -3196,18 +3294,24 @@ function flyTerms(f, d){
 }
 /* 現在這個分頁（和航廈）有哪些地點、各幾班：同一國的放在一起（班機多的國家在前），城市由北到南 */
 const FLYCN = (() => { try { return new Intl.DisplayNames(["zh-Hant-TW"], {type: "region"}); } catch(e) { return null; } })();
-const FLYCNX = {HK: "香港", MO: "澳門", KR: "韓國", AE: "阿聯"};
+const FLYCNX = {CN: "中國大陸", HK: "香港", MO: "澳門", KR: "韓國", AE: "阿聯", "CN+": "中國大陸・港澳"};
 const flyCnName = c => FLYCNX[c] || (FLYCN && c ? FLYCN.of(c) : c) || "其他";
 const flyCtry = pl => (pl && FLYD && FLYD.ccs && FLYD.ccs[pl.code]) || "";
-const flyPlIs = (p, tab, sel) => { const pl = flyPl(p, tab); return sel.k[0] === "@" ? "@" + flyCtry(pl) === sel.k : flyPk(pl) === sel.k; };   // 「@JP」是整個國家
+const flyCg = c => c === "CN" || c === "HK" || c === "MO" ? "CN+" : c;   // 中國大陸、香港、澳門放成一組
+const flyPlIs = (p, tab, sel) => { const pl = flyPl(p, tab); return sel.k[0] === "@" ? "@" + flyCg(flyCtry(pl)) === sel.k : flyPk(pl) === sel.k; };   // 「@JP」是整個國家
+/* 地點清單照地區分段 */
+const FLYRG = [["國內", "TW"], ["東北亞", "JP KR KP CN+ MN"], ["東南亞", "TH VN SG MY PH ID KH MM LA BN TL"], ["南亞", "IN NP BD LK MV PK BT"],
+  ["中東", "AE QA TR SA IL KW OM BH JO IR IQ"], ["歐美", "US CA MX GB IE FR DE NL BE LU AT CH IT ES PT GR DK SE NO FI IS PL CZ SK HU RO BG HR SI RS UA RU BY LT LV EE"],
+  ["大洋洲", "AU NZ GU MP PW FJ PG NC PF"]].map(([n, cs]) => [n, new Set(cs.split(" "))]);
+const flyRg = c => { const i = FLYRG.findIndex(([, s]) => s.has(c)); return i < 0 ? FLYRG.length : i; };
 function flyPlaces(){
   const d = FLYD, tab = FLYS.tab, m = new Map(), g = new Map();
   (d && d[tab] || []).filter(p => !FLYS.term || p.term === FLYS.term).forEach(p => {
     const pl = flyPl(p, tab), k = flyPk(pl); if (!k) return;
     const o = m.get(k) || {k, name: pl.name || pl.code, code: pl.code || "", cc: flyCc(pl), c: flyCtry(pl), lat: d.lat && d.lat[pl.code], n: 0}; o.n++; m.set(k, o); });
-  m.forEach(o => { const x = g.get(o.c) || {k: "@" + o.c, c: o.c, cc: o.c && o.c !== "TW" && !FLYNOFL.has(o.c) ? o.c : "", name: flyCnName(o.c), n: 0, items: []}; x.n += o.n; x.items.push(o); g.set(o.c, x); });
-  const gs = [...g.values()].sort((a, b) => !a.c - !b.c || b.n - a.n || a.name.localeCompare(b.name, "zh-TW"));
-  gs.forEach(x => x.items.sort((a, b) => (b.lat ?? -99) - (a.lat ?? -99) || b.n - a.n));
+  m.forEach(o => { const c = flyCg(o.c), x = g.get(c) || {k: "@" + c, c, cc: c && c !== "TW" && c !== "CN+" && !FLYNOFL.has(c) ? c : "", name: flyCnName(c), rg: c ? flyRg(c) : FLYRG.length, n: 0, items: []}; x.n += o.n; x.items.push(o); g.set(c, x); });
+  const gs = [...g.values()].sort((a, b) => a.rg - b.rg || b.n - a.n || a.name.localeCompare(b.name, "zh-TW"));   // 先照地區，同地區班機多的國家在前
+  gs.forEach(x => x.items.sort((a, b) => (a.c !== "CN") - (b.c !== "CN") || (a.c === "MO") - (b.c === "MO") || (b.lat ?? -99) - (a.lat ?? -99) || b.n - a.n));   // 城市由北到南；那一組是大陸城市、香港、澳門
   return gs;
 }
 const flyFnN = s => (s || "").toUpperCase().replace(/\s+/g, "").replace(/^([A-Z0-9]{2})0+(?=\d)/, "$1");   // CI054、ci 54 都算同一班
@@ -3231,13 +3335,12 @@ function flyWhere(){
     const fl = p => { const t = tabOf(p), pl = flyPl(p, t), go = t === "dep" || t === "gnd" && flyOut(p);
       return `<button class="fplr" data-fid="${esc(p.id)}">${flyLogo(flyAl(p.fn))}<span class="lab">${esc(p.fn || p.reg || "")}<small>${pl ? `${go ? "往" : "從"} ${esc(pl.name || pl.code)}` : ""}${p.fids && t !== "gnd" ? `・${flyHM((p.est || p.sch) * 1000, tz)}` : ""}${p.st ? `・${esc(p.st)}` : ""}</small></span></button>`; };
     // 這個國家只有一個城市（香港、曼谷）：一列就好；其他國家先一列國家（點了看整國），下面是城市
-    const grp = g => { if (g.items.length === 1) return row({...g.items[0], cc: g.cc});
+    const grp = g => { if (g.items.length === 1) return row({...g.items[0], cc: g.items[0].cc});
       const on = q || open.has(g.k);
       return row(g, 0, q ? 0 : on ? 2 : 1) + `<div class="fpls" data-fs="${esc(g.k)}"${on ? "" : " hidden"}>${g.items.map(x => row(x, 1)).join("")}</div>`; };
     const html = (fs.length ? `<div class="fplh">航班</div>${fs.map(fl).join("")}` : "")
-      + (fs.length && pls.length ? `<div class="fplh">地點</div>` : "")
       + (!q ? `<button class="fplr${FLYPLC ? "" : " on"}" data-fpl=""><span class="lab">${flyFlagAt("")}全部地點</span><span class="n">${sum} 班</span>${ck}</button>` : "")
-      + pls.map(grp).join("")
+      + pls.map((g, i) => (!i || pls[i - 1].rg !== g.rg ? `<div class="fplh">${FLYRG[g.rg] ? FLYRG[g.rg][0] : "其他地區"}</div>` : "") + grp(g)).join("")
       + (!fs.length && !pls.length ? `<div class="calm">找不到「${esc(q)}」</div>` : "");
     first ? box.innerHTML = html : swapHTML(box, html);       // 打字時：新出現的淡入，清單高度慢慢變
   };
@@ -3684,6 +3787,11 @@ document.addEventListener("click", e => {
   if (tm) { if ((FLYS.term || "") !== tm.dataset.fterm) { FLYS.term = tm.dataset.fterm; FLYHR = ""; flySave(); const s = tm.parentNode;
     slideSel(() => s.querySelectorAll("button").forEach(b => b.classList.toggle("on", b === tm))); flySwitch(); } return; }
   if (t.closest("[data-fdone]")) { FLYDONE = !FLYDONE; return flyDoneOpen(); }
+  if (t.closest(".fsum")) {                                 // 點「接下來一小時」：跳到抵達（在出發就留在出發）的這個小時
+    const k = FLYS.tab === "dep" ? "dep" : "arr", b = FLYS.tab === k ? f.querySelector(".fhrs button") : f.querySelector(`[data-ftab="${k}"]`);
+    if (b && !b.classList.contains("on")) b.click();
+    f.querySelector(".board").scrollIntoView({block:"nearest", behavior:canAnim() ? "smooth" : "auto"}); return;
+  }
   const hr = t.closest("[data-fhr]");
   if (hr) { if (FLYHR !== hr.dataset.fhr) { FLYHR = hr.dataset.fhr; const s = hr.parentNode;
     slideSel(() => s.querySelectorAll("button").forEach(b => b.classList.toggle("on", b === hr))); flySwitch("hr");
@@ -3691,6 +3799,36 @@ document.addEventListener("click", e => {
   const r = t.closest(".fr[data-id]");
   if (r && r.dataset.id) return flyInfo(r.dataset.id);
 });
+/* 電腦：時段、航廈那一排可以用滑鼠拖著捲，滾輪也能左右捲（捲到頭再滾就捲整頁） */
+(function(){
+  const row = t => t.closest && t.closest("#fly :is(.fhrs,.fterm)");
+  let d = null;
+  document.addEventListener("pointerdown", e => {
+    const s = e.pointerType === "mouse" && !e.button && row(e.target);
+    if (s && s.scrollWidth > s.clientWidth) d = {s, x:e.clientX, l:s.scrollLeft, moved:false};
+  });
+  addEventListener("pointermove", e => {
+    if (!d) return;
+    const dx = (e.clientX - d.x) / ZM();
+    if (!d.moved && Math.abs(dx) < 5) return;
+    if (!d.moved) { d.moved = true; d.s.classList.add("drag"); }
+    d.s.scrollLeft = d.l - dx;
+  });
+  addEventListener("pointerup", () => {
+    if (!d) return;
+    const m = d.moved; d.s.classList.remove("drag"); d = null;
+    if (!m) return;
+    const eat = e => { e.stopPropagation(); e.preventDefault(); };   // 拖完放開不算點一下
+    addEventListener("click", eat, true); setTimeout(() => removeEventListener("click", eat, true));
+  });
+  document.addEventListener("wheel", e => {
+    const s = row(e.target);
+    if (!s || e.ctrlKey || Math.abs(e.deltaX) >= Math.abs(e.deltaY)) return;
+    const max = s.scrollWidth - s.clientWidth;
+    if (max <= 0 || (e.deltaY < 0 && s.scrollLeft <= 0) || (e.deltaY > 0 && s.scrollLeft >= max - 1)) return;
+    e.preventDefault(); s.scrollBy({left:e.deltaY, behavior:Math.abs(e.deltaY) >= 50 && canAnim() ? "smooth" : "auto"});
+  }, {passive:false});
+})();
 document.addEventListener("keydown", e => {
   if (!$("#fly")) return;
   if (e.key === "Escape" && !document.querySelector("#layer .veil")) FRAD ? fradClose() : flyClose();
@@ -3719,7 +3857,7 @@ function fradOpen(){
   FRAD = {v, rv, sel:""}; rv.rwd = f._rv.rwd;
   const top = () => { const b = v.querySelector(".frbar").getBoundingClientRect(), m = cv.getBoundingClientRect(), z = ZM(); rv.top = (b.bottom - m.top) / z + 4; };
   rv.resize(); top(); rv.view(0, 0, rv.fit(flyR() * .95));           // 一開始跟小雷達看到的範圍差不多，看起來就像它長大
-  if (f._geo) rv.setGeo(FLYGEO[f._geo]);
+  if (f._geo) { rv.setGeo(FLYGEO[f._geo]); rv.setTrk(FLYTRK[f._geo] && FLYTRK[f._geo].d); }
   fradData();
   if (window.ResizeObserver) new ResizeObserver(() => { if (FRAD && FRAD.rv === rv) { rv.resize(); top(); } }).observe(cv);
   fradGest(rv, cv);

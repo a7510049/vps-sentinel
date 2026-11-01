@@ -881,6 +881,7 @@ html.flyon .dash>.view{content-visibility:hidden;contain-intrinsic-size:auto non
 .fhrs,.fterm{display:flex;gap:8px;overflow-x:auto;scrollbar-width:none;margin:0 -16px;padding:2px 16px;
   -webkit-mask-image:linear-gradient(90deg,transparent,#000 16px,#000 calc(100% - 16px),transparent);mask-image:linear-gradient(90deg,transparent,#000 16px,#000 calc(100% - 16px),transparent)}
 .fhrs::-webkit-scrollbar,.fterm::-webkit-scrollbar{display:none}
+@media (hover:hover) and (pointer:fine){.fhrs,.fterm{cursor:grab}.fhrs.drag,.fterm.drag{cursor:grabbing;user-select:none}.fhrs.drag>*,.fterm.drag>*{pointer-events:none}}   /* 電腦：用滑鼠拖著捲 */
 .fhrs .fchip,.fterm .fchip{flex:none;display:inline-flex;align-items:center;gap:6px;white-space:nowrap}
 .fhrs .n{font-size:var(--fs-s);opacity:.7}
 .ftabs .fn{margin-left:6px;color:var(--tx3);font-variant-numeric:tabular-nums}.ftabs .on .fn{color:var(--on-p);opacity:.75}[data-accent="rainbow"] .ftabs .on .fn{color:var(--on-rbw)}   /* 數字自己給顏色，不跟著按鈕的變色動畫走（手機上有時會留著選到時的深色） */
@@ -909,7 +910,7 @@ html.flyon .dash>.view{content-visibility:hidden;contain-intrinsic-size:auto non
 .fr .t.late b{color:var(--warn)}.fr .t.early b{color:var(--ok)}.fsh:empty{display:none}   /* 時間改了：只寫新的，早到綠字、晚到橘字 */
 .fr .fn{position:relative}.fsh{position:absolute;right:0;top:50%;translate:0 -50%;font-size:var(--fs-xs);font-weight:500;color:var(--tx3)}     /* 共掛班號：+2 疊在翻牌最後一格（班號很少用滿七格），不多佔寬度 */
 .fh .st{justify-self:end}                                          /* 狀態靠右，標題也靠右 */
-.fsum{font-size:var(--fs-s);padding:0 4px}
+.fsum{font-size:var(--fs-s);padding:0 4px;cursor:pointer;width:fit-content;border-radius:var(--r-xs)}@media (hover:hover){.fsum:hover{color:var(--p)}}
 .fdone{grid-column:1/-1;display:flex;align-items:center;gap:6px;justify-self:start;margin:2px 0 4px;padding:8px 10px;border-radius:var(--r-sm);color:var(--tx2);font-size:var(--fs-s);font-weight:500}   /* 已到／已飛的收成一行 */
 .fdone .chv{width:16px;height:16px;transition:transform var(--t-mid) var(--ease)}.fdone.on .chv{transform:rotate(180deg)}
 .fr.hot .st b{color:var(--p)}
