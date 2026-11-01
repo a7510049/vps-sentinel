@@ -43,7 +43,7 @@ from collections import deque
 from concurrent.futures import ThreadPoolExecutor
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
-VERSION = "3.54"
+VERSION = "3.55"
 
 # ───────────────────────── 哨兵備份檔（.vsbk）─────────────────────────
 # 哨兵專用的備份格式：外面是自己的檔案格式，裡面用的是成熟、標準的加密方法（不自己發明加密）：
@@ -983,7 +983,7 @@ def apt_updates():
 # ───────────────────────── 更新哨兵本身 ─────────────────────────
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-SRC_FILES = ["sentinel.py", "web/index.html", "web/style.css", "web/app.js", "data/airports.tsv", "data/coast.tsv"]   # 程式本體＋網頁三個檔＋機場資料、海岸線
+SRC_FILES = ["sentinel.py", "web/index.html", "web/style.css", "web/app.js", "data/airports.tsv", "data/coast.tsv", "data/terrain.bin"]   # 程式本體＋網頁三個檔＋機場資料、海岸線、地形
 
 
 def build_of(blobs):
@@ -1019,6 +1019,15 @@ BUILD = build_of(_read_bytes(p) for p in SRC_FILES)
 SELF_UNIT = "vps-sentinel-selfupdate"
 SELF_LOG = "/var/log/vps-sentinel-selfupdate.log"
 SELF = {"checked": 0, "has": None, "changes": [], "err": "", "lock": threading.Lock()}
+
+
+def git_raw(d, *args, timeout=30):
+    try:
+        r = subprocess.run(["git", "-c", "safe.directory=*", "-C", d, *args], capture_output=True, timeout=timeout,
+                           env={**os.environ, "GIT_TERMINAL_PROMPT": "0"})
+        return r.stdout if r.returncode == 0 else b""
+    except (OSError, subprocess.SubprocessError):
+        return b""
 
 
 def git(d, *args, timeout=30):
@@ -1082,8 +1091,8 @@ def self_check(force=False):
             if code != 0:
                 SELF.update(has=None, changes=[], err="連不上 GitHub，暫時沒辦法檢查新版")
             else:
-                blobs = [git(d, "show", f"@{{u}}:{p}")[1] for p in SRC_FILES]
-                new_build = build_of(x.encode("utf-8") for x in blobs) if blobs[0] else ""
+                blobs = [git_raw(d, "show", f"@{{u}}:{p}") for p in SRC_FILES]   # 原本的位元組（地形是二進位檔，當文字讀會變，就一直以為有新版）
+                new_build = build_of(blobs) if blobs[0] else ""
                 _, logs, _ = git(d, "log", "--format=%s", "-n", "8", "HEAD..@{u}")
                 SELF.update(has=bool(new_build) and new_build != BUILD, err="",
                             changes=[x.strip() for x in logs.splitlines() if x.strip()])
@@ -6859,6 +6868,7 @@ def fly_board(code, bg=False):
                   if x and x.get("code") in db and db[x["code"]][5]}   # 地名旁邊的國旗：機場代碼 → 國家
     out["lat"] = {c: round(db[c][3], 2) for c in out["ccs"]}
     out["wx"] = fly_wx(ap[0])   # 地點選單：同一國的城市由北到南排
+    fly_track(ap[0], rows + cargo)
     FLY["cache"][ap[0]] = out
     return out
 
@@ -6915,6 +6925,69 @@ def fly_seen_load():
         fly_bg_start()
 
 
+FLY_TRK_FILE = os.path.join(DATA_DIR, "fly-tracks.json")
+FLY_TRK = {"g": {}, "last": {}, "day": ""}            # g：機場 → 抵達／出發 → "x,y"（1 公里一格）→ 飛過幾次
+
+
+def fly_track(code, planes):
+    """記下抵達、出發的飛機飛過哪些格子：飛得多的格子連起來，就是這個機場常走的進場、離場路線"""
+    now, day = time.time(), time.strftime("%Y%m%d")
+    with FLY["lock"]:
+        if FLY_TRK["day"] != day:                     # 每天淡一點：很久沒人飛的路線慢慢消失
+            for ps in FLY_TRK["g"].values():
+                for cs in ps.values():
+                    for k in [k for k, v in cs.items() if v * .92 < .5]:
+                        del cs[k]
+                    for k in cs:
+                        cs[k] *= .92
+            FLY_TRK["day"] = day
+        g = FLY_TRK["g"].setdefault(code, {"arr": {}, "dep": {}})
+        for p in planes:
+            if p.get("ph") not in ("arr", "dep") or p.get("x") is None or (p.get("alt") or 0) > 7000 or math.hypot(p["x"], p["y"]) > 90:
+                continue
+            k, x, y = code + p["id"], p["x"], p["y"]
+            o = FLY_TRK["last"].get(k)
+            d = math.hypot(x - o[0], y - o[1]) if o and now - o[2] < 120 else 0
+            if o and now - o[2] < 120 and d < .5:     # 同一個位置抓到兩次（背景和網頁各問一次）不重複算
+                continue
+            n = int(d / .5) if d < 25 else 0           # 這次和上次的位置之間也補上（30 秒飛好幾公里，不然會斷成點點）
+            cells = {f"{round(x + (o[0] - x) * i / (n + 1))},{round(y + (o[1] - y) * i / (n + 1))}" for i in range(n + 1)} if n else {f"{round(x)},{round(y)}"}
+            if o and n:
+                cells.discard(f"{round(o[0])},{round(o[1])}")
+            for c in cells:
+                g[p["ph"]][c] = g[p["ph"]].get(c, 0) + 1
+            FLY_TRK["last"][k] = (x, y, now)
+        for k in [k for k, v in FLY_TRK["last"].items() if now - v[2] > 300]:
+            del FLY_TRK["last"][k]
+
+
+def fly_tracks(code):
+    """常走的路線給雷達畫：[x, y, 濃淡 1～9, …]，太少飛過的格子不給"""
+    out = {"ok": True}
+    for ph in ("arr", "dep"):
+        cs = dict((FLY_TRK["g"].get(code) or {}).get(ph) or {})
+        top = max(cs.values(), default=0)
+        lst = []
+        if top >= 3:
+            lt = math.log(top + 1)
+            for c, v in sorted(cs.items(), key=lambda kv: -kv[1])[:5000]:
+                a = round(math.log(v + 1) / lt * 9)
+                if a >= 2 and v >= 2:
+                    lst += [*map(int, c.split(",")), a]
+        out[ph] = lst
+    return out
+
+
+def fly_tracks_load():
+    try:
+        with open(FLY_TRK_FILE, encoding="utf-8") as f:
+            d = json.load(f)
+        FLY_TRK["day"] = str(d.get("day") or "")
+        FLY_TRK["g"] = {c: {ph: {k: float(v) for k, v in cs.items()} for ph, cs in ps.items() if ph in ("arr", "dep")} for c, ps in (d.get("g") or {}).items() if c in FLY_PIN}
+    except (OSError, ValueError, AttributeError, TypeError):
+        pass
+
+
 def fly_seen_save():
     try:
         os.makedirs(DATA_DIR, exist_ok=True)
@@ -6926,6 +6999,11 @@ def fly_seen_save():
         with open(FLY_HEX_FILE + ".tmp", "w", encoding="utf-8") as f:
             json.dump(dict(FLY["hex"]), f)
         os.replace(FLY_HEX_FILE + ".tmp", FLY_HEX_FILE)
+        with FLY["lock"]:
+            trk = json.dumps({"day": FLY_TRK["day"], "g": {c: {ph: {k: round(v, 1) for k, v in cs.items()} for ph, cs in ps.items()} for c, ps in FLY_TRK["g"].items()}}, separators=(",", ":"))
+        with open(FLY_TRK_FILE + ".tmp", "w", encoding="utf-8") as f:
+            f.write(trk)
+        os.replace(FLY_TRK_FILE + ".tmp", FLY_TRK_FILE)
     except OSError as e:
         fly_log(f"存不了班機資料：{e}")
 
@@ -6989,6 +7067,30 @@ FLY_TOWNS2 = [
 ]
 # 跑道（大約）：方位角、長度（公里）、往左平移（公里），畫在雷達正中間
 FLY_RWY = {"TPE": [(53, 3.66, .75), (53, 3.8, -.75)], "TSA": [(96, 2.6, 0)], "RMQ": [(3, 3.66, 0)], "KHH": [(93, 3.15, 0)]}
+# 導航台（OurAirports，公有領域）：代碼、種類（V＝VOR／TACAN，N＝NDB）、緯度、經度
+FLY_NAV = [("AP", "N", 25.1761, 121.523), ("APU", "V", 25.1769, 121.522), ("BM", "N", 23.5203, 119.609), ("CCK", "V", 24.2626, 120.618),
+           ("CHI", "V", 23.4649, 120.391), ("GI", "N", 22.6761, 121.483), ("GID", "V", 22.6728, 121.486), ("HCN", "V", 21.9281, 120.844),
+           ("HL", "N", 24.6464, 120.774), ("HLG", "V", 24.64, 120.783), ("HLN", "V", 24.0185, 121.64), ("HSU", "V", 24.8217, 120.938),
+           ("KS", "N", 25.0558, 121.217), ("KT", "N", 22.0438, 120.731), ("KU", "N", 23.5842, 120.389), ("KW", "N", 21.9317, 120.839),
+           ("LK", "N", 25.0743, 121.424), ("LKU", "V", 25.0761, 121.427), ("LU", "N", 25.1394, 121.801), ("LY", "N", 22.0767, 121.508),
+           ("MKG", "V", 23.5954, 119.637), ("MR", "N", 22.9783, 120.29), ("MS", "N", 24.7319, 121.741), ("NN", "N", 23.1247, 120.202),
+           ("O", "N", 25.0654, 121.632), ("PIT", "V", 22.6707, 120.46), ("RA", "N", 24.8617, 121.253), ("SG", "N", 25.0704, 121.53),
+           ("SK", "N", 22.5778, 120.326), ("SN", "N", 24.1363, 120.655), ("SW", "N", 24.9948, 121.491), ("TC", "N", 24.2535, 120.619),
+           ("TIA", "V", 25.0884, 121.233), ("TNN", "V", 23.1356, 120.206), ("TWS", "V", 22.9499, 120.205), ("TYN", "V", 25.0625, 121.245),
+           ("WK", "N", 24.2333, 120.823), ("YU", "N", 24.0177, 121.627), ("ZN", "N", 22.7599, 121.159)]
+
+
+def fly_ter():
+    """地形高度（data/terrain.bin，tools/terrain.py 產生）：(說明, 高度表)；沒有就是 None"""
+    if "ter" not in FLY:
+        try:
+            with open(os.path.join(HERE, "data", "terrain.bin"), "rb") as f:
+                head, body = f.read().split(b"\n", 1)
+            m = json.loads(head)
+            FLY["ter"] = (m, body) if len(body) == m["w"] * m["h"] else None
+        except (OSError, ValueError, KeyError):
+            FLY["ter"] = None
+    return FLY["ter"]
 FLY_GEO = {}
 
 
@@ -7038,7 +7140,13 @@ def fly_geo(code):
             cx, cy = x + off * math.sin(b), y + off * math.cos(b)
             dx, dy = ln / 2 * math.sin(a), ln / 2 * math.cos(a)
             rwy.append([round(cx - dx, 2), round(cy - dy, 2), round(cx + dx, 2), round(cy + dy, 2)])
-    FLY_GEO[code] = {"ok": True, "coast": "".join(path["t"]), "far": "".join(path["f"]), "towns": towns, "aps": aps, "rwy": rwy}
+    nav = [[n, k, round(x, 1), round(y, 1)] for n, k, la, lo in FLY_NAV for x, y in [xy(la, lo)] if math.hypot(x, y) < lim]
+    ter = fly_ter()
+    if ter:                                          # 地形那張圖放在哪（公里）：左邊、上面、寬、高
+        m = ter[0]
+        x0, y1 = xy(m["la"], m["lo"])
+        ter = [round(x0, 2), round(y1, 2), round(m["w"] * m["d"] * kx, 2), round(m["h"] * m["d"] * ky, 2), m["w"], m["h"]]
+    FLY_GEO[code] = {"ok": True, "coast": "".join(path["t"]), "far": "".join(path["f"]), "towns": towns, "aps": aps, "rwy": rwy, "nav": nav, "ter": ter}
     return FLY_GEO[code]
 
 
@@ -7050,6 +7158,9 @@ def fly_api(q):
     if "geo" in q:
         c = str(q["geo"][0]).upper()[:4]
         return fly_geo(c if c in FLY_PIN else "TPE")
+    if "trk" in q:
+        c = str(q["trk"][0]).upper()[:4]
+        return fly_tracks(c if c in FLY_PIN else "TPE")
     code = str(q.get("ap", ["TPE"])[0]).upper()[:4]
     try:
         return fly_board(code if code in FLY_PIN else "TPE")
@@ -7389,6 +7500,9 @@ class Handler(BaseHTTPRequestHandler):
             with open(f, "rb") as fh:
                 shutil.copyfileobj(fh, self.wfile, 1 << 20)
             return
+        if path == "/api/fly-terrain":                # 地形高度（公開資料，不用登入）
+            ter = fly_ter()
+            return self.send(200, ter[1], "application/octet-stream", cache=True) if ter else self.send(404, '{"error":"找不到"}')
         if path == "/api/fly-logo":                   # 標誌圖：只給固定清單裡的，不用登入（分享連結也看得到）
             key = urllib.parse.parse_qs(urllib.parse.urlsplit(self.path).query).get("k", [""])[0][:3].upper()
             r = fly_logo(key) if re.fullmatch(r"[A-Z0-9]{2,3}|@[A-Z]{2}", key) else None
@@ -7758,7 +7872,7 @@ def main():
     threading.Thread(target=yt_update_loop, daemon=True).start()  # 有裝 yt-dlp／deno 才會真的做事
     threading.Thread(target=alert_loop, daemon=True).start()      # 沒設定時也會跑，網頁上一設定好就開始通知
     dl_load()                                                     # 上次沒下載完的接著下載
-    fly_seen_load()                                               # 有在用機場起降：背景接著抓
+    fly_seen_load(); fly_tracks_load()                             # 有在用機場起降：背景接著抓
     srv = ThreadingHTTPServer((BIND, PORT), Handler)
     log(f"VPS 哨兵 {VERSION} 已啟動：http://{BIND}:{PORT}  名稱={NAME}  其他主機={len(PEERS)} 台  "
         f"Telegram={'開' if TG_BOT and TG_CHAT else '關'}")
