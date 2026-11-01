@@ -3696,6 +3696,36 @@ document.addEventListener("click", e => {
   const r = t.closest(".fr[data-id]");
   if (r && r.dataset.id) return flyInfo(r.dataset.id);
 });
+/* 電腦：時段、航廈那一排可以用滑鼠拖著捲，滾輪也能左右捲（捲到頭再滾就捲整頁） */
+(function(){
+  const row = t => t.closest && t.closest("#fly :is(.fhrs,.fterm)");
+  let d = null;
+  document.addEventListener("pointerdown", e => {
+    const s = e.pointerType === "mouse" && !e.button && row(e.target);
+    if (s && s.scrollWidth > s.clientWidth) d = {s, x:e.clientX, l:s.scrollLeft, moved:false};
+  });
+  addEventListener("pointermove", e => {
+    if (!d) return;
+    const dx = (e.clientX - d.x) / ZM();
+    if (!d.moved && Math.abs(dx) < 5) return;
+    if (!d.moved) { d.moved = true; d.s.classList.add("drag"); }
+    d.s.scrollLeft = d.l - dx;
+  });
+  addEventListener("pointerup", () => {
+    if (!d) return;
+    const m = d.moved; d.s.classList.remove("drag"); d = null;
+    if (!m) return;
+    const eat = e => { e.stopPropagation(); e.preventDefault(); };   // 拖完放開不算點一下
+    addEventListener("click", eat, true); setTimeout(() => removeEventListener("click", eat, true));
+  });
+  document.addEventListener("wheel", e => {
+    const s = row(e.target);
+    if (!s || e.ctrlKey || Math.abs(e.deltaX) >= Math.abs(e.deltaY)) return;
+    const max = s.scrollWidth - s.clientWidth;
+    if (max <= 0 || (e.deltaY < 0 && s.scrollLeft <= 0) || (e.deltaY > 0 && s.scrollLeft >= max - 1)) return;
+    e.preventDefault(); s.scrollBy({left:e.deltaY, behavior:Math.abs(e.deltaY) >= 50 && canAnim() ? "smooth" : "auto"});
+  }, {passive:false});
+})();
 document.addEventListener("keydown", e => {
   if (!$("#fly")) return;
   if (e.key === "Escape" && !document.querySelector("#layer .veil")) FRAD ? fradClose() : flyClose();
