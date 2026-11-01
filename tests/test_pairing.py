@@ -61,6 +61,66 @@ class Crypto(unittest.TestCase):
         self.assertTrue(sent[-1].startswith("✅"), sent[-1])
         S.pair_save({})
 
+    def test_idle_watcher_expires(self):
+        """監看的主機 7 天沒連進來（多半已經把這台移除了）：自動取消被監看"""
+        now = S.time.time()
+        S.PEERS[:] = []
+        S.PAIR_SEEN.clear()
+        S.WATCH.update(down=False, t0=now - 30 * 86400)
+        S.pair_save({"keys": [{"id": "o1", "name": "舊的", "hash": "x", "t": int(now - 9 * 86400)},
+                              {"id": "o2", "name": "還在", "hash": "y", "t": int(now - 9 * 86400), "seen": int(now - 3600)}],
+                     "tg": {"bot": "1:x", "chat": "9"}})
+        S.pair_expire()
+        self.assertEqual(S.watchers(), ["還在"])
+        S.pair_save({"keys": [{"id": "o2", "name": "還在", "hash": "y", "t": int(now - 9 * 86400), "seen": int(now - 8 * 86400)}],
+                     "tg": {"bot": "1:x", "chat": "9"}})
+        S.WATCH["t0"] = now                       # 剛重新啟動：先等 7 天，不馬上取消
+        S.pair_expire()
+        self.assertEqual(S.watchers(), ["還在"])
+        S.WATCH["t0"] = now - 30 * 86400
+        S.pair_expire()
+        self.assertEqual(S.watchers(), [])
+        self.assertNotIn("tg", S.pair_load())
+        S.WATCH["t0"] = now
+        S.pair_save({})
+
+    def test_forget_retry(self):
+        """主要主機移除時連不上那台：記下來，之後在背景再通知，通知到就不用再記"""
+        S.pair_save({})
+        p = {"name": "那台", "url": "http://127.0.0.1:9", "token": "vsk_x"}
+        S.peer_forget_later(p)
+        S.WATCH.pop("fg", None)
+        S.peer_forget_retry()                     # 還是連不上：留著
+        self.assertEqual(len(S.pair_load()["forget"]), 1)
+        real = S.urllib.request.urlopen
+        S.urllib.request.urlopen = lambda *a, **k: open(os.devnull, "rb")
+        try:
+            S.WATCH.pop("fg", None)
+            S.peer_forget_retry()
+        finally:
+            S.urllib.request.urlopen = real
+        self.assertNotIn("forget", S.pair_load())
+
+    def test_unwatch_by_tg_code(self):
+        """沒設密碼、PIN 碼：被監看的那頁可以改傳 Telegram 驗證碼，用一次就失效，錯 3 次也失效"""
+        sent = []
+        S.tg_api = lambda bot, m, d: (sent.append(d.get("text", "")) or ({"result": {"message_id": 1}}, ""))
+        S.pair_save({"keys": [{"id": "u1", "name": "主要主機", "hash": "x"}], "tg": {"bot": "1:x", "chat": "9"}})
+        S.UNW.update(code="", t=0)
+        self.assertTrue(S.unwatch_ask()[0])
+        code = S.re.search(r"<code>(\d{8})</code>", sent[-1]).group(1)
+        self.assertTrue(sent[-1].startswith("🔐"))
+        self.assertFalse(S.unwatch_code_ok("00000000" if code != "00000000" else "11111111"))
+        self.assertTrue(S.unwatch_code_ok(code))
+        self.assertFalse(S.unwatch_code_ok(code))           # 用過就失效
+        S.UNW.update(code="", t=0)
+        S.unwatch_ask()
+        code = S.re.search(r"<code>(\d{8})</code>", sent[-1]).group(1)
+        for _ in range(3):
+            S.unwatch_code_ok("12345678" if code != "12345678" else "87654321")
+        self.assertFalse(S.unwatch_code_ok(code))           # 錯 3 次失效
+        S.pair_save({})
+
     def test_bad_url(self):
         self.assertFalse(S.pair_code("ftp://x")[0])
         self.assertFalse(S.pair_code("")[0])
