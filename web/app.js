@@ -3309,7 +3309,7 @@ function flyPlaces(){
   (d && d[tab] || []).filter(p => !FLYS.term || p.term === FLYS.term).forEach(p => {
     const pl = flyPl(p, tab), k = flyPk(pl); if (!k) return;
     const o = m.get(k) || {k, name: pl.name || pl.code, code: pl.code || "", cc: flyCc(pl), c: flyCtry(pl), lat: d.lat && d.lat[pl.code], n: 0}; o.n++; m.set(k, o); });
-  m.forEach(o => { const c = flyCg(o.c), x = g.get(c) || {k: "@" + c, c, cc: c && c !== "TW" && c !== "CN+" && !FLYNOFL.has(c) ? c : "", name: flyCnName(c), rg: c ? flyRg(c) : FLYRG.length, n: 0, items: []}; x.n += o.n; x.items.push(o); g.set(c, x); });
+  m.forEach(o => { const c = flyCg(o.c), x = g.get(c) || {k: "@" + c, c, cc: c === "CN+" ? "CN" : c && c !== "TW" && !FLYNOFL.has(c) ? c : "", name: flyCnName(c), rg: c ? flyRg(c) : FLYRG.length, n: 0, items: []}; x.n += o.n; x.items.push(o); g.set(c, x); });
   const gs = [...g.values()].sort((a, b) => a.rg - b.rg || b.n - a.n || a.name.localeCompare(b.name, "zh-TW"));   // 先照地區，同地區班機多的國家在前
   gs.forEach(x => x.items.sort((a, b) => (a.c !== "CN") - (b.c !== "CN") || (a.c === "MO") - (b.c === "MO") || (b.lat ?? -99) - (a.lat ?? -99) || b.n - a.n));   // 城市由北到南；那一組是大陸城市、香港、澳門
   return gs;
@@ -3323,7 +3323,7 @@ function flyWhere(){
   $("#layer").appendChild(v);
   const box = v.querySelector(".fpll"), inp = v.querySelector("input"), tz = d.ap && d.ap.tz;
   const ck = `<span class="fon">${I("check")}</span>`;
-  const row = (x, sub, fx) => `<button class="fplr${sub ? " sub" : ""}${FLYPLC && FLYPLC.k === x.k ? " on" : ""}" data-fpl="${esc(x.k)}"><span class="lab">${sub ? "" : flyFlagAt(x.cc)}${esc(x.name)}${fx ? `<span class="fplx${fx > 1 ? " open" : ""}" data-fx="${esc(x.k)}" role="button" aria-label="展開城市">${I("chev")}</span>` : ""}</span><span class="n">${x.n} 班</span>${ck}</button>`;
+  const row = (x, sub, fx) => `<button class="fplr${sub ? " sub" : ""}${sub === 2 ? " sf" : ""}${FLYPLC && FLYPLC.k === x.k ? " on" : ""}" data-fpl="${esc(x.k)}"><span class="lab">${sub !== 1 ? flyFlagAt(sub ? x.c === "CN" ? "" : x.cc : x.cc) : ""}${esc(x.name)}${fx ? `<span class="fplx${fx > 1 ? " open" : ""}" data-fx="${esc(x.k)}" role="button" aria-label="展開城市">${I("chev")}</span>` : ""}</span><span class="n">${x.n} 班</span>${ck}</button>`;
   const open = new Set();                                  // 有好幾個城市的國家每次打開都先收起來，點國旗旁邊的箭頭才展開
   const draw = first => {
     const q = inp.value.trim(), Q = flyFnN(q), gs = flyPlaces(), sum = gs.reduce((a, x) => a + x.n, 0);
@@ -3337,7 +3337,7 @@ function flyWhere(){
     // 這個國家只有一個城市（香港、曼谷）：一列就好；其他國家先一列國家（點了看整國），下面是城市
     const grp = g => { if (g.items.length === 1) return row({...g.items[0], cc: g.items[0].cc});
       const on = q || open.has(g.k);
-      return row(g, 0, q ? 0 : on ? 2 : 1) + `<div class="fpls" data-fs="${esc(g.k)}"${on ? "" : " hidden"}>${g.items.map(x => row(x, 1)).join("")}</div>`; };
+      return row(g, 0, q ? 0 : on ? 2 : 1) + `<div class="fpls" data-fs="${esc(g.k)}"${on ? "" : " hidden"}>${g.items.map(x => row(x, g.c === "CN+" ? 2 : 1)).join("")}</div>`; };
     const html = (fs.length ? `<div class="fplh">航班</div>${fs.map(fl).join("")}` : "")
       + (!q ? `<button class="fplr${FLYPLC ? "" : " on"}" data-fpl=""><span class="lab">${flyFlagAt("")}全部地點</span><span class="n">${sum} 班</span>${ck}</button>` : "")
       + pls.map((g, i) => (!i || pls[i - 1].rg !== g.rg ? `<div class="fplh">${FLYRG[g.rg] ? FLYRG[g.rg][0] : "其他地區"}</div>` : "") + grp(g)).join("")
