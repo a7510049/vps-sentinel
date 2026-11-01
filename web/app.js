@@ -2693,7 +2693,7 @@ document.addEventListener("load", e => { const t = e.target; if (t.tagName !== "
   if (t.parentNode.classList.contains("faplg")) t.parentNode.classList.add("ok");
   if (t.classList.contains("flg")) t.classList.add("ok"); }, true);
 document.addEventListener("error", e => { const t = e.target; if (t.tagName === "IMG" && t.parentNode && t.parentNode.classList.contains("faplg")) t.remove();
-  if (t.tagName === "IMG" && t.classList.contains("flg")) { if (t.dataset.c) FLYNOFL.add(t.dataset.c); t.hidden = true; }
+  if (t.tagName === "IMG" && t.classList.contains("flg")) { if (t.dataset.c) FLYNOFL.add(t.dataset.c); if (t.classList.contains("at")) t.style.visibility = "hidden"; else t.hidden = true; }   // 清單裡抓不到國旗也留位置，名字才對齊
   if (t.tagName === "IMG" && t.parentNode && t.parentNode.classList.contains("alg")) { FLYNOLG.add(t.parentNode.dataset.c); t.remove(); } }, true);
 const FLYF = ["t", "fn", "pc", "st"], FLYX = ["pl", "al", "m", "reg", "bx"];   // 翻牌的欄位／一般文字的欄位（城市、航空公司、機型、註冊號用一般字比較好讀）
 const FLYW = {t:5, fn:7, pc:3, st:4};             // 狀態最多四個中文字，每格都是中文字寬，長短不一也對齊
@@ -3196,18 +3196,24 @@ function flyTerms(f, d){
 }
 /* 現在這個分頁（和航廈）有哪些地點、各幾班：同一國的放在一起（班機多的國家在前），城市由北到南 */
 const FLYCN = (() => { try { return new Intl.DisplayNames(["zh-Hant-TW"], {type: "region"}); } catch(e) { return null; } })();
-const FLYCNX = {HK: "香港", MO: "澳門", KR: "韓國", AE: "阿聯"};
+const FLYCNX = {CN: "中國大陸", HK: "香港", MO: "澳門", KR: "韓國", AE: "阿聯", "CN+": "中國大陸・港澳"};
 const flyCnName = c => FLYCNX[c] || (FLYCN && c ? FLYCN.of(c) : c) || "其他";
 const flyCtry = pl => (pl && FLYD && FLYD.ccs && FLYD.ccs[pl.code]) || "";
-const flyPlIs = (p, tab, sel) => { const pl = flyPl(p, tab); return sel.k[0] === "@" ? "@" + flyCtry(pl) === sel.k : flyPk(pl) === sel.k; };   // 「@JP」是整個國家
+const flyCg = c => c === "CN" || c === "HK" || c === "MO" ? "CN+" : c;   // 中國大陸、香港、澳門放成一組
+const flyPlIs = (p, tab, sel) => { const pl = flyPl(p, tab); return sel.k[0] === "@" ? "@" + flyCg(flyCtry(pl)) === sel.k : flyPk(pl) === sel.k; };   // 「@JP」是整個國家
+/* 地點清單照地區分段 */
+const FLYRG = [["國內", "TW"], ["東北亞", "JP KR KP CN+ MN"], ["東南亞", "TH VN SG MY PH ID KH MM LA BN TL"], ["南亞", "IN NP BD LK MV PK BT"],
+  ["中東", "AE QA TR SA IL KW OM BH JO IR IQ"], ["歐美", "US CA MX GB IE FR DE NL BE LU AT CH IT ES PT GR DK SE NO FI IS PL CZ SK HU RO BG HR SI RS UA RU BY LT LV EE"],
+  ["大洋洲", "AU NZ GU MP PW FJ PG NC PF"]].map(([n, cs]) => [n, new Set(cs.split(" "))]);
+const flyRg = c => { const i = FLYRG.findIndex(([, s]) => s.has(c)); return i < 0 ? FLYRG.length : i; };
 function flyPlaces(){
   const d = FLYD, tab = FLYS.tab, m = new Map(), g = new Map();
   (d && d[tab] || []).filter(p => !FLYS.term || p.term === FLYS.term).forEach(p => {
     const pl = flyPl(p, tab), k = flyPk(pl); if (!k) return;
     const o = m.get(k) || {k, name: pl.name || pl.code, code: pl.code || "", cc: flyCc(pl), c: flyCtry(pl), lat: d.lat && d.lat[pl.code], n: 0}; o.n++; m.set(k, o); });
-  m.forEach(o => { const x = g.get(o.c) || {k: "@" + o.c, c: o.c, cc: o.c && o.c !== "TW" && !FLYNOFL.has(o.c) ? o.c : "", name: flyCnName(o.c), n: 0, items: []}; x.n += o.n; x.items.push(o); g.set(o.c, x); });
-  const gs = [...g.values()].sort((a, b) => !a.c - !b.c || b.n - a.n || a.name.localeCompare(b.name, "zh-TW"));
-  gs.forEach(x => x.items.sort((a, b) => (b.lat ?? -99) - (a.lat ?? -99) || b.n - a.n));
+  m.forEach(o => { const c = flyCg(o.c), x = g.get(c) || {k: "@" + c, c, cc: c && c !== "TW" && c !== "CN+" && !FLYNOFL.has(c) ? c : "", name: flyCnName(c), rg: c ? flyRg(c) : FLYRG.length, n: 0, items: []}; x.n += o.n; x.items.push(o); g.set(c, x); });
+  const gs = [...g.values()].sort((a, b) => a.rg - b.rg || b.n - a.n || a.name.localeCompare(b.name, "zh-TW"));   // 先照地區，同地區班機多的國家在前
+  gs.forEach(x => x.items.sort((a, b) => (a.c !== "CN") - (b.c !== "CN") || (a.c === "MO") - (b.c === "MO") || (b.lat ?? -99) - (a.lat ?? -99) || b.n - a.n));   // 城市由北到南；那一組是大陸城市、香港、澳門
   return gs;
 }
 const flyFnN = s => (s || "").toUpperCase().replace(/\s+/g, "").replace(/^([A-Z0-9]{2})0+(?=\d)/, "$1");   // CI054、ci 54 都算同一班
@@ -3231,13 +3237,12 @@ function flyWhere(){
     const fl = p => { const t = tabOf(p), pl = flyPl(p, t), go = t === "dep" || t === "gnd" && flyOut(p);
       return `<button class="fplr" data-fid="${esc(p.id)}">${flyLogo(flyAl(p.fn))}<span class="lab">${esc(p.fn || p.reg || "")}<small>${pl ? `${go ? "往" : "從"} ${esc(pl.name || pl.code)}` : ""}${p.fids && t !== "gnd" ? `・${flyHM((p.est || p.sch) * 1000, tz)}` : ""}${p.st ? `・${esc(p.st)}` : ""}</small></span></button>`; };
     // 這個國家只有一個城市（香港、曼谷）：一列就好；其他國家先一列國家（點了看整國），下面是城市
-    const grp = g => { if (g.items.length === 1) return row({...g.items[0], cc: g.cc});
+    const grp = g => { if (g.items.length === 1) return row({...g.items[0], cc: g.items[0].cc});
       const on = q || open.has(g.k);
       return row(g, 0, q ? 0 : on ? 2 : 1) + `<div class="fpls" data-fs="${esc(g.k)}"${on ? "" : " hidden"}>${g.items.map(x => row(x, 1)).join("")}</div>`; };
     const html = (fs.length ? `<div class="fplh">航班</div>${fs.map(fl).join("")}` : "")
-      + (fs.length && pls.length ? `<div class="fplh">地點</div>` : "")
       + (!q ? `<button class="fplr${FLYPLC ? "" : " on"}" data-fpl=""><span class="lab">${flyFlagAt("")}全部地點</span><span class="n">${sum} 班</span>${ck}</button>` : "")
-      + pls.map(grp).join("")
+      + pls.map((g, i) => (!i || pls[i - 1].rg !== g.rg ? `<div class="fplh">${FLYRG[g.rg] ? FLYRG[g.rg][0] : "其他地區"}</div>` : "") + grp(g)).join("")
       + (!fs.length && !pls.length ? `<div class="calm">找不到「${esc(q)}」</div>` : "");
     first ? box.innerHTML = html : swapHTML(box, html);       // 打字時：新出現的淡入，清單高度慢慢變
   };
