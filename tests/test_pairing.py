@@ -281,6 +281,9 @@ class Pairing(unittest.TestCase):
         self.assertEqual(self.b.request("/api/pair", token=key, method="POST", data=beat)[0], 200)
         with open(os.path.join(self.B.tmp.name, "data", "pairing.json"), encoding="utf-8") as f:
             self.assertEqual(json.load(f)["tg"], {"bot": "1:x", "chat": "9"})
+        # 被監看的主機不提供機場起降（不會在背景抓）
+        self.assertIn("監看中", self.b.request("/")[2].decode())
+        self.assertEqual(self.b.request("/api/flights?ap=TPE", token=self.btok)[0], 404)
         # 在新主機上取消被監看：密碼不對不行
         bad = json.dumps({"action": "unwatch", "pw": "nope"}).encode()
         self.assertEqual(self.b.request("/api/pair", method="POST", data=bad)[0], 401)

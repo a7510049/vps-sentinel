@@ -43,7 +43,7 @@ from collections import deque
 from concurrent.futures import ThreadPoolExecutor
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
-VERSION = "3.55"
+VERSION = "3.56"
 
 # ───────────────────────── 哨兵備份檔（.vsbk）─────────────────────────
 # 哨兵專用的備份格式：外面是自己的檔案格式，裡面用的是成熟、標準的加密方法（不自己發明加密）：
@@ -7009,6 +7009,8 @@ def fly_seen_save():
 
 
 def fly_bg_start():
+    if watchers():                                    # 被監看的主機：機場起降由主要主機抓，這台完全不跑
+        return
     with FLY["lock"]:
         if FLY.get("bg"):
             return
@@ -7022,12 +7024,13 @@ def fly_loop():
     threading.Thread(target=fly_logo_warm, daemon=True).start()
     while time.time() - FLY["used"] < 7 * 86400:
         time.sleep(FLY_BG)
-        if not watchers():                    # 被監看的主機不用自己抓
-            for c in FLY_PIN:
-                try:
-                    fly_board(c, True)
-                except Exception as e:  # noqa: BLE001
-                    fly_log(f"背景抓{c}：{str(e)[:60]}")
+        if watchers():                        # 後來被配對成被監看的主機：停掉，交給主要主機抓
+            break
+        for c in FLY_PIN:
+            try:
+                fly_board(c, True)
+            except Exception as e:  # noqa: BLE001
+                fly_log(f"背景抓{c}：{str(e)[:60]}")
         if time.time() - saved > 300:
             saved = time.time()
             fly_seen_save()
@@ -7500,6 +7503,8 @@ class Handler(BaseHTTPRequestHandler):
             with open(f, "rb") as fh:
                 shutil.copyfileobj(fh, self.wfile, 1 << 20)
             return
+        if path.startswith(("/api/fly", "/api/flights")) and watchers():   # 被監看的主機不提供機場起降（主要主機自己抓）
+            return self.send(404, '{"error":"找不到"}')
         if path == "/api/fly-terrain":                # 地形高度（公開資料，不用登入）
             ter = fly_ter()
             return self.send(200, ter[1], "application/octet-stream", cache=True) if ter else self.send(404, '{"error":"找不到"}')
@@ -7596,6 +7601,8 @@ class Handler(BaseHTTPRequestHandler):
                     n = 0
                 ok, msg = rsw_start(self.jbody(self.rfile.read(min(n, 4096))).get("pw"))
             return self.send(200 if ok else 400, json.dumps({"ok": ok, "message": msg}, ensure_ascii=False))
+        if u.path.startswith("/api/fly") and watchers():   # 被監看的主機不提供機場起降
+            return self.send(404, '{"error":"找不到"}')
         if u.path == "/api/fly-claim":               # 朋友打開分享連結（不用登入）
             try:
                 n = int(self.headers.get("Content-Length") or 0)
