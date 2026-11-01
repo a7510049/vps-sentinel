@@ -218,8 +218,9 @@ img.flag{width:28px;height:21px;object-fit:cover;border-radius:var(--r-xs);flex:
 .lbl{display:flex;align-items:center;justify-content:space-between;gap:8px;font-size:var(--fs-s);font-weight:500;color:var(--tx3);margin:22px 8px 10px}
 .lbl:first-child{margin-top:0}
 .sp{height:22px}
-.hb .lbl,.aside .lbl{margin:18px 4px 10px}
-.aside .lbl:first-child{margin-top:4px}
+.hb .lbl{margin:18px 4px 10px}
+.aside .lbl{margin:18px 8px 10px}
+.aside .lbl:first-child,.aside .wxw:empty+.lbl{margin-top:0}   /* 跟左邊「主機」同一條線 */
 .lbl button{color:var(--p);font-weight:500;padding:2px 4px;transition:opacity var(--t-mid) var(--ease)}
 .lbl button[disabled]{opacity:.45;cursor:default}
 .empty{color:var(--tx3);padding:28px 8px;text-align:center}
@@ -496,7 +497,6 @@ button.li.prs,a.li.prs{border-radius:var(--r-lg);transform:scale(.98);background
 /* 主題色 */
 /* 色票像 Android：上半主色、右下選中色塊、左下主題色本身；選中時變圓角方塊，中間出現勾勾 */
 .sw{display:grid;grid-template-columns:repeat(6,44px);justify-content:space-between;gap:12px 8px}
-.dash.d .sw{justify-content:start;gap:12px 14px}
 .sw button{width:44px;height:44px;border-radius:50%;position:relative;display:grid;place-items:center;overflow:hidden;
   background:conic-gradient(from -90deg,var(--p) 0 50%,var(--pc) 0 75%,var(--seed) 0);
   transition:border-radius var(--sp),transform var(--sp-fast)}
@@ -529,6 +529,7 @@ button.li.prs,a.li.prs{border-radius:var(--r-lg);transform:scale(.98);background
 
 /* ═════════ 電腦版：左邊直排分頁，右邊內容 ═════════ */
 .dash.d{display:grid;grid-template-columns:96px minmax(0,1fr);min-height:100vh}
+.dash.d,body:has(.dash.d) .flyv{--pw:1520px;--side:340px;--gut:28px}   /* 每一頁同一副骨架：內容最寬 --pw 置中、右邊欄 --side、兩欄間距 --gut */
 .rail{position:sticky;top:0;height:calc(100vh / var(--zoom));display:flex;flex-direction:column;align-items:center;gap:14px;padding:22px 0}
 .rail .brand svg{width:44px;height:44px}
 .rail .brand{margin-bottom:18px}
@@ -543,12 +544,13 @@ button.li.prs,a.li.prs{border-radius:var(--r-lg);transform:scale(.98);background
 .rb.hasnew::after{top:-2px;right:16px}
 .rail .rfoot{margin-top:auto;display:flex;flex-direction:column;align-items:center;gap:6px}
 .dash.d .view{padding:30px 32px 48px 8px;min-width:0}
-.dash.d .ptitle{padding:30px 4px 22px}
+.dash.d .view>*{max-width:var(--pw);margin-inline:auto}
+/* 每一頁的標題列一樣高：首頁的狀態圖形、其他頁的大標題，下面的內容都從同一條線開始 */
+.dash.d .ptitle{display:flex;align-items:center;height:122px;padding:6px 4px 26px}
 .dash.d .narrow{max-width:760px}
 /* 工具、紀錄、設定：電腦上用兩欄把寬度用滿 */
-.dash.d .wide{max-width:1480px}
 .split{display:grid;grid-template-columns:240px minmax(0,1fr);gap:24px;align-items:start}
-.split.rside{grid-template-columns:minmax(0,1fr) 300px}
+.split.rside{grid-template-columns:minmax(0,1fr) var(--side);gap:var(--gut)}
 .smain{min-width:0}
 .split>.pane,.side{position:sticky;top:24px;max-height:calc(100vh / var(--zoom) - 48px);overflow-y:auto}
 .pane .li{min-height:52px;padding:10px 16px;gap:10px}
@@ -562,7 +564,8 @@ button.li.prs,a.li.prs{border-radius:var(--r-lg);transform:scale(.98);background
 .dash.d .v-tools .group>.li{border-radius:var(--r-lg);min-height:84px;padding:16px 20px}
 .dash.d .v-tools .group>.li.col{grid-column:1/-1}
 .dash.d .v-tools .group:not(:has(>.col))>.li:last-child:nth-child(odd),.dash.d .v-tools .group:has(>.col:first-child)>.li:last-child:nth-child(even){grid-column:1/-1}   /* 單數個時最後一個撐滿，右邊不留空 */
-.dhome{display:grid;grid-template-columns:minmax(0,1fr) 340px;gap:28px;align-items:start}
+.dhome{display:grid;grid-template-columns:minmax(0,1fr) var(--side);grid-template-areas:"hd hd" "main side";column-gap:var(--gut);align-items:start}
+.dhome>.hero{grid-area:hd;height:122px}.dhome>.dmain{grid-area:main}.dhome>.aside{grid-area:side}
 .dmain{min-width:0}
 .dhome .hero{padding:6px 4px 26px}
 .dhome .blob{width:72px;height:72px}
@@ -584,11 +587,14 @@ button.li.prs,a.li.prs{border-radius:var(--r-lg);transform:scale(.98);background
 .hosts.wall{grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:12px}
 .wall .addhost{height:52px}
 @media (hover:hover){.hcard:not(.prs):hover{background:var(--s2)}}
-.dash.d .det{left:96px}
-.dash.d .dscroll{padding:24px 32px 48px}
-.dash.d .dscroll>*{max-width:1080px}
+.dash.d .det,body:has(.dash.d) .flyv{left:96px}   /* 主機頁、機場起降都從分頁列右邊開始，分頁列一直都在 */
+body:has(.dash.d) .fscroll{padding:30px 32px 48px 8px}
+body:has(.dash.d) .fwrap{max-width:var(--pw)}
+.dash.d .dscroll{padding:30px 32px 48px 8px}
+.dash.d .dscroll>*{max-width:var(--pw);margin-inline:auto}
 .dash.d .dscroll{--bar:58px}
-.dash.d .dscroll>.dtop{max-width:none;top:-24px;margin:-24px -32px 0;padding:24px max(32px,calc((100% - 1080px) / 2 + 32px)) 10px}
+.dash.d .dscroll>.dtop{max-width:none;top:-30px;margin:-30px -32px 0 -8px;padding:30px calc(32px + max(0px,(100% - var(--pw)) / 2)) 10px calc(8px + max(0px,(100% - var(--pw)) / 2))}
+.dash.d .cbox:has(.yax) .chart{width:calc(100% - 66px)}   /* 同一台的兩張圖右邊刻度一樣寬：曲線結尾對齊 */
 @media (min-width:700px){.dscroll .tiles{grid-template-columns:repeat(4,minmax(0,1fr))}}
 
 /* ═════════ 對話框 ═════════ */

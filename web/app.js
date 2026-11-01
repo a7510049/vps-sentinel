@@ -591,15 +591,15 @@ function homePhone(list, time){
   return hero(list, time) + `<div class="lbl" data-key="lh">主機</div><div class="hosts" data-key="hosts" data-keyed>${list.map(hostCard).join("")}${addHostBtn("addhost")}</div>
     <div class="lbl" data-key="le">最近發生${ev.length ? `<button data-tab="log">全部紀錄</button>` : ""}</div>${evList(ev, list.length > 1)}`;
 }
-/* 電腦一排放得下幾台：螢幕夠寬放三台；主機比這個多就改成小卡片，點了才看整頁 */
-const deskCols = () => innerWidth >= 1800 ? 3 : 2;
+/* 電腦一排放得下幾台（每欄至少 360 寬）：內容最寬 1520、右邊欄 340；主機比這個多就改成小卡片，點了才看整頁 */
+const deskCols = () => Math.max(1, Math.min(3, Math.floor((Math.min(innerWidth / ZM() - 136, 1520) - 368 + 16) / 376)));
 const cardMode = list => !DESK.matches || list.length > deskCols();
 function homeDesk(list, time){
   const n = Math.min(deskCols(), Math.max(1, list.length)), ev = allEvents(list).slice(0, 8);
   const hosts = cardMode(list)
     ? `<div class="hosts wall" data-key="wall" data-keyed data-grid>${list.map(hostCard).join("")}${addHostBtn("addhost")}</div>`
     : `<div class="cols" data-key="cols" data-keyed data-grid style="--n:${n}">${list.map((s, i) => `<section class="hp ${lvOf(s)}" data-key="${esc(keyOf(s))}" style="--i:${i}">${hostBody(s, false)}</section>`).join("")}${addHostBtn("addhost")}</div>`;
-  return `<div class="dhome" data-key="dh"><div class="dmain" data-key="dm">${hero(list, time)}${hosts}</div>
+  return `<div class="dhome" data-key="dh">${hero(list, time)}<div class="dmain" data-key="dm"><div class="lbl" data-key="lh">主機</div>${hosts}</div>
     <aside class="aside" data-key="as"><div class="wxw">${greet().wx}</div><div class="lbl">最近發生${ev.length ? `<button data-tab="log">全部紀錄</button>` : ""}</div>${evList(ev, list.length > 1)}</aside></div>`;
 }
 /* 那台主機的整頁（從卡片的位置展開；電腦上左邊的分頁列留著） */
@@ -613,13 +613,15 @@ function detail(s){
 let TOOLH = store("vs-toolh"), ORDER = [];
 function toolsPage(list){
   const on = list.filter(s => s.online).sort((a, b) => ORDER.indexOf(keyOf(a)) - ORDER.indexOf(keyOf(b)));
-  let h = `<div class="${DESK.matches ? "wide" : "narrow"}" data-key="tools"><h1 class="ptitle">工具</h1>`;
-  if (!on.length) return h + `<div class="calm">連不上任何主機</div></div>`;
+  const D = DESK.matches;
+  let h = `<div class="${D ? "wide" : "narrow"}" data-key="tools"><h1 class="ptitle">工具</h1>`;
+  const fly = `<div class="group fly1" data-key="g-fly"><button class="li" data-key="fly" data-fly>${IC("fly", "")}<span class="lab">機場起降<small>${esc(FLYS.name || "即時抵達、出發的飛機")}</small></span>${CHEV}</button></div>`;
+  if (!on.length) return h + (D ? fly : "") + `<div class="calm">連不上任何主機</div></div>`;
   const s = on.find(x => keyOf(x) === TOOLH) || on.find(x => !x.node) || on[0], k = esc(keyOf(s)), node = esc(s.node || ""), name = esc(s.name);
   const dot = x => lvOf(x) === "ok" ? "" : `<span class="dot ${lvOf(x)}"></span>`;
-  h += `<div class="group fly1" data-key="g-fly"><button class="li" data-key="fly" data-fly>${IC("fly", "")}<span class="lab">機場起降<small>${esc(FLYS.name || "即時抵達、出發的飛機")}</small></span>${CHEV}</button></div>`;
-  if (on.length > 1) h += hpick(on, s, dot);
-  return h + toolsBody(s, k, node, name) + `</div>`;
+  const pick = on.length > 1 ? hpick(on, s, dot) : "";
+  if (D) return h + `<div class="split rside" data-key="tsplit"><div class="smain" data-key="tm">${pick}${toolsBody(s, k, node, name)}</div><aside class="side" data-key="ts">${fly}</aside></div></div>`;   // 電腦：右邊欄放不分主機的
+  return h + fly + pick + toolsBody(s, k, node, name) + `</div>`;
 }
 function toolsBody(s, k, node, name){
   const c = s.cloud && safeUrl(cloudHref(s.cloud)) ? s.cloud : null;
@@ -718,7 +720,7 @@ function setPage(list){
   const go = (attr, ic, l, st) => `<button class="li" ${attr}>${IC(ic, "")}<span class="lab">${l}<small class="${st}" data-keep data-ld>讀取中…</small></span>${CHEV}</button>`;
   const sw = ACCENTS.map(([v, l]) => `<button class="${PREF.accent === v ? "on" : ""}" data-pref="accent" data-val="${v}" data-accent="${v}" title="${l}" aria-label="${l}">${I("check")}</button>`).join("")
     + `<button class="rbsw${PREF.accent === "rainbow" ? " on" : ""}" data-pref="accent" data-val="rainbow" title="彩虹" aria-label="彩虹">${I("check")}</button>`;
-  const D = DESK.matches;   // 電腦：左欄是這台裝置的設定，右欄是主機
+  const D = DESK.matches;   // 電腦：左邊主機和通知，右邊欄是這台裝置的外觀
   const look = `<div class="lbl">外觀</div><div class="group">
       <div class="li col"><span class="lab">主題</span>${seg("theme", [["auto", "自動"], ["light", "淺色"], ["dark", "深色"]])}</div>
       <div class="li col"><span class="lab">主題色</span><div class="sw">${sw}</div></div>
@@ -740,7 +742,7 @@ function setPage(list){
       + (s.node ? "" : go("data-pair", "link", "配對暗號", "pairst")) + `</div>`;
   }
   return `<div class="${D ? "wide" : "narrow"}" data-key="set"><h1 class="ptitle">設定</h1>`
-    + (D ? `<div class="scols" data-key="scols"><div class="scol" data-key="sc1">${look}${out}</div><div class="scol" data-key="sc2">${sec}${h}</div></div>` : look + sec + h + out) + `</div>`;
+    + (D ? `<div class="split rside" data-key="ssplit"><div class="smain" data-key="sc2">${sec}${h}</div><aside class="side" data-key="sc1">${look}${out}</aside></div>` : look + sec + h + out) + `</div>`;
 }
 /* 系統更新（作業系統的套件）：跟哨兵、雲端硬碟的版本放在一起 */
 const sysRow = s => s.update && s.update.supported ? `<div class="selfrow" data-key="sys"><div class="cl2 first"><span class="ico info">${I("layers")}</span><span>系統<small data-x>${updateInfo(s) || "還沒檢查"}</small></span>${updateBtn(s)}</div></div>` : "";
@@ -1099,8 +1101,8 @@ function render(list){
 let PSMOOTH = false;   // 點主機名稱換台時，那一排平順地滑到選到的那台
 DESK.addEventListener("change", () => { applyPrefs(); if (LIST.length) render(LIST); });
 /* 電腦版一次並排幾台：螢幕夠寬才放三台 */
-let WIDE = innerWidth >= 1800;
-addEventListener("resize", () => { const w = innerWidth >= 1800; if (w !== WIDE) { WIDE = w; if (DESK.matches && LIST.length) render(LIST); } }, {passive:true});
+let WIDE = 0;
+addEventListener("resize", () => { const w = deskCols(); if (w !== WIDE) { WIDE = w; if (DESK.matches && LIST.length) render(LIST); } }, {passive:true});
 
 /* ═════════ 對話框、通知 ═════════ */
 function modal({icon, cls="box", title, text, input, ok="確定", cancel="取消"}){
@@ -2437,7 +2439,7 @@ document.addEventListener("click", async e => {
   if (t.closest("[data-pklogin]")) return pkLoginClick(t.closest("[data-pklogin]"));
   if (t.closest("[data-rsw]")) return restoreScreen();
   const tb = t.closest("[data-tab]");
-  if (tb) return setTab(tb.dataset.tab);
+  if (tb) { if ($("#fly") && !tb.closest("#fly")) { flyClose(); if (TAB === tb.dataset.tab) return; } return setTab(tb.dataset.tab); }   // 機場起降開著時按分頁列：先關掉
   if (t.closest("[data-settings]")) return setTab("set");
   if (t.closest("[data-back]")) return closeDet();
   if (t.closest("[data-addhost]")) return addHostModal();
@@ -3661,8 +3663,8 @@ function flyOpen(btn){
   if ($("#fly")) return;
   closeMenu();
   document.body.insertAdjacentHTML("beforeend", flyShell());
-  const f = $("#fly"), z = ZM(), r = btn && btn.getBoundingClientRect();
-  if (r) f.style.cssText = `--ct:${r.top / z}px;--cb:${(innerHeight - r.bottom) / z}px;--cl:${r.left / z}px;--cr:${(innerWidth - r.right) / z}px`;
+  const f = $("#fly"), z = ZM(), r = btn && btn.getBoundingClientRect(), x = $(".dash.d") ? 96 : 0;   // 電腦：從分頁列右邊開始
+  if (r) f.style.cssText = `--ct:${r.top / z}px;--cb:${(innerHeight - r.bottom) / z}px;--cl:${Math.max(0, r.left / z - x)}px;--cr:${(innerWidth - r.right) / z}px`;
   if (!canAnim()) f.style.animation = "none";
   if (!SHARE) history.pushState({fly:1}, "");          // 分享連結只有這一頁，不能返回
   document.documentElement.classList.add("lock");
