@@ -43,7 +43,7 @@ from collections import deque
 from concurrent.futures import ThreadPoolExecutor
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
-VERSION = "3.53"
+VERSION = "3.54"
 
 # ───────────────────────── 哨兵備份檔（.vsbk）─────────────────────────
 # 哨兵專用的備份格式：外面是自己的檔案格式，裡面用的是成熟、標準的加密方法（不自己發明加密）：
@@ -2949,6 +2949,11 @@ def pair_key_ok(given):
     for k in pair_keys():
         if hmac.compare_digest(h, str(k.get("hash", ""))):
             PAIR_SEEN[k.get("id")] = time.time()
+            if time.time() - k.get("seen", 0) > 3600:      # 一小時記一次，重新啟動後還知道對方多久沒來
+                with PAIR_LOCK:
+                    st = dict(pair_load())
+                    st["keys"] = [dict(x, seen=int(time.time())) if x.get("id") == k.get("id") else x for x in pair_keys()]
+                    pair_save(st)
             return True
     return False
 
@@ -3077,8 +3082,11 @@ def peer_remove(node):
             req = urllib.request.Request(p["url"] + "/api/pair", data=b'{"action":"forget"}', method="POST",
                                          headers={"X-Token": p["token"], "Content-Type": "application/json"})
             urllib.request.urlopen(req, timeout=6).close()
+        except urllib.error.HTTPError as e:
+            if e.code >= 500:
+                peer_forget_later(p)
         except Exception:  # noqa: BLE001
-            pass                                  # 連不上也照樣移除；那邊可以自己在設定裡解除
+            peer_forget_later(p)                  # 連不上也照樣移除，之後在背景再通知那台，免得它一直卡在被監看
     PEERS.remove(p)
     try:
         write_conf({"PEERS": peers_conf()})
@@ -3131,6 +3139,64 @@ def pair_beat_store(tg):
         if (st.get("tg") or {}) != tg:
             st["tg"] = tg
             pair_save(st)
+
+
+PAIR_IDLE = 7 * 86400                           # 監看的主機幾天沒連進來，就自動取消被監看
+
+
+def peer_forget_later(p):
+    """主要主機這邊：移除時沒通知到那台，記下來之後再試"""
+    with PAIR_LOCK:
+        st = dict(pair_load())
+        st["forget"] = [f for f in st.get("forget") or [] if f.get("url") != p["url"]] + \
+                       [{"url": p["url"], "token": p["token"], "t": int(time.time())}]
+        pair_save(st)
+
+
+def peer_forget_retry():
+    """主要主機這邊：每 5 分鐘再通知一次之前沒通知到的主機（最多 30 天）"""
+    left = pair_load().get("forget") or []
+    if not left or time.time() - WATCH.get("fg", 0) < 300:
+        return
+    WATCH["fg"] = time.time()
+    keep = []
+    for f in left:
+        try:
+            req = urllib.request.Request(f["url"] + "/api/pair", data=b'{"action":"forget"}', method="POST",
+                                         headers={"X-Token": f["token"], "Content-Type": "application/json"})
+            urllib.request.urlopen(req, timeout=6).close()
+        except urllib.error.HTTPError as e:
+            if e.code >= 500 and time.time() - f.get("t", 0) < 30 * 86400:
+                keep.append(f)                    # 401／404：那邊早就沒有這把鑰匙了
+        except Exception:  # noqa: BLE001
+            if time.time() - f.get("t", 0) < 30 * 86400:
+                keep.append(f)
+    with PAIR_LOCK:
+        st = dict(pair_load())
+        st["forget"] = [f for f in st.get("forget") or [] if f in keep or f not in left]
+        if not st["forget"]:
+            st.pop("forget")
+        pair_save(st)
+
+
+def pair_expire():
+    """被監看這邊：監看的主機太久沒連進來（多半已經把這台移除了），自動取消被監看"""
+    now = time.time()
+    old = [k for k in pair_keys()
+           if now - max(WATCH["t0"], PAIR_SEEN.get(k.get("id"), 0), k.get("seen", 0), k.get("t", 0)) > PAIR_IDLE]
+    if not old:
+        return
+    with PAIR_LOCK:
+        st = dict(pair_load())
+        st["keys"] = [k for k in pair_keys() if k not in old]
+        if not st["keys"]:
+            st.pop("tg", None)
+            WATCH["down"] = False
+        pair_save(st)
+    for k in old:
+        msg = f"「{k.get('name') or '主要主機'}」{PAIR_IDLE // 86400} 天沒連進來，已自動取消被監看"
+        log(msg)
+        COL.add_event("info", msg)
 
 
 def peer_beats():
@@ -3268,6 +3334,51 @@ def reboot_go(given):
     return True, "正在重新開機"
 
 
+UNW = {"code": "", "t": 0, "tries": 0, "msg": None}   # 被監看的那頁：取消用的 Telegram 驗證碼（沒設密碼、PIN 碼時用）
+UNW_LK = threading.Lock()
+
+
+def unwatch_ask():
+    """傳 8 位數驗證碼到 Telegram（主要主機給的或這台自己的），5 分鐘內有效、錯 3 次失效"""
+    tg = reboot_tg()
+    if not tg:
+        return False, "沒有 Telegram 可以傳"
+    with UNW_LK:
+        if time.time() - UNW["t"] < 60:                  # 這頁不用登入，不讓人一直傳
+            return True, "剛傳過，請看 Telegram"
+        old, code = UNW["msg"], f"{secrets.randbelow(10 ** 8):08d}"
+        UNW.update(code=code, t=time.time(), tries=0, msg=None)
+    if old:
+        tg_api(old[0], "deleteMessage", {"chat_id": old[1], "message_id": old[2]})
+    text = f"🔐 <b>{html.escape(NAME)}</b>　取消被監看驗證碼：<code>{code}</code>（{REBOOT_MIN} 分鐘內有效）"
+    d, err = tg_api(tg[0], "sendMessage", {"chat_id": tg[1], "text": text, "parse_mode": "HTML"})
+    if err:
+        with UNW_LK:
+            UNW.update(code="")
+        return False, f"傳不出去：{err}"
+    with UNW_LK:
+        if UNW["code"] == code:
+            UNW["msg"] = (tg[0], tg[1], d["result"]["message_id"])
+    return True, "已傳到 Telegram"
+
+
+def unwatch_code_ok(given):
+    with UNW_LK:
+        if not UNW["code"] or time.time() - UNW["t"] > REBOOT_MIN * 60 or not re.fullmatch(r"[0-9]{8}", given):
+            return False
+        if hmac.compare_digest(given, UNW["code"]):
+            UNW["code"] = ""
+            msg, UNW["msg"] = UNW["msg"], None
+        else:
+            UNW["tries"] += 1
+            if UNW["tries"] >= 3:
+                UNW["code"] = ""
+            return False
+    if msg:
+        tg_api(msg[0], "deleteMessage", {"chat_id": msg[1], "message_id": msg[2]})
+    return True
+
+
 def watch_page(names):
     who = html.escape("、".join(names))
     return f"""<!doctype html><html lang="zh-Hant"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
@@ -3283,16 +3394,26 @@ h1{{margin:14px 0 4px;font-size:26px;font-weight:500}}p{{margin:0;color:var(--su
 details{{margin-top:22px}}summary{{cursor:pointer;color:var(--p);font-size:14px;font-weight:500;list-style:none}}
 input,button{{width:100%;font:inherit;font-size:16px;border:0;padding:14px 16px;margin-top:10px}}
 input{{background:var(--field);color:var(--text);border-radius:16px}}button{{cursor:pointer;font-weight:500;color:var(--on-p);background:var(--p);border-radius:999px}}
+.tg{{display:inline-block;margin-top:12px;color:var(--p);font-size:14px;font-weight:500;text-decoration:none}}
 .m{{min-height:20px;margin-top:8px;font-size:13.5px;color:var(--bad)}}
 </style></head><body><div class="c"><img src="/icon.svg" width="60" height="60" alt="">
 <h1>{html.escape(NAME)}</h1><p>由「{who}」監看中，請到那邊看這台</p>
-<details><summary>取消被監看</summary><form><input type="password" placeholder="這台的密碼或 PIN 碼" autocomplete="current-password" required>
-<button>取消被監看</button><div class="m"></div></form></details></div>
+<details><summary>取消被監看</summary><form><input type="password" placeholder="{"密碼、PIN 碼或 Telegram 驗證碼" if reboot_tg() else "這台的密碼或 PIN 碼"}" autocomplete="current-password" required>
+<button>取消被監看</button>{'<a class="tg" href="#">傳驗證碼到 Telegram</a>' if reboot_tg() else ""}<div class="m"></div></form></details></div>
 <script>
+document.querySelector(".tg")?.addEventListener("click", async e => {{
+  e.preventDefault();
+  const m = document.querySelector(".m");
+  try {{
+    const r = await fetch("/api/pair", {{method:"POST", headers:{{"Content-Type":"application/json"}}, body:'{{"action":"unwatch-code"}}'}});
+    const d = await r.json().catch(() => ({{}}));
+    m.textContent = d.message || "沒有成功，請再試一次"; m.style.color = d.ok ? "var(--sub)" : "";
+  }} catch(err) {{ m.textContent = "連線失敗，請稍後再試"; }}
+}});
 document.querySelector("form").addEventListener("submit", async e => {{
   e.preventDefault();
   const b = e.target.querySelector("button"), m = e.target.querySelector(".m");
-  b.disabled = true; m.textContent = "";
+  b.disabled = true; m.textContent = ""; m.style.color = "";
   try {{
     const r = await fetch("/api/pair", {{method:"POST", headers:{{"Content-Type":"application/json"}},
       body:JSON.stringify({{action:"unwatch", pw:e.target.querySelector("input").value.trim()}})}});
@@ -3498,6 +3619,8 @@ def alert_loop():
     offline_count, down, seen_ev = {}, set(), {}
     while True:
         try:
+            pair_expire()
+            peer_forget_retry()
             if watchers():                     # 被監看：事件由主要主機轉發，這邊只注意主要主機有沒有失聯
                 watch_check()
                 TG_SENT.clear()                         # 取消被監看後從那一刻開始通知，不補發被監看期間的事件
@@ -7410,14 +7533,19 @@ class Handler(BaseHTTPRequestHandler):
             d = self.jbody(body)
             if d.get("action") == "unwatch":         # 被監看的那頁：用這台的密碼或 PIN 碼取消
                 pw = str(d.get("pw") or "")
-                ok = bool(pw) and hmac.compare_digest(pw.encode(), TOKEN.encode())
-                msg = "密碼不對"
+                ok = bool(pw) and (hmac.compare_digest(pw.encode(), TOKEN.encode()) or unwatch_code_ok(pw))
+                msg = "密碼或驗證碼不對"
                 if not ok and re.fullmatch(r"[0-9]{4,8}", pw) and pin_load():
                     ok, msg = pin_login(pw)
                 if not ok:
                     time.sleep(1)
                     return self.send(401, json.dumps({"ok": False, "message": msg}, ensure_ascii=False))
                 ok, msg = pair_unwatch()
+                return self.send(200 if ok else 400, json.dumps({"ok": ok, "message": msg}, ensure_ascii=False))
+            if d.get("action") == "unwatch-code":    # 被監看的那頁：沒設密碼、PIN 碼時改傳 Telegram 驗證碼
+                if not watchers():
+                    return self.send(400, '{"ok":false,"message":"這台沒有被監看"}')
+                ok, msg = unwatch_ask()
                 return self.send(200 if ok else 400, json.dumps({"ok": ok, "message": msg}, ensure_ascii=False))
             if d.get("action") == "beat":            # 主要主機的心跳
                 if not self.authed():
