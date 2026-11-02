@@ -1042,7 +1042,7 @@ html.flyon .dash>.view{content-visibility:hidden;contain-intrinsic-size:auto non
   .fmain{display:grid;grid-template-columns:minmax(0,1fr) 380px;column-gap:0;align-items:stretch}
   .fleft{display:contents}
   .fleft>:not(.board){grid-column:1/-1}
-  .board{grid-column:1;border-radius:var(--r-xl) 0 0 var(--r-xl);padding:10px 14px;align-content:start}   /* 雷達比較高時：列排在上面，下面留白，不要把列撐開 */
+  .board{grid-column:1;border-radius:var(--r-xl) 0 0 var(--r-xl);padding:10px 14px;align-content:start;min-height:100%}   /* 看板長高、縮短的動畫不會比雷達那半邊短（同一張卡片不會缺一角）；雷達比較高時：列排在上面，下面留白，不要把列撐開 */
   .radar{grid-column:2;max-width:none;align-self:stretch;border-radius:0 var(--r-xl) var(--r-xl) 0;border-left:1px solid var(--s3)}
   .rin{position:sticky;top:16px}
 }

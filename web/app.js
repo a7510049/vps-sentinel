@@ -2743,9 +2743,18 @@ function flySplashOff(f){
     const sp = f.querySelector(".fsplash");
     sp.animate([{opacity:1}, {opacity:0, transform:"scale(1.04)"}], {duration:T.mid, easing:EXIT, fill:"forwards"}).finished.then(() => sp.remove(), () => sp.remove());
     f.classList.remove("splash");
-    [...f.querySelectorAll(".fwrap>:not(.ftop), .fmain>*")].filter(e => !e.classList.contains("fmain")).forEach((e, i) =>
-      e.animate([{opacity:0, transform:"translateY(16px)"}, {opacity:1, transform:"none"}], {duration:T.slow, delay:T.fast * .5 + i * T.fast * .35, easing:EASE, fill:"backwards"}));
+    flyRise(f, T.fast * .5);
   }, Math.max(T.mid, T.long * 2 - (performance.now() - f._sp0)));   // 資料到了也多等一下：看板先在後面排好、長好
+}
+/* 打開、換機場資料到了：上面到下面一塊一塊浮上來。電腦上看板和雷達是同一張卡片（.fleft 拆開排），兩邊一起浮，不會一邊先出來 */
+function flyRise(f, d0){
+  if (!canAnim()) return;
+  const wide = getComputedStyle(f.querySelector(".fleft")).display === "contents", gs = [];
+  [...f.querySelectorAll(".fwrap>:not(.ftop):not(.fmain), .fmain>*")].forEach(e => {
+    if (e.classList.contains("fleft") && wide) [...e.children].forEach(c => c.classList.contains("board") ? gs.push([c, f.querySelector(".radar")]) : gs.push([c]));
+    else if (!(wide && e.classList.contains("radar"))) gs.push([e]);
+  });
+  gs.filter(g => g.some(e => !e.hidden)).forEach((g, i) => g.forEach(e => e.animate([{opacity:0, transform:"translateY(16px)"}, {opacity:1, transform:"none"}], {duration:T.slow, delay:d0 + i * T.fast * .35, easing:EASE, fill:"backwards"})));
 }
 /* 換機場：看板、雷達先淡掉，換成小飛機的載入畫面（翻出新機場代碼），資料在後面準備好才一塊一塊浮上來 */
 function flySplashSwap(f){
@@ -2924,9 +2933,11 @@ function radarView(cv, full){
     if (document.hidden) return;
     if (R.inv) return;                                      // 小雷達不在畫面上（手機上在看板下面）：不用畫，捲回來再畫
     if (!full && !A.t && scrolling()) { R.tm = setTimeout(R.kick, 120); return; }   // 手指在捲看板：小雷達先停一下，捲完再畫（捲動才順）
-    const fading = o => o.gone || (o.on === false ? o.a > 0 : o.a < 1);   // 正在淡入淡出（雷達圈外的飛機一直是透明的，不算）
-    const moving = A.t || R.busy || [...pl.values()].some(o => fading(o) || t - o.t0 < FLYEV) || t - R.gt < T.mid;
-    const fade = R.busy || [...pl.values()].some(fading) || t - R.gt < T.mid;
+    const fading = o => o.gone || (o.on === false ? o.a > 0 : o.a < 1) || (o.dmT != null && o.dm !== o.dmT);   // 正在淡入淡出（雷達圈外的飛機一直是透明的，不算）
+    if (R.sel !== R.ps) { R.ps = R.sel; R.st = t; }           // 換選到（滑鼠指著）的飛機：光圈跟看板那一列一樣慢慢亮起來
+    if (R.focus !== R.pf) { R.pf = R.focus; R.ft1 = t; }      // 看板換分頁：飛機的濃淡跟著慢慢換
+    const moving = A.t || R.busy || t - (R.st || 0) < T.fast || t - (R.ft1 || 0) < T.mid * 1.6 || [...pl.values()].some(o => fading(o) || t - o.t0 < FLYEV) || t - R.gt < T.mid;
+    const fade = R.busy || t - (R.ft1 || 0) < T.mid * 1.6 || [...pl.values()].some(fading) || t - R.gt < T.mid;
     let v = 0;                                              // 小雷達：照飛機在畫面上移動的快慢決定多久畫一次（移不到一點就不用重畫）
     if (!fade && !full) pl.forEach(o => { if (o.vis && t - o.t0 < FLYEV) v = Math.max(v, Math.hypot(o.x1 - o.x0, o.y1 - o.y0)); });
     const gap = A.t || R.busy ? 0 : t < FLYHUSH ? T.mid : fade || full ? 30 : Math.min(250, Math.max(33, .7 * FLYEV / (v * V.s || 1e-6)));   // 看板切換時先讓給切換動畫
@@ -2949,7 +2960,7 @@ function radarView(cv, full){
     ctx.save();
     if (!full) { ctx.beginPath(); ctx.arc(W / 2, H / 2, rr, 0, Math.PI * 2); ctx.clip(); }
     /* 地圖、山、常走的路線：不常變，先畫在另一張畫布上，之後直接貼上去（每次都重畫山和路線，手機會卡） */
-    const ga = R.geo ? Math.min(1, (t - R.gt) / T.mid) : 0;
+    const ga = R.geo ? EASEF(Math.min(1, (t - R.gt) / T.mid)) : 0;
     if (R.geo && R.gp) {
       const ta = R.trk ? canAnim() ? Math.min(ga, (t - (R.tt || 0)) / T.mid) : 1 : 0, ti = flyTer(R.geo);
       const bk = [V.cx, V.cy, s, W, H, R.dpr, canAnim() ? ga : 1, ta, col.s2, col.s4, col.p, col.tx2, R.gk, !!ti].join();
@@ -3049,7 +3060,11 @@ function radarView(cv, full){
     const vis = [], step = canAnim() ? dt / T.mid : 1;
     pl.forEach(o => {
       const on = want(o) && (full || Math.hypot(...R.at(o, t)) * s <= rr);
-      o.a = on ? Math.min(1, o.a + step) : Math.max(0, o.a - step); o.on = on;
+      o.k = on ? Math.min(1, (o.k ?? o.a) + step) : Math.max(0, (o.k ?? o.a) - step); o.on = on;
+      o.a = on ? EASEF(o.k) : 1 - EASEF(1 - o.k);             // 淡入淡出用跟看板一樣的曲線（不是等速）
+      o.dmT = !full && R.focus && o.id !== R.sel && o.p.ph !== R.focus && !(R.focus === "arr" && o.p.emg) ? .35 : 1;   // 看板在看抵達／出發：雷達上其他飛機淡一點，跟著看板一起換
+      o.dm = o.dm == null || !canAnim() ? o.dmT : o.dm < o.dmT ? Math.min(o.dmT, o.dm + step * .7) : Math.max(o.dmT, o.dm - step * .7);
+      o.v = o.a * EASEF(o.dm);
       if (o.gone && o.a <= 0) { pl.delete(o.id); return; }
       const [x, y] = R.at(o, t), [sx, sy] = R.xy(x, y);
       o.sx = sx; o.sy = sy; o.x = x; o.y = y; o.vis = o.a > .3 && sx > -20 && sx < W + 20 && sy > -20 && sy < H + 20;
@@ -3064,7 +3079,7 @@ function radarView(cv, full){
       if (!sel && o.p.ph === "over") return;
       if (o.h.length < 2 && !(o.h.length && o.p.ph !== "gnd")) return;
       const pts = [...o.h.slice(0, -1).map(([x, y, a]) => [...R.xy(x, y), a]), [o.sx, o.sy, o.p.alt]], n = pts.length - 1;
-      const base = o.a * (sel ? 1 : R.sel && full ? .2 : .55);
+      const base = o.v * (sel ? 1 : R.sel && full ? .2 : .55);
       ctx.lineWidth = sel ? 2.4 : 1.1;
       if (!sel) ctx.strokeStyle = pc(o);
       for (let i = 1; i < pts.length; i++) {
@@ -3078,7 +3093,7 @@ function radarView(cv, full){
     vis.forEach(o => {
       const p = o.p; if (o.id === R.sel || p.ph === "gnd" || !p.alt || !(p.spd > 0) || p.trk == null) return;
       const d = p.spd / 60 * (full ? 1 : .5), hd = p.trk * Math.PI / 180, [ex, ey] = R.xy(o.x + Math.sin(hd) * d, o.y + Math.cos(hd) * d);
-      ctx.globalAlpha = o.a * (p.ph === "over" ? full ? .25 : .15 : .45) * (R.sel && full ? .4 : 1); ctx.strokeStyle = pc(o);
+      ctx.globalAlpha = o.v * (p.ph === "over" ? full ? .25 : .15 : .45) * (R.sel && full ? .4 : 1); ctx.strokeStyle = pc(o);
       ctx.beginPath(); ctx.moveTo(o.sx, o.sy); ctx.lineTo(ex, ey); ctx.stroke();
     });
     const vo = R.sel && pl.get(R.sel);
@@ -3097,12 +3112,18 @@ function radarView(cv, full){
     ctx.save();
     if (!full) { ctx.beginPath(); ctx.arc(W / 2, H / 2, rr + fs * 3, 0, Math.PI * 2); ctx.clip(); }
     const ps = full ? 2.9 : Math.min(2.6, Math.max(2, rr / 75));   // 飛機大小
+    const sk = canAnim() ? EASEF(Math.min(1, (t - (R.st || 0)) / T.fast)) : 1;
+    const so2 = R.sel && pl.get(R.sel);
+    if (so2 && so2.a > 0 && sk > 0) {                       // 選到的飛機後面一圈淡淡的光（看板那一列亮起來時，雷達這邊也一起亮）
+      ctx.globalAlpha = so2.a * .35 * sk; ctx.fillStyle = col.p;
+      ctx.beginPath(); ctx.arc(so2.sx, so2.sy, ps * 6.5 * (.6 + .4 * sk), 0, Math.PI * 2); ctx.fill();
+    }
     vis.forEach(o => {
-      ctx.globalAlpha = o.a * (R.sel && full && o.id !== R.sel ? .55 : 1);
+      ctx.globalAlpha = o.v * (R.sel && full && o.id !== R.sel ? .55 : 1);
       ctx.save(); ctx.translate(o.sx, o.sy); ctx.rotate((o.p.trk || 0) * Math.PI / 180);
       const k = ps * (o.p.ph === "gnd" ? .6 : 1); ctx.scale(k, k);
       const sh = FLYSH[o.p.kind] || FLYPL;                   // 照機型畫：四發、廣體、窄體、螺旋槳、小飛機、直升機
-      if (o.id === R.sel) { ctx.lineWidth = 1.4 / k * 1.6; ctx.strokeStyle = col.p; ctx.stroke(sh); }
+      if (o.id === R.sel) { const ga0 = ctx.globalAlpha; ctx.globalAlpha = ga0 * sk; ctx.lineWidth = 1.4 / k * 1.6; ctx.strokeStyle = col.p; ctx.stroke(sh); ctx.globalAlpha = ga0; }
       ctx.fillStyle = pc(o); ctx.fill(sh); ctx.restore();
     });
     /* 名字：擠在一起時換邊放，放不下先不顯示 */
@@ -3129,7 +3150,7 @@ function radarView(cv, full){
     }
     lab.forEach(o => {
       if (!o.lp) return;
-      ctx.globalAlpha = o.a * (R.sel && full && o.id !== R.sel ? .6 : 1);
+      ctx.globalAlpha = o.v * (R.sel && full && o.id !== R.sel ? .6 : 1);
       ctx.fillStyle = o.p.emg ? col.bad : o.id === R.sel ? col.p : o.p.ph === "over" ? col.tx3 : col.tx2;
       ctx.font = `600 ${lf}px ${font}`; ctx.fillText(o.l1, o.lp[0], o.lp[1] + lf * .8);
       if (o.l2) { ctx.fillStyle = col.tx3; ctx.font = `${Math.round(lf * .85)}px ${font}`; ctx.fillText(o.l2, o.lp[0], o.lp[1] + lf * 1.85); }
@@ -3216,6 +3237,7 @@ function flyWxRow(f, d, rw){
   if (el._h !== html) { el._h = html; html ? swapHTML(el, html) : el.innerHTML = ""; }
   reveal(el, !!html);
 }
+const flyFocus = () => FLYS.tab === "arr" || FLYS.tab === "dep" ? FLYS.tab : "";   // 雷達跟著看板：看抵達時抵達的飛機清楚、其他淡一點
 function flyRadar(f, d){
   const v = f._rv; if (!v) return;
   const rw = d.loading ? null : flyRwy(d);
@@ -3224,7 +3246,7 @@ function flyRadar(f, d){
     flyWxRow(f, d, rw);
     [["arr", d.arr], ["dep", d.dep], ["gnd", d.gnd], ["over", [...d.over, ...(d.rest || [])]]].forEach(([k, l]) => txt(f.querySelector(`[data-k="rc-${k}"]`), String(l.filter(p => p.x != null).length)));
   }
-  v.sel = FLYHOV || FLYSEL; v.setData(flyAll(d));
+  v.sel = FLYHOV || FLYSEL; v.focus = flyFocus(); v.setData(flyAll(d));
   f.querySelectorAll(".fr.hl").forEach(r => { if (r.dataset.id !== FLYHOV) r.classList.remove("hl"); });   // 列被換給別班了：不要留著亮
   if (!d.loading && d.ap && d.ap.code) flyTrk(f, d.ap.code);
   if (FRAD) fradData();
@@ -3255,6 +3277,7 @@ async function flySwitch(mode){   // mode："hr" 換時段、"tab" 換分頁、�
   FLYSTILL = true; try { flyPaint(false); } finally { FLYSTILL = false; }
   b.classList.add("cvx"); const s1 = span() / z, bh = b.offsetHeight; b.classList.remove("cvx");   // 手機的列平常畫面外不排版（高度是估的），量的這一刻先排版
   fo.forEach(a => a.cancel()); b._fo = null;
+  if (f._rv && f._rv.focus !== flyFocus()) { if (wide) FLYHUSH = 0; f._rv.focus = flyFocus(); f._rv.kick(); }   // 看板淡入的同時，雷達上的飛機也跟著換濃淡（電腦上同一張卡片，不能一邊動一邊停）
   const ins = [b, ...[hb, tb, sm, ...tb.querySelectorAll("[data-fterm]")].filter(e => shown(e) && !was.has(e) && !(e.parentNode === tb && !was.has(tb)))];   // 新出現的（整排新出來的，裡面的按鈕跟著那排一起）
   if (!hr && shown(hb) && was.has(hb) && hb._keys !== keys0) ins.push(hb);   // 時段那排還在、但時段變了：整排淡入；只有班數變的話只換數字
   ins.forEach(e => e.animate([{opacity:0, transform:"translateY(8px)"}, {opacity:1, transform:"none"}], {duration:T.mid, easing:EASE}));
@@ -3673,8 +3696,8 @@ function flyOpen(btn){
   if (FLYD && FLYD.ap && FLYD.ap.code === FLYS.ap) {         // 有上次的資料：直接排好（不一格一格翻、不一排一排長出來），跟著打開的動畫一塊一塊浮上來
     f.querySelector(".fsplash").remove();
     FLYSTILL = true; try { flyPaint(false); } finally { FLYSTILL = false; }
-    if (canAnim()) [...f.querySelectorAll(".fwrap>:not(.ftop), .fmain>*")].filter(e => !e.classList.contains("fmain")).forEach((e, i) =>
-      e.animate([{opacity:0, transform:"translateY(16px)"}, {opacity:1, transform:"none"}], {duration:T.slow, delay:T.fast + i * T.fast * .35, easing:EASE, fill:"backwards"}));
+    flyRadar(f, FLYD);                                        // 雷達也用上次的資料先畫好（不然要等下一次抓到資料才出現飛機）
+    flyRise(f, T.fast);
     FLYBZ = performance.now() + T.slow + T.fast * 3;           // 浮完才換上剛抓到的新資料
   } else { flySplashOn(f); flyWait(f, true); }
   flyLoad(false);
