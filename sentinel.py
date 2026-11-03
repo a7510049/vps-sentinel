@@ -6359,6 +6359,8 @@ def fly_fids_pull(code, hit):
             al = fly_al_zh(r["fn"][:2])
             if al != r["fn"][:2]:                       # 航空公司名稱照同一張表（官網有的寫「韓商泰瑞航空」，雷達寫「德威航空」）
                 r["al"] = al
+            if r.get("pc") == "MYJ":                    # 日本的松山（愛媛）：官網寫「松山」會跟台北松山搞混
+                r["pl"] = "愛媛"
             while r.get("est") and r["est"] < r["sch"] - 12 * 3600:   # 跨過半夜：官網的預計日期沒跟著換（或沒給日期），補一天
                 r["est"] += 86400
             k = (r["io"], r["sch"], r["pc"] or r["pl"], r.get("gate") or "", r.get("term") or "")   # 同時間同地點的兩家公司（例如長榮、樂桃都 16:05 從成田來）登機門不同，不能當成同一班
