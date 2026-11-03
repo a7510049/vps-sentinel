@@ -2719,7 +2719,7 @@ function flyShell(){
         <div class="rnote sub" hidden></div>
         <div class="rwx" hidden></div>
         <div class="rleg"><span><i class="arr"></i>抵達<b data-k="rc-arr"></b></span><span><i class="dep"></i>出發<b data-k="rc-dep"></b></span><span><i></i>機坪<b data-k="rc-gnd"></b></span><span><i></i>路過<b data-k="rc-over"></b></span>
-          <span class="ralt">尾跡高度<i></i>1000<i></i>3000<i></i>6000<i></i>公尺</span><span class="rctl"><span class="rng"><button class="${FLYTRKON ? "on" : ""}" data-ftrk aria-pressed="${FLYTRKON}" title="常走路線">路線</button></span><span class="rng fzm">${FLYZM.map(k => `<button data-fzm="${k}">${k}</button>`).join("")}</span></span></div></div></div>
+          <span class="ralt">尾跡高度<i></i>1000<i></i>3000<i></i>6000<i></i>公尺</span><span class="rctl"><span class="rng fzm">${FLYZM.map(k => `<button data-fzm="${k}">${k}</button>`).join("")}</span></span></div></div></div>
     </div>
     <div class="ffoot sub"></div></div></div>${flySplash()}</div>`;
 }
@@ -2943,7 +2943,7 @@ function radarView(cv, full){
   };
   R.V = V;
   R.zoom = (r, anim) => { R.range = r; if (!full) R.view(0, 0, R.fit(r), anim); };
-  R.setGeo = g => { if (R.geo === g) return; R.geo = g; R.gk = (R.gk || 0) + 1; R.gp = g && new Path2D(g.coast); R.gf = g && g.far ? new Path2D(g.far) : null; R.am = g && flyApm(g.apm); R.ga = 0; R.gt = now(); R.kick(); };
+  R.setGeo = g => { if (R.geo === g) return; R.geo = g; R.gk = (R.gk || 0) + 1; R.gp = g && new Path2D(g.coast); R.gf = g && g.far ? new Path2D(g.far) : null; R.am = g && flyApm(g.apm); R.rws = g ? flyRws(g) : []; R.ga = 0; R.gt = now(); R.kick(); };
   R.trkOn = () => { R.tt = now(); R.kick(); };
   R.setTrk = d => { if (R.trk === d) return; R.trk = d; R.gk = (R.gk || 0) + 1; R.ti = null; R.td = now(); R.kick(); };
   /* 新資料：每架飛機從現在畫的位置，花一次更新的時間慢慢移到新的位置 */
@@ -2954,14 +2954,15 @@ function radarView(cv, full){
       if (p.x == null || seen.has(p.id)) return;
       seen.add(p.id);
       let o = pl.get(p.id);
-      if (!o) { o = {id:p.id, x0:p.x, y0:p.y, x1:p.x, y1:p.y, t0:t, a:pl.size && canAnim() ? 0 : 1, h:[]}; pl.set(p.id, o); }
+      if (!o) { const q = flySnap(R.rws, p); o = {id:p.id, x0:q.x, y0:q.y, x1:q.x, y1:q.y, t0:t, a:pl.size && canAnim() ? 0 : 1, h:[]}; pl.set(p.id, o); }
       else {
         const [x, y] = R.at(o, t), far = Math.hypot(p.x - x, p.y - y) > 8;
-        Object.assign(o, far ? {x0:p.x, y0:p.y} : {x0:x, y0:y}); o.t0 = t;
+        Object.assign(o, far ? {x0:p.x, y0:p.y} : {x0:x, y0:y}); o.t0 = t;   // 很遠才跳過去（snap 後的位置在下面設）
       }
-      o.x1 = p.x; o.y1 = p.y; o.p = p; o.gone = false;
+      const q = flySnap(R.rws, p);                            // 在跑道上、對準跑道起降的：拉到跑道中線上，看起來跟跑道對齊
+      o.x1 = q.x; o.y1 = q.y; o.p = q; o.gone = false;
       const l = o.h[o.h.length - 1];
-      if (p.ph !== "gnd" && (!l || l[0] !== p.x || l[1] !== p.y)) { o.h.push([p.x, p.y, p.alt]); if (o.h.length > 18) o.h.shift(); }
+      if (p.ph !== "gnd" && (!l || l[0] !== q.x || l[1] !== q.y)) { o.h.push([q.x, q.y, p.alt]); if (o.h.length > 18) o.h.shift(); }
     });
     pl.forEach(o => { if (!seen.has(o.id)) o.gone = true; });
     R.kick();
@@ -3041,8 +3042,9 @@ function radarView(cv, full){
           g.globalAlpha = ba;
         }
         g.lineCap = "round"; g.strokeStyle = col.tx3; g.lineWidth = (full ? 3 : 2.2) / s;
-        g.beginPath(); (R.geo.rwy || []).forEach(([a, b, c, d]) => { if (am > 0 && Math.hypot((a + c) / 2, (b + d) / 2) <= 4) return; g.moveTo(a, -b); g.lineTo(c, -d); }); g.stroke();
-        if (am > 0 && am < 1) { g.globalAlpha = ba * (1 - am); g.beginPath(); (R.geo.rwy || []).forEach(([a, b, c, d]) => { if (Math.hypot((a + c) / 2, (b + d) / 2) <= 4) { g.moveTo(a, -b); g.lineTo(c, -d); } }); g.stroke(); g.globalAlpha = ba; }
+        const own = ([a, b, c, d]) => Math.hypot((a + c) / 2, (b + d) / 2) <= 4;   // 這個機場的跑道改畫真的位置（R.rws），飛機才會剛好對在線上
+        g.beginPath(); (R.geo.rwy || []).forEach(r => { if (own(r)) return; g.moveTo(r[0], -r[1]); g.lineTo(r[2], -r[3]); }); g.stroke();
+        if (am < 1) { g.globalAlpha = ba * (1 - am); g.beginPath(); R.rws.forEach(r => { g.moveTo(r.x1, -r.y1); g.lineTo(r.x2, -r.y2); }); g.stroke(); g.globalAlpha = ba; }
         if (R.trk && ta > 0) {                                // 常走的進場、離場路線：抵達用主題色、出發用灰色，細線，越常飛越清楚
           if (!R.ti) R.ti = {a:flyTrkLines(R.trk.arr), d:flyTrkLines(R.trk.dep)};
           g.lineJoin = g.lineCap = "round"; g.lineWidth = (full ? 1.6 : 1.3) / s;
@@ -3070,7 +3072,8 @@ function radarView(cv, full){
     R.fin = null;
     if (R.geo && R.rwd != null) {
       const hd = R.rwd * Math.PI / 180, ux = Math.sin(hd), uy = Math.cos(hd), L = full ? 30 : 20, nx = uy, ny = -ux;
-      const rw = (R.geo.rwy || []).filter(([a, b, c, d]) => Math.hypot((a + c) / 2, (b + d) / 2) <= 4);   // 只畫這個機場的跑道
+      const cnt = R.rws.map((r, i) => [...pl.values()].filter(o => !o.gone && o.p.ph === "arr" && o.p.rwi === i).length);
+      const bi = cnt.indexOf(Math.max(...cnt)), rw = R.rws.length ? [R.rws[bi < 0 ? 0 : bi]].map(r => [r.x1, r.y1, r.x2, r.y2]) : [];   // 只畫飛機正在排的那一條（平行跑道看飛機對準哪條）
       ctx.save(); ctx.globalAlpha = (canAnim() ? ga : 1) * .6; ctx.strokeStyle = ctx.fillStyle = col.p; ctx.lineWidth = full ? 1.4 : 1.1;
       ctx.font = `${Math.round(fs * .8)}px ${font}`; ctx.textAlign = "center"; ctx.textBaseline = "middle";
       const fin = rw.map(([a, b, c, d]) => a * ux + b * uy < c * ux + d * uy ? [a, b] : [c, d]);   // 降落那一頭
@@ -3262,6 +3265,64 @@ function radarView(cv, full){
     ctx.restore(); ctx.globalAlpha = 1;
   };
   return R;
+}
+/* 這個機場的跑道（公里）：有 OpenStreetMap 的用真的位置，同一條被切成好幾段的接回一條；沒有就用大約位置 */
+function flyRws(g){
+  const seg = (g.apm && g.apm.rw || []).map(a => [a[1], a[2], a[a.length - 2], a[a.length - 1]]);
+  const src = seg.length ? seg : (g.rwy || []).filter(([a, b, c, d]) => Math.hypot((a + c) / 2, (b + d) / 2) <= 4);
+  const out = [];
+  src.forEach(([x1, y1, x2, y2]) => {
+    const len = Math.hypot(x2 - x1, y2 - y1); if (len < .3) return;
+    const ux = (x2 - x1) / len, uy = (y2 - y1) / len;
+    const r = out.find(r => Math.abs(r.ux * uy - r.uy * ux) < .05 && Math.abs((x1 - r.x1) * r.uy - (y1 - r.y1) * r.ux) < .08);
+    if (!r) return out.push({x1, y1, x2, y2, ux, uy, len});
+    const t = [0, r.len, (x1 - r.x1) * r.ux + (y1 - r.y1) * r.uy, (x2 - r.x1) * r.ux + (y2 - r.y1) * r.uy], a = Math.min(...t), b = Math.max(...t);
+    Object.assign(r, {x1:r.x1 + r.ux * a, y1:r.y1 + r.uy * a, x2:r.x1 + r.ux * b, y2:r.y1 + r.uy * b, len:b - a});
+  });
+  out.tw = [];                                              // 滑行道一小段一小段（地面滑行的飛機拉到上面）
+  (g.apm && g.apm.tw || []).forEach(a => { for (let i = 0; i + 3 < a.length; i += 2) {
+    const x1 = a[i], y1 = a[i + 1], len = Math.hypot(a[i + 2] - x1, a[i + 3] - y1);
+    if (len > .001) out.tw.push({x1, y1, ux:(a[i + 2] - x1) / len, uy:(a[i + 3] - y1) / len, len});
+  } });
+  return out;
+}
+/* 在滑行道上滑行的：拉到最近那條滑行道中線上（60 公尺內），機頭照滑行道方向；停著的（機坪上）不動 */
+function flyTaxi(tw, p){
+  if (!tw || !tw.length || !(p.spd >= 3) || p.spd >= 60) return p;
+  let best = null;
+  tw.forEach(r => {
+    const dx = p.x - r.x1, dy = p.y - r.y1, t = Math.max(0, Math.min(r.len, dx * r.ux + dy * r.uy));
+    const ex = p.x - (r.x1 + r.ux * t), ey = p.y - (r.y1 + r.uy * t), d = Math.hypot(ex, ey);
+    if (d > .06) return;
+    const hd = Math.atan2(r.ux, r.uy) * 180 / Math.PI, h = p.trk != null && flyAdiff(p.trk, hd) > 90 ? hd + 180 : hd;
+    if (p.trk != null && flyAdiff(p.trk, h) > 40) return;   // 方向差太多（正在轉彎到別條）不拉
+    const sc = d + (p.trk != null ? flyAdiff(p.trk, h) / 1500 : 0);
+    if (!best || sc < best.sc) best = {sc, x:p.x - ex, y:p.y - ey, hd:(h + 360) % 360};
+  });
+  return best ? {...p, x:best.x, y:best.y, trk:best.hd} : p;
+}
+/* 快到機場、對準跑道起降和在跑道上滑跑的飛機：位置拉到跑道中線上、機頭轉成跑道方向（訊號有幾十公尺誤差，畫出來會歪在跑道旁邊）
+   天上照雷達原本的位置：離跑道頭 3 公里內整個拉過去，到 8 公里慢慢放開；離中線 0.4～1.2 公里也一樣慢慢放開
+   15 公里內對準的會記 rwi（延長線畫哪一條用）；回傳新的一份，原本的資料不動 */
+function flySnap(rws, p){
+  if (!rws || !rws.length || p.x == null || !(p.ph === "arr" || p.ph === "dep" || p.ph === "gnd")) return p;
+  const gnd = p.ph === "gnd" || !p.alt;
+  if (!gnd && p.alt > 5000) return p;
+  if (gnd && !(p.spd >= 25)) return flyTaxi(rws.tw, p);    // 地面上慢的是在滑行道上（滑行道離跑道很近，慢的不拉到跑道）
+  let best = null;
+  rws.forEach((r, i) => {
+    const dx = p.x - r.x1, dy = p.y - r.y1, t = dx * r.ux + dy * r.uy, lat = dx * r.uy - dy * r.ux;
+    if (t < (gnd ? 0 : -15) || t > r.len + (gnd ? 0 : 15)) return;
+    const hd = Math.atan2(r.ux, r.uy) * 180 / Math.PI;
+    if (p.trk != null && Math.min(flyAdiff(p.trk, hd), flyAdiff(p.trk, hd + 180)) > (gnd ? 15 : 25)) return;
+    if (Math.abs(lat) > (gnd ? .15 : 1.2) || (best && Math.abs(lat) >= Math.abs(best.lat))) return;
+    best = {i, t, lat, hd: p.trk != null && flyAdiff(p.trk, hd) > 90 ? (hd + 180) % 360 : (hd + 360) % 360};
+  });
+  if (!best) return gnd ? flyTaxi(rws.tw, p) : p;
+  const r = rws[best.i], far = Math.max(0, -best.t, best.t - r.len);
+  const w = gnd ? 1 : Math.min(1, Math.max(0, (1.2 - Math.abs(best.lat)) / .8)) * Math.min(1, Math.max(0, (8 - far) / 5));
+  if (w <= 0) return {...p, rwi:best.i};
+  return {...p, x:p.x - r.uy * best.lat * w, y:p.y + r.ux * best.lat * w, trk:p.trk == null || w >= 1 ? best.hd : (p.trk + ((best.hd - p.trk + 540) % 360 - 180) * w + 360) % 360, rwi:best.i};   // 機頭跟著慢慢轉正，降落時不會歪
 }
 /* 機場地圖（OpenStreetMap）：做成畫布用的路徑；沒有資料回 null */
 function flyApm(m){
