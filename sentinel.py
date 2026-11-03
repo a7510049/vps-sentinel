@@ -43,7 +43,7 @@ from collections import deque
 from concurrent.futures import ThreadPoolExecutor
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
-VERSION = "3.58"
+VERSION = "3.59"
 
 # ───────────────────────── 哨兵備份檔（.vsbk）─────────────────────────
 # 哨兵專用的備份格式：外面是自己的檔案格式，裡面用的是成熟、標準的加密方法（不自己發明加密）：
@@ -7171,10 +7171,23 @@ def fly_api(q):
         return {"ok": False, "error": f"航班資料暫時拿不到（{e}）"}
 
 
-# ── 機場起降分享：1 小時內有效，第一支打開的手機才看得到（只能看機場起降） ──
+# ── 機場起降分享：自己選能看多久、幾支手機、哪個機場（只能看機場起降） ──
 SHARE_FILE = os.path.join(DATA_DIR, "fly-share.json")
 SHARE_LOCK = threading.Lock()
 SHARE_SECS = int(os.environ.get("SENTINEL_SHARE_SECS") or 3600)
+SHARE_TIMES = (3600, 6 * 3600, 86400, 7 * 86400)   # 能選的時間
+SHARE_DEVS = (1, 3, 0)                              # 幾支手機能看（0 = 不限）
+
+
+def share_fix(v):
+    """舊版存的是一支手機（dev 是字串）：換成清單"""
+    if isinstance(v.get("dev"), str):
+        v["dev"] = [v["dev"]] if v["dev"] else []
+    v.setdefault("max", 1)
+    v.setdefault("ap", "")
+    v.setdefault("name", "")
+    v.setdefault("t0", v.get("exp", 0) - SHARE_SECS)
+    return v
 
 
 def share_load():
@@ -7184,7 +7197,7 @@ def share_load():
     except (OSError, ValueError):
         d = {}
     now = time.time()
-    return {k: v for k, v in d.items() if isinstance(v, dict) and v.get("exp", 0) > now} if isinstance(d, dict) else {}
+    return {k: share_fix(v) for k, v in d.items() if isinstance(v, dict) and v.get("exp", 0) > now} if isinstance(d, dict) else {}
 
 
 def share_save(d):
@@ -7196,44 +7209,71 @@ def share_save(d):
     os.replace(tmp, SHARE_FILE)
 
 
-def share_new():
+def share_new(secs=None, devs=1, ap="", name=""):
     """新的分享連結代碼（只存雜湊）"""
+    secs = int(secs) if str(secs or "").isdigit() and int(secs) in SHARE_TIMES else SHARE_SECS
+    devs = int(devs) if str(devs).isdigit() and int(devs) in SHARE_DEVS else 1
+    ap = str(ap or "").upper()
+    ap = ap if ap in FLY_PIN else ""
+    name = re.sub(r"[\x00-\x1f]", "", str(name or "")).strip()[:20]
     code = "fs_" + secrets.token_urlsafe(16)
     with SHARE_LOCK:
         d = share_load()
         if len(d) >= 50:                         # 太多還沒過期的：最舊的先失效
             for k in sorted(d, key=lambda k: d[k]["exp"])[:len(d) - 49]:
                 d.pop(k)
-        d[hashlib.sha256(code.encode()).hexdigest()] = {"exp": time.time() + SHARE_SECS, "dev": ""}
+        now = time.time()
+        d[hashlib.sha256(code.encode()).hexdigest()] = {"exp": now + secs, "t0": now, "dev": [], "max": devs, "ap": ap, "name": name}
         share_save(d)
-    return code, SHARE_SECS
+    return code, secs
+
+
+def share_list():
+    """已分享、還沒過期的連結（id 是雜湊的前 12 碼，拿不回原本的連結）"""
+    now = time.time()
+    return sorted(({"id": k[:12], "name": v["name"], "ap": v["ap"], "max": v["max"], "used": len(v["dev"]),
+                    "left": int(v["exp"] - now), "t0": int(v["t0"])} for k, v in share_load().items()), key=lambda x: -x["t0"])
+
+
+def share_del(sid):
+    """提前收回：打開過的手機也會立刻看不到"""
+    sid = str(sid or "")
+    with SHARE_LOCK:
+        d = share_load()
+        ks = [k for k in d if sid and k.startswith(sid)] if len(sid) == 12 else []
+        for k in ks:
+            d.pop(k)
+        if ks:
+            share_save(d)
+    return bool(ks)
 
 
 def share_claim(code, dev):
-    """朋友打開連結：第一次打開的裝置拿到自己的通行碼，之後只認這個裝置"""
+    """朋友打開連結：還有名額的裝置拿到自己的通行碼，之後只認這些裝置"""
     h = hashlib.sha256(str(code or "").encode()).hexdigest()
     with SHARE_LOCK:
         d = share_load()
         e = d.get(h)
         if not e:
-            return None, "連結已經失效"
-        if e["dev"]:
-            if dev and hmac.compare_digest(hashlib.sha256(str(dev).encode()).hexdigest(), e["dev"]):
-                return dev, int(e["exp"] - time.time())
-            return None, "這個連結已經在別的手機打開過"
+            return None, "連結已經失效", ""
+        if dev and any(hmac.compare_digest(hashlib.sha256(str(dev).encode()).hexdigest(), x) for x in e["dev"]):
+            return dev, int(e["exp"] - time.time()), e["ap"]
+        if e["max"] and len(e["dev"]) >= e["max"]:
+            return None, "這個連結已經在別的手機打開過" if e["max"] == 1 else f"這個連結已經有 {e['max']} 支手機打開過", ""
         dev = secrets.token_urlsafe(16)
-        e["dev"] = hashlib.sha256(dev.encode()).hexdigest()
+        e["dev"].append(hashlib.sha256(dev.encode()).hexdigest())
         share_save(d)
-    return dev, int(e["exp"] - time.time())
+    return dev, int(e["exp"] - time.time()), e["ap"]
 
 
 def share_ok(given):
-    """X-Share：代碼:通行碼"""
+    """X-Share：代碼:通行碼；對的話回傳那個分享（ap 是限定的機場）"""
     code, _, dev = str(given or "").partition(":")
     if not code.startswith("fs_") or not dev:
-        return False
+        return None
     e = share_load().get(hashlib.sha256(code.encode()).hexdigest())
-    return bool(e and e["dev"]) and hmac.compare_digest(hashlib.sha256(dev.encode()).hexdigest(), e["dev"])
+    hd = hashlib.sha256(dev.encode()).hexdigest()
+    return e if e and any(hmac.compare_digest(hd, x) for x in e["dev"]) else None
 
 
 class Handler(BaseHTTPRequestHandler):
@@ -7515,10 +7555,16 @@ class Handler(BaseHTTPRequestHandler):
                 return self.send(404, '{"error":"找不到"}')
             return self.send(200, r[0], r[1], cache=True, csp="; default-src 'none'; style-src 'unsafe-inline'; sandbox")   # 官網的 SVG 不能跑程式
         if path == "/api/flights":
-            if not (self.authed() or share_ok(self.headers.get("X-Share"))):
+            sh = None if self.authed() else share_ok(self.headers.get("X-Share"))
+            if not (sh or self.authed()):
                 time.sleep(1)
                 return self.send(401, '{"error":"密碼錯誤"}')
-            return self.send(200, json.dumps(fly_api(urllib.parse.parse_qs(urllib.parse.urlsplit(self.path).query, keep_blank_values=True)), ensure_ascii=False))
+            q = urllib.parse.parse_qs(urllib.parse.urlsplit(self.path).query, keep_blank_values=True)
+            if sh and sh["ap"]:                       # 只分享一個機場：其他機場一律換成這個
+                for k in ("ap", "geo", "trk"):
+                    if k in q:
+                        q[k] = [sh["ap"]]
+            return self.send(200, json.dumps(fly_api(q), ensure_ascii=False))
         if path in ("/api/status", "/api/all"):
             if not self.authed():
                 time.sleep(1)
@@ -7609,16 +7655,25 @@ class Handler(BaseHTTPRequestHandler):
             except ValueError:
                 n = 0
             b = self.jbody(self.rfile.read(min(n, 4096)))
-            dev, left = share_claim(b.get("code"), b.get("dev"))
+            dev, left, ap = share_claim(b.get("code"), b.get("dev"))
             if not dev:
                 time.sleep(1)
                 return self.send(403, json.dumps({"ok": False, "error": left}, ensure_ascii=False))
-            return self.send(200, json.dumps({"ok": True, "dev": dev, "left": left}))
-        if u.path == "/api/fly-share":
+            return self.send(200, json.dumps({"ok": True, "dev": dev, "left": left, "ap": ap}))
+        if u.path == "/api/fly-share":               # 做新的分享連結（op=list 看清單、op=del 收回）
             if not self.authed():
                 time.sleep(1)
                 return self.send(401, '{"error":"密碼錯誤"}')
-            code, secs = share_new()
+            try:
+                n = int(self.headers.get("Content-Length") or 0)
+            except ValueError:
+                n = 0
+            b = self.jbody(self.rfile.read(min(n, 4096))) if n else {}
+            if b.get("op") == "list":
+                return self.send(200, json.dumps({"ok": True, "list": share_list()}, ensure_ascii=False))
+            if b.get("op") == "del":
+                return self.send(200, json.dumps({"ok": share_del(b.get("id")), "list": share_list()}, ensure_ascii=False))
+            code, secs = share_new(b.get("secs"), b.get("devs", 1), b.get("ap"), b.get("name"))
             return self.send(200, json.dumps({"ok": True, "code": code, "secs": secs}))
         if u.path == "/api/backup-store":            # 其他主機傳來的備份（檔案很大，邊收邊存，不先讀進記憶體）
             if not self.authed():
