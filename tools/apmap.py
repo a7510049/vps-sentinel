@@ -23,6 +23,11 @@ def simplify(pts, tol):
     """道格拉斯－普克簡化（公尺）"""
     if len(pts) < 3:
         return pts
+    if pts[0] == pts[-1]:                      # 圍起來的面：頭尾同一點，從離起點最遠的地方切成兩半各自簡化
+        m = max(range(len(pts)), key=lambda i: (pts[i][0] - pts[0][0]) ** 2 + (pts[i][1] - pts[0][1]) ** 2)
+        if m in (0, len(pts) - 1):
+            return pts
+        return simplify(pts[:m + 1], tol) + simplify(pts[m:], tol)[1:]
     la0 = math.radians(pts[0][1])
     xy = [(lo * 111320 * math.cos(la0), la * 110570) for lo, la in pts]
     keep = [False] * len(pts)

@@ -984,7 +984,7 @@ def apt_updates():
 # ───────────────────────── 更新哨兵本身 ─────────────────────────
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-SRC_FILES = ["sentinel.py", "web/index.html", "web/style.css", "web/app.js", "data/airports.tsv", "data/coast.tsv", "data/terrain.bin", "data/actypes.tsv"]   # 程式本體＋網頁三個檔＋機場資料、海岸線、地形、機型分類
+SRC_FILES = ["sentinel.py", "web/index.html", "web/style.css", "web/app.js", "data/airports.tsv", "data/coast.tsv", "data/terrain.bin", "data/actypes.tsv", "data/apmap.tsv"]   # 程式本體＋網頁三個檔＋機場資料、海岸線、地形、機型分類
 
 
 def build_of(blobs):
@@ -7269,13 +7269,24 @@ def fly_geo(code):
             cx, cy = x + off * math.sin(b), y + off * math.cos(b)
             dx, dy = ln / 2 * math.sin(a), ln / 2 * math.cos(a)
             rwy.append([round(cx - dx, 2), round(cy - dy, 2), round(cx + dx, 2), round(cy + dy, 2)])
+    apm = {"rw": [], "tw": [], "ap": [], "tm": []}   # 這個機場的跑道、滑行道、機坪、航廈（OpenStreetMap，放大才畫）
+    try:
+        with open(os.path.join(HERE, "data", "apmap.tsv"), encoding="utf-8") as f:
+            for line in f:
+                p = line.split()
+                if len(p) < 5 or p[0] != code or p[1] not in apm:
+                    continue
+                pts = [v for q in p[3:] for la, lo in [(float(q.split(",")[1]), float(q.split(",")[0]))] for v in (round(xy(la, lo)[0], 4), round(xy(la, lo)[1], 4))]
+                apm[p[1]].append([int(p[2]), *pts] if p[1] == "rw" else pts)
+    except (OSError, ValueError, IndexError):
+        pass
     nav = [[n, k, round(x, 1), round(y, 1)] for n, k, la, lo in FLY_NAV for x, y in [xy(la, lo)] if math.hypot(x, y) < lim]
     ter = fly_ter()
     if ter:                                          # 地形那張圖放在哪（公里）：左邊、上面、寬、高
         m = ter[0]
         x0, y1 = xy(m["la"], m["lo"])
         ter = [round(x0, 2), round(y1, 2), round(m["w"] * m["d"] * kx, 2), round(m["h"] * m["d"] * ky, 2), m["w"], m["h"]]
-    FLY_GEO[code] = {"ok": True, "coast": "".join(path["t"]), "far": "".join(path["f"]), "towns": towns, "aps": aps, "rwy": rwy, "nav": nav, "ter": ter}
+    FLY_GEO[code] = {"ok": True, "coast": "".join(path["t"]), "far": "".join(path["f"]), "towns": towns, "aps": aps, "rwy": rwy, "nav": nav, "ter": ter, "apm": apm}
     return FLY_GEO[code]
 
 
