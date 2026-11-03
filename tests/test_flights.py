@@ -630,6 +630,16 @@ class Kinds(unittest.TestCase):
                            (("HKE601", ["UO", "香港快運"], "A21N", "A3", False, "Hong Kong Express Airways"), "客機")]:
             self.assertEqual(u(*args), want, args)
 
+    def test_cargo_model(self):
+        """貨機的型號寫成貨機版本（華航 747-400 貨機寫 747-400F），原本已經是貨機版本的不動"""
+        from test_passkey import load_sentinel
+        S = load_sentinel()
+        self.assertEqual(S.fly_cargo_model("B744", "747-400"), "747-400F")
+        self.assertEqual(S.fly_cargo_model("B77L", "777-200LR"), "777F")
+        self.assertEqual(S.fly_cargo_model("B744", "747-409F"), "747-409F")
+        self.assertEqual(S.fly_cargo_model("B738", "737-800BCF"), "737-800BCF")
+        self.assertEqual(S.fly_cargo_model("C172", "Cessna 172"), "Cessna 172")
+
     def test_biz_jet(self):
         """私人噴射機（呼號 TWY42）不能被當成首爾航空；首爾航空的呼號是 ASV；機型名稱不切掉數字"""
         from test_passkey import load_sentinel
