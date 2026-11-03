@@ -402,6 +402,7 @@ html.dhid .dash>.view{content-visibility:hidden;contain-intrinsic-size:auto none
 .wait{display:grid;place-items:center;color:var(--tx3);font-size:var(--fs-s)}
 /* 曲線的時間範圍：連在一起的小按鈕 */
 .rng{display:inline-flex;gap:2px;margin-left:auto;flex:none}
+.rctl{display:inline-flex;gap:8px;margin-left:auto;flex:none}.rctl .rng{margin-left:0}   /* 雷達下面：路線開關和遠近放在一起 */
 .rng button{height:30px;padding:0 11px;font-size:var(--fs-xs);font-weight:500;background:var(--chip);color:var(--tx2);border-radius:var(--r-xs);white-space:nowrap;
   transition:border-radius var(--sp),background-color var(--t-fast) var(--ease),color var(--t-fast) var(--ease)}
 .rng button:first-child{border-radius:var(--r-full) var(--r-xs) var(--r-xs) var(--r-full)}
@@ -1000,6 +1001,8 @@ html.flyon .dash>.view{content-visibility:hidden;contain-intrinsic-size:auto non
 .frchips{pointer-events:auto;box-shadow:var(--sh-1);max-width:420px;width:100%}
 .frzm{position:absolute;right:12px;top:calc(env(safe-area-inset-top) + 12px);display:flex;gap:8px}
 .frzm .icbtn{background:var(--s2);box-shadow:var(--sh-1)}
+.frzm .icbtn{transition:background-color var(--t-fast) var(--ease),color var(--t-fast) var(--ease)}
+.frzm .icbtn.on{background:var(--pc);color:var(--on-pc)}   /* 常走路線開著 */
 .frcard{position:absolute;left:12px;right:12px;bottom:calc(env(safe-area-inset-bottom) + 76px);max-width:420px;margin:0 auto;background:var(--s1);border-radius:var(--r-lg);padding:14px 16px;box-shadow:var(--sh-2)}
 .frch{display:flex;align-items:center;gap:10px}.frch>div{flex:1;min-width:0;display:flex;align-items:baseline;gap:8px}
 .frfn{font-size:var(--fs-xl);font-weight:600}.frch .fst{font-size:var(--fs-s);color:var(--p)}
@@ -1013,7 +1016,11 @@ html.flyon .dash>.view{content-visibility:hidden;contain-intrinsic-size:auto non
 .frlh .chv svg{width:18px;height:18px;transform:rotate(180deg);transition:transform var(--t-mid) var(--ease)}.frad.lopen .frlh .chv svg{transform:none}
 .frli{overflow-y:auto;padding:0 8px 12px;display:flex;flex-direction:column;gap:2px}
 .frr{display:flex;align-items:center;gap:12px;text-align:left;border-radius:var(--r-md);padding:6px 12px}
-.frr.on{background:var(--s3)}.frr .lab{min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.frr .lab small{display:block;color:var(--tx3);font-size:var(--fs-s)}
+.frr.on{background:var(--s3)}.frr .lab{flex:1;min-width:0}.frr .lab>*{display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.frr .lab small{color:var(--tx3);font-size:var(--fs-s)}
+.frlg{position:relative;flex:none;display:grid}.frlg .frd{position:absolute;right:-3px;bottom:-3px;box-shadow:0 0 0 2px var(--s1)}   /* 航空公司標誌，右下角的點是抵達／出發／路過 */
+.frt{flex:none;min-width:4.5em;display:flex;flex-direction:column;align-items:flex-end;text-align:right;font-size:var(--fs-s);font-weight:500;color:var(--p)}.frt.bad{color:var(--bad)}
+.frt small{display:block;font-weight:400;color:var(--tx3)}   /* 右邊下面一行：離機場幾公里 */
+.frlh small{margin-left:10px;font-weight:400;font-size:var(--fs-s);color:var(--tx3)}
 .frd{width:10px;height:10px;border-radius:50%;flex:none;background:var(--tx3)}.frd.arr{background:var(--p)}.frd.dep{background:var(--tx)}.frd.emg{background:var(--bad)}
 @media (min-width:900px){
   .frlist{position:relative;width:340px;max-height:none;border-radius:0;box-shadow:none;border-left:1px solid var(--s3)}
