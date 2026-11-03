@@ -44,7 +44,7 @@ from collections import deque
 from concurrent.futures import ThreadPoolExecutor
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
-VERSION = "3.61"
+VERSION = "3.62"
 
 # ───────────────────────── 哨兵備份檔（.vsbk）─────────────────────────
 # 哨兵專用的備份格式：外面是自己的檔案格式，裡面用的是成熟、標準的加密方法（不自己發明加密）：
@@ -5509,10 +5509,10 @@ FLY_AL = {
     "MDA": ("AE", "華信航空"), "UIA": ("B7", "立榮航空"), "CPA": ("CX", "國泰航空"), "HKE": ("UO", "香港快運"),
     "CRK": ("HX", "香港航空"), "AMU": ("NX", "澳門航空"), "HGB": ("HB", "大灣區航空"), "AHK": ("LD", "華民航空"),
     "JAL": ("JL", "日本航空"), "ANA": ("NH", "全日空"), "APJ": ("MM", "樂桃航空"), "JJP": ("GK", "捷星日本"),
-    "SKY": ("BC", "天馬航空"), "ADO": ("HD", "北海道國際航空"), "SNJ": ("6J", "新日本航空"), "JTA": ("NU", "日本越洋航空"),
+    "SKY": ("BC", "天馬航空"), "ADO": ("HD", "北海道國際航空"), "SNJ": ("6J", "Solaseed 航空"), "JTA": ("NU", "日本越洋航空"),
     "NCA": ("KZ", "日本貨物航空"), "IBX": ("FW", "伊別克斯航空"), "KAL": ("KE", "大韓航空"), "AAR": ("OZ", "韓亞航空"),
-    "JNA": ("LJ", "真航空"), "TWB": ("TW", "德威航空"), "JJA": ("7C", "濟州航空"), "ABL": ("BX", "釜山航空"),
-    "ESR": ("ZE", "易斯達航空"), "TWY": ("RS", "首爾航空"), "CCA": ("CA", "中國國際航空"), "CES": ("MU", "東方航空"),
+    "JNA": ("LJ", "真航空"), "TWB": ("TW", "德威航空"), "TZP": ("ZG", "ZIPAIR"), "AJX": ("NQ", "AirJapan"), "JSA": ("3K", "捷星亞洲"), "VAG": ("VU", "越旅航空"), "LAO": ("QV", "寮國航空"), "APZ": ("YP", "Air Premia"), "JJA": ("7C", "濟州航空"), "ABL": ("BX", "釜山航空"),
+    "ESR": ("ZE", "易斯達航空"), "ASV": ("RS", "首爾航空"), "CCA": ("CA", "中國國際航空"), "CES": ("MU", "東方航空"),
     "CSN": ("CZ", "南方航空"), "CHH": ("HU", "海南航空"), "CXA": ("MF", "廈門航空"), "CSZ": ("ZH", "深圳航空"),
     "CSC": ("3U", "四川航空"), "CQH": ("9C", "春秋航空"), "DKH": ("HO", "吉祥航空"), "CSH": ("FM", "上海航空"),
     "CDG": ("SC", "山東航空"), "CAO": ("CA", "國貨航"), "CKK": ("CK", "中貨航"), "CSS": ("O3", "順豐航空"),
@@ -5552,7 +5552,7 @@ FLY_TYPES = {
     "E170": "E170", "E75L": "E175", "E190": "E190", "E195": "E195", "E290": "E190-E2", "E295": "E195-E2",
     "AT72": "ATR 72", "AT76": "ATR 72-600", "DH8D": "Dash 8-400", "CRJ9": "CRJ900", "CRJ7": "CRJ700",
     "A3ST": "Beluga", "A337": "BelugaXL", "A124": "An-124", "A225": "An-225", "IL76": "Il-76", "C17": "C-17",
-    "C130": "C-130", "C30J": "C-130J", "K35R": "KC-135", "P8": "P-8", "GLF6": "Gulfstream G650", "GLEX": "Global Express",
+    "C130": "C-130", "C30J": "C-130J", "K35R": "KC-135", "P8": "P-8", "GLF6": "Gulfstream G650", "GLEX": "Global Express", "GL5T": "Global 5000", "GL7T": "Global 7500", "GL8T": "Global 8000", "GLF4": "Gulfstream G450", "GLF5": "Gulfstream G550", "GA6C": "Gulfstream G600", "GA7C": "Gulfstream G700", "CL35": "Challenger 350", "CL60": "Challenger 650", "F2TH": "Falcon 2000", "FA7X": "Falcon 7X", "FA8X": "Falcon 8X",
     "B190": "Beech 1900", "C208": "Cessna 208", "H25B": "Hawker 800",
 }
 FLY_RARE = {"A388", "B748", "B742", "MD11", "A343", "A346", "A3ST", "A337", "A124", "A225", "IL76", "C17",
@@ -5584,7 +5584,7 @@ FLY_CARGO_ICAO = {"NCA", "CAO", "CKK", "CSS", "SQC", "FDX", "UPS", "GTI", "CLX",
                   "DHK", "DHX", "BCS", "YZR", "CYZ", "ICV", "ATN", "ABX", "MPH", "TAY", "NPT", "SOO", "WGN", "AJT", "KYE", "YTO", "AZG", "NCR", "HYT"}
 FLY_CARGO_IATA = {"KZ", "CK", "O3", "FX", "5X", "5Y", "CV", "K4", "PO", "RU", "3S", "LD", "QY", "D0", "Y8", "CF", "M6", "GB", "YG", "C8", "K9", "7L", "KD", "N8", "8Y", "ES", "8C"}
 FLY_SKYS = {"cache": {}, "until": 0, "left": None, "out": 0, "tok": "", "texp": 0, "tbad": 0, "err": ""}
-FLY = {"cache": {}, "routes": {}, "lock": threading.Lock(), "last": 0.0, "bad": {}, "rq": set(), "rbusy": False, "fetch": threading.Lock(), "logged": {}, "seen": {}, "view": {}, "used": 0, "hex": {}, "hq": set(), "hbusy": False, "zh": {}, "gate": {}, "types": {}}
+FLY = {"cache": {}, "routes": {}, "lock": threading.Lock(), "last": 0.0, "bad": {}, "rq": set(), "rbusy": False, "fetch": threading.Lock(), "logged": {}, "seen": {}, "view": {}, "used": 0, "hex": {}, "hq": set(), "hbusy": False, "zh": {}, "gate": {}, "types": {}, "turn": {}}
 
 
 def fly_cargo(fn, cs=""):
@@ -5661,8 +5661,8 @@ def fly_sched_check():
 # 用途：貨運航空公司以外，客貨都飛的公司只有某些機型是貨機（例如國泰的 747 全部是貨機）
 FLY_FREIGHT = {("CPA", "B748"), ("CPA", "B744"), ("CAL", "B744"), ("CAL", "B77L"), ("EVA", "B77L"), ("SIA", "B744"), ("SIA", "B77L"),
                ("CES", "B77L"), ("CSN", "B77L"), ("ETD", "B77L"), ("AFR", "B77L")}   # 只放這家公司這種機型「全部」都是貨機的
-FLY_BIZ = r"^(GLF|GL[5-7XE]|GLEX|CL30|CL35|CL60|F2TH|F900|FA[5-8X]|C25|C5[0-9][0-9]|C68|C700|C750|E5[05]P|E35L|E545|E550|LJ|H25|PC24|BE40|PRM1|HDJT|SF50|EA50|C510|BBJ|ACJ|A318|B737BBJ)"
-FLY_GOV = r"(airborne service|coast guard|police|fire|government|ministry|navy|army|air force|空勤|海巡|警|消防)"
+FLY_BIZ = r"^(GLF|GA[5-8]C|GL[5-8XE]|GLEX|CL30|CL35|CL60|F2TH|F900|FA[5-8X]|C25|C5\d|C68|C700|C750|E5[05]P|E35L|E545|E550|LJ|H25|PC24|BE40|PRM1|HDJT|SF50|EA50|C510|BBJ|ACJ|A318|B737BBJ)"
+FLY_GOV = r"(airborne service|coast guard|\bpolice\b|\bfire\b|government|ministry|\bnavy\b|\barmy\b|air force|空勤|海巡|警|消防)"
 
 
 FLY_RGN = r"AT[4-7]\d|DH8|SF34|D328|E120|JS41|AN24|F50$"
@@ -5693,6 +5693,11 @@ def fly_use(cs, al, t, cat, mil, op="", fn=""):
     return ""
 
 
+def fly_cut(m, n):
+    """太長的機型名稱：在字和字之間切，不把數字切一半（Global 7000 不會變 Global 700）"""
+    return m if len(m) <= n else m[:n + 1].rsplit(" ", 1)[0]
+
+
 def fly_model(m):
     """機型寫法統一：官網的「B777-300」「A320-271」和收到的「777-300ER」「A320neo」用同一種寫法"""
     m = re.sub(r"\s+", " ", str(m or "")).strip()
@@ -5706,12 +5711,12 @@ def fly_model(m):
 
 
 # 雷達上飛機的樣子：q4 四發、wb 雙發廣體、nb 窄體、tp 螺旋槳、ga 小飛機、heli 直升機（看機型代碼，沒有就看機型名稱、訊號裡的大小分類）
-FLY_KINDS = [("heli", r"^(EC\d|H1\d\d|H[1-6]\d|AS3|AS5|AS6|B06|B407|B412|B429|R22|R44|R66|S76|S92|AW1|A1[0-6]9|BK17|UH\d|H60|MI8|EH10|NH90)"),
+FLY_KINDS = [("heli", r"^(EC\d|H1\d\d$|H[1-6]\d$|AS3|AS5|AS6|B06|B407|B412|B429|R22|R44|R66|S76|S92|AW1|A1[0-8]9|BK17|UH\d|H60|MI8|EH10|NH90)"),
              ("q4", r"^(A38|B74|A34|IL9|IL7|A124|A225|C17$|C5M|K35|E3[TC]F|A400|B52|BA46|RJ[178]|P3$|C130|C30J)"),
-             ("wb", r"^(A30|A31|A33|A35|B76|B77|B78|MD1|DC10|L101|IL86|A3ST|A337)"),
-             ("tp", r"^(AT[4-7]|DH8|DHC|F50|SF34|D328|B190|C208|JS\d|ATP|Y12|AN2|AN24|AN26|L410|BE20|BE9|PC12|C212|CN35|E120|SW4|DO28)"),
+             ("wb", r"^(A30|A310|A33|A35|B76|B77|B78|MD1|DC10|L101|IL86|A3ST|A337)"),
+             ("tp", r"^(AT[4-7]|DH8|DHC|F50|SF34|D328|B190|C208|JS\d|ATP|Y12|AN2|AN24|AN26|L410|BE20|BE9|PC12|MU2|C212|CN35|E120|SW4|DO28)"),
              ("ga", r"^(C1\d\d|C2[0-9][0-9]|P28|PA\d|SR2|DA[2-6]|BE3|BE[56]\d|M20|TB\d|RV\d|G115|ULAC|GLID|C42)"),
-             ("nb", r"^(A1[89]N|A2[01]N|A3[12]\d|B7[0-5]|B3[789]M|B3XM|BCS|E1\d|E2\d|E7|E9|CRJ|C919|AJ27|MD8|MD9|B71|SU95|F70|F100|GLF|GLEX|CL|LJ|FA|H25|C5[0-9][0-9]|C68|E5[05]|PC24)")]
+             ("nb", r"^(A1[89]N|A2[01]N|A3[12]\d|B7[0-5]|B3[789]M|B3XM|BCS|E1\d|E2\d|E7|E9|CRJ|C919|AJ27|MD8|MD9|B71|SU95|F70|F100|GLF|GL\d|GA[5-8]C|GLEX|CL|LJ|FA|H25|C25|C5\d|C6\d|C7[05]0|E5[05]|E35L|E545|E550|HDJT|BE40|PRM1|SF50|EA50|PC24|P8$)")]
 FLY_KIND_M = [("q4", r"(A380|747|A340|Il-76|An-124|C-17|C-130)"), ("wb", r"(A330|A350|777|787|767|A300|MD-11)"),
               ("tp", r"(ATR|Dash 8|Q400|Beech 1900|Cessna 208)"), ("nb", r"(A31[89]|A32[01]|737|757|A220|E1[79]\d|CRJ|C919|ARJ)")]
 
@@ -5906,6 +5911,63 @@ def fly_get(url, data=None, ua="Mozilla/5.0 (vps-sentinel)", timeout=10):
         hd["Content-Type"] = "application/json"
     with urllib.request.urlopen(urllib.request.Request(url, data=data, headers=hd), timeout=timeout) as r:
         return r.read()
+
+
+# 飛機照片：planespotters.net 的公開介面（不用註冊；要寫攝影者、連回照片頁）；照註冊號查，主機記 14 天（查不到的也記，3 天後再查）
+FLY_PHOTO_URL = os.environ.get("SENTINEL_FLY_PHOTO") or "https://api.planespotters.net/pub/photos/{by}/{key}"
+FLY_PHOTO_FILE = os.path.join(DATA_DIR, "fly-photos.json")
+FLY_PHOTOS = {"d": None, "lock": threading.Lock()}
+
+
+def fly_photo(reg, hx=""):
+    """回傳 {"src", "big", "link", "by"}；查不到回 {}"""
+    reg = str(reg or "").upper().strip()
+    hx = str(hx or "").lower().strip()
+    if not re.fullmatch(r"[A-Z0-9][A-Z0-9-]{1,9}", reg):
+        reg = ""
+    if not re.fullmatch(r"[0-9a-f]{6}", hx):
+        hx = ""
+    if not reg and not hx:
+        return {}
+    k = reg or "~" + hx
+    with FLY_PHOTOS["lock"]:
+        if FLY_PHOTOS["d"] is None:
+            try:
+                with open(FLY_PHOTO_FILE, encoding="utf-8") as f:
+                    FLY_PHOTOS["d"] = json.load(f)
+            except (OSError, ValueError):
+                FLY_PHOTOS["d"] = {}
+        hit = FLY_PHOTOS["d"].get(k)
+    if hit and time.time() - hit.get("at", 0) < (14 if hit.get("src") else 3) * 86400:
+        return {x: hit[x] for x in ("src", "big", "link", "by") if hit.get(x)}
+    out = {}
+    try:
+        d = json.loads(fly_get(FLY_PHOTO_URL.replace("{by}", "reg" if reg else "hex").replace("{key}", urllib.parse.quote(reg or hx)), timeout=8))
+        ph = (d.get("photos") or [None])[0] if isinstance(d, dict) else None
+        if isinstance(ph, dict):
+            src = str((ph.get("thumbnail") or {}).get("src") or "")
+            big = str((ph.get("thumbnail_large") or {}).get("src") or "")
+            link = str(ph.get("link") or "")
+            if src.startswith("https://") and link.startswith("https://"):
+                out = {"src": src, "big": big if big.startswith("https://") else src, "link": link, "by": str(ph.get("photographer") or "")[:60]}
+    except (OSError, ValueError, AttributeError):
+        if hit:                                   # 連不上：先用舊的
+            return {x: hit[x] for x in ("src", "big", "link", "by") if hit.get(x)}
+        return {}
+    with FLY_PHOTOS["lock"]:
+        d = FLY_PHOTOS["d"]
+        d[k] = {"at": time.time(), **out}
+        if len(d) > 3000:                         # 太多就丟掉最舊的
+            for x in sorted(d, key=lambda x: d[x].get("at", 0))[:len(d) - 2500]:
+                d.pop(x)
+        try:
+            os.makedirs(DATA_DIR, exist_ok=True)
+            with open(FLY_PHOTO_FILE + ".tmp", "w", encoding="utf-8") as f:
+                json.dump(d, f)
+            os.replace(FLY_PHOTO_FILE + ".tmp", FLY_PHOTO_FILE)
+        except OSError:
+            pass
+    return out
 
 
 # 機場天氣（METAR，美國航空氣象中心，不用註冊）：背景抓，10 分鐘一次
@@ -6538,6 +6600,33 @@ def fly_closest(ap, lat, lon, trk=None, way=0):
     return best
 
 
+FLY_HOLD = (8 * 60, 300)                        # 8 分鐘內同一個方向轉了 300 度以上：在盤旋
+
+
+def fly_hold(hx, trk, now=None):
+    """記下每架飛機的航向，算最近幾分鐘轉了幾圈；在盤旋就回傳 True（剛轉完再留 3 分鐘，不會一下有一下沒有）"""
+    if not hx or trk is None:
+        return False
+    now = now or time.time()
+    win, need = FLY_HOLD
+    with FLY["lock"]:
+        h = FLY["turn"].setdefault(hx, {"s": [], "on": 0})
+        s = h["s"]
+        if s and now - s[-1][0] > 120:          # 中間斷太久，轉幾度算不出來：重新記
+            s.clear()
+        if not s or now - s[-1][0] >= 5:
+            s.append((now, float(trk)))
+        while s and now - s[0][0] > win:
+            s.pop(0)
+        turn = sum(((b[1] - a[1] + 180) % 360) - 180 for a, b in zip(s, s[1:]))
+        if abs(turn) >= need:
+            h["on"] = now
+        if len(FLY["turn"]) > 3000:
+            for k in [k for k, v in FLY["turn"].items() if not v["s"] or now - v["s"][-1][0] > 600]:
+                FLY["turn"].pop(k, None)
+        return bool(h["on"]) and now - h["on"] < 180
+
+
 def fly_plane(a, ap):
     """一架飛機：整理成看板一列；判斷是要降落、剛起飛、在地面還是路過"""
     try:
@@ -6595,8 +6684,13 @@ def fly_plane(a, ap):
     if not rt and ph in ("arr", "dep") and d < 30 and alt < 10000:     # 查不到航線：很確定在這裡落地／剛從這裡起飛的，先寫這一頭
         me, far = {"code": code, "name": fly_city(code) or ap[2], "guess": True}, None
         rt = [far, me] if ph == "arr" else [me, far]
-    eta = round(d / (gs * 1.852) * 60) if ph == "arr" and gs > 50 else None
-    if ph == "arr":
+    hold = ph != "gnd" and d < 80 and fly_hold(str(a.get("hex") or "").lower(), trk)
+    if hold and ph == "over" and not (rt and rt[0] and rt[1]) and alt < 20000 and fly_closest(ap, lat, lon) == code:
+        ph = "arr"                            # 查不到航線、在這個機場附近繞圈：多半是在等降落
+    eta = round(d / (gs * 1.852) * 60) if ph == "arr" and gs > 50 and not hold else None
+    if hold:
+        st = "盤旋等待" if ph == "arr" else "盤旋中"
+    elif ph == "arr":
         st = "即將降落" if alt < 2000 and d < 10 else "進場中"           # 幾點降落看時間那欄
     elif ph == "dep":
         st = "剛起飛" if d < 12 else "爬升中" if vr > 250 else "離開中"
@@ -6611,12 +6705,12 @@ def fly_plane(a, ap):
     op = str(a.get("ownOp") or "")
     return {
         "id": str(a.get("hex") or "")[:8], "cs": cs, "fn": fn, "al": al[1] if al else str(a.get("ownOp") or "")[:24],
-        "reg": reg, "t": t, "model": FLY_TYPES.get(t) or fly_model(str(a.get("desc") or t).title()[:28]),
+        "reg": reg, "t": t, "model": FLY_TYPES.get(t) or fly_model(fly_cut(str(a.get("desc") or t).title(), 32)),
         "org": rt[0] if rt else None, "dst": rt[1] if rt else None,
         "alt": round(alt * 0.3048), "spd": round(gs * 1.852), "vr": round(float(vr) * 0.00508, 1),
         "d": round(d, 1), "eta": eta, "trk": round(float(trk)) if trk is not None else None,
         "x": round(d * math.sin(math.radians(brg)), 2), "y": round(d * math.cos(math.radians(brg)), 2),
-        "ph": ph, "st": emg or st, "emg": bool(emg), "sq": sq, "mil": mil, "rare": mil or fly_rare(t, ap[0]),
+        "ph": ph, "st": emg or st, "emg": bool(emg), "hold": hold, "sq": sq, "mil": mil, "rare": mil or fly_rare(t, ap[0]),
         "cat": str(a.get("category") or "")[:2], "use": fly_use(cs, al, t, a.get("category"), mil, op, fn),
     }
 
@@ -6728,7 +6822,7 @@ def fly_merge(ap, fids, rows, io):
             if p.get("reg") or p.get("t"):            # 記住這班收到的飛機資料：停好關掉訊號後一樣查得到
                 FLY["seen"][sk] = {"at": now, "sch": r["sch"], "reg": p["reg"], "t": p["t"], "model": p["model"]}
             used.add(p["id"])
-            row.update({k: p[k] for k in ("id", "cs", "reg", "t", "model", "alt", "spd", "vr", "d", "eta", "trk", "x", "y", "sq", "emg", "mil", "rare") if p[k] or k not in ("t", "model")})   # 收到的訊號沒有機型：留官網的
+            row.update({k: p[k] for k in ("id", "cs", "reg", "t", "model", "alt", "spd", "vr", "d", "eta", "trk", "x", "y", "sq", "emg", "mil", "rare", "hold") if p.get(k) or k not in ("t", "model", "hold")})   # 收到的訊號沒有機型：留官網的
             row["live"] = True
             if p["mil"]:
                 row["use"] = "軍機"
@@ -6738,8 +6832,8 @@ def fly_merge(ap, fids, rows, io):
                 row["st"] = p["st"]                    # 天上的飛機：用即時的「即將降落」「剛起飛」
                 if io == "arr" and p["eta"] is not None:
                     row["est"] = now + p["eta"] * 60
-            if p["emg"]:
-                row["st"] = p["st"]
+            if p["emg"] or (p.get("hold") and io == "arr" and not done and r["st"] != "取消"):
+                row["st"] = p["st"] if p["emg"] else "盤旋等待"    # 緊急、在空中繞圈等降落：照即時的寫
         elif seen and seen.get("sch") == r["sch"] and now - seen.get("at", 0) < 6 * 3600:
             row.update(reg=seen.get("reg") or "", t=seen.get("t") or row["t"], model=seen.get("model") or row["model"], seen=seen["at"])
             fly_fix_type(row, r)
@@ -7165,6 +7259,8 @@ def fly_api(q):
     if "trk" in q:
         c = str(q["trk"][0]).upper()[:4]
         return fly_tracks(c if c in FLY_PIN else "TPE")
+    if "photo" in q:                              # 飛機照片（註冊號，沒有就用飛機編號）
+        return {"ok": True, **fly_photo(q["photo"][0], (q.get("hex") or [""])[0])}
     code = str(q.get("ap", ["TPE"])[0]).upper()[:4]
     try:
         return fly_board(code if code in FLY_PIN else "TPE")

@@ -113,6 +113,13 @@ class Fake(BaseHTTPRequestHandler):
             acct = self.headers.get("Authorization") == "Bearer tok-good"      # 有登入：次數比較多
             return self.reply({"time": t, "states": [[*x[:3], t, t, *x[5:]] for x in SKY] if float(q["lamin"][0]) < 23 else None},
                               hd={"X-Rate-Limit-Remaining": "3999" if acct else "350"})
+        if self.path.startswith("/ph/"):             # Planespotters 照片
+            if self.path == "/ph/reg/B-16781":
+                return self.reply({"photos": [{"thumbnail": {"src": "https://t.example/s.jpg"}, "thumbnail_large": {"src": "https://t.example/l.jpg"},
+                                               "link": "https://www.planespotters.net/photo/1", "photographer": "某人"}]})
+            if self.path == "/ph/reg/B-BAD":
+                return self.reply({"photos": [{"thumbnail": {"src": "javascript:x"}, "link": "https://p/1"}]})
+            return self.reply({"photos": []})
         if self.path.startswith("/tdb/"):            # 飛機資料庫的分檔（gzip 的 JSON；7 開頭的再分一層）
             d = {"/tdb/8.js": {"990B5": ["B-16331", "A333", "00", "AIRBUS A-330-300"]}, "/tdb/7.js": {"children": ["78"]},
                  "/tdb/78.js": {"0ABF": ["B-1", "A320", "00", ""]}}.get(self.path)
@@ -159,6 +166,7 @@ class Flights(unittest.TestCase):
         S.FLY_SKY_AUTH = base + "/auth"
         S.FLY_TDB = base + "/tdb/"
         S.FLY_METAR = base + "/metar/{icao}"
+        S.FLY_PHOTO_URL = base + "/ph/{by}/{key}"
         cls.night, S.fly_night = S.fly_night, lambda ap, now=None: False      # 測試不管現在幾點
         S.FLY_FIDS_URL.update({"TPE": base + "/tpe", "KHH": base + "/khh/", "RMQ": "http://127.0.0.1:9/", "TSA": "http://127.0.0.1:9/"})
 
@@ -168,6 +176,31 @@ class Flights(unittest.TestCase):
 
     def get(self, q):
         return self.S.fly_api(urllib.parse.parse_qs(q, keep_blank_values=True))
+
+    def test_photo(self):
+        """飛機照片：查得到給網址和攝影者，不是 https 的不給，亂打的註冊號不問"""
+        d = self.get("photo=B-16781")
+        self.assertEqual(d["big"], "https://t.example/l.jpg")
+        self.assertEqual(d["by"], "某人")
+        self.assertTrue(d["link"].startswith("https://www.planespotters.net/"))
+        self.assertNotIn("src", self.get("photo=B-BAD"))
+        self.assertNotIn("src", self.get("photo=&hex=899001"))
+        self.assertEqual(self.get("photo=<x>"), {"ok": True})
+
+    def test_hold(self):
+        """盤旋：幾分鐘內一直往同一邊轉、轉滿一圈才算，直直飛、左右修正都不算"""
+        S, t = self.S, 1e9
+        for i in range(20):                          # 每 20 秒轉 30 度：4 分鐘轉兩圈
+            h = S.fly_hold("aa0001", (i * 30) % 360, t + i * 20)
+        self.assertTrue(h)
+        for i in range(20):
+            h = S.fly_hold("aa0002", 53 + (10 if i % 2 else -10), t + i * 20)
+        self.assertFalse(h)
+        for i in range(8):                           # 只轉半圈（一般進場轉彎）
+            h = S.fly_hold("aa0003", 53 + i * 25, t + i * 20)
+        self.assertFalse(h)
+        self.assertTrue(S.fly_hold("aa0001", 0, t + 19 * 20 + 60))       # 剛轉完：先留著
+        self.assertFalse(S.fly_hold("aa0001", 0, t + 19 * 20 + 400))
 
     def test_board(self):
         self.get("ap=TPE")
@@ -582,6 +615,23 @@ class Kinds(unittest.TestCase):
                            (("JAL1", ["JL", "日本航空"], "B763", "A5", False), "客機"),
                            (("HKE601", ["UO", "香港快運"], "A21N", "A3", False, "Hong Kong Express Airways"), "客機")]:
             self.assertEqual(u(*args), want, args)
+
+    def test_biz_jet(self):
+        """私人噴射機（呼號 TWY42）不能被當成首爾航空；首爾航空的呼號是 ASV；機型名稱不切掉數字"""
+        from test_passkey import load_sentinel
+        S = load_sentinel()
+        self.assertNotIn("TWY", S.FLY_AL)
+        self.assertEqual(S.FLY_AL["ASV"][0], "RS")
+        self.assertEqual(S.fly_use("TWY42", S.FLY_AL.get("TWY"), "GL7T", "A3", False), "私人／公務機")
+        self.assertEqual(S.FLY_TYPES["GL7T"], "Global 7500")
+        self.assertEqual(S.fly_cut("Bombardier Bd-700 Global 7000 Extra Long Name", 32), "Bombardier Bd-700 Global 7000")
+        self.assertEqual(S.fly_cut("Short", 32), "Short")
+        for t, k in [("A319", "nb"), ("A318", "nb"), ("A310", "wb"), ("H25B", "nb"), ("H60", "heli"), ("H160", "heli"), ("GL7T", "nb"),
+                     ("C56X", "nb"), ("GA7C", "nb"), ("MU2", "tp"), ("B77W", "wb"), ("C208", "tp")]:
+            self.assertEqual(S.fly_kind(t), k, t)                  # A319 不是廣體機、Hawker 不是直升機
+        self.assertEqual(S.fly_use("", None, "H25B", "", False), "私人／公務機")
+        self.assertEqual(S.fly_use("", None, "C56X", "", False), "私人／公務機")
+        self.assertNotEqual(S.fly_use("FFM1", None, "AT76", "", False, "Firefly"), "公務飛機")
 
 
 class Logos(unittest.TestCase):
