@@ -44,7 +44,7 @@ from collections import deque
 from concurrent.futures import ThreadPoolExecutor
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
-VERSION = "3.65"
+VERSION = "3.66"
 
 # ───────────────────────── 哨兵備份檔（.vsbk）─────────────────────────
 # 哨兵專用的備份格式：外面是自己的檔案格式，裡面用的是成熟、標準的加密方法（不自己發明加密）：
@@ -5699,6 +5699,19 @@ def fly_cut(m, n):
     return m if len(m) <= n else m[:n + 1].rsplit(" ", 1)[0]
 
 
+FLY_CARGO_M = {"B744": "747-400F", "B748": "747-8F", "B77L": "777F", "B763": "767-300F", "B762": "767-200F", "B752": "757-200F",
+               "B738": "737-800F", "B734": "737-400F", "B733": "737-300F", "A332": "A330-200F", "A333": "A330-300F", "A321": "A321F",
+               "A306": "A300-600F", "MD11": "MD-11F", "B77W": "777-300ERF", "DC10": "DC-10F", "A310": "A310F"}   # 同一個國際民航組織代碼客貨機都用：確定是貨機時改寫貨機型號
+
+
+def fly_cargo_model(t, m):
+    """貨機的型號：機型代碼分不出客貨，是貨機就寫成「747-400F」這種（原本已經寫貨機的不動）"""
+    m = m or ""
+    if re.search(r"(F|BCF|SF|P2F|PCF|Freighter)\b", m, re.I):
+        return m
+    return FLY_CARGO_M.get((t or "").upper()) or m
+
+
 def fly_model(m):
     """機型寫法統一：官網的「B777-300」「A320-271」和收到的「777-300ER」「A320neo」用同一種寫法"""
     m = re.sub(r"\s+", " ", str(m or "")).strip()
@@ -6989,6 +7002,8 @@ def fly_board(code, bg=False):
     rest += cargo
     for p in arr + dep + gnd + over + rest:
         p["kind"] = fly_kind(p.get("t"), p.get("model"), p.get("cat"))
+        if p.get("use") == "貨機":
+            p["model"] = fly_cargo_model(p.get("t"), p.get("model"))
     fly_logo_new(arr + dep + gnd + over + rest)
     out = {"ok": True, "t": time.time(), "ap": fly_ap(ap), "src": src or (srcs[0][0] if srcs else ""), "home": home, "srcs": srcs,
            "fids": fids is not None, "arr": arr, "dep": dep, "gnd": gnd, "over": over, "rest": rest, "als": sorted(FLY_LGOK), "lgv": VERSION,
