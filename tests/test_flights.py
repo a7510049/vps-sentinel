@@ -632,6 +632,9 @@ class Kinds(unittest.TestCase):
         self.assertEqual(S.fly_use("", None, "H25B", "", False), "私人／公務機")
         self.assertEqual(S.fly_use("", None, "C56X", "", False), "私人／公務機")
         self.assertNotEqual(S.fly_use("FFM1", None, "AT76", "", False, "Firefly"), "公務飛機")
+        for t, k in [("DH82", "ga"), ("C295", "tp"), ("FA24", "ga"), ("B52", "q4"), ("MD11", "wb"), ("V22", "tp"), ("EC35", "heli"), ("UHEL", "heli")]:
+            self.assertEqual(S.fly_kind(t), k, t)                  # 照國際民航組織的機型分類
+        self.assertEqual(S.fly_use("", None, "C510", "", False), "私人／公務機")     # 輕型噴射機
 
 
 class Logos(unittest.TestCase):

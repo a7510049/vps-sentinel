@@ -984,7 +984,7 @@ def apt_updates():
 # ───────────────────────── 更新哨兵本身 ─────────────────────────
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-SRC_FILES = ["sentinel.py", "web/index.html", "web/style.css", "web/app.js", "data/airports.tsv", "data/coast.tsv", "data/terrain.bin"]   # 程式本體＋網頁三個檔＋機場資料、海岸線、地形
+SRC_FILES = ["sentinel.py", "web/index.html", "web/style.css", "web/app.js", "data/airports.tsv", "data/coast.tsv", "data/terrain.bin", "data/actypes.tsv"]   # 程式本體＋網頁三個檔＋機場資料、海岸線、地形、機型分類
 
 
 def build_of(blobs):
@@ -5661,7 +5661,7 @@ def fly_sched_check():
 # 用途：貨運航空公司以外，客貨都飛的公司只有某些機型是貨機（例如國泰的 747 全部是貨機）
 FLY_FREIGHT = {("CPA", "B748"), ("CPA", "B744"), ("CAL", "B744"), ("CAL", "B77L"), ("EVA", "B77L"), ("SIA", "B744"), ("SIA", "B77L"),
                ("CES", "B77L"), ("CSN", "B77L"), ("ETD", "B77L"), ("AFR", "B77L")}   # 只放這家公司這種機型「全部」都是貨機的
-FLY_BIZ = r"^(GLF|GA[5-8]C|GL[5-8XE]|GLEX|CL30|CL35|CL60|F2TH|F900|FA[5-8X]|C25|C5\d|C68|C700|C750|E5[05]P|E35L|E545|E550|LJ|H25|PC24|BE40|PRM1|HDJT|SF50|EA50|C510|BBJ|ACJ|A318|B737BBJ)"
+FLY_BIZ = r"^(SBR|MU30|WW24|ASTR|GALX|G150|G280|FA10|FA20|GLF|GA[5-8]C|GL[5-8XE]|GLEX|CL30|CL35|CL60|F2TH|F900|FA[5-8X]|C25|C5\d|C68|C700|C750|E5[05]P|E35L|E545|E550|LJ|H25|PC24|BE40|PRM1|HDJT|SF50|EA50|C510|BBJ|ACJ|A318|B737BBJ)"
 FLY_GOV = r"(airborne service|coast guard|\bpolice\b|\bfire\b|government|ministry|\bnavy\b|\barmy\b|air force|空勤|海巡|警|消防)"
 
 
@@ -5680,7 +5680,8 @@ def fly_use(cs, al, t, cat, mil, op="", fn=""):
     pre = cs[:3] if re.match(r"[A-Z]{3}\d", cs or "") else ""
     if fly_cargo(fn, cs) or (pre, t) in FLY_FREIGHT or (not al and re.search(r"cargo|freight|logistics", op or "", re.I)):
         return "貨機"
-    if t and re.match(FLY_BIZ, t) and not al:
+    a = fly_act(t)
+    if t and not al and (re.match(FLY_BIZ, t) or (a and a[0][2] == "J" and a[1] == "L")):     # 輕型噴射機都是私人／公務機
         return "私人／公務機"
     if al:
         return "客機"
@@ -5711,18 +5712,48 @@ def fly_model(m):
 
 
 # 雷達上飛機的樣子：q4 四發、wb 雙發廣體、nb 窄體、tp 螺旋槳、ga 小飛機、heli 直升機（看機型代碼，沒有就看機型名稱、訊號裡的大小分類）
-FLY_KINDS = [("heli", r"^(EC\d|H1\d\d$|H[1-6]\d$|AS3|AS5|AS6|B06|B407|B412|B429|R22|R44|R66|S76|S92|AW1|A1[0-8]9|BK17|UH\d|H60|MI8|EH10|NH90)"),
+FLY_KINDS = [("heli", r"^(EC\d|H1\d\d$|H[1-6]\d$|AS3|AS5|AS6|B06|B407|B412|B429|R22|R44|R66|S76|S92|AW1|A1[0-8]9|BK17|UH\d|UHEL|H60|MI8|EH10|NH90)"),
              ("q4", r"^(A38|B74|A34|IL9|IL7|A124|A225|C17$|C5M|K35|E3[TC]F|A400|B52|BA46|RJ[178]|P3$|C130|C30J)"),
              ("wb", r"^(A30|A310|A33|A35|B76|B77|B78|MD1|DC10|L101|IL86|A3ST|A337)"),
              ("tp", r"^(AT[4-7]|DH8|DHC|F50|SF34|D328|B190|C208|JS\d|ATP|Y12|AN2|AN24|AN26|L410|BE20|BE9|PC12|MU2|C212|CN35|E120|SW4|DO28)"),
-             ("ga", r"^(C1\d\d|C2[0-9][0-9]|P28|PA\d|SR2|DA[2-6]|BE3|BE[56]\d|M20|TB\d|RV\d|G115|ULAC|GLID|C42)"),
+             ("ga", r"^(C1\d\d|C2[0-9][0-9]|P28|PA\d|SR2|DA[2-6]|BE3|BE[56]\d|M20|TB\d|RV\d|G115|ULAC|GLID|GLIM|GYRO|C42)"),
              ("nb", r"^(A1[89]N|A2[01]N|A3[12]\d|B7[0-5]|B3[789]M|B3XM|BCS|E1\d|E2\d|E7|E9|CRJ|C919|AJ27|MD8|MD9|B71|SU95|F70|F100|GLF|GL\d|GA[5-8]C|GLEX|CL|LJ|FA|H25|C25|C5\d|C6\d|C7[05]0|E5[05]|E35L|E545|E550|HDJT|BE40|PRM1|SF50|EA50|PC24|P8$)")]
 FLY_KIND_M = [("q4", r"(A380|747|A340|Il-76|An-124|C-17|C-130)"), ("wb", r"(A330|A350|777|787|767|A300|MD-11)"),
               ("tp", r"(ATR|Dash 8|Q400|Beech 1900|Cessna 208)"), ("nb", r"(A31[89]|A32[01]|737|757|A220|E1[79]\d|CRJ|C919|ARJ)")]
 
 
+FLY_ACT = {}
+
+
+def fly_act(t):
+    """機型代碼查國際民航組織的表（data/actypes.tsv）：(種類, 尾流等級)，例如 ("L2J", "M")；查不到回 None"""
+    if not FLY_ACT:
+        try:
+            with open(os.path.join(HERE, "data", "actypes.tsv"), encoding="utf-8") as f:
+                for line in f:
+                    p = line.split()
+                    if len(p) == 3 and not line.startswith("#"):
+                        FLY_ACT[p[0]] = (p[1], p[2])
+        except OSError:
+            pass
+        FLY_ACT.setdefault("", None)          # 讀過了（沒有檔案也不要一直讀）
+    return FLY_ACT.get(str(t or "").upper())
+
+
 def fly_kind(t, model="", cat=""):
     t, model = str(t or "").upper(), str(model or "")
+    a = fly_act(t)
+    if a:                                     # 照國際民航組織的分類：直升機、四發、重型噴射機是廣體、其他噴射機、螺旋槳、小飛機
+        (k, n, e), w = a[0], a[1]
+        if k == "H":
+            return "heli"
+        if n in "468":
+            return "q4"
+        if e == "J":
+            return "wb" if w in "HJ" else "nb"
+        if e == "T" or k == "R":
+            return "tp"
+        return "ga"
     for k, rx in FLY_KINDS:
         if t and re.match(rx, t):
             return k
