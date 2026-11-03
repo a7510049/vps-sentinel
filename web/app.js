@@ -2708,7 +2708,7 @@ const flyRow = i => `<div class="fr" data-i="${i}" role="button" tabindex="0">${
 function flyShell(){
   return `<div class="flyv" id="fly"><div class="fscroll"><div class="fwrap">
     <div class="ftop">${SHARE ? `<span class="fexp sub" data-k="left"></span>` : `<button class="icbtn" data-fback title="返回">${I("back")}</button>`}<span class="grow"></span>
-      ${SHARE ? "" : `<button class="fchip fap" data-fshare>${I("share")}<span>分享</span></button>`}<button class="fchip fap fapb" data-fpick title="換機場">${flyApLg("")}<span class="fapn"></span>${I("chev").replace("<svg", '<svg class="chv"')}</button></div>
+      ${SHARE ? "" : `<button class="fchip fap" data-fshare>${I("share")}<span>分享</span></button>`}<button class="fchip fap fapb"${SHAREAP ? " disabled" : ` data-fpick title="換機場"`}>${flyApLg("")}<span class="fapn"></span>${SHAREAP ? "" : I("chev").replace("<svg", '<svg class="chv"')}</button></div>
     <div class="fhead"><div class="fcode">${flap("", 3, "xl")}</div><div class="fname"><b data-k="name"></b><span class="sub" data-k="city"></span></div>
       <div class="fclock"><span class="sub">當地時間</span>${flap("", 5, "lg")}</div></div>
     <div class="fmain"><div class="fleft">
@@ -3727,7 +3727,7 @@ const FLYAPC = ["", " full", " crop"];
 const FLYPLACE = {TPE:"桃園", TSA:"松山", RMQ:"台中", KHH:"高雄"};   // 右上角按鈕寫地名就好
 const flyApLg = c => `<span class="faplg${FLYAPC[FLYAPLG[c] || 0]}" data-c="${esc(c)}">${esc(c)}${c in FLYAPLG ? `<img alt="" src="/api/fly-logo?k=${esc(c)}">` : ""}</span>`;
 function flyApBtn(f, ap){
-  const b = f.querySelector("[data-fpick]"), lg = b && b.querySelector(".faplg"); if (!lg) return;
+  const b = f.querySelector(".fapb"), lg = b && b.querySelector(".faplg"); if (!lg) return;
   if (lg.dataset.c !== ap.code) lg.outerHTML = flyApLg(ap.code);
   txt(b.querySelector(".fapn"), FLYPLACE[ap.code] || ap.city || ap.code);
 }
@@ -3805,7 +3805,7 @@ document.addEventListener("click", e => {
   if (t.closest("[data-fpick]")) return flyPick();
   if (t.closest("[data-fplace]")) return flyWhere();
   if (t.closest("[data-rfull]")) return fradOpen();
-  if (t.closest("[data-fshare]")) return flyShare(t.closest("[data-fshare]"));
+  if (t.closest("[data-fshare]")) return flyShare();
   const tb = t.closest("[data-ftab]");
   if (tb) { if (FLYS.tab !== tb.dataset.ftab) { FLYS.tab = tb.dataset.ftab; FLYHR = ""; flySave(); const s = tb.parentNode;
     slideSel(() => s.querySelectorAll("button").forEach(b => b.classList.toggle("on", b === tb))); flySwitch("tab"); } return; }
@@ -4032,20 +4032,65 @@ document.addEventListener("click", e => {
   if (row) { if (!DESK.matches) FRAD.v.classList.remove("lopen"); return fradPick(row.dataset.rid, true); }
 });
 
-/* ═════════ 機場起降分享：1 小時內有效，第一支打開的手機才看得到 ═════════ */
+/* ═════════ 機場起降分享：自己選能看多久、幾支手機、哪個機場 ═════════ */
 const SHARE = location.pathname === "/fly" ? new URLSearchParams(location.hash.slice(1)).get("s") || "" : "";
-let SHAREDEV = "", SHAREEND = 0, SHARET = 0;
+let SHAREDEV = "", SHAREEND = 0, SHARET = 0, SHAREAP = "";
 const flyHdr = () => SHARE ? {"X-Share":SHARE + ":" + SHAREDEV} : {"X-Token":getTok()};
-async function flyShare(b){
-  if (b._busy) return; b._busy = 1;
-  try {
-    const r = await api("/api/fly-share", {method:"POST", headers:{"X-Token":getTok()}}), d = await r.json();
-    if (!d.ok) throw new Error(d.error || "做不出連結");
-    const url = location.origin + "/fly#s=" + d.code;
-    if (navigator.share && matchMedia("(pointer:coarse)").matches) { try { await navigator.share({title:"機場起降", url}); } catch(e) { /* 取消分享 */ } }
-    else { await navigator.clipboard.writeText(url); toast("已複製連結：1 小時內有效，只能一支手機看"); }
-  } catch(e) { toast(e.message || "複製不了", "bad"); }
-  b._busy = 0;
+const SHTIME = [[3600, "1 小時"], [21600, "6 小時"], [86400, "1 天"], [604800, "7 天"]], SHDEV = [[1, "1 支"], [3, "3 支"], [0, "不限"]];
+const shLeft = s => { const h = Math.ceil(s / 3600); return h >= 24 ? `還有 ${Math.ceil(s / 86400 - .01)} 天` : s >= 5400 ? `還有 ${h} 小時` : `還有 ${Math.max(1, Math.ceil(s / 60))} 分鐘`; };
+const shCall = body => api("/api/fly-share", {method:"POST", headers:{"X-Token":getTok(), "Content-Type":"application/json"}, body:JSON.stringify(body)}).then(r => r.json());
+async function flyShare(){
+  const o = (() => { try { return {secs:3600, devs:1, one:0, ...JSON.parse(store("vs-shopt") || "{}")}; } catch(e) { return {secs:3600, devs:1, one:0}; } })();
+  const apn = FLYPLACE[FLYS.ap] || FLYS.ap, sg = (k, opts) => `<div class="seg" data-o="${k}">${opts.map(([v, l]) => `<button type="button" class="${o[k] === v ? "on" : ""}" data-v="${v}">${l}</button>`).join("")}</div>`;
+  const v = document.createElement("div"); v.className = "veil";
+  v.innerHTML = `<div class="dialog shd"><span class="ico big fly">${I("share")}</span><h3>分享機場起降</h3>
+    <div class="form">
+      <label>給誰<input class="field" data-k="name" maxlength="20" placeholder="可不填"></label>
+      <label>能看多久${sg("secs", SHTIME)}</label>
+      <label>幾支手機能看${sg("devs", SHDEV)}</label>
+      <label>機場${sg("one", [[0, "四個都能看"], [1, `只看${esc(apn)}`]])}</label>
+      <div class="lbl shl" hidden>已分享</div><div class="pklist"></div>
+    </div>
+    <div class="btns"><button class="ubtn ghost" data-r="0">關閉</button><button class="ubtn" data-go>${navigator.share && matchMedia("(pointer:coarse)").matches ? "分享" : "複製連結"}</button></div></div>`;
+  $("#layer").appendChild(v);
+  const list = v.querySelector(".pklist"), lbl = v.querySelector(".shl"), go = v.querySelector("[data-go]");
+  const draw = items => { reveal(lbl, items.length > 0);
+    swapHTML(list, items.map(x => `<div class="pkrow"><span>${esc(x.name || "沒寫給誰")}<small>${x.ap ? `只看${FLYPLACE[x.ap] || x.ap}・` : ""}${shLeft(x.left)}・${x.used ? `${x.used}${x.max ? ` / ${x.max}` : ""} 支打開過` : "還沒打開"}</small></span>
+      <button type="button" class="iconbtn" data-del="${esc(x.id)}" data-name="${esc(x.name || "")}" title="收回">${I("x")}</button></div>`).join("")); };
+  shCall({op:"list"}).then(d => d.ok && v.isConnected && draw(d.list || []), () => {});
+  v.querySelectorAll(".seg").forEach(g => g.addEventListener("click", e => { const b = e.target.closest("button"); if (!b) return;
+    o[g.dataset.o] = +b.dataset.v; g.querySelectorAll("button").forEach(x => x.classList.toggle("on", x === b)); }));
+  let busy = false;
+  return new Promise(res => {
+    const done = () => { if (v._d) return; v._d = 1; v.classList.add("closing"); setTimeout(() => { v.remove(); res(); }, 360); };
+    v._esc = done;
+    v.addEventListener("click", async e => {
+      if (e.target === v || e.target.closest("[data-r]")) return done();
+      if (busy) return;
+      const del = e.target.closest("[data-del]");
+      if (del) {
+        const nm = del.dataset.name;
+        if (!await modal({icon:"share", cls:"bad", title:nm ? `收回給「${nm}」的連結？` : "收回這個連結？", text:"打開過的手機也會立刻看不到。", ok:"收回"})) return;
+        busy = true;
+        const d = await shCall({op:"del", id:del.dataset.del}).catch(() => ({}));
+        busy = false;
+        if (d.ok) { draw(d.list || []); toast("已收回"); } else toast("收回失敗", "bad");
+        return;
+      }
+      if (!e.target.closest("[data-go]")) return;
+      busy = true; go.disabled = true;
+      store("vs-shopt", JSON.stringify({secs:o.secs, devs:o.devs, one:o.one}));
+      try {
+        const d = await shCall({secs:o.secs, devs:o.devs, ap:o.one ? FLYS.ap : "", name:v.querySelector('[data-k="name"]').value.trim()});
+        if (!d.ok) throw new Error(d.error || "做不出連結");
+        const url = location.origin + "/fly#s=" + d.code;
+        if (navigator.share && matchMedia("(pointer:coarse)").matches) { try { await navigator.share({title:"機場起降", url}); } catch(err) { /* 取消分享 */ } }
+        else { await navigator.clipboard.writeText(url); toast("已複製連結"); }
+        shCall({op:"list"}).then(x => x.ok && v.isConnected && draw(x.list || []), () => {});
+      } catch(err) { toast(err.message || "複製不了", "bad"); }
+      busy = false; go.disabled = false;
+    });
+  });
 }
 async function shareBoot(){
   document.title = "機場起降";
@@ -4054,6 +4099,7 @@ async function shareBoot(){
     const r = await api("/api/fly-claim", {method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({code:SHARE, dev:store(k)})}), d = await r.json();
     if (!d.ok) return shareGone(d.error);
     SHAREDEV = d.dev; store(k, d.dev); SHAREEND = Date.now() + d.left * 1000;
+    if (d.ap) { SHAREAP = d.ap; FLYS.ap = d.ap; FLYS.name = ""; }      // 只分享一個機場：不能換
   } catch(e) { return shareGone(e.message); }
   endSplash(); flyOpen(); shareLeft();
 }
@@ -4062,7 +4108,7 @@ function shareLeft(){
   clearTimeout(SHARET);
   const m = Math.ceil((SHAREEND - Date.now()) / 60000), el = $("#fly [data-k=left]");
   if (m <= 0) return shareGone("連結已經失效");
-  if (el) el.textContent = `還能看 ${m} 分鐘`;
+  if (el) el.textContent = m > 90 ? shLeft(m * 60).replace("還有", "還能看") : `還能看 ${m} 分鐘`;
   SHARET = setTimeout(shareLeft, 15000);
 }
 function shareGone(msg){

@@ -3,6 +3,7 @@ import gzip
 import json
 import os
 import threading
+import hashlib
 import time
 import unittest
 import urllib.parse
@@ -459,19 +460,42 @@ class Flights(unittest.TestCase):
         code, secs = S.share_new()
         self.assertEqual(secs, 3600)
         self.assertFalse(S.share_ok(code + ":"))
-        dev, left = S.share_claim(code, "")                         # 第一支手機打開
+        dev, left, ap = S.share_claim(code, "")                     # 第一支手機打開
         self.assertTrue(dev and left > 3500)
+        self.assertEqual(ap, "")
         self.assertTrue(S.share_ok(code + ":" + dev))
         self.assertEqual(S.share_claim(code, dev)[0], dev)          # 同一支手機再打開
-        self.assertEqual(S.share_claim(code, ""), (None, "這個連結已經在別的手機打開過"))
+        self.assertEqual(S.share_claim(code, ""), (None, "這個連結已經在別的手機打開過", ""))
         self.assertIsNone(S.share_claim(code, "別人的")[0])
         self.assertFalse(S.share_ok(code + ":別人的"))
-        self.assertEqual(S.share_claim("fs_亂打", ""), (None, "連結已經失效"))
+        self.assertEqual(S.share_claim("fs_亂打", ""), (None, "連結已經失效", ""))
         d = S.share_load()
         for e in d.values():
             e["exp"] = time.time() - 1                              # 過了一小時
         S.share_save(d)
         self.assertFalse(S.share_ok(code + ":" + dev))
+
+    def test_share_opts(self):
+        S = self.S
+        code, secs = S.share_new(86400, 3, "khh", "小明\n")          # 一天、三支手機、只看高雄
+        self.assertEqual(secs, 86400)
+        self.assertEqual(S.share_new(999)[1], 3600)                 # 不在清單裡的時間：用預設
+        devs = [S.share_claim(code, "")[0] for _ in range(3)]
+        self.assertTrue(all(devs) and len(set(devs)) == 3)
+        self.assertEqual(S.share_claim(code, "")[1], "這個連結已經有 3 支手機打開過")
+        self.assertEqual(S.share_ok(code + ":" + devs[2])["ap"], "KHH")
+        it = [x for x in S.share_list() if x["name"] == "小明"][0]
+        self.assertEqual((it["max"], it["used"], it["ap"]), (3, 3, "KHH"))
+        c2 = S.share_new(3600, 0)[0]                                # 不限幾支手機
+        self.assertTrue(all(S.share_claim(c2, "")[0] for _ in range(5)))
+        self.assertTrue(S.share_del(it["id"]))                     # 提前收回
+        self.assertIsNone(S.share_ok(code + ":" + devs[0]))
+        self.assertFalse(S.share_del("亂打"))
+        d = S.share_load()                                          # 舊版存的（一支手機、dev 是字串）照樣能用
+        h = hashlib.sha256(b"fs_old").hexdigest()
+        d[h] = {"exp": time.time() + 60, "dev": hashlib.sha256(b"d1").hexdigest()}
+        S.share_save(d)
+        self.assertTrue(S.share_ok("fs_old:d1"))
 
     def test_night(self):
         S, night = self.S, type(self).night

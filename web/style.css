@@ -1127,6 +1127,7 @@ html.flyon .dash>.view{content-visibility:hidden;contain-intrinsic-size:auto non
 .fapb{gap:8px;padding-left:6px}
 .fapb .faplg{width:28px;height:28px;border-radius:var(--r-sm);font-size:var(--fs-xs)}
 .fapb .chv{width:16px;height:16px;margin-left:-2px;opacity:.7}
+.fapb:disabled{opacity:1;cursor:default}
 .fapc .lab{font-size:var(--fs-l);font-weight:600;line-height:1.25}
 .fapc .lab small{display:block;margin-top:2px;font-size:var(--fs-s);font-weight:400;color:var(--tx3)}
 .fapc.on .lab small{color:inherit;opacity:.75}
