@@ -44,7 +44,7 @@ from collections import deque
 from concurrent.futures import ThreadPoolExecutor
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
-VERSION = "3.62"
+VERSION = "3.63"
 
 # ───────────────────────── 哨兵備份檔（.vsbk）─────────────────────────
 # 哨兵專用的備份格式：外面是自己的檔案格式，裡面用的是成熟、標準的加密方法（不自己發明加密）：
@@ -5532,7 +5532,7 @@ FLY_AL = {
     "DHK": ("D0", "DHL 航空"), "BCS": ("QY", "DHL 歐洲航空"), "DHX": ("ES", "DHL 國際航空"), "YZR": ("Y8", "揚子江快運"),
     "CYZ": ("8Y", "中國郵政航空"), "HYT": ("YG", "圓通航空"), "ABX": ("GB", "ABX 航空"), "ATN": ("8C", "ATI 航空"),
     "AZG": ("7L", "絲路西方航空"), "WGN": ("KD", "西方環球航空"), "NCR": ("N8", "國家航空"),
-    "SFJ": ("7G", "星悅航空"), "-9G": ("9G", "太陽富國航空"), "AIC": ("AI", "印度航空"), "AVA": ("AV", "哥倫比亞航空"),   # 「-」開頭：查不到三碼
+    "SFJ": ("7G", "星悅航空"), "SPQ": ("9G", "太陽富國航空"), "CDC": ("GJ", "長龍航空"), "AIC": ("AI", "印度航空"), "AVA": ("AV", "哥倫比亞航空"),
     "RBA": ("BI", "汶萊航空"), "CMP": ("CM", "巴拿馬航空"), "LOT": ("LO", "波蘭航空"), "BKP": ("PG", "曼谷航空"),
     "EOK": ("RF", "可依航空"), "AEA": ("UX", "歐洲航空"), "DAC": ("DA", "德安航空"),
 }
@@ -6361,7 +6361,9 @@ def fly_fids_pull(code, hit):
                 r["al"] = al
             while r.get("est") and r["est"] < r["sch"] - 12 * 3600:   # 跨過半夜：官網的預計日期沒跟著換（或沒給日期），補一天
                 r["est"] += 86400
-            k = (r["io"], r["sch"], r["pc"] or r["pl"])
+            k = (r["io"], r["sch"], r["pc"] or r["pl"], r.get("gate") or "", r.get("term") or "")   # 同時間同地點的兩家公司（例如長榮、樂桃都 16:05 從成田來）登機門不同，不能當成同一班
+            if k in keep and keep[k]["type"] and r["type"] and keep[k]["type"] != r["type"]:
+                k += (r["fn"],)                          # 機型不同：一定是兩班飛機
             if k in keep:                              # 同一班飛機掛好幾個航班號
                 keep[k].setdefault("share", []).append(r["fn"])
                 keep[k]["type"] = keep[k]["type"] or r["type"]

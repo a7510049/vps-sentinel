@@ -47,6 +47,7 @@ def tpe_txt():
     for io, al, alz, num, gate, t, pc, en, zh, st in [
         ("A", "BR", "長榮航空", "2196", " C8", now + 600, "NRT", "Tokyo", "東京", "準時ON TIME"),
         ("A", "NH", "全日空", "5800", " C8", now + 600, "NRT", "Tokyo", "東京", "準時ON TIME"),     # 共掛
+        ("A", "MM", "樂桃航空", " 621", " B9", now + 600, "NRT", "Tokyo", "東京", "準時ON TIME"),    # 同時間同地點、不同登機門：別家的另一班
         ("D", "CI", "中華航空", "  27", " A5", now + 1800, "HKG", "Hong Kong", "香港", "登機BOARDING"),
         ("D", "IT", "台灣虎航", " 200", " D1", now - 3 * 3600, "OKA", "Okinawa", "沖繩", "出發DEPARTED"),   # 太早了
         ("D", "B7", "立榮航空", " 831", " D3", now + 900, "KIX", "Osaka", "大阪", "準時ON TIME"),        # 在地面滑行的那班
@@ -176,6 +177,19 @@ class Flights(unittest.TestCase):
 
     def get(self, q):
         return self.S.fly_api(urllib.parse.parse_qs(q, keep_blank_values=True))
+
+    def test_not_share(self):
+        """同時間從同一個地方來、登機門不同的兩家公司，不能被當成共掛班號（長榮配到樂桃的飛機）"""
+        d = self.get("ap=TPE")
+        br = next(p for p in d["arr"] if p["fn"] == "BR2196")
+        self.assertEqual(br.get("share"), ["NH5800"])
+        self.assertTrue(any(p["fn"] == "MM621" for p in d["arr"]))
+
+    def test_apmap(self):
+        """雷達底圖有機場的跑道、滑行道（OpenStreetMap）"""
+        g = self.S.fly_geo("TPE")
+        self.assertTrue(g["apm"]["rw"] and g["apm"]["tw"])
+        self.assertTrue(all(len(a) >= 5 for a in g["apm"]["rw"]))
 
     def test_photo(self):
         """飛機照片：查得到給網址和攝影者，不是 https 的不給，亂打的註冊號不問"""
