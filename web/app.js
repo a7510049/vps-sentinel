@@ -2943,7 +2943,7 @@ function radarView(cv, full){
   };
   R.V = V;
   R.zoom = (r, anim) => { R.range = r; if (!full) R.view(0, 0, R.fit(r), anim); };
-  R.setGeo = g => { if (R.geo === g) return; R.geo = g; R.gk = (R.gk || 0) + 1; R.gp = g && new Path2D(g.coast); R.gf = g && g.far ? new Path2D(g.far) : null; R.ga = 0; R.gt = now(); R.kick(); };
+  R.setGeo = g => { if (R.geo === g) return; R.geo = g; R.gk = (R.gk || 0) + 1; R.gp = g && new Path2D(g.coast); R.gf = g && g.far ? new Path2D(g.far) : null; R.am = g && flyApm(g.apm); R.ga = 0; R.gt = now(); R.kick(); };
   R.trkOn = () => { R.tt = now(); R.kick(); };
   R.setTrk = d => { if (R.trk === d) return; R.trk = d; R.gk = (R.gk || 0) + 1; R.ti = null; R.td = now(); R.kick(); };
   /* 新資料：每架飛機從現在畫的位置，花一次更新的時間慢慢移到新的位置 */
@@ -3030,8 +3030,19 @@ function radarView(cv, full){
         const tr = R.geo.ter;                                   // 山
         if (ti) { g.save(); g.clip(R.gp); g.imageSmoothingQuality = "high"; g.drawImage(ti, tr[0], -tr[1], tr[2], tr[3]); g.restore(); }
         else if (tr && FLYTERQ && !R.tq) R.tq = FLYTERQ.then(() => { R.tq = null; R.gt = now(); R.kick(); });
+        const am = R.am ? Math.min(1, Math.max(0, (s - 12) / 14)) : 0, ba = g.globalAlpha;   // 放大到看得清楚機場：畫真的跑道、滑行道、機坪、航廈
+        if (am > 0) {
+          const A = R.am;
+          g.globalAlpha = ba * am; g.fillStyle = col.s4; g.fill(A.ap);
+          g.globalAlpha = ba * am * .45; g.fillStyle = col.tx3; g.fill(A.tm);
+          g.globalAlpha = ba * am * .7; g.strokeStyle = col.tx3; g.lineJoin = "round"; g.lineCap = "round"; g.lineWidth = Math.max(.023, 1.2 / s); g.stroke(A.tw);
+          g.globalAlpha = ba * am; g.strokeStyle = col.tx2; g.lineCap = "butt";
+          A.rw.forEach(([w, p]) => { g.lineWidth = Math.max(w / 1000, 2 / s); g.stroke(p); });
+          g.globalAlpha = ba;
+        }
         g.lineCap = "round"; g.strokeStyle = col.tx3; g.lineWidth = (full ? 3 : 2.2) / s;
-        g.beginPath(); (R.geo.rwy || []).forEach(([a, b, c, d]) => { g.moveTo(a, -b); g.lineTo(c, -d); }); g.stroke();
+        g.beginPath(); (R.geo.rwy || []).forEach(([a, b, c, d]) => { if (am > 0 && Math.hypot((a + c) / 2, (b + d) / 2) <= 4) return; g.moveTo(a, -b); g.lineTo(c, -d); }); g.stroke();
+        if (am > 0 && am < 1) { g.globalAlpha = ba * (1 - am); g.beginPath(); (R.geo.rwy || []).forEach(([a, b, c, d]) => { if (Math.hypot((a + c) / 2, (b + d) / 2) <= 4) { g.moveTo(a, -b); g.lineTo(c, -d); } }); g.stroke(); g.globalAlpha = ba; }
         if (R.trk && ta > 0) {                                // 常走的進場、離場路線：抵達用主題色、出發用灰色，細線，越常飛越清楚
           if (!R.ti) R.ti = {a:flyTrkLines(R.trk.arr), d:flyTrkLines(R.trk.dep)};
           g.lineJoin = g.lineCap = "round"; g.lineWidth = (full ? 1.6 : 1.3) / s;
@@ -3251,6 +3262,16 @@ function radarView(cv, full){
     ctx.restore(); ctx.globalAlpha = 1;
   };
   return R;
+}
+/* 機場地圖（OpenStreetMap）：做成畫布用的路徑；沒有資料回 null */
+function flyApm(m){
+  if (!m || !(m.rw || []).length) return null;
+  const line = (P, a, i0) => { P.moveTo(a[i0], -a[i0 + 1]); for (let i = i0 + 2; i < a.length; i += 2) P.lineTo(a[i], -a[i + 1]); };
+  const ap = new Path2D(), tm = new Path2D(), tw = new Path2D();
+  (m.ap || []).forEach(a => { line(ap, a, 0); ap.closePath(); });
+  (m.tm || []).forEach(a => { line(tm, a, 0); tm.closePath(); });
+  (m.tw || []).forEach(a => line(tw, a, 0));
+  return {ap, tm, tw, rw:m.rw.map(a => { const P = new Path2D(); line(P, a, 1); return [a[0] || 45, P]; })};
 }
 /* 顏色加透明度（畫布用） */
 function flyAlpha(c, a){ return c.startsWith("rgb(") ? c.replace("rgb(", "rgba(").replace(")", `, ${a})`) : c.replace(/\)$/, ` / ${a})`); }
