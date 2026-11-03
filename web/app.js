@@ -2945,7 +2945,7 @@ function radarView(cv, full){
   R.zoom = (r, anim) => { R.range = r; if (!full) R.view(0, 0, R.fit(r), anim); };
   R.setGeo = g => { if (R.geo === g) return; R.geo = g; R.gk = (R.gk || 0) + 1; R.gp = g && new Path2D(g.coast); R.gf = g && g.far ? new Path2D(g.far) : null; R.ga = 0; R.gt = now(); R.kick(); };
   R.trkOn = () => { R.tt = now(); R.kick(); };
-  R.setTrk = d => { if (R.trk === d) return; R.trk = d; R.gk = (R.gk || 0) + 1; R.ti = null; R.tt = now(); R.kick(); };
+  R.setTrk = d => { if (R.trk === d) return; R.trk = d; R.gk = (R.gk || 0) + 1; R.ti = null; R.td = now(); R.kick(); };
   /* 新資料：每架飛機從現在畫的位置，花一次更新的時間慢慢移到新的位置 */
   R.setData = list => {
     const t = now(), seen = new Set();
@@ -2987,8 +2987,8 @@ function radarView(cv, full){
     const fading = o => o.gone || (o.on === false ? o.a > 0 : o.a < 1) || (o.dmT != null && o.dm !== o.dmT);   // 正在淡入淡出（雷達圈外的飛機一直是透明的，不算）
     if (R.sel !== R.ps) { R.ps = R.sel; R.st = t; }           // 換選到（滑鼠指著）的飛機：光圈跟看板那一列一樣慢慢亮起來
     if (R.focus !== R.pf) { R.pf = R.focus; R.ft1 = t; }      // 看板換分頁：飛機的濃淡跟著慢慢換
-    const moving = A.t || R.busy || t - (R.tt || 0) < T.mid || t - (R.st || 0) < T.fast || t - (R.ft1 || 0) < T.mid * 1.6 || [...pl.values()].some(o => fading(o) || t - o.t0 < FLYEV) || t - R.gt < T.mid;
-    const fade = R.busy || t - (R.tt || 0) < T.mid || t - (R.ft1 || 0) < T.mid * 1.6 || [...pl.values()].some(fading) || t - R.gt < T.mid;
+    const moving = A.t || R.busy || t - (R.tt || 0) < T.mid || t - (R.td || 0) < T.mid || t - (R.st || 0) < T.fast || t - (R.ft1 || 0) < T.mid * 1.6 || [...pl.values()].some(o => fading(o) || t - o.t0 < FLYEV) || t - R.gt < T.mid;
+    const fade = R.busy || t - (R.tt || 0) < T.mid || t - (R.td || 0) < T.mid || t - (R.ft1 || 0) < T.mid * 1.6 || [...pl.values()].some(fading) || t - R.gt < T.mid;
     let v = 0;                                              // 小雷達：照飛機在畫面上移動的快慢決定多久畫一次（移不到一點就不用重畫）
     if (!fade && !full) pl.forEach(o => { if (o.vis && t - o.t0 < FLYEV) v = Math.max(v, Math.hypot(o.x1 - o.x0, o.y1 - o.y0)); });
     const gap = A.t || R.busy ? 0 : t < FLYHUSH ? T.mid : fade || full ? 30 : Math.min(250, Math.max(33, .7 * FLYEV / (v * V.s || 1e-6)));   // 看板切換時先讓給切換動畫
@@ -3013,8 +3013,9 @@ function radarView(cv, full){
     /* 地圖、山、常走的路線：不常變，先畫在另一張畫布上，之後直接貼上去（每次都重畫山和路線，手機會卡） */
     const ga = R.geo ? EASEF(Math.min(1, (t - R.gt) / T.mid)) : 0;
     if (R.geo && R.gp) {
-      const tp = canAnim() ? EASEF(Math.min(1, Math.max(0, (t - (R.tt || 0)) / T.mid))) : 1;   // 常走路線開關：慢慢出現、慢慢消失
-      const ta = R.trk ? FLYTRKON ? Math.min(ga, tp) : 1 - tp : 0, ti = flyTer(R.geo);
+      const pr = x => canAnim() ? EASEF(Math.min(1, Math.max(0, (t - (x || 0)) / T.mid))) : 1;
+      const tp = pr(R.tt), td = pr(R.td);                   // 常走路線：按開關慢慢出現、消失；資料到了慢慢浮出來（關著就不畫，不會閃一下）
+      const ta = R.trk ? FLYTRKON ? Math.min(ga, tp, td) : 1 - tp : 0, ti = flyTer(R.geo);
       const bk = [V.cx, V.cy, s, W, H, R.dpr, canAnim() ? ga : 1, ta, col.s2, col.s4, col.p, col.tx2, R.gk, !!ti].join();
       const B = R.bg || (R.bg = document.createElement("canvas"));
       if (R.bk !== bk) {
@@ -3214,7 +3215,7 @@ function radarView(cv, full){
       ctx.restore();
     }
     /* 名字：擠在一起時換邊放，放不下就放遠一點拉線，再放不下先不顯示 */
-    const lf = Math.round(full ? fs : Math.max(9, rr / 21)), lab = vis.filter(o => o.vis && (o.id === R.sel || o.p.emg || o.p.ph === "arr" || o.p.ph === "dep" || (full && o.p.ph === "over" && s > 14)));   // 路過的放大到 30 公里內才寫名字
+    const lf = Math.round(full ? fs : Math.max(9, rr / 21)), lab = vis.filter(o => o.vis && (o.id === R.sel || o.p.emg || o.p.hold || o.p.ph === "arr" || o.p.ph === "dep" || (full && o.p.ph === "over" && s > 14)));   // 路過的放大到 30 公里內才寫名字
     const used = flyPlace(ctx, lab, lf, ps * 3.4, full, font, R.sel, W, H, rb, R.top || 0);
     if (tw.length || nv.length) {
       ctx.globalAlpha = (canAnim() ? ga : 1) * .8; ctx.textAlign = "center"; ctx.textBaseline = "middle"; ctx.fillStyle = col.tx3;
@@ -3268,6 +3269,7 @@ function flyPlace(ctx, lab, lf, gap, full, font, sel, W, H, rb, top){
     const vr = o.p.vr > 1 ? " ↑" : o.p.vr < -1 ? " ↓" : "";     // 爬升／下降
     const near = (o.p.ph === "arr" || o.p.ph === "dep") && Math.hypot(o.x, o.y) < 12;   // 高度、速度只寫選到的、快落地／剛起飛的
     o.l2 = (o.id === sel || near) && o.p.alt != null && o.p.alt > 0 && o.p.ph !== "gnd" ? full ? `${o.p.alt.toLocaleString()} 公尺${vr}・${o.p.spd} 公里/時` : `${o.p.alt.toLocaleString()}${vr}` : "";
+    if (o.p.hold) o.l2 = o.l2 ? "盤旋・" + o.l2 : "盤旋中";     // 在空中繞圈等降落
     const w = Math.max(ctx.measureText(o.l1).width, o.l2 ? ctx.measureText(o.l2).width * .85 : 0) + 2, h = lf * (o.l2 ? 2.1 : 1.1), x = o.sx, y = o.sy;
     const G = gap * 2.6, D = G * .72;                       // 旁邊都放不下：放遠一點、拉一條細線連回飛機
     const c = {r:[x + gap, y - h / 2], l:[x - gap - w, y - h / 2], t:[x - w / 2, y - gap - h], b:[x - w / 2, y + gap * .9],
@@ -3883,12 +3885,14 @@ function flyInfo(id){
     <div class="fih">${flyLogo(flyAl(p.fn), "lg")}<div class="lab"><b class="ffn">${esc(p.fn || p.reg || "—")}</b><small>${esc([p.al, p.use].filter(Boolean).join("・") || "航空公司不明")}</small></div>
       ${p.st ? `<span class="fst2${p.emg || /取消|轉降/.test(p.st) ? " bad" : ""}">${esc(p.st)}</span>` : ""}</div>
     ${p.emg || p.mil || p.rare ? `<div class="fbad${p.emg ? " bad" : ""}">${p.emg ? `${I("warn")}${esc(p.st)}（應答碼 ${esc(p.sq)}）` : p.mil ? "軍機" : "少見機型"}</div>` : ""}
+    <a class="fph" target="_blank" rel="noopener noreferrer" hidden></a>
     ${p.org || p.dst ? `<div class="froute">${end(p.org, !arr)}<span class="fln"><i></i>${I("plane")}<i></i></span>${end(p.dst, arr)}</div>` : `<div class="fnr sub">航線不明</div>`}
     ${rows.length ? `<div class="fdl">${rows.map(([k, val]) => `<div><span>${k}</span><b>${esc(val)}</b></div>`).join("")}</div>` : ""}
     ${reg ? `<div class="group"><a class="li" href="https://www.jetphotos.com/registration/${reg}" target="_blank" rel="noopener noreferrer"><span class="lab">看這架的照片<small>JetPhotos</small></span>${EXT}</a>
       <a class="li" href="https://www.flightradar24.com/data/aircraft/${reg.toLowerCase()}" target="_blank" rel="noopener noreferrer"><span class="lab">飛行紀錄<small>Flightradar24</small></span>${EXT}</a></div>` : ""}
     </div><div class="btns"><button class="ubtn ghost" data-r="0">關閉</button></div></div>`;
   $("#layer").appendChild(v);
+  flyPhoto(v.querySelector(".fph"), p);
   const done = () => { if (v._d) return; v._d = 1; v.classList.add("closing"); FLYSEL = ""; flyPaint(); setTimeout(() => v.remove(), 360); };
   v._esc = done;
   v.addEventListener("click", e => { if (e.target === v || e.target.closest("[data-r]")) done(); });
@@ -4038,7 +4042,7 @@ function fradList(){
   out.sort((a, b) => a[0] - b[0]);
   const pl = p => p.ph === "arr" ? (p.org ? "從 " + p.org.name : "") : p.ph === "dep" ? (p.dst ? "往 " + p.dst.name : "") : [p.org && p.org.name, p.dst && p.dst.name].filter(Boolean).join(" → ");
   const vr = p => p.vr > 1 ? " ↑" : p.vr < -1 ? " ↓" : "";
-  const rt = p => p.emg ? "緊急" : p.ph === "arr" && p.eta != null ? (p.eta < 1 ? "快到了" : `${p.eta} 分後`) : p.ph === "dep" ? (p.st || "") : "";   // 右邊：抵達幾分後降落、出發的狀態
+  const rt = p => p.emg ? "緊急" : p.hold ? "盤旋中" : p.ph === "arr" && p.eta != null ? (p.eta < 1 ? "快到了" : `${p.eta} 分後`) : p.ph === "dep" ? (p.st || "") : "";   // 右邊：抵達幾分後降落、出發的狀態
   const html = out.slice(0, 60).map(([, p]) => `<button class="li frr${p.id === FRAD.sel ? " on" : ""}" data-rid="${esc(p.id)}" data-key="${esc(p.id)}">
     <span class="frlg">${flyLogo(flyAl(p.fn)) || `<i class="alg"></i>`}<i class="frd ${p.emg ? "emg" : p.ph}"></i></span>
     <span class="lab"><span class="l1"><b>${esc(p.fn || p.reg || "—")}</b> ${esc(pl(p) || p.al || "")}</span>
@@ -4062,9 +4066,31 @@ function fradCard(){
       <button class="icbtn" data-rx title="關閉">${I("x")}</button></div>
     ${p.org || p.dst ? `<div class="frrt"><div>${ap(p.org)}</div><span class="sub">${I("plane")}</span><div>${ap(p.dst)}</div></div>` : `<div class="frrt sub">航線不明</div>`}
     <div class="frkv">${kv("高度", p.alt != null ? p.alt.toLocaleString() + " 公尺" : "—")}${kv("速度", p.spd != null ? p.spd + " 公里/時" : "—")}${kv(p.ph === "arr" && p.eta != null ? "降落" : "離機場", p.ph === "arr" && p.eta != null ? (p.eta < 1 ? "快到了" : p.eta + " 分鐘後") : (p.d != null ? p.d + " 公里" : "—"))}${kv("機型", esc(p.model || p.t || "—"))}</div>`;
-  if (c._h !== html) { c._h = html; c.innerHTML = html; }
+  if (!c._b) { c.innerHTML = `<a class="fph wide" target="_blank" rel="noopener noreferrer" hidden></a><div></div>`; c._b = c.lastChild; }
+  if (c._h !== html) { c._h = html; c._b.innerHTML = html; }
+  flyPhoto(c.firstChild, p);
   if (c._id !== p.id) { c._id = p.id; if (!c.hidden && canAnim()) c.animate([{opacity:.4, transform:"translateY(6px)"}, {opacity:1, transform:"none"}], {duration:T.mid, easing:EASE}); }
   reveal(c, true);
+}
+/* 飛機照片（Planespotters）：查得到就放在卡片最上面，寫攝影者、點了看原圖 */
+const FLYPH = new Map();
+function flyPhoto(box, p){
+  const reg = p.reg || "", hx = /^[0-9a-f]{6}$/.test(p.id || "") ? p.id : "", k = reg || hx;
+  if (!box || box._k === k) return;
+  box._k = k;
+  if (!k) return reveal(box, false);
+  box.classList.add("old");                                  // 換了一架：舊照片先變淡，新的到了再換
+  if (!FLYPH.has(k)) FLYPH.set(k, api("/api/flights?photo=" + encodeURIComponent(reg) + "&hex=" + hx, {headers:flyHdr()}).then(r => r.json())
+    .then(d => d && d.ok && d.src ? new Promise(ok => { const im = new Image(); im.onload = () => ok(d); im.onerror = () => ok(null); im.src = d.big || d.src; }) : null, () => { FLYPH.delete(k); return null; }));
+  FLYPH.get(k).then(d => {
+    if (box._k !== k) return;
+    box.classList.remove("old");
+    if (!d) return reveal(box, false);
+    box.href = d.link;
+    box.innerHTML = `<img alt="" src="${esc(d.big || d.src)}">${d.by ? `<small>攝影：${esc(d.by)}</small>` : ""}`;
+    if (!box.hidden && canAnim()) box.firstChild.animate([{opacity:0}, {opacity:1}], {duration:T.mid, easing:EASE});
+    reveal(box, true);
+  });
 }
 function fradPick(id, center){
   if (!FRAD) return;
