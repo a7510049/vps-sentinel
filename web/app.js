@@ -2838,19 +2838,63 @@ function flyTer(g){
 }
 /* 常走的航線（主機記下每天抵達、出發的飛機飛過哪裡）：一格一公里，越常飛越濃 */
 const FLYTRK = {};
-function flyTrkImg(d, color){
+/* 常走的路線：飛過的格子先柔化，夠常飛的連成一塊，再削成一格寬的中線（Zhang-Suen 細化），
+   沿著中線串成一條條線、磨圓，越常飛越清楚。以前整片柔化，飛的人一多就整片霧 */
+function flyTrkLines(d){
   if (!d || !d.length) return null;
   let x0 = 1e9, x1 = -1e9, y0 = 1e9, y1 = -1e9;
   for (let i = 0; i < d.length; i += 3) { x0 = Math.min(x0, d[i]); x1 = Math.max(x1, d[i]); y0 = Math.min(y0, d[i + 1]); y1 = Math.max(y1, d[i + 1]); }
-  const w = x1 - x0 + 1, h = y1 - y0 + 1, c = document.createElement("canvas"); c.width = w; c.height = h;
-  const cx = c.getContext("2d"), im = cx.createImageData(w, h);
-  for (let i = 0; i < d.length; i += 3) im.data[((y1 - d[i + 1]) * w + d[i] - x0) * 4 + 3] = Math.round(Math.pow(d[i + 2] / 9, 1.4) * 255);
-  cx.putImageData(im, 0, 0);
-  const b = document.createElement("canvas"), bx = b.getContext("2d"); b.width = w * 4; b.height = h * 4;   // 一公里一格：放大四倍再柔化，看起來是一條條的線
-  bx.filter = "blur(3px)"; bx.imageSmoothingQuality = "high"; bx.drawImage(c, 0, 0, b.width, b.height);
-  bx.filter = "none"; bx.globalCompositeOperation = "source-in"; bx.fillStyle = color; bx.fillRect(0, 0, b.width, b.height);
-  b._b = [x0 - .5, -(y1 + .5), w, h];
-  return b;
+  x0 -= 2; y0 -= 2; const w = x1 - x0 + 3, h = y1 - y0 + 3, I = (x, y) => y * w + x;
+  let v = new Float32Array(w * h);
+  for (let i = 0; i < d.length; i += 3) v[I(d[i] - x0, d[i + 1] - y0)] = d[i + 2] > 9 ? d[i + 2] / 99 : d[i + 2] / 9;   // 舊主機給 1～9
+  for (let k = 0; k < 2; k++) {                              // 柔化兩次（1-2-1），零星亂飛的格子被拉低、同一條路線連起來
+    const o = new Float32Array(w * h);
+    for (let y = 1; y < h - 1; y++) for (let x = 1; x < w - 1; x++) {
+      let t = 0; for (let j = -1; j <= 1; j++) for (let i = -1; i <= 1; i++) t += v[I(x + i, y + j)] * (2 - Math.abs(i)) * (2 - Math.abs(j));
+      o[I(x, y)] = t / 16;
+    }
+    v = o;
+  }
+  const B = new Uint8Array(w * h);
+  const st0 = [];                                            // 夠常飛的格子當起點，往旁邊比較淡、但還連著的格子長出去（路線中間不會斷掉）
+  for (let i = 0; i < w * h; i++) if (v[i] >= .4) { B[i] = 1; st0.push(i); }
+  while (st0.length) { const i = st0.pop(), x = i % w; for (const j of [i - 1, i + 1, i - w, i + w, i - w - 1, i - w + 1, i + w - 1, i + w + 1]) if (j >= 0 && j < w * h && !B[j] && v[j] >= .22 && Math.abs(j % w - x) <= 1) { B[j] = 1; st0.push(j); } }
+  const nb = (x, y) => [B[I(x, y - 1)], B[I(x + 1, y - 1)], B[I(x + 1, y)], B[I(x + 1, y + 1)], B[I(x, y + 1)], B[I(x - 1, y + 1)], B[I(x - 1, y)], B[I(x - 1, y - 1)]];
+  for (let ch = 1; ch;) {                                    // Zhang-Suen：一層一層削，削到只剩一格寬
+    ch = 0;
+    for (const st of [0, 1]) {
+      const del = [];
+      for (let y = 1; y < h - 1; y++) for (let x = 1; x < w - 1; x++) {
+        if (!B[I(x, y)]) continue;
+        const p = nb(x, y), n = p.reduce((a, b) => a + b, 0); if (n < 2 || n > 6) continue;
+        let tr = 0; for (let i = 0; i < 8; i++) if (!p[i] && p[(i + 1) % 8]) tr++; if (tr !== 1) continue;
+        if (st ? p[0] * p[2] * p[6] || p[0] * p[4] * p[6] : p[0] * p[2] * p[4] || p[2] * p[4] * p[6]) continue;
+        del.push(I(x, y));
+      }
+      del.forEach(i => { B[i] = 0; }); ch += del.length;
+    }
+  }
+  const N8 = [[1, 0], [-1, 0], [0, 1], [0, -1], [1, 1], [-1, -1], [1, -1], [-1, 1]];
+  const nbs = i => { const x = i % w, y = (i - x) / w, r = [];   // 斜的鄰居如果已經經過直角那格連著，就不算（不然轉角會多出小三角形）
+    for (const [dx, dy] of N8) { const j = I(x + dx, y + dy); if (B[j] && !(dx && dy && (B[I(x + dx, y)] || B[I(x, y + dy)]))) r.push(j); } return r; };
+  const ek = (a, b) => a < b ? a + "," + b : b + "," + a, used = new Set(), lines = [];
+  const walk = (a, b) => {                                   // 從 a 走到 b，一直走到岔路或盡頭
+    const pts = [a]; let p = a, c = b;
+    for (;;) { used.add(ek(p, c)); pts.push(c); const n = nbs(c); if (n.length !== 2) break; const nx = n[0] === p ? n[1] : n[0]; if (used.has(ek(c, nx))) break; p = c; c = nx; }
+    return pts;
+  };
+  for (let i = 0; i < w * h; i++) if (B[i] && nbs(i).length !== 2) nbs(i).forEach(j => { if (!used.has(ek(i, j))) lines.push(walk(i, j)); });
+  for (let i = 0; i < w * h; i++) if (B[i]) nbs(i).forEach(j => { if (!used.has(ek(i, j))) lines.push(walk(i, j)); });   // 繞一圈的
+  const P = [new Path2D(), new Path2D(), new Path2D()];
+  let any = 0;
+  lines.forEach(L => {
+    if (L.length < 5 && (nbs(L[0]).length < 2 || nbs(L[L.length - 1]).length < 2)) return;   // 細化留下的小毛邊（一頭沒接東西的短線）
+    const q = L.map(i => [i % w + x0, Math.floor(i / w) + y0]);
+    const sm = q.map((p, k) => { if (!k || k === q.length - 1) return p; let sx = 0, sy = 0, n = 0; for (let j = Math.max(0, k - 2); j <= Math.min(q.length - 1, k + 2); j++) { sx += q[j][0]; sy += q[j][1]; n++; } return [sx / n, sy / n]; });
+    const a = L.reduce((t, i) => t + v[i], 0) / L.length, p = P[a >= .75 ? 2 : a >= .58 ? 1 : 0];
+    p.moveTo(sm[0][0], -sm[0][1]); sm.slice(1).forEach(([x, y]) => p.lineTo(x, -y)); any = 1;
+  });
+  return any ? P : null;
 }
 function flyTrk(f, code){
   const o = FLYTRK[code], use = () => [f._rv, FRAD && FRAD.rv].forEach(v => v && v.setTrk(FLYTRK[code] && FLYTRK[code].d));
@@ -2979,10 +3023,10 @@ function radarView(cv, full){
         else if (tr && FLYTERQ && !R.tq) R.tq = FLYTERQ.then(() => { R.tq = null; R.gt = now(); R.kick(); });
         g.lineCap = "round"; g.strokeStyle = col.tx3; g.lineWidth = (full ? 3 : 2.2) / s;
         g.beginPath(); (R.geo.rwy || []).forEach(([a, b, c, d]) => { g.moveTo(a, -b); g.lineTo(c, -d); }); g.stroke();
-        if (R.trk) {                                          // 常走的進場、離場路線：抵達用主題色、出發用灰色，淡淡的
-          if (!R.ti || R.ti.k !== col.p + col.tx2) R.ti = {k:col.p + col.tx2, a:flyTrkImg(R.trk.arr, col.p), d:flyTrkImg(R.trk.dep, col.tx2)};
-          g.globalAlpha = ta * (full ? .5 : .4); g.imageSmoothingQuality = "high";
-          [R.ti.d, R.ti.a].forEach(c => c && g.drawImage(c, ...c._b));
+        if (R.trk) {                                          // 常走的進場、離場路線：抵達用主題色、出發用灰色，細線，越常飛越清楚
+          if (!R.ti) R.ti = {a:flyTrkLines(R.trk.arr), d:flyTrkLines(R.trk.dep)};
+          g.lineJoin = g.lineCap = "round"; g.lineWidth = (full ? 1.6 : 1.3) / s;
+          [[R.ti.d, col.tx2], [R.ti.a, col.p]].forEach(([P, c]) => P && P.forEach((p, i) => { g.globalAlpha = ta * [.3, .55, .85][i]; g.strokeStyle = c; g.stroke(p); }));
         }
         g.restore();
       }
@@ -3088,11 +3132,13 @@ function radarView(cv, full){
         ctx.beginPath(); ctx.moveTo(pts[i - 1][0], pts[i - 1][1]); ctx.lineTo(pts[i][0], pts[i][1]); ctx.stroke();
       }
     });
-    /* 機頭前面的短線：一分鐘後會飛到哪（小雷達半分鐘）；選到的那架比較清楚 */
+    /* 機頭前面的短線：一分鐘後會飛到哪（小雷達半分鐘），拉遠時最長只畫一小段（不然高空飛得快的拖一大條，整片都是線）；
+       路過的只畫一點點；選到的那架另外畫完整的 */
     ctx.lineWidth = 1;
     vis.forEach(o => {
       const p = o.p; if (o.id === R.sel || p.ph === "gnd" || !p.alt || !(p.spd > 0) || p.trk == null) return;
-      const d = p.spd / 60 * (full ? 1 : .5), hd = p.trk * Math.PI / 180, [ex, ey] = R.xy(o.x + Math.sin(hd) * d, o.y + Math.cos(hd) * d);
+      const mx = (full ? 34 : 16) * (p.ph === "over" ? .5 : 1) / s;
+      const d = Math.min(p.spd / 60 * (full ? 1 : .5), mx), hd = p.trk * Math.PI / 180, [ex, ey] = R.xy(o.x + Math.sin(hd) * d, o.y + Math.cos(hd) * d);
       ctx.globalAlpha = o.v * (p.ph === "over" ? full ? .25 : .15 : .45) * (R.sel && full ? .4 : 1); ctx.strokeStyle = pc(o);
       ctx.beginPath(); ctx.moveTo(o.sx, o.sy); ctx.lineTo(ex, ey); ctx.stroke();
     });
@@ -3127,7 +3173,7 @@ function radarView(cv, full){
       ctx.fillStyle = pc(o); ctx.fill(sh); ctx.restore();
     });
     /* 名字：擠在一起時換邊放，放不下先不顯示 */
-    const lf = Math.round(full ? fs : Math.max(9, rr / 21)), lab = vis.filter(o => o.vis && (o.id === R.sel || o.p.emg || o.p.ph === "arr" || o.p.ph === "dep" || (full && o.p.ph === "over" && s > 3)));
+    const lf = Math.round(full ? fs : Math.max(9, rr / 21)), lab = vis.filter(o => o.vis && (o.id === R.sel || o.p.emg || o.p.ph === "arr" || o.p.ph === "dep" || (full && o.p.ph === "over" && s > 14)));   // 路過的放大到 30 公里內才寫名字
     const used = flyPlace(ctx, lab, lf, ps * 3.4, full, font, R.sel, W, H, rb, R.top || 0);
     if (tw.length || nv.length) {
       ctx.globalAlpha = (canAnim() ? ga : 1) * .8; ctx.textAlign = "center"; ctx.textBaseline = "middle"; ctx.fillStyle = col.tx3;

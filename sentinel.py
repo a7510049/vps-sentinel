@@ -43,7 +43,7 @@ from collections import deque
 from concurrent.futures import ThreadPoolExecutor
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
-VERSION = "3.59"
+VERSION = "3.60"
 
 # ───────────────────────── 哨兵備份檔（.vsbk）─────────────────────────
 # 哨兵專用的備份格式：外面是自己的檔案格式，裡面用的是成熟、標準的加密方法（不自己發明加密）：
@@ -6962,7 +6962,7 @@ def fly_track(code, planes):
 
 
 def fly_tracks(code):
-    """常走的路線給雷達畫：[x, y, 濃淡 1～9, …]，太少飛過的格子不給"""
+    """常走的路線給雷達畫：[x, y, 濃淡 1～99, …]，太少飛過的格子不給"""
     out = {"ok": True}
     for ph in ("arr", "dep"):
         cs = dict((FLY_TRK["g"].get(code) or {}).get(ph) or {})
@@ -6971,8 +6971,8 @@ def fly_tracks(code):
         if top >= 3:
             lt = math.log(top + 1)
             for c, v in sorted(cs.items(), key=lambda kv: -kv[1])[:5000]:
-                a = round(math.log(v + 1) / lt * 9)
-                if a >= 2 and v >= 2:
+                a = round(math.log(v + 1) / lt * 99)
+                if a >= 15 and v >= 2:
                     lst += [*map(int, c.split(",")), a]
         out[ph] = lst
     return out
