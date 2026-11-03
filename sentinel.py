@@ -22,6 +22,7 @@ import math
 import os
 import re
 import secrets
+import string
 import shutil
 import ssl
 import shlex
@@ -43,7 +44,7 @@ from collections import deque
 from concurrent.futures import ThreadPoolExecutor
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
-VERSION = "3.59"
+VERSION = "3.60"
 
 # ───────────────────────── 哨兵備份檔（.vsbk）─────────────────────────
 # 哨兵專用的備份格式：外面是自己的檔案格式，裡面用的是成熟、標準的加密方法（不自己發明加密）：
@@ -6962,7 +6963,7 @@ def fly_track(code, planes):
 
 
 def fly_tracks(code):
-    """常走的路線給雷達畫：[x, y, 濃淡 1～9, …]，太少飛過的格子不給"""
+    """常走的路線給雷達畫：[x, y, 濃淡 1～99, …]，太少飛過的格子不給"""
     out = {"ok": True}
     for ph in ("arr", "dep"):
         cs = dict((FLY_TRK["g"].get(code) or {}).get(ph) or {})
@@ -6971,8 +6972,8 @@ def fly_tracks(code):
         if top >= 3:
             lt = math.log(top + 1)
             for c, v in sorted(cs.items(), key=lambda kv: -kv[1])[:5000]:
-                a = round(math.log(v + 1) / lt * 9)
-                if a >= 2 and v >= 2:
+                a = round(math.log(v + 1) / lt * 99)
+                if a >= 15 and v >= 2:
                     lst += [*map(int, c.split(",")), a]
         out[ph] = lst
     return out
@@ -7216,7 +7217,7 @@ def share_new(secs=None, devs=1, ap="", name=""):
     ap = str(ap or "").upper()
     ap = ap if ap in FLY_PIN else ""
     name = re.sub(r"[\x00-\x1f]", "", str(name or "")).strip()[:20]
-    code = "fs_" + secrets.token_urlsafe(16)
+    code = "fs_" + "".join(secrets.choice(string.ascii_letters + string.digits) for _ in range(8))   # 網址 /s/八碼（猜錯會等一秒、又只認打開過的手機）
     with SHARE_LOCK:
         d = share_load()
         if len(d) >= 50:                         # 太多還沒過期的：最舊的先失效
@@ -7487,8 +7488,8 @@ class Handler(BaseHTTPRequestHandler):
         if self.is_cloud():
             return self.proxy_cloud()
         path = urllib.parse.urlsplit(self.path).path
-        if path == "/fly":                           # 機場起降分享連結：只給網頁，資料要靠連結上的代碼
-            return self.send(200, page(), "text/html; charset=utf-8")
+        if path == "/fly" or re.fullmatch(r"/s/[A-Za-z0-9]{8}", path):   # 機場起降分享連結：只給網頁，資料要靠連結上的代碼
+            return self.send(200, share_page(), "text/html; charset=utf-8")
         if path == "/":
             rs = rsw_state()
             busy = rs and (rs.get("stage") == "wait" or rs.get("stage") == "running" and time.time() - rs.get("start_t", 0) < 7200)
@@ -7917,6 +7918,15 @@ def page():
     if PAGE is None:                              # 取消被監看後第一次打開才載入
         PAGE = load_page()
     return PAGE
+
+
+def share_page():
+    """分享連結打開的網頁：直接是機場起降，不出現哨兵的名字、圖示和開場畫面"""
+    h = page()
+    h = re.sub(r'<link rel="(?:manifest|icon|apple-touch-icon)"[^>]*>\n?', "", h)
+    h = h.replace("<title>VPS 哨兵</title>", '<title>機場起降</title>\n<meta name="referrer" content="no-referrer">')
+    h = h.replace('content="VPS 哨兵"', 'content="機場起降"')
+    return re.sub(r'<div id="splash">.*?</div></div>\n', "", h, count=1, flags=re.S)
 
 
 def main():

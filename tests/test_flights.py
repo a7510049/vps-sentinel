@@ -486,6 +486,11 @@ class Flights(unittest.TestCase):
         self.assertEqual(S.share_ok(code + ":" + devs[2])["ap"], "KHH")
         it = [x for x in S.share_list() if x["name"] == "小明"][0]
         self.assertEqual((it["max"], it["used"], it["ap"]), (3, 3, "KHH"))
+        self.assertRegex(code, r"^fs_[A-Za-z0-9]{8}$")             # 網址 /s/八碼
+        h = S.share_page()                                          # 朋友打開的網頁：直接是機場起降
+        self.assertIn("<title>機場起降</title>", h)
+        self.assertNotIn('id="splash"', h)
+        self.assertNotIn("manifest", h)
         c2 = S.share_new(3600, 0)[0]                                # 不限幾支手機
         self.assertTrue(all(S.share_claim(c2, "")[0] for _ in range(5)))
         self.assertTrue(S.share_del(it["id"]))                     # 提前收回
