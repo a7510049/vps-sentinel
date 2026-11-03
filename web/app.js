@@ -3046,17 +3046,30 @@ function radarView(cv, full){
       });
       ctx.restore();
     }
-    /* 現在用的跑道：進場那一頭往外畫一條虛線（飛機排隊降落的路線） */
+    /* 現在用的跑道：進場那一頭往外畫延長線，每 2 公里一個刻度、每 5 公里長一點（整頁寫公里數），看得出排隊降落的飛機間隔多遠 */
+    R.fin = null;
     if (R.geo && R.rwd != null) {
-      const hd = R.rwd * Math.PI / 180, ux = Math.sin(hd), uy = Math.cos(hd);
-      ctx.save(); ctx.globalAlpha = (canAnim() ? ga : 1) * .55; ctx.strokeStyle = col.p; ctx.lineWidth = full ? 1.6 : 1.2; ctx.setLineDash([6, 5]);
-      ctx.beginPath();
-      (R.geo.rwy || []).forEach(([a, b, c, d]) => {
-        if (Math.hypot((a + c) / 2, (b + d) / 2) > 4) return;   // 只畫這個機場的跑道
-        const [x, y] = a * ux + b * uy < c * ux + d * uy ? [a, b] : [c, d];   // 降落那一頭
-        ctx.moveTo(...R.xy(x, y)); ctx.lineTo(...R.xy(x - ux * 18, y - uy * 18));
-      });
-      ctx.stroke(); ctx.restore();
+      const hd = R.rwd * Math.PI / 180, ux = Math.sin(hd), uy = Math.cos(hd), L = full ? 30 : 20, nx = uy, ny = -ux;
+      const rw = (R.geo.rwy || []).filter(([a, b, c, d]) => Math.hypot((a + c) / 2, (b + d) / 2) <= 4);   // 只畫這個機場的跑道
+      ctx.save(); ctx.globalAlpha = (canAnim() ? ga : 1) * .6; ctx.strokeStyle = ctx.fillStyle = col.p; ctx.lineWidth = full ? 1.4 : 1.1;
+      ctx.font = `${Math.round(fs * .8)}px ${font}`; ctx.textAlign = "center"; ctx.textBaseline = "middle";
+      const fin = rw.map(([a, b, c, d]) => a * ux + b * uy < c * ux + d * uy ? [a, b] : [c, d]);   // 降落那一頭
+      if (fin.length) {                                        // 平行跑道只畫一條（兩條疊在一起刻度會亂）
+        const x = fin.reduce((t, f) => t + f[0], 0) / fin.length, y = fin.reduce((t, f) => t + f[1], 0) / fin.length;
+        ctx.beginPath(); ctx.moveTo(...R.xy(x, y)); ctx.lineTo(...R.xy(x - ux * L, y - uy * L));
+        for (let k = 2; k <= L; k += 2) {
+          const t = (k % 10 ? k % 5 ? 2.5 : 4 : 5.5) / s, px = x - ux * k, py = y - uy * k;
+          ctx.moveTo(...R.xy(px + nx * t, py + ny * t)); ctx.lineTo(...R.xy(px - nx * t, py - ny * t));
+        }
+        ctx.stroke();
+        if (full && s > 5) {                                   // 刻度旁寫公里數
+          const side = 12 / s;
+          for (let k = 5; k <= L; k += 5) { const [sx, sy] = R.xy(x - ux * k + nx * side, y - uy * k + ny * side); if (sy > (R.top || 0) + fs) ctx.fillText(String(k), sx, sy); }
+        }
+        fin.splice(0, fin.length, [x, y]);
+      }
+      ctx.restore();
+      if (fin.length) R.fin = {x: fin.reduce((t, f) => t + f[0], 0) / fin.length, y: fin.reduce((t, f) => t + f[1], 0) / fin.length, ux, uy, L};
     }
     /* 距離圈：整頁的照比例挑好讀的距離；小雷達固定三圈 */
     ctx.strokeStyle = col.s4; ctx.lineWidth = 1; ctx.fillStyle = col.tx3; ctx.font = `${Math.round(fs * (full ? 1 : .85))}px ${font}`;
@@ -3172,7 +3185,27 @@ function radarView(cv, full){
       if (o.id === R.sel) { const ga0 = ctx.globalAlpha; ctx.globalAlpha = ga0 * sk; ctx.lineWidth = 1.4 / k * 1.6; ctx.strokeStyle = col.p; ctx.stroke(sh); ctx.globalAlpha = ga0; }
       ctx.fillStyle = pc(o); ctx.fill(sh); ctx.restore();
     });
-    /* 名字：擠在一起時換邊放，放不下先不顯示 */
+    /* 排隊降落：對準跑道、在延長線上的抵達班機，照離跑道多遠編號，號碼放在延長線上對應的位置 */
+    if (R.fin) {
+      const F = R.fin, q = [];
+      vis.forEach(o => {
+        const p = o.p; if (p.ph !== "arr" || o.a < .3 || p.x == null || (p.alt != null && p.alt > 4500)) return;
+        const dx = o.x - F.x, dy = o.y - F.y, al = -(dx * F.ux + dy * F.uy), lat = Math.abs(dx * F.uy - dy * F.ux);
+        if (al > 0 && al <= F.L + 5 && lat < Math.max(1.5, al * .15) && (p.trk == null || flyAdiff(p.trk, R.rwd) < 40)) q.push([al, o]);
+      });
+      q.sort((a, b) => a[0] - b[0]);
+      const br = full ? 8 : 6.5;
+      ctx.save(); ctx.font = `700 ${Math.round(br * 1.25)}px ${font}`; ctx.textAlign = "center"; ctx.textBaseline = "middle";
+      const off = (br * 2.4) / s;                             // 號碼放在延長線旁邊（不蓋住飛機），位置對著飛機離跑道多遠
+      q.slice(0, full ? 6 : 4).forEach(([al, o], i) => {
+        const k = Math.min(al, F.L), [sx, sy] = R.xy(F.x - F.ux * k - F.uy * off, F.y - F.uy * k + F.ux * off);
+        ctx.globalAlpha = o.v; ctx.fillStyle = col.p; ctx.beginPath(); ctx.arc(sx, sy, br, 0, Math.PI * 2); ctx.fill();
+        ctx.fillStyle = col.card; ctx.fillText(String(i + 1), sx, sy + .5);
+        rb.push([sx - br, sy - br, sx + br, sy + br]);       // 飛機名字避開號碼
+      });
+      ctx.restore();
+    }
+    /* 名字：擠在一起時換邊放，放不下就放遠一點拉線，再放不下先不顯示 */
     const lf = Math.round(full ? fs : Math.max(9, rr / 21)), lab = vis.filter(o => o.vis && (o.id === R.sel || o.p.emg || o.p.ph === "arr" || o.p.ph === "dep" || (full && o.p.ph === "over" && s > 14)));   // 路過的放大到 30 公里內才寫名字
     const used = flyPlace(ctx, lab, lf, ps * 3.4, full, font, R.sel, W, H, rb, R.top || 0);
     if (tw.length || nv.length) {
@@ -3197,6 +3230,11 @@ function radarView(cv, full){
     lab.forEach(o => {
       if (!o.lp) return;
       ctx.globalAlpha = o.v * (R.sel && full && o.id !== R.sel ? .6 : 1);
+      if (o.lk.length > 1 || o.lk !== o.lk.toLowerCase()) {   // 名字放得比較遠：細線連到名字最近的那一邊
+        const [lx, ly] = o.lp, cx = Math.max(lx, Math.min(o.sx, lx + o.lw)), cy = Math.max(ly, Math.min(o.sy, ly + o.lh)), dd = Math.hypot(cx - o.sx, cy - o.sy) || 1, r0 = ps * 2.6;
+        const ga0 = ctx.globalAlpha; ctx.globalAlpha = ga0 * .55; ctx.strokeStyle = col.tx3; ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(o.sx + (cx - o.sx) / dd * r0, o.sy + (cy - o.sy) / dd * r0); ctx.lineTo(cx, cy); ctx.stroke(); ctx.globalAlpha = ga0;
+      }
       ctx.fillStyle = o.p.emg ? col.bad : o.id === R.sel ? col.p : o.p.ph === "over" ? col.tx3 : col.tx2;
       ctx.font = `600 ${lf}px ${font}`; ctx.fillText(o.l1, o.lp[0], o.lp[1] + lf * .8);
       if (o.l2) { ctx.fillStyle = col.tx3; ctx.font = `${Math.round(lf * .85)}px ${font}`; ctx.fillText(o.l2, o.lp[0], o.lp[1] + lf * 1.85); }
@@ -3223,10 +3261,13 @@ function flyPlace(ctx, lab, lf, gap, full, font, sel, W, H, rb, top){
     const near = (o.p.ph === "arr" || o.p.ph === "dep") && Math.hypot(o.x, o.y) < 12;   // 高度、速度只寫選到的、快落地／剛起飛的
     o.l2 = (o.id === sel || near) && o.p.alt != null && o.p.alt > 0 && o.p.ph !== "gnd" ? full ? `${o.p.alt.toLocaleString()} 公尺${vr}・${o.p.spd} 公里/時` : `${o.p.alt.toLocaleString()}${vr}` : "";
     const w = Math.max(ctx.measureText(o.l1).width, o.l2 ? ctx.measureText(o.l2).width * .85 : 0) + 2, h = lf * (o.l2 ? 2.1 : 1.1), x = o.sx, y = o.sy;
-    const c = {r:[x + gap, y - h / 2], l:[x - gap - w, y - h / 2], t:[x - w / 2, y - gap - h], b:[x - w / 2, y + gap * .9]};
-    const order = [o.lk, "r", "l", "t", "b"].filter((v, i, a) => v && a.indexOf(v) === i);
+    const G = gap * 2.6, D = G * .72;                       // 旁邊都放不下：放遠一點、拉一條細線連回飛機
+    const c = {r:[x + gap, y - h / 2], l:[x - gap - w, y - h / 2], t:[x - w / 2, y - gap - h], b:[x - w / 2, y + gap * .9],
+      R:[x + G, y - h / 2], L:[x - G - w, y - h / 2], T:[x - w / 2, y - G - h], B:[x - w / 2, y + G],
+      RT:[x + D, y - D - h], RB:[x + D, y + D], LT:[x - D - w, y - D - h], LB:[x - D - w, y + D]};
+    const order = [o.lk, "r", "l", "t", "b", "R", "L", "RT", "RB", "LT", "LB", "T", "B"].filter((v, i, a) => v && a.indexOf(v) === i);
     const k = order.find(k => !hit([c[k][0], c[k][1], c[k][0] + w, c[k][1] + h]));
-    o.lk = k; o.lp = k ? c[k] : null;
+    o.lk = k; o.lp = k ? c[k] : null; o.lw = w; o.lh = h;
     if (k) box.push([c[k][0], c[k][1], c[k][0] + w, c[k][1] + h]);
   });
   return box;
@@ -4079,7 +4120,7 @@ document.addEventListener("click", e => {
 });
 
 /* ═════════ 機場起降分享：自己選能看多久、幾支手機、哪個機場 ═════════ */
-const SHARE = location.pathname === "/fly" ? new URLSearchParams(location.hash.slice(1)).get("s") || "" : "";
+const SHARE = (m => m ? "fs_" + m[1] : location.pathname === "/fly" ? new URLSearchParams(location.hash.slice(1)).get("s") || "" : "")(location.pathname.match(/^\/s\/([A-Za-z0-9]{8})$/));   // /s/八碼；以前的 /fly#s=…照樣能用
 let SHAREDEV = "", SHAREEND = 0, SHARET = 0, SHAREAP = "";
 const flyHdr = () => SHARE ? {"X-Share":SHARE + ":" + SHAREDEV} : {"X-Token":getTok()};
 const SHTIME = [[3600, "1 小時"], [21600, "6 小時"], [86400, "1 天"], [604800, "7 天"]], SHDEV = [[1, "1 支"], [3, "3 支"], [0, "不限"]];
@@ -4129,7 +4170,7 @@ async function flyShare(){
       try {
         const d = await shCall({secs:o.secs, devs:o.devs, ap:o.one ? FLYS.ap : "", name:v.querySelector('[data-k="name"]').value.trim()});
         if (!d.ok) throw new Error(d.error || "做不出連結");
-        const url = location.origin + "/fly#s=" + d.code;
+        const url = location.origin + "/s/" + d.code.slice(3);
         if (navigator.share && matchMedia("(pointer:coarse)").matches) { try { await navigator.share({title:"機場起降", url}); } catch(err) { /* 取消分享 */ } }
         else { await navigator.clipboard.writeText(url); toast("已複製連結"); }
         shCall({op:"list"}).then(x => x.ok && v.isConnected && draw(x.list || []), () => {});
