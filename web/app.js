@@ -3921,12 +3921,12 @@ function flyOpen(btn){
   document.documentElement.classList.add("lock");
   setTimeout(() => { if (f.isConnected && !f._bye) document.documentElement.classList.add("flyon"); }, T.slow + 80);   // 很快又關掉的話不要加（不然關完後面的畫面會整個藏著）
   f._rv = radarView(f.querySelector(".rcv"), false); f._rv.range = flyR(); flyZoom(f, false);   // 雷達先建好：下面用現成資料畫的時候，底圖才放得上去
-  if (FLYD && FLYD.ap && FLYD.ap.code === FLYS.ap) {         // 有上次的資料：直接排好（不一格一格翻、不一排一排長出來），跟著打開的動畫一塊一塊浮上來
-    f.querySelector(".fsplash").remove();
+  if (FLYD && FLYD.ap && FLYD.ap.code === FLYS.ap) {         // 有上次的資料：小飛機照樣飛一趟，看板在後面直接排好（不一格一格翻），飛完一塊一塊浮上來
+    flySplashOn(f);
     FLYSTILL = true; try { flyPaint(false); } finally { FLYSTILL = false; }
     flyRadar(f, FLYD);                                        // 雷達也用上次的資料先畫好（不然要等下一次抓到資料才出現飛機）
-    flyRise(f, T.fast);
-    FLYBZ = performance.now() + T.slow + T.fast * 3;           // 浮完才換上剛抓到的新資料
+    flySplashOff(f);
+    FLYBZ = performance.now() + T.long * 2 + T.slow + T.fast * 3;   // 浮完才換上剛抓到的新資料
   } else { flySplashOn(f); flyWait(f, true); }
   flyLoad(false);
   f.querySelector(".rcv").addEventListener("click", e => {    // 點雷達打開整頁雷達；點到飛機就順便選好那一架
