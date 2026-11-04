@@ -851,8 +851,8 @@ html.flyon .dash>.view{content-visibility:hidden;contain-intrinsic-size:auto non
 .fsp .fsd0,.fsp .fsd{fill:none;stroke-width:2.5;stroke-linecap:round;stroke-dasharray:1 7}
 .fsp .fsd0{stroke:var(--s3)}.fsp .fsd{stroke:var(--p)}
 .fsp circle{fill:var(--p)}
-.fsp .fspr{fill:none;stroke:#fff;stroke-width:8;stroke-dasharray:1;stroke-dashoffset:1;animation:fspTrail calc(var(--t-long) * 3) var(--ease) infinite}
-.fspl{position:absolute;left:0;top:0;width:26px;height:26px;color:var(--p);offset-path:path("M14 76 Q110 -14 206 76");offset-rotate:auto 45deg;animation:fspFly calc(var(--t-long) * 3) var(--ease) infinite}
+.fsp .fspr{fill:none;stroke:#fff;stroke-width:8;stroke-dasharray:1;stroke-dashoffset:1;animation:fspTrail calc(var(--t-long) * 2) var(--ease) infinite}
+.fspl{position:absolute;left:0;top:0;width:26px;height:26px;color:var(--p);offset-path:path("M14 76 Q110 -14 206 76");offset-rotate:auto 45deg;animation:fspFly calc(var(--t-long) * 2) var(--ease) infinite}
 .fspl svg{width:26px;height:26px;fill:currentColor;stroke:none}
 @keyframes fspFly{0%{offset-distance:0%;opacity:0}12%{opacity:1}85%{opacity:1}100%{offset-distance:100%;opacity:0}}
 @keyframes fspTrail{0%{stroke-dashoffset:1;opacity:1}85%{opacity:1}100%{stroke-dashoffset:0;opacity:0}}
