@@ -846,16 +846,18 @@ html.flyon .dash>.view{content-visibility:hidden;contain-intrinsic-size:auto non
 .fsplash{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;pointer-events:none}
 .flyv:not(.splash) .fsplash{pointer-events:none}
 .flyv.splash .fwrap>:not(.ftop){opacity:0}
-.fsp{position:relative;width:220px;height:90px}
-.fsp svg{position:absolute;inset:0;overflow:visible}
-.fsp .fsd0,.fsp .fsd{fill:none;stroke-width:2.5;stroke-linecap:round;stroke-dasharray:1 7}
-.fsp .fsd0{stroke:var(--s3)}.fsp .fsd{stroke:var(--p)}
-.fsp circle{fill:var(--p)}
-.fsp .fspr{fill:none;stroke:#fff;stroke-width:8;stroke-dasharray:1;stroke-dashoffset:1;animation:fspTrail calc(var(--t-long) * 2) var(--ease) infinite}
-.fspl{position:absolute;left:0;top:0;width:26px;height:26px;color:var(--p);offset-path:path("M14 76 Q110 -14 206 76");offset-rotate:auto 45deg;animation:fspFly calc(var(--t-long) * 2) var(--ease) infinite}
-.fspl svg{width:26px;height:26px;fill:currentColor;stroke:none}
-@keyframes fspFly{0%{offset-distance:0%;opacity:0}12%{opacity:1}85%{opacity:1}100%{offset-distance:100%;opacity:0}}
-@keyframes fspTrail{0%{stroke-dashoffset:1;opacity:1}85%{opacity:1}100%{stroke-dashoffset:0;opacity:0}}
+.fsp{position:relative;width:150px;aspect-ratio:1;border-radius:50%;border:1.5px solid var(--s3);overflow:hidden;
+  background:radial-gradient(circle,transparent 0 31%,var(--s3) 31.5% 32.5%,transparent 33% 64%,var(--s3) 64.5% 65.5%,transparent 66%),
+    linear-gradient(var(--s3),var(--s3)) center/1px 100% no-repeat,linear-gradient(var(--s3),var(--s3)) center/100% 1px no-repeat}   /* 雷達：兩圈＋十字 */
+.fsw{position:absolute;inset:0;border-radius:50%;background:conic-gradient(transparent 0 72%,color-mix(in oklab,var(--p) 34%,transparent));animation:spin calc(var(--t-long) * 2) linear infinite}
+.fsb{position:absolute;width:5px;height:5px;border-radius:50%;background:var(--tx3);animation:breathe calc(var(--t-long) * 2) var(--ease) infinite alternate}   /* 遠處路過的光點 */
+.fsb.b1{left:22%;top:30%}.fsb.b2{left:70%;top:72%;animation-delay:calc(var(--t-long) * -.7)}.fsb.b3{left:30%;top:76%;animation-delay:calc(var(--t-long) * -1.3)}
+.fsap{position:absolute;inset:0;rotate:-35deg}                         /* 跑道方向：進場線、跑道、飛機都沿著這條線 */
+.fsln{position:absolute;left:50%;top:50%;width:50%;height:0;border-top:1.5px dashed color-mix(in oklab,var(--p) 55%,transparent)}
+.fsrw{position:absolute;left:calc(50% - 22px);top:calc(50% - 2.5px);width:44px;height:5px;border-radius:var(--r-pill);background:var(--tx3)}
+.fspl{position:absolute;left:calc(50% - 11px);top:calc(50% - 11px);width:22px;height:22px;color:var(--p);rotate:225deg;animation:fspLand calc(var(--t-long) * 2) linear infinite}
+.fspl svg{width:22px;height:22px;fill:currentColor;stroke:var(--bg);stroke-width:1.5;paint-order:stroke}
+@keyframes fspLand{0%{translate:78px 0;scale:1.25;opacity:0}15%{opacity:1}65%{translate:6px 0;scale:.9}85%{translate:-16px 0;scale:.85;opacity:1}100%{translate:-20px 0;scale:.85;opacity:0}}
 .fspn{font-size:var(--fs-m)}
 .fscroll{position:absolute;inset:0;overflow-y:auto;overflow-x:hidden;touch-action:pan-y pinch-zoom;overscroll-behavior:contain;padding:calc(env(safe-area-inset-top) + 16px) 16px calc(env(safe-area-inset-bottom) + 40px)}
 .fwrap{max-width:1280px;margin:0 auto;display:flex;flex-direction:column;gap:12px}
