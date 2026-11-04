@@ -2723,12 +2723,9 @@ function flyShell(){
     </div>
     <div class="ffoot sub"></div></div></div>${flySplash()}</div>`;
 }
-/* 第一次打開、資料還沒到：一架小飛機沿著虛線航線飛過去，下面翻出機場代碼 */
-const FLYARC = "M14 76 Q110 -14 206 76";
-const flySplash = () => `<div class="fsplash" aria-hidden="true"><div class="fsp">
-    <svg viewBox="0 0 220 90" width="220" height="90"><defs><mask id="fspm"><path class="fspr" d="${FLYARC}" pathLength="1"/></mask></defs>
-      <path class="fsd0" d="${FLYARC}"/><path class="fsd" d="${FLYARC}" mask="url(#fspm)"/><circle cx="14" cy="76" r="4"/><circle cx="206" cy="76" r="4"/></svg>
-    <i class="fspl">${I("plane")}</i></div>
+/* 載入畫面：小雷達掃描，一架飛機沿著進場線降落到跑道上，下面翻出機場代碼 */
+const flySplash = () => `<div class="fsplash" aria-hidden="true"><div class="fsp"><i class="fsw"></i><i class="fsb b1"></i><i class="fsb b2"></i><i class="fsb b3"></i>
+    <div class="fsap"><i class="fsln"></i><i class="fsrw"></i><i class="fspl">${I("plane")}</i></div></div>
   <div class="fspc">${flap("", 3, "xl")}</div><div class="fspn sub"></div></div>`;
 function flySplashOn(f){
   if (!canAnim()) return f.querySelector(".fsplash").remove();
