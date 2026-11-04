@@ -3038,8 +3038,9 @@ function radarView(cv, full){
           g.globalAlpha = ba * am; g.fillStyle = col.s4; g.fill(A.ap);
           g.globalAlpha = ba * am * .45; g.fillStyle = col.tx3; g.fill(A.tm);
           g.globalAlpha = ba * am * .7; g.strokeStyle = col.tx3; g.lineJoin = "round"; g.lineCap = "round"; g.lineWidth = Math.max(.023, 1.2 / s); g.stroke(A.tw);
-          g.globalAlpha = ba * am; g.strokeStyle = col.tx2; g.lineCap = "butt";
+          g.globalAlpha = ba * am * .75; g.strokeStyle = col.tx3; g.lineCap = "butt";   // 跑道用灰色（飛機是主題色、深色），中間一條虛線
           A.rw.forEach(([w, p]) => { g.lineWidth = Math.max(w / 1000, 2 / s); g.stroke(p); });
+          if (s > 40) { g.globalAlpha = ba * am * .9; g.strokeStyle = col.card; g.setLineDash([.03, .03]); A.rw.forEach(([w, p]) => { g.lineWidth = Math.max(w / 1000 * .03, .8 / s); g.stroke(p); }); g.setLineDash([]); }
           g.globalAlpha = ba;
         }
         g.lineCap = "round"; g.strokeStyle = col.tx3; g.lineWidth = (full ? 3 : 2.2) / s;
@@ -3234,6 +3235,7 @@ function radarView(cv, full){
       ctx.save(); ctx.translate(o.sx, o.sy); ctx.rotate((o.p.trk || 0) * Math.PI / 180);
       const k0 = ps * (o.p.ph === "gnd" ? .6 : 1), k = apv0 ? Math.max(k0, (FLYWS[o.p.kind] || .036) * s / 6.4) : k0; o.pk = k; ctx.scale(k, k);   // 放大到機場裡面：照真的翼展大小畫
       const sh = FLYSH[o.p.kind] || FLYPL;                   // 照機型畫：四發、廣體、窄體、螺旋槳、小飛機、直升機
+      ctx.lineJoin = "round"; ctx.lineWidth = 2.6 / k; ctx.strokeStyle = col.card; ctx.stroke(sh);   // 外面一圈底色：飛在跑道、滑行道上也分得出來
       if (o.id === R.sel) { const ga0 = ctx.globalAlpha; ctx.globalAlpha = ga0 * sk; ctx.lineWidth = 1.4 / k * 1.6; ctx.strokeStyle = col.p; ctx.stroke(sh); ctx.globalAlpha = ga0; }
       ctx.fillStyle = pc(o); ctx.fill(sh); ctx.restore();
     });
