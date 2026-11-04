@@ -2805,6 +2805,7 @@ function flyHeli(){
   [45, -45].forEach(a => { const b = new Path2D(); b.rect(-2.8, -.14, 5.6, .28); p.addPath(b, new DOMMatrix().translate(0, -.4).rotate(a)); });   // 主旋翼
   return p;
 }
+const FLYWS = {q4:.068, wb:.062, nb:.036, tp:.027, ga:.012, heli:.012};   // 各種飛機大概的翼展（公里），放大到機場裡面時照這個大小畫
 const FLYSH = {
   q4: flyShape({L:8.2, w:1.05, S:8, sw:1.8, c:2, ct:.45, wy:-.4, T:3, e:[[1.45, -.85], [2.65, -.25]], er:[.27, .55]}),
   wb: flyShape({L:7.6, w:1, S:7.4, sw:1.6, c:1.9, ct:.45, wy:-.3, T:2.8, e:[[1.6, -.72]], er:[.34, .66]}),
@@ -3054,6 +3055,15 @@ function radarView(cv, full){
       }
       ctx.save(); ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.drawImage(B, 0, 0); ctx.restore();
     }
+    /* 放大到機場裡：疊一層細格線（每 250 公尺），越放大越清楚，看起來像塔台的螢幕 */
+    const apk = full ? Math.max(0, Math.min(1, (5 - Math.min(W, H) / 2 / s) / 2)) : 0;
+    if (apk > 0) {
+      const st = .25, [x0, y1] = R.km(0, 0), [x1, y0] = R.km(W, H);
+      ctx.save(); ctx.globalAlpha = apk * .12; ctx.strokeStyle = col.p; ctx.lineWidth = 1; ctx.beginPath();
+      for (let x = Math.ceil(x0 / st) * st; x <= x1; x += st) { const sx = Math.round(R.xy(x, 0)[0]) + .5; ctx.moveTo(sx, 0); ctx.lineTo(sx, H); }
+      for (let y = Math.ceil(y0 / st) * st; y <= y1; y += st) { const sy = Math.round(R.xy(0, y)[1]) + .5; ctx.moveTo(0, sy); ctx.lineTo(W, sy); }
+      ctx.stroke(); ctx.restore();
+    }
     /* 導航台：整頁雷達放大時才畫（三角形是 VOR、點是 NDB） */
     const nv = [];
     if (R.geo && full && s > 3) {
@@ -3218,10 +3228,11 @@ function radarView(cv, full){
       ctx.globalAlpha = so2.a * .35 * sk; ctx.fillStyle = col.p;
       ctx.beginPath(); ctx.arc(so2.sx, so2.sy, ps * 6.5 * (.6 + .4 * sk), 0, Math.PI * 2); ctx.fill();
     }
+    const apv0 = full && Math.min(W, H) / 2 / s < 5;
     vis.forEach(o => {
       ctx.globalAlpha = o.v * (R.sel && full && o.id !== R.sel ? .55 : 1);
       ctx.save(); ctx.translate(o.sx, o.sy); ctx.rotate((o.p.trk || 0) * Math.PI / 180);
-      const k = ps * (o.p.ph === "gnd" ? .6 : 1); ctx.scale(k, k);
+      const k0 = ps * (o.p.ph === "gnd" ? .6 : 1), k = apv0 ? Math.max(k0, (FLYWS[o.p.kind] || .036) * s / 6.4) : k0; o.pk = k; ctx.scale(k, k);   // 放大到機場裡面：照真的翼展大小畫
       const sh = FLYSH[o.p.kind] || FLYPL;                   // 照機型畫：四發、廣體、窄體、螺旋槳、小飛機、直升機
       if (o.id === R.sel) { const ga0 = ctx.globalAlpha; ctx.globalAlpha = ga0 * sk; ctx.lineWidth = 1.4 / k * 1.6; ctx.strokeStyle = col.p; ctx.stroke(sh); ctx.globalAlpha = ga0; }
       ctx.fillStyle = pc(o); ctx.fill(sh); ctx.restore();
@@ -3239,7 +3250,9 @@ function radarView(cv, full){
       ctx.restore();
     }
     /* 名字：擠在一起時換邊放，放不下就放遠一點拉線，再放不下先不顯示 */
-    const lf = Math.round(full ? fs : Math.max(9, rr / 21)), lab = vis.filter(o => o.vis && (o.id === R.sel || o.p.emg || o.p.hold || o.p.ph === "arr" || o.p.ph === "dep" || (full && o.p.ph === "over" && s > 14)));   // 路過的放大到 30 公里內才寫名字
+    const apv = full && Math.min(W, H) / 2 / s < 5, onG = p => p.ph === "gnd" || !p.alt;   // 放大到機場裡面：地上的飛機也寫名字和停在哪
+    const lf = Math.round(full ? fs : Math.max(9, rr / 21)), lab = vis.filter(o => o.vis && (o.id === R.sel || o.p.emg || o.p.hold || o.p.ph === "arr" || o.p.ph === "dep" || (full && o.p.ph === "over" && s > 14) || (apv && onG(o.p))));   // 路過的放大到 30 公里內才寫名字
+    lab.forEach(o => { o.gtx = apv && onG(o.p) ? (o.p.gate ? `${o.p.gate} 登機門` : o.p.spd >= 3 ? (o.p.st && o.p.st !== "停在機坪" ? o.p.st : "滑行中") : "停在機坪") : null; });
     const used = flyPlace(ctx, lab, lf, ps * 3.4, full, font, R.sel, W, H, rb, R.top || 0);
     if (tw.length || nv.length) {
       ctx.globalAlpha = (canAnim() ? ga : 1) * .8; ctx.textAlign = "center"; ctx.textBaseline = "middle"; ctx.fillStyle = col.tx3;
@@ -3259,6 +3272,16 @@ function radarView(cv, full){
         ctx.fillText(n, x + 6, y + fs * .45); done.push(a);
       });
       ctx.textAlign = "left"; ctx.textBaseline = "alphabetic";
+    }
+    if (apk > 0) {                                          // 機場裡地上的飛機：四個角的瞄準框
+      ctx.save(); ctx.strokeStyle = col.p; ctx.lineWidth = 1.5;
+      lab.forEach(o => {
+        if (!o.gtx) return;
+        const r = Math.max(ps * 3.2, (o.pk || 0) * 3.8 + 3), c = r * .45; ctx.globalAlpha = o.v * apk * .8; ctx.beginPath();
+        [[-1, -1], [1, -1], [1, 1], [-1, 1]].forEach(([dx, dy]) => { const x = o.sx + dx * r, y = o.sy + dy * r; ctx.moveTo(x, y - dy * c); ctx.lineTo(x, y); ctx.lineTo(x - dx * c, y); });
+        ctx.stroke();
+      });
+      ctx.restore();
     }
     lab.forEach(o => {
       if (!o.lp) return;
@@ -3289,12 +3312,25 @@ function flyRws(g){
     const t = [0, r.len, (x1 - r.x1) * r.ux + (y1 - r.y1) * r.uy, (x2 - r.x1) * r.ux + (y2 - r.y1) * r.uy], a = Math.min(...t), b = Math.max(...t);
     Object.assign(r, {x1:r.x1 + r.ux * a, y1:r.y1 + r.uy * a, x2:r.x1 + r.ux * b, y2:r.y1 + r.uy * b, len:b - a});
   });
+  out.tm = (g.apm && g.apm.tm || []).map(a => { const P = []; for (let i = 0; i + 1 < a.length; i += 2) P.push([a[i], a[i + 1]]); return P; });   // 航廈外框（停著的飛機機頭朝這裡）
   out.tw = [];                                              // 滑行道一小段一小段（地面滑行的飛機拉到上面）
   (g.apm && g.apm.tw || []).forEach(a => { for (let i = 0; i + 3 < a.length; i += 2) {
     const x1 = a[i], y1 = a[i + 1], len = Math.hypot(a[i + 2] - x1, a[i + 3] - y1);
     if (len > .001) out.tw.push({x1, y1, ux:(a[i + 2] - x1) / len, uy:(a[i + 3] - y1) / len, len});
   } });
   return out;
+}
+/* 停在登機門旁的飛機：訊號裡的方向常是關掉前的舊方向，改成機頭朝最近的航廈牆（250 公尺內；遠的停機位不動） */
+function flyPark(tm, p){
+  if (!tm || !tm.length) return p;
+  let best = null;
+  tm.forEach(P => { for (let i = 0; i < P.length; i++) {
+    const [x1, y1] = P[i], [x2, y2] = P[(i + 1) % P.length], dx = x2 - x1, dy = y2 - y1, l2 = dx * dx + dy * dy;
+    const k = l2 ? Math.max(0, Math.min(1, ((p.x - x1) * dx + (p.y - y1) * dy) / l2)) : 0, qx = x1 + dx * k, qy = y1 + dy * k, d = Math.hypot(p.x - qx, p.y - qy);
+    if (d <= .25 && (!best || d < best.d)) best = {d, qx, qy};
+  } });
+  if (!best || best.d < .005) return p;
+  return {...p, trk:(Math.atan2(best.qx - p.x, best.qy - p.y) * 180 / Math.PI + 360) % 360};
 }
 /* 在滑行道上滑行的：拉到最近那條滑行道中線上（60 公尺內），機頭照滑行道方向；停著的（機坪上）不動 */
 function flyTaxi(tw, p){
@@ -3318,6 +3354,7 @@ function flySnap(rws, p){
   if (!rws || !rws.length || p.x == null || !(p.ph === "arr" || p.ph === "dep" || p.ph === "gnd")) return p;
   const gnd = p.ph === "gnd" || !p.alt;
   if (!gnd && p.alt > 5000) return p;
+  if (gnd && !(p.spd >= 3)) return flyPark(rws.tm, p);    // 停著的：機頭朝最近的航廈
   if (gnd && !(p.spd >= 25)) return flyTaxi(rws.tw, p);    // 地面上慢的是在滑行道上（滑行道離跑道很近，慢的不拉到跑道）
   let best = null;
   rws.forEach((r, i) => {
@@ -3362,6 +3399,7 @@ function flyPlace(ctx, lab, lf, gap, full, font, sel, W, H, rb, top){
     const near = (o.p.ph === "arr" || o.p.ph === "dep") && Math.hypot(o.x, o.y) < 12;   // 高度、速度只寫選到的、快落地／剛起飛的
     o.l2 = (o.id === sel || near) && o.p.alt != null && o.p.alt > 0 && o.p.ph !== "gnd" ? full ? `${o.p.alt.toLocaleString()} 公尺${vr}・${o.p.spd} 公里/時` : `${o.p.alt.toLocaleString()}${vr}` : "";
     if (o.p.hold) o.l2 = o.l2 ? "盤旋・" + o.l2 : "盤旋中";     // 在空中繞圈等降落
+    if (o.gtx) o.l2 = o.gtx;                                // 機場裡：登機門或滑行中
     const w = Math.max(ctx.measureText(o.l1).width, o.l2 ? ctx.measureText(o.l2).width * .85 : 0) + 2, h = lf * (o.l2 ? 2.1 : 1.1), x = o.sx, y = o.sy;
     const G = gap * 2.6, D = G * .72;                       // 旁邊都放不下：放遠一點、拉一條細線連回飛機
     const c = {r:[x + gap, y - h / 2], l:[x - gap - w, y - h / 2], t:[x - w / 2, y - gap - h], b:[x - w / 2, y + gap * .9],
@@ -4124,26 +4162,26 @@ function fradData(){
 /* 畫面裡的飛機，照起降先後分段：降落（緊急優先、照雷達上排隊的號碼（兩條跑道合在一起照幾分鐘後落地排）、再照幾分後到）、起飛（在跑道上、滑行中、剛起飛）、剛降落、路過（由近到遠） */
 function fradList(){
   if (!FRAD) return;
-  const {v, rv} = FRAD, V = rv.V, half = [rv.W / 2 / V.s, rv.H / 2 / V.s], seq = rv.seq || new Map(), G = {arr:[], dep:[], land:[], over:[]};
+  const {v, rv} = FRAD, V = rv.V, half = [rv.W / 2 / V.s, rv.H / 2 / V.s], seq = rv.seq || new Map(), G = {arr:[], dep:[], land:[], gnd:[], over:[]}, apv = Math.min(rv.W, rv.H) / 2 / V.s < 5;   // 放大到機場裡面：停著的也列出來
   const tm = p => seq.has(p.id) ? seq.get(p.id).m : p.eta != null ? p.eta : 999;   // 幾分鐘後落地：排隊中的照雷達算的距離÷速度，其他照航班資料
   rv.pl.forEach(o => {
     const p = o.p;
     if (o.gone || !p) return;
-    const k = p.ph === "arr" ? (p.alt ? "arr" : "land") : p.ph === "dep" ? "dep" : p.ph === "gnd" ? (flyOut(p) && p.spd >= 3 ? "dep" : "") : "over";   // 機坪上只算正要去起飛的；已經落地的另外放
-    if (!k || (FRADF && (k === "land" ? "arr" : k) !== FRADF)) return;
+    const k = p.ph === "arr" ? (p.alt ? "arr" : "land") : p.ph === "dep" ? "dep" : p.ph === "gnd" ? (flyOut(p) && p.spd >= 3 ? "dep" : apv ? "gnd" : "") : "over";   // 機坪上只算正要去起飛的；已經落地的另外放
+    if (!k || (FRADF && (k === "land" ? "arr" : k === "gnd" ? (flyOut(p) ? "dep" : "arr") : k) !== FRADF)) return;
     const [x, y] = rv.at(o, performance.now());
     if (Math.abs(x - V.cx) > half[0] || Math.abs(y - V.cy) > half[1]) return;
     const d = p.d != null ? p.d : Math.hypot(x, y);
     const key = k === "arr" ? [p.emg ? 0 : 1, seq.has(p.id) ? seq.get(p.id).n : 99, tm(p), d] : k === "land" ? [d]
-      : k === "dep" ? [p.emg ? 0 : 1, p.ph === "gnd" ? (/跑道/.test(p.st || "") ? 0 : 1) : 2, p.ph === "gnd" ? -(p.spd || 0) : d]
+      : k === "gnd" ? [p.gate ? 0 : 1, String(p.gate || ""), d] : k === "dep" ? [p.emg ? 0 : 1, p.ph === "gnd" ? (/跑道/.test(p.st || "") ? 0 : 1) : 2, p.ph === "gnd" ? -(p.spd || 0) : d]
       : [p.emg ? 0 : 1, d];
     G[k].push([key, p, d]);
   });
-  const cmp = (a, b) => { for (let i = 0; i < a[0].length; i++) if (a[0][i] !== b[0][i]) return a[0][i] - b[0][i]; return 0; };
+  const cmp = (a, b) => { for (let i = 0; i < a[0].length; i++) if (a[0][i] !== b[0][i]) return typeof a[0][i] === "string" ? a[0][i].localeCompare(b[0][i], "en", {numeric:true}) : a[0][i] - b[0][i]; return 0; };
   Object.values(G).forEach(g => g.sort(cmp));
   const pl = p => p.ph === "arr" ? (p.org ? "從 " + p.org.name : "") : p.ph === "dep" || flyOut(p) ? (p.dst ? "往 " + p.dst.name : "") : [p.org && p.org.name, p.dst && p.dst.name].filter(Boolean).join(" → ");
   const vr = p => p.vr > 1 ? " ↑" : p.vr < -1 ? " ↓" : "";
-  const rt = p => p.emg ? "緊急" : p.hold ? "盤旋中" : p.ph === "arr" && !p.alt ? (p.st || "已降落") : p.ph === "arr" && tm(p) < 999 ? (tm(p) < 1 ? "快到了" : `${Math.round(tm(p))} 分後`) : p.ph === "gnd" ? (p.st || "滑行中") : p.ph === "dep" ? (p.st || "") : "";   // 右邊：抵達幾分後降落、出發的狀態
+  const rt = p => p.emg ? "緊急" : p.hold ? "盤旋中" : p.ph === "arr" && !p.alt ? (p.st || "已降落") : p.ph === "arr" && tm(p) < 999 ? (tm(p) < 1 ? "快到了" : `${Math.round(tm(p))} 分後`) : p.ph === "gnd" ? (p.spd >= 3 ? (p.st || "滑行中") : p.gate ? p.gate + " 登機門" : "停在機坪") : p.ph === "dep" ? (p.st || "") : "";   // 右邊：抵達幾分後降落、出發的狀態
   const sub = p => p.ph === "gnd" ? [p.model || p.t || p.use, p.spd ? p.spd + " 公里/時" : ""] : [p.model || p.t || p.use, p.alt != null ? p.alt.toLocaleString() + " 公尺" + vr(p) : "", p.spd != null ? p.spd + " 公里/時" : ""];
   const row = (p, d) => { const n = seq.has(p.id) && seq.get(p.id).n; return `<button class="li frr${p.id === FRAD.sel ? " on" : ""}" data-rid="${esc(p.id)}" data-key="${esc(p.id)}">
     <span class="frlg">${flyLogo(flyAl(p.fn)) || `<i class="alg"></i>`}${n && p.ph === "arr" ? `<i class="frd frn">${n}</i>` : `<i class="frd ${p.emg ? "emg" : p.ph === "gnd" ? "dep" : p.ph}"></i>`}</span>
@@ -4151,14 +4189,14 @@ function fradList(){
       <small>${sub(p).filter(Boolean).map(esc).join("・")}</small></span>
     <span class="frt${p.emg ? " bad" : ""}">${esc(rt(p))}<small>${p.ph === "gnd" ? "" : Math.round(d * 10) / 10 + " 公里"}</small></span></button>`; };
   let left = 60;
-  const html = [["arr", "降落"], ["dep", "起飛"], ["land", "剛降落"], ["over", "路過"]].map(([k, l]) => {
+  const html = [["arr", "降落"], ["dep", "起飛"], ["land", "剛降落"], ["gnd", "機坪"], ["over", "路過"]].map(([k, l]) => {
     const g = G[k].slice(0, left); left -= g.length;
     return g.length ? `<div class="frg" data-key="g-${k}">${l}<span class="num">${G[k].length}</span></div>` + g.map(([, p, d]) => row(p, d)).join("") : "";
   }).join("");
   const li = v.querySelector(".frli");
   if (li._h !== html) { li._h = html; li.innerHTML = html || `<div class="calm">畫面裡沒有飛機</div>`; }
   const all = Object.values(G).reduce((t, g) => t + g.length, 0), a0 = G.arr.map(g => g[1]).filter(p => tm(p) < 999).sort((a, b) => tm(a) - tm(b))[0];   // 下一班：最快降落的（緊急的排最前面，但不一定最先到）
-  const hh = `畫面裡 ${all} 架<small>${a0 && a0.eta != null ? `下一班 ${esc(a0.fn || a0.reg || "")} ${tm(a0) < 1 ? "快到了" : Math.round(tm(a0)) + " 分後"}` : [["arr", "降落"], ["dep", "起飛"], ["land", "剛降落"], ["over", "路過"]].map(([k, l]) => G[k].length ? `${l} ${G[k].length}` : "").filter(Boolean).join("・")}</small>`;
+  const hh = `畫面裡 ${all} 架<small>${a0 && a0.eta != null ? `下一班 ${esc(a0.fn || a0.reg || "")} ${tm(a0) < 1 ? "快到了" : Math.round(tm(a0)) + " 分後"}` : [["arr", "降落"], ["dep", "起飛"], ["land", "剛降落"], ["gnd", "機坪"], ["over", "路過"]].map(([k, l]) => G[k].length ? `${l} ${G[k].length}` : "").filter(Boolean).join("・")}</small>`;
   const h = v.querySelector(".frlh span");
   if (h._h !== hh) { h._h = hh; h.innerHTML = hh; }
 }
@@ -4215,10 +4253,19 @@ function fradPick(id, center){
   if (o && center) setTimeout(fradList, T.mid + T.fast);       // 畫面移過去之後再數一次
 }
 /* 手勢：一指拖曳、兩指縮放、滾輪縮放、點一下選飛機、點兩下回到機場 */
+/* 點雷達上的機場：放大到整個機場（跑道、滑行道、登機門），地上的飛機寫名字和停在哪個登機門 */
+function fradAp(rv, [sx, sy]){
+  const [ox, oy] = rv.xy(0, 0); if (Math.hypot(sx - ox, sy - oy) > 28 || !rv.rws || !rv.rws.length) return false;
+  const pts = rv.rws.flatMap(r => [[r.x1, r.y1], [r.x2, r.y2]]), xs = pts.map(q => q[0]), ys = pts.map(q => q[1]);
+  const cx = (Math.min(...xs) + Math.max(...xs)) / 2, cy = (Math.min(...ys) + Math.max(...ys)) / 2, r = Math.max(...pts.map(([x, y]) => Math.hypot(x - cx, y - cy))) + .4;
+  if (rv.V.s >= rv.fit(r) * .9) return false;             // 已經在機場裡了
+  fradPick(""); rv.view(cx, cy, rv.fit(r), true); setTimeout(fradList, T.mid + T.fast);
+  return true;
+}
 function fradGest(rv, cv){
   const P = new Map(); let g = null, tap = null, last = 0, lt = 0;
   const loc = e => { const r = cv.getBoundingClientRect(), z = ZM(); return [(e.clientX - r.left) / z, (e.clientY - r.top) / z]; };
-  const lim = (cx, cy, s) => { s = Math.max(rv.fit(140), Math.min(rv.fit(3), s)); return [Math.max(-140, Math.min(140, cx)), Math.max(-140, Math.min(140, cy)), s]; };
+  const lim = (cx, cy, s) => { s = Math.max(rv.fit(140), Math.min(rv.fit(.6), s)); return [Math.max(-140, Math.min(140, cx)), Math.max(-140, Math.min(140, cy)), s]; };
   const begin = () => {
     const pts = [...P.values()], m = [(pts[0][0] + (pts[1] || pts[0])[0]) / 2, (pts[0][1] + (pts[1] || pts[0])[1]) / 2];
     g = {m, d: pts[1] ? Math.hypot(pts[0][0] - pts[1][0], pts[0][1] - pts[1][1]) : 0, s: rv.V.s, w: rv.km(...m)};
@@ -4245,7 +4292,9 @@ function fradGest(rv, cv){
     const t = performance.now();
     if (t - last < 320) { last = 0; return rv.view(0, 0, rv.fit(flyR() * .95), true); }
     last = t;
-    const p = rv.hit(...tap.p); fradPick(p ? p.id : "");
+    const p = rv.hit(...tap.p);
+    if (!p && fradAp(rv, tap.p)) return;                     // 點機場：放大到整個機場
+    fradPick(p ? p.id : "");
   };
   cv.addEventListener("pointerup", up); cv.addEventListener("pointercancel", up);
   cv.addEventListener("wheel", e => {
@@ -4261,7 +4310,7 @@ document.addEventListener("click", e => {
   if (t.closest("[data-rx]")) return fradPick("");
   if (t.closest("[data-rtrk]")) return flyTrkSet(!FLYTRKON);
   const z = t.closest("[data-rz]");
-  if (z) { rv.view(rv.V.cx, rv.V.cy, Math.max(rv.fit(140), Math.min(rv.fit(3), rv.V.s * (+z.dataset.rz > 0 ? 2 : .5))), true); return setTimeout(fradList, T.mid); }
+  if (z) { rv.view(rv.V.cx, rv.V.cy, Math.max(rv.fit(140), Math.min(rv.fit(.6), rv.V.s * (+z.dataset.rz > 0 ? 2 : .5))), true); return setTimeout(fradList, T.mid); }
   const rf = t.closest("[data-rf]");
   if (rf) { if (FRADF !== rf.dataset.rf) { FRADF = rf.dataset.rf; const s = rf.parentNode; slideSel(() => s.querySelectorAll("button").forEach(b => b.classList.toggle("on", b === rf))); fradData(); } return; }
   if (t.closest("[data-rlist]")) return FRAD.v.classList.toggle("lopen");
