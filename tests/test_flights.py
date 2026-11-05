@@ -704,6 +704,9 @@ class Legs(unittest.TestCase):
         S.fly_route = lambda cs, lat, lon: [{"code": "DFW", "name": "達拉斯"}, {"code": "ANC", "name": "安克拉治"}]
         c = {**a, "alt_baro": 30000, "baro_rate": 0}           # 高空路過：照查到的航線
         self.assertEqual(S.fly_plane(c, ap)["ph"], "over")
+        g = {**a, "flight": "UPS95 ", "alt_baro": "ground", "gs": 80, "baro_rate": 0, "lat": TPE[0] + .003, "lon": TPE[1] + .003}
+        p = S.fly_plane(g, ap)                                 # 停在這裡、航線兩頭都不是這裡：不寫錯的航線
+        self.assertEqual((p["ph"], p["org"], p["dst"]), ("gnd", None, None))
 
 
 class Midnight(unittest.TestCase):
