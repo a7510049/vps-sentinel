@@ -47,7 +47,8 @@ for c in ["TPE", "TSA", "KHH", "RMQ"]:
         for p in d[io]:
             gap = ((p.get("est") or p.get("sch") or 0) - (p.get("sch") or 0)) / 60
             if abs(gap) > 300: issues.append(f"{io} {p['fn']} 早晚 {gap:.0f} 分 sch={hm(p.get('sch'))} est={hm(p.get('est'))}")
-            if p.get("live") and p.get("lag"): issues.append(f"{io} {p['fn']} 收得到訊號但標還沒 st={p['st']} alt={p.get('alt')} d={p.get('d')}")
+            atg = io == "dep" and not p.get("alt") and (p.get("spd") or 0) < 30   # 出發班機還停在登機門：寫還沒飛是對的
+            if p.get("live") and p.get("lag") and not atg: issues.append(f"{io} {p['fn']} 收得到訊號但標還沒 st={p['st']} alt={p.get('alt')} d={p.get('d')}")
             if not p.get("al"): issues.append(f"{io} {p['fn']} 沒有航空公司")
             if p.get("live"):
                 alt, dd, vr = p.get("alt") or 0, p.get("d") or 0, p.get("vr") or 0
@@ -55,11 +56,11 @@ for c in ["TPE", "TSA", "KHH", "RMQ"]:
                 if p["st"] == "已飛" and alt < 50 and dd < 4 and (p.get("spd") or 0) < 30: issues.append(f"dep {p['fn']} 寫已飛但停在地上 alt={alt} d={dd}")
                 if io == "arr" and vr > 3 and alt > 300: issues.append(f"arr {p['fn']} 配到正在爬升的飛機 alt={alt} vr={vr} st={p['st']}")
                 if io == "dep" and vr < -3 and alt > 300: issues.append(f"dep {p['fn']} 配到正在下降的飛機 alt={alt} vr={vr} st={p['st']}")
-                if p["st"] in ("還沒到", "還沒飛"): issues.append(f"{io} {p['fn']} 收得到訊號卻寫{p['st']} alt={alt} d={dd}")
+                if p["st"] in ("還沒到", "還沒飛") and not atg: issues.append(f"{io} {p['fn']} 收得到訊號卻寫{p['st']} alt={alt} d={dd}")
             t = p.get("est") or p.get("sch") or now
             if p["st"] not in ("已到", "已飛", "取消") and t < now - 3 * 3600: issues.append(f"{io} {p['fn']} 過了三小時還在看板 sch={hm(p.get('sch'))} st={p['st']}")
     allp = [(k, p) for k in ("arr", "dep", "gnd", "over", "rest") for p in d[k]]
-    idc = collections.Counter(p["id"] for k, p in allp if not p.get("fids") or p.get("live"))
+    idc = collections.Counter(p["id"] for k, p in allp if k != "gnd" and (not p.get("fids") or p.get("live")))   # 機坪分頁本來就是抵達／出發裡停在地上的
     for i, n in idc.items():
         if n > 1: issues.append(f"同一架出現在 {n} 個地方 {i}: " + ",".join(f"{k}:{p['fn']}" for k, p in allp if p['id'] == i))
     for k, p in allp:
