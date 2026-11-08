@@ -558,6 +558,25 @@ class Flights(unittest.TestCase):
         self.assertTrue(night(ap, three))
         self.assertFalse(night(S.fly_db()["TPE"], three))           # 桃園半夜也有班機
         self.assertFalse(night(S.fly_db()["NRT"], three))
+        tsa, rmq = S.fly_db()["TSA"], S.fly_db()["RMQ"]
+        self.assertTrue(night(tsa, day + 15.5 * 3600))             # 松山 23:30 已經不起降
+        self.assertFalse(night(tsa, day + 22.5 * 3600))            # 松山 6:30 開了
+        self.assertTrue(night(rmq, day + 22.5 * 3600))             # 台中 7 點才開
+        self.assertFalse(night(ap, day + 15.5 * 3600))             # 高雄 23:30 還有班機
+        old = S.FLY_FIDS.get("KHH")
+        try:                                                        # 延誤到半夜、還沒到的照常抓
+            S.FLY_FIDS["KHH"] = {"rows": [{"fn": "IT1", "io": "arr", "st": "延誤", "sch": day + 15.8 * 3600, "est": day + 16.5 * 3600},
+                                          {"fn": "IT2", "io": "dep", "st": "準時", "sch": day + 22.9 * 3600, "est": None}]}
+            self.assertFalse(night(ap, day + 16.2 * 3600))
+            self.assertTrue(night(ap, day + 19 * 3600))
+            self.assertEqual(S.fly_first("KHH", day + 19 * 3600), day + 22.9 * 3600)
+            S.FLY_FIDS["KHH"]["rows"] = [{"fn": "IT3", "io": "dep", "st": "取消", "sch": day + 23 * 3600}]
+            self.assertEqual(S.fly_first("KHH", day + 19 * 3600), day + 22 * 3600)     # 表上沒有：6 點
+        finally:
+            if old is None:
+                S.FLY_FIDS.pop("KHH", None)
+            else:
+                S.FLY_FIDS["KHH"] = old
 
     def test_fids_wait(self):
         """官網表第一次還沒抓到：先回「等一下」，抓到了才一次給全部（不會先秀幾架、等一下又冒出一大堆）"""
