@@ -1,12 +1,14 @@
 """產生 data/apmap.tsv：台灣四個機場的跑道、滑行道、機坪、航廈形狀（雷達放大時畫）
 
 來源是 OpenStreetMap（© OpenStreetMap 貢獻者，ODbL 授權），用 Overpass 查機場 5 公里內 aeroway 的線和面。
-每行：機場代碼、種類（rw 跑道／tw 滑行道／ap 機坪／tm 航廈）、寬度（公尺，跑道用；沒有寫 0）、經度,緯度 …
+每行：機場代碼、種類（rw 跑道／tw 滑行道／ap 機坪／tm 航廈／jb 空橋）、寬度（公尺，跑道用；沒有寫 0）、經度,緯度 …
+登機門一行一個：機場代碼、gt、登機門編號（例如 A5）、經度,緯度（班機細節的登機門導引用）
 點太密的先簡化（3 公尺內的彎拿掉）。這台開發機連不到 Overpass，要在 GitHub Actions 上跑（.github/workflows/apmap.yml）。
 """
 import json
 import math
 import os
+import re
 import sys
 import time
 import urllib.parse
@@ -15,7 +17,7 @@ import urllib.request
 HERE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 OUT = os.path.join(HERE, "data", "apmap.tsv")
 APS = {"TPE": (25.0777, 121.2330), "TSA": (25.0694, 121.5525), "RMQ": (24.2647, 120.6208), "KHH": (22.5771, 120.3500)}
-KIND = {"runway": "rw", "taxiway": "tw", "apron": "ap", "terminal": "tm"}
+KIND = {"runway": "rw", "taxiway": "tw", "apron": "ap", "terminal": "tm", "jet_bridge": "jb"}
 URLS = ["https://overpass-api.de/api/interpreter", "https://overpass.kumi.systems/api/interpreter"]
 
 
@@ -48,8 +50,8 @@ def simplify(pts, tol):
     return [p for p, k in zip(pts, keep) if k]
 
 
-def fetch(la, lo):
-    q = f'[out:json][timeout:90];way(around:5000,{la},{lo})["aeroway"~"^(runway|taxiway|apron|terminal)$"];out geom;'
+def fetch(la, lo, q=None):
+    q = q or f'[out:json][timeout:90];way(around:5000,{la},{lo})["aeroway"~"^(runway|taxiway|apron|terminal|jet_bridge)$"];out geom;'
     for i in range(6):
         for u in URLS:
             try:
@@ -78,7 +80,16 @@ def main():
             pts = simplify([(p["lon"], p["lat"]) for p in g], 3 if k in ("rw", "tw") else 2)
             lines.append(f"{code}\t{k}\t{wd if k == 'rw' else 0}\t" + " ".join(f"{x:.5f},{y:.5f}" for x, y in pts))
             n += 1
-        print(code, n, "條")
+        gates = {}
+        for g in fetch(la, lo, f'[out:json][timeout:90];nwr(around:5000,{la},{lo})["aeroway"="gate"];out center;'):
+            t = g.get("tags") or {}
+            ref = re.sub(r"[^0-9A-Za-z]", "", str(t.get("ref") or t.get("name") or "")).upper()
+            c = g.get("center") or g
+            if ref and "lat" in c and ref not in gates:
+                gates[ref] = (c["lon"], c["lat"])
+        for ref in sorted(gates, key=lambda r: (re.sub(r"\d", "", r), int(re.sub(r"\D", "", r) or 0), r)):
+            lines.append(f"{code}\tgt\t{ref}\t{gates[ref][0]:.5f},{gates[ref][1]:.5f}")
+        print(code, n, "條", len(gates), "個登機門", " ".join(sorted(gates)))
         time.sleep(5)
     with open(OUT, "w", encoding="utf-8") as f:
         f.write("\n".join(lines) + "\n")
