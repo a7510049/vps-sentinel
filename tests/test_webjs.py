@@ -9,8 +9,10 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 class WebJs(unittest.TestCase):
     def test_no_duplicate_top_level_names(self):
-        with open(os.path.join(ROOT, "web", "app.js"), encoding="utf-8") as f:
-            src = f.read()
+        src = ""
+        for name in ("app.js", "fly.js"):         # 兩個檔案最後會放在同一個網頁裡
+            with open(os.path.join(ROOT, "web", name), encoding="utf-8") as f:
+                src += f.read() + "\n"
         names = re.findall(r"^(?:async\s+)?function\s+(\w+)\s*\(", src, re.M)
         names += re.findall(r"^(?:const|let|var)\s+(\w+)\s*=", src, re.M)
         dup = [n for n, c in collections.Counter(names).items() if c > 1]
