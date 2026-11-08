@@ -380,7 +380,9 @@ function radarView(cv, full){
     if (!full) { V.s = R.fit(R.range); V.cx = V.cy = 0; }
     R.kick();
   };
-  if (!full && window.IntersectionObserver) new IntersectionObserver(es => { R.inv = !es[es.length - 1].isIntersecting; if (!R.inv) R.kick(); }).observe(cv);
+  const idle = () => { cv.parentNode.classList.toggle("off", !!(R.inv || R.hid)); if (!R.inv && !R.hid) R.kick(); };   // 看不到的時候掃描光也停下來（一直轉很耗電）
+  if (!full && window.IntersectionObserver) new IntersectionObserver(es => { R.inv = !es[es.length - 1].isIntersecting; idle(); }).observe(cv);
+  R.hide = on => { R.hid = on; idle(); };                   // 整頁雷達蓋在上面：小雷達先不畫
   R.fit = r => Math.min(R.W, R.H) / 2 * (full ? .92 : 61 / 62) / r;   // 半徑 r 公里剛好放進畫面
   /* 視角：中心（公里）和比例（每公里幾點）；anim 時慢慢移過去 */
   R.view = (cx, cy, s, anim) => {
@@ -401,20 +403,49 @@ function radarView(cv, full){
       if (p.x == null || seen.has(p.id)) return;
       seen.add(p.id);
       let o = pl.get(p.id);
+      let m0 = null, r0 = null;
       if (!o) { const q = flySnap(R.rws, p); o = {id:p.id, x0:q.x, y0:q.y, x1:q.x, y1:q.y, t0:t, a:pl.size && canAnim() ? 0 : 1, h:[]}; pl.set(p.id, o); }
       else {
         const [x, y] = R.at(o, t), far = Math.hypot(p.x - x, p.y - y) > 8;
+        if (!far) { m0 = R.vel(o, t); r0 = R.hd(o, t); }        // 現在飛的方向、機頭方向：接著飛，不會在每次更新時折一下
         Object.assign(o, far ? {x0:p.x, y0:p.y} : {x0:x, y0:y}); o.t0 = t;   // 很遠才跳過去（snap 後的位置在下面設）
       }
       const q = flySnap(R.rws, p);                            // 在跑道上、對準跑道起降的：拉到跑道中線上，看起來跟跑道對齊
       o.x1 = q.x; o.y1 = q.y; o.p = q; o.gone = false;
+      /* 轉彎走弧線：從現在飛的方向，順順地轉到新位置的方向（照速度、航向），不是一段一段直線 */
+      const cx = o.x1 - o.x0, cy = o.y1 - o.y0, L = Math.hypot(cx, cy);
+      const tan = m => { if (!m) return [cx, cy]; const n = Math.hypot(m[0], m[1]); if (!n || m[0] * cx + m[1] * cy <= 0) return [cx, cy]; const k = Math.min(n, L * 1.5) / n; return [m[0] * k, m[1] * k]; };
+      const hv = q.ph !== "gnd" && q.alt && q.spd > 0 && q.trk != null ? (a => [Math.sin(a), Math.cos(a)].map(v => v * q.spd / 3600 * FLYEV / 1000))(q.trk * Math.PI / 180) : null;
+      if (m0 && !Math.hypot(m0[0], m0[1]) && r0 != null) m0 = [Math.sin(r0 * Math.PI / 180) * L, Math.cos(r0 * Math.PI / 180) * L];   // 剛出現、還沒動過：從現在機頭的方向開始轉
+      o.m0 = m0 && hv && L > .05 ? tan(m0) : null; o.m1 = o.m0 ? tan(hv) : null;
+      o.r0 = r0 == null ? q.trk || 0 : r0; o.r1 = q.trk == null ? o.r0 : q.trk;
       const l = o.h[o.h.length - 1];
       if (p.ph !== "gnd" && (!l || l[0] !== q.x || l[1] !== q.y)) { o.h.push([q.x, q.y, p.alt]); if (o.h.length > 18) o.h.shift(); }
     });
     pl.forEach(o => { if (!seen.has(o.id)) o.gone = true; });
     R.kick();
   };
-  R.at = (o, t) => { const k = canAnim() ? Math.min(1, (t - o.t0) / FLYEV) : 1; return [o.x0 + (o.x1 - o.x0) * k, o.y0 + (o.y1 - o.y0) * k]; };
+  const kOf = (o, t) => canAnim() ? Math.min(1, (t - o.t0) / FLYEV) : 1;
+  R.at = (o, t) => {                                        // 有方向的：照兩頭的方向畫弧線（Hermite 曲線）；沒有的直直移過去
+    const k = kOf(o, t);
+    if (!o.m0 || k >= 1) return [o.x0 + (o.x1 - o.x0) * k, o.y0 + (o.y1 - o.y0) * k];
+    const k2 = k * k, k3 = k2 * k, a = 2 * k3 - 3 * k2 + 1, b = k3 - 2 * k2 + k, c = 3 * k2 - 2 * k3, e = k3 - k2;
+    return [a * o.x0 + b * o.m0[0] + c * o.x1 + e * o.m1[0], a * o.y0 + b * o.m0[1] + c * o.y1 + e * o.m1[1]];
+  };
+  R.vel = (o, t) => {                                       // 現在往哪邊飛（每段更新時間飛多遠）
+    const k = kOf(o, t);
+    if (!o.m0) return [o.x1 - o.x0, o.y1 - o.y0];
+    if (k >= 1) return o.m1;
+    const k2 = k * k, a = 6 * k2 - 6 * k, b = 3 * k2 - 4 * k + 1, c = -a, e = 3 * k2 - 2 * k;
+    return [a * o.x0 + b * o.m0[0] + c * o.x1 + e * o.m1[0], a * o.y0 + b * o.m0[1] + c * o.y1 + e * o.m1[1]];
+  };
+  R.hd = (o, t) => {                                        // 機頭方向：走弧線的跟著飛的方向轉；其他的（地上、拉到跑道上）慢慢轉過去，不會一下跳到新方向
+    if (o.r1 == null) return o.p ? o.p.trk || 0 : 0;
+    const k = kOf(o, t);
+    if (o.m0 && k < 1) { const [vx, vy] = R.vel(o, t); if (vx || vy) return Math.atan2(vx, vy) * 180 / Math.PI; }
+    const k1 = Math.min(1, k * 3), d = ((o.r1 - o.r0) % 360 + 540) % 360 - 180;
+    return o.r0 + d * EASEF(k1);
+  };
   R.xy = (x, y) => [R.W / 2 + (x - V.cx) * V.s, R.H / 2 - (y - V.cy) * V.s];   // 公里 → 畫面上的點
   R.km = (sx, sy) => [V.cx + (sx - R.W / 2) / V.s, V.cy - (sy - R.H / 2) / V.s];
   const want = o => !o.gone && (!R.only || o.p.ph === R.only || (R.only === "arr" && o.p.emg && o.p.ph === "arr"));
@@ -430,13 +461,13 @@ function radarView(cv, full){
     R.raf = 0;
     if (R.off || !cv.isConnected) return;
     if (document.hidden) return;
-    if (R.inv) return;                                      // 小雷達不在畫面上（手機上在看板下面）：不用畫，捲回來再畫
+    if (R.inv || R.hid) return;                             // 小雷達不在畫面上（手機上在看板下面）：不用畫，捲回來再畫
     if (!full && !A.t && scrolling()) { R.tm = setTimeout(R.kick, 120); return; }   // 手指在捲看板：小雷達先停一下，捲完再畫（捲動才順）
     const fading = o => o.gone || (o.on === false ? o.a > 0 : o.a < 1) || (o.dmT != null && o.dm !== o.dmT);   // 正在淡入淡出（雷達圈外的飛機一直是透明的，不算）
     if (R.sel !== R.ps) { R.ps = R.sel; R.st = t; }           // 換選到（滑鼠指著）的飛機：光圈跟看板那一列一樣慢慢亮起來
     if (R.focus !== R.pf) { R.pf = R.focus; R.ft1 = t; }      // 看板換分頁：飛機的濃淡跟著慢慢換
-    const moving = A.t || R.busy || t - (R.tt || 0) < T.mid || t - (R.td || 0) < T.mid || t - (R.st || 0) < T.fast || t - (R.ft1 || 0) < T.mid * 1.6 || [...pl.values()].some(o => fading(o) || t - o.t0 < FLYEV) || t - R.gt < T.mid;
-    const fade = R.busy || t - (R.tt || 0) < T.mid || t - (R.td || 0) < T.mid || t - (R.ft1 || 0) < T.mid * 1.6 || [...pl.values()].some(fading) || t - R.gt < T.mid;
+    const moving = A.t || R.busy || R.lbusy || t - (R.tt || 0) < T.mid || t - (R.td || 0) < T.mid || t - (R.st || 0) < T.fast || t - (R.ft1 || 0) < T.mid * 1.6 || [...pl.values()].some(o => fading(o) || t - o.t0 < FLYEV) || t - R.gt < T.mid;
+    const fade = R.busy || R.lbusy || t - (R.tt || 0) < T.mid || t - (R.td || 0) < T.mid || t - (R.ft1 || 0) < T.mid * 1.6 || [...pl.values()].some(fading) || t - R.gt < T.mid;
     let v = 0;                                              // 小雷達：照飛機在畫面上移動的快慢決定多久畫一次（移不到一點就不用重畫）
     if (!fade && !full) pl.forEach(o => { if (o.vis && t - o.t0 < FLYEV) v = Math.max(v, Math.hypot(o.x1 - o.x0, o.y1 - o.y0)); });
     const gap = A.t || R.busy ? 0 : t < FLYHUSH ? T.mid : fade || full ? 30 : Math.min(250, Math.max(33, .7 * FLYEV / (v * V.s || 1e-6)));   // 看板切換時先讓給切換動畫
@@ -622,7 +653,7 @@ function radarView(cv, full){
       o.v = o.a * EASEF(o.dm);
       if (o.gone && o.a <= 0) { pl.delete(o.id); return; }
       const [x, y] = R.at(o, t), [sx, sy] = R.xy(x, y);
-      o.sx = sx; o.sy = sy; o.x = x; o.y = y; o.vis = o.a > .3 && sx > -20 && sx < W + 20 && sy > -20 && sy < H + 20;
+      o.sx = sx; o.sy = sy; o.x = x; o.y = y; o.hd = R.hd(o, t); o.vis = o.a > .3 && sx > -20 && sx < W + 20 && sy > -20 && sy < H + 20;
       if (o.a > 0) vis.push(o);
     });
     const pc = o => o.p.emg ? col.bad : o.p.ph === "arr" ? col.p : o.p.ph === "dep" ? col.tx : col.tx3;
@@ -649,13 +680,13 @@ function radarView(cv, full){
     vis.forEach(o => {
       const p = o.p; if (o.id === R.sel || p.ph === "gnd" || !p.alt || !(p.spd > 0) || p.trk == null) return;
       const mx = (full ? 34 : 16) * (p.ph === "over" ? .5 : 1) / s;
-      const d = Math.min(p.spd / 60 * (full ? 1 : .5), mx), hd = p.trk * Math.PI / 180, [ex, ey] = R.xy(o.x + Math.sin(hd) * d, o.y + Math.cos(hd) * d);
+      const d = Math.min(p.spd / 60 * (full ? 1 : .5), mx), hd = o.hd * Math.PI / 180, [ex, ey] = R.xy(o.x + Math.sin(hd) * d, o.y + Math.cos(hd) * d);
       ctx.globalAlpha = o.v * (p.ph === "over" ? full ? .25 : .15 : .45) * (R.sel && full ? .4 : 1); ctx.strokeStyle = pc(o);
       ctx.beginPath(); ctx.moveTo(o.sx, o.sy); ctx.lineTo(ex, ey); ctx.stroke();
     });
     const vo = R.sel && pl.get(R.sel);
     if (vo && vo.a > 0 && vo.p.ph !== "gnd" && vo.p.alt && vo.p.spd > 0) {
-      const d = vo.p.spd / 60, hd = (vo.p.trk || 0) * Math.PI / 180, [ex, ey] = R.xy(vo.x + Math.sin(hd) * d, vo.y + Math.cos(hd) * d);
+      const d = vo.p.spd / 60, hd = (vo.hd || 0) * Math.PI / 180, [ex, ey] = R.xy(vo.x + Math.sin(hd) * d, vo.y + Math.cos(hd) * d);
       ctx.globalAlpha = vo.a * .8; ctx.strokeStyle = pc(vo); ctx.lineWidth = 1.2;
       ctx.beginPath(); ctx.moveTo(vo.sx, vo.sy); ctx.lineTo(ex, ey); ctx.stroke();
     }
@@ -678,7 +709,7 @@ function radarView(cv, full){
     const apv0 = full && Math.min(W, H) / 2 / s < 5;
     vis.forEach(o => {
       ctx.globalAlpha = o.v * (R.sel && full && o.id !== R.sel ? .55 : 1);
-      ctx.save(); ctx.translate(o.sx, o.sy); ctx.rotate((o.p.trk || 0) * Math.PI / 180);
+      ctx.save(); ctx.translate(o.sx, o.sy); ctx.rotate((o.hd || 0) * Math.PI / 180);
       const k0 = ps * (o.p.ph === "gnd" ? .6 : 1), k = apv0 ? Math.max(k0, (FLYWS[o.p.kind] || .036) * s / 6.4) : k0; o.pk = k; ctx.scale(k, k);   // 放大到機場裡面：照真的翼展大小畫
       const sh = FLYSH[o.p.kind] || FLYPL;                   // 照機型畫：四發、廣體、窄體、螺旋槳、小飛機、直升機
       ctx.lineJoin = "round"; ctx.lineWidth = 2.6 / k; ctx.strokeStyle = col.card; ctx.stroke(sh);   // 外面一圈底色：飛在跑道、滑行道上也分得出來
@@ -701,7 +732,21 @@ function radarView(cv, full){
     const apv = full && Math.min(W, H) / 2 / s < 5, onG = p => p.ph === "gnd" || !p.alt;   // 放大到機場裡面：地上的飛機也寫名字和停在哪
     const lf = Math.round(full ? fs : Math.max(9, rr / 21)), lab = vis.filter(o => o.vis && (o.id === R.sel || o.p.emg || o.p.hold || o.p.ph === "arr" || o.p.ph === "dep" || (full && o.p.ph === "over" && s > 14) || (apv && onG(o.p))));   // 路過的放大到 30 公里內才寫名字
     lab.forEach(o => { o.gtx = apv && onG(o.p) ? (o.p.gate ? `${o.p.gate} 登機門` : o.p.spd >= 3 ? (o.p.st && o.p.st !== "停在機坪" ? o.p.st : "滑行中") : "停在機坪") : null; });
-    const used = flyPlace(ctx, lab, lf, ps * 3.4, full, font, R.sel, W, H, rb, R.top || 0);
+    const used = flyPlace(ctx, lab, lf, ps * 3.4, full, font, R.sel, W, H, rb, R.top || 0), inLab = new Set(lab);
+    /* 名字換邊放時滑過去、出現消失時淡入淡出（不會一下跳到另一邊、一下不見） */
+    const lk = canAnim() ? 1 - Math.pow(.002, dt / T.mid) : 1, la = canAnim() ? dt / T.fast : 1;
+    let lbusy = false;
+    const lbl = vis.filter(o => {
+      const on = inLab.has(o) && !!o.lp;
+      if (on) { const tx = o.lp[0] - o.sx, ty = o.lp[1] - o.sy;
+        if (!o.lo || !(o.la > 0)) o.lo = [tx, ty];
+        else { o.lo[0] += (tx - o.lo[0]) * lk; o.lo[1] += (ty - o.lo[1]) * lk; if (Math.abs(tx - o.lo[0]) + Math.abs(ty - o.lo[1]) > .5) lbusy = true; else o.lo = [tx, ty]; }
+        o.ld = [o.l1, o.l2, o.lk, o.lw, o.lh]; }
+      o.la = Math.max(0, Math.min(1, (o.la || 0) + (on ? la : -la)));
+      if (o.la > 0 && o.la < 1) lbusy = true;
+      return o.la > 0 && o.lo && o.ld;
+    });
+    R.lbusy = lbusy;
     if (tw.length || nv.length) {
       ctx.globalAlpha = (canAnim() ? ga : 1) * .8; ctx.textAlign = "center"; ctx.textBaseline = "middle"; ctx.fillStyle = col.tx3;
       ctx.font = `${Math.round(fs * (full ? 1 : .9))}px ${font}`;
@@ -731,17 +776,17 @@ function radarView(cv, full){
       });
       ctx.restore();
     }
-    lab.forEach(o => {
-      if (!o.lp) return;
-      ctx.globalAlpha = o.v * (R.sel && full && o.id !== R.sel ? .6 : 1);
-      if (o.lk.length > 1 || o.lk !== o.lk.toLowerCase()) {   // 名字放得比較遠：細線連到名字最近的那一邊
-        const [lx, ly] = o.lp, cx = Math.max(lx, Math.min(o.sx, lx + o.lw)), cy = Math.max(ly, Math.min(o.sy, ly + o.lh)), dd = Math.hypot(cx - o.sx, cy - o.sy) || 1, r0 = ps * 2.6;
+    lbl.forEach(o => {
+      const [l1, l2, lkk, lw, lh] = o.ld, lx = o.sx + o.lo[0], ly = o.sy + o.lo[1];
+      ctx.globalAlpha = o.v * EASEF(o.la) * (R.sel && full && o.id !== R.sel ? .6 : 1);
+      if (lkk.length > 1 || lkk !== lkk.toLowerCase()) {   // 名字放得比較遠：細線連到名字最近的那一邊
+        const cx = Math.max(lx, Math.min(o.sx, lx + lw)), cy = Math.max(ly, Math.min(o.sy, ly + lh)), dd = Math.hypot(cx - o.sx, cy - o.sy) || 1, r0 = ps * 2.6;
         const ga0 = ctx.globalAlpha; ctx.globalAlpha = ga0 * .55; ctx.strokeStyle = col.tx3; ctx.lineWidth = 1;
         ctx.beginPath(); ctx.moveTo(o.sx + (cx - o.sx) / dd * r0, o.sy + (cy - o.sy) / dd * r0); ctx.lineTo(cx, cy); ctx.stroke(); ctx.globalAlpha = ga0;
       }
       ctx.fillStyle = o.p.emg ? col.bad : o.id === R.sel ? col.p : o.p.ph === "over" ? col.tx3 : col.tx2;
-      ctx.font = `600 ${lf}px ${font}`; ctx.fillText(o.l1, o.lp[0], o.lp[1] + lf * .8);
-      if (o.l2) { ctx.fillStyle = col.tx3; ctx.font = `${Math.round(lf * .85)}px ${font}`; ctx.fillText(o.l2, o.lp[0], o.lp[1] + lf * 1.85); }
+      ctx.font = `600 ${lf}px ${font}`; ctx.fillText(l1, lx, ly + lf * .8);
+      if (l2) { ctx.fillStyle = col.tx3; ctx.font = `${Math.round(lf * .85)}px ${font}`; ctx.fillText(l2, lx, ly + lf * 1.85); }
     });
     ctx.restore(); ctx.globalAlpha = 1;
   };
@@ -1140,7 +1185,8 @@ function flyPaint(anim){
   flapSet(f.querySelector(".fcode .sf"), d.ap.code); flyApBtn(f, d.ap);
   txt(f.querySelector('[data-k="name"]'), d.ap.name); txt(f.querySelector('[data-k="city"]'), d.ap.city);
   flapSet(f.querySelector(".fclock .sf"), flyHM(Date.now(), tz));
-  FLYTAB.forEach(([k]) => { f.querySelector(`[data-k="n-${k}"]`).textContent = d.loading ? "" : String((d[k] || []).length); });   // 不淡入：手機上淡入中剛好換分頁，數字會留著選到時的深色
+  FLYTAB.forEach(([k]) => { const e = f.querySelector(`[data-k="n-${k}"]`), n = d.loading ? "" : String((d[k] || []).length), was = e.textContent; if (was === n) return; e.textContent = n;
+    if (was && n && !FLYSTILL && canAnim()) e.animate([{transform:`translateY(${+n > +was ? "" : "-"}.5em)`}, {transform:"none"}], {duration:T.mid, easing:EASE}); });   // 班數變了：數字從下面（變少從上面）滑進來；不淡入：手機上淡入中剛好換分頁，數字會留著選到時的深色   // 不淡入：手機上淡入中剛好換分頁，數字會留著選到時的深色
   f.querySelectorAll(".fh .fk").forEach((h, i) => (FLYSTILL ? (e, t) => { e.textContent = t; } : txt)(h, (d.fids && FLYHEADF[FLYS.tab] || FLYHEAD[FLYS.tab])[i]));
   f.querySelector(".board").dataset.tab = FLYS.tab; f.querySelector(".board").dataset.fids = d.fids ? "1" : "";
   if (d.loading && d.ok) { flyRadar(f, d); flyGeoOff(f); f.querySelector(".ffoot").textContent = ""; return; }   // 等資料：舊的列留著淡出（不先翻成空白），舊機場的飛機收掉
@@ -1180,6 +1226,9 @@ function flyRows(f, d, list, n, byHr, tz, anim){
     const p = items[i], v = flyRowV(p, FLYS.tab, tz), off = offs[i] || FLYSTILL || fresh.has(r);   // 新長出來的列直接寫好字
     if (io && !r._obs) { r._obs = 1; io.observe(r); }
     // 已經到了、飛了：淡一點、只留小標籤，不再閃
+    const sig = p ? [p.id, p.fids ? v.t : "", v.st, v.reg, v.m].join("|") : "";   // 同一班的時間、狀態、登機門、機型變了：整列淡淡亮一下（看得出哪一班剛變）
+    if (p && r._sig && r._sig !== sig && r.dataset.id === p.id && !off && anim !== false && canAnim()) { r.classList.remove("chg"); void r.offsetWidth; r.classList.add("chg"); }
+    r._sig = sig;
     r.dataset.id = p ? p.id : ""; r.classList.toggle("bad", v.cls === "bad"); r.classList.toggle("hot", v.cls === "hot"); r.querySelector(".fk.t").classList.toggle("late", !!v.late); r.querySelector(".fk.t").classList.toggle("early", !!v.early); r.querySelector(".fk.reg").classList.toggle("gch", !!v.gch); r.querySelector(".fk.m").classList.toggle("gch", !!v.mch); r.classList.toggle("done", /已到|已飛/.test(v.st || "")); r.classList.toggle("empty", !p); r.classList.toggle("nopc", !!p && !v.pc); r.classList.toggle("nopl", !v.pl); r.classList.toggle("sel", !!p && p.id === FLYSEL);
     const g = (FLYS.tab === "gnd" || FLYS.tab === "cargo") && !!p, gh = g && (i === 0 || items[i - 1] && flyGo(items[i - 1], FLYS.tab) !== v.gout) ? (FLYS.tab === "gnd" ? v.gout ? "準備起飛" : "剛降落" : v.gout ? "起飛" : "降落") : "";   // 機坪、貨機：降落、起飛分兩段，每段第一列上面寫標題
     r.classList.toggle("gh", !!gh); if ((r.dataset.gh || "") !== gh) r.dataset.gh = gh;
@@ -1586,11 +1635,13 @@ function fradOpen(){
   fradData();
   if (window.ResizeObserver) new ResizeObserver(() => { if (FRAD && FRAD.rv === rv) { rv.resize(); top(); } }).observe(cv);
   fradGest(rv, cv);
+  setTimeout(() => { if (FRAD && FRAD.rv === rv) f._rv.hide(true); }, canAnim() ? T.slow + 80 : 0);   // 長大完：後面的小雷達被蓋住了，先不畫
 }
 function fradClose(){ if (!FRAD) return; if (history.state && history.state.frad) history.back(); else fradShut(); }
 function fradShut(){
   const F = FRAD; if (!F) return; FRAD = null;
   const f = $("#fly"), b = f && f.querySelector(".rbox"), v = F.v, end = () => { F.rv.stop(); v.remove(); };
+  if (f && f._rv) f._rv.hide(false);                        // 縮回去之前小雷達先畫好
   if (!canAnim() || !b) return end();
   const r = b.getBoundingClientRect(), z = ZM();
   v.style.cssText = `--ct:${r.top / z}px;--cb:${(innerHeight - r.bottom) / z}px;--cl:${r.left / z}px;--cr:${(innerWidth - r.right) / z}px`;
