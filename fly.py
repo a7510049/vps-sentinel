@@ -1557,10 +1557,48 @@ def fly_gnd(ap, fids, gnd):
     return out
 
 
+# 台灣機場的起降時間（幾點到幾點，民航局飛航指南 AD 2.3；台中照官網表）：關門時間沒有班機就不去抓。桃園 24 小時
+FLY_OPEN = {"TSA": (6, 23), "KHH": (6, 24), "RMQ": (7, 23)}
+
+
+def fly_fids_rows(code):
+    """官網表最後一次抓到的（不管多舊；半夜沒在抓，就讀存下來的那份）"""
+    rows = (FLY_FIDS.get(code) or {}).get("rows")
+    if rows:
+        return rows
+    try:
+        with open(os.path.join(DATA_DIR, "fids", code + ".json"), encoding="utf-8") as f:
+            return json.load(f)
+    except (OSError, ValueError):
+        return []
+
+
 def fly_night(ap, now=None):
-    """桃園以外的台灣機場，半夜 0～6 點沒有班機，不用去抓"""
-    h = datetime.fromtimestamp(now or time.time(), FLY_TW).hour
-    return ap[5] == "TW" and ap[0] != "TPE" and h < 6
+    """機場關門的時段（松山 23～6 點、高雄 0～6 點、台中 23～7 點）沒有班機，不用去抓；
+    延誤到關門後、還沒到／還沒飛的班機照常抓"""
+    hrs = FLY_OPEN.get(ap[0]) if ap[5] == "TW" else None
+    if not hrs:
+        return False
+    now = now or time.time()
+    if hrs[0] <= datetime.fromtimestamp(now, FLY_TW).hour < hrs[1]:
+        return False
+    for r in fly_fids_rows(ap[0]):
+        t = r.get("est") or r.get("sch") or 0
+        if r.get("st") not in ("已到", "已飛", "取消") and now - 3600 < t < now + 1800:
+            return False
+    return True
+
+
+def fly_first(code, now=None):
+    """關門時，下一班的時間（官網表上最早的；表上沒有就是開門的時間）"""
+    now = now or time.time()
+    ts = [r.get("est") or r.get("sch") or 0 for r in fly_fids_rows(code) if r.get("st") != "取消"]
+    ts = [t for t in ts if t > now]
+    if ts:
+        return min(ts)
+    d = datetime.fromtimestamp(now, FLY_TW)
+    t = d.replace(hour=FLY_OPEN[code][0], minute=0, second=0, microsecond=0)
+    return (t if t > d else t + timedelta(days=1)).timestamp()
 
 
 def fly_board(code, bg=False):
@@ -1571,7 +1609,7 @@ def fly_board(code, bg=False):
         FLY["view"][ap[0]] = FLY["used"] = time.time()
         fly_bg_start()
     if fly_night(ap):
-        return {"ok": True, "t": time.time(), "ap": fly_ap(ap), "night": True, "src": "", "home": "", "srcs": [],
+        return {"ok": True, "t": time.time(), "ap": fly_ap(ap), "night": True, "first": fly_first(ap[0]), "src": "", "home": "", "srcs": [],
                 "fids": True, "arr": [], "dep": [], "gnd": [], "over": [], "rest": []}
     for c in FLY_PIN:                     # 其他台灣機場的官網表也在背景先抓好，換機場就不用等
         if c != ap[0] and c in db and not fly_night(db[c]) and not bg:
