@@ -1494,11 +1494,12 @@ function flyInfo(id){
   const hm = t => t ? flyHM(t * 1000, d.ap.tz) : "", air = p.alt != null, arr = p.ph === "arr" || (p.ph === "gnd" && p.dst && p.dst.code === d.ap.code);
   const tm = p.fids ? `<span class="frt"><b class="num">${hm(p.est || p.sch)}</b>${p.est && hm(p.est) !== hm(p.sch) ? `<s class="num">${hm(p.sch)}</s>` : ""}</span>` : "";
   const end = (x, mine) => `<div class="fre"><b>${esc(x ? x.code : "—")}</b><small>${esc(x ? (x.guess ? "可能是 " : "") + x.name : "查不到")}${flyFlag(flyCc(x))}</small>${mine ? tm : ""}</div>`;
+  const gmap = FLYGATE[d.ap.code] && !arr && p.gate && !flyDone(p) && !/取消/.test(p.st || "");   // 有登機門導引：登機門寫在地圖上面，下面不重複
   const vr = p.vr > 0.5 ? `，上升 ${p.vr} 公尺/秒` : p.vr < -0.5 ? `，下降 ${-p.vr} 公尺/秒` : "";
   const rows = [
     ["機型", [p.model, p.t && p.t !== p.model ? p.t : ""].filter(Boolean).join("・") + (p.type0 && (p.model || p.t) ? `（原本 ${p.type0}）` : "")],
     ["註冊號", p.reg],
-    [arr ? "抵達登機門" : "登機門", [p.gate, p.term].filter(Boolean).join("・") + (p.gate0 && p.gate ? `（原本 ${p.gate0}）` : "")],
+    [arr ? "抵達登機門" : "登機門", gmap ? "" : [p.gate, p.term].filter(Boolean).join("・") + (p.gate0 && p.gate ? `（原本 ${p.gate0}）` : "")],
     [arr ? "行李轉盤" : "報到櫃台", (p.bx || "").replace(/^\S+ /, "")],
     ["共掛班號", p.share && p.share.length ? p.share.join("、") : ""],
     ["高度", air ? (p.alt ? `${p.alt.toLocaleString()} 公尺${p.ph === "gnd" ? "" : vr}` : "地面") : ""],
@@ -1515,13 +1516,15 @@ function flyInfo(id){
     ${p.emg || p.mil || p.rare ? `<div class="fbad${p.emg ? " bad" : ""}">${p.emg ? `${I("warn")}${esc(p.st)}（應答碼 ${esc(p.sq)}）` : p.mil ? "軍機" : "少見機型"}</div>` : ""}
     <a class="fph" target="_blank" rel="noopener noreferrer" hidden></a>
     ${p.org || p.dst ? `<div class="froute">${end(p.org, !arr)}<span class="fln"><i></i>${I("plane")}<i></i></span>${end(p.dst, arr)}</div>` : `<div class="fnr sub">航線不明</div>`}
+    ${gmap ? `<div class="fgate"></div>` : ""}
     ${rows.length ? `<div class="fdl">${rows.map(([k, val]) => `<div><span>${k}</span><b>${esc(val)}</b></div>`).join("")}</div>` : ""}
     ${reg ? `<div class="group"><a class="li" href="https://www.jetphotos.com/registration/${reg}" target="_blank" rel="noopener noreferrer"><span class="lab">看這架的照片<small>JetPhotos</small></span>${EXT}</a>
       <a class="li" href="https://www.flightradar24.com/data/aircraft/${reg.toLowerCase()}" target="_blank" rel="noopener noreferrer"><span class="lab">飛行紀錄<small>Flightradar24</small></span>${EXT}</a></div>` : ""}
     </div><div class="btns"><button class="ubtn ghost" data-r="0">關閉</button></div></div>`;
   $("#layer").appendChild(v);
   flyPhoto(v.querySelector(".fph"), p);
-  const done = () => { if (v._d) return; v._d = 1; v.classList.add("closing"); FLYSEL = ""; flyPaint(); setTimeout(() => v.remove(), 360); };
+  if (v.querySelector(".fgate")) flyGate(v, v.querySelector(".fgate"), p, d.ap.code);
+  const done = () => { if (v._d) return; v._d = 1; flyMeOff(v); v.classList.add("closing"); FLYSEL = ""; flyPaint(); setTimeout(() => v.remove(), 360); };
   v._esc = done;
   v.addEventListener("click", e => { if (e.target === v || e.target.closest("[data-r]")) done(); });
 }
@@ -1718,6 +1721,78 @@ function fradCard(){
 }
 /* 飛機照片（Planespotters）：查得到就放在卡片最上面，寫攝影者、點了看原圖 */
 const FLYPH = new Map();
+/* 登機門導引（桃園）：航廈平面圖上標出登機門；按「我在哪」才用手機定位，畫一個「大概在這附近」的圈（室內誤差幾十公尺，不假裝準） */
+const FLYGATE = {TPE: 1, TSA: 1, RMQ: 1, KHH: 1};           // 有登機門位置的機場（OpenStreetMap；官網表沒寫登機門的就不放）
+const flyGateN = g => String(g || "").toUpperCase().replace(/[^0-9A-Z]/g, "").replace(/^([A-Z]*)0+(?=\d)/, "$1");   // A05 → A5
+async function flyGeoGet(code){
+  if (!FLYGEO[code]) { const r = await api("/api/flights?geo=" + encodeURIComponent(code), {headers:flyHdr()}); const d = await r.json(); if (!d.ok) throw new Error(d.error || ""); FLYGEO[code] = d; }
+  return FLYGEO[code];
+}
+async function flyGate(v, box, p, code){
+  let g; try { g = await flyGeoGet(code); } catch(e) { g = {}; }
+  if (!v.isConnected) return;
+  const sm = [p.term, p.gate0 ? `原本 ${p.gate0}` : ""].filter(Boolean).join("・");
+  const gn = flyGateN(p.gate), gs = g.gates || {}, key = Object.keys(gs).find(k => flyGateN(k) === gn), at = key && gs[key];
+  const gq = encodeURIComponent(at ? `${at[2]},${at[3]}` : `${FLYS.name || code} ${p.term || ""} 登機門 ${gn}`);
+  const gm = `<a class="ubtn ghost sm" href="https://www.google.com/maps/search/?api=1&query=${gq}" target="_blank" rel="noopener noreferrer">Google 地圖${EXT}</a>`;
+  if (!at) return swapHTML(box, `<div class="fgh"><span class="lab">登機門 ${esc(gn)}<small>${esc(sm)}</small></span>${gm}</div>`);
+  const m = (x, y) => [Math.round((x - at[0]) * 1000), Math.round((at[1] - y) * 1000)];   // 公尺，以登機門為中心、往下為正
+  const poly = a => { const q = []; for (let i = 0; i + 1 < a.length; i += 2) q.push(m(a[i], a[i + 1]).join(",")); return q.join(" "); };
+  const apm = g.apm || {}, near = a => { for (let i = 0; i + 1 < a.length; i += 2) { const [x, y] = m(a[i], a[i + 1]); if (Math.abs(x) < 2500 && Math.abs(y) < 2500) return true; } return false; };
+  const ap = (apm.ap || []).filter(near).map(a => `<polygon class="fgap" points="${poly(a)}"/>`).join("");
+  const tm = (apm.tm || []).filter(near).map(a => `<polygon class="fgtm" points="${poly(a)}"/>`).join("");
+  const jb = (apm.jb || []).filter(near).map(a => `<polyline class="fgjb" points="${poly(a)}"/>`).join("");
+  const dots = Object.entries(gs).filter(([k]) => flyGateN(k) !== gn).map(([k, q]) => { const [x, y] = m(q[0], q[1]);
+    return Math.abs(x) < 2500 && Math.abs(y) < 2500 ? `<g class="fgo" transform="translate(${x} ${y})"><g class="fgk"><circle r="6"/><text y="-12">${esc(k)}</text></g></g>` : ""; }).join("");
+  box.dataset.lat = at[2]; box.dataset.lon = at[3];
+  swapHTML(box, `<div class="fgh"><span class="lab">登機門 ${esc(gn)}<small>${esc(sm)}</small></span>
+      <button class="ubtn ghost sm" data-fme>${I("loc")}<span>我在哪</span></button>${gm}</div>
+    <div class="fgm"><svg viewBox="-300 -200 600 400" preserveAspectRatio="xMidYMid slice"><g class="fgv">${ap}${tm}${jb}${dots}
+      <g class="fme" hidden><circle class="acc" r="1"/><circle class="dot" r="1"/></g>
+      <g class="fgt"><g class="fgk"><circle class="ring" r="16"/><circle r="9"/><text y="-22">${esc(gn)}</text></g></g></g></svg></div>`);
+  box.querySelector("[data-fme]").addEventListener("click", () => v._gw != null ? flyMeOff(v, true) : flyMeOn(v, box, g, at));
+}
+function flyMeOn(v, box, g, at){
+  const b = box.querySelector("[data-fme]");
+  const say = t => { const st = box.querySelector(".fgs:not([data-bye])"); if (st) return txt(st, t);
+    box.insertAdjacentHTML("beforeend", `<div class="fgs sub">${esc(t)}</div>`); if (canAnim()) enterBlock(box.lastElementChild, 0); };
+  if (!navigator.geolocation || !isSecureContext) return say("這個瀏覽器拿不到位置");
+  txt(b.querySelector("span"), "定位中…");
+  v._gw = navigator.geolocation.watchPosition(pos => {
+    if (!v.isConnected) return flyMeOff(v);
+    const c = pos.coords, o = g.o || [0, 0, 1, 1];
+    const x = ((c.longitude - o[1]) * o[2] - at[0]) * 1000, y = (at[1] - (c.latitude - o[0]) * o[3]) * 1000, d = Math.hypot(x, y);
+    txt(b.querySelector("span"), "關掉定位");
+    const me = box.querySelector(".fme");
+    if (d > 3000) { me.classList.remove("on"); flyGateFit(box, 0, 0, 0); return say("你不在機場附近"); }
+    const r = Math.max(30, Math.min(c.accuracy || 50, 400));
+    me.removeAttribute("hidden"); me.style.transform = `translate(${x}px, ${y}px)`;
+    me.querySelector(".acc").style.transform = `scale(${r})`;
+    requestAnimationFrame(() => me.classList.add("on"));
+    flyGateFit(box, x, y, r);
+    say(d < Math.max(r, 100) ? "登機門就在附近" : `你大概在藍圈裡，離登機門約 ${Math.max(50, Math.round(d / 50) * 50).toLocaleString()} 公尺`);
+  }, e => { flyMeOff(v); say(e.code === 1 ? "沒有位置權限" : "定位不到"); }, {enableHighAccuracy:true, maximumAge:5000, timeout:20000});
+}
+function flyMeOff(v, ui){
+  if (v._gw != null) navigator.geolocation.clearWatch(v._gw);
+  v._gw = null;
+  const box = v.querySelector(".fgate"), b = box && box.querySelector("[data-fme] span"); if (!b) return;
+  txt(b, "我在哪");
+  if (!ui) return;
+  const me = box.querySelector(".fme"), st = box.querySelector(".fgs:not([data-bye])");
+  if (me) me.classList.remove("on");
+  flyGateFit(box, 0, 0, 0);
+  if (st) { st.dataset.bye = 1; canAnim() ? leaveBlock(st) : st.remove(); }
+}
+/* 畫面要同時看得到登機門和我：拉遠（最多 3 公里），點和字照原本大小，太遠時其他登機門的編號先藏起來 */
+function flyGateFit(box, x, y, r){
+  const v = box.querySelector(".fgv"); if (!v) return;
+  const x0 = Math.min(-60, x - r), x1 = Math.max(60, x + r), y0 = Math.min(-60, y - r), y1 = Math.max(60, y + r);
+  const sc = Math.min(1, 560 / (x1 - x0), 360 / (y1 - y0)), cx = sc < 1 ? (x0 + x1) / 2 : 0, cy = sc < 1 ? (y0 + y1) / 2 : 0;
+  v.style.transform = `scale(${sc.toFixed(4)}) translate(${(-cx).toFixed(1)}px, ${(-cy).toFixed(1)}px)`;
+  v.style.setProperty("--fz", (1 / sc).toFixed(3));
+  v.classList.toggle("far", sc < .6);
+}
 function flyPhoto(box, p){
   const reg = p.reg || "", hx = /^[0-9a-f]{6}$/.test(p.id || "") ? p.id : "", k = reg || hx;
   if (!box || box._k === k) return;
