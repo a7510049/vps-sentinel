@@ -96,6 +96,9 @@ class SmokeTest(Server):
         # 樣式和畫面程式要已經塞進網頁裡，不能留下記號
         self.assertNotIn("/*@style.css*/", html)
         self.assertNotIn("/*@app.js*/", html)
+        self.assertNotIn("/*@fly.js*/", html)
+        with open(os.path.join(ROOT, "web", "fly.js"), encoding="utf-8") as f:
+            self.assertIn(next(line for line in f if line.strip()).strip(), html)
         with open(os.path.join(ROOT, "web", "app.js"), encoding="utf-8") as f:
             first_line = next(line for line in f if line.strip())
         self.assertIn(first_line.strip(), html)

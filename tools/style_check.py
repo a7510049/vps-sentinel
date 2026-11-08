@@ -11,6 +11,8 @@ import sys
 WEB = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "web")
 css = open(os.path.join(WEB, "style.css"), encoding="utf-8").read()
 js = open(os.path.join(WEB, "app.js"), encoding="utf-8").read()
+JS_APP = len(js) + 1                          # fly.js（機場起降）接在後面一起檢查
+js += "\n" + open(os.path.join(WEB, "fly.js"), encoding="utf-8").read()
 root_end = css.index("}", css.index(":root{"))
 body_css = css[root_end + 1:]                 # 共用規則本身（第一個 :root）不檢查
 line0 = css[:root_end + 1].count("\n") + 1
@@ -20,6 +22,8 @@ bad = []
 
 
 def report(where, base, text, idx, msg):
+    if text is js and idx >= JS_APP:          # 在 fly.js 裡
+        where, base, text, idx = "fly.js", 1, js[JS_APP:], idx - JS_APP
     bad.append(f"  第 {base + text[:idx].count(chr(10))} 行（{where}）：{msg}")
 
 
