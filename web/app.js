@@ -2352,15 +2352,20 @@ function rswCodeForm(body, err){
   $("#rswcode").addEventListener("keydown", e => { if (e.key === "Enter") go(); });
 }
 function rswForm(body){
-  body.innerHTML = `<label class="ubtn ghost rswfile"><input type="file" accept=".vsbk" hidden>${IC("archive")}<span class="rswname">選擇備份檔（.vsbk）</span></label>
+  body.innerHTML = `<label class="ubtn ghost rswfile"><input type="file" accept=".vsbk" multiple hidden>${IC("archive")}<span class="rswname">選擇備份檔（.vsbk）</span></label>
     <input class="field" id="rswpw" type="password" placeholder="解開密碼" autocomplete="off">
-    <small class="rswtip">備份檔在 Telegram 或另一台的雲端硬碟「哨兵備份」裡；密碼用總密碼或 Telegram 附的都行</small>
+    <small class="rswtip">備份檔在 Telegram（分段的全部一起選）或另一台的雲端硬碟「哨兵備份」裡；密碼用總密碼或 Telegram 附的都行</small>
     <div class="err"></div><button class="ubtn" data-rswgo>開始還原</button>`;
   const inp = body.querySelector("input[type=file]"), err = body.querySelector(".err"), go = body.querySelector("[data-rswgo]");
   const lab = body.querySelector(".rswname");
-  inp.onchange = () => { const f = inp.files[0]; lab.textContent = f ? `${f.name}（${bkSize(f.size)}）` : "選擇備份檔（.vsbk）"; err.textContent = ""; };
+  inp.onchange = () => {
+    const fs = [...inp.files], b = rswJoin(fs);
+    lab.textContent = !fs.length ? "選擇備份檔（.vsbk）" : fs.length > 1 ? `${fs.length} 段（${bkSize(b.size || 0)}）` : `${fs[0].name}（${bkSize(fs[0].size)}）`;
+    err.textContent = b.err || "";
+  };
   go.onclick = async () => {
-    const f = inp.files[0], pw = $("#rswpw").value;
+    const b = rswJoin([...inp.files]), f = b.blob, pw = $("#rswpw").value;
+    if (b.err) return err.textContent = b.err;
     if (!f) return err.textContent = "請先選擇備份檔";
     if (!pw) return err.textContent = "請輸入解開密碼";
     go.disabled = true; err.textContent = "";
@@ -2380,6 +2385,20 @@ function rswForm(body){
       rswShow();
     } catch(e) { err.textContent = e.message; go.disabled = false; go.textContent = "開始還原"; }
   };
+}
+/* Telegram 上超過 50 MB 的備份分成「…第1／3段.vsbk」好幾個檔：全部一起選，照順序接回一個檔再上傳 */
+function rswJoin(fs){
+  if (!fs.length) return {};
+  const ps = fs.map(f => [f, /^(.*) 第(\d+)／(\d+)段\.vsbk$/.exec(f.name)]);
+  if (fs.length === 1 && !ps[0][1]) return {blob: fs[0], size: fs[0].size};
+  if (ps.some(p => !p[1])) return {err: "一次選一份備份"};
+  const [, base, , n] = ps[0][1];
+  if (ps.some(p => p[1][1] !== base || p[1][3] !== n)) return {err: "一次選一份備份"};
+  const got = new Map(ps.map(p => [+p[1][2], p[0]]));
+  const miss = Array.from({length: +n}, (_, i) => i + 1).filter(i => !got.has(i));
+  if (miss.length) return {err: `還少第 ${miss.join("、")} 段，${n} 段要一起選`};
+  const blob = new Blob(Array.from({length: +n}, (_, i) => got.get(i + 1)));
+  return {blob, size: blob.size};
 }
 function rswLog(pg){
   return (pg && pg.log || []).filter(l => !/測試，不執行/.test(l)).slice(-10).map(l => `<li>${esc(l.trim())}</li>`).join("");
