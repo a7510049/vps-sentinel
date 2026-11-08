@@ -7552,6 +7552,34 @@ def share_ok(given):
     return e if e and any(hmac.compare_digest(hd, x) for x in e["dev"]) else None
 
 
+MAX_CONN = max(16, int(os.environ.get("SENTINEL_MAX_CONN") or 200))   # 同時最多處理幾個連線（測試可以調小）
+
+
+class Server(ThreadingHTTPServer):
+    """每個連線一個處理，但有上限：被大量亂連時多的直接斷掉，記憶體不會一直漲"""
+    daemon_threads = True
+
+    def __init__(self, *a, **k):
+        self.slots = threading.BoundedSemaphore(MAX_CONN)
+        super().__init__(*a, **k)
+
+    def process_request(self, request, client_address):
+        if not self.slots.acquire(timeout=2):    # 滿了：等一下下，還是滿就不接
+            self.shutdown_request(request)
+            return
+        try:
+            super().process_request(request, client_address)
+        except Exception:
+            self.slots.release()
+            raise
+
+    def process_request_thread(self, request, client_address):
+        try:
+            super().process_request_thread(request, client_address)
+        finally:
+            self.slots.release()
+
+
 class Handler(BaseHTTPRequestHandler):
     server_version = "VPSSentinelLite"
     timeout = 120                               # 連上來卻一直不送資料的連線，2 分鐘後自動斷掉，不會越積越多把哨兵拖垮
@@ -8235,7 +8263,7 @@ def main():
     threading.Thread(target=alert_loop, daemon=True).start()      # 沒設定時也會跑，網頁上一設定好就開始通知
     dl_load()                                                     # 上次沒下載完的接著下載
     fly_seen_load(); fly_tracks_load()                             # 有在用機場起降：背景接著抓
-    srv = ThreadingHTTPServer((BIND, PORT), Handler)
+    srv = Server((BIND, PORT), Handler)
     log(f"VPS 哨兵 {VERSION} 已啟動：http://{BIND}:{PORT}  名稱={NAME}  其他主機={len(PEERS)} 台  "
         f"Telegram={'開' if TG_BOT and TG_CHAT else '關'}")
     srv.serve_forever()

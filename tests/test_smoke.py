@@ -27,6 +27,7 @@ class Server(unittest.TestCase):
     """每個測試類別各自跑一個哨兵（用暫存資料夾，不會動到正式設定）"""
     STATE = None                                   # 啟動前先放好的存檔內容
     EXTRA = ""                                     # 額外的設定（每行一個）
+    ENV = {}                                       # 額外的環境變數
 
     @classmethod
     def setUpClass(cls):
@@ -42,6 +43,7 @@ class Server(unittest.TestCase):
                 json.dump(cls.STATE, f)
         env = {k: v for k, v in os.environ.items() if not k.startswith("SENTINEL_")}
         env["SENTINEL_CONF"] = conf
+        env.update(cls.ENV)
         cls.log = open(os.path.join(cls.tmp.name, "server.log"), "w+", encoding="utf-8")
         cls.proc = subprocess.Popen([sys.executable, os.path.join(ROOT, "sentinel.py")], cwd=cls.tmp.name,
                                     env=env, stdout=cls.log, stderr=subprocess.STDOUT)

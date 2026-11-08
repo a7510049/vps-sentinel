@@ -71,6 +71,7 @@ android/           安卓 App：全螢幕打開主機的網頁（記住網址）
 - 機場起降分享（`share_` 開頭的函式、app.js 的 `SHARE`、`flyShare`）：「分享」先跳出視窗選給誰、能看多久（`SHARE_TIMES`：1 小時～7 天）、幾支手機（`SHARE_DEVS`：1／3／不限）、四個機場或只看目前這個（`ap`，`/api/flights` 會把機場換成它，朋友那邊不能換機場 `SHAREAP`），選過的記在瀏覽器；同一個視窗下面列出還沒過期的分享（`op:list`，打開過幾支）、可以提前收回（`op:del`）；產生 `/s/八碼` 連結（內部代碼是 `fs_八碼`；舊的 `/fly#s=fs_…` 照樣能用；預設時間 `SENTINEL_SHARE_SECS`），這兩個網址給 `share_page()`：標題「機場起降」、沒有哨兵的開場畫面和圖示，直接進機場起降，存雜湊在 `DATA_DIR/fly-share.json`（舊版 `dev` 是字串，`share_fix` 換成清單）；打開的裝置用 `/api/fly-claim` 拿到自己的通行碼（存在那台的瀏覽器），名額用完就只認這幾支；`X-Share: 代碼:通行碼` 只能讀 `/api/flights`
 - 其他主機的狀態（`peer_get`／`PEER_CACHE`）：網頁 `/api/all` 直接拿存著的，超過 2 秒才在背景重問，同一台同時只問一次；連不上的越隔越久（最多 10 秒）才再問；通知那邊（`alert_loop`）用 `all_status(fresh=True)` 等最新的
 - 網頁 `/` 帶 ETag（`page_tag`），沒改就回 304，瀏覽器用存的那份；Caddy 壓縮時加的 `-gzip` 會先拿掉再比
+- 同時連線上限（`Server`、`MAX_CONN` 200）：滿了等 2 秒，還是滿就斷掉；測試用 SENTINEL_MAX_CONN
 - Caddy：主設定用 `import /etc/caddy/sites/vps-sentinel.d/*.caddy`；雲端硬碟的轉接寫在 `cloud.caddy`
 
 ## 使用者的兩台主機
