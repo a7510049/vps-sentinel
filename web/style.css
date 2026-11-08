@@ -93,8 +93,8 @@
 /* 主色漸層：選中的分頁、主要按鈕、主機頭像。第二個顏色是主色轉 --gh 度（每個主題色各自挑往好看的那一邊；舊瀏覽器就是主色） */
 :root{--p2:var(--p); --grad:linear-gradient(135deg,var(--p),var(--p2))}
 @supports (color:oklch(from red l c h)){:root{--p2:oklch(from var(--p) l c calc(h + var(--gh,45)))}}
-:root{--alt0:oklch(.8 .1 195); --alt1:oklch(.7 .14 240); --alt2:oklch(.64 .17 280); --alt3:oklch(.62 .19 320)}   /* 雷達尾跡的顏色：高度（低 → 高） */
-[data-mode="light"]{--alt0:oklch(.72 .11 195); --alt1:oklch(.6 .15 240); --alt2:oklch(.52 .18 280); --alt3:oklch(.5 .2 320)}
+:root{--me:oklch(.72 .15 250); --alt0:oklch(.8 .1 195); --alt1:oklch(.7 .14 240); --alt2:oklch(.64 .17 280); --alt3:oklch(.62 .19 320)}   /* 雷達尾跡的顏色：高度（低 → 高） */
+[data-mode="light"]{--me:oklch(.6 .17 250); --alt0:oklch(.72 .11 195); --alt1:oklch(.6 .15 240); --alt2:oklch(.52 .18 280); --alt3:oklch(.5 .2 320)}
 
 /* ═════════ 方塊圖示：每個概念一個自己的色調（底色淺、圖案深；深色模式相反） ═════════ */
 .ico{width:40px;height:40px;border-radius:50%;display:grid;place-items:center;flex:none}
@@ -1192,7 +1192,33 @@ html.flyon .dash>.view{content-visibility:hidden;contain-intrinsic-size:auto non
 .fkvs .fkv:first-child{border-top-left-radius:var(--r-lg)}.fkvs .fkv:nth-child(3){border-top-right-radius:var(--r-lg)}
 .fkvs .fkv:nth-last-child(3){border-bottom-left-radius:var(--r-lg)}.fkvs .fkv:last-child{border-bottom-right-radius:var(--r-lg)}
 .finfo,.fpick{max-width:460px}
-.finfo .form{gap:12px}                          /* 資訊頁每一塊的間距都一樣 */
+.finfo .form{gap:12px}
+/* 登機門導引：航廈平面圖、登機門、我大概在哪 */
+.fgate{display:flex;flex-direction:column;gap:10px}
+.fgh{display:flex;align-items:center;gap:8px}
+.fgh .lab{flex:1;min-width:0;white-space:nowrap;font-weight:600;font-size:var(--fs-l)}
+.fgh .lab small{display:block;font-weight:400;font-size:var(--fs-s);color:var(--tx3)}
+.fgh .ubtn{gap:6px}
+.fgh .ubtn svg.ext{width:14px;height:14px}
+.fgm{border-radius:var(--r-lg);overflow:hidden;background:var(--chip);aspect-ratio:3/2}
+.fgm svg{display:block;width:100%;height:100%}
+.fgv{transition:transform var(--t-slow) var(--dec);--fz:1}
+.fgap{fill:var(--s2);stroke:none}
+.fgtm{fill:var(--s4);stroke:var(--line);stroke-width:2;vector-effect:non-scaling-stroke}
+.fgjb{fill:none;stroke:var(--tx3);stroke-width:2;stroke-linecap:round;opacity:.5;vector-effect:non-scaling-stroke}
+.fgk{transform:scale(var(--fz));transition:transform var(--t-slow) var(--dec)}
+.fgo circle{fill:var(--s1);stroke:var(--tx3);stroke-width:2}
+.fgo text,.fgt text{font:600 calc(var(--fs-m) * 1.25) var(--font);text-anchor:middle;fill:var(--tx2);transition:opacity var(--t-mid) var(--ease)}
+.fgv.far .fgo text{opacity:0}
+.fgt circle{fill:var(--p);stroke:var(--s1);stroke-width:3}
+.fgt .ring{fill:none;stroke:var(--p);stroke-width:3;opacity:0;transform-origin:0 0;animation:fgring 2s var(--dec) infinite}
+.fgt text{font-size:calc(var(--fs-m) * 1.5);fill:var(--p);paint-order:stroke;stroke:var(--s1);stroke-width:5px}
+@keyframes fgring{0%{transform:scale(.6);opacity:.8}100%{transform:scale(2.2);opacity:0}}
+.fme{transition:transform var(--t-slow) var(--dec),opacity var(--t-mid) var(--ease);opacity:0}
+.fme.on{opacity:1}
+.fme .acc{fill:color-mix(in oklch,var(--me) 18%,transparent);stroke:var(--me);stroke-width:1.5;vector-effect:non-scaling-stroke;transition:transform var(--t-slow) var(--dec)}
+.fme .dot{fill:var(--me);stroke:white;stroke-width:.3;transform:scale(calc(8 * var(--fz)));transition:transform var(--t-slow) var(--dec)}
+.fgs{text-align:center}                          /* 資訊頁每一塊的間距都一樣 */
 .fapg{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
 .fapc{position:relative;display:flex;flex-direction:column;align-items:flex-start;gap:12px;padding:16px;border-radius:var(--r-xl);background:var(--chip);color:var(--tx);text-align:left;overflow:hidden;
   transition:background-color var(--t-mid) var(--ease),border-radius var(--sp-fast),transform var(--sp-fast)}
