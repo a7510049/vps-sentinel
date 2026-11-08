@@ -44,7 +44,7 @@ from collections import deque
 from concurrent.futures import ThreadPoolExecutor
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
-VERSION = "3.71"
+VERSION = "3.72"
 
 # ───────────────────────── 哨兵備份檔（.vsbk）─────────────────────────
 # 哨兵專用的備份格式：外面是自己的檔案格式，裡面用的是成熟、標準的加密方法（不自己發明加密）：
@@ -163,13 +163,42 @@ def vsbk_decrypt(src, dst, pw):
                 os.remove(ct)
 
 
+VSBK_PART = re.compile(r"^(.*) 第(\d+)／(\d+)段\.vsbk$")
+
+
+def vsbk_part_name(base, i, n):
+    """「主機 2026-11-08 04.00.vsbk」切成好幾段時第 i 段的檔名：「主機 2026-11-08 04.00 第1／3段.vsbk」"""
+    return f"{re.sub(r'[.]vsbk$', '', base)} 第{i}／{n}段.vsbk"
+
+
+def vsbk_whole(src, td):
+    """src 是分段的其中一段：找同一個資料夾裡的其他段，照順序接成一個完整的備份檔放在 td；不是分段的直接回傳 src"""
+    m = VSBK_PART.match(os.path.basename(src))
+    if not m:
+        return src
+    base, n = m.group(1), int(m.group(3))
+    folder = os.path.dirname(os.path.abspath(src))
+    parts = [os.path.join(folder, f"{base} 第{i}／{n}段.vsbk") for i in range(1, n + 1)]
+    miss = [str(i) for i, p in enumerate(parts, 1) if not os.path.isfile(p)]
+    if miss:
+        raise ValueError(f"少了第 {'、'.join(miss)} 段（{n} 段要放在同一個資料夾）")
+    dst = os.path.join(td, "whole.vsbk")
+    with open(dst, "wb") as fo:
+        for p in parts:
+            with open(p, "rb") as fi:
+                shutil.copyfileobj(fi, fo, 1 << 20)
+    return dst
+
+
 def vsbk_cli(args):
     """python3 sentinel.py --decrypt 備份檔.vsbk [解開後的檔名]：在任何有 Python 和 openssl 的主機上都能用"""
     if not args or not os.path.isfile(args[0]):
         sys.exit("用法：python3 sentinel.py --decrypt 備份檔.vsbk")
     os.umask(0o077)                                # 解開的檔案裡有密碼：只有自己讀得到
     src = args[0]
-    dst = args[1] if len(args) > 1 else re.sub(r"\.vsbk$", "", src) + (".tar.gz" if not src.endswith(".tar.gz.vsbk") else "")
+    m = VSBK_PART.match(os.path.basename(src))
+    plain = os.path.join(os.path.dirname(src), m.group(1)) if m else re.sub(r"\.vsbk$", "", src)
+    dst = args[1] if len(args) > 1 else plain + (".tar.gz" if not plain.endswith(".tar.gz") else "")
     if os.path.exists(dst):
         sys.exit(f"{dst} 已經存在，請先移走或換一個檔名")
     if sys.stdin.isatty():
@@ -177,12 +206,15 @@ def vsbk_cli(args):
         pw = getpass.getpass("解開密碼：")
     else:
         pw = sys.stdin.readline().rstrip("\r\n")
+    td = tempfile.mkdtemp(prefix="vsbk-", dir=os.path.dirname(os.path.abspath(dst)))
     try:
-        vsbk_decrypt(src, dst, pw)
+        vsbk_decrypt(vsbk_whole(src, td), dst, pw)
     except (ValueError, OSError) as e:
         if os.path.exists(dst):
             os.remove(dst)
         sys.exit(f"沒有解開：{e}")
+    finally:
+        shutil.rmtree(td, ignore_errors=True)
     print(f"已解開：{dst}\n放回原位：sudo tar -xzf {shlex.quote(dst)} -C /")
     sys.exit(0)
 
@@ -377,6 +409,11 @@ def restore_cli(args):
             src = rs_download(src, td)
         elif not os.path.isfile(src):
             sys.exit(f"找不到備份檔：{src}")
+        else:
+            try:
+                src = vsbk_whole(src, td)              # Telegram 上分段的：其他段在同一個資料夾就自動接回來
+            except (ValueError, OSError) as e:
+                sys.exit(f"沒有解開：{e}")
         if opts.get("--password-file"):
             try:
                 with open(opts["--password-file"], encoding="utf-8") as f:
@@ -712,7 +749,11 @@ BK_CLOUD_SUB = "哨兵備份"                          # 有雲端硬碟時，�
 BK_FILE_MAX = 300 * 1024 * 1024                   # 單一檔案超過這個大小就跳過（多半是記錄檔或暫存）
 BK_UPLOAD_MAX = 2 * 1024 ** 3
 TG_FILE_MAX = 49 * 1024 * 1024                    # Telegram 機器人最多只能傳 50 MB 的檔案
+TG_PART = int(os.environ.get("SENTINEL_TG_PART") or 45 * 1024 * 1024)   # 備份比這個大就切成好幾段傳（每段都在 50 MB 以下）
+TG_PARTS_MAX = 20                                  # 最多切幾段（大約 900 MB）；再大就不傳 Telegram
 BK_SKIP_DIRS = {"cache", ".cache", "tmp", "log", "logs", "node_modules"}
+# 哨兵自己抓來的資料（機場起降的飛機資料庫、標誌、航班表、照片）：還原後會自己重抓，不用備份
+BK_REGEN = ("aircraft-db", "fly-logos", "fids", "fly-photos.json", "fly-aircraft.json")
 BK_RUN = threading.Lock()                         # 同一時間只跑一次備份
 BK_MAKE = threading.Lock()                        # 同一時間只打包一份
 BK = {"last": None, "ok_t": None, "day": None, "key_t": 0, "names": {}, "tg": {}, "running": False}  # 會存檔
@@ -4845,7 +4886,8 @@ def xui_version():
 
 def _bk_tar(dst, td):
     """把要備份的東西打包成 dst（.tar.gz）；回傳 (包含哪些東西, 跳過的大檔)"""
-    skip = {os.path.realpath(p) for p in (BK_LOCAL_DIR, os.path.join(DATA_DIR, "peer-backups"), CLOUD_DIR)}
+    skip = {os.path.realpath(p) for p in (BK_LOCAL_DIR, os.path.join(DATA_DIR, "peer-backups"), CLOUD_DIR,
+                                           *(os.path.join(DATA_DIR, x) for x in BK_REGEN))}
     labels, big, seen, n = [], [], set(), 0
     cs = n8n_containers()
     with tarfile.open(dst, "w:gz", compresslevel=6) as tar:
@@ -4941,10 +4983,11 @@ def fmt_size(n):
         n /= 1024
 
 
-def tg_send_file(path, filename, caption):
-    """把檔案傳到 Telegram（最多 50 MB）；回傳 (失敗原因或空字串, 訊息編號)"""
-    if os.path.getsize(path) > TG_FILE_MAX:
-        return f"檔案太大（{fmt_size(os.path.getsize(path))}），Telegram 只收 50 MB 以下的檔案", None
+def tg_send_file(path, filename, caption, start=0, size=None):
+    """把檔案（或檔案裡從 start 開始的 size 個位元組）傳到 Telegram（最多 50 MB）；回傳 (失敗原因或空字串, 訊息編號)"""
+    size = os.path.getsize(path) - start if size is None else size
+    if size > max(TG_FILE_MAX, TG_PART):
+        return f"檔案太大（{fmt_size(size)}），Telegram 只收 50 MB 以下的檔案", None
     b = "----vs" + secrets.token_hex(12)
     fields = {"chat_id": TG_CHAT, "caption": caption, "parse_mode": "HTML", "disable_notification": "true"}
     head = "".join(f'--{b}\r\nContent-Disposition: form-data; name="{k}"\r\n\r\n{v}\r\n' for k, v in fields.items())
@@ -4955,14 +4998,20 @@ def tg_send_file(path, filename, caption):
 
     def body(f):                                   # 邊讀邊傳，不把整個檔案（最多 50 MB）放進記憶體
         yield head
-        for chunk in iter(lambda: f.read(1 << 20), b""):
+        left = size
+        while left > 0:
+            chunk = f.read(min(left, 1 << 20))
+            if not chunk:
+                break
+            left -= len(chunk)
             yield chunk
         yield tail
     try:
         with open(path, "rb") as f:
+            f.seek(start)
             req = urllib.request.Request(TG_BASE + TG_BOT + "/sendDocument", data=body(f), headers={
                 "Content-Type": f"multipart/form-data; boundary={b}",
-                "Content-Length": str(len(head) + os.path.getsize(path) + len(tail))})
+                "Content-Length": str(len(head) + size + len(tail))})
             r = urllib.request.urlopen(req, timeout=300)
         with r:
             d = json.loads(r.read())
@@ -4986,9 +5035,14 @@ def tg_private():
 
 def bk_to_tg(path, owner=None):
     """把備份檔（已經加密）傳到 Telegram；owner 是幫別台傳的時候那台的名稱。
+    超過 Telegram 的 50 MB 就切成好幾段（「…第1／3段.vsbk」），還原時全部一起選就會自動接回來。
     私人對話會附上打碼的「這份自己的」解開密碼；傳成功後把同一台前一份備份的訊息刪掉，Telegram 裡每台只留最新一份"""
     owner = owner or NAME
-    cap = f"🗄 <b>{html.escape(owner)}</b>　每日備份（{fmt_size(os.path.getsize(path))}）\n"
+    total = os.path.getsize(path)
+    n = max(1, -(-total // TG_PART))
+    if n > TG_PARTS_MAX:
+        return f"備份太大（{fmt_size(total)}），Telegram 放不下"
+    cap = f"🗄 <b>{html.escape(owner)}</b>　每日備份（{fmt_size(total)}{f'，分 {n} 段' if n > 1 else ''}）\n"
     pw = vsbk_pass_of(path, bk_key()) if tg_private() else ""
     if pw and owner != NAME:                       # 別台做的：確定這組真的打得開才附（那台的總密碼可能還沒同步）
         try:
@@ -4999,13 +5053,24 @@ def bk_to_tg(path, owner=None):
         cap += f"解開密碼：<tg-spoiler>{html.escape(pw)}</tg-spoiler>"   # 這份自己的密碼，只打得開這一份
     else:
         cap += "解開密碼在網頁的「設定 → 備份」"
-    err, mid = tg_send_file(path, os.path.basename(path), cap)
-    if not err and mid:
-        old = BK["tg"].get(owner)
-        BK["tg"][owner] = [TG_CHAT, mid]
-        if old:
-            tg_api(TG_BOT, "deleteMessage", {"chat_id": old[0], "message_id": old[1]})   # 超過 48 小時的 Telegram 不讓刪，就留著
-    return err
+    if n > 1:
+        cap += f"\n還原時 {n} 段一起選"
+    base = os.path.basename(path)
+    mids = []
+    for i in range(n):
+        name = base if n == 1 else vsbk_part_name(base, i + 1, n)
+        c = cap if i == 0 else f"🗄 <b>{html.escape(owner)}</b>　每日備份 第 {i + 1}／{n} 段"
+        err, mid = tg_send_file(path, name, c, i * TG_PART, min(TG_PART, total - i * TG_PART))
+        if err or not mid:
+            for m in mids:                         # 沒傳完整：已經傳上去的幾段收回來，留著前一份完整的
+                tg_api(TG_BOT, "deleteMessage", {"chat_id": TG_CHAT, "message_id": m})
+            return err or "Telegram 沒有回應"
+        mids.append(mid)
+    old = BK["tg"].get(owner)
+    BK["tg"][owner] = [TG_CHAT, *mids]
+    for m in (old or [])[1:]:
+        tg_api(TG_BOT, "deleteMessage", {"chat_id": old[0], "message_id": m})   # 超過 48 小時的 Telegram 不讓刪，就留著
+    return ""
 
 
 def bk_store(src, fname, stream, length, aliases=()):

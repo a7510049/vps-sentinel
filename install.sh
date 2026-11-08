@@ -493,7 +493,7 @@ printf '\n  %s━━━━━━━━━━━━━━━━━━━━━━
 if [ -n "$RCODE" ]; then
   printf '  %s✅ 哨兵裝好了，接下來在網頁上還原%s\n\n' "$B" "$N"
   printf '  1. 用電腦或手機打開這個網址：\n     %s%s?restore=%s%s\n\n' "$B$C" "$BASE" "$RCODE" "$N"
-  printf '  2. 選擇備份檔（.vsbk）、輸入解開密碼，按「開始還原」\n\n'
+  printf '  2. 選擇備份檔（.vsbk，分段的全部一起選）、輸入解開密碼，按「開始還原」\n\n'
   printf '  %s還原代碼：%s（24 小時內有效）%s\n' "$D" "$RCODE" "$N"
   printf '  %s備份檔可以從 Telegram，或另一台主機雲端硬碟裡的「哨兵備份」資料夾下載%s\n' "$D" "$N"
 else
