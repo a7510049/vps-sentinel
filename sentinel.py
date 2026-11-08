@@ -2890,11 +2890,62 @@ def peer_error(e, url):
 
 
 POOL = ThreadPoolExecutor(max_workers=8)
+PEER_POOL = ThreadPoolExecutor(max_workers=16)  # 問其他主機專用，不跟連結檢查搶
+PEER_CACHE = {}                                 # (代號, 網址, 鑰匙) → {"t": 問到的時間, "d": 資料, "busy": 問的那一次, "fails": 連續連不上幾次}
+PEER_LOCK = threading.Lock()
+PEER_FRESH = 2                                  # 資料超過幾秒就在背景重問（網頁照樣先拿現成的）
+PEER_WAIT = 10                                  # 連不上的主機最久隔幾秒再問一次
 
 
-def all_status():
-    peers = list(POOL.map(fetch_peer, PEERS)) if PEERS else []
-    return [COL.snapshot()] + peers
+def peer_key(p):
+    return (p["name"], p["url"], p["token"])
+
+
+def peer_pull(p):
+    """問一台，把結果存起來"""
+    k, d = peer_key(p), None
+    try:
+        d = fetch_peer(p)
+        return d
+    finally:                                     # 就算出錯也要把「正在問」清掉，下次才會再問
+        with PEER_LOCK:
+            c = PEER_CACHE.setdefault(k, {})
+            c["busy"] = None
+            if d is not None:
+                c.update(t=time.time(), d=d, fails=0 if d.get("online") else c.get("fails", 0) + 1)
+
+
+def peer_get(p, fresh=False):
+    """先給存著的資料，舊了就在背景重問；連不上的越隔越久才再問。第一次（或 fresh）才等它回來"""
+    k = peer_key(p)
+    with PEER_LOCK:
+        c = PEER_CACHE.get(k) or {}
+        fut = c.get("busy")
+        if fut is None:
+            age = time.time() - c.get("t", 0)
+            due = min(PEER_FRESH * 2 ** c.get("fails", 0), PEER_WAIT) if c.get("fails") else PEER_FRESH
+            if fresh or "d" not in c or age >= due:
+                fut = PEER_POOL.submit(peer_pull, p)
+                PEER_CACHE.setdefault(k, {})["busy"] = fut
+    if "d" in c and not fresh:
+        return c["d"]
+    try:
+        return fut.result(timeout=8) if fut else c["d"]
+    except Exception:  # noqa: BLE001  逾時：先當連不上，背景那次問完會更新
+        return c.get("d") or {"name": PEER_NAME.get(p["name"]) or p["name"], "node": p["name"], "online": False, "level": "bad",
+                              "problems": ["連不上"], "error": "等太久沒有回應", "last_seen": PEER_SEEN.get(p["name"]), "peer_url": p["url"]}
+
+
+def all_status(fresh=False):
+    """這台＋其他主機。網頁每幾秒問一次，不用每次都當場去問每一台：直接拿背景問好的"""
+    peers = list(PEERS)
+    with PEER_LOCK:                              # 已經拿掉、改過網址或鑰匙的就不留
+        keep = {peer_key(p) for p in peers}
+        for k in [k for k in PEER_CACHE if k not in keep]:
+            PEER_CACHE.pop(k, None)
+    if fresh:
+        return [COL.snapshot()] + list(PEER_POOL.map(lambda p: peer_get(p, True), peers))
+    return [COL.snapshot()] + [peer_get(p) for p in peers]
 
 
 # ───────────────────────── 配對暗號（新增主機） ─────────────────────────
@@ -3676,7 +3727,7 @@ def alert_loop():
                 watch_check()
                 TG_SENT.clear()                         # 取消被監看後從那一刻開始通知，不補發被監看期間的事件
             elif TG_BOT and TG_CHAT:
-                for s in all_status():
+                for s in all_status(fresh=True):
                     key, name = s.get("node") or "", s.get("name") or "主機"
                     if not s.get("online"):
                         offline_count[key] = offline_count.get(key, 0) + 1
@@ -7508,18 +7559,28 @@ class Handler(BaseHTTPRequestHandler):
     def log_message(self, *a):
         pass
 
-    def send(self, code, body, ctype="application/json; charset=utf-8", cache=False, csp=""):
+    def send(self, code, body, ctype="application/json; charset=utf-8", cache=False, csp="", etag=False):
         data = body if isinstance(body, bytes) else body.encode("utf-8")
+        tag = None
+        if etag:                                  # 網頁：瀏覽器先問一聲「有沒有改」，沒改就用它存的那份，不用重新下載
+            tag = page_tag(data)
+            have = {re.sub(r'-(?:gzip|br|zstd)$', "", re.sub(r'^W/|"', "", t.strip())) for t in (self.headers.get("If-None-Match") or "").split(",")}
+            if code == 200 and tag in have:
+                code, data = 304, b""
         self.send_response(code)
         self.send_header("Content-Type", ctype)
-        self.send_header("Content-Length", str(len(data)))
-        self.send_header("Cache-Control", "max-age=86400" if cache else "no-store")
+        if code != 304:
+            self.send_header("Content-Length", str(len(data)))
+        if tag:
+            self.send_header("ETag", f'W/"{tag}"')
+        self.send_header("Cache-Control", "max-age=86400" if cache else "no-cache" if tag else "no-store")
         self.send_header("X-Content-Type-Options", "nosniff")
         self.send_header("X-Frame-Options", "DENY")              # 不讓別的網站把哨兵嵌進去騙你點按鈕
         self.send_header("Content-Security-Policy", "frame-ancestors 'none'" + csp)
         self.send_header("Referrer-Policy", "no-referrer")       # 點外部連結時不帶出哨兵的網址
         self.end_headers()
-        self.wfile.write(data)
+        if data:
+            self.wfile.write(data)
 
     def client_ip(self):
         """連進來的人在哪裡（經過本機的 Caddy 時看它轉來的；IPv6 同一段 /64 當成同一個人）"""
@@ -7713,12 +7774,12 @@ class Handler(BaseHTTPRequestHandler):
             return self.proxy_cloud()
         path = urllib.parse.urlsplit(self.path).path
         if path == "/fly" or re.fullmatch(r"/s/[A-Za-z0-9]{8}", path):   # 機場起降分享連結：只給網頁，資料要靠連結上的代碼
-            return self.send(200, share_page(), "text/html; charset=utf-8")
+            return self.send(200, share_page(), "text/html; charset=utf-8", etag=True)
         if path == "/":
             rs = rsw_state()
             busy = rs and (rs.get("stage") == "wait" or rs.get("stage") == "running" and time.time() - rs.get("start_t", 0) < 7200)
             w = [] if busy else watchers()        # 等著網頁還原、還原中：照樣給完整網頁
-            return self.send(200, watch_page(w) if w else page(), "text/html; charset=utf-8")
+            return self.send(200, watch_page(w) if w else page(), "text/html; charset=utf-8", etag=True)
         if path == "/manifest.webmanifest":
             return self.send(200, MANIFEST, "application/manifest+json", cache=True)
         if path == "/apple-touch-icon.png":
@@ -8135,6 +8196,11 @@ class Handler(BaseHTTPRequestHandler):
 
 
 PAGE = None if watchers() else load_page()       # 被監看的主機不載入完整網頁
+
+
+def page_tag(data):
+    """網頁內容的指紋：內容一樣，指紋就一樣"""
+    return hashlib.sha256(data).hexdigest()[:20]
 
 
 def page():
