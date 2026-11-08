@@ -44,7 +44,7 @@ from collections import deque
 from concurrent.futures import ThreadPoolExecutor
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
-VERSION = "3.73"
+VERSION = "3.74"
 
 # ───────────────────────── 哨兵備份檔（.vsbk）─────────────────────────
 # 哨兵專用的備份格式：外面是自己的檔案格式，裡面用的是成熟、標準的加密方法（不自己發明加密）：
@@ -1105,25 +1105,36 @@ def self_running():
 
 
 def self_last():
+    """最後一次更新的結果（last：ok、time、rolled＝新版打不開已換回原本的）和還在跑時跑到哪（stage）：
+    dl 下載新版、inst 安裝、boot 重新啟動"""
     try:
         with open(SELF_LOG, encoding="utf-8", errors="replace") as f:
-            lines = f.read().splitlines()[-200:]
+            lines = f.read().splitlines()[-400:]
     except OSError:
-        return None
-    for line in reversed(lines):
-        if line.startswith("__RESULT__"):
+        return None, ""
+    last, stage, start = None, "", -1
+    for i, line in enumerate(lines):
+        if line.startswith("=== 開始更新"):
+            start, stage = i, "dl"
+        elif stage and (line.startswith("__STEP__ inst") or re.match(r"\s*\[\d+/\d+\]", line)):   # 安裝程式每一步印「[1/4] …」
+            stage = "boot" if "啟動哨兵" in line else "inst" if stage == "dl" else stage
+        elif line.startswith("__RESULT__"):
             p = line.split()
             try:
-                return {"ok": p[1] == "ok", "time": float(p[2])}
+                last = {"ok": p[1] == "ok", "time": float(p[2]),
+                        "rolled": any("已換回原本的版本" in x for x in lines[max(start, 0):i])}
             except (IndexError, ValueError):
-                return None
-    return None
+                last = None
+            stage = ""
+    return last, stage
 
 
 def self_check(force=False):
     """看 GitHub 上有沒有新版（3 小時查一次，或手動按「檢查」）"""
     d = src_dir()
-    base = {"build": BUILD, "version": VERSION, "running": self_running(), "last": self_last()}
+    last, stage = self_last()
+    run_ = self_running()
+    base = {"build": BUILD, "version": VERSION, "running": run_, "last": last, "stage": stage if run_ else ""}
     if not d or not shutil.which("git") or not shutil.which("systemd-run"):
         return {**base, "supported": False,
                 "err": "找不到安裝資料夾，請先照說明手動更新一次（git pull 後執行 bash install.sh）"}
@@ -1153,7 +1164,7 @@ def self_update():
     script = f"""set -u
 echo "=== 開始更新哨兵 $(date '+%F %T') ==="
 res=fail
-cd {q} && git -c safe.directory='*' fetch origin && git -c safe.directory='*' reset --hard '@{{u}}' && bash install.sh && res=ok
+cd {q} && git -c safe.directory='*' fetch origin && git -c safe.directory='*' reset --hard '@{{u}}' && echo "__STEP__ inst" && bash install.sh && res=ok
 echo "__RESULT__ $res $(date +%s)"""
     try:
         if os.path.getsize(SELF_LOG) > 1_000_000:

@@ -1442,8 +1442,9 @@ async function selfUpdate(root, jobs){
   if (go.includes(first)) { UPW.wait = later; UPW.first = first.node; }
   else if (later.length) go.push(...await upwStart(later, fail));     // 先試的那台根本沒開始（例如剛好斷線）：其他台照常更新
   const all = go.length + (go.includes(first) ? later.length : 0);
-  const started = all ? (all > 1 ? `已開始更新 ${all} 個項目` : `已開始更新「${jobName(go[0])}」`) : "";
-  if (all || fail.length) toast([started, ...fail].filter(Boolean).join("；"), fail.length ? "bad" : "ok");   // 不管成功失敗都只跳一則
+  if (UPW.wait.length) UPW.wait.forEach(j => upvSet(j, "wait"));
+  if (all) upvOpen();                                                   // 開始了：打開進度視窗（開不了的也列在裡面）
+  else if (fail.length) toast(fail.join("；"), "bad");
   setTimeout(() => selfStatus(root, "fresh"), 1500);
   upwSave(); upwRun();
 }
@@ -1455,7 +1456,8 @@ async function upwStart(jobs, fail){
     const h = LIST.find(x => (x.node || "") === j.node) || {}, d = SELFST[keyOf(h)] || {};
     try { await selfCall(j.node, j.kind === "cloud" ? "cloud_update" : "update"); go.push(j);
       UPW.jobs.push({node: j.node, kind: j.kind, name: h.name || "主機", from: j.kind === "cloud" ? (d.cloud || {}).version || "" : d.build || "", t0: Date.now()});
-    } catch(e) { fail.push(`${jobName(j)}：${e.message}`); }
+      upvSet(j, "dl");
+    } catch(e) { fail.push(`${jobName(j)}：${e.message}`); upvSet(j, "fail", e.message); }
   }
   return go;
 }
@@ -1464,8 +1466,9 @@ async function upwStart(jobs, fail){
    wait：等第一台（first）確定沒問題才更新的；held：已經有結果、等全部好了一起說的 */
 const UPW = (() => { let o = {}; try { o = JSON.parse(sstore("vs-upw") || "{}"); } catch(e) {}
   if (Array.isArray(o)) o = {jobs: o};
-  return {jobs: o.jobs || [], wait: o.wait || [], first: o.first || "", held: o.held || [], timer: 0}; })();
-function upwSave(){ const {jobs, wait, first, held} = UPW; sstore("vs-upw", jobs.length || wait.length || held.length ? JSON.stringify({jobs, wait, first, held}) : ""); }
+  return {jobs: o.jobs || [], wait: o.wait || [], first: o.first || "", held: o.held || [], rows: o.rows || [], show: !!o.show, timer: 0}; })();
+function upwSave(){ const {jobs, wait, first, held, rows, show} = UPW;
+  sstore("vs-upw", jobs.length || wait.length || held.length || show ? JSON.stringify({jobs, wait, first, held, rows, show}) : ""); }
 function upwPanel(){ const b = TAB === "set" && view(); if (b) selfStatus(b, "fresh"); }
 const upwSay = (list) => { const bad = list.filter(x => !x[1]), good = list.filter(x => x[1]);
   return [good.length ? (good.length > 1 ? `${good.length} 個項目都更新好了 ✨` : good[0][0]) : "", ...bad.map(x => x[0])].filter(Boolean).join("；"); };
@@ -1473,6 +1476,12 @@ function upwReload(msg){
   if (window._reloading) return; window._reloading = true;
   if (!UPW.jobs.length && !UPW.wait.length) { msg = upwSay([...UPW.held, [msg, true]]); UPW.held = []; }
   else UPW.held.push([msg, true]);
+  if (UPV) { UPW.rows.filter(r => r.k.startsWith("|") && r.kind === "self").forEach(r => upvSet(r, "done"));   // 視窗開著：先畫「好了」，整頁淡出再重新載入
+    if (!UPW.jobs.length && !UPW.wait.length) UPW.show = false;
+    upwSave(); if (msg) sstore("vs-upmsg", msg);
+    setTimeout(() => { if (canAnim()) document.body.animate([{opacity:1}, {opacity:0}], {duration:T.slow, easing:EXIT, fill:"forwards"}); }, T.long);
+    return setTimeout(() => location.reload(), T.long + (canAnim() ? T.slow : 0));
+  }
   upwSave();
   if (msg) sstore("vs-upmsg", msg);
   toast("哨兵已更新到新版，重新載入中…");
@@ -1481,15 +1490,22 @@ function upwReload(msg){
 function upwRun(){
   clearTimeout(UPW.timer);
   if (!UPW.jobs.length || window._reloading) return;
-  UPW.timer = setTimeout(upwStep, 3000);
+  UPW.timer = setTimeout(upwStep, UPV ? 1500 : 3000);                  // 進度視窗開著：問勤一點，步驟才跟得上
 }
 async function upwStep(){
   const nodes = [...new Set(UPW.jobs.map(j => j.node))], done = [];
   let mine = "";                                                        // 這台的哨兵換好的新版本號
   await Promise.all(nodes.map(async node => {
-    let d; try { d = await selfCall(node, "status"); } catch(e) { return; }   // 正在重新啟動，連不上是正常的
+    let d; try { d = await selfCall(node, "status"); }
+    catch(e) {                                                          // 正在重新啟動，連不上是正常的
+      UPW.jobs.filter(x => x.node === node && x.kind === "self" && Date.now() - x.t0 > 4000).forEach(j => upvSet(j, "boot"));
+      return; }
     for (const j of UPW.jobs.filter(x => x.node === node)) {
       const age = Date.now() - j.t0;
+      if (j.kind === "self" && d.running && !(d.build && j.from && d.build !== j.from)) {
+        const r = UPW.rows.find(x => x.k === upk(j)), was = r ? UPST.indexOf(r.st) : 0, now = UPST.indexOf(d.stage || (age < 4000 ? "dl" : "inst"));
+        if (now > was) upvSet(j, UPST[now]);                            // 舊版主機沒有回報步驟：照時間猜；步驟只往前不往回
+      }
       if (j.kind === "cloud") {
         const c = d.cloud; if (!c || c.running) continue;
         if (age < 4000) continue;                                       // 剛開始的那一下可能還沒跑起來
@@ -1499,26 +1515,98 @@ async function upwStep(){
         if (!node) { mine = d.version; done.push([j, "", true]); continue; }   // 這台：等一下換上新畫面
         done.push([j, `「${j.name}」的哨兵已更新到 ${d.version} ✨`, true]);
       } else if (!d.running && age > 15000) {
-        done.push([j, d.last && d.last.ok === false ? `「${j.name}」的哨兵更新失敗，已保留原本的版本` : `「${j.name}」的哨兵${j.from ? "已經是最新版" : "更新完成"} ✨`, !(d.last && d.last.ok === false)]);
+        const bad = d.last && d.last.ok === false;
+        done.push([j, bad ? `「${j.name}」的哨兵${d.last.rolled ? "新版打不開，已換回原本的版本" : "更新失敗，已保留原本的版本"}` : `「${j.name}」的哨兵${j.from ? "已經是最新版" : "更新完成"} ✨`, !bad,
+          bad ? (d.last.rolled ? "新版打不開，已換回原本的版本" : "沒更新成功，還是原本的版本") : ""]);
       }
     }
   }));
   if (window._reloading) return;
-  if (mine) { UPW.jobs = UPW.jobs.filter(j => !done.some(x => x[0] === j)); UPW.held.push(...done.filter(x => x[1]).map(x => [x[1], x[2]])); return upwReload(`哨兵已更新到 ${mine} ✨`); }
+  const mark = () => done.forEach(([j, m, ok, why]) => upvSet(j, ok ? "done" : "fail", ok ? "" : why || m.replace(/^「[^」]*」(的哨兵|的雲端硬碟)?/, "")));
+  if (mine) { mark(); UPW.jobs = UPW.jobs.filter(j => !done.some(x => x[0] === j)); UPW.held.push(...done.filter(x => x[1]).map(x => [x[1], x[2]])); return upwReload(`哨兵已更新到 ${mine} ✨`); }
   for (const j of UPW.jobs) if (Date.now() - j.t0 > 15 * 60000 && !done.some(x => x[0] === j)) done.push([j, `「${j.name}」${j.kind === "cloud" ? "的雲端硬碟" : "的哨兵"}更新太久沒回應，請到主機上看看`, false]);
   if (done.length) {
-    UPW.jobs = UPW.jobs.filter(j => !done.some(x => x[0] === j));
+    UPW.jobs = UPW.jobs.filter(j => !done.some(x => x[0] === j)); mark();
     UPW.held.push(...done.map(x => [x[1], x[2]]));
     const fx = UPW.wait.length && done.find(x => x[0].kind === "self" && x[0].node === UPW.first);
-    if (fx && fx[2]) { const fail = []; await upwStart(UPW.wait, fail); fail.forEach(f => UPW.held.push([f, false])); UPW.wait = []; }   // 第一台沒問題：換其他台
-    else if (fx) { UPW.held.push([`其他 ${UPW.wait.length} 台先不更新`, false]); UPW.wait = []; }
-    if (!UPW.jobs.length && !UPW.wait.length) {                         // 全部都有結果了：合成一則
+    if (fx && fx[2]) { const fail = [], w = UPW.wait; UPW.wait = []; await upwStart(w, fail); fail.forEach(f => UPW.held.push([f, false])); }   // 第一台沒問題：換其他台
+    else if (fx) { UPW.held.push([`其他 ${UPW.wait.length} 台先不更新`, false]); UPW.wait.forEach(j => upvSet(j, "skip")); UPW.wait = []; }
+    if (!UPW.jobs.length && !UPW.wait.length) {                         // 全部都有結果了：合成一則（進度視窗開著就看視窗，不另外跳）
       const bad = UPW.held.some(x => !x[1]);
-      toast(upwSay(UPW.held), bad ? "bad" : "ok"); UPW.held = [];
+      if (!UPV) { toast(upwSay(UPW.held), bad ? "bad" : "ok"); UPW.rows = []; }
+      UPW.held = [];
     }
     upwSave(); upwPanel(); tick();                                      // 設定面板的版本號、齒輪上的紅點馬上跟著變
   }
   upwRun();
+}
+/* ═════════ 更新進度視窗：每一項一條波浪進度條，哨兵另外標出走到哪一步 ═════════ */
+const UPST = ["wait", "dl", "inst", "boot", "done"];
+/* 每一步的進度條範圍（%）和慢慢往前走的快慢（毫秒）：沒有真的百分比，只在這一步的範圍裡越走越慢，不會停住也不會跳 */
+const UPRG = {self:{wait:[0, 0, 1], dl:[4, 26, 5000], inst:[26, 66, 14000], boot:[66, 93, 9000]}, cloud:{dl:[4, 90, 25000]}};
+const UPLB = {wait:"等第一台好", dl:"下載新版", inst:"安裝中", boot:"重新啟動", done:"好了", fail:"沒更新成功", skip:"先不更新"};
+const UPSTEP = [["dl", "下載"], ["inst", "安裝"], ["boot", "重新啟動"], ["done", "完成"]];
+const upk = j => (j.node || "") + "|" + j.kind;
+let UPV = null;
+function upvPct(r){
+  if (r.st === "done" || r.st === "fail") return 100;
+  const g = (UPRG[r.kind] || UPRG.self)[r.st] || [r.p || 0, r.p || 0, 1], lo = Math.max(g[0], r.p0 || 0);
+  return lo + (g[1] - lo) * (1 - Math.exp(-(Date.now() - r.t) / g[2]));
+}
+function upvSet(j, st, msg){
+  const k = j.k || upk(j); let r = UPW.rows.find(x => x.k === k);
+  if (!r) { const h = LIST.find(x => (x.node || "") === (j.node || "")) || {};
+    UPW.rows.push(r = {k, name: j.name || h.name || "主機", kind: j.kind, st: "", t: Date.now(), p0: 0}); }
+  if (r.st !== st) { r.p0 = r.st ? upvPct(r) : 0; if (st === "fail") r.prev = r.st; r.st = st; r.t = Date.now(); }
+  if (msg !== undefined) r.msg = msg;
+  upwSave(); upvPaint();
+}
+function upvOpen(){
+  UPW.show = true; upwSave();
+  if (UPV) return upvPaint();
+  const v = UPV = document.createElement("div"); v.className = "veil upv";
+  v.innerHTML = `<div class="dialog upd run"><div class="uorb" aria-hidden="true"><i class="ur"></i><i class="ub"></i><i class="uc"></i>
+      <span class="ug a">${I("upd")}</span><span class="ug b">${I("chk")}</span><span class="ug c">${I("bang")}</span></div>
+    <h3 aria-live="polite">更新中</h3><p class="ups"></p><div class="uplist"></div>
+    <div class="btns"><button class="ubtn ghost" data-r>在背景更新</button></div></div>`;
+  $("#layer").appendChild(v);
+  v._esc = upvClose;
+  v.addEventListener("click", e => { if (e.target === v || e.target.closest("[data-r]")) upvClose(); });
+  upvPaint(); v._t = setInterval(upvPaint, 600);
+  upwRun();
+}
+function upvClose(){
+  const v = UPV; if (!v || window._reloading) return;
+  UPV = null; clearInterval(v._t); v.classList.add("closing"); setTimeout(() => v.remove(), 360);
+  UPW.show = false; if (!UPW.jobs.length && !UPW.wait.length) UPW.rows = [];
+  upwSave(); upwRun();
+}
+function upvPaint(){
+  const v = UPV; if (!v) return;
+  const dlg = v.querySelector(".dialog"), list = v.querySelector(".uplist"), rows = UPW.rows;
+  const live = UPW.jobs.length || UPW.wait.length || rows.some(r => !["done", "fail", "skip"].includes(r.st));
+  const fails = rows.filter(r => r.st === "fail").length;
+  const mode = live ? "run" : fails ? "bad" : "ok";
+  if (!dlg.classList.contains(mode)) { dlg.classList.remove("run", "ok", "bad"); dlg.classList.add(mode); }
+  txt(v.querySelector("h3"), {run:"更新中", ok:"更新好了", bad: fails < rows.length ? "有些沒更新成功" : "更新失敗"}[mode]);
+  const p = v.querySelector(".ups"), say = window._reloading ? "換上新版中…" : "";
+  if (p.textContent !== say) sayTo(p, say);
+  const btn = v.querySelector("[data-r]");
+  txt(btn, live ? "在背景更新" : "好"); btn.disabled = !!window._reloading;
+  const keys = rows.map(r => r.k).join(",");
+  if (list.dataset.keys !== keys) { list.dataset.keys = keys;
+    swapHTML(list, rows.map(r => `<div class="upj" data-k="${esc(r.k)}"><div class="upt"><b>${esc(r.name)}</b><small>${r.kind === "cloud" ? "雲端硬碟" : "哨兵"}</small><span class="upn"></span></div>
+      ${wave(0, "")}${r.kind === "self" ? `<div class="upsteps">${UPSTEP.map(([k, l]) => `<span data-s="${k}">${l}</span>`).join("")}</div>` : ""}<div class="upm" hidden></div></div>`).join("")); }
+  rows.forEach(r => {
+    const el = list.querySelector(`[data-k="${CSS.escape(r.k)}"]`); if (!el) return;
+    el.className = "upj s-" + r.st;
+    txt(el.querySelector(".upn"), UPLB[r.st] || "");
+    const w = el.querySelector(".wv"); w.style.setProperty("--v", upvPct(r).toFixed(1) + "%"); w.classList.toggle("b", r.st === "fail");
+    const bad = r.st === "fail", at = UPST.indexOf(bad ? r.prev : r.st);      // 失敗：停在出事的那一步，那一步標紅
+    el.querySelectorAll(".upsteps span").forEach(s => { const i = UPST.indexOf(s.dataset.s);
+      s.classList.toggle("on", at >= 0 && (i < at || r.st === "done")); s.classList.toggle("cur", i === at && !bad && r.st !== "done"); s.classList.toggle("x", i === at && bad); });
+    const m = el.querySelector(".upm"); if (r.msg) txt(m, r.msg); reveal(m, !!r.msg);
+  });
 }
 /* ═════════ Telegram 通知設定 ═════════ */
 async function tgCall(body){
@@ -2652,6 +2740,8 @@ async function tick(){
       const wait = 700 - (performance.now() - T0); if (wait > 0) await sleep(wait);
       endSplash();
       const um = sstore("vs-upmsg"); if (um) { sstore("vs-upmsg", ""); setTimeout(() => toast(um), 500); }   // 剛重新載入：說一聲換成哪一版
+      if (UPW.show && (UPW.jobs.length || UPW.wait.length)) setTimeout(upvOpen, 600);   // 還有別台在更新：進度視窗接著開
+      else if (UPW.rows.length) { UPW.rows = []; UPW.show = false; upwSave(); }
       upwRun();
       setTimeout(wxRun, 1200);                   // 畫面出來後再問位置、抓天氣，不拖慢開啟
     }

@@ -53,6 +53,7 @@ android/           安卓 App：全螢幕打開主機的網頁（記住網址）
 ## 主機上的位置
 
 - 程式：`/opt/vps-sentinel-lite/`（sentinel.py ＋ web/）；安裝時舊版留在 `.prev`，新版 40 秒內打不開網頁就換回來，並留 `.rolled-back` 讓哨兵記一筆「更新失敗，已退回」（會傳 Telegram）；網頁「全部更新」先更新一台別的主機，成功才更新其他台
+- 更新進度視窗（app.js 的 `upv` 開頭、`UPW.rows`）：按「更新」／「全部更新」後跳出，每一項一條波浪進度條，哨兵標出「下載・安裝・重新啟動・完成」走到哪（`self_last()` 從更新記錄檔讀 `stage`：`__STEP__ inst`、安裝畫面的「[4/4] 啟動哨兵」；連不上就算重新啟動），進度條只在那一步的範圍裡慢慢走（`UPRG`）；新版打不開換回舊版時 `last.rolled`；這台好了先畫「好了」再整頁淡出重新載入；「在背景更新」關掉後照舊只跳一則通知
 - 設定：`/etc/vps-sentinel-lite.conf`（用 `write_conf` 修改；狀態存在 state.json）
 - 服務：`systemctl status vps-sentinel-lite`
 - 安裝來源：使用者把專案 clone 在 `~/vps-sentinel`，設定檔的 `SRC_DIR` 會記錄位置

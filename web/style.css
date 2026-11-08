@@ -63,7 +63,7 @@
   --tx:#eceef6; --tx2:#c0c3cf; --tx3:#8a8e9c; --line:rgba(255,255,255,.08); --scrim:rgba(0,0,0,.55);
   --p:color-mix(in oklab,color-mix(in oklab,var(--seed) 52%,#fff),#c6c8cf var(--mute)); --on-p:color-mix(in oklab,var(--seed) 40%,#050816);
   --pc:color-mix(in oklab,var(--seed) calc(38% * var(--vc)),#14161c); --on-pc:color-mix(in oklab,var(--seed) 16%,#fff);
-  --ok:#7fd99f; --warn:#ffb77c; --on-warn:#4a2800; --warnc:#5a3612; --on-warnc:#ffdcc2;
+  --ok:#7fd99f; --on-ok:#00391b; --warn:#ffb77c; --on-warn:#4a2800; --warnc:#5a3612; --on-warnc:#ffdcc2;
   --bad:#ffb4ab; --on-bad:#690005; --badc:#73201b; --on-badc:#ffdad6;
   --inv:#e4e4e9; --on-inv:#1b1c20; --inv-ok:#1f7a45; --inv-bad:#ba1a1a;
   --tl:.33; --tc:.075; --fl:.9; --fc:.08;                /* 方塊圖示：底色亮度、彩度／圖案亮度、彩度 */
@@ -81,7 +81,7 @@
   --tx:#16182a; --tx2:#454960; --tx3:#696d82; --line:rgba(20,24,40,.09); --scrim:rgba(0,0,0,.32);
   --p:color-mix(in oklab,color-mix(in oklab,var(--seed) 82%,#000),#50525a var(--mute)); --on-p:#fff;
   --pc:color-mix(in oklab,var(--seed) calc(20% * var(--vc)),#fff); --on-pc:color-mix(in oklab,var(--seed) 50%,#000);
-  --ok:#1f7a45; --warn:#8b5000; --on-warn:#fff; --warnc:#ffdcc2; --on-warnc:#2e1500;
+  --ok:#1f7a45; --on-ok:#fff; --warn:#8b5000; --on-warn:#fff; --warnc:#ffdcc2; --on-warnc:#2e1500;
   --bad:#ba1a1a; --on-bad:#fff; --badc:#ffdad6; --on-badc:#410002;
   --inv:#2f3036; --on-inv:#f1f0f5; --inv-ok:#7fd99f; --inv-bad:#ffb4ab;
   --tl:.93; --tc:.05; --fl:.4; --fc:.13;
@@ -751,6 +751,52 @@ textarea.field{height:auto;padding:12px 16px;resize:none}
 .chg{margin:6px 0 0;padding-left:16px;font-size:var(--fs-xs);color:var(--tx3);line-height:1.6}
 .group>.selfbox>:last-child{border-bottom-left-radius:var(--r-xs);border-bottom-right-radius:var(--r-xs)}
 .selfrow>.cl2.first{margin-top:0}
+
+/* ═════════ 更新進度視窗 ═════════ */
+.upd{max-width:400px}
+.uorb{position:relative;width:80px;height:80px;margin:2px auto 16px;display:grid;place-items:center}
+.uorb>i,.ug{position:absolute;inset:8px}
+.uorb .ur{transition:opacity var(--t-slow) var(--ease)}
+.uorb .ur::before{content:"";position:absolute;inset:0;border-radius:var(--r-pill);background:var(--p);opacity:0;animation:upring 2.2s var(--dec) infinite}
+@keyframes upring{from{transform:scale(.92);opacity:.4}to{transform:scale(1.55);opacity:0}}
+.uorb .ub{background:var(--p) var(--grad);box-shadow:0 12px 26px -12px color-mix(in oklab,var(--p) 80%,transparent);
+  animation:morph 2.4s ease-in-out infinite,spin 3.2s linear infinite;transition:opacity var(--t-mid) var(--ease),scale var(--sp)}
+.uorb .uc{border-radius:var(--r-pill);background:var(--ok);opacity:0;scale:.4;transition:opacity var(--t-mid) var(--ease),scale var(--sp-fast)}
+.bad .uorb .uc{background:var(--bad)}
+.ug{display:grid;place-items:center;color:var(--on-p);opacity:0;scale:.4;transition:opacity var(--t-mid) var(--ease),scale var(--sp-fast)}
+.ug svg{width:30px;height:30px;stroke-width:2.4}
+.ug.a svg{animation:spin 1.4s var(--ease) infinite}
+.ug.b{color:var(--on-ok)}.ug.c{color:var(--on-bad)}
+.run .ug.a,.ok .ug.b,.bad .ug.c{opacity:1;scale:1}
+.ok .uorb .ub,.bad .uorb .ub{opacity:0;scale:.7}
+.ok .uorb .uc,.bad .uorb .uc{opacity:1;scale:1}
+.ok .uorb .ur,.bad .uorb .ur{opacity:0}
+.ups:empty{display:none}
+.uplist{display:flex;flex-direction:column;gap:10px;margin-top:20px;text-align:left}
+.upj{background:var(--card);border-radius:var(--r-lg);padding:12px 14px 13px;display:flex;flex-direction:column;gap:9px}
+.upt{display:flex;align-items:baseline;gap:8px;min-width:0}
+.upt b{font-weight:600;font-size:var(--fs-m);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}
+.upt small{color:var(--tx3);font-size:var(--fs-xs);flex:none}
+.upn{margin-left:auto;flex:none;font-size:var(--fs-s);font-weight:600;color:var(--p);transition:color var(--t-mid) var(--ease)}
+.upj.s-done .upn{color:var(--ok)}.upj.s-fail .upn{color:var(--bad)}.upj.s-wait .upn,.upj.s-skip .upn{color:var(--tx3)}
+.upj .wv{flex:none;width:100%;transition:color var(--t-mid) var(--ease)}
+.upj.s-done .wv{color:var(--ok)}.upj.s-wait .wv,.upj.s-skip .wv{color:var(--tx3)}
+.upj .wf svg{transition:scale var(--t-slow) var(--ease),opacity var(--t-slow) var(--ease)}
+.upj .wf::after{content:"";position:absolute;left:0;right:0;top:4px;height:4px;border-radius:var(--r-pill);background:currentColor;opacity:0;transition:opacity var(--t-slow) var(--ease)}
+.upj:is(.s-done,.s-fail,.s-wait,.s-skip) .wf svg{scale:1 .1;opacity:0}   /* 沒在動的時候波浪攤平成一條直線 */
+.upj:is(.s-done,.s-fail,.s-wait,.s-skip) .wf::after{opacity:1}
+.upj .wr{transition:opacity var(--t-slow) var(--ease)}.upj:is(.s-done,.s-fail) .wr{opacity:0}
+.upsteps{display:flex;justify-content:space-between;gap:6px;font-size:var(--fs-xs);color:var(--tx3)}
+.upsteps span{display:flex;align-items:center;gap:5px;transition:color var(--t-mid) var(--ease)}
+.upsteps span::before{content:"";width:6px;height:6px;border-radius:var(--r-pill);background:var(--s4);transition:background-color var(--t-mid) var(--ease)}
+.upsteps .on{color:var(--tx2)}.upsteps .on::before{background:var(--p)}
+.upj.s-done .upsteps .on::before{background:var(--ok)}
+.upsteps .cur{color:var(--p);font-weight:600}
+.upsteps .x{color:var(--bad);font-weight:600}.upsteps .x::before{background:var(--bad)}
+.upsteps .cur::before{background:var(--p);animation:upblink .9s var(--ease) infinite alternate}
+@keyframes upblink{to{transform:scale(1.7);opacity:.45}}
+.upm{font-size:var(--fs-s);color:var(--bad);line-height:1.5}
+.upj.s-skip .upm{color:var(--tx3)}
 .selfsum:empty{display:none}
 .selfsum{display:flex;align-items:center;gap:12px;margin:0 0 16px;padding:12px 12px 12px 16px;background:var(--card);border-radius:var(--r-lg);font-size:var(--fs-m)}
 .selfsum>span{flex:1;min-width:0;color:var(--p);font-weight:500}
