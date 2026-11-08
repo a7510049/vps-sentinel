@@ -1,6 +1,6 @@
 /* ═════════ 共用規則（所有元件只能用這些值；完整說明見 DESIGN.md） ═════════ */
 :root{
-  --font:"Lexend",-apple-system,BlinkMacSystemFont,"PingFang TC","Noto Sans TC","Microsoft JhengHei",sans-serif;
+  --font:"Plus Jakarta Sans",-apple-system,BlinkMacSystemFont,"PingFang TC","Noto Sans TC","Microsoft JhengHei",sans-serif;
   --r-xs:6px; --r-sm:12px; --r-md:16px; --r-lg:24px; --r-xl:28px; --r-2xl:40px; --r-pill:999px; --r-full:24px;   /* 圓角：連在一起的按鈕中間／小元件／欄位、選單／小卡片／卡片／按下去的卡片／膠囊／會變形的小按鈕變膠囊（48px 高以內；數字接近一半高度，變形才不會慢半拍） */
   --fs-xs:12px; --fs-s:13px; --fs-m:14.5px; --fs-l:16px; --fs-xl:19px; --fs-2xl:23px; --fs-3xl:30px; --fs-4xl:36px;   /* 字級 */
   --fs-input:16px;                                       /* 手機輸入框最小字級：小於這個 iPhone 一點輸入框就會自己放大畫面 */
@@ -25,18 +25,18 @@
 /* ═════════ 顏色：全部從主題色（--seed）算出來 ═════════ */
 @property --seed{syntax:"<color>";inherits:true;initial-value:#4a7dff}
 /* 色相一圈 11 個（照 Android 的基本色），加上彩虹 */
-[data-accent="red"]{--seed:#e5484d}
-[data-accent="orange"]{--seed:#f97316}
-[data-accent="amber"]{--seed:#d99a06}
-[data-accent="lime"]{--seed:#7cb518}
-[data-accent="green"]{--seed:#10b981}
-[data-accent="teal"]{--seed:#0fa3a3}
-[data-accent="cyan"]{--seed:#1a9fd8}
-[data-accent="blue"]{--seed:#4a7dff}
-[data-accent="indigo"]{--seed:#6366f1}
-[data-accent="purple"]{--seed:#8b5cf6}
-[data-accent="pink"]{--seed:#ec4899}
-[data-accent="rainbow"]{--seed:#a855f7}
+[data-accent="red"]{--seed:#e5484d;--gh:-30}
+[data-accent="orange"]{--seed:#f97316;--gh:-35}
+[data-accent="amber"]{--seed:#d99a06;--gh:-35}
+[data-accent="lime"]{--seed:#7cb518;--gh:45}
+[data-accent="green"]{--seed:#10b981;--gh:45}
+[data-accent="teal"]{--seed:#0fa3a3;--gh:45}
+[data-accent="cyan"]{--seed:#1a9fd8;--gh:45}
+[data-accent="blue"]{--seed:#4a7dff;--gh:45}
+[data-accent="indigo"]{--seed:#6366f1;--gh:45}
+[data-accent="purple"]{--seed:#8b5cf6;--gh:45}
+[data-accent="pink"]{--seed:#ec4899;--gh:-45}
+[data-accent="rainbow"]{--seed:#a855f7;--gh:45}
 /* 彩虹主題：選到的分頁、選項、開關、首頁狀態圖形換成彩虹（配色風格一樣有效）；--pride 是色票上的彩虹旗 */
 :root{--pride:linear-gradient(#e40303 0 17%,#ff8c00 0 33%,#ffed00 0 50%,#008026 0 67%,#004dff 0 83%,#750787 0)}
 [data-accent="rainbow"]{--rbl:.8; --on-rbw:color-mix(in oklab,var(--seed) 22%,#000);
@@ -55,37 +55,44 @@
 /* 第二個選擇器：主題色的色票用自己的 --seed 重算一次，預覽就是選了之後的樣子 */
 [data-mode="dark"],[data-mode="dark"] .sw [data-accent]{
   color-scheme:dark;
-  --bg:color-mix(in oklab,var(--seed) calc(5% * var(--vs)),#101114);
-  --s1:color-mix(in oklab,var(--seed) calc(7% * var(--vs)),#18191d);
-  --s2:color-mix(in oklab,var(--seed) calc(8% * var(--vs)),#1e2024);
-  --s3:color-mix(in oklab,var(--seed) calc(10% * var(--vs)),#26282d);
-  --s4:color-mix(in oklab,var(--seed) calc(11% * var(--vs)),#33353b);
-  --tx:#e4e4e9; --tx2:#c5c7ce; --tx3:#8f929a; --line:rgba(255,255,255,.08); --scrim:rgba(0,0,0,.55);
+  --bg:color-mix(in oklab,var(--seed) calc(6% * var(--vs)),#0c0d12);
+  --s1:color-mix(in oklab,var(--seed) calc(8% * var(--vs)),#15161d);
+  --s2:color-mix(in oklab,var(--seed) calc(9% * var(--vs)),#1b1d25);
+  --s3:color-mix(in oklab,var(--seed) calc(11% * var(--vs)),#23252f);
+  --s4:color-mix(in oklab,var(--seed) calc(12% * var(--vs)),#2f313c);
+  --tx:#eceef6; --tx2:#c0c3cf; --tx3:#8a8e9c; --line:rgba(255,255,255,.08); --scrim:rgba(0,0,0,.55);
   --p:color-mix(in oklab,color-mix(in oklab,var(--seed) 52%,#fff),#c6c8cf var(--mute)); --on-p:color-mix(in oklab,var(--seed) 40%,#050816);
   --pc:color-mix(in oklab,var(--seed) calc(38% * var(--vc)),#14161c); --on-pc:color-mix(in oklab,var(--seed) 16%,#fff);
   --ok:#7fd99f; --warn:#ffb77c; --on-warn:#4a2800; --warnc:#5a3612; --on-warnc:#ffdcc2;
   --bad:#ffb4ab; --on-bad:#690005; --badc:#73201b; --on-badc:#ffdad6;
   --inv:#e4e4e9; --on-inv:#1b1c20; --inv-ok:#1f7a45; --inv-bad:#ba1a1a;
   --tl:.33; --tc:.075; --fl:.9; --fc:.08;                /* 方塊圖示：底色亮度、彩度／圖案亮度、彩度 */
+  --glow:24%;                                            /* 頁面頂端的主題色光暈有多濃 */
+  --sh-card:inset 0 1px 0 rgba(255,255,255,.05),0 14px 36px -18px rgba(0,0,0,.75);   /* 卡片：上緣一點亮邊＋往下的柔和影子 */
   --c-cpu:oklch(.74 .14 255); --c-mem:oklch(.74 .15 305); --c-rx:oklch(.8 .12 200); --c-tx:oklch(.74 .16 355);
 }
 [data-mode="light"],[data-mode="light"] .sw [data-accent]{
   color-scheme:light;
-  --bg:color-mix(in oklab,var(--seed) calc(3% * var(--vs)),#fbfbfe);
-  --s1:color-mix(in oklab,var(--seed) calc(5% * var(--vs)),#f0f1f5);
-  --s2:color-mix(in oklab,var(--seed) calc(6% * var(--vs)),#e8e9ee);
-  --s3:color-mix(in oklab,var(--seed) calc(7% * var(--vs)),#e1e2e8);
-  --s4:color-mix(in oklab,var(--seed) calc(8% * var(--vs)),#d3d5dc);
-  --tx:#1a1b20; --tx2:#44464e; --tx3:#6c6f78; --line:rgba(20,24,40,.09); --scrim:rgba(0,0,0,.32);
+  --bg:color-mix(in oklab,var(--seed) calc(5% * var(--vs)),#f2f3f7);
+  --s1:color-mix(in oklab,var(--seed) calc(1% * var(--vs)),#fff);
+  --s2:color-mix(in oklab,var(--seed) calc(4% * var(--vs)),#f4f5f8);
+  --s3:color-mix(in oklab,var(--seed) calc(6% * var(--vs)),#eaecf1);
+  --s4:color-mix(in oklab,var(--seed) calc(8% * var(--vs)),#dcdfe6);
+  --tx:#16182a; --tx2:#454960; --tx3:#696d82; --line:rgba(20,24,40,.09); --scrim:rgba(0,0,0,.32);
   --p:color-mix(in oklab,color-mix(in oklab,var(--seed) 82%,#000),#50525a var(--mute)); --on-p:#fff;
   --pc:color-mix(in oklab,var(--seed) calc(20% * var(--vc)),#fff); --on-pc:color-mix(in oklab,var(--seed) 50%,#000);
   --ok:#1f7a45; --warn:#8b5000; --on-warn:#fff; --warnc:#ffdcc2; --on-warnc:#2e1500;
   --bad:#ba1a1a; --on-bad:#fff; --badc:#ffdad6; --on-badc:#410002;
   --inv:#2f3036; --on-inv:#f1f0f5; --inv-ok:#7fd99f; --inv-bad:#ffb4ab;
   --tl:.93; --tc:.05; --fl:.4; --fc:.13;
+  --glow:18%;
+  --sh-card:0 1px 2px rgba(30,40,90,.05),0 12px 30px -16px rgba(30,40,90,.24);
   --c-cpu:oklch(.56 .17 255); --c-mem:oklch(.55 .19 305); --c-rx:oklch(.6 .12 200); --c-tx:oklch(.58 .2 355);
 }
-:root{--card:var(--s1); --chip:var(--s2)}
+:root{--card:var(--s1); --chip:var(--s2); --cs:var(--sh-card)}   /* --cs：最外層卡片的影子（卡片裡面的卡片換成 none） */
+/* 主色漸層：選中的分頁、主要按鈕、主機頭像。第二個顏色是主色轉 --gh 度（每個主題色各自挑往好看的那一邊；舊瀏覽器就是主色） */
+:root{--p2:var(--p); --grad:linear-gradient(135deg,var(--p),var(--p2))}
+@supports (color:oklch(from red l c h)){:root{--p2:oklch(from var(--p) l c calc(h + var(--gh,45)))}}
 :root{--alt0:oklch(.8 .1 195); --alt1:oklch(.7 .14 240); --alt2:oklch(.64 .17 280); --alt3:oklch(.62 .19 320)}   /* 雷達尾跡的顏色：高度（低 → 高） */
 [data-mode="light"]{--alt0:oklch(.72 .11 195); --alt1:oklch(.6 .15 240); --alt2:oklch(.52 .18 280); --alt3:oklch(.5 .2 320)}
 
@@ -124,7 +131,8 @@
 /* ═════════ 基本 ═════════ */
 *{box-sizing:border-box;margin:0;-webkit-tap-highlight-color:transparent;scrollbar-width:none}
 *::-webkit-scrollbar{display:none}                                     /* 不顯示拉條，照樣能捲 */
-html{background:var(--bg);color:var(--tx);touch-action:manipulation;accent-color:var(--p);caret-color:var(--p);
+html{background:radial-gradient(70% 420px at 6% -60px,color-mix(in oklab,var(--seed) var(--glow),transparent),transparent),
+  radial-gradient(60% 380px at 96% -40px,color-mix(in oklab,var(--p2) var(--glow),transparent),transparent),var(--bg);color:var(--tx);touch-action:manipulation;accent-color:var(--p);caret-color:var(--p);
   transition:background-color var(--t-mid) var(--ease),color var(--t-mid) var(--ease)}
 html.lock{overflow:hidden}
 body{font:400 var(--fs-m)/1.5 var(--font);zoom:var(--zoom);min-height:100vh;-webkit-font-smoothing:antialiased;overflow-x:hidden;overscroll-behavior-y:contain}
@@ -166,7 +174,7 @@ b,strong{font-weight:500}
 .hasnew::after{background:var(--p);box-shadow:0 0 0 2px var(--s3)}
 
 /* 按鈕：膠囊形，按下去圓角變小、縮一點（圓角用一半高度 --h，不用 999px，變形才看得到） */
-.ubtn{--h:44px;height:var(--h);padding:0 20px;border-radius:calc(var(--h) / 2);background:var(--p);color:var(--on-p);font-weight:500;font-size:var(--fs-m);
+.ubtn{--h:44px;height:var(--h);padding:0 20px;border-radius:calc(var(--h) / 2);background:var(--p) var(--grad);color:var(--on-p);font-weight:600;font-size:var(--fs-m);
   display:inline-flex;align-items:center;justify-content:center;gap:8px;white-space:nowrap;text-decoration:none;
   transition:border-radius var(--sp-fast),transform var(--sp-fast),background-color var(--t-mid) var(--ease),opacity var(--t-mid) var(--ease)}
 .ubtn svg{width:18px;height:18px;flex:none}
@@ -194,7 +202,8 @@ b,strong{font-weight:500}
 img.flag{width:28px;height:21px;object-fit:cover;border-radius:var(--r-xs);flex:none;box-shadow:0 0 0 1px var(--line)}
 .emoji{font-size:var(--fs-xl);line-height:1}
 .avatar{display:grid;place-items:center;flex:none;min-width:28px}
-.avatar .letter{width:32px;height:32px;border-radius:50%;display:grid;place-items:center;background:var(--pc);color:var(--on-pc);font-weight:500;font-size:var(--fs-m)}
+.avatar .letter{width:36px;height:36px;border-radius:var(--r-sm);display:grid;place-items:center;background:var(--p) var(--grad);color:var(--on-p);font-weight:700;font-size:var(--fs-m);
+  box-shadow:0 6px 14px -6px color-mix(in oklab,var(--p) 70%,transparent)}
 .fw{display:grid;place-items:center;line-height:0}
 
 /* ═════════ 波浪進度條 ═════════ */
@@ -215,7 +224,7 @@ img.flag{width:28px;height:21px;object-fit:cover;border-radius:var(--r-xs);flex:
 .dash.m{max-width:760px;margin:0 auto;padding:0 16px calc(env(safe-area-inset-bottom) + 120px)}
 .view{animation:through var(--sp) backwards}
 .ptitle{font-size:var(--fs-4xl);font-weight:500;letter-spacing:-.01em;line-height:1.15;padding:calc(env(safe-area-inset-top) + 56px) 4px 20px}
-.lbl{display:flex;align-items:center;justify-content:space-between;gap:8px;font-size:var(--fs-s);font-weight:500;color:var(--tx3);margin:22px 8px 10px}
+.lbl{display:flex;align-items:center;justify-content:space-between;gap:8px;font-size:var(--fs-m);font-weight:600;color:var(--tx2);margin:22px 8px 10px}
 .lbl:first-child{margin-top:0}
 .sp{height:22px}
 .hb .lbl{margin:18px 4px 10px}
@@ -235,7 +244,7 @@ img.flag{width:28px;height:21px;object-fit:cover;border-radius:var(--r-xs);flex:
 .tb svg{width:22px;height:22px;flex:none}
 .tb .t{max-width:0;opacity:0;overflow:hidden;white-space:nowrap;font-weight:500;font-size:var(--fs-m);
   transition:max-width var(--sp),opacity var(--t-mid) var(--ease),margin var(--sp)}
-.tb.on{background:var(--pc);color:var(--on-pc);padding:0 20px 0 18px}
+.tb.on{background:var(--p) var(--grad);color:var(--on-p);padding:0 20px 0 18px}
 .tb.on .t{max-width:3em;opacity:1;margin-left:8px}
 .tb.prs{border-radius:var(--r-md)}
 .tb.hasnew::after{top:10px;right:10px}
@@ -245,6 +254,7 @@ img.flag{width:28px;height:21px;object-fit:cover;border-radius:var(--r-xs);flex:
 .dash.m .blob{width:60px;height:60px}
 .dash.m .blob .bg svg{width:28px;height:28px}
 .dash.m .hello{margin-top:12px}
+.dash.m .headline{font-size:var(--fs-3xl)}
 .hrow{display:flex;align-items:center;gap:16px}
 .blob{position:relative;width:80px;height:80px;flex:none;transition:transform var(--sp)}
 .blob.prs{transform:scale(.86)}
@@ -257,13 +267,14 @@ img.flag{width:28px;height:21px;object-fit:cover;border-radius:var(--r-xs);flex:
 .htx{flex:1;min-width:0}
 .htx .hello{margin-top:2px}
 .hello{display:flex;align-items:center;gap:8px;color:var(--tx3);font-size:var(--fs-s);margin-top:18px}
-.headline{font-size:var(--fs-3xl);font-weight:500;line-height:1.22;letter-spacing:-.01em;margin-top:4px;text-wrap:balance;overflow-wrap:anywhere}
+.headline{font-size:var(--fs-4xl);font-weight:800;line-height:1.2;letter-spacing:-.03em;
+  background:linear-gradient(100deg,var(--tx) 35%,color-mix(in oklab,var(--p) 75%,var(--tx)));-webkit-background-clip:text;background-clip:text;color:transparent;margin-top:4px;text-wrap:balance;overflow-wrap:anywhere}
 .quote{color:var(--tx3);font-size:var(--fs-m);margin-top:6px}
 .quote:empty{display:none}
 /* 天氣：問候旁邊的小卡片 */
 .wxw{min-width:0;flex:1;display:flex;justify-content:flex-end}
 .wxw:empty{display:none}
-.wx{display:flex;align-items:center;gap:12px;padding:12px 16px;border-radius:var(--r-lg);background:var(--s1);min-width:0;max-width:100%}
+.wx{display:flex;align-items:center;gap:12px;padding:12px 16px;border-radius:var(--r-lg);background:linear-gradient(135deg,color-mix(in oklab,var(--p) 12%,var(--s1)),var(--s1));box-shadow:var(--cs);min-width:0;max-width:100%}
 .wx .wi{font-size:var(--fs-3xl);line-height:1;flex:none}
 .wx div{min-width:0;color:var(--tx2);font-size:var(--fs-s)}
 .wx b{font-size:var(--fs-xl);color:var(--tx);margin-right:6px}
@@ -272,24 +283,29 @@ img.flag{width:28px;height:21px;object-fit:cover;border-radius:var(--r-xs);flex:
 /* ═════════ 首頁的主機卡片：按下去圓角變大、縮一點，點了從卡片長出整頁 ═════════ */
 .hosts{display:grid;grid-template-columns:minmax(0,1fr);gap:10px}
 @media (min-width:700px){.dash.m .hosts{grid-template-columns:repeat(2,minmax(0,1fr))}}
-.hcard{display:block;width:100%;background:var(--s1);border-radius:var(--r-xl);padding:18px 18px 16px;cursor:pointer;position:relative;
+.hcard{display:block;width:100%;background:var(--s1);border-radius:var(--r-xl);padding:20px 20px 18px;box-shadow:var(--cs);cursor:pointer;position:relative;
   transition:border-radius var(--sp),transform var(--sp),background-color var(--t-mid) var(--ease),box-shadow var(--t-mid) var(--ease);
   animation:rise var(--sp) backwards;animation-delay:calc(60ms + var(--i,0) * 60ms)}
 .hcard.prs{border-radius:var(--r-2xl);transform:scale(.97);background:var(--s2)}
-.hcard.warn{box-shadow:inset 0 0 0 2px color-mix(in oklab,var(--warn) 55%,transparent)}
-.hcard.bad{box-shadow:inset 0 0 0 2px color-mix(in oklab,var(--bad) 60%,transparent)}
+/* 出狀況：卡片上半淡淡染上狀態色（不用外框），提示列換成半透明白底 */
+:is(.hcard,.hp).warn{background-image:linear-gradient(180deg,color-mix(in oklab,var(--warnc) 80%,transparent),transparent 55%)}
+:is(.hcard,.hp).bad{background-image:linear-gradient(180deg,color-mix(in oklab,var(--badc) 85%,transparent),transparent 55%)}
+:is(.hcard,.hp):is(.warn,.bad) .alert{background:color-mix(in oklab,var(--s1) 72%,transparent)}
+:is(.hcard,.hp):is(.warn,.bad) .alert.bad svg{color:var(--bad)}:is(.hcard,.hp):is(.warn,.bad) .alert.warn svg{color:var(--warn)}
 .hcard:focus-visible{outline:2px solid var(--p);outline-offset:2px}
 .ct{display:flex;align-items:center;gap:12px}
 .ct .nm{min-width:0;flex:1}
-.cn{font-size:var(--fs-xl);font-weight:500;line-height:1.3;overflow-wrap:anywhere}
+.cn{font-size:var(--fs-xl);font-weight:700;letter-spacing:-.01em;line-height:1.3;overflow-wrap:anywhere}
 .cp{font-size:var(--fs-s);color:var(--tx3);margin-top:1px}
 .ct>svg{width:20px;height:20px;color:var(--tx3);flex:none;transform:rotate(-90deg)}
-.mrows{margin-top:12px}
-.mr{display:flex;align-items:center;gap:12px;height:30px}
-.mr .ml{width:3.6em;font-size:var(--fs-s);color:var(--tx2);flex:none}
-.mr .mv{width:3.4em;text-align:right;font-weight:500;flex:none;font-variant-numeric:tabular-nums}
+/* 三個數字各一個小框並排：大數字在上、名稱、波浪條 */
+.mrows{margin-top:16px;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
+.mr{display:flex;flex-direction:column;gap:5px;min-width:0;background:var(--chip);border-radius:var(--r-md);padding:10px 12px 12px}
+.mr .ml{order:1;font-size:var(--fs-xs);color:var(--tx3);white-space:nowrap}
+.mr .mv{font-size:var(--fs-2xl);font-weight:700;letter-spacing:-.02em;line-height:1.1;font-variant-numeric:tabular-nums;white-space:nowrap}
+.mr .wv{order:2;flex:none;width:100%}
 .mr .mv.w{color:var(--warn)}.mr .mv.b{color:var(--bad)}
-.cfoot{font-size:var(--fs-s);color:var(--tx3);margin-top:10px}
+.cfoot{font-size:var(--fs-s);color:var(--tx3);margin-top:14px}
 .cfoot:empty{display:none}
 .hcard .alerts{margin:12px 0 2px}
 .addhost{display:flex;align-items:center;justify-content:center;gap:8px;width:100%;height:56px;border-radius:var(--r-xl);color:var(--tx2);
@@ -365,10 +381,10 @@ html.dhid .dash>.view{content-visibility:hidden;contain-intrinsic-size:auto none
 .hacts{display:flex;align-items:center;flex:none}
 /* 四格數字 */
 .tiles{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
-.tile{background:var(--card);border-radius:var(--r-lg);padding:14px 14px 12px;display:flex;flex-direction:column;gap:6px;min-width:0;
+.tile{background:var(--card);border-radius:var(--r-lg);padding:16px 16px 14px;box-shadow:var(--cs);display:flex;flex-direction:column;gap:6px;min-width:0;
   transition:background-color var(--t-slow) var(--ease),color var(--t-slow) var(--ease)}
 .tile .th{display:flex;align-items:center;gap:8px;font-size:var(--fs-s);color:var(--tx2);white-space:nowrap}
-.tile .tv{font-size:var(--fs-3xl);font-weight:500;line-height:1.05;white-space:nowrap;font-variant-numeric:tabular-nums}
+.tile .tv{font-size:var(--fs-3xl);font-weight:800;letter-spacing:-.03em;line-height:1.05;white-space:nowrap;font-variant-numeric:tabular-nums}
 .tile .tv small{font-size:var(--fs-l);margin-left:1px;color:var(--tx2)}
 .tile .ts{font-size:var(--fs-xs);color:var(--tx3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .tile.w{background:var(--warnc);color:var(--on-warnc)}.tile.b{background:var(--badc);color:var(--on-badc)}
@@ -388,7 +404,7 @@ html.dhid .dash>.view{content-visibility:hidden;contain-intrinsic-size:auto none
 .v6.warn{color:var(--warn)}
 .v6.a{display:block;max-width:240px;overflow:hidden;text-overflow:ellipsis;cursor:pointer;color:var(--tx);font-variant-numeric:tabular-nums}
 /* 卡片（曲線、網路、流量、容器、連結） */
-.cc{background:var(--card);border-radius:var(--r-lg);padding:14px 16px 12px;min-width:0}
+.cc{background:var(--card);border-radius:var(--r-lg);padding:14px 16px 12px;min-width:0;box-shadow:var(--cs)}
 .cch{display:flex;align-items:center;gap:6px 12px;flex-wrap:wrap;margin-bottom:10px;min-height:32px}
 .cch .ct2{font-size:var(--fs-m);font-weight:500;display:flex;align-items:center;gap:10px}
 .lg{display:inline-flex;align-items:center;gap:6px;font-size:var(--fs-s);color:var(--tx2);white-space:nowrap}
@@ -478,6 +494,8 @@ button.li.prs,a.li.prs{border-radius:var(--r-lg);transform:scale(.98);background
 .pane[data-slide]>.slide{z-index:1}   /* 一列一列是不透明的方塊：底色蓋在方塊上、字再蓋在底色上 */
 [data-slide].sliding>*{transition-property:color,box-shadow,transform,padding}
 [data-slide].sliding>.on{background:transparent}
+.dock>.slide,.rail>.slide{background:var(--p) var(--grad)}
+.dock.sliding>.on,.rail.sliding>.on .ri{background-image:none}
 .pane[data-slide].sliding>.on{background:var(--card)}
 .rail.sliding>.on .ri{background:transparent}
 .rail.sliding .ri{transition-property:width,color,transform}
@@ -539,7 +557,7 @@ button.li.prs,a.li.prs{border-radius:var(--r-lg);transform:scale(.98);background
   transition:width var(--sp),background-color var(--t-mid) var(--ease),color var(--t-mid) var(--ease),transform var(--sp-fast)}
 .rb svg{width:22px;height:22px}
 .rb.on{color:var(--tx)}
-.rb.on .ri{width:56px;background:var(--pc);color:var(--on-pc)}
+.rb.on .ri{width:56px;background:var(--p) var(--grad);color:var(--on-p)}
 @media (hover:hover){.rb:not(.on):hover .ri{width:56px;background:color-mix(in srgb,var(--tx) 8%,transparent)}}
 .rb.prs .ri{transform:scale(.9)}
 .rb.hasnew::after{top:-2px;right:16px}
@@ -571,11 +589,9 @@ button.li.prs,a.li.prs{border-radius:var(--r-lg);transform:scale(.98);background
 .dhome .hero{padding:6px 4px 26px}
 .dhome .blob{width:72px;height:72px}
 .cols{display:grid;grid-template-columns:repeat(var(--n),minmax(0,1fr));gap:16px;align-items:start}
-.hp{--card:var(--s2);--chip:var(--s3);background:var(--s1);border-radius:var(--r-xl);padding:20px;container-type:inline-size;
+.hp{--card:var(--s2);--chip:var(--s3);--cs:none;box-shadow:var(--sh-card);background:var(--s1);border-radius:var(--r-xl);padding:20px;container-type:inline-size;
   animation:rise var(--sp) backwards;animation-delay:calc(var(--i,0) * 70ms);
   transition:box-shadow var(--t-mid) var(--ease)}
-.hp.warn{box-shadow:inset 0 0 0 2px color-mix(in oklab,var(--warn) 55%,transparent)}
-.hp.bad{box-shadow:inset 0 0 0 2px color-mix(in oklab,var(--bad) 60%,transparent)}
 .hp .hname{font-size:var(--fs-2xl)}
 .hp .hsub{font-size:var(--fs-s);margin-top:2px}
 .hp .hhead{padding:0 0 4px}
