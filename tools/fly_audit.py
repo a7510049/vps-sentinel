@@ -22,6 +22,10 @@ for c in ["TPE", "TSA", "KHH", "RMQ"]:
     issues = []
     fids = S.FLY_FIDS.get(c, {}).get("rows") or []
     print("  FIDS rows", len(fids), "ok", hm(S.FLY_FIDS.get(c, {}).get("ok")), "near", sum(1 for r in fids if abs((r.get("est") or r["sch"]) - now) < 3 * 3600))
+    hrs = collections.Counter(time.gmtime(r["sch"] + 8 * 3600).tm_hour for r in fids if r.get("sch"))
+    print("  表定時間各小時班數", " ".join(f"{h:02d}:{hrs[h]}" for h in range(24)))
+    late = sorted((time.gmtime(r["sch"] + 8 * 3600)[3:5], r["io"], r["fn"]) for r in fids if r.get("sch") and time.gmtime(r["sch"] + 8 * 3600).tm_hour < 7)
+    print("  0～7 點的班機", " ".join(f"{a:02d}:{b:02d}{io[0]}{fn}" for (a, b), io, fn in late) or "-")
     if not fids:
         issues.append("官網航班表是空的（連不上或解析失敗）")
     if c == "TPE":
