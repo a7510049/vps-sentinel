@@ -5500,7 +5500,29 @@ def include(name):
         exec(compile(f.read(), path, "exec"), globals())   # noqa: S102
 
 
-include("fly.py")
+try:                                            # 機場起降載入失敗（檔案壞了、少了）：監控、備份這些照常，只有機場起降不能用
+    include("fly.py")
+    FLY_OK = True
+except Exception as e:  # noqa: BLE001
+    FLY_OK = False
+    log(f"機場起降載入失敗（{type(e).__name__}：{str(e)[:120]}），其他功能照常")
+FLY_MAX = 48                                    # 機場起降同時最多處理幾個連線：看的人再多，也留位置給監控
+FLY_BUSY = {"n": 0, "lock": threading.Lock()}
+FLY_API = ("/api/fly", "/api/flights", "/api/opensky")
+
+
+def fly_enter():
+    """要處理一個機場起降的連線：滿了就回 False"""
+    with FLY_BUSY["lock"]:
+        if FLY_BUSY["n"] >= FLY_MAX:
+            return False
+        FLY_BUSY["n"] += 1
+        return True
+
+
+def fly_leave():
+    with FLY_BUSY["lock"]:
+        FLY_BUSY["n"] -= 1
 
 
 MAX_CONN = max(16, int(os.environ.get("SENTINEL_MAX_CONN") or 200))   # 同時最多處理幾個連線（測試可以調小）
@@ -5749,6 +5771,25 @@ class Handler(BaseHTTPRequestHandler):
         self.end_headers()
 
     def do_GET(self):
+        self.fly_gate(self.route_get)
+
+    def do_POST(self):
+        self.fly_gate(self.route_post)
+
+    def fly_gate(self, run):
+        """機場起降的連線另外算：載入失敗或同時太多就先不處理，不會拖到監控"""
+        if self.is_cloud() or not urllib.parse.urlsplit(self.path).path.startswith(FLY_API):
+            return run()
+        if not FLY_OK:
+            return self.send(503, json.dumps({"ok": False, "error": "機場起降暫時不能用"}, ensure_ascii=False))
+        if not fly_enter():
+            return self.send(503, json.dumps({"ok": False, "error": "看的人太多，等一下再試"}, ensure_ascii=False))
+        try:
+            run()
+        finally:
+            fly_leave()
+
+    def route_get(self):
         if self.is_cloud():
             return self.proxy_cloud()
         path = urllib.parse.urlsplit(self.path).path
@@ -5886,7 +5927,7 @@ class Handler(BaseHTTPRequestHandler):
         with open(f, "rb") as fh:
             shutil.copyfileobj(fh, self.wfile, 1 << 20)
 
-    def do_POST(self):
+    def route_post(self):
         if self.is_cloud():
             return self.proxy_cloud()
         u = urllib.parse.urlsplit(self.path)
@@ -6202,7 +6243,7 @@ def main():
     def stop(*_):
         keep_stop()
         COL.save()
-        if FLY["used"]:
+        if FLY_OK and FLY["used"]:
             fly_seen_save()
         log("已存檔，結束")
         sys.exit(0)
@@ -6213,7 +6254,11 @@ def main():
     threading.Thread(target=yt_update_loop, daemon=True).start()  # 有裝 yt-dlp／deno 才會真的做事
     threading.Thread(target=alert_loop, daemon=True).start()      # 沒設定時也會跑，網頁上一設定好就開始通知
     dl_load()                                                     # 上次沒下載完的接著下載
-    fly_seen_load(); fly_tracks_load()                             # 有在用機場起降：背景接著抓
+    if FLY_OK:
+        try:
+            fly_seen_load(); fly_tracks_load()                         # 有在用機場起降：背景接著抓
+        except Exception as e:  # noqa: BLE001  機場的存檔有問題也不影響監控
+            log(f"機場起降的存檔讀不出來（{str(e)[:120]}）")
     srv = Server((BIND, PORT), Handler)
     log(f"VPS 哨兵 {VERSION} 已啟動：http://{BIND}:{PORT}  名稱={NAME}  其他主機={len(PEERS)} 台  "
         f"Telegram={'開' if TG_BOT and TG_CHAT else '關'}")
