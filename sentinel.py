@@ -44,7 +44,7 @@ from collections import deque
 from concurrent.futures import ThreadPoolExecutor
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
-VERSION = "3.76"
+VERSION = "3.77"
 
 # ───────────────────────── 哨兵備份檔（.vsbk）─────────────────────────
 # 哨兵專用的備份格式：外面是自己的檔案格式，裡面用的是成熟、標準的加密方法（不自己發明加密）：
@@ -835,6 +835,7 @@ PEER_SEEN = {}                                  # 其他主機最後一次連上
 PEER_NAME = {}                                  # 其他主機最後一次連上時的名稱（連不上時照樣用它自己的名稱稱呼，會存檔）
 TG_SENT = {}                                    # 每台主機已經通知到哪一筆事件（事件時間，會存檔）
 TG_MSGS = []                                    # 傳出去的通知 [時間, 聊天, 訊息編號]，到期自動刪除（會存檔）
+TG_QUEUE = []                                   # 還沒傳出去的通知 [時間, 走哪個 Telegram, 內容]（會存檔）；""＝這台的，"w"＝主要主機給的
 
 if not TOKEN:
     sys.exit("錯誤：設定檔裡沒有 TOKEN（存取密碼），請先設定。")
@@ -2472,6 +2473,7 @@ class Collector:
             PEER_NAME.update({k: str(v)[:40] for k, v in (st.get("peer_name") or {}).items() if k in names and v})
             TG_SENT.update({k: float(v) for k, v in (st.get("tg_sent") or {}).items() if k == "" or k in names})
             TG_MSGS.extend(list(m) for m in (st.get("tg_msgs") or []) if len(m) == 3)
+            TG_QUEUE.extend(list(q) for q in (st.get("tg_queue") or []) if isinstance(q, list) and len(q) == 3)
             self.saved_boot = st.get("boot")
             bk = st.get("backup") or {}
             BK.update({k: bk[k] for k in ("last", "ok_t", "day", "key_t", "names", "tg") if k in bk})
@@ -2489,7 +2491,7 @@ class Collector:
                 st = {"v": 1, "saved": time.time(), "boot": boot_id(), "hist": list(self.hist), "h24": list(self.h24), "h7d": list(self.h7d),
                       "events": list(self.events), "traffic": self.traffic,
                       "prev_keys": self.prev_keys, "peer_seen": dict(PEER_SEEN), "peer_name": dict(PEER_NAME),
-                      "tg_sent": dict(TG_SENT), "tg_msgs": list(TG_MSGS),
+                      "tg_sent": dict(TG_SENT), "tg_msgs": list(TG_MSGS), "tg_queue": list(TG_QUEUE),
                       "backup": {k: BK[k] for k in ("last", "ok_t", "day", "key_t", "names", "tg")}}
                 with KEEP_LK:
                     st["keep"] = {k: list(v) for k, v in KEEP["days"].items()}
@@ -2850,7 +2852,7 @@ class Collector:
             "updates": updates, "reboot": reboot, "geo": geo, "update": upd, "events": events, "traffic": traffic, "bk_tz": BACKUP_TZ,
             "hist": {"t": [h[0] for h in hist], "cpu": [h[1] for h in hist], "mem": [h[2] for h in hist],
                      "rx": [h[3] for h in hist], "tx": [h[4] for h in hist]},
-            "problems": problems, "notices": notices,
+            "problems": problems, "notices": notices, "tg_self": pair_load().get("self_t") or 0,
             "level": "bad" if problems else ("warn" if notices else "ok"),
         }
 
@@ -3236,7 +3238,8 @@ def pair_unwatch():
         if not gone:
             return False, "這台沒有被監看"
         st["keys"] = []
-        st.pop("tg", None)
+        for k in ("tg", "lead", "self_t"):
+            st.pop(k, None)
         pair_save(st)
         WATCH["down"] = False
     who = "、".join(gone)
@@ -3245,13 +3248,14 @@ def pair_unwatch():
     return True, "已取消被監看"
 
 
-def pair_beat_store(tg):
-    """被監看這邊：記住主要主機的 Telegram 設定（失聯時用）"""
+def pair_beat_store(tg, lead=None):
+    """被監看這邊：記住主要主機的 Telegram 設定（失聯時用），還有失聯時是不是由這台說「主要主機不見了」"""
     tg = {"bot": str(tg.get("bot") or "")[:100], "chat": str(tg.get("chat") or "")[:40]} if isinstance(tg, dict) else {}
+    lead = True if lead is None else bool(lead)         # 舊版主要主機沒說：每台都講
     with PAIR_LOCK:
         st = dict(pair_load())
-        if (st.get("tg") or {}) != tg:
-            st["tg"] = tg
+        if (st.get("tg") or {}) != tg or st.get("lead", True) != lead:
+            st["tg"], st["lead"] = tg, lead
             pair_save(st)
 
 
@@ -3316,8 +3320,12 @@ def pair_expire():
 def peer_beats():
     """主要主機這邊：每 10 分鐘（Telegram 設定有變就馬上）告訴被監看的主機「我還在」"""
     tg = {"bot": TG_BOT, "chat": TG_CHAT} if TG_BOT and TG_CHAT else {}
-    body = json.dumps({"action": "beat", "tg": tg}).encode()
+    paired = [p for p in PEERS if p["token"].startswith("vsk_")]
+    with PEER_LOCK:                              # 這台失聯時只派一台說「主要主機不見了」：挑現在連得上的第一台
+        up = [p for p in paired if ((PEER_CACHE.get(peer_key(p)) or {}).get("d") or {}).get("online")]
+    lead = (up or paired or [{}])[0].get("name")
     for p in PEERS:
+        body = json.dumps({"action": "beat", "tg": tg, "lead": p["name"] == lead}).encode()
         last = BEAT_SENT.get(p["name"])
         if not p["token"].startswith("vsk_") or (last and last[1] == body and time.time() - last[0] < 600):
             continue
@@ -3331,22 +3339,40 @@ def peer_beats():
 
 
 def watch_check():
-    """被監看這邊：主要主機太久沒連進來就通知（用主要主機給的 Telegram 設定）"""
-    tg = pair_load().get("tg") or {}
+    """被監看這邊：主要主機太久沒連進來就通知（用主要主機給的 Telegram 設定）；失聯期間這台自己的事件自己通知"""
+    st = pair_load()
+    tg = st.get("tg") or {}
     if not (tg.get("bot") and tg.get("chat")):
         return
     # 最後一次連進來的時間；剛配對好、剛重新啟動也當成連過（主要主機剛好也掛了的話，5 分鐘後一樣會通知）
     seen = max([WATCH["t0"]] + [max(PAIR_SEEN.get(k.get("id"), 0), k.get("t", 0)) for k in pair_keys()])
     gone = time.time() - seen > WATCH_SILENT
     if gone != WATCH["down"]:
-        who = html.escape("、".join(watchers()))
-        text = (f"🔌 <b>{who}</b>　超過 {WATCH_SILENT // 60} 分鐘沒來看「{html.escape(NAME)}」，可能當機或斷線了" if gone
-                else f"✅ <b>{who}</b>　恢復連線了")
-        _, err = tg_api(tg["bot"], "sendMessage", {"chat_id": tg["chat"], "text": text, "parse_mode": "HTML"})
-        if err:
-            log("Telegram 傳送失敗：", err)
-            return
+        if gone:
+            WATCH["base"] = seen                    # 主要主機最後看到這台的時間：之後的事件它沒看到
+        if st.get("lead", True):                   # 好幾台被監看時只派一台講，不會一次收到好幾則
+            who = html.escape("、".join(watchers()))
+            tg_send(f"🔌 <b>{who}</b>　超過 {WATCH_SILENT // 60} 分鐘沒來看「{html.escape(NAME)}」，可能當機或斷線了" if gone
+                    else f"✅ <b>{who}</b>　恢復連線了", "w")
     WATCH["down"] = gone
+    if gone:
+        watch_own(st)
+
+
+def watch_own(st):
+    """主要主機失聯時：這台的事件自己傳到 Telegram，記下傳到哪一筆（主要主機回來後不再重發）"""
+    base = max(WATCH.get("base", 0), st.get("self_t") or 0)
+    with COL.lock:
+        evs = sorted(({"t": e[0], "kind": e[1], "text": e[2]} for e in COL.events if e[0] > base), key=lambda e: e["t"])
+    if not evs:
+        return
+    lines = [x for x in (ev_line(e) for e in evs) if x]
+    if lines:
+        tg_send(tg_host_msg(NAME, lines[-10:]), "w")
+    with PAIR_LOCK:
+        st = dict(pair_load())
+        st["self_t"] = evs[-1]["t"]
+        pair_save(st)
 
 
 # ───────────────────────── 從網頁重新開機 ─────────────────────────
@@ -3566,6 +3592,8 @@ def tg_api(token, method, params=None):
             return None, "你把這個機器人封鎖了，請在 Telegram 解除封鎖後再試"
         if "kicked" in desc or "not a member" in desc:
             return None, "機器人不在這個群組裡，請先把它加進群組"
+        if e.code == 429 or e.code >= 500:
+            return None, "Telegram 暫時沒回應，等一下再試"
         return None, f"Telegram 回應錯誤：{desc or e.code}"
     except Exception:  # noqa: BLE001
         return None, "連不上 Telegram，請確認這台主機能連外網"
@@ -3657,14 +3685,61 @@ def telegram(cfg):
     return True, {"ok": True, "chat": chat, "message": f"已開啟，通知會由 {bot} 傳送"}
 
 
-def tg_send(text):
-    if not (TG_BOT and TG_CHAT):
+TG_QLK, TG_FLK = threading.Lock(), threading.Lock()
+TG_QUEUE_KEEP = 24 * 3600                       # 超過一天還傳不出去就算了
+TG_QUEUE_MAX = 100
+TG_LATE = 120                                   # 晚了這麼多秒才送到的，後面註明是幾點的通知
+TG_AGAIN = ("連不上 Telegram", "Telegram 暫時沒回應")    # 這些錯誤等一下再補傳；其他（密碼錯、被封鎖）傳幾次都一樣
+
+
+def tg_via(via):
+    if via == "w":
+        tg = pair_load().get("tg") or {}
+        return tg.get("bot") or "", tg.get("chat") or ""
+    return TG_BOT, TG_CHAT
+
+
+def tg_send(text, via=""):
+    """傳通知；網路斷了、Telegram 暫時沒回應就先排隊，之後照順序補傳"""
+    bot, chat = tg_via(via)
+    if not (bot and chat):
         return
-    d, err = tg_api(TG_BOT, "sendMessage", {"chat_id": TG_CHAT, "text": text, "parse_mode": "HTML"})
-    if err:
-        log("Telegram 傳送失敗：", err)
-    elif TG_KEEP:
-        TG_MSGS.append([time.time(), TG_CHAT, d["result"]["message_id"]])
+    with TG_QLK:
+        TG_QUEUE.append([time.time(), via, text])
+        del TG_QUEUE[:-TG_QUEUE_MAX]
+    tg_flush()
+
+
+def tg_flush():
+    """把排隊的通知照順序傳出去；還是連不上就停，下一輪（30 秒後）再試"""
+    if not TG_FLK.acquire(blocking=False):      # 別人正在傳：它會一路傳到排隊的都清空
+        return
+    try:
+        while True:
+            with TG_QLK:
+                now = time.time()
+                TG_QUEUE[:] = [q for q in TG_QUEUE if now - q[0] < TG_QUEUE_KEEP]
+                if not TG_QUEUE:
+                    return
+                q = TG_QUEUE[0]
+            t, via, text = q
+            bot, chat = tg_via(via)
+            if bot and chat:
+                if now - t > TG_LATE:
+                    text += f"\n<i>（{bk_time(t):%m/%d %H:%M} 的通知）</i>"
+                d, err = tg_api(bot, "sendMessage", {"chat_id": chat, "text": text, "parse_mode": "HTML"})
+                if err and err.startswith(TG_AGAIN):
+                    log("Telegram 傳送失敗，等一下再傳：", err)
+                    return
+                if err:
+                    log("Telegram 傳送失敗：", err)
+                elif TG_KEEP and via == "" and ((d or {}).get("result") or {}).get("message_id"):
+                    TG_MSGS.append([time.time(), chat, d["result"]["message_id"]])
+            with TG_QLK:
+                if TG_QUEUE and TG_QUEUE[0] is q:
+                    TG_QUEUE.pop(0)
+    finally:
+        TG_FLK.release()
 
 
 def tg_cleanup():
@@ -3763,7 +3838,8 @@ def alert_loop():
                     done = seen_ev.get(key)
                     if done is None:                   # 剛重新啟動：已經通知過的（時間不晚於上次那筆）不要再發
                         done = seen_ev[key] = {(e["t"], e.get("text")) for e in evs if e["t"] <= last}
-                    new = [e for e in evs if e["t"] >= last and (e["t"], e.get("text")) not in done]
+                    own = s.get("tg_self") or 0        # 這台失聯時，那台自己通知到這裡了
+                    new = [e for e in evs if e["t"] >= last and e["t"] > own and (e["t"], e.get("text")) not in done]
                     lines = [x for x in (ev_line(e) for e in new) if x]
                     if lines:
                         tg_send(tg_host_msg(name, lines[-10:]))
@@ -3775,6 +3851,7 @@ def alert_loop():
                 TG_SENT.clear()                         # 關閉期間不累積，重新開啟時從那一刻開始通知
             if PEERS:
                 peer_beats()
+            tg_flush()
             tg_cleanup()
         except Exception as e:  # noqa: BLE001
             log("通知檢查失敗：", e)
@@ -6043,7 +6120,7 @@ class Handler(BaseHTTPRequestHandler):
             if d.get("action") == "beat":            # 主要主機的心跳
                 if not self.authed():
                     return self.send(401, '{"error":"密碼錯誤"}')
-                pair_beat_store(d.get("tg"))
+                pair_beat_store(d.get("tg"), d.get("lead"))
                 return self.send(200, '{"ok":true}')
             if d.get("action") == "forget":
                 if not self.authed():

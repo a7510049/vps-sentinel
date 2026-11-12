@@ -46,6 +46,7 @@ class Crypto(unittest.TestCase):
         sent = []
         S.tg_api = lambda bot, m, d: (sent.append(d["text"]) or ({}, ""))
         S.PEERS[:] = []
+        S.COL.events.clear()                      # 只看「主要主機不見了」這則，不要混進別的測試留下的事件
         S.pair_save({"keys": [{"id": "k1", "name": "主要主機", "hash": "x"}], "tg": {"bot": "1:x", "chat": "9"}})
         S.WATCH.update(down=False, t0=S.time.time() - 3600)        # 哨兵早就開著了
         S.PAIR_SEEN["k1"] = S.time.time()
@@ -131,6 +132,7 @@ class Crypto(unittest.TestCase):
         S.tg_api = lambda bot, m, d: (sent.append(d["text"]) or ({}, ""))
         S.PEERS[:] = []
         S.PAIR_SEEN.clear()
+        S.COL.events.clear()
         S.WATCH.update(down=False, t0=S.time.time() - S.WATCH_SILENT - 5)
         S.pair_save({"keys": [{"id": "k9", "name": "主要主機", "hash": "x"}], "tg": {"bot": "1:x", "chat": "9"}})
         S.watch_check()
