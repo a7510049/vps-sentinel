@@ -4,6 +4,7 @@
 """
 import json
 import os
+import re
 import socket
 import subprocess
 import sys
@@ -97,8 +98,20 @@ class SmokeTest(Server):
         self.assertNotIn("/*@style.css*/", html)
         self.assertNotIn("/*@app.js*/", html)
         self.assertNotIn("/*@fly.js*/", html)
+        self.assertNotIn("/*@flyv*/", html)
+        # 機場起降的 fly.js 不放在首頁，另外下載（網址帶版本）
         with open(os.path.join(ROOT, "web", "fly.js"), encoding="utf-8") as f:
-            self.assertIn(next(line for line in f if line.strip()).strip(), html)
+            fly = f.read()
+        self.assertNotIn(fly.splitlines()[1], html)
+        v = re.search(r'const FLYV = "([0-9a-f]{12})"', html).group(1)
+        code, headers, body = self.request("/fly.js?v=" + v)
+        self.assertEqual(code, 200)
+        self.assertIn("javascript", headers["Content-Type"])
+        self.assertEqual(body.decode("utf-8"), fly)
+        req = urllib.request.Request(f"http://127.0.0.1:{self.port}/fly.js?v={v}", headers={"If-None-Match": headers["ETag"]})
+        with self.assertRaises(urllib.error.HTTPError) as e:   # 沒改：瀏覽器用存的那份
+            urllib.request.urlopen(req, timeout=15)
+        self.assertEqual(e.exception.code, 304)
         with open(os.path.join(ROOT, "web", "app.js"), encoding="utf-8") as f:
             first_line = next(line for line in f if line.strip())
         self.assertIn(first_line.strip(), html)

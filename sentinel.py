@@ -44,7 +44,7 @@ from collections import deque
 from concurrent.futures import ThreadPoolExecutor
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
-VERSION = "3.77"
+VERSION = "3.78"
 
 # ───────────────────────── 哨兵備份檔（.vsbk）─────────────────────────
 # 哨兵專用的備份格式：外面是自己的檔案格式，裡面用的是成熟、標準的加密方法（不自己發明加密）：
@@ -1037,14 +1037,24 @@ def build_of(blobs):
     return h.hexdigest()[:7]
 
 
+def page_tag(data):
+    """網頁內容的指紋：內容一樣，指紋就一樣"""
+    return hashlib.sha256(data).hexdigest()[:20]
+
+
+FLY_JS = {"js": None, "v": ""}                  # 機場起降的畫面程式：另外下載（首頁不用等它）
+
+
 def load_page():
-    """網頁放在 web/ 資料夾：啟動時把樣式和程式塞回 index.html，送出去的還是同一個完整網頁"""
+    """網頁放在 web/ 資料夾：啟動時把樣式和程式塞回 index.html；機場起降的 fly.js 另外給，網頁用到才下載"""
     def rd(p):
         with open(os.path.join(HERE, p), encoding="utf-8") as f:
             return f.read()
     try:
         html = rd("web/index.html").rstrip("\n")
-        js = rd("web/app.js").replace("/*@fly.js*/\n", rd("web/fly.js"))      # 機場起降的畫面放在 fly.js，照原本的位置塞回來
+        fly = rd("web/fly.js").encode("utf-8")
+        FLY_JS.update(js=fly, v=page_tag(fly)[:12])
+        js = rd("web/app.js").replace("/*@flyv*/", FLY_JS["v"])
         return html.replace("/*@style.css*/\n", rd("web/style.css")).replace("/*@app.js*/\n", js)
     except OSError as e:
         log(f"找不到網頁檔案（{e}）：請重新執行 bash install.sh")
@@ -5888,6 +5898,8 @@ class Handler(BaseHTTPRequestHandler):
             busy = rs and (rs.get("stage") == "wait" or rs.get("stage") == "running" and time.time() - rs.get("start_t", 0) < 7200)
             w = [] if busy else watchers()        # 等著網頁還原、還原中：照樣給完整網頁
             return self.send(200, watch_page(w) if w else page(), "text/html; charset=utf-8", etag=True)
+        if path == "/fly.js":                      # 機場起降的畫面程式（公開的程式碼，不用登入；分享連結也要用）
+            return self.send(200, fly_js(), "text/javascript; charset=utf-8", cache=True, etag=True)
         if path == "/manifest.webmanifest":
             return self.send(200, MANIFEST, "application/manifest+json", cache=True)
         if path == "/apple-touch-icon.png":
@@ -6306,11 +6318,6 @@ class Handler(BaseHTTPRequestHandler):
 PAGE = None if watchers() else load_page()       # 被監看的主機不載入完整網頁
 
 
-def page_tag(data):
-    """網頁內容的指紋：內容一樣，指紋就一樣"""
-    return hashlib.sha256(data).hexdigest()[:20]
-
-
 def page():
     global PAGE
     if PAGE is None:                              # 取消被監看後第一次打開才載入
@@ -6318,9 +6325,15 @@ def page():
     return PAGE
 
 
+def fly_js():
+    page()                                        # 跟網頁一起讀，版本才對得上
+    return FLY_JS["js"] or b""
+
+
 def share_page():
     """分享連結打開的網頁：直接是機場起降，不出現哨兵的名字、圖示和開場畫面"""
     h = page()
+    h = h.replace("</title>", f'</title>\n<link rel="preload" as="script" href="/fly.js?v={FLY_JS["v"]}">', 1)   # 一打開就開始下載機場起降
     h = re.sub(r'<link rel="(?:manifest|icon|apple-touch-icon)"[^>]*>\n?', "", h)
     h = h.replace("<title>VPS 哨兵</title>", '<title>機場起降</title>\n<meta name="referrer" content="no-referrer">')
     h = h.replace('content="VPS 哨兵"', 'content="機場起降"')

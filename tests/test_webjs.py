@@ -10,7 +10,7 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 class WebJs(unittest.TestCase):
     def test_no_duplicate_top_level_names(self):
         src = ""
-        for name in ("app.js", "fly.js"):         # 兩個檔案最後會放在同一個網頁裡
+        for name in ("app.js", "fly.js"):         # fly.js 用到才載入，但跟 app.js 共用同一組名字
             with open(os.path.join(ROOT, "web", name), encoding="utf-8") as f:
                 src += f.read() + "\n"
         names = re.findall(r"^(?:async\s+)?function\s+(\w+)\s*\(", src, re.M)

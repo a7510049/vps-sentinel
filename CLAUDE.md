@@ -20,8 +20,8 @@ sentinel.py        後端：收集資料、API、Telegram、雲端硬碟轉接�
 fly.py             機場起降、分享的後端；sentinel.py 用 include("fly.py") 載入到自己裡面，兩邊共用同一組變數（不是獨立模組）
 web/index.html     網頁骨架；/*@style.css*/ 和 /*@app.js*/ 兩個記號會在啟動時被換成對應檔案的內容
 web/style.css      所有樣式，最前面的 :root 是共用設計規則
-web/app.js         所有畫面邏輯與動畫；/*@fly.js*/ 記號的位置會換成 web/fly.js
-web/fly.js         機場起降、整頁雷達、分享的畫面（style_check、test_webjs 會跟 app.js 一起檢查）
+web/app.js         所有畫面邏輯與動畫；機場起降的 web/fly.js 用到才下載（`flyLib`／`flyEnter`，`/fly.js?v=` 版本由主機換掉 /*@flyv*/；用過機場起降的首頁好了就先在背景下載；跟 app.js 共用名字，最外層不能重複）
+web/fly.js         機場起降、整頁雷達、分享的畫面（主機另外給 /fly.js；app.js 一定要先有的 FLYS、SHARE、flyHM 放在 app.js；style_check、test_webjs 會跟 app.js 一起檢查）
 DESIGN.md          美術設計規範
 README.md          GitHub 首頁的介紹（功能改了要跟著改）；docs/ 放介紹用的截圖
 install.sh         安裝／更新哨兵（複製到 /opt/vps-sentinel-lite、設定檔、Caddy、systemd）
