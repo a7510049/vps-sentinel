@@ -18,7 +18,7 @@ jobs:
         with:
           python-version: "3.x"
       - name: 程式語法
-        run: python3 -m py_compile sentinel.py fly.py tools/style_check.py tests/*.py
+        run: python3 -m py_compile sentinel.py pair.py download.py backup.py fly.py tools/style_check.py tests/*.py
       - name: 樣式規則
         run: python3 tools/style_check.py
       - name: 安裝腳本（shellcheck）

@@ -17,6 +17,10 @@
 
 ```
 sentinel.py        後端：收集資料、API、Telegram、雲端硬碟轉接、自我更新（全部 Python 內建模組）
+pair.py            配對暗號、被監看模式（`pair_`、`watch_` 開頭）
+download.py        遠端下載、影片網站下載（`dl_`、`yt_` 開頭）
+backup.py          每日備份、網頁還原（`bk_`、`rsw_` 開頭；.vsbk 格式和 `--restore`／`--decrypt` 留在 sentinel.py，單獨一個檔就能解開、還原）
+                   以上三個跟 fly.py 一樣用 include() 載入、共用同一組變數，位置照原本的順序（include 定義在 HERE 下面）；這三個出錯整個哨兵就起不來（安裝會自動換回舊版）
 fly.py             機場起降、分享的後端；sentinel.py 用 include("fly.py") 載入到自己裡面，兩邊共用同一組變數（不是獨立模組）
 web/index.html     網頁骨架；/*@style.css*/ 和 /*@app.js*/ 兩個記號會在啟動時被換成對應檔案的內容
 web/style.css      所有樣式，最前面的 :root 是共用設計規則
@@ -36,6 +40,7 @@ tools/style_check.py  檢查樣式有沒有照共用規則
 tools/terrain.py      產生 data/terrain.bin（AWS 上公開的地形圖塊，0.01 度一格、16 公尺一級）
 tools/airports_zh.py  幫 data/airports.tsv 補中文城市名（維基數據，連不到，要在 GitHub Actions 上跑）
 tools/fly_db_audit.py 用真實飛機訊號核對航空公司表、機型表，列出對不上的（跟 fly_audit 一起在 fly-audit 跑）
+tools/fly_perf.py     量機場起降會不會拖慢監控（GitHub Actions 手動執行 fly-perf，ARM 主機；2026-11-13 量的：整個程式處理器 1%、監控定時工作最多晚 7 毫秒，不用搬成獨立程式）
 tools/fly_audit.py    機場起降：用真實資料把四個機場跑一遍、列出不合理的地方（這台連不到，到 GitHub Actions 手動執行 fly-audit）
 tests/             基本功能測試（只用 Python 內建模組）
 android/           安卓 App：全螢幕打開主機的網頁（記住網址），畫面全部來自網頁，主力是網頁

@@ -18,7 +18,7 @@ class BrokenFly(unittest.TestCase):
     def test_monitor_still_runs(self):
         d = tempfile.mkdtemp()
         try:
-            for name in ("sentinel.py", "web", "data"):
+            for name in ("sentinel.py", "pair.py", "download.py", "backup.py", "web", "data"):
                 os.symlink(os.path.join(ROOT, name), os.path.join(d, name))
             with open(os.path.join(d, "fly.py"), "w", encoding="utf-8") as f:
                 f.write("raise RuntimeError('壞掉了')\n")

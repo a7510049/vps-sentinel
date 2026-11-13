@@ -1,0 +1,10 @@
+# 機場起降會不會拖慢監控：用真實資料量（開發用，手動執行；ARM 主機，跟 Oracle 免費主機同一類）
+name: fly-perf
+on: workflow_dispatch
+jobs:
+  perf:
+    runs-on: ubuntu-24.04-arm
+    steps:
+      - uses: actions/checkout@v4
+      - run: nproc && lscpu | head -15
+      - run: python3 tools/fly_perf.py
