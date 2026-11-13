@@ -225,9 +225,9 @@ img.flag{width:28px;height:21px;object-fit:cover;border-radius:var(--r-xs);flex:
 /* ═════════ 整體版面 ═════════ */
 .booting #app{opacity:0}
 #app{transition:opacity var(--t-mid) var(--ease)}
-.dash.m{max-width:760px;margin:0 auto;padding:0 16px calc(env(safe-area-inset-bottom) + 120px)}
+.dash.m{max-width:760px;margin:0 auto;padding:0 16px calc(env(safe-area-inset-bottom) + 40px)}
 .view{animation:through var(--sp) backwards}
-.ptitle{font-size:var(--fs-4xl);font-weight:500;letter-spacing:-.01em;line-height:1.15;padding:calc(env(safe-area-inset-top) + 56px) 4px 20px}
+.ptitle{font-size:var(--fs-4xl);font-weight:500;letter-spacing:-.01em;line-height:1.15;padding:28px 4px 20px}
 .lbl{display:flex;align-items:center;justify-content:space-between;gap:8px;font-size:var(--fs-m);font-weight:600;color:var(--tx2);margin:22px 8px 10px}
 .lbl:first-child{margin-top:0}
 .sp{height:22px}
@@ -238,24 +238,9 @@ img.flag{width:28px;height:21px;object-fit:cover;border-radius:var(--r-xs);flex:
 .lbl button[disabled]{opacity:.45;cursor:default}
 .empty{color:var(--tx3);padding:28px 8px;text-align:center}
 
-/* ═════════ 浮在下面的分頁列（手機）：選到的那格變寬、露出文字 ═════════ */
-.dock{position:fixed;left:50%;bottom:calc(env(safe-area-inset-bottom) + 14px);transform:translateX(-50%);z-index:var(--z-bar);
-  display:flex;gap:4px;padding:8px;border-radius:var(--r-pill);background:var(--s3);box-shadow:var(--sh-3);
-  transition:transform var(--sp),opacity var(--t-mid) var(--ease)}
-.lock .dock{transform:translate(-50%,150%);opacity:0}
-/* 分頁列後面往下漸漸變成底色：內容捲到下面淡掉；往下多蓋 160px，iPhone Safari 網址列後面也是底色，不會露出一截內容 */
-.dash.m::before{content:"";position:fixed;left:0;right:0;bottom:-160px;height:calc(env(safe-area-inset-bottom) + 264px);z-index:var(--z-bar);pointer-events:none;
-  background:linear-gradient(to bottom,transparent,var(--bg) 64px)}
-/* iPhone Safari：分頁列放上面，下面留給 Safari 的網址列 */
-.iosweb .dock{bottom:auto;top:calc(env(safe-area-inset-top) + 10px)}
-.iosweb.lock .dock{transform:translate(-50%,-150%)}
-.iosweb .dash.m::before{bottom:auto;top:-160px;height:calc(env(safe-area-inset-top) + 260px);background:linear-gradient(to top,transparent,var(--bg) 36px);
-  opacity:0;transition:opacity var(--t-mid) var(--ease)}   /* 往下捲了才出現，內容不會跟分頁列疊在一起；在最上面時照樣看得到光暈 */
-.iosweb.scl .dash.m::before{opacity:1}
-.iosweb .dash.m{padding-bottom:calc(env(safe-area-inset-bottom) + 40px)}
-.iosweb .hero{padding-top:calc(env(safe-area-inset-top) + 96px)}
-.iosweb .ptitle{padding-top:calc(env(safe-area-inset-top) + 104px)}
-.iosweb .toasts{bottom:calc(env(safe-area-inset-bottom) + 20px)}
+/* ═════════ 手機的分頁列：在頁面最上面，跟著頁面捲走（不浮著，不會跟瀏覽器的網址列擠在一起）；選到的那格變寬、露出文字 ═════════ */
+.dock{position:relative;width:fit-content;margin:calc(env(safe-area-inset-top) + 10px) auto 0;
+  display:flex;gap:4px;padding:8px;border-radius:var(--r-pill);background:var(--s3);box-shadow:var(--sh-1)}
 .tb{--h:52px;height:var(--h);padding:0 15px;border-radius:calc(var(--h) / 2);display:flex;align-items:center;color:var(--tx2);position:relative;
   transition:padding var(--sp),border-radius var(--sp-fast),background-color var(--t-mid) var(--ease),color var(--t-mid) var(--ease)}
 .tb svg{width:22px;height:22px;flex:none}
@@ -267,7 +252,7 @@ img.flag{width:28px;height:21px;object-fit:cover;border-radius:var(--r-xs);flex:
 .tb.hasnew::after{top:10px;right:10px}
 
 /* ═════════ 首頁上面：狀態圖形＋一句話 ═════════ */
-.hero{padding:calc(env(safe-area-inset-top) + 18px) 4px 6px}
+.hero{padding:18px 4px 6px}
 .dash.m .blob{width:60px;height:60px}
 .dash.m .blob .bg svg{width:28px;height:28px}
 .dash.m .hello{margin-top:12px}
@@ -860,7 +845,7 @@ textarea.field{height:auto;padding:12px 16px;resize:none}
 .fchip.hsel.set{background:var(--pc);color:var(--on-pc);box-shadow:none}
 
 /* ═════════ 通知（底部小提示） ═════════ */
-.toasts{position:fixed;left:50%;bottom:calc(env(safe-area-inset-bottom) + 96px);transform:translateX(-50%);z-index:var(--z-toast);
+.toasts{position:fixed;left:50%;bottom:calc(env(safe-area-inset-bottom) + 24px);transform:translateX(-50%);z-index:var(--z-toast);
   display:flex;flex-direction:column;align-items:center;gap:8px;pointer-events:none;width:max-content;max-width:calc(100vw - 32px)}
 @media (min-width:1024px){.toasts{bottom:28px}}
 @media (max-width:599px){.toasts{left:16px;right:16px;width:auto;max-width:none;transform:none;align-items:stretch}}

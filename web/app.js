@@ -2,13 +2,6 @@ const $ = s => document.querySelector(s);
 const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
 function store(k, v){ try { if (v === undefined) return localStorage.getItem(k) || ""; v ? localStorage.setItem(k, v) : localStorage.removeItem(k); } catch(e){ return ""; } }
 const KEY = "vps-sentinel-token";
-/* iPhone、iPad 的 Safari（不是從主畫面打開）：下面有 Safari 自己的網址列，分頁列改放上面（iosweb） */
-if ((/iP(hone|od|ad)/.test(navigator.userAgent) || (/Macintosh/.test(navigator.userAgent) && navigator.maxTouchPoints > 1))
-  && !navigator.standalone && !matchMedia("(display-mode: standalone)").matches) {
-  document.documentElement.classList.add("iosweb");
-  let on = false;   // 捲離最上面時，分頁列後面才墊底色
-  addEventListener("scroll", () => { const v = scrollY > 8; if (v !== on) document.documentElement.classList.toggle("scl", on = v); }, {passive: true});
-}
 /* 登入狀態：勾「30 天內不用再登入」存在這台裝置 30 天；沒勾的話關掉瀏覽器（或 App）就要重新登入 */
 const DAY30 = 30 * 86400000;
 function sstore(k, v){ try { if (v === undefined) return sessionStorage.getItem(k) || ""; v ? sessionStorage.setItem(k, v) : sessionStorage.removeItem(k); } catch(e){ return ""; } }
@@ -611,7 +604,7 @@ function page(list, time){
 /* 手機：首頁是每台一張卡片，點了從卡片長出那台的整頁 */
 function renderPhone(list, time){
   const s = DET && list.find(x => keyOf(x) === DET);
-  return `<div class="dash m" data-key="m"><main class="view v-${TAB}" data-key="v:${TAB}">${page(list, time)}</main><nav class="dock" data-key="dock" data-slide>${navBtns(false, list)}</nav>${s ? detail(s) : ""}</div>`;
+  return `<div class="dash m" data-key="m"><nav class="dock" data-key="dock" data-slide>${navBtns(false, list)}</nav><main class="view v-${TAB}" data-key="v:${TAB}">${page(list, time)}</main>${s ? detail(s) : ""}</div>`;
 }
 /* 電腦：左邊直排分頁；首頁每台主機一欄並排（主機多就是小卡片），右邊是天氣和最近發生的事 */
 function renderDesk(list, time){
@@ -2937,6 +2930,27 @@ async function refreshNow(btn){
     await st; await sleep(T.long);
     if (g === gen) hideUp();
   }, {passive:true});
+})();
+/* 手機：畫面中間左右滑，換到隔壁的分頁（最左、最右邊緣留給瀏覽器的上一頁；圖表、會左右捲的那排、輸入框不算） */
+(function(){
+  let x0 = null, y0 = 0, t0 = 0;
+  addEventListener("touchstart", e => {
+    x0 = null;
+    if (DESK.matches || DET || $("#fly") || e.touches.length > 1 || document.querySelector("#layer .veil") || !LIST.length) return;
+    const t = e.touches[0];
+    if (t.clientX < 28 || t.clientX > innerWidth - 28) return;
+    if (e.target.closest("input,textarea,select,canvas,.cbox,.dock,[data-noswipe],.fhrs,.fterm")) return;
+    for (let el = e.target; el && el !== document.body; el = el.parentElement) if (el.scrollWidth > el.clientWidth + 2 && /auto|scroll/.test(getComputedStyle(el).overflowX)) return;
+    x0 = t.clientX; y0 = t.clientY; t0 = performance.now();
+  }, {passive:true});
+  addEventListener("touchend", e => {
+    if (x0 === null) return;
+    const t = e.changedTouches[0], dx = t.clientX - x0, dy = t.clientY - y0; x0 = null;
+    if (Math.abs(dx) < 70 || Math.abs(dx) < Math.abs(dy) * 2 || performance.now() - t0 > 700) return;   // 要明顯的橫滑，捲動時斜斜的不算
+    const ks = TABS.map(([k]) => k), i = ks.indexOf(TAB) + (dx < 0 ? 1 : -1);
+    if (i >= 0 && i < ks.length) setTab(ks[i]);
+  }, {passive:true});
+  addEventListener("touchcancel", () => { x0 = null; }, {passive:true});
 })();
 /* 按下去的水波紋：手指一碰就從那個點擴散；手機上等一下下，確定不是要捲動才出現 */
 (function(){
