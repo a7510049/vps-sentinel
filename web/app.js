@@ -2,6 +2,9 @@ const $ = s => document.querySelector(s);
 const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
 function store(k, v){ try { if (v === undefined) return localStorage.getItem(k) || ""; v ? localStorage.setItem(k, v) : localStorage.removeItem(k); } catch(e){ return ""; } }
 const KEY = "vps-sentinel-token";
+/* 從主畫面、安卓 App 打開（沒有網址列）：手機分頁列浮在下面；瀏覽器裡放上面（style.css 的 .full） */
+if (navigator.standalone || matchMedia("(display-mode: standalone)").matches || typeof VSApp !== "undefined" || /; wv\)/.test(navigator.userAgent))
+  document.documentElement.classList.add("full");
 /* 登入狀態：勾「30 天內不用再登入」存在這台裝置 30 天；沒勾的話關掉瀏覽器（或 App）就要重新登入 */
 const DAY30 = 30 * 86400000;
 function sstore(k, v){ try { if (v === undefined) return sessionStorage.getItem(k) || ""; v ? sessionStorage.setItem(k, v) : sessionStorage.removeItem(k); } catch(e){ return ""; } }
@@ -2929,6 +2932,19 @@ async function refreshNow(btn){
     pg.innerHTML = drawable(I(ok ? "chk" : "bang")); drawIn(pg.firstChild, T.fast);
     await st; await sleep(T.long);
     if (g === gen) hideUp();
+  }, {passive:true});
+})();
+/* 瀏覽器裡的手機分頁列：往下捲藏起來、往上捲就出現 */
+(function(){
+  let y = scrollY, acc = 0;
+  addEventListener("scroll", () => {
+    const d = document.querySelector(".dock"), now = scrollY, dy = now - y; y = now;
+    if (!d || DESK.matches || document.documentElement.classList.contains("full")) return;
+    acc = Math.sign(dy) === Math.sign(acc) ? acc + dy : dy;
+    const hid = d.classList.contains("hid");
+    if (now < d.offsetHeight) { if (hid) d.classList.remove("hid"); }
+    else if (acc > 24 && !hid) d.classList.add("hid");
+    else if (acc < -12 && hid) d.classList.remove("hid");
   }, {passive:true});
 })();
 /* 手機：畫面中間左右滑，換到隔壁的分頁（最左、最右邊緣留給瀏覽器的上一頁；圖表、會左右捲的那排、輸入框不算） */

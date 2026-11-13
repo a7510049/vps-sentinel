@@ -238,9 +238,31 @@ img.flag{width:28px;height:21px;object-fit:cover;border-radius:var(--r-xs);flex:
 .lbl button[disabled]{opacity:.45;cursor:default}
 .empty{color:var(--tx3);padding:28px 8px;text-align:center}
 
-/* ═════════ 手機的分頁列：在頁面最上面，跟著頁面捲走（不浮著，不會跟瀏覽器的網址列擠在一起）；選到的那格變寬、露出文字 ═════════ */
-.dock{position:relative;width:fit-content;margin:calc(env(safe-area-inset-top) + 10px) auto 0;
-  display:flex;gap:4px;padding:8px;border-radius:var(--r-pill);background:var(--s3);box-shadow:var(--sh-1)}
+/* ═════════ 手機的分頁列 ═════════
+   從主畫面、App 打開（html.full，沒有網址列）：浮在下面的膠囊，選到的那格變寬、露出文字
+   瀏覽器裡：頁面最上面一整排分頁，底下一條線滑到選到的那格；往下捲藏起來、往上捲就出現（.dock.hid） */
+.dock{position:fixed;left:50%;bottom:calc(env(safe-area-inset-bottom) + 14px);transform:translateX(-50%);z-index:var(--z-bar);
+  display:flex;gap:4px;padding:8px;border-radius:var(--r-pill);background:var(--s3);box-shadow:var(--sh-3);
+  transition:transform var(--sp),opacity var(--t-mid) var(--ease)}
+.lock .dock{transform:translate(-50%,150%);opacity:0}
+.full .dash.m{padding-bottom:calc(env(safe-area-inset-bottom) + 120px)}
+.full .dash.m::before{content:"";position:fixed;left:0;right:0;bottom:0;height:calc(env(safe-area-inset-bottom) + 104px);z-index:var(--z-bar);pointer-events:none;
+  background:linear-gradient(to bottom,transparent,var(--bg) 62%)}   /* 內容捲到分頁列後面慢慢淡掉 */
+@media (max-width:1023px){.full .toasts{bottom:calc(env(safe-area-inset-bottom) + 96px)}}
+.full .hero{padding-top:calc(env(safe-area-inset-top) + 18px)}
+.full .ptitle{padding-top:calc(env(safe-area-inset-top) + 56px)}
+html:not(.full) .dock{position:sticky;top:0;left:auto;bottom:auto;transform:none;display:grid;grid-template-columns:repeat(4,1fr);gap:0;
+  margin:0 -16px;padding:env(safe-area-inset-top) 8px 0;border-radius:0;box-shadow:none;
+  background:color-mix(in oklab,var(--bg) 84%,transparent);-webkit-backdrop-filter:blur(18px);backdrop-filter:blur(18px)}
+html:not(.full) .dock.hid{transform:translateY(-100%)}
+html:not(.full) .dock .tb{--h:50px;justify-content:center;border-radius:var(--r-md);padding:0;gap:6px;background:none}
+html:not(.full) .dock .tb svg{width:20px;height:20px}
+html:not(.full) .dock .tb .t{max-width:none;opacity:1;margin:0}
+html:not(.full) .dock .tb.on{color:var(--p);padding:0}
+html:not(.full) .dock .tb::before,html:not(.full) .dock>.slide::before{content:"";position:absolute;left:50%;bottom:0;width:36px;height:3px;margin-left:-18px;border-radius:var(--r-pill) var(--r-pill) 0 0;background:var(--p);opacity:0;transition:opacity var(--t-mid) var(--ease)}
+html:not(.full) .dock .tb.on::before,html:not(.full) .dock>.slide::before{opacity:1}
+html:not(.full) .dock.sliding .tb.on::before{opacity:0}
+html:not(.full) .dock>.slide{background:none}
 .tb{--h:52px;height:var(--h);padding:0 15px;border-radius:calc(var(--h) / 2);display:flex;align-items:center;color:var(--tx2);position:relative;
   transition:padding var(--sp),border-radius var(--sp-fast),background-color var(--t-mid) var(--ease),color var(--t-mid) var(--ease)}
 .tb svg{width:22px;height:22px;flex:none}
