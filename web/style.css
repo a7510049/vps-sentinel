@@ -246,6 +246,16 @@ img.flag{width:28px;height:21px;object-fit:cover;border-radius:var(--r-xs);flex:
 /* 分頁列後面往下漸漸變成底色：內容捲到下面淡掉；往下多蓋 160px，iPhone Safari 網址列後面也是底色，不會露出一截內容 */
 .dash.m::before{content:"";position:fixed;left:0;right:0;bottom:-160px;height:calc(env(safe-area-inset-bottom) + 264px);z-index:var(--z-bar);pointer-events:none;
   background:linear-gradient(to bottom,transparent,var(--bg) 64px)}
+/* iPhone Safari：分頁列放上面，下面留給 Safari 的網址列 */
+.iosweb .dock{bottom:auto;top:calc(env(safe-area-inset-top) + 10px)}
+.iosweb.lock .dock{transform:translate(-50%,-150%)}
+.iosweb .dash.m::before{bottom:auto;top:-160px;height:calc(env(safe-area-inset-top) + 260px);background:linear-gradient(to top,transparent,var(--bg) 36px);
+  opacity:0;transition:opacity var(--t-mid) var(--ease)}   /* 往下捲了才出現，內容不會跟分頁列疊在一起；在最上面時照樣看得到光暈 */
+.iosweb.scl .dash.m::before{opacity:1}
+.iosweb .dash.m{padding-bottom:calc(env(safe-area-inset-bottom) + 40px)}
+.iosweb .hero{padding-top:calc(env(safe-area-inset-top) + 96px)}
+.iosweb .ptitle{padding-top:calc(env(safe-area-inset-top) + 104px)}
+.iosweb .toasts{bottom:calc(env(safe-area-inset-bottom) + 20px)}
 .tb{--h:52px;height:var(--h);padding:0 15px;border-radius:calc(var(--h) / 2);display:flex;align-items:center;color:var(--tx2);position:relative;
   transition:padding var(--sp),border-radius var(--sp-fast),background-color var(--t-mid) var(--ease),color var(--t-mid) var(--ease)}
 .tb svg{width:22px;height:22px;flex:none}

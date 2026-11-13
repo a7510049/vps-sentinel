@@ -2,6 +2,13 @@ const $ = s => document.querySelector(s);
 const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
 function store(k, v){ try { if (v === undefined) return localStorage.getItem(k) || ""; v ? localStorage.setItem(k, v) : localStorage.removeItem(k); } catch(e){ return ""; } }
 const KEY = "vps-sentinel-token";
+/* iPhone、iPad 的 Safari（不是從主畫面打開）：下面有 Safari 自己的網址列，分頁列改放上面（iosweb） */
+if ((/iP(hone|od|ad)/.test(navigator.userAgent) || (/Macintosh/.test(navigator.userAgent) && navigator.maxTouchPoints > 1))
+  && !navigator.standalone && !matchMedia("(display-mode: standalone)").matches) {
+  document.documentElement.classList.add("iosweb");
+  let on = false;   // 捲離最上面時，分頁列後面才墊底色
+  addEventListener("scroll", () => { const v = scrollY > 8; if (v !== on) document.documentElement.classList.toggle("scl", on = v); }, {passive: true});
+}
 /* 登入狀態：勾「30 天內不用再登入」存在這台裝置 30 天；沒勾的話關掉瀏覽器（或 App）就要重新登入 */
 const DAY30 = 30 * 86400000;
 function sstore(k, v){ try { if (v === undefined) return sessionStorage.getItem(k) || ""; v ? sessionStorage.setItem(k, v) : sessionStorage.removeItem(k); } catch(e){ return ""; } }
