@@ -240,6 +240,9 @@ img.flag{width:28px;height:21px;object-fit:cover;border-radius:var(--r-xs);flex:
   display:flex;gap:4px;padding:8px;border-radius:var(--r-pill);background:var(--s3);box-shadow:var(--sh-3);
   transition:transform var(--sp),opacity var(--t-mid) var(--ease)}
 .lock .dock{transform:translate(-50%,150%);opacity:0}
+/* 分頁列後面往下漸漸變成底色：內容捲到下面淡掉，Safari 底下的網址列那塊也接成同一個顏色，不會有一條線 */
+.dash.m::before{content:"";position:fixed;left:0;right:0;bottom:0;height:calc(env(safe-area-inset-bottom) + 104px);z-index:var(--z-bar);pointer-events:none;
+  background:linear-gradient(to bottom,transparent,var(--bg) 62%)}
 .tb{--h:52px;height:var(--h);padding:0 15px;border-radius:calc(var(--h) / 2);display:flex;align-items:center;color:var(--tx2);position:relative;
   transition:padding var(--sp),border-radius var(--sp-fast),background-color var(--t-mid) var(--ease),color var(--t-mid) var(--ease)}
 .tb svg{width:22px;height:22px;flex:none}
