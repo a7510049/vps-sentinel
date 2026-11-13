@@ -438,8 +438,19 @@ function mergeEv(ev){
 }
 /* 所有主機的事件合在一起，新的在上面 */
 const allEvents = list => list.flatMap(s => mergeEv(s.events || []).map(e => ({...e, h: s.name, k: keyOf(s)}))).sort((a, b) => b.t - a.t);
+/* 好幾台在 10 分鐘內發生同一件事：合成一筆「日本等 5 台」，不用一台一筆往下滑 */
+function groupEv(ev){
+  const out = [], open = new Map();
+  for (const e of ev) {                          // 新的在前面
+    const k = e.kind + ":" + e.text, g = open.get(k);
+    if (g && g.t0 - e.t <= 600 && !g.ks.includes(e.k)) { g.hs.push(e.h); g.ks.push(e.k); g.t0 = e.t; continue; }
+    const x = {...e, hs:[e.h], ks:[e.k], t0:e.t}; open.set(k, x); out.push(x);
+  }
+  return out.map(x => x.hs.length > 1 ? {...x, k:"*" + Math.round(x.t0), n:1} : x);
+}
 const hm = t => new Date(t * 1000).toLocaleTimeString("zh-TW", {hour:"2-digit", minute:"2-digit", hour12:false});
-const evRow = (e, many, tf = ago) => `<div class="ev" data-key="${esc(e.k)}|${e.kind}:${esc(e.text)}"><span class="dot ${e.kind}"></span><div class="et"><div>${many ? `<span class="eh">${esc(e.h)}</span>` : ""}${esc(e.text)}</div><div class="sub">${WORD[e.kind] || ""}・${tf(e.t)}${e.n > 1 ? `・共 ${e.n} 次` : ""}</div></div></div>`;
+const evWho = e => e.hs && e.hs.length > 1 ? `<span class="eh" title="${esc(e.hs.join("、"))}">${esc(e.hs[0])}等 ${e.hs.length} 台</span>` : `<span class="eh">${esc(e.h)}</span>`;
+const evRow = (e, many, tf = ago) => `<div class="ev" data-key="${esc(e.k)}|${e.kind}:${esc(e.text)}"><span class="dot ${e.kind}"></span><div class="et"><div>${many ? evWho(e) : ""}${esc(e.text)}</div><div class="sub">${WORD[e.kind] || ""}・${tf(e.t)}${e.n > 1 ? `・共 ${e.n} 次` : ""}</div></div></div>`;
 const evList = (ev, many) => ev.length ? `<div class="evs" data-key="evs" data-keyed>${ev.map(e => evRow(e, many)).join("")}</div>` : `<div class="calm" data-key="calm">目前沒有事件</div>`;
 const dayOf = t => { const d = new Date(t * 1000), n = new Date(), y = new Date(n); y.setDate(n.getDate() - 1);
   return d.toDateString() === n.toDateString() ? "今天" : d.toDateString() === y.toDateString() ? "昨天" : `${d.getMonth() + 1} 月 ${d.getDate()} 日`; };
@@ -603,7 +614,7 @@ function renderDesk(list, time){
     <main class="view v-${TAB}" data-key="v:${TAB}">${page(list, time)}</main>${s ? detail(s) : ""}</div>`;
 }
 function homePhone(list, time){
-  const ev = allEvents(list).slice(0, 3);
+  const ev = groupEv(allEvents(list)).slice(0, 3);
   return hero(list, time) + `<div class="lbl" data-key="lh">主機</div>${hostLists(list, "")}
     <div class="lbl" data-key="le">最近發生${ev.length ? `<button data-tab="log">全部紀錄</button>` : ""}</div>${evList(ev, list.length > 1)}`;
 }
@@ -611,7 +622,7 @@ function homePhone(list, time){
 const deskCols = () => Math.max(1, Math.min(3, Math.floor((Math.min(innerWidth / ZM() - 136, 1520) - 368 + 16) / 376)));
 const cardMode = list => !DESK.matches || list.length > deskCols();
 function homeDesk(list, time){
-  const n = Math.min(deskCols(), Math.max(1, list.length)), ev = allEvents(list).slice(0, 8);
+  const n = Math.min(deskCols(), Math.max(1, list.length)), ev = groupEv(allEvents(list)).slice(0, 8);
   const hosts = cardMode(list)
     ? hostLists(list, " wall")
     : `<div class="cols" data-key="cols" data-keyed data-grid style="--n:${n}">${list.map((s, i) => `<section class="hp ${lvOf(s)}" data-key="${esc(keyOf(s))}" style="--i:${i}">${hostBody(s, false)}</section>`).join("")}${addHostBtn("addhost")}</div>`;
@@ -706,21 +717,23 @@ function boxIn(b, el, z){
 let LOGF = "", LOGH = "";
 const LOGK = {"": () => true, bad: e => e.kind === "bad" || e.kind === "warn", other: e => e.kind === "ok" || e.kind === "info"};
 function logPage(list){
-  const D = DESK.matches, many = list.length > 1, hk = D && many && list.some(x => keyOf(x) === LOGH) ? LOGH : "";
-  const all = allEvents(list), byH = all.filter(e => !hk || e.k === hk), ev = byH.filter(LOGK[LOGF] || LOGK[""]);
+  const D = DESK.matches, many = list.length > 1, hk = many && list.some(x => keyOf(x) === LOGH) ? LOGH : "";
+  const all = allEvents(list), byH = all.filter(e => !hk || e.k === hk), ev0 = byH.filter(LOGK[LOGF] || LOGK[""]), ev = hk ? ev0 : groupEv(ev0);
   const F = [["", "全部"], ["bad", "有狀況"], ["other", "恢復與通知"]];
   let rows = "", day = "";
   for (const e of ev) { const d = dayOf(e.t); if (d !== day) { day = d; rows += `<div class="day" data-key="d:${d}">${d}</div>`; } rows += evRow(e, many, hm); }
   const body = ev.length ? `<div class="evs" data-key="evs" data-keyed data-sw>${rows}</div>` : `<div class="calm" data-key="calm" data-sw>目前沒有事件</div>`;
   if (D) {   // 電腦：右邊放篩選和各台的則數
     const row = (attr, on, l, n) => `<button class="li${on ? " on" : ""}" ${attr}><span class="lab">${l}</span><span class="val num">${n}</span></button>`;
-    const kf = LOGK[LOGF] || LOGK[""];
-    let side = `<div class="lbl">篩選</div><div class="pane group" data-key="lf" data-slide>${F.map(([k, l]) => row(`data-logf="${k}"`, LOGF === k, l, byH.filter(LOGK[k]).length)).join("")}</div>`;
-    if (many) side += `<div class="lbl" data-key="lhh">主機</div><div class="pane group" data-key="lhs" data-keyed data-slide>${row(`data-logh="" data-key="lh:"`, !hk, "全部主機", all.filter(kf).length)}${list.map(x => row(`data-logh="${esc(keyOf(x))}" data-key="lh:${esc(keyOf(x))}"`, hk === keyOf(x), esc(x.name), all.filter(e => e.k === keyOf(x) && kf(e)).length)).join("")}</div>`;
+    const kf = LOGK[LOGF] || LOGK[""], rowsN = x => (hk ? x : groupEv(x)).length;   // 數字跟左邊列出來的筆數一樣（好幾台合成一筆的算一筆）
+    let side = `<div class="lbl">篩選</div><div class="pane group" data-key="lf" data-slide>${F.map(([k, l]) => row(`data-logf="${k}"`, LOGF === k, l, rowsN(byH.filter(LOGK[k])))).join("")}</div>`;
+    if (many) side += `<div class="lbl" data-key="lhh">主機</div><div class="pane group" data-key="lhs" data-keyed data-slide>${row(`data-logh="" data-key="lh:"`, !hk, "全部主機", groupEv(all.filter(kf)).length)}${list.map(x => row(`data-logh="${esc(keyOf(x))}" data-key="lh:${esc(keyOf(x))}"`, hk === keyOf(x), esc(x.name), all.filter(e => e.k === keyOf(x) && kf(e)).length)).join("")}</div>`;
     return `<div class="wide" data-key="log"><h1 class="ptitle">紀錄</h1><div class="split rside" data-key="lsplit"><div class="smain" data-key="lm">${body}</div><aside class="side" data-key="ls">${side}</aside></div></div>`;
   }
   const chip = (k, l) => `<button class="fchip${LOGF === k ? " on" : ""}" data-logf="${k}"><span class="ck">${I("check")}</span>${l}</button>`;
-  return `<div class="narrow" data-key="log"><h1 class="ptitle">紀錄</h1><div class="fchips" data-key="lfc" data-slide>${F.map(([k, l]) => chip(k, l)).join("")}</div>${body}</div>`;
+  const hn = hk && list.find(x => keyOf(x) === hk);   // 手機：好幾台時多一顆「全部主機 ▾」，點了選只看哪一台
+  const hc = many ? `<button class="fchip hsel${hk ? " set" : ""}" data-loghm data-key="hsel" data-x>${esc(hn ? hn.name : "全部主機")}${I("chev")}</button>` : "";
+  return `<div class="narrow" data-key="log"><h1 class="ptitle wh"><span>紀錄</span>${hc}</h1><div class="fchips" data-key="lfc" data-slide>${F.map(([k, l]) => chip(k, l)).join("")}</div>${body}</div>`;
 }
 /* 主題色：照色相排一圈（色票本身用 style.css 的 [data-accent] 算出預覽） */
 const ACCENTS = [["red", "紅"], ["orange", "橘"], ["amber", "琥珀"], ["lime", "萊姆"], ["green", "綠"], ["teal", "青綠"],
@@ -898,7 +911,7 @@ function flipWidth(el, change){
   if (canAnim() && Math.abs(w1 - w0) > 1) el.animate([{width:w0+"px"}, {width:w1+"px"}], {duration:T.mid, easing:EASE});
 }
 /* 拿出來又放回去的元素：瀏覽器會把裡面的進場動畫從頭重播（卡片會突然不見），全部停在結尾 */
-const still = el => el.getAnimations({subtree:true}).forEach(n => { if (!n.animationName) n.cancel(); else if (isFinite(n.effect.getComputedTiming().endTime)) n.finish(); });
+const still = (el, keep) => el.getAnimations({subtree:true}).forEach(n => { if (n === keep) return; if (!n.animationName) n.cancel(); else if (isFinite(n.effect.getComputedTiming().endTime)) n.finish(); });
 /* 換分頁：舊的那頁留在原地很快淡出（不佔位置），新的那頁接著淡入（CSS 的 through） */
 function through(a, b){
   const par = a.offsetParent;
@@ -908,7 +921,14 @@ function through(a, b){
   a._leaving = 1;
   Object.assign(a.style, {position:"absolute", left:(r.left - R.left) / z - par.clientLeft + "px", top:(r.top - R.top) / z - par.clientTop + "px", width:r.width / z + "px",
     height:Math.min(r.height / z, innerHeight / z * 2) + "px", overflow:"hidden", margin:"0", pointerEvents:"none", animation:"none"});
-  b.after(a); still(a);
+  const f = a._fading;
+  b.after(a); still(a, f);
+  if (f) {                                       // 按分頁時已經先開始淡出：接著淡完就好，新的那頁等它淡完再出來
+    const left = Math.max(0, T.fast / 2 - (f.currentTime || 0));
+    f.finished.catch(() => {}).then(() => a.remove());
+    b.style.animationDelay = left + "ms";
+    return;
+  }
   a.animate([{opacity:1}, {opacity:0}], {duration:T.fast / 2, easing:EXIT, fill:"forwards", id:"ui"}).onfinish = () => a.remove();
   b.style.animationDelay = T.fast / 2 + "ms";
 }
@@ -1105,7 +1125,7 @@ function render(list){
     }
   }
   // 有紅色（異常）或橘色（注意）告警的主機排在最前面；同一級的照原本順序
-  ORDER = list.map(keyOf);                     // 原本的順序（工具的主機列不跟著告警重排，免得按到別台）
+  if (list !== LIST) ORDER = list.map(keyOf);  // 原本的順序（工具的主機列不跟著告警重排，免得按到別台）；換分頁重畫時 LIST 已經排過，不能拿來當原本的順序
   list = [...list].map(tidy).sort((a, b) => LVRANK[lvOf(a)] - LVRANK[lvOf(b)]);
   LIST = list;
   if (DET && (!cardMode(list) || !list.some(s => keyOf(s) === DET))) { DET = ""; DETX = false; showBack(); document.documentElement.classList.remove("lock"); }
@@ -1201,8 +1221,16 @@ function setTab(k){
   }
   if (TAB === k) { if (scrollY > 0) scrollTo({top:0, behavior: canAnim() ? "smooth" : "auto"}); return; }
   TAB = k; sstore("vs-tab", k);
-  scrollTo(0, 0); slideSel(() => render(LIST));
+  scrollTo(0, 0);
+  const v = view();
+  if (!canAnim() || !v) return slideSel(() => render(LIST));
+  // 按下去只做便宜的事（分頁底色開始滑、舊的那頁淡出），淡完才畫新的那頁：主機多也不會先頓一下才動，淡出也不會被拖慢
+  slideSel(() => document.querySelectorAll(".dock [data-tab], .rail [data-tab]").forEach(b => b.classList.toggle("on", b.dataset.tab === k)));
+  if (!v._fading) v._fading = v.animate([{opacity:1}, {opacity:0}], {duration:T.fast / 2, easing:EXIT, fill:"forwards", id:"ui"});
+  const id = ++TABID;
+  v._fading.finished.catch(() => {}).then(() => { if (id === TABID && TAB === k) render(LIST); });
 }
+let TABID = 0;
 /* 工具、設定頁上「讀取中…」的狀態：換到那一頁時讀一次（之後自動更新不會蓋掉） */
 const view = () => $("#app .view");
 function loadStatus(){
@@ -1356,12 +1384,24 @@ function moreMenu(btn, s){
   window._menu = m;
   setTimeout(() => m.addEventListener("click", () => closeMenu()), 0);
 }
+/* 紀錄（手機）：選只看哪一台主機 */
+function logHostMenu(btn){
+  closeMenu();
+  const it = (k, l) => `<button data-logh="${esc(k)}"${LOGH === k ? ` class="on"` : ""}>${LOGH === k ? I("check") : `<span class="ckh"></span>`}<span>${l}</span></button>`;
+  const m = document.createElement("div"); m.className = "lmenu hmenu hlist";
+  m.innerHTML = it("", "全部主機") + LIST.map(x => it(keyOf(x), esc(x.name))).join("");
+  document.body.appendChild(m);
+  placeMenu(m, btn, r => r.right - m.offsetWidth);
+  if (canAnim()) m.animate([{opacity:0, transform:"scale(.85,.4)"}, {opacity:1, transform:"none"}], {duration:T.spf, easing:SPRING_F});
+  window._menu = m;
+  setTimeout(() => m.addEventListener("click", () => closeMenu()), 0);
+}
 function closeMenu(){
   const m = window._menu; if (!m) return; window._menu = null;
   if (!canAnim()) return m.remove();
   m.animate([{opacity:1}, {opacity:0, transform:"scale(.95,.8)"}], {duration:T.fast, easing:EXIT, fill:"forwards"}).finished.then(() => m.remove());
 }
-addEventListener("scroll", closeMenu, {passive:true, capture:true});
+addEventListener("scroll", e => { if (!(window._menu && e.target instanceof Node && window._menu.contains(e.target))) closeMenu(); }, {passive:true, capture:true});   // 選單自己裡面捲動不關
 addEventListener("keydown", e => { if (e.key === "Escape") closeMenu(); });
 /* ═════════ 更新哨兵本身 ═════════ */
 async function selfCall(node, action){
@@ -2579,6 +2619,8 @@ document.addEventListener("click", async e => {
   if (th) { if (TOOLH !== th.dataset.toolh) { TOOLH = th.dataset.toolh; store("vs-toolh", TOOLH); PSMOOTH = true; slideSel(() => render(LIST)); PSMOOTH = false; } pickShow(true); return; }
   const lf = t.closest("[data-logf]");
   if (lf) { if (LOGF !== lf.dataset.logf) { LOGF = lf.dataset.logf; slideSel(() => render(LIST)); } return; }
+  const lhm = t.closest("[data-loghm]");
+  if (lhm) return logHostMenu(lhm);
   const lh = t.closest("[data-logh]");
   if (lh) { if (LOGH !== lh.dataset.logh) { LOGH = lh.dataset.logh; slideSel(() => render(LIST)); } return; }
 
