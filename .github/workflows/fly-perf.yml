@@ -1,10 +1,6 @@
-# 機場起降會不會拖慢監控：用真實資料量（開發用，手動執行）
+# 機場起降會不會拖慢監控：用真實資料量（開發用，手動執行；ARM 主機，跟 Oracle 免費主機同一類）
 name: fly-perf
-on:
-  workflow_dispatch:
-  push:
-    branches: [claude/project-thread-u3ztfk]
-    paths: [tools/fly_perf.py, .github/workflows/fly-perf.yml]
+on: workflow_dispatch
 jobs:
   perf:
     runs-on: ubuntu-24.04-arm
