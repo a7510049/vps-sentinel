@@ -100,7 +100,7 @@ let LIST = [];
 function size(b){ if(!b) return "0 B"; const u=["B","KB","MB","GB","TB"]; let i=0; while(b>=1024&&i<4){b/=1024;i++} return (b<10&&i?b.toFixed(1):Math.round(b))+" "+u[i]; }
 const rate = b => size(b)+"/s";
 function up(s){ const d=Math.floor(s/86400), h=Math.floor(s%86400/3600), m=Math.floor(s%3600/60);
-  return d ? `${d} 天 ${h} 小時` : h ? `${h} 小時 ${m} 分` : `${m} 分鐘`; }
+  return d ? `${d} 天${h ? ` ${h} 小時` : ""}` : h ? `${h} 小時${m ? ` ${m} 分` : ""}` : `${m} 分鐘`; }   // 「15 天 0 小時」只寫「15 天」
 const num = (v, d=0) => `<span class="num" data-v="${(+v).toFixed(d)}" data-d="${d}">${(+v).toFixed(d)}</span>`;
 const keyOf = s => s.node || "@self";            // 這台自己用固定代號：改名後打開的頁面、選的主機都不會跑掉
 const lvOf = s => ["ok","warn","bad"].includes(s.level) ? s.level : s.online ? "ok" : "bad";
@@ -165,9 +165,15 @@ document.addEventListener("click", e => {
 const linkSt = x => x.up === false ? `打不開：${x.err || "連不上"}` : x.up ? `正常・${x.ms} 毫秒` : x.err ? "剛剛沒回應，再確認一次中…" : "還沒檢查";
 /* 主機名稱旁的「⋯」：編輯、重新開機、移除（雲端硬碟、下載、連結都在「工具」） */
 const moreBtn = s => (s.online || s.node) ? `<button class="iconbtn" title="更多" data-more="${esc(keyOf(s))}">${I("more")}</button>` : "";
+/* 處理器、記憶體、主要磁碟的百分比下面的大數字已經有了，提示只寫發生什麼事 */
+function noDup(s, p){
+  const d0 = disk0(s);
+  return p.replace(/^處理器持續偏高 \d+(\.\d+)?%$/, "處理器持續偏高").replace(/^記憶體 \d+(\.\d+)?%$/, "記憶體快用完了")
+    .replace(/^磁碟 (\S+) 剩下不多（\d+(\.\d+)?%）$/, (m, path) => d0 && d0.path === path ? "磁碟快滿了" : m);
+}
 function alerts(s){
   const k = t => esc(String(t).replace(/^\d+\s*|\s*[（(]?\d+(\.\d+)?\s*%[）)]?$/g, ""));   // 只拿掉會變的數字，名稱裡的數字要留（app-1、app-2 是兩件事）
-  const al = (s.problems||[]).map(p=>`<div class="alert bad" data-key="b:${k(p)}">${I("warn")}${esc(p)}</div>`)
+  const al = (s.problems||[]).map(p => noDup(s, String(p))).map(p=>`<div class="alert bad" data-key="b:${k(p)}">${I("warn")}${esc(p)}</div>`)
     .concat((s.notices||[]).map(p=>`<div class="alert warn" data-key="w:${k(p)}">${I("alert")}${esc(p)}</div>`));
   return al.length ? `<div class="alerts" data-key="al" data-keyed>${al.join("")}</div>` : "";
 }
@@ -440,13 +446,22 @@ const dayOf = t => { const d = new Date(t * 1000), n = new Date(), y = new Date(
 
 /* ═════════ 首頁的主機卡片（手機） ═════════ */
 const mrow = (l, p) => `<div class="mr"><span class="ml">${l}</span>${wave(p)}<span class="mv ${tier(p)}">${num(p)}%</span></div>`;
-function hostCard(s, i){
+function hostCard(s, i, mini){
   const lv = lvOf(s), k = keyOf(s);
-  let b = `<div class="hcard ${lv}" data-key="${esc(k)}" data-keyed data-open="${esc(k)}" role="button" tabindex="0" style="--i:${i}">
-    <div class="ct" data-key="ct">${avatar(s)}<div class="nm"><div class="cn">${esc(s.name)}</div><div class="cp">${esc(place(s) || s.os || "")}</div></div>${I("chev")}</div>`;
+  let b = `<div class="hcard ${lv}${mini ? " mini" : ""}" data-key="${esc(k)}" data-keyed data-open="${esc(k)}" role="button" tabindex="0" style="--i:${i}">
+    <div class="ct" data-key="ct">${avatar(s)}<div class="nm"><div class="cn">${esc(s.name)}</div><div class="cp">${esc(place(s) || s.os || "")}</div></div>${mini ? "" : I("chev")}</div>`;
   if (!s.online) return b + offBox(s) + `</div>`;
   const d0 = disk0(s), ft = [PREF.show.traffic && s.traffic ? `本月 ${size(s.traffic.used)}` : "", `開機 ${up(s.uptime)}`].filter(Boolean).join("・");
-  return b + alerts(s) + `<div class="mrows" data-key="mr">${mrow("處理器", s.cpu)}${mrow("記憶體", s.mem.pct)}${mrow("磁碟", d0.pct)}</div><div class="cfoot" data-key="cf">${ft}</div></div>`;
+  const mr = `<div class="mrows" data-key="mr">${mrow("處理器", s.cpu)}${mrow("記憶體", s.mem.pct)}${mrow("磁碟", d0.pct)}</div>`;
+  if (mini) return b + mr + `<span class="mch" data-key="ch">${I("chev")}</span></div>`;
+  return b + alerts(s) + mr + `<div class="cfoot" data-key="cf">${ft}</div></div>`;
+}
+/* 主機很多時（4 台以上、而且是卡片模式）：正常的主機縮成一行（名稱＋三個數字），有狀況的照舊是大卡片 */
+const MININ = 4;
+function hostLists(list, wallCls){
+  const mini = cardMode(list) && list.length >= MININ, big = mini ? list.filter(s => !s.online || lvOf(s) !== "ok") : list, small = mini ? list.filter(s => !big.includes(s)) : [];
+  return `<div class="hosts${wallCls}" data-key="hosts" data-keyed${wallCls ? " data-grid" : ""}>${big.map((s, i) => hostCard(s, i)).join("")}</div>`
+    + `<div class="minis" data-key="minis" data-keyed>${small.map((s, i) => hostCard(s, big.length + i, true)).join("")}${addHostBtn("addhost")}</div>`;
 }
 const offBox = (s, sub) => `<div class="offline" data-key="off">${I("off")}<div>連不上這台主機<div class="sub">${s.last_seen && !sub ? esc(seen(s)) + "<br>" : ""}${esc(s.error || "")}</div>${peerBtn(s)}</div></div>`;
 /* 主機列表最後的「新增主機」：貼上新主機的配對暗號 */
@@ -589,7 +604,7 @@ function renderDesk(list, time){
 }
 function homePhone(list, time){
   const ev = allEvents(list).slice(0, 3);
-  return hero(list, time) + `<div class="lbl" data-key="lh">主機</div><div class="hosts" data-key="hosts" data-keyed>${list.map(hostCard).join("")}${addHostBtn("addhost")}</div>
+  return hero(list, time) + `<div class="lbl" data-key="lh">主機</div>${hostLists(list, "")}
     <div class="lbl" data-key="le">最近發生${ev.length ? `<button data-tab="log">全部紀錄</button>` : ""}</div>${evList(ev, list.length > 1)}`;
 }
 /* 電腦一排放得下幾台（每欄至少 360 寬）：內容最寬 1520、右邊欄 340；主機比這個多就改成小卡片，點了才看整頁 */
@@ -598,7 +613,7 @@ const cardMode = list => !DESK.matches || list.length > deskCols();
 function homeDesk(list, time){
   const n = Math.min(deskCols(), Math.max(1, list.length)), ev = allEvents(list).slice(0, 8);
   const hosts = cardMode(list)
-    ? `<div class="hosts wall" data-key="wall" data-keyed data-grid>${list.map(hostCard).join("")}${addHostBtn("addhost")}</div>`
+    ? hostLists(list, " wall")
     : `<div class="cols" data-key="cols" data-keyed data-grid style="--n:${n}">${list.map((s, i) => `<section class="hp ${lvOf(s)}" data-key="${esc(keyOf(s))}" style="--i:${i}">${hostBody(s, false)}</section>`).join("")}${addHostBtn("addhost")}</div>`;
   return `<div class="dhome" data-key="dh">${hero(list, time)}<div class="dmain" data-key="dm"><div class="lbl" data-key="lh">主機</div>${hosts}</div>
     <aside class="aside" data-key="as"><div class="wxw">${greet().wx}</div><div class="lbl">最近發生${ev.length ? `<button data-tab="log">全部紀錄</button>` : ""}</div>${evList(ev, list.length > 1)}</aside></div>`;

@@ -282,7 +282,7 @@ img.flag{width:28px;height:21px;object-fit:cover;border-radius:var(--r-xs);flex:
 
 /* ═════════ 首頁的主機卡片：按下去圓角變大、縮一點，點了從卡片長出整頁 ═════════ */
 .hosts{display:grid;grid-template-columns:minmax(0,1fr);gap:10px}
-@media (min-width:700px){.dash.m .hosts{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media (min-width:700px){.dash.m :is(.hosts,.minis){grid-template-columns:repeat(2,minmax(0,1fr))}}
 .hcard{display:block;width:100%;background:var(--s1);border-radius:var(--r-xl);padding:20px 20px 18px;box-shadow:var(--cs);cursor:pointer;position:relative;
   transition:border-radius var(--sp),transform var(--sp),background-color var(--t-mid) var(--ease),box-shadow var(--t-mid) var(--ease);
   animation:rise var(--sp) backwards;animation-delay:calc(60ms + var(--i,0) * 60ms)}
@@ -313,7 +313,22 @@ img.flag{width:28px;height:21px;object-fit:cover;border-radius:var(--r-xs);flex:
   transition:border-radius var(--sp-fast),transform var(--sp-fast),background-color var(--t-fast) var(--ease)}
 .addhost svg{width:20px;height:20px}
 .addhost.prs{border-radius:var(--r-md);transform:scale(.97);background:var(--s1)}
-.hosts .addhost{grid-column:1/-1}
+/* 主機很多時：正常的主機一台一行（名稱、三個數字、箭頭），數字欄每一行對齊 */
+.hosts:empty{display:none}
+.hosts:not(:empty)+.minis{margin-top:10px}
+.minis{display:grid;grid-template-columns:minmax(0,1fr);gap:8px}
+.minis .addhost{grid-column:1/-1}
+.minis .hcard+.addhost{margin-top:2px}
+.hcard.mini{display:flex;align-items:center;gap:12px;padding:12px 12px 12px 16px;border-radius:var(--r-lg)}
+.hcard.mini.prs{border-radius:var(--r-xl)}
+.mini .ct{flex:1;min-width:0;gap:10px}
+.mini .cn{font-size:var(--fs-l);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;overflow-wrap:normal}
+.mini .cp{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.mini .mrows{margin:0;flex:none;grid-template-columns:repeat(3,62px);gap:6px}
+.mini .mr{background:none;padding:0;gap:3px}
+.mini .mr .mv{font-size:var(--fs-l)}
+.mch{display:flex;flex:none;color:var(--tx3)}
+.mch svg{width:18px;height:18px;transform:rotate(-90deg)}
 .offline{display:flex;align-items:flex-start;gap:12px;margin-top:12px;padding:14px;border-radius:var(--r-md);background:var(--badc);color:var(--on-badc)}
 .offline>svg{width:22px;height:22px;flex:none}
 .offline .sub{color:inherit;opacity:.8;margin-top:2px}
@@ -373,11 +388,11 @@ html.dhid .dash>.view{content-visibility:hidden;contain-intrinsic-size:auto none
 /* ═════════ 一台主機的內容（手機整頁、電腦欄位共用） ═════════ */
 .hb{display:flex;flex-direction:column;gap:10px}
 .hb>*{flex-shrink:0}
-.hhead{display:flex;align-items:flex-start;gap:12px;padding:4px 4px 6px}
+.hhead{display:flex;align-items:center;gap:12px;padding:4px 4px 6px}
 .hhead .nm{min-width:0;flex:1}
 .hname{font-size:var(--fs-4xl);font-weight:500;letter-spacing:-.01em;line-height:1.15;overflow-wrap:anywhere}
-.hhead img.flag{width:36px;height:27px;margin-top:7px}
-.hp .hhead img.flag{width:30px;height:22px;margin-top:3px}
+.hhead img.flag{width:36px;height:27px}
+.hp .hhead img.flag{width:30px;height:22px}
 .hacts{display:flex;align-items:center;flex:none}
 /* 四格數字 */
 .tiles{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
@@ -394,6 +409,8 @@ html.dhid .dash>.view{content-visibility:hidden;contain-intrinsic-size:auto none
 .tile .wd{font-size:var(--fs-2xl)}
 /* 小資訊膠囊：連線數、IP、IPv6… */
 .fcs{display:flex;flex-wrap:wrap;gap:6px}
+.dash.m .fcs{display:grid;grid-template-columns:repeat(2,minmax(0,1fr))}   /* 手機：兩個一排、一樣寬，不會有一個單獨掉到下一行 */
+.dash.m .fcs>.fc:last-child:nth-child(odd){grid-column:1/-1}
 .fc{display:inline-flex;align-items:center;gap:6px;height:34px;padding:0 12px;border-radius:var(--r-sm);background:var(--card);font-size:var(--fs-s);color:var(--tx2);
   white-space:nowrap;max-width:100%;overflow:hidden}
 .fc b{color:var(--tx);font-weight:500}.fc b.w{color:var(--warn)}.fc b.b{color:var(--bad)}
@@ -413,8 +430,7 @@ html.dhid .dash>.view{content-visibility:hidden;contain-intrinsic-size:auto none
 .chart{width:100%;display:block;overflow:visible}
 .gl{stroke:var(--line);stroke-width:1;vector-effect:non-scaling-stroke;stroke-dasharray:3 5}
 .yax span{position:absolute;right:0;transform:translateY(-50%);font-size:var(--fs-xs);color:var(--tx3);white-space:nowrap;font-variant-numeric:tabular-nums}
-.cbox:has(.yax) .chart{width:calc(100% - 36px)}
-.cbox.wide:has(.yax) .chart{width:calc(100% - 66px)}
+.cbox:has(.yax) .chart{width:calc(100% - 66px)}   /* 同一台的兩張圖右邊刻度一樣寬：曲線結尾對齊 */
 .wait{display:grid;place-items:center;color:var(--tx3);font-size:var(--fs-s)}
 /* 曲線的時間範圍：連在一起的小按鈕 */
 .rng{display:inline-flex;gap:2px;margin-left:auto;flex:none}
@@ -602,7 +618,13 @@ button.li.prs,a.li.prs{border-radius:var(--r-lg);transform:scale(.98);background
 .cols .addhost{grid-column:1/-1;height:52px}
 /* 主機比一排放得下的多：每台一張小卡片，點了從卡片長出整頁 */
 .hosts.wall{grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:12px}
-.wall .addhost{height:52px}
+/* 同一排的卡片一樣高：三個數字和最下面那行貼齊底部，對齊；連不上的那張紅框撐滿 */
+.wall .hcard{display:flex;flex-direction:column}
+.wall .hcard>.mrows{margin-top:auto;padding-top:16px}
+.wall .hcard>.offline{flex:1;align-items:center}
+.minis .addhost{height:52px}
+@media (min-width:1000px){.dash.d .minis{grid-template-columns:repeat(2,minmax(0,1fr))}}
+.dash.d .minis .mrows{grid-template-columns:repeat(3,72px)}
 @media (hover:hover){.hcard:not(.prs):hover{background:var(--s2)}}
 .dash.d .det,body:has(.dash.d) .flyv{left:96px}   /* 主機頁、機場起降都從分頁列右邊開始，分頁列一直都在 */
 body:has(.dash.d) .fscroll{padding:30px 32px 48px 8px}
@@ -611,7 +633,6 @@ body:has(.dash.d) .fwrap{max-width:var(--pw)}
 .dash.d .dscroll>*{max-width:var(--pw);margin-inline:auto}
 .dash.d .dscroll{--bar:58px}
 .dash.d .dscroll>.dtop{max-width:none;top:-30px;margin:-30px -32px 0 -8px;padding:30px calc(32px + max(0px,(100% - var(--pw)) / 2)) 10px calc(8px + max(0px,(100% - var(--pw)) / 2))}
-.dash.d .cbox:has(.yax) .chart{width:calc(100% - 66px)}   /* 同一台的兩張圖右邊刻度一樣寬：曲線結尾對齊 */
 @media (min-width:700px){.dscroll .tiles{grid-template-columns:repeat(4,minmax(0,1fr))}}
 
 /* ═════════ 對話框 ═════════ */
