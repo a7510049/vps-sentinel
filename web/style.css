@@ -135,8 +135,8 @@ html{background:radial-gradient(70% 420px at 6% -60px,color-mix(in oklab,var(--s
   radial-gradient(60% 380px at 96% -40px,color-mix(in oklab,var(--p2) var(--glow),transparent),transparent),var(--bg);color:var(--tx);touch-action:manipulation;accent-color:var(--p);caret-color:var(--p);
   transition:background-color var(--t-mid) var(--ease),color var(--t-mid) var(--ease)}
 html.lock{overflow:hidden}
+html{overscroll-behavior-y:none}   /* 頂端、底端不要往下／往上彈（Safari 會露出一條沒有光暈的底色）；重新整理改點首頁的勾勾，App 裡另有自己的下拉 */
 body{font:400 var(--fs-m)/1.5 var(--font);zoom:var(--zoom);min-height:100vh;-webkit-font-smoothing:antialiased;overflow-x:hidden}
-html.inapp body{overscroll-behavior-y:contain}   /* 只有 App 裡用自己的下拉重新整理；瀏覽器照它自己的 */
 [hidden]{display:none!important}
 ::selection{background:color-mix(in srgb,var(--p) 32%,transparent)}
 button{font:inherit;color:inherit;border:0;background:none;padding:0;cursor:pointer;text-align:inherit}
@@ -240,6 +240,9 @@ img.flag{width:28px;height:21px;object-fit:cover;border-radius:var(--r-xs);flex:
   display:flex;gap:4px;padding:8px;border-radius:var(--r-pill);background:var(--s3);box-shadow:var(--sh-3);
   transition:transform var(--sp),opacity var(--t-mid) var(--ease)}
 .lock .dock{transform:translate(-50%,150%);opacity:0}
+/* 分頁列後面往下漸漸變成底色：內容捲到下面淡掉，Safari 底下的網址列那塊也接成同一個顏色，不會有一條線 */
+.dash.m::before{content:"";position:fixed;left:0;right:0;bottom:0;height:calc(env(safe-area-inset-bottom) + 104px);z-index:var(--z-bar);pointer-events:none;
+  background:linear-gradient(to bottom,transparent,var(--bg) 62%)}
 .tb{--h:52px;height:var(--h);padding:0 15px;border-radius:calc(var(--h) / 2);display:flex;align-items:center;color:var(--tx2);position:relative;
   transition:padding var(--sp),border-radius var(--sp-fast),background-color var(--t-mid) var(--ease),color var(--t-mid) var(--ease)}
 .tb svg{width:22px;height:22px;flex:none}
