@@ -2541,7 +2541,7 @@ async function pkLoginClick(b){
 /* ═════════ 點擊 ═════════ */
 document.addEventListener("click", async e => {
   if (e.target.closest("#layer") || e.target.closest("#fly")) return;
-  if (e.target.closest("[data-fly]")) return flyOpen(e.target.closest("[data-fly]"));
+  if (e.target.closest("[data-fly]")) return flyEnter(e.target.closest("[data-fly]"));
   const t = e.target;
   if (t.closest("[data-login]")) return doLogin();
   if (t.closest("[data-pklogin]")) return pkLoginClick(t.closest("[data-pklogin]"));
@@ -2657,7 +2657,24 @@ document.addEventListener("click", async e => {
   if (op) return openDet(op.dataset.open);
 });
 
-/*@fly.js*/
+/* ═════════ 機場起降：畫面程式在 web/fly.js，用到才下載（首頁打開比較快） ═════════ */
+const FLYK = "vs-fly";                                    // 記住選的機場和分頁
+const FLYS = (() => { try { return {ap:"", tab:"arr", ...JSON.parse(store(FLYK) || "{}")}; } catch(e) { return {ap:"", tab:"arr"}; } })();
+const FLYFMT = {};                                         // 每個時區的時間格式只建一次（每次都建很慢）
+const flyHM = (t, tz) => { const k = tz || "";
+  if (!FLYFMT[k]) { try { FLYFMT[k] = new Intl.DateTimeFormat("zh-TW", {hour:"2-digit", minute:"2-digit", hourCycle:"h23", timeZone: tz || undefined}); } catch(e) { FLYFMT[k] = new Intl.DateTimeFormat("zh-TW", {hour:"2-digit", minute:"2-digit", hourCycle:"h23"}); } }
+  return FLYFMT[k].format(t); };
+const SHARE = (m => m ? "fs_" + m[1] : location.pathname === "/fly" ? new URLSearchParams(location.hash.slice(1)).get("s") || "" : "")(location.pathname.match(/^\/s\/([A-Za-z0-9]{8})$/));   // /s/八碼；以前的 /fly#s=…照樣能用
+const FLYV = "/*@flyv*/";                                 // fly.js 的版本：換版本瀏覽器才重拿
+let FLYLIB = null;
+function flyLib(){
+  return FLYLIB || (FLYLIB = new Promise((ok, no) => {
+    const s = document.createElement("script"); s.src = "/fly.js?v=" + FLYV;
+    s.onload = ok; s.onerror = () => { FLYLIB = null; s.remove(); no(); };   // 載入失敗：下次再試
+    document.head.appendChild(s);
+  }));
+}
+function flyEnter(btn){ flyLib().then(() => flyOpen(btn), () => toast("機場起降打不開，請再試一次", "bad")); }
 /* ═════════ 定時抓資料 ═════════ */
 let timer;
 const T0 = performance.now(), sleep = ms => new Promise(r => setTimeout(r, ms));
@@ -2665,6 +2682,7 @@ let BOOTED = false, REFRESHING = false;
 function splashMsg(t){ const m = document.querySelector(".sp-msg"); if (m && m.textContent !== t) m.innerHTML = `<span>${esc(t)}</span>`; }
 function endSplash(){
   if (BOOTED) return; BOOTED = true;
+  if (store(FLYK)) setTimeout(() => flyLib().catch(() => {}), 2000);   // 用過機場起降：先在背景下載，按下去就能打開
   const sp = $("#splash"); document.documentElement.classList.remove("booting");
   if (!sp) return;
   if (!canAnim()) return sp.remove();
@@ -2911,7 +2929,7 @@ async function refreshNow(btn){
   }, {passive:true});
 })();
 document.addEventListener("visibilitychange",()=>{ if(!document.hidden && LIST.length && getTok()) tick(); });   // 登入、還原畫面不要重畫（打到一半的密碼、選好的檔案會不見）
-SHARE ? shareBoot() : tick();
+SHARE ? flyLib().then(() => shareBoot(), () => setTimeout(() => location.reload(), 3000)) : tick();
 /* 不是按鈕但點得動的（IP、備份密碼、還原指令）：用鍵盤選到後按 Enter 或空白鍵也行 */
 document.addEventListener("keydown", e => {
   const t = e.target;

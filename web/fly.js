@@ -1,6 +1,5 @@
 /* ═════════ 機場起降：像機場那種會翻牌的看板（飛機即時位置來自業餘接收站，主要主機去抓） ═════════ */
-const FLYK = "vs-fly", FLYEV = 10000;                     // 記住選的機場和分頁；每 10 秒更新
-const FLYS = (() => { try { return {ap:"", tab:"arr", ...JSON.parse(store(FLYK) || "{}")}; } catch(e) { return {ap:"", tab:"arr"}; } })();
+const FLYEV = 10000;                                      // 每 10 秒更新
 let FLYD = null, FLYT = 0, FLYSEL = "", FLYHOV = "", FLYSEQ = 0, FLYHR = "", FLYSTILL = false, FLYSW = 0, FLYDONE = false, FLYHUSH = 0, FLYBZ = 0, FLYLATER = 0, FLYDT = 0;   // FLYBZ：切換動畫跑到什麼時候（這段時間新資料先等）   // FLYDONE：已到／已飛的班機展開   // FLYHR：看板現在看哪個時段（幾點）
 const flySave = () => store(FLYK, JSON.stringify({ap: FLYS.ap, tab: FLYS.tab, name: FLYS.name, term: FLYS.term || ""}));
 const FLYTAB = [["arr", "抵達"], ["dep", "出發"], ["gnd", "機坪"], ["cargo", "貨機"]];
@@ -50,10 +49,6 @@ function flapSet(el, v, delay = 0, still = false){
   const cs = [...el.children], want = flyPad(v, cs.length);
   cs.forEach((c, i) => { if (c.dataset.c !== want[i] || c._tok) flyFlip(c, want[i], delay + i * T.fast * .12, still || FLYSTILL); });   // 整塊換的時候直接換字，不翻
 }
-const FLYFMT = {};                                         // 每個時區的時間格式只建一次（每次都建很慢）
-const flyHM = (t, tz) => { const k = tz || "";
-  if (!FLYFMT[k]) { try { FLYFMT[k] = new Intl.DateTimeFormat("zh-TW", {hour:"2-digit", minute:"2-digit", hourCycle:"h23", timeZone: tz || undefined}); } catch(e) { FLYFMT[k] = new Intl.DateTimeFormat("zh-TW", {hour:"2-digit", minute:"2-digit", hourCycle:"h23"}); } }
-  return FLYFMT[k].format(t); };
 const FLYDEP = {};                                        // 每架飛機估出來的起飛時間（第一次看到就固定，不會一直跳）
 const flyOut = p => p.io ? p.io === "dep" : !!(p.dst && FLYD && FLYD.ap && p.dst.code !== FLYD.ap.code);   // 機坪上這架是要飛走的（不是剛降落）
 const flyGo = (p, tab) => tab === "gnd" ? flyOut(p) : tab === "cargo" ? p.ph === "dep" || p.ph === "gnd" && flyOut(p) : false;   // 機坪、貨機：算在「起飛」那一段
@@ -1893,7 +1888,6 @@ document.addEventListener("click", e => {
 });
 
 /* ═════════ 機場起降分享：自己選能看多久、幾支手機、哪個機場 ═════════ */
-const SHARE = (m => m ? "fs_" + m[1] : location.pathname === "/fly" ? new URLSearchParams(location.hash.slice(1)).get("s") || "" : "")(location.pathname.match(/^\/s\/([A-Za-z0-9]{8})$/));   // /s/八碼；以前的 /fly#s=…照樣能用
 let SHAREDEV = "", SHAREEND = 0, SHARET = 0, SHAREAP = "";
 const flyHdr = () => SHARE ? {"X-Share":SHARE + ":" + SHAREDEV} : {"X-Token":getTok()};
 const SHTIME = [[3600, "1 小時"], [21600, "6 小時"], [86400, "1 天"], [604800, "7 天"]], SHDEV = [[1, "1 支"], [3, "3 支"], [0, "不限"]];
