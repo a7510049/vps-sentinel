@@ -2884,7 +2884,7 @@ async function refreshNow(btn){
   finally { REFRESHING = false; stop(); }   // 出錯也一定要停下來，不然之後都不能再重新整理
 }
 /* 安卓 App 裡：下拉重新整理。圓形跟著手指長大、旋轉，拉夠了彈一下變形；放開就變成載入中的形狀，好了畫出勾勾再收起來
-   一般瀏覽器（Safari、Chrome…）本身就會下拉重新整理，兩個一起會打架，所以只在 App 裡用（App 會放 VSApp 進來，網頁殼的 UA 也有「; wv)」） */
+   一般瀏覽器（Safari、Chrome…）整頁不彈（style.css 的 overscroll-behavior），重新整理點首頁的勾勾；只在 App 裡用（App 會放 VSApp 進來，網頁殼的 UA 也有「; wv)」） */
 (function(){
   if (typeof VSApp === "undefined" && !/; wv\)/.test(navigator.userAgent)) return;
   document.documentElement.classList.add("inapp");
