@@ -2883,8 +2883,11 @@ async function refreshNow(btn){
   try { const [ok] = await Promise.all([tick(), sleep(T.long)]); return ok; }
   finally { REFRESHING = false; stop(); }   // 出錯也一定要停下來，不然之後都不能再重新整理
 }
-/* 手機：下拉重新整理。圓形跟著手指長大、旋轉，拉夠了彈一下變形；放開就變成載入中的形狀，好了畫出勾勾再收起來 */
+/* 安卓 App 裡：下拉重新整理。圓形跟著手指長大、旋轉，拉夠了彈一下變形；放開就變成載入中的形狀，好了畫出勾勾再收起來
+   一般瀏覽器（Safari、Chrome…）本身就會下拉重新整理，兩個一起會打架，所以只在 App 裡用（App 會放 VSApp 進來，網頁殼的 UA 也有「; wv)」） */
 (function(){
+  if (typeof VSApp === "undefined" && !/; wv\)/.test(navigator.userAgent)) return;
+  document.documentElement.classList.add("inapp");
   const ptr = $("#ptr"), RND = blobSh(9, 0), CK = blobSh(9, .14);
   ptr.innerHTML = `<span class="pl" style="clip-path:${RND}"></span><span class="pg"></span>`;
   const pl = ptr.querySelector(".pl"), pg = ptr.querySelector(".pg");

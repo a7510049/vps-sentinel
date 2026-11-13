@@ -135,7 +135,8 @@ html{background:radial-gradient(70% 420px at 6% -60px,color-mix(in oklab,var(--s
   radial-gradient(60% 380px at 96% -40px,color-mix(in oklab,var(--p2) var(--glow),transparent),transparent),var(--bg);color:var(--tx);touch-action:manipulation;accent-color:var(--p);caret-color:var(--p);
   transition:background-color var(--t-mid) var(--ease),color var(--t-mid) var(--ease)}
 html.lock{overflow:hidden}
-body{font:400 var(--fs-m)/1.5 var(--font);zoom:var(--zoom);min-height:100vh;-webkit-font-smoothing:antialiased;overflow-x:hidden;overscroll-behavior-y:contain}
+body{font:400 var(--fs-m)/1.5 var(--font);zoom:var(--zoom);min-height:100vh;-webkit-font-smoothing:antialiased;overflow-x:hidden}
+html.inapp body{overscroll-behavior-y:contain}   /* 只有 App 裡用自己的下拉重新整理；瀏覽器照它自己的 */
 [hidden]{display:none!important}
 ::selection{background:color-mix(in srgb,var(--p) 32%,transparent)}
 button{font:inherit;color:inherit;border:0;background:none;padding:0;cursor:pointer;text-align:inherit}
@@ -909,6 +910,7 @@ textarea.field{height:auto;padding:12px 16px;resize:none}
 /* ═════════ 下拉重新整理 ═════════ */
 #ptr{position:fixed;left:50%;top:calc(env(safe-area-inset-top) + 8px);z-index:var(--z-ptr);width:44px;height:44px;margin-left:-22px;border-radius:50%;
   display:grid;place-items:center;background:var(--s3);box-shadow:var(--sh-2);transform:translateY(-70px);opacity:0;pointer-events:none}
+html:not(.inapp) #ptr{display:none}
 #ptr>span{grid-area:1/1}
 #ptr .pl{width:30px;height:30px;background:var(--p);transition:clip-path var(--sp-fast),background-color var(--t-mid) var(--ease)}
 #ptr .pg{position:relative;color:var(--on-p)}
