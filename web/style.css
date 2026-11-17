@@ -211,12 +211,16 @@ img.flag{width:28px;height:21px;object-fit:cover;border-radius:var(--r-xs);flex:
 .fw{display:grid;place-items:center;line-height:0}
 
 /* ═════════ 波浪進度條 ═════════ */
-.wv{--v:0%;flex:1;min-width:0;display:flex;align-items:center;gap:5px;height:12px;color:var(--p)}
+/* 長短用位移做（外層往左移、裡面往右移回來，等於切掉右邊）：交給顯示卡跑，不用重新排版、重畫 */
+.wv{--v:0%;--vw:clamp(6px,var(--v),calc(100% - 9px));flex:1;min-width:0;min-height:12px;display:block;position:relative;height:12px;color:var(--p);overflow:hidden}
 .wv.w{color:var(--warn)}.wv.b{color:var(--bad)}
-.wf{flex:0 1 auto;width:clamp(6px,var(--v),100%);height:12px;overflow:hidden;position:relative;min-width:0;transition:width var(--sp-slow)}
+.wf,.wq{position:absolute;inset:0;transition:transform var(--sp-slow)}
+.wf{overflow:hidden;transform:translateX(calc(var(--vw) - 100%))}
+.wq{transform:translateX(calc(100% - var(--vw)))}
 .wf svg{position:absolute;left:0;top:0;width:480px;height:12px;fill:none;stroke:currentColor;stroke-width:3.4;stroke-linecap:round;animation:wave 1.8s linear infinite}
 @keyframes wave{to{transform:translateX(-24px)}}
-.wr{flex:1;min-width:4px;height:4px;border-radius:var(--r-pill);background:var(--s4)}
+.wr{position:absolute;left:0;right:0;top:4px;height:4px;border-radius:var(--r-pill);overflow:hidden;transform:translateX(calc(var(--vw) + 5px));transition:transform var(--sp-slow)}
+.wr>i{position:absolute;inset:0;border-radius:var(--r-pill);background:var(--s4);transform:translateX(calc(-1 * (var(--vw) + 5px)));transition:transform var(--sp-slow)}
 /* 一般進度條（下載清單用） */
 .track{height:4px;background:var(--s4);border-radius:var(--r-pill);overflow:hidden;width:100%}
 .fill{height:100%;border-radius:var(--r-pill);background:var(--p);min-width:4px;transition:width var(--t-slow) var(--ease)}
@@ -429,7 +433,7 @@ html.dhid .dash>.view{content-visibility:hidden;contain-intrinsic-size:auto none
 .tile.w{background:var(--warnc);color:var(--on-warnc)}.tile.b{background:var(--badc);color:var(--on-badc)}
 .tile.w .th,.tile.w .ts,.tile.w .tv small,.tile.b .th,.tile.b .ts,.tile.b .tv small{color:inherit;opacity:.85}
 .tile.w .wv,.tile.b .wv{color:currentColor}
-.tile.w .wr,.tile.b .wr{background:color-mix(in srgb,currentColor 25%,transparent)}
+.tile.w .wr>i,.tile.b .wr>i{background:color-mix(in srgb,currentColor 25%,transparent)}
 .tile .wd{font-size:var(--fs-2xl)}
 /* 小資訊膠囊：連線數、IP、IPv6… */
 .fcs{display:flex;flex-wrap:wrap;gap:6px}
@@ -451,7 +455,7 @@ html.dhid .dash>.view{content-visibility:hidden;contain-intrinsic-size:auto none
 .lg{display:inline-flex;align-items:center;gap:6px;font-size:var(--fs-s);color:var(--tx2);white-space:nowrap}
 .lg i{width:8px;height:8px;border-radius:50%;flex:none}
 .cbox{position:relative;cursor:crosshair}
-.chart{width:100%;display:block;overflow:visible}
+.chart{width:100%;display:block;overflow:visible;clip-path:inset(-8px 0)}   /* 往左滑的時候，滑出左右兩邊的曲線切掉（上下留給線條粗細） */
 .gl{stroke:var(--line);stroke-width:1;vector-effect:non-scaling-stroke;stroke-dasharray:3 5}
 .yax span{position:absolute;right:0;transform:translateY(-50%);font-size:var(--fs-xs);color:var(--tx3);white-space:nowrap;font-variant-numeric:tabular-nums}
 .cbox:has(.yax) .chart{width:calc(100% - 66px)}   /* 同一台的兩張圖右邊刻度一樣寬：曲線結尾對齊 */
@@ -827,10 +831,10 @@ textarea.field{height:auto;padding:12px 16px;resize:none}
 .upj .wv{flex:none;width:100%;transition:color var(--t-mid) var(--ease)}
 .upj.s-done .wv{color:var(--ok)}.upj.s-wait .wv,.upj.s-skip .wv{color:var(--tx3)}
 .upj .wf svg{transition:scale var(--t-slow) var(--ease),opacity var(--t-slow) var(--ease)}
-.upj .wf::after{content:"";position:absolute;left:0;right:0;top:4px;height:4px;border-radius:var(--r-pill);background:currentColor;opacity:0;transition:opacity var(--t-slow) var(--ease)}
+.upj .wq::after{content:"";position:absolute;left:0;right:0;top:4px;height:4px;border-radius:var(--r-pill);background:currentColor;opacity:0;transition:opacity var(--t-slow) var(--ease)}
 .upj:is(.s-done,.s-fail,.s-wait,.s-skip) .wf svg{scale:1 .1;opacity:0}   /* 沒在動的時候波浪攤平成一條直線 */
-.upj:is(.s-done,.s-fail,.s-wait,.s-skip) .wf::after{opacity:1}
-.upj .wr{transition:opacity var(--t-slow) var(--ease)}.upj:is(.s-done,.s-fail) .wr{opacity:0}
+.upj:is(.s-done,.s-fail,.s-wait,.s-skip) .wq::after{opacity:1}
+.upj .wr{transition:opacity var(--t-slow) var(--ease),transform var(--sp-slow)}.upj:is(.s-done,.s-fail) .wr{opacity:0}
 .upsteps{display:flex;justify-content:space-between;gap:6px;font-size:var(--fs-xs);color:var(--tx3)}
 .upsteps span{display:flex;align-items:center;gap:5px;transition:color var(--t-mid) var(--ease)}
 .upsteps span::before{content:"";width:6px;height:6px;border-radius:var(--r-pill);background:var(--s4);transition:background-color var(--t-mid) var(--ease)}

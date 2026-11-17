@@ -292,11 +292,11 @@ function wxRun(){
 }
 
 /* ═════════ 曲線圖 ═════════ */
-function pathOf(vals, W, H, max){
+function pathOf(vals, W, H, max, xs){
   if (!vals || vals.length < 2) return null;
-  const n = vals.length, y = v => H - Math.max(0, Math.min(v/max, 1)) * (H-4) - 2;
-  const d = vals.map((v,i)=>`${i?"L":"M"}${(i/(n-1)*W).toFixed(1)},${y(v).toFixed(1)}`).join(" ");
-  return {line:d, area:`${d} L${W},${H} L0,${H} Z`};
+  const n = vals.length, y = v => H - Math.max(0, Math.min(v/max, 1)) * (H-4) - 2, x = i => xs ? xs[i] : i/(n-1)*W;
+  const d = vals.map((v,i)=>`${i?"L":"M"}${x(i).toFixed(1)},${y(v).toFixed(1)}`).join(" ");
+  return {line:d, area:`${d} L${W},${H} L${x(0).toFixed(1)},${H} Z`};
 }
 /* 換算成固定點數：點多就每段取平均（保留尖峰的一半高度），點少就線性補 */
 function resample(v, n){
@@ -326,19 +326,38 @@ function niceMax(v, bin){
   return (f <= 1 ? 1 : f <= 2 ? 2 : f <= 2.5 ? 2.5 : f <= 5 ? 5 : 10) * e;
 }
 const CHD = {};                       // 每張曲線圖的原始資料（滑鼠移上去顯示數值用）
+/* 每條曲線固定 2N 個點（前 N 個是已經滑出左邊的舊資料，換時間範圍時才能平順變形）。
+   30 分鐘的照時間放：新資料進來時整條往左滑（data-tf：新位置換回舊位置的比例和位移），不是原地扭動 */
 function chart(id, series, o={}){
-  const N = o.n || 150, raw = series;
-  series = series.map(s => ({...s, data: resample(s.data, N)}));
-  const W = 600, H = o.h || 170, all = series.flatMap(s=>s.data||[]);
+  const N = o.n || 180, raw = series, W = 600, H = o.h || 170, prev = CHD[id], t = o.t || [];
+  const live = o.rg === "30m" && t.length >= 2;
+  let xs = null, tf = "";
+  if (live) {
+    const k = Math.min(N, t.length, ...series.map(s => (s.data || []).length)), tw = t.slice(-k), s1 = tw[0], span = (tw[k - 1] - s1) || 1;
+    const old = prev && prev.rg === "30m" && prev.pre ? prev : null;
+    // 已經滑出左邊的舊資料（上一次的左邊＋上一次畫面裡、這次切掉的），滑動時左邊才不會空一塊
+    const ot = old ? old.pre.t.concat(old.t) : [], idx = ot.map((x, i) => x < s1 ? i : -1).filter(i => i >= 0).slice(-N);
+    const pre = {t: idx.map(i => ot[i]), v: series.map((s, j) => { const ov = old ? old.pre.v[j].concat(old.ser[j] ? old.ser[j].data : []) : []; return idx.map(i => +ov[i] || 0); })};
+    const pad = (a, n) => a.length >= n ? a.slice(-n) : Array(n - a.length).fill(a[0]).concat(a);
+    const X = tt => (tt - s1) / span * W;
+    xs = pad(pre.t.length ? pre.t.map(X) : [0], N).concat(pad(tw.map(X), N));
+    series = series.map((s, j) => { const w = (s.data || []).slice(-k);
+      return {...s, data: pad(pre.t.length ? pre.v[j] : [w[0]], N).concat(pad(w, N))}; });
+    if (old && old.span) tf = [span / old.span, (s1 - old.s1) / old.span * W];
+    o._s = {s1, span, pre};
+  } else series = series.map(s => { const d = resample(s.data, N); return {...s, data: d && d.length ? Array(N).fill(d[0]).concat(d) : d}; });
+  const all = series.flatMap(s => (s.data || []).slice(-N));
   if (all.length < 4) return `<div class="wait" style="height:${H}px">收集資料中…</div>`;
   const max = o.max || (o.grid ? niceMax(Math.max(1, ...all) * 1.1, o.bin) : Math.max(1, ...all) * 1.2);
-  if (o.t) CHD[id] = {t: o.t, ser: raw, fmt: o.fmt || (v => v)};
+  if (tf) { const c = prev && prev.max ? max / prev.max : 1; tf = [tf[0], c, tf[1], (H - 2) * (1 - c)].map(v => +v.toFixed(5)).join(","); }
+  if (o.t) CHD[id] = {t: o.t, ser: raw, fmt: o.fmt || (v => v), rg: o.rg, max, ...(o._s || {})};
   const yax = o.grid && o.fmt ? `<div class="yax">${[.25,.5,.75].map(f=>`<span style="top:${f*100}%">${o.fmt(max*(1-f))}</span>`).join("")}</div>` : "";
   let g = "";
   if (o.grid) for (const f of [.25,.5,.75]) g += `<line class="gl" x1="0" x2="${W}" y1="${(H*f).toFixed(1)}" y2="${(H*f).toFixed(1)}"/>`;
   const defs = series.map((s,i)=>`<linearGradient id="${id}${i}" x1="0" y1="0" x2="0" y2="1"><stop offset="0" style="stop-color:${s.color};stop-opacity:${o.fade??.3}"/><stop offset="1" style="stop-color:${s.color};stop-opacity:0"/></linearGradient>`).join("");
-  const body = series.map((s,i)=>{ const p = pathOf(s.data, W, H, max); if (!p) return "";
-    return `<path d="${p.area}" fill="url(#${id}${i})"/><path d="${p.line}" fill="none" style="stroke:${s.color}" stroke-width="${o.sw||2.4}" vector-effect="non-scaling-stroke" stroke-linecap="round" stroke-linejoin="miter"/>`; }).join("");
+  const sl = tf ? ` data-tf="${tf}"` : "";
+  const body = series.map((s,i)=>{ const p = pathOf(s.data, W, H, max, xs); if (!p) return "";
+    return `<path d="${p.area}"${sl} fill="url(#${id}${i})"/><path d="${p.line}"${sl} fill="none" style="stroke:${s.color}" stroke-width="${o.sw||2.4}" vector-effect="non-scaling-stroke" stroke-linecap="round" stroke-linejoin="miter"/>`; }).join("");
   return `<svg class="chart" ${o.t?`data-cid="${id}"`:""} viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" style="height:${H}px"><defs>${defs}</defs>${g}${body}</svg>${yax}`;
 }
 let RANGE = ["30m","24h","7d"].includes(store("vps-range")) ? store("vps-range") : "30m";
@@ -370,7 +389,7 @@ function chartOr(h, id, series, o){
   if (!h) return `<div class="wait" style="height:${o.h||170}px">讀取中…</div>`;
   if (h.err) return `<div class="wait" style="height:${o.h||170}px">${esc(h.err)}</div>`;
   if (RANGE !== "30m" && (!h.t || h.t.length < 2)) return `<div class="wait" style="height:${o.h||170}px">${RANGE==="24h"?"約 10 分鐘":"約 1 小時"}後出現</div>`;
-  return chart(id, series(h), {...o, t: h.t});
+  return chart(id, series(h), {...o, t: h.t, rg: RANGE});
 }
 const cid = (s, k) => "g" + Math.abs([...keyOf(s)].reduce((a,c)=>(a*31+c.charCodeAt(0))|0, 7)) + k;
 const COL = {cpu:"var(--c-cpu)", mem:"var(--c-mem)", rx:"var(--c-rx)", tx:"var(--c-tx)"};
@@ -388,7 +407,7 @@ const CHEV = I("chev").replace("<svg", '<svg class="chev"'), EXT = I("ext").repl
 /* 波浪進度條：波浪那段會慢慢往前流，數字變了寬度用彈簧變過去 */
 const WAVE = (() => { let d = "M0 6"; for (let x = 0; x < 480; x += 12) d += ` Q${x + 6} ${x % 24 ? 12 : 0} ${x + 12} 6`;
   return `<svg viewBox="0 0 480 12" aria-hidden="true"><path d="${d}"/></svg>`; })();
-const wave = (pct, t = tier(pct)) => `<div class="wv ${t}" style="--v:${Math.max(0, Math.min(100, +pct || 0)).toFixed(1)}%"><div class="wf">${WAVE}</div><i class="wr"></i></div>`;
+const wave = (pct, t = tier(pct)) => `<div class="wv ${t}" style="--v:${Math.max(0, Math.min(100, +pct || 0)).toFixed(1)}%"><div class="wf"><div class="wq">${WAVE}</div></div><i class="wr"><i></i></i></div>`;
 /* 首頁的狀態圖形：正常是圓潤的餅乾形、注意是尖一點的太陽形、異常是更尖的星形；點數一樣，換狀態時會平順變形 */
 const blobSh = (k, a) => `polygon(${Array.from({length:96}, (_, i) => { const t = i / 96 * 2 * Math.PI, r = 50 * (1 - a * (1 - Math.cos(k * t)) / 2);
   return `${(50 + r * Math.sin(t)).toFixed(2)}% ${(50 - r * Math.cos(t)).toFixed(2)}%`; }).join(",")})`;
@@ -695,6 +714,15 @@ function slideSel(change){
     const g = document.createElement("i"); g.className = "slide"; g._leaving = 1; b.prepend(g); b.classList.add("sliding");   // _leaving：重畫時不要把它當成內容
     const dur = T.sp, t0 = performance.now(), lerp = (a, c, p) => a + (c - a) * p;
     g.animate([{opacity:1}, {opacity:1}], {duration:dur, id:"ui"});              // 滑完之前，自動更新先等一下
+    const done = () => { const on2 = selOf(b); if (on2) { on2.style.transition = "none"; b.classList.remove("sliding"); on2.offsetWidth; on2.style.transition = ""; } g.remove(); };   // 換回它自己的底色，同一格畫面，不會閃
+    if (Math.abs(to0.w - from.w) < 1 && Math.abs(to0.h - from.h) < 1 && to0.r.every((r, i) => Math.abs(r - from.r[i]) < 1)) {
+      // 大小一樣（例如手機上面的分頁列、電腦左邊的圖示）：只移位置，交給顯示卡跑，新的一頁在畫的時候也不會頓
+      Object.assign(g.style, {width:to0.w + "px", height:to0.h + "px", borderRadius:to0.r.map(r => r + "px").join(" ")});
+      const tr = c => `translate(${c.x}px,${c.y}px)`, a = g.animate([{transform:tr(from)}, {transform:tr(to0)}], {duration:dur, easing:SPRING, fill:"forwards"});
+      a.onfinish = () => { if (!g._stop) done(); };
+      Object.defineProperty(g, "_now", {get(){ const m = new DOMMatrix(getComputedStyle(g).transform); return {x:m.e, y:m.f, w:to0.w, h:to0.h, r:to0.r}; }});
+      return;
+    }
     const step = now => {
       if (g._stop || !g.isConnected) return;
       const p = Math.min(1, (now - t0) / dur), e = springAt(p), on2 = selOf(b);
@@ -703,7 +731,7 @@ function slideSel(change){
       g._now = c;
       Object.assign(g.style, {transform:`translate(${c.x}px,${c.y}px)`, width:c.w + "px", height:c.h + "px", borderRadius:c.r.map(r => r + "px").join(" ")});
       if (p < 1) return requestAnimationFrame(step);
-      on2.style.transition = "none"; b.classList.remove("sliding"); on2.offsetWidth; on2.style.transition = ""; g.remove();   // 換回它自己的底色，同一格畫面，不會閃
+      done();
     };
     step(t0);
   });
@@ -830,15 +858,39 @@ function morphPath(el, from, to){
   el._praf = requestAnimationFrame(step);
   return true;
 }
+/* 曲線往左滑：直接換成新的形狀，再從「舊的位置和高度比例」移回來（只動 transform，不用每格重算路徑） */
+function slidePath(el, tf, to){
+  cancelAnimationFrame(el._praf); el._pcur = null;
+  if (!onScreen(el) || !canAnim()) return false;
+  const [a, c, b, e] = tf.split(",").map(Number);
+  if (![a, c, b, e].every(isFinite) || a <= 0 || c <= 0) return false;
+  let m = new DOMMatrix([a, 0, 0, c, b, e]);
+  if (el._slide && el._slide.playState === "running") { m = new DOMMatrix(getComputedStyle(el).transform).multiply(m); el._slide.cancel(); }   // 上一次還沒滑完：從目前的位置接著滑
+  el.setAttribute("d", to);
+  if (m.isIdentity) return true;
+  el._slide = el.animate([{transform: m.toString()}, {transform: "none"}], {duration: T.slow, easing: EASE});
+  return true;
+}
 function tween(el, from, to, d){
-  cancelAnimationFrame(el._raf);
-  if (!isFinite(from) || !isFinite(to) || !canAnim() || behind(el)) { el.textContent = (+to).toFixed(d); return; }
-  let t0 = null; const dur = T.slow;
+  cancelAnimationFrame(el._raf); (el._tws || []).forEach(clearTimeout); el._tws = [];
+  if (!isFinite(from) || !isFinite(to) || !canAnim() || behind(el) || scrolling()) { el.textContent = (+to).toFixed(d); return; }
+  let t0 = null; const dur = T.slow, q = Math.pow(10, d), a = Math.round(from * q), n = Math.abs(Math.round(to * q) - a);
+  if (!n) { const v = (+to).toFixed(d); if (el.textContent !== v) el.textContent = v; return; }
+  if (n <= 24) {
+    // 數字只變幾下（平常都是這樣）：先算好每一下在什麼時候換，用計時器換就好，不用每一格畫面都跑、都重新排版
+    const dir = Math.sign(to - from);
+    for (let j = 1; j <= n; j++) {
+      const v = a + dir * j, e = Math.min(1, Math.max(0, ((v - dir * .5) / q - from) / (to - from))), k = 1 - Math.cbrt(1 - e);   // 跟下面同一條曲線：越過兩個數字中間的那一刻
+      el._tws.push(setTimeout(() => { el.textContent = j === n ? (+to).toFixed(d) : (v / q).toFixed(d); }, k * dur));
+    }
+    return;
+  }
   const stepf = now => {
     if (t0 === null) t0 = now;                                   // 用第一格畫面當起點，時間不會倒退
     const k = scrolling() ? 1 : Math.min(1, Math.max(0, (now - t0) / dur)), e = 1 - Math.pow(1 - k, 3);
-    el.textContent = (from + (to - from) * e).toFixed(d);
-    if (k < 1) el._raf = requestAnimationFrame(stepf); else el.textContent = (+to).toFixed(d);
+    const v = (k < 1 ? from + (to - from) * e : +to).toFixed(d);
+    if (el.textContent !== v) el.textContent = v;               // 數字真的變了才寫（整數只變兩三次；每格都寫會逼整頁重新排版）
+    if (k < 1) el._raf = requestAnimationFrame(stepf);
   };
   el._raf = requestAnimationFrame(stepf);
 }
@@ -919,6 +971,7 @@ const still = (el, keep) => el.getAnimations({subtree:true}).forEach(n => { if (
 function through(a, b){
   const par = a.offsetParent;
   if (!canAnim() || !par) return a.replaceWith(b);
+  if (a._fading && a._fading.playState === "finished") return a.replaceWith(b);   // 按分頁時舊的那頁已經淡完：直接拿掉（不用再量位置、停它的動畫，新的那頁早一點出來）
   const z = ZM(), r = a.getBoundingClientRect(), R = par.getBoundingClientRect();
   a.replaceWith(b);
   a._leaving = 1;
@@ -1008,7 +1061,7 @@ function dedupKeys(p){
   const seen = new Map();
   for (const c of p.children) { if (c._leaving || !c.hasAttribute("data-key")) continue;
     const k = c.getAttribute("data-key").replace(/#\d+$/, ""), n = (seen.get(k) || 0) + 1; seen.set(k, n);
-    c.setAttribute("data-key", n > 1 ? `${k}#${n}` : k); }
+    const v = n > 1 ? `${k}#${n}` : k; if (c.getAttribute("data-key") !== v) c.setAttribute("data-key", v); }   // 沒變就不寫（寫了瀏覽器會重算樣式）
 }
 function keyedPatch(a, b, attrs){
   dedupKeys(a); dedupKeys(b);
@@ -1087,7 +1140,7 @@ function patch(a, b){
     for (const at of [...a.attributes]) if (!b.hasAttribute(at.name)) a.removeAttribute(at.name);
     for (const at of [...b.attributes]) if (a.getAttribute(at.name)!==at.value){
       if (at.name==="data-v") tween(a, parseFloat(a.getAttribute("data-v"))||0, parseFloat(at.value)||0, +b.getAttribute("data-d")||0);
-      if (at.name==="d" && a.tagName==="path" && morphPath(a, a.getAttribute("d"), at.value)) continue;
+      if (at.name==="d" && a.tagName==="path" && (b.hasAttribute("data-tf") ? slidePath(a, b.getAttribute("data-tf"), at.value) : morphPath(a, a.getAttribute("d"), at.value))) continue;
       a.setAttribute(at.name, at.value);
     }
   };
@@ -2812,6 +2865,7 @@ async function tick(){
   if (rq) { RSW.code = rq.trim().toUpperCase(); sessionStorage.setItem("vs-rsw", RSW.code); history.replaceState(null, "", location.pathname); }
   if (RSW.code) return restoreScreen();
   if (!getTok()) { endSplash(); return login(); }
+  if (document.hidden && LIST.length) return true;   // 已經切到背景：不抓也不畫，回來時馬上更新
   try {
     if (!BOOTED) splashMsg("讀取主機狀態…");
     const since = Object.fromEntries(Object.entries(HIST).map(([k, h]) => [k, h.t[h.t.length - 1]]).filter(x => x[1]));
@@ -2850,6 +2904,7 @@ async function tick(){
     }
     if (BOOTED) await settle();
     if (id !== TICKID || !getTok()) return true;  // 等的時候登出了，或已經有更新的一次
+    if (document.hidden && BOOTED) return true;    // 抓到一半切到背景：先不畫（資料留到回來那次一起畫）
     render(data);
   } catch(e) {
     if (id !== TICKID) return false;
