@@ -82,6 +82,8 @@ android/           安卓 App：全螢幕打開主機的網頁（記住網址）
 - Telegram 通知排隊（`tg_send`／`tg_flush`、`TG_QUEUE`，存在 state.json）：連不上、429、5xx（`TG_AGAIN`）先留著，每 30 秒照順序補傳，晚 2 分鐘以上的註明幾點，一天還傳不出去就丟掉；密碼錯、被封鎖直接丟掉；驗證碼這類即時的不排隊
 - 其他主機的狀態（`peer_get`／`PEER_CACHE`）：網頁 `/api/all` 直接拿存著的，超過 2 秒才在背景重問，同一台同時只問一次；連不上的越隔越久（最多 10 秒）才再問；通知那邊（`alert_loop`）用 `all_status(fresh=True)` 等最新的
 - 網頁 `/` 帶 ETag（`page_tag`），沒改就回 304，瀏覽器用存的那份；Caddy 壓縮時加的 `-gzip` 會先拿掉再比
+- 省流量：30 分鐘圖表資料只傳新的那一段（網頁 `/api/all?since={"@self"或代號: 最後時間}`、主要主機問其他台 `/api/status?since=`，回 `hist.part`；`hist_cut`／`hist_join`，網頁 `HIST`／`histJoin` 接起來）；網頁、程式、API 回應哨兵自己壓縮（`gz_of`、`GZ_TYPES`，沒經過 Caddy 也有；主機之間要求壓縮）；網頁看不到（`document.hidden`）時不更新，回來馬上更新
+- 重新啟動（例如更新完）不用等其他主機：關掉前把其他主機最後的狀態存在 `DATA_DIR/peers-cache.json`（`peer_cache_save`／`peer_cache_load`，網址改了不用；不備份），啟動後先給這份、背景馬上重問
 - 同時連線上限（`Server`、`MAX_CONN` 200）：滿了等 2 秒，還是滿就斷掉；測試用 SENTINEL_MAX_CONN
 - 機場起降跟監控隔開：fly.py 載入失敗時 `FLY_OK=False`，其他照常、機場的 API 回 503；機場的連線（`FLY_API`）同時最多 `FLY_MAX` 48 個（`Handler.fly_gate`），滿了回 503「看的人太多」
 - Caddy：主設定用 `import /etc/caddy/sites/vps-sentinel.d/*.caddy`；雲端硬碟的轉接寫在 `cloud.caddy`

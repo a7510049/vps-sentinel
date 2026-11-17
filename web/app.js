@@ -2782,6 +2782,28 @@ async function settle(){
   }
   await new Promise(r => requestAnimationFrame(r));       // 對齊下一格畫面再改
 }
+/* 30 分鐘的圖表資料：主機只傳上次之後的新點，這邊接起來（每台每次只多一兩筆，不用整段重傳） */
+const HIST = {};
+function histJoin(list){
+  const seen = new Set();
+  for (const s of list) {
+    const k = keyOf(s), h = s.hist, o = HIST[k];
+    seen.add(k);
+    if (!h || !Array.isArray(h.t)) { if (o) s.hist = o; continue; }
+    let m = h;
+    if (h.part && o) {
+      const last = o.t[o.t.length - 1] || 0, add = h.t.map((t, i) => t > last ? i : -1).filter(i => i >= 0);
+      m = {};
+      for (const f of Object.keys(o)) m[f] = o[f].concat(add.map(i => (h[f] || [])[i]));
+      const end = m.t[m.t.length - 1] || 0, cut = m.t.findIndex(t => t >= end - 1800);
+      if (cut > 0) for (const f of Object.keys(m)) m[f] = m[f].slice(cut);
+      if (!add.length) m = o;                       // 沒有新的：用同一份，畫面就知道不用重畫
+    } else if (h.part) { delete HIST[k]; s.hist = null; continue; }   // 這邊沒有前面的（不該發生）：下次整段要
+    else { m = {}; for (const f of Object.keys(h)) if (f !== "part") m[f] = h[f]; }
+    HIST[k] = m; s.hist = m;
+  }
+  for (const k in HIST) if (!seen.has(k)) delete HIST[k];
+}
 let TICKID = 0;
 async function tick(){
   clearTimeout(timer);
@@ -2792,10 +2814,12 @@ async function tick(){
   if (!getTok()) { endSplash(); return login(); }
   try {
     if (!BOOTED) splashMsg("讀取主機狀態…");
-    const r = await fetch("/api/all", {headers:{"X-Token":getTok()}, cache:"no-store", signal: AbortSignal.timeout ? AbortSignal.timeout(20000) : undefined});   // 網路卡住最多等 20 秒，不會一直轉
-    if (r.status === 401) { setTok(""); LIST = []; endSplash(); return login("密碼不對，再試一次"); }
+    const since = Object.fromEntries(Object.entries(HIST).map(([k, h]) => [k, h.t[h.t.length - 1]]).filter(x => x[1]));
+    const r = await fetch("/api/all" + (Object.keys(since).length ? "?since=" + encodeURIComponent(JSON.stringify(since)) : ""), {headers:{"X-Token":getTok()}, cache:"no-store", signal: AbortSignal.timeout ? AbortSignal.timeout(20000) : undefined});   // 網路卡住最多等 20 秒，不會一直轉
+    if (r.status === 401) { setTok(""); LIST = []; for (const k in HIST) delete HIST[k]; endSplash(); return login("密碼不對，再試一次"); }
     const data = await r.json();
     if (id !== TICKID || !getTok()) return true;
+    histJoin(data);
     const me = data.find(x => !x.node);
     if (window._fresh) { window._fresh = false; fetch("/api/pin", {method:"POST", headers:{"X-Token":getTok()}, body:'{"action":"login"}'}).catch(() => {}); }  // 登入成功：PIN 碼輸錯的次數歸零
     if (new URLSearchParams(location.search).get("go") === "cloud" && me && me.cloud && !window._goCloud) {   // 從雲端硬碟跳過來登入：登入好了就送回去
@@ -2831,8 +2855,10 @@ async function tick(){
     if (id !== TICKID) return false;
     if (!BOOTED) splashMsg("連線不上，正在重試…");
     const m = document.querySelector(".meta"); if (m) m.innerHTML = `<span class="live off"></span>連線中斷，重試中…`;
-    timer = setTimeout(tick, 3000); return false;
+    if (!(document.hidden && LIST.length)) timer = setTimeout(tick, 3000);
+    return false;
   }
+  if (document.hidden && LIST.length) return true;   // 看不到（切到別的分頁、App 在背景）：先不更新，回來馬上更新
   const busy = LIST.some(s => s.update && s.update.running);   // 更新中就看得勤一點
   timer = setTimeout(tick, busy ? 2000 : (PREF.refresh || 5) * 1000);
   return true;
