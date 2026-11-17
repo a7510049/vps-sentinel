@@ -8,6 +8,7 @@ VPS 哨兵：用手機或電腦隨時查看 VPS 狀態
 設定檔：/etc/vps-sentinel-lite.conf（可用環境變數 SENTINEL_CONF 指定別的位置）
 """
 import base64
+import bisect
 import csv
 import glob
 import gzip
@@ -44,7 +45,7 @@ from collections import deque
 from concurrent.futures import ThreadPoolExecutor
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
-VERSION = "3.88"
+VERSION = "3.89"
 
 # ───────────────────────── 哨兵備份檔（.vsbk）─────────────────────────
 # 哨兵專用的備份格式：外面是自己的檔案格式，裡面用的是成熟、標準的加密方法（不自己發明加密）：
@@ -753,7 +754,7 @@ TG_PART = int(os.environ.get("SENTINEL_TG_PART") or 45 * 1024 * 1024)   # 備份
 TG_PARTS_MAX = 20                                  # 最多切幾段（大約 900 MB）；再大就不傳 Telegram
 BK_SKIP_DIRS = {"cache", ".cache", "tmp", "log", "logs", "node_modules"}
 # 哨兵自己抓來的資料（機場起降的飛機資料庫、標誌、航班表、照片）：還原後會自己重抓，不用備份
-BK_REGEN = ("aircraft-db", "fly-logos", "fids", "fly-photos.json", "fly-aircraft.json")
+BK_REGEN = ("aircraft-db", "fly-logos", "fids", "fly-photos.json", "fly-aircraft.json", "peers-cache.json")
 BK_RUN = threading.Lock()                         # 同一時間只跑一次備份
 BK_MAKE = threading.Lock()                        # 同一時間只打包一份
 BK = {"last": None, "ok_t": None, "day": None, "key_t": 0, "names": {}, "tg": {}, "running": False}  # 會存檔
@@ -2881,11 +2882,15 @@ COL = Collector()
 
 # ───────────────────────── 其他 VPS ─────────────────────────
 
-def fetch_peer(p):
+def fetch_peer(p, since=0):
     try:
-        req = urllib.request.Request(p["url"] + "/api/status", headers={"X-Token": p["token"]})
+        q = f"?since={since}" if since else ""     # 已經有的圖表資料不用再傳一次
+        req = urllib.request.Request(p["url"] + "/api/status" + q, headers={"X-Token": p["token"], "Accept-Encoding": "gzip"})
         with urllib.request.urlopen(req, timeout=5) as r:
-            data = json.loads(r.read())
+            raw = r.read()
+            if (r.headers.get("Content-Encoding") or "").lower() == "gzip":
+                raw = gzip.decompress(raw)
+            data = json.loads(raw)
         data["node"] = p["name"]                  # 代號：用來把指令轉給這台
         data["name"] = data.get("name") or p["name"]   # 顯示：用那台自己的名稱
         PEER_SEEN[p["name"]] = time.time()
@@ -2934,11 +2939,55 @@ def peer_key(p):
     return (p["name"], p["url"], p["token"])
 
 
-def peer_pull(p):
-    """問一台，把結果存起來"""
-    k, d = peer_key(p), None
+def hist_last(d):
+    """存著的圖表資料最後一筆的時間（沒有就 0）"""
     try:
-        d = fetch_peer(p)
+        return float(d["hist"]["t"][-1])
+    except (KeyError, IndexError, TypeError, ValueError):
+        return 0
+
+
+def hist_cut(d, since):
+    """只留 since 之後的圖表資料（對方已經有前面的），標上 part"""
+    h = d.get("hist") if isinstance(d, dict) else None
+    if not since or not isinstance(h, dict) or not isinstance(h.get("t"), list):
+        return d
+    try:
+        i = bisect.bisect_right(h["t"], float(since))
+    except (TypeError, ValueError):
+        return d
+    return {**d, "hist": {**{k: v[i:] for k, v in h.items() if isinstance(v, list)}, "part": True}}
+
+
+def hist_join(old, new):
+    """把新收到的一小段圖表資料接在存著的後面，只留最近 30 分鐘"""
+    h = new.get("hist") if isinstance(new, dict) else None
+    if not isinstance(h, dict) or not h.get("part"):
+        return new                                 # 整段給的（或舊版主機）：直接用
+    o = (old or {}).get("hist")
+    try:
+        keys = [k for k in h if k != "part"]
+        last = hist_last(old)
+        add = [i for i, t in enumerate(h["t"]) if t > last]
+        m = {k: list(o[k]) + [h[k][i] for i in add] for k in keys}
+        end = m["t"][-1] if m["t"] else 0
+        i = bisect.bisect_left(m["t"], end - 1800)
+        return {**new, "hist": {k: v[i:] for k, v in m.items()}}
+    except (KeyError, IndexError, TypeError):
+        return {**new, "hist": {k: v for k, v in h.items() if k != "part"}}
+
+
+def peer_pull(p):
+    """問一台，把結果存起來（圖表資料只問新的那一段）"""
+    k, d = peer_key(p), None
+    with PEER_LOCK:
+        old = (PEER_CACHE.get(k) or {}).get("d")
+    try:
+        d = fetch_peer(p, hist_last(old) if old and old.get("online") else 0)
+        if d.get("online"):
+            d = hist_join(old, d)
+        elif old and old.get("hist"):              # 連不上：圖表留著上次的
+            d = {**d, "hist": old["hist"]}
         return d
     finally:                                     # 就算出錯也要把「正在問」清掉，下次才會再問
         with PEER_LOCK:
@@ -2969,8 +3018,42 @@ def peer_get(p, fresh=False):
                               "problems": ["連不上"], "error": "等太久沒有回應", "last_seen": PEER_SEEN.get(p["name"]), "peer_url": p["url"]}
 
 
-def all_status(fresh=False):
-    """這台＋其他主機。網頁每幾秒問一次，不用每次都當場去問每一台：直接拿背景問好的"""
+def peer_cache_path():
+    return os.path.join(DATA_DIR, "peers-cache.json")
+
+
+def peer_cache_save():
+    """關掉前把其他主機最後的狀態存起來：重新啟動（例如更新完）後網頁一打開就有，不用等每一台回應"""
+    with PEER_LOCK:
+        out = [{"name": k[0], "url": k[1], "d": c["d"]} for k, c in PEER_CACHE.items() if c.get("d")]
+    try:
+        with open(peer_cache_path() + ".tmp", "w", encoding="utf-8") as f:
+            json.dump(out, f, ensure_ascii=False, separators=(",", ":"))
+        os.replace(peer_cache_path() + ".tmp", peer_cache_path())
+    except OSError as e:
+        log("其他主機的狀態存檔失敗：", e)
+
+
+def peer_cache_load():
+    """讀回上次存的狀態（只認現在還在設定裡、網址沒改的），然後在背景馬上重問一次"""
+    try:
+        with open(peer_cache_path(), encoding="utf-8") as f:
+            saved = {(x["name"], x["url"]): x["d"] for x in json.load(f) if isinstance(x, dict) and isinstance(x.get("d"), dict)}
+    except (OSError, ValueError, KeyError, TypeError):
+        saved = {}
+    with PEER_LOCK:
+        for p in PEERS:
+            d = saved.get((p["name"], p["url"]))
+            if d:
+                PEER_CACHE.setdefault(peer_key(p), {}).update(t=0, d=d, fails=0)
+    all_status()                                   # 舊了的都會在背景重問
+
+
+def all_status(fresh=False, since=None):
+    """這台＋其他主機。網頁每幾秒問一次，不用每次都當場去問每一台：直接拿背景問好的。
+    since：網頁已經有的圖表資料到哪裡（{"@self" 或代號: 時間}），只給之後的"""
+    if since:
+        return [hist_cut(s, since.get(s.get("node") or "@self")) for s in all_status(fresh)]
     peers = list(PEERS)
     with PEER_LOCK:                              # 已經拿掉、改過網址或鑰匙的就不留
         keep = {peer_key(p) for p in peers}
@@ -3523,6 +3606,22 @@ def fly_leave():
         FLY_BUSY["n"] -= 1
 
 
+GZ_TYPES = {"application/json", "text/html", "text/javascript", "application/javascript", "text/css", "image/svg+xml", "application/manifest+json"}
+GZ_KEEP = {}                                     # 網頁、機場程式這類固定內容：壓過一次就留著（指紋 → 壓好的）
+
+
+def gz_of(data, tag=None):
+    """壓縮；固定內容（有指紋的）只壓一次"""
+    if tag and tag in GZ_KEEP:
+        return GZ_KEEP[tag]
+    z = gzip.compress(data, 6 if tag else 4, mtime=0)
+    if tag:
+        if len(GZ_KEEP) > 8:
+            GZ_KEEP.clear()
+        GZ_KEEP[tag] = z
+    return z
+
+
 MAX_CONN = max(16, int(os.environ.get("SENTINEL_MAX_CONN") or 200))   # 同時最多處理幾個連線（測試可以調小）
 
 
@@ -3566,8 +3665,15 @@ class Handler(BaseHTTPRequestHandler):
             have = {re.sub(r'-(?:gzip|br|zstd)$', "", re.sub(r'^W/|"', "", t.strip())) for t in (self.headers.get("If-None-Match") or "").split(",")}
             if code == 200 and tag in have:
                 code, data = 304, b""
+        zipped = False
+        if len(data) > 1024 and ctype.split(";")[0] in GZ_TYPES and "gzip" in (self.headers.get("Accept-Encoding") or "").lower():
+            data, zipped = gz_of(data, tag), True        # 壓縮後大約剩 1/3～1/10（沒經過 Caddy 的主機、主機之間互傳都用得到）
         self.send_response(code)
         self.send_header("Content-Type", ctype)
+        if zipped:
+            self.send_header("Content-Encoding", "gzip")
+        if ctype.split(";")[0] in GZ_TYPES:
+            self.send_header("Vary", "Accept-Encoding")
         if code != 304:
             self.send_header("Content-Length", str(len(data)))
         if tag:
@@ -3875,8 +3981,17 @@ class Handler(BaseHTTPRequestHandler):
             if not self.authed():
                 time.sleep(1)
                 return self.send(401, '{"error":"密碼錯誤"}')
-            data = COL.snapshot() if path == "/api/status" else all_status()
-            return self.send(200, json.dumps(data, ensure_ascii=False))
+            q = urllib.parse.parse_qs(urllib.parse.urlsplit(self.path).query)
+            if path == "/api/status":
+                data = hist_cut(COL.snapshot(), (q.get("since") or [""])[0][:20])
+            else:
+                try:
+                    since = json.loads((q.get("since") or ["{}"])[0][:20000])
+                    since = {str(k): float(v) for k, v in since.items()} if isinstance(since, dict) else None
+                except (ValueError, TypeError, AttributeError):
+                    since = None
+                data = all_status(since=since)
+            return self.send(200, json.dumps(data, ensure_ascii=False, separators=(",", ":")))
         self.send(404, '{"error":"找不到"}')
 
     def backup_get(self, path):
@@ -4244,6 +4359,7 @@ def main():
     def stop(*_):
         keep_stop()
         COL.save()
+        peer_cache_save()
         if FLY_OK and FLY["used"]:
             fly_seen_save()
         log("已存檔，結束")
@@ -4251,6 +4367,7 @@ def main():
     signal.signal(signal.SIGTERM, stop)
     signal.signal(signal.SIGINT, stop)
     threading.Thread(target=COL.loop, daemon=True).start()
+    threading.Thread(target=peer_cache_load, daemon=True).start()   # 其他主機：先用上次的狀態，背景馬上重問
     threading.Thread(target=keep_loop, daemon=True).start()       # 只有 Oracle 免費主機才會真的做事
     threading.Thread(target=yt_update_loop, daemon=True).start()  # 有裝 yt-dlp／deno 才會真的做事
     threading.Thread(target=alert_loop, daemon=True).start()      # 沒設定時也會跑，網頁上一設定好就開始通知
