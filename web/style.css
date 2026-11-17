@@ -1302,3 +1302,29 @@ html.flyon .dash>.view{content-visibility:hidden;contain-intrinsic-size:auto non
 .fapc .fon svg{width:16px;height:16px}
 .fapc.on .fon{opacity:1;transform:none}
 .fon{color:var(--p)}.fon svg{width:20px;height:20px}
+
+/* ═════════ 玻璃（像 Android 17）：浮在內容上面的東西半透明＋霧化，看得到後面的顏色 ═════════
+   只給分頁列、主機頁標題列、選單、視窗、通知、圖表提示；卡片不用（一直更新的東西霧化很耗電）
+   系統設定「減少透明度」或瀏覽器不支援霧化時，維持原本的實心底色 */
+:root{--blur:blur(24px) saturate(1.8); --blur-veil:blur(8px)}
+[data-mode="dark"]{--glass:color-mix(in oklab,var(--s2) 62%,transparent); --glass-hi:color-mix(in oklab,var(--s3) 66%,transparent); --glass-inv:color-mix(in oklab,var(--inv) 80%,transparent);
+  --glass-edge:inset 0 0 0 1px rgba(255,255,255,.08)}
+[data-mode="light"]{--glass:color-mix(in oklab,var(--s1) 62%,transparent); --glass-hi:color-mix(in oklab,var(--s1) 76%,transparent); --glass-inv:color-mix(in oklab,var(--inv) 82%,transparent);
+  --glass-edge:inset 0 0 0 1px rgba(255,255,255,.6)}
+@supports ((backdrop-filter:blur(1px)) or (-webkit-backdrop-filter:blur(1px))){@media not (prefers-reduced-transparency:reduce){
+  html:not(.full) .dock{background:color-mix(in oklab,var(--bg) 62%,transparent);-webkit-backdrop-filter:var(--blur);backdrop-filter:var(--blur)}
+  .full .dock{background:color-mix(in oklab,var(--s3) 60%,transparent);box-shadow:var(--glass-edge),var(--sh-3);-webkit-backdrop-filter:var(--blur);backdrop-filter:var(--blur)}
+  .full .dash.m::before{opacity:.45}                               /* 分頁列後面的內容看得到（霧化），淡掉的那層變淺 */
+  .dscroll>.dtop{background:color-mix(in oklab,var(--bg) 55%,transparent);-webkit-backdrop-filter:var(--blur);backdrop-filter:var(--blur)}
+  .dtop::before{background:var(--glass)}
+  .lmenu{background:var(--glass-hi);box-shadow:var(--glass-edge),var(--sh-2);-webkit-backdrop-filter:var(--blur);backdrop-filter:var(--blur)}
+  .dialog{background:var(--glass-hi);box-shadow:var(--glass-edge),var(--sh-3);-webkit-backdrop-filter:var(--blur);backdrop-filter:var(--blur);
+    --card:color-mix(in oklab,var(--s3) 72%,transparent);--chip:color-mix(in oklab,var(--s3) 72%,transparent)}
+  .toast{background:var(--glass-inv);-webkit-backdrop-filter:var(--blur);backdrop-filter:var(--blur)}
+  #ctip{background:var(--glass-hi);box-shadow:var(--glass-edge),var(--sh-2);-webkit-backdrop-filter:var(--blur);backdrop-filter:var(--blur)}
+  /* 電腦：視窗後面整頁也霧化（手機上量過，整頁霧化會讓動畫掉格，所以只給電腦） */
+  @media (hover:hover) and (pointer:fine){
+    [data-mode="light"]{--scrim:rgba(0,0,0,.18)}                  /* 後面已經霧化，淺色模式不用壓那麼暗 */
+    .veil::before{-webkit-backdrop-filter:var(--blur-veil);backdrop-filter:var(--blur-veil)}
+  }
+}}
