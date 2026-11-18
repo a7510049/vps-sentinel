@@ -45,7 +45,7 @@ from collections import deque
 from concurrent.futures import ThreadPoolExecutor
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
-VERSION = "3.92"
+VERSION = "3.93"
 
 # ───────────────────────── 哨兵備份檔（.vsbk）─────────────────────────
 # 哨兵專用的備份格式：外面是自己的檔案格式，裡面用的是成熟、標準的加密方法（不自己發明加密）：
@@ -1517,7 +1517,7 @@ def links_status():
 # ───────────────────────── 換密碼 ─────────────────────────
 
 def change_token():
-    """換一組新的存取密碼：舊密碼、雲端硬碟通行證、一鍵登入網址全部失效"""
+    """換一組新的存取密碼：舊密碼、每台裝置的登入、雲端硬碟通行證、一鍵登入網址全部失效"""
     global TOKEN
     old, new = TOKEN, secrets.token_urlsafe(18)
     TOKEN = new
@@ -1529,6 +1529,7 @@ def change_token():
     except OSError as e:
         TOKEN = old
         return False, f"無法寫入設定檔：{e}", ""
+    sess_del()                                   # 每台裝置都要用新密碼重新登入
     log("已換成新的存取密碼")
     COL.add_event("info", "存取密碼已換新")
     return True, "已換成新密碼", new
@@ -1885,8 +1886,105 @@ def pk_delete(cid):
     return True, f"已刪除「{k.get('name')}」，它不能再登入了"
 
 
+# ───────────────────────── 每台裝置自己的登入 ─────────────────────────
+# 用密碼、PIN 碼或手機金鑰登入後，裝置拿到的是自己的一把鑰匙（vss_ 開頭），不是存取密碼本身。
+# 主機只存鑰匙的雜湊（DATA_DIR/sessions.json）：勾「30 天內不用再登入」的 30 天後失效，沒勾的一天沒用就失效；
+# 設定裡看得到哪些裝置登入過，可以單獨登出一台；換密碼時全部登出。
+
+SESS_DAYS, SESS_IDLE, SESS_MAX = 30, 86400, 30
+SESS_LK = threading.Lock()
+SESS = {"list": None}
+
+
+def sess_path():
+    return os.path.join(DATA_DIR, "sessions.json")
+
+
+def _sess_all():
+    """所有還有效的登入（已經上鎖時呼叫）"""
+    if SESS["list"] is None:
+        try:
+            with open(sess_path(), encoding="utf-8") as f:
+                v = json.load(f)
+            SESS["list"] = [x for x in v if isinstance(x, dict) and x.get("h")] if isinstance(v, list) else []
+        except (OSError, ValueError):
+            SESS["list"] = []
+    now = time.time()
+    SESS["list"] = [x for x in SESS["list"] if x.get("exp", 0) > now and (x.get("keep") or now - x.get("seen", 0) < SESS_IDLE)]
+    return SESS["list"]
+
+
+def _sess_save():
+    os.makedirs(DATA_DIR, exist_ok=True)
+    tmp = sess_path() + ".tmp"
+    with open(tmp, "w", encoding="utf-8") as f:
+        json.dump(SESS["list"] or [], f, ensure_ascii=False)
+    os.chmod(tmp, 0o600)
+    os.replace(tmp, sess_path())
+
+
+def _sess_h(key):
+    return hashlib.sha256(key.encode("utf-8", "replace")).hexdigest()
+
+
+def sess_new(dev, keep, how):
+    """發一把新的登入鑰匙給這台裝置"""
+    key, now = "vss_" + secrets.token_urlsafe(24), time.time()
+    dev = re.sub(r"\s+", " ", str(dev or ""))[:30].strip() or "某台裝置"
+    with SESS_LK:
+        lst = _sess_all()
+        lst.append({"id": secrets.token_hex(4), "h": _sess_h(key), "dev": dev, "how": how, "keep": bool(keep),
+                    "t0": now, "seen": now, "exp": now + SESS_DAYS * 86400})
+        lst.sort(key=lambda x: x["seen"])
+        del lst[:-SESS_MAX]                          # 太多就把最久沒用的擠掉
+        try:
+            _sess_save()
+        except OSError as e:
+            log("無法寫入登入紀錄：", e)
+    return key
+
+
+def sess_find(key):
+    """這把鑰匙還有效就回傳那一筆（順便記下最後用的時間）"""
+    if not key.startswith("vss_"):
+        return None
+    h = _sess_h(key)
+    with SESS_LK:
+        for x in _sess_all():
+            if hmac.compare_digest(x["h"], h):
+                now = time.time()
+                if now - x.get("seen", 0) > 600:     # 10 分鐘才寫一次檔
+                    x["seen"] = now
+                    try:
+                        _sess_save()
+                    except OSError:
+                        pass
+                return x
+    return None
+
+
+def sess_list(me_id=""):
+    with SESS_LK:
+        lst = sorted(_sess_all(), key=lambda x: -x["seen"])
+        return [{"id": x["id"], "dev": x["dev"], "how": x.get("how", ""), "t0": int(x["t0"]), "seen": int(x["seen"]),
+                 "keep": x.get("keep", False), "me": x["id"] == me_id} for x in lst]
+
+
+def sess_del(sid=None):
+    """登出一台（sid）或全部（None）"""
+    with SESS_LK:
+        lst = _sess_all()
+        gone = [x for x in lst if sid is None or x["id"] == sid]
+        SESS["list"] = [x for x in lst if x not in gone]
+        try:
+            _sess_save()
+        except OSError:
+            pass
+    return gone
+
+
 # ───────────────────────── PIN 碼登入 ─────────────────────────
-# 4～8 位數字，存在 DATA_DIR/pin.json（只存加鹽雜湊，不存 PIN 碼本身）。登入成功就交出目前的存取密碼。
+# 4～8 位數字，存在 DATA_DIR/pin.json（只存加鹽雜湊，不存 PIN 碼本身）。登入成功就發一把這台裝置自己的鑰匙（見上面）。
 # 數字很短容易被猜，所以：連續輸錯 5 次暫停 15 分鐘；累計輸錯 10 次直接關閉 PIN 碼，要用密碼或手機金鑰登入後重新設定。
 
 PIN_LOCK_AFTER, PIN_LOCK_MIN, PIN_OFF_AFTER = 5, 15, 10
@@ -2904,6 +3002,8 @@ class Collector:
             notices.append(f"{updates['security']} 個安全更新")
         if BACKUP_ON and BK["ok_t"] and time.time() - BK["ok_t"] > 50 * 3600:
             notices.append(f"{int((time.time() - BK['ok_t']) // 86400)} 天沒有成功備份")
+        elif BACKUP_ON and not BK["ok_t"] and BK["last"] and not BK["last"].get("ok"):
+            notices.append("備份還沒成功過")
         notices += cert_soon
         if keep_notice():
             notices.append(keep_notice())
@@ -2922,6 +3022,7 @@ class Collector:
             "hist": {"t": [h[0] for h in hist], "cpu": [h[1] for h in hist], "mem": [h[2] for h in hist],
                      "rx": [h[3] for h in hist], "tx": [h[4] for h in hist]},
             "problems": problems, "notices": notices, "tg_self": pair_load().get("self_t") or 0,
+            "tg_off": not (TG_BOT and TG_CHAT) and not watchers(),   # 還沒設定 Telegram：首頁提醒一行
             "level": "bad" if problems else ("warn" if notices else "ok"),
         }
 
@@ -3659,6 +3760,24 @@ def fly_leave():
         FLY_BUSY["n"] -= 1
 
 
+HTML_CSP = {}
+
+
+def html_csp(data):
+    """網頁只能跑自己的程式：網頁裡寫好的那幾段（照內容算指紋）和這台給的檔案，別的一律不跑。
+    萬一別台主機名稱、航班資料裡夾帶程式碼，瀏覽器也不會執行"""
+    key = hashlib.sha256(data).digest()
+    if key not in HTML_CSP:
+        hs = " ".join("'sha256-" + base64.b64encode(hashlib.sha256(m).digest()).decode() + "'"
+                      for m in re.findall(rb"<script>(.*?)</script>", data, re.S))
+        if len(HTML_CSP) > 8:
+            HTML_CSP.clear()
+        HTML_CSP[key] = ("; default-src 'self'; script-src 'self' " + hs + "; style-src 'self' 'unsafe-inline'"
+                         "; img-src 'self' data: blob: https:; connect-src 'self' https://api.open-meteo.com"
+                         "; font-src 'self' data:; object-src 'none'; base-uri 'none'")
+    return HTML_CSP[key]
+
+
 GZ_TYPES = {"application/json", "text/html", "text/javascript", "application/javascript", "text/css", "image/svg+xml", "application/manifest+json"}
 GZ_KEEP = {}                                     # 網頁、機場程式這類固定內容：壓過一次就留著（指紋 → 壓好的）
 
@@ -3712,6 +3831,8 @@ class Handler(BaseHTTPRequestHandler):
 
     def send(self, code, body, ctype="application/json; charset=utf-8", cache=False, csp="", etag=False):
         data = body if isinstance(body, bytes) else body.encode("utf-8")
+        if not csp and ctype.startswith("text/html") and code == 200:
+            csp = html_csp(data)
         tag = None
         if etag:                                  # 網頁：瀏覽器先問一聲「有沒有改」，沒改就用它存的那份，不用重新下載
             tag = page_tag(data)
@@ -3761,9 +3882,18 @@ class Handler(BaseHTTPRequestHandler):
             msg = f"輸錯太多次，請 {left // 60 + 1} 分鐘後再試"
         return self.send(401, json.dumps({"active": bool(rsw_state()), "ok": False, "error": msg, "message": msg}, ensure_ascii=False))
 
+    sess = None                                       # 這次是哪一台裝置登入的（用自己的登入鑰匙時）
+
     def authed(self):
         given = self.headers.get("X-Token", "")
+        if given.startswith("vss_"):
+            self.sess = sess_find(given)
+            return bool(self.sess)
         return bool(given) and (hmac.compare_digest(given.encode(), TOKEN.encode()) or pair_key_ok(given))
+
+    def sess_give(self, d, how):
+        """登入成功：發一把這台裝置自己的鑰匙"""
+        return sess_new(d.get("dev") or "", d.get("keep", True), how)
 
     # ── /cloud/ 開頭：整個轉給本機的雲端硬碟（沒有網域時，雲端硬碟就跟哨兵用同一個連接埠） ──
     HOP = {"connection", "keep-alive", "proxy-authenticate", "proxy-authorization", "te", "trailers", "transfer-encoding", "upgrade"}
@@ -3919,7 +4049,7 @@ class Handler(BaseHTTPRequestHandler):
             time.sleep(1)
             return self.send(401, json.dumps({"ok": False, "message": res}, ensure_ascii=False))
         log(f"用手機金鑰「{res}」登入")
-        return self.send(200, json.dumps({"ok": True, "token": TOKEN}))
+        return self.send(200, json.dumps({"ok": True, "token": self.sess_give(d, "手機金鑰")}))
 
     def do_HEAD(self):
         if self.is_cloud():
@@ -4106,7 +4236,7 @@ class Handler(BaseHTTPRequestHandler):
             return self.proxy_cloud()
         u = urllib.parse.urlsplit(self.path)
         if u.path not in ("/api/update", "/api/rename", "/api/traffic", "/api/telegram", "/api/links", "/api/self", "/api/cloud-login", "/api/peer",
-                          "/api/token", "/api/passkey", "/api/passkey-login", "/api/pin", "/api/pin-login", "/api/backup", "/api/backup-store",
+                          "/api/token", "/api/passkey", "/api/passkey-login", "/api/pin", "/api/pin-login", "/api/login", "/api/sessions", "/api/backup", "/api/backup-store",
                           "/api/restore-upload", "/api/restore-run", "/api/pair", "/api/pair-admin", "/api/reboot", "/api/keepalive", "/api/download", "/api/fly-share", "/api/fly-claim", "/api/opensky"):
             return self.send(404, '{"error":"找不到"}')
         if u.path in ("/api/restore-upload", "/api/restore-run"):   # 網頁還原：要有安裝時給的代碼（或已經登入）
@@ -4178,13 +4308,21 @@ class Handler(BaseHTTPRequestHandler):
             body = b""
         if u.path == "/api/passkey-login":           # 還沒登入：用手機金鑰換到存取密碼
             return self.passkey_login(body)
-        if u.path == "/api/pin-login":               # 還沒登入：用 PIN 碼換到存取密碼
-            ok, msg = pin_login(self.jbody(body).get("pin"))
+        if u.path == "/api/pin-login":               # 還沒登入：用 PIN 碼換到這台裝置自己的登入鑰匙
+            d = self.jbody(body)
+            ok, msg = pin_login(d.get("pin"))
             if not ok:
                 time.sleep(1)
                 return self.send(401, json.dumps({"ok": False, "message": msg}, ensure_ascii=False))
             log("用 PIN 碼登入")
-            return self.send(200, json.dumps({"ok": True, "token": TOKEN}))
+            return self.send(200, json.dumps({"ok": True, "token": self.sess_give(d, "PIN 碼")}))
+        if u.path == "/api/login":                   # 還沒登入：用存取密碼換到這台裝置自己的登入鑰匙（舊版存著密碼的也從這裡換）
+            d = self.jbody(body)
+            pw = str(d.get("pw") or "")
+            if not (pw and hmac.compare_digest(pw.encode(), TOKEN.encode())):
+                time.sleep(1)
+                return self.send(401, json.dumps({"ok": False, "message": "密碼不對，再試一次"}, ensure_ascii=False))
+            return self.send(200, json.dumps({"ok": True, "token": self.sess_give(d, "密碼")}))
         if u.path == "/api/pair":                    # 還沒登入：主要主機拿配對暗號來對（或主要主機移除這台時把鑰匙作廢）
             d = self.jbody(body)
             if d.get("action") == "unwatch":         # 被監看的那頁：用這台的密碼或 PIN 碼取消
@@ -4322,8 +4460,21 @@ class Handler(BaseHTTPRequestHandler):
                 return self.send(200, json.dumps({"ok": True, **pin_status()}))
             return self.send(200 if ok else 400, json.dumps({"ok": ok, "message": msg, **pin_status()}, ensure_ascii=False))
         if u.path == "/api/token":
+            me = self.sess
             ok, msg, tok = change_token()
-            return self.send(200 if ok else 500, json.dumps({"ok": ok, "message": msg, "token": tok}, ensure_ascii=False))
+            out = {"ok": ok, "message": msg, "token": tok}
+            if ok and me:                              # 換密碼會登出所有裝置：這台直接換一把新的
+                out["sess"] = sess_new(me["dev"], me.get("keep"), me.get("how", ""))
+            return self.send(200 if ok else 500, json.dumps(out, ensure_ascii=False))
+        if u.path == "/api/sessions":                # 登入的裝置：列出來、登出一台、登出自己
+            d = self.jbody(body)
+            act, me = d.get("action"), (self.sess or {}).get("id", "")
+            if act in ("del", "out"):
+                sid = me if act == "out" else str(d.get("id") or "")
+                gone = sess_del(sid) if sid else []
+                if act == "del" and gone:
+                    log(f"登出了「{gone[0]['dev']}」")
+            return self.send(200, json.dumps({"ok": True, "list": sess_list(me)}, ensure_ascii=False))
         if u.path == "/api/cloud-login":            # 網頁上已經登入哨兵：直接發雲端硬碟通行證
             if not CLOUD_URL:
                 return self.send(404, '{"ok":false}')

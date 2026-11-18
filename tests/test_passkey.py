@@ -177,10 +177,11 @@ class PasskeyFlowTest(Server):
         self.assertTrue(self.call("/api/passkey-login", {"action": "has"})[1]["has"])
         self.assertFalse(self.call("/api/passkey-login", {"action": "has"}, host="other.example")[1]["has"])
 
-        # 用金鑰登入：拿到存取密碼
+        # 用金鑰登入：拿到這台裝置自己的鑰匙（不是存取密碼）
         code, d = self.login(phone)
         self.assertEqual(code, 200, d)
-        self.assertEqual(d["token"], TOKEN)
+        self.assertTrue(d["token"].startswith("vss_"))
+        self.assertEqual(self.call("/api/sessions", {"action": "list"}, d["token"])[0], 200)
 
         # 有人一直要題目：自己拿到的題目照樣能用
         _, mine = self.call("/api/passkey-login", {"action": "begin"})
@@ -218,13 +219,13 @@ class PasskeyFlowTest(Server):
         self.assertEqual(len(d["keys"]), 4)
         self.assertEqual(self.login(phone)[0], 401)
 
-        # 換密碼後，金鑰登入拿到的是新密碼
+        # 換密碼後，金鑰登入照樣能用
         other = FakePhone(origin)
         self.assertEqual(self.register(other)[0], 200)
         _, t = self.call("/api/token", {}, TOKEN)
         code, d = self.login(other)
         self.assertEqual(code, 200)
-        self.assertEqual(d["token"], t["token"])
+        self.assertEqual(self.call("/api/sessions", {"action": "list"}, d["token"])[0], 200)
 
 
 if __name__ == "__main__":

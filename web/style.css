@@ -126,6 +126,7 @@
 .ico.quote{background:oklch(var(--tl) var(--tc) 232);color:oklch(var(--fl) var(--fc) 232)}
 .ico.keep{background:oklch(var(--tl) calc(var(--tc) * .6) 45);color:oklch(var(--fl) calc(var(--fc) * .65) 45)}
 .ico.dl{background:oklch(var(--tl) calc(var(--tc) * .8) 112);color:oklch(var(--fl) calc(var(--fc) * .85) 112)}
+.ico.devices{background:oklch(var(--tl) calc(var(--tc) * .5) 290);color:oklch(var(--fl) calc(var(--fc) * .55) 290)}
 .ico.theme{background:var(--pc);color:var(--on-pc)}                  /* 哨兵本身的動作（更新、編輯）：主題色 */
 .ico.warn{background:var(--warnc);color:var(--on-warnc)}            /* 要小心的動作（重新開機、換密碼） */
 .ico.bad{background:var(--badc);color:var(--on-badc)}               /* 刪除、移除、解除配對 */
@@ -343,6 +344,7 @@ html:not(.full) .dock>.slide{background:none}
   box-shadow:inset 0 0 0 1px var(--s4);font-weight:500;
   transition:border-radius var(--sp-fast),transform var(--sp-fast),background-color var(--t-fast) var(--ease)}
 .addhost svg{width:20px;height:20px}
+.tgh{margin-top:12px}
 .addhost.prs{border-radius:var(--r-md);transform:scale(.97);background:var(--s1)}
 /* 主機很多時：正常的主機一台一行（名稱、三個數字、箭頭），數字欄每一行對齊 */
 .hosts:empty{display:none}

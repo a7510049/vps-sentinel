@@ -406,6 +406,28 @@ def _bk_tar(dst, td):
     return labels, big
 
 
+def bk_verify(path, td):
+    """剛做好的備份馬上試開一次：解得開、每個檔案都讀得完，才算備份成功"""
+    chk = os.path.join(td, "check.tar.gz")
+    try:
+        vsbk_decrypt(path, chk, bk_key())
+        n = 0
+        with tarfile.open(chk, "r:gz") as t:
+            for m in t:
+                if m.isfile():
+                    f = t.extractfile(m)
+                    while f.read(1 << 20):
+                        pass
+                n += 1
+        if not n:
+            raise ValueError("裡面是空的")
+    except Exception as e:  # noqa: BLE001  （zlib 壞掉丟的不是 OSError）
+        raise OSError(f"試開備份檔失敗（{e}）") from e
+    finally:
+        if os.path.exists(chk):
+            os.remove(chk)
+
+
 def make_backup():
     """打包並加密一份這台的備份，回傳 (檔案路徑, 包含哪些東西, 跳過的大檔)"""
     folder = bk_dir(NAME, bk_learn_name("", NAME))
@@ -417,6 +439,7 @@ def make_backup():
             tgz = os.path.join(td, "backup.tar.gz")
             labels, big = _bk_tar(tgz, td)
             vsbk_encrypt(tgz, tmp, bk_key())
+            bk_verify(tmp, td)
         bk_own(tmp)
         os.replace(tmp, path)
     finally:
