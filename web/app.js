@@ -116,11 +116,13 @@ function flag(cc){
   if (!/^[A-Z]{2}$/.test(cc||"")) return "";
   const emo = String.fromCodePoint(...[...cc].map(c=>127397+c.charCodeAt(0)));
   if (FLAGFAIL[cc]) return `<span class="emoji">${emo}</span>`;
-  return `<img class="flag" src="https://flagcdn.com/w80/${cc.toLowerCase()}.png" alt="${emo}" title="${esc(regionOf(cc))}"
+  return `<img class="flag" src="/flag/${cc.toLowerCase()}.png" alt="${emo}" title="${esc(regionOf(cc))}"
     onerror="FLAGFAIL['${cc}']=1;this.outerHTML='<span class=emoji>${emo}</span>'">`;  /* 外層 .fw 會留著，發光不會跑掉 */
 }
 const regionOf = cc => { try { return REGION && /^[A-Z]{2}$/.test(cc) ? REGION.of(cc) : cc; } catch(e) { return cc; } };   // 國家代碼打錯也不會讓整頁打不開
-const place = s => s.geo ? [s.geo.cc ? regionOf(s.geo.cc) : "", s.geo.city].filter(Boolean).join(" ") : "";
+/* 地點：名稱裡已經有的國家、城市不再寫一次（「香港」不會寫成「香港／香港」，「日本」下面只寫「東京」） */
+const place = s => { if (!s.geo) return ""; const n = String(s.name || "");
+  return [s.geo.cc ? regionOf(s.geo.cc) : "", s.geo.city].filter(x => x && !(n && (n.includes(x) || x.includes(n)))).filter((x, i, a) => a.indexOf(x) === i).join(" "); };
 function when(t){ const d=new Date(t*1000), now=new Date();
   const hm=d.toLocaleTimeString("zh-TW",{hour:"2-digit",minute:"2-digit",hour12:false});
   return d.toDateString()===now.toDateString() ? `今天 ${hm}` : `${d.getMonth()+1}/${d.getDate()} ${hm}`; }
@@ -174,9 +176,15 @@ function noDup(s, p){
   return p.replace(/^處理器持續偏高 \d+(\.\d+)?%$/, "處理器持續偏高").replace(/^記憶體 \d+(\.\d+)?%$/, "記憶體快用完了")
     .replace(/^磁碟 (\S+) 剩下不多（\d+(\.\d+)?%）$/, (m, path) => d0 && d0.path === path ? "磁碟快滿了" : m);
 }
-function alerts(s){
+/* 處理器、記憶體、主要磁碟的問題：主機頁上那一格已經變紅，紅條就不再寫一次 */
+function tileKey(s, p){
+  p = String(p); if (/^處理器持續偏高 /.test(p)) return "cpu"; if (/^記憶體 \d/.test(p)) return "mem";
+  const m = p.match(/^磁碟 (\S+) 剩下不多/), d0 = disk0(s); return m && d0 && d0.path === m[1] ? "disk" : "";
+}
+const tileProb = s => Object.fromEntries((s.problems || []).map(p => [tileKey(s, p), 1]).filter(x => x[0]));
+function alerts(s, inTile){
   const k = t => esc(String(t).replace(/^\d+\s*|\s*[（(]?\d+(\.\d+)?\s*%[）)]?$/g, ""));   // 只拿掉會變的數字，名稱裡的數字要留（app-1、app-2 是兩件事）
-  const al = (s.problems||[]).map(p => noDup(s, String(p))).map(p=>`<div class="alert bad" data-key="b:${k(p)}">${I("warn")}${esc(p)}</div>`)
+  const al = (s.problems||[]).filter(p => !(inTile && tileKey(s, p))).map(p => noDup(s, String(p))).map(p=>`<div class="alert bad" data-key="b:${k(p)}">${I("warn")}${esc(p)}</div>`)
     .concat((s.notices||[]).map(p=>`<div class="alert warn" data-key="w:${k(p)}">${I("alert")}${esc(p)}</div>`));
   return al.length ? `<div class="alerts" data-key="al" data-keyed>${al.join("")}</div>` : "";
 }
@@ -471,8 +479,10 @@ function groupEv(ev){
   return out.map(x => x.hs.length > 1 ? {...x, k:"*" + Math.round(x.t0), n:1} : x);
 }
 const hm = t => new Date(t * 1000).toLocaleTimeString("zh-TW", {hour:"2-digit", minute:"2-digit", hour12:false});
-const evWho = e => e.hs && e.hs.length > 1 ? `<span class="eh" title="${esc(e.hs.join("、"))}">${esc(e.hs[0])}等 ${e.hs.length} 台</span>` : `<span class="eh">${esc(e.h)}</span>`;
-const evRow = (e, many, tf = ago) => `<div class="ev" data-key="${esc(e.k)}|${e.kind}:${esc(e.text)}"><span class="dot ${e.kind}"></span><div class="et"><div>${many ? evWho(e) : ""}${esc(e.text)}</div><div class="sub">${WORD[e.kind] || ""}・${tf(e.t)}${e.n > 1 ? `・共 ${e.n} 次` : ""}</div></div></div>`;
+const EVOPEN = new Set();                   // 好幾台合成一筆的事件：點開列出是哪幾台（記住哪幾筆是打開的，自動更新不會收起來）
+const evMany = e => e.hs && e.hs.length > 1;
+const evWho = e => evMany(e) ? `<button class="eh" data-evx="${esc(e.k)}" aria-expanded="${EVOPEN.has(e.k)}">${esc(e.hs[0])}等 ${e.hs.length} 台 <i>▾</i></button>` : `<span class="eh">${esc(e.h)}</span>`;
+const evRow = (e, many, tf = ago) => `<div class="ev${many && evMany(e) && EVOPEN.has(e.k) ? " open" : ""}" data-key="${esc(e.k)}|${e.kind}:${esc(e.text)}"><span class="dot ${e.kind}"></span><div class="et"><div>${many ? evWho(e) : ""}${esc(e.text)}</div>${many && evMany(e) ? `<div class="ehs"><div><div>${esc(e.hs.join("、"))}</div></div></div>` : ""}<div class="sub">${WORD[e.kind] || ""}・${tf(e.t)}${e.n > 1 ? `・共 ${e.n} 次` : ""}</div></div></div>`;
 const evList = (ev, many) => ev.length ? `<div class="evs" data-key="evs" data-keyed>${ev.map(e => evRow(e, many)).join("")}</div>` : `<div class="calm" data-key="calm">目前沒有事件</div>`;
 const dayOf = t => { const d = new Date(t * 1000), n = new Date(), y = new Date(n); y.setDate(n.getDate() - 1);
   return d.toDateString() === n.toDateString() ? "今天" : d.toDateString() === y.toDateString() ? "昨天" : `${d.getMonth() + 1} 月 ${d.getDate()} 日`; };
@@ -506,7 +516,7 @@ const subOf = s => s.online ? `<span title="核心版本 ${esc(s.kernel)}">${esc
 function hostBody(s, ph){
   let h = `<div class="hb" data-key="hb" data-keyed><div class="hhead" data-key="hh">${avatar(s)}<div class="nm"><h2 class="hname">${esc(s.name)}</h2><div class="hsub">${subOf(s)}</div></div>${ph ? "" : `<span class="hacts">${moreBtn(s)}</span>`}</div>`;
   if (!s.online) return h + offBox(s, 1) + `</div>`;   // 標題下面已經寫了「離線・多久前」
-  h += alerts(s) + tiles(s) + factsRow(s, ph);
+  h += alerts(s, 1) + tiles(s) + factsRow(s, ph);
   const hs = PREF.show.chart ? histFor(s) : null;
   if (PREF.show.chart) h += `<div class="cc" data-key="cp"><div class="cch"><span class="lg"><i style="background:${COL.cpu}"></i>處理器</span><span class="lg"><i style="background:${COL.mem}"></i>記憶體</span>${rangeSeg()}</div>
     <div class="cbox">${chartOr(hs, cid(s, ph ? "m" : "a"), x => [{data:x.cpu, color:COL.cpu, name:"處理器"}, {data:x.mem, color:COL.mem, name:"記憶體"}], {max:100, grid:1, fmt:v => Math.round(v) + "%", h: ph ? 130 : 150})}</div></div>`;
@@ -517,9 +527,9 @@ function hostBody(s, ph){
 }
 /* 四格：處理器、記憶體、磁碟、負載 */
 function tiles(s){
-  const d0 = disk0(s), l = +s.load[0] || 0, lr = l / (s.cores || 1), [lw, lt] = LOADW(lr);
+  const d0 = disk0(s), l = +s.load[0] || 0, lr = l / (s.cores || 1), [lw, lt] = LOADW(lr), tp = tileProb(s);
   const of = (a, b) => `${size(a)} / ${size(b)}`;
-  const t = (k, label, val, pct, sub, tt = tier(pct)) => `<div class="tile ${tt}" data-key="t:${k}"><div class="th">${IC(k)}${label}</div><div class="tv">${val}</div>${wave(pct, tt)}<div class="ts">${sub}</div></div>`;
+  const t = (k, label, val, pct, sub, tt = tp[k] ? "b" : tier(pct)) => `<div class="tile ${tt}" data-key="t:${k}"><div class="th">${IC(k)}${label}</div><div class="tv">${val}</div>${wave(pct, tt)}<div class="ts">${sub}</div></div>`;
   return `<div class="tiles" data-key="tiles">${t("cpu", "處理器", `${num(s.cpu)}<small>%</small>`, s.cpu, `${s.cores} 核`)}`
     + t("mem", "記憶體", `${num(s.mem.pct)}<small>%</small>`, s.mem.pct, of(s.mem.used, s.mem.total))
     + t("disk", "磁碟", `${num(d0.pct)}<small>%</small>`, d0.pct, of(d0.used, d0.total))
@@ -2675,6 +2685,9 @@ document.addEventListener("click", async e => {
   if (th) { if (TOOLH !== th.dataset.toolh) { TOOLH = th.dataset.toolh; store("vs-toolh", TOOLH); PSMOOTH = true; slideSel(() => render(LIST)); PSMOOTH = false; } pickShow(true); return; }
   const lf = t.closest("[data-logf]");
   if (lf) { if (LOGF !== lf.dataset.logf) { LOGF = lf.dataset.logf; slideSel(() => render(LIST)); } return; }
+  const ex = t.closest("[data-evx]");
+  if (ex) { const k = ex.dataset.evx, on = !EVOPEN.has(k); on ? EVOPEN.add(k) : EVOPEN.delete(k);
+    document.querySelectorAll("[data-evx]").forEach(b => { if (b.dataset.evx === k) { b.closest(".ev").classList.toggle("open", on); b.setAttribute("aria-expanded", on); } }); return; }
   const lhm = t.closest("[data-loghm]");
   if (lhm) return logHostMenu(lhm);
   const lh = t.closest("[data-logh]");
@@ -2807,7 +2820,7 @@ function preloadFlags(list){
   const ccs = [...new Set(list.map(s => s.geo && s.geo.cc).filter(c => /^[A-Z]{2}$/.test(c || "")))];
   return Promise.all(ccs.map(cc => new Promise(res => {
     const im = new Image(); im.onload = () => (im.decode ? im.decode().catch(()=>{}) : Promise.resolve()).then(res);
-    im.onerror = () => { FLAGFAIL[cc] = 1; res(); }; im.src = `https://flagcdn.com/w80/${cc.toLowerCase()}.png`;
+    im.onerror = () => { FLAGFAIL[cc] = 1; res(); }; im.src = `/flag/${cc.toLowerCase()}.png`;
   })));
 }
 /* 背景讀到的資料（24 小時／7 天的曲線）：等畫面空下來再換上去 */

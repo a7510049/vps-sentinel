@@ -79,3 +79,17 @@ class PeerCacheTest(Server):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class OfflineGeoTest(Server):
+    """連不上的主機照樣有上次的國旗和地點（只留國家、城市）"""
+    EXTRA = f"PEERS=dead=http://127.0.0.1:{DEAD}\n"
+    STATE = {"peer_name": {"dead": "英國"}, "peer_geo": {"dead": {"cc": "GB", "city": "倫敦", "ip": "1.2.3.4"}, "gone": {"cc": "JP"}}}
+
+    def test_offline_geo(self):
+        code, _, body = self.request("/api/all", TOKEN)
+        self.assertEqual(code, 200)
+        d = json.loads(body)[1]
+        self.assertFalse(d["online"])
+        self.assertEqual(d["name"], "英國")
+        self.assertEqual(d["geo"], {"cc": "GB", "city": "倫敦"})

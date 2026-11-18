@@ -249,6 +249,7 @@ def peer_remove(node):
         return False, f"無法寫入設定檔：{e}"
     PEER_SEEN.pop(node, None)
     PEER_NAME.pop(node, None)
+    PEER_GEO.pop(node, None)
     BEAT_SENT.pop(node, None)
     log(f"不再監看「{node}」")
     COL.add_event("info", f"不再監看「{node}」")

@@ -1,4 +1,6 @@
 /* ═════════ 共用規則（所有元件只能用這些值；完整說明見 DESIGN.md） ═════════ */
+/* 英數字型由主機自己給（Plus Jakarta Sans，SIL OFL），不用等 Google */
+@font-face{font-family:"Plus Jakarta Sans";font-style:normal;font-weight:200 800;font-display:swap;src:url(/font.woff2) format("woff2");unicode-range:U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD}
 :root{
   --font:"Plus Jakarta Sans",-apple-system,BlinkMacSystemFont,"PingFang TC","Noto Sans TC","Microsoft JhengHei",sans-serif;
   --r-xs:6px; --r-sm:12px; --r-md:16px; --r-lg:24px; --r-xl:28px; --r-2xl:40px; --r-pill:999px; --r-full:24px;   /* 圓角：連在一起的按鈕中間／小元件／欄位、選單／小卡片／卡片／按下去的卡片／膠囊／會變形的小按鈕變膠囊（48px 高以內；數字接近一半高度，變形才不會慢半拍） */
@@ -188,6 +190,7 @@ b,strong{font-weight:500}
 .ubtn.warn{background:var(--warn);color:var(--on-warn)}
 .ubtn.bad{background:var(--bad);color:var(--on-bad)}
 .ubtn.sm{--h:34px;padding:0 14px;font-size:var(--fs-s);flex:none}
+@media (pointer:coarse){.ubtn.sm::before{content:"";position:absolute;inset:-5px 0}}   /* 手機：看起來一樣大，手指按得到的範圍有 44 高 */
 .spin{width:14px;height:14px;border:2px solid currentColor;border-right-color:transparent;border-radius:50%;animation:spin .8s linear infinite;flex:none;display:inline-block}
 .linkish{color:var(--p);font-size:var(--fs-s);font-weight:500;padding:4px 6px;border-radius:var(--r-xs)}
 .linkish:disabled{color:var(--tx3)}
@@ -238,7 +241,7 @@ img.flag{width:28px;height:21px;object-fit:cover;border-radius:var(--r-xs);flex:
 .hb .lbl{margin:18px 4px 10px}
 .aside .lbl{margin:18px 8px 10px}
 .aside .lbl:first-child,.aside .wxw:empty+.lbl{margin-top:0}   /* 跟左邊「主機」同一條線 */
-.lbl button{color:var(--p);font-weight:500;padding:2px 4px;transition:opacity var(--t-mid) var(--ease)}
+.lbl button{color:var(--p);font-weight:500;padding:11px 8px;margin:-9px -4px;transition:opacity var(--t-mid) var(--ease)}
 .lbl button[disabled]{opacity:.45;cursor:default}
 .empty{color:var(--tx3);padding:28px 8px;text-align:center}
 
@@ -383,6 +386,13 @@ html:not(.full) .dock>.slide{background:none}
 .ev .et{min-width:0;overflow-wrap:anywhere}
 .ev .sub{margin-top:2px}
 .ev .eh{color:var(--tx2);margin-right:6px}
+.ev button.eh{color:var(--p);font:inherit;padding:10px 4px;margin:-10px 2px -10px -4px}   /* 「日本等 3 台 ▾」：點了列出是哪幾台 */
+.ev button.eh i{display:inline-block;font-style:normal;transition:transform var(--t-mid) var(--ease)}
+.ev.open button.eh i{transform:rotate(180deg)}
+.ev .ehs{display:grid;grid-template-rows:0fr;opacity:0;transition:grid-template-rows var(--t-mid) var(--ease),opacity var(--t-mid) var(--ease)}
+.ev .ehs>div{overflow:hidden;min-height:0}
+.ev.open .ehs{grid-template-rows:1fr;opacity:1}
+.ev .ehs>div>div{padding-top:4px;color:var(--tx2);font-size:var(--fs-s)}
 .day{font-size:var(--fs-s);font-weight:500;color:var(--tx3);margin:18px 8px 8px}
 .day:first-child{margin-top:4px}
 .calm{color:var(--tx3);padding:22px 16px;background:var(--card);border-radius:var(--r-lg);text-align:center}
@@ -649,7 +659,7 @@ button.li.prs,a.li.prs{border-radius:var(--r-lg);transform:scale(.98);background
 /* 同一排的卡片一樣高：三個數字和最下面那行貼齊底部，對齊；連不上的那張紅框撐滿 */
 .wall .hcard{display:flex;flex-direction:column}
 .wall .hcard>.mrows{margin-top:auto;padding-top:16px}
-.wall .hcard>.offline{flex:1;align-items:center}
+.wall .hcard>.offline{flex:1;display:grid;grid-template-columns:auto 1fr;align-content:center;align-items:start}   /* 卡片比較高時：整塊置中，圖示照樣對齊第一行 */
 .minis .addhost{height:52px}
 @media (min-width:1000px){.dash.d .minis{grid-template-columns:repeat(2,minmax(0,1fr))}}
 .dash.d .minis .mrows{grid-template-columns:repeat(3,72px)}

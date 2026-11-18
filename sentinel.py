@@ -45,7 +45,7 @@ from collections import deque
 from concurrent.futures import ThreadPoolExecutor
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
-VERSION = "3.91"
+VERSION = "3.92"
 
 # ───────────────────────── 哨兵備份檔（.vsbk）─────────────────────────
 # 哨兵專用的備份格式：外面是自己的檔案格式，裡面用的是成熟、標準的加密方法（不自己發明加密）：
@@ -754,7 +754,7 @@ TG_PART = int(os.environ.get("SENTINEL_TG_PART") or 45 * 1024 * 1024)   # 備份
 TG_PARTS_MAX = 20                                  # 最多切幾段（大約 900 MB）；再大就不傳 Telegram
 BK_SKIP_DIRS = {"cache", ".cache", "tmp", "log", "logs", "node_modules"}
 # 哨兵自己抓來的資料（機場起降的飛機資料庫、標誌、航班表、照片）：還原後會自己重抓，不用備份
-BK_REGEN = ("aircraft-db", "fly-logos", "fids", "fly-photos.json", "fly-aircraft.json", "peers-cache.json")
+BK_REGEN = ("aircraft-db", "fly-logos", "flags", "fids", "fly-photos.json", "fly-aircraft.json", "peers-cache.json")
 BK_RUN = threading.Lock()                         # 同一時間只跑一次備份
 BK_MAKE = threading.Lock()                        # 同一時間只打包一份
 BK = {"last": None, "ok_t": None, "day": None, "key_t": 0, "names": {}, "tg": {}, "running": False}  # 會存檔
@@ -834,6 +834,16 @@ def set_peer(name, url, token, force=False):
     return True, f"已更新「{name}」的連線網址", False
 PEER_SEEN = {}                                  # 其他主機最後一次連上的時間（會存檔）
 PEER_NAME = {}                                  # 其他主機最後一次連上時的名稱（連不上時照樣用它自己的名稱稱呼，會存檔）
+PEER_GEO = {}                                   # 其他主機最後一次連上時的國家、城市（連不上時照樣顯示國旗和地點，會存檔）
+
+
+def geo_keep(g):
+    """其他主機的國家、城市：只留顯示要用的兩個欄位（IP、電信商不存）"""
+    if not isinstance(g, dict) or not re.fullmatch(r"[A-Z]{2}", str(g.get("cc") or "")):
+        return None
+    return {"cc": g["cc"], "city": str(g.get("city") or "")[:40]}
+
+
 TG_SENT = {}                                    # 每台主機已經通知到哪一筆事件（事件時間，會存檔）
 TG_MSGS = []                                    # 傳出去的通知 [時間, 聊天, 訊息編號]，到期自動刪除（會存檔）
 TG_QUEUE = []                                   # 還沒傳出去的通知 [時間, 走哪個 Telegram, 內容]（會存檔）；""＝這台的，"w"＝主要主機給的
@@ -1036,7 +1046,7 @@ def include(name):
         exec(compile(f.read(), path, "exec"), globals())   # noqa: S102
 
 
-SRC_FILES = ["sentinel.py", "pair.py", "download.py", "backup.py", "fly.py", "web/index.html", "web/style.css", "web/app.js", "web/fly.js", "data/airports.tsv", "data/coast.tsv", "data/terrain.bin", "data/actypes.tsv", "data/apmap.tsv"]   # 程式本體（含機場起降）＋網頁三個檔＋機場資料、海岸線、地形、機型分類
+SRC_FILES = ["sentinel.py", "pair.py", "download.py", "backup.py", "fly.py", "web/index.html", "web/style.css", "web/app.js", "web/fly.js", "web/font.woff2", "data/airports.tsv", "data/coast.tsv", "data/terrain.bin", "data/actypes.tsv", "data/apmap.tsv"]   # 程式本體（含機場起降）＋網頁三個檔＋機場資料、海岸線、地形、機型分類
 
 
 def build_of(blobs):
@@ -1055,6 +1065,39 @@ def page_tag(data):
 FLY_JS = {"js": None, "v": ""}                  # 機場起降的畫面程式：另外下載（首頁不用等它）
 
 
+FONT = {"b": b""}                                # 英數字型檔（啟動時讀進來）
+FLAG_MISS = {}                                   # 抓不到的國旗：國家代碼 → 幾點以後再試
+
+
+def flag_img(cc):
+    """主機上存一份國旗（第一次用到才去 flagcdn 抓），網頁打開不用等外面的網站、也不會讓外面看到誰在看"""
+    fn = os.path.join(DATA_DIR, "flags", cc + ".png")
+    try:
+        with open(fn, "rb") as f:
+            old = f.read()
+        if time.time() - os.path.getmtime(fn) < 180 * 86400:
+            return old
+    except OSError:
+        old = None
+    if FLAG_MISS.get(cc, 0) > time.time():
+        return old
+    try:
+        url = (os.environ.get("SENTINEL_FLAG_URL") or "https://flagcdn.com/w80/{cc}.png").replace("{cc}", cc)
+        req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0 vps-sentinel"})
+        with urllib.request.urlopen(req, timeout=8) as r:
+            b = r.read(256 * 1024 + 1)
+        if len(b) > 256 * 1024 or not b.startswith(b"\x89PNG"):
+            raise ValueError("不是圖片")
+        os.makedirs(os.path.dirname(fn), exist_ok=True)
+        with open(fn + ".tmp", "wb") as f:
+            f.write(b)
+        os.replace(fn + ".tmp", fn)
+        return b
+    except Exception:  # noqa: BLE001
+        FLAG_MISS[cc] = time.time() + 3600
+        return old
+
+
 def load_page():
     """網頁放在 web/ 資料夾：啟動時把樣式和程式塞回 index.html；機場起降的 fly.js 另外給，網頁用到才下載"""
     def rd(p):
@@ -1064,6 +1107,11 @@ def load_page():
         html = rd("web/index.html").rstrip("\n")
         fly = rd("web/fly.js").encode("utf-8")
         FLY_JS.update(js=fly, v=page_tag(fly)[:12])
+        try:                                       # 英數字型（Plus Jakarta Sans 拉丁字母那一份，SIL OFL）：自己給，不用等 Google
+            with open(os.path.join(HERE, "web/font.woff2"), "rb") as f:
+                FONT["b"] = f.read()
+        except OSError:
+            FONT["b"] = b""
         js = rd("web/app.js").replace("/*@flyv*/", FLY_JS["v"])
         return html.replace("/*@style.css*/\n", rd("web/style.css")).replace("/*@app.js*/\n", js)
     except OSError as e:
@@ -2491,6 +2539,7 @@ class Collector:
             names = {p["name"] for p in PEERS}           # 已經從設定拿掉的主機就不留了
             PEER_SEEN.update({k: float(v) for k, v in (st.get("peer_seen") or {}).items() if k in names})
             PEER_NAME.update({k: str(v)[:40] for k, v in (st.get("peer_name") or {}).items() if k in names and v})
+            PEER_GEO.update({k: geo_keep(v) for k, v in (st.get("peer_geo") or {}).items() if k in names and geo_keep(v)})
             TG_SENT.update({k: float(v) for k, v in (st.get("tg_sent") or {}).items() if k == "" or k in names})
             TG_MSGS.extend(list(m) for m in (st.get("tg_msgs") or []) if len(m) == 3)
             TG_QUEUE.extend(list(q) for q in (st.get("tg_queue") or []) if isinstance(q, list) and len(q) == 3)
@@ -2510,7 +2559,7 @@ class Collector:
             with self.lock:
                 st = {"v": 1, "saved": time.time(), "boot": boot_id(), "hist": list(self.hist), "h24": list(self.h24), "h7d": list(self.h7d),
                       "events": list(self.events), "traffic": self.traffic,
-                      "prev_keys": self.prev_keys, "peer_seen": dict(PEER_SEEN), "peer_name": dict(PEER_NAME),
+                      "prev_keys": self.prev_keys, "peer_seen": dict(PEER_SEEN), "peer_name": dict(PEER_NAME), "peer_geo": dict(PEER_GEO),
                       "tg_sent": dict(TG_SENT), "tg_msgs": list(TG_MSGS), "tg_queue": list(TG_QUEUE),
                       "backup": {k: BK[k] for k in ("last", "ok_t", "day", "key_t", "names", "tg")}}
                 with KEEP_LK:
@@ -2896,11 +2945,14 @@ def fetch_peer(p, since=0):
         PEER_SEEN[p["name"]] = time.time()
         if isinstance(data["name"], str):
             PEER_NAME[p["name"]] = data["name"][:40]
+        g = geo_keep(data.get("geo"))
+        if g:
+            PEER_GEO[p["name"]] = g
         return data
     except Exception as e:  # noqa: BLE001
         return {"name": PEER_NAME.get(p["name"]) or BK["names"].get(p["name"]) or p["name"], "node": p["name"], "online": False, "level": "bad",
                 "problems": ["連不上"], "error": peer_error(e, p["url"]), "last_seen": PEER_SEEN.get(p["name"]),
-                "peer_url": p["url"]}
+                "geo": PEER_GEO.get(p["name"]), "peer_url": p["url"]}
 
 
 def peer_error(e, url):
@@ -3015,7 +3067,8 @@ def peer_get(p, fresh=False):
         return fut.result(timeout=8) if fut else c["d"]
     except Exception:  # noqa: BLE001  逾時：先當連不上，背景那次問完會更新
         return c.get("d") or {"name": PEER_NAME.get(p["name"]) or p["name"], "node": p["name"], "online": False, "level": "bad",
-                              "problems": ["連不上"], "error": "等太久沒有回應", "last_seen": PEER_SEEN.get(p["name"]), "peer_url": p["url"]}
+                              "problems": ["連不上"], "error": "等太久沒有回應", "last_seen": PEER_SEEN.get(p["name"]),
+                              "geo": PEER_GEO.get(p["name"]), "peer_url": p["url"]}
 
 
 def peer_cache_path():
@@ -3678,7 +3731,7 @@ class Handler(BaseHTTPRequestHandler):
             self.send_header("Content-Length", str(len(data)))
         if tag:
             self.send_header("ETag", f'W/"{tag}"')
-        self.send_header("Cache-Control", "max-age=86400" if cache else "no-cache" if tag else "no-store")
+        self.send_header("Cache-Control", f"max-age={86400 if cache is True else cache}" if cache else "no-cache" if tag else "no-store")   # cache：True＝一天，數字＝幾秒
         self.send_header("X-Content-Type-Options", "nosniff")
         self.send_header("X-Frame-Options", "DENY")              # 不讓別的網站把哨兵嵌進去騙你點按鈕
         self.send_header("Content-Security-Policy", "frame-ancestors 'none'" + csp)
@@ -3914,6 +3967,12 @@ class Handler(BaseHTTPRequestHandler):
             return self.send(200, ICON_PNG_512, "image/png", cache=True)
         if path in ("/icon.svg", "/favicon.ico"):
             return self.send(200, ICON, "image/svg+xml", cache=True)
+        if path == "/font.woff2":                  # 英數字型（公開的，不用登入）
+            return self.send(200, FONT["b"], "font/woff2", cache=30 * 86400) if FONT["b"] else self.send(404, '{"error":"找不到"}')
+        m = re.fullmatch(r"/flag/([a-z]{2})\.png", path)
+        if m:                                      # 國旗（公開的，不用登入）
+            b = flag_img(m[1])
+            return self.send(200, b, "image/png", cache=30 * 86400) if b else self.send(404, '{"error":"找不到"}')
         if path == "/api/history":
             if not self.authed():
                 time.sleep(1)
