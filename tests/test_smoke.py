@@ -134,6 +134,14 @@ class SmokeTest(Server):
         json.loads(body)
         _, _, body = self.request("/icon-512.png")
         self.assertTrue(body.startswith(b"\x89PNG"))
+        code, headers, body = self.request("/font.woff2")      # 英數字型：主機自己給，不用等 Google
+        self.assertEqual(code, 200)
+        self.assertEqual(headers["Content-Type"], "font/woff2")
+        self.assertTrue(body.startswith(b"wOF2"))
+        self.assertIn("max-age=2592000", headers["Cache-Control"])
+        for bad in ("/flag/JP.png", "/flag/jpn.png", "/flag/../x.png"):   # 國旗只認兩個小寫字母
+            with self.subTest(path=bad):
+                self.assertEqual(self.request(bad)[0], 404)
 
     def test_api_needs_token(self):
         for path in ("/api/status", "/api/all", "/api/history"):
@@ -221,3 +229,28 @@ class RebootAndTokenTest(Server):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class FlagTest(Server):
+    """國旗由主機抓一次存起來（測試用本機檔案代替 flagcdn）"""
+    @classmethod
+    def setUpClass(cls):
+        cls.src = tempfile.TemporaryDirectory()
+        with open(os.path.join(cls.src.name, "jp.png"), "wb") as f:
+            f.write(b"\x89PNG\r\n\x1a\nfake")
+        cls.ENV = {"SENTINEL_FLAG_URL": "file://" + cls.src.name + "/{cc}.png"}
+        super().setUpClass()
+
+    @classmethod
+    def tearDownClass(cls):
+        super().tearDownClass()
+        cls.src.cleanup()
+
+    def test_flag(self):
+        code, headers, body = self.request("/flag/jp.png")
+        self.assertEqual(code, 200)
+        self.assertEqual(headers["Content-Type"], "image/png")
+        self.assertTrue(body.startswith(b"\x89PNG"))
+        os.remove(os.path.join(self.src.name, "jp.png"))     # 來源不見了：照樣給存著的那份
+        self.assertEqual(self.request("/flag/jp.png")[0], 200)
+        self.assertEqual(self.request("/flag/xx.png")[0], 404)

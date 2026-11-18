@@ -25,6 +25,7 @@ fly.py             機場起降、分享的後端；sentinel.py 用 include("fly
 web/index.html     網頁骨架；/*@style.css*/ 和 /*@app.js*/ 兩個記號會在啟動時被換成對應檔案的內容
 web/style.css      所有樣式，最前面的 :root 是共用設計規則
 web/app.js         所有畫面邏輯與動畫；機場起降的 web/fly.js 用到才下載（`flyLib`／`flyEnter`，`/fly.js?v=` 版本由主機換掉 /*@flyv*/；用過機場起降的首頁好了就先在背景下載；跟 app.js 共用名字，最外層不能重複）
+web/font.woff2     英數字型（Plus Jakarta Sans 拉丁字母那份，SIL OFL；主機給 /font.woff2，不用等 Google）
 web/fly.js         機場起降、整頁雷達、分享的畫面（主機另外給 /fly.js；app.js 一定要先有的 FLYS、SHARE、flyHM 放在 app.js；style_check、test_webjs 會跟 app.js 一起檢查）
 DESIGN.md          美術設計規範
 README.md          GitHub 首頁的介紹（功能改了要跟著改）；docs/ 放介紹用的截圖
@@ -81,6 +82,7 @@ android/           安卓 App：全螢幕打開主機的網頁（記住網址）
 - 機場起降分享（`share_` 開頭的函式在 fly.py、web/fly.js 的 `SHARE`、`flyShare`）：「分享」先跳出視窗選給誰、能看多久（`SHARE_TIMES`：1 小時～7 天）、幾支手機（`SHARE_DEVS`：1／3／不限）、四個機場或只看目前這個（`ap`，`/api/flights` 會把機場換成它，朋友那邊不能換機場 `SHAREAP`），選過的記在瀏覽器；同一個視窗下面列出還沒過期的分享（`op:list`，打開過幾支）、可以提前收回（`op:del`）；產生 `/s/八碼` 連結（內部代碼是 `fs_八碼`；舊的 `/fly#s=fs_…` 照樣能用；預設時間 `SENTINEL_SHARE_SECS`），這兩個網址給 `share_page()`：標題「機場起降」、沒有哨兵的開場畫面和圖示，直接進機場起降，存雜湊在 `DATA_DIR/fly-share.json`（舊版 `dev` 是字串，`share_fix` 換成清單）；打開的裝置用 `/api/fly-claim` 拿到自己的通行碼（存在那台的瀏覽器），名額用完就只認這幾支；`X-Share: 代碼:通行碼` 只能讀 `/api/flights`
 - Telegram 通知排隊（`tg_send`／`tg_flush`、`TG_QUEUE`，存在 state.json）：連不上、429、5xx（`TG_AGAIN`）先留著，每 30 秒照順序補傳，晚 2 分鐘以上的註明幾點，一天還傳不出去就丟掉；密碼錯、被封鎖直接丟掉；驗證碼這類即時的不排隊
 - 其他主機的狀態（`peer_get`／`PEER_CACHE`）：網頁 `/api/all` 直接拿存著的，超過 2 秒才在背景重問，同一台同時只問一次；連不上的越隔越久（最多 10 秒）才再問；通知那邊（`alert_loop`）用 `all_status(fresh=True)` 等最新的
+- 國旗由主機給（`/flag/jp.png`、`flag_img`：第一次用到才抓 flagcdn，存在 `DATA_DIR/flags/`，180 天重抓，不備份；測試用 SENTINEL_FLAG_URL），網頁打開不用等外面的網站；連不上的其他主機照樣有上次的國旗和城市（`PEER_GEO`、`geo_keep`，存在 state.json）
 - 網頁 `/` 帶 ETag（`page_tag`），沒改就回 304，瀏覽器用存的那份；Caddy 壓縮時加的 `-gzip` 會先拿掉再比
 - 省流量：30 分鐘圖表資料只傳新的那一段（網頁 `/api/all?since={"@self"或代號: 最後時間}`、主要主機問其他台 `/api/status?since=`，回 `hist.part`；`hist_cut`／`hist_join`，網頁 `HIST`／`histJoin` 接起來）；網頁、程式、API 回應哨兵自己壓縮（`gz_of`、`GZ_TYPES`，沒經過 Caddy 也有；主機之間要求壓縮）；網頁看不到（`document.hidden`）時不更新，回來馬上更新
 - 重新啟動（例如更新完）不用等其他主機：關掉前把其他主機最後的狀態存在 `DATA_DIR/peers-cache.json`（`peer_cache_save`／`peer_cache_load`，網址改了不用；不備份），啟動後先給這份、背景馬上重問
