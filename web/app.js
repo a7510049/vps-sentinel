@@ -47,6 +47,7 @@ const P = {
   flag:'<path d="M4 22V4"/><path d="M4 4h13l-2.5 4.5L17 13H4"/>',
   alert:'<circle cx="12" cy="12" r="9.5"/><path d="M12 7.5v5.5M12 16.5h.01"/>',
   gear:'<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>',
+  devices:'<rect x="2" y="4" width="14" height="10" rx="2"/><path d="M5 18h8"/><rect x="16" y="9" width="6" height="11" rx="1.5"/><path d="M19 17h.01"/>',
   logout:'<path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9"/>',
   edit:'<path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/>',
   more:'<circle cx="5" cy="12" r="1.2"/><circle cx="12" cy="12" r="1.2"/><circle cx="19" cy="12" r="1.2"/>',
@@ -116,9 +117,15 @@ function flag(cc){
   if (!/^[A-Z]{2}$/.test(cc||"")) return "";
   const emo = String.fromCodePoint(...[...cc].map(c=>127397+c.charCodeAt(0)));
   if (FLAGFAIL[cc]) return `<span class="emoji">${emo}</span>`;
-  return `<img class="flag" src="/flag/${cc.toLowerCase()}.png" alt="${emo}" title="${esc(regionOf(cc))}"
-    onerror="FLAGFAIL['${cc}']=1;this.outerHTML='<span class=emoji>${emo}</span>'">`;  /* 外層 .fw 會留著，發光不會跑掉 */
+  return `<img class="flag" src="/flag/${cc.toLowerCase()}.png" alt="${emo}" title="${esc(regionOf(cc))}" data-cc="${cc}">`;  /* 外層 .fw 會留著，發光不會跑掉 */
 }
+/* 國旗抓不到：換成表情符號（網頁只跑登記過的程式，標籤上不能直接寫程式） */
+document.addEventListener("error", e => {
+  const im = e.target;
+  if (!(im instanceof HTMLImageElement) || !im.classList.contains("flag") || !im.dataset.cc) return;
+  FLAGFAIL[im.dataset.cc] = 1;
+  im.outerHTML = `<span class="emoji">${esc(im.alt)}</span>`;
+}, true);
 const regionOf = cc => { try { return REGION && /^[A-Z]{2}$/.test(cc) ? REGION.of(cc) : cc; } catch(e) { return cc; } };   // 國家代碼打錯也不會讓整頁打不開
 /* 地點：名稱裡已經有的國家、城市不再寫一次（「香港」不會寫成「香港／香港」，「日本」下面只寫「東京」） */
 const place = s => { if (!s.geo) return ""; const n = String(s.name || "");
@@ -404,7 +411,7 @@ const COL = {cpu:"var(--c-cpu)", mem:"var(--c-mem)", rx:"var(--c-rx)", tx:"var(-
 /* 概念 → [顏色樣式, 圖示] */
 const ICO = {cpu:["cpu","cpu"], mem:["mem","mem"], disk:["disk","disk"], load:["load","gauge"], down:["down","down"], up:["up","up"],
   net:["net","net"], trend:["trend","trend"], month:["month","month"], box:["box","box"], bell:["bell","bell"], info:["info","info"],
-  flag:["flag","flag"], keep:["keep","shield"], key:["key","key"], finger:["finger","finger"], pin:["pin","pin"], link:["link","link"], archive:["archive","archive"], sun:["sun","sun"], quote:["quote","quote"], dl:["dl","dl"], cloud:["cloud","cloud"], fly:["fly","plane"]};
+  flag:["flag","flag"], keep:["keep","shield"], key:["key","key"], finger:["finger","finger"], pin:["pin","pin"], link:["link","link"], archive:["archive","archive"], sun:["sun","sun"], quote:["quote","quote"], dl:["dl","dl"], cloud:["cloud","cloud"], fly:["fly","plane"], devices:["devices","devices"]};
 const IC = (k, cls="sm") => `<span class="ico ${cls} ${ICO[k][0]}">${I(ICO[k][1])}</span>`;
 
 /* ═════════ 共用的小元件 ═════════ */
@@ -645,9 +652,11 @@ function renderDesk(list, time){
     <div class="rfoot"><button class="iconbtn" data-refresh title="重新整理">${I("upd")}</button></div></nav>
     <main class="view v-${TAB}" data-key="v:${TAB}">${page(list, time)}</main>${s ? detail(s) : ""}</div>`;
 }
+/* 這台還沒設定 Telegram：主機下面提醒一行，點了直接設定 */
+const tgHint = list => list.some(x => !x.node && x.tg_off) ? `<div class="group tgh" data-key="tgh"><button class="li" data-tg>${IC("bell", "")}<span class="lab">Telegram 通知<small>還沒設定，出事不會通知你</small></span>${CHEV}</button></div>` : "";
 function homePhone(list, time){
   const ev = groupEv(allEvents(list)).slice(0, 3);
-  return hero(list, time) + `<div class="lbl" data-key="lh">主機</div>${hostLists(list, "")}
+  return hero(list, time) + `<div class="lbl" data-key="lh">主機</div>${hostLists(list, "")}${tgHint(list)}
     <div class="lbl" data-key="le">最近發生${ev.length ? `<button data-tab="log">全部紀錄</button>` : ""}</div>${evList(ev, list.length > 1)}`;
 }
 /* 電腦一排放得下幾台（每欄至少 360 寬）：內容最寬 1520、右邊欄 340；主機比這個多就改成小卡片，點了才看整頁 */
@@ -659,7 +668,7 @@ function homeDesk(list, time){
     ? hostLists(list, " wall")
     : `<div class="cols" data-key="cols" data-keyed data-grid style="--n:${n}">${list.map((s, i) => `<section class="hp ${lvOf(s)}" data-key="${esc(keyOf(s))}" style="--i:${i}">${hostBody(s, false)}</section>`).join("")}${addHostBtn("addhost")}</div>`;
   return `<div class="dhome" data-key="dh">${hero(list, time)}<div class="dmain" data-key="dm"><div class="lbl" data-key="lh">主機</div>${hosts}</div>
-    <aside class="aside" data-key="as"><div class="wxw">${greet().wx}</div><div class="lbl">最近發生${ev.length ? `<button data-tab="log">全部紀錄</button>` : ""}</div>${evList(ev, list.length > 1)}</aside></div>`;
+    <aside class="aside" data-key="as"><div class="wxw">${greet().wx}</div>${tgHint(list)}<div class="lbl">最近發生${ev.length ? `<button data-tab="log">全部紀錄</button>` : ""}</div>${evList(ev, list.length > 1)}</aside></div>`;
 }
 /* 那台主機的整頁（從卡片的位置展開；電腦上左邊的分頁列留著） */
 function detail(s){
@@ -798,7 +807,7 @@ function setPage(list){
       <div class="li col"><span class="lab">文字大小</span>${seg("size", [["s", "小"], ["m", "中"], ["l", "大"]])}</div>
       <label class="li"><span class="lab">動畫</span>${tog("motion", "動畫")}</label>
       <button class="li" data-shows>${IC("trend", "")}<span class="lab">要顯示的內容<small class="showst">${showSum()}</small></span>${CHEV}</button></div>`;
-  const sec = `<div class="lbl" data-key="lsec">通知與登入</div><div class="group" data-key="g-sec">${go("data-tg", "bell", "Telegram 通知", "tgst")}${PK_OK && self ? go("data-pk", "finger", "手機金鑰登入", "pkst") : ""}${self ? go("data-pin", "pin", "PIN 碼登入", "pinst") : ""}</div>`
+  const sec = `<div class="lbl" data-key="lsec">通知與登入</div><div class="group" data-key="g-sec">${go("data-tg", "bell", "Telegram 通知", "tgst")}${PK_OK && self ? go("data-pk", "finger", "手機金鑰登入", "pkst") : ""}${self ? go("data-pin", "pin", "PIN 碼登入", "pinst") + go("data-sess", "devices", "登入的裝置", "sessst") : ""}</div>`
     + (self && !SHARE ? `<div class="lbl" data-key="lsky">機場起降</div><div class="group" data-key="g-sky">${go("data-sky", "fly", "OpenSky 帳號", "skyst")}</div>` : "");
   const out = `<div class="sp" data-key="sp"></div><div class="group" data-key="g-out"><button class="li" data-logout><span class="ico info">${I("logout")}</span><span class="lab">登出</span></button>
       <button class="li" data-reset><span class="ico info">${I("upd")}</span><span class="lab">恢復預設值<small>外觀設定只存在這台裝置</small></span></button></div>`;
@@ -1302,7 +1311,7 @@ const view = () => $("#app .view");
 function loadStatus(){
   const r = view(); if (!r || !r.querySelector("[data-ld]")) return;
   r.querySelectorAll("[data-ld]").forEach(x => x.removeAttribute("data-ld"));
-  tgStatus(r); selfStatus(r); pkStatus(r); pinStatus(r); pairStatus(r); bkStatus(r); skyStatus(r);
+  tgStatus(r); selfStatus(r); pkStatus(r); pinStatus(r); sessStatus(r); pairStatus(r); bkStatus(r); skyStatus(r);
 }
 /* 手機：點主機卡片，那台的整頁從卡片的位置長出來；返回時縮回卡片 */
 let DET = "", DETX = false, OPENR = null;
@@ -1867,7 +1876,7 @@ async function skyModal(){
 /* 換密碼：換好後顯示新密碼給你複製，這台裝置會自動改用新密碼 */
 async function newToken(node, label){
   const ok = await modal({icon:"key", cls:"warn", title:`換掉「${label}」的密碼？`,
-    text:"其他裝置要用新密碼重新登入。", ok:"換新密碼"});
+    text:"其他裝置都會登出，要用新密碼重新登入。", ok:"換新密碼"});
   if (!ok) return;
   let d = {};
   try {
@@ -1877,7 +1886,7 @@ async function newToken(node, label){
     if (!r.ok || !d.ok || !d.token) return toast(d.message || "換密碼失敗", "bad");
   } catch(e) { return toast("連線失敗，請稍後再試", "bad"); }
   if (!node) {
-    setTok(d.token);
+    setTok(d.sess || d.token);
     if (LIST.some(x => !x.node && x.cloud))          // 這台裝置的雲端硬碟通行證也換新
       fetch("/api/cloud-login", {method:"POST", headers:{"X-Token":getTok()}}).catch(() => {});
   }
@@ -1912,6 +1921,13 @@ function devName(){
   const u = navigator.userAgent;
   return /iPhone/.test(u) ? "iPhone" : /iPad/.test(u) ? "iPad" : /Android/.test(u) ? "Android 手機" : /Mac/.test(u) ? "Mac" : /Windows/.test(u) ? "Windows 電腦" : "我的裝置";
 }
+/* 登入的裝置清單上的名字：裝置＋瀏覽器（安卓 App 寫 App） */
+function devLabel(){
+  const u = navigator.userAgent;
+  const b = typeof VSApp !== "undefined" || /; wv\)/.test(u) ? "App" : /Edg\//.test(u) ? "Edge" : /Firefox|FxiOS/.test(u) ? "Firefox"
+    : /Chrome|CriOS/.test(u) ? "Chrome" : /Safari/.test(u) ? "Safari" : "";
+  return devName() + (b ? "・" + b : "");
+}
 async function pkRegister(name){
   const b = await pkCall("/api/passkey", {action:"begin"}, 1);
   if (!b.ok) throw new Error(b.message || "沒辦法開始登記");
@@ -1931,7 +1947,7 @@ async function pkLogin(){
   if (!b.challenge) throw new Error("主機還沒更新到新版");
   const c = await navigator.credentials.get({publicKey:{challenge:ub(b.challenge), rpId:b.rp, timeout:120000, userVerification:"required"}});
   const d = await pkCall("/api/passkey-login", {action:"finish", id:bu(c.rawId), clientDataJSON:bu(c.response.clientDataJSON),
-    authenticatorData:bu(c.response.authenticatorData), signature:bu(c.response.signature)});
+    authenticatorData:bu(c.response.authenticatorData), signature:bu(c.response.signature), keep:REM, dev:devLabel()});
   if (!d.ok || !d.token) throw new Error(d.message || "登入失敗");
   return d.token;
 }
@@ -1987,6 +2003,42 @@ async function pkModal(){
         keys = d.keys || []; store("vps-pk", "1"); toast(d.message);
       } catch(err) { msg.className = "msg bad"; msg.textContent = pkErr(err); }
       busy = false; draw();
+    });
+  });
+}
+
+/* ═════════ 登入的裝置：每台裝置登入後拿到自己的鑰匙，可以單獨登出一台 ═════════ */
+const sessCall = body => pkCall("/api/sessions", body, 1);
+async function sessStatus(root){
+  const el = root.querySelector(".sessst"); if (!el) return;
+  try { const d = await sessCall({action:"list"}); txt(el, `${(d.list || []).length || 1} 台`); }
+  catch(e) { txt(el, e.message); }
+}
+async function sessModal(){
+  const v = document.createElement("div"); v.className = "veil";
+  v.innerHTML = `<div class="dialog pkd">${IC("devices","big")}<h3>登入的裝置</h3>
+    <p>手機掉了，在這裡登出它</p>
+    <div class="form"><div class="pklist"></div><div class="msg"></div></div>
+    <div class="btns"><button class="ubtn ghost" data-r="0">關閉</button></div></div>`;
+  $("#layer").appendChild(v);
+  const list = v.querySelector(".pklist"), msg = v.querySelector(".msg");
+  let rows = [], busy = false;
+  const draw = () => swapHTML(list, rows.map(x => `<div class="pkrow"><span>${esc(x.dev)}<small>${x.me ? "這台裝置" : ago(x.seen) + "用過"}・${esc(x.how || "密碼")}登入</small></span>
+      ${x.me ? "" : `<button type="button" class="iconbtn" data-del="${esc(x.id)}" data-name="${esc(x.dev)}" title="登出這台">${I("x")}</button>`}</div>`).join(""));
+  try { rows = (await sessCall({action:"list"})).list || []; draw(); }
+  catch(e) { msg.className = "msg bad"; msg.textContent = e.message; }
+  return new Promise(res => {
+    const done = () => { if (v._d) return; v._d = 1; v.classList.add("closing"); setTimeout(() => { v.remove(); res(); }, 360); };
+    v._esc = done;
+    v.addEventListener("click", async e => {
+      if (e.target === v || e.target.closest("[data-r]")) return done();
+      const del = e.target.closest("[data-del]");
+      if (!del || busy) return;
+      if (!await modal({icon:"logout", cls:"bad", title:`登出「${del.dataset.name}」？`, text:"那台要重新登入才能再用。", ok:"登出"})) return;
+      busy = true;
+      const d = await sessCall({action:"del", id:del.dataset.del}).catch(err => ({message:err.message}));
+      busy = false;
+      if (d.ok) { rows = d.list || []; draw(); toast(`已登出「${del.dataset.name}」`); } else toast(d.message || "登出失敗", "bad");
     });
   });
 }
@@ -2641,14 +2693,15 @@ let REM = true, PIN_ON = false;
 /* 輸入 4～8 位數字、主機又有設定 PIN 碼：當成 PIN 碼；其他都當成存取密碼 */
 async function doLogin(){
   const v = $("#tok").value.trim();
-  if (!(PIN_ON && /^\d{4,8}$/.test(v))) { window._fresh = true; setTok(v, REM); return tick(); }   // 用密碼登入才把 PIN 碼輸錯的次數歸零
+  const pin = PIN_ON && /^\d{4,8}$/.test(v);
   const b = $("#app [data-login]"); b.disabled = true;
   let d = {};
-  try { const r = await fetch("/api/pin-login", {method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({pin:v})});
+  try { const r = await fetch(pin ? "/api/pin-login" : "/api/login", {method:"POST", headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({[pin ? "pin" : "pw"]:v, keep:REM, dev:devLabel()})});
     d = await r.json().catch(() => ({})); }
   catch(e) { d = {message:"連線失敗，請稍後再試"}; }
-  if (d.ok && d.token) { setTok(d.token, REM); return tick(); }
-  login(d.message || "PIN 碼不對");
+  if (d.ok && d.token) { if (!pin) window._fresh = true; setTok(d.token, REM); return tick(); }   // 用密碼登入才把 PIN 碼輸錯的次數歸零
+  login(d.message || (pin ? "PIN 碼不對" : "密碼不對，再試一次"));
 }
 const pkBtn = `<button class="ubtn ghost pkbtn" data-pklogin>${I("finger")}用手機金鑰登入</button>`;
 async function pkLoginClick(b){
@@ -2678,7 +2731,7 @@ document.addEventListener("click", async e => {
   if (tf) return trafficModal(tf.dataset.traffic, tf.dataset.label);
   if (t.closest("[data-refresh]")) return refreshNow(t.closest("[data-refresh]"));
   if (t.closest("[data-logout]")) {
-    if (await modal({icon:"logout", cls:"theme", title:"要登出嗎？", text:"", ok:"登出"})) { setTok(""); LIST = []; clearTimeout(timer); DET = ""; showBack(); document.documentElement.classList.remove("lock"); login(); }
+    if (await modal({icon:"logout", cls:"theme", title:"要登出嗎？", text:"", ok:"登出"})) { sessCall({action:"out"}).catch(() => {}); setTok(""); LIST = []; clearTimeout(timer); DET = ""; showBack(); document.documentElement.classList.remove("lock"); login(); }
     return;
   }
   const th = t.closest("[data-toolh]");
@@ -2755,6 +2808,7 @@ document.addEventListener("click", async e => {
   if (t.closest("[data-sky]")) return skyModal().then(() => skyStatus(view()));
   if (t.closest("[data-pk]")) return pkModal().then(() => pkStatus(view()));
   if (t.closest("[data-pin]")) return pinModal().then(() => pinStatus(view()));
+  if (t.closest("[data-sess]")) return sessModal().then(() => sessStatus(view()));
   if (t.closest("[data-shows]")) return showsModal();
   if (t.closest("[data-pair]")) return pairModal().then(() => pairStatus(view()));
   const bk = t.closest("[data-bk]");
@@ -2871,6 +2925,17 @@ function histJoin(list){
   for (const k in HIST) if (!seen.has(k)) delete HIST[k];
 }
 let TICKID = 0;
+/* 舊版存著的存取密碼、安裝時給的一鍵登入網址：換成這台裝置自己的登入鑰匙，瀏覽器裡就不再留著密碼 */
+async function upgradeTok(){
+  let r;
+  try { r = await fetch("/api/login", {method:"POST", headers:{"Content-Type":"application/json"}, cache:"no-store",
+    body:JSON.stringify({pw:getTok(), keep:!!store(KEY), dev:devLabel()})}); }
+  catch(e) { return true; }                                     // 連不上：照舊用，等一下 tick 自己會處理
+  if (r.status === 401) { setTok(""); endSplash(); login("密碼不對，再試一次"); return false; }
+  const d = await r.json().catch(() => ({}));
+  if (d.ok && d.token) setTok(d.token);
+  return true;
+}
 async function tick(){
   clearTimeout(timer);
   const id = ++TICKID;                          // 同時有好幾個在讀：只用最新的那一次，舊的結果不畫
@@ -2878,12 +2943,13 @@ async function tick(){
   if (rq) { RSW.code = rq.trim().toUpperCase(); sessionStorage.setItem("vs-rsw", RSW.code); history.replaceState(null, "", location.pathname); }
   if (RSW.code) return restoreScreen();
   if (!getTok()) { endSplash(); return login(); }
+  if (!/^vss_/.test(getTok()) && !await upgradeTok()) return;
   if (document.hidden && LIST.length) return true;   // 已經切到背景：不抓也不畫，回來時馬上更新
   try {
     if (!BOOTED) splashMsg("讀取主機狀態…");
     const since = Object.fromEntries(Object.entries(HIST).map(([k, h]) => [k, h.t[h.t.length - 1]]).filter(x => x[1]));
     const r = await fetch("/api/all" + (Object.keys(since).length ? "?since=" + encodeURIComponent(JSON.stringify(since)) : ""), {headers:{"X-Token":getTok()}, cache:"no-store", signal: AbortSignal.timeout ? AbortSignal.timeout(20000) : undefined});   // 網路卡住最多等 20 秒，不會一直轉
-    if (r.status === 401) { setTok(""); LIST = []; for (const k in HIST) delete HIST[k]; endSplash(); return login("密碼不對，再試一次"); }
+    if (r.status === 401) { const was = getTok(); setTok(""); LIST = []; for (const k in HIST) delete HIST[k]; endSplash(); return login(/^vss_/.test(was) ? "請重新登入" : "密碼不對，再試一次"); }
     const data = await r.json();
     if (id !== TICKID || !getTok()) return true;
     histJoin(data);

@@ -39,9 +39,11 @@ class PinTest(Server):
         with open(self.pin_file(), encoding="utf-8") as f:
             self.assertNotIn("4826", f.read())                     # 存的是雜湊，不是 PIN 碼本身
 
-        code, d = self.call("/api/pin-login", {"pin": "4826"})
+        code, d = self.call("/api/pin-login", {"pin": "4826", "dev": "iPhone・Safari"})
         self.assertEqual(code, 200)
-        self.assertEqual(d["token"], TOKEN)
+        self.assertTrue(d["token"].startswith("vss_"))              # 拿到的是這台裝置自己的鑰匙，不是存取密碼
+        self.assertNotEqual(d["token"], TOKEN)
+        self.assertEqual(self.call("/api/sessions", {"action": "list"}, d["token"])[0], 200)
 
         # 連續輸錯 5 次：暫停，連對的也不能用
         for i in range(4):
