@@ -592,7 +592,7 @@ function radarView(cv, full){
           const y0 = Math.max(-tr[1], -V.cy - H / 2 / s - m), y1 = Math.min(-tr[1] + tr[3], -V.cy + H / 2 / s + m);
           if (x1 > x0 && y1 > y0) {
             const kx = ti.width / tr[2], ky = ti.height / tr[3];
-            g.save(); g.clip(R.gp); g.imageSmoothingQuality = zq ? "high" : "low";
+            g.save(); g.clip(R.gp); g.imageSmoothingQuality = zq ? "high" : "low"; g.globalAlpha *= .3;   // 山只留一點點明暗（塔台螢幕上整片花花的看久了不舒服）
             g.drawImage(ti, (x0 - tr[0]) * kx, (y0 + tr[1]) * ky, (x1 - x0) * kx, (y1 - y0) * ky, x0, y0, x1 - x0, y1 - y0); g.restore();
           }
         }

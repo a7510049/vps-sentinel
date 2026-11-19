@@ -260,7 +260,11 @@ class Flights(unittest.TestCase):
         self.assertNotIn("NH5800", arr)
         cdep = {p["fn"]: p for p in d["dep"]}
         self.assertEqual((cdep["CI27"]["st"], cdep["CI27"]["dst"]["name"]), ("登機", "香港"))
-        self.assertNotIn("IT200", cdep)       # 三小時前就飛走的不顯示
+        now = time.time(); day0 = now - (now + 8 * 3600) % 86400
+        if now - 3 * 3600 >= day0:            # 今天（台灣時間）已經飛走的留著（收在「已飛 N 班」裡）；昨天的不顯示
+            self.assertEqual(cdep["IT200"]["st"], "已飛")
+        else:
+            self.assertNotIn("IT200", cdep)
 
     def test_wx(self):
         """機場天氣：背景抓 METAR，整理成風、能見度、溫度"""

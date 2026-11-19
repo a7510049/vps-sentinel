@@ -98,7 +98,7 @@
 @supports (color:oklch(from red l c h)){:root{--p2:oklch(from var(--p) l c calc(h + var(--gh,45)))}}
 :root{--me:oklch(.72 .15 250); --alt0:oklch(.8 .1 195); --alt1:oklch(.7 .14 240); --alt2:oklch(.64 .17 280); --alt3:oklch(.62 .19 320)}   /* 雷達尾跡的顏色：高度（低 → 高） */
 /* 塔台螢幕：雷達、進場排隊條一律是深綠底的螢光綠（深淺模式都一樣，像塔台的雷達螢幕） */
-:root{--tw-bg:oklch(.19 .035 165); --tw-bg2:oklch(.25 .05 160); --tw-land:oklch(.27 .05 158); --tw-line:oklch(.42 .08 155); --tw-arr:oklch(.88 .2 148); --tw-dep:oklch(.94 .06 190);
+:root{--tw-bg:oklch(.18 .025 165); --tw-bg2:oklch(.2 .03 162); --tw-land:oklch(.225 .03 160); --tw-line:oklch(.45 .07 155); --tw-arr:oklch(.88 .2 148); --tw-dep:oklch(.94 .06 190);
   --tw-txt:oklch(.86 .14 150); --tw-dim:oklch(.62 .09 155); --tw-bad:oklch(.72 .2 28); --tw-a0:oklch(.86 .12 190); --tw-a1:oklch(.86 .17 145); --tw-a2:oklch(.88 .16 105); --tw-a3:oklch(.8 .16 65)}
 .twr{--s2:var(--tw-land); --s3:var(--tw-bg2); --s4:var(--tw-line); --p:var(--tw-arr); --tx:var(--tw-dep); --tx2:var(--tw-txt); --tx3:var(--tw-dim); --card:var(--tw-bg); --bad:var(--tw-bad);
   --alt0:var(--tw-a0); --alt1:var(--tw-a1); --alt2:var(--tw-a2); --alt3:var(--tw-a3)}
@@ -1157,7 +1157,7 @@ html.flyon .dash>.view{content-visibility:hidden;contain-intrinsic-size:auto non
 .radar .rbox .rfull{top:8px;right:8px}
 .rbox .rfull{position:absolute;top:0;right:0;background:var(--s2);box-shadow:var(--sh-1)}.rfull svg{width:18px;height:18px}
 .rsweep{position:absolute;left:50%;top:50%;width:calc(100% * 61 / 62);aspect-ratio:1;translate:-50% -50%;border-radius:50%;pointer-events:none;
-  background:conic-gradient(transparent 0 60%,color-mix(in oklab,var(--tw-arr) 5%,transparent) 82%,color-mix(in oklab,var(--tw-arr) 26%,transparent) 99.5%,color-mix(in oklab,var(--tw-arr) 70%,transparent) 99.5%);animation:spin calc(var(--t-long) * 5) steps(90) infinite}   /* 雷達掃描：只轉動；每秒轉 20 下就夠順（每格都轉很耗電） */
+  background:conic-gradient(transparent 0 70%,color-mix(in oklab,var(--tw-arr) 3%,transparent) 86%,color-mix(in oklab,var(--tw-arr) 13%,transparent) 99.6%,color-mix(in oklab,var(--tw-arr) 45%,transparent) 99.6%);animation:spin calc(var(--t-long) * 5) steps(90) infinite}   /* 雷達掃描：只轉動；每秒轉 20 下就夠順（每格都轉很耗電） */
 .rbox.off .rsweep{animation-play-state:paused}[data-motion="off"] .rsweep{display:none}@media (prefers-reduced-motion:reduce){.rsweep{display:none}}
 .radar .rcv{display:block;width:100%;height:auto;aspect-ratio:1;cursor:pointer;touch-action:manipulation}
 .fzm{margin-left:auto}.fzm button{height:26px;padding:0 10px}

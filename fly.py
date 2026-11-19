@@ -216,6 +216,7 @@ FLY_CARGO_ICAO = {"NCA", "CAO", "CKK", "CSS", "SQC", "FDX", "UPS", "GTI", "CLX",
                   "DHK", "DHX", "BCS", "YZR", "CYZ", "ICV", "ATN", "ABX", "MPH", "TAY", "NPT", "SOO", "WGN", "AJT", "KYE", "YTO", "AZG", "NCR", "HYT"}
 FLY_CARGO_IATA = {"KZ", "CK", "O3", "FX", "5X", "5Y", "CV", "K4", "PO", "RU", "3S", "LD", "QY", "D0", "Y8", "CF", "M6", "GB", "YG", "C8", "K9", "7L", "KD", "N8", "8Y", "ES", "8C"}
 FLY_SKYS = {"cache": {}, "until": 0, "left": None, "out": 0, "tok": "", "texp": 0, "tbad": 0, "err": ""}
+FLY_ROWS = 400                                 # 抵達、出發各最多給幾班（今天已到／已飛的也算在內）
 FLY_SEEN_KEEP = 36 * 3600                      # 班機配到的註冊號、機型記多久：表定時間一樣才用，所以整天（跨半夜的也算）都查得到，隔天就清掉
 FLY = {"cache": {}, "routes": {}, "lock": threading.Lock(), "last": 0.0, "bad": {}, "rq": set(), "rbusy": False, "fetch": threading.Lock(), "logged": {}, "seen": {}, "view": {}, "used": 0, "hex": {}, "hq": set(), "hbusy": False, "zh": {}, "gate": {}, "types": {}, "turn": {}, "far": {}, "keep": {}, "land": {}, "rdir": {}}
 FLY_KEEP = 45          # 一架飛機漏收幾秒內，照上一次的位置留著（背景每 30 秒抓一次，漏一次不倒退）
@@ -1563,12 +1564,13 @@ def fly_merge(ap, fids, rows, io):
         return None if p and p["ph"] == other else p
 
     show = []
+    day0 = now - (now + 8 * 3600) % 86400               # 台灣今天 0 點：今天已到／已飛的都留著（收在「已到 N 班」裡，可以搜尋班號查）
     for r in fids:
         if r["io"] != io or fly_cargo(r["fn"]):
             continue
         t = r["est"] or r["sch"]
         done = r["st"] in ("已到", "已飛")
-        if t > now + 12 * 3600 or t < now - (20 if done else 90) * 60 and not (done and t > now - 90 * 60 and (plane(r) or {}).get("ph") in (io, "gnd" if io == "dep" else io)):
+        if t > now + 12 * 3600 or t < now - (20 if done else 90) * 60 and not (done and t >= day0) and not (done and t > now - 90 * 60 and (plane(r) or {}).get("ph") in (io, "gnd" if io == "dep" else io)):
             continue                                   # 還沒到、還沒飛的留久一點（官網常常慢半拍）；寫已飛但其實剛起飛（排隊滑行很久）的也留著
         show.append(r)
     pick = {}                                          # 同一班號今天、明天都在表上：天上那架只配給時間最接近的那一筆
@@ -1639,15 +1641,19 @@ def fly_merge(ap, fids, rows, io):
         row["at"] = now if row.get("lag") else (row["est"] or row["sch"] or now)   # 排序用的時間
         out.append(row)
     out.sort(key=lambda o: o["at"])
-    for k, v in list(FLY["land"].items()) if len(FLY["land"]) > 500 else []:
-        if now - v.get("land", v["air"]) > 6 * 3600:
+    for k, v in list(FLY["land"].items()) if len(FLY["land"]) > 1500 else []:
+        if now - v.get("land", v["air"]) > FLY_SEEN_KEEP:
             FLY["land"].pop(k, None)
     if len(FLY["seen"]) > 2000 or now - FLY.get("seen_gc", 0) > 86400:   # 每天清一次（太多時也清）
         FLY["seen_gc"] = now
         for k, v in list(FLY["seen"].items()):
             if now - v.get("at", 0) > FLY_SEEN_KEEP:
                 FLY["seen"].pop(k, None)
-    return out[:300]                                   # 網頁照時段分開看，可以多給一點
+    if len(out) > FLY_ROWS:                            # 太多：先拿掉最早已到／已飛的，接下來的班機一定留著
+        old = [o for o in out if o["st"] in ("已到", "已飛")][:len(out) - FLY_ROWS]
+        ids = {id(o) for o in old}
+        out = [o for o in out if id(o) not in ids]
+    return out[:FLY_ROWS]                              # 網頁照時段分開看，可以多給一點
 
 
 def fly_rdir(ap, rows):
