@@ -1621,11 +1621,13 @@ function flyInfo(id){
   const end = (x, mine) => `<div class="fre"><b>${esc(x ? x.code : "—")}</b><small>${esc(x ? (x.guess ? "可能是 " : "") + x.name : "查不到")}${flyFlag(flyCc(x))}</small>${mine ? tm : ""}</div>`;
   const gmap = FLYGATE[d.ap.code] && !arr && p.gate && !flyDone(p) && !/取消/.test(p.st || "");   // 有登機門導引：登機門寫在地圖上面，下面不重複
   const vr = p.vr > 0.5 ? `，上升 ${p.vr} 公尺/秒` : p.vr < -0.5 ? `，下降 ${-p.vr} 公尺/秒` : "";
+  const keys = [                                           // 登機證下半：最常看的幾項，大字（改過的小字寫原本的）
+    [arr ? "抵達登機門" : "登機門", gmap ? "" : p.gate, [p.term, p.gate0 && p.gate ? `原本 ${p.gate0}` : ""].filter(Boolean).join("・")],
+    [arr ? "行李轉盤" : "報到櫃台", (p.bx || "").replace(/^\S+ /, ""), ""],
+    ["機型", p.model || p.t, p.type0 && (p.model || p.t) ? `原本 ${p.type0}` : p.t && p.model && p.t !== p.model ? p.t : ""],
+    ["註冊號", p.reg, ""],
+  ].filter(r => r[1]);
   const rows = [
-    ["機型", [p.model, p.t && p.t !== p.model ? p.t : ""].filter(Boolean).join("・") + (p.type0 && (p.model || p.t) ? `（原本 ${p.type0}）` : "")],
-    ["註冊號", p.reg],
-    [arr ? "抵達登機門" : "登機門", gmap ? "" : [p.gate, p.term].filter(Boolean).join("・") + (p.gate0 && p.gate ? `（原本 ${p.gate0}）` : "")],
-    [arr ? "行李轉盤" : "報到櫃台", (p.bx || "").replace(/^\S+ /, "")],
     ["共掛班號", p.share && p.share.length ? p.share.join("、") : ""],
     ["高度", air ? (p.alt ? `${p.alt.toLocaleString()} 公尺${p.ph === "gnd" ? "" : vr}` : "地面") : ""],
     ["速度", air ? `${p.spd} 公里/時` : ""],
@@ -1636,11 +1638,12 @@ function flyInfo(id){
   ].filter(r => r[1]);
   const reg = encodeURIComponent(p.reg || "");
   v.innerHTML = `<div class="dialog finfo"><div class="form">
-    <div class="fih">${flyLogo(flyAl(p.fn), "lg")}<div class="lab"><b class="ffn">${esc(p.fn || p.reg || "—")}</b><small>${esc([p.al, p.use].filter(Boolean).join("・") || "航空公司不明")}</small></div>
-      ${p.st ? `<span class="fst2${p.emg || /取消|轉降/.test(p.st) ? " bad" : ""}">${esc(p.st)}</span>` : ""}</div>
-    ${p.emg || p.mil || p.rare ? `<div class="fbad${p.emg ? " bad" : ""}">${p.emg ? `${I("warn")}${esc(p.st)}（應答碼 ${esc(p.sq)}）` : p.mil ? "軍機" : "少見機型"}</div>` : ""}
     <a class="fph" target="_blank" rel="noopener noreferrer" hidden></a>
-    ${p.org || p.dst ? `<div class="froute">${end(p.org, !arr)}<span class="fln"><i></i>${I("plane")}<i></i></span>${end(p.dst, arr)}</div>` : `<div class="fnr sub">航線不明</div>`}
+    <div class="bpass"><div class="fih">${flyLogo(flyAl(p.fn), "lg")}<div class="lab"><b class="ffn">${esc(p.fn || p.reg || "—")}</b><small>${esc([p.al, p.use].filter(Boolean).join("・") || "航空公司不明")}</small></div>
+      ${p.st ? `<span class="fst2${p.emg || /取消|轉降/.test(p.st) ? " bad" : ""}">${esc(p.st)}</span>` : ""}</div>
+      ${p.org || p.dst ? `<div class="froute">${end(p.org, !arr)}<span class="fln"><i></i>${I("plane")}<i></i></span>${end(p.dst, arr)}</div>` : `<div class="fnr sub">航線不明</div>`}
+      ${keys.length ? `<div class="bpcut"></div><div class="bpk">${keys.map(([k, val, sm]) => `<div><span>${k}</span><b>${esc(val)}</b>${sm ? `<small${/原本/.test(sm) ? ' class="was"' : ""}>${esc(sm)}</small>` : ""}</div>`).join("")}</div>` : ""}</div>
+    ${p.emg || p.mil || p.rare ? `<div class="fbad${p.emg ? " bad" : ""}">${p.emg ? `${I("warn")}${esc(p.st)}（應答碼 ${esc(p.sq)}）` : p.mil ? "軍機" : "少見機型"}</div>` : ""}
     ${gmap ? `<div class="fgate"></div>` : ""}
     ${rows.length ? `<div class="fdl">${rows.map(([k, val]) => `<div><span>${k}</span><b>${esc(val)}</b></div>`).join("")}</div>` : ""}
     ${reg ? `<div class="group"><a class="li" href="https://www.jetphotos.com/registration/${reg}" target="_blank" rel="noopener noreferrer"><span class="lab">看這架的照片<small>JetPhotos</small></span>${EXT}</a>
