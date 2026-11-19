@@ -674,7 +674,7 @@ function homeDesk(list, time){
 function detail(s){
   const r = OPENR || {t:0, b:0, l:0, r:0};
   return `<div class="det${DETX ? " closing" : ""}" data-key="det:${esc(keyOf(s))}" style="--ct:${r.t}px;--cb:${r.b}px;--cl:${r.l}px;--cr:${r.r}px"><div class="dscroll">
-    <div class="dtop"><button class="icbtn" data-back title="返回">${I("back")}</button><span class="dtt">${esc(s.name)}</span><span class="hacts">${moreBtn(s)}</span></div>
+    <div class="dtop"><button class="icbtn" data-back title="返回">${I("back")}</button><span class="dtt">${esc(s.name)}</span><span class="hacts">${moreBtn(s).replace("iconbtn", "icbtn")}</span></div>
     ${hostBody(s, true)}</div></div>`;
 }
 /* 工具：雲端硬碟、遠端下載、每日備份、常用連結；好幾台時上面一排主機名稱（可以左右滑）選一台，只顯示那台的 */
@@ -682,14 +682,15 @@ let TOOLH = store("vs-toolh"), ORDER = [];
 function toolsPage(list){
   const on = list.filter(s => s.online).sort((a, b) => ORDER.indexOf(keyOf(a)) - ORDER.indexOf(keyOf(b)));
   const D = DESK.matches;
-  let h = `<div class="${D ? "wide" : "narrow"}" data-key="tools"><h1 class="ptitle">工具</h1>`;
+  let h = `<div class="${D ? "wide" : "narrow"}" data-key="tools"><h1 class="ptitle"><span>工具</span></h1>`;
   const fly = `<div class="group fly1" data-key="g-fly"><button class="li" data-key="fly" data-fly>${IC("fly", "")}<span class="lab">機場起降<small>${esc(FLYS.name || "即時抵達、出發的飛機")}</small></span>${CHEV}</button></div>`;
   if (!on.length) return h + (D ? fly : "") + `<div class="calm">連不上任何主機</div></div>`;
   const s = on.find(x => keyOf(x) === TOOLH) || on.find(x => !x.node) || on[0], k = esc(keyOf(s)), node = esc(s.node || ""), name = esc(s.name);
   const dot = x => lvOf(x) === "ok" ? "" : `<span class="dot ${lvOf(x)}"></span>`;
   const pick = on.length > 1 ? hpick(on, s, dot) : "";
-  if (D) return h + `<div class="split rside" data-key="tsplit"><div class="smain" data-key="tm">${pick}${toolsBody(s, k, node, name)}</div><aside class="side" data-key="ts">${fly}</aside></div></div>`;   // 電腦：右邊欄放不分主機的
-  return h + fly + pick + toolsBody(s, k, node, name) + `</div>`;
+  const lh = `<div class="lbl" data-key="lth">主機</div>`;
+  if (D) return h + `<div class="split rside" data-key="tsplit"><div class="smain" data-key="tm">${lh}${pick}${toolsBody(s, k, node, name)}</div><aside class="side" data-key="ts"><div class="lbl" data-key="ltf">不分主機</div>${fly}</aside></div></div>`;   // 電腦：右邊欄放不分主機的
+  return h + fly + lh + pick + toolsBody(s, k, node, name) + `</div>`;
 }
 function toolsBody(s, k, node, name){
   const c = s.cloud && safeUrl(cloudHref(s.cloud)) ? s.cloud : null;
@@ -789,9 +790,9 @@ function logPage(list){
     const kf = LOGK[LOGF] || LOGK[""], rowsN = x => (hk ? x : groupEv(x)).length;   // 數字跟左邊列出來的筆數一樣（好幾台合成一筆的算一筆）
     let side = `<div class="lbl">篩選</div><div class="pane group" data-key="lf" data-slide>${F.map(([k, l]) => row(`data-logf="${k}"`, LOGF === k, l, rowsN(byH.filter(LOGK[k])))).join("")}</div>`;
     if (many) side += `<div class="lbl" data-key="lhh">主機</div><div class="pane group" data-key="lhs" data-keyed data-slide>${row(`data-logh="" data-key="lh:"`, !hk, "全部主機", groupEv(all.filter(kf)).length)}${list.map(x => row(`data-logh="${esc(keyOf(x))}" data-key="lh:${esc(keyOf(x))}"`, hk === keyOf(x), esc(x.name), all.filter(e => e.k === keyOf(x) && kf(e)).length)).join("")}</div>`;
-    return `<div class="wide" data-key="log"><h1 class="ptitle">紀錄</h1><div class="split rside" data-key="lsplit"><div class="smain" data-key="lm">${body}</div><aside class="side" data-key="ls">${side}</aside></div></div>`;
+    return `<div class="wide" data-key="log"><h1 class="ptitle"><span>紀錄</span></h1><div class="split rside" data-key="lsplit"><div class="smain" data-key="lm">${body}</div><aside class="side" data-key="ls">${side}</aside></div></div>`;
   }
-  const chip = (k, l) => `<button class="fchip${LOGF === k ? " on" : ""}" data-logf="${k}"><span class="ck">${I("check")}</span>${l}</button>`;
+  const chip = (k, l) => `<button class="fchip${LOGF === k ? " on" : ""}" data-logf="${k}">${l}</button>`;
   const hn = hk && list.find(x => keyOf(x) === hk);   // 手機：好幾台時多一顆「全部主機 ▾」，點了選只看哪一台
   const hc = many ? `<button class="fchip hsel${hk ? " set" : ""}" data-loghm data-key="hsel" data-x>${esc(hn ? hn.name : "全部主機")}${I("chev")}</button>` : "";
   return `<div class="narrow" data-key="log"><h1 class="ptitle wh"><span>紀錄</span>${hc}</h1><div class="fchips" data-key="lfc" data-slide>${F.map(([k, l]) => chip(k, l)).join("")}</div>${body}</div>`;
@@ -831,7 +832,7 @@ function setPage(list){
       + (s.keep ? `<label class="li">${IC("keep", "")}<span class="lab">Oracle 防回收${keepLine(s.keep)}</span><input type="checkbox" class="tog" data-keepalive="${node}" aria-label="Oracle 防回收" ${s.keep.on ? "checked" : ""}></label>` : "")
       + (s.node ? "" : go("data-pair", "link", "配對暗號", "pairst")) + `</div>`;
   }
-  return `<div class="${D ? "wide" : "narrow"}" data-key="set"><h1 class="ptitle">設定</h1>`
+  return `<div class="${D ? "wide" : "narrow"}" data-key="set"><h1 class="ptitle"><span>設定</span></h1>`
     + (D ? `<div class="split rside" data-key="ssplit"><div class="smain" data-key="sc2">${sec}${h}</div><aside class="side" data-key="sc1">${look}${out}</aside></div>` : look + sec + h + out) + `</div>`;
 }
 /* 系統更新（作業系統的套件）：跟哨兵、雲端硬碟的版本放在一起 */
