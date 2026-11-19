@@ -159,7 +159,7 @@ install -d "$DIR"
 install -m 755 "$HERE/sentinel.py" "$DIR/sentinel.py"
 for f in pair.py download.py backup.py fly.py; do install -m 644 "$HERE/$f" "$DIR/$f"; done
 install -d "$DIR/web"
-install -m 644 "$HERE"/web/index.html "$HERE"/web/style.css "$HERE"/web/app.js "$HERE"/web/fly.js "$HERE"/web/font.woff2 "$DIR/web/"
+install -m 644 "$HERE"/web/index.html "$HERE"/web/style.css "$HERE"/web/app.js "$HERE"/web/pin.js "$HERE"/web/fly.js "$HERE"/web/font.woff2 "$DIR/web/"
 install -d "$DIR/data"
 install -m 644 "$HERE/data/airports.tsv" "$HERE/data/coast.tsv" "$HERE/data/terrain.bin" "$HERE/data/actypes.tsv" "$HERE/data/apmap.tsv" "$DIR/data/"
 ok "放在 $DIR"

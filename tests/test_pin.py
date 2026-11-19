@@ -72,6 +72,27 @@ class PinTest(Server):
         _, d = self.call("/api/pin", {"action": "status"}, TOKEN)
         self.assertFalse(d["on"])
 
+        # 網頁送的是算好的答案，PIN 碼本身不在網路上傳；題目只能用一次
+        import hashlib
+        import hmac
+        b = self.call("/api/pin-login", {"action": "begin"})[1]
+        self.assertFalse(b["pin"])
+        salt = "00112233445566778899aabbccddeeff"
+        h = hashlib.pbkdf2_hmac("sha256", b"7391", bytes.fromhex(salt), 200000).hex()
+        self.assertEqual(self.call("/api/pin", {"action": "set", "pin": {"salt": salt, "n": 200000, "hash": h}}, TOKEN)[0], 200)
+        with open(self.pin_file(), encoding="utf-8") as f:
+            self.assertEqual(json.load(f)["hash"], h)
+        b = self.call("/api/pin-login", {"action": "begin"})[1]
+        self.assertEqual((b["salt"], b["n"]), (salt, 200000))
+        proof = hmac.new(h.encode(), b["nonce"].encode(), hashlib.sha256).hexdigest()
+        code, d = self.call("/api/pin-login", {"pin": {"nonce": b["nonce"], "proof": proof}})
+        self.assertEqual(code, 200, d)
+        self.assertEqual(self.call("/api/pin-login", {"pin": {"nonce": b["nonce"], "proof": proof}})[0], 401)   # 同一題再送一次不行
+        b = self.call("/api/pin-login", {"action": "begin"})[1]
+        self.assertEqual(self.call("/api/pin-login", {"pin": {"nonce": b["nonce"], "proof": "0" * 64}})[0], 401)
+        self.call("/api/pin", {"action": "login"}, TOKEN)
+        self.assertEqual(self.call("/api/pin", {"action": "set", "pin": {"salt": "zz", "n": 5, "hash": h}}, TOKEN)[0], 400)
+
         # 重新設定、再關閉
         self.assertEqual(self.call("/api/pin", {"action": "set", "pin": "5091"}, TOKEN)[0], 200)
         code, d = self.call("/api/pin", {"action": "off"}, TOKEN)

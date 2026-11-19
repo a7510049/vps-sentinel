@@ -78,11 +78,37 @@ class CloudTest(Server):
         c.close()
         return r
 
+    def open_cloud(self, body, token=TOKEN):
+        c = http.client.HTTPConnection("127.0.0.1", self.port, timeout=15)
+        c.request("POST", "/api/cloud-open", body=json.dumps(body), headers={"Content-Type": "application/json", "X-Token": token})
+        r = c.getresponse()
+        d = json.loads(r.read() or b"{}")
+        c.close()
+        return r.status, d
+
     def ticket(self):
         _, _, body = self.request("/api/status", token=TOKEN)
         cloud = json.loads(body)["cloud"]
+        self.assertNotIn("ticket", cloud)                             # 登入票要先驗證才給，狀態裡沒有
         self.assertTrue(cloud["login"].endswith("/cloud-sso"))       # 網址裡沒有任何密碼或簽章
-        return cloud["ticket"]
+        code, d = self.open_cloud({"pw": TOKEN})
+        self.assertEqual(code, 200, d)
+        return d["ticket"]
+
+    def test_open_needs_verify(self):
+        """打開雲端硬碟每次都要驗證：沒給、密碼錯、PIN 碼答案錯都不給票；舊的直接發通行證的入口不見了"""
+        self.assertEqual(self.open_cloud({})[0], 401)
+        self.assertEqual(self.open_cloud({"pw": "猜猜看"})[0], 401)
+        self.assertEqual(self.open_cloud({"pin": {"nonce": "x", "proof": "0" * 64}})[0], 401)
+        self.assertEqual(self.open_cloud({"pw": TOKEN}, token="")[0], 401)
+        c = http.client.HTTPConnection("127.0.0.1", self.port, timeout=15)
+        c.request("POST", "/api/cloud-login", body="{}", headers={"X-Token": TOKEN})
+        r = c.getresponse(); r.read(); c.close()
+        self.assertIsNone(r.getheader("Set-Cookie"))
+        self.assertEqual(r.status, 404)
+        r = self.post_sso(self.ticket())
+        ck = r.getheader("Set-Cookie")
+        self.assertNotIn("Max-Age", ck)                               # 關掉瀏覽器就失效
 
     def test_sso_and_cookie(self):
         t = self.ticket()

@@ -45,7 +45,7 @@ from collections import deque
 from concurrent.futures import ThreadPoolExecutor
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
-VERSION = "4.01"
+VERSION = "4.02"
 
 # ───────────────────────── 哨兵備份檔（.vsbk）─────────────────────────
 # 哨兵專用的備份格式：外面是自己的檔案格式，裡面用的是成熟、標準的加密方法（不自己發明加密）：
@@ -656,7 +656,8 @@ def _sign(msg):
     return hmac.new(TOKEN.encode(), msg.encode(), hashlib.sha256).hexdigest()
 
 
-CLOUD_DAYS = 30                                 # 雲端硬碟通行證的有效天數
+CLOUD_DAYS = 30                                 # 舊版通行證最長的天數
+CLOUD_HOURS = 12                                # 驗證過 PIN 碼或手機金鑰後，這個瀏覽器能用雲端硬碟幾小時（關掉瀏覽器就要重新驗證）
 
 
 CLOUD_GEN = {"n": None}
@@ -737,7 +738,7 @@ def cloud_ticket_use(t):
 def cloud_info():
     if not CLOUD_URL:
         return None
-    info = {"url": CLOUD_URL, "login": cloud_sso_url(), "ticket": cloud_ticket()}
+    info = {"url": CLOUD_URL, "login": cloud_sso_url(), "verify": True}   # 登入票要先驗證 PIN 碼或手機金鑰才給（/api/cloud-open）
     if os.path.ismount(CLOUD_DIR):
         d = disk(CLOUD_DIR)          # 跟 df 一樣的算法：系統預留的一小塊（約 16 MB）不算「已用」
         if d:
@@ -1109,7 +1110,7 @@ def include(name):
         exec(compile(f.read(), path, "exec"), globals())   # noqa: S102
 
 
-SRC_FILES = ["sentinel.py", "pair.py", "download.py", "backup.py", "fly.py", "web/index.html", "web/style.css", "web/app.js", "web/fly.js", "web/font.woff2", "data/airports.tsv", "data/coast.tsv", "data/terrain.bin", "data/actypes.tsv", "data/apmap.tsv"]   # 程式本體（含機場起降）＋網頁三個檔＋機場資料、海岸線、地形、機型分類
+SRC_FILES = ["sentinel.py", "pair.py", "download.py", "backup.py", "fly.py", "web/index.html", "web/style.css", "web/app.js", "web/pin.js", "web/fly.js", "web/font.woff2", "data/airports.tsv", "data/coast.tsv", "data/terrain.bin", "data/actypes.tsv", "data/apmap.tsv"]   # 程式本體（含機場起降）＋網頁三個檔＋機場資料、海岸線、地形、機型分類
 
 
 def build_of(blobs):
@@ -1175,7 +1176,7 @@ def load_page():
                 FONT["b"] = f.read()
         except OSError:
             FONT["b"] = b""
-        js = rd("web/app.js").replace("/*@flyv*/", FLY_JS["v"])
+        js = rd("web/pin.js") + "\n" + rd("web/app.js").replace("/*@flyv*/", FLY_JS["v"])   # PIN 碼鍵盤放在最前面（被監看那頁另外用 /pin.js）
         return html.replace("/*@style.css*/\n", rd("web/style.css")).replace("/*@app.js*/\n", js)
     except OSError as e:
         log(f"找不到網頁檔案（{e}）：請重新執行 bash install.sh")
@@ -2095,15 +2096,22 @@ def pin_status():
 
 
 def pin_set(pin):
-    pin = str(pin or "")
-    if not re.fullmatch(r"[0-9]{4,8}", pin):
-        return False, "PIN 碼要是 4 到 8 位數字"
-    if len(set(pin)) == 1 or pin in "0123456789" or pin in "9876543210":
-        return False, "這組太好猜了（同一個數字或連號），換一組吧"
-    salt, n = secrets.token_hex(16), 200_000
+    """pin 是網頁算好的 {"salt", "n", "hash"}（PIN 碼本身不送過來；太好猜的網頁那邊先擋），舊的寫法直接給數字也行"""
+    if isinstance(pin, dict):
+        salt, n, h = str(pin.get("salt") or ""), pin.get("n"), str(pin.get("hash") or "")
+        if not (re.fullmatch(r"[0-9a-f]{32}", salt) and n == 200_000 and re.fullmatch(r"[0-9a-f]{64}", h)):
+            return False, "PIN 碼的資料不對，請重新整理網頁再試一次"
+    else:
+        pin = str(pin or "")
+        if not re.fullmatch(r"[0-9]{4,8}", pin):
+            return False, "PIN 碼要是 4 到 8 位數字"
+        if len(set(pin)) == 1 or pin in "0123456789" or pin in "9876543210":
+            return False, "這組太好猜了（同一個數字或連號），換一組吧"
+        salt, n = secrets.token_hex(16), 200_000
+        h = _pin_hash(pin, salt, n)
     with PIN_LK:
         try:
-            pin_save({"hash": _pin_hash(pin, salt, n), "salt": salt, "n": n, "fails": 0, "streak": 0, "lock_until": 0,
+            pin_save({"hash": h, "salt": salt, "n": n, "fails": 0, "streak": 0, "lock_until": 0,
                       "set": int(time.time())})
         except OSError as e:
             return False, f"無法存檔：{e}"
@@ -2135,9 +2143,31 @@ def pin_reset_fails():
                 pass
 
 
+PIN_NONCE = {}                                   # 一次性的題目：PIN 碼不在網路上傳，網頁拿題目算出答案再送
+
+
+def pin_begin():
+    """給網頁算答案要用的鹽、次數和一次性題目（2 分鐘內、用一次就失效）"""
+    p = pin_load()
+    if not p:
+        return {"pin": False}
+    n, now = secrets.token_hex(16), time.time()
+    with PIN_LK:
+        for k in [k for k, v in PIN_NONCE.items() if v < now]:
+            del PIN_NONCE[k]
+        if len(PIN_NONCE) > 200:
+            PIN_NONCE.clear()
+        PIN_NONCE[n] = now + 120
+    return {"pin": True, "salt": p["salt"], "n": int(p["n"]), "nonce": n}
+
+
+def pin_proof(h, nonce):
+    """網頁那邊：PBKDF2(PIN 碼, 鹽, 次數) 再拿它對題目算 HMAC；主機只存 PBKDF2 的結果，照樣對得上"""
+    return hmac.new(h.encode(), nonce.encode(), hashlib.sha256).hexdigest()
+
+
 def pin_login(pin):
-    """回傳 (成功與否, 訊息)"""
-    pin = str(pin or "")
+    """回傳 (成功與否, 訊息)；pin 是 {"nonce", "proof"}（網頁算好的答案），舊的寫法直接給數字也照樣能對"""
     with PIN_LK:
         p = pin_load()
         if not p:
@@ -2146,7 +2176,13 @@ def pin_login(pin):
         if p.get("lock_until", 0) > now:
             return False, f"輸錯太多次，請 {int((p['lock_until'] - now) // 60) + 1} 分鐘後再試，或改用密碼登入"
         try:
-            ok = re.fullmatch(r"[0-9]{4,8}", pin) and hmac.compare_digest(_pin_hash(pin, p["salt"], int(p["n"])), p["hash"])
+            if isinstance(pin, dict):
+                nonce, proof = str(pin.get("nonce") or ""), str(pin.get("proof") or "")
+                fresh = PIN_NONCE.pop(nonce, 0) > now
+                ok = fresh and bool(re.fullmatch(r"[0-9a-f]{64}", proof)) and hmac.compare_digest(pin_proof(p["hash"], nonce), proof)
+            else:
+                pin = str(pin or "")
+                ok = bool(re.fullmatch(r"[0-9]{4,8}", pin)) and hmac.compare_digest(_pin_hash(pin, p["salt"], int(p["n"])), p["hash"])
         except (KeyError, ValueError, TypeError):
             ok = False
         if ok:
@@ -3349,6 +3385,8 @@ def reboot_ask():
 
 def reboot_check(given):
     """回傳 (通過與否, 訊息)"""
+    if isinstance(given, dict):                     # PIN 碼（網頁算好的答案）
+        return pin_login(given) if not reboot_tg() and pin_load() else (False, "驗證碼不對")
     given = str(given or "").strip()
     if not reboot_tg():                             # 沒有 Telegram：用這台的密碼或 PIN 碼
         if given and hmac.compare_digest(given.encode(), TOKEN.encode()):
@@ -3464,11 +3502,36 @@ input,button{{width:100%;font:inherit;font-size:16px;border:0;padding:14px 16px;
 input{{background:var(--field);color:var(--text);border-radius:16px}}button{{cursor:pointer;font-weight:500;color:var(--on-p);background:var(--p);border-radius:999px}}
 .tg{{display:inline-block;margin-top:12px;color:var(--p);font-size:14px;font-weight:500;text-decoration:none}}
 .m{{min-height:20px;margin-top:8px;font-size:13.5px;color:var(--bad)}}
+.pl{{display:inline-block;margin:12px 10px 0;color:var(--p);font-size:14px;font-weight:500;text-decoration:none}}
+.ppad{{display:flex;flex-direction:column;align-items:center;gap:18px;margin-top:16px}}.ppad.ppwait{{opacity:.55;pointer-events:none}}
+.ppad.ppbad{{animation:sh .3s}}@keyframes sh{{25%,75%{{transform:translateX(-8px)}}50%{{transform:translateX(8px)}}}}
+.ppdots{{display:flex;gap:12px;min-height:12px}}.ppdots i{{width:12px;height:12px;border-radius:50%;background:var(--field)}}.ppdots i.on{{background:var(--p)}}
+.ppkeys{{display:grid;grid-template-columns:repeat(3,64px);gap:12px 16px}}
+.ppkeys button{{margin:0;padding:0;height:64px;border-radius:50%;background:var(--field);color:var(--text);font-size:22px;font-weight:600;display:grid;place-items:center}}
+.ppkeys .ppfn{{background:none}}.ppkeys .ppok{{background:var(--p);color:var(--on-p)}}.ppkeys .ppok:disabled{{background:var(--field);color:var(--sub)}}
+.ppkeys svg{{width:26px;height:26px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}}
 </style></head><body><div class="c"><img src="/icon.svg" width="60" height="60" alt="">
 <h1>{html.escape(NAME)}</h1><p>由「{who}」監看中，請到那邊看這台</p>
-<details><summary>取消被監看</summary><form><input type="password" placeholder="{"密碼、PIN 碼或 Telegram 驗證碼" if reboot_tg() else "這台的密碼或 PIN 碼"}" autocomplete="current-password" required>
-<button>取消被監看</button>{'<a class="tg" href="#">傳驗證碼到 Telegram</a>' if reboot_tg() else ""}<div class="m"></div></form></details></div>
+<details><summary>取消被監看</summary><form><input type="password" placeholder="{"密碼或 Telegram 驗證碼" if reboot_tg() else "這台的密碼"}" autocomplete="current-password" required>
+<button>取消被監看</button>{'<a class="tg" href="#">傳驗證碼到 Telegram</a>' if reboot_tg() else ""}{'<a class="pl" href="#">用 PIN 碼</a>' if pin_load() else ""}<div class="m"></div></form><div class="pp"></div></details></div>
+<script src="/pin.js"></script>
 <script>
+const unwatch = async body => {{
+  const r = await fetch("/api/pair", {{method:"POST", headers:{{"Content-Type":"application/json"}}, body:JSON.stringify({{action:"unwatch", ...body}})}});
+  return r.json().catch(() => ({{}}));
+}};
+const begin = () => fetch("/api/pin-login", {{method:"POST", headers:{{"Content-Type":"application/json"}}, body:'{{"action":"begin"}}'}}).then(r => r.json());
+document.querySelector(".pl")?.addEventListener("click", e => {{   // 用 PIN 碼：打亂的數字鍵盤，PIN 碼不原樣送出
+  e.preventDefault();
+  const f = document.querySelector("form"), m = f.querySelector(".m"), box = document.querySelector(".pp");
+  f.querySelectorAll("input,button,a").forEach(x => {{ x.style.display = "none"; }}); m.textContent = "";
+  const pad = pinPad(box, {{ok: async p => {{
+    pad.busy(true); m.textContent = "";
+    try {{ const d = await unwatch({{pin: await pinProof(p, begin)}}); if (d.ok) return location.reload(); m.textContent = d.message || "沒有成功，請再試一次"; }}
+    catch(err) {{ m.textContent = err.message || "連線失敗，請稍後再試"; }}
+    pad.busy(false); pad.again();
+  }}}});
+}});
 document.querySelector(".tg")?.addEventListener("click", async e => {{
   e.preventDefault();
   const m = document.querySelector(".m");
@@ -3483,9 +3546,9 @@ document.querySelector("form").addEventListener("submit", async e => {{
   const b = e.target.querySelector("button"), m = e.target.querySelector(".m");
   b.disabled = true; m.textContent = ""; m.style.color = "";
   try {{
-    const r = await fetch("/api/pair", {{method:"POST", headers:{{"Content-Type":"application/json"}},
-      body:JSON.stringify({{action:"unwatch", pw:e.target.querySelector("input").value.trim()}})}});
-    const d = await r.json().catch(() => ({{}}));
+    const v = e.target.querySelector("input").value.trim();
+    const pin = {"true" if pin_load() else "false"} && /^\\d{{4,{7 if reboot_tg() else 8}}}$/.test(v);   // 打的是 PIN 碼：一樣不原樣送出（8 位數是 Telegram 驗證碼）
+    const d = await unwatch(pin ? {{pin: await pinProof(v, begin)}} : {{pw: v}});
     if (d.ok) return location.reload();
     m.textContent = d.message || "沒有成功，請再試一次";
   }} catch(err) {{ m.textContent = "連線失敗，請稍後再試"; }}
@@ -3991,7 +4054,7 @@ class Handler(BaseHTTPRequestHandler):
 
     def cloud_cookie(self):
         secure = "; Secure" if (self.headers.get("X-Forwarded-Proto") or "").lower() == "https" else ""
-        return f"vs_cloud={cloud_cookie_value()}; Path=/; Max-Age={CLOUD_DAYS * 86400}; HttpOnly; SameSite=Lax{secure}"
+        return f"vs_cloud={cloud_cookie_value(time.time() + CLOUD_HOURS * 3600)}; Path=/; HttpOnly; SameSite=Lax{secure}"   # 關掉瀏覽器就失效
 
     def proxy_cloud(self):
         u = urllib.parse.urlsplit(self.path)
@@ -4116,6 +4179,39 @@ class Handler(BaseHTTPRequestHandler):
             return self.send(200, json.dumps({"ok": True, "keys": pk_list(), "max": PASSKEY_MAX}, ensure_ascii=False))
         return self.send(200 if ok else 400, json.dumps({"ok": ok, "message": msg, "keys": pk_list()}, ensure_ascii=False))
 
+    def cloud_open(self, body):
+        d = self.jbody(body)
+        if isinstance(d.get("pin"), dict):
+            ok, msg = pin_login(d["pin"])
+        elif d.get("clientDataJSON"):
+            ok, msg = pk_login_finish(d)
+            msg = "" if ok else msg
+        else:
+            pw = str(d.get("pw") or "")
+            ok, msg = bool(pw) and hmac.compare_digest(pw.encode(), TOKEN.encode()), "密碼不對"
+        if not ok:
+            time.sleep(1)
+            return self.send(401, json.dumps({"ok": False, "message": msg or "驗證失敗"}, ensure_ascii=False))
+        node = str(d.get("node") or "")
+        if not node:
+            if not CLOUD_URL:
+                return self.send(404, json.dumps({"ok": False, "message": "這台沒有雲端硬碟"}, ensure_ascii=False))
+            return self.send(200, json.dumps({"ok": True, "ticket": cloud_ticket(), "login": cloud_sso_url()}))
+        peer = next((p for p in PEERS if p["name"] == node), None)
+        if not peer:
+            return self.send(404, json.dumps({"ok": False, "message": "找不到這台主機"}, ensure_ascii=False))
+        try:
+            req = urllib.request.Request(peer["url"] + "/api/cloud-ticket", data=b"{}", method="POST",
+                                         headers={"X-Token": peer["token"], "Content-Type": "application/json"})
+            with urllib.request.urlopen(req, timeout=15) as r:
+                t = json.loads(r.read())
+            return self.send(200, json.dumps({"ok": True, "ticket": str(t["ticket"]), "login": str(t["login"])}))
+        except urllib.error.HTTPError as e:
+            msg = f"「{node}」要先更新哨兵" if e.code == 404 else "那台主機不給登入票"
+        except Exception as e:  # noqa: BLE001
+            msg = peer_error(e, peer["url"])
+        return self.send(502, json.dumps({"ok": False, "message": msg}, ensure_ascii=False))
+
     def passkey_login(self, body):
         d = self.jbody(body)
         act = d.get("action")
@@ -4167,6 +4263,8 @@ class Handler(BaseHTTPRequestHandler):
             busy = rs and (rs.get("stage") == "wait" or rs.get("stage") == "running" and time.time() - rs.get("start_t", 0) < 7200)
             w = [] if busy else watchers()        # 等著網頁還原、還原中：照樣給完整網頁
             return self.send(200, watch_page(w) if w else page(), "text/html; charset=utf-8", etag=True)
+        if path == "/pin.js":                      # PIN 碼鍵盤（被監看那頁用；首頁已經塞在網頁裡）
+            return self.send(200, _read_bytes("web/pin.js"), "text/javascript; charset=utf-8", etag=True)
         if path == "/fly.js":                      # 機場起降的畫面程式（公開的程式碼，不用登入；分享連結也要用）
             return self.send(200, fly_js(), "text/javascript; charset=utf-8", cache=True, etag=True)
         if path == "/manifest.webmanifest":
@@ -4315,7 +4413,7 @@ class Handler(BaseHTTPRequestHandler):
         if self.is_cloud():
             return self.proxy_cloud()
         u = urllib.parse.urlsplit(self.path)
-        if u.path not in ("/api/update", "/api/rename", "/api/traffic", "/api/telegram", "/api/links", "/api/self", "/api/cloud-login", "/api/peer",
+        if u.path not in ("/api/update", "/api/rename", "/api/traffic", "/api/telegram", "/api/links", "/api/self", "/api/cloud-open", "/api/cloud-ticket", "/api/cloud-revoke", "/api/peer",
                           "/api/token", "/api/passkey", "/api/passkey-login", "/api/pin", "/api/pin-login", "/api/login", "/api/sessions", "/api/backup", "/api/backup-store",
                           "/api/restore-upload", "/api/restore-run", "/api/pair", "/api/pair-admin", "/api/reboot", "/api/keepalive", "/api/download", "/api/fly-share", "/api/fly-claim", "/api/opensky"):
             return self.send(404, '{"error":"找不到"}')
@@ -4382,7 +4480,7 @@ class Handler(BaseHTTPRequestHandler):
             return self.send(200 if ok else 400, json.dumps({"ok": ok, "message": msg}, ensure_ascii=False))
         try:
             size = min(int(self.headers.get("Content-Length") or 0),
-                       16384 if u.path.startswith("/api/passkey") else 400000 if u.path == "/api/download" else 4096)
+                       16384 if u.path.startswith("/api/passkey") or u.path == "/api/cloud-open" else 400000 if u.path == "/api/download" else 4096)
             body = self.rfile.read(size) if size else b""
         except (ValueError, OSError):
             body = b""
@@ -4390,6 +4488,8 @@ class Handler(BaseHTTPRequestHandler):
             return self.passkey_login(body)
         if u.path == "/api/pin-login":               # 還沒登入：用 PIN 碼換到這台裝置自己的登入鑰匙
             d = self.jbody(body)
+            if d.get("action") == "begin":
+                return self.send(200, json.dumps(pin_begin()))
             ok, msg = pin_login(d.get("pin"))
             if not ok:
                 time.sleep(1)
@@ -4406,11 +4506,14 @@ class Handler(BaseHTTPRequestHandler):
         if u.path == "/api/pair":                    # 還沒登入：主要主機拿配對暗號來對（或主要主機移除這台時把鑰匙作廢）
             d = self.jbody(body)
             if d.get("action") == "unwatch":         # 被監看的那頁：用這台的密碼或 PIN 碼取消
-                pw = str(d.get("pw") or "")
-                ok = bool(pw) and (hmac.compare_digest(pw.encode(), TOKEN.encode()) or unwatch_code_ok(pw))
-                msg = "密碼或驗證碼不對"
-                if not ok and re.fullmatch(r"[0-9]{4,8}", pw) and pin_load():
+                pw = d.get("pin") if isinstance(d.get("pin"), dict) else str(d.get("pw") or "")
+                if isinstance(pw, dict):                 # PIN 碼：網頁算好的答案
                     ok, msg = pin_login(pw)
+                else:
+                    ok = bool(pw) and (hmac.compare_digest(pw.encode(), TOKEN.encode()) or unwatch_code_ok(pw))
+                    msg = "密碼或驗證碼不對"
+                    if not ok and re.fullmatch(r"[0-9]{4,8}", pw) and pin_load():
+                        ok, msg = pin_login(pw)
                 if not ok:
                     time.sleep(1)
                     return self.send(401, json.dumps({"ok": False, "message": msg}, ensure_ascii=False))
@@ -4439,6 +4542,8 @@ class Handler(BaseHTTPRequestHandler):
         if not self.authed():
             time.sleep(1)
             return self.send(401, '{"error":"密碼錯誤"}')
+        if u.path == "/api/cloud-open":             # 打開雲端硬碟：每次都在這台驗證 PIN 碼、手機金鑰或密碼，過了才發登入票
+            return self.cloud_open(body)
         node = urllib.parse.parse_qs(u.query).get("node", [""])[0]
         if node:                                  # 轉給其他 VPS
             peer = next((p for p in PEERS if p["name"] == node), None)
@@ -4530,6 +4635,8 @@ class Handler(BaseHTTPRequestHandler):
             return self.send(200 if ok else 500, json.dumps({"ok": ok, "message": msg}, ensure_ascii=False))
         if u.path == "/api/pin":                     # 設定、關閉 PIN 碼（已登入才能用）
             d = self.jbody(body)
+            if d.get("action") == "begin":           # 這台的 PIN 碼題目（重新開機時用；別台的照 ?node= 轉過去）
+                return self.send(200, json.dumps(pin_begin()))
             if d.get("action") == "set":
                 ok, msg = pin_set(d.get("pin"))
             elif d.get("action") == "off":
@@ -4561,16 +4668,10 @@ class Handler(BaseHTTPRequestHandler):
         if u.path == "/api/cloud-revoke":           # 主要主機登出了一台裝置：這台的雲端硬碟通行證也全部作廢
             cloud_revoke()
             return self.send(200, '{"ok":true}')
-        if u.path == "/api/cloud-login":            # 網頁上已經登入哨兵：直接發雲端硬碟通行證
-            if not CLOUD_URL:
-                return self.send(404, '{"ok":false}')
-            self.send_response(200)
-            self.send_header("Set-Cookie", self.cloud_cookie())
-            self.send_header("Content-Type", "application/json")
-            self.send_header("Content-Length", "11")
-            self.end_headers()
-            self.wfile.write(b'{"ok":true}')
-            return
+        if u.path == "/api/cloud-ticket":           # 主要主機驗證過了，來拿這台雲端硬碟的登入票（只給主機之間的鑰匙）
+            if self.sess or not CLOUD_URL:
+                return self.send(403 if self.sess else 404, '{"ok":false}')
+            return self.send(200, json.dumps({"ok": True, "ticket": cloud_ticket(), "login": cloud_sso_url()}))
         if u.path == "/api/self":
             try:
                 act = json.loads(body or b"{}").get("action")
