@@ -650,6 +650,10 @@ class Kinds(unittest.TestCase):
         self.assertLess(final, 2.5)
         self.assertGreater(abeam, final)
         self.assertGreater(abeam, math.hypot(10.5, 2.5) / 460 * 60 * 1.5)  # 不是直線距離÷速度
+        S = load_sentinel()
+        hdg, ln, off = S.FLY_RWY["TPE"][0]
+        cx, cy = -off * math.cos(math.radians(hdg)), off * math.sin(math.radians(hdg))
+        self.assertEqual(e("TPE", cx, cy, 180), 0)                          # 已經落在跑道上：不能寫 7 分鐘後
 
     def test_fids_fill(self):
         """查到的航線只好用猜的（「可能是」），官網表又有這班：照官網表寫；同班號的別段不換"""
@@ -764,6 +768,9 @@ class Legs(unittest.TestCase):
         g = {**a, "flight": "UPS95 ", "alt_baro": "ground", "gs": 80, "baro_rate": 0, "lat": TPE[0] + .003, "lon": TPE[1] + .003}
         p = S.fly_plane(g, ap)                                 # 停在這裡、航線兩頭都不是這裡：不寫錯的航線
         self.assertEqual((p["ph"], p["org"], p["dst"]), ("gnd", None, None))
+        S.fly_route = lambda cs, lat, lon: [{"code": "TPE", "name": "台北"}, {"code": "HKG", "name": "香港"}]   # 查到的是下一段
+        h = {**a, "flight": "CPA451 ", "alt_baro": 6600, "baro_rate": -700, "track": 53, "lat": TPE[0] + .09, "lon": TPE[1] + .09}
+        self.assertEqual(S.fly_plane(h, ap)["ph"], "arr")     # 順風邊往下降、機頭背著機場：是飛來的，不是剛起飛
 
 
 class Midnight(unittest.TestCase):

@@ -1328,6 +1328,8 @@ def fly_eta(code, x, y, v):
             al, lat = -(dx * ux + dy * uy), abs(dx * uy - dy * ux)
             if al > 0 and lat <= max(1.2, al * .12):
                 path = al
+            elif -ln - .5 <= al <= 0 and lat <= .6:
+                path = 0                                                      # 已經過了跑道頭、在跑道上：就是現在
             else:
                 jx, jy = tx - ux * max(10, al), ty - uy * max(10, al)
                 path = math.hypot(x - jx, y - jy) + max(10, al)
@@ -1373,7 +1375,8 @@ def fly_plane(a, ap):
     near = {c for c, _, _ in fly_nearby(ap)}           # 查到的航線是附近別的機場（例如在松山看到要降落桃園的）：照航線
     land = not gnd and vr < -300 and dst not in near and (
         (alt < 15000 and d < 60 and toward and fly_closest(ap, lat, lon, trk, 1) == code)
-        or (alt < 6500 and d < 25 and fly_closest(ap, lat, lon) == code))     # 很低很近、在繞圈排隊或順風邊：機頭不一定對著機場
+        or (alt < 6500 and d < 25 and fly_closest(ap, lat, lon) == code)     # 很低很近、在繞圈排隊或順風邊：機頭不一定對著機場
+        or (org == code and alt < 10000 and d < 30 and fly_closest(ap, lat, lon) == code))   # 查到「從這裡出發」卻在附近往下降：是飛來接下一段的
     lift = not gnd and alt < 15000 and d < 60 and vr > 300 and not toward and org not in near and fly_closest(ap, lat, lon, trk, -1) == code
     me = {"code": code, "name": fly_city(code) or ap[2]}
     if land and rt and dst != code:                    # 例如查到「達拉斯 → 安克拉治」，其實是安克拉治飛來的下一段
@@ -1584,7 +1587,7 @@ def fly_merge(ap, fids, rows, io):
             if p and p["ph"] == "gnd" and (p.get("d") or 99) < 6:
                 if io == "arr":
                     row["st"] = "已到"                 # 已經停在這個機場了
-                elif (p.get("spd") or 0) > 5 and now > t0 - 1800:
+                elif (p.get("spd") or 0) >= 9 and now > t0 - 1800:      # 跟機坪那邊一樣：5 節以上才算在滑行（推出、拖車晃一下不算）
                     row["st"] = "滑行中"
             if row["st"] not in ("已到", "已飛", "滑行中") and not (p and p["ph"] == io) and now > t0 + 300:
                 row["lag"] = True                      # 過了時間還沒到／還沒飛：照現在的時間排，網頁算晚幾分
