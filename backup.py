@@ -701,7 +701,8 @@ def bk_copies():
     for n in names:
         fs = bk_list(os.path.join(root, n))
         if fs:
-            out.append({"name": n, "me": n == me, "count": len(fs), "t": os.path.getmtime(fs[-1]), "size": os.path.getsize(fs[-1])})
+            out.append({"name": n, "me": n == me, "count": len(fs), "t": os.path.getmtime(fs[-1]), "size": os.path.getsize(fs[-1]),
+                        **({"ts": [int(os.path.getmtime(f)) for f in fs[-10:]]} if n == me else {})})   # 工具頁畫最近 7 天的點
     return out
 
 

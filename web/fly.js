@@ -144,7 +144,7 @@ function flyMiniMenu(f, btn){
   document.body.appendChild(m);
   placeMenu(m, btn, r => r.left + r.width / 2 - m.offsetWidth / 2);
   if (canAnim()) m.animate([{opacity:0, transform:"scale(.85,.4)"}, {opacity:1, transform:"none"}], {duration:T.spf, easing:SPRING_F});
-  window._menu = m;
+  window._menu = m; histMark(m);
   setTimeout(() => m.addEventListener("click", e => {
     const b = e.target.closest("[data-fmi]"); closeMenu(); if (!b) return;
     const tb = f.querySelector(`.ftabs [data-ftab="${b.dataset.fmi}"]`); if (!tb) return;
@@ -293,7 +293,7 @@ function flyLayMenu(btn){
   document.body.appendChild(m);
   placeMenu(m, btn, r => r.right - m.offsetWidth);
   if (canAnim()) m.animate([{opacity:0, transform:"scale(.85,.4)"}, {opacity:1, transform:"none"}], {duration:T.spf, easing:SPRING_F});
-  window._menu = m;
+  window._menu = m; histMark(m);
   m.addEventListener("click", e => { const b = e.target.closest("[data-flay]"); if (!b) return; b.dataset.flay === "trk" ? flyTrkSet(!FLYTRKON) : flyVehSet(!FLYVEHON); closeMenu(); });
 }
 function flyTrkSet(on){
@@ -1271,7 +1271,8 @@ function flyTl(hb, hrs, tz){
     const k = b.dataset.fhr, x = m.get(k), n = x ? x.n : 0;
     b.disabled = !n; b.classList.toggle("past", !!(x && x.past)); b.classList.toggle("now", k === h0); b.classList.toggle("lb", +k % 3 === 0);
     b.style.setProperty("--h", (n / mx).toFixed(3)); b.setAttribute("aria-label", `${+k} 點 ${n} 班`);
-    txt(b.querySelector(".fhn"), n ? `${n} 班` : "");
+    const e = b.querySelector(".fhn"), t = n ? `${n} 班` : "";   // 只有選到的那根看得到班數；其他的直接換字，淡入動畫會讓藏著的字閃出來
+    if (b.classList.contains("on")) txt(e, t); else if (e.textContent !== t) e.textContent = t;
   });
 }
 /* 官網航班表照「幾點」分成一段一段：已經過了的算在這一小時 */
@@ -1703,7 +1704,7 @@ function flyInfo(id){
     ${rows.length ? `<div class="fdl">${rows.map(([k, val]) => `<div><span>${k}</span><b>${esc(val)}</b></div>`).join("")}</div>` : ""}
     ${reg ? `<div class="group"><a class="li" href="https://www.jetphotos.com/registration/${reg}" target="_blank" rel="noopener noreferrer"><span class="lab">看這架的照片<small>JetPhotos</small></span>${EXT}</a>
       <a class="li" href="https://www.flightradar24.com/data/aircraft/${reg.toLowerCase()}" target="_blank" rel="noopener noreferrer"><span class="lab">飛行紀錄<small>Flightradar24</small></span>${EXT}</a></div>` : ""}
-    </div><div class="btns">${p.x != null && p.live !== false ? `<button class="ubtn ghost" data-frad>在雷達上看</button>` : ""}<button class="ubtn ghost" data-r="0">關閉</button></div></div>`;
+    </div><div class="btns">${p.x != null && p.live !== false ? `<button class="ubtn" data-frad>在雷達上看</button>` : ""}</div></div>`;
   $("#layer").appendChild(v);
   flyPhoto(v.querySelector(".fph"), p);
   if (v.querySelector(".fgate")) flyGate(v, v.querySelector(".fgate"), p, d.ap.code);
@@ -2110,7 +2111,7 @@ async function flyShare(){
       <label>機場${sg("one", [[0, "四個都能看"], [1, `只看${esc(apn)}`]])}</label>
       <div class="lbl shl" hidden>已分享</div><div class="pklist"></div>
     </div>
-    <div class="btns"><button class="ubtn ghost" data-r="0">關閉</button><button class="ubtn" data-go>${navigator.share && matchMedia("(pointer:coarse)").matches ? "分享" : "複製連結"}</button></div></div>`;
+    <div class="btns"><button class="ubtn" data-go>${navigator.share && matchMedia("(pointer:coarse)").matches ? "分享" : "複製連結"}</button></div></div>`;
   $("#layer").appendChild(v);
   const list = v.querySelector(".pklist"), lbl = v.querySelector(".shl"), go = v.querySelector("[data-go]");
   const draw = items => { reveal(lbl, items.length > 0);
