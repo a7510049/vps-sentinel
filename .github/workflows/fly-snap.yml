@@ -1,0 +1,19 @@
+# 暫時用：存下真實的機場看板資料，提交回這個分支
+name: fly-snap
+on:
+  push:
+    paths: [tools/fly_snap.py]
+permissions:
+  contents: write
+jobs:
+  snap:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: python3 tools/fly_snap.py
+      - run: python3 tools/fly_audit.py > snap/audit.txt 2>&1 || true
+      - run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -f snap
+          git commit -m "暫時：機場看板真實資料" && git push
