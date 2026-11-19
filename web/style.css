@@ -97,6 +97,11 @@
 :root{--p2:var(--p); --grad:linear-gradient(135deg,var(--p),var(--p2))}
 @supports (color:oklch(from red l c h)){:root{--p2:oklch(from var(--p) l c calc(h + var(--gh,45)))}}
 :root{--me:oklch(.72 .15 250); --alt0:oklch(.8 .1 195); --alt1:oklch(.7 .14 240); --alt2:oklch(.64 .17 280); --alt3:oklch(.62 .19 320)}   /* 雷達尾跡的顏色：高度（低 → 高） */
+/* 塔台螢幕：雷達、進場排隊條一律是深綠底的螢光綠（深淺模式都一樣，像塔台的雷達螢幕） */
+:root{--tw-bg:oklch(.19 .035 165); --tw-bg2:oklch(.25 .05 160); --tw-land:oklch(.27 .05 158); --tw-line:oklch(.42 .08 155); --tw-arr:oklch(.88 .2 148); --tw-dep:oklch(.94 .06 190);
+  --tw-txt:oklch(.86 .14 150); --tw-dim:oklch(.62 .09 155); --tw-bad:oklch(.72 .2 28); --tw-a0:oklch(.86 .12 190); --tw-a1:oklch(.86 .17 145); --tw-a2:oklch(.88 .16 105); --tw-a3:oklch(.8 .16 65)}
+.twr{--s2:var(--tw-land); --s3:var(--tw-bg2); --s4:var(--tw-line); --p:var(--tw-arr); --tx:var(--tw-dep); --tx2:var(--tw-txt); --tx3:var(--tw-dim); --card:var(--tw-bg); --bad:var(--tw-bad);
+  --alt0:var(--tw-a0); --alt1:var(--tw-a1); --alt2:var(--tw-a2); --alt3:var(--tw-a3)}
 [data-mode="light"]{--me:oklch(.6 .17 250); --alt0:oklch(.72 .11 195); --alt1:oklch(.6 .15 240); --alt2:oklch(.52 .18 280); --alt3:oklch(.5 .2 320)}
 
 /* ═════════ 方塊圖示：每個概念一個自己的色調（底色淺、圖案深；深色模式相反） ═════════ */
@@ -1026,7 +1031,7 @@ html.flyon .dash>.view{content-visibility:hidden;contain-intrinsic-size:auto non
 .sgone b{font-size:var(--fs-xl);font-weight:600}
 /* 一格翻牌：上下兩半分開畫，中間一條縫 */
 /* 翻牌：一般照主題色；最上面的機場代碼和當地時間（.fhead）是機場老看板的黑底黃字。看板的列不用，狀態才分得出顏色 */
-.fhead .sf{--s3:oklch(.2 .012 260);--s2:color-mix(in oklab,oklch(.2 .012 260) 22%,transparent);--tx:oklch(.87 .15 92)}
+.rah .sf,.fhead .sf{--s3:oklch(.2 .012 260);--s2:color-mix(in oklab,oklch(.2 .012 260) 22%,transparent);--tx:oklch(.87 .15 92)}
 .sf{display:inline-flex;gap:2px;line-height:1;font-weight:500;font-variant-numeric:tabular-nums;vertical-align:middle}
 .sf .c{position:relative;contain:strict;font-style:normal;width:.8em;height:1.4em;flex:none;border-radius:calc(var(--r-xs) / 2);background:var(--s3);perspective:5em}
 .sf .c.w,.sf.zh .c{width:1.2em}
@@ -1148,22 +1153,23 @@ html.flyon .dash>.view{content-visibility:hidden;contain-intrinsic-size:auto non
 .radar{background:var(--card);box-shadow:var(--cs);border-radius:var(--r-xl);padding:16px;width:100%;max-width:480px;align-self:center}
 .fr.sel .sf .c[data-c=" "],.fr.sel .sf .c[data-c=" "] b{background:transparent}   /* 選到的那列：空格子不要變成深色方塊 */
 .board[data-tab="gnd"] .fr .t .sf{visibility:hidden}                              /* 地面沒有時間：不放空格子 */
-.radar .rbox{position:relative}
+.radar .rbox{position:relative;border-radius:var(--r-lg);background:radial-gradient(circle,var(--tw-bg2),var(--tw-bg) 72%)}   /* 塔台螢幕 */
+.radar .rbox .rfull{top:8px;right:8px}
 .rbox .rfull{position:absolute;top:0;right:0;background:var(--s2);box-shadow:var(--sh-1)}.rfull svg{width:18px;height:18px}
 .rsweep{position:absolute;left:50%;top:50%;width:calc(100% * 61 / 62);aspect-ratio:1;translate:-50% -50%;border-radius:50%;pointer-events:none;
-  background:conic-gradient(transparent 0 80%,color-mix(in oklab,var(--p) 18%,transparent));animation:spin calc(var(--t-long) * 5) steps(90) infinite}   /* 雷達掃描：只轉動；每秒轉 20 下就夠順（每格都轉很耗電） */
+  background:conic-gradient(transparent 0 60%,color-mix(in oklab,var(--tw-arr) 5%,transparent) 82%,color-mix(in oklab,var(--tw-arr) 26%,transparent) 99.5%,color-mix(in oklab,var(--tw-arr) 70%,transparent) 99.5%);animation:spin calc(var(--t-long) * 5) steps(90) infinite}   /* 雷達掃描：只轉動；每秒轉 20 下就夠順（每格都轉很耗電） */
 .rbox.off .rsweep{animation-play-state:paused}[data-motion="off"] .rsweep{display:none}@media (prefers-reduced-motion:reduce){.rsweep{display:none}}
 .radar .rcv{display:block;width:100%;height:auto;aspect-ratio:1;cursor:pointer;touch-action:manipulation}
 .fzm{margin-left:auto}.fzm button{height:26px;padding:0 10px}
 /* 整頁雷達 */
 .frad{position:fixed;inset:0;z-index:var(--z-det);background:var(--card);display:flex;--ct:0px;--cb:0px;--cl:0px;--cr:0px;animation:expand var(--t-slow) var(--dec) backwards}
 .frad.closing{animation:collapse var(--t-mid) var(--exit) forwards;pointer-events:none}
-.frmap{position:relative;flex:1;min-width:0}
+.frmap{position:relative;flex:1;min-width:0;background:radial-gradient(circle at 50% 45%,var(--tw-bg2),var(--tw-bg) 75%)}
 .frmap canvas{position:absolute;inset:0;width:100%;height:100%;touch-action:none;cursor:grab}
-.frsc{position:absolute;left:0;right:0;top:0;height:calc(env(safe-area-inset-top) + 150px);background:linear-gradient(var(--bg) 40%,transparent);pointer-events:none}
+.frsc{position:absolute;left:0;right:0;top:0;height:calc(env(safe-area-inset-top) + 150px);background:linear-gradient(var(--tw-bg) 40%,transparent);pointer-events:none}
 .frtop{position:absolute;top:calc(env(safe-area-inset-top) + 12px);left:12px;right:120px;display:flex;align-items:center;gap:10px;pointer-events:none}
 .frtop>*{pointer-events:auto}.frtop .icbtn{background:var(--s2);box-shadow:var(--sh-1)}
-.frname{font-size:var(--fs-l);font-weight:600;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;text-shadow:0 0 6px var(--bg)}
+.frname{font-size:var(--fs-l);font-weight:600;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--tw-txt);text-shadow:0 0 6px var(--tw-bg)}
 .frbar{position:absolute;top:calc(env(safe-area-inset-top) + 64px);left:12px;right:12px;display:flex;justify-content:center;pointer-events:none}
 .frchips{pointer-events:auto;max-width:420px;width:100%}
 .frchips button{box-shadow:var(--sh-1)}.frchips button:not(.on){background:var(--s2)}   /* 陰影跟著每顆按鈕的圓角，不會多一個方框 */
@@ -1190,14 +1196,14 @@ html.flyon .dash>.view{content-visibility:hidden;contain-intrinsic-size:auto non
 .frli{overflow-y:auto;padding:0 8px 12px;display:flex;flex-direction:column;gap:2px}
 .frr{display:flex;align-items:center;gap:12px;text-align:left;border-radius:var(--r-md);padding:6px 12px}
 .frr.on{background:var(--s3)}.frr .lab{flex:1;min-width:0}.frr .lab>*{display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.frr .lab small{color:var(--tx3);font-size:var(--fs-s)}
-.frlg{position:relative;flex:none;display:grid}.frlg .frd{position:absolute;right:-3px;bottom:-3px;box-shadow:0 0 0 2px var(--s1)}   /* 航空公司標誌，右下角的點是抵達／出發／路過 */
+.frlg{position:relative;flex:none;display:grid}.frlg .frd{position:absolute;right:-3px;bottom:-3px;box-shadow:0 0 0 2px var(--tw-bg)}   /* 航空公司標誌，右下角的點是抵達／出發／路過 */
 .frt{flex:none;min-width:5em;display:flex;flex-direction:column;align-items:flex-end;text-align:right;font-size:var(--fs-s);font-weight:500;color:var(--p)}.frt.bad{color:var(--bad)}
 .frt small{display:block;font-weight:400;color:var(--tx3)}   /* 右邊下面一行：離機場幾公里 */
 .frlh small{margin-left:10px;font-weight:400;font-size:var(--fs-s);color:var(--tx3)}
 .frg{display:flex;align-items:center;gap:8px;padding:12px 12px 4px;font-size:var(--fs-xs);font-weight:600;color:var(--tx3)}.frg:first-child{padding-top:2px}
 .frg .num{font-weight:400}   /* 清單分段：降落、起飛、路過 */
-.frd.frn{width:16px;height:16px;right:-5px;bottom:-5px;display:grid;place-items:center;background:var(--p);color:var(--on-p);font-size:var(--fs-xs);font-weight:700;font-style:normal;line-height:1}   /* 跟雷達延長線上一樣的降落順序號碼 */
-.frd{width:10px;height:10px;border-radius:50%;flex:none;background:var(--tx3)}.frd.arr{background:var(--p)}.frd.dep{background:var(--tx)}.frd.emg{background:var(--bad)}
+.frd.frn{width:16px;height:16px;right:-5px;bottom:-5px;display:grid;place-items:center;background:var(--tw-arr);color:var(--tw-bg);font-size:var(--fs-xs);font-weight:700;font-style:normal;line-height:1}   /* 跟雷達延長線上一樣的降落順序號碼 */
+.frd{width:10px;height:10px;border-radius:50%;flex:none;background:var(--tw-dim)}.frd.arr{background:var(--tw-arr)}.frd.dep{background:var(--tw-dep)}.frd.emg{background:var(--tw-bad)}   /* 跟雷達上一樣的顏色 */
 @media (min-width:900px){
   .frlist{position:relative;width:clamp(340px,28vw,400px);max-height:none;border-radius:0;box-shadow:none;border-left:1px solid var(--s3)}
   .frlh{pointer-events:none}.frlh .chv{display:none}
@@ -1206,17 +1212,37 @@ html.flyon .dash>.view{content-visibility:hidden;contain-intrinsic-size:auto non
 .rnote{margin-top:10px;padding:10px 14px;border-radius:var(--r-md);background:var(--warnc);color:var(--on-warnc);font-size:var(--fs-s)}
 .rleg{display:flex;flex-wrap:wrap;gap:6px 14px;margin-top:10px;font-size:var(--fs-s);color:var(--tx2);align-items:center}
 .rleg span{display:inline-flex;align-items:center;gap:6px}
-.rleg i{width:10px;height:10px;border-radius:50%;background:var(--tx3)}
-.rleg i.arr{background:var(--p)}.rleg i.dep{background:var(--tx)}
+.rleg i{width:10px;height:10px;border-radius:50%;background:var(--tw-dim);box-shadow:0 0 0 2px var(--tw-bg)}   /* 跟雷達上一樣的顏色（外面一圈螢幕底色） */
+.rleg i.arr{background:var(--tw-arr)}.rleg i.dep{background:var(--tw-dep)}
 .rleg .sub{margin-left:auto}
 .rleg b{font-weight:500;color:var(--tx);font-variant-numeric:tabular-nums;margin-left:2px}
 .rleg .ralt{gap:4px;color:var(--tx3);font-size:var(--fs-xs);order:8;flex:1 1 auto}.rleg .fzm{order:9}
 .rleg .ralt i{width:14px;height:4px;border-radius:var(--r-pill)}
-.rleg .ralt i:nth-of-type(1){background:var(--alt0)}.rleg .ralt i:nth-of-type(2){background:var(--alt1)}.rleg .ralt i:nth-of-type(3){background:var(--alt2)}.rleg .ralt i:nth-of-type(4){background:var(--alt3)}
+.rleg .ralt i:nth-of-type(1){background:var(--tw-a0)}.rleg .ralt i:nth-of-type(2){background:var(--tw-a1)}.rleg .ralt i:nth-of-type(3){background:var(--tw-a2)}.rleg .ralt i:nth-of-type(4){background:var(--tw-a3)}
 /* 雷達下面：跑道、風、能見度、溫度 */
-.rwx{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px}
-.rwx span{padding:4px 10px;border-radius:var(--r-pill);background:var(--s2);color:var(--tx2);font-size:var(--fs-s)}
-.rwx span.on{background:var(--pc);color:var(--on-pc);font-weight:500}
+/* 塔台廣播：左上一格翻牌字母（資訊 B），下面一格一格寫跑道、風、能見度… */
+.rwx{margin-top:10px;padding:12px 14px;border-radius:var(--r-lg);background:var(--s2)}
+.rah{display:flex;align-items:center;gap:10px}.rah>div{display:flex;flex-direction:column;min-width:0}
+.rah b{font-weight:700;font-size:var(--fs-s)}.rah small{color:var(--tx2);font-size:var(--fs-xs);font-variant-numeric:tabular-nums}
+.rah .sf.lg{font-size:var(--fs-xl)}
+.rad{display:grid;grid-template-columns:repeat(auto-fill,minmax(7.5em,1fr));gap:8px 12px;margin-top:10px}
+.rad .w2{grid-column:span 2}.rad>div{display:flex;flex-direction:column;min-width:0}.rad small{color:var(--tx3);font-size:var(--fs-xs)}.rad b{font-weight:600;font-size:var(--fs-s)}
+/* 進場排隊條：右邊是跑道，要降落的飛機照離跑道多遠排在線上，慢慢滑過去 */
+.rq{margin-top:10px;padding:10px 14px 12px;border-radius:var(--r-lg);background:var(--tw-bg);color:var(--tw-txt)}
+.rqh{display:flex;align-items:baseline;gap:10px;font-size:var(--fs-xs);color:var(--tw-dim)}.rqh b{margin-left:auto;font-size:var(--fs-s);font-weight:600;color:var(--tw-arr);text-align:right}
+.rqt{position:relative;height:84px;margin:4px 0 16px}
+.rqt::before{content:"";position:absolute;left:0;right:8%;top:50%;border-top:1px dashed var(--tw-line)}
+.rqk i{position:absolute;font-style:normal;top:calc(50% - 4px);height:8px;border-left:1px solid var(--tw-line)}
+.rqk small{position:absolute;top:50px;left:0;translate:-50% 0;white-space:nowrap;font-size:var(--fs-xs);color:var(--tw-dim)}
+.rqrw{position:absolute;right:0;top:calc(50% - 7px);width:8%;height:14px;border-radius:var(--r-xs);background:var(--tw-line);display:grid;place-items:center}
+.rqrn{position:absolute;right:4%;top:calc(50% + 46px);translate:50% 0;white-space:nowrap;font-size:var(--fs-xs);font-weight:600;color:var(--tw-txt)}
+.rqps{position:absolute;inset:0;pointer-events:none}
+.rqp{position:absolute;inset:0;transition:transform var(--t-long) linear}
+.rqp>span{position:absolute;left:0;top:calc(50% - 11px);translate:-50% 0;display:flex;flex-direction:column;align-items:center}
+.rqp i{width:22px;height:22px;border-radius:50%;display:grid;place-items:center;background:var(--tw-arr);color:var(--tw-bg);font-style:normal;font-weight:700;font-size:var(--fs-xs);box-shadow:0 0 8px color-mix(in oklab,var(--tw-arr) 60%,transparent)}
+.rqp b,.rqp small{white-space:nowrap;line-height:1.2}.rqp b{margin-top:3px;font-size:var(--fs-xs);font-weight:600;color:var(--tw-txt)}.rqp small{font-size:var(--fs-xs);color:var(--tw-dim)}
+.rqp.up>span{top:auto;bottom:calc(50% - 11px);flex-direction:column-reverse}.rqp.up b{margin:0 0 3px}
+.rqp.emg i{background:var(--tw-bad);box-shadow:0 0 8px var(--tw-bad)}
 .ffoot{text-align:center;padding:4px 16px}
 .ffoot a{color:var(--p);text-decoration:none}
 @media (min-width:1280px){

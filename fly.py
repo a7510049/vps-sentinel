@@ -216,6 +216,7 @@ FLY_CARGO_ICAO = {"NCA", "CAO", "CKK", "CSS", "SQC", "FDX", "UPS", "GTI", "CLX",
                   "DHK", "DHX", "BCS", "YZR", "CYZ", "ICV", "ATN", "ABX", "MPH", "TAY", "NPT", "SOO", "WGN", "AJT", "KYE", "YTO", "AZG", "NCR", "HYT"}
 FLY_CARGO_IATA = {"KZ", "CK", "O3", "FX", "5X", "5Y", "CV", "K4", "PO", "RU", "3S", "LD", "QY", "D0", "Y8", "CF", "M6", "GB", "YG", "C8", "K9", "7L", "KD", "N8", "8Y", "ES", "8C"}
 FLY_SKYS = {"cache": {}, "until": 0, "left": None, "out": 0, "tok": "", "texp": 0, "tbad": 0, "err": ""}
+FLY_SEEN_KEEP = 36 * 3600                      # 班機配到的註冊號、機型記多久：表定時間一樣才用，所以整天（跨半夜的也算）都查得到，隔天就清掉
 FLY = {"cache": {}, "routes": {}, "lock": threading.Lock(), "last": 0.0, "bad": {}, "rq": set(), "rbusy": False, "fetch": threading.Lock(), "logged": {}, "seen": {}, "view": {}, "used": 0, "hex": {}, "hq": set(), "hbusy": False, "zh": {}, "gate": {}, "types": {}, "turn": {}, "far": {}, "keep": {}, "land": {}, "rdir": {}}
 FLY_KEEP = 45          # 一架飛機漏收幾秒內，照上一次的位置留著（背景每 30 秒抓一次，漏一次不倒退）
 FLY_ELSE = 90          # 別的機場收到的同一班：幾秒內的算數
@@ -1603,7 +1604,7 @@ def fly_merge(ap, fids, rows, io):
                     row["est"] = now + p["eta"] * 60
             if p["emg"] or (p.get("hold") and io == "arr" and not done and r["st"] != "取消"):
                 row["st"] = p["st"] if p["emg"] else "盤旋等待"    # 緊急、在空中繞圈等降落：照即時的寫
-        elif seen and seen.get("sch") == r["sch"] and now - seen.get("at", 0) < 6 * 3600:
+        elif seen and seen.get("sch") == r["sch"] and now - seen.get("at", 0) < FLY_SEEN_KEEP:   # 同一班、同一天（表定時間一樣）：整天都記得是哪架飛機
             row.update(reg=seen.get("reg") or "", t=seen.get("t") or row["t"], model=seen.get("model") or row["model"], seen=seen["at"])
             fly_fix_type(row, r)
         if io == "dep" and r["st"] == "已飛" and p and p["ph"] == "gnd" and (p.get("d") or 99) < 6:
@@ -1641,9 +1642,10 @@ def fly_merge(ap, fids, rows, io):
     for k, v in list(FLY["land"].items()) if len(FLY["land"]) > 500 else []:
         if now - v.get("land", v["air"]) > 6 * 3600:
             FLY["land"].pop(k, None)
-    if len(FLY["seen"]) > 2000:
+    if len(FLY["seen"]) > 2000 or now - FLY.get("seen_gc", 0) > 86400:   # 每天清一次（太多時也清）
+        FLY["seen_gc"] = now
         for k, v in list(FLY["seen"].items()):
-            if now - v.get("at", 0) > 6 * 3600:
+            if now - v.get("at", 0) > FLY_SEEN_KEEP:
                 FLY["seen"].pop(k, None)
     return out[:300]                                   # 網頁照時段分開看，可以多給一點
 
@@ -1898,7 +1900,7 @@ def fly_seen_load():
         with open(FLY_SEEN_FILE, encoding="utf-8") as f:
             d = json.load(f)
         if d.get("v") == 2:                   # 舊版用 hexdb 查到的機型有過時的，不沿用
-            FLY["seen"].update({k: v for k, v in (d.get("seen") or {}).items() if isinstance(v, dict) and time.time() - v.get("at", 0) < 6 * 3600})
+            FLY["seen"].update({k: v for k, v in (d.get("seen") or {}).items() if isinstance(v, dict) and time.time() - v.get("at", 0) < FLY_SEEN_KEEP})
         FLY["zh"].update({k: v for k, v in (d.get("zh") or {}).items() if isinstance(v, str)})
         FLY["gate"].update({k: v for k, v in (d.get("gate") or {}).items() if isinstance(v, dict) and time.time() - v.get("t", 0) < 12 * 3600})
         FLY["used"] = float(d.get("used") or 0)
