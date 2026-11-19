@@ -1223,7 +1223,7 @@ html.flyon .dash>.view{content-visibility:hidden;contain-intrinsic-size:auto non
   .radar{grid-column:2;max-width:none;align-self:stretch;border-radius:0 var(--r-xl) var(--r-xl) 0;border-left:1px solid var(--s3)}
   .rin{position:sticky;top:16px}
 }
-/* 手機、平板：往下捲看板時，抵達／出發那排分頁貼在畫面最上面（不用捲回去才能換） */
+/* 手機、平板：抵達／出發那排捲出畫面後，上面中間浮出小膠囊（不用捲回去才能換） */
 @media (max-width:1279px){
   /* 抵達／出發那排捲出畫面後：上面中間浮出小膠囊（flyStuck），點了選分頁；看板不會被一整排擋住 */
   .fmini{position:absolute;top:calc(env(safe-area-inset-top) + 10px);left:50%;z-index:var(--z-bar);display:flex;align-items:center;gap:6px;height:40px;padding:0 12px 0 16px;
