@@ -45,7 +45,7 @@ from collections import deque
 from concurrent.futures import ThreadPoolExecutor
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
-VERSION = "3.93"
+VERSION = "3.94"
 
 # ───────────────────────── 哨兵備份檔（.vsbk）─────────────────────────
 # 哨兵專用的備份格式：外面是自己的檔案格式，裡面用的是成熟、標準的加密方法（不自己發明加密）：
@@ -3778,7 +3778,7 @@ def html_csp(data):
     return HTML_CSP[key]
 
 
-GZ_TYPES = {"application/json", "text/html", "text/javascript", "application/javascript", "text/css", "image/svg+xml", "application/manifest+json"}
+GZ_TYPES = {"application/json", "text/html", "text/javascript", "application/javascript", "text/css", "image/svg+xml", "application/manifest+json", "application/octet-stream"}   # octet-stream：雷達的地形高度（98 KB → 26 KB）
 GZ_KEEP = {}                                     # 網頁、機場程式這類固定內容：壓過一次就留著（指紋 → 壓好的）
 
 

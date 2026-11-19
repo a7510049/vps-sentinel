@@ -1197,6 +1197,11 @@ html.flyon .dash>.view{content-visibility:hidden;contain-intrinsic-size:auto non
   .radar{grid-column:2;max-width:none;align-self:stretch;border-radius:0 var(--r-xl) var(--r-xl) 0;border-left:1px solid var(--s3)}
   .rin{position:sticky;top:16px}
 }
+/* 手機、平板：往下捲看板時，抵達／出發那排分頁貼在畫面最上面（不用捲回去才能換） */
+@media (max-width:1279px){
+  .ftabs{position:sticky;top:0;z-index:var(--z-bar);margin:calc(-6px - env(safe-area-inset-top)) -16px -6px;padding:calc(env(safe-area-inset-top) + 6px) 16px 6px;
+    background:color-mix(in oklab,var(--bg) 84%,transparent);-webkit-backdrop-filter:blur(18px);backdrop-filter:blur(18px)}
+}
 /* 手機：每一列分三行：時間、航班、狀態／從哪來、航空公司／機型、註冊號 */
 @media (max-width:899px){
   .board{display:flex;flex-direction:column;gap:6px;padding:8px}
