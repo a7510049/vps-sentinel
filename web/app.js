@@ -156,23 +156,31 @@ function avatar(s){
 const safeUrl = u => /^https?:\/\/[^\s"'<>]+$/i.test(u || "") ? u : "";
 const linksOf = s => (s.links || (s.panel ? [{name:"管理後台", url:s.panel}] : []))
   .map(x => x.fixed && s.cloud ? {...x, url: cloudHref(s.cloud), sso: keyOf(s)} : x).filter(x => safeUrl(x.url));   // 雲端硬碟：點了用一次性登入票打開
-/* 雲端硬碟一鍵登入：一次性登入票用表單送出，不放在網址上（網址列、瀏覽紀錄都看不到）；票用過一次就失效 */
-const cloudHref = c => c.ticket ? c.url : (c.login || c.url);    // 沒有登入票的是還沒更新的主機，照舊用它給的網址
-const ssoAttr = s => s.cloud && s.cloud.ticket ? ` data-sso="${esc(keyOf(s))}"` : "";
-const TK_USED = new Set();
-function openCloud(s){
-  const c = s && s.cloud;
-  if (!c || !c.ticket || TK_USED.has(c.ticket) || !safeUrl(c.login)) return false;   // 票用過了：直接開雲端硬碟（剛剛已經拿到通行證）
-  TK_USED.add(c.ticket);
+/* 雲端硬碟：每次打開都要先驗證 PIN 碼、手機金鑰或密碼，過了主機才給一次性登入票（用表單送出，不放在網址上） */
+const cloudHref = c => c.url;
+const ssoAttr = s => s.cloud ? ` data-sso="${esc(keyOf(s))}"` : "";
+function cloudSubmit(t, target){
   const f = document.createElement("form"), i = document.createElement("input");
-  Object.assign(f, {method: "post", action: c.login, target: "_blank", rel: "noopener noreferrer", hidden: true});
-  Object.assign(i, {type: "hidden", name: "t", value: c.ticket});
+  Object.assign(f, {method: "post", action: t.login, target, rel: "noopener noreferrer", hidden: true});
+  Object.assign(i, {type: "hidden", name: "t", value: t.ticket});
   f.append(i); document.body.append(f); f.submit(); f.remove();
-  return true;
+}
+async function openCloud(s, here){
+  if (!s || !s.cloud) return;
+  const has = await pkCall("/api/passkey-login", {action:"has"}).catch(() => ({}));
+  const t = await pinAsk({title: "打開雲端硬碟", sub: s.name, icon: "cloud", pin: !!has.pin, passkey: PK_OK && !!has.has,
+    send: c => pkCall("/api/cloud-open", {...c, node: s.node || ""}, 1)});
+  if (!t || !t.ticket || !safeUrl(t.login)) return;
+  if (here) return cloudSubmit(t, "_self");
+  const w = window.open("", "vscloud");                 // 驗證完馬上開新分頁；被瀏覽器擋下來就給一顆按鈕再按一次
+  if (w) return cloudSubmit(t, "vscloud");
+  modal({icon: ICO.cloud[1], cls: "cloud", title: "雲端硬碟", text: "驗證好了", ok: "打開"}).then(go => { if (go) cloudSubmit(t, "_blank"); });
 }
 document.addEventListener("click", e => {
   const a = e.target.closest && e.target.closest("a[data-sso]");
-  if (a && !e.ctrlKey && !e.metaKey && !e.shiftKey && e.button === 0 && openCloud(LIST.find(x => keyOf(x) === a.dataset.sso))) e.preventDefault();
+  if (!a || e.button !== 0) return;
+  e.preventDefault();
+  openCloud(LIST.find(x => keyOf(x) === a.dataset.sso));
 }, true);
 const linkSt = x => x.up === false ? `打不開：${x.err || "連不上"}` : x.up ? `正常・${x.ms} 毫秒` : x.err ? "剛剛沒回應，再確認一次中…" : "還沒檢查";
 /* 主機名稱旁的「⋯」：編輯、重新開機、移除（雲端硬碟、下載、連結都在「工具」） */
@@ -2057,6 +2065,49 @@ async function sessModal(){
   });
 }
 
+/* 要驗證是你本人：打亂的 PIN 碼鍵盤（主要），旁邊可以改用手機金鑰或密碼
+   send(憑證) 送去主機：PIN 碼是 {pin:{nonce, proof}}、手機金鑰是簽好的資料、密碼是 {pw}；回傳主機的回覆（ok 才關），取消回傳 null */
+function pinAsk({title, sub = "", icon = "pin", pin = true, passkey = false, pw = true, begin, send}){
+  begin = begin || (() => pkCall("/api/pin-login", {action:"begin"}));
+  return new Promise(res => {
+    const v = document.createElement("div"); v.className = "veil";
+    const links = [passkey ? `<button class="linkish" data-ppk>${I("finger")}用手機金鑰</button>` : "", pw && pin ? `<button class="linkish" data-ppw>改用密碼</button>` : ""].join("");
+    v.innerHTML = `<div class="dialog pindlg2">${IC(icon, "big")}<h3>${esc(title)}</h3>${sub ? `<p>${esc(sub)}</p>` : ""}
+      <div class="ppbox"${pin ? "" : " hidden"}></div>
+      <div class="form ppw"${pin ? " hidden" : ""}><input class="field" type="password" placeholder="存取密碼" autocomplete="current-password"><button class="ubtn" data-pwgo>確定</button></div>
+      <div class="msg"></div>${links ? `<div class="pplinks">${links}</div>` : ""}
+      <div class="btns"><button class="ubtn ghost" data-r="0">取消</button></div></div>`;
+    $("#layer").appendChild(v);
+    const msg = v.querySelector(".msg"), box = v.querySelector(".ppbox"), pwf = v.querySelector(".ppw"), inp = pwf.querySelector("input");
+    let out = null, busy = false;
+    const done = () => { if (v._d) return; v._d = 1; v.classList.add("closing"); setTimeout(() => { v.remove(); res(out); }, 360); };
+    v._esc = done;
+    const say = t => { msg.className = "msg bad"; sayTo(msg, t); };
+    const tryIt = async (mk, onBad) => {
+      if (busy) return; busy = true; pad && pad.busy(true); sayTo(msg, "");
+      let d;
+      try { d = await send(await mk()); } catch(e) { d = {message: e.name === "NotAllowedError" || e.name === "AbortError" ? "" : e.message}; }
+      busy = false; pad && pad.busy(false);
+      if (d && d.ok) { out = d; return done(); }
+      if (d && d.message) say(d.message);
+      onBad && onBad();
+    };
+    const pad = pin ? pinPad(box, {ok: p => tryIt(() => pinProof(p, begin).then(x => ({pin: x})), () => pad.again())}) : null;
+    if (!pin) setTimeout(() => inp.focus(), 60);
+    const pwGo = () => { const x = inp.value.trim(); if (!x) return inp.focus(); tryIt(async () => ({pw: x}), () => inp.select()); };
+    inp.addEventListener("keydown", e => { if (e.key === "Enter") { e.preventDefault(); pwGo(); } });
+    v.addEventListener("click", e => {
+      if (e.target === v || e.target.closest("[data-r]")) return done();
+      if (e.target.closest("[data-pwgo]")) return pwGo();
+      if (e.target.closest("[data-ppw]")) { reveal(box, false); e.target.closest("[data-ppw]").remove(); reveal(pwf, true); return setTimeout(() => inp.focus(), 60); }
+      if (e.target.closest("[data-ppk]")) return tryIt(async () => {
+        const b = await pkCall("/api/passkey-login", {action:"begin"});
+        const c = await navigator.credentials.get({publicKey:{challenge:ub(b.challenge), rpId:b.rp, timeout:120000, userVerification:"required"}});
+        return {id:bu(c.rawId), clientDataJSON:bu(c.response.clientDataJSON), authenticatorData:bu(c.response.authenticatorData), signature:bu(c.response.signature)};
+      });
+    });
+  });
+}
 /* ═════════ PIN 碼登入：4～8 位數字，連續輸錯 5 次暫停 15 分鐘，累計 10 次自動關閉 ═════════ */
 const pinCall = body => pkCall("/api/pin", body, 1);
 async function pinStatus(root){
@@ -2069,41 +2120,30 @@ async function pinStatus(root){
 async function pinModal(){
   const st = await pinCall({action:"status"}).catch(() => ({}));
   const v = document.createElement("div"); v.className = "veil";
-  const inp = k => `<input class="field" data-k="${k}" type="password" inputmode="numeric" pattern="[0-9]*" maxlength="8" autocomplete="new-password">`;
-  v.innerHTML = `<div class="dialog pindlg">${IC("pin","big")}<h3>${st.on ? "換一組 PIN 碼" : "設定 PIN 碼"}</h3>
-    <p>用短短的數字登入</p>
-    <div class="form">
-      <label>新的 PIN 碼${inp("a")}<small>4～8 位數字，輸錯太多次會暫停</small></label>
-      <label>再輸入一次${inp("b")}</label>
-      <div class="msg"></div></div>
-    <div class="btns ${st.on ? "three" : ""}">${st.on ? `<button class="ubtn ghost" data-off>關閉 PIN 碼</button>` : ""}<button class="ubtn ghost" data-r="0">取消</button><button class="ubtn" data-save>儲存</button></div></div>`;
+  v.innerHTML = `<div class="dialog pindlg2">${IC("pin","big")}<h3>${st.on ? "換一組 PIN 碼" : "設定 PIN 碼"}</h3>
+    <p data-t>輸入 4～8 位數字</p><div class="ppbox"></div><div class="msg"></div>
+    <div class="btns">${st.on ? `<button class="ubtn ghost" data-off>關閉 PIN 碼</button>` : ""}<button class="ubtn ghost" data-r="0">取消</button></div></div>`;
   $("#layer").appendChild(v);
-  const q = k => v.querySelector(`[data-k="${k}"]`), msg = v.querySelector(".msg");
-  setTimeout(() => q("a").focus(), 60);
-  v.addEventListener("input", e => {                // 只留數字（全形數字也換成半形）
-    const f = e.target; if (!f.matches("[data-k]")) return;
-    const d = f.value.replace(/[０-９]/g, c => String.fromCharCode(c.charCodeAt(0) - 0xFEE0)).replace(/\D/g, "").slice(0, 8);
-    if (d !== f.value) f.value = d;
-  });
+  const msg = v.querySelector(".msg"), tip = v.querySelector("[data-t]");
   return new Promise(res => {
-    let busy = false;
+    let busy = false, first = "";
     const done = () => { if (v._d) return; v._d = 1; v.classList.add("closing"); setTimeout(() => { v.remove(); res(); }, 360); };
     v._esc = done;
-    const bad = t => { msg.className = "msg bad"; msg.textContent = t; };
-    const save = async () => {
-      const a = q("a").value.trim(), b = q("b").value.trim();
-      if (!/^\d{4,8}$/.test(a)) return bad("PIN 碼要是 4 到 8 位數字");
-      if (a !== b) return bad("兩次輸入的不一樣");
-      busy = true;
-      const d = await pinCall({action:"set", pin:a}).catch(e => ({message:e.message}));
-      busy = false;
-      if (d.ok) { toast(d.message); done(); } else bad(d.message || "設定失敗");
-    };
-    v.addEventListener("keydown", e => { if (e.key === "Enter" && !busy) { e.target === q("a") ? q("b").focus() : save(); } });
+    const bad = t => { msg.className = "msg bad"; sayTo(msg, t); };
+    const pad = pinPad(v.querySelector(".ppbox"), {ok: async p => {      // 先輸入一次，鍵盤重新打亂再輸入一次；PIN 碼在這裡算好雜湊才送出
+      if (!first) {
+        if (pinWeak(p)) { bad("這組太好猜了，換一組吧"); return pad.again(); }
+        first = p; sayTo(msg, ""); txt(tip, "再輸入一次"); return pad.again();
+      }
+      if (p !== first) { first = ""; txt(tip, "輸入 4～8 位數字"); bad("兩次輸入的不一樣，請重新輸入"); return pad.again(); }
+      busy = true; pad.busy(true);
+      const d = await pinMake(p).then(x => pinCall({action:"set", pin:x})).catch(e => ({message:e.message}));
+      busy = false; pad.busy(false);
+      if (d.ok) { toast(d.message); done(); } else { first = ""; txt(tip, "輸入 4～8 位數字"); bad(d.message || "設定失敗"); pad.again(); }
+    }});
     v.addEventListener("click", async e => {
       if (e.target === v || e.target.closest("[data-r]")) return done();
       if (busy) return;
-      if (e.target.closest("[data-save]")) return save();
       if (e.target.closest("[data-off]")) {
         busy = true;
         const d = await pinCall({action:"off"}).catch(err => ({message:err.message}));
@@ -2211,15 +2251,18 @@ function rebootModal(node, name){
     busy = false; go.disabled = false; go.textContent = asked ? "重新開機" : "繼續";
     if (!d.ok) { reveal(form, true); return say(d.message || "傳送失敗", 1); }
     asked = true; go.textContent = "重新開機"; reveal(form, true);
-    if (d.mode === "pw") { txt.textContent = "沒設定 Telegram，請輸入這台的密碼或 PIN 碼"; inp.type = "password"; inp.placeholder = "密碼或 PIN 碼"; }
+    if (d.mode === "pw") { txt.innerHTML = `沒設定 Telegram，請輸入這台的密碼 <a href="#" data-rpin>用 PIN 碼</a>`; inp.type = "password"; inp.placeholder = "密碼"; }
     else { txt.innerHTML = `請輸入 Telegram 收到的驗證碼 <a href="#" data-again>重傳</a>`; inp.inputMode = "numeric"; inp.maxLength = 6; inp.placeholder = "6 位數驗證碼"; say(d.message); }
     inp.value = ""; setTimeout(() => inp.focus(), 60);
   };
+  const nq = node ? "?node=" + encodeURIComponent(node) : "";
+  const begin = () => pkCall("/api/pin" + nq, {action:"begin"}, 1);
   const boot = async () => {
-    const code = inp.value.trim();
+    let code = inp.value.trim();
     if (!code) return inp.focus();
     wait("重新開機中…");
-    const d = await call({action:"go", code});
+    if (inp.type === "password" && /^\d{4,8}$/.test(code)) code = await pinProof(code, begin).catch(e => ({err: e.message}));   // 打的是 PIN 碼：一樣不原樣送出
+    const d = code.err ? {message: code.err} : await call({action:"go", code});
     busy = false; go.disabled = false; go.textContent = "重新開機";
     if (d.ok) { toast(`「${name}」正在重新開機`); done(); } else { say(d.message || "沒有成功", 1); inp.select(); }
   };
@@ -2228,6 +2271,11 @@ function rebootModal(node, name){
   v.addEventListener("click", e => {
     if (e.target === v || e.target.closest("[data-r]")) return done();
     if (e.target.closest("[data-again]")) { e.preventDefault(); if (!busy) ask(); return; }
+    if (e.target.closest("[data-rpin]")) {          // 用 PIN 碼：打亂的數字鍵盤，對了就直接重新開機
+      e.preventDefault();
+      return pinAsk({title: `重新開機「${name}」`, pw: false, begin, send: c => call({action:"go", code:c.pin})})
+        .then(d => { if (d) { toast(`「${name}」正在重新開機`); done(); } });
+    }
     if (e.target.closest("[data-go]") && !busy) asked ? boot() : ask();
   });
 }
@@ -2570,19 +2618,19 @@ async function bkRestore(){
 const LOGO = LOGOSVG("lg").replace("<svg", '<svg class="logo"');
 function login(msg){
   $("#app").innerHTML = `<div class="login ${msg?"shake":""}">${LOGO}<h1>VPS 哨兵</h1>
-    <input id="tok" class="field" type="password" placeholder="${PIN_ON ? "存取密碼或 PIN 碼" : "存取密碼"}" autocomplete="current-password">
+    <input id="tok" class="field" type="password" placeholder="存取密碼" autocomplete="current-password">
     <label class="remember"><input type="checkbox" id="rem" ${REM ? "checked" : ""}><span>30 天內不用再登入</span></label>
-    <div class="err">${msg||""}</div><button class="ubtn" data-login>進入</button>${PK_OK && store("vps-pk") ? pkBtn : ""}</div>`;
+    <div class="err">${msg||""}</div><button class="ubtn" data-login>進入</button>${PIN_ON ? pinBtn : ""}${PK_OK && store("vps-pk") ? pkBtn : ""}</div>`;
   $("#tok").addEventListener("keydown",e=>{ if(e.key==="Enter") doLogin(); });
   $("#rem").addEventListener("change", e => { REM = e.target.checked; });
   pkCall("/api/passkey-login", {action:"has"}).then(d => {   // 問主機有沒有設定 PIN 碼、有沒有登記手機金鑰，有才顯示
     const box = $("#app .login");
     if (!box) return;
-    PIN_ON = !!d.pin; $("#tok").placeholder = PIN_ON ? "存取密碼或 PIN 碼" : "存取密碼";
-    if (!PK_OK || !d.has || box.querySelector("[data-pklogin]")) return;
-    box.insertAdjacentHTML("beforeend", pkBtn);
-    const b = box.lastElementChild;
-    if (canAnim()) b.animate([{opacity:0, transform:"translateY(-4px)"}, {opacity:1, transform:"none"}], {duration:T.mid, easing:EASE});
+    PIN_ON = !!d.pin;
+    const add = h => { box.insertAdjacentHTML("beforeend", h); const b = box.lastElementChild;
+      if (canAnim()) b.animate([{opacity:0, transform:"translateY(-4px)"}, {opacity:1, transform:"none"}], {duration:T.mid, easing:EASE}); };
+    if (PIN_ON && !box.querySelector("[data-pinlogin]")) add(pinBtn);
+    if (PK_OK && d.has && !box.querySelector("[data-pklogin]")) add(pkBtn);
   }).catch(() => {});
   fetch("/api/restore", {cache:"no-store"}).then(r => r.json()).then(d => {   // 剛裝好、正在等待還原：多一個入口
     const box = $("#app .login");
@@ -2704,20 +2752,27 @@ function rswEnd(body, pg, msg){
   };
 }
 let REM = true, PIN_ON = false;
-/* 輸入 4～8 位數字、主機又有設定 PIN 碼：當成 PIN 碼；其他都當成存取密碼 */
+/* 輸入 4～8 位數字、主機又有設定 PIN 碼：當成 PIN 碼（一樣不原樣送出）；其他都當成存取密碼 */
 async function doLogin(){
   const v = $("#tok").value.trim();
   const pin = PIN_ON && /^\d{4,8}$/.test(v);
   const b = $("#app [data-login]"); b.disabled = true;
   let d = {};
   try { const r = await fetch(pin ? "/api/pin-login" : "/api/login", {method:"POST", headers:{"Content-Type":"application/json"},
-      body:JSON.stringify({[pin ? "pin" : "pw"]:v, keep:REM, dev:devLabel()})});
+      body:JSON.stringify({[pin ? "pin" : "pw"]: pin ? await pinProof(v, () => pkCall("/api/pin-login", {action:"begin"})) : v, keep:REM, dev:devLabel()})});
     d = await r.json().catch(() => ({})); }
   catch(e) { d = {message:"連線失敗，請稍後再試"}; }
   if (d.ok && d.token) { if (!pin) window._fresh = true; setTok(d.token, REM); return tick(); }   // 用密碼登入才把 PIN 碼輸錯的次數歸零
   login(d.message || (pin ? "PIN 碼不對" : "密碼不對，再試一次"));
 }
 const pkBtn = `<button class="ubtn ghost pkbtn" data-pklogin>${I("finger")}用手機金鑰登入</button>`;
+const pinBtn = `<button class="ubtn ghost pkbtn" data-pinlogin>${I("pin")}用 PIN 碼登入</button>`;
+async function pinLoginClick(){
+  const d = await pinAsk({title: "PIN 碼登入", pw: false,
+    send: async c => { const r = await api("/api/pin-login", {method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({...c, keep:REM, dev:devLabel()})});
+      return r.json().catch(() => ({})); }});
+  if (d && d.token) { setTok(d.token, REM); tick(); }
+}
 async function pkLoginClick(b){
   const err = $("#app .login .err");
   b.disabled = true; err.textContent = "";
@@ -2733,6 +2788,7 @@ document.addEventListener("click", async e => {
   const t = e.target;
   if (t.closest("[data-login]")) return doLogin();
   if (t.closest("[data-pklogin]")) return pkLoginClick(t.closest("[data-pklogin]"));
+  if (t.closest("[data-pinlogin]")) return pinLoginClick();
   if (t.closest("[data-rsw]")) return restoreScreen();
   const tb = t.closest("[data-tab]");
   if (tb) { if ($("#fly") && !tb.closest("#fly")) { flyClose(); if (TAB === tb.dataset.tab) return; } return setTab(tb.dataset.tab); }   // 機場起降開著時按分頁列：先關掉
@@ -2970,10 +3026,10 @@ async function tick(){
     histJoin(data);
     const me = data.find(x => !x.node);
     if (window._fresh) { window._fresh = false; fetch("/api/pin", {method:"POST", headers:{"X-Token":getTok()}, body:'{"action":"login"}'}).catch(() => {}); }  // 登入成功：PIN 碼輸錯的次數歸零
-    if (new URLSearchParams(location.search).get("go") === "cloud" && me && me.cloud && !window._goCloud) {   // 從雲端硬碟跳過來登入：登入好了就送回去
+    if (new URLSearchParams(location.search).get("go") === "cloud" && me && me.cloud && !window._goCloud) {   // 直接打開雲端硬碟的網址：驗證好了就送回去
       window._goCloud = true;
-      await fetch("/api/cloud-login", {method:"POST", headers:{"X-Token":getTok()}}).catch(() => {});
-      return location.replace("/cloud/");
+      history.replaceState(null, "", location.pathname + location.hash);
+      setTimeout(() => openCloud(me, true), 900);
     }
     const tz = -new Date().getTimezoneOffset();
     if (me && "bk_tz" in me && me.bk_tz !== tz && !window._tzSent) {   // 備份檔名上的時間跟這支手機／電腦一樣（所有主機一起用）
