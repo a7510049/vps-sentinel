@@ -5,7 +5,7 @@ const flySave = () => store(FLYK, JSON.stringify({ap: FLYS.ap, tab: FLYS.tab, na
 const FLYTAB = [["arr", "抵達"], ["dep", "出發"], ["gnd", "機坪"], ["cargo", "貨機"]];
 /* 分頁前面的小圖示（像機場指示牌）：降落、起飛、停機坪、貨物 */
 const FLYPLN = (r, y) => `<g transform="translate(12 ${y}) rotate(${r}) scale(.72) translate(-12 -12)">${P.plane}</g>`;
-const FLYTI = {arr: FLYPLN(90, 10) + '<path d="M3 21h18"/>', dep: FLYPLN(0, 10) + '<path d="M3 21h18"/>', gnd:'<rect x="4" y="4" width="16" height="16" rx="3"/><path d="M10 16V8h3a2.5 2.5 0 0 1 0 5h-3"/>', cargo:'<path d="M3 7.5 12 3l9 4.5v9L12 21l-9-4.5zM3 7.5l9 4.5 9-4.5M12 12v9"/>'};
+const FLYTI = {arr: FLYPLN(90, 10) + '<path d="M3 21h18"/>', dep: FLYPLN(0, 10) + '<path d="M3 21h18"/>', gnd:'<rect x="4" y="4" width="16" height="16" rx="3"/><path d="M10 16V8h3a2.5 2.5 0 0 1 0 5h-3"/>', cargo:'<path d="M3 7.5 12 3l9 4.5v9L12 21l-9-4.5zM3 7.5l9 4.5 9-4.5M12 12v9"/>', late:'<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>'};
 const flyTi = k => `<svg class="fti" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${FLYTI[k]}</svg>`;
 const flyFT = tab => tab === "arr" || tab === "dep";       // 照官網表排的分頁（機坪、貨機是收得到訊號的飛機）
 const FLYCH = " ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-:.";
@@ -1324,7 +1324,7 @@ function flyPaint(anim){
   if (byHr && !hrs.some(x => x.k === FLYHR)) FLYHR = (hrs.find(x => !x.past) || hrs[hrs.length - 1]).k;   // 預設看現在這個小時（前面是今天已經過去的時段）
   const hb = f.querySelector(".fhrs"), sig = hrs.map(x => x.k + ":" + x.n).join(",");
   const sm = f.querySelector(".fsum"), st = d.fids && !d.loading && d.ok ? flySum(d) : "";   // 接下來一小時：幾班抵達、幾班出發、幾班延誤
-  if (!d.loading) { flyRv(sm, !!st); if (st) (FLYSTILL ? flySet : txt)(sm, st); }
+  if (!d.loading) { flyRv(sm, !!st); if (st) flySumSet(sm, st); }
   f.classList.toggle("fwait", !!d.loading);
   if (!d.loading) flyRv(hb, byHr);                         // 等資料時時段那排留著（淡掉），不要收起來又長出來
   if (byHr && hb._sig !== sig) { hb._sig = sig; flyTl(hb, hrs, d.ap.tz); }   // 時段長條圖：班數變了只改高度，時段變了才重排
@@ -1421,10 +1421,18 @@ function flyRows(f, d, list, n, byHr, tz, anim){
   if (box._flip) { box._flip(); box._flip = null; }
   flyBeat(box);
 }
+/* 接下來一小時：圖示＋數字（抵達、出發、延誤橘色；延誤 0 班就不放） */
+function flySumSet(sm, [a, b, late]){
+  if (!sm.querySelector(".fsn")) sm.innerHTML = `<span class="fsl">1 小時內</span>${["arr", "dep", "late"].map(k => `<span class="fsn ${k}" title="${{arr:"抵達", dep:"出發", late:"延誤"}[k]}">${flyTi(k)}<b></b></span>`).join("")}`;
+  const n = sm.querySelectorAll(".fsn b");
+  [a, b, late].forEach((v, i) => { const t = String(v); if (n[i].textContent !== t) (FLYSTILL ? (e => { e.textContent = t; }) : txt)(n[i], t); });
+  sm.querySelector(".fsn.late").hidden = !late;
+  sm.setAttribute("aria-label", `接下來一小時 抵達 ${a} 班、出發 ${b} 班${late ? `、延誤 ${late} 班` : ""}`);
+}
 function flySum(d){
   const now = Date.now() / 1000, up = p => p.fids && !/取消|已到|已飛/.test(p.st || "") && (p.est || p.sch) >= now - 300 && (p.est || p.sch) < now + 3600;
   const a = (d.arr || []).filter(up), b = (d.dep || []).filter(up), late = [...a, ...b].filter(p => p.est && p.est - p.sch >= 900).length;
-  return a.length || b.length ? `接下來一小時 抵達 ${a.length} 班・出發 ${b.length} 班${late ? `・延誤 ${late} 班` : ""}` : "";
+  return a.length || b.length ? [a.length, b.length, late] : null;
 }
 /* 小標籤：最多一個，只放最要緊的（其他變更看字的顏色：時間早綠晚橘、登機門和機型改了是橘字） */
 function flyTags(p, v){
