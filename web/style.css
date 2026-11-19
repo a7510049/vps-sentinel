@@ -136,14 +136,12 @@
 *::-webkit-scrollbar{display:none}                                     /* 不顯示拉條，照樣能捲 */
 html{background:var(--bg);color:var(--tx);touch-action:manipulation;accent-color:var(--p);caret-color:var(--p);
   transition:background-color var(--t-mid) var(--ease),color var(--t-mid) var(--ease)}
-/* 頁面頂端的光暈：從頁面上方 600px 就開始畫，Safari 拉到頂往下彈時露出來的也是光暈，不會有一條底色 */
-html::before{content:"";position:absolute;left:0;right:0;top:-600px;height:1100px;z-index:-1;pointer-events:none;--gy:600px}
+/* 頁面頂端的光暈：固定在視窗上，往下捲不跟著跑（手機、電腦都一樣；往上多畫 600px，Safari 拉到頂往下彈時露出來的也是光暈） */
+html::before{content:"";position:fixed;left:0;right:0;top:-600px;height:calc(100lvh + 600px);z-index:-1;pointer-events:none;--gy:600px}
 /* 光暈的位置照視窗算：主機頁、機場起降蓋上來時也畫同一片，跟左邊分頁列接得起來（--gx 往右挪了多少、--gz 放大倍數） */
 html::before,.det,.flyv{background-image:
   radial-gradient(calc(70vw / var(--gz,1)) calc(420px / var(--gz,1)) at calc(6vw / var(--gz,1) - var(--gx,0px)) calc(var(--gy,0px) - 60px / var(--gz,1)),color-mix(in oklab,var(--seed) var(--glow),transparent),transparent),
   radial-gradient(calc(60vw / var(--gz,1)) calc(380px / var(--gz,1)) at calc(96vw / var(--gz,1) - var(--gx,0px)) calc(var(--gy,0px) - 40px / var(--gz,1)),color-mix(in oklab,var(--p2) var(--glow),transparent),transparent)}
-/* 電腦：光暈固定在視窗上，捲動時不跟著跑（左邊分頁列一直看得到） */
-html:has(.dash.d)::before{position:fixed;top:0;height:100vh;--gy:0px}
 html.lock{overflow:hidden}
 html.inapp{overscroll-behavior-y:contain}   /* App 裡用自己的下拉重新整理；瀏覽器照它自己的彈性 */
 body{font:400 var(--fs-m)/1.5 var(--font);zoom:var(--zoom);min-height:100vh;-webkit-font-smoothing:antialiased;overflow-x:hidden}
