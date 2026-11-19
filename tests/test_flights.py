@@ -697,6 +697,19 @@ class Kinds(unittest.TestCase):
         self.assertEqual(S.FLY["rdir"]["TPE"][0], 53)
         S.FLY["rdir"].clear()
 
+    def test_slim(self):
+        """看板只傳有變的班機：沒變的列只給代號；版本對不上、代號重複就整張／整段給"""
+        from test_passkey import load_sentinel
+        S = load_sentinel()
+        b = lambda t, eta: {"ok": True, "t": t, "ap": {"code": "TPE"}, "arr": [{"id": "a", "eta": eta}, {"id": "b", "st": "準時"}], "dep": [], "gnd": [{"id": "g"}, {"id": "g"}]}  # noqa: E731
+        o1 = S.fly_slim(b(100.0, 5), "")
+        self.assertEqual((o1["v"], "base" in o1, o1["arr"][1]), ("100.000", False, {"id": "b", "st": "準時"}))
+        o2 = S.fly_slim(b(110.0, 4), o1["v"])
+        self.assertEqual((o2["base"], o2["arr"]), ("100.000", [{"id": "a", "eta": 4}, "b"]))
+        self.assertEqual(o2["gnd"], [{"id": "g"}, {"id": "g"}])            # 代號重複：照整段給
+        self.assertNotIn("base", S.fly_slim(b(120.0, 3), "99.000"))        # 主機沒記這一版：整張給
+        self.assertEqual(S.fly_slim({"ok": True, "loading": True}, "100.000"), {"ok": True, "loading": True})
+
     def test_fids_fill(self):
         """查到的航線只好用猜的（「可能是」），官網表又有這班：照官網表寫；同班號的別段不換"""
         from test_passkey import load_sentinel

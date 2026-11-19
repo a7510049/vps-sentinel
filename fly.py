@@ -1320,6 +1320,11 @@ def fly_mins(path, v):
     return (max(0.0, path - 18) / v + min(path, 18) / min(v, 190.0)) * 60
 
 
+def fly_rmin(m):
+    """幾分後落地寫多細：15 分鐘以外誤差大（塔台常叫飛機繞路），只寫到 5 分鐘（網頁 flyRm 一樣）"""
+    return round(m / 5) * 5 if m >= 15 else round(m)
+
+
 FLY_GLIDE = (600, 120)     # 算「已經對準跑道」的最高高度：公尺＋每公里幾公尺（網頁雷達排隊用同樣的數字）
 
 
@@ -1427,7 +1432,7 @@ def fly_plane(a, ap):
     hold = ph != "gnd" and d < 80 and fly_hold(str(a.get("hex") or "").lower(), trk)
     if hold and ph == "over" and not (rt and rt[0] and rt[1]) and alt < 20000 and fly_closest(ap, lat, lon) == code:
         ph = "arr"                            # 查不到航線、在這個機場附近繞圈：多半是在等降落
-    eta = round(fly_eta(code, d * math.sin(math.radians(brg)), d * math.cos(math.radians(brg)), gs * 1.852, float(trk) if trk is not None else None, alt * 0.3048)) if ph == "arr" and gs > 50 and not hold else None
+    eta = fly_rmin(fly_eta(code, d * math.sin(math.radians(brg)), d * math.cos(math.radians(brg)), gs * 1.852, float(trk) if trk is not None else None, alt * 0.3048)) if ph == "arr" and gs > 50 and not hold else None
     if hold:
         st = "盤旋等待" if ph == "arr" else "盤旋中"
     elif ph == "arr":
@@ -1670,7 +1675,7 @@ def fly_far(ap, r, io, now):
         if toward != (io == "arr"):
             continue                                   # 抵達要朝這裡飛、出發要背著這裡飛（同班號的別段不算）
         eta = fly_eta(ap[0], d * math.sin(math.radians(brg)), d * math.cos(math.radians(brg)), x["spd"], x["trk"], x.get("alt")) if io == "arr" else 0
-        return {**x, "d": d, "eta": round(eta)}
+        return {**x, "d": d, "eta": fly_rmin(eta)}
     return None
 
 
@@ -2165,9 +2170,38 @@ def fly_api(q):
         return {"ok": True, **fly_photo(q["photo"][0], (q.get("hex") or [""])[0])}
     code = str(q.get("ap", ["TPE"])[0]).upper()[:4]
     try:
-        return fly_board(code if code in FLY_PIN else "TPE")
+        return fly_slim(fly_board(code if code in FLY_PIN else "TPE"), str((q.get("v") or [""])[0])[:20])
     except Exception as e:  # noqa: BLE001
         return {"ok": False, "error": f"航班資料暫時拿不到（{e}）"}
+
+
+FLY_LISTS = ("arr", "dep", "gnd", "over", "rest", "cargo", "veh")
+FLY_SLIM = threading.Lock()
+
+
+def fly_slim(out, base):
+    """看板只傳有變的班機：網頁帶上一次拿到的版本 v，沒變的那一列只寫代號（網頁照上一次的接回來）；
+    主機每個機場記最近 8 版（約一分多鐘），版本對不上就整張給"""
+    if not out.get("ok") or out.get("loading") or out.get("night"):
+        return out
+    code, key = out["ap"]["code"], f"{out['t']:.3f}"
+    with FLY_SLIM:
+        sent = FLY.setdefault("sent", {}).setdefault(code, {})
+        if key not in sent:
+            sent[key] = {f"{k}:{p.get('id')}": json.dumps(p, sort_keys=True, ensure_ascii=False) for k in FLY_LISTS for p in out.get(k) or []}
+            while len(sent) > 8:
+                sent.pop(next(iter(sent)))
+        cur, old = sent[key], sent.get(base) if base and base != key else None
+    o = {**out, "v": key}
+    if not old:
+        return o
+    o["base"] = base
+    for k in FLY_LISTS:
+        ps = out.get(k) or []
+        if len({p.get("id") for p in ps}) != len(ps):          # 同一個代號出現兩次：這一段整段給
+            continue
+        o[k] = [p["id"] if isinstance(p.get("id"), str) and old.get(f"{k}:{p.get('id')}") == cur[f"{k}:{p.get('id')}"] else p for p in ps]
+    return o
 
 
 # ── 機場起降分享：自己選能看多久、幾支手機、哪個機場（只能看機場起降） ──
