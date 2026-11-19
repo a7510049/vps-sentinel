@@ -216,7 +216,7 @@ FLY_CARGO_ICAO = {"NCA", "CAO", "CKK", "CSS", "SQC", "FDX", "UPS", "GTI", "CLX",
                   "DHK", "DHX", "BCS", "YZR", "CYZ", "ICV", "ATN", "ABX", "MPH", "TAY", "NPT", "SOO", "WGN", "AJT", "KYE", "YTO", "AZG", "NCR", "HYT"}
 FLY_CARGO_IATA = {"KZ", "CK", "O3", "FX", "5X", "5Y", "CV", "K4", "PO", "RU", "3S", "LD", "QY", "D0", "Y8", "CF", "M6", "GB", "YG", "C8", "K9", "7L", "KD", "N8", "8Y", "ES", "8C"}
 FLY_SKYS = {"cache": {}, "until": 0, "left": None, "out": 0, "tok": "", "texp": 0, "tbad": 0, "err": ""}
-FLY = {"cache": {}, "routes": {}, "lock": threading.Lock(), "last": 0.0, "bad": {}, "rq": set(), "rbusy": False, "fetch": threading.Lock(), "logged": {}, "seen": {}, "view": {}, "used": 0, "hex": {}, "hq": set(), "hbusy": False, "zh": {}, "gate": {}, "types": {}, "turn": {}, "far": {}, "keep": {}, "land": {}}
+FLY = {"cache": {}, "routes": {}, "lock": threading.Lock(), "last": 0.0, "bad": {}, "rq": set(), "rbusy": False, "fetch": threading.Lock(), "logged": {}, "seen": {}, "view": {}, "used": 0, "hex": {}, "hq": set(), "hbusy": False, "zh": {}, "gate": {}, "types": {}, "turn": {}, "far": {}, "keep": {}, "land": {}, "rdir": {}}
 FLY_KEEP = 45          # 一架飛機漏收幾秒內，照上一次的位置留著（背景每 30 秒抓一次，漏一次不倒退）
 FLY_ELSE = 90          # 別的機場收到的同一班：幾秒內的算數
 
@@ -620,7 +620,8 @@ def fly_photo(reg, hx=""):
         return {x: hit[x] for x in ("src", "big", "link", "by") if hit.get(x)}
     out = {}
     try:
-        d = json.loads(fly_get(FLY_PHOTO_URL.replace("{by}", "reg" if reg else "hex").replace("{key}", urllib.parse.quote(reg or hx)), timeout=8))
+        d = json.loads(fly_get(FLY_PHOTO_URL.replace("{by}", "reg" if reg else "hex").replace("{key}", urllib.parse.quote(reg or hx)),
+                               ua=f"vps-sentinel/{VERSION} (+https://github.com/a7510049/vps-sentinel)", timeout=8))   # 要寫清楚是誰在問，假裝瀏覽器會被擋（403）
         ph = (d.get("photos") or [None])[0] if isinstance(d, dict) else None
         if isinstance(ph, dict):
             src = str((ph.get("thumbnail") or {}).get("src") or "")
@@ -1313,28 +1314,43 @@ FLY_NOTAC = {"GND", "TWR", "SERV", "EMRG", "VEH"}       # 飛機資料庫裡不�
 
 
 def fly_mins(path, v):
-    """飛 path 公里要幾分鐘：最後 8 公里減速到大約 270 公里/時（網頁雷達的排隊用同一個算法）"""
-    v = max(150.0, v)
-    return (max(0.0, path - 8) / v + min(path, 8) / min(v, 270.0)) * 60
+    """飛 path 公里要幾分鐘：路上最快算 380 公里/時，最後 10 公里減速到大約 230 公里/時
+    （2026-11-19 桃園真實落地時間核對過；網頁雷達的排隊用同一個算法）"""
+    v = min(380.0, max(150.0, v))
+    return (max(0.0, path - 10) / v + min(path, 10) / min(v, 230.0)) * 60
 
 
-def fly_eta(code, x, y, v):
-    """幾分鐘後落地：已經對準跑道的照到跑道頭的距離；還沒對準的要先繞到跑道延長線上（10 公里外）再進來，不是直線飛過去"""
-    best = None
+FLY_GLIDE = (600, 120)     # 算「已經對準跑道」的最高高度：公尺＋每公里幾公尺（網頁雷達排隊用同樣的數字）
+
+
+def fly_eta(code, x, y, v, trk=None, alt=None):
+    """幾分鐘後落地：已經對準跑道（機頭朝跑道、高度不會比正常下滑高太多）的照到跑道頭的距離；
+    還沒對準的要先繞到跑道延長線上（10 公里外）再進來；太高的要多飛一段才降得下來（跟網頁雷達排隊同一套條件）"""
+    best, rd = None, FLY["rdir"].get(code)
+    rd = rd[0] if rd and time.time() - rd[1] < 1800 else None    # 現在往哪個方向降落（別的飛機看出來的）：另一頭不算
     for hdg, ln, off in FLY_RWY.get(code) or [(0, 0, 0)]:
         cx, cy = -off * math.cos(math.radians(hdg)), off * math.sin(math.radians(hdg))   # 跑道中心（往左右偏 off，跟 fly_geo 一樣）
         for h in (hdg, hdg + 180):
+            if rd is not None and abs((h - rd + 540) % 360 - 180) > 10:
+                continue
             ux, uy = math.sin(math.radians(h)), math.cos(math.radians(h))     # 降落時飛的方向
             tx, ty = cx - ux * ln / 2, cy - uy * ln / 2                       # 這一頭的跑道頭
             dx, dy = x - tx, y - ty
             al, lat = -(dx * ux + dy * uy), abs(dx * uy - dy * ux)
-            if al > 0 and lat <= max(1.2, al * .12):
+            head = trk is None or abs((trk - h + 540) % 360 - 180) <= 35
+            if al > 0 and lat <= max(1.2, al * .12) and head and (alt is None or alt <= FLY_GLIDE[0] + al * FLY_GLIDE[1]):
                 path = al
             elif -ln - .5 <= al <= 0 and lat <= .6:
                 path = 0                                                      # 已經過了跑道頭、在跑道上：就是現在
             else:
-                jx, jy = tx - ux * max(10, al), ty - uy * max(10, al)
-                path = math.hypot(x - jx, y - jy) + max(10, al)
+                far = max(10, al)
+                jx, jy = tx - ux * far, ty - uy * far
+                path = math.hypot(x - jx, y - jy) + far
+                if trk is not None and math.hypot(x - jx, y - jy) > 1:        # 機頭沒朝著要去的地方：要先轉過去
+                    b = math.degrees(math.atan2(jx - x, jy - y))
+                    path += 6 * abs((trk - b + 540) % 360 - 180) / 180
+                if alt is not None:
+                    path = max(path, (alt - 300) / 52)                         # 3 度下滑：每公里降 52 公尺，太高的要多飛
             best = path if best is None else min(best, path)
     return fly_mins(best, v)
 
@@ -1411,7 +1427,7 @@ def fly_plane(a, ap):
     hold = ph != "gnd" and d < 80 and fly_hold(str(a.get("hex") or "").lower(), trk)
     if hold and ph == "over" and not (rt and rt[0] and rt[1]) and alt < 20000 and fly_closest(ap, lat, lon) == code:
         ph = "arr"                            # 查不到航線、在這個機場附近繞圈：多半是在等降落
-    eta = round(fly_eta(code, d * math.sin(math.radians(brg)), d * math.cos(math.radians(brg)), gs * 1.852)) if ph == "arr" and gs > 50 and not hold else None
+    eta = round(fly_eta(code, d * math.sin(math.radians(brg)), d * math.cos(math.radians(brg)), gs * 1.852, float(trk) if trk is not None else None, alt * 0.3048)) if ph == "arr" and gs > 50 and not hold else None
     if hold:
         st = "盤旋等待" if ph == "arr" else "盤旋中"
     elif ph == "arr":
@@ -1545,7 +1561,7 @@ def fly_merge(ap, fids, rows, io):
             continue
         t = r["est"] or r["sch"]
         done = r["st"] in ("已到", "已飛")
-        if t > now + 12 * 3600 or t < now - (20 if done else 90) * 60 and not (done and t > now - 90 * 60 and (plane(r) or {}).get("ph") == io):
+        if t > now + 12 * 3600 or t < now - (20 if done else 90) * 60 and not (done and t > now - 90 * 60 and (plane(r) or {}).get("ph") in (io, "gnd" if io == "dep" else io)):
             continue                                   # 還沒到、還沒飛的留久一點（官網常常慢半拍）；寫已飛但其實剛起飛（排隊滑行很久）的也留著
         show.append(r)
     pick = {}                                          # 同一班號今天、明天都在表上：天上那架只配給時間最接近的那一筆
@@ -1584,8 +1600,8 @@ def fly_merge(ap, fids, rows, io):
         elif seen and seen.get("sch") == r["sch"] and now - seen.get("at", 0) < 6 * 3600:
             row.update(reg=seen.get("reg") or "", t=seen.get("t") or row["t"], model=seen.get("model") or row["model"], seen=seen["at"])
             fly_fix_type(row, r)
-        if io == "dep" and r["st"] == "已飛" and p and p["ph"] == "gnd" and (p.get("d") or 99) < 6 and (p.get("spd") or 0) >= 9:
-            row["st"] = "滑行中"                       # 官網推出就寫已飛，其實還在滑行
+        if io == "dep" and r["st"] == "已飛" and p and p["ph"] == "gnd" and (p.get("d") or 99) < 6:
+            row["st"] = "滑行中" if (p.get("spd") or 0) >= 9 else "還沒飛"   # 官網推出就寫已飛，其實還在滑行、還停在機坪
         far = None if p or done or r["st"] == "取消" else fly_far(ap, r, io, now)
         if far:                                        # 不在這個機場的範圍、別的機場收得到：已經在天上了
             row.update({k: far[k] for k in ("reg", "t", "model") if far[k]})
@@ -1626,6 +1642,21 @@ def fly_merge(ap, fids, rows, io):
     return out[:300]                                   # 網頁照時段分開看，可以多給一點
 
 
+def fly_rdir(ap, rows):
+    """現在往哪個方向起降：看快落地、剛起飛、在跑道上滑跑的飛機機頭朝哪條跑道的哪一頭（順風邊的飛機會被當成另一頭的進場，要先知道這個）"""
+    votes = {}
+    for p in rows:
+        trk, alt, d = p.get("trk"), p.get("alt") or 0, p.get("d") or 99
+        if trk is None or d > 12 or not (p["ph"] in ("arr", "dep") and alt < 700 or p["ph"] == "gnd" and (p.get("spd") or 0) > 90):
+            continue
+        for hdg, _, _ in FLY_RWY.get(ap[0]) or []:
+            for h in (hdg, (hdg + 180) % 360):
+                if abs((trk - h + 540) % 360 - 180) < 15:
+                    votes[h] = votes.get(h, 0) + 1
+    if votes:
+        FLY["rdir"][ap[0]] = (max(votes, key=votes.get), time.time())
+
+
 def fly_far(ap, r, io, now):
     """官網表上這班不在這個機場收得到的範圍，別的台灣機場收得到（例如馬祖飛松山，在台中附近的天上）：回傳位置和幾分後到"""
     for f in [r["fn"], *(r.get("share") or [])]:
@@ -1638,7 +1669,7 @@ def fly_far(ap, r, io, now):
         toward = abs((x["trk"] - (brg + 180) % 360 + 540) % 360 - 180) < 90
         if toward != (io == "arr"):
             continue                                   # 抵達要朝這裡飛、出發要背著這裡飛（同班號的別段不算）
-        eta = fly_eta(ap[0], d * math.sin(math.radians(brg)), d * math.cos(math.radians(brg)), x["spd"]) if io == "arr" else 0
+        eta = fly_eta(ap[0], d * math.sin(math.radians(brg)), d * math.cos(math.radians(brg)), x["spd"], x["trk"], x.get("alt")) if io == "arr" else 0
         return {**x, "d": d, "eta": round(eta)}
     return None
 
@@ -1781,11 +1812,12 @@ def fly_board(code, bg=False):
                 x, y = p["x"] + k * math.sin(math.radians(p["trk"])), p["y"] + k * math.cos(math.radians(p["trk"]))
                 p = {**p, "x": round(x, 2), "y": round(y, 2), "d": round(math.hypot(x, y), 1)}
             (cargo if p["use"] == "貨機" else rows).append(p)
+    fly_rdir(ap, rows)
     lat0 = math.cos(math.radians(ap[3]))
     for p in rows:                                 # 記下每一班的位置：飛到別的機場範圍裡的國內班機，這個機場的看板也知道它在天上
         if p["fn"] and p.get("x") is not None:
             FLY["far"][fly_fn(p["fn"])] = {"at": now, "lat": ap[3] + p["y"] / 111.2, "lon": ap[4] + p["x"] / (111.2 * lat0),
-                                           "spd": p.get("spd") or 0, "trk": p.get("trk"), "gnd": p["ph"] == "gnd",
+                                           "spd": p.get("spd") or 0, "trk": p.get("trk"), "alt": p.get("alt"), "gnd": p["ph"] == "gnd",
                                            "reg": p.get("reg") or "", "t": p.get("t") or "", "model": p.get("model") or ""}
     if len(FLY["far"]) > 3000:
         for k, v in list(FLY["far"].items()):
@@ -1809,7 +1841,7 @@ def fly_board(code, bg=False):
             p["model"] = fly_cargo_model(p.get("t"), p.get("model"))
     fly_logo_new(arr + dep + gnd + over + rest)
     out = {"ok": True, "t": time.time(), "ap": fly_ap(ap), "src": src or (srcs[0][0] if srcs else ""), "home": home, "srcs": srcs,
-           "fids": fids is not None, "arr": arr, "dep": dep, "gnd": gnd, "over": over, "rest": rest, "als": sorted(FLY_LGOK), "lgv": VERSION,
+           "rdir": (FLY["rdir"].get(ap[0]) or (None, 0))[0] if time.time() - (FLY["rdir"].get(ap[0]) or (None, 0))[1] < 1800 else None, "fids": fids is not None, "arr": arr, "dep": dep, "gnd": gnd, "over": over, "rest": rest, "als": sorted(FLY_LGOK), "lgv": VERSION,
            "skyout": FLY_SKYS["out"] if FLY_SKYS["out"] > time.time() and fly_sky_need(ap, fids, ac) else 0}   # OpenSky 今天的次數用完了：網頁寫幾點恢復
     out["cargo"] = sorted([p for p in cargo if p["ph"] != "over"], key=lambda p: ({"arr": 0, "gnd": 1}.get(p["ph"], 2), p["eta"] if p["eta"] is not None else 999, p["d"]))   # 「貨機」分頁：要降落、在地面、剛起飛的貨機
     out["ccs"] = {x["code"]: db[x["code"]][5] for p in arr + dep + gnd + over + rest for x in (p.get("org"), p.get("dst"))

@@ -593,6 +593,7 @@ function radarView(cv, full){
           const dx = x0 - x, dy = y0 - y, al = -(dx * ux + dy * uy), lat = Math.abs(dx * uy - dy * ux), h = Math.atan2(ux, uy) * 180 / Math.PI;
           if (al <= -.3 || al > L + 5 || lat > Math.max(1.2, al * .12) || p.alt > 600 + al * 120) return;   // 在跑道頭外面、側偏不大、高度不會高過正常下滑太多
           if (p.trk != null && flyAdiff(p.trk, h) > 35) return;
+          if (FLYD && FLYD.rdir != null && flyAdiff(h, FLYD.rdir) > 10) return;   // 現在往另一頭降落：順風邊往這邊飛的不是在進場
           if (!b || lat < b.lat) b = {al:Math.max(0, al), lat, x, y, ux, uy, ri};
         }));
         if (b) R.q.push([flyMins(b.al, p.spd || 250), o, b]);
@@ -832,7 +833,7 @@ function radarView(cv, full){
 }
 /* 這個機場的跑道（公里）：有 OpenStreetMap 的用真的位置，同一條被切成好幾段的接回一條；沒有就用大約位置 */
 /* 飛 path 公里要幾分鐘：最後 8 公里減速到大約 270 公里/時（跟主機算「幾分後」的 fly_mins 一樣） */
-function flyMins(path, v){ v = Math.max(150, v); return (Math.max(0, path - 8) / v + Math.min(path, 8) / Math.min(v, 270)) * 60; }
+function flyMins(path, v){ v = Math.min(380, Math.max(150, v)); return (Math.max(0, path - 10) / v + Math.min(path, 10) / Math.min(v, 230)) * 60; }   // 跟主機 fly_mins 一樣
 function flyRws(g){
   const seg = (g.apm && g.apm.rw || []).map(a => [a[1], a[2], a[a.length - 2], a[a.length - 1]]);
   const src = seg.length ? seg : (g.rwy || []).filter(([a, b, c, d]) => Math.hypot((a + c) / 2, (b + d) / 2) <= 4);
@@ -1532,7 +1533,7 @@ function flyInfo(id){
   FLYSEL = id; flyPaint();
   const v = document.createElement("div"); v.className = "veil";
   const hm = t => t ? flyHM(t * 1000, d.ap.tz) : "", air = p.alt != null, arr = p.ph === "arr" || (p.ph === "gnd" && p.dst && p.dst.code === d.ap.code);
-  const tm = p.fids ? `<span class="frt"><b class="num">${hm(p.est || p.sch)}</b>${p.est && hm(p.est) !== hm(p.sch) ? `<s class="num">${hm(p.sch)}</s>` : ""}</span>` : "";
+  const tm = p.fids ? `<span class="fdt"><b class="num">${hm(p.est || p.sch)}</b>${p.est && hm(p.est) !== hm(p.sch) ? `<s class="num">${hm(p.sch)}</s>` : ""}</span>` : "";
   const end = (x, mine) => `<div class="fre"><b>${esc(x ? x.code : "—")}</b><small>${esc(x ? (x.guess ? "可能是 " : "") + x.name : "查不到")}${flyFlag(flyCc(x))}</small>${mine ? tm : ""}</div>`;
   const gmap = FLYGATE[d.ap.code] && !arr && p.gate && !flyDone(p) && !/取消/.test(p.st || "");   // 有登機門導引：登機門寫在地圖上面，下面不重複
   const vr = p.vr > 0.5 ? `，上升 ${p.vr} 公尺/秒` : p.vr < -0.5 ? `，下降 ${-p.vr} 公尺/秒` : "";

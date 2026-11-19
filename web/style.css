@@ -1251,9 +1251,9 @@ html.flyon .dash>.view{content-visibility:hidden;contain-intrinsic-size:auto non
 .fre{min-width:0}.fre:last-child{text-align:right}
 .fre b{display:block;font-size:var(--fs-2xl);font-weight:500;line-height:1.2}
 .fre small{display:block;color:var(--tx3);font-size:var(--fs-s);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.frt{display:flex;align-items:baseline;gap:6px;margin-top:8px}.fre:last-child .frt{justify-content:flex-end}
-.frt b{font-size:var(--fs-l);font-weight:600;color:var(--p)}
-.frt s{font-size:var(--fs-s);color:var(--tx3)}
+.fdt{display:flex;align-items:baseline;gap:6px;margin-top:8px}.fre:last-child .fdt{justify-content:flex-end}   /* 細節的時間（不要用 .frt：那是整頁雷達清單右邊那欄，會被它改成直的） */
+.fdt b{font-size:var(--fs-l);font-weight:600;color:var(--p)}
+.fdt s{font-size:var(--fs-s);color:var(--tx3)}
 .froute .fln{display:flex;align-items:center;gap:4px;align-self:center;color:var(--p);min-width:72px}
 .froute .fln i{flex:1;height:0;border-top:2px dotted var(--line)}
 .froute .fln svg{width:20px;height:20px;transform:rotate(45deg);flex:none}
