@@ -98,8 +98,8 @@
 @supports (color:oklch(from red l c h)){:root{--p2:oklch(from var(--p) l c calc(h + var(--gh,45)))}}
 :root{--me:oklch(.72 .15 250); --alt0:oklch(.8 .1 195); --alt1:oklch(.7 .14 240); --alt2:oklch(.64 .17 280); --alt3:oklch(.62 .19 320)}   /* 雷達尾跡的顏色：高度（低 → 高） */
 /* 塔台螢幕：雷達、進場排隊條一律是深綠底的螢光綠（深淺模式都一樣，像塔台的雷達螢幕） */
-:root{--tw-bg:oklch(.18 .025 165); --tw-bg2:oklch(.2 .03 162); --tw-land:oklch(.225 .03 160); --tw-line:oklch(.45 .07 155); --tw-arr:oklch(.88 .2 148); --tw-dep:oklch(.94 .06 190);
-  --tw-txt:oklch(.86 .14 150); --tw-dim:oklch(.62 .09 155); --tw-bad:oklch(.72 .2 28); --tw-a0:oklch(.86 .12 190); --tw-a1:oklch(.86 .17 145); --tw-a2:oklch(.88 .16 105); --tw-a3:oklch(.8 .16 65)}
+:root{--tw-bg:oklch(.18 .025 165); --tw-bg2:oklch(.2 .03 162); --tw-land:oklch(.225 .03 160); --tw-line:oklch(.45 .07 155); --tw-arr:oklch(.88 .2 148); --tw-dep:oklch(.78 .14 240); --tw-gnd:oklch(.87 .15 92); --tw-ov:oklch(.7 .015 220);
+  --tw-txt:oklch(.86 .14 150); --tw-dim:oklch(.62 .09 155); --tw-bad:oklch(.72 .2 28); --tw-a0:oklch(.58 .13 300); --tw-a1:oklch(.68 .14 300); --tw-a2:oklch(.79 .12 300); --tw-a3:oklch(.9 .08 300)}   /* 尾跡高度：同一個紫色，越高越亮（不跟四種飛機的顏色搞混） */
 .twr{--s2:var(--tw-land); --s3:var(--tw-bg2); --s4:var(--tw-line); --p:var(--tw-arr); --tx:var(--tw-dep); --tx2:var(--tw-txt); --tx3:var(--tw-dim); --card:var(--tw-bg); --bad:var(--tw-bad);
   --alt0:var(--tw-a0); --alt1:var(--tw-a1); --alt2:var(--tw-a2); --alt3:var(--tw-a3)}
 [data-mode="light"]{--me:oklch(.6 .17 250); --alt0:oklch(.72 .11 195); --alt1:oklch(.6 .15 240); --alt2:oklch(.52 .18 280); --alt3:oklch(.5 .2 320)}
@@ -1058,7 +1058,23 @@ html.flyon .dash>.view{content-visibility:hidden;contain-intrinsic-size:auto non
 @media (hover:hover) and (pointer:fine){.fhrs,.fterm{cursor:grab}.fhrs.drag,.fterm.drag{cursor:grabbing;user-select:none}.fhrs.drag>*,.fterm.drag>*{pointer-events:none}}   /* 電腦：用滑鼠拖著捲 */
 .fhrs .fchip,.fterm .fchip{flex:none;display:inline-flex;align-items:center;gap:6px;white-space:nowrap}
 .fhrs .n{font-size:var(--fs-s);opacity:.7}
+/* 時段長條圖：每小時一根，高度是班數 */
+.fhrs.ftl{gap:3px;align-items:stretch;height:92px;margin:2px 0 0;padding:0;overflow:visible;-webkit-mask-image:none;mask-image:none;touch-action:pan-y;cursor:default}
+.fhb{flex:1 1 0;min-width:0;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;gap:4px;padding:0;background:none;color:var(--tx3)}
+.fhb i{width:100%;max-width:32px;height:calc(4px + var(--h,0) * 48px);border-radius:var(--r-xs);background:color-mix(in oklab,var(--p) 35%,var(--s3));transition:height var(--t-mid) var(--ease),background-color var(--t-fast) var(--ease)}
+.fhb.past i{background:var(--s3)}
+.fhb:not(:disabled):hover i{background:color-mix(in oklab,var(--p) 60%,var(--s3))}
+.fhb.on i{background:var(--p) var(--grad)}
+.fhb:disabled i{height:2px;opacity:.6}
+.fhb small{height:1.3em;font-size:var(--fs-xs);font-variant-numeric:tabular-nums;white-space:nowrap;visibility:hidden;position:relative}
+.fhb.lb small,.fhb.on small,.fhb.now small{visibility:visible}
+.fhb.on small{color:var(--p);font-weight:700}
+.fhb.now small::after{content:"";position:absolute;left:50%;bottom:-5px;width:4px;height:4px;margin-left:-2px;border-radius:50%;background:var(--p)}   /* 現在這個小時 */
+.fhn{height:1.3em;font-size:var(--fs-xs);font-weight:700;color:var(--p);white-space:nowrap;opacity:0;transition:opacity var(--t-fast) var(--ease)}
+.fhb.on .fhn{opacity:1}
+.fti{width:18px;height:18px;margin-right:6px;flex:none;display:inline-block;vertical-align:-4px}   /* 分頁前面的指示牌圖示 */
 .ftabs{--chip:var(--card)}
+.ftabs{flex-wrap:nowrap}@media (max-width:480px){.ftabs button{padding:0 4px}.ftabs .fti{width:15px;height:15px;margin-right:3px;vertical-align:-3px}.ftabs .fn{margin-left:4px}}@media (max-width:360px){.ftabs .fti{display:none}}   /* 手機：四個分頁加圖示也排得下一排（太窄就不放圖示） */
 .ftabs .fn{display:inline-block;margin-left:6px;color:var(--tx3);font-variant-numeric:tabular-nums}.ftabs .on .fn{color:var(--on-p);opacity:.75}[data-accent="rainbow"] .ftabs .on .fn{color:var(--on-rbw)}   /* 數字自己給顏色，不跟著按鈕的變色動畫走（手機上有時會留著選到時的深色） */
 .ftabs .fn .dg{display:inline-block;position:relative;font-style:normal}.ftabs .fn .dg>b{display:inline-block;font-weight:inherit;transform-origin:50% 50%}.ftabs .fn .dgo{position:absolute;inset:0;font-style:normal;transform-origin:50% 50%}   /* 班數一位一位翻：舊的疊在上面先翻走 */
 .board{background:var(--card);box-shadow:var(--cs);border-radius:var(--r-xl);padding:10px;display:grid;grid-template-columns:auto auto auto minmax(5.6em,1fr) auto minmax(5em,1fr) auto auto auto auto auto;column-gap:12px;overflow:hidden}
@@ -1098,6 +1114,8 @@ html.flyon .dash>.view{content-visibility:hidden;contain-intrinsic-size:auto non
 .sf .c[data-c=" "],.sf .c[data-c=" "] b{background:var(--s2)}     /* 空的格子淡一點，有字的才跳出來 */
 .fr .sf .c[data-c=" "],.fr .sf .c[data-c=" "] b{background:transparent}.fr .sf .c[data-c=" "]::after{display:none}   /* 看板的列：用不到的格子不畫出來 */
 .fr.done>:not(.ftag,.br){opacity:.5}                               /* 已到、已飛：淡一點，正要來的比較顯眼 */
+.board.past .fr.done>:not(.ftag,.br){opacity:1}                 /* 過去的時段整段都是已到：不用淡 */
+.fhrs .fchip.past:not(.on){color:var(--tx3)}                      /* 今天已經過去的時段 */
 .ftag{justify-self:start;white-space:nowrap;font-size:var(--fs-xs);font-weight:500;border-radius:var(--r-pill);padding:0;opacity:0;transition:opacity var(--t-mid) var(--ease)}
 .ftag.on{opacity:1;padding:3px 9px;background:var(--pc);color:var(--on-pc)}
 .ftag.bad{background:var(--badc);color:var(--on-badc)}
@@ -1203,7 +1221,7 @@ html.flyon .dash>.view{content-visibility:hidden;contain-intrinsic-size:auto non
 .frg{display:flex;align-items:center;gap:8px;padding:12px 12px 4px;font-size:var(--fs-xs);font-weight:600;color:var(--tx3)}.frg:first-child{padding-top:2px}
 .frg .num{font-weight:400}   /* 清單分段：降落、起飛、路過 */
 .frd.frn{width:16px;height:16px;right:-5px;bottom:-5px;display:grid;place-items:center;background:var(--tw-arr);color:var(--tw-bg);font-size:var(--fs-xs);font-weight:700;font-style:normal;line-height:1}   /* 跟雷達延長線上一樣的降落順序號碼 */
-.frd{width:10px;height:10px;border-radius:50%;flex:none;background:var(--tw-dim)}.frd.arr{background:var(--tw-arr)}.frd.dep{background:var(--tw-dep)}.frd.emg{background:var(--tw-bad)}   /* 跟雷達上一樣的顏色 */
+.frd{width:10px;height:10px;border-radius:50%;flex:none;background:var(--tw-dim)}.frd.arr{background:var(--tw-arr)}.frd.dep{background:var(--tw-dep)}.frd.gnd{background:var(--tw-gnd)}.frd.over{background:var(--tw-ov)}.frd.emg{background:var(--tw-bad)}   /* 跟雷達上一樣的顏色 */
 @media (min-width:900px){
   .frlist{position:relative;width:clamp(340px,28vw,400px);max-height:none;border-radius:0;box-shadow:none;border-left:1px solid var(--s3)}
   .frlh{pointer-events:none}.frlh .chv{display:none}
@@ -1213,7 +1231,7 @@ html.flyon .dash>.view{content-visibility:hidden;contain-intrinsic-size:auto non
 .rleg{display:flex;flex-wrap:wrap;gap:6px 14px;margin-top:10px;font-size:var(--fs-s);color:var(--tx2);align-items:center}
 .rleg span{display:inline-flex;align-items:center;gap:6px}
 .rleg i{width:10px;height:10px;border-radius:50%;background:var(--tw-dim);box-shadow:0 0 0 2px var(--tw-bg)}   /* 跟雷達上一樣的顏色（外面一圈螢幕底色） */
-.rleg i.arr{background:var(--tw-arr)}.rleg i.dep{background:var(--tw-dep)}
+.rleg i.arr{background:var(--tw-arr)}.rleg i.dep{background:var(--tw-dep)}.rleg i.gnd{background:var(--tw-gnd)}.rleg i.ov{background:var(--tw-ov)}
 .rleg .sub{margin-left:auto}
 .rleg b{font-weight:500;color:var(--tx);font-variant-numeric:tabular-nums;margin-left:2px}
 .rleg .ralt{gap:4px;color:var(--tx3);font-size:var(--fs-xs);order:8;flex:1 1 auto}.rleg .fzm{order:9}
@@ -1230,17 +1248,17 @@ html.flyon .dash>.view{content-visibility:hidden;contain-intrinsic-size:auto non
 /* 進場排隊條：右邊是跑道，要降落的飛機照離跑道多遠排在線上，慢慢滑過去 */
 .rq{margin-top:10px;padding:10px 14px 12px;border-radius:var(--r-lg);background:var(--tw-bg);color:var(--tw-txt)}
 .rqh{display:flex;align-items:baseline;gap:10px;font-size:var(--fs-xs);color:var(--tw-dim)}.rqh b{margin-left:auto;font-size:var(--fs-s);font-weight:600;color:var(--tw-arr);text-align:right}
-.rqt{position:relative;height:84px;margin:4px 0 16px}
+.rqt{position:relative;height:84px;margin:4px 0 12px}
 .rqt::before{content:"";position:absolute;left:0;right:8%;top:50%;border-top:1px dashed var(--tw-line)}
 .rqk i{position:absolute;font-style:normal;top:calc(50% - 4px);height:8px;border-left:1px solid var(--tw-line)}
 .rqk small{position:absolute;top:50px;left:0;translate:-50% 0;white-space:nowrap;font-size:var(--fs-xs);color:var(--tw-dim)}
+.rqk em{position:absolute;left:100%;margin-left:3px;font-style:normal}   /* 數字對準刻度，「公里」放在數字後面 */
 .rqrw{position:absolute;right:0;top:calc(50% - 7px);width:8%;height:14px;border-radius:var(--r-xs);background:var(--tw-line);display:grid;place-items:center}
-.rqrn{position:absolute;right:4%;top:calc(50% + 46px);translate:50% 0;white-space:nowrap;font-size:var(--fs-xs);font-weight:600;color:var(--tw-txt)}
 .rqps{position:absolute;inset:0;pointer-events:none}
 .rqp{position:absolute;inset:0;transition:transform var(--t-long) linear}
 .rqp>span{position:absolute;left:0;top:calc(50% - 11px);translate:-50% 0;display:flex;flex-direction:column;align-items:center}
 .rqp i{width:22px;height:22px;border-radius:50%;display:grid;place-items:center;background:var(--tw-arr);color:var(--tw-bg);font-style:normal;font-weight:700;font-size:var(--fs-xs);box-shadow:0 0 8px color-mix(in oklab,var(--tw-arr) 60%,transparent)}
-.rqp b,.rqp small{white-space:nowrap;line-height:1.2}.rqp b{margin-top:3px;font-size:var(--fs-xs);font-weight:600;color:var(--tw-txt)}.rqp small{font-size:var(--fs-xs);color:var(--tw-dim)}
+.rqp b,.rqp small{white-space:nowrap;line-height:1.2;translate:var(--sh,0) 0;transition:translate var(--t-long) linear}.rqp b{margin-top:3px;font-size:var(--fs-xs);font-weight:600;color:var(--tw-txt)}.rqp small{font-size:var(--fs-xs);color:var(--tw-dim)}
 .rqp.up>span{top:auto;bottom:calc(50% - 11px);flex-direction:column-reverse}.rqp.up b{margin:0 0 3px}
 .rqp.emg i{background:var(--tw-bad);box-shadow:0 0 8px var(--tw-bad)}
 .ffoot{text-align:center;padding:4px 16px}
