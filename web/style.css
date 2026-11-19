@@ -238,6 +238,9 @@ img.flag{width:28px;height:21px;object-fit:cover;border-radius:var(--r-xs);flex:
 #app{transition:opacity var(--t-mid) var(--ease)}
 .dash.m{max-width:760px;margin:0 auto;padding:0 16px calc(env(safe-area-inset-bottom) + 40px)}
 .view{animation:through var(--sp) backwards}
+/* 這個網頁連不上主機超過 15 秒（html.lost）：畫面上的數字都是舊的，整塊變淡 */
+.view>:not(.hero,.dhome),.dhome>:not(.hero),.det .dscroll>:not(.dtop){transition:filter var(--t-slow) var(--ease)}
+html.lost :is(.view>:not(.hero,.dhome),.dhome>:not(.hero),.det .dscroll>:not(.dtop)){filter:opacity(.5) saturate(.4)}
 .ptitle{font-size:var(--fs-4xl);font-weight:800;letter-spacing:-.03em;line-height:1.15;padding:28px 4px 20px}
 /* 頁面標題（首頁那句話、工具／紀錄／設定、主機頁的名稱）同一種字：最粗、文字漸層 */
 .headline,.ptitle>span:first-child,.hname{background:var(--ttl);-webkit-background-clip:text;background-clip:text;color:transparent}
@@ -1050,6 +1053,7 @@ html.flyon .dash>.view{content-visibility:hidden;contain-intrinsic-size:auto non
 .fhrs .n{font-size:var(--fs-s);opacity:.7}
 .ftabs{--chip:var(--card)}
 .ftabs .fn{display:inline-block;margin-left:6px;color:var(--tx3);font-variant-numeric:tabular-nums}.ftabs .on .fn{color:var(--on-p);opacity:.75}[data-accent="rainbow"] .ftabs .on .fn{color:var(--on-rbw)}   /* 數字自己給顏色，不跟著按鈕的變色動畫走（手機上有時會留著選到時的深色） */
+.ftabs .fn .dg{display:inline-block;position:relative;font-style:normal}.ftabs .fn .dg>b{display:inline-block;font-weight:inherit;transform-origin:50% 50%}.ftabs .fn .dgo{position:absolute;inset:0;font-style:normal;transform-origin:50% 50%}   /* 班數一位一位翻：舊的疊在上面先翻走 */
 .board{background:var(--card);box-shadow:var(--cs);border-radius:var(--r-xl);padding:10px;display:grid;grid-template-columns:auto auto auto minmax(5.6em,1fr) auto minmax(5em,1fr) auto auto auto auto auto;column-gap:12px;overflow:hidden}
 .fh,.frows,.fr{display:grid;grid-column:1/-1;grid-template-columns:subgrid}
 .fh{padding:4px 10px 8px;font-size:var(--fs-xs);color:var(--tx3);font-weight:500;white-space:nowrap}

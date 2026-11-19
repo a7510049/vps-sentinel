@@ -43,6 +43,27 @@ async function flyFlip(c, to, delay, still){
     for (const ch of seq) { if (c._tok !== tok) return; await flyOnce(c, c.dataset.c, ch, tok); }
   } finally { FLYN--; }
 }
+/* 分頁上的班數：有變的那幾位數像看板的翻牌一樣上下翻過去（往上數或往下數，最多翻三張；個位先翻，十位接著） */
+function flyRoll(e, was, n){
+  const a = [...was].reverse(), b = [...n].reverse(), dur = T.fast * .6, up = +n > +was, tok = e._roll = (e._roll || 0) + 1;
+  e.innerHTML = [...n].map((x, i) => `<i class="dg"><b>${a[n.length - 1 - i] ?? ""}</b></i>`).join("");   // 先擺舊數字，輪到才翻
+  const flip = (g, from, to) => {                      // 翻一張：舊數字往後翻下去，新數字從上面翻下來
+    const o = document.createElement("i"); o.className = "dgo"; o.textContent = from; g.append(o); g.firstChild.textContent = to;
+    const nb = g.firstChild.animate([{transform:"perspective(3em) rotateX(90deg)"}, {transform:"perspective(3em) rotateX(90deg)", offset:.5}, {transform:"perspective(3em) rotateX(0)"}], {duration:dur * 2, easing:EASE});
+    o.animate([{transform:"perspective(3em) rotateX(0)"}, {transform:"perspective(3em) rotateX(-90deg)", offset:.5}, {transform:"perspective(3em) rotateX(-90deg)"}], {duration:dur * 2, easing:EXIT, fill:"forwards"});
+    return nb.finished.catch(() => {}).then(() => o.remove());
+  };
+  [...e.children].reverse().forEach(async (g, i) => {
+    if (a[i] === b[i]) return;
+    g.firstChild.textContent = a[i] ?? "";
+    const to = +b[i], from = a[i] == null ? NaN : +a[i];
+    let seq = [b[i] ?? ""];
+    if (!isNaN(from) && !isNaN(to)) { seq = []; for (let k = from; k !== to; ) { k = (k + (up ? 1 : 9)) % 10; seq.push(String(k)); } seq = seq.slice(-3); }
+    await sleep(i * dur);
+    let cur = a[i] ?? "";
+    for (const ch of seq) { if (e._roll !== tok || !g.isConnected) return; await flip(g, cur, ch); cur = ch; }
+  });
+}
 /* 整排翻牌：每格依序晚一點點開始，像真的看板一格一格翻；不在畫面上的（still）直接換字 */
 function flapSet(el, v, delay = 0, still = false){
   if (!el) return;
@@ -106,15 +127,16 @@ function flyStuck(f){
     f.classList.toggle("tabsaway", away); f.querySelector(".fmini").tabIndex = away ? 0 : -1; if (!away && window._menu && window._menu._fmini) closeMenu(); },
     {root: sc, rootMargin: "0px 100% 0px 100%"}).observe(t);
 }
+const flyNum = (f, k) => { const e = f.querySelector(`.ftabs [data-k="n-${k}"]`); return e ? e.dataset.n ?? e.textContent : ""; };   // 分頁上的班數（翻牌翻到一半也拿到新的）
 function flyMini(f){
-  const k = FLYS.tab, l = (FLYTAB.find(x => x[0] === k) || FLYTAB[0])[1], n = (f.querySelector(`.ftabs [data-k="n-${k}"]`) || {}).textContent || "";
+  const k = FLYS.tab, l = (FLYTAB.find(x => x[0] === k) || FLYTAB[0])[1], n = flyNum(f, k);
   txt(f.querySelector('[data-k="mini-l"]'), l); txt(f.querySelector('[data-k="mini-n"]'), n);
 }
 function flyMiniMenu(f, btn){
   if (window._menu && window._menu._fmini) return closeMenu();
   closeMenu();
   const m = document.createElement("div"); m.className = "lmenu hmenu fminim"; m._fmini = 1;
-  m.innerHTML = FLYTAB.map(([k, l]) => `<button data-fmi="${k}"${FLYS.tab === k ? ` class="on"` : ""}>${FLYS.tab === k ? I("check") : `<span class="ckh"></span>`}<span>${l}</span><b>${esc((f.querySelector(`.ftabs [data-k="n-${k}"]`) || {}).textContent || "")}</b></button>`).join("");
+  m.innerHTML = FLYTAB.map(([k, l]) => `<button data-fmi="${k}"${FLYS.tab === k ? ` class="on"` : ""}>${FLYS.tab === k ? I("check") : `<span class="ckh"></span>`}<span>${l}</span><b>${esc(flyNum(f, k))}</b></button>`).join("");
   document.body.appendChild(m);
   placeMenu(m, btn, r => r.left + r.width / 2 - m.offsetWidth / 2);
   if (canAnim()) m.animate([{opacity:0, transform:"scale(.85,.4)"}, {opacity:1, transform:"none"}], {duration:T.spf, easing:SPRING_F});
@@ -1266,9 +1288,9 @@ function flyPaint(anim){
   flapSet(f.querySelector(".fcode .sf"), d.ap.code); flyApBtn(f, d.ap);
   txt(f.querySelector('[data-k="name"]'), d.ap.name); txt(f.querySelector('[data-k="city"]'), d.ap.city);
   flapSet(f.querySelector(".fclock .sf"), flyHM(Date.now(), tz));
-  FLYTAB.forEach(([k]) => { const e = f.querySelector(`[data-k="n-${k}"]`), n = d.loading ? "" : String((d[k] || []).length), was = e.textContent; if (was === n) return; e.textContent = n;
-    if (was && n && !FLYSTILL && canAnim()) e.animate([{transform:`translateY(${+n > +was ? "" : "-"}.5em)`}, {transform:"none"}], {duration:T.mid, easing:EASE}); });
-  flyMini(f);   // 班數變了：數字從下面（變少從上面）滑進來；不淡入：手機上淡入中剛好換分頁，數字會留著選到時的深色   // 不淡入：手機上淡入中剛好換分頁，數字會留著選到時的深色
+  FLYTAB.forEach(([k]) => { const e = f.querySelector(`[data-k="n-${k}"]`), n = d.loading ? "" : String((d[k] || []).length), was = e.dataset.n ?? e.textContent; if (was === n) return; e.dataset.n = n;
+    if (was && n && !FLYSTILL && canAnim()) flyRoll(e, was, n); else e.textContent = n; });
+  flyMini(f);   // 班數變了：有變的那幾位數像翻牌一樣上下翻過去；不淡入：手機上淡入中剛好換分頁，數字會留著選到時的深色
   f.querySelectorAll(".fh .fk").forEach((h, i) => (FLYSTILL ? (e, t) => { e.textContent = t; } : txt)(h, (d.fids && FLYHEADF[FLYS.tab] || FLYHEAD[FLYS.tab])[i]));
   f.querySelector(".board").dataset.tab = FLYS.tab; f.querySelector(".board").dataset.fids = d.fids ? "1" : "";
   if (d.loading && d.ok) { flyRadar(f, d); flyGeoOff(f); f.querySelector(".ffoot").textContent = ""; return; }   // 等資料：舊的列留著淡出（不先翻成空白），舊機場的飛機收掉

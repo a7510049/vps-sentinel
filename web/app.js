@@ -451,7 +451,9 @@ function issuesOf(list){
   }
   return out;
 }
+let LOST = false, LOST0 = 0;                  // 這個網頁連不上主機：從什麼時候開始
 function headline(list){
+  if (LOST) return "連不上主機";
   const is = issuesOf(list), hosts = new Set(is.map(x => keyOf(x.s)));
   if (!is.length) return list.length > 1 ? `${list.length} 台主機都正常` : "主機一切正常";
   if (is.length === 1) return is[0].t ? `${is[0].s.name}・${is[0].t}` : `${is[0].s.name} 連不上`;
@@ -460,7 +462,7 @@ function headline(list){
 }
 function hero(list, time){
   const lv = list.some(s => lvOf(s) === "bad") ? "bad" : list.some(s => lvOf(s) === "warn") ? "warn" : "ok", g = greet();
-  const txt = `<div class="hello meta"><span class="live"></span>${g.hi}・${time} 更新</div><h1 class="headline" data-x>${esc(headline(list))}</h1><p class="quote">${esc(g.quote)}</p>`;
+  const txt = `<div class="hello meta">${LOST ? `<span class="live off"></span>連不上主機，重試中…` : `<span class="live"></span>${g.hi}・${time} 更新`}</div><h1 class="headline" data-x>${esc(headline(list))}</h1><p class="quote">${esc(g.quote)}</p>`;
   return DESK.matches
     ? `<section class="hero" data-key="hero"><div class="hrow">${blobBtn(lv)}<div class="htx">${txt}</div></div></section>`
     : `<section class="hero" data-key="hero"><div class="hrow">${blobBtn(lv)}<div class="wxw">${g.wx}</div></div>${txt}</section>`;
@@ -800,7 +802,7 @@ function logPage(list){
 /* 主題色：照色相排一圈（色票本身用 style.css 的 [data-accent] 算出預覽） */
 const ACCENTS = [["red", "紅"], ["orange", "橘"], ["amber", "琥珀"], ["lime", "萊姆"], ["green", "綠"], ["teal", "青綠"],
   ["cyan", "天藍"], ["blue", "藍"], ["indigo", "靛藍"], ["purple", "紫"], ["pink", "粉紅"]];
-/* 設定：上面是這台裝置的外觀、通知與登入；下面「主機」好幾台時跟工具一樣一排主機名稱選一台，只顯示那台的 */
+/* 設定：上面是通知與登入、主機，外觀在最後（電腦放右邊欄）；下面「主機」好幾台時跟工具一樣一排主機名稱選一台，只顯示那台的 */
 const SHOWS = [["trend", "歷史曲線圖", "chart"], ["net", "網路速度", "net"], ["box", "容器與服務", "items"], ["info", "連線數與 IP", "info"],
   ["flag", "國旗", "flag"], ["month", "每月流量", "traffic"], ["sun", "天氣", "weather", "用這台裝置的位置"], ["quote", "心情小語", "quote"]];
 const showSum = () => { const n = SHOWS.filter(x => PREF.show[x[2]]).length; return n === SHOWS.length ? "全部顯示" : n ? `顯示 ${n} 項` : "全部隱藏"; };
@@ -812,7 +814,7 @@ function setPage(list){
   const sw = ACCENTS.map(([v, l]) => `<button class="${PREF.accent === v ? "on" : ""}" data-pref="accent" data-val="${v}" data-accent="${v}" title="${l}" aria-label="${l}">${I("check")}</button>`).join("")
     + `<button class="rbsw${PREF.accent === "rainbow" ? " on" : ""}" data-pref="accent" data-val="rainbow" title="彩虹" aria-label="彩虹">${I("check")}</button>`;
   const D = DESK.matches;   // 電腦：左邊主機和通知，右邊欄是這台裝置的外觀
-  const look = `<div class="lbl">外觀</div><div class="group">
+  const look = `<div class="lbl" data-key="llook">外觀</div><div class="group" data-key="g-look">
       <div class="li col"><span class="lab">主題</span>${seg("theme", [["auto", "自動"], ["light", "淺色"], ["dark", "深色"]])}</div>
       <div class="li col"><span class="lab">主題色</span><div class="sw">${sw}</div></div>
       <div class="li col"><span class="lab">配色風格</span>${seg("tone", [["soft", "柔和"], ["vivid", "鮮明"], ["calm", "素雅"]])}</div>
@@ -833,7 +835,7 @@ function setPage(list){
       + (s.node ? "" : go("data-pair", "link", "配對暗號", "pairst")) + `</div>`;
   }
   return `<div class="${D ? "wide" : "narrow"}" data-key="set"><h1 class="ptitle"><span>設定</span></h1>`
-    + (D ? `<div class="split rside" data-key="ssplit"><div class="smain" data-key="sc2">${sec}${h}</div><aside class="side" data-key="sc1">${look}${out}</aside></div>` : look + sec + h + out) + `</div>`;
+    + (D ? `<div class="split rside" data-key="ssplit"><div class="smain" data-key="sc2">${sec}${h}</div><aside class="side" data-key="sc1">${look}${out}</aside></div>` : sec + h + look + out) + `</div>`;   // 手機：常用的通知、登入放最上面，外觀設好就很少動，放最後
 }
 /* 系統更新（作業系統的套件）：跟哨兵、雲端硬碟的版本放在一起 */
 const sysRow = s => s.update && s.update.supported ? `<div class="selfrow" data-key="sys"><div class="cl2 first"><span class="ico info">${I("layers")}</span><span>系統<small data-x>${updateInfo(s) || "還沒檢查"}</small></span>${updateBtn(s)}</div></div>` : "";
@@ -2964,6 +2966,7 @@ async function tick(){
     if (r.status === 401) { const was = getTok(); setTok(""); LIST = []; for (const k in HIST) delete HIST[k]; endSplash(); return login(/^vss_/.test(was) ? "請重新登入" : "密碼不對，再試一次"); }
     const data = await r.json();
     if (id !== TICKID || !getTok()) return true;
+    LOST0 = 0; if (LOST) { LOST = false; document.documentElement.classList.remove("lost"); }   // 又連上了：數字恢復、標題照實際狀況
     histJoin(data);
     const me = data.find(x => !x.node);
     if (window._fresh) { window._fresh = false; fetch("/api/pin", {method:"POST", headers:{"X-Token":getTok()}, body:'{"action":"login"}'}).catch(() => {}); }  // 登入成功：PIN 碼輸錯的次數歸零
@@ -3000,7 +3003,11 @@ async function tick(){
   } catch(e) {
     if (id !== TICKID) return false;
     if (!BOOTED) splashMsg("連線不上，正在重試…");
-    const m = document.querySelector(".meta"); if (m) m.innerHTML = `<span class="live off"></span>連線中斷，重試中…`;
+    const m = document.querySelector(".meta"); if (m && !LOST) m.innerHTML = `<span class="live off"></span>連線中斷，重試中…`;
+    if (!LOST0) LOST0 = Date.now();
+    if (!LOST && LIST.length && Date.now() - LOST0 > 15000) {   // 連不上超過 15 秒：標題改「連不上主機」、畫面上的數字變淡（都是舊的）
+      LOST = true; document.documentElement.classList.add("lost"); render(LIST);
+    }
     if (!(document.hidden && LIST.length)) timer = setTimeout(tick, 3000);
     return false;
   }
