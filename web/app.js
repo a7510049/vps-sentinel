@@ -499,7 +499,11 @@ const hm = t => new Date(t * 1000).toLocaleTimeString("zh-TW", {hour:"2-digit", 
 const EVOPEN = new Set();                   // 好幾台合成一筆的事件：點開列出是哪幾台（記住哪幾筆是打開的，自動更新不會收起來）
 const evMany = e => e.hs && e.hs.length > 1;
 const evWho = e => evMany(e) ? `<button class="eh" data-evx="${esc(e.k)}" aria-expanded="${EVOPEN.has(e.k)}">${esc(e.hs[0])}等 ${e.hs.length} 台 <i>▾</i></button>` : `<span class="eh">${esc(e.h)}</span>`;
-const evRow = (e, many, tf = ago) => `<div class="ev${many && evMany(e) && EVOPEN.has(e.k) ? " open" : ""}" data-key="${esc(e.k)}|${e.kind}:${esc(e.text)}"><span class="dot ${e.kind}"></span><div class="et"><div>${many ? evWho(e) : ""}${esc(e.text)}</div>${many && evMany(e) ? `<div class="ehs"><div><div>${esc(e.hs.join("、"))}</div></div></div>` : ""}<div class="sub">${WORD[e.kind] || ""}・${tf(e.t)}${e.n > 1 ? `・共 ${e.n} 次` : ""}</div></div></div>`;
+/* 事件前面的圖示：照內容挑（登入鑰匙、重新開機電源…），顏色是狀態（紅異常、橘注意、綠恢復、主題色通知） */
+const EVI = [[/登入|PIN|金鑰|密碼/, "key"], [/重新開機|開機|重開/, "power"], [/備份|還原/, "archive"], [/更新|新版/, "upd"], [/憑證|https|TLS/i, "shield"],
+  [/記憶體/, "mem"], [/磁碟|硬碟/, "disk"], [/處理器|負載/, "cpu"], [/流量/, "month"], [/下載/, "dl"], [/Telegram|通知/, "bell"], [/連不上|連線|離線|上線|網路|IPv/, "net"], [/容器|Docker/i, "box"], [/服務/, "layers"]];
+const evIco = e => { const m = EVI.find(([r]) => r.test(e.text)); return `<span class="evi ${e.kind}">${I(m ? m[1] : {bad:"warn", warn:"alert", ok:"ok"}[e.kind] || "info")}</span>`; };
+const evRow = (e, many, tf = ago) => `<div class="ev${many && evMany(e) && EVOPEN.has(e.k) ? " open" : ""}" data-key="${esc(e.k)}|${e.kind}:${esc(e.text)}">${evIco(e)}<div class="et"><div>${many ? evWho(e) : ""}${esc(e.text)}</div>${many && evMany(e) ? `<div class="ehs"><div><div>${esc(e.hs.join("、"))}</div></div></div>` : ""}<div class="sub">${tf(e.t)}${e.n > 1 ? `・共 ${e.n} 次` : ""}</div></div></div>`;
 const evList = (ev, many) => ev.length ? `<div class="evs" data-key="evs" data-keyed>${ev.map(e => evRow(e, many)).join("")}</div>` : `<div class="calm" data-key="calm">目前沒有事件</div>`;
 const dayOf = t => { const d = new Date(t * 1000), n = new Date(), y = new Date(n); y.setDate(n.getDate() - 1);
   return d.toDateString() === n.toDateString() ? "今天" : d.toDateString() === y.toDateString() ? "昨天" : `${d.getMonth() + 1} 月 ${d.getDate()} 日`; };
@@ -511,7 +515,7 @@ function hostCard(s, i, mini){
   let b = `<div class="hcard ${lv}${mini ? " mini" : ""}" data-key="${esc(k)}" data-keyed data-open="${esc(k)}" role="button" tabindex="0" style="--i:${i}">
     <div class="ct" data-key="ct">${avatar(s)}<div class="nm"><div class="cn">${esc(s.name)}</div><div class="cp">${esc(place(s) || s.os || "")}</div></div>${mini ? "" : I("chev")}</div>`;
   if (!s.online) return b + offBox(s) + `</div>`;
-  const d0 = disk0(s), ft = [PREF.show.traffic && s.traffic ? `本月 ${size(s.traffic.used)}` : "", `開機 ${up(s.uptime)}`].filter(Boolean).join("・");
+  const d0 = disk0(s), ft = [PREF.show.traffic && s.traffic ? `<span title="本月流量">${I("month")}${size(s.traffic.used)}</span>` : "", `<span title="開機多久">${I("power")}${up(s.uptime)}</span>`].join("");   // 圖示＋數字，不寫「本月」「開機」
   const mr = `<div class="mrows" data-key="mr">${mrow("處理器", s.cpu)}${mrow("記憶體", s.mem.pct)}${mrow("磁碟", d0.pct)}</div>`;
   if (mini) return b + mr + `<span class="mch" data-key="ch">${I("chev")}</span></div>`;
   return b + alerts(s) + mr + `<div class="cfoot" data-key="cf">${ft}</div></div>`;
@@ -704,10 +708,12 @@ function toolsPage(list){
 }
 function toolsBody(s, k, node, name){
   const c = s.cloud && safeUrl(cloudHref(s.cloud)) ? s.cloud : null;
-  let h = `<div data-key="tb:${k}" data-sw><div class="group" data-key="g-t:${k}">`;
-  if (c) h += `<a class="li col" data-key="cl" href="${esc(cloudHref(c))}"${ssoAttr(s)} target="_blank" rel="noopener noreferrer"><span class="rt">${IC("cloud", "")}<span class="lab">雲端硬碟<small>${c.total ? `已用 ${size(c.used)} / ${size(c.total)}` : ""}</small></span>${EXT}</span>${c.total ? wave(c.pct) : ""}</a>
-    <button class="li" data-key="dl" data-dl="${node}" data-name="${name}">${IC("dl", "")}<span class="lab">遠端下載<small>貼上連結，存到雲端硬碟</small></span>${CHEV}</button>`;
-  h += `<button class="li" data-key="bk" data-bk="${node}" data-label="${name}">${IC("archive", "")}<span class="lab">每日備份<small class="bkst" data-n="${node}" data-keep data-ld>讀取中…</small></span>${CHEV}</button></div>`;
+  let h = `<div data-key="tb:${k}" data-sw><div class="tgrid" data-key="g-t:${k}">`;   // 兩欄大方塊：圖示、名字，下面直接畫狀態（用量波浪條、備份最近 7 天）
+  if (c) h += `<a class="tile" data-key="cl" href="${esc(cloudHref(c))}"${ssoAttr(s)} target="_blank" rel="noopener noreferrer"><span class="ttop">${IC("cloud", "")}<span class="tgo">${EXT}</span></span>
+      <b>雲端硬碟</b><small>${c.total ? `${size(c.used)} / ${size(c.total)}` : ""}</small>${c.total ? wave(c.pct) : ""}</a>
+    <button class="tile" data-key="dl" data-dl="${node}" data-name="${name}"><span class="ttop">${IC("dl", "")}<span class="tgo nx">${CHEV}</span></span><b>遠端下載</b><small>存到雲端硬碟</small></button>`;
+  h += `<button class="tile" data-key="bk" data-bk="${node}" data-label="${name}"><span class="ttop">${IC("archive", "")}<span class="tgo nx">${CHEV}</span></span>
+      <b>每日備份</b><small class="bkst" data-n="${node}" data-keep data-ld>讀取中…</small><span class="bkdots" data-n="${node}" data-keep>${"<i></i>".repeat(7)}</span></button></div>`;
   const L = linksOf(s).filter(x => !x.fixed);
   if (L.length) h += `<div class="lbl" data-key="ll">常用連結</div><div class="group" data-key="g-lk:${k}">${L.map(x => linkRow(x, esc(linkSt(x)))).join("")}</div>`;
   return h + `</div>`;
@@ -815,18 +821,21 @@ const SHOWS = [["trend", "歷史曲線圖", "chart"], ["net", "網路速度", "n
   ["flag", "國旗", "flag"], ["month", "每月流量", "traffic"], ["sun", "天氣", "weather", "用這台裝置的位置"], ["quote", "心情小語", "quote"]];
 const showSum = () => { const n = SHOWS.filter(x => PREF.show[x[2]]).length; return n === SHOWS.length ? "全部顯示" : n ? `顯示 ${n} 項` : "全部隱藏"; };
 const seg = (k, opts) => `<div class="seg">${opts.map(([v, l]) => `<button class="${String(getP(k)) === String(v) ? "on" : ""}" data-pref="${k}" data-val="${v}">${l}</button>`).join("")}</div>`;
+/* 外觀的選項用小預覽圖代替字：主題是迷你畫面、配色風格用那個風格算出來的顏色、文字大小是三種大小的「字」 */
+const lkMini = (m, tone) => `<i class="lkp" data-mode="${m}"${tone ? ` data-tone="${tone}"` : ""}><b></b><s></s><u></u></i>`;
+const lkPick = (k, opts, pic) => `<div class="lks">${opts.map(([v, l]) => `<button class="lkb${String(getP(k)) === String(v) ? " on" : ""}" data-pref="${k}" data-val="${v}" aria-label="${l}"><span class="lkf">${pic(v)}<i class="lkc">${I("check")}</i></span><small>${l}</small></button>`).join("")}</div>`;
 const tog = (k, l) => `<input type="checkbox" class="tog" data-pref="${k}" aria-label="${l}" ${getP(k) ? "checked" : ""}>`;
 function setPage(list){
   const on = list.filter(s => s.online).sort((a, b) => ORDER.indexOf(keyOf(a)) - ORDER.indexOf(keyOf(b))), self = on.some(s => !s.node);
-  const go = (attr, ic, l, st) => `<button class="li" ${attr}>${IC(ic, "")}<span class="lab">${l}<small class="${st}" data-keep data-ld>讀取中…</small></span>${CHEV}</button>`;
+  const go = (attr, ic, l, st) => `<button class="li" ${attr}>${IC(ic, "")}<span class="lab">${l}<small class="${st}" data-keep data-ld>讀取中…</small></span><span class="stb" data-keep hidden></span>${CHEV}</button>`;
   const sw = ACCENTS.map(([v, l]) => `<button class="${PREF.accent === v ? "on" : ""}" data-pref="accent" data-val="${v}" data-accent="${v}" title="${l}" aria-label="${l}">${I("check")}</button>`).join("")
     + `<button class="rbsw${PREF.accent === "rainbow" ? " on" : ""}" data-pref="accent" data-val="rainbow" title="彩虹" aria-label="彩虹">${I("check")}</button>`;
   const D = DESK.matches;   // 電腦：左邊主機和通知，右邊欄是這台裝置的外觀
   const look = `<div class="lbl" data-key="llook">外觀</div><div class="group" data-key="g-look">
-      <div class="li col"><span class="lab">主題</span>${seg("theme", [["auto", "自動"], ["light", "淺色"], ["dark", "深色"]])}</div>
+      <div class="li col"><span class="lab">主題</span>${lkPick("theme", [["auto", "自動"], ["light", "淺色"], ["dark", "深色"]], v => v === "auto" ? `<span class="lkh">${lkMini("light")}${lkMini("dark")}</span>` : lkMini(v))}</div>
       <div class="li col"><span class="lab">主題色</span><div class="sw">${sw}</div></div>
-      <div class="li col"><span class="lab">配色風格</span>${seg("tone", [["soft", "柔和"], ["vivid", "鮮明"], ["calm", "素雅"]])}</div>
-      <div class="li col"><span class="lab">文字大小</span>${seg("size", [["s", "小"], ["m", "中"], ["l", "大"]])}</div>
+      <div class="li col"><span class="lab">配色風格</span>${lkPick("tone", [["soft", "柔和"], ["vivid", "鮮明"], ["calm", "素雅"]], v => lkMini(document.documentElement.dataset.mode || "light", v))}</div>
+      <div class="li col"><span class="lab">文字大小</span>${lkPick("size", [["s", "小"], ["m", "中"], ["l", "大"]], v => `<i class="lkz ${v}">字</i>`)}</div>
       <label class="li"><span class="lab">動畫</span>${tog("motion", "動畫")}</label>
       <button class="li" data-shows>${IC("trend", "")}<span class="lab">要顯示的內容<small class="showst">${showSum()}</small></span>${CHEV}</button></div>`;
   const sec = `<div class="lbl" data-key="lsec">通知與登入</div><div class="group" data-key="g-sec">${go("data-tg", "bell", "Telegram 通知", "tgst")}${PK_OK && self ? go("data-pk", "finger", "手機金鑰登入", "pkst") : ""}${self ? go("data-pin", "pin", "PIN 碼登入", "pinst") + go("data-sess", "devices", "登入的裝置", "sessst") : ""}</div>`
@@ -1771,7 +1780,7 @@ async function tgCall(body){
 async function tgStatus(root){
   const el = root.querySelector(".tgst"); if (!el) return;
   try { const d = await tgCall({action:"status"});
-    txt(el, d.on ? `已開啟・由 ${d.bot || "機器人"} 傳送・${d.keep ? `保留 ${d.keep >= 24 ? Math.round(d.keep/24) + " 天" : d.keep + " 小時"}` : "不自動刪除"}` : d.has_token ? "還沒選要傳到哪裡" : "還沒設定");
+    stSet(el, d.on ? "" : d.has_token ? "還沒選要傳到哪裡" : "還沒設定", !!d.on);
     el.classList.toggle("on", !!d.on);
   } catch(e) { txt(el, e.message); }
 }
@@ -2049,7 +2058,7 @@ async function pkLogin(){
 async function pkStatus(root){
   const el = root.querySelector(".pkst"); if (!el) return;
   try { const d = await pkCall("/api/passkey", {action:"list"}, 1);
-    txt(el, d.keys && d.keys.length ? `已登記 ${d.keys.length} 支` : "還沒登記");
+    stSet(el, d.keys && d.keys.length ? "" : "還沒登記", d.keys && d.keys.length);
     el.classList.toggle("on", !!(d.keys && d.keys.length));
   } catch(e) { txt(el, e.message); }
 }
@@ -2102,11 +2111,20 @@ async function pkModal(){
   });
 }
 
+/* 設定列表的狀態：設好了只在右邊放一個勾或數字，還沒設好（要你動手）才寫字 */
+function stSet(el, t, b){
+  const li = el.closest(".li"); txt(el, t);
+  let g = li && li.querySelector(".stb");
+  if (!g) return;
+  const h = !b ? "" : b === true ? I("check") : String(b);
+  if (g.innerHTML !== h) { g.innerHTML = h; g.className = "stb" + (typeof b === "number" ? " n" : ""); if (canAnim() && h) g.animate([{opacity:0, transform:"scale(.6)"}, {opacity:1, transform:"none"}], {duration:T.mid, easing:SPRING}); }
+  g.hidden = !b;
+}
 /* ═════════ 登入的裝置：每台裝置登入後拿到自己的鑰匙，可以單獨登出一台 ═════════ */
 const sessCall = body => pkCall("/api/sessions", body, 1);
 async function sessStatus(root){
   const el = root.querySelector(".sessst"); if (!el) return;
-  try { const d = await sessCall({action:"list"}); txt(el, `${(d.list || []).length || 1} 台`); }
+  try { const d = await sessCall({action:"list"}); stSet(el, "", (d.list || []).length || 1); }
   catch(e) { txt(el, e.message); }
 }
 async function sessModal(){
@@ -2188,7 +2206,7 @@ const pinCall = body => pkCall("/api/pin", body, 1);
 async function pinStatus(root){
   const el = root.querySelector(".pinst"); if (!el) return;
   try { const d = await pinCall({action:"status"});
-    txt(el, !d.on ? "還沒設定" : d.locked ? `輸錯太多次，暫停中（還有 ${Math.ceil(d.locked / 60)} 分鐘）` : "已設定");
+    stSet(el, !d.on ? "還沒設定" : d.locked ? `輸錯太多次，暫停中（還有 ${Math.ceil(d.locked / 60)} 分鐘）` : "", !!(d.on && !d.locked));
     el.classList.toggle("on", !!d.on && !d.locked);
   } catch(e) { txt(el, e.message); }
 }
@@ -2235,7 +2253,7 @@ const pairDay = t => { const d = new Date(t * 1000); return `${d.getMonth()+1}/$
 async function pairStatus(root){
   const el = root.querySelector(".pairst"); if (!el) return;
   try { const d = await pairCall({action:"status"}), n = (d.keys || []).length;
-    txt(el, n ? `已配對 ${n} 台` : "還沒配對");
+    stSet(el, n ? "" : "還沒配對", n);
     el.classList.toggle("on", n > 0);
   } catch(e) { txt(el, e.message); }
 }
@@ -2514,9 +2532,20 @@ function bkLine(d){
 }
 async function bkStatus(root){
   await Promise.all([...root.querySelectorAll(".bkst")].map(async el => {
-    try { const [t, c] = bkLine(await bkGet(el.dataset.n)); txt(el, t); el.className = "bkst " + c; }
+    try { const d = await bkGet(el.dataset.n), [t, c] = bkLine(d); txt(el, el.closest(".tile") ? t.replace(/^上次備份：/, "").replace(/（.*）$/, "") : t); el.className = "bkst " + c; bkDots(el.parentNode.querySelector(".bkdots"), d); }
     catch(e) { txt(el, e.message); el.className = "bkst"; }
   }));
+}
+/* 最近 7 天每天一個點：有備份綠色、最後一次失敗紅色、沒有灰色（最右邊是今天） */
+function bkDots(box, d){
+  if (!box) return;
+  const me = (d.copies || []).find(c => c.me), ts = (me && me.ts) || [], L = d.last, day = t => new Date(t * 1000).toDateString();
+  const has = new Set(ts.map(day)), bad = L && !L.ok ? day(L.t) : "";
+  [...box.children].forEach((i, n) => {
+    const k = new Date(Date.now() - (6 - n) * 864e5).toDateString(), c = k === bad && !has.has(k) ? "bad" : has.has(k) ? "ok" : "";
+    if (i.className !== c) i.className = c;
+    i.title = new Date(Date.now() - (6 - n) * 864e5).toLocaleDateString("zh-TW", {month:"numeric", day:"numeric"});
+  });
 }
 function bkRows(d){
   const L = d.last, row = (ok, t, sub) => `<li class="${ok === null ? "" : ok ? "ok" : "bad"}">${ok === null ? "" : I(ok ? "ok" : "warn")}<span>${t}${sub ? `<small>${esc(sub)}</small>` : ""}</span></li>`;
