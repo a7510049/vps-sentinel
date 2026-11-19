@@ -619,23 +619,23 @@ button.li.prs,a.li.prs{border-radius:var(--r-lg);transform:scale(.98);background
 .tgrid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
 @media (max-width:599px){.tgrid>:last-child:nth-child(odd){grid-column:1/-1}}   /* 單數個時最後一塊撐滿，不留空 */
 @media (min-width:600px){.tgrid{grid-template-columns:repeat(auto-fit,minmax(200px,1fr))}}
-.tile{position:relative;display:flex;flex-direction:column;align-items:flex-start;gap:2px;min-height:132px;padding:14px 14px 16px;border-radius:var(--r-lg);background:var(--card);box-shadow:var(--cs);color:var(--tx);text-align:left;text-decoration:none;overflow:hidden}
-.tile .ttop{display:flex;justify-content:space-between;align-items:flex-start;width:100%;padding-bottom:12px}
-.tile .tgo{color:var(--tx3)}
-.tile .tgo svg{width:18px;height:18px}
-.tile .tgo.nx svg{transform:rotate(-90deg)}
-.tile b{font-size:var(--fs-l);font-weight:700}
-.tile small{font-size:var(--fs-xs);color:var(--tx3)}
-.tile small.bad{color:var(--bad)}
-.tile .wv{width:100%;margin-top:auto}
-.tile>small{padding-bottom:10px}
+.tbx{position:relative;display:flex;flex-direction:column;align-items:flex-start;gap:2px;min-height:132px;padding:14px 14px 16px;border-radius:var(--r-lg);background:var(--card);box-shadow:var(--cs);color:var(--tx);text-align:left;text-decoration:none;overflow:hidden}
+.tbx .ttop{display:flex;justify-content:space-between;align-items:flex-start;width:100%;padding-bottom:12px}
+.tbx .tgo{color:var(--tx3)}
+.tbx .tgo svg{width:18px;height:18px}
+.tbx .tgo.nx svg{transform:rotate(-90deg)}
+.tbx b{font-size:var(--fs-l);font-weight:700}
+.tbx small{font-size:var(--fs-xs);color:var(--tx3)}
+.tbx small.bad{color:var(--bad)}
+.tbx .wv{width:100%;margin-top:auto}
+.tbx>small{padding-bottom:10px}
 .bkdots{display:flex;gap:5px;margin-top:auto}
 .bkdots i{width:10px;height:10px;border-radius:var(--r-pill);background:var(--s4);transition:background-color var(--t-mid) var(--ease)}
 .bkdots i.ok{background:var(--ok)}
 .bkdots i.bad{background:var(--bad)}
-@media (hover:hover){.tile:hover{background:color-mix(in oklab,var(--card),var(--tx) 3%)}}
-.tile{transition:transform var(--t-fast) var(--ease)}
-.tile:active{transform:scale(.98)}
+@media (hover:hover){.tbx:hover{background:color-mix(in oklab,var(--card),var(--tx) 3%)}}
+.tbx{transition:transform var(--t-fast) var(--ease)}
+.tbx:active{transform:scale(.98)}
 .lkz.s{font-size:var(--fs-s)} .lkz.m{font-size:var(--fs-xl)} .lkz.l{font-size:var(--fs-3xl)}
 .li .seg{flex:none}
 .li.col .seg{width:100%}

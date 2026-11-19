@@ -709,10 +709,10 @@ function toolsPage(list){
 function toolsBody(s, k, node, name){
   const c = s.cloud && safeUrl(cloudHref(s.cloud)) ? s.cloud : null;
   let h = `<div data-key="tb:${k}" data-sw><div class="tgrid" data-key="g-t:${k}">`;   // 兩欄大方塊：圖示、名字，下面直接畫狀態（用量波浪條、備份最近 7 天）
-  if (c) h += `<a class="tile" data-key="cl" href="${esc(cloudHref(c))}"${ssoAttr(s)} target="_blank" rel="noopener noreferrer"><span class="ttop">${IC("cloud", "")}<span class="tgo">${EXT}</span></span>
+  if (c) h += `<a class="tbx" data-key="cl" href="${esc(cloudHref(c))}"${ssoAttr(s)} target="_blank" rel="noopener noreferrer"><span class="ttop">${IC("cloud", "")}<span class="tgo">${EXT}</span></span>
       <b>雲端硬碟</b><small>${c.total ? `${size(c.used)} / ${size(c.total)}` : ""}</small>${c.total ? wave(c.pct) : ""}</a>
-    <button class="tile" data-key="dl" data-dl="${node}" data-name="${name}"><span class="ttop">${IC("dl", "")}<span class="tgo nx">${CHEV}</span></span><b>遠端下載</b><small>存到雲端硬碟</small></button>`;
-  h += `<button class="tile" data-key="bk" data-bk="${node}" data-label="${name}"><span class="ttop">${IC("archive", "")}<span class="tgo nx">${CHEV}</span></span>
+    <button class="tbx" data-key="dl" data-dl="${node}" data-name="${name}"><span class="ttop">${IC("dl", "")}<span class="tgo nx">${CHEV}</span></span><b>遠端下載</b><small>存到雲端硬碟</small></button>`;
+  h += `<button class="tbx" data-key="bk" data-bk="${node}" data-label="${name}"><span class="ttop">${IC("archive", "")}<span class="tgo nx">${CHEV}</span></span>
       <b>每日備份</b><small class="bkst" data-n="${node}" data-keep data-ld>讀取中…</small><span class="bkdots" data-n="${node}" data-keep>${"<i></i>".repeat(7)}</span></button></div>`;
   const L = linksOf(s).filter(x => !x.fixed);
   if (L.length) h += `<div class="lbl" data-key="ll">常用連結</div><div class="group" data-key="g-lk:${k}">${L.map(x => linkRow(x, esc(linkSt(x)))).join("")}</div>`;
@@ -2532,7 +2532,7 @@ function bkLine(d){
 }
 async function bkStatus(root){
   await Promise.all([...root.querySelectorAll(".bkst")].map(async el => {
-    try { const d = await bkGet(el.dataset.n), [t, c] = bkLine(d); txt(el, el.closest(".tile") ? t.replace(/^上次備份：/, "").replace(/（.*）$/, "") : t); el.className = "bkst " + c; bkDots(el.parentNode.querySelector(".bkdots"), d); }
+    try { const d = await bkGet(el.dataset.n), [t, c] = bkLine(d); txt(el, el.closest(".tbx") ? t.replace(/^上次備份：/, "").replace(/（.*）$/, "") : t); el.className = "bkst " + c; bkDots(el.parentNode.querySelector(".bkdots"), d); }
     catch(e) { txt(el, e.message); el.className = "bkst"; }
   }));
 }
