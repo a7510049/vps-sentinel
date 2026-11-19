@@ -1561,7 +1561,7 @@ def fly_merge(ap, fids, rows, io):
             continue
         t = r["est"] or r["sch"]
         done = r["st"] in ("已到", "已飛")
-        if t > now + 12 * 3600 or t < now - (20 if done else 90) * 60 and not (done and t > now - 90 * 60 and (plane(r) or {}).get("ph") == io):
+        if t > now + 12 * 3600 or t < now - (20 if done else 90) * 60 and not (done and t > now - 90 * 60 and (plane(r) or {}).get("ph") in (io, "gnd" if io == "dep" else io)):
             continue                                   # 還沒到、還沒飛的留久一點（官網常常慢半拍）；寫已飛但其實剛起飛（排隊滑行很久）的也留著
         show.append(r)
     pick = {}                                          # 同一班號今天、明天都在表上：天上那架只配給時間最接近的那一筆
@@ -1600,8 +1600,8 @@ def fly_merge(ap, fids, rows, io):
         elif seen and seen.get("sch") == r["sch"] and now - seen.get("at", 0) < 6 * 3600:
             row.update(reg=seen.get("reg") or "", t=seen.get("t") or row["t"], model=seen.get("model") or row["model"], seen=seen["at"])
             fly_fix_type(row, r)
-        if io == "dep" and r["st"] == "已飛" and p and p["ph"] == "gnd" and (p.get("d") or 99) < 6 and (p.get("spd") or 0) >= 9:
-            row["st"] = "滑行中"                       # 官網推出就寫已飛，其實還在滑行
+        if io == "dep" and r["st"] == "已飛" and p and p["ph"] == "gnd" and (p.get("d") or 99) < 6:
+            row["st"] = "滑行中" if (p.get("spd") or 0) >= 9 else "還沒飛"   # 官網推出就寫已飛，其實還在滑行、還停在機坪
         far = None if p or done or r["st"] == "取消" else fly_far(ap, r, io, now)
         if far:                                        # 不在這個機場的範圍、別的機場收得到：已經在天上了
             row.update({k: far[k] for k in ("reg", "t", "model") if far[k]})

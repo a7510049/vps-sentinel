@@ -501,6 +501,7 @@ class Flights(unittest.TestCase):
         self.assertFalse({r["fn"]: r for r in S.fly_merge(ap, fids, live, "dep")}["AK1511"].get("live"))
         fids = [f("BR809", "dep", now - 300, "已飛")]              # 官網推出就寫已飛，其實還在滑行道上
         self.assertEqual(S.fly_merge(ap, fids, [pl("BR809", "gnd", alt=0, spd=30, d=.9)], "dep")[0]["st"], "滑行中")
+        self.assertEqual(S.fly_merge(ap, fids, [pl("BR809", "gnd", alt=0, spd=0, d=1.7)], "dep")[0]["st"], "還沒飛")   # 還停在機坪
 
     def test_sky_need(self):
         """非必要不問 OpenSky：沒有班機要起降、或愛好者都收得到時不問"""
