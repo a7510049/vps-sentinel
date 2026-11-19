@@ -1318,8 +1318,12 @@ def fly_mins(path, v):
     return (max(0.0, path - 8) / v + min(path, 8) / min(v, 270.0)) * 60
 
 
-def fly_eta(code, x, y, v):
-    """幾分鐘後落地：已經對準跑道的照到跑道頭的距離；還沒對準的要先繞到跑道延長線上（10 公里外）再進來，不是直線飛過去"""
+FLY_GLIDE = (600, 120)     # 算「已經對準跑道」的最高高度：公尺＋每公里幾公尺（網頁雷達排隊用同樣的數字）
+
+
+def fly_eta(code, x, y, v, trk=None, alt=None):
+    """幾分鐘後落地：已經對準跑道（機頭朝跑道、高度不會比正常下滑高太多）的照到跑道頭的距離；
+    還沒對準的要先繞到跑道延長線上（10 公里外）再進來；太高的要多飛一段才降得下來（跟網頁雷達排隊同一套條件）"""
     best = None
     for hdg, ln, off in FLY_RWY.get(code) or [(0, 0, 0)]:
         cx, cy = -off * math.cos(math.radians(hdg)), off * math.sin(math.radians(hdg))   # 跑道中心（往左右偏 off，跟 fly_geo 一樣）
@@ -1328,13 +1332,20 @@ def fly_eta(code, x, y, v):
             tx, ty = cx - ux * ln / 2, cy - uy * ln / 2                       # 這一頭的跑道頭
             dx, dy = x - tx, y - ty
             al, lat = -(dx * ux + dy * uy), abs(dx * uy - dy * ux)
-            if al > 0 and lat <= max(1.2, al * .12):
+            head = trk is None or abs((trk - h + 540) % 360 - 180) <= 35
+            if al > 0 and lat <= max(1.2, al * .12) and head and (alt is None or alt <= FLY_GLIDE[0] + al * FLY_GLIDE[1]):
                 path = al
             elif -ln - .5 <= al <= 0 and lat <= .6:
                 path = 0                                                      # 已經過了跑道頭、在跑道上：就是現在
             else:
-                jx, jy = tx - ux * max(10, al), ty - uy * max(10, al)
-                path = math.hypot(x - jx, y - jy) + max(10, al)
+                far = max(10, al)
+                jx, jy = tx - ux * far, ty - uy * far
+                path = math.hypot(x - jx, y - jy) + far
+                if trk is not None and math.hypot(x - jx, y - jy) > 1:        # 機頭沒朝著要去的地方：要先轉過去
+                    b = math.degrees(math.atan2(jx - x, jy - y))
+                    path += 6 * abs((trk - b + 540) % 360 - 180) / 180
+                if alt is not None:
+                    path = max(path, (alt - 300) / 52)                         # 3 度下滑：每公里降 52 公尺，太高的要多飛
             best = path if best is None else min(best, path)
     return fly_mins(best, v)
 
@@ -1411,7 +1422,7 @@ def fly_plane(a, ap):
     hold = ph != "gnd" and d < 80 and fly_hold(str(a.get("hex") or "").lower(), trk)
     if hold and ph == "over" and not (rt and rt[0] and rt[1]) and alt < 20000 and fly_closest(ap, lat, lon) == code:
         ph = "arr"                            # 查不到航線、在這個機場附近繞圈：多半是在等降落
-    eta = round(fly_eta(code, d * math.sin(math.radians(brg)), d * math.cos(math.radians(brg)), gs * 1.852)) if ph == "arr" and gs > 50 and not hold else None
+    eta = round(fly_eta(code, d * math.sin(math.radians(brg)), d * math.cos(math.radians(brg)), gs * 1.852, float(trk) if trk is not None else None, alt * 0.3048)) if ph == "arr" and gs > 50 and not hold else None
     if hold:
         st = "盤旋等待" if ph == "arr" else "盤旋中"
     elif ph == "arr":
@@ -1638,7 +1649,7 @@ def fly_far(ap, r, io, now):
         toward = abs((x["trk"] - (brg + 180) % 360 + 540) % 360 - 180) < 90
         if toward != (io == "arr"):
             continue                                   # 抵達要朝這裡飛、出發要背著這裡飛（同班號的別段不算）
-        eta = fly_eta(ap[0], d * math.sin(math.radians(brg)), d * math.cos(math.radians(brg)), x["spd"]) if io == "arr" else 0
+        eta = fly_eta(ap[0], d * math.sin(math.radians(brg)), d * math.cos(math.radians(brg)), x["spd"], x["trk"], x.get("alt")) if io == "arr" else 0
         return {**x, "d": d, "eta": round(eta)}
     return None
 
@@ -1785,7 +1796,7 @@ def fly_board(code, bg=False):
     for p in rows:                                 # 記下每一班的位置：飛到別的機場範圍裡的國內班機，這個機場的看板也知道它在天上
         if p["fn"] and p.get("x") is not None:
             FLY["far"][fly_fn(p["fn"])] = {"at": now, "lat": ap[3] + p["y"] / 111.2, "lon": ap[4] + p["x"] / (111.2 * lat0),
-                                           "spd": p.get("spd") or 0, "trk": p.get("trk"), "gnd": p["ph"] == "gnd",
+                                           "spd": p.get("spd") or 0, "trk": p.get("trk"), "alt": p.get("alt"), "gnd": p["ph"] == "gnd",
                                            "reg": p.get("reg") or "", "t": p.get("t") or "", "model": p.get("model") or ""}
     if len(FLY["far"]) > 3000:
         for k, v in list(FLY["far"].items()):
