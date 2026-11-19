@@ -1520,9 +1520,18 @@ def fly_merge(ap, fids, rows, io):
     me, out, used = {"code": ap[0], "name": ap[2]}, [], set()
     other = "dep" if io == "arr" else "arr"
 
+    landed = {}                                        # 同一班號剛降落（抵達時間在 45 分鐘內）：停在地上的那架還是抵達那段，不算下一段的出發
+    for r in fids:
+        if r["io"] == "arr" and abs((r["est"] or r["sch"]) - now + 600) < 35 * 60:
+            for f in [r["fn"], *(r.get("share") or [])]:
+                landed[fly_fn(f)] = True
+
     def plane(r):
-        """這一筆配得到的飛機（同一班號接著飛下一段時：正在降落的不算出發、正在起飛的不算抵達）"""
-        p = next((live[fly_fn(f)] for f in [r["fn"], *(r.get("share") or [])] if fly_fn(f) in live), None)
+        """這一筆配得到的飛機（同一班號接著飛下一段時：正在降落的不算出發、正在起飛的不算抵達、剛降落停在地上的也不算出發）"""
+        fs = [fly_fn(f) for f in [r["fn"], *(r.get("share") or [])]]
+        p = next((live[f] for f in fs if f in live), None)
+        if p and io == "dep" and p["ph"] == "gnd" and any(f in landed for f in fs):
+            return None
         return None if p and p["ph"] == other else p
 
     show = []
