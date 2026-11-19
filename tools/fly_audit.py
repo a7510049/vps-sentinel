@@ -82,6 +82,8 @@ for c in ["TPE", "TSA", "KHH", "RMQ"]:
             issues.append(f"{k} {p['fn'] or p['cs']} 不是飛機卻列成飛機 t={p.get('t')}")
         if p.get("use") == "" and k != "over":
             issues.append(f"{k} {p['fn'] or p['reg']} 沒有用途 t={p.get('t')}")
+    far = [f"{io}:{p['fn']} {p['st']} {hm(p.get('est'))}" for io in ("arr", "dep") for p in d[io] if not p.get("live") and p.get("reg") and p["st"] in ("飛行中", "已飛") and (p.get("est") or p.get("sch") or 0) > now - 1800]
+    print("  別的機場收到的", " ".join(far) or "-")
     print("\n".join("  ! " + x for x in issues) or "  (沒發現問題)")
     for k, p in allp:
         if k in ("arr", "dep") and not p.get("live"): continue

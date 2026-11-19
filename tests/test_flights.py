@@ -302,6 +302,12 @@ class Flights(unittest.TestCase):
         try:
             S.FLY["cache"].clear()
             d = self.get("ap=TPE")
+            br = [p for p in d["arr"] if p["fn"] == "BR2196"][0]
+            self.assertTrue(br.get("live"))   # 剛漏收一次：先照上一次的留著，狀態不倒退
+            for k in S.FLY["keep"]["TPE"]:
+                S.FLY["keep"]["TPE"][k] = (0, S.FLY["keep"]["TPE"][k][1])     # 過了 FLY_KEEP 秒
+            S.FLY["cache"].clear()
+            d = self.get("ap=TPE")
         finally:
             AC.insert(0, gone)
         br = [p for p in d["arr"] if p["fn"] == "BR2196"][0]
@@ -448,6 +454,32 @@ class Flights(unittest.TestCase):
         self.assertEqual(dep["BR6"]["st"], "滑行中")
         order = [r["fn"] for r in S.fly_merge(ap, fids, live, "arr")]
         self.assertLess(order.index("BR2"), order.index("BR1"))   # 已經到的排在還沒到的前面
+
+    def test_far_and_landed(self):
+        """不在範圍裡、別的機場收得到的國內班機寫「飛行中」和幾點到；「已到」寫雷達看到落地的時間"""
+        S, now = self.S, time.time()
+        ap = S.fly_db()["TSA"]
+        f = lambda fn, io, t, st="準時": {"io": io, "fn": fn, "al": "", "sch": t, "est": t, "pc": "MZG", "pl": "澎湖", "gate": "", "term": "", "st": st, "type": ""}
+        far = {"at": now, "lat": ap[3] - 1.2, "lon": ap[4] - .3, "spd": 450, "trk": 10, "gnd": False, "reg": "B-17001", "t": "AT76", "model": "ATR 72-600"}
+        S.FLY["far"].update({"B78612": far, "B78613": {**far, "lat": ap[3] + .6, "trk": 20}, "B78614": far})
+        fids = [f("B78612", "arr", now - 600, "延誤"), f("B78613", "dep", now - 300), f("B78614", "dep", now + 600)]
+        arr = {r["fn"]: r for r in S.fly_merge(ap, fids, [], "arr")}
+        dep = {r["fn"]: r for r in S.fly_merge(ap, fids, [], "dep")}
+        self.assertEqual(arr["B78612"]["st"], "飛行中")
+        self.assertGreater(arr["B78612"]["est"], now + 10 * 60)
+        self.assertFalse(arr["B78612"].get("lag"))
+        self.assertEqual(arr["B78612"]["reg"], "B-17001")
+        self.assertEqual(dep["B78613"]["st"], "已飛")        # 背著松山飛、已經在天上
+        self.assertNotEqual(dep["B78614"]["st"], "已飛")     # 朝松山飛的是飛來的那段，不是這班出發
+        S.FLY["far"]["B78612"] = {**far, "at": now - 300}   # 太久沒收到：不算
+        self.assertNotEqual({r["fn"]: r for r in S.fly_merge(ap, fids, [], "arr")}["B78612"]["st"], "飛行中")
+        pl = lambda ph, **k: {"fn": "BR2196", "id": "x1", "cs": "EVA2196", "reg": "", "t": "", "model": "", "alt": 300, "spd": 250, "vr": -4, "d": 5, "eta": 1,
+                              "trk": 0, "x": 0, "y": 0, "sq": "", "emg": False, "mil": False, "rare": False, "ph": ph, "st": "即將降落", **k}
+        fids = [f("BR2196", "arr", now - 600, "已到")]                # 官網的「已到」時間是舊的
+        S.fly_merge(ap, fids, [pl("arr")], "arr")
+        row = S.fly_merge(ap, fids, [pl("gnd", alt=0, spd=60, d=1, st="在跑道上")], "arr")[0]
+        self.assertEqual(row["st"], "已到")
+        self.assertAlmostEqual(row["est"], time.time(), delta=5)
 
     def test_next_leg(self):
         """同一班號降落後接著飛下一段：正在降落的不配給出發那筆；寫已飛但排隊很久才剛起飛的，看板上還留著"""
