@@ -1040,6 +1040,8 @@ html.flyon .dash>.view{content-visibility:hidden;contain-intrinsic-size:auto non
 .fr .pl{color:var(--tx)}
 .fr .al,.fr .reg,.fr .bx{color:var(--tx2)}
 .fr .fal{display:flex;margin-right:-6px}
+.fr .fal{position:relative}.fr .fal::after{content:"";position:absolute;right:-3px;bottom:-3px;width:9px;height:9px;border-radius:50%;background:var(--p);box-shadow:0 0 0 2px var(--card);opacity:0;transform:scale(.4);transition:opacity var(--t-mid) var(--ease),transform var(--t-mid) var(--ease)}
+.fr.onr .fal::after{opacity:1;transform:none}   /* 雷達上看得到這班：標誌右下角一個點（跟整頁雷達清單一樣的位置） */
 .alg{position:relative;display:inline-grid;place-items:center;flex:none;width:2.6em;height:2.6em;border-radius:var(--r-xs);background:var(--s3);color:var(--tx2);font-size:var(--fs-xs);font-style:normal;font-weight:600;overflow:hidden;vertical-align:middle;transition:background-color var(--t-fast) var(--ease)}
 .alg.none{display:none}
 .alg img{position:absolute;inset:3px;width:calc(100% - 6px);height:calc(100% - 6px);object-fit:contain;opacity:0;transition:opacity var(--t-fast) var(--ease)}

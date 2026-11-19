@@ -833,7 +833,7 @@ function radarView(cv, full){
 }
 /* 這個機場的跑道（公里）：有 OpenStreetMap 的用真的位置，同一條被切成好幾段的接回一條；沒有就用大約位置 */
 /* 飛 path 公里要幾分鐘：最後 8 公里減速到大約 270 公里/時（跟主機算「幾分後」的 fly_mins 一樣） */
-function flyMins(path, v){ v = Math.min(380, Math.max(150, v)); return (Math.max(0, path - 10) / v + Math.min(path, 10) / Math.min(v, 230)) * 60; }   // 跟主機 fly_mins 一樣
+function flyMins(path, v){ v = Math.min(320, Math.max(150, v)); return (Math.max(0, path - 18) / v + Math.min(path, 18) / Math.min(v, 190)) * 60; }   // 跟主機 fly_mins 一樣
 function flyRws(g){
   const seg = (g.apm && g.apm.rw || []).map(a => [a[1], a[2], a[a.length - 2], a[a.length - 1]]);
   const src = seg.length ? seg : (g.rwy || []).filter(([a, b, c, d]) => Math.hypot((a + c) / 2, (b + d) / 2) <= 4);
@@ -1271,6 +1271,7 @@ function flyRows(f, d, list, n, byHr, tz, anim){
     if (p && r._sig && r._sig !== sig && r.dataset.id === p.id && !off && anim !== false && canAnim()) { r.classList.remove("chg"); void r.offsetWidth; r.classList.add("chg"); }
     r._sig = sig;
     r.dataset.id = p ? p.id : ""; r.classList.toggle("bad", v.cls === "bad"); r.classList.toggle("hot", v.cls === "hot"); r.querySelector(".fk.t").classList.toggle("late", !!v.late); r.querySelector(".fk.t").classList.toggle("early", !!v.early); r.querySelector(".fk.reg").classList.toggle("gch", !!v.gch); r.querySelector(".fk.m").classList.toggle("gch", !!v.mch); r.classList.toggle("done", /已到|已飛/.test(v.st || "")); r.classList.toggle("empty", !p); r.classList.toggle("nopc", !!p && !v.pc); r.classList.toggle("nopl", !v.pl); r.classList.toggle("sel", !!p && p.id === FLYSEL);
+    r.classList.toggle("onr", !!p && !!p.live && p.x != null && !flyDone(p) && (FLYS.tab === "arr" || FLYS.tab === "dep") && !!flyAl(p.fn));   // 雷達上看得到這班：標誌右下角一個點
     const g = (FLYS.tab === "gnd" || FLYS.tab === "cargo") && !!p, gh = g && (i === 0 || items[i - 1] && flyGo(items[i - 1], FLYS.tab) !== v.gout) ? (FLYS.tab === "gnd" ? v.gout ? "準備起飛" : "剛降落" : v.gout ? "起飛" : "降落") : "";   // 機坪、貨機：降落、起飛分兩段，每段第一列上面寫標題
     r.classList.toggle("gh", !!gh); if ((r.dataset.gh || "") !== gh) r.dataset.gh = gh;
     FLYF.forEach((k, j) => flapSet(r.querySelector(`.fk.${k} .sf`), k === "st" ? flyRight(v.st, FLYW.st) : v[k], i * T.fast * .35 + j * T.fast * .2, off));
@@ -1561,13 +1562,16 @@ function flyInfo(id){
     ${rows.length ? `<div class="fdl">${rows.map(([k, val]) => `<div><span>${k}</span><b>${esc(val)}</b></div>`).join("")}</div>` : ""}
     ${reg ? `<div class="group"><a class="li" href="https://www.jetphotos.com/registration/${reg}" target="_blank" rel="noopener noreferrer"><span class="lab">看這架的照片<small>JetPhotos</small></span>${EXT}</a>
       <a class="li" href="https://www.flightradar24.com/data/aircraft/${reg.toLowerCase()}" target="_blank" rel="noopener noreferrer"><span class="lab">飛行紀錄<small>Flightradar24</small></span>${EXT}</a></div>` : ""}
-    </div><div class="btns"><button class="ubtn ghost" data-r="0">關閉</button></div></div>`;
+    </div><div class="btns">${p.x != null && p.live !== false ? `<button class="ubtn ghost" data-frad>在雷達上看</button>` : ""}<button class="ubtn ghost" data-r="0">關閉</button></div></div>`;
   $("#layer").appendChild(v);
   flyPhoto(v.querySelector(".fph"), p);
   if (v.querySelector(".fgate")) flyGate(v, v.querySelector(".fgate"), p, d.ap.code);
   const done = () => { if (v._d) return; v._d = 1; flyMeOff(v); v.classList.add("closing"); FLYSEL = ""; flyPaint(); setTimeout(() => v.remove(), 360); };
   v._esc = done;
-  v.addEventListener("click", e => { if (e.target === v || e.target.closest("[data-r]")) done(); });
+  v.addEventListener("click", e => {
+    if (e.target.closest("[data-frad]")) { done(); fradOpen(); return fradPick(p.id, true); }   // 打開整頁雷達、選好這架、移到中間
+    if (e.target === v || e.target.closest("[data-r]")) done();
+  });
 }
 document.addEventListener("click", e => {
   const f = e.target.closest && e.target.closest("#fly"); if (!f) return;
