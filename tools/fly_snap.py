@@ -27,6 +27,7 @@ for c in APS:
     try: open(f"{OUT}/trk-{c}.json", "wb").write(get("/api/flights?trk=" + c))
     except Exception as e: print(e)
 p.terminate(); p.wait()
+os.makedirs(OUT + "/data", exist_ok=True)
 for n in os.listdir(D + "/data"):
     s = os.path.join(D, "data", n)
     if n in ("aircraft-db",): continue
