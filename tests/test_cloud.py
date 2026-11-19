@@ -115,6 +115,29 @@ class CloudTest(Server):
         self.assertIsNone(self.user(sign("cloud-cookie:v1")))                         # 舊版永久有效的通行證
         self.assertEqual(self.user(f"{exp}.{sign(f'cloud-cookie:v2:{exp}')}"), "owner")
 
+    def test_logout_revokes(self):
+        """登出一台裝置：之前發的雲端硬碟通行證全部作廢；還登入著的裝置從哨兵點進去照樣拿得到新的"""
+        def post(path, body, token):
+            c = http.client.HTTPConnection("127.0.0.1", self.port, timeout=15)
+            c.request("POST", path, body=json.dumps(body), headers={"Content-Type": "application/json", "X-Token": token})
+            r = c.getresponse()
+            d = json.loads(r.read() or b"{}")
+            c.close()
+            return d
+        a = post("/api/login", {"pw": TOKEN, "keep": True, "dev": "手機"}, "")["token"]
+        b = post("/api/login", {"pw": TOKEN, "keep": True, "dev": "電腦"}, "")["token"]
+        r = self.post_sso(self.ticket())
+        old = r.getheader("Set-Cookie").split(";")[0].split("=", 1)[1]
+        self.assertEqual(self.user(old), "owner")
+        sid = next(x["id"] for x in post("/api/sessions", {"action": "list"}, a)["list"] if x["dev"] == "電腦")
+        post("/api/sessions", {"action": "del", "id": sid}, a)
+        self.assertIsNone(self.user(old))                                              # 登出後舊通行證不能用
+        exp = int(time.time()) + 600
+        self.assertIsNone(self.user(f"{exp}.{sign(f'cloud-cookie:v2:{exp}')}"))      # 舊版沒有代數的也不行
+        self.assertEqual(self.request("/api/status", token=b)[0], 401)
+        new = self.post_sso(self.ticket()).getheader("Set-Cookie").split(";")[0].split("=", 1)[1]
+        self.assertEqual(self.user(new), "owner")
+
 
 if __name__ == "__main__":
     unittest.main()

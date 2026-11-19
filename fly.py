@@ -464,9 +464,10 @@ def fly_sky_tok():
         return FLY_SKYS["tok"]
     except urllib.error.HTTPError as e:
         bad = e.code in (400, 401, 403)
-        FLY_SKYS.update(tbad=now + (600 if bad else 60), err="帳號不對" if bad else f"登入失敗（{e.code}）")
+        FLY_SKYS.update(tbad=now + (600 if bad else 60), err="帳號不對" if bad else "OpenSky 暫時連不上")
     except Exception as e:  # noqa: BLE001
-        FLY_SKYS.update(tbad=now + 60, err=f"登入失敗（{str(e)[:40]}）")
+        FLY_SKYS.update(tbad=now + 60, err="OpenSky 暫時連不上")
+        fly_log(f"OpenSky 登入：{str(e)[:60]}")
     fly_log(f"OpenSky 登入：{FLY_SKYS['err']}")
     return ""
 
@@ -2172,7 +2173,8 @@ def fly_api(q):
     try:
         return fly_slim(fly_board(code if code in FLY_PIN else "TPE"), str((q.get("v") or [""])[0])[:20])
     except Exception as e:  # noqa: BLE001
-        return {"ok": False, "error": f"航班資料暫時拿不到（{e}）"}
+        fly_log(f"看板：{str(e)[:120]}")                # 原因記在紀錄檔；網頁只寫一句中文
+        return {"ok": False, "error": "航班資料暫時拿不到，等一下會自己再試"}
 
 
 FLY_LISTS = ("arr", "dep", "gnd", "over", "rest", "cargo", "veh")

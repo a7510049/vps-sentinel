@@ -238,6 +238,9 @@ img.flag{width:28px;height:21px;object-fit:cover;border-radius:var(--r-xs);flex:
 #app{transition:opacity var(--t-mid) var(--ease)}
 .dash.m{max-width:760px;margin:0 auto;padding:0 16px calc(env(safe-area-inset-bottom) + 40px)}
 .view{animation:through var(--sp) backwards}
+/* 這個網頁連不上主機超過 15 秒（html.lost）：畫面上的數字都是舊的，整塊變淡 */
+.view>:not(.hero,.dhome),.dhome>:not(.hero),.det .dscroll>:not(.dtop){transition:filter var(--t-slow) var(--ease)}
+html.lost :is(.view>:not(.hero,.dhome),.dhome>:not(.hero),.det .dscroll>:not(.dtop)){filter:opacity(.5) saturate(.4)}
 .ptitle{font-size:var(--fs-4xl);font-weight:800;letter-spacing:-.03em;line-height:1.15;padding:28px 4px 20px}
 /* 頁面標題（首頁那句話、工具／紀錄／設定、主機頁的名稱）同一種字：最粗、文字漸層 */
 .headline,.ptitle>span:first-child,.hname{background:var(--ttl);-webkit-background-clip:text;background-clip:text;color:transparent}
@@ -1022,15 +1025,17 @@ html.flyon .dash>.view{content-visibility:hidden;contain-intrinsic-size:auto non
 .sgone .ico{width:64px;height:64px}.sgone .ico svg{width:30px;height:30px}
 .sgone b{font-size:var(--fs-xl);font-weight:600}
 /* 一格翻牌：上下兩半分開畫，中間一條縫 */
+/* 翻牌：像機場的老看板，黑底黃字，淺色、深色模式都一樣（只有翻牌格子，其他照主題色） */
+.sf{--flap:oklch(.2 .012 260);--flapx:oklch(.87 .15 92);--flaph:white;--flapb:oklch(.7 .19 25);--flapo:oklch(.78 .16 55);--flapg:oklch(.8 .16 150);--flape:color-mix(in oklab,var(--flap) 22%,transparent)}
 .sf{display:inline-flex;gap:2px;line-height:1;font-weight:500;font-variant-numeric:tabular-nums;vertical-align:middle}
-.sf .c{position:relative;contain:strict;font-style:normal;width:.8em;height:1.4em;flex:none;border-radius:calc(var(--r-xs) / 2);background:var(--s3);perspective:5em}
+.sf .c{position:relative;contain:strict;font-style:normal;width:.8em;height:1.4em;flex:none;border-radius:calc(var(--r-xs) / 2);background:var(--flap);perspective:5em}
 .sf .c.w,.sf.zh .c{width:1.2em}
-.sf b{position:absolute;inset:0;display:grid;place-items:center;border-radius:inherit;background:var(--s3);color:var(--tx);font-weight:500;backface-visibility:hidden;transform-origin:50% 50%;white-space:pre}
+.sf b{position:absolute;inset:0;display:grid;place-items:center;border-radius:inherit;background:var(--flap);color:var(--flapx);font-weight:500;backface-visibility:hidden;transform-origin:50% 50%;white-space:pre}
 .sf b.u{clip-path:inset(0 0 50% 0)}
 .sf b.d{clip-path:inset(50% 0 0 0)}
 .sf b>span{display:inline-block}.sf .nw{scale:.64 1}.sf .nm{scale:.78 1}                         /* W、M 比格子寬：壓窄塞進去，翻牌還是對齊 */
 .sf b.d.f{transform:rotateX(90deg)}
-.sf .c::after{content:"";position:absolute;left:0;right:0;top:50%;height:1px;margin-top:-.5px;background:var(--bg);opacity:.4;z-index:1;pointer-events:none}
+.sf .c::after{content:"";position:absolute;left:0;right:0;top:50%;height:1px;margin-top:-.5px;background:black;opacity:.7;z-index:1;pointer-events:none}
 .sf.xl{font-size:var(--fs-4xl)}
 .sf.lg{font-size:var(--fs-2xl)}
 .fhead{display:flex;align-items:center;gap:16px;background:var(--card);box-shadow:var(--cs);border-radius:var(--r-xl);padding:18px 20px}
@@ -1050,6 +1055,7 @@ html.flyon .dash>.view{content-visibility:hidden;contain-intrinsic-size:auto non
 .fhrs .n{font-size:var(--fs-s);opacity:.7}
 .ftabs{--chip:var(--card)}
 .ftabs .fn{display:inline-block;margin-left:6px;color:var(--tx3);font-variant-numeric:tabular-nums}.ftabs .on .fn{color:var(--on-p);opacity:.75}[data-accent="rainbow"] .ftabs .on .fn{color:var(--on-rbw)}   /* 數字自己給顏色，不跟著按鈕的變色動畫走（手機上有時會留著選到時的深色） */
+.ftabs .fn .dg{display:inline-block;position:relative;font-style:normal}.ftabs .fn .dg>b{display:inline-block;font-weight:inherit;transform-origin:50% 50%}.ftabs .fn .dgo{position:absolute;inset:0;font-style:normal;transform-origin:50% 50%}   /* 班數一位一位翻：舊的疊在上面先翻走 */
 .board{background:var(--card);box-shadow:var(--cs);border-radius:var(--r-xl);padding:10px;display:grid;grid-template-columns:auto auto auto minmax(5.6em,1fr) auto minmax(5em,1fr) auto auto auto auto auto;column-gap:12px;overflow:hidden}
 .fh,.frows,.fr{display:grid;grid-column:1/-1;grid-template-columns:subgrid}
 .fh{padding:4px 10px 8px;font-size:var(--fs-xs);color:var(--tx3);font-weight:500;white-space:nowrap}
@@ -1075,16 +1081,16 @@ html.flyon .dash>.view{content-visibility:hidden;contain-intrinsic-size:auto non
 .alg.lg{width:3.2em;height:3.2em;border-radius:var(--r-md);font-size:var(--fs-s)}
 .fr .reg{font-variant-numeric:tabular-nums}
 .fr .t,.fr .fn{display:flex;align-items:center;gap:6px;white-space:nowrap}.fr .t{position:relative}
-.fr .t.late b{color:var(--warn)}.fr .t.early b{color:var(--ok)}.fsh:empty{display:none}   /* 時間改了：只寫新的，早到綠字、晚到橘字 */
+.fr .t.late b{color:var(--flapo)}.fr .t.early b{color:var(--flapg)}.fsh:empty{display:none}   /* 時間改了：只寫新的，早到綠字、晚到橘字 */
 .fr .fn{position:relative}.fsh{position:absolute;right:0;top:50%;translate:0 -50%;font-size:var(--fs-xs);font-weight:500;color:var(--tx3)}     /* 共掛班號：+2 疊在翻牌最後一格（班號很少用滿七格），不多佔寬度 */
 .fh .st{justify-self:end}                                          /* 狀態靠右，標題也靠右 */
 .fsum{font-size:var(--fs-s);padding:0 4px;cursor:pointer;width:fit-content;border-radius:var(--r-xs)}@media (hover:hover){.fsum:hover{color:var(--p)}}
 .fdone{grid-column:1/-1;display:flex;align-items:center;gap:6px;justify-self:start;margin:2px 0 4px;padding:8px 10px;border-radius:var(--r-sm);color:var(--tx2);font-size:var(--fs-s);font-weight:500}   /* 已到／已飛的收成一行 */
 .fdone .chv{width:16px;height:16px;transition:transform var(--t-mid) var(--ease)}.fdone.on .chv{transform:rotate(180deg)}
-.fr.hot .st b{color:var(--p)}
-.fr.bad .st b{color:var(--bad)}
+.fr.hot .st b{color:var(--flaph)}
+.fr.bad .st b{color:var(--flapb)}
 .fr .reg.gch,.fr .m.gch{color:var(--warn);font-weight:600}
-.sf .c[data-c=" "],.sf .c[data-c=" "] b{background:var(--s2)}     /* 空的格子淡一點，有字的才跳出來 */
+.sf .c[data-c=" "],.sf .c[data-c=" "] b{background:var(--flape)}     /* 空的格子淡一點，有字的才跳出來 */
 .fr .sf .c[data-c=" "],.fr .sf .c[data-c=" "] b{background:transparent}.fr .sf .c[data-c=" "]::after{display:none}   /* 看板的列：用不到的格子不畫出來 */
 .fr.done>:not(.ftag,.br){opacity:.5}                               /* 已到、已飛：淡一點，正要來的比較顯眼 */
 .ftag{justify-self:start;white-space:nowrap;font-size:var(--fs-xs);font-weight:500;border-radius:var(--r-pill);padding:0;opacity:0;transition:opacity var(--t-mid) var(--ease)}
@@ -1289,6 +1295,19 @@ html.flyon .dash>.view{content-visibility:hidden;contain-intrinsic-size:auto non
 .froute .fln{display:flex;align-items:center;gap:4px;align-self:center;color:var(--p);min-width:72px}
 .froute .fln i{flex:1;height:0;border-top:2px dotted var(--line)}
 .froute .fln svg{width:20px;height:20px;transform:rotate(45deg);flex:none}
+/* 班機細節的上半：登機證（上面航班、大字的出發 → 抵達，一條撕線，下面登機門、櫃台、機型、註冊號） */
+.bpass{position:relative;background:var(--chip);border-radius:var(--r-lg);padding:16px;text-align:left;overflow:hidden}
+.bpass::before{content:"";position:absolute;left:0;right:0;top:0;height:4px;background:var(--grad)}
+.bpass .froute{background:none;padding:14px 0 2px;border-radius:0}
+.bpass .fre b{font-size:var(--fs-4xl);font-weight:800;letter-spacing:.02em;line-height:1.1}
+.bpcut{position:relative;margin:16px -16px;border-top:2px dashed var(--line)}
+.bpcut::before,.bpcut::after{content:"";position:absolute;top:-11px;width:20px;height:20px;border-radius:50%;background:var(--s2)}   /* 撕線兩頭的半圓缺口（跟視窗同色） */
+.bpcut::before{left:-10px}.bpcut::after{right:-10px}
+.bpk{display:grid;grid-template-columns:repeat(auto-fit,minmax(76px,1fr));gap:12px 10px}
+.bpk div{min-width:0}
+.bpk span{display:block;font-size:var(--fs-xs);color:var(--tx3)}
+.bpk b{display:block;font-size:var(--fs-xl);font-weight:700;line-height:1.25;font-variant-numeric:tabular-nums;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.bpk small{display:block;font-size:var(--fs-xs);color:var(--tx3)}.bpk small.was{color:var(--warn)}   /* 改過的：橘字寫原本的 */
 .fdl{background:var(--chip);border-radius:var(--r-lg);padding:4px 16px}
 .fdl div{display:flex;justify-content:space-between;align-items:baseline;gap:16px;padding:11px 0}
 .fdl div+div{border-top:1px solid var(--line)}

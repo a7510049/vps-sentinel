@@ -11,7 +11,7 @@ EVENTS = [
     ("warn", "主機重新開機了"), ("info", "root 從 1.2.3.4 登入了主機（SSH）"),
     ("info", "存取密碼已換新"), ("info", "登記了手機金鑰「iPhone」"), ("info", "刪除了手機金鑰「iPhone」"),
     ("info", "PIN 碼登入已設定"), ("info", "PIN 碼登入已關閉"), ("warn", "PIN 碼連續輸錯 5 次，暫停 15 分鐘"),
-    ("bad", "PIN 碼累計輸錯 20 次，已自動關閉"), ("warn", "安全憑證再 7 天到期"), ("bad", "記憶體不夠了"),
+    ("bad", "PIN 碼累計輸錯 20 次，已自動關閉"), ("warn", "安全憑證再 7 天到期"), ("bad", "記憶體不夠了"), ("bad", "記憶體不夠，系統強制關掉了 xray"),
     ("info", "「主要主機」開始監看這台主機"), ("info", "解除了「主要主機」的配對"), ("info", "開始監看「新主機」"),
     ("info", "不再監看「新主機」"), ("bad", "重新開機失敗"), ("info", "已取消被「主要主機」監看"), ("warn", "處理器太閒，Oracle 可能會收回這台"), ("info", "下載好了：a.zip（1.0 GB）"), ("bad", "下載失敗：a.zip，找不到這個檔案（404）"), ("bad", "哨兵更新到 3.1 失敗，已退回 3.0"), ("ok", "其他好消息"), ("info", "其他一般消息"), ("weird", "不認得的種類"),
 ]
@@ -43,6 +43,16 @@ class TgIcons(unittest.TestCase):
     def test_reboot_lines(self):
         self.assertEqual(S.ev_line({"kind": "info", "text": "從網頁重新開機"}), "")   # 重開前已經直接傳過了
         self.assertEqual(S.ev_line({"kind": "bad", "text": "重新開機失敗"}), "❌ 重新開機失敗")
+
+
+class OomTest(unittest.TestCase):
+    def test_names_and_text(self):
+        lines = ["Out of memory: Killed process 812 (xray) total-vm:1234kB", "oom_reaper: reaped process 812 (xray)",
+                 "Out of memory: Killed process 900 (node) total-vm:1kB", "Killed process 901 (node)"]
+        self.assertEqual(S.oom_names(0, lines), ["xray", "node"])
+        self.assertEqual(S.oom_text(2, ["xray", "node"]), "記憶體不夠，系統強制關掉了 xray、node")
+        self.assertEqual(S.oom_text(1, []), "記憶體不夠，系統強制關掉了一個程式")
+        self.assertEqual(S.oom_text(5, list("abcde")), "記憶體不夠，系統強制關掉了 a、b、c 等 5 個程式")
 
 
 if __name__ == "__main__":

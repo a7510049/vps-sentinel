@@ -45,7 +45,7 @@ from collections import deque
 from concurrent.futures import ThreadPoolExecutor
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
-VERSION = "4.00"
+VERSION = "4.01"
 
 # ───────────────────────── 哨兵備份檔（.vsbk）─────────────────────────
 # 哨兵專用的備份格式：外面是自己的檔案格式，裡面用的是成熟、標準的加密方法（不自己發明加密）：
@@ -659,16 +659,48 @@ def _sign(msg):
 CLOUD_DAYS = 30                                 # 雲端硬碟通行證的有效天數
 
 
+CLOUD_GEN = {"n": None}
+
+
+def cloud_gen():
+    """雲端硬碟通行證的「代」：登出裝置時加 1，之前發的通行證全部失效（還登入著的裝置從哨兵點進去會自動拿新的）"""
+    if CLOUD_GEN["n"] is None:
+        try:
+            with open(os.path.join(DATA_DIR, "cloud-gen"), encoding="utf-8") as f:
+                CLOUD_GEN["n"] = max(0, int(f.read().strip() or 0))
+        except (OSError, ValueError):
+            CLOUD_GEN["n"] = 0
+    return CLOUD_GEN["n"]
+
+
+def cloud_revoke():
+    n = cloud_gen() + 1
+    CLOUD_GEN["n"] = n
+    try:
+        os.makedirs(DATA_DIR, exist_ok=True)
+        with open(os.path.join(DATA_DIR, "cloud-gen"), "w", encoding="utf-8") as f:
+            f.write(str(n))
+    except OSError as e:
+        log("無法寫入雲端硬碟通行證的代數：", e)
+
+
 def cloud_cookie_value(exp=None):
-    """雲端硬碟通行證：裡面寫著到期時間並簽章，過期就要重新從哨兵點進去（就算被偷看到也不能一直用）"""
-    exp = int(exp or time.time() + CLOUD_DAYS * 86400)
-    return f"{exp}.{_sign(f'cloud-cookie:v2:{exp}')}"
+    """雲端硬碟通行證：裡面寫著到期時間和「代」並簽章，過期或登出過裝置就要重新從哨兵點進去（就算被偷看到也不能一直用）"""
+    exp, g = int(exp or time.time() + CLOUD_DAYS * 86400), cloud_gen()
+    return f"{exp}.{g}.{_sign(f'cloud-cookie:v3:{g}:{exp}')}"
 
 
 def cloud_cookie_ok(v):
-    exp, _, sig = (v or "").partition(".")
-    return (bool(re.fullmatch(r"[0-9]{1,12}", exp)) and int(exp) > time.time()
-            and hmac.compare_digest(sig.encode(), _sign(f"cloud-cookie:v2:{exp}").encode()))
+    p = (v or "").split(".")
+    if len(p) == 2:                               # 舊版（沒有代數）：還沒登出過裝置前照樣能用
+        exp, sig = p
+        return (cloud_gen() == 0 and bool(re.fullmatch(r"[0-9]{1,12}", exp)) and int(exp) > time.time()
+                and hmac.compare_digest(sig.encode(), _sign(f"cloud-cookie:v2:{exp}").encode()))
+    if len(p) != 3:
+        return False
+    exp, g, sig = p
+    return (bool(re.fullmatch(r"[0-9]{1,12}", exp)) and int(exp) > time.time() and g == str(cloud_gen())
+            and hmac.compare_digest(sig.encode(), _sign(f"cloud-cookie:v3:{g}:{exp}").encode()))
 
 
 CLOUD_TK_MIN = 15                               # 一次性登入票的有效分鐘數
@@ -945,6 +977,37 @@ def ssh_logins(since_us):
         if m and t > since_us:
             out.append((t, m.group(2), m.group(3), SSH_WAY.get(m.group(1), "")))
     return out
+
+
+def oom_count():
+    """系統因為記憶體不夠、強制關掉程式的累計次數（開機到現在）；讀不到回傳 None"""
+    m = re.search(r"^oom_kill (\d+)$", read(os.environ.get("SENTINEL_VMSTAT", "/proc/vmstat")), re.M)
+    return int(m.group(1)) if m else None
+
+
+def oom_names(since_s, lines=None):
+    """從系統紀錄找出 since_s 之後被強制關掉的程式名稱（照順序、不重複）"""
+    if lines is None:
+        try:
+            r = subprocess.run(["journalctl", "-k", "--since", f"@{int(since_s)}", "-o", "cat", "--no-pager", "-q"],
+                               capture_output=True, encoding="utf-8", errors="replace", timeout=15)
+            lines = r.stdout.splitlines()
+        except (OSError, subprocess.SubprocessError):
+            return []
+    out = []
+    for line in lines:
+        m = re.search(r"Killed process \d+ \(([^)]{1,40})\)", line)
+        if m and m.group(1) not in out:
+            out.append(m.group(1))
+    return out
+
+
+def oom_text(n, names):
+    """「記憶體不夠，系統強制關掉了 xray」：名稱最多寫 3 個"""
+    if names:
+        more = f" 等 {len(names)} 個程式" if len(names) > 3 else ""
+        return "記憶體不夠，系統強制關掉了 " + "、".join(names[:3]) + more
+    return f"記憶體不夠，系統強制關掉了 {n} 個程式" if n > 1 else "記憶體不夠，系統強制關掉了一個程式"
 
 
 def cycle_bounds(day=None):
@@ -2593,6 +2656,7 @@ class Collector:
         self.v6 = {"addr": "", "ok": None, "fails": 0, "seen": False}   # IPv6：位址、能不能連出去
         self.events = deque(maxlen=40)         # 事件紀錄
         self.prev_keys = None
+        self.oom = (None, 0)                 # 記憶體不夠被強制關掉的累計次數、那時候的時間（啟動前的不算）
         self.upd_running = False
         self.upd_last = update_last()
         self.h24 = deque(maxlen=288)            # 24 小時，每 5 分鐘一筆
@@ -2818,7 +2882,12 @@ class Collector:
                 if tick % 30 == 0 and tick > 0:           # 每 1 分鐘存檔
                     self.save()
 
-                if tick % 15 == 0:        # 每 30 秒：容器與服務
+                if tick % 15 == 0:        # 每 30 秒：容器與服務；記憶體不夠被系統強制關掉的程式
+                    n = oom_count()
+                    if n is not None and self.oom[0] is not None and n > self.oom[0]:
+                        self.add_event("bad", oom_text(n - self.oom[0], oom_names(self.oom[1] - 5)))
+                    if n is not None:
+                        self.oom = (n, now_t)
                     c, s = docker_containers(), service_states()
                     with self.lock:
                         self.containers, self.services = c, s
@@ -3031,6 +3100,17 @@ COL = Collector()
 
 
 # ───────────────────────── 其他 VPS ─────────────────────────
+
+def peer_cloud_revoke():
+    """登出裝置後叫其他主機的雲端硬碟通行證也作廢（連不上的就算了：通行證最多 30 天也會過期）"""
+    for p in list(PEERS):
+        try:
+            req = urllib.request.Request(p["url"] + "/api/cloud-revoke", data=b"{}", method="POST",
+                                         headers={"X-Token": p["token"], "Content-Type": "application/json"})
+            urllib.request.urlopen(req, timeout=10).close()
+        except Exception as e:  # noqa: BLE001
+            log(f"沒通知到「{p.get('name')}」作廢雲端硬碟通行證：", e)
+
 
 def fetch_peer(p, since=0):
     try:
@@ -4472,9 +4552,15 @@ class Handler(BaseHTTPRequestHandler):
             if act in ("del", "out"):
                 sid = me if act == "out" else str(d.get("id") or "")
                 gone = sess_del(sid) if sid else []
+                if gone:                             # 登出的那台也不能再開雲端硬碟（這台和其他主機的）
+                    cloud_revoke()
+                    threading.Thread(target=peer_cloud_revoke, daemon=True).start()
                 if act == "del" and gone:
                     log(f"登出了「{gone[0]['dev']}」")
             return self.send(200, json.dumps({"ok": True, "list": sess_list(me)}, ensure_ascii=False))
+        if u.path == "/api/cloud-revoke":           # 主要主機登出了一台裝置：這台的雲端硬碟通行證也全部作廢
+            cloud_revoke()
+            return self.send(200, '{"ok":true}')
         if u.path == "/api/cloud-login":            # 網頁上已經登入哨兵：直接發雲端硬碟通行證
             if not CLOUD_URL:
                 return self.send(404, '{"ok":false}')
