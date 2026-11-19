@@ -98,13 +98,34 @@ function flyObs(f){
     });
   }, {root: f.querySelector(".fscroll")});
 }
-/* 手機、平板：抵達／出發那排貼到最上面時才出現霧面底（平常是透明的，跟後面的光暈接在一起） */
+/* 手機、平板：抵達／出發那排捲出畫面後，上面中間浮出一顆小膠囊「抵達 23 ▾」，點了選分頁（不整排貼著擋住看板） */
 function flyStuck(f){
   const t = f.querySelector(".ftabs"), sc = f.querySelector(".fscroll");
   if (!t || !sc || !window.IntersectionObserver) return;
-  const pad = Math.ceil(parseFloat(getComputedStyle(sc).paddingTop) * ZM()) + 1;   // 貼住的位置是捲動區的上緣再往下 padding 那麼多
-  new IntersectionObserver(([e]) => t.classList.toggle("stuck", e.intersectionRatio < 1 && e.boundingClientRect.top <= e.rootBounds.top + 1),
-    {root: sc, rootMargin: `-${pad}px 100% 0px 100%`, threshold: 1}).observe(t);
+  new IntersectionObserver(([e]) => { const away = !e.isIntersecting && e.boundingClientRect.top < e.rootBounds.top;
+    f.classList.toggle("tabsaway", away); f.querySelector(".fmini").tabIndex = away ? 0 : -1; if (!away && window._menu && window._menu._fmini) closeMenu(); },
+    {root: sc, rootMargin: "0px 100% 0px 100%"}).observe(t);
+}
+function flyMini(f){
+  const k = FLYS.tab, l = (FLYTAB.find(x => x[0] === k) || FLYTAB[0])[1], n = (f.querySelector(`.ftabs [data-k="n-${k}"]`) || {}).textContent || "";
+  txt(f.querySelector('[data-k="mini-l"]'), l); txt(f.querySelector('[data-k="mini-n"]'), n);
+}
+function flyMiniMenu(f, btn){
+  if (window._menu && window._menu._fmini) return closeMenu();
+  closeMenu();
+  const m = document.createElement("div"); m.className = "lmenu hmenu fminim"; m._fmini = 1;
+  m.innerHTML = FLYTAB.map(([k, l]) => `<button data-fmi="${k}"${FLYS.tab === k ? ` class="on"` : ""}>${FLYS.tab === k ? I("check") : `<span class="ckh"></span>`}<span>${l}</span><b>${esc((f.querySelector(`.ftabs [data-k="n-${k}"]`) || {}).textContent || "")}</b></button>`).join("");
+  document.body.appendChild(m);
+  placeMenu(m, btn, r => r.left + r.width / 2 - m.offsetWidth / 2);
+  if (canAnim()) m.animate([{opacity:0, transform:"scale(.85,.4)"}, {opacity:1, transform:"none"}], {duration:T.spf, easing:SPRING_F});
+  window._menu = m;
+  setTimeout(() => m.addEventListener("click", e => {
+    const b = e.target.closest("[data-fmi]"); closeMenu(); if (!b) return;
+    const tb = f.querySelector(`.ftabs [data-ftab="${b.dataset.fmi}"]`); if (!tb) return;
+    if (!tb.classList.contains("on")) tb.click();
+    const sc = f.querySelector(".fscroll"), top = f.querySelector(".ftabs").offsetTop - 8;   // 換了分頁：回到那一排，從新清單的第一班開始看
+    sc.scrollTo({top: Math.max(0, top), behavior: canAnim() ? "smooth" : "auto"});
+  }), 0);
 }
 /* 航空公司標誌：航班號前兩碼（BR、CI、5J）認得的航空公司，抓公開的標誌圖（只有標誌、不含字）；不認得或抓不到就留著代碼小方塊 */
 const FLYNOLG = new Set();
@@ -158,7 +179,7 @@ const FLYHEAD = {arr:["抵達", "航班", "出發地", "", "", "航空公司", "
 const FLYHEADF = {arr:["抵達", "航班", "出發地", "", "", "航空公司", "機型", "登機門", "行李", "狀態"], dep:["出發", "航班", "目的地", "", "", "航空公司", "機型", "登機門", "報到", "狀態"]};   // 有機場官網航班表時
 const flyRow = i => `<div class="fr" data-i="${i}" role="button" tabindex="0">${FLYCOL.map(k => `<span class="fk ${k}">${FLYW[k] ? flap("", FLYW[k], k === "st" ? "zh" : "") + (k === "fn" ? `<span class="fsh"></span>` : "") : k === "fal" ? `<i class="alg none" data-c=""></i>` : k === "pl" ? `<img class="flg at" alt="" hidden><span class="plt"></span>` : ""}</span>`).join("")}<span class="ftag"></span><i class="br b1"></i><i class="br b2"></i></div>`;
 function flyShell(){
-  return `<div class="flyv" id="fly"><div class="fscroll"><div class="fwrap">
+  return `<div class="flyv" id="fly"><button class="fmini" data-fmini tabindex="-1"><span data-k="mini-l"></span><b data-k="mini-n"></b>${I("chev").replace("<svg", '<svg class="chv"')}</button><div class="fscroll"><div class="fwrap">
     <div class="ftop">${SHARE ? `<span class="fexp sub" data-k="left"></span>` : `<button class="icbtn" data-fback title="返回">${I("back")}</button>`}<span class="grow"></span>
       ${SHARE ? "" : `<button class="fchip fap" data-fshare>${I("share")}<span>分享</span></button>`}<button class="fchip fap fapb"${SHAREAP ? " disabled" : ` data-fpick title="換機場"`}>${flyApLg("")}<span class="fapn"></span>${SHAREAP ? "" : I("chev").replace("<svg", '<svg class="chv"')}</button></div>
     <div class="fhead"><div class="fcode">${flap("", 3, "xl")}</div><div class="fname"><b data-k="name"></b><span class="sub" data-k="city"></span></div>
@@ -1246,7 +1267,8 @@ function flyPaint(anim){
   txt(f.querySelector('[data-k="name"]'), d.ap.name); txt(f.querySelector('[data-k="city"]'), d.ap.city);
   flapSet(f.querySelector(".fclock .sf"), flyHM(Date.now(), tz));
   FLYTAB.forEach(([k]) => { const e = f.querySelector(`[data-k="n-${k}"]`), n = d.loading ? "" : String((d[k] || []).length), was = e.textContent; if (was === n) return; e.textContent = n;
-    if (was && n && !FLYSTILL && canAnim()) e.animate([{transform:`translateY(${+n > +was ? "" : "-"}.5em)`}, {transform:"none"}], {duration:T.mid, easing:EASE}); });   // 班數變了：數字從下面（變少從上面）滑進來；不淡入：手機上淡入中剛好換分頁，數字會留著選到時的深色   // 不淡入：手機上淡入中剛好換分頁，數字會留著選到時的深色
+    if (was && n && !FLYSTILL && canAnim()) e.animate([{transform:`translateY(${+n > +was ? "" : "-"}.5em)`}, {transform:"none"}], {duration:T.mid, easing:EASE}); });
+  flyMini(f);   // 班數變了：數字從下面（變少從上面）滑進來；不淡入：手機上淡入中剛好換分頁，數字會留著選到時的深色   // 不淡入：手機上淡入中剛好換分頁，數字會留著選到時的深色
   f.querySelectorAll(".fh .fk").forEach((h, i) => (FLYSTILL ? (e, t) => { e.textContent = t; } : txt)(h, (d.fids && FLYHEADF[FLYS.tab] || FLYHEAD[FLYS.tab])[i]));
   f.querySelector(".board").dataset.tab = FLYS.tab; f.querySelector(".board").dataset.fids = d.fids ? "1" : "";
   if (d.loading && d.ok) { flyRadar(f, d); flyGeoOff(f); f.querySelector(".ffoot").textContent = ""; return; }   // 等資料：舊的列留著淡出（不先翻成空白），舊機場的飛機收掉
@@ -1620,9 +1642,10 @@ document.addEventListener("click", e => {
   if (t.closest("[data-fplace]")) return flyWhere();
   if (t.closest("[data-rfull]")) return fradOpen();
   if (t.closest("[data-fshare]")) return flyShare();
+  if (t.closest("[data-fmini]")) return flyMiniMenu(f, t.closest("[data-fmini]"));
   const tb = t.closest("[data-ftab]");
   if (tb) { if (FLYS.tab !== tb.dataset.ftab) { FLYS.tab = tb.dataset.ftab; FLYHR = ""; flySave(); const s = tb.parentNode;
-    slideSel(() => s.querySelectorAll("button").forEach(b => b.classList.toggle("on", b === tb))); flySwitch("tab"); } return; }
+    slideSel(() => s.querySelectorAll("button").forEach(b => b.classList.toggle("on", b === tb))); flyMini(f); flySwitch("tab"); } return; }
   if (t.closest("[data-ftrk]")) return flyTrkSet(!FLYTRKON);
   const zb = t.closest("[data-fzm]");
   if (zb) { if (+FLYS.zm !== +zb.dataset.fzm) { FLYS.zm = +zb.dataset.fzm; flySave(); flyZoom(f, true); } return; }

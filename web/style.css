@@ -136,14 +136,12 @@
 *::-webkit-scrollbar{display:none}                                     /* 不顯示拉條，照樣能捲 */
 html{background:var(--bg);color:var(--tx);touch-action:manipulation;accent-color:var(--p);caret-color:var(--p);
   transition:background-color var(--t-mid) var(--ease),color var(--t-mid) var(--ease)}
-/* 頁面頂端的光暈：從頁面上方 600px 就開始畫，Safari 拉到頂往下彈時露出來的也是光暈，不會有一條底色 */
-html::before{content:"";position:absolute;left:0;right:0;top:-600px;height:1100px;z-index:-1;pointer-events:none;--gy:600px}
+/* 頁面頂端的光暈：固定在視窗上，往下捲不跟著跑（手機、電腦都一樣；往上多畫 600px，Safari 拉到頂往下彈時露出來的也是光暈） */
+html::before{content:"";position:fixed;left:0;right:0;top:-600px;height:calc(100lvh + 600px);z-index:-1;pointer-events:none;--gy:600px}
 /* 光暈的位置照視窗算：主機頁、機場起降蓋上來時也畫同一片，跟左邊分頁列接得起來（--gx 往右挪了多少、--gz 放大倍數） */
 html::before,.det,.flyv{background-image:
   radial-gradient(calc(70vw / var(--gz,1)) calc(420px / var(--gz,1)) at calc(6vw / var(--gz,1) - var(--gx,0px)) calc(var(--gy,0px) - 60px / var(--gz,1)),color-mix(in oklab,var(--seed) var(--glow),transparent),transparent),
   radial-gradient(calc(60vw / var(--gz,1)) calc(380px / var(--gz,1)) at calc(96vw / var(--gz,1) - var(--gx,0px)) calc(var(--gy,0px) - 40px / var(--gz,1)),color-mix(in oklab,var(--p2) var(--glow),transparent),transparent)}
-/* 電腦：光暈固定在視窗上，捲動時不跟著跑（左邊分頁列一直看得到） */
-html:has(.dash.d)::before{position:fixed;top:0;height:100vh;--gy:0px}
 html.lock{overflow:hidden}
 html.inapp{overscroll-behavior-y:contain}   /* App 裡用自己的下拉重新整理；瀏覽器照它自己的彈性 */
 body{font:400 var(--fs-m)/1.5 var(--font);zoom:var(--zoom);min-height:100vh;-webkit-font-smoothing:antialiased;overflow-x:hidden}
@@ -1043,6 +1041,8 @@ html.flyon .dash>.view{content-visibility:hidden;contain-intrinsic-size:auto non
 .fmain{display:flex;flex-direction:column;gap:12px}
 .fleft{min-width:0;display:flex;flex-direction:column;gap:12px}
 /* 看板的時段：幾點有幾班，點了只看那一小時 */
+.fmini{display:none}   /* 電腦寬畫面：分頁那排就在看板上面，不用小膠囊 */
+.fminim b{margin-left:auto;padding-left:16px;font-weight:500;color:var(--tx3);font-variant-numeric:tabular-nums}
 .fhrs,.fterm{display:flex;gap:8px;overflow-x:auto;scrollbar-width:none;margin:0 -16px;padding:2px 16px;
   -webkit-mask-image:linear-gradient(90deg,transparent,#000 16px,#000 calc(100% - 16px),transparent);mask-image:linear-gradient(90deg,transparent,#000 16px,#000 calc(100% - 16px),transparent)}
 .fhrs::-webkit-scrollbar,.fterm::-webkit-scrollbar{display:none}
@@ -1223,14 +1223,16 @@ html.flyon .dash>.view{content-visibility:hidden;contain-intrinsic-size:auto non
   .radar{grid-column:2;max-width:none;align-self:stretch;border-radius:0 var(--r-xl) var(--r-xl) 0;border-left:1px solid var(--s3)}
   .rin{position:sticky;top:16px}
 }
-/* 手機、平板：往下捲看板時，抵達／出發那排分頁貼在畫面最上面（不用捲回去才能換） */
+/* 手機、平板：抵達／出發那排捲出畫面後，上面中間浮出小膠囊（不用捲回去才能換） */
 @media (max-width:1279px){
-  .ftabs{position:sticky;top:0;z-index:var(--z-bar);margin:calc(-6px - env(safe-area-inset-top)) -16px -6px;padding:calc(env(safe-area-inset-top) + 6px) 16px 6px}
-  /* 霧面底只在貼住時出現，左右、往上延伸到畫面邊（不會在光暈上切出一塊方框，上面也不會露出捲上去的列），底下一條細線 */
-  .ftabs::before{content:"";position:absolute;top:-60px;bottom:0;left:-100vw;right:-100vw;z-index:-1;pointer-events:none;opacity:0;
-    background:color-mix(in oklab,var(--bg) 84%,transparent);box-shadow:0 1px 0 var(--line);-webkit-backdrop-filter:blur(18px);backdrop-filter:blur(18px);
-    transition:opacity var(--t-mid) var(--ease)}
-  .ftabs.stuck::before{opacity:1}
+  /* 抵達／出發那排捲出畫面後：上面中間浮出小膠囊（flyStuck），點了選分頁；看板不會被一整排擋住 */
+  .fmini{position:absolute;top:calc(env(safe-area-inset-top) + 10px);left:50%;z-index:var(--z-bar);display:flex;align-items:center;gap:6px;height:40px;padding:0 12px 0 16px;
+    border-radius:var(--r-pill);background:var(--s3);color:var(--tx);font-size:var(--fs-s);font-weight:500;box-shadow:var(--sh-2);
+    opacity:0;transform:translate(-50%,-140%) scale(.9);pointer-events:none;transition:opacity var(--t-mid) var(--ease),transform var(--sp)}
+  .fmini b{font-weight:500;color:var(--tx3);font-variant-numeric:tabular-nums}
+  .fmini .chv{width:16px;height:16px;opacity:.7}
+  .tabsaway .fmini{opacity:1;transform:translate(-50%,0);pointer-events:auto}
+  .fmini.prs{transform:translate(-50%,0) scale(.95)}
 }
 /* 手機：每一列分三行：時間、航班、狀態／從哪來、航空公司／機型、註冊號 */
 @media (max-width:899px){
@@ -1363,6 +1365,7 @@ html.flyon .dash>.view{content-visibility:hidden;contain-intrinsic-size:auto non
   .full .dock{background:color-mix(in oklab,var(--s3) 60%,transparent);box-shadow:var(--glass-edge),var(--sh-3);-webkit-backdrop-filter:var(--blur);backdrop-filter:var(--blur)}
   .full .dash.m::before{opacity:.45}                               /* 分頁列後面的內容看得到（霧化），淡掉的那層變淺 */
   .dtop::before{background:var(--glass);-webkit-backdrop-filter:var(--blur);backdrop-filter:var(--blur)}   /* 霧面跟著色塊一起出現：沒往上捲時標題列是透明的 */
+  .fmini{background:var(--glass-hi);box-shadow:var(--glass-edge),var(--sh-2);-webkit-backdrop-filter:var(--blur);backdrop-filter:var(--blur)}
   .lmenu{background:var(--glass-hi);box-shadow:var(--glass-edge),var(--sh-2);-webkit-backdrop-filter:var(--blur);backdrop-filter:var(--blur)}
   .dialog{background:var(--glass-hi);box-shadow:var(--glass-edge),var(--sh-3);-webkit-backdrop-filter:var(--blur);backdrop-filter:var(--blur);
     --card:color-mix(in oklab,var(--s3) 72%,transparent);--chip:color-mix(in oklab,var(--s3) 72%,transparent)}
