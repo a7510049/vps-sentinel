@@ -688,6 +688,13 @@ class Kinds(unittest.TestCase):
         hdg, ln, off = S.FLY_RWY["TPE"][0]
         cx, cy = -off * math.cos(math.radians(hdg)), off * math.sin(math.radians(hdg))
         self.assertEqual(e("TPE", cx, cy, 180), 0)                          # 已經落在跑道上：不能寫 7 分鐘後
+        x, y = 15.8 * math.sin(h), 15.8 * math.cos(h)                      # 機場東北邊 15.8 公里、往西南飛（像在進 23 跑道）
+        S.FLY["rdir"]["TPE"] = (53, time.time())                            # 其他飛機都往 05 降落：這架是順風邊，要飛過去再繞回來
+        self.assertGreater(S.fly_eta("TPE", x, y, 560, 233, 1859), 6)
+        S.FLY["rdir"].clear()
+        S.fly_rdir(S.fly_db()["TPE"], [{"ph": "arr", "trk": 50, "alt": 300, "d": 6}, {"ph": "dep", "trk": 52, "alt": 400, "d": 4}, {"ph": "arr", "trk": 230, "alt": 2000, "d": 10}])
+        self.assertEqual(S.FLY["rdir"]["TPE"][0], 53)
+        S.FLY["rdir"].clear()
 
     def test_fids_fill(self):
         """查到的航線只好用猜的（「可能是」），官網表又有這班：照官網表寫；同班號的別段不換"""
