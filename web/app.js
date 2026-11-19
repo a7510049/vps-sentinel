@@ -618,7 +618,7 @@ async function trafficModal(node, label){
       <label>怎麼計算<div class="seg">${Object.entries(CNT).map(([k,l])=>`<button type="button" class="${mode===k?"on":""}" data-m="${k}">${l}</button>`).join("")}</div>
         <small>不確定就選「上傳＋下載」</small></label>
     </div>
-    <div class="btns"><button class="ubtn ghost" data-r="0">取消</button><button class="ubtn" data-r="1">儲存</button></div></div>`;
+    <div class="btns"><button class="ubtn" data-r="1">儲存</button></div></div>`;
   $("#layer").appendChild(v);
   v.querySelectorAll(".seg").forEach(sg => sg.querySelectorAll("button").forEach(b => b.onclick = () => {
     mode = b.dataset.m; sg.querySelectorAll("button").forEach(x => x.classList.toggle("on", x === b)); }));
@@ -853,7 +853,7 @@ function showsModal(){
   v.innerHTML = `<div class="dialog showsd"><h3>要顯示的內容</h3>
     <div class="form"><div class="group">${SHOWS.map(([ic, l, k, sm]) => `<label class="li">${IC(ic, "")}<span class="lab">${l}${sm ? `<small>${sm}</small>` : ""}</span>${tog("show." + k, l)}</label>`).join("")}</div>
       <div class="group"><div class="li col"><span class="lab">畫面更新頻率</span>${seg("refresh", [[3, "3 秒"], [5, "5 秒"], [10, "10 秒"], [30, "30 秒"]])}</div></div></div>
-    <div class="btns"><button class="ubtn" data-r="0">完成</button></div></div>`;
+    </div>`;
   $("#layer").appendChild(v);
   const done = () => { if (v._d) return; v._d = 1; v.classList.add("closing"); setTimeout(() => v.remove(), 360); };
   v._esc = done;
@@ -1238,12 +1238,12 @@ let WIDE = 0;
 addEventListener("resize", () => { const w = deskCols(); if (w !== WIDE) { WIDE = w; if (DESK.matches && LIST.length) render(LIST); } }, {passive:true});
 
 /* ═════════ 對話框、通知 ═════════ */
-function modal({icon, cls="box", title, text, input, ok="確定", cancel="取消"}){
+function modal({icon, cls="box", title, text, input, ok="確定"}){
   return new Promise(res => {
     const v = document.createElement("div"); v.className = "veil";
     v.innerHTML = `<div class="dialog">${icon?`<div class="ico big ${cls}">${I(icon)}</div>`:""}<h3>${esc(title)}</h3>${text?`<p>${esc(text)}</p>`:""}
       ${input!==undefined?`<input class="field" maxlength="40" value="${esc(input)}">`:""}
-      <div class="btns"><button class="ubtn ghost" data-r="0">${cancel}</button><button class="ubtn ${cls === "bad" || cls === "warn" ? cls : ""}" data-r="1">${ok}</button></div></div>`;
+      <div class="btns"><button class="ubtn ${cls === "bad" || cls === "warn" ? cls : ""}" data-r="1">${ok}</button></div></div>`;
     $("#layer").appendChild(v);
     const inp = v.querySelector("input");
     const done = r => { if (v._d) return; v._d = 1; v.classList.add("closing"); const val = r ? (inp ? inp.value : true) : null;
@@ -1363,7 +1363,7 @@ function shutDet(){
   setTimeout(endDet, T.mid);
 }
 function endDet(){ DET = ""; DETX = false; showBack(); document.documentElement.classList.remove("lock"); render(LIST); }
-addEventListener("popstate", () => { if (DET) shutDet(); });
+addEventListener("popstate", () => { if (DET && !(history.state && history.state.det)) shutDet(); });
 document.addEventListener("keydown", e => {
   if ((e.key === "Enter" || e.key === " ") && e.target.matches && e.target.matches("[data-open]")) { e.preventDefault(); openDet(e.target.dataset.open); }
   if (e.key === "Escape" && DET && !document.querySelector("#layer .veil") && !window._menu) closeDet();
@@ -1395,7 +1395,7 @@ function peerModal(s){
         <small>那台換過密碼才要填</small></label>
       <div class="msg"></div>
     </div>
-    <div class="btns"><button class="ubtn ghost" data-r="0">取消</button><button class="ubtn" data-save>測試並儲存</button></div></div>`;
+    <div class="btns"><button class="ubtn" data-save>測試並儲存</button></div></div>`;
   $("#layer").appendChild(v);
   const q = k => v.querySelector(`[data-k="${k}"]`), msg = v.querySelector(".msg"), sb = v.querySelector("[data-save]");
   let force = false, busy = false;
@@ -1431,7 +1431,7 @@ function hostModal(name, links){
           <div class="lrows">${(links.length ? links : [{name:"", url:""}]).map(row).join("")}</div>
           <button type="button" class="ubtn ghost addl" data-add>＋ 新增連結</button></div>
       </div>
-      <div class="btns"><button class="ubtn ghost" data-r="0">取消</button><button class="ubtn" data-r="1">儲存</button></div></div>`;
+      <div class="btns"><button class="ubtn" data-r="1">儲存</button></div></div>`;
     $("#layer").appendChild(v);
     const box = v.querySelector(".lrows");
     const rows = () => [...box.children].filter(r => !r._leaving);
@@ -1478,7 +1478,7 @@ function moreMenu(btn, s){
   document.body.appendChild(m);
   placeMenu(m, btn, r => r.left - 6);           // 從 ⋯ 往右下展開，不會蓋住主機名稱
   if (canAnim()) m.animate([{opacity:0, transform:"scale(.85,.4)"}, {opacity:1, transform:"none"}], {duration:T.spf, easing:SPRING_F});   // 從 ⋯ 的位置往外長出來
-  window._menu = m;
+  window._menu = m; histMark(m);
   setTimeout(() => m.addEventListener("click", () => closeMenu()), 0);
 }
 /* 紀錄（手機）：選只看哪一台主機 */
@@ -1490,13 +1490,13 @@ function logHostMenu(btn){
   document.body.appendChild(m);
   placeMenu(m, btn, r => r.right - m.offsetWidth);
   if (canAnim()) m.animate([{opacity:0, transform:"scale(.85,.4)"}, {opacity:1, transform:"none"}], {duration:T.spf, easing:SPRING_F});
-  window._menu = m;
+  window._menu = m; histMark(m);
   setTimeout(() => m.addEventListener("click", () => closeMenu()), 0);
 }
 function closeMenu(){
   const m = window._menu; if (!m) return; window._menu = null;
-  if (!canAnim()) return m.remove();
-  m.animate([{opacity:1}, {opacity:0, transform:"scale(.95,.8)"}], {duration:T.fast, easing:EXIT, fill:"forwards"}).finished.then(() => m.remove());
+  if (!canAnim()) { m.remove(); return histDrop(m); }
+  m.animate([{opacity:1}, {opacity:0, transform:"scale(.95,.8)"}], {duration:T.fast, easing:EXIT, fill:"forwards"}).finished.then(() => { m.remove(); histDrop(m); });
 }
 addEventListener("scroll", e => { if (!(window._menu && e.target instanceof Node && window._menu.contains(e.target))) closeMenu(); }, {passive:true, capture:true});   // 選單自己裡面捲動不關
 addEventListener("keydown", e => { if (e.key === "Escape") closeMenu(); });
@@ -1793,7 +1793,7 @@ async function tgModal(){
         <div class="seg keep">${[[0,"不刪除"],[1,"1 小時"],[6,"6 小時"],[24,"1 天"],[47,"2 天"]].map(([h,l])=>`<button type="button" data-keep="${h}" class="${(+st.keep||0)===h?"on":""}">${l}</button>`).join("")}</div></div>
       <div class="msg" aria-live="polite"></div>
     </div>
-    <div class="btns three"><button class="ubtn ghost" data-r="0">取消</button><button class="ubtn ghost" data-test>測試</button><button class="ubtn" data-save>儲存</button></div>
+    <div class="btns three"><button class="ubtn ghost" data-test>測試</button><button class="ubtn" data-save>儲存</button></div>
     ${st.on ? `<button class="linkbtn" data-off>關閉 Telegram 通知</button>` : ""}</div>`;
   $("#layer").appendChild(v);
   const q = k => v.querySelector(`[data-k="${k}"]`), msg = v.querySelector(".msg");
@@ -1860,7 +1860,7 @@ async function skyModal(){
       <label>client_secret<input class="field" data-k="secret" type="password" autocomplete="off" spellcheck="false" placeholder="${st.on ? "已經設定過" : ""}"></label>
       <div class="msg" aria-live="polite"></div>
     </div>
-    <div class="btns"><button class="ubtn ghost" data-r="0">取消</button><button class="ubtn" data-save>儲存</button></div>
+    <div class="btns"><button class="ubtn" data-save>儲存</button></div>
     ${st.on ? `<button class="linkbtn" data-off>移除帳號</button>` : ""}</div>`;
   $("#layer").appendChild(v);
   const q = k => v.querySelector(`[data-k="${k}"]`), msg = v.querySelector(".msg"), file = v.querySelector("input[type=file]");
@@ -1912,7 +1912,7 @@ async function newToken(node, label){
     if (LIST.some(x => !x.node && x.cloud))          // 這台裝置的雲端硬碟通行證也換新
       fetch("/api/cloud-login", {method:"POST", headers:{"X-Token":getTok()}}).catch(() => {});
   }
-  const cp = await modal({icon:"ok", cls:"theme", title:"已換成新密碼", input:d.token, ok:"複製密碼", cancel:"關閉",
+  const cp = await modal({icon:"ok", cls:"theme", title:"已換成新密碼", input:d.token, ok:"複製密碼",
     text: node ? "這邊已記住新密碼。直接打開那台時，用新密碼登入。"
                : "請記下新密碼，其他裝置要用它重新登入。"});
   if (cp) {
@@ -1922,6 +1922,37 @@ async function newToken(node, label){
 }
 function restart(){ clearTimeout(timer); timer = setTimeout(tick, (PREF.refresh || 5) * 1000); }
 addEventListener("keydown", e => { if (e.key === "Escape") { const v = [...document.querySelectorAll("#layer .veil")].pop(); if (v && v._esc) v._esc(); } });
+/* 對話框：不放「取消」「關閉」鈕（點旁邊、往下滑、Esc 就關）；電腦上右上角一個 ×
+   打開時記一筆瀏覽紀錄，返回手勢先關最上面的視窗，不會整頁退出（機場起降、主機細節也一樣） */
+let DLGN = 0, DLGSKIP = 0;
+new MutationObserver(ms => { for (const m of ms) {
+  for (const v of m.addedNodes) {
+    const d = v.classList && v.classList.contains("veil") && v.querySelector(".dialog"); if (!d) continue;
+    if (!v.classList.contains("upv") && !d.querySelector(".dx")) {
+      d.insertAdjacentHTML("afterbegin", `<button type="button" class="dx" aria-label="關閉">${I("x")}</button>`);
+      d.firstChild.addEventListener("click", e => { e.stopPropagation(); if (v._esc) v._esc(); });
+    }
+    histMark(v);
+  }
+  for (const v of m.removedNodes) histDrop(v);
+} }).observe($("#layer"), {childList:true});
+const DLGEL = new Map();
+const histLive = el => el && (el === window._menu || (el.classList.contains("veil") && !el._d && !el.classList.contains("closing") && el.isConnected));
+function histMark(el){                         // 上一個正在關（例如選單點了就換成對話框）：沿用那一筆，不多一格
+  const st = history.state || {}, cur = st.dlg;
+  el._dlg = ++DLGN; DLGEL.set(el._dlg, el);
+  if (cur && !histLive(DLGEL.get(cur))) { DLGEL.delete(cur); history.replaceState({...st, dlg: el._dlg}, ""); }
+  else history.pushState({...st, dlg: el._dlg}, "");
+}
+function histDrop(el){ DLGEL.delete(el._dlg); if (el._dlg && !el._popped && history.state && history.state.dlg === el._dlg) { DLGSKIP++; history.back(); } }
+addEventListener("popstate", () => {
+  if (DLGSKIP) { DLGSKIP--; return; }
+  const at = (history.state && history.state.dlg) || 0, mn = window._menu;
+  if (mn && mn._dlg > at) { mn._popped = 1; return closeMenu(); }
+  const top = [...document.querySelectorAll("#layer .veil")].filter(v => v._dlg && !v._d && !v._popped).pop();
+  if (top && top._dlg > at) { top._popped = 1; if (top._esc) top._esc(); }
+  else if (at && !(mn && mn._dlg === at) && ![...document.querySelectorAll("#layer .veil")].some(v => v._dlg === at)) { DLGSKIP++; history.back(); }   // 這筆的視窗早就關了：再退一格
+});
 
 /* ═════════ 手機金鑰登入：用指紋、臉部辨識代替輸入密碼（要用 https 網址打開才能用） ═════════ */
 const PK_OK = !!(window.PublicKeyCredential && window.isSecureContext && navigator.credentials);
@@ -1939,16 +1970,58 @@ const pkErr = e => e && e.name === "InvalidStateError" ? `這${isPhone() ? "支�
   : e && (e.name === "NotSupportedError" || e.name === "ConstraintError") ? `這${isPhone() ? "支手機" : "台裝置"}不支援手機金鑰，可以改用 PIN 碼`
   : e instanceof DOMException ? "沒有完成，請再試一次"                // 瀏覽器其他的錯誤訊息都是英文，不直接顯示
   : (e && e.message) || "失敗了，請再試一次";
-function devName(){
+/* 裝置的詳細型號：Chrome、Edge 可以問到手機型號、Windows／macOS 版本（Safari 問不到 iPhone 型號，只寫 iOS 幾） */
+let DEVH = {};
+const DEVP = (async () => { try { DEVH = (await Promise.race([navigator.userAgentData.getHighEntropyValues(["model", "platformVersion"]), new Promise(r => setTimeout(r, T.long))])) || {}; } catch(e) {} })();
+function devOs(){
   const u = navigator.userAgent;
-  return /iPhone/.test(u) ? "iPhone" : /iPad/.test(u) ? "iPad" : /Android/.test(u) ? "Android 手機" : /Mac/.test(u) ? "Mac" : /Windows/.test(u) ? "Windows 電腦" : "我的裝置";
+  return /iPhone|iPad/.test(u) || (/Mac/.test(u) && navigator.maxTouchPoints > 1) ? "ios" : /Android/.test(u) ? "android"
+    : /Mac/.test(u) ? "mac" : /Windows/.test(u) ? "win" : /Linux|CrOS/.test(u) ? "linux" : "";
+}
+function devModel(m){                       // 型號代碼換成看得懂的名字（三星 S、Z 系列換成第幾代）
+  m = String(m || "").replace(/\s*Build\/.*$/, "").trim();
+  if (!m || m === "K") return "";
+  let g;
+  if ((g = /^SM-S9(\d)(\d)/.exec(m))) return `Samsung Galaxy S${22 + +g[1]}${{6:"+", 7:" Edge", 8:" Ultra"}[g[2]] || ""}`;
+  if ((g = /^SM-F9(\d)/.exec(m))) return `Samsung Galaxy Z Fold${+g[1] + 1}`;
+  if ((g = /^SM-F7(\d)/.exec(m))) return `Samsung Galaxy Z Flip${+g[1] + 2}`;
+  if (/^SM-/.test(m)) return "Samsung Galaxy " + m.slice(3);
+  if (/^Pixel/.test(m)) return "Google " + m;
+  if (/^CPH\d/.test(m)) return "OPPO " + m;
+  if (/^RMX\d/.test(m)) return "realme " + m;
+  if (/^V2\d{3}/.test(m)) return "vivo " + m;
+  if (/^XQ-/.test(m)) return "Sony Xperia " + m.slice(3);
+  if (/^moto/i.test(m)) return "Motorola " + m.replace(/^motorola\s*/i, "");
+  return m;
+}
+function devName(){
+  const u = navigator.userAgent, os = devOs(), ver = parseInt(DEVH.platformVersion || "", 10);
+  if (os === "ios") { const v = /OS (\d+)_/.exec(u); return (/iPhone/.test(u) ? "iPhone" : "iPad") + (v ? `（iOS ${v[1]}）` : ""); }
+  if (os === "android") return devModel(DEVH.model) || devModel((/Android [\d.]+; ([^;)]+)/.exec(u) || [])[1]) || "Android 手機";
+  if (os === "mac") return ver ? `Mac（macOS ${ver}）` : "Mac";
+  if (os === "win") return ver ? `Windows ${ver >= 13 ? 11 : 10} 電腦` : "Windows 電腦";
+  return os === "linux" ? (/CrOS/.test(u) ? "Chromebook" : "Linux 電腦") : "我的裝置";
 }
 /* 登入的裝置清單上的名字：裝置＋瀏覽器（安卓 App 寫 App） */
 function devLabel(){
   const u = navigator.userAgent;
-  const b = typeof VSApp !== "undefined" || /; wv\)/.test(u) ? "App" : /Edg\//.test(u) ? "Edge" : /Firefox|FxiOS/.test(u) ? "Firefox"
+  const b = typeof VSApp !== "undefined" || /; wv\)/.test(u) ? "App" : /Edg\//.test(u) ? "Edge" : /SamsungBrowser/.test(u) ? "三星瀏覽器" : /Firefox|FxiOS/.test(u) ? "Firefox"
     : /Chrome|CriOS/.test(u) ? "Chrome" : /Safari/.test(u) ? "Safari" : "";
   return devName() + (b ? "・" + b : "");
+}
+/* 廠商圖示：蘋果、安卓、Windows（舊的登入沒有記系統，照名字猜） */
+const DEVI = {
+  ios:'<path d="M16.4 12.7c0-2.5 2-3.7 2.1-3.8-1.2-1.7-3-1.9-3.6-2-1.5-.2-3 .9-3.8.9s-2-.9-3.3-.8c-1.7 0-3.3 1-4.2 2.5-1.8 3.1-.5 7.7 1.3 10.2.9 1.2 1.9 2.6 3.2 2.6 1.3-.1 1.8-.8 3.3-.8s2 .8 3.3.8c1.4 0 2.3-1.3 3.1-2.5 1-1.4 1.4-2.8 1.4-2.9 0 0-2.8-1.1-2.8-4.2zM14 5.2c.7-.8 1.2-2 1-3.2-1 .1-2.2.7-2.9 1.5-.6.7-1.2 1.9-1.1 3 1.1.1 2.3-.5 3-1.3z"/>',
+  android:'<path fill-rule="evenodd" d="M3.5 18a8.5 8.5 0 0 1 17 0zM8.6 13.2a1.1 1.1 0 1 0 0 2.2 1.1 1.1 0 0 0 0-2.2zm6.8 0a1.1 1.1 0 1 0 0 2.2 1.1 1.1 0 0 0 0-2.2z"/><path d="M7.4 10.6 5.6 7.6m11 3 1.8-3" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>',
+  win:'<path d="M3 5.6 10.4 4.6v6.9H3zM11.6 4.4 21 3v8.5h-9.4zM3 12.7h7.4v6.9L3 18.6zM11.6 12.7H21V21l-9.4-1.3z"/>'};
+DEVI.mac = DEVI.ios;
+function devRow(x){                         // 名字只放裝置，系統版本、瀏覽器、多久前用過放下面那行
+  const [n, b] = String(x.dev).split("・"), m = /^(.*?)（(.+)）$/.exec(n);
+  return `${esc(m ? m[1] : n)}<small>${[m && m[2], b, x.me ? "這台裝置" : ago(x.seen) + "用過"].filter(Boolean).map(esc).join("・")}</small>`;
+}
+function devIcon(x){
+  const os = x.os || (/iPhone|iPad/.test(x.dev) ? "ios" : /Mac/.test(x.dev) ? "mac" : /Windows/.test(x.dev) ? "win" : /Android|Samsung|Google|OPPO|realme|vivo|Sony|Motorola/.test(x.dev) ? "android" : "");
+  return `<i class="dvi ${os || "etc"}" aria-hidden="true">${DEVI[os] ? `<svg viewBox="0 0 24 24" fill="currentColor">${DEVI[os]}</svg>` : I("devices")}</i>`;
 }
 async function pkRegister(name){
   const b = await pkCall("/api/passkey", {action:"begin"}, 1);
@@ -1969,7 +2042,7 @@ async function pkLogin(){
   if (!b.challenge) throw new Error("主機還沒更新到新版");
   const c = await navigator.credentials.get({publicKey:{challenge:ub(b.challenge), rpId:b.rp, timeout:120000, userVerification:"required"}});
   const d = await pkCall("/api/passkey-login", {action:"finish", id:bu(c.rawId), clientDataJSON:bu(c.response.clientDataJSON),
-    authenticatorData:bu(c.response.authenticatorData), signature:bu(c.response.signature), keep:REM, dev:devLabel()});
+    authenticatorData:bu(c.response.authenticatorData), signature:bu(c.response.signature), keep:REM, dev:devLabel(), os:devOs()});
   if (!d.ok || !d.token) throw new Error(d.message || "登入失敗");
   return d.token;
 }
@@ -1989,7 +2062,7 @@ async function pkModal(){
       <label class="pkadd">幫${me}取個名字<input class="field" data-k="name" maxlength="20" value="${esc(devName())}">
         <small>最多 5 支，換密碼也照樣能用</small></label>
       <div class="msg"></div></div>
-    <div class="btns"><button class="ubtn ghost" data-r="0">關閉</button><button class="ubtn" data-add>登記${me}</button></div></div>`;
+    <div class="btns"><button class="ubtn" data-add>登記${me}</button></div></div>`;
   $("#layer").appendChild(v);
   const list = v.querySelector(".pklist"), msg = v.querySelector(".msg"), add = v.querySelector("[data-add]"), lab = v.querySelector(".pkadd");
   const day = t => { const d = new Date(t * 1000); return `${d.getMonth()+1}/${d.getDate()}`; };
@@ -2041,13 +2114,13 @@ async function sessModal(){
   v.innerHTML = `<div class="dialog pkd">${IC("devices","big")}<h3>登入的裝置</h3>
     <p>手機掉了，在這裡登出它</p>
     <div class="form"><div class="pklist"></div><div class="msg"></div></div>
-    <div class="btns"><button class="ubtn ghost" data-r="0">關閉</button></div></div>`;
+    </div>`;
   $("#layer").appendChild(v);
   const list = v.querySelector(".pklist"), msg = v.querySelector(".msg");
   let rows = [], busy = false;
-  const draw = () => swapHTML(list, rows.map(x => `<div class="pkrow"><span>${esc(x.dev)}<small>${x.me ? "這台裝置" : ago(x.seen) + "用過"}・${esc(x.how || "密碼")}登入</small></span>
+  const draw = () => swapHTML(list, rows.map(x => `<div class="pkrow dvrow">${devIcon(x)}<span>${devRow(x)}</span>
       ${x.me ? "" : `<button type="button" class="iconbtn" data-del="${esc(x.id)}" data-name="${esc(x.dev)}" title="登出這台">${I("x")}</button>`}</div>`).join(""));
-  try { rows = (await sessCall({action:"list"})).list || []; draw(); }
+  try { rows = (await sessCall({action:"list", dev:devLabel(), os:devOs()})).list || []; draw(); }
   catch(e) { msg.className = "msg bad"; msg.textContent = e.message; }
   return new Promise(res => {
     const done = () => { if (v._d) return; v._d = 1; v.classList.add("closing"); setTimeout(() => { v.remove(); res(); }, 360); };
@@ -2071,40 +2144,42 @@ function pinAsk({title, sub = "", icon = "pin", pin = true, passkey = false, pw 
   begin = begin || (() => pkCall("/api/pin-login", {action:"begin"}));
   return new Promise(res => {
     const v = document.createElement("div"); v.className = "veil";
-    const links = [passkey ? `<button class="linkish" data-ppk>${I("finger")}用手機金鑰</button>` : "", pw && pin ? `<button class="linkish" data-ppw>改用密碼</button>` : ""].join("");
+    const alt = [passkey && !pin ? `<button class="linkish" data-ppk>用手機金鑰</button>` : "", pw && pin ? `<button class="linkish" data-ppw>改用密碼</button>` : ""].join("");   // 有數字鍵盤時手機金鑰是鍵盤左下那顆
     v.innerHTML = `<div class="dialog pindlg2">${IC(icon, "big")}<h3>${esc(title)}</h3>${sub ? `<p>${esc(sub)}</p>` : ""}
       <div class="ppbox"${pin ? "" : " hidden"}></div>
-      <div class="form ppw"${pin ? " hidden" : ""}><input class="field" type="password" placeholder="存取密碼" autocomplete="current-password"><button class="ubtn" data-pwgo>確定</button></div>
-      <div class="msg"></div>${links ? `<div class="pplinks">${links}</div>` : ""}
-      <div class="btns"><button class="ubtn ghost" data-r="0">取消</button></div></div>`;
+      <div class="form ppw"${pin ? " hidden" : ""}><input class="field" type="password" placeholder="存取密碼" autocomplete="current-password"></div>
+      <div class="msg"></div>${alt ? `<div class="pplinks">${alt}</div>` : ""}
+      <div class="btns"><button class="ubtn" data-ppgo>確定</button></div></div>`;
     $("#layer").appendChild(v);
-    const msg = v.querySelector(".msg"), box = v.querySelector(".ppbox"), pwf = v.querySelector(".ppw"), inp = pwf.querySelector("input");
-    let out = null, busy = false;
+    const msg = v.querySelector(".msg"), box = v.querySelector(".ppbox"), pwf = v.querySelector(".ppw"), inp = pwf.querySelector("input"), okb = v.querySelector("[data-ppgo]");
+    let out = null, busy = false, pwMode = !pin;
     const done = () => { if (v._d) return; v._d = 1; v.classList.add("closing"); setTimeout(() => { v.remove(); res(out); }, 360); };
     v._esc = done;
     const say = t => { msg.className = "msg bad"; sayTo(msg, t); };
     const tryIt = async (mk, onBad) => {
-      if (busy) return; busy = true; pad && pad.busy(true); sayTo(msg, "");
+      if (busy) return; busy = true; pad && pad.busy(true); okb.disabled = true; sayTo(msg, "");
       let d;
       try { d = await send(await mk()); } catch(e) { d = {message: e.name === "NotAllowedError" || e.name === "AbortError" ? "" : e.message}; }
-      busy = false; pad && pad.busy(false);
+      busy = false; pad && pad.busy(false); if (pwMode) okb.disabled = false;
       if (d && d.ok) { out = d; return done(); }
       if (d && d.message) say(d.message);
       onBad && onBad();
     };
-    const pad = pin ? pinPad(box, {ok: p => tryIt(() => pinProof(p, begin).then(x => ({pin: x})), () => pad.again())}) : null;
+    const usePk = () => tryIt(async () => {
+      const b = await pkCall("/api/passkey-login", {action:"begin"});
+      const c = await navigator.credentials.get({publicKey:{challenge:ub(b.challenge), rpId:b.rp, timeout:120000, userVerification:"required"}});
+      return {id:bu(c.rawId), clientDataJSON:bu(c.response.clientDataJSON), authenticatorData:bu(c.response.authenticatorData), signature:bu(c.response.signature)};
+    });
+    const pad = pin ? pinPad(box, {okBtn: okb, left: passkey ? {html: I("finger"), label: "用手機金鑰", on: usePk} : null,
+      ok: p => tryIt(() => pinProof(p, begin).then(x => ({pin: x})), () => pad.again())}) : null;
     if (!pin) setTimeout(() => inp.focus(), 60);
     const pwGo = () => { const x = inp.value.trim(); if (!x) return inp.focus(); tryIt(async () => ({pw: x}), () => inp.select()); };
     inp.addEventListener("keydown", e => { if (e.key === "Enter") { e.preventDefault(); pwGo(); } });
     v.addEventListener("click", e => {
       if (e.target === v || e.target.closest("[data-r]")) return done();
-      if (e.target.closest("[data-pwgo]")) return pwGo();
-      if (e.target.closest("[data-ppw]")) { reveal(box, false); e.target.closest("[data-ppw]").remove(); reveal(pwf, true); return setTimeout(() => inp.focus(), 60); }
-      if (e.target.closest("[data-ppk]")) return tryIt(async () => {
-        const b = await pkCall("/api/passkey-login", {action:"begin"});
-        const c = await navigator.credentials.get({publicKey:{challenge:ub(b.challenge), rpId:b.rp, timeout:120000, userVerification:"required"}});
-        return {id:bu(c.rawId), clientDataJSON:bu(c.response.clientDataJSON), authenticatorData:bu(c.response.authenticatorData), signature:bu(c.response.signature)};
-      });
+      if (e.target.closest("[data-ppgo]") && pwMode) return pwGo();
+      if (e.target.closest("[data-ppw]")) { pwMode = true; okb.disabled = false; reveal(box, false); e.target.closest(".pplinks").remove(); reveal(pwf, true); return setTimeout(() => inp.focus(), 60); }
+      if (e.target.closest("[data-ppk]")) return usePk();
     });
   });
 }
@@ -2122,7 +2197,7 @@ async function pinModal(){
   const v = document.createElement("div"); v.className = "veil";
   v.innerHTML = `<div class="dialog pindlg2">${IC("pin","big")}<h3>${st.on ? "換一組 PIN 碼" : "設定 PIN 碼"}</h3>
     <p data-t>輸入 4～8 位數字</p><div class="ppbox"></div><div class="msg"></div>
-    <div class="btns">${st.on ? `<button class="ubtn ghost" data-off>關閉 PIN 碼</button>` : ""}<button class="ubtn ghost" data-r="0">取消</button></div></div>`;
+    <div class="btns">${st.on ? `<button class="ubtn ghost" data-off>關閉 PIN 碼</button>` : ""}<button class="ubtn" data-ppgo>確定</button></div></div>`;
   $("#layer").appendChild(v);
   const msg = v.querySelector(".msg"), tip = v.querySelector("[data-t]");
   return new Promise(res => {
@@ -2130,7 +2205,7 @@ async function pinModal(){
     const done = () => { if (v._d) return; v._d = 1; v.classList.add("closing"); setTimeout(() => { v.remove(); res(); }, 360); };
     v._esc = done;
     const bad = t => { msg.className = "msg bad"; sayTo(msg, t); };
-    const pad = pinPad(v.querySelector(".ppbox"), {ok: async p => {      // 先輸入一次，鍵盤重新打亂再輸入一次；PIN 碼在這裡算好雜湊才送出
+    const pad = pinPad(v.querySelector(".ppbox"), {okBtn: v.querySelector("[data-ppgo]"), ok: async p => {      // 先輸入一次，鍵盤重新打亂再輸入一次；PIN 碼在這裡算好雜湊才送出
       if (!first) {
         if (pinWeak(p)) { bad("這組太好猜了，換一組吧"); return pad.again(); }
         first = p; sayTo(msg, ""); txt(tip, "再輸入一次"); return pad.again();
@@ -2169,7 +2244,7 @@ async function pairModal(){
   v.innerHTML = `<div class="dialog pkd pairdlg">${IC("link","big")}<h3>配對暗號</h3>
     <p>在主要主機按「新增主機」，貼上暗號</p>
     <div class="form"><div class="pklist"></div><div class="pcode"></div><div class="msg"></div></div>
-    <div class="btns"><button class="ubtn ghost" data-r="0">關閉</button><button class="ubtn" data-gen>產生暗號</button></div></div>`;
+    <div class="btns"><button class="ubtn" data-gen>產生暗號</button></div></div>`;
   $("#layer").appendChild(v);
   const list = v.querySelector(".pklist"), box = v.querySelector(".pcode"), msg = v.querySelector(".msg"), gen = v.querySelector("[data-gen]");
   let keys = [], code = "", busy = false;
@@ -2236,7 +2311,7 @@ function rebootModal(node, name){
   v.innerHTML = `<div class="dialog"><div class="ico big warn">${I("power")}</div><h3>重新開機「${esc(name)}」？</h3>
     <p data-t>要先確認是你本人</p>
     <div class="form" hidden><input class="field" data-k="code" autocomplete="one-time-code" autocapitalize="off" spellcheck="false"><div class="msg"></div></div>
-    <div class="btns"><button class="ubtn ghost" data-r="0">取消</button><button class="ubtn warn" data-go>繼續</button></div></div>`;
+    <div class="btns"><button class="ubtn warn" data-go>繼續</button></div></div>`;
   $("#layer").appendChild(v);
   const form = v.querySelector(".form"), inp = v.querySelector("input"), msg = v.querySelector(".msg"), go = v.querySelector("[data-go]"), txt = v.querySelector("[data-t]");
   const call = body => pkCall("/api/reboot" + (node ? "?node=" + encodeURIComponent(node) : ""), body, 1).catch(err => ({message:err.message}));
@@ -2290,7 +2365,7 @@ function dlModal(node, name){
         <div class="dlck" hidden><textarea class="field pfield" rows="3" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="貼上 cookies.txt 的內容"></textarea>
           <small>被擋時才會用；建議用備用帳號；不同網站分開貼</small>
           <div class="dlnew"><button type="button" class="ubtn sm ghost" data-ckdel>清除</button><button type="button" class="ubtn sm" data-cksave>儲存</button></div></div></div></div>
-    <div class="btns one"><button class="ubtn ghost" data-r="0">關閉</button></div></div>`;
+    </div>`;
   $("#layer").appendChild(v);
   const inp = v.querySelector("input"), msg = v.querySelector(".msg"), go = v.querySelector("[data-go]"), list = v.querySelector(".dllist"), room = v.querySelector(".dlroom");
   const call = body => pkCall("/api/download" + (node ? "?node=" + encodeURIComponent(node) : ""), body, 1).catch(err => ({message:err.message}));
@@ -2377,7 +2452,7 @@ async function addHostModal(){
     <p>貼上新主機的配對暗號</p>
     <div class="form"><textarea class="field pfield" data-k="code" rows="3" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="VS-…"></textarea>
       <small>新主機裝好時會顯示，也能在它的「設定 → 配對暗號」產生</small><div class="msg"></div></div>
-    <div class="btns"><button class="ubtn ghost" data-r="0">取消</button><button class="ubtn" data-go>連接</button></div></div>`;
+    <div class="btns"><button class="ubtn" data-go>連接</button></div></div>`;
   $("#layer").appendChild(v);
   const inp = v.querySelector("textarea"), msg = v.querySelector(".msg"), go = v.querySelector("[data-go]");
   let busy = false;
@@ -2476,7 +2551,7 @@ async function bkModal(node, label){
         <span class="bknew" hidden><input class="field" type="password" maxlength="128" autocomplete="new-password" placeholder="至少 8 個字"><button class="ubtn sm" data-setkey>儲存</button></span></div>
       <label class="bkon"><span>每天 ${+d.hour || 0} 點自動備份</span><input type="checkbox" class="tog" ${d.on ? "checked" : ""}></label>
       <div class="msg"></div></div>
-    <div class="btns three"><button class="ubtn ghost" data-dl>下載</button><button class="ubtn ghost" data-r="0">關閉</button><button class="ubtn" data-run>立即備份</button></div></div>`;
+    <div class="btns three"><button class="ubtn ghost" data-dl>下載</button><button class="ubtn" data-run>立即備份</button></div></div>`;
   $("#layer").appendChild(v);
   const msg = v.querySelector(".msg"), rows = v.querySelector(".bkrows"), runb = v.querySelector("[data-run]");
   const say = (t, c = "") => { msg.className = "msg " + c; sayTo(msg, t); };
@@ -2580,7 +2655,7 @@ async function bkRestore(){
         <div class="bkhosts">${hosts.map(h => `<button class="ubtn ghost sm" data-link="${esc(h.name)}">${esc(h.name)}</button>`).join("")}</div>
         <code class="bkcmd" tabindex="0" role="button" data-cmd="" hidden></code></div>` : ""}
       <div class="msg"></div></div>
-    <div class="btns one"><button class="ubtn" data-r="0">關閉</button></div></div>`;
+    </div>`;
   $("#layer").appendChild(v);
   const msg = v.querySelector(".msg");
   const say = (t, c = "") => { msg.className = "msg " + c; sayTo(msg, t); };
@@ -2759,7 +2834,7 @@ async function doLogin(){
   const b = $("#app [data-login]"); b.disabled = true;
   let d = {};
   try { const r = await fetch(pin ? "/api/pin-login" : "/api/login", {method:"POST", headers:{"Content-Type":"application/json"},
-      body:JSON.stringify({[pin ? "pin" : "pw"]: pin ? await pinProof(v, () => pkCall("/api/pin-login", {action:"begin"})) : v, keep:REM, dev:devLabel()})});
+      body:JSON.stringify({[pin ? "pin" : "pw"]: pin ? await pinProof(v, () => pkCall("/api/pin-login", {action:"begin"})) : v, keep:REM, dev:devLabel(), os:devOs()})});
     d = await r.json().catch(() => ({})); }
   catch(e) { d = {message:"連線失敗，請稍後再試"}; }
   if (d.ok && d.token) { if (!pin) window._fresh = true; setTok(d.token, REM); return tick(); }   // 用密碼登入才把 PIN 碼輸錯的次數歸零
@@ -2769,7 +2844,7 @@ const pkBtn = `<button class="ubtn ghost pkbtn" data-pklogin>${I("finger")}用�
 const pinBtn = `<button class="ubtn ghost pkbtn" data-pinlogin>${I("pin")}用 PIN 碼登入</button>`;
 async function pinLoginClick(){
   const d = await pinAsk({title: "PIN 碼登入", pw: false,
-    send: async c => { const r = await api("/api/pin-login", {method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({...c, keep:REM, dev:devLabel()})});
+    send: async c => { const r = await api("/api/pin-login", {method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({...c, keep:REM, dev:devLabel(), os:devOs()})});
       return r.json().catch(() => ({})); }});
   if (d && d.token) { setTok(d.token, REM); tick(); }
 }
@@ -2998,8 +3073,9 @@ let TICKID = 0;
 /* 舊版存著的存取密碼、安裝時給的一鍵登入網址：換成這台裝置自己的登入鑰匙，瀏覽器裡就不再留著密碼 */
 async function upgradeTok(){
   let r;
+  await DEVP;
   try { r = await fetch("/api/login", {method:"POST", headers:{"Content-Type":"application/json"}, cache:"no-store",
-    body:JSON.stringify({pw:getTok(), keep:!!store(KEY), dev:devLabel()})}); }
+    body:JSON.stringify({pw:getTok(), keep:!!store(KEY), dev:devLabel(), os:devOs()})}); }
   catch(e) { return true; }                                     // 連不上：照舊用，等一下 tick 自己會處理
   if (r.status === 401) { setTok(""); endSplash(); login("密碼不對，再試一次"); return false; }
   const d = await r.json().catch(() => ({}));

@@ -45,7 +45,7 @@ from collections import deque
 from concurrent.futures import ThreadPoolExecutor
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
-VERSION = "4.04"
+VERSION = "4.05"
 
 # ───────────────────────── 哨兵備份檔（.vsbk）─────────────────────────
 # 哨兵專用的備份格式：外面是自己的檔案格式，裡面用的是成熟、標準的加密方法（不自己發明加密）：
@@ -1991,13 +1991,23 @@ def _sess_h(key):
     return hashlib.sha256(key.encode("utf-8", "replace")).hexdigest()
 
 
-def sess_new(dev, keep, how):
+def sess_dev(dev):
+    return re.sub(r"\s+", " ", str(dev or ""))[:40].strip()
+
+
+def sess_os(os_):
+    """裝置的系統（清單上的廠商圖示）：ios、mac、win、android、linux"""
+    os_ = str(os_ or "")
+    return os_ if os_ in ("ios", "mac", "win", "android", "linux") else ""
+
+
+def sess_new(dev, keep, how, os_=""):
     """發一把新的登入鑰匙給這台裝置"""
     key, now = "vss_" + secrets.token_urlsafe(24), time.time()
-    dev = re.sub(r"\s+", " ", str(dev or ""))[:30].strip() or "某台裝置"
+    dev = sess_dev(dev) or "某台裝置"
     with SESS_LK:
         lst = _sess_all()
-        lst.append({"id": secrets.token_hex(4), "h": _sess_h(key), "dev": dev, "how": how, "keep": bool(keep),
+        lst.append({"id": secrets.token_hex(4), "h": _sess_h(key), "dev": dev, "os": sess_os(os_), "how": how, "keep": bool(keep),
                     "t0": now, "seen": now, "exp": now + SESS_DAYS * 86400})
         lst.sort(key=lambda x: x["seen"])
         del lst[:-SESS_MAX]                          # 太多就把最久沒用的擠掉
@@ -2027,10 +2037,25 @@ def sess_find(key):
     return None
 
 
+def sess_name(me_id, dev, os_):
+    """這台裝置打開清單時，順便把名字換成現在抓得到的詳細型號（舊的登入也會換）"""
+    dev, os_ = sess_dev(dev), sess_os(os_)
+    if not me_id or not dev:
+        return
+    with SESS_LK:
+        for x in _sess_all():
+            if x["id"] == me_id and (x["dev"], x.get("os", "")) != (dev, os_):
+                x["dev"], x["os"] = dev, os_
+                try:
+                    _sess_save()
+                except OSError:
+                    pass
+
+
 def sess_list(me_id=""):
     with SESS_LK:
         lst = sorted(_sess_all(), key=lambda x: -x["seen"])
-        return [{"id": x["id"], "dev": x["dev"], "how": x.get("how", ""), "t0": int(x["t0"]), "seen": int(x["seen"]),
+        return [{"id": x["id"], "dev": x["dev"], "os": x.get("os", ""), "how": x.get("how", ""), "t0": int(x["t0"]), "seen": int(x["seen"]),
                  "keep": x.get("keep", False), "me": x["id"] == me_id} for x in lst]
 
 
@@ -3508,7 +3533,7 @@ input{{background:var(--field);color:var(--text);border-radius:16px}}button{{cur
 .ppdots{{display:flex;gap:12px;min-height:12px}}.ppdots i{{width:12px;height:12px;border-radius:50%;background:var(--field)}}.ppdots i.on{{background:var(--p)}}
 .ppkeys{{display:grid;grid-template-columns:repeat(3,64px);gap:12px 16px}}
 .ppkeys button{{margin:0;padding:0;height:64px;border-radius:50%;background:var(--field);color:var(--text);font-size:22px;font-weight:600;display:grid;place-items:center}}
-.ppkeys .ppfn{{background:none}}.ppkeys .ppok{{background:var(--p);color:var(--on-p)}}.ppkeys .ppok:disabled{{background:var(--field);color:var(--sub)}}
+.ppkeys .ppfn{{background:none}}.ppgo{{margin:0}}.ppgo:disabled{{background:var(--field);color:var(--sub)}}
 .ppkeys svg{{width:26px;height:26px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}}
 </style></head><body><div class="c"><img src="/icon.svg" width="60" height="60" alt="">
 <h1>{html.escape(NAME)}</h1><p>由「{who}」監看中，請到那邊看這台</p>
@@ -4036,7 +4061,7 @@ class Handler(BaseHTTPRequestHandler):
 
     def sess_give(self, d, how):
         """登入成功：發一把這台裝置自己的鑰匙"""
-        return sess_new(d.get("dev") or "", d.get("keep", True), how)
+        return sess_new(d.get("dev") or "", d.get("keep", True), how, d.get("os"))
 
     # ── /cloud/ 開頭：整個轉給本機的雲端硬碟（沒有網域時，雲端硬碟就跟哨兵用同一個連接埠） ──
     HOP = {"connection", "keep-alive", "proxy-authenticate", "proxy-authorization", "te", "trailers", "transfer-encoding", "upgrade"}
@@ -4651,7 +4676,7 @@ class Handler(BaseHTTPRequestHandler):
             ok, msg, tok = change_token()
             out = {"ok": ok, "message": msg, "token": tok}
             if ok and me:                              # 換密碼會登出所有裝置：這台直接換一把新的
-                out["sess"] = sess_new(me["dev"], me.get("keep"), me.get("how", ""))
+                out["sess"] = sess_new(me["dev"], me.get("keep"), me.get("how", ""), me.get("os"))
             return self.send(200 if ok else 500, json.dumps(out, ensure_ascii=False))
         if u.path == "/api/sessions":                # 登入的裝置：列出來、登出一台、登出自己
             d = self.jbody(body)
@@ -4664,6 +4689,8 @@ class Handler(BaseHTTPRequestHandler):
                     threading.Thread(target=peer_cloud_revoke, daemon=True).start()
                 if act == "del" and gone:
                     log(f"登出了「{gone[0]['dev']}」")
+            if act == "list" and d.get("dev"):
+                sess_name(me, d.get("dev"), d.get("os"))
             return self.send(200, json.dumps({"ok": True, "list": sess_list(me)}, ensure_ascii=False))
         if u.path == "/api/cloud-revoke":           # 主要主機登出了一台裝置：這台的雲端硬碟通行證也全部作廢
             cloud_revoke()

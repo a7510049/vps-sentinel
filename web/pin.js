@@ -69,23 +69,25 @@ function pinShuffle(){
   for (let i = 9; i > 0; i--) { const j = r[i] % (i + 1); [a[i], a[j]] = [a[j], a[i]]; }
   return a;
 }
-/* 數字鍵盤：box 裡畫上圓點和 12 顆鍵（9 顆數字、刪除、1 顆數字、確定），每次打開、輸錯都重新打亂
-   opt.ok(pin) 按確定（或打滿 8 碼）時呼叫；回傳 {clear, again, busy}；電腦上也可以直接按鍵盤的數字 */
+/* 數字鍵盤：box 裡畫上圓點和 12 顆鍵（9 顆數字、左下 opt.left（例如手機金鑰，沒有就空著）、1 顆數字、刪除），每次打開、輸錯都重新打亂
+   確定鈕是 opt.okBtn（視窗下面那顆），沒給就在鍵盤下面放一顆；opt.ok(pin) 按確定（或打滿 8 碼）時呼叫；回傳 {clear, again, busy}；電腦上也可以直接按鍵盤的數字 */
 function pinPad(box, opt){
   let pin = "", busy = false;
-  const ico = {del:'<svg viewBox="0 0 24 24"><path d="M21 5H9l-6 7 6 7h12zM12.5 9.5l5 5m0-5-5 5"/></svg>', ok:'<svg viewBox="0 0 24 24"><path d="m5 12.5 4.5 4.5L19 7.5"/></svg>'};
+  const ico = {del:'<svg viewBox="0 0 24 24"><path d="M21 5H9l-6 7 6 7h12zM12.5 9.5l5 5m0-5-5 5"/></svg>'};
+  const L = opt.left;
   const draw = () => {
     const d = pinShuffle();
     box.innerHTML = `<div class="ppdots" aria-live="polite"></div><div class="ppkeys">${d.slice(0, 9).map(x => `<button type="button" data-pk="${x}">${x}</button>`).join("")}`
-      + `<button type="button" class="ppfn" data-pdel aria-label="刪除">${ico.del}</button><button type="button" data-pk="${d[9]}">${d[9]}</button>`
-      + `<button type="button" class="ppfn ppok" data-pok aria-label="確定">${ico.ok}</button></div>`;
+      + (L ? `<button type="button" class="ppfn ppl" data-pleft aria-label="${L.label}">${L.html}</button>` : `<i></i>`)
+      + `<button type="button" data-pk="${d[9]}">${d[9]}</button><button type="button" class="ppfn" data-pdel aria-label="刪除">${ico.del}</button></div>`
+      + (opt.okBtn ? "" : `<button type="button" class="ppgo" data-pok>確定</button>`);
     dots();
   };
   const dots = () => {
     const el = box.querySelector(".ppdots"); if (!el) return;
     el.innerHTML = Array.from({length: Math.max(4, pin.length)}, (_, i) => `<i${i < pin.length ? ' class="on"' : ""}></i>`).join("");
     el.setAttribute("aria-label", `已輸入 ${pin.length} 碼`);
-    const ok = box.querySelector("[data-pok]"); if (ok) ok.disabled = pin.length < 4 || busy;
+    const ok = opt.okBtn || box.querySelector("[data-pok]"); if (ok) ok.disabled = pin.length < 4 || busy;
   };
   const go = () => { if (pin.length >= 4 && !busy) opt.ok(pin); };
   const key = ch => {
@@ -98,7 +100,7 @@ function pinPad(box, opt){
   box.addEventListener("click", e => {
     const b = e.target.closest("button"); if (!b || !box.contains(b)) return;
     e.preventDefault();
-    if (b.hasAttribute("data-pdel")) key("del"); else if (b.hasAttribute("data-pok")) go(); else if (b.dataset.pk) key(b.dataset.pk);
+    if (b.hasAttribute("data-pdel")) key("del"); else if (b.hasAttribute("data-pok")) go(); else if (b.hasAttribute("data-pleft")) { if (!busy) L.on(); } else if (b.dataset.pk) key(b.dataset.pk);
   });
   const kd = e => {
     if (!box.isConnected) return document.removeEventListener("keydown", kd);
@@ -108,6 +110,7 @@ function pinPad(box, opt){
     else if (e.key === "Enter") { e.preventDefault(); go(); }
   };
   document.addEventListener("keydown", kd);
+  if (opt.okBtn) opt.okBtn.addEventListener("click", e => { e.preventDefault(); go(); });
   box.classList.add("ppad");
   draw();
   return {
