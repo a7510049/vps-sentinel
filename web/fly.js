@@ -98,6 +98,14 @@ function flyObs(f){
     });
   }, {root: f.querySelector(".fscroll")});
 }
+/* 手機、平板：抵達／出發那排貼到最上面時才出現霧面底（平常是透明的，跟後面的光暈接在一起） */
+function flyStuck(f){
+  const t = f.querySelector(".ftabs"), sc = f.querySelector(".fscroll");
+  if (!t || !sc || !window.IntersectionObserver) return;
+  const pad = Math.ceil(parseFloat(getComputedStyle(sc).paddingTop) * ZM()) + 1;   // 貼住的位置是捲動區的上緣再往下 padding 那麼多
+  new IntersectionObserver(([e]) => t.classList.toggle("stuck", e.intersectionRatio < 1 && e.boundingClientRect.top <= e.rootBounds.top + 1),
+    {root: sc, rootMargin: `-${pad}px 100% 0px 100%`, threshold: 1}).observe(t);
+}
 /* 航空公司標誌：航班號前兩碼（BR、CI、5J）認得的航空公司，抓公開的標誌圖（只有標誌、不含字）；不認得或抓不到就留著代碼小方塊 */
 const FLYNOLG = new Set();
 const flyLgOk = c => !FLYNOLG.has(c) && !!(FLYD && FLYD.als && FLYD.als.includes(c));
@@ -1486,6 +1494,7 @@ function flyOpen(btn){
   const f = $("#fly"), z = ZM(), r = btn && btn.getBoundingClientRect(), x = $(".dash.d") ? 96 : 0;   // 電腦：從分頁列右邊開始
   if (r) f.style.cssText = `--ct:${r.top / z}px;--cb:${(innerHeight - r.bottom) / z}px;--cl:${Math.max(0, r.left / z - x)}px;--cr:${(innerWidth - r.right) / z}px`;
   if (!canAnim()) f.style.animation = "none";
+  flyStuck(f);
   if (!SHARE) history.pushState({fly:1}, "");          // 分享連結只有這一頁，不能返回
   document.documentElement.classList.add("lock");
   setTimeout(() => { if (f.isConnected && !f._bye) document.documentElement.classList.add("flyon"); }, T.slow + 80);   // 很快又關掉的話不要加（不然關完後面的畫面會整個藏著）
