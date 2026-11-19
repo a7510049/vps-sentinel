@@ -1584,6 +1584,8 @@ def fly_merge(ap, fids, rows, io):
         elif seen and seen.get("sch") == r["sch"] and now - seen.get("at", 0) < 6 * 3600:
             row.update(reg=seen.get("reg") or "", t=seen.get("t") or row["t"], model=seen.get("model") or row["model"], seen=seen["at"])
             fly_fix_type(row, r)
+        if io == "dep" and r["st"] == "已飛" and p and p["ph"] == "gnd" and (p.get("d") or 99) < 6 and (p.get("spd") or 0) >= 9:
+            row["st"] = "滑行中"                       # 官網推出就寫已飛，其實還在滑行
         far = None if p or done or r["st"] == "取消" else fly_far(ap, r, io, now)
         if far:                                        # 不在這個機場的範圍、別的機場收得到：已經在天上了
             row.update({k: far[k] for k in ("reg", "t", "model") if far[k]})
