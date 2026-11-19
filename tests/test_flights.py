@@ -26,6 +26,11 @@ AC = [
     # 聯邦快遞的貨機，不列出來
     {"hex": "899006", "flight": "FDX5300 ", "t": "B77L", "alt_baro": 2800, "gs": 150, "track": 53,
      "baro_rate": -700, "lat": TPE[0] - .06, "lon": TPE[1] - .07, "seen": 1},
+    # 機場的地勤車（呼號剛好像盧森堡貨運 CV），不是飛機
+    {"hex": "899337", "flight": "CV04    ", "r": "GND", "t": "GND", "alt_baro": "ground", "gs": 15, "track": 321,
+     "lat": TPE[0] - .002, "lon": TPE[1] + .001, "seen": 1},
+    {"hex": "899338", "flight": "FOLLOW1 ", "category": "C1", "alt_baro": "ground", "gs": 20, "track": 10,
+     "lat": TPE[0] + .002, "lon": TPE[1] - .001, "seen": 1},
     # 從松山剛起飛（就在松山上空往東南爬升），不能算成桃園的
     {"hex": "899005", "flight": "EVA261  ", "alt_baro": 3200, "gs": 170, "track": 147, "baro_rate": 1500,
      "lat": 25.050, "lon": 121.570, "seen": 1},
@@ -239,6 +244,10 @@ class Flights(unittest.TestCase):
         every = [p["fn"] for p in d["arr"] + d["dep"] + d["gnd"] + d["over"]]
         self.assertNotIn("CI5225", every)                          # 貨機不列
         self.assertNotIn("FX5300", every)
+        allc = [p.get("cs") for k in ("arr", "dep", "gnd", "over", "rest", "cargo") for p in d.get(k) or []]
+        self.assertNotIn("CV04", allc)                             # 地勤車不是飛機
+        self.assertNotIn("FOLLOW1", allc)
+        self.assertEqual(sorted(v["cs"] for v in d["veh"]), ["CV04", "FOLLOW1"])   # 另外給整頁雷達畫（地勤車開關）
         self.assertTrue(arr["MU2017"]["emg"])
         self.assertEqual(arr["MU2017"]["st"], "緊急狀況")
         self.assertNotIn("BR261", [p["fn"] for p in d["arr"] + d["dep"] + d["gnd"]])   # 松山的
@@ -455,6 +464,9 @@ class Flights(unittest.TestCase):
         self.assertFalse(dep["CX530"].get("live"))
         self.assertTrue(dep["CI831"].get("live"))
         self.assertEqual(dep["CI831"]["st"], "已飛")
+        fids = [f("AK1511", "arr", now - 300, "已到"), f("AK1511", "dep", now + 3600)]   # 剛降落、還在跑道上：不算下一段的出發
+        live = [pl("AK1511", "gnd", alt=0, spd=40, d=.8)]
+        self.assertFalse({r["fn"]: r for r in S.fly_merge(ap, fids, live, "dep")}["AK1511"].get("live"))
 
     def test_sky_need(self):
         """非必要不問 OpenSky：沒有班機要起降、或愛好者都收得到時不問"""
@@ -628,6 +640,36 @@ if __name__ == "__main__":
 
 
 class Kinds(unittest.TestCase):
+    def test_eta(self):
+        """幾分後落地：還沒對準跑道的要先繞到延長線上，不能比已經在跑道延長線上、更近的那架還早"""
+        import math
+        from test_passkey import load_sentinel
+        e, h = load_sentinel().fly_eta, math.radians(53)
+        final = e("TPE", -8 * math.sin(h), -8 * math.cos(h), 250)          # 桃園 05 跑道延長線上 8 公里
+        abeam = e("TPE", -10.5, 2.5, 460)                                   # 在機場西北邊，還沒轉進來
+        self.assertLess(final, 2.5)
+        self.assertGreater(abeam, final)
+        self.assertGreater(abeam, math.hypot(10.5, 2.5) / 460 * 60 * 1.5)  # 不是直線距離÷速度
+        S = load_sentinel()
+        hdg, ln, off = S.FLY_RWY["TPE"][0]
+        cx, cy = -off * math.cos(math.radians(hdg)), off * math.sin(math.radians(hdg))
+        self.assertEqual(e("TPE", cx, cy, 180), 0)                          # 已經落在跑道上：不能寫 7 分鐘後
+
+    def test_fids_fill(self):
+        """查到的航線只好用猜的（「可能是」），官網表又有這班：照官網表寫；同班號的別段不換"""
+        from test_passkey import load_sentinel
+        f = load_sentinel().fly_fids_fill
+        r = {"io": "arr", "pc": "IST", "pl": "伊斯坦堡", "fn": "TK24"}
+        p = {"ph": "arr", "org": {"code": "IST", "name": "伊斯坦堡", "guess": True}, "dst": {"code": "TPE", "name": "台北"}}
+        f(p, "TPE", "TPE", r)
+        self.assertEqual((p["org"], p["dst"]["code"]), ({"code": "IST", "name": "伊斯坦堡"}, "TPE"))
+        p = {"ph": "dep", "org": {"code": "TPE", "name": "台北", "guess": True}, "dst": None}
+        f(p, "TPE", "TPE", r)                                              # 抵達那段的表，配到正在起飛的：不換
+        self.assertTrue(p["org"]["guess"])
+        p = {"ph": "over", "org": None, "dst": None}
+        f(p, "TSA", "TPE", r)                                              # 在松山看到飛去桃園的
+        self.assertEqual((p["org"]["code"], p["dst"]["code"]), ("IST", "TPE"))
+
     def test_kind(self):
         from test_passkey import load_sentinel
         k = load_sentinel().fly_kind
@@ -726,6 +768,9 @@ class Legs(unittest.TestCase):
         g = {**a, "flight": "UPS95 ", "alt_baro": "ground", "gs": 80, "baro_rate": 0, "lat": TPE[0] + .003, "lon": TPE[1] + .003}
         p = S.fly_plane(g, ap)                                 # 停在這裡、航線兩頭都不是這裡：不寫錯的航線
         self.assertEqual((p["ph"], p["org"], p["dst"]), ("gnd", None, None))
+        S.fly_route = lambda cs, lat, lon: [{"code": "TPE", "name": "台北"}, {"code": "HKG", "name": "香港"}]   # 查到的是下一段
+        h = {**a, "flight": "CPA451 ", "alt_baro": 6600, "baro_rate": -700, "track": 53, "lat": TPE[0] + .09, "lon": TPE[1] + .09}
+        self.assertEqual(S.fly_plane(h, ap)["ph"], "arr")     # 順風邊往下降、機頭背著機場：是飛來的，不是剛起飛
 
 
 class Midnight(unittest.TestCase):

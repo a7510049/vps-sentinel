@@ -76,6 +76,10 @@ for c in ["TPE", "TSA", "KHH", "RMQ"]:
             issues.append(f"{k} {p['fn']} 正在降落到這裡卻不在看板 alt={p['alt']} d={p['d']} {pl(p.get('org'))}")
         if k in ("arr", "dep") and p.get("live") and p.get("d", 0) > 400:
             issues.append(f"{k} {p['fn']} 配到很遠的飛機 d={p['d']}")
+        if any((x or {}).get("guess") for x in (p.get("org"), p.get("dst"))) and S.fly_fids_find(p.get("fn")):
+            issues.append(f"{k} {p['fn']} 官網表有這班卻寫「可能是」 {pl(p.get('org'))}->{pl(p.get('dst'))} ph={p['ph']}")
+        if p.get("veh") is None and str(p.get("t") or "") in S.FLY_NOTAC:
+            issues.append(f"{k} {p['fn'] or p['cs']} 不是飛機卻列成飛機 t={p.get('t')}")
         if p.get("use") == "" and k != "over":
             issues.append(f"{k} {p['fn'] or p['reg']} 沒有用途 t={p.get('t')}")
     print("\n".join("  ! " + x for x in issues) or "  (沒發現問題)")

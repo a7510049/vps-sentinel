@@ -1307,6 +1307,36 @@ def fly_hold(hx, trk, now=None):
         return bool(h["on"]) and now - h["on"] < 180
 
 
+FLY_NOTAC = {"GND", "TWR", "SERV", "EMRG", "VEH"}       # 飛機資料庫裡不是飛機的機型代碼
+
+
+def fly_mins(path, v):
+    """飛 path 公里要幾分鐘：最後 8 公里減速到大約 270 公里/時（網頁雷達的排隊用同一個算法）"""
+    v = max(150.0, v)
+    return (max(0.0, path - 8) / v + min(path, 8) / min(v, 270.0)) * 60
+
+
+def fly_eta(code, x, y, v):
+    """幾分鐘後落地：已經對準跑道的照到跑道頭的距離；還沒對準的要先繞到跑道延長線上（10 公里外）再進來，不是直線飛過去"""
+    best = None
+    for hdg, ln, off in FLY_RWY.get(code) or [(0, 0, 0)]:
+        cx, cy = -off * math.cos(math.radians(hdg)), off * math.sin(math.radians(hdg))   # 跑道中心（往左右偏 off，跟 fly_geo 一樣）
+        for h in (hdg, hdg + 180):
+            ux, uy = math.sin(math.radians(h)), math.cos(math.radians(h))     # 降落時飛的方向
+            tx, ty = cx - ux * ln / 2, cy - uy * ln / 2                       # 這一頭的跑道頭
+            dx, dy = x - tx, y - ty
+            al, lat = -(dx * ux + dy * uy), abs(dx * uy - dy * ux)
+            if al > 0 and lat <= max(1.2, al * .12):
+                path = al
+            elif -ln - .5 <= al <= 0 and lat <= .6:
+                path = 0                                                      # 已經過了跑道頭、在跑道上：就是現在
+            else:
+                jx, jy = tx - ux * max(10, al), ty - uy * max(10, al)
+                path = math.hypot(x - jx, y - jy) + max(10, al)
+            best = path if best is None else min(best, path)
+    return fly_mins(best, v)
+
+
 def fly_plane(a, ap):
     """一架飛機：整理成看板一列；判斷是要降落、剛起飛、在地面還是路過"""
     try:
@@ -1324,9 +1354,18 @@ def fly_plane(a, ap):
     vr = a.get("baro_rate", a.get("geom_rate")) or 0
     trk = a.get("track", a.get("true_heading"))
     d, brg = fly_dist(ap[3], ap[4], lat, lon)
-    cs = str(a.get("flight") or "").strip().upper()
+    cs = re.sub(r"[^A-Z0-9]", "", str(a.get("flight") or "").upper())   # 沒有呼號時訊號會是「@@@@@@@@」
     t = str(a.get("t") or "").upper()
     reg = str(a.get("r") or "").upper()
+    cat = str(a.get("category") or "").upper()
+    if t in FLY_NOTAC or cat[:1] == "C" or cat in ("B2", "B3", "B6"):   # 地勤車、消防車、障礙物、氣球、跳傘、無人機：不是飛機（例如 CV04 會被當成盧森堡貨運）
+        d, brg = fly_dist(ap[3], ap[4], lat, lon)
+        if d > 6 or fly_closest(ap, lat, lon) != ap[0]:
+            return None
+        trk = a.get("track", a.get("true_heading"))
+        return {"veh": True, "id": str(a.get("hex") or "")[:8], "cs": re.sub(r"[^A-Z0-9]", "", str(a.get("flight") or "").upper())[:10],
+                "spd": round(float(a.get("gs") or 0) * 1.852), "trk": round(float(trk)) if isinstance(trk, (int, float)) else None,
+                "x": round(d * math.sin(math.radians(brg)), 3), "y": round(d * math.cos(math.radians(brg)), 3)}   # 只畫在整頁雷達放大到機場時（地勤車開關）
     al = FLY_AL.get(cs[:3]) if re.match(r"[A-Z]{3}\d", cs) else None
     fn = fly_fn(al[0] + cs[3:]) if al else cs
     rt = (fly_route(cs, lat, lon) if cs else None) or fly_fids_route(fn)
@@ -1336,7 +1375,8 @@ def fly_plane(a, ap):
     near = {c for c, _, _ in fly_nearby(ap)}           # 查到的航線是附近別的機場（例如在松山看到要降落桃園的）：照航線
     land = not gnd and vr < -300 and dst not in near and (
         (alt < 15000 and d < 60 and toward and fly_closest(ap, lat, lon, trk, 1) == code)
-        or (alt < 6500 and d < 25 and fly_closest(ap, lat, lon) == code))     # 很低很近、在繞圈排隊或順風邊：機頭不一定對著機場
+        or (alt < 6500 and d < 25 and fly_closest(ap, lat, lon) == code)     # 很低很近、在繞圈排隊或順風邊：機頭不一定對著機場
+        or (org == code and alt < 10000 and d < 30 and fly_closest(ap, lat, lon) == code))   # 查到「從這裡出發」卻在附近往下降：是飛來接下一段的
     lift = not gnd and alt < 15000 and d < 60 and vr > 300 and not toward and org not in near and fly_closest(ap, lat, lon, trk, -1) == code
     me = {"code": code, "name": fly_city(code) or ap[2]}
     if land and rt and dst != code:                    # 例如查到「達拉斯 → 安克拉治」，其實是安克拉治飛來的下一段
@@ -1369,7 +1409,7 @@ def fly_plane(a, ap):
     hold = ph != "gnd" and d < 80 and fly_hold(str(a.get("hex") or "").lower(), trk)
     if hold and ph == "over" and not (rt and rt[0] and rt[1]) and alt < 20000 and fly_closest(ap, lat, lon) == code:
         ph = "arr"                            # 查不到航線、在這個機場附近繞圈：多半是在等降落
-    eta = round(d / (gs * 1.852) * 60) if ph == "arr" and gs > 50 and not hold else None
+    eta = round(fly_eta(code, d * math.sin(math.radians(brg)), d * math.cos(math.radians(brg)), gs * 1.852)) if ph == "arr" and gs > 50 and not hold else None
     if hold:
         st = "盤旋等待" if ph == "arr" else "盤旋中"
     elif ph == "arr":
@@ -1416,6 +1456,20 @@ def fly_fids_find(fn):
             if dt < bd:
                 best, bd = (c, r), dt
     return best
+
+
+def fly_fids_fill(p, code, c, r):
+    """航線有「可能是」或缺一頭、官網表又排了這班：照官網表寫，不用猜（例如土耳其航空查到的是回程那段，出發地只好用猜的）"""
+    org, dst = p.get("org"), p.get("dst")
+    if org and dst and not org.get("guess") and not dst.get("guess"):
+        return
+    if not (r.get("pc") or r.get("pl")):
+        return
+    me, pl = {"code": c, "name": fly_city(c) or c}, {"code": r["pc"], "name": r["pl"]}
+    o, d = (pl, me) if r["io"] == "arr" else (me, pl)
+    if (p["ph"] == "arr" and d["code"] != code) or (p["ph"] == "dep" and o["code"] != code) or p["ph"] == "gnd" and code not in (o["code"], d["code"]):
+        return                                     # 同一個班號的別段（例如到了桃園又飛吉隆坡）：對不上就不換
+    p["org"], p["dst"] = o, d
 
 
 def fly_fids_route(fn):
@@ -1469,9 +1523,18 @@ def fly_merge(ap, fids, rows, io):
     me, out, used = {"code": ap[0], "name": ap[2]}, [], set()
     other = "dep" if io == "arr" else "arr"
 
+    landed = {}                                        # 同一班號剛降落（抵達時間在 45 分鐘內）：停在地上的那架還是抵達那段，不算下一段的出發
+    for r in fids:
+        if r["io"] == "arr" and abs((r["est"] or r["sch"]) - now + 600) < 35 * 60:
+            for f in [r["fn"], *(r.get("share") or [])]:
+                landed[fly_fn(f)] = True
+
     def plane(r):
-        """這一筆配得到的飛機（同一班號接著飛下一段時：正在降落的不算出發、正在起飛的不算抵達）"""
-        p = next((live[fly_fn(f)] for f in [r["fn"], *(r.get("share") or [])] if fly_fn(f) in live), None)
+        """這一筆配得到的飛機（同一班號接著飛下一段時：正在降落的不算出發、正在起飛的不算抵達、剛降落停在地上的也不算出發）"""
+        fs = [fly_fn(f) for f in [r["fn"], *(r.get("share") or [])]]
+        p = next((live[f] for f in fs if f in live), None)
+        if p and io == "dep" and p["ph"] == "gnd" and any(f in landed for f in fs):
+            return None
         return None if p and p["ph"] == other else p
 
     show = []
@@ -1524,7 +1587,7 @@ def fly_merge(ap, fids, rows, io):
             if p and p["ph"] == "gnd" and (p.get("d") or 99) < 6:
                 if io == "arr":
                     row["st"] = "已到"                 # 已經停在這個機場了
-                elif (p.get("spd") or 0) > 5 and now > t0 - 1800:
+                elif (p.get("spd") or 0) >= 9 and now > t0 - 1800:      # 跟機坪那邊一樣：5 節以上才算在滑行（推出、拖車晃一下不算）
                     row["st"] = "滑行中"
             if row["st"] not in ("已到", "已飛", "滑行中") and not (p and p["ph"] == io) and now > t0 + 300:
                 row["lag"] = True                      # 過了時間還沒到／還沒飛：照現在的時間排，網頁算晚幾分
@@ -1640,7 +1703,7 @@ def fly_board(code, bg=False):
     if add:
         srcs.append(["OpenSky", "https://opensky-network.org"])
     fly_hex_fill(ac)
-    rows, cargo = [], []
+    rows, cargo, veh = [], [], []
     for a in ac:                              # 一架資料怪怪的就跳過，不要整個看板都出不來
         try:
             p = fly_plane(a, ap) if isinstance(a, dict) else None
@@ -1648,6 +1711,9 @@ def fly_board(code, bg=False):
             fly_log(f"有一架資料讀不懂（{type(e).__name__}）")
             p = None
         if not p:
+            continue
+        if p.get("veh"):
+            veh.append(p)
             continue
         if p["ph"] != "over":
             fly_type_seen(ap[0], p["t"])
@@ -1657,6 +1723,7 @@ def fly_board(code, bg=False):
         hit = fly_fids_find(p["fn"])
         if hit:                                        # 任何一個台灣機場的官網表排了這班：機型照官網（路過的也是）
             fly_fix_type(p, hit[1])
+            fly_fids_fill(p, ap[0], *hit)
             if not p["mil"]:
                 p["use"] = "客機"                      # 官網表只有客機
         rows.append(p)
@@ -1683,6 +1750,7 @@ def fly_board(code, bg=False):
     out["cargo"] = sorted([p for p in cargo if p["ph"] != "over"], key=lambda p: ({"arr": 0, "gnd": 1}.get(p["ph"], 2), p["eta"] if p["eta"] is not None else 999, p["d"]))   # 「貨機」分頁：要降落、在地面、剛起飛的貨機
     out["ccs"] = {x["code"]: db[x["code"]][5] for p in arr + dep + gnd + over + rest for x in (p.get("org"), p.get("dst"))
                   if x and x.get("code") in db and db[x["code"]][5]}   # 地名旁邊的國旗：機場代碼 → 國家
+    out["veh"] = veh[:60]
     out["lat"] = {c: round(db[c][3], 2) for c in out["ccs"]}
     out["wx"] = fly_wx(ap[0])   # 地點選單：同一國的城市由北到南排
     fly_track(ap[0], rows + cargo)
