@@ -137,9 +137,13 @@
 html{background:var(--bg);color:var(--tx);touch-action:manipulation;accent-color:var(--p);caret-color:var(--p);
   transition:background-color var(--t-mid) var(--ease),color var(--t-mid) var(--ease)}
 /* 頁面頂端的光暈：從頁面上方 600px 就開始畫，Safari 拉到頂往下彈時露出來的也是光暈，不會有一條底色 */
-html::before{content:"";position:absolute;left:0;right:0;top:-600px;height:1100px;z-index:-1;pointer-events:none;
-  background:radial-gradient(70% 420px at 6% 540px,color-mix(in oklab,var(--seed) var(--glow),transparent),transparent),
-  radial-gradient(60% 380px at 96% 560px,color-mix(in oklab,var(--p2) var(--glow),transparent),transparent)}
+html::before{content:"";position:absolute;left:0;right:0;top:-600px;height:1100px;z-index:-1;pointer-events:none;--gy:600px}
+/* 光暈的位置照視窗算：主機頁、機場起降蓋上來時也畫同一片，跟左邊分頁列接得起來（--gx 往右挪了多少、--gz 放大倍數） */
+html::before,.det,.flyv{background-image:
+  radial-gradient(calc(70vw / var(--gz,1)) calc(420px / var(--gz,1)) at calc(6vw / var(--gz,1) - var(--gx,0px)) calc(var(--gy,0px) - 60px / var(--gz,1)),color-mix(in oklab,var(--seed) var(--glow),transparent),transparent),
+  radial-gradient(calc(60vw / var(--gz,1)) calc(380px / var(--gz,1)) at calc(96vw / var(--gz,1) - var(--gx,0px)) calc(var(--gy,0px) - 40px / var(--gz,1)),color-mix(in oklab,var(--p2) var(--glow),transparent),transparent)}
+/* 電腦：光暈固定在視窗上，捲動時不跟著跑（左邊分頁列一直看得到） */
+html:has(.dash.d)::before{position:fixed;top:0;height:100vh;--gy:0px}
 html.lock{overflow:hidden}
 html.inapp{overscroll-behavior-y:contain}   /* App 裡用自己的下拉重新整理；瀏覽器照它自己的彈性 */
 body{font:400 var(--fs-m)/1.5 var(--font);zoom:var(--zoom);min-height:100vh;-webkit-font-smoothing:antialiased;overflow-x:hidden}
@@ -280,6 +284,14 @@ html:not(.full) .dock>.slide{background:none}
 .tb.on .t{max-width:3em;opacity:1;margin-left:8px}
 .tb.prs{border-radius:var(--r-md)}
 .tb.hasnew::after{top:10px;right:10px}
+/* 浮在下面的膠囊分頁列：選到的底色在原地撐開、舊的原地縮回去（不從別的圖示上面滑過去） */
+html.full .dock>.slide{display:none}
+html.full .dock .tb.on{background:none}
+html.full .dock .tb{isolation:isolate}
+html.full .dock .tb::before{content:"";position:absolute;inset:0;z-index:-1;border-radius:inherit;background:var(--p) var(--grad);opacity:0;transform:scale(.6);
+  transition:opacity var(--t-mid) var(--ease),transform var(--sp)}
+html.full .dock .tb.on::before{opacity:1;transform:none}
+[data-accent="rainbow"].full .dock .tb.on::before{background-image:var(--rbw)}
 
 /* ═════════ 首頁上面：狀態圖形＋一句話 ═════════ */
 .hero{padding:18px 4px 6px}
@@ -400,7 +412,7 @@ html:not(.full) .dock>.slide{background:none}
 .calm{color:var(--tx3);padding:22px 16px;background:var(--card);border-radius:var(--r-lg);text-align:center}
 
 /* ═════════ 主機整頁（手機）：從卡片的位置長出來 ═════════ */
-.det{position:fixed;inset:0;z-index:var(--z-det);background:var(--bg);animation:expand var(--t-slow) var(--dec) backwards}
+.det{position:fixed;inset:0;z-index:var(--z-det);background-color:var(--bg);--gz:var(--zoom);animation:expand var(--t-slow) var(--dec) backwards}
 /* 整頁完全蓋住之後，後面那一頁先不畫（動畫、更新都停下來，捲動只要顧整頁）；收起時立刻回來 */
 html.dhid .dash>.view{content-visibility:hidden;contain-intrinsic-size:auto none}
 .det.closing{animation:collapse var(--t-mid) var(--exit) forwards;pointer-events:none}
@@ -410,12 +422,14 @@ html.dhid .dash>.view{content-visibility:hidden;contain-intrinsic-size:auto none
   padding:calc(env(safe-area-inset-top) + 10px) 16px calc(env(safe-area-inset-bottom) + 40px)}
 .dscroll>*{max-width:760px;margin-left:auto;margin-right:auto}
 .det .hb{animation:fadeIn var(--t-mid) var(--ease) .08s backwards}
-.dscroll>.dtop{position:sticky;top:calc(-10px - env(safe-area-inset-top));z-index:1;max-width:none;display:flex;align-items:center;gap:12px;background:var(--bg);
+.dscroll>.dtop{position:sticky;top:calc(-10px - env(safe-area-inset-top));z-index:1;max-width:none;display:flex;align-items:center;gap:12px;
   margin:calc(-10px - env(safe-area-inset-top)) -16px 0;padding:calc(env(safe-area-inset-top) + 16px) 16px 8px}
 .dtt{flex:1;min-width:0;font-size:var(--fs-xl);font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;opacity:0}
 /* 往上捲：大標題鑽進標題列的同時，標題列換上色塊、小標題浮上來（跟著手指走，由顯示卡處理，不佔主程式）；
    瀏覽器不支援就維持底色，不顯示名稱 */
-.dtop::before{content:"";position:absolute;inset:0;z-index:-1;background:var(--s2);opacity:0;pointer-events:none}
+/* 標題列平常透明（後面的光暈接得起來）；色塊左右延伸到整個畫面寬 */
+.dtop::before{content:"";position:absolute;top:0;bottom:0;left:-100vw;right:-100vw;z-index:-1;background:var(--s2);opacity:1;pointer-events:none}
+.dscroll{overflow-x:hidden}
 @supports (animation-timeline:view()) and (timeline-scope:--a){
   .dscroll{--bar:62px;timeline-scope:--hn}
   .det .hname{view-timeline:--hn block;view-timeline-inset:var(--bar) 0}
@@ -541,7 +555,7 @@ button.li.prs,a.li.prs{border-radius:var(--r-lg);transform:scale(.98);background
 /* 工具、設定：選主機（很多台時換行，全部看得到；選到的是實心主題色，跟「自動／柔和」那種選項一樣） */
 .hpick{display:flex;flex-wrap:wrap;gap:8px;margin:0 4px 16px}
 .hpick .fchip{flex:none;display:inline-flex;align-items:center;gap:8px;white-space:nowrap}
-.hpick .fchip.on,.hpick>.slide{background:var(--p);color:var(--on-p)}
+.hpick .fchip.on,.hpick[data-slide]>.slide{background:var(--p);color:var(--on-p)}
 .hpick .fchip.on .dot.info{background:var(--on-p)}   /* 「有新版」的圓點跟底色同色：換成白點才看得到 */
 .hpick .dot,.pane .dot{animation:pop var(--sp-fast) backwards}
 /* 單選的一排／一列（主機名稱、紀錄篩選）：選取底色從舊的滑到新的（slideSel） */
@@ -550,11 +564,11 @@ button.li.prs,a.li.prs{border-radius:var(--r-lg);transform:scale(.98);background
 .pane[data-slide]>.slide{z-index:1}   /* 一列一列是不透明的方塊：底色蓋在方塊上、字再蓋在底色上 */
 [data-slide].sliding>*{transition-property:color,box-shadow,transform,padding}
 [data-slide].sliding>.on{background:transparent}
-.dock>.slide,.rail>.slide{background:var(--p) var(--grad)}
-.dock.sliding>.on,.rail.sliding>.on .ri{background-image:none}
+.seg[data-slide]>.slide{background:var(--p)}   /* 跟選好之後的底色一樣，撐開完不會換色 */
+[data-slide].grow>*{transition-property:color,box-shadow,transform,padding,background-color,border-color}   /* 原地撐開：舊的那一格底色淡掉 */
+.dock>.slide{background:var(--p) var(--grad)}
+.dock.sliding>.on{background-image:none}
 .pane[data-slide].sliding>.on{background:var(--card)}
-.rail.sliding>.on .ri{background:transparent}
-.rail.sliding .ri{transition-property:width,color,transform}
 .pane[data-slide].sliding>.li>*{position:relative;z-index:2}
 
 /* ═════════ 設定的控制項 ═════════ */
@@ -595,9 +609,11 @@ button.li.prs,a.li.prs{border-radius:var(--r-lg);transform:scale(.98);background
 .tog:checked::before{left:36px;opacity:1;transform:translate(-50%,-50%)}
 .tog:active::after{width:28px;height:28px}
 /* 彩虹主題：選到的東西換成彩虹底、深色字（滑動中的那一格交給 .slide） */
-[data-accent="rainbow"] :is(.tb.on,.rb.on .ri,[data-slide]>.slide,.fchip.on,.seg button.on,.rng button.on,.pane .li.on,.chats button.on,.bkhosts .ubtn.on,
+[data-accent="rainbow"] :is(.tb.on,[data-slide]>.slide,.fchip.on,.seg button.on,.rng button.on,.pane .li.on,.chats button.on,.bkhosts .ubtn.on,
   .tog:checked,.remember input:checked,.blob:not(.warn,.bad) .bf,.sp-blob){background-image:var(--rbw);color:var(--on-rbw)}
-[data-accent="rainbow"] :is([data-slide].sliding>.on,.rail.sliding>.on .ri){background-image:none}
+[data-accent="rainbow"] [data-slide].sliding>.on{background-image:none}
+[data-accent="rainbow"] .rb.on .ri::before{background-image:var(--rbw)}
+[data-accent="rainbow"] .rb.on .ri{color:var(--on-rbw)}
 [data-accent="rainbow"] .blob:not(.warn,.bad) .bg{color:var(--on-rbw)}
 [data-accent="rainbow"] .tog:checked::after{background:#fff}
 [data-accent="rainbow"] .tog:checked::before{background:var(--on-rbw)}
@@ -609,12 +625,20 @@ button.li.prs,a.li.prs{border-radius:var(--r-lg);transform:scale(.98);background
 .rail .brand svg{width:44px;height:44px}
 .rail .brand{margin-bottom:18px}
 .rb{display:flex;flex-direction:column;align-items:center;gap:4px;color:var(--tx2);font-size:var(--fs-xs);font-weight:500;position:relative;width:80px}
-.rb .ri{width:32px;height:32px;border-radius:var(--r-pill);display:grid;place-items:center;
-  transition:width var(--sp),background-color var(--t-mid) var(--ease),color var(--t-mid) var(--ease),transform var(--sp-fast)}
+.rb{transition:color var(--t-mid) var(--ease)}
+/* 選到的底色在原地從中間撐開、舊的原地縮回去（不在格子之間滑，才不會蓋過別的圖示和字） */
+.rb .ri{width:56px;height:32px;border-radius:var(--r-pill);display:grid;place-items:center;
+  transition:color var(--t-mid) var(--ease),transform var(--sp-fast)}
+.rb .ri::before,.rb .ri::after{content:"";position:absolute;inset:0;border-radius:inherit;opacity:0;transform:scaleX(.5);
+  transition:opacity var(--t-mid) var(--ease),transform var(--sp)}
+.rb .ri::before{background:var(--p) var(--grad)}
+.rb .ri::after{background:color-mix(in srgb,var(--tx) 8%,transparent)}
+.rb .ri svg{position:relative}
 .rb svg{width:22px;height:22px}
 .rb.on{color:var(--tx)}
-.rb.on .ri{width:56px;background:var(--p) var(--grad);color:var(--on-p)}
-@media (hover:hover){.rb:not(.on):hover .ri{width:56px;background:color-mix(in srgb,var(--tx) 8%,transparent)}}
+.rb.on .ri{color:var(--on-p)}
+.rb.on .ri::before{opacity:1;transform:none}
+@media (hover:hover){.rb:not(.on):hover .ri::after{opacity:1;transform:none}}
 .rb.prs .ri{transform:scale(.9)}
 .rb.hasnew::after{top:-2px;right:16px}
 .rail .rfoot{margin-top:auto;display:flex;flex-direction:column;align-items:center;gap:6px}
@@ -666,7 +690,7 @@ button.li.prs,a.li.prs{border-radius:var(--r-lg);transform:scale(.98);background
 @media (min-width:1000px){.dash.d .minis{grid-template-columns:repeat(2,minmax(0,1fr))}}
 .dash.d .minis .mrows{grid-template-columns:repeat(3,72px)}
 @media (hover:hover){.hcard:not(.prs):hover{background:var(--s2)}}
-.dash.d .det,body:has(.dash.d) .flyv{left:96px}   /* 主機頁、機場起降都從分頁列右邊開始，分頁列一直都在 */
+.dash.d .det,body:has(.dash.d) .flyv{left:96px;--gx:96px}   /* 主機頁、機場起降都從分頁列右邊開始，分頁列一直都在 */
 body:has(.dash.d) .fscroll{padding:30px 32px 48px 8px}
 body:has(.dash.d) .fwrap{max-width:var(--pw)}
 .dash.d .dscroll{padding:30px 32px 48px 8px}
@@ -972,7 +996,7 @@ html:not(.inapp) #ptr{display:none}
 .ico.fly{background:oklch(var(--tl) var(--tc) 268);color:oklch(var(--fl) var(--fc) 268)}
 .group.fly1{margin-bottom:16px}
 html.flyon .dash>.view{content-visibility:hidden;contain-intrinsic-size:auto none}
-.flyv{position:fixed;inset:0;z-index:var(--z-det);background:var(--bg);--ct:0px;--cb:0px;--cl:0px;--cr:0px;animation:expand var(--t-slow) var(--dec) backwards}
+.flyv{position:fixed;inset:0;z-index:var(--z-det);background-color:var(--bg);--gz:var(--zoom);--ct:0px;--cb:0px;--cl:0px;--cr:0px;animation:expand var(--t-slow) var(--dec) backwards}
 .flyv.closing{animation:collapse var(--t-mid) var(--exit) forwards;pointer-events:none}
 /* 第一次打開的載入畫面：小飛機沿著虛線航線飛，下面翻出機場代碼 */
 .fsplash{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;pointer-events:none}
@@ -1201,8 +1225,12 @@ html.flyon .dash>.view{content-visibility:hidden;contain-intrinsic-size:auto non
 }
 /* 手機、平板：往下捲看板時，抵達／出發那排分頁貼在畫面最上面（不用捲回去才能換） */
 @media (max-width:1279px){
-  .ftabs{position:sticky;top:0;z-index:var(--z-bar);margin:calc(-6px - env(safe-area-inset-top)) -16px -6px;padding:calc(env(safe-area-inset-top) + 6px) 16px 6px;
-    background:color-mix(in oklab,var(--bg) 84%,transparent);-webkit-backdrop-filter:blur(18px);backdrop-filter:blur(18px)}
+  .ftabs{position:sticky;top:0;z-index:var(--z-bar);margin:calc(-6px - env(safe-area-inset-top)) -16px -6px;padding:calc(env(safe-area-inset-top) + 6px) 16px 6px}
+  /* 霧面底只在貼住時出現，左右、往上延伸到畫面邊（不會在光暈上切出一塊方框，上面也不會露出捲上去的列），底下一條細線 */
+  .ftabs::before{content:"";position:absolute;top:-60px;bottom:0;left:-100vw;right:-100vw;z-index:-1;pointer-events:none;opacity:0;
+    background:color-mix(in oklab,var(--bg) 84%,transparent);box-shadow:0 1px 0 var(--line);-webkit-backdrop-filter:blur(18px);backdrop-filter:blur(18px);
+    transition:opacity var(--t-mid) var(--ease)}
+  .ftabs.stuck::before{opacity:1}
 }
 /* 手機：每一列分三行：時間、航班、狀態／從哪來、航空公司／機型、註冊號 */
 @media (max-width:899px){
@@ -1334,8 +1362,7 @@ html.flyon .dash>.view{content-visibility:hidden;contain-intrinsic-size:auto non
   html:not(.full) .dock{background:color-mix(in oklab,var(--bg) 62%,transparent);-webkit-backdrop-filter:var(--blur);backdrop-filter:var(--blur)}
   .full .dock{background:color-mix(in oklab,var(--s3) 60%,transparent);box-shadow:var(--glass-edge),var(--sh-3);-webkit-backdrop-filter:var(--blur);backdrop-filter:var(--blur)}
   .full .dash.m::before{opacity:.45}                               /* 分頁列後面的內容看得到（霧化），淡掉的那層變淺 */
-  .dscroll>.dtop{background:color-mix(in oklab,var(--bg) 55%,transparent);-webkit-backdrop-filter:var(--blur);backdrop-filter:var(--blur)}
-  .dtop::before{background:var(--glass)}
+  .dtop::before{background:var(--glass);-webkit-backdrop-filter:var(--blur);backdrop-filter:var(--blur)}   /* 霧面跟著色塊一起出現：沒往上捲時標題列是透明的 */
   .lmenu{background:var(--glass-hi);box-shadow:var(--glass-edge),var(--sh-2);-webkit-backdrop-filter:var(--blur);backdrop-filter:var(--blur)}
   .dialog{background:var(--glass-hi);box-shadow:var(--glass-edge),var(--sh-3);-webkit-backdrop-filter:var(--blur);backdrop-filter:var(--blur);
     --card:color-mix(in oklab,var(--s3) 72%,transparent);--chip:color-mix(in oklab,var(--s3) 72%,transparent)}
