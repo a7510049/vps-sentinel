@@ -1338,6 +1338,10 @@ html.flyon .dash>.view{content-visibility:hidden;contain-intrinsic-size:auto non
 .fhead{display:flex;align-items:center;gap:16px;background:var(--card);box-shadow:var(--cs);border-radius:var(--r-xl);padding:18px 20px}
 .fname{flex:1;min-width:0;display:flex;flex-direction:column}
 .fname b{font-size:var(--fs-2xl);font-weight:700;letter-spacing:-.01em;line-height:1.2}
+.fnm{display:flex;align-items:center;gap:4px;min-width:0}.fnm .chv{width:18px;height:18px;flex:none;color:var(--tx3)}   /* 點大標題換機場（右上不再多一顆寫一樣的按鈕） */
+.fhead[data-fpick]{cursor:pointer;transition:transform var(--sp-fast),background-color var(--t-fast) var(--ease)}
+.fhead[data-fpick]:active{transform:scale(.985)}
+@media (hover:hover){.fhead[data-fpick]:hover{background:color-mix(in oklab,var(--card) 94%,var(--tx))}}
 .fclock{display:flex;flex-direction:column;align-items:flex-end;gap:6px}
 .fmain{display:flex;flex-direction:column;gap:12px}
 .fleft{min-width:0;display:flex;flex-direction:column;gap:12px}
@@ -1369,7 +1373,6 @@ html.flyon .dash>.view{content-visibility:hidden;contain-intrinsic-size:auto non
 .fhb.tm0{margin-left:6px}                                          /* 明天的時段：跟今天空開一點 */
 .fhrh{display:flex;align-items:baseline;justify-content:space-between;gap:12px;margin-bottom:-4px}.fhrh:not(:has(> :not([hidden]))){display:none}   /* 長條圖上面一行：左邊選到的時段、右邊 1 小時內 */
 .fhsel{font-size:var(--fs-s);color:var(--tx3);white-space:nowrap}.fhsel b{margin-right:6px;font-size:var(--fs-l);color:var(--tx);font-weight:700}
-.fhrh .fsum{margin-left:auto}
 .fti{width:18px;height:18px;margin-right:6px;flex:none;display:inline-block;vertical-align:-4px}   /* 分頁前面的指示牌圖示 */
 .ftabs{--chip:var(--card)}
 .ftabs{flex-wrap:nowrap}@media (max-width:480px){.ftabs button{padding:0 4px}.ftabs .fti{width:15px;height:15px;margin-right:3px;vertical-align:-3px}}@media (max-width:360px){.ftabs .fti{display:none}}   /* 手機：四個分頁加圖示也排得下一排（太窄就不放圖示） */
@@ -1405,11 +1408,6 @@ html.flyon .dash>.view{content-visibility:hidden;contain-intrinsic-size:auto non
 .fr .t.late b{color:var(--warn)}.fr .t.early b{color:var(--ok)}.fsh:empty{display:none}   /* 時間改了：只寫新的，早到綠字、晚到橘字 */
 .fr .fn{position:relative}.fsh{position:absolute;right:0;top:50%;translate:0 -50%;font-size:var(--fs-xs);font-weight:500;color:var(--tx3)}     /* 共掛班號：+2 疊在翻牌最後一格（班號很少用滿七格），不多佔寬度 */
 .fh .st{justify-self:end}                                          /* 狀態靠右，標題也靠右 */
-.fsum{display:flex;align-items:center;gap:14px;font-size:var(--fs-s);padding:0 4px;cursor:pointer;width:fit-content;border-radius:var(--r-xs)}
-.fsum .fsl{color:var(--tx3)}
-.fsn{display:inline-flex;align-items:center;gap:5px;font-weight:700;color:var(--tx);font-variant-numeric:tabular-nums}
-.fsn .fti{width:16px;height:16px;margin:0;vertical-align:0;color:var(--tx3)}
-.fsn.late,.fsn.late .fti{color:var(--warn)}@media (hover:hover){.fsum:hover{color:var(--p)}}
 .fdone{grid-column:1/-1;display:flex;align-items:center;gap:6px;justify-self:start;margin:2px 0 4px;padding:8px 10px;border-radius:var(--r-sm);color:var(--tx2);font-size:var(--fs-s);font-weight:500}   /* 已到／已飛的收成一行 */
 .fdone .chv{width:16px;height:16px;transition:transform var(--t-mid) var(--ease)}.fdone.on .chv{transform:rotate(180deg)}
 .fr.hot .st b{color:var(--p)}
@@ -1425,7 +1423,6 @@ html.flyon .dash>.view{content-visibility:hidden;contain-intrinsic-size:auto non
 .ftag.bad{background:var(--badc);color:var(--on-badc)}
 .ftag.late{background:var(--warnc);color:var(--on-warnc)}
 .ftag.early{background:color-mix(in oklab,var(--ok) 18%,transparent);color:var(--ok)}
-.ftag.soon{background:var(--s3);color:var(--tx2)}                 /* 一小時內：還有幾分 */
 /* 國旗（地名後面；國內的不放） */
 .flg{display:inline-block;height:.85em;width:auto;margin-left:.4em;vertical-align:-.06em;border-radius:calc(var(--r-xs) / 3);box-shadow:0 0 0 1px color-mix(in oklab,var(--tx) 12%,transparent);opacity:0;transition:opacity var(--t-fast) var(--ease)}
 .flg.ok{opacity:1}.flg[hidden]{display:none}
@@ -1470,7 +1467,7 @@ html.flyon .dash>.view{content-visibility:hidden;contain-intrinsic-size:auto non
 .board.wait{min-height:14em}.board.wait :is(.fh,.frows,.fdone,.fmsg){opacity:0;pointer-events:none}   /* 換機場等資料：上一個機場的「已飛 N 班」、提示字也先淡掉 */
 .fload{position:absolute;inset:0;display:grid;place-items:center;pointer-events:none;opacity:0;transition:opacity var(--t-mid) var(--ease)}
 .board.wait .fload{opacity:1;transition-delay:var(--t-long)}
-.flyv :is(.fhrs,.fterm,.fsum,.fhsel){transition:opacity var(--t-mid) var(--ease)}.flyv.fwait :is(.fhrs,.fterm,.fsum,.fhsel){opacity:0;pointer-events:none}
+.flyv :is(.fhrs,.fterm,.fhsel){transition:opacity var(--t-mid) var(--ease)}.flyv.fwait :is(.fhrs,.fterm,.fhsel){opacity:0;pointer-events:none}
 .fload i{width:40px;height:40px;background:var(--p)}
 .radar{background:var(--card);box-shadow:var(--cs);border-radius:var(--r-xl);padding:16px;width:100%;max-width:480px;align-self:center}
 .fr.sel .sf .c[data-c=" "],.fr.sel .sf .c[data-c=" "] b{background:transparent}   /* 選到的那列：空格子不要變成深色方塊 */
@@ -1501,7 +1498,7 @@ html.flyon .dash>.view{content-visibility:hidden;contain-intrinsic-size:auto non
 .frzm .icbtn{transition:background-color var(--t-fast) var(--ease),color var(--tsel)}
 .frzm .icbtn.on{color:var(--on-p)}   /* 常走路線開著 */
 .frcard{position:absolute;left:12px;right:12px;bottom:calc(env(safe-area-inset-bottom) + 76px);max-width:420px;margin:0 auto;background:var(--s1);border-radius:var(--r-lg);padding:14px 16px;box-shadow:var(--sh-2)}
-.frch{display:flex;align-items:center;gap:10px}.frch>div{flex:1;min-width:0;display:flex;align-items:baseline;gap:8px}
+.frch{display:flex;align-items:center;gap:10px}.frch>div{flex:1;min-width:0;display:flex;align-items:baseline;gap:8px}.frch>div>.sub{min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}   /* 「國泰航空・客機」不換行
 .frfn{font-size:var(--fs-xl);font-weight:600}.frch .fst{font-size:var(--fs-s);color:var(--p)}
 .frrt{display:flex;align-items:center;gap:12px;margin:10px 0}.frrt>div{display:flex;flex-direction:column}.frrt>div:last-child{align-items:flex-end;margin-left:auto}
 .frrt b{font-size:var(--fs-l)}.frrt small{color:var(--tx2);font-size:var(--fs-s)}.frrt .sub svg{width:18px;height:18px;transform:rotate(45deg)}
@@ -1538,10 +1535,9 @@ html.flyon .dash>.view{content-visibility:hidden;contain-intrinsic-size:auto non
 .rleg i{width:10px;height:10px;border-radius:50%;background:var(--tw-dim);box-shadow:0 0 0 2px var(--tw-bg)}   /* 跟雷達上一樣的顏色（外面一圈螢幕底色） */
 .rleg i.arr{background:var(--tw-arr)}.rleg i.dep{background:var(--tw-dep)}.rleg i.gnd{background:var(--tw-gnd)}.rleg i.ov{background:var(--tw-ov)}
 .rleg .sub{margin-left:auto}
-.rleg b{font-weight:500;color:var(--tx);font-variant-numeric:tabular-nums;margin-left:2px}
-.rleg .ralt{gap:4px;color:var(--tx3);font-size:var(--fs-xs);order:8;flex:1 1 auto}.rleg .fzm{order:9}
-.rleg .ralt i{width:14px;height:4px;border-radius:var(--r-pill)}
-.rleg .ralt i:nth-of-type(1){background:var(--tw-a0)}.rleg .ralt i:nth-of-type(2){background:var(--tw-a1)}.rleg .ralt i:nth-of-type(3){background:var(--tw-a2)}.rleg .ralt i:nth-of-type(4){background:var(--tw-a3)}
+.ralt{display:flex;align-items:center;gap:4px;color:var(--tx3);font-size:var(--fs-xs);margin-top:10px}.rleg .fzm{order:9;margin-left:auto}
+.ralt i{width:14px;height:4px;border-radius:var(--r-pill)}
+.ralt i:nth-of-type(1){background:var(--tw-a0)}.ralt i:nth-of-type(2){background:var(--tw-a1)}.ralt i:nth-of-type(3){background:var(--tw-a2)}.ralt i:nth-of-type(4){background:var(--tw-a3)}
 /* 雷達下面：跑道、風、能見度、溫度 */
 /* 塔台廣播：左上一格翻牌字母（資訊 B），下面一格一格寫跑道、風、能見度… */
 .rwx{margin-top:10px;padding:12px 14px;border-radius:var(--r-lg);background:var(--s2)}
@@ -1604,12 +1600,12 @@ html.flyon .dash>.view{content-visibility:hidden;contain-intrinsic-size:auto non
   .tabsaway .fmini{opacity:1;transform:translate(-50%,0);pointer-events:auto}
   .fmini.prs{transform:translate(-50%,0) scale(.95)}
 }
-/* 手機：每一列分三行：時間、航班、狀態／從哪來、航空公司／機型、註冊號 */
+/* 手機：每一列分三行：時間、航班、狀態／從哪來／登機門、機型 */
 @media (max-width:899px){
   .board{display:flex;flex-direction:column;gap:6px;padding:8px}
   .fh{display:none}
-  /* 三欄對齊：時間／出發地代碼／航空公司同一條線，航班／地名／登機門同一條線，標籤／狀態／機型靠右 */
-  .fr{display:grid;grid-template-columns:4.6em minmax(0,1fr) auto;grid-template-areas:"t fn tag" "pc pl st" "al reg m";align-items:center;gap:6px 10px;padding:12px 10px;font-size:var(--fs-m)}
+  /* 三欄對齊：時間／出發地代碼／登機門同一條線，航班／地名／登機門同一條線，標籤／狀態／機型靠右 */
+  .fr{display:grid;grid-template-columns:4.6em minmax(0,1fr) auto;grid-template-areas:"t fn tag" "pc pl st" "reg reg m";align-items:center;gap:6px 10px;padding:12px 10px;font-size:var(--fs-m)}
   .fr .br{display:none}
   .board[data-tab="gnd"] .fr .t{display:none}
   .fr{content-visibility:auto;contain-intrinsic-size:auto 110px}
@@ -1617,7 +1613,7 @@ html.flyon .dash>.view{content-visibility:hidden;contain-intrinsic-size:auto non
   .fr.bad{content-visibility:visible}                         /* 有閃框的列照常處理，捲出來時節拍才不會慢半拍 */
   .fr .t{grid-area:t;flex-direction:column;align-items:flex-start;gap:2px}.fr .t,.fr .fn,.fr .ftag{align-self:start}.fr .fsh{display:none}   /* 原本的時間在下面：同一行的航班、標籤照樣對齊上緣；共掛班號點開才看（手機放不下） */.fr .fn{grid-area:fn}.fr .ftag{grid-area:tag;justify-self:end}
   .fr .pc{grid-area:pc;font-size:var(--fs-s)}.fr .pl{grid-area:pl}.fr .st{grid-area:st;justify-self:end}
-  .fr .al{grid-area:al;font-size:var(--fs-s)}.fr .m{grid-area:m;justify-self:end;font-size:var(--fs-s);color:var(--tx3)}.fr .reg{grid-area:reg;font-size:var(--fs-s);color:var(--tx3)}
+  .fr .al{display:none}   /* 手機：航空公司看標誌就好，名字在點開的細節 */.fr .m{grid-area:m;justify-self:end;font-size:var(--fs-s);color:var(--tx3)}.fr .reg{grid-area:reg;font-size:var(--fs-s);color:var(--tx3)}
   .fr{position:relative;padding-left:calc(3em + 20px)}            /* 標誌固定在每列最左邊，上下對齊 */
   .fr .fal{position:absolute;left:10px;top:50%;transform:translateY(-50%);margin:0}
   .fr .fal .alg{width:3em;height:3em;border-radius:var(--r-md);font-size:var(--fs-s)}
@@ -1720,10 +1716,6 @@ html.flyon .dash>.view{content-visibility:hidden;contain-intrinsic-size:auto non
 .faplg.full img{inset:0;width:100%;height:100%;object-fit:cover}
 .faplg.crop img{inset:auto;left:12%;top:11%;width:auto;height:93%;object-fit:initial}
 /* 看板右上角：現在的機場（小標誌＋地名＋向下箭頭），點了換機場 */
-.fapb{gap:8px;padding-left:6px}
-.fapb .faplg{width:28px;height:28px;border-radius:var(--r-sm);font-size:var(--fs-xs)}
-.fapb .chv{width:16px;height:16px;margin-left:-2px;opacity:.7}
-.fapb:disabled{opacity:1;cursor:default}
 .fapc .lab{font-size:var(--fs-l);font-weight:600;line-height:1.25}
 .fapc .lab small{display:block;margin-top:2px;font-size:var(--fs-s);font-weight:400;color:var(--tx3)}
 .fapc.on .lab small{color:inherit;opacity:.75}
