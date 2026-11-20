@@ -100,6 +100,7 @@ android/           安卓 App：全螢幕打開主機的網頁（記住網址）
 - 網頁只跑自己的程式（`html_csp`）：網頁裡的 `<script>` 照內容算指紋放進 Content-Security-Policy，所以**不能在標籤上寫 onclick=、onerror= 這類程式**（改用 addEventListener）；外部連線只開 open-meteo（天氣），要加別的網站要改 `html_csp`
 - 存在主機上的資料加密（`seal_`、`sec_` 開頭，sentinel.py 設定那段最前面）：設定檔裡 `SEAL_CONF` 這幾個值（存取密碼、Telegram、備份密碼、PEERS、OpenSky、YT_PROXY、LINKS）寫成 `vse1:…`，DATA_DIR 裡 `SEAL_FILES` 這幾個檔案開頭是 `VSE1`；兩層：裡面 AES-256-GCM、外面 ChaCha20-Poly1305，各自的鑰匙（ctypes 呼叫系統 libcrypto，啟動先對 NIST、RFC 8439 標準測試值，對不上就照舊存明碼），鑰匙在設定檔旁邊的 `.key`（`SEAL_KEY_PATH`，root 才讀得到，跟著每日備份）；每個欄位／檔名各自一把（換位置解不開）；讀的時候明碼也認得，服務啟動時自動換成加密的（`seal_all`）；**新增存秘密的檔案要用 `sec_load`／`sec_dump`／`sec_write` 並加進 `SEAL_FILES`，新增秘密設定加進 `SEAL_CONF`**；shell 腳本要讀這些值用 `python3 sentinel.py --conf-get 名稱`；`--unseal` 全部換回明碼（install.sh 退回不認得加密的舊版前會先跑）；測試讀加密檔用 `tests/seal_util.py`
 - 沒網域的主機走 https（`tls_` 開頭）：`DOMAIN` 沒設、`BIND` 不是本機時，啟動用 openssl 產生自己簽的憑證（`DATA_DIR/tls/`，P-384、10 年，不用備份也行），只收 TLS 1.3；同一個連接埠第一個位元組是 0x16 才當 https（`Server.finish_request`），從外面用 http 開網頁轉到 https，`/api/`、本機、安卓 App（`; wv)`）照舊收 http；主機之間只認指紋（`TLS_PINS`／`_PinHTTPS`，存 `tls-pins.json`）：配對暗號版本 2 帶指紋（`pair_decode_fp`），舊的 http 主機看到 `/api/status` 的 `tlsfp` 自動換 https（`tls_upgrade`）；設定檔 `TLS=off` 關掉
+- SSH 的門（`ssh_risks`，一小時看一次 `sshd -T`）：能用密碼登入是注意、root 能用密碼登入或允許空密碼是異常，放進 notices／problems（首頁小膠囊、Telegram）；測試用 SENTINEL_SSHD_T
 - 備份做完馬上試開一次（`bk_verify`：解密、每個檔案讀到底），失敗就算備份失敗；從沒成功過也會提醒「備份還沒成功過」
 - 還沒設定 Telegram（`tg_off`，被監看的主機不算）：首頁主機下面（電腦在右邊欄）一行「Telegram 通知 還沒設定」（`tgHint`），點了直接設定
 - Telegram 通知排隊（`tg_send`／`tg_flush`、`TG_QUEUE`，存在 state.json）：連不上、429、5xx（`TG_AGAIN`）先留著，每 30 秒照順序補傳，晚 2 分鐘以上的註明幾點，一天還傳不出去就丟掉；密碼錯、被封鎖直接丟掉；驗證碼這類即時的不排隊
@@ -173,6 +174,7 @@ android/           安卓 App：全螢幕打開主機的網頁（記住網址）
 - 設定檔會嚴格檢查欄位，多一個不認得的欄位就整個起不來。例如 `auth.methods.password.adminUsername` 是 2.1 才有的，stable 用的是 `auth.adminUsername`。
 - 容器只開在 `127.0.0.1:8099`，一律經由哨兵轉送（`/cloud/...`）。
 - 容量限制靠的是 `/var/lib/vps-cloud/disk.img`（ext4 映像檔），掛在 `/srv/cloud`；調整容量時要先卸載。
+- 整顆加密（使用者要求：新裝的一律加密，沒有不加密的選項）：空間檔是 LUKS2（AES-256-XTS、argon2id），鑰匙 `/etc/vps-cloud.key`（跟著每日備份的「雲端硬碟設定」），開機由 `vps-cloud-unlock.service` 解鎖成 `/dev/mapper/vps-cloud` 再掛上；調整容量三層一起改（`luks_grow`、縮小時留 32 MB 給檔頭）；舊的沒加密的用 `cloud.sh 加密`（設定 → 主機「雲端硬碟」旁的「加密」鈕，`cloud_encrypt`，systemd 單元 `vps-cloud-encrypt`）：新做加密空間檔、`cp -a`、`diff -rq` 比對、換檔名、打得開才刪舊的，失敗換回原本的；**兩台都加密好後，下個版本拿掉「加密」鈕和沒加密的寫法**（使用者要求）
 
 ## 改完要做的檢查
 

@@ -45,7 +45,7 @@ from collections import deque
 from concurrent.futures import ThreadPoolExecutor
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
-VERSION = "4.23"
+VERSION = "4.24"
 
 # ───────────────────────── 哨兵備份檔（.vsbk）─────────────────────────
 # 哨兵專用的備份格式：外面是自己的檔案格式，裡面用的是成熟、標準的加密方法（不自己發明加密）：
@@ -1713,11 +1713,68 @@ def cloud_running():
     return out.strip() in ("active", "activating")
 
 
+CLOUD_ENC_UNIT = "vps-cloud-encrypt"
+CLOUD_IMG = os.environ.get("SENTINEL_CLOUD_IMG") or "/var/lib/vps-cloud/disk.img"
+
+
+def cloud_enc():
+    """雲端硬碟整顆加密了沒：{"on", "running", "need"（搬的時候要多幾位元組）, "free"}"""
+    try:
+        with open(CLOUD_IMG, "rb") as f:
+            on = f.read(6) == b"LUKS\xba\xbe"
+    except OSError:
+        return None
+    _, out = run(["systemctl", "is-active", CLOUD_ENC_UNIT], 5)
+    d = {"on": on, "running": out.strip() in ("active", "activating")}
+    if not on:
+        try:
+            used = disk(CLOUD_DIR) or {}
+            st = os.statvfs(os.path.dirname(CLOUD_IMG))
+            d.update(need=int(used.get("used") or 0) + (1 << 30), free=st.f_bavail * st.f_frsize)
+        except OSError:
+            pass
+    return d
+
+
+def cloud_encrypt():
+    d, enc = src_dir(), cloud_enc()
+    if not CLOUD_URL or not enc:
+        return False, "這台還沒安裝雲端硬碟"
+    if enc["on"]:
+        return False, "已經加密了"
+    if enc["running"] or cloud_running():
+        return False, "雲端硬碟正在處理中"
+    if not d or not os.path.isfile(os.path.join(d, "cloud.sh")):
+        return False, "找不到安裝資料夾，請先更新哨兵"
+    if enc.get("free") is not None and enc.get("need", 0) > enc["free"]:
+        return False, "主機硬碟空間不夠"
+    run(["systemctl", "reset-failed", CLOUD_ENC_UNIT], 5)
+    code, _ = run(["systemd-run", f"--unit={CLOUD_ENC_UNIT}", "--collect", "/bin/bash", os.path.join(d, "cloud.sh"), "加密"], 15)
+    if code != 0:
+        return False, "無法開始加密"
+    log("開始加密雲端硬碟")
+    COL.add_event("info", "開始加密雲端硬碟")
+
+    def wait():                                   # 做完記一筆（會傳 Telegram）
+        time.sleep(5)
+        for _ in range(6 * 3600 // 10):
+            e = cloud_enc() or {}
+            if not e.get("running"):
+                if e.get("on"):
+                    COL.add_event("ok", "雲端硬碟整顆加密好了")
+                else:
+                    COL.add_event("bad", "雲端硬碟加密失敗，檔案照原本的樣子")
+                return
+            time.sleep(10)
+    threading.Thread(target=wait, daemon=True).start()
+    return True, "已開始加密雲端硬碟"
+
+
 def cloud_check(force=False):
     if not CLOUD_URL or not shutil.which("docker"):
         return None
     digests, ver = cloud_local()
-    base = {"version": ver, "running": cloud_running()}
+    base = {"version": ver, "running": cloud_running(), "enc": cloud_enc()}
     if digests is None:
         return {**base, "has": None, "err": "雲端硬碟程式沒有在跑"}
     if base["running"]:                         # 更新中先不查：不然會拿舊版去比，更新完還一直說「有新版」
@@ -3502,6 +3559,9 @@ class Collector:
         elif BACKUP_ON and not BK["ok_t"] and BK["last"] and not BK["last"].get("ok"):
             notices.append("備份還沒成功過")
         notices += cert_soon
+        sb, sw = ssh_risks()                       # 機器人最常大量猜的就是 SSH 密碼
+        problems += sb
+        notices += sw
         if keep_notice():
             notices.append(keep_notice())
 
@@ -4140,7 +4200,7 @@ def tg_cleanup():
 def ev_line(e):
     """事件 → 一句通順的通知；不需要通知的回傳空字串"""
     k, t = e.get("kind"), str(e.get("text") or "")
-    if t in ("哨兵開始監看這台主機", "開始系統更新"):     # 自己按的更新不用再通知「開始」，等結果就好
+    if t in ("哨兵開始監看這台主機", "開始系統更新", "開始加密雲端硬碟"):     # 自己按的更新不用再通知「開始」，等結果就好
         return ""
     if t == "系統更新完成":
         return "✅ 系統更新完成"
@@ -4329,6 +4389,43 @@ def gz_of(data, tag=None):
             GZ_KEEP.clear()
         GZ_KEEP[tag] = z
     return z
+
+
+SSHD = {"t": 0, "v": [], "bad": []}
+
+
+def ssh_risks():
+    """SSH 的門有沒有關好（一小時看一次 sshd -T，要 root）：回傳 (異常, 注意)；看不到就不說"""
+    if time.time() - SSHD["t"] < 3600:
+        return SSHD["bad"], SSHD["v"]
+    SSHD["t"] = time.time()
+    txt = os.environ.get("SENTINEL_SSHD_T")              # 測試用：假的 sshd -T 輸出
+    if txt is None:
+        exe = shutil.which("sshd") or ("/usr/sbin/sshd" if os.path.exists("/usr/sbin/sshd") else "")
+        if not exe or os.geteuid() != 0:
+            return [], []
+        try:
+            r = subprocess.run([exe, "-T"], capture_output=True, text=True, timeout=10)
+            txt = r.stdout if r.returncode == 0 else ""
+        except (OSError, subprocess.SubprocessError):
+            txt = ""
+    c = {}
+    for line in txt.splitlines():
+        k, _, v = line.strip().partition(" ")
+        c.setdefault(k.lower(), v.strip().lower())
+    if not c:
+        SSHD["bad"], SSHD["v"] = [], []
+        return [], []
+    bad, warn = [], []
+    pw = c.get("passwordauthentication") == "yes"
+    if c.get("permitemptypasswords") == "yes":
+        bad.append("SSH 允許空密碼登入")
+    if pw and c.get("permitrootlogin") == "yes":
+        bad.append("root 能用密碼登入 SSH")
+    elif pw:
+        warn.append("SSH 能用密碼登入")
+    SSHD["bad"], SSHD["v"] = bad, warn
+    return bad, warn
 
 
 MAX_CONN = max(16, int(os.environ.get("SENTINEL_MAX_CONN") or 200))   # 同時最多處理幾個連線（測試可以調小）
@@ -5226,6 +5323,8 @@ class Handler(BaseHTTPRequestHandler):
                 ok, msg = self_update()
             elif act == "cloud_update":
                 ok, msg = cloud_update()
+            elif act == "cloud_encrypt":
+                ok, msg = cloud_encrypt()
             else:
                 return self.send(200, json.dumps({"ok": True, **self_check(act == "check"), "cloud": cloud_check(act == "check")},
                                                  ensure_ascii=False))
