@@ -95,3 +95,18 @@ for k, (cs, t, cargo) in sorted(planes.items(), key=lambda x: not x[1][2])[:250]
         bad += 1
         print(f"  {'貨機' if cargo else '客機'} {cs:8} {k:9} {t:5} 表上 {(S.FLY_AL.get(cs[:3]) or ('', '?'))[1]:10} 登記 {o['op']} {o['opn']}")
 print(f"  共 {bad} 架（查了 {min(len(planes), 250)} 架）")
+
+print("\n== 官網寫的公司名稱跟表上不一樣（可能改名了，請人工看）")
+seen = set()
+for c in S.FLY_PIN:
+    try:
+        raw = S.FLY_FIDS_GET[c]()
+    except Exception as e:  # noqa: BLE001
+        print("  官網表抓不到", c, str(e)[:80])
+        continue
+    for r in raw or []:
+        k = (r.get("fn") or "")[:2]
+        mine = next((v[1] for v in S.FLY_AL.values() if v[0] == k), "")
+        if mine and r.get("al") and r["al"] != mine and (k, r["al"]) not in seen:
+            seen.add((k, r["al"]))
+            print(f"  {k} 表上 {mine}，{c} 官網 {r['al']}")
