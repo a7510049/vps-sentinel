@@ -97,9 +97,13 @@
 :root{--p2:var(--p); --grad:linear-gradient(135deg,var(--p),var(--p2))}
 @supports (color:oklch(from red l c h)){:root{--p2:oklch(from var(--p) l c calc(h + var(--gh,45)))}}
 :root{--me:oklch(.72 .15 250); --alt0:oklch(.8 .1 195); --alt1:oklch(.7 .14 240); --alt2:oklch(.64 .17 280); --alt3:oklch(.62 .19 320)}   /* 雷達尾跡的顏色：高度（低 → 高） */
-/* 塔台螢幕：雷達、進場排隊條一律是深綠底的螢光綠（深淺模式都一樣，像塔台的雷達螢幕） */
-:root{--tw-bg:oklch(.18 .025 165); --tw-bg2:oklch(.2 .03 162); --tw-land:oklch(.225 .03 160); --tw-line:oklch(.45 .07 155); --tw-arr:oklch(.88 .2 148); --tw-dep:oklch(.78 .14 240); --tw-gnd:oklch(.87 .15 92); --tw-ov:oklch(.7 .015 220);
-  --tw-txt:oklch(.86 .14 150); --tw-dim:oklch(.62 .09 155); --tw-bad:oklch(.72 .2 28); --tw-a0:oklch(.58 .13 300); --tw-a1:oklch(.68 .14 300); --tw-a2:oklch(.79 .12 300); --tw-a3:oklch(.9 .08 300)}   /* 尾跡高度：同一個紫色，越高越亮（不跟四種飛機的顏色搞混） */
+/* 塔台螢幕：雷達、進場排隊條是深色螢幕，底色和飛機跟著主題色（深淺模式都一樣）；抵達是主題色、出發白色、機坪沙色、路過灰色 */
+:root{--tw-bg:oklch(.2 .014 230); --tw-bg2:oklch(.23 .016 230); --tw-land:oklch(.255 .016 230); --tw-line:oklch(.46 .03 230); --tw-arr:oklch(.82 .09 230); --tw-dep:oklch(.94 .01 230); --tw-gnd:oklch(.84 .06 85); --tw-ov:oklch(.6 .015 230);
+  --tw-txt:oklch(.88 .02 230); --tw-dim:oklch(.65 .03 230); --tw-bad:oklch(.72 .17 28); --tw-a0:oklch(.5 .05 230); --tw-a1:oklch(.62 .06 230); --tw-a2:oklch(.75 .06 230); --tw-a3:oklch(.9 .03 230)}   /* 舊瀏覽器：灰藍 */
+@supports (color:oklch(from red l c h)){:root{--tw-bg:oklch(from var(--seed) .2 .03 h); --tw-bg2:oklch(from var(--seed) .23 .035 h); --tw-land:oklch(from var(--seed) .255 .03 h); --tw-line:oklch(from var(--seed) .46 .05 h);
+  --tw-arr:oklch(from var(--seed) .82 .11 h); --tw-dep:oklch(from var(--seed) .94 .015 h); --tw-ov:oklch(from var(--seed) .6 .02 h); --tw-txt:oklch(from var(--seed) .88 .03 h); --tw-dim:oklch(from var(--seed) .65 .04 h);
+  --tw-a0:oklch(from var(--seed) .5 .06 h); --tw-a1:oklch(from var(--seed) .62 .07 h); --tw-a2:oklch(from var(--seed) .75 .07 h); --tw-a3:oklch(from var(--seed) .9 .04 h)}}   /* 尾跡高度：主題色越高越亮 */
+[data-accent="amber"],[data-accent="orange"],[data-accent="lime"]{--tw-gnd:oklch(.84 .06 200)}   /* 主題色跟沙色太像：機坪改淡青 */
 .twr{--s2:var(--tw-land); --s3:var(--tw-bg2); --s4:var(--tw-line); --p:var(--tw-arr); --tx:var(--tw-dep); --tx2:var(--tw-txt); --tx3:var(--tw-dim); --card:var(--tw-bg); --bad:var(--tw-bad);
   --alt0:var(--tw-a0); --alt1:var(--tw-a1); --alt2:var(--tw-a2); --alt3:var(--tw-a3)}
 [data-mode="light"]{--me:oklch(.6 .17 250); --alt0:oklch(.72 .11 195); --alt1:oklch(.6 .15 240); --alt2:oklch(.52 .18 280); --alt3:oklch(.5 .2 320)}
