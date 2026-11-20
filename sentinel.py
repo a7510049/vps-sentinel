@@ -45,7 +45,7 @@ from collections import deque
 from concurrent.futures import ThreadPoolExecutor
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
-VERSION = "4.12"
+VERSION = "4.13"
 
 # ───────────────────────── 哨兵備份檔（.vsbk）─────────────────────────
 # 哨兵專用的備份格式：外面是自己的檔案格式，裡面用的是成熟、標準的加密方法（不自己發明加密）：
@@ -2596,6 +2596,18 @@ def keep_window(now=None):
     return False
 
 
+def keep_until(now=None):
+    """這一段補量到幾點結束（時間戳）；不在補量時段回 None"""
+    now = now or datetime.now()
+    m = now.hour * 60 + now.minute
+    for h in KEEP_HOURS:
+        d = (m - h * 60) % 1440
+        if d < 60 + KEEP_MARGIN or d >= 1440 - KEEP_MARGIN:
+            left = (60 + KEEP_MARGIN - d) % 1440        # 整點前那幾分鐘：d 接近 1440，取餘數一樣算得對
+            return int((now.replace(second=0, microsecond=0) + timedelta(minutes=left)).timestamp())
+    return None
+
+
 def keep_ticks():
     """補處理器的程序到現在用了多少處理器時間（跟 /proc/stat 一樣的單位）：(程序編號, 累計)"""
     p = KEEP["proc"]
@@ -2666,7 +2678,7 @@ def keep_info():
     p95, days = keep_p95()
     p = KEEP["proc"]
     return {"on": KEEP_ON, "shape": KEEP["shape"], "p95": p95, "days": days, "target": KEEP_TARGET,
-            "now": bool(p and p.poll() is None), "hours": KEEP_HOURS}
+            "now": bool(p and p.poll() is None), "until": keep_until(), "hours": KEEP_HOURS}
 
 
 def keep_notice():

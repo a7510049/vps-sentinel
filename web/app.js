@@ -2593,7 +2593,7 @@ function keepLine(k){
   if (k.p95 == null) return `<small>收集資料中</small>`;
   const low = k.p95 < 20 && k.days >= 2;
   const dd = Math.min(7, Math.max(1, Math.ceil(k.days)));   // 長條 0～50%，直線是 20% 的門檻
-  return `<small class="kpst${low ? " bad" : ""}" title="${dd} 天處理器 ${k.p95}%・門檻 20%"><span class="kpb" style="--k:${Math.min(1, k.p95 / 50).toFixed(3)}"><i></i><u></u></span><b class="num">${Math.round(k.p95)}%</b>${k.now ? `<span class="spin"></span>` : ""}</small>`;
+  return `<small class="kpst${low ? " bad" : ""}" title="${dd} 天處理器 ${k.p95}%・門檻 20%"><span class="kpb" style="--k:${Math.min(1, k.p95 / 50).toFixed(3)}"><i></i><u></u></span><b class="num">${Math.round(k.p95)}%</b>${k.now ? `<span class="vbd kpon">${I("cpu")}補量中${k.until ? `・到 ${hm(k.until)}` : ""}</span>` : ""}</small>`;   // 正在補處理器：不會動的小標籤（轉圈看起來像卡住）
 }
 async function keepSet(t){
   const node = t.dataset.keepalive;
