@@ -138,6 +138,7 @@
 .ico.quote{background:oklch(var(--tl) var(--tc) 232);color:oklch(var(--fl) var(--fc) 232)}
 .ico.keep{background:oklch(var(--tl) calc(var(--tc) * .6) 45);color:oklch(var(--fl) calc(var(--fc) * .65) 45)}
 .ico.dl{background:oklch(var(--tl) calc(var(--tc) * .8) 112);color:oklch(var(--fl) calc(var(--fc) * .85) 112)}
+.ico.safe{background:oklch(var(--tl) var(--tc) 84);color:oklch(var(--fl) var(--fc) 84)}
 .ico.devices{background:oklch(var(--tl) calc(var(--tc) * .5) 290);color:oklch(var(--fl) calc(var(--fc) * .55) 290)}
 .ico.theme{background:var(--pc);color:var(--on-pc)}                  /* 哨兵本身的動作（更新、編輯）：主題色 */
 .ico.warn{background:var(--warnc);color:var(--on-warnc)}            /* 要小心的動作（重新開機、換密碼） */
@@ -1785,3 +1786,21 @@ html.flyon .dash>.view{content-visibility:hidden;contain-intrinsic-size:auto non
 .sig i{width:4px;border-radius:var(--r-xs);background:var(--s4)}
 .sig i:nth-child(1){height:6px}.sig i:nth-child(2){height:11px}.sig i:nth-child(3){height:16px}
 .sig.ok i.on{background:var(--ok)}.sig.bad i.on{background:var(--bad)}
+
+/* 安全檢查：每一項右邊一個勾（好）或驚嘆號（要注意） */
+.secrow>svg{flex:none;width:20px;height:20px;color:var(--tx2)}
+.secrow>span:nth-child(2){flex:1;display:flex;flex-direction:column}
+.secrow small{color:var(--tx2);font-size:var(--fs-s)}
+.pkrow .seck{flex:none;display:grid;place-items:center;width:26px;height:26px;border-radius:var(--r-pill)}
+.seck svg{width:15px;height:15px;stroke-width:2.6}
+.seck.ok{background:var(--ok);color:var(--on-ok)}
+.seck.warn{background:var(--warnc);color:var(--on-warnc)}
+.secd .lbl{margin:16px 4px 8px}
+.secd .lbl button{display:flex;align-items:center;gap:4px;color:var(--p);font-weight:500;padding:8px 6px;margin:-8px -6px}
+.secd .lbl button svg{width:16px;height:16px}
+.secd .seknew{margin-top:10px}
+.secd .secu{margin:0 0 4px}
+.pkrow.secrow>.tog{flex:none}
+.pkrow.secrow .tog[disabled]{opacity:.5}
+.form label.pkrow.secrow{flex-direction:row;align-items:center;gap:12px;font-size:var(--fs-m);font-weight:400;color:var(--tx);cursor:pointer}
+.secd .form .lbl{flex-direction:row;align-items:center;justify-content:space-between;font-size:var(--fs-m);font-weight:600;color:var(--tx2)}

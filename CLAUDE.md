@@ -19,6 +19,7 @@
 sentinel.py        後端：收集資料、API、Telegram、雲端硬碟轉接、自我更新（全部 Python 內建模組）
 pair.py            配對暗號、被監看模式（`pair_`、`watch_` 開頭）
 download.py        遠端下載、影片網站下載（`dl_`、`yt_` 開頭）
+guard.py           安全檢查頁（`sec_`）、SSH 上鎖和金鑰（`ssh_`）、錯太多次封鎖（`guard_`）、自動安全更新（`autoupd_`）
 backup.py          每日備份、網頁還原（`bk_`、`rsw_` 開頭；.vsbk 格式和 `--restore`／`--decrypt` 留在 sentinel.py，單獨一個檔就能解開、還原）
                    以上三個跟 fly.py 一樣用 include() 載入、共用同一組變數，位置照原本的順序（include 定義在 HERE 下面）；這三個出錯整個哨兵就起不來（安裝會自動換回舊版）
 fly.py             機場起降、分享的後端；sentinel.py 用 include("fly.py") 載入到自己裡面，兩邊共用同一組變數（不是獨立模組）
@@ -101,6 +102,7 @@ android/           安卓 App：全螢幕打開主機的網頁（記住網址）
 - 存在主機上的資料加密（`seal_`、`sec_` 開頭，sentinel.py 設定那段最前面）：設定檔裡 `SEAL_CONF` 這幾個值（存取密碼、Telegram、備份密碼、PEERS、OpenSky、YT_PROXY、LINKS）寫成 `vse1:…`，DATA_DIR 裡 `SEAL_FILES` 這幾個檔案開頭是 `VSE1`；兩層：裡面 AES-256-GCM、外面 ChaCha20-Poly1305，各自的鑰匙（ctypes 呼叫系統 libcrypto，啟動先對 NIST、RFC 8439 標準測試值，對不上就照舊存明碼），鑰匙在設定檔旁邊的 `.key`（`SEAL_KEY_PATH`，root 才讀得到，跟著每日備份）；每個欄位／檔名各自一把（換位置解不開）；讀的時候明碼也認得，服務啟動時自動換成加密的（`seal_all`）；**新增存秘密的檔案要用 `sec_load`／`sec_dump`／`sec_write` 並加進 `SEAL_FILES`，新增秘密設定加進 `SEAL_CONF`**；shell 腳本要讀這些值用 `python3 sentinel.py --conf-get 名稱`；`--unseal` 全部換回明碼（install.sh 退回不認得加密的舊版前會先跑）；測試讀加密檔用 `tests/seal_util.py`
 - 沒網域的主機走 https（`tls_` 開頭）：`DOMAIN` 沒設、`BIND` 不是本機時，啟動用 openssl 產生自己簽的憑證（`DATA_DIR/tls/`，P-384、10 年，不用備份也行），只收 TLS 1.3；同一個連接埠第一個位元組是 0x16 才當 https（`Server.finish_request`），從外面用 http 開網頁轉到 https，`/api/`、本機、安卓 App（`; wv)`）照舊收 http；主機之間只認指紋（`TLS_PINS`／`_PinHTTPS`，存 `tls-pins.json`）：配對暗號版本 2 帶指紋（`pair_decode_fp`），舊的 http 主機看到 `/api/status` 的 `tlsfp` 自動換 https（`tls_upgrade`）；設定檔 `TLS=off` 關掉
 - SSH 的門（`ssh_risks`，一小時看一次 `sshd -T`）：能用密碼登入是注意、root 能用密碼登入或允許空密碼是異常，放進 notices／problems（首頁小膠囊、Telegram）；測試用 SENTINEL_SSHD_T
+- 安全檢查頁（使用者要求，guard.py；設定 → 主機「安全檢查」，`secModal`，`/api/sec`，改東西要先確認是你）：上面四項自動做好的只看（`SECI`），下面四個開關（`SECO`）：SSH 只能用金鑰、root 只能用金鑰（只寫自己的 `/etc/ssh/sshd_config.d/00-vps-sentinel.conf`，`sshd -t` 過了才 reload，不對就換回；主設定沒讀 sshd_config.d 就在最前面加 Include）、錯太多次封鎖（`guard_loop`：讀 journalctl 的 sshd，10 分鐘錯 5 次封 1 小時、7 天內再來封 24 小時，7 天內成功登入過的、內部網路不封；nftables 表 `inet vps_sentinel`，沒有就 iptables；設定檔 `SSH_GUARD=off` 關，預設開；存 `DATA_DIR/ssh-guard.json`）、自動安裝安全更新（`/etc/apt/apt.conf.d/20auto-upgrades`，沒裝 unattended-upgrades 先背景裝）；**沒有金鑰不准關密碼登入**（`ssh_key_ok`）；SSH 金鑰可以貼 .pub 或「幫我做一組」（ssh-keygen ed25519，私密的只給網頁下載一次、主機不留）；第一次安裝 install.sh 跑 `--sec-setup`（打開自動安全更新、印出狀況）；測試用 SENTINEL_SSH_ETC／SENTINEL_SSH_HOME／SENTINEL_GUARD_FW／SENTINEL_GUARD_LOG／SENTINEL_GUARD_EVERY／SENTINEL_AUTOUPD
 - 備份做完馬上試開一次（`bk_verify`：解密、每個檔案讀到底），失敗就算備份失敗；從沒成功過也會提醒「備份還沒成功過」
 - 還沒設定 Telegram（`tg_off`，被監看的主機不算）：首頁主機下面（電腦在右邊欄）一行「Telegram 通知 還沒設定」（`tgHint`），點了直接設定
 - Telegram 通知排隊（`tg_send`／`tg_flush`、`TG_QUEUE`，存在 state.json）：連不上、429、5xx（`TG_AGAIN`）先留著，每 30 秒照順序補傳，晚 2 分鐘以上的註明幾點，一天還傳不出去就丟掉；密碼錯、被封鎖直接丟掉；驗證碼這類即時的不排隊
@@ -174,7 +176,7 @@ android/           安卓 App：全螢幕打開主機的網頁（記住網址）
 - 設定檔會嚴格檢查欄位，多一個不認得的欄位就整個起不來。例如 `auth.methods.password.adminUsername` 是 2.1 才有的，stable 用的是 `auth.adminUsername`。
 - 容器只開在 `127.0.0.1:8099`，一律經由哨兵轉送（`/cloud/...`）。
 - 容量限制靠的是 `/var/lib/vps-cloud/disk.img`（ext4 映像檔），掛在 `/srv/cloud`；調整容量時要先卸載。
-- 整顆加密（使用者要求：新裝的一律加密，沒有不加密的選項）：空間檔是 LUKS2（AES-256-XTS、argon2id），鑰匙 `/etc/vps-cloud.key`（跟著每日備份的「雲端硬碟設定」），開機由 `vps-cloud-unlock.service` 解鎖成 `/dev/mapper/vps-cloud` 再掛上；調整容量三層一起改（`luks_grow`、縮小時留 32 MB 給檔頭）；舊的沒加密的用 `cloud.sh 加密`（設定 → 主機「雲端硬碟」旁的「加密」鈕，`cloud_encrypt`，systemd 單元 `vps-cloud-encrypt`）：新做加密空間檔、`cp -a`、`diff -rq` 比對、換檔名、打得開才刪舊的，失敗換回原本的；**兩台都加密好後，下個版本拿掉「加密」鈕和沒加密的寫法**（使用者要求）
+- 整顆加密（使用者要求：新裝的一律加密，沒有不加密的選項）：空間檔是 LUKS2（AES-256-XTS、argon2id），鑰匙 `/etc/vps-cloud.key`（跟著每日備份的「雲端硬碟設定」），開機由 `vps-cloud-unlock.service` 解鎖成 `/dev/mapper/vps-cloud` 再掛上；調整容量三層一起改（`luks_grow`、縮小時留 32 MB 給檔頭）；4.25 起拿掉「加密」鈕和沒加密的寫法（兩台都加密好了，使用者要求），cloud.sh 遇到沒加密的空間檔直接停下
 
 ## 改完要做的檢查
 

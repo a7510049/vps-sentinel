@@ -158,7 +158,7 @@ rm -rf "$DIR.prev"
 [ -f "$DIR/sentinel.py" ] && cp -a "$DIR" "$DIR.prev"   # 留一份舊版：新版啟動失敗就換回來
 install -d "$DIR"
 install -m 755 "$HERE/sentinel.py" "$DIR/sentinel.py"
-for f in pair.py download.py backup.py fly.py; do install -m 644 "$HERE/$f" "$DIR/$f"; done
+for f in pair.py download.py backup.py guard.py fly.py; do install -m 644 "$HERE/$f" "$DIR/$f"; done
 install -d "$DIR/web"
 install -m 644 "$HERE"/web/index.html "$HERE"/web/style.css "$HERE"/web/app.js "$HERE"/web/pin.js "$HERE"/web/fly.js "$HERE"/web/font.woff2 "$DIR/web/"
 install -d "$DIR/data"
@@ -477,6 +477,12 @@ with os.fdopen(fd, "w") as f:
 print(code[:4] + "-" + code[4:])
 PY
 )"
+fi
+
+# 第一次安裝：自動安裝安全更新先打開，SSH 的狀況列出來（關密碼登入要先放金鑰，在網頁上做）
+if [ -n "$NEWCONF" ] && [ -z "${RCODE:-}" ]; then
+  printf '\n  %s安全檢查%s\n' "$B" "$N"
+  SENTINEL_CONF="$CONF" python3 "$DIR/sentinel.py" --sec-setup 2>/dev/null || true
 fi
 
 # ── 6. 顯示網址 ──

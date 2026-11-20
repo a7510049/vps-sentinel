@@ -7,7 +7,6 @@
 #   sudo bash cloud.sh 整理         補足容量、修好刪不掉的檔案、把刪掉的檔案佔的主機空間還回去（更新哨兵時會自動做）
 #   sudo bash cloud.sh 更新         更新到官方最新版（檔案和帳號都保留，哨兵網頁上也能按）
 #   sudo bash cloud.sh 移除         移除雲端硬碟程式（檔案會保留）
-#   sudo bash cloud.sh 加密         把舊的雲端硬碟換成整顆加密的（檔案搬過去、比對過才刪舊的；新裝的一開始就加密）
 #
 # 做了什麼：
 #   1. 建一個固定大小的「空間檔」掛在 /srv/cloud，放滿就是滿了，不會吃掉整台主機的硬碟
@@ -61,8 +60,7 @@ luks_grow() {  # 空間檔變大之後：解鎖的磁碟跟著變大
   [ -n "$loop" ] && losetup -c "$loop" 2>/dev/null
   cryptsetup resize --key-file "$KEY" "$MAP"
 }
-write_units() {   # 加密的：開機時先解鎖、再掛上；沒加密的照舊直接掛空間檔
-  if is_enc; then
+write_units() {   # 開機時先解鎖、再掛上
     cat > "$UNLOCK_UNIT" <<EOF
 [Unit]
 Description=VPS 哨兵雲端硬碟解鎖
@@ -95,83 +93,6 @@ WantedBy=multi-user.target
 EOF
     systemctl daemon-reload
     systemctl enable vps-cloud-unlock.service >/dev/null 2>&1 || true
-  else
-    rm -f "$UNLOCK_UNIT"
-    cat > "$MOUNT_UNIT" <<EOF
-[Unit]
-Description=VPS 哨兵雲端硬碟空間
-
-[Mount]
-What=$IMG
-Where=$MNT
-Type=ext4
-Options=loop,noatime,discard
-
-[Install]
-WantedBy=multi-user.target
-EOF
-    systemctl daemon-reload
-  fi
-}
-
-ENC_NEW=$BASE/disk-enc.img
-ENC_TMP=$BASE/enc-mnt
-ENC_OLD=$BASE/disk-plain.img
-enc_undo() {   # 加密中途失敗：新的丟掉，舊的照原本的樣子打開
-  trap - ERR; set +e
-  mountpoint -q "$ENC_TMP" && umount "$ENC_TMP"
-  cryptsetup close "$MAP-new" 2>/dev/null || true
-  if [ -f "$ENC_OLD" ]; then                       # 已經換過檔名：換回來
-    systemctl stop srv-cloud.mount vps-cloud-unlock.service 2>/dev/null || true
-    cryptsetup close "$MAP" 2>/dev/null || true
-    rm -f "$IMG"; mv "$ENC_OLD" "$IMG"
-    write_units
-  fi
-  rm -f "$ENC_NEW"; rmdir "$ENC_TMP" 2>/dev/null || true
-  systemctl start srv-cloud.mount 2>/dev/null || true
-  docker start "$NAME" >/dev/null 2>&1 || true
-  echo "❌ 加密沒有成功，雲端硬碟照原本的樣子打開了（檔案沒動）"
-  exit 1
-}
-
-# 舊的（沒加密的）雲端硬碟換成加密的：新做一個加密的空間檔、檔案搬過去、一個一個比對過，才換掉、刪掉舊的
-encrypt_old() {
-  local need free size
-  [ -f "$APP/data/config.yaml" ] && [ -f "$IMG" ] || { echo "還沒安裝雲端硬碟"; return 1; }
-  need_crypt || return 1
-  if is_enc; then echo "✅ 雲端硬碟已經加密了"; return 0; fi
-  mountpoint -q "$MNT" || { echo "❌ 雲端硬碟沒有掛上：systemctl status srv-cloud.mount"; return 1; }
-  need=$(df --output=used -B1 "$MNT" | tail -1 | tr -d ' ')
-  free=$(df --output=avail -B1 "$BASE" | tail -1 | tr -d ' ')
-  if [ $(( need + 1073741824 )) -gt "$free" ]; then
-    echo "❌ 主機硬碟空間不夠：搬的時候要多 $(( need / 1073741824 + 1 )) GB，現在只剩 $(( free / 1073741824 )) GB"; return 1
-  fi
-  make_key || { echo "❌ 鑰匙做不出來"; return 1; }
-  set -E
-  trap enc_undo ERR
-  echo "▶ 做一個加密的空間…"
-  size=$(stat -c %s "$IMG")
-  rm -f "$ENC_NEW"; truncate -s "$size" "$ENC_NEW"
-  luks_new "$ENC_NEW" "$MAP-new"
-  install -d "$ENC_TMP"; mount -o noatime "/dev/mapper/$MAP-new" "$ENC_TMP"
-  rmdir "$ENC_TMP/lost+found" 2>/dev/null || true
-  echo "▶ 搬檔案（大約 $(( need / 1073741824 )) GB，期間雲端硬碟打不開）…"
-  docker stop "$NAME" >/dev/null 2>&1 || true
-  cp -a "$MNT/." "$ENC_TMP/"
-  echo "▶ 一個一個比對…"
-  diff -rq --no-dereference "$MNT" "$ENC_TMP" >/dev/null
-  sync; umount "$ENC_TMP"; rmdir "$ENC_TMP"; cryptsetup close "$MAP-new"
-  systemctl stop srv-cloud.mount; if mountpoint -q "$MNT"; then umount "$MNT"; fi
-  mv "$IMG" "$ENC_OLD"; mv "$ENC_NEW" "$IMG"
-  write_units
-  systemctl start vps-cloud-unlock.service srv-cloud.mount
-  mountpoint -q "$MNT"
-  docker start "$NAME" >/dev/null 2>&1 || run_container
-  wait_ready
-  trap - ERR; set +E
-  rm -f "$ENC_OLD"                                 # 比對過、也打得開了：舊的（沒加密的）刪掉
-  top_up "$(saved_gb)"; fix_owner; give_back
-  echo "✅ 雲端硬碟整顆加密好了"
 }
 
 run_container() {
@@ -211,11 +132,7 @@ top_up() {
     [ "${fs:-0}" -gt 0 ] || return 0
     size=$(( fs + want - have ))                             # 照現在格式化佔掉的比例補回來
     [ "$size" -gt "$(stat -c %s "$IMG")" ] && truncate -s "$size" "$IMG"
-    if is_enc; then
-      { luks_grow >/dev/null 2>&1 && resize2fs "$dev" >/dev/null 2>&1; } || return 0
-    else
-      { losetup -c "$dev" 2>/dev/null && resize2fs "$dev" >/dev/null 2>&1; } || return 0
-    fi
+    { luks_grow >/dev/null 2>&1 && resize2fs "$dev" >/dev/null 2>&1; } || return 0
   done
 }
 
@@ -230,10 +147,6 @@ fix_owner() {
 # 以前沒開，所以雲端裡刪了檔案，哨兵上主機硬碟的用量卻沒有減少。
 give_back() {
   mountpoint -q "$MNT" || return 0
-  if [ -f "$MOUNT_UNIT" ] && ! grep -q discard "$MOUNT_UNIT"; then
-    sed -i 's/^Options=loop,noatime$/Options=loop,noatime,discard/' "$MOUNT_UNIT"
-    systemctl daemon-reload
-  fi
   findmnt -no OPTIONS "$MNT" | grep -q discard || mount -o remount,discard "$MNT" 2>/dev/null || true
   fstrim "$MNT" >/dev/null 2>&1 || true            # 把之前刪掉的檔案佔的空間一次還回去
 }
@@ -256,7 +169,7 @@ diagnose() {
   if mountpoint -q "$MNT"; then echo "✅ 存放空間：已掛好（$(df -h --output=used,size "$MNT" | tail -1 | awk '{print $1" / "$2}')）"
   else echo "❌ 存放空間沒有掛上：systemctl status srv-cloud.mount"; fi
   if is_enc; then echo "✅ 整顆加密：有（鑰匙 $KEY）"; [ -s "$KEY" ] || echo "❌ 找不到鑰匙 $KEY：從每日備份還原"
-  else echo "ℹ️ 整顆加密：還沒有（sudo bash cloud.sh 加密）"; fi
+  else echo "❌ 整顆加密：沒有"; fi
   if mountpoint -q "$MNT"; then
     local bad; bad="$(find "$MNT" -xdev \( ! -user 1000 -o ! -group 1000 \) 2>/dev/null | wc -l || true)"
     if [ "$bad" -gt 0 ]; then echo "❌ 有 $bad 個檔案或資料夾雲端硬碟刪不掉（是用 root 放進去的），執行 sudo bash cloud.sh 整理 就會修好"; fi
@@ -317,8 +230,6 @@ case "${1:-}" in
     command -v resize2fs >/dev/null || exit 0
     top_up "$(saved_gb)"; fix_owner; give_back
     echo "✅ 雲端硬碟整理好了（可用空間 $(df -h --output=size "$MNT" 2>/dev/null | tail -1 | tr -d ' ')）"; exit 0 ;;
-  加密|encrypt)
-    encrypt_old; exit $? ;;
   移除|remove)
     docker rm -f "$NAME" >/dev/null 2>&1 || true
     rm -f /etc/caddy/sites/vps-sentinel.d/cloud.caddy
@@ -343,7 +254,8 @@ if ! command -v docker >/dev/null; then
   curl -fsSL https://get.docker.com | sh >/dev/null 2>&1 || { echo "❌ Docker 安裝失敗"; exit 1; }
 fi
 command -v resize2fs >/dev/null || { apt-get update -qq && apt-get install -y -qq e2fsprogs; }
-[ -f "$IMG" ] || need_crypt || exit 1             # 新裝的一律整顆加密
+need_crypt || exit 1
+if [ -f "$IMG" ] && ! is_enc; then echo "❌ 這個雲端硬碟沒有加密：先用 4.24 版的「加密」把它換成加密的"; exit 1; fi
 
 # ── 2. 固定大小的空間 ──
 install -d "$BASE" "$MNT"
@@ -379,26 +291,17 @@ elif [ "$SIZE" -ne "$cur_gb" ]; then
   docker stop "$NAME" >/dev/null 2>&1 || true
   systemctl stop srv-cloud.mount 2>/dev/null || true
   mountpoint -q "$MNT" && umount "$MNT"
-  if is_enc; then                                   # 加密的：解鎖著改（空間檔、解鎖的磁碟、檔案系統三層一起）
-    systemctl start vps-cloud-unlock.service 2>/dev/null || true
-    DEV="/dev/mapper/$MAP"
-    e2fsck -f -y "$DEV" >/dev/null 2>&1 || true
-    if [ "$SIZE" -gt "$cur_gb" ]; then
-      [ $(( SIZE * 1073741824 )) -gt "$(stat -c %s "$IMG")" ] && truncate -s "${SIZE}G" "$IMG"
-      luks_grow >/dev/null; resize2fs "$DEV" >/dev/null
-    else
-      resize2fs "$DEV" "$(( SIZE * 1024 - 32 ))M" >/dev/null       # 留 32 MB 給加密的檔頭
-      cryptsetup resize --key-file "$KEY" --size $(( (SIZE * 1024 - 32) * 2048 )) "$MAP"
-      truncate -s "${SIZE}G" "$IMG"; luks_grow >/dev/null
-    fi
+  # 解鎖著改（空間檔、解鎖的磁碟、檔案系統三層一起）
+  systemctl start vps-cloud-unlock.service 2>/dev/null || true
+  DEV="/dev/mapper/$MAP"
+  e2fsck -f -y "$DEV" >/dev/null 2>&1 || true
+  if [ "$SIZE" -gt "$cur_gb" ]; then
+    [ $(( SIZE * 1073741824 )) -gt "$(stat -c %s "$IMG")" ] && truncate -s "${SIZE}G" "$IMG"
+    luks_grow >/dev/null; resize2fs "$DEV" >/dev/null
   else
-    e2fsck -f -y "$IMG" >/dev/null 2>&1 || true
-    if [ "$SIZE" -gt "$cur_gb" ]; then
-      [ $(( SIZE * 1073741824 )) -gt "$(stat -c %s "$IMG")" ] && truncate -s "${SIZE}G" "$IMG"   # 空間檔可能已經比設定大一點，不能反過來縮小它
-      resize2fs "$IMG" >/dev/null
-    else
-      resize2fs "$IMG" "${SIZE}G" >/dev/null; truncate -s "${SIZE}G" "$IMG"
-    fi
+    resize2fs "$DEV" "$(( SIZE * 1024 - 32 ))M" >/dev/null       # 留 32 MB 給加密的檔頭
+    cryptsetup resize --key-file "$KEY" --size $(( (SIZE * 1024 - 32) * 2048 )) "$MAP"
+    truncate -s "${SIZE}G" "$IMG"; luks_grow >/dev/null
   fi
   trap - EXIT
 fi
@@ -408,7 +311,7 @@ write_units
 install -d /etc/systemd/system/docker.service.d
 printf '[Unit]\nWants=srv-cloud.mount\nAfter=srv-cloud.mount\n' > /etc/systemd/system/docker.service.d/vps-cloud.conf
 systemctl daemon-reload
-if is_enc; then systemctl enable --now vps-cloud-unlock.service >/dev/null 2>&1; fi
+systemctl enable --now vps-cloud-unlock.service >/dev/null 2>&1 || true
 systemctl enable --now srv-cloud.mount >/dev/null 2>&1
 mountpoint -q "$MNT" || { echo "❌ 雲端硬碟空間掛載失敗：journalctl -u srv-cloud.mount"; exit 1; }
 rm -rf "$MNT/lost+found" 2>/dev/null || true
