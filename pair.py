@@ -60,7 +60,8 @@ def pair_code(url):
         return False, "網址格式不對"
     url = f"{u.scheme}://{u.netloc}{u.path.rstrip('/')}"
     secret = secrets.token_bytes(16)
-    raw = b"\x01" + secret + url.encode()
+    fp = TLS["fp"] if u.scheme == "https" else ""
+    raw = (b"\x02" + secret + bytes.fromhex(fp) if fp else b"\x01" + secret) + url.encode()   # 沒網域：帶著自己憑證的指紋
     with PAIR_LOCK:
         d = dict(pair_load())
         d["pending"] = {"s": secret.hex(), "url": url, "exp": time.time() + PAIR_HOURS * 3600, "fails": 0}
@@ -77,13 +78,24 @@ def pair_decode(code):
     except (ValueError, TypeError):
         raw = b""
     body, chk = raw[:-3], raw[-3:]
-    if len(body) < 20 or body[:1] != b"\x01" or not hmac.compare_digest(hashlib.sha256(body).digest()[:3], chk):
+    if len(body) < 20 or body[:1] not in (b"\x01", b"\x02") or not hmac.compare_digest(hashlib.sha256(body).digest()[:3], chk):
         return None
+    at = 49 if body[:1] == b"\x02" else 17
     try:
-        url = body[17:].decode()
+        url = body[at:].decode()
     except UnicodeDecodeError:
         return None
     return url, body[1:17]
+
+
+def pair_decode_fp(code):
+    """配對暗號裡帶的憑證指紋（沒網域、自己簽憑證的主機才有）"""
+    s = re.sub(r"\s", "", str(code or ""))
+    try:
+        raw = unb64u(s[3:] if s[:3].upper() == "VS-" else s)
+    except (ValueError, TypeError):
+        return ""
+    return raw[17:49].hex() if raw[:1] == b"\x02" and len(raw) > 52 else ""
 
 
 def pair_keys():
@@ -177,6 +189,8 @@ def peer_add(code):
     if u.scheme not in ("http", "https") or not u.hostname or re.search(r"[\s,|?#]", url):
         return False, "暗號裡的網址不對，請在新主機重新產生"
     own = pair_load().get("pending") or {}
+    if u.scheme == "https" and pair_decode_fp(code):
+        tls_pin_set(url, pair_decode_fp(code))           # 那台用自己簽的憑證：之後只認這張
     if hmac.compare_digest(str(own.get("s", "")), secret.hex()):
         return False, "這是這台自己的暗號，請貼到主要主機"
     n1 = secrets.token_bytes(16)

@@ -596,7 +596,7 @@ CONF_PATH = os.environ.get("SENTINEL_CONF", "/etc/vps-sentinel-lite.conf")
 # 讀的時候明碼、加密的都認得（舊資料照樣能讀，啟動時自動換成加密的）；`--unseal` 全部換回明碼（退回舊版用）。
 SEAL_KEY_PATH = os.environ.get("SENTINEL_SEAL_KEY") or os.path.splitext(CONF_PATH)[0] + ".key"
 SEAL_CONF = ("TOKEN", "TG_BOT_TOKEN", "TG_CHAT_ID", "BACKUP_KEY", "PEERS", "OPENSKY_ID", "OPENSKY_SECRET", "YT_PROXY", "LINKS")
-SEAL_FILES = ("pin.json", "sessions.json", "passkeys.json", "state.json", "pairing.json", "yt-cookies.txt",
+SEAL_FILES = ("tls-pins.json", "pin.json", "sessions.json", "passkeys.json", "state.json", "pairing.json", "yt-cookies.txt",
               "downloads.json", "peers-cache.json", "fly-share.json")
 SEAL_TXT = "vse1:"                                # 設定檔裡加密過的值
 SEAL_BIN = b"VSE1"                                # 加密過的檔案開頭
@@ -893,7 +893,36 @@ class _SafeRedirect(urllib.request.HTTPRedirectHandler):
         return new
 
 
-urllib.request.install_opener(urllib.request.build_opener(_SafeRedirect))
+TLS_PINS = {}                                   # "主機:連接埠" → 憑證指紋：沒網域的主機用自己簽的憑證，只認這張
+
+
+def pin_key(url):
+    u = urllib.parse.urlsplit(url)
+    return f"{(u.hostname or '').lower()}:{u.port or (443 if u.scheme == 'https' else 80)}"
+
+
+class _PinConn(http.client.HTTPSConnection):
+    """連到自己簽憑證的主機：不看憑證是誰發的，改成比對事先記下的指紋（比一般的檢查更嚴：只認這一張）"""
+    def connect(self):
+        super().connect()
+        want = TLS_PINS.get(f"{str(self.host).lower()}:{self.port}")
+        got = hashlib.sha256(self.sock.getpeercert(binary_form=True) or b"").hexdigest()
+        if not want or not hmac.compare_digest(want, got):
+            self.sock.close()
+            raise ssl.SSLError("對方的憑證跟配對時記下的不一樣，已拒絕連線")
+
+
+class _PinHTTPS(urllib.request.HTTPSHandler):
+    def https_open(self, req):
+        if pin_key(req.full_url) not in TLS_PINS:
+            return super().https_open(req)
+        ctx = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
+        ctx.minimum_version = ssl.TLSVersion.TLSv1_3
+        ctx.check_hostname, ctx.verify_mode = False, ssl.CERT_NONE   # 改由 _PinConn 比對指紋
+        return self.do_open(lambda host, **kw: _PinConn(host, **{**kw, "context": ctx}), req)
+
+
+urllib.request.install_opener(urllib.request.build_opener(_SafeRedirect, _PinHTTPS))
 
 
 def load_config():
@@ -3489,7 +3518,7 @@ class Collector:
             "updates": updates, "reboot": reboot, "geo": geo, "update": upd, "events": events, "traffic": traffic, "bk_tz": BACKUP_TZ,
             "hist": {"t": [h[0] for h in hist], "cpu": [h[1] for h in hist], "mem": [h[2] for h in hist],
                      "rx": [h[3] for h in hist], "tx": [h[4] for h in hist]},
-            "problems": problems, "notices": notices, "tg_self": pair_load().get("self_t") or 0,
+            "problems": problems, "notices": notices, "tg_self": pair_load().get("self_t") or 0, "tlsfp": TLS["fp"],
             "tg_off": not (TG_BOT and TG_CHAT) and not watchers(),   # 還沒設定 Telegram：首頁提醒一行
             "level": "bad" if problems else ("warn" if notices else "ok"),
         }
@@ -3520,6 +3549,7 @@ def fetch_peer(p, since=0):
             if (r.headers.get("Content-Encoding") or "").lower() == "gzip":
                 raw = gzip.decompress(raw)
             data = json.loads(raw)
+        tls_upgrade(p, data)                      # 那台有自己的憑證了：改走 https
         data["node"] = p["name"]                  # 代號：用來把指令轉給這台
         data["name"] = data.get("name") or p["name"]   # 顯示：用那台自己的名稱
         PEER_SEEN[p["name"]] = time.time()
@@ -4303,6 +4333,87 @@ def gz_of(data, tag=None):
 
 MAX_CONN = max(16, int(os.environ.get("SENTINEL_MAX_CONN") or 200))   # 同時最多處理幾個連線（測試可以調小）
 
+# ── 沒有網域的主機：自己簽一張憑證走 https（只用 TLS 1.3）──
+# 瀏覽器第一次會說「不安全」（憑證不是公開機構發的），按繼續後一樣全程加密；主機之間只認這張憑證的指紋（TLS_PINS）。
+# 同一個連接埠 http、https 都收：從外面用 http 打開網頁會被轉到 https；/api/ 照舊收 http，舊版主機才連得上。
+TLS_DIR = os.path.join(DATA_DIR, "tls")
+TLS = {"ctx": None, "fp": ""}
+TLS_PIN_FILE = os.path.join(DATA_DIR, "tls-pins.json")
+
+
+def tls_self_on():
+    if (os.environ.get("SENTINEL_TLS") or C.get("TLS") or "").lower() == "off" or C.get("DOMAIN"):
+        return False
+    try:
+        if ipaddress.ip_address(BIND).is_loopback:     # 只讓本機連（前面有 Caddy）
+            return False
+    except ValueError:
+        if BIND in ("localhost",):
+            return False
+    return bool(shutil.which("openssl"))
+
+
+def tls_self_load():
+    """產生（或讀回）自己簽的憑證：P-384 金鑰、10 年；失敗就照舊只用 http"""
+    if not tls_self_on():
+        return
+    cert, key = os.path.join(TLS_DIR, "cert.pem"), os.path.join(TLS_DIR, "key.pem")
+    try:
+        if not (os.path.isfile(cert) and os.path.isfile(key)):
+            os.makedirs(TLS_DIR, mode=0o700, exist_ok=True)
+            r = subprocess.run(["openssl", "req", "-x509", "-newkey", "ec", "-pkeyopt", "ec_paramgen_curve:P-384", "-nodes",
+                                "-keyout", key + ".tmp", "-out", cert + ".tmp", "-days", "3650", "-sha384", "-subj", "/CN=vps-sentinel"],
+                               capture_output=True, timeout=60)
+            if r.returncode != 0:
+                raise OSError(r.stderr.decode(errors="replace")[:200])
+            os.chmod(key + ".tmp", 0o600)
+            os.replace(key + ".tmp", key)
+            os.replace(cert + ".tmp", cert)
+        ctx = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
+        ctx.minimum_version = ssl.TLSVersion.TLSv1_3
+        ctx.load_cert_chain(cert, key)
+        with open(cert, encoding="ascii") as f:
+            TLS["fp"] = hashlib.sha256(ssl.PEM_cert_to_DER_cert(f.read())).hexdigest()
+        TLS["ctx"] = ctx
+    except (OSError, ssl.SSLError, ValueError, subprocess.SubprocessError) as e:
+        log("自己簽的憑證做不出來，照舊用 http：", e)
+
+
+def tls_pins_load():
+    try:
+        d = sec_load(TLS_PIN_FILE)
+        TLS_PINS.update({str(k): str(v) for k, v in d.items() if re.fullmatch(r"[0-9a-f]{64}", str(v))})
+    except (OSError, ValueError, AttributeError):
+        pass
+
+
+def tls_pin_set(url, fp):
+    """記下某台主機的憑證指紋（配對暗號裡帶的，或那台用 http 回報的）"""
+    if not re.fullmatch(r"[0-9a-f]{64}", str(fp or "")):
+        return
+    TLS_PINS[pin_key(url)] = fp
+    try:
+        os.makedirs(DATA_DIR, exist_ok=True)
+        sec_dump(TLS_PIN_FILE, dict(TLS_PINS))
+    except OSError as e:
+        log("憑證指紋存不起來：", e)
+
+
+def tls_upgrade(p, data):
+    """其他主機還用 http 連、那台已經有自己的憑證：記下指紋、換成 https（之後只認這張）"""
+    fp = data.get("tlsfp") if isinstance(data, dict) else None
+    if not fp or not p["url"].startswith("http://"):
+        return
+    new = "https://" + p["url"][7:]
+    tls_pin_set(new, fp)
+    with PEER_LOCK:
+        p["url"] = new
+    try:
+        write_conf({"PEERS": peers_conf()})
+        log(f"「{p['name']}」改用加密連線")
+    except OSError as e:
+        log("設定檔寫不進去：", e)
+
 
 class Server(ThreadingHTTPServer):
     """每個連線一個處理，但有上限：被大量亂連時多的直接斷掉，記憶體不會一直漲"""
@@ -4328,6 +4439,32 @@ class Server(ThreadingHTTPServer):
         finally:
             self.slots.release()
 
+    def finish_request(self, request, client_address):
+        """第一個位元組是 0x16 就是加密連線（TLS），其他照舊當 http"""
+        ctx = TLS["ctx"]
+        if ctx:
+            try:
+                request.settimeout(15)
+                first = request.recv(1, socket.MSG_PEEK)
+            except OSError:
+                return
+            if first == b"\x16":
+                try:
+                    tls = ctx.wrap_socket(request, server_side=True)
+                except (OSError, ssl.SSLError):
+                    return
+                try:
+                    self.RequestHandlerClass(tls, client_address, self)
+                except (OSError, ssl.SSLError):         # 對方握手完就斷掉（例如指紋對不上）：不用記錯誤
+                    pass
+                finally:
+                    try:
+                        tls.close()
+                    except OSError:
+                        pass
+                return
+        self.RequestHandlerClass(request, client_address, self)
+
 
 class Handler(BaseHTTPRequestHandler):
     server_version = "VPSSentinelLite"
@@ -4335,6 +4472,30 @@ class Handler(BaseHTTPRequestHandler):
 
     def log_message(self, *a):
         pass
+
+    def parse_request(self):
+        """沒網域、用自己簽的憑證時：從外面用 http 打開網頁，轉到 https（主機之間的 /api/ 照舊收，舊版才連得上）"""
+        if not super().parse_request():
+            return False
+        if TLS["ctx"] and not isinstance(self.connection, ssl.SSLSocket) and not self.path.startswith("/api/"):
+            try:
+                local = ipaddress.ip_address(self.client_address[0]).is_loopback
+            except ValueError:
+                local = False
+            host = (self.headers.get("Host") or "").strip()
+            app = "; wv)" in (self.headers.get("User-Agent") or "")   # 安卓 App 不收自己簽的憑證：照舊用 http
+            if not local and not app and re.fullmatch(r"[A-Za-z0-9.\-]+(:\d+)?|\[[0-9A-Fa-f:.]+\](:\d+)?", host):
+                self.send_response(301)
+                self.send_header("Location", f"https://{host}{self.path}")
+                self.send_header("Content-Length", "0")
+                self.send_header("Connection", "close")
+                self.end_headers()
+                self.close_connection = True
+                return False
+        return True
+
+    def https(self):
+        return isinstance(self.connection, ssl.SSLSocket) or (self.headers.get("X-Forwarded-Proto") or "").lower() == "https"
 
     def send(self, code, body, ctype="application/json; charset=utf-8", cache=False, csp="", etag=False):
         data = body if isinstance(body, bytes) else body.encode("utf-8")
@@ -4440,7 +4601,7 @@ class Handler(BaseHTTPRequestHandler):
         return False
 
     def cloud_cookie(self):
-        secure = "; Secure" if (self.headers.get("X-Forwarded-Proto") or "").lower() == "https" else ""
+        secure = "; Secure" if self.https() else ""
         return f"vs_cloud={cloud_cookie_value(time.time() + CLOUD_HOURS * 3600)}; Path=/; HttpOnly; SameSite=Lax{secure}"   # 關掉瀏覽器就失效
 
     def proxy_cloud(self):
@@ -4482,7 +4643,7 @@ class Handler(BaseHTTPRequestHandler):
                                                                    "x-forwarded-for", "x-forwarded-proto"):
                     conn.putheader(k, v)
             conn.putheader("X-Forwarded-For", self.headers.get("X-Forwarded-For") or self.client_address[0])
-            conn.putheader("X-Forwarded-Proto", self.headers.get("X-Forwarded-Proto") or "http")
+            conn.putheader("X-Forwarded-Proto", "https" if self.https() else "http")
             if authed:
                 conn.putheader(CLOUD_USER_HEADER, CLOUD_OWNER)
             length = self.headers.get("Content-Length")
@@ -5158,8 +5319,10 @@ def main():
             fly_seen_load(); fly_tracks_load()                         # 有在用機場起降：背景接著抓
         except Exception as e:  # noqa: BLE001  機場的存檔有問題也不影響監控
             log(f"機場起降的存檔讀不出來（{str(e)[:120]}）")
+    tls_pins_load()
+    tls_self_load()
     srv = Server((BIND, PORT), Handler)
-    log(f"VPS 哨兵 {VERSION} 已啟動：http://{BIND}:{PORT}  名稱={NAME}  其他主機={len(PEERS)} 台  "
+    log(f"VPS 哨兵 {VERSION} 已啟動：{'https' if TLS['ctx'] else 'http'}://{BIND}:{PORT}  名稱={NAME}  其他主機={len(PEERS)} 台  "
         f"Telegram={'開' if TG_BOT and TG_CHAT else '關'}")
     srv.serve_forever()
 

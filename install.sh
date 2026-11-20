@@ -73,6 +73,7 @@ if [ ! -f "$CONF" ] && [ -t 0 ]; then
   fi
   if [ -z "$DOMAIN" ]; then
     printf '\n  有網域嗎？有的話會設定加密連線（https）\n'
+    printf '  %s沒有的話可以到 duckdns.org 免費申請一個；先不設也會用自己簽的憑證加密%s\n' "$D" "$N"
     [ "$MODE" = restore ] && printf '  %s先不設也沒關係：還原時會自動用回備份裡的網域%s\n' "$D" "$N"
     read -rp "  輸入網域，或直接按 Enter 先不設定：" DOMAIN
     DOMAIN="$(echo "$DOMAIN" | tr -d '[:space:]')"
@@ -494,7 +495,8 @@ if [ "$BIND" = "127.0.0.1" ] && [ -n "$SAVED_DOMAIN" ]; then
   fi
 else
   IP="$(curl -s4 --max-time 4 https://ifconfig.me || hostname -I | awk '{print $1}')"
-  BASE="http://$IP:$PORT/"
+  DDIR="$(grep -E '^DATA_DIR=' "$CONF" | cut -d= -f2)"
+  if [ -f "${DDIR:-/var/lib/vps-sentinel-lite}/tls/cert.pem" ]; then BASE="https://$IP:$PORT/"; else BASE="http://$IP:$PORT/"; fi
   [ -n "$NEWCONF" ] && CLOUD_NOTE="記得到雲端主機網站的防火牆（安全清單）新增 TCP $PORT"
 fi
 
@@ -515,6 +517,9 @@ else
 fi
 [ -n "${CLOUD_NOTE:-}" ] && { echo; warn "$CLOUD_NOTE"; }
 if [ "$BIND" = "0.0.0.0" ]; then
-  printf '\n  %s💡 目前是一般連線（http）。有網域的話可以改成加密連線：sudo bash install.sh 你的網域%s\n' "$D" "$N"
+  case "$BASE" in
+    https*) printf '\n  %s💡 瀏覽器第一次會說「不安全」，按「繼續前往」就好（一樣有加密）。\n     不想看到這個警告：到 duckdns.org 免費申請網域，再執行 sudo bash install.sh 你的網域%s\n' "$D" "$N" ;;
+    *) printf '\n  %s💡 目前是一般連線（http）。到 duckdns.org 免費申請網域後可以改成加密連線：sudo bash install.sh 你的網域%s\n' "$D" "$N" ;;
+  esac
 fi
 printf '  %s━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━%s\n\n' "$G" "$N"
