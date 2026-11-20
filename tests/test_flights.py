@@ -497,7 +497,8 @@ class Flights(unittest.TestCase):
         pl = lambda ph, **k: {"fn": "BR2196", "id": "x1", "cs": "EVA2196", "reg": "", "t": "", "model": "", "alt": 300, "spd": 250, "vr": -4, "d": 5, "eta": 1,
                               "trk": 0, "x": 0, "y": 0, "sq": "", "emg": False, "mil": False, "rare": False, "ph": ph, "st": "即將降落", **k}
         fids = [f("BR2196", "arr", now - 600, "已到")]                # 官網的「已到」時間是舊的
-        S.fly_merge(ap, fids, [pl("arr")], "arr")
+        row = S.fly_merge(ap, fids, [pl("arr")], "arr")[0]
+        self.assertEqual(row["st"], "即將降落")                  # 官網提早寫已到，雷達上還在進場：照雷達
         row = S.fly_merge(ap, fids, [pl("gnd", alt=0, spd=60, d=1, st="在跑道上")], "arr")[0]
         self.assertEqual(row["st"], "已到")
         self.assertAlmostEqual(row["est"], time.time(), delta=5)

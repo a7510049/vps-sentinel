@@ -1650,6 +1650,8 @@ def fly_merge(ap, fids, rows, io):
             p = None
         sk = io + ":" + fly_fn(r["fn"])
         seen = FLY["seen"].get(sk)
+        if p and done and io == "arr" and p["ph"] == "arr":
+            done = False                               # 官網提早寫「已到」，雷達上其實還在進場：照雷達寫「即將降落」
         if p:
             fly_fix_type(p, r)
             if p.get("reg") or p.get("t"):            # 記住這班收到的飛機資料：停好關掉訊號後一樣查得到

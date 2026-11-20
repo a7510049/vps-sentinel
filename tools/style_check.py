@@ -99,6 +99,17 @@ for m in re.finditer(r"(@media \(hover:hover\)\{)?[^{}\n]*:hover\{", body_css):
     if not m.group(1):
         report("style.css", line0, body_css, m.start(), "滑過效果請包在 @media (hover:hover){…} 裡")
 
+# 說明（/* … */）沒寫完整：後面的樣式整段都會失效（4.20 雷達整頁跑掉就是這樣）
+i = 0
+while True:
+    a = css.find("/*", i)
+    if a < 0:
+        break
+    b, n = css.find("*/", a + 2), css.find("/*", a + 2)
+    if b < 0 or (0 <= n < b):
+        bad.append(f"  第 {css[:a].count(chr(10)) + 1} 行（style.css）：說明 /* 沒有 */ 結尾，後面的樣式會整段失效")
+    i = a + 2
+
 if bad:
     print(f"有 {len(bad)} 個地方沒照共用規則：")
     print("\n".join(bad))
