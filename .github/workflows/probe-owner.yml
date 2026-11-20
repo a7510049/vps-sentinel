@@ -1,0 +1,12 @@
+name: probe-owner
+on:
+  push:
+    branches: [claude/project-thread-9rqdzh]
+    paths: [.github/workflows/probe-owner.yml]
+jobs:
+  p:
+    runs-on: ubuntu-latest
+    steps:
+      - run: |
+          for k in B-1589 B-16781 B-18918 780f2d B-2422; do echo "== $k"; curl -s -m 20 -A "vps-sentinel/probe" "https://api.adsbdb.com/v0/aircraft/$k"; echo; done
+          echo "== cs"; curl -s -m 20 "https://api.adsbdb.com/v0/callsign/YZR7402"; echo
