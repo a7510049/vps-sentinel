@@ -278,8 +278,7 @@ class Download(unittest.TestCase):
             self.assertEqual(j["st"], "ok", j["err"])                # 被擋 → 自動改用登入資料再試一次
             S.yt_cookies_set(".douyin.com\tTRUE\t/\tFALSE\t0\tttwid\ta")    # 不同網站分開貼：合在一起
             S.yt_cookies_set(".douyin.com\tTRUE\t/\tFALSE\t0\tttwid\tb")    # 同一個網站再貼：換掉舊的
-            with open(S.YT_COOKIES) as f:
-                t = f.read()
+            t = S.sec_read(S.YT_COOKIES).decode()
             self.assertIn("SID\tx", t)
             self.assertIn("ttwid\tb", t)
             self.assertNotIn("ttwid\ta", t)

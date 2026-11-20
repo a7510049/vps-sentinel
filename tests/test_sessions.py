@@ -8,6 +8,7 @@ import unittest
 import urllib.error
 import urllib.request
 
+from seal_util import read_text
 from test_smoke import TOKEN, Server
 
 
@@ -44,8 +45,7 @@ class SessionTest(Server):
         self.assertTrue(devs["iPhone・Safari"]["me"])
         self.assertFalse(devs["Mac・Chrome"]["me"])
         self.assertEqual(devs["iPhone・Safari"]["how"], "密碼")
-        with open(f"{self.tmp.name}/data/sessions.json", encoding="utf-8") as f:
-            raw = f.read()
+        raw = read_text(self.conf, f"{self.tmp.name}/data/sessions.json")
         self.assertNotIn(a, raw)
         self.assertNotIn(b, raw)
 

@@ -14,6 +14,8 @@ import unittest
 import urllib.error
 import urllib.request
 
+from seal_util import conf_get
+
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 TOKEN = "test-token-123"
 
@@ -223,8 +225,9 @@ class RebootAndTokenTest(Server):
         self.assertEqual(self.request("/api/status", token=TOKEN)[0], 401)   # 舊密碼不能用了
         self.assertEqual(self.request("/api/status", token=new)[0], 200)
         type(self).tok = new
+        self.assertEqual(conf_get(self.conf, "TOKEN"), new)
         with open(self.conf, encoding="utf-8") as f:
-            self.assertIn(f"TOKEN={new}\n", f.read())                       # 重新啟動後也是新密碼
+            self.assertNotIn(new, f.read())                                  # 設定檔裡是加密過的                       # 重新啟動後也是新密碼
 
 
 if __name__ == "__main__":

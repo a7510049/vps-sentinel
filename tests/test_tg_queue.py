@@ -63,8 +63,7 @@ class TgQueue(unittest.TestCase):
         self.fail = "連不上 Telegram，請確認這台主機能連外網"
         S.tg_send("🔴 存起來")
         S.COL.save()
-        with open(S.COL.state_path(), encoding="utf-8") as f:
-            st = json.load(f)
+        st = S.sec_load(S.COL.state_path())
         self.assertEqual([q[2] for q in st["tg_queue"]], ["🔴 存起來"])
 
 

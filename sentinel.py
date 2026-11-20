@@ -45,7 +45,7 @@ from collections import deque
 from concurrent.futures import ThreadPoolExecutor
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
-VERSION = "4.20"
+VERSION = "4.21"
 
 # ───────────────────────── 哨兵備份檔（.vsbk）─────────────────────────
 # 哨兵專用的備份格式：外面是自己的檔案格式，裡面用的是成熟、標準的加密方法（不自己發明加密）：
@@ -58,7 +58,7 @@ VERSION = "4.20"
 #   Telegram 上只給這份的密碼，就算外流也只打得開這一份；總密碼（網頁上那組）每一份都打得開。
 VSBK_MAGIC = b"VSBK"
 VSBK_HEAD = 40
-VSBK_SCRYPT = (15, 8, 1)                          # N=32768、r=8、p=1：大約要 32 MB 記憶體、零點幾秒
+VSBK_SCRYPT = (17, 8, 1)                          # N=131072、r=8、p=1：大約要 128 MB 記憶體、不到一秒（4.21 以前是 2^15；參數寫在檔頭，舊檔照樣能開）
 
 
 def _vsbk_keys(pw, salt, nonce, n, r, p):
@@ -588,6 +588,297 @@ if __name__ == "__main__" and sys.argv[1:2] == ["--restore"]:
 
 CONF_PATH = os.environ.get("SENTINEL_CONF", "/etc/vps-sentinel-lite.conf")
 
+# ───────────────────────── 存在主機上的資料加密 ─────────────────────────
+# 設定檔裡的密碼、Telegram 機器人密碼、其他主機的連線鑰匙，還有 PIN 碼、登入、配對、YouTube 登入資料這些檔案，
+# 一律加兩層鎖才寫進硬碟：裡面 AES-256-GCM、外面 ChaCha20-Poly1305，兩種算法完全不同、各用自己的鑰匙，
+# 要兩種同時被破解才看得到（系統的 libcrypto，跟 Python 自己的 https 用的是同一份）。
+# 鑰匙是另一個檔案（設定檔旁邊的 .key，只有 root 讀得到）：設定檔或資料夾被複製走，沒有鑰匙只是亂碼。
+# 讀的時候明碼、加密的都認得（舊資料照樣能讀，啟動時自動換成加密的）；`--unseal` 全部換回明碼（退回舊版用）。
+SEAL_KEY_PATH = os.environ.get("SENTINEL_SEAL_KEY") or os.path.splitext(CONF_PATH)[0] + ".key"
+SEAL_CONF = ("TOKEN", "TG_BOT_TOKEN", "TG_CHAT_ID", "BACKUP_KEY", "PEERS", "OPENSKY_ID", "OPENSKY_SECRET", "YT_PROXY", "LINKS")
+SEAL_FILES = ("pin.json", "sessions.json", "passkeys.json", "state.json", "pairing.json", "yt-cookies.txt",
+              "downloads.json", "peers-cache.json", "fly-share.json")
+SEAL_TXT = "vse1:"                                # 設定檔裡加密過的值
+SEAL_BIN = b"VSE1"                                # 加密過的檔案開頭
+SEAL = {"lib": None, "key": None, "ok": None}
+
+
+def _seal_lib():
+    """系統的 libcrypto（OpenSSL）；找不到或對不上標準測試值就回傳 None（照舊存明碼，不會壞）"""
+    if SEAL["ok"] is not None:
+        return SEAL["lib"]
+    SEAL["ok"] = False
+    try:
+        import ctypes
+        import ctypes.util
+        lib = None
+        for n in (ctypes.util.find_library("crypto"), "libcrypto.so.3", "libcrypto.so.1.1", "libcrypto.so"):
+            if n:
+                try:
+                    lib = ctypes.CDLL(n)
+                    break
+                except OSError:
+                    continue
+        if lib is None:
+            return None
+        vp, cp, ci = ctypes.c_void_p, ctypes.c_char_p, ctypes.c_int
+        pi = ctypes.POINTER(ci)
+        for name, res, args in (("EVP_CIPHER_CTX_new", vp, []), ("EVP_CIPHER_CTX_free", None, [vp]),
+                                ("EVP_aes_256_gcm", vp, []), ("EVP_chacha20_poly1305", vp, []), ("EVP_CIPHER_CTX_ctrl", ci, [vp, ci, ci, vp]),
+                                ("EVP_EncryptInit_ex", ci, [vp, vp, vp, cp, cp]), ("EVP_DecryptInit_ex", ci, [vp, vp, vp, cp, cp]),
+                                ("EVP_EncryptUpdate", ci, [vp, cp, pi, cp, ci]), ("EVP_DecryptUpdate", ci, [vp, cp, pi, cp, ci]),
+                                ("EVP_EncryptFinal_ex", ci, [vp, cp, pi]), ("EVP_DecryptFinal_ex", ci, [vp, cp, pi])):
+            fn = getattr(lib, name)
+            fn.restype, fn.argtypes = res, args
+        SEAL["lib"], SEAL["ct"] = lib, ctypes
+        k = bytes(32)                              # NIST 的 GCM 標準測試值（Test Case 14）：算出來一樣才用
+        if _gcm(False, k, bytes(12), bytes(16), b"") != bytes.fromhex("cea7403d4d606b6e074ec5d3baf39d18d0d1c8a799996bf0265b98b5d48ab919"):
+            SEAL["lib"] = None
+            return None
+        lady = (b"Ladies and Gentlemen of the class of '99: If I could offer you only one tip for the future, "
+                b"sunscreen would be it.")                 # RFC 8439 的 ChaCha20-Poly1305 標準測試值（2.8.2）
+        got = _gcm(False, bytes(range(0x80, 0xa0)), bytes.fromhex("070000004041424344454647"), lady,
+                   bytes.fromhex("50515253c0c1c2c3c4c5c6c7"), cc=True)
+        if got[-16:] != bytes.fromhex("1ae10b594f09e26a7e902ecbd0600691"):
+            SEAL["lib"] = None
+            return None
+        SEAL["ok"] = True
+    except Exception as e:  # noqa: BLE001
+        SEAL["lib"] = None
+        print("找不到可用的加密程式庫，資料照舊不加密：", e, file=sys.stderr, flush=True)
+    return SEAL["lib"]
+
+
+def _gcm(dec, key, iv, data, aad, cc=False):
+    """AES-256-GCM（cc=True 是 ChaCha20-Poly1305）：加密回傳 密文＋16 位元組驗證碼；
+    解密時 data 是 密文＋驗證碼，被改過或鑰匙不對丟出 ValueError"""
+    lib, ct = SEAL["lib"], SEAL["ct"]
+    if dec:
+        if len(data) < 16:
+            raise ValueError("加密的資料不完整")
+        data, tag = data[:-16], data[-16:]
+    ctx = lib.EVP_CIPHER_CTX_new()
+    if not ctx:
+        raise MemoryError("libcrypto")
+    try:
+        init, upd, fin = ((lib.EVP_DecryptInit_ex, lib.EVP_DecryptUpdate, lib.EVP_DecryptFinal_ex) if dec else
+                          (lib.EVP_EncryptInit_ex, lib.EVP_EncryptUpdate, lib.EVP_EncryptFinal_ex))
+        n = ct.c_int(0)
+        out = ct.create_string_buffer(len(data) + 32)
+        ok = init(ctx, lib.EVP_chacha20_poly1305() if cc else lib.EVP_aes_256_gcm(), None, None, None) == 1
+        ok = ok and lib.EVP_CIPHER_CTX_ctrl(ctx, 0x9, len(iv), None) == 1           # 設定起始值長度
+        ok = ok and init(ctx, None, None, key, iv) == 1
+        if aad:
+            ok = ok and upd(ctx, None, ct.byref(n), aad, len(aad)) == 1
+        ok = ok and upd(ctx, out, ct.byref(n), data, len(data)) == 1
+        if not ok:
+            raise ValueError("加密失敗")
+        got = out.raw[:n.value]
+        if dec:
+            tb = ct.create_string_buffer(tag, 16)
+            if lib.EVP_CIPHER_CTX_ctrl(ctx, 0x11, 16, tb) != 1 or fin(ctx, out, ct.byref(n)) != 1:
+                raise ValueError("鑰匙不對，或資料被改過")
+            return got
+        if fin(ctx, out, ct.byref(n)) != 1:
+            raise ValueError("加密失敗")
+        tb = ct.create_string_buffer(16)
+        if lib.EVP_CIPHER_CTX_ctrl(ctx, 0x10, 16, tb) != 1:
+            raise ValueError("加密失敗")
+        return got + tb.raw
+    finally:
+        lib.EVP_CIPHER_CTX_free(ctx)
+
+
+def seal_key(make=False):
+    """加密鑰匙（32 位元組亂數）；make=True 時沒有就產生一把"""
+    if SEAL["key"] is not None:
+        return SEAL["key"]
+    try:
+        with open(SEAL_KEY_PATH, "rb") as f:
+            raw = base64.b64decode(f.read().strip(), validate=True)
+        if len(raw) == 32:
+            SEAL["key"] = raw
+            return raw
+        print("加密鑰匙檔格式不對：", SEAL_KEY_PATH, file=sys.stderr, flush=True)
+        return None
+    except FileNotFoundError:
+        pass
+    except (OSError, ValueError) as e:
+        print("讀不到加密鑰匙：", e, file=sys.stderr, flush=True)
+        return None
+    if not make or not _seal_lib():
+        return None
+    raw = os.urandom(32)
+    try:
+        fd = os.open(SEAL_KEY_PATH, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o400)
+    except FileExistsError:                           # 同時有另一個在產生：用它的
+        return seal_key()
+    except OSError as e:
+        print("無法產生加密鑰匙：", e, file=sys.stderr, flush=True)
+        return None
+    with os.fdopen(fd, "wb") as f:
+        f.write(base64.b64encode(raw) + b"\n")
+        f.flush()
+        os.fsync(f.fileno())
+    SEAL["key"] = raw
+    return raw
+
+
+def _seal_k(key, label):
+    return hmac.new(key, b"vps-sentinel seal|" + label, hashlib.sha256).digest()   # 每一種資料各自一把（換用途就解不開）
+
+
+def seal_bytes(data, label):
+    """加密（沒有可用的程式庫或鑰匙就原樣回傳）；label 綁在驗證碼裡，A 欄位的密文搬到 B 欄位會解不開"""
+    key = seal_key(make=True) if _seal_lib() else None
+    if not key:
+        return data
+    iv, iv2, aad = os.urandom(12), os.urandom(12), SEAL_BIN + label
+    inner = _gcm(False, _seal_k(key, b"aes|" + label), iv, data, aad)                     # 第一層 AES-256-GCM
+    return SEAL_BIN + iv + iv2 + _gcm(False, _seal_k(key, b"chacha|" + label), iv2, inner, aad, cc=True)   # 第二層 ChaCha20
+
+
+def unseal_bytes(data, label):
+    """解密；不是加密過的直接回傳（舊資料）"""
+    if not data.startswith(SEAL_BIN):
+        return data
+    if not _seal_lib():
+        raise ValueError("這台主機找不到 libcrypto，解不開加密的資料")
+    key = seal_key()
+    if not key:
+        raise ValueError(f"找不到加密鑰匙 {SEAL_KEY_PATH}，解不開加密的資料")
+    aad = SEAL_BIN + label
+    inner = _gcm(True, _seal_k(key, b"chacha|" + label), data[16:28], data[28:], aad, cc=True)
+    return _gcm(True, _seal_k(key, b"aes|" + label), data[4:16], inner, aad)
+
+
+def seal_val(k, v):
+    """設定檔裡的一個值"""
+    if not v or k not in SEAL_CONF or v.startswith(SEAL_TXT):
+        return v
+    b = seal_bytes(v.encode("utf-8"), b"conf:" + k.encode())
+    return SEAL_TXT + base64.urlsafe_b64encode(b[4:]).decode().rstrip("=") if b.startswith(SEAL_BIN) else v
+
+
+def unseal_val(k, v):
+    if not v.startswith(SEAL_TXT):
+        return v
+    try:
+        b = v[len(SEAL_TXT):]
+        raw = base64.urlsafe_b64decode(b + "=" * (-len(b) % 4))
+        return unseal_bytes(SEAL_BIN + raw, b"conf:" + k.encode()).decode("utf-8")
+    except (ValueError, UnicodeDecodeError) as e:
+        print(f"設定檔的 {k} 解不開：{e}", file=sys.stderr, flush=True)
+        return ""
+
+
+def sec_read(path):
+    """讀一個可能加密過的資料檔（回傳 bytes；檔案不在丟出 FileNotFoundError，解不開丟出 ValueError）"""
+    with open(path, "rb") as f:
+        data = f.read()
+    return unseal_bytes(data, b"file:" + os.path.basename(path).encode())
+
+
+def sec_load(path):
+    """讀 JSON 資料檔（加密過的、明碼的都可以）；讀不到或壞了丟出 OSError／ValueError，跟 json.load 一樣"""
+    return json.loads(sec_read(path).decode("utf-8"))
+
+
+def sec_write(path, data, plain=False):
+    """加密後寫入（先寫暫存檔再換掉，一開始就只有 root 讀得到）；data 可以是字串或 bytes"""
+    if isinstance(data, str):
+        data = data.encode("utf-8")
+    if not plain:
+        data = seal_bytes(data, b"file:" + os.path.basename(path).encode())
+    tmp = path + ".tmp"
+    fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+    with os.fdopen(fd, "wb") as f:
+        f.write(data)
+    os.chmod(tmp, 0o600)
+    os.replace(tmp, path)
+
+
+def sec_dump(path, obj, **kw):
+    sec_write(path, json.dumps(obj, ensure_ascii=False, **kw))
+
+
+def _seal_conf_text(text, fn):
+    """設定檔每一行要加密的值換成 fn(名稱, 值)"""
+    out = []
+    for line in text.splitlines(keepends=True):
+        m = re.match(r"^(\s*)([A-Z0-9_]+)(\s*=\s*)(.*?)(\r?\n?)$", line)
+        if m and m.group(2) in SEAL_CONF:
+            v = m.group(4).strip().strip('"').strip("'")
+            nv = fn(m.group(2), v)
+            if nv != v:
+                line = f"{m.group(1)}{m.group(2)}={nv}{m.group(5)}"
+        out.append(line)
+    return "".join(out)
+
+
+def seal_all(data_dir, plain=False):
+    """把設定檔和資料夾裡的資料全部換成加密的（plain=True 換回明碼）；回傳換了幾個"""
+    if not plain and not seal_key(make=True):
+        return 0
+    n = 0
+    try:
+        with open(CONF_PATH, encoding="utf-8") as f:
+            text = f.read()
+        new = _seal_conf_text(text, unseal_val if plain else seal_val)
+        if new != text:
+            tmp = CONF_PATH + ".tmp"
+            fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+            with os.fdopen(fd, "w", encoding="utf-8") as f:
+                f.write(new)
+            os.replace(tmp, CONF_PATH)
+            n += 1
+    except OSError:
+        pass
+    for name in SEAL_FILES:
+        p = os.path.join(data_dir, name)
+        try:
+            with open(p, "rb") as f:
+                raw = f.read()
+            if raw.startswith(SEAL_BIN) != plain:
+                continue
+            sec_write(p, sec_read(p), plain=plain)
+            n += 1
+        except FileNotFoundError:
+            continue
+        except (OSError, ValueError) as e:
+            print(f"{name} 無法{'解開' if plain else '加密'}：{e}", file=sys.stderr, flush=True)
+    return n
+
+
+def seal_cli(args):
+    """sudo python3 sentinel.py --unseal：全部換回明碼（要退回不認得加密資料的舊版時用）
+    --conf-get 名稱：印出設定檔裡某個值（安裝畫面用）"""
+    if args[:1] == ["--conf-get"] and len(args) == 2:
+        conf = {}
+        try:
+            with open(CONF_PATH, encoding="utf-8") as f:
+                for line in f:
+                    if "=" in line and not line.lstrip().startswith("#"):
+                        k, v = line.split("=", 1)
+                        conf[k.strip()] = v.strip().strip('"').strip("'")
+        except OSError:
+            pass
+        print(unseal_val(args[1], conf.get(args[1], "")))
+        sys.exit(0)
+    conf = {}
+    try:
+        with open(CONF_PATH, encoding="utf-8") as f:
+            conf = dict(x.strip().split("=", 1) for x in f if "=" in x and not x.lstrip().startswith("#"))
+    except OSError:
+        pass
+    n = seal_all(conf.get("DATA_DIR", "/var/lib/vps-sentinel-lite").strip(), plain=True)
+    print(f"換回明碼：{n} 個")
+    sys.exit(0)
+
+
+if __name__ == "__main__" and sys.argv[1:2] in (["--unseal"], ["--conf-get"]):
+    seal_cli(sys.argv[1:])
+
 
 class _SafeRedirect(urllib.request.HTTPRedirectHandler):
     """被轉址到別的網站（或從 https 降成 http）時，不把密碼、連線鑰匙一起帶過去"""
@@ -615,7 +906,7 @@ def load_config():
                 if not line or line.startswith("#") or "=" not in line:
                     continue
                 k, v = line.split("=", 1)
-                conf[k.strip()] = v.strip().strip('"').strip("'")
+                conf[k.strip()] = unseal_val(k.strip(), v.strip().strip('"').strip("'"))   # 加密過的密碼在這裡解開
     for k, v in os.environ.items():   # 環境變數優先
         if k.startswith("SENTINEL_") and k != "SENTINEL_CONF":
             conf[k[len("SENTINEL_"):]] = v
@@ -760,6 +1051,12 @@ ALERT_MEM = float(C.get("ALERT_MEM", "90"))
 ALERT_DISK = float(C.get("ALERT_DISK", "90"))
 CPU_MINUTES = float(C.get("ALERT_CPU_MINUTES", "5"))
 DATA_DIR = C.get("DATA_DIR", "/var/lib/vps-sentinel-lite")
+if __name__ == "__main__" and not sys.argv[1:] and os.environ.get("SENTINEL_SEAL") != "off":
+    try:
+        if seal_all(DATA_DIR):                    # 舊版留下的明碼（設定檔的密碼、PIN 碼、登入…）換成加密的
+            print("已把存著的密碼和資料換成加密的", flush=True)
+    except Exception as e:  # noqa: BLE001         # 加密不成也不能讓哨兵起不來
+        print("資料加密失敗，照舊使用：", e, file=sys.stderr, flush=True)
 
 
 def _num(v, default):
@@ -1798,8 +2095,7 @@ def pk_path():
 
 def pk_load():
     try:
-        with open(pk_path(), encoding="utf-8") as f:
-            v = json.load(f)
+        v = sec_load(pk_path())
         return [x for x in v if isinstance(x, dict) and x.get("id") and x.get("key")] if isinstance(v, list) else []
     except (OSError, ValueError):
         return []
@@ -1807,11 +2103,7 @@ def pk_load():
 
 def pk_save(keys):
     os.makedirs(DATA_DIR, exist_ok=True)
-    tmp = pk_path() + ".tmp"
-    with open(tmp, "w", encoding="utf-8") as f:
-        json.dump(keys, f, ensure_ascii=False)
-    os.chmod(tmp, 0o600)
-    os.replace(tmp, pk_path())
+    sec_dump(pk_path(), keys)
 
 
 def pk_list():
@@ -1990,8 +2282,7 @@ def _sess_all():
     """所有還有效的登入（已經上鎖時呼叫）"""
     if SESS["list"] is None:
         try:
-            with open(sess_path(), encoding="utf-8") as f:
-                v = json.load(f)
+            v = sec_load(sess_path())
             SESS["list"] = [x for x in v if isinstance(x, dict) and x.get("h")] if isinstance(v, list) else []
         except (OSError, ValueError):
             SESS["list"] = []
@@ -2002,11 +2293,7 @@ def _sess_all():
 
 def _sess_save():
     os.makedirs(DATA_DIR, exist_ok=True)
-    tmp = sess_path() + ".tmp"
-    with open(tmp, "w", encoding="utf-8") as f:
-        json.dump(SESS["list"] or [], f, ensure_ascii=False)
-    os.chmod(tmp, 0o600)
-    os.replace(tmp, sess_path())
+    sec_dump(sess_path(), SESS["list"] or [])
 
 
 def _sess_h(key):
@@ -2133,8 +2420,7 @@ def pin_path():
 
 def pin_load():
     try:
-        with open(pin_path(), encoding="utf-8") as f:
-            v = json.load(f)
+        v = sec_load(pin_path())
         return v if isinstance(v, dict) and v.get("hash") else None
     except (OSError, ValueError):
         return None
@@ -2148,11 +2434,7 @@ def pin_save(v):
         except FileNotFoundError:
             pass
         return
-    tmp = pin_path() + ".tmp"
-    with open(tmp, "w", encoding="utf-8") as f:
-        json.dump(v, f)
-    os.chmod(tmp, 0o600)
-    os.replace(tmp, pin_path())
+    sec_dump(pin_path(), v)
 
 
 def _pin_hash(pin, salt, n):
@@ -2304,7 +2586,7 @@ def _write_conf(values):
     except OSError:
         text = ""
     for k, v in values.items():
-        line = f"{k}={v}"
+        line = f"{k}={seal_val(k, v)}"                    # 密碼這類的值加密後才寫
         if re.search(rf"(?m)^{k}=.*$", text):
             text = re.sub(rf"(?m)^{k}=.*$", lambda _: line, text, count=1)
         else:
@@ -2805,8 +3087,7 @@ class Collector:
 
     def load(self):
         try:
-            with open(self.state_path(), encoding="utf-8") as f:
-                st = json.load(f)
+            st = sec_load(self.state_path())
         except (OSError, ValueError):
             return
         now = time.time()
@@ -2849,10 +3130,7 @@ class Collector:
                 st = json.dumps(st, ensure_ascii=False, separators=(",", ":"))   # 鎖著的時候就轉好，別的執行緒改到一半也不會出錯
             try:
                 os.makedirs(DATA_DIR, exist_ok=True)
-                tmp = self.state_path() + ".tmp"
-                with open(tmp, "w", encoding="utf-8") as f:
-                    f.write(st)
-                os.replace(tmp, self.state_path())
+                sec_write(self.state_path(), st)
             except OSError as e:
                 log("存檔失敗：", e)
 
@@ -3383,9 +3661,7 @@ def peer_cache_save():
     with PEER_LOCK:
         out = [{"name": k[0], "url": k[1], "d": c["d"]} for k, c in PEER_CACHE.items() if c.get("d")]
     try:
-        with open(peer_cache_path() + ".tmp", "w", encoding="utf-8") as f:
-            json.dump(out, f, ensure_ascii=False, separators=(",", ":"))
-        os.replace(peer_cache_path() + ".tmp", peer_cache_path())
+        sec_dump(peer_cache_path(), out, separators=(",", ":"))
     except OSError as e:
         log("其他主機的狀態存檔失敗：", e)
 
@@ -3393,8 +3669,7 @@ def peer_cache_save():
 def peer_cache_load():
     """讀回上次存的狀態（只認現在還在設定裡、網址沒改的），然後在背景馬上重問一次"""
     try:
-        with open(peer_cache_path(), encoding="utf-8") as f:
-            saved = {(x["name"], x["url"]): x["d"] for x in json.load(f) if isinstance(x, dict) and isinstance(x.get("d"), dict)}
+        saved = {(x["name"], x["url"]): x["d"] for x in sec_load(peer_cache_path()) if isinstance(x, dict) and isinstance(x.get("d"), dict)}
     except (OSError, ValueError, KeyError, TypeError):
         saved = {}
     with PEER_LOCK:

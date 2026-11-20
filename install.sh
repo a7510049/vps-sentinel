@@ -437,6 +437,10 @@ done
 if [ -z "$UP" ]; then
   if [ -f "$DIR.prev/sentinel.py" ]; then          # 新版起不來：換回舊版，網頁至少還打得開
     NEWV="$(grep -m1 -E '^VERSION' "$DIR/sentinel.py" | cut -d'"' -f2)"
+    if ! grep -q 'SEAL_KEY_PATH' "$DIR.prev/sentinel.py"; then   # 舊版看不懂加密過的資料：先換回明碼
+      systemctl stop vps-sentinel-lite 2>/dev/null || true
+      SENTINEL_CONF="$CONF" python3 "$DIR/sentinel.py" --unseal >/dev/null 2>&1 || true
+    fi
     rm -rf "$DIR" && mv "$DIR.prev" "$DIR"
     printf '%s\n' "$NEWV" > "$DIR/.rolled-back"     # 哨兵重新啟動後會記一筆、傳 Telegram
     systemctl restart vps-sentinel-lite
@@ -473,7 +477,7 @@ fi
 # ── 6. 顯示網址 ──
 BIND="$(grep -E '^BIND=' "$CONF" | cut -d= -f2)"
 PORT="$(grep -E '^PORT=' "$CONF" | cut -d= -f2)"
-TOKEN="$(grep -E '^TOKEN=' "$CONF" | cut -d= -f2)"
+TOKEN="$(SENTINEL_CONF="$CONF" python3 "$DIR/sentinel.py" --conf-get TOKEN 2>/dev/null || grep -E '^TOKEN=' "$CONF" | cut -d= -f2)"   # 加密過的要用哨兵解開
 SAVED_DOMAIN="$(grep -E '^DOMAIN=' "$CONF" | cut -d= -f2 || true)"
 
 SAVED_HTTPS="$(grep -E '^HTTPS_PORT=' "$CONF" | cut -d= -f2 || true)"

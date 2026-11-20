@@ -217,10 +217,7 @@ def dl_save():
     with DL_LOCK:
         keep = [{k: j.get(k) for k in ("id", "url", "name", "st", "done", "total", "err", "t", "t_end", "segs", "kind")} for j in DL]
     try:
-        tmp = DL_FILE + ".tmp"
-        with open(os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600), "w") as f:
-            json.dump(keep, f, ensure_ascii=False)
-        os.replace(tmp, DL_FILE)
+        sec_dump(DL_FILE, keep)
     except OSError:
         pass
 
@@ -228,8 +225,7 @@ def dl_save():
 def dl_load():
     """啟動時讀回清單；之前沒下載完的接著下載"""
     try:
-        with open(DL_FILE, encoding="utf-8") as f:
-            items = json.load(f)
+        items = sec_load(DL_FILE)
     except (OSError, ValueError):
         items = []
     with DL_LOCK:
@@ -431,14 +427,10 @@ def yt_cookies_set(text):
     site = lambda x: x.split("\t", 1)[0].removeprefix("#HttpOnly_").lstrip(".").lower()
     new = {site(x) for x in rows}
     try:
-        with open(YT_COOKIES, encoding="utf-8") as f:
-            old = [x for x in f.read().splitlines() if re.match(r"^\S+\t(TRUE|FALSE)\t", x) and site(x) not in new]
-    except OSError:
+        old = [x for x in sec_read(YT_COOKIES).decode("utf-8", "replace").splitlines() if re.match(r"^\S+\t(TRUE|FALSE)\t", x) and site(x) not in new]
+    except (OSError, ValueError):
         old = []
-    tmp = YT_COOKIES + ".tmp"
-    with open(os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600), "w", encoding="utf-8") as f:
-        f.write("# Netscape HTTP Cookie File\n" + "\n".join(old + rows) + "\n")
-    os.replace(tmp, YT_COOKIES)
+    sec_write(YT_COOKIES, "# Netscape HTTP Cookie File\n" + "\n".join(old + rows) + "\n")
     return True, "已儲存登入資料"
 
 
@@ -531,8 +523,8 @@ def yt_run(j, d, cookies):
         cmd += ["--proxy", px]
     if cookies:                                    # 登入資料只給 YouTube 用；複製一份給 yt-dlp（它會改寫）
         fd, ck = tempfile.mkstemp(prefix="vs-yt-", suffix=".txt")
-        with os.fdopen(fd, "w") as f, open(YT_COOKIES, encoding="utf-8") as src:
-            f.write(src.read())
+        with os.fdopen(fd, "wb") as f:             # 解開的那份只在 yt-dlp 跑的時候存在，用完就刪
+            f.write(sec_read(YT_COOKIES))
         cmd += ["--cookies", ck]
     cmd += ["--", yt_fix(j["url"])]
     kw = {}

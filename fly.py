@@ -2298,8 +2298,7 @@ def share_fix(v):
 
 def share_load():
     try:
-        with open(SHARE_FILE, encoding="utf-8") as f:
-            d = json.load(f)
+        d = sec_load(SHARE_FILE)
     except (OSError, ValueError):
         d = {}
     now = time.time()
@@ -2308,11 +2307,7 @@ def share_load():
 
 def share_save(d):
     os.makedirs(DATA_DIR, exist_ok=True)
-    tmp = SHARE_FILE + ".tmp"
-    fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
-    with os.fdopen(fd, "w", encoding="utf-8") as f:
-        json.dump(d, f)
-    os.replace(tmp, SHARE_FILE)
+    sec_dump(SHARE_FILE, d)
 
 
 def share_new(secs=None, devs=1, ap="", name=""):

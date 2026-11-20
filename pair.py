@@ -39,8 +39,7 @@ def pair_load():
         mt = 0
     if mt != PAIR_CACHE["mt"]:                  # 安裝畫面另外產生的暗號也要讀得到
         try:
-            with open(PAIR_FILE, encoding="utf-8") as f:
-                d = json.load(f)
+            d = sec_load(PAIR_FILE)
         except (OSError, ValueError):
             d = {}
         PAIR_CACHE.update(mt=mt, d=d if isinstance(d, dict) else {})
@@ -49,11 +48,7 @@ def pair_load():
 
 def pair_save(d):
     os.makedirs(DATA_DIR, exist_ok=True)
-    tmp = PAIR_FILE + ".tmp"
-    fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
-    with os.fdopen(fd, "w", encoding="utf-8") as f:
-        json.dump(d, f, ensure_ascii=False)
-    os.replace(tmp, PAIR_FILE)
+    sec_dump(PAIR_FILE, d)
     PAIR_CACHE.update(mt=None)
 
 
