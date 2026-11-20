@@ -539,7 +539,7 @@ html.dhid .dash>.view{content-visibility:hidden;contain-intrinsic-size:auto none
 .lgg path{fill:none;stroke-linecap:round}
 .lgb{stroke:var(--s4);stroke-width:6}
 .lgv{stroke:var(--p);stroke-width:6;transition:stroke-dasharray var(--t-slow) var(--ease)}
-.tile.w .lgv,.tile.b .lgv,.tile.w .lgn,.tile.b .lgn{stroke:currentColor;fill:currentColor}
+.tile.w .lgv,.tile.b .lgv{stroke:currentColor}.tile.w .lgn,.tile.b .lgn{stroke:currentColor;fill:currentColor}   /* 弧線只上色不填滿（以前整個半圓被塗滿、看不到指針） */
 .tile.w .lgb,.tile.b .lgb{stroke:color-mix(in srgb,currentColor 25%,transparent)}
 .lgn{transform-origin:32px 32px;transition:transform var(--t-slow) var(--ease);stroke:var(--tx);fill:var(--tx)}
 .lgn path{stroke-width:3}
