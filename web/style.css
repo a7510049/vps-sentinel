@@ -463,16 +463,17 @@ html.full .dock .tb.on::before{opacity:1;transform:none}
 .calm{color:var(--tx3);padding:22px 16px;background:var(--card);box-shadow:var(--cs);border-radius:var(--r-lg);text-align:center}
 
 /* ═════════ 主機整頁（手機）：從卡片的位置長出來 ═════════ */
-.det{position:fixed;inset:0;z-index:var(--z-det);background-color:var(--bg);--gz:var(--zoom);animation:expand var(--t-slow) var(--dec) backwards}
+.det{position:fixed;inset:0;z-index:var(--z-det);background-color:var(--bg);--gz:var(--zoom);animation:detIn var(--t-slow) var(--dec) backwards}
 /* 整頁完全蓋住之後，後面那一頁先不畫（動畫、更新都停下來，捲動只要顧整頁）；收起時立刻回來 */
 html.dhid .dash>.view{content-visibility:hidden;contain-intrinsic-size:auto none}
 .det.closing{animation:collapse var(--t-mid) var(--exit) forwards;pointer-events:none}
 @keyframes expand{from{clip-path:inset(var(--ct) var(--cr) var(--cb) var(--cl) round var(--r-xl))}to{clip-path:inset(0 0 0 0 round 0)}}
+/* 主機整頁：一邊從卡片長大、一邊蓋上去（卡片的內容慢慢被換掉，中間不會有一塊空的） */
+@keyframes detIn{from{clip-path:inset(var(--ct) var(--cr) var(--cb) var(--cl) round var(--r-xl));opacity:0}35%{opacity:1}to{clip-path:inset(0 0 0 0 round 0);opacity:1}}
 @keyframes collapse{from{clip-path:inset(0 0 0 0 round 0)}70%{opacity:1}to{clip-path:inset(var(--ct) var(--cr) var(--cb) var(--cl) round var(--r-xl));opacity:0}}
 .dscroll{position:absolute;inset:0;overflow-y:auto;overscroll-behavior:contain;
   padding:calc(env(safe-area-inset-top) + 10px) 16px calc(env(safe-area-inset-bottom) + 40px)}
 .dscroll>*{max-width:760px;margin-left:auto;margin-right:auto}
-.det .hb{animation:fadeIn var(--t-mid) var(--ease) .08s backwards}
 .dscroll>.dtop{position:sticky;top:calc(-10px - env(safe-area-inset-top));z-index:1;max-width:none;display:flex;align-items:center;gap:12px;
   margin:calc(-10px - env(safe-area-inset-top)) -16px 0;padding:calc(env(safe-area-inset-top) + 16px) 16px 8px}
 .dtt{flex:1;min-width:0;font-size:var(--fs-xl);font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;opacity:0}
@@ -1125,9 +1126,10 @@ textarea.field{height:auto;padding:12px 16px;resize:none}
 .upj .wv{flex:none;width:100%;transition:color var(--t-mid) var(--ease)}
 .upj.s-done .wv{color:var(--ok)}.upj.s-wait .wv,.upj.s-skip .wv{color:var(--tx3)}
 .upj .wf svg{transition:scale var(--t-slow) var(--ease),opacity var(--t-slow) var(--ease)}
-.upj .wq::after{content:"";position:absolute;left:0;right:0;top:4px;height:4px;border-radius:var(--r-pill);background:currentColor;opacity:0;transition:opacity var(--t-slow) var(--ease)}
+.upj .wq::after{content:"";position:absolute;left:0;right:calc(100% - var(--vw));top:4px;height:4px;border-radius:var(--r-pill);background:currentColor;opacity:0;transition:opacity var(--t-slow) var(--ease)}
 .upj:is(.s-done,.s-fail,.s-wait,.s-skip) .wf svg{scale:1 .1;opacity:0}   /* 沒在動的時候波浪攤平成一條直線 */
 .upj:is(.s-done,.s-fail,.s-wait,.s-skip) .wq::after{opacity:1}
+.upj:is(.s-done,.s-fail) .wv{--vw:100%}   /* 走完了：直線走到底，兩頭都是圓的（平常右邊留的空隙是給灰色軌道的） */
 .upj .wr{transition:opacity var(--t-slow) var(--ease),transform var(--sp-slow)}.upj:is(.s-done,.s-fail) .wr{opacity:0}
 .upsteps{display:flex;justify-content:space-between;gap:6px;font-size:var(--fs-xs);color:var(--tx3)}
 .upsteps span{display:flex;align-items:center;gap:5px;transition:color var(--t-mid) var(--ease)}
