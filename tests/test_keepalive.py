@@ -34,6 +34,19 @@ class Unit(unittest.TestCase):
         finally:
             S.KEEP_HOURS = old
 
+    def test_until(self):
+        """補量到幾點結束：網頁寫「補量中・到幾點」"""
+        end = lambda h, m: datetime.fromtimestamp(S.keep_until(datetime(2026, 10, 15, h, m))).strftime("%H:%M")
+        self.assertEqual(end(19, 34), "20:05")
+        self.assertEqual(end(18, 56), "20:05")
+        self.assertIsNone(S.keep_until(datetime(2026, 10, 15, 10, 0)))
+        old = S.KEEP_HOURS
+        try:
+            S.KEEP_HOURS = [0]                         # 跨午夜
+            self.assertEqual(end(23, 56), "01:05")
+        finally:
+            S.KEEP_HOURS = old
+
     def test_only_free_oracle(self):
         self.assertTrue(S.keep_free())
         S.KEEP["shape"] = "VM.Standard.E2.1.Micro"

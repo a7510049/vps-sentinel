@@ -1879,12 +1879,13 @@ function fradOpen(){
   fradData();
   if (window.ResizeObserver) new ResizeObserver(() => { if (FRAD && FRAD.rv === rv) { rv.resize(); top(); } }).observe(cv);
   fradGest(rv, cv);
-  setTimeout(() => { if (FRAD && FRAD.rv === rv) f._rv.hide(true); }, canAnim() ? T.slow + 80 : 0);   // 長大完：後面的小雷達被蓋住了，先不畫
+  setTimeout(() => { if (FRAD && FRAD.rv === rv) { f._rv.hide(true); f.classList.add("under"); } }, canAnim() ? T.slow + 80 : 0);   // 後面的看板也先藏起來   // 長大完：後面的小雷達被蓋住了，先不畫
 }
 function fradClose(){ if (!FRAD) return; if (history.state && history.state.frad) history.back(); else fradShut(); }
 function fradShut(){
   const F = FRAD; if (!F) return; FRAD = null;
   const f = $("#fly"), b = f && f.querySelector(".rbox"), v = F.v, end = () => { F.rv.stop(); v.remove(); };
+  if (f) f.classList.remove("under");                        // 縮回去之前：後面的看板整個重畫
   if (f && f._rv) f._rv.hide(false);                        // 縮回去之前小雷達先畫好
   if (!canAnim() || !b) return end();
   const r = b.getBoundingClientRect(), z = ZM();
