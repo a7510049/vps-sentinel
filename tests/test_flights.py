@@ -361,7 +361,8 @@ class Flights(unittest.TestCase):
         ok, st = S.sky_conf({"action": "save", "id": "good", "secret": "s3cret"})
         self.assertTrue(ok and st["on"], st)
         with open(S.CONF_PATH, encoding="utf-8") as f:
-            self.assertIn("OPENSKY_ID=good", f.read())
+            line = next(x for x in f if x.startswith("OPENSKY_ID="))
+        self.assertEqual(S.unseal_val("OPENSKY_ID", line.strip()[11:]), "good")   # 存的是加密過的
         S.FLY_SKYS["cache"].clear()
         S.FLY["cache"].clear()
         d = self.get("ap=KHH")

@@ -73,6 +73,7 @@ if [ ! -f "$CONF" ] && [ -t 0 ]; then
   fi
   if [ -z "$DOMAIN" ]; then
     printf '\n  有網域嗎？有的話會設定加密連線（https）\n'
+    printf '  %s沒有的話可以到 duckdns.org 免費申請一個；先不設也會用自己簽的憑證加密%s\n' "$D" "$N"
     [ "$MODE" = restore ] && printf '  %s先不設也沒關係：還原時會自動用回備份裡的網域%s\n' "$D" "$N"
     read -rp "  輸入網域，或直接按 Enter 先不設定：" DOMAIN
     DOMAIN="$(echo "$DOMAIN" | tr -d '[:space:]')"
@@ -276,8 +277,12 @@ if [ -n "$DOMAIN" ]; then
   install -d /etc/caddy/sites/vps-sentinel.d
   [ -f /etc/caddy/sites/vps-sentinel.d/00-keep.caddy ] || echo "# 附加功能（例如雲端硬碟）的設定放這個資料夾" > /etc/caddy/sites/vps-sentinel.d/00-keep.caddy
   cat > /etc/caddy/sites/vps-sentinel.caddy <<EOF
-# VPS 哨兵（由安裝腳本產生）
+# VPS 哨兵（由安裝腳本產生）：只用 TLS 1.3；瀏覽器記住一年內只用 https 連
 $SITE {
+	tls {
+		protocols tls1.3
+	}
+	header Strict-Transport-Security "max-age=31536000"
 	encode gzip
 	import /etc/caddy/sites/vps-sentinel.d/*.caddy
 	handle {
@@ -437,6 +442,10 @@ done
 if [ -z "$UP" ]; then
   if [ -f "$DIR.prev/sentinel.py" ]; then          # 新版起不來：換回舊版，網頁至少還打得開
     NEWV="$(grep -m1 -E '^VERSION' "$DIR/sentinel.py" | cut -d'"' -f2)"
+    if ! grep -q 'SEAL_KEY_PATH' "$DIR.prev/sentinel.py"; then   # 舊版看不懂加密過的資料：先換回明碼
+      systemctl stop vps-sentinel-lite 2>/dev/null || true
+      SENTINEL_CONF="$CONF" python3 "$DIR/sentinel.py" --unseal >/dev/null 2>&1 || true
+    fi
     rm -rf "$DIR" && mv "$DIR.prev" "$DIR"
     printf '%s\n' "$NEWV" > "$DIR/.rolled-back"     # 哨兵重新啟動後會記一筆、傳 Telegram
     systemctl restart vps-sentinel-lite
@@ -473,7 +482,7 @@ fi
 # ── 6. 顯示網址 ──
 BIND="$(grep -E '^BIND=' "$CONF" | cut -d= -f2)"
 PORT="$(grep -E '^PORT=' "$CONF" | cut -d= -f2)"
-TOKEN="$(grep -E '^TOKEN=' "$CONF" | cut -d= -f2)"
+TOKEN="$(SENTINEL_CONF="$CONF" python3 "$DIR/sentinel.py" --conf-get TOKEN 2>/dev/null || grep -E '^TOKEN=' "$CONF" | cut -d= -f2)"   # 加密過的要用哨兵解開
 SAVED_DOMAIN="$(grep -E '^DOMAIN=' "$CONF" | cut -d= -f2 || true)"
 
 SAVED_HTTPS="$(grep -E '^HTTPS_PORT=' "$CONF" | cut -d= -f2 || true)"
@@ -486,7 +495,8 @@ if [ "$BIND" = "127.0.0.1" ] && [ -n "$SAVED_DOMAIN" ]; then
   fi
 else
   IP="$(curl -s4 --max-time 4 https://ifconfig.me || hostname -I | awk '{print $1}')"
-  BASE="http://$IP:$PORT/"
+  DDIR="$(grep -E '^DATA_DIR=' "$CONF" | cut -d= -f2)"
+  if [ -f "${DDIR:-/var/lib/vps-sentinel-lite}/tls/cert.pem" ]; then BASE="https://$IP:$PORT/"; else BASE="http://$IP:$PORT/"; fi
   [ -n "$NEWCONF" ] && CLOUD_NOTE="記得到雲端主機網站的防火牆（安全清單）新增 TCP $PORT"
 fi
 
@@ -507,6 +517,9 @@ else
 fi
 [ -n "${CLOUD_NOTE:-}" ] && { echo; warn "$CLOUD_NOTE"; }
 if [ "$BIND" = "0.0.0.0" ]; then
-  printf '\n  %s💡 目前是一般連線（http）。有網域的話可以改成加密連線：sudo bash install.sh 你的網域%s\n' "$D" "$N"
+  case "$BASE" in
+    https*) printf '\n  %s💡 瀏覽器第一次會說「不安全」，按「繼續前往」就好（一樣有加密）。\n     不想看到這個警告：到 duckdns.org 免費申請網域，再執行 sudo bash install.sh 你的網域%s\n' "$D" "$N" ;;
+    *) printf '\n  %s💡 目前是一般連線（http）。到 duckdns.org 免費申請網域後可以改成加密連線：sudo bash install.sh 你的網域%s\n' "$D" "$N" ;;
+  esac
 fi
 printf '  %s━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━%s\n\n' "$G" "$N"

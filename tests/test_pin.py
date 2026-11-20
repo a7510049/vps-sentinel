@@ -5,6 +5,7 @@ import unittest
 import urllib.error
 import urllib.request
 
+from seal_util import read_text
 from test_smoke import TOKEN, Server
 
 
@@ -36,8 +37,7 @@ class PinTest(Server):
         self.assertEqual(code, 200, d)
         self.assertTrue(d["on"])
         self.assertTrue(self.call("/api/passkey-login", {"action": "has"})[1]["pin"])
-        with open(self.pin_file(), encoding="utf-8") as f:
-            self.assertNotIn("4826", f.read())                     # 存的是雜湊，不是 PIN 碼本身
+        self.assertNotIn("4826", read_text(self.conf, self.pin_file()))                     # 存的是雜湊，不是 PIN 碼本身
 
         code, d = self.call("/api/pin-login", {"pin": "4826", "dev": "iPhone・Safari"})
         self.assertEqual(code, 200)
@@ -60,8 +60,7 @@ class PinTest(Server):
         self.assertEqual(self.call("/api/pin-login", {"pin": "4826"})[0], 200)
 
         # 累計輸錯 10 次：自動關閉
-        with open(self.pin_file(), encoding="utf-8") as f:
-            p = json.load(f)
+        p = json.loads(read_text(self.conf, self.pin_file()))
         p["fails"] = 9
         with open(self.pin_file(), "w", encoding="utf-8") as f:
             json.dump(p, f)
@@ -80,8 +79,7 @@ class PinTest(Server):
         salt = "00112233445566778899aabbccddeeff"
         h = hashlib.pbkdf2_hmac("sha256", b"7391", bytes.fromhex(salt), 200000).hex()
         self.assertEqual(self.call("/api/pin", {"action": "set", "pin": {"salt": salt, "n": 200000, "hash": h}}, TOKEN)[0], 200)
-        with open(self.pin_file(), encoding="utf-8") as f:
-            self.assertEqual(json.load(f)["hash"], h)
+        self.assertEqual(json.loads(read_text(self.conf, self.pin_file()))["hash"], h)
         b = self.call("/api/pin-login", {"action": "begin"})[1]
         self.assertEqual((b["salt"], b["n"]), (salt, 200000))
         proof = hmac.new(h.encode(), b["nonce"].encode(), hashlib.sha256).hexdigest()

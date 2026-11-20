@@ -6,6 +6,7 @@ import sys
 import unittest
 import urllib.parse
 
+from seal_util import conf_get, read_text
 from test_passkey import load_sentinel
 from test_smoke import ROOT, Server, TOKEN
 
@@ -199,9 +200,7 @@ class Pairing(unittest.TestCase):
         return d["code"]
 
     def peers(self):
-        with open(self.A.conf, encoding="utf-8") as f:
-            line = next((x for x in f if x.startswith("PEERS=")), "PEERS=")
-        return line.strip()[6:]
+        return conf_get(self.A.conf, "PEERS")
 
     def test_1_pair_and_remove(self):
         code = self.new_code()
@@ -217,7 +216,7 @@ class Pairing(unittest.TestCase):
         peers = self.peers()
         self.assertIn(f"http://127.0.0.1:{self.B.port}|vsk_", peers)
         key = peers.split("|", 1)[1]
-        self.assertNotIn(key, open(os.path.join(self.B.tmp.name, "data", "pairing.json"), encoding="utf-8").read())  # 新主機只存雜湊
+        self.assertNotIn(key, read_text(self.B.conf, os.path.join(self.B.tmp.name, "data", "pairing.json")))  # 新主機只存雜湊
 
         # 主要主機看得到新主機
         _, _, body = self.a.request("/api/all", token=TOKEN)
@@ -281,8 +280,7 @@ class Pairing(unittest.TestCase):
         beat = json.dumps({"action": "beat", "tg": {"bot": "1:x", "chat": "9"}}).encode()
         self.assertEqual(self.b.request("/api/pair", token="wrong", method="POST", data=beat)[0], 401)
         self.assertEqual(self.b.request("/api/pair", token=key, method="POST", data=beat)[0], 200)
-        with open(os.path.join(self.B.tmp.name, "data", "pairing.json"), encoding="utf-8") as f:
-            self.assertEqual(json.load(f)["tg"], {"bot": "1:x", "chat": "9"})
+        self.assertEqual(json.loads(read_text(self.B.conf, os.path.join(self.B.tmp.name, "data", "pairing.json")))["tg"], {"bot": "1:x", "chat": "9"})
         # 被監看的主機不提供機場起降（不會在背景抓）
         self.assertIn("監看中", self.b.request("/")[2].decode())
         self.assertEqual(self.b.request("/api/flights?ap=TPE", token=self.btok)[0], 404)

@@ -275,7 +275,7 @@ def xui_cert_paths(db="/etc/x-ui/x-ui.db"):
 
 def backup_sources(cs=None):
     """[(說明, [路徑…])]；只列出這台主機上真的有的（cs＝n8n 容器的設定）"""
-    items = [("哨兵設定", [CONF_PATH, DATA_DIR]),
+    items = [("哨兵設定", [CONF_PATH, SEAL_KEY_PATH, DATA_DIR]),   # 加密鑰匙一起備份（在加密的備份檔裡），還原後才解得開
              ("3x-ui", ["/etc/x-ui", "/etc/systemd/system/x-ui.service"]),
              ("n8n", n8n_dirs(n8n_containers() if cs is None else cs)),
              ("Caddy", ["/etc/caddy"]),
