@@ -1,6 +1,7 @@
 """每台裝置自己的登入：密碼換鑰匙、清單、登出一台、換密碼全部登出；網頁只跑自己的程式；沒設定 Telegram 的提醒。只用 Python 內建模組。"""
 import base64
 import hashlib
+import hmac
 import json
 import re
 import unittest
@@ -11,8 +12,10 @@ from test_smoke import TOKEN, Server
 
 
 class SessionTest(Server):
-    def call(self, path, body, token=None):
+    def call(self, path, body, token=None, again=None):
         headers = {"Content-Type": "application/json", **({"X-Token": token} if token else {})}
+        if again is not None:                        # 再確認一次是你：base64 的 JSON
+            headers["X-Recheck"] = base64.urlsafe_b64encode(json.dumps(again).encode()).decode().rstrip("=")
         req = urllib.request.Request(f"http://127.0.0.1:{self.port}{path}", data=json.dumps(body).encode(), method="POST", headers=headers)
         try:
             with urllib.request.urlopen(req, timeout=15) as r:
@@ -59,7 +62,7 @@ class SessionTest(Server):
 
         # 換密碼：所有裝置都登出，按的那台直接拿到新鑰匙
         d2 = self.login("iPad・Safari")[1]["token"]
-        code, t = self.call("/api/token", {}, a)
+        code, t = self.call("/api/token", {}, a, again={"pw": TOKEN})
         self.assertEqual(code, 200, t)
         self.assertTrue(t["sess"].startswith("vss_"))
         self.assertEqual(self.request("/api/status", token=a)[0], 401)
@@ -69,6 +72,34 @@ class SessionTest(Server):
         self.assertEqual(self.login("iPhone・Safari", pw=t["token"])[0], 200)
         _, d = self.call("/api/sessions", {"action": "list"}, t["sess"])
         self.assertEqual(next(x for x in d["list"] if x["me"])["dev"], "iPhone・Safari")
+
+
+class RecheckTest(Server):
+    call, login = SessionTest.call, SessionTest.login
+
+    def test_recheck(self):
+        """已經登入的裝置：關 PIN 碼、換 PIN 碼、換密碼、改 Telegram、加刪手機金鑰、產生配對暗號前都要再確認一次"""
+        self.assertEqual(self.call("/api/pin", {"action": "set", "pin": "4826"}, TOKEN)[0], 200)   # 存取密碼本身（主機之間）不用
+        a = self.login("iPhone・Safari")[1]["token"]
+        for path, body in (("/api/pin", {"action": "off"}), ("/api/pin", {"action": "set", "pin": "5091"}), ("/api/token", {}),
+                           ("/api/telegram", {"action": "save", "off": True}), ("/api/passkey", {"action": "begin"}),
+                           ("/api/passkey", {"action": "delete", "id": "x"}), ("/api/pair-admin", {"action": "code", "url": "http://x/"}),
+                           ("/api/backup", {"action": "key", "key": "新的備份密碼 2026"})):
+            code, d = self.call(path, body, a)
+            self.assertEqual((code, d.get("recheck")), (403, True), path)
+        self.assertTrue(self.call("/api/pin", {"action": "status"}, a)[1]["on"])            # 沒確認：PIN 碼還在
+        self.assertEqual(self.call("/api/pin", {"action": "status"}, a)[0], 200)              # 看狀態不用確認
+        code, d = self.call("/api/pin", {"action": "off"}, a, again={"pw": "猜猜看"})
+        self.assertEqual((code, d.get("recheck")), (403, True))
+        _, b = self.call("/api/pin-login", {"action": "begin"})                               # 現在的 PIN 碼（網頁算好的答案）
+        h = hashlib.pbkdf2_hmac("sha256", b"4826", bytes.fromhex(b["salt"]), b["n"]).hex()
+        proof = hmac.new(h.encode(), b["nonce"].encode(), hashlib.sha256).hexdigest()
+        code, d = self.call("/api/pin", {"action": "off"}, a, again={"pin": {"nonce": b["nonce"], "proof": proof}})
+        self.assertEqual(code, 200, d)
+        self.assertFalse(d["on"])
+        self.assertEqual(self.call("/api/pin", {"action": "set", "pin": "5091"}, a)[0], 200)   # 5 分鐘內同一台不用再問
+        c = self.login("Mac・Chrome")[1]["token"]
+        self.assertEqual(self.call("/api/pin", {"action": "off"}, c)[0], 403)                 # 別台照樣要問
 
 
 class PageGuardTest(Server):

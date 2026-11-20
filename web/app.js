@@ -26,7 +26,15 @@ function setTok(t, remember){
   window._tok = t;
 }
 /* 連不上主機時（例如主機正在重新啟動），瀏覽器給的錯誤是英文，換成看得懂的中文 */
-const api = (path, opt) => fetch(path, opt).catch(() => { throw new Error("連線失敗，請稍後再試"); });
+/* 換密碼、關 PIN 碼這類動作：主機回「要先確認是你」時，先問 PIN 碼／手機金鑰／密碼，再帶著答案送一次 */
+const api = async (path, opt) => {
+  const go = o => fetch(path, o).catch(() => { throw new Error("連線失敗，請稍後再試"); });
+  const r = await go(opt);
+  if (r.status !== 403 || !opt || !opt.headers) return r;
+  const d = await r.clone().json().catch(() => ({}));
+  return d.recheck && await recheckAsk(a => go({...opt, headers:{...opt.headers, "X-Recheck": b64j(a)}})) || r;
+};
+const b64j = o => btoa(unescape(encodeURIComponent(JSON.stringify(o)))).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
 if (window._t0) { setTok(window._t0, true); window._t0 = ""; }   // 網址上的密碼已經在 index.html 最前面拿掉了
 
 /* ═════════ 圖示 ═════════ */
@@ -1977,7 +1985,7 @@ async function newToken(node, label){
   if (!ok) return;
   let d = {};
   try {
-    const r = await fetch("/api/token?node=" + encodeURIComponent(node), {method:"POST", headers:{"X-Token":getTok()}});
+    const r = await api("/api/token?node=" + encodeURIComponent(node), {method:"POST", headers:{"X-Token":getTok()}});
     d = await r.json().catch(() => ({}));
     if (r.status === 404) return toast("那台主機還沒更新到新版，先更新再換密碼", "bad");
     if (!r.ok || !d.ok || !d.token) return toast(d.message || "換密碼失敗", "bad");
@@ -2267,6 +2275,17 @@ function pinAsk({title, sub = "", icon = "pin", pin = true, passkey = false, pw 
       if (e.target.closest("[data-ppk]")) return usePk();
     });
   });
+}
+/* 再確認一次是你：有 PIN 碼用鍵盤，有手機金鑰可以用金鑰，不然打密碼；確認過 5 分鐘內不用再問 */
+async function recheckAsk(go){
+  const has = await pkCall("/api/passkey-login", {action:"has"}).catch(() => ({}));
+  const out = await pinAsk({title: "先確認是你", sub: has.pin ? "輸入現在的 PIN 碼" : "", icon: "key", pin: !!has.pin, passkey: PK_OK && !!has.has,
+    send: async a => {
+      const r = await go(a);
+      if (r.status === 403) { const d = await r.clone().json().catch(() => ({})); if (d.recheck) return {message: d.message}; }
+      return {ok: true, r};
+    }});
+  return out && out.r;
 }
 /* ═════════ PIN 碼登入：4～8 位數字，連續輸錯 5 次暫停 15 分鐘，累計 10 次自動關閉 ═════════ */
 const pinCall = body => pkCall("/api/pin", body, 1);
