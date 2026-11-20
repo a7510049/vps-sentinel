@@ -877,7 +877,7 @@ body:has(.dash.d) .fwrap{max-width:var(--pw)}
 /* 首頁：主機總表＋選到那台＋右邊最近發生 */
 .dash.d .dhome{display:block}
 .htab{background:var(--card);border:1px solid var(--line);border-radius:var(--r-lg);box-shadow:var(--cs);margin-bottom:var(--gut);overflow:hidden}
-.hth,.htr{display:grid;grid-template-columns:minmax(170px,1.5fr) repeat(3,minmax(104px,1fr)) minmax(170px,1.3fr) minmax(76px,.6fr) minmax(76px,.6fr) 44px;align-items:center;column-gap:14px;padding:0 10px 0 16px}
+.hth,.htr{display:grid;grid-template-columns:minmax(170px,1.5fr) repeat(3,minmax(104px,1fr)) minmax(170px,1.3fr) minmax(120px,.9fr) minmax(76px,.6fr) 44px;align-items:center;column-gap:14px;padding:0 10px 0 16px}
 .hth{height:36px;font-size:var(--fs-xs);font-weight:600;color:var(--tx3);border-bottom:1px solid var(--line)}
 .htb{display:flex;flex-direction:column}
 .htr{min-height:56px;border-bottom:1px solid var(--line);cursor:pointer;transition:background-color var(--t-fast) var(--ease)}
@@ -891,6 +891,7 @@ body:has(.dash.d) .fwrap{max-width:var(--pw)}
 .hc>b.w{color:var(--warn)}.hc>b.b{color:var(--bad)}
 .hc>svg{width:13px;height:13px;flex:none;color:var(--tx3)}
 .hc>i{width:6px}
+.hc.htf>b{width:auto;min-width:58px}   /* 本月流量有上限：波浪條＋用了多少 */
 .hn .av,.hn .avatar{flex:none}
 .hn>span{display:flex;flex-direction:column;min-width:0}
 .hn b{color:var(--tx);font-weight:700;overflow:hidden;text-overflow:ellipsis}
@@ -1090,6 +1091,7 @@ textarea.field{height:auto;padding:12px 16px;resize:none}
 .bkhosts{display:flex;flex-wrap:wrap;gap:8px}
 .bkhosts .ubtn.on{background:var(--pc);color:var(--on-pc)}
 .form .bkon{flex-direction:row;align-items:center;justify-content:space-between;font-size:var(--fs-m);color:var(--tx)}
+.bkat{display:inline-flex;align-items:center;gap:8px}.bkat svg{width:20px;height:20px;color:var(--tx2)}.bkat b{font-weight:600}   /* 每天幾點備份：時鐘＋時間 */
 /* 軟體更新（設定裡） */
 .selfbox{display:flex;flex-direction:column;gap:3px}
 .selfrow{display:flex;flex-direction:column;justify-content:center;min-height:68px;padding:12px 16px;background:var(--card);box-shadow:var(--cs);border-radius:var(--r-xs)}
@@ -1584,8 +1586,6 @@ html.flyon .dash>.view{content-visibility:hidden;contain-intrinsic-size:auto non
   .fr .fal .alg{width:3em;height:3em;border-radius:var(--r-md);font-size:var(--fs-s)}
   .fr.nopc .pc{display:none}
   .fr.empty{padding-left:10px}.fr.empty .logo{display:none}
-  .board[data-tab="arr"] .fr:not(.empty):not(.nopl) .pl::before{content:"從 ";color:var(--tx3)}
-  .board[data-tab="dep"] .fr:not(.empty):not(.nopl) .pl::before{content:"往 ";color:var(--tx3)}
   .board[data-fids="1"]:is([data-tab="arr"],[data-tab="dep"]) .fr:not(.empty) .reg:not(:empty)::before{content:"登機門 ";color:var(--tx3)}
   .fr .bx{display:none}                                                /* 手機：轉盤／櫃台接在登機門後面 */
   .board[data-fids="1"]:is([data-tab="arr"],[data-tab="dep"]) .fr:not(.empty) .reg:not(:empty):not([data-bx=""])[data-bx]::before{content:none}   /* 有轉盤／櫃台時只寫「C2・轉盤 4」，放得下不會被切掉 */
