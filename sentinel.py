@@ -45,7 +45,7 @@ from collections import deque
 from concurrent.futures import ThreadPoolExecutor
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
-VERSION = "4.17"
+VERSION = "4.19"
 
 # ───────────────────────── 哨兵備份檔（.vsbk）─────────────────────────
 # 哨兵專用的備份格式：外面是自己的檔案格式，裡面用的是成熟、標準的加密方法（不自己發明加密）：
@@ -3701,11 +3701,8 @@ def telegram(cfg):
     chat = norm_chat(cfg.get("chat"))
     token = token.replace(" ", "")
     if act == "status":
-        info = {"ok": True, "on": bool(TG_BOT and TG_CHAT), "chat": TG_CHAT, "has_token": bool(TG_BOT), "keep": TG_KEEP}
-        if TG_BOT:
-            me, _ = tg_api(TG_BOT, "getMe")
-            info["bot"] = "@" + me["result"]["username"] if me else ""
-        return True, info
+        # 不去問 Telegram（以前每次都問機器人名字，網頁沒用到，還讓視窗慢好幾秒才打開）
+        return True, {"ok": True, "on": bool(TG_BOT and TG_CHAT), "chat": TG_CHAT, "has_token": bool(TG_BOT), "keep": TG_KEEP}
     if act == "save" and not cfg.get("token") and not chat and cfg.get("off"):
         try:
             write_conf({"TG_BOT_TOKEN": "", "TG_CHAT_ID": ""})

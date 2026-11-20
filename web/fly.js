@@ -1758,8 +1758,11 @@ function flyInfo(id){
     if (e.target === v || e.target.closest("[data-r]")) done();
   });
 }
-document.addEventListener("click", e => {
+document.addEventListener("click", e => {   // 同一顆按鈕還沒做完再按不理它（onceClick 在 app.js）
   const f = e.target.closest && e.target.closest("#fly"); if (!f) return;
+  return onceClick(e.target.closest(ONCE_SEL), () => flyClick(e, f));
+});
+function flyClick(e, f){
   const t = e.target;
   if (t.closest("[data-fback]")) return flyClose();
   if (t.closest("[data-fpick]")) return flyPick();
@@ -1788,7 +1791,7 @@ document.addEventListener("click", e => {
     flyNudge(s, hr); } return; }
   const r = t.closest(".fr[data-id]");
   if (r && r.dataset.id) return flyInfo(r.dataset.id);
-});
+}
 /* 電腦：滑鼠指著看板的某一班，雷達上那架亮起來；指著雷達上的飛機，看板那一列亮起來 */
 (function(){
   let raf = 0, ev = null;

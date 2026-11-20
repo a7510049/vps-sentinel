@@ -193,7 +193,7 @@ document.addEventListener("click", e => {
   const a = e.target.closest && e.target.closest("a[data-sso]");
   if (!a || e.button !== 0) return;
   e.preventDefault();
-  openCloud(LIST.find(x => keyOf(x) === a.dataset.sso));
+  onceClick(a, () => openCloud(LIST.find(x => keyOf(x) === a.dataset.sso)));
 }, true);
 const linkSt = x => x.up === false ? x.err || "連不上" : x.up ? `${x.ms} 毫秒` : x.err ? "確認中…" : "還沒檢查";
 /* 連結的訊號格：越快格數越多，打不開是一格紅的 */
@@ -1329,6 +1329,26 @@ function render(list){
   paint(DESK.matches ? renderDesk(list, time) : renderPhone(list, time));
   if (TIPX) drawTip(...TIPX);
   loadStatus(); pickShow(PSMOOTH);
+}
+/* 換主機時新的那台內容比較短：先撐住原本的高度，再順順地往上捲到新的底，最後才放開；
+   不然捲到下面時一換，頁面會一下子跳回上面（使用者回報） */
+let HOLDT = 0;
+function holdHeight(change){
+  const v = view(), se = document.scrollingElement, B = document.body;
+  if (!v || !se || se.scrollTop < 1) return change();
+  const bot = () => { const l = v.lastElementChild; return l ? l.getBoundingClientRect().bottom + se.scrollTop : 0; };
+  clearTimeout(HOLDT); B.style.minHeight = "";
+  const y0 = se.scrollTop, b0 = bot(); B.style.minHeight = se.scrollHeight / ZM() + "px";   // 撐住整頁原本的高度
+  change();
+  const tok = HOLDT = setTimeout(() => {}, 0);
+  const go = () => { if (HOLDT !== tok) return;                     // 舊的還在淡出時量不準：等換好再量、再捲
+    const y = se.scrollTop, cut = b0 - bot(); if (cut <= 1) { B.style.minHeight = ""; return; }
+    const top = Math.max(0, Math.min(y, se.scrollHeight - cut - innerHeight));
+    let done = 0; const free = () => { if (done) return; done = 1; removeEventListener("scrollend", free); if (HOLDT === tok) B.style.minHeight = ""; };
+    if (top < y && canAnim()) { addEventListener("scrollend", free); setTimeout(free, 900); se.scrollTo({top, behavior:"smooth"}); }
+    else { se.scrollTop = top; free(); } };
+  const an = v.getAnimations ? v.getAnimations({subtree:true}).filter(a => a.playState === "running" && isFinite(a.effect && a.effect.getComputedTiming().endTime)) : [];
+  Promise.race([Promise.all(an.map(a => a.finished.catch(() => {}))), new Promise(r => setTimeout(r, 700))]).then(go);
 }
 let PSMOOTH = false;   // 點主機名稱換台時，那一排平順地滑到選到的那台
 DESK.addEventListener("change", () => { applyPrefs(); if (LIST.length) render(LIST); });
@@ -3002,7 +3022,24 @@ async function pkLoginClick(b){
 }
 
 /* ═════════ 點擊 ═════════ */
-document.addEventListener("click", async e => {
+/* 同一顆按鈕上一次按的還沒做完（例如還在等主機回應、視窗還沒打開）再按就不理它；視窗或選單一出現、做完、或 10 秒後放開（使用者要求：不能按兩次開兩個） */
+const ONCE = new WeakSet();
+function onceClick(el, run){
+  if (!el) return run();
+  if (ONCE.has(el)) return;
+  ONCE.add(el);
+  let done = 0;
+  const L = $("#layer"), mo = new MutationObserver(() => free()), tm = setTimeout(() => free(), 10000);
+  const free = () => { if (done) return; done = 1; ONCE.delete(el); mo.disconnect(); clearTimeout(tm); };
+  if (L) mo.observe(L, {childList:true});
+  return Promise.resolve().then(run).finally(free);
+}
+const ONCE_SEL = "button,a,[role=button],[data-open],[data-dsel]";
+document.addEventListener("click", e => {
+  if (!e.target.closest || e.target.closest("#layer") || e.target.closest("#fly")) return;
+  return onceClick(e.target.closest(ONCE_SEL), () => pageClick(e));
+});
+async function pageClick(e){
   if (e.target.closest("#layer") || e.target.closest("#fly")) return;
   if (e.target.closest("[data-fly]")) return flyEnter(e.target.closest("[data-fly]"));
   const t = e.target;
@@ -3025,7 +3062,7 @@ document.addEventListener("click", async e => {
     return;
   }
   const th = t.closest("[data-toolh]");
-  if (th) { if (TOOLH !== th.dataset.toolh) { TOOLH = th.dataset.toolh; store("vs-toolh", TOOLH); PSMOOTH = true; slideSel(() => render(LIST)); PSMOOTH = false; } pickShow(true); return; }
+  if (th) { if (TOOLH !== th.dataset.toolh) { TOOLH = th.dataset.toolh; store("vs-toolh", TOOLH); PSMOOTH = true; holdHeight(() => slideSel(() => render(LIST))); PSMOOTH = false; } pickShow(true); return; }
   const scg = t.closest("[data-setc]");
   if (scg) { if (SETC !== scg.dataset.setc) { SETC = scg.dataset.setc; store("vs-setc", SETC); slideSel(() => render(LIST)); } return; }
   const lf = t.closest("[data-logf]");
@@ -3129,7 +3166,7 @@ document.addEventListener("click", async e => {
   if (ds && !t.closest("[data-more]")) { DSEL = ds.dataset.dsel; store("vs-dsel", DSEL); if (TAB !== "home") return setTab("home"); return render(LIST); }
   const op = t.closest("[data-open]");
   if (op) return openDet(op.dataset.open);
-});
+}
 
 /* ═════════ 機場起降：畫面程式在 web/fly.js，用到才下載（首頁打開比較快） ═════════ */
 const FLYK = "vs-fly";                                    // 記住選的機場和分頁
@@ -3148,7 +3185,7 @@ function flyLib(){
     document.head.appendChild(s);
   }));
 }
-function flyEnter(btn){ flyLib().then(() => flyOpen(btn), () => toast("機場起降打不開，請再試一次", "bad")); }
+function flyEnter(btn){ return flyLib().then(() => flyOpen(btn), () => toast("機場起降打不開，請再試一次", "bad")); }
 /* ═════════ 定時抓資料 ═════════ */
 let timer;
 const T0 = performance.now(), sleep = ms => new Promise(r => setTimeout(r, ms));
