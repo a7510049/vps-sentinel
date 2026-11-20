@@ -1333,7 +1333,12 @@ def fly_nearby(ap):
 def fly_closest(ap, lat, lon, trk=None, way=0):
     """飛機是哪個機場的：way=1 找前方最近的（要降落），-1 找後方最近的（剛起飛），0 就是最近的"""
     best, bd = None, 1e9
-    for c, la, lo in [(ap[0], ap[3], ap[4])] + fly_nearby(ap):
+    aps = [(ap[0], ap[3], ap[4])] + fly_nearby(ap)
+    if way < 0:                                   # 剛起飛常常馬上轉彎：離某個機場 15 公里內就算那裡起飛的（金鵬 Y87402 從桃園起飛轉向西，以前被算成松山起飛）
+        n = min(((fly_dist(la, lo, lat, lon)[0], c) for c, la, lo in aps), default=(1e9, None))
+        if n[0] < 15:
+            return n[1]
+    for c, la, lo in aps:
         d, b = fly_dist(la, lo, lat, lon)
         if way and trk is not None and abs((float(trk) - (b + (180 if way > 0 else 0)) % 360 + 540) % 360 - 180) >= 60:
             continue
