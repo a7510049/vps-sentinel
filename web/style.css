@@ -172,8 +172,21 @@ b,strong{font-weight:500}
 :is(.li,.ubtn,.iconbtn,.icbtn,.hmenu button,.rb .ri,.seg button,.rng button,.fchip,.addhost,.trf,.chats button){position:relative}
 .rip{position:absolute;inset:0;border-radius:inherit;overflow:hidden;pointer-events:none}
 .rip i{position:absolute;border-radius:50%;background:currentColor;opacity:.14}
+/* 選到的底色（單選的一排、開關鈕）：按鈕裡一層 ::before 原地淡入撐開、淡出縮回（DESIGN.md「按鈕動畫」）
+   連按左右左右時，每一顆都從「現在的樣子」接著變回去，不會整塊消失、也不會從零重長
+   字的顏色不慢慢變：底色走到一半（--t-mid 的 1/5）時一次換好（--tsel）；慢慢變的話中間會有一下字跟底色一樣、字看不見 */
+:is(.fchip,.seg button,.rng button,.chats button,.frzm .icbtn){isolation:isolate;--tsel:calc(var(--t-mid) / 5) steps(1)}
+:is(.fchip,.seg button,.rng button,.chats button,.frzm .icbtn)::before{content:"";position:absolute;inset:0;z-index:-1;border-radius:inherit;pointer-events:none;
+  background:var(--p) var(--grad);opacity:0;transform:scale(.8);transition:opacity var(--t-mid) var(--ease),transform var(--sp)}
+:is(.fchip,.seg button,.rng button,.chats button,.frzm .icbtn).on::before{opacity:1;transform:none}
+/* 滑鼠指著（只有電腦）：沒選到的底色深一點點；選到的不變 */
+@media (hover:hover){.fchip:not(.on,.hsel.set,:disabled):hover{background-color:color-mix(in oklab,var(--card) 92%,var(--tx))}}
+@media (hover:hover){:is(.seg button,.rng button,.chats button):not(.on,:disabled):hover{background-color:color-mix(in oklab,var(--chip) 92%,var(--tx))}}
+@media (hover:hover){.frchips button:not(.on,:disabled):hover{background-color:color-mix(in oklab,var(--s2) 92%,var(--tx))}}
 /* 按下去（.prs，程式控制，輕點也至少看得到一下）：快速縮進去；放開時才用彈性曲線彈回來 */
 :is(.hcard,.tb,.li,.ubtn,.iconbtn,.icbtn,.hmenu button,.seg button,.rng button,.fchip,.addhost,.trf,.chats button,.blob,.sw button,.rb .ri,.fapc).prs,.rb.prs .ri{transition-duration:var(--t-fast);transition-timing-function:var(--ease)}
+/* 按住（.prs）時整排動畫改快，字的顏色照樣在底色一半時換 */
+:is(.fchip,.seg button,.rng button,.chats button).prs{transition:border-radius var(--sp),background-color var(--t-fast) var(--ease),box-shadow var(--t-fast) var(--ease),color var(--tsel),transform var(--t-fast) var(--ease)}
 
 /* 小圖示按鈕：圓的，按下去變圓角方形 */
 .iconbtn{width:40px;height:40px;border-radius:50%;display:inline-grid;place-items:center;color:var(--tx2);flex:none;position:relative;text-decoration:none;
@@ -538,10 +551,10 @@ html.dhid .dash>.view{content-visibility:hidden;contain-intrinsic-size:auto none
 .rng{display:inline-flex;gap:2px;margin-left:auto;flex:none}
 .rctl{display:inline-flex;gap:8px;margin-left:auto;flex:none}.rctl .rng{margin-left:0}   /* 雷達下面：路線開關和遠近放在一起 */
 .rng button{height:30px;padding:0 11px;font-size:var(--fs-xs);font-weight:500;background:var(--chip);color:var(--tx2);border-radius:var(--r-xs);white-space:nowrap;
-  transition:border-radius var(--sp),background-color var(--t-fast) var(--ease),color var(--t-fast) var(--ease)}
+  transition:border-radius var(--sp),background-color var(--t-fast) var(--ease),color var(--tsel)}
 .rng button:first-child{border-radius:var(--r-full) var(--r-xs) var(--r-xs) var(--r-full)}
 .rng button:last-child{border-radius:var(--r-xs) var(--r-full) var(--r-full) var(--r-xs)}
-.rng button.on{background:var(--p) var(--grad);color:var(--on-p);border-radius:var(--r-full)}
+.rng button.on{color:var(--on-p);border-radius:var(--r-full)}
 /* 網路速度：兩格 */
 .nets{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin-bottom:10px}
 .nt{display:flex;gap:10px;align-items:center;min-width:0}
@@ -610,8 +623,8 @@ button.li.prs,a.li.prs{border-radius:var(--r-lg);transform:scale(.98);background
 /* 篩選小按鈕 */
 .fchips{display:flex;gap:8px;margin:0 4px 16px;flex-wrap:wrap}
 .fchip{height:36px;padding:0 16px;border-radius:var(--r-sm);background:var(--card);color:var(--tx2);font-size:var(--fs-m);
-  transition:border-radius var(--sp),background-color var(--t-fast) var(--ease),box-shadow var(--t-fast) var(--ease),color var(--t-mid) var(--ease),transform var(--sp-fast)}
-.fchip.on{background:var(--p) var(--grad);color:var(--on-p);border-radius:var(--r-full)}   /* 單選：選到的一律實心主色（跟分頁、「自動／柔和」一樣） */
+  transition:border-radius var(--sp),background-color var(--t-fast) var(--ease),box-shadow var(--t-fast) var(--ease),color var(--tsel),transform var(--sp-fast)}
+.fchip.on{color:var(--on-p);border-radius:var(--r-full)}   /* 單選：選到的一律實心主色（底色是下面的 ::before） */
 .fchip.prs{transform:scale(.95)}
 .fchips .fchip{display:inline-flex;align-items:center}
 /* 工具、設定：選主機（很多台時換行，全部看得到；選到的是實心主題色，跟「自動／柔和」那種選項一樣） */
@@ -625,7 +638,6 @@ button.li.prs,a.li.prs{border-radius:var(--r-lg);transform:scale(.98);background
 .pane[data-slide]>.slide{z-index:1}   /* 一列一列是不透明的方塊：底色蓋在方塊上、字再蓋在底色上 */
 [data-slide].sliding>*{transition-property:color,box-shadow,transform,padding}
 [data-slide].sliding>.on{background:transparent}
-[data-slide].grow>*{transition-property:color,box-shadow,transform,padding,background-color,border-color}   /* 原地撐開：舊的那一格底色淡掉 */
 .dock>.slide{background:var(--p) var(--grad)}
 .dock.sliding>.on{background-image:none}
 .pane[data-slide].sliding>.on{background:var(--card)}
@@ -636,10 +648,10 @@ button.li.prs,a.li.prs{border-radius:var(--r-lg);transform:scale(.98);background
 .seg{display:flex;gap:3px;flex-wrap:wrap}
 .seg button{flex:1;height:40px;padding:0 12px;background:var(--chip);border-radius:var(--r-xs);font-size:var(--fs-s);font-weight:500;color:var(--tx2);white-space:nowrap;
   display:flex;align-items:center;justify-content:center;gap:6px;
-  transition:border-radius var(--sp),background-color var(--t-fast) var(--ease),color var(--t-fast) var(--ease),transform var(--sp-fast)}
+  transition:border-radius var(--sp),background-color var(--t-fast) var(--ease),color var(--tsel),transform var(--sp-fast)}
 .seg button:first-child{border-radius:var(--r-full) var(--r-xs) var(--r-xs) var(--r-full)}
 .seg button:last-child{border-radius:var(--r-xs) var(--r-full) var(--r-full) var(--r-xs)}
-.seg button.on{background:var(--p) var(--grad);color:var(--on-p);border-radius:var(--r-full)}
+.seg button.on{color:var(--on-p);border-radius:var(--r-full)}
 .seg button.prs{transform:scale(.94)}
 /* 外觀的選項：小預覽圖＋底下小字；選到的預覽圖外圈主題色、右上角打勾 */
 .lks{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
@@ -697,7 +709,8 @@ button.li.prs,a.li.prs{border-radius:var(--r-lg);transform:scale(.98);background
 .sw button.prs{transform:scale(.88)}
 .sw .rbsw{background:var(--pride)}
 /* 開關：打開時圓點變大、出現勾勾 */
-.tog{appearance:none;-webkit-appearance:none;width:52px;height:32px;border-radius:var(--r-pill);background:var(--s4);box-shadow:inset 0 0 0 2px var(--tx3);
+/* 關著時用一層內陰影蓋住主色，打開時這層淡掉（漸層不能直接漸變，直接換會一下子跳成主色） */
+.tog{appearance:none;-webkit-appearance:none;width:52px;height:32px;border-radius:var(--r-pill);background:var(--p) var(--grad);box-shadow:inset 0 0 0 2px var(--tx3),inset 0 0 0 26px var(--s4);
   position:relative;flex:none;cursor:pointer;margin:0;transition:background-color var(--t-mid) var(--ease),box-shadow var(--t-mid) var(--ease)}
 .tog::after{content:"";position:absolute;top:50%;left:16px;width:16px;height:16px;border-radius:50%;background:var(--tx3);transform:translate(-50%,-50%);
   transition:left var(--sp),width var(--sp),height var(--sp),background-color var(--t-mid) var(--ease)}
@@ -705,17 +718,20 @@ button.li.prs,a.li.prs{border-radius:var(--r-lg);transform:scale(.98);background
   -webkit-mask:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='3.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m5 12.5 4.5 4.5L19 7.5'/%3E%3C/svg%3E") center/contain no-repeat;
   mask:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='3.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m5 12.5 4.5 4.5L19 7.5'/%3E%3C/svg%3E") center/contain no-repeat;
   transition:left var(--sp),opacity var(--t-fast) var(--ease),transform var(--sp)}
-.tog:checked{background:var(--p) var(--grad);box-shadow:none}
+.tog:checked{box-shadow:inset 0 0 0 2px transparent,inset 0 0 0 26px transparent}
 .tog:checked::after{left:36px;width:24px;height:24px;background:var(--on-p)}
 .tog:checked::before{left:36px;opacity:1;transform:translate(-50%,-50%)}
 .tog:active::after{width:28px;height:28px}
 /* 彩虹主題：選到的東西換成彩虹底、深色字（滑動中的那一格交給 .slide） */
-[data-accent="rainbow"] :is(.tb.on,[data-slide]>.slide,.fchip.on,.seg button.on,.rng button.on,.pane .li.on,.chats button.on,.bkhosts .ubtn.on,
+[data-accent="rainbow"] :is(.fchip,.seg button,.rng button,.chats button,.frzm .icbtn)::before{background-image:var(--rbw)}
+[data-accent="rainbow"] :is(.fchip.on,.seg button.on,.rng button.on,.chats button.on,.frzm .icbtn.on){color:var(--on-rbw)}
+[data-accent="rainbow"] :is(.tb.on,[data-slide]>.slide,.pane .li.on,.bkhosts .ubtn.on,
   .tog:checked,.remember input:checked,.blob:not(.warn,.bad) .bf,.sp-blob){background-image:var(--rbw);color:var(--on-rbw)}
 [data-accent="rainbow"] [data-slide].sliding>.on{background-image:none}
 [data-accent="rainbow"] .rb.on .ri::before{background-image:var(--rbw)}
 [data-accent="rainbow"] .rb.on .ri{color:var(--on-rbw)}
 [data-accent="rainbow"] .blob:not(.warn,.bad) .bg{color:var(--on-rbw)}
+[data-accent="rainbow"] .tog{background-image:var(--rbw)}
 [data-accent="rainbow"] .tog:checked::after{background:#fff}
 [data-accent="rainbow"] .tog:checked::before{background:var(--on-rbw)}
 
@@ -756,6 +772,7 @@ button.li.prs,a.li.prs{border-radius:var(--r-lg);transform:scale(.98);background
   padding:0 18px 32px;margin:0 -18px -32px}   /* 捲動的欄位會切掉卡片的影子：四周多留位置 */
 .pane .li{min-height:52px;padding:10px 16px;gap:10px}
 .pane .li{transition:border-radius var(--sp-fast),transform var(--sp-fast),background-color var(--t-mid) var(--ease),color var(--t-mid) var(--ease)}
+.pane[data-slide].sliding>.li{transition-property:border-radius,transform,color}   /* 底色正在滑：舊的那一列不要留一塊慢慢褪的灰底（上面那條會蓋掉 [data-slide].sliding>*） */
 .pane .li.on{background:var(--p) var(--grad);color:var(--on-p)}
 .lfi{display:grid;place-items:center;flex:none}
 .lfi svg{width:16px;height:16px}
@@ -987,8 +1004,8 @@ textarea.field{height:auto;padding:12px 16px;resize:none}
 .tgd .chats{display:flex;flex-wrap:wrap;gap:6px}
 .tgd .chats:empty{display:none}
 .tgd .chats button{height:34px;padding:0 14px;border-radius:var(--r-sm);background:var(--chip);font-size:var(--fs-s);
-  transition:border-radius var(--sp),background-color var(--t-fast) var(--ease),box-shadow var(--t-fast) var(--ease),color var(--t-mid) var(--ease)}
-.tgd .chats button.on{background:var(--p) var(--grad);color:var(--on-p);border-radius:var(--r-full)}
+  transition:border-radius var(--sp),background-color var(--t-fast) var(--ease),box-shadow var(--t-fast) var(--ease),color var(--tsel)}
+.tgd .chats button.on{color:var(--on-p);border-radius:var(--r-full)}
 /* 手機金鑰、PIN 碼、配對暗號 */
 .pkd,.pindlg{max-width:420px}
 .pklist{display:flex;flex-direction:column;gap:3px}
@@ -1299,7 +1316,9 @@ html.flyon .dash>.view{content-visibility:hidden;contain-intrinsic-size:auto non
 .fhb i{width:100%;max-width:32px;height:calc(4px + var(--h,0) * 48px);border-radius:var(--r-xs);background:color-mix(in oklab,var(--p) 35%,var(--s3));transition:height var(--t-mid) var(--ease),background-color var(--t-fast) var(--ease)}
 .fhb.past i{background:var(--s3)}
 .fhb:not(:disabled):hover i{background:color-mix(in oklab,var(--p) 60%,var(--s3))}
-.fhb.on i{background:var(--p) var(--grad)}
+.fhb i{position:relative;isolation:isolate}
+.fhb i::before{content:"";position:absolute;inset:0;border-radius:inherit;background:var(--p) var(--grad);opacity:0;transition:opacity var(--t-mid) var(--ease)}   /* 選到的時段：主色淡入（漸層不能直接漸變） */
+.fhb.on i::before{opacity:1}
 .fhb:disabled i{height:2px;opacity:.6}
 .fhb small{height:1.3em;font-size:var(--fs-xs);font-variant-numeric:tabular-nums;white-space:nowrap;visibility:hidden;position:relative}
 .fhb.lb small,.fhb.on small,.fhb.now small{visibility:visible}
@@ -1310,7 +1329,7 @@ html.flyon .dash>.view{content-visibility:hidden;contain-intrinsic-size:auto non
 .fti{width:18px;height:18px;margin-right:6px;flex:none;display:inline-block;vertical-align:-4px}   /* 分頁前面的指示牌圖示 */
 .ftabs{--chip:var(--card)}
 .ftabs{flex-wrap:nowrap}@media (max-width:480px){.ftabs button{padding:0 4px}.ftabs .fti{width:15px;height:15px;margin-right:3px;vertical-align:-3px}.ftabs .fn{margin-left:4px}}@media (max-width:360px){.ftabs .fti{display:none}}   /* 手機：四個分頁加圖示也排得下一排（太窄就不放圖示） */
-.ftabs .fn{display:inline-block;margin-left:6px;color:var(--tx3);font-variant-numeric:tabular-nums}.ftabs .on .fn{color:var(--on-p);opacity:.75}[data-accent="rainbow"] .ftabs .on .fn{color:var(--on-rbw)}   /* 數字自己給顏色，不跟著按鈕的變色動畫走（手機上有時會留著選到時的深色） */
+.ftabs .fn{display:inline-block;margin-left:6px;color:var(--tx3);transition:color var(--tsel);font-variant-numeric:tabular-nums}.ftabs .on .fn{color:var(--on-p);opacity:.75}[data-accent="rainbow"] .ftabs .on .fn{color:var(--on-rbw)}   /* 數字自己給顏色，不跟著按鈕的變色動畫走（手機上有時會留著選到時的深色） */
 .ftabs .fn .dg{display:inline-block;position:relative;font-style:normal}.ftabs .fn .dg>b{display:inline-block;font-weight:inherit;transform-origin:50% 50%}.ftabs .fn .dgo{position:absolute;inset:0;font-style:normal;transform-origin:50% 50%}   /* 班數一位一位翻：舊的疊在上面先翻走 */
 .board{background:var(--card);box-shadow:var(--cs);border-radius:var(--r-xl);padding:10px;display:grid;grid-template-columns:auto auto auto minmax(5.6em,1fr) auto minmax(5em,1fr) auto auto auto auto auto;column-gap:12px;overflow:hidden}
 .fh,.frows,.fr{display:grid;grid-column:1/-1;grid-template-columns:subgrid}
@@ -1429,11 +1448,11 @@ html.flyon .dash>.view{content-visibility:hidden;contain-intrinsic-size:auto non
 .frname{font-size:var(--fs-l);font-weight:600;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--tw-txt);text-shadow:0 0 6px var(--tw-bg)}
 .frbar{position:absolute;top:calc(env(safe-area-inset-top) + 64px);left:12px;right:12px;display:flex;justify-content:center;pointer-events:none}
 .frchips{pointer-events:auto;max-width:420px;width:100%}
-.frchips button{box-shadow:var(--sh-1)}.frchips button:not(.on){background:var(--s2)}   /* 陰影跟著每顆按鈕的圓角，不會多一個方框 */
+.frchips button{box-shadow:var(--sh-1)}.frchips button{background:var(--s2)}   /* 陰影跟著每顆按鈕的圓角，不會多一個方框 */
 .frzm{position:absolute;right:12px;top:calc(env(safe-area-inset-top) + 12px);display:flex;gap:8px}
 .frzm .icbtn{background:var(--s2);box-shadow:var(--sh-1)}
-.frzm .icbtn{transition:background-color var(--t-fast) var(--ease),color var(--t-fast) var(--ease)}
-.frzm .icbtn.on{background:var(--p) var(--grad);color:var(--on-p)}   /* 常走路線開著 */
+.frzm .icbtn{transition:background-color var(--t-fast) var(--ease),color var(--tsel)}
+.frzm .icbtn.on{color:var(--on-p)}   /* 常走路線開著 */
 .frcard{position:absolute;left:12px;right:12px;bottom:calc(env(safe-area-inset-bottom) + 76px);max-width:420px;margin:0 auto;background:var(--s1);border-radius:var(--r-lg);padding:14px 16px;box-shadow:var(--sh-2)}
 .frch{display:flex;align-items:center;gap:10px}.frch>div{flex:1;min-width:0;display:flex;align-items:baseline;gap:8px}
 .frfn{font-size:var(--fs-xl);font-weight:600}.frch .fst{font-size:var(--fs-s);color:var(--p)}
