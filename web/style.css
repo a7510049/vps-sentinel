@@ -1498,7 +1498,7 @@ html.flyon .dash>.view{content-visibility:hidden;contain-intrinsic-size:auto non
 .frzm .icbtn{transition:background-color var(--t-fast) var(--ease),color var(--tsel)}
 .frzm .icbtn.on{color:var(--on-p)}   /* 常走路線開著 */
 .frcard{position:absolute;left:12px;right:12px;bottom:calc(env(safe-area-inset-bottom) + 76px);max-width:420px;margin:0 auto;background:var(--s1);border-radius:var(--r-lg);padding:14px 16px;box-shadow:var(--sh-2)}
-.frch{display:flex;align-items:center;gap:10px}.frch>div{flex:1;min-width:0;display:flex;align-items:baseline;gap:8px}.frch>div>.sub{min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}   /* 「國泰航空・客機」不換行
+.frch{display:flex;align-items:center;gap:10px}.frch>div{flex:1;min-width:0;display:flex;align-items:baseline;gap:8px}.frch>div>.sub{min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}   /* 「國泰航空・客機」不換行 */
 .frfn{font-size:var(--fs-xl);font-weight:600}.frch .fst{font-size:var(--fs-s);color:var(--p)}
 .frrt{display:flex;align-items:center;gap:12px;margin:10px 0}.frrt>div{display:flex;flex-direction:column}.frrt>div:last-child{align-items:flex-end;margin-left:auto}
 .frrt b{font-size:var(--fs-l)}.frrt small{color:var(--tx2);font-size:var(--fs-s)}.frrt .sub svg{width:18px;height:18px;transform:rotate(45deg)}
