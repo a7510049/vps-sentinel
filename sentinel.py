@@ -787,7 +787,7 @@ TG_PART = int(os.environ.get("SENTINEL_TG_PART") or 45 * 1024 * 1024)   # 備份
 TG_PARTS_MAX = 20                                  # 最多切幾段（大約 900 MB）；再大就不傳 Telegram
 BK_SKIP_DIRS = {"cache", ".cache", "tmp", "log", "logs", "node_modules"}
 # 哨兵自己抓來的資料（機場起降的飛機資料庫、標誌、航班表、照片）：還原後會自己重抓，不用備份
-BK_REGEN = ("aircraft-db", "fly-logos", "flags", "fids", "fly-photos.json", "fly-aircraft.json", "peers-cache.json")
+BK_REGEN = ("aircraft-db", "fly-logos", "flags", "fids", "fly-photos.json", "fly-owners.json", "fly-aircraft.json", "peers-cache.json")
 BK_RUN = threading.Lock()                         # 同一時間只跑一次備份
 BK_MAKE = threading.Lock()                        # 同一時間只打包一份
 BK = {"last": None, "ok_t": None, "day": None, "key_t": 0, "names": {}, "tg": {}, "running": False}  # 會存檔

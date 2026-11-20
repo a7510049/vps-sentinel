@@ -1709,8 +1709,8 @@ function flyInfo(id){
   ].filter(r => r[1]);
   const rows = [
     ["共掛班號", p.share && p.share.length ? p.share.join("、") : ""],
-    ["高度", air ? (p.alt ? `${p.alt.toLocaleString()} 公尺${p.ph === "gnd" ? "" : vr}` : "地面") : ""],
-    ["速度", air ? `${p.spd} 公里/時` : ""],
+    ["高度", air && p.alt ? `${p.alt.toLocaleString()} 公尺${p.ph === "gnd" ? "" : vr}` : ""],   // 在地上：狀態已經寫了，不用再列「地面」「0 公里/時」
+    ["速度", air && (p.alt || p.spd >= 5) ? `${p.spd} 公里/時` : ""],
     ["離機場", air ? `${p.d} 公里` : ""],
     ["呼號", p.cs && p.cs !== p.fn ? p.cs : ""],
     ["應答碼", p.sq],
@@ -1721,8 +1721,9 @@ function flyInfo(id){
     <a class="fph" target="_blank" rel="noopener noreferrer" hidden></a>
     <div class="bpass"><div class="fih">${flyLogo(flyAl(p.fn), "lg")}<div class="lab"><b class="ffn">${esc(p.fn || p.reg || "—")}</b><small>${esc([p.al, p.use].filter(Boolean).join("・") || "航空公司不明")}</small></div>
       ${p.st ? `<span class="fst2${p.emg || /取消|轉降/.test(p.st) ? " bad" : ""}">${esc(p.st)}</span>` : ""}</div>
-      ${p.org || p.dst ? `<div class="froute">${end(p.org, !arr)}<span class="fln"><i></i>${I("plane")}<i></i></span>${end(p.dst, arr)}</div>` : `<div class="fnr sub">航線不明</div>`}
+      ${p.org || p.dst ? `<div class="froute">${end(p.org, !arr)}<span class="fln"><i></i>${I("plane")}<i></i></span>${end(p.dst, arr)}</div>` : air && !p.alt ? "" : `<div class="fnr sub">航線不明</div>`}
       ${keys.length ? `<div class="bpcut"></div><div class="bpk">${keys.map(([k, val, sm]) => `<div><span>${k}</span><b>${esc(val)}</b>${sm ? `<small${/原本/.test(sm) ? ' class="was"' : ""}>${esc(sm)}</small>` : ""}</div>`).join("")}</div>` : ""}</div>
+    <div class="fbad fown" hidden></div>
     ${p.emg || p.mil || p.rare ? `<div class="fbad${p.emg ? " bad" : ""}">${p.emg ? `${I("warn")}${esc(p.st)}（應答碼 ${esc(p.sq)}）` : p.mil ? "軍機" : "少見機型"}</div>` : ""}
     ${gmap ? `<div class="fgate"></div>` : ""}
     ${rows.length ? `<div class="fdl">${rows.map(([k, val]) => `<div><span>${k}</span><b>${esc(val)}</b></div>`).join("")}</div>` : ""}
@@ -1731,6 +1732,7 @@ function flyInfo(id){
     </div><div class="btns">${p.x != null && p.live !== false ? `<button class="ubtn" data-frad>在雷達上看</button>` : ""}</div></div>`;
   $("#layer").appendChild(v);
   flyPhoto(v.querySelector(".fph"), p);
+  flyOwner(v.querySelector(".fown"), p);
   if (v.querySelector(".fgate")) flyGate(v, v.querySelector(".fgate"), p, d.ap.code);
   const done = () => { if (v._d) return; v._d = 1; flyMeOff(v); v.classList.add("closing"); FLYSEL = ""; flyPaint(); setTimeout(() => v.remove(), 360); };
   v._esc = done;
@@ -1941,6 +1943,19 @@ function fradCard(){
   flyPhoto(c.firstChild, p);
   if (c._id !== p.id) { c._id = p.id; if (!c.hidden && canAnim()) c.animate([{opacity:.4, transform:"translateY(6px)"}, {opacity:1, transform:"none"}], {duration:T.mid, easing:EASE}); }
   reveal(c, true);
+}
+/* 飛機登記在哪家（adsbdb）：跟呼號的航空公司不一樣時講出來（例如金鵬的班號、飛機是順豐的） */
+const FLYOWN = new Map();
+function flyOwner(box, p){
+  const al = /^([A-Z]{3})\d/.exec(p.cs || "");
+  const reg = p.reg || "", hx = /^[0-9a-f]{6}$/.test(p.id || "") ? p.id : "", k = reg || hx;
+  if (!box || !al || !k) return;
+  if (!FLYOWN.has(k)) FLYOWN.set(k, api("/api/flights?owner=" + encodeURIComponent(reg) + "&hex=" + hx, {headers:flyHdr()}).then(r => r.json()).catch(() => { FLYOWN.delete(k); return null; }));
+  FLYOWN.get(k).then(d => {
+    if (!d || !d.op || !d.opn || d.op === al[1] || !box.isConnected) return;
+    box.innerHTML = `${I("info")}這架飛機登記是${esc(d.opn)}的`;
+    reveal(box, true);
+  });
 }
 /* 飛機照片（Planespotters）：查得到就放在卡片最上面，寫攝影者、點了看原圖 */
 const FLYPH = new Map();

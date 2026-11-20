@@ -150,7 +150,7 @@ FLY_AL = {
     "CDG": ("SC", "山東航空"), "CAO": ("CA", "國貨航"), "CKK": ("CK", "中貨航"), "CSS": ("O3", "順豐航空"),
     "SIA": ("SQ", "新加坡航空"), "TGW": ("TR", "酷航"), "SQC": ("SQ", "新航貨運"), "THA": ("TG", "泰國航空"),
     "AIQ": ("FD", "泰國亞洲航空"), "TLM": ("SL", "泰國獅子航空"), "NOK": ("DD", "皇雀航空"), "TVJ": ("VZ", "泰國越捷航空"),
-    "AXM": ("AK", "亞洲航空"), "XAX": ("D7", "全亞洲航空"), "MAS": ("MH", "馬來西亞航空"), "MXD": ("OD", "馬印航空"),
+    "AXM": ("AK", "亞洲航空"), "XAX": ("D7", "全亞洲航空"), "MAS": ("MH", "馬來西亞航空"), "MXD": ("OD", "馬來西亞峇迪航空"),
     "PAL": ("PR", "菲律賓航空"), "CEB": ("5J", "宿霧太平洋"), "APG": ("Z2", "菲律賓亞洲航空"), "HVN": ("VN", "越南航空"),
     "VJC": ("VJ", "越捷航空"), "BAV": ("QH", "越竹航空"), "GIA": ("GA", "印尼航空"), "LNI": ("JT", "獅子航空"), "AWQ": ("QZ", "印尼亞洲航空"), "TAX": ("XJ", "泰國全亞洲航空"),
     "UAE": ("EK", "阿聯酋航空"), "QTR": ("QR", "卡達航空"), "ETD": ("EY", "阿提哈德航空"), "THY": ("TK", "土耳其航空"),
@@ -161,7 +161,7 @@ FLY_AL = {
     "ETH": ("ET", "衣索比亞航空"), "FDX": ("FX", "聯邦快遞"), "UPS": ("5X", "優比速"), "GTI": ("5Y", "亞特拉斯航空"),
     "CLX": ("CV", "盧森堡貨運"), "CKS": ("K4", "卡利塔航空"), "PAC": ("PO", "寶立航空"), "ABW": ("RU", "空橋貨運"),
     "BOX": ("3S", "德國貨運"), "GEC": ("LH", "漢莎貨運"),
-    "DHK": ("D0", "DHL 航空"), "BCS": ("QY", "DHL 歐洲航空"), "DHX": ("ES", "DHL 國際航空"), "YZR": ("Y8", "揚子江快運"),
+    "DHK": ("D0", "DHL 航空"), "BCS": ("QY", "DHL 歐洲航空"), "DHX": ("ES", "DHL 國際航空"), "YZR": ("Y8", "金鵬航空"),
     "CYZ": ("8Y", "中國郵政航空"), "HYT": ("YG", "圓通航空"), "ABX": ("GB", "ABX 航空"), "ATN": ("8C", "ATI 航空"),
     "AZG": ("7L", "絲路西方航空"), "WGN": ("KD", "西方環球航空"), "NCR": ("N8", "國家航空"),
     "SFJ": ("7G", "星悅航空"), "SPQ": ("9G", "太陽富國航空"), "CDC": ("GJ", "長龍航空"), "AIC": ("AI", "印度航空"), "AVA": ("AV", "哥倫比亞航空"),
@@ -651,6 +651,62 @@ def fly_photo(reg, hx=""):
             pass
     return out
 
+
+
+# 飛機登記在哪家公司（adsbdb）：班號是一家、飛機登記是另一家時（租機、代飛、資料庫舊了）網頁要講出來
+FLY_OWNER_URL = os.environ.get("SENTINEL_FLY_OWNER") or "https://api.adsbdb.com/v0/aircraft/{key}"
+FLY_OWNER_FILE = os.path.join(DATA_DIR, "fly-owners.json")
+FLY_OWNERS = {"d": None, "lock": threading.Lock()}
+
+
+def fly_owner(reg, hx=""):
+    """回傳 {"op": 國際民航組織三碼, "opn": 中文名稱（沒有就原文）}；查不到回 {}"""
+    reg = str(reg or "").upper().strip()
+    hx = str(hx or "").lower().strip()
+    if not re.fullmatch(r"[A-Z0-9][A-Z0-9-]{1,9}", reg):
+        reg = ""
+    if not re.fullmatch(r"[0-9a-f]{6}", hx):
+        hx = ""
+    if not reg and not hx:
+        return {}
+    k = reg or "~" + hx
+    with FLY_OWNERS["lock"]:
+        if FLY_OWNERS["d"] is None:
+            try:
+                with open(FLY_OWNER_FILE, encoding="utf-8") as f:
+                    FLY_OWNERS["d"] = json.load(f)
+            except (OSError, ValueError):
+                FLY_OWNERS["d"] = {}
+        hit = FLY_OWNERS["d"].get(k)
+    if hit and time.time() - hit.get("at", 0) < (30 if hit.get("op") else 3) * 86400:
+        return {x: hit[x] for x in ("op", "opn") if hit.get(x)}
+    out = {}
+    try:
+        d = json.loads(fly_get(FLY_OWNER_URL.replace("{key}", urllib.parse.quote(reg or hx)),
+                               ua=f"vps-sentinel/{VERSION} (+https://github.com/a7510049/vps-sentinel)", timeout=8))
+        a = (d.get("response") or {}).get("aircraft") if isinstance(d, dict) and isinstance(d.get("response"), dict) else None
+        if isinstance(a, dict):
+            op = str(a.get("registered_owner_operator_flag_code") or "").upper()
+            if re.fullmatch(r"[A-Z]{3}", op):
+                out = {"op": op, "opn": (FLY_AL.get(op) or ("", ""))[1] or fly_cut(str(a.get("registered_owner") or ""), 40)}
+    except (OSError, ValueError, AttributeError):
+        if hit:
+            return {x: hit[x] for x in ("op", "opn") if hit.get(x)}
+        return {}
+    with FLY_OWNERS["lock"]:
+        d = FLY_OWNERS["d"]
+        d[k] = {"at": time.time(), **out}
+        if len(d) > 3000:
+            for x in sorted(d, key=lambda x: d[x].get("at", 0))[:len(d) - 2500]:
+                d.pop(x)
+        try:
+            os.makedirs(DATA_DIR, exist_ok=True)
+            with open(FLY_OWNER_FILE + ".tmp", "w", encoding="utf-8") as f:
+                json.dump(d, f)
+            os.replace(FLY_OWNER_FILE + ".tmp", FLY_OWNER_FILE)
+        except OSError:
+            pass
+    return out
 
 # 機場天氣（METAR，美國航空氣象中心，不用註冊）：背景抓，10 分鐘一次
 FLY_ICAO = {"TPE": "RCTP", "TSA": "RCSS", "RMQ": "RCMQ", "KHH": "RCKH"}
@@ -2177,6 +2233,8 @@ def fly_api(q):
         return fly_tracks(c if c in FLY_PIN else "TPE")
     if "photo" in q:                              # 飛機照片（註冊號，沒有就用飛機編號）
         return {"ok": True, **fly_photo(q["photo"][0], (q.get("hex") or [""])[0])}
+    if "owner" in q:                              # 飛機登記在哪家公司
+        return {"ok": True, **fly_owner(q["owner"][0], (q.get("hex") or [""])[0])}
     code = str(q.get("ap", ["TPE"])[0]).upper()[:4]
     try:
         return fly_slim(fly_board(code if code in FLY_PIN else "TPE"), str((q.get("v") or [""])[0])[:20])
