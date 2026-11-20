@@ -71,6 +71,7 @@
   --tl:.33; --tc:.075; --fl:.9; --fc:.08;                /* 方塊圖示：底色亮度、彩度／圖案亮度、彩度 */
   --glow:24%;                                            /* 頁面頂端的主題色光暈有多濃 */
   --sh-card:inset 0 1px 0 rgba(255,255,255,.05),0 14px 36px -18px rgba(0,0,0,.75);   /* 卡片：上緣一點亮邊＋往下的柔和影子 */
+  --sh-seg:inset 0 1px 0 rgba(255,255,255,.05);         /* 連在一起的清單：中間幾列只留亮邊，大影子只給最後一列（不然每道縫都有一條灰影） */
   --c-cpu:oklch(.74 .14 255); --c-mem:oklch(.74 .15 305); --c-rx:oklch(.8 .12 200); --c-tx:oklch(.74 .16 355);
 }
 [data-mode="light"],[data-mode="light"] .sw [data-accent]{
@@ -89,9 +90,10 @@
   --tl:.93; --tc:.05; --fl:.4; --fc:.13;
   --glow:18%;
   --sh-card:0 1px 2px rgba(30,40,90,.05),0 12px 30px -16px rgba(30,40,90,.24);
+  --sh-seg:0 1px 2px rgba(30,40,90,.05);
   --c-cpu:oklch(.56 .17 255); --c-mem:oklch(.55 .19 305); --c-rx:oklch(.6 .12 200); --c-tx:oklch(.58 .2 355);
 }
-:root{--card:var(--s1); --chip:var(--s2); --cs:var(--sh-card)}
+:root{--card:var(--s1); --chip:var(--s2); --cs:var(--sh-card); --cseg:var(--sh-seg)}
 :root{--ttl:linear-gradient(100deg,var(--tx) 35%,color-mix(in oklab,var(--p) 75%,var(--tx)))}   /* 頁面標題的文字漸層 */   /* --cs：最外層卡片的影子（卡片裡面的卡片換成 none） */
 /* 主色漸層：選中的分頁、主要按鈕、主機頭像。第二個顏色是主色轉 --gh 度（每個主題色各自挑往好看的那一邊；舊瀏覽器就是主色） */
 :root{--p2:var(--p); --grad:linear-gradient(135deg,var(--p),var(--p2))}
@@ -360,8 +362,8 @@ html.full .dock .tb.on::before{opacity:1;transform:none}
   animation:rise var(--sp) backwards;animation-delay:calc(60ms + var(--i,0) * 60ms)}
 .hcard.prs{border-radius:var(--r-2xl);transform:scale(.97);background:var(--s2)}
 /* 出狀況：卡片上半淡淡染上狀態色（不用外框），提示列換成半透明白底 */
-:is(.hcard,.hp).warn{background-image:linear-gradient(180deg,color-mix(in oklab,var(--warnc) 80%,transparent),transparent 55%)}
-:is(.hcard,.hp).bad{background-image:linear-gradient(180deg,color-mix(in oklab,var(--badc) 85%,transparent),transparent 55%)}
+:is(.hcard,.hp).warn{background-image:linear-gradient(180deg,color-mix(in oklab,var(--warnc) 80%,transparent),transparent min(55%,200px))}
+:is(.hcard,.hp).bad{background-image:linear-gradient(180deg,color-mix(in oklab,var(--badc) 85%,transparent),transparent min(55%,200px))}   /* 只染上面一段：電腦、主機頁很高，染一半會整片紅 */
 .hcard:focus-visible{outline:2px solid var(--p);outline-offset:2px}
 .ct{display:flex;align-items:center;gap:12px}
 .ct .nm{min-width:0;flex:1}
@@ -523,8 +525,11 @@ html.dhid .dash>.view{content-visibility:hidden;contain-intrinsic-size:auto none
 .tile .tv{font-size:var(--fs-3xl);font-weight:800;letter-spacing:-.03em;line-height:1.05;white-space:nowrap;font-variant-numeric:tabular-nums}
 .tile .tv small{font-size:var(--fs-l);margin-left:1px;color:var(--tx2)}
 .tile .ts{font-size:var(--fs-xs);color:var(--tx3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.tile.w{background:var(--warnc);color:var(--on-warnc)}.tile.b{background:var(--badc);color:var(--on-badc)}
-.tile.w .th,.tile.w .ts,.tile.w .tv small,.tile.b .th,.tile.b .ts,.tile.b .tv small{color:inherit;opacity:.85}
+/* 有狀況的格子：淡淡染色、數字和波浪條換成狀態色（跟主機卡片一樣），不再整格深色 */
+.tile.w{background:color-mix(in oklab,var(--warnc) 45%,var(--card));color:var(--warn)}
+.tile.b{background:color-mix(in oklab,var(--badc) 45%,var(--card));color:var(--bad)}
+.tile.w .th,.tile.b .th{color:var(--tx2)}.tile.w .ts,.tile.b .ts{color:var(--tx3)}
+.tile.w .tv small,.tile.b .tv small{color:inherit;opacity:.85}
 .tile.w .wv,.tile.b .wv{color:currentColor}
 .tile.w .wr>i,.tile.b .wr>i{background:color-mix(in srgb,currentColor 25%,transparent)}
 .tile .wd{font-size:var(--fs-2xl)}
@@ -622,6 +627,7 @@ html.dhid .dash>.view{content-visibility:hidden;contain-intrinsic-size:auto none
   transition:border-radius var(--sp-fast),transform var(--sp-fast),background-color var(--t-fast) var(--ease)}
 .group>.li:first-child{border-top-left-radius:var(--r-lg);border-top-right-radius:var(--r-lg)}
 .group>.li:last-child{border-bottom-left-radius:var(--r-lg);border-bottom-right-radius:var(--r-lg)}
+.group>:not(:last-child),.group>.selfbox>*,.selfbox>:not(:last-child),.evs>.ev:not(:last-child):not(:has(+.day)){box-shadow:var(--cseg)}   /* 縫裡不透出上一列的影子 */
 button.li.prs,a.li.prs{border-radius:var(--r-lg);transform:scale(.98);background:var(--s2)}
 @media (hover:hover){button.li:hover,a.li:hover{background:color-mix(in oklab,var(--card) 92%,var(--tx))}}
 .li .lab{flex:1;min-width:0;font-size:var(--fs-l);overflow-wrap:anywhere}
@@ -804,7 +810,7 @@ button.li.prs,a.li.prs{border-radius:var(--r-lg);transform:scale(.98);background
 .scol{min-width:0}
 /* 工具的每一項各自一個框框，兩個一排；雲端硬碟（有容量條）佔滿一排 */
 .dash.d .v-tools .group{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
-.dash.d .v-tools .group>.li{border-radius:var(--r-lg);min-height:84px;padding:16px 20px}
+.dash.d .v-tools .group>.li{box-shadow:var(--cs);border-radius:var(--r-lg);min-height:84px;padding:16px 20px}
 .dash.d .v-tools .group>.li.col{grid-column:1/-1}
 .dash.d .v-tools .group:not(:has(>.col))>.li:last-child:nth-child(odd),.dash.d .v-tools .group:has(>.col:first-child)>.li:last-child:nth-child(even){grid-column:1/-1}   /* 單數個時最後一個撐滿，右邊不留空 */
 .dhome{display:grid;grid-template-columns:minmax(0,1fr) var(--side);grid-template-areas:"hd hd" "main side";column-gap:var(--gut);align-items:start}
@@ -813,7 +819,7 @@ button.li.prs,a.li.prs{border-radius:var(--r-lg);transform:scale(.98);background
 .dhome .hero{padding:6px 4px 26px}
 .dhome .blob{width:72px;height:72px}
 .cols{display:grid;grid-template-columns:repeat(var(--n),minmax(0,1fr));gap:16px;align-items:start}
-.hp{--card:var(--s2);--chip:var(--s3);--cs:none;box-shadow:var(--sh-card);background:var(--s1);border-radius:var(--r-xl);padding:20px;container-type:inline-size;
+.hp{--card:var(--s2);--chip:var(--s3);--cs:none;--cseg:none;box-shadow:var(--sh-card);background:var(--s1);border-radius:var(--r-xl);padding:20px;container-type:inline-size;
   animation:rise var(--sp) backwards;animation-delay:calc(var(--i,0) * 70ms);
   transition:box-shadow var(--t-mid) var(--ease)}
 .hp .hname{font-size:var(--fs-2xl);font-weight:700;letter-spacing:-.01em;background:none;color:var(--tx)}   /* 電腦欄位裡是卡片標題，跟首頁卡片的主機名稱一樣 */
@@ -903,6 +909,9 @@ body:has(.dash.d) .fwrap{max-width:var(--pw)}
 .hc>svg{width:13px;height:13px;flex:none;color:var(--tx3)}
 .hc>i{width:6px}
 .hc.htf>b{width:auto;min-width:58px}   /* 本月流量有上限：波浪條＋用了多少 */
+.hc .wv0{flex:1}.hc.htf>b.nl{font-weight:500;color:var(--tx2)}   /* 沒上限的：數字一樣靠右，跟有上限的對齊 */
+.hc.hnet{display:grid;grid-template-columns:13px minmax(0,1fr) 13px minmax(0,1fr);column-gap:6px}   /* 下載、上傳各自一欄，每一列的箭頭對齊 */
+.hth>:nth-child(7),.htr>:nth-child(7){padding-left:10px}
 .hn .av,.hn .avatar{flex:none}
 .hn>span{display:flex;flex-direction:column;min-width:0}
 .hn b{color:var(--tx);font-weight:700;overflow:hidden;text-overflow:ellipsis}
@@ -973,7 +982,7 @@ body:has(.dash.d) .fwrap{max-width:var(--pw)}
 .veil.closing::before{animation:fadeOut var(--t-fast) var(--ease) forwards}   /* 要在 360ms 移除前跑完 */
 .dialog{width:100%;max-width:380px;max-height:calc((100dvh - 40px) / var(--zoom));overflow-y:auto;overscroll-behavior:contain;
   background:var(--s2);border-radius:var(--r-xl);padding:24px;text-align:center;animation:dlgin var(--sp) backwards;
-  --card:var(--s3);--chip:var(--s3);--cs:none}
+  --card:var(--s3);--chip:var(--s3);--cs:none;--cseg:none}
 .closing .dialog{animation:dlgout var(--t-fast) var(--exit) forwards}
 @keyframes dlgin{from{opacity:0;transform:scale(.85)}}
 /* 手機：要填東西的視窗從下面滑上來（上面有拉桿，往下拉就關掉） */

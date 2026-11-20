@@ -754,7 +754,7 @@ function hostRowD(s, on){
   if (!s.online) return `<div class="htr off${on ? " on" : ""}" data-dsel="${k}" data-key="hr:${k}">${nm}<span class="hc hoff">${I("off")}連不上${s.last_seen ? `・${esc(seen(s))}` : ""}</span><span class="hc">${moreBtn(s)}</span></div>`;
   const d0 = disk0(s);
   return `<div class="htr ${lv}${on ? " on" : ""}" data-dsel="${k}" data-key="hr:${k}">${nm}${bar(s.cpu)}${bar(s.mem.pct)}${bar(d0.pct)}
-    <span class="hc num">${I("down")}${rate(s.net.rx)}<i></i>${I("up")}${rate(s.net.tx)}</span>${s.traffic && s.traffic.limit ? `<span class="hc htf" title="${size(s.traffic.used)}／${size(s.traffic.limit)}">${wave(s.traffic.pct)}<b class="num ${tier(s.traffic.pct)}">${size(s.traffic.used)}</b></span>` : `<span class="hc num">${s.traffic ? size(s.traffic.used) : "—"}</span>`}<span class="hc num">${up(s.uptime)}</span><span class="hc">${moreBtn(s)}</span></div>`;
+    <span class="hc num hnet">${I("down")}<span>${rate(s.net.rx)}</span>${I("up")}<span>${rate(s.net.tx)}</span></span>${s.traffic && s.traffic.limit ? `<span class="hc htf" title="${size(s.traffic.used)}／${size(s.traffic.limit)}">${wave(s.traffic.pct)}<b class="num ${tier(s.traffic.pct)}">${size(s.traffic.used)}</b></span>` : `<span class="hc htf"><span class="wv0"></span><b class="num nl">${s.traffic ? size(s.traffic.used) : "—"}</b></span>`}<span class="hc num">${up(s.uptime)}</span><span class="hc">${moreBtn(s)}</span></div>`;
 }
 function homeDesk(list, time){
   const ev = groupEv(allEvents(list)).slice(0, 8), sel = deskSel(list), g = greet();
