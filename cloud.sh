@@ -315,6 +315,10 @@ if [ -n "$DOMAIN" ] && [ -f /etc/caddy/sites/vps-sentinel.caddy ]; then
     cat > "$SITE_FILE" <<EOF
 # VPS 哨兵（由安裝腳本產生）
 $SITE {
+	tls {
+		protocols tls1.3
+	}
+	header Strict-Transport-Security "max-age=31536000"
 	encode gzip
 	import /etc/caddy/sites/vps-sentinel.d/*.caddy
 	handle {

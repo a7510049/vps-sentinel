@@ -276,8 +276,12 @@ if [ -n "$DOMAIN" ]; then
   install -d /etc/caddy/sites/vps-sentinel.d
   [ -f /etc/caddy/sites/vps-sentinel.d/00-keep.caddy ] || echo "# 附加功能（例如雲端硬碟）的設定放這個資料夾" > /etc/caddy/sites/vps-sentinel.d/00-keep.caddy
   cat > /etc/caddy/sites/vps-sentinel.caddy <<EOF
-# VPS 哨兵（由安裝腳本產生）
+# VPS 哨兵（由安裝腳本產生）：只用 TLS 1.3；瀏覽器記住一年內只用 https 連
 $SITE {
+	tls {
+		protocols tls1.3
+	}
+	header Strict-Transport-Security "max-age=31536000"
 	encode gzip
 	import /etc/caddy/sites/vps-sentinel.d/*.caddy
 	handle {
