@@ -83,6 +83,7 @@ const P = {
   shield:'<path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="m8.5 12 2.5 2.5 4.5-5"/>',
   dl:'<path d="M12 3v12"/><path d="m7 10 5 5 5-5"/><path d="M5 21h14"/>',
   plug:'<path d="M9 2v5M15 2v5"/><path d="M6 7h12v4a6 6 0 0 1-12 0z"/><path d="M12 17v5"/>',
+  clock:'<circle cx="12" cy="12" r="9.5"/><path d="M12 7v5l3 2"/>',
   power:'<path d="M12 2v10"/><path d="M18.4 6.6a9 9 0 1 1-12.77.04"/>',
   loc:'<circle cx="12" cy="12" r="7"/><circle cx="12" cy="12" r="2.5"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/>',
   mpin:'<path d="M12 21s7-6.2 7-12a7 7 0 0 0-14 0c0 5.8 7 12 7 12Z"/><circle cx="12" cy="9" r="2.5"/>',
@@ -749,7 +750,7 @@ function hostRowD(s, on){
   if (!s.online) return `<div class="htr off${on ? " on" : ""}" data-dsel="${k}" data-key="hr:${k}">${nm}<span class="hc hoff">${I("off")}連不上${s.last_seen ? `・${esc(seen(s))}` : ""}</span><span class="hc">${moreBtn(s)}</span></div>`;
   const d0 = disk0(s);
   return `<div class="htr ${lv}${on ? " on" : ""}" data-dsel="${k}" data-key="hr:${k}">${nm}${bar(s.cpu)}${bar(s.mem.pct)}${bar(d0.pct)}
-    <span class="hc num">${I("down")}${rate(s.net.rx)}<i></i>${I("up")}${rate(s.net.tx)}</span><span class="hc num">${s.traffic ? size(s.traffic.used) : "—"}</span><span class="hc num">${up(s.uptime)}</span><span class="hc">${moreBtn(s)}</span></div>`;
+    <span class="hc num">${I("down")}${rate(s.net.rx)}<i></i>${I("up")}${rate(s.net.tx)}</span>${s.traffic && s.traffic.limit ? `<span class="hc htf" title="${size(s.traffic.used)}／${size(s.traffic.limit)}">${wave(s.traffic.pct)}<b class="num ${tier(s.traffic.pct)}">${size(s.traffic.used)}</b></span>` : `<span class="hc num">${s.traffic ? size(s.traffic.used) : "—"}</span>`}<span class="hc num">${up(s.uptime)}</span><span class="hc">${moreBtn(s)}</span></div>`;
 }
 function homeDesk(list, time){
   const ev = groupEv(allEvents(list)).slice(0, 8), sel = deskSel(list), g = greet();
@@ -773,8 +774,8 @@ function toolsPage(list){
   const on = list.filter(s => s.online).sort((a, b) => ORDER.indexOf(keyOf(a)) - ORDER.indexOf(keyOf(b)));
   const D = DESK.matches;
   let h = `<div class="${D ? "wide" : "narrow"}" data-key="tools"><h1 class="ptitle"><span>工具</span></h1>`;
-  const fly = `<div class="group fly1" data-key="g-fly"><button class="li" data-key="fly" data-fly>${IC("fly", "")}<span class="lab">機場起降<small>${esc(FLYS.name || "即時抵達、出發的飛機")}</small></span>${CHEV}</button></div>`;
-  const flyT = `<button class="tbx" data-key="fly" data-fly><span class="ttop">${IC("fly", "")}<span class="tgo nx">${CHEV}</span></span><b>機場起降</b><small>${esc(FLYS.name || "即時抵達、出發的飛機")}</small></button>`;
+  const fly = `<div class="group fly1" data-key="g-fly"><button class="li" data-key="fly" data-fly>${IC("fly", "")}<span class="lab">機場起降${FLYS.name ? `<small>${esc(FLYS.name)}</small>` : ""}</span>${CHEV}</button></div>`;
+  const flyT = `<button class="tbx" data-key="fly" data-fly><span class="ttop">${IC("fly", "")}<span class="tgo nx">${CHEV}</span></span><b>機場起降</b>${FLYS.name ? `<small>${esc(FLYS.name)}</small>` : ""}</button>`;
   if (!on.length) return D ? `<div class="wide" data-key="tools">${dbar("工具")}<div class="calm">連不上任何主機</div><div class="tgrid" data-key="g-tf">${flyT}</div></div>`
     : h + `<div class="calm">連不上任何主機</div></div>`;
   const s = on.find(x => keyOf(x) === TOOLH) || on.find(x => !x.node) || on[0], k = esc(keyOf(s)), node = esc(s.node || ""), name = esc(s.name);
@@ -915,7 +916,7 @@ function setPage(list){
   const skyG = self && !SHARE ? `<div class="group" data-key="g-sky">${go("data-sky", "fly", "OpenSky 帳號", "skyst")}</div>` : "";
   const sec = `<div class="lbl" data-key="lsec">通知與登入</div>${secG}` + (skyG ? `<div class="lbl" data-key="lsky">機場起降</div>${skyG}` : "");
   const out = `<div class="sp" data-key="sp"></div><div class="group" data-key="g-out"><button class="li" data-logout><span class="ico info">${I("logout")}</span><span class="lab">登出</span></button>
-      <button class="li" data-reset><span class="ico info">${I("upd")}</span><span class="lab">恢復預設值<small>外觀設定只存在這台裝置</small></span></button></div>`;
+      <button class="li" data-reset><span class="ico info">${I("upd")}</span><span class="lab">恢復預設值</span></button></div>`;
   let h = "";
   if (on.length) {
     const s = on.find(x => keyOf(x) === TOOLH) || on.find(x => !x.node) || on[0], k = esc(keyOf(s)), node = esc(s.node || "");
@@ -1413,7 +1414,11 @@ function setTab(k){
   slideSel(() => document.querySelectorAll(".dock [data-tab], .rail [data-tab]").forEach(b => b.classList.toggle("on", b.dataset.tab === k)));
   if (!v._fading) v._fading = v.animate([{opacity:1}, {opacity:0}], {duration:T.fast / 2, easing:EXIT, fill:"forwards", id:"ui"});
   const id = ++TABID;
-  v._fading.finished.catch(() => {}).then(() => { if (id === TABID && TAB === k) render(LIST); });
+  v._fading.finished.catch(() => {}).then(() => {
+    if (id !== TABID || TAB !== k) return;
+    render(LIST);
+    if (v.isConnected && !v._leaving && v._fading) { v._fading.cancel(); v._fading = null; v.animate([{opacity:0}, {opacity:1}], {duration:T.mid, easing:EASE, id:"ui"}); }   // 很快又按回原本那頁：同一頁留著，淡出要拿掉（不然整頁一直是透明的）
+  });
 }
 let TABID = 0;
 /* 工具、設定頁上「讀取中…」的狀態：換到那一頁時讀一次（之後自動更新不會蓋掉） */
@@ -1930,7 +1935,7 @@ async function skyCall(body){
   return d;
 }
 const skyLine = d => d.on ? d.err ? d.err : d.out ? `今天的次數用完了，${flyHM(d.out * 1000)} 恢復` : d.left != null ? `已設定・今天還能查 ${d.left.toLocaleString()} 次` : "已設定"
-  : d.out ? `今天的次數用完了，${flyHM(d.out * 1000)} 恢復` : "還沒設定・每天只能查 400 次";
+  : d.out ? `今天的次數用完了，${flyHM(d.out * 1000)} 恢復` : "還沒設定";
 async function skyStatus(root){
   const el = root.querySelector(".skyst"); if (!el) return;
   try { const d = await skyCall({action:"status"}); txt(el, skyLine(d)); el.classList.toggle("on", !!d.on && !d.err); }
@@ -2210,7 +2215,6 @@ async function sessStatus(root){
 async function sessModal(){
   const v = document.createElement("div"); v.className = "veil";
   v.innerHTML = `<div class="dialog pkd">${IC("devices","big")}<h3>登入的裝置</h3>
-    <p>手機掉了，在這裡登出它</p>
     <div class="form"><div class="pklist"></div><div class="msg"></div></div>
     </div>`;
   $("#layer").appendChild(v);
@@ -2672,7 +2676,6 @@ async function bkModal(node, label){
   const v = document.createElement("div"); v.className = "veil";
   const multi = LIST.length > 1;
   v.innerHTML = `<div class="dialog bkdlg">${IC("archive","big")}<h3>每日備份${multi ? `：${esc(label)}` : ""}</h3>
-    <p>每天自動加密備份，每台主機都存一份</p>
     <div class="form">
       <ul class="bkrows">${bkRows(d)}</ul>
       <div class="lbl">${bkCopies(d) ? `${d.where === "雲端硬碟" ? "這台的雲端硬碟裡有" : "這台主機上有"}${d.where === "雲端硬碟" ? `<small>「${esc(d.folder)}」資料夾</small>` : ""}<ul class="bkrows bkcopies">${bkCopies(d)}</ul>` : ""}
@@ -2681,7 +2684,7 @@ async function bkModal(node, label){
         <small>沒有它誰都打不開，請另外記好</small>
         <button class="linkish bkchg" data-chg>改成自己的密碼</button>
         <span class="bknew" hidden><input class="field" type="password" maxlength="128" autocomplete="new-password" placeholder="至少 8 個字"><button class="ubtn sm" data-setkey>儲存</button></span></div>
-      <label class="bkon"><span>每天 ${+d.hour || 0} 點自動備份</span><input type="checkbox" class="tog" ${d.on ? "checked" : ""}></label>
+      <label class="bkon" title="每天 ${+d.hour || 0} 點自動備份"><span class="bkat">${I("clock")}<b class="num">${String(+d.hour || 0).padStart(2, "0")}:00</b></span><input type="checkbox" class="tog" ${d.on ? "checked" : ""}></label>
       <div class="msg"></div></div>
     <div class="btns three"><button class="ubtn ghost" data-dl>下載</button><button class="ubtn" data-run>立即備份</button></div></div>`;
   $("#layer").appendChild(v);
