@@ -82,6 +82,7 @@ const P = {
   upd:'<path d="M21 12a9 9 0 1 1-9-9c2.52 0 4.93 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/>',
   shield:'<path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="m8.5 12 2.5 2.5 4.5-5"/>',
   dl:'<path d="M12 3v12"/><path d="m7 10 5 5 5-5"/><path d="M5 21h14"/>',
+  plug:'<path d="M9 2v5M15 2v5"/><path d="M6 7h12v4a6 6 0 0 1-12 0z"/><path d="M12 17v5"/>',
   power:'<path d="M12 2v10"/><path d="M18.4 6.6a9 9 0 1 1-12.77.04"/>',
   loc:'<circle cx="12" cy="12" r="7"/><circle cx="12" cy="12" r="2.5"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/>',
   mpin:'<path d="M12 21s7-6.2 7-12a7 7 0 0 0-14 0c0 5.8 7 12 7 12Z"/><circle cx="12" cy="9" r="2.5"/>',
@@ -538,10 +539,12 @@ const evWho = e => evMany(e) ? `<button class="eh stk" data-evx="${esc(e.k)}" ar
 /* 事件前面的圖示：照內容挑（登入鑰匙、重新開機電源…），顏色是狀態（紅異常、橘注意、綠恢復、主題色通知） */
 const EVI = [[/登入|PIN|金鑰|密碼/, "key"], [/重新開機|開機|重開/, "power"], [/備份|還原/, "archive"], [/更新|新版/, "upd"], [/憑證|https|TLS/i, "shield"],
   [/記憶體/, "mem"], [/磁碟|硬碟/, "disk"], [/處理器|負載/, "cpu"], [/流量/, "month"], [/下載/, "dl"], [/Telegram|通知/, "bell"], [/連不上|連線|離線|上線|網路|IPv/, "net"], [/容器|Docker/i, "box"], [/服務/, "layers"]];
+/* 圖示已經說是容器、服務，字就不再寫一次（「容器 n8n 停止」→「n8n 停止」） */
+const evTx = e => esc(String(e.text).replace(/(^|：)(容器|服務) /g, "$1"));
 const evIco = e => { const m = EVI.find(([r]) => r.test(e.text)); return `<span class="evi ${e.kind}">${I(m ? m[1] : {bad:"warn", warn:"alert", ok:"ok"}[e.kind] || "info")}</span>`; };
-const evRow = (e, many, tf = ago) => `<div class="ev${many && evMany(e) && EVOPEN.has(e.k) ? " open" : ""}" data-key="${esc(e.k)}|${e.kind}:${esc(e.text)}">${evIco(e)}<div class="et"><div>${many ? evWho(e) : ""}${esc(e.text)}</div>${many && evMany(e) ? `<div class="ehs"><div><div>${esc(e.hs.join("、"))}</div></div></div>` : ""}<div class="sub">${tf(e.t)}${e.n > 1 ? `・共 ${e.n} 次` : ""}</div></div></div>`;
+const evRow = (e, many, tf = ago) => `<div class="ev${many && evMany(e) && EVOPEN.has(e.k) ? " open" : ""}" data-key="${esc(e.k)}|${e.kind}:${esc(e.text)}">${evIco(e)}<div class="et"><div>${many ? evWho(e) : ""}${evTx(e)}${e.n > 1 ? `<small class="lx num">×${e.n}</small>` : ""}</div>${many && evMany(e) ? `<div class="ehs"><div><div>${esc(e.hs.join("、"))}</div></div></div>` : ""}<div class="sub">${tf(e.t)}</div></div></div>`;
 /* 電腦紀錄表的一列：時間、主機、圖示、事件（好幾台合成一筆的照樣點開看是哪幾台） */
-const evRowD = (e, many) => `<div class="ev lr${many && evMany(e) && EVOPEN.has(e.k) ? " open" : ""}" data-key="${esc(e.k)}|${e.kind}:${esc(e.text)}"><span class="lt num">${hm(e.t)}</span>${many ? `<span class="lh">${evWho(e)}</span>` : ""}${evIco(e)}<div class="et"><div>${esc(e.text)}${e.n > 1 ? `<small class="lx num">×${e.n}</small>` : ""}</div>${many && evMany(e) ? `<div class="ehs"><div><div>${esc(e.hs.join("、"))}</div></div></div>` : ""}</div></div>`;
+const evRowD = (e, many) => `<div class="ev lr${many && evMany(e) && EVOPEN.has(e.k) ? " open" : ""}" data-key="${esc(e.k)}|${e.kind}:${esc(e.text)}"><span class="lt num">${hm(e.t)}</span>${many ? `<span class="lh">${evWho(e)}</span>` : ""}${evIco(e)}<div class="et"><div>${evTx(e)}${e.n > 1 ? `<small class="lx num">×${e.n}</small>` : ""}</div>${many && evMany(e) ? `<div class="ehs"><div><div>${esc(e.hs.join("、"))}</div></div></div>` : ""}</div></div>`;
 const evList = (ev, many) => ev.length ? `<div class="evs" data-key="evs" data-keyed>${ev.map(e => evRow(e, many)).join("")}</div>` : `<div class="calm" data-key="calm">目前沒有事件</div>`;
 const dayOf = t => { const d = new Date(t * 1000), n = new Date(), y = new Date(n); y.setDate(n.getDate() - 1);
   return d.toDateString() === n.toDateString() ? "今天" : d.toDateString() === y.toDateString() ? "昨天" : `${d.getMonth() + 1} 月 ${d.getDate()} 日`; };
@@ -551,7 +554,7 @@ const mrow = (l, p) => `<div class="mr"><span class="ml">${l}</span>${wave(p)}<s
 function hostCard(s, i, mini){
   const lv = lvOf(s), k = keyOf(s);
   let b = `<div class="hcard ${lv}${mini ? " mini" : ""}" data-key="${esc(k)}" data-keyed data-open="${esc(k)}" role="button" tabindex="0" style="--i:${i}">
-    <div class="ct" data-key="ct">${avatar(s)}<div class="nm"><div class="cn">${esc(s.name)}</div><div class="cp">${esc(place(s) || s.os || "")}</div></div>${mini ? "" : I("chev")}</div>`;
+    <div class="ct" data-key="ct">${avatar(s)}<div class="nm"><div class="cn">${esc(s.name)}</div><div class="cp">${esc(place(s) || osShort(s.os))}</div></div>${mini ? "" : I("chev")}</div>`;
   if (!s.online) return b + offBox(s) + `</div>`;
   const d0 = disk0(s), ft = [PREF.show.traffic && s.traffic ? `<span title="本月流量">${I("month")}${size(s.traffic.used)}</span>` : "", `<span title="開機多久">${I("power")}${up(s.uptime)}</span>`].join("");   // 圖示＋數字，不寫「本月」「開機」
   const mr = `<div class="mrows" data-key="mr">${mrow("處理器", s.cpu)}${mrow("記憶體", s.mem.pct)}${mrow("磁碟", d0.pct)}</div>`;
@@ -576,8 +579,9 @@ function offBox(s){
 const addHostBtn = cls => `<button class="${cls}" data-addhost data-key="+add">${I("plus")}<span>新增主機</span></button>`;
 
 /* ═════════ 一台主機的內容：手機的整頁、電腦的欄位共用 ═════════ */
-const subOf = s => s.online ? `<span title="核心版本 ${esc(s.kernel)}">${esc([place(s), s.os].filter(Boolean).join("・"))}</span>・開機 ${up(s.uptime)}`
-  : "離線";   // 多久前寫在下面的時間條
+const osShort = o => String(o || "").replace(/(\d+\.\d+)\.\d+/, "$1").replace(/\s*LTS$/, "");   // Ubuntu 24.04.5 LTS → Ubuntu 24.04（完整的放在提示）
+const subOf = s => s.online ? `<span title="${esc(s.os || "")}・核心版本 ${esc(s.kernel)}">${esc([place(s), osShort(s.os)].filter(Boolean).join("・"))}</span>・<span class="hup" title="開機多久">${I("power")}${up(s.uptime)}</span>`
+  : esc(place(s) || "");   // 連不上寫在下面的時間條，這裡不再寫「離線」
 function hostBody(s, ph){
   let h = `<div class="hb" data-key="hb" data-keyed><div class="hhead" data-key="hh">${avatar(s)}<div class="nm"><h2 class="hname">${esc(s.name)}</h2><div class="hsub">${subOf(s)}</div></div>${ph ? "" : `<span class="hacts">${moreBtn(s)}</span>`}</div>`;
   if (!s.online) return h + offBox(s) + `</div>`;
@@ -585,7 +589,7 @@ function hostBody(s, ph){
   const hs = PREF.show.chart ? histFor(s) : null;
   if (PREF.show.chart) h += `<div class="cc" data-key="cp"><div class="cch"><span class="lg"><i style="background:${COL.cpu}"></i>處理器</span><span class="lg"><i style="background:${COL.mem}"></i>記憶體</span>${rangeSeg()}</div>
     <div class="cbox">${chartOr(hs, cid(s, ph ? "m" : "a"), x => [{data:x.cpu, color:COL.cpu, name:"處理器"}, {data:x.mem, color:COL.mem, name:"記憶體"}], {max:100, grid:1, fmt:v => Math.round(v) + "%", h: ph ? 130 : 150})}</div></div>`;
-  if (PREF.show.net) h += `<div class="cc" data-key="np"><div class="nets"><div class="nt">${IC("down")}<div><div class="nv">${rate(s.net.rx)}</div><div class="nl">下載</div></div></div><div class="nt">${IC("up")}<div><div class="nv">${rate(s.net.tx)}</div><div class="nl">上傳</div></div></div></div>
+  if (PREF.show.net) h += `<div class="cc" data-key="np"><div class="nets"><div class="nt">${IC("down")}<div class="nv" title="下載">${rate(s.net.rx)}</div></div><div class="nt">${IC("up")}<div class="nv" title="上傳">${rate(s.net.tx)}</div></div></div>
     ${hs ? `<div class="cbox wide">${chartOr(hs, cid(s, ph ? "n" : "b"), x => [{data:x.rx, color:COL.rx, name:"下載"}, {data:x.tx, color:COL.tx, name:"上傳"}], {grid:1, bin:1, fmt:rate, h: ph ? 96 : 110})}</div>` : ""}</div>`;
   h += trafficCard(s) + itemsCard(s);
   return h + `</div>`;
@@ -607,9 +611,9 @@ function v6line(s, shown){
   const v = s.ipv6;
   if (!v) return "";
   if (!v.addr) return `<span class="v6 warn">IPv6 位址不見了</span>`;
-  const st = v.ok === false ? `<i class="ld bad"></i>連不出去` : v.ok ? `<i class="ld ok"></i>正常` : `<i class="ld"></i>檢查中`;
+  const st = v.ok === false ? ALX : `<i class="ld${v.ok ? " ok" : ""}"></i>`;   // 正常只放綠點，連不出去是紅叉
   return shown ? `<span class="v6 a" data-copy="${esc(v.addr)}" title="點一下複製">${esc(v.addr)}</span>`
-    : `<span class="v6 ${v.ok === false ? "warn" : ""}">IPv6 ${st}</span>`;
+    : `<span class="v6 ${v.ok === false ? "warn" : ""}" title="${v.ok === false ? "IPv6 連不出去" : v.ok ? "IPv6 正常" : "IPv6 檢查中"}">IPv6 ${st}</span>`;
 }
 /* 電信商名稱跟主機名稱同一家（例如「Oracle Corporation」和「Oracle Cloud」）就不再顯示一次 */
 const ORGW = new Set("cloud corporation corp inc ltd llc limited company group network networks technology technologies hosting host server servers data services the".split(" "));
@@ -621,7 +625,7 @@ function factsRow(s, ph){
   const f = [], k = keyOf(s), shown = IPSHOW[k] > Date.now(), c = s.conns, avg = s.conns_avg;
   if (PREF.show.info) {
     const cw = c == null || avg == null ? "" : (c > avg * 2 && c - avg > 20) ? "比平常多很多" : (avg > 10 && c < avg * .3) ? "比平常少很多" : "";
-    if (c != null) f.push(`<span class="fc" title="現在的網路連線數${avg != null ? `（平常約 ${Math.round(avg)} 條）` : ""}">連線<b class="num">${Number(c).toLocaleString("zh-TW")}</b>${cw ? `<em class="${cw.includes("多") ? "warn" : ""}">${cw}</em>` : ""}</span>`);
+    if (c != null) f.push(`<span class="fc" title="現在的網路連線數${avg != null ? `（平常約 ${Math.round(avg)} 條）` : ""}">${I("plug")}<b class="num">${Number(c).toLocaleString("zh-TW")}</b>${cw ? `<em class="${cw.includes("多") ? "warn" : ""}">${cw}</em>` : ""}</span>`);
     const ip = s.geo && s.geo.ip, org = s.geo && s.geo.org;
     if (ip) f.push(`<span class="fc">IP<b class="ipb ${shown ? "on" : ""}" tabindex="0" role="button" ${shown ? `data-copy="${esc(ip)}" title="點一下複製（15 秒後會自動遮起來）"` : `data-reveal="${esc(k)}" title="點一下顯示"`}>${esc(ip)}</b></span>`);
     if (s.ipv6) f.push(`<span class="fc" data-xw>${v6line(s, shown)}</span>`);
@@ -655,7 +659,8 @@ function itemsCard(s){
   let c = "";
   for (const g of groups) {
     const gi = items.filter(x => x.g === g);
-    if (head) c += `<div class="grp" data-key="grp:${esc(g)}">${g ? esc(g) : "其他容器"}</div>`;
+    if (head && c) c += `<i class="gbr" data-key="br:${esc(g)}"></i>`;
+    if (head) c += `<span class="grp" data-key="grp:${esc(g)}" title="${g ? esc(g) : "容器"}">${I(g === "系統服務" ? "gear" : "box")}${g && g !== "系統服務" ? `<span>${esc(g)}</span>` : ""}</span>`;   // 圖示說是容器還是服務，docker compose 專案才寫名字
     c += gi.map(x => `<span class="chip${x.st === "bad" ? " bad" : ""}" data-key="${x.t}:${esc(x.n)}" title="${x.t}：${esc(x.n)}・${esc(x.s)}">${x.st === "bad" ? ALX : `<span class="dot ${x.st}"></span>`}<span>${esc(x.sn || x.n)}</span></span>`).join("");
   }
   return `<div class="cc" data-key="ib"><div class="cch"><span class="ct2">${IC("box")}容器與服務</span><span class="sum">${boxSummary(items)}</span></div><div class="chips" data-key="chips" data-keyed>${c}</div></div>`;
@@ -717,7 +722,7 @@ function renderPhone(list, time){
 /* 電腦：桌面主控台。左邊固定側欄（分頁＋所有主機），右邊是頁面；手機版完全不同一套 */
 let DSEL = store("vs-dsel") || "";
 const deskSel = list => list.find(x => keyOf(x) === DSEL) || list[0];
-const railHost = (s, on) => `<button class="rh${on ? " on" : ""}" data-dsel="${esc(keyOf(s))}" data-key="rh:${esc(keyOf(s))}"><span class="dot ${s.online ? lvOf(s) : "bad"}"></span><b>${esc(s.name)}</b><small class="num">${s.online ? num(s.cpu) + "%" : "離線"}</small></button>`;
+const railHost = (s, on) => `<button class="rh${on ? " on" : ""}" data-dsel="${esc(keyOf(s))}" data-key="rh:${esc(keyOf(s))}"><span class="dot ${s.online ? lvOf(s) : "bad"}"></span><b>${esc(s.name)}</b><small class="num">${s.online ? num(s.cpu) + "%" : I("off")}</small></button>`;
 function renderDesk(list, time){
   const sel = deskSel(list), k = sel && keyOf(sel);
   return `<div class="dash d" data-key="d"><nav class="rail" data-key="rail"><div class="brand">${BRAND}<b>VPS 哨兵</b></div><div class="rnav">${navBtns(true, list)}</div>
@@ -740,7 +745,7 @@ const cardMode = () => !DESK.matches;
 /* 主機總表的一列：名稱、三條用量、網路、流量、開機、⋯；連不上的整列寫原因 */
 function hostRowD(s, on){
   const k = esc(keyOf(s)), lv = s.online ? lvOf(s) : "bad", bar = p => `<span class="hc">${wave(p)}<b class="num ${tier(p)}">${num(p)}%</b></span>`;
-  const nm = `<span class="hc hn">${avatar(s)}<span><b>${esc(s.name)}</b><small>${esc(place(s) || s.os || "")}</small></span></span>`;
+  const nm = `<span class="hc hn">${avatar(s)}<span><b>${esc(s.name)}</b><small>${esc(place(s) || osShort(s.os))}</small></span></span>`;
   if (!s.online) return `<div class="htr off${on ? " on" : ""}" data-dsel="${k}" data-key="hr:${k}">${nm}<span class="hc hoff">${I("off")}連不上${s.last_seen ? `・${esc(seen(s))}` : ""}</span><span class="hc">${moreBtn(s)}</span></div>`;
   const d0 = disk0(s);
   return `<div class="htr ${lv}${on ? " on" : ""}" data-dsel="${k}" data-key="hr:${k}">${nm}${bar(s.cpu)}${bar(s.mem.pct)}${bar(d0.pct)}
@@ -867,7 +872,7 @@ function logPage(list){
   let rows = "", day = "";
   for (const e of ev) { const d = dayOf(e.t); if (d !== day) { day = d; rows += `<div class="day" data-key="d:${d}">${d}</div>`; } rows += evRow(e, many, hm); }
   const body = ev.length ? `<div class="evs" data-key="evs" data-keyed data-sw>${rows}</div>` : `<div class="calm" data-key="calm" data-sw>目前沒有事件</div>`;
-  const chip = (k, l, ic) => `<button class="fchip lfc${LOGF === k ? " on" : ""}" data-logf="${k}" data-key="lf:${k}">${fi(k, ic)}${l}<b class="lfn">${fn(k)}</b></button>`;
+  const chip = (k, l, ic) => `<button class="fchip lfc${LOGF === k ? " on" : ""}" data-logf="${k}" data-key="lf:${k}" title="${l}">${fi(k, ic)}<span class="lfl">${l}</span><b class="lfn">${fn(k)}</b></button>`;
   const hn = hk && list.find(x => keyOf(x) === hk);   // 好幾台時多一顆「全部主機 ▾」，點了選只看哪一台
   const hc = many ? `<button class="fchip hsel${hk ? " set" : ""}" data-loghm data-key="hsel" data-x>${esc(hn ? hn.name : "全部主機")}${I("chev")}</button>` : "";
   const fc = `<div class="fchips" data-key="lfc" data-slide>${F.map(([k, l, ic]) => chip(k, l, ic)).join("")}</div>`;
@@ -2100,7 +2105,7 @@ const DEVI = {
 DEVI.mac = DEVI.ios;
 function devRow(x){                         // 名字只放裝置，系統版本、瀏覽器、多久前用過放下面那行
   const [n, b] = String(x.dev).split("・"), m = /^(.*?)（(.+)）$/.exec(n);
-  return `${esc(m ? m[1] : n)}<small>${[m && m[2], b, x.me ? "這台裝置" : ago(x.seen) + "用過"].filter(Boolean).map(esc).join("・")}</small>`;
+  return `${esc(m ? m[1] : n)}<small>${[m && m[2], b, x.me ? "" : ago(x.seen)].filter(Boolean).map(esc).join("・")}</small>`;
 }
 function devIcon(x){
   const os = x.os || (/iPhone|iPad/.test(x.dev) ? "ios" : /Mac/.test(x.dev) ? "mac" : /Windows/.test(x.dev) ? "win" : /Android|Samsung|Google|OPPO|realme|vivo|Sony|Motorola/.test(x.dev) ? "android" : "");
@@ -2212,7 +2217,7 @@ async function sessModal(){
   const list = v.querySelector(".pklist"), msg = v.querySelector(".msg");
   let rows = [], busy = false;
   const draw = () => swapHTML(list, rows.map(x => `<div class="pkrow dvrow">${devIcon(x)}<span>${devRow(x)}</span>
-      ${x.me ? "" : `<button type="button" class="iconbtn" data-del="${esc(x.id)}" data-name="${esc(x.dev)}" title="登出這台">${I("x")}</button>`}</div>`).join(""));
+      ${x.me ? `<span class="dvme">這台</span>` : `<button type="button" class="iconbtn" data-del="${esc(x.id)}" data-name="${esc(x.dev)}" title="登出這台">${I("x")}</button>`}</div>`).join(""));
   try { rows = (await sessCall({action:"list", dev:devLabel(), os:devOs()})).list || []; draw(); }
   catch(e) { msg.className = "msg bad"; msg.textContent = e.message; }
   return new Promise(res => {
@@ -2660,8 +2665,7 @@ function bkRows(d){
   return h;
 }
 /* 這台存著哪些主機的備份（每台主機都存著每一台的） */
-const bkCopies = d => (d.copies || []).map(c => `<li>${I("archive")}<span><b>${esc(c.name)}${c.me ? "（這台）" : ""}</b>${+c.count || 0} 份<small>最新：${esc(when(c.t))}・${bkSize(c.size)}</small></span></li>`).join("")
-  || `<li><span>還沒有備份</span></li>`;
+const bkCopies = d => (d.copies || []).map(c => `<li>${I("archive")}<span><b>${esc(c.name)}${c.me ? "（這台）" : ""}</b>${+c.count || 0} 份<small>最新：${esc(when(c.t))}・${bkSize(c.size)}</small></span></li>`).join("");   // 沒有就整段不放（上面已經寫「還沒備份過」）
 async function bkModal(node, label){
   let d = await bkGet(node).catch(e => ({err:e.message}));
   if (d.err) return toast(d.err, "bad");
@@ -2671,7 +2675,7 @@ async function bkModal(node, label){
     <p>每天自動加密備份，每台主機都存一份</p>
     <div class="form">
       <ul class="bkrows">${bkRows(d)}</ul>
-      <div class="lbl">${d.where === "雲端硬碟" ? "這台的雲端硬碟裡有" : "這台主機上有"}${d.where === "雲端硬碟" ? `<small>「${esc(d.folder)}」資料夾</small>` : ""}<ul class="bkrows bkcopies">${bkCopies(d)}</ul>
+      <div class="lbl">${bkCopies(d) ? `${d.where === "雲端硬碟" ? "這台的雲端硬碟裡有" : "這台主機上有"}${d.where === "雲端硬碟" ? `<small>「${esc(d.folder)}」資料夾</small>` : ""}<ul class="bkrows bkcopies">${bkCopies(d)}</ul>` : ""}
         <button class="linkish bkchg" data-restore>怎麼還原？</button></div>
       <div class="lbl">解開密碼（所有主機共用）<b class="bkkey" tabindex="0" role="button" title="點一下顯示">${esc(d.key)}</b>
         <small>沒有它誰都打不開，請另外記好</small>
@@ -2703,7 +2707,7 @@ async function bkModal(node, label){
         if (!d.running) break;
       }
       if (!live) return;
-      busy(runb); swapHTML(rows, bkRows(d)); swapHTML(v.querySelector(".bkcopies"), bkCopies(d));
+      busy(runb); swapHTML(rows, bkRows(d)); { const bc = v.querySelector(".bkcopies"); if (bc) swapHTML(bc, bkCopies(d)); }
       d.last && d.last.ok ? say("備份好了", "ok") : say("有地方沒備份成功，看上面的說明", "bad");
     };
     if (d.running) watch();
