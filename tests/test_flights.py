@@ -119,6 +119,12 @@ class Fake(BaseHTTPRequestHandler):
             acct = self.headers.get("Authorization") == "Bearer tok-good"      # 有登入：次數比較多
             return self.reply({"time": t, "states": [[*x[:3], t, t, *x[5:]] for x in SKY] if float(q["lamin"][0]) < 23 else None},
                               hd={"X-Rate-Limit-Remaining": "3999" if acct else "350"})
+        if self.path.startswith("/own/"):            # adsbdb：飛機登記在哪家
+            if self.path == "/own/B-1589":
+                return self.reply({"response": {"aircraft": {"registration": "B-1589", "registered_owner_operator_flag_code": "CSS", "registered_owner": "SF Airlines"}}})
+            if self.path == "/own/B-9999":
+                return self.reply({"response": {"aircraft": {"registered_owner_operator_flag_code": "ZZZ", "registered_owner": "Some Leasing"}}})
+            return self.reply({"response": "unknown aircraft"})
         if self.path.startswith("/ph/"):             # Planespotters 照片
             if self.path == "/ph/reg/B-16781":
                 return self.reply({"photos": [{"thumbnail": {"src": "https://t.example/s.jpg"}, "thumbnail_large": {"src": "https://t.example/l.jpg"},
@@ -173,6 +179,7 @@ class Flights(unittest.TestCase):
         S.FLY_TDB = base + "/tdb/"
         S.FLY_METAR = base + "/metar/{icao}"
         S.FLY_PHOTO_URL = base + "/ph/{by}/{key}"
+        S.FLY_OWNER_URL = base + "/own/{key}"
         cls.night, S.fly_night = S.fly_night, lambda ap, now=None: False      # 測試不管現在幾點
         S.FLY_FIDS_URL.update({"TPE": base + "/tpe", "KHH": base + "/khh/", "RMQ": "http://127.0.0.1:9/", "TSA": "http://127.0.0.1:9/"})
 
@@ -195,6 +202,15 @@ class Flights(unittest.TestCase):
         g = self.S.fly_geo("TPE")
         self.assertTrue(g["apm"]["rw"] and g["apm"]["tw"])
         self.assertTrue(all(len(a) >= 5 for a in g["apm"]["rw"]))
+
+    def test_owner(self):
+        """飛機登記在哪家：表上有的給中文名稱，沒有的給原文，查不到給空的，亂打的不問"""
+        self.assertEqual(self.get("owner=B-1589&hex=")["op"], "CSS")
+        self.assertEqual(self.get("owner=B-1589&hex=")["opn"], "順豐航空")
+        self.assertEqual(self.get("owner=B-9999")["opn"], "Some Leasing")
+        self.assertNotIn("op", self.get("owner=B-0000"))
+        self.assertNotIn("op", self.get("owner=<x>&hex=zz"))
+        self.assertEqual(self.S.FLY_AL["YZR"][1], "金鵬航空")
 
     def test_photo(self):
         """飛機照片：查得到給網址和攝影者，不是 https 的不給，亂打的註冊號不問"""

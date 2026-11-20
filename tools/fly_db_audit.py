@@ -4,6 +4,8 @@
 - 常出現、表上沒有的呼號前三碼（要不要補）
 - 機型代碼查不到分類的
 - 官網航班表上的航空公司兩碼，表上沒有的（沒有中文名稱、標誌）
+- 呼號的航空公司跟飛機登記的公司（adsbdb）不一樣的，貨機先查（租機、代飛，或我們的名稱表舊了）
+- 看板「貨機」分頁每一架的班號、公司、機型、註冊號，給人看一遍
 """
 import collections
 import os
@@ -16,6 +18,7 @@ from test_passkey import load_sentinel  # noqa: E402
 S = load_sentinel()
 S.fly_night = lambda ap, now=None: False
 pre, ops, types, regs = collections.Counter(), collections.defaultdict(collections.Counter), collections.Counter(), {}
+planes = {}                                        # 註冊號（沒有就飛機編號）→ (呼號, 機型, 是不是貨機)
 for rnd in range(4):
     for c in S.FLY_PIN:
         ap = S.fly_db()[c]
@@ -32,6 +35,9 @@ for rnd in range(4):
             if m:
                 pre[m.group(1)] += 1
                 ops[m.group(1)][op] += 1
+            k = str(a.get("r") or "").upper() or "~" + str(a.get("hex") or "").lower()
+            if m and len(k) > 2:
+                planes[k] = (cs, t, m.group(1) in S.FLY_CARGO_ICAO or S.fly_use(cs, None, t, "", False) == "貨機")
             if t:
                 types[t] += 1
                 regs.setdefault(t, (str(a.get("desc") or ""), cs, str(a.get("r") or "")))
@@ -70,3 +76,37 @@ for c in S.FLY_PIN:
             miss[(m.group(1), r.get("al") or "")] += 1
 for (k, n), v in miss.most_common():
     print(f"  {k} {n} x{v}")
+
+print("\n== 看板「貨機」分頁（給人看一遍）")
+for c in S.FLY_PIN:
+    try:
+        d = S.fly_board(c)
+    except Exception as e:  # noqa: BLE001
+        print("  看板抓不到", c, e)
+        continue
+    for p in d.get("cargo") or []:
+        print(f"  {c} {p.get('fn') or '-':8} {p.get('cs') or '-':8} {p.get('al') or '-':10} {p.get('model') or p.get('t') or '-':12} {p.get('reg') or '-':9} {p.get('st') or ''}")
+print("\n== 呼號的公司跟飛機登記的公司不一樣（貨機在前）")
+bad = 0
+for k, (cs, t, cargo) in sorted(planes.items(), key=lambda x: not x[1][2])[:250]:
+    o = S.fly_owner(k if not k.startswith("~") else "", k[1:] if k.startswith("~") else "")
+    time.sleep(.3)
+    if o.get("op") and o["op"] != cs[:3]:
+        bad += 1
+        print(f"  {'貨機' if cargo else '客機'} {cs:8} {k:9} {t:5} 表上 {(S.FLY_AL.get(cs[:3]) or ('', '?'))[1]:10} 登記 {o['op']} {o['opn']}")
+print(f"  共 {bad} 架（查了 {min(len(planes), 250)} 架）")
+
+print("\n== 官網寫的公司名稱跟表上不一樣（可能改名了，請人工看）")
+seen = set()
+for c in S.FLY_PIN:
+    try:
+        raw = S.FLY_FIDS_GET[c]()
+    except Exception as e:  # noqa: BLE001
+        print("  官網表抓不到", c, str(e)[:80])
+        continue
+    for r in raw or []:
+        k = (r.get("fn") or "")[:2]
+        mine = next((v[1] for v in S.FLY_AL.values() if v[0] == k), "")
+        if mine and r.get("al") and r["al"] != mine and (k, r["al"]) not in seen:
+            seen.add((k, r["al"]))
+            print(f"  {k} 表上 {mine}，{c} 官網 {r['al']}")

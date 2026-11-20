@@ -143,14 +143,14 @@ FLY_AL = {
     "JAL": ("JL", "日本航空"), "ANA": ("NH", "全日空"), "APJ": ("MM", "樂桃航空"), "JJP": ("GK", "捷星日本"),
     "SKY": ("BC", "天馬航空"), "ADO": ("HD", "北海道國際航空"), "SNJ": ("6J", "Solaseed 航空"), "JTA": ("NU", "日本越洋航空"),
     "NCA": ("KZ", "日本貨物航空"), "IBX": ("FW", "伊別克斯航空"), "KAL": ("KE", "大韓航空"), "AAR": ("OZ", "韓亞航空"),
-    "JNA": ("LJ", "真航空"), "TWB": ("TW", "德威航空"), "TZP": ("ZG", "ZIPAIR"), "AJX": ("NQ", "AirJapan"), "JSA": ("3K", "捷星亞洲"), "VAG": ("VU", "越旅航空"), "LAO": ("QV", "寮國航空"), "APZ": ("YP", "Air Premia"), "JJA": ("7C", "濟州航空"), "ABL": ("BX", "釜山航空"),
+    "JNA": ("LJ", "真航空"), "TWB": ("TW", "泰瑞航空"), "TZP": ("ZG", "ZIPAIR"), "AJX": ("NQ", "AirJapan"), "JSA": ("3K", "捷星亞洲"), "VAG": ("VU", "越旅航空"), "LAO": ("QV", "寮國航空"), "APZ": ("YP", "Air Premia"), "JJA": ("7C", "濟州航空"), "ABL": ("BX", "釜山航空"),
     "ESR": ("ZE", "易斯達航空"), "ASV": ("RS", "首爾航空"), "CCA": ("CA", "中國國際航空"), "CES": ("MU", "東方航空"),
     "CSN": ("CZ", "南方航空"), "CHH": ("HU", "海南航空"), "CXA": ("MF", "廈門航空"), "CSZ": ("ZH", "深圳航空"),
     "CSC": ("3U", "四川航空"), "CQH": ("9C", "春秋航空"), "DKH": ("HO", "吉祥航空"), "CSH": ("FM", "上海航空"),
     "CDG": ("SC", "山東航空"), "CAO": ("CA", "國貨航"), "CKK": ("CK", "中貨航"), "CSS": ("O3", "順豐航空"),
     "SIA": ("SQ", "新加坡航空"), "TGW": ("TR", "酷航"), "SQC": ("SQ", "新航貨運"), "THA": ("TG", "泰國航空"),
     "AIQ": ("FD", "泰國亞洲航空"), "TLM": ("SL", "泰國獅子航空"), "NOK": ("DD", "皇雀航空"), "TVJ": ("VZ", "泰國越捷航空"),
-    "AXM": ("AK", "亞洲航空"), "XAX": ("D7", "全亞洲航空"), "MAS": ("MH", "馬來西亞航空"), "MXD": ("OD", "馬印航空"),
+    "AXM": ("AK", "亞洲航空"), "XAX": ("D7", "全亞洲航空"), "MAS": ("MH", "馬來西亞航空"), "MXD": ("OD", "馬來西亞峇迪航空"),
     "PAL": ("PR", "菲律賓航空"), "CEB": ("5J", "宿霧太平洋"), "APG": ("Z2", "菲律賓亞洲航空"), "HVN": ("VN", "越南航空"),
     "VJC": ("VJ", "越捷航空"), "BAV": ("QH", "越竹航空"), "GIA": ("GA", "印尼航空"), "LNI": ("JT", "獅子航空"), "AWQ": ("QZ", "印尼亞洲航空"), "TAX": ("XJ", "泰國全亞洲航空"),
     "UAE": ("EK", "阿聯酋航空"), "QTR": ("QR", "卡達航空"), "ETD": ("EY", "阿提哈德航空"), "THY": ("TK", "土耳其航空"),
@@ -161,7 +161,7 @@ FLY_AL = {
     "ETH": ("ET", "衣索比亞航空"), "FDX": ("FX", "聯邦快遞"), "UPS": ("5X", "優比速"), "GTI": ("5Y", "亞特拉斯航空"),
     "CLX": ("CV", "盧森堡貨運"), "CKS": ("K4", "卡利塔航空"), "PAC": ("PO", "寶立航空"), "ABW": ("RU", "空橋貨運"),
     "BOX": ("3S", "德國貨運"), "GEC": ("LH", "漢莎貨運"),
-    "DHK": ("D0", "DHL 航空"), "BCS": ("QY", "DHL 歐洲航空"), "DHX": ("ES", "DHL 國際航空"), "YZR": ("Y8", "揚子江快運"),
+    "DHK": ("D0", "DHL 航空"), "BCS": ("QY", "DHL 歐洲航空"), "DHX": ("ES", "DHL 國際航空"), "YZR": ("Y8", "金鵬航空"),
     "CYZ": ("8Y", "中國郵政航空"), "HYT": ("YG", "圓通航空"), "ABX": ("GB", "ABX 航空"), "ATN": ("8C", "ATI 航空"),
     "AZG": ("7L", "絲路西方航空"), "WGN": ("KD", "西方環球航空"), "NCR": ("N8", "國家航空"),
     "SFJ": ("7G", "星悅航空"), "SPQ": ("9G", "太陽富國航空"), "CDC": ("GJ", "長龍航空"), "AIC": ("AI", "印度航空"), "AVA": ("AV", "哥倫比亞航空"),
@@ -652,6 +652,62 @@ def fly_photo(reg, hx=""):
     return out
 
 
+
+# 飛機登記在哪家公司（adsbdb）：班號是一家、飛機登記是另一家時（租機、代飛、資料庫舊了）網頁要講出來
+FLY_OWNER_URL = os.environ.get("SENTINEL_FLY_OWNER") or "https://api.adsbdb.com/v0/aircraft/{key}"
+FLY_OWNER_FILE = os.path.join(DATA_DIR, "fly-owners.json")
+FLY_OWNERS = {"d": None, "lock": threading.Lock()}
+
+
+def fly_owner(reg, hx=""):
+    """回傳 {"op": 國際民航組織三碼, "opn": 中文名稱（沒有就原文）}；查不到回 {}"""
+    reg = str(reg or "").upper().strip()
+    hx = str(hx or "").lower().strip()
+    if not re.fullmatch(r"[A-Z0-9][A-Z0-9-]{1,9}", reg):
+        reg = ""
+    if not re.fullmatch(r"[0-9a-f]{6}", hx):
+        hx = ""
+    if not reg and not hx:
+        return {}
+    k = reg or "~" + hx
+    with FLY_OWNERS["lock"]:
+        if FLY_OWNERS["d"] is None:
+            try:
+                with open(FLY_OWNER_FILE, encoding="utf-8") as f:
+                    FLY_OWNERS["d"] = json.load(f)
+            except (OSError, ValueError):
+                FLY_OWNERS["d"] = {}
+        hit = FLY_OWNERS["d"].get(k)
+    if hit and time.time() - hit.get("at", 0) < (30 if hit.get("op") else 3) * 86400:
+        return {x: hit[x] for x in ("op", "opn") if hit.get(x)}
+    out = {}
+    try:
+        d = json.loads(fly_get(FLY_OWNER_URL.replace("{key}", urllib.parse.quote(reg or hx)),
+                               ua=f"vps-sentinel/{VERSION} (+https://github.com/a7510049/vps-sentinel)", timeout=8))
+        a = (d.get("response") or {}).get("aircraft") if isinstance(d, dict) and isinstance(d.get("response"), dict) else None
+        if isinstance(a, dict):
+            op = str(a.get("registered_owner_operator_flag_code") or "").upper()
+            if re.fullmatch(r"[A-Z]{3}", op):
+                out = {"op": op, "opn": (FLY_AL.get(op) or ("", ""))[1] or fly_cut(str(a.get("registered_owner") or ""), 40)}
+    except (OSError, ValueError, AttributeError):
+        if hit:
+            return {x: hit[x] for x in ("op", "opn") if hit.get(x)}
+        return {}
+    with FLY_OWNERS["lock"]:
+        d = FLY_OWNERS["d"]
+        d[k] = {"at": time.time(), **out}
+        if len(d) > 3000:
+            for x in sorted(d, key=lambda x: d[x].get("at", 0))[:len(d) - 2500]:
+                d.pop(x)
+        try:
+            os.makedirs(DATA_DIR, exist_ok=True)
+            with open(FLY_OWNER_FILE + ".tmp", "w", encoding="utf-8") as f:
+                json.dump(d, f)
+            os.replace(FLY_OWNER_FILE + ".tmp", FLY_OWNER_FILE)
+        except OSError:
+            pass
+    return out
+
 # 機場天氣（METAR，美國航空氣象中心，不用註冊）：背景抓，10 分鐘一次
 FLY_ICAO = {"TPE": "RCTP", "TSA": "RCSS", "RMQ": "RCMQ", "KHH": "RCKH"}
 FLY_WX = {}                                   # 機場代碼 → [抓的時間, 整理好的天氣, 正在抓]
@@ -1008,7 +1064,7 @@ def fly_fids_pull(code, hit):
                 continue
             r["type"] = fly_model(r["type"])
             al = fly_al_zh(r["fn"][:2])
-            if al != r["fn"][:2]:                       # 航空公司名稱照同一張表（官網有的寫「韓商泰瑞航空」，雷達寫「德威航空」）
+            if al != r["fn"][:2]:                       # 航空公司名稱照同一張表（官網有的寫「韓商泰瑞航空」，表上寫「泰瑞航空」）
                 r["al"] = al
             if r.get("pc") == "MYJ":                    # 日本的松山（愛媛）：官網寫「松山」會跟台北松山搞混
                 r["pl"] = "愛媛"
@@ -1277,7 +1333,12 @@ def fly_nearby(ap):
 def fly_closest(ap, lat, lon, trk=None, way=0):
     """飛機是哪個機場的：way=1 找前方最近的（要降落），-1 找後方最近的（剛起飛），0 就是最近的"""
     best, bd = None, 1e9
-    for c, la, lo in [(ap[0], ap[3], ap[4])] + fly_nearby(ap):
+    aps = [(ap[0], ap[3], ap[4])] + fly_nearby(ap)
+    if way < 0:                                   # 剛起飛常常馬上轉彎：離某個機場 15 公里內就算那裡起飛的（金鵬 Y87402 從桃園起飛轉向西，以前被算成松山起飛）
+        n = min(((fly_dist(la, lo, lat, lon)[0], c) for c, la, lo in aps), default=(1e9, None))
+        if n[0] < 15:
+            return n[1]
+    for c, la, lo in aps:
         d, b = fly_dist(la, lo, lat, lon)
         if way and trk is not None and abs((float(trk) - (b + (180 if way > 0 else 0)) % 360 + 540) % 360 - 180) >= 60:
             continue
@@ -2177,6 +2238,8 @@ def fly_api(q):
         return fly_tracks(c if c in FLY_PIN else "TPE")
     if "photo" in q:                              # 飛機照片（註冊號，沒有就用飛機編號）
         return {"ok": True, **fly_photo(q["photo"][0], (q.get("hex") or [""])[0])}
+    if "owner" in q:                              # 飛機登記在哪家公司
+        return {"ok": True, **fly_owner(q["owner"][0], (q.get("hex") or [""])[0])}
     code = str(q.get("ap", ["TPE"])[0]).upper()[:4]
     try:
         return fly_slim(fly_board(code if code in FLY_PIN else "TPE"), str((q.get("v") or [""])[0])[:20])

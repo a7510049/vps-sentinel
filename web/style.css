@@ -1309,9 +1309,10 @@ html.flyon .dash>.view{content-visibility:hidden;contain-intrinsic-size:auto non
 .fhrs::-webkit-scrollbar,.fterm::-webkit-scrollbar{display:none}
 @media (hover:hover) and (pointer:fine){.fhrs,.fterm{cursor:grab}.fhrs.drag,.fterm.drag{cursor:grabbing;user-select:none}.fhrs.drag>*,.fterm.drag>*{pointer-events:none}}   /* 電腦：用滑鼠拖著捲 */
 .fhrs .fchip,.fterm .fchip{flex:none;display:inline-flex;align-items:center;gap:6px;white-space:nowrap}
+.fterm .fchip{height:32px;padding:0 12px;font-size:var(--fs-s)}.fpn svg{width:15px;height:15px;margin-right:4px;vertical-align:-2px}   /* 航廈、地點：比分頁小一號，看得出是第二層 */
 .fhrs .n{font-size:var(--fs-s);opacity:.7}
 /* 時段長條圖：每小時一根，高度是班數 */
-.fhrs.ftl{gap:3px;align-items:stretch;height:92px;margin:2px 0 0;padding:0;overflow:visible;-webkit-mask-image:none;mask-image:none;touch-action:pan-y;cursor:default}
+.fhrs.ftl{gap:3px;align-items:stretch;height:74px;margin:2px 0 0;padding:0;overflow:visible;-webkit-mask-image:none;mask-image:none;touch-action:pan-y;cursor:default}
 .fhb{flex:1 1 0;min-width:0;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;gap:4px;padding:0;background:none;color:var(--tx3)}
 .fhb i{width:100%;max-width:32px;height:calc(4px + var(--h,0) * 48px);border-radius:var(--r-xs);background:color-mix(in oklab,var(--p) 35%,var(--s3));transition:height var(--t-mid) var(--ease),background-color var(--t-fast) var(--ease)}
 .fhb.past i{background:var(--s3)}
@@ -1321,15 +1322,20 @@ html.flyon .dash>.view{content-visibility:hidden;contain-intrinsic-size:auto non
 .fhb.on i::before{opacity:1}
 .fhb:disabled i{height:2px;opacity:.6}
 .fhb small{height:1.3em;font-size:var(--fs-xs);font-variant-numeric:tabular-nums;white-space:nowrap;visibility:hidden;position:relative}
-.fhb.lb small,.fhb.on small,.fhb.now small{visibility:visible}
+.fhb.lb small,.fhb.on small{visibility:visible}
+.fhb.lb:is(:has(+ .fhb.on),.fhb.on + *):not(.on) small{visibility:hidden}   /* 選到的旁邊那根不寫，不然數字會黏在一起（1415） */
 .fhb.on small{color:var(--p);font-weight:700}
-.fhb.now small::after{content:"";position:absolute;left:50%;bottom:-5px;width:4px;height:4px;margin-left:-2px;border-radius:50%;background:var(--p)}   /* 現在這個小時 */
-.fhn{height:1.3em;font-size:var(--fs-xs);font-weight:700;color:var(--p);white-space:nowrap;opacity:0;transition:opacity var(--t-fast) var(--ease)}
-.fhb.on .fhn{opacity:1}
+.fhb.now small::after{content:"";visibility:visible;position:absolute;left:50%;bottom:-5px;width:4px;height:4px;margin-left:-2px;border-radius:50%;background:var(--p)}   /* 現在這個小時：只有一個點 */
+.fhb.tm0{margin-left:6px}                                          /* 明天的時段：跟今天空開一點 */
+.fhrh{display:flex;align-items:baseline;justify-content:space-between;gap:12px;margin-bottom:-4px}.fhrh:not(:has(> :not([hidden]))){display:none}   /* 長條圖上面一行：左邊選到的時段、右邊 1 小時內 */
+.fhsel{font-size:var(--fs-s);color:var(--tx3);white-space:nowrap}.fhsel b{margin-right:6px;font-size:var(--fs-l);color:var(--tx);font-weight:700}
+.fhrh .fsum{margin-left:auto}
 .fti{width:18px;height:18px;margin-right:6px;flex:none;display:inline-block;vertical-align:-4px}   /* 分頁前面的指示牌圖示 */
 .ftabs{--chip:var(--card)}
-.ftabs{flex-wrap:nowrap}@media (max-width:480px){.ftabs button{padding:0 4px}.ftabs .fti{width:15px;height:15px;margin-right:3px;vertical-align:-3px}.ftabs .fn{margin-left:4px}}@media (max-width:360px){.ftabs .fti{display:none}}   /* 手機：四個分頁加圖示也排得下一排（太窄就不放圖示） */
-.ftabs .fn{display:inline-block;margin-left:6px;color:var(--tx3);transition:color var(--tsel);font-variant-numeric:tabular-nums}.ftabs .on .fn{color:var(--on-p);opacity:.75}[data-accent="rainbow"] .ftabs .on .fn{color:var(--on-rbw)}   /* 數字自己給顏色，不跟著按鈕的變色動畫走（手機上有時會留著選到時的深色） */
+.ftabs{flex-wrap:nowrap}@media (max-width:480px){.ftabs button{padding:0 4px}.ftabs .fti{width:15px;height:15px;margin-right:3px;vertical-align:-3px}}@media (max-width:360px){.ftabs .fti{display:none}}   /* 手機：四個分頁加圖示也排得下一排（太窄就不放圖示） */
+.fnw{display:inline-flex;align-items:baseline;gap:3px;margin-left:6px}.fnl{font-size:var(--fs-xs);color:var(--tx3);transition:color var(--tsel)}.ftabs .on .fnl{color:var(--on-p);opacity:.75}
+@media (max-width:480px){.ftabs button{height:auto;min-height:48px;flex-wrap:wrap;align-content:center;justify-content:center;row-gap:0;line-height:1.25}.ftabs .fnw{flex-basis:100%;justify-content:center;margin:0;font-size:var(--fs-xs)}}   /* 手機：數字放在名稱下面，四個分頁排得下 */
+.ftabs .fn{display:inline-block;margin-left:0;color:var(--tx3);transition:color var(--tsel);font-variant-numeric:tabular-nums}.ftabs .on .fn{color:var(--on-p);opacity:.75}[data-accent="rainbow"] .ftabs .on .fn{color:var(--on-rbw)}   /* 數字自己給顏色，不跟著按鈕的變色動畫走（手機上有時會留著選到時的深色） */
 .ftabs .fn .dg{display:inline-block;position:relative;font-style:normal}.ftabs .fn .dg>b{display:inline-block;font-weight:inherit;transform-origin:50% 50%}.ftabs .fn .dgo{position:absolute;inset:0;font-style:normal;transform-origin:50% 50%}   /* 班數一位一位翻：舊的疊在上面先翻走 */
 .board{background:var(--card);box-shadow:var(--cs);border-radius:var(--r-xl);padding:10px;display:grid;grid-template-columns:auto auto auto minmax(5.6em,1fr) auto minmax(5em,1fr) auto auto auto auto auto;column-gap:12px;overflow:hidden}
 .fh,.frows,.fr{display:grid;grid-column:1/-1;grid-template-columns:subgrid}
@@ -1424,7 +1430,7 @@ html.flyon .dash>.view{content-visibility:hidden;contain-intrinsic-size:auto non
 .board.wait{min-height:14em}.board.wait :is(.fh,.frows,.fdone,.fmsg){opacity:0;pointer-events:none}   /* 換機場等資料：上一個機場的「已飛 N 班」、提示字也先淡掉 */
 .fload{position:absolute;inset:0;display:grid;place-items:center;pointer-events:none;opacity:0;transition:opacity var(--t-mid) var(--ease)}
 .board.wait .fload{opacity:1;transition-delay:var(--t-long)}
-.flyv :is(.fhrs,.fterm,.fsum){transition:opacity var(--t-mid) var(--ease)}.flyv.fwait :is(.fhrs,.fterm,.fsum){opacity:0;pointer-events:none}
+.flyv :is(.fhrs,.fterm,.fsum,.fhsel){transition:opacity var(--t-mid) var(--ease)}.flyv.fwait :is(.fhrs,.fterm,.fsum,.fhsel){opacity:0;pointer-events:none}
 .fload i{width:40px;height:40px;background:var(--p)}
 .radar{background:var(--card);box-shadow:var(--cs);border-radius:var(--r-xl);padding:16px;width:100%;max-width:480px;align-self:center}
 .fr.sel .sf .c[data-c=" "],.fr.sel .sf .c[data-c=" "] b{background:transparent}   /* 選到的那列：空格子不要變成深色方塊 */
