@@ -793,7 +793,8 @@ function pickShow(anim){
 }
 /* 單選的一排（data-slide）：
    直的清單（.pane）、手機上面的分頁底線（.dock）：選取底色從舊的那一個彈性滑到新的，跟著新的大小、圓角變形；滑的途中再按別的就從現在的位置轉向
-   其他（選主機、機場分頁、時段、紀錄篩選）：按鈕本身有底色，滑過去會被蓋住或蓋到別的字，改成在新的那一格原地撐開、舊的淡掉 */
+   其他（選主機、機場分頁、時段、紀錄篩選）：交給 CSS（style.css 的「選到的底色」::before），新的原地撐開、舊的淡掉；
+   連按時每一顆從現在的樣子接著變，不在這裡另外疊一塊（以前疊的那塊被下一下拿掉，底色整塊消失） */
 let SPTS;   // SPRING 曲線的轉折點（JS 自己算動畫時用）
 function springAt(t){
   if (!SPTS) { const m = SPRING.match(/^linear\((.*)\)$/);
@@ -802,7 +803,7 @@ function springAt(t){
   return 1;
 }
 function slideSel(change){
-  const z = ZM(), was = canAnim() ? [...document.querySelectorAll("[data-slide]")].map(b => {
+  const z = ZM(), was = canAnim() ? [...document.querySelectorAll(".pane[data-slide],.dock[data-slide]")].map(b => {
     const g = b.querySelector(":scope>.slide"), on = selOf(b);
     return [b.dataset.key, g ? g._now : on && boxIn(b, on, z)];
   }) : [];
@@ -812,20 +813,11 @@ function slideSel(change){
     if (!from || !on) return;
     const old = b.querySelector(":scope>.slide"); if (old) { old._stop = 1; old.remove(); }
     const to0 = boxIn(b, on, z);
-    if (Math.abs(to0.x - from.x) < 1 && Math.abs(to0.y - from.y) < 1) { if (old) b.classList.remove("sliding", "grow"); return; }   // 停在原地：換回它自己的底色
+    if (Math.abs(to0.x - from.x) < 1 && Math.abs(to0.y - from.y) < 1) { if (old) b.classList.remove("sliding"); return; }   // 停在原地：換回它自己的底色
     const g = document.createElement("i"); g.className = "slide"; g._leaving = 1; b.prepend(g); b.classList.add("sliding");   // _leaving：重畫時不要把它當成內容
     const dur = T.sp, t0 = performance.now(), lerp = (a, c, p) => a + (c - a) * p;
     g.animate([{opacity:1}, {opacity:1}], {duration:dur, id:"ui"});              // 滑完之前，自動更新先等一下
     const done = () => { const on2 = selOf(b); if (on2) { on2.style.transition = "none"; b.classList.remove("sliding"); on2.offsetWidth; on2.style.transition = ""; } g.remove(); };   // 換回它自己的底色，同一格畫面，不會閃
-    if (!b.matches(".pane,.dock")) {                                           // 原地撐開：不經過別的按鈕
-      const at = `translate(${to0.x}px,${to0.y}px)`;
-      Object.assign(g.style, {width:to0.w + "px", height:to0.h + "px", borderRadius:to0.r.map(r => r + "px").join(" "), transform:at});
-      b.classList.add("grow");
-      const a = g.animate([{transform:at + " scale(.6,.8)", opacity:0}, {opacity:1, offset:.35}, {transform:at, opacity:1}], {duration:dur, easing:SPRING, fill:"forwards"});
-      a.onfinish = () => { if (!g._stop) { b.classList.remove("grow"); done(); } };
-      g._now = to0;
-      return;
-    }
     if (Math.abs(to0.w - from.w) < 1 && Math.abs(to0.h - from.h) < 1 && to0.r.every((r, i) => Math.abs(r - from.r[i]) < 1)) {
       // 大小一樣（例如手機上面的分頁列、電腦左邊的圖示）：只移位置，交給顯示卡跑，新的一頁在畫的時候也不會頓
       Object.assign(g.style, {width:to0.w + "px", height:to0.h + "px", borderRadius:to0.r.map(r => r + "px").join(" ")});
