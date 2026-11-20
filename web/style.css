@@ -344,8 +344,6 @@ html.full .dock .tb.on::before{opacity:1;transform:none}
 /* 出狀況：卡片上半淡淡染上狀態色（不用外框），提示列換成半透明白底 */
 :is(.hcard,.hp).warn{background-image:linear-gradient(180deg,color-mix(in oklab,var(--warnc) 80%,transparent),transparent 55%)}
 :is(.hcard,.hp).bad{background-image:linear-gradient(180deg,color-mix(in oklab,var(--badc) 85%,transparent),transparent 55%)}
-:is(.hcard,.hp):is(.warn,.bad) .alert{background:color-mix(in oklab,var(--s1) 72%,transparent)}
-:is(.hcard,.hp):is(.warn,.bad) .alert.bad svg{color:var(--bad)}:is(.hcard,.hp):is(.warn,.bad) .alert.warn svg{color:var(--warn)}
 .hcard:focus-visible{outline:2px solid var(--p);outline-offset:2px}
 .ct{display:flex;align-items:center;gap:12px}
 .ct .nm{min-width:0;flex:1}
@@ -392,19 +390,31 @@ html.full .dock .tb.on::before{opacity:1;transform:none}
 .mch svg{width:18px;height:18px;transform:rotate(-90deg)}
 .offline{display:flex;align-items:flex-start;gap:12px;margin-top:12px;padding:14px;border-radius:var(--r-md);background:var(--badc);color:var(--on-badc)}
 .offline>svg{width:22px;height:22px;flex:none}
-.offline .sub{color:inherit;opacity:.8;margin-top:2px}
+.offline .sub{color:inherit;opacity:.8;margin-top:6px;font-size:var(--fs-s)}
+.ofm{flex:1;min-width:0}
+.ofm>b{font-weight:700}
+.otl{position:relative;height:10px;margin:10px 0 5px;border-radius:var(--r-pill);overflow:hidden;
+  background:repeating-linear-gradient(135deg,var(--bad) 0 4px,color-mix(in oklab,var(--bad) 25%,transparent) 4px 8px)}
+.otl i{position:absolute;inset:0;background:var(--ok);transform-origin:left;transform:scaleX(var(--g));transition:transform var(--t-slow) var(--ease)}
+.otx{display:flex;justify-content:space-between;font-size:var(--fs-xs);opacity:.75;font-variant-numeric:tabular-nums}
 .peerfix{margin-top:10px}
 
 /* 告警 */
-.alerts{display:flex;flex-direction:column;gap:3px}
+.alerts{display:flex;flex-wrap:wrap;gap:6px}
 .alerts:empty{display:none}
 .alerts>*{flex-shrink:0}
-.alert{display:flex;align-items:center;gap:10px;padding:10px 14px;border-radius:var(--r-xs);font-size:var(--fs-m)}
-.alert:first-child{border-top-left-radius:var(--r-md);border-top-right-radius:var(--r-md)}
-.alert:last-child{border-bottom-left-radius:var(--r-md);border-bottom-right-radius:var(--r-md)}
-.alert svg{width:18px;height:18px;flex:none}
+/* 狀況小膠囊：圖示＋名稱，壞掉的後面一個紅叉 */
+.alert{display:inline-flex;align-items:center;gap:6px;min-height:32px;padding:4px 11px 4px 9px;border-radius:var(--r-pill);font-size:var(--fs-s);font-weight:600;max-width:100%;line-height:1.3}
+.alert>span{min-width:0;overflow-wrap:anywhere;display:inline-flex;align-items:center;gap:5px}
+.alert.long{font-weight:500;border-radius:var(--r-md)}
+.alert b{font-weight:800;font-variant-numeric:tabular-nums}
+.alert svg{width:16px;height:16px;flex:none}
+.alx{display:inline-grid;place-items:center;width:15px;height:15px;border-radius:50%;background:var(--bad);color:#fff;flex:none}
+.alx svg{width:10px;height:10px;stroke-width:3.5}
 .alert.bad{background:var(--badc);color:var(--on-badc)}
 .alert.warn{background:var(--warnc);color:var(--on-warnc)}
+:is(.hcard,.hp):is(.warn,.bad) .alert{background:color-mix(in oklab,var(--s1) 55%,var(--chip))}   /* 卡片上半已經染色：膠囊用淡底，圖示照狀態色 */
+:is(.hcard,.hp):is(.warn,.bad) .alert.bad>svg{color:var(--bad)}:is(.hcard,.hp):is(.warn,.bad) .alert.warn>svg{color:var(--warn)}
 
 /* 事件 */
 .evs{display:flex;flex-direction:column;gap:3px}
@@ -423,6 +433,14 @@ html.full .dock .tb.on::before{opacity:1;transform:none}
 .ev button.eh{color:var(--p);font:inherit;padding:10px 4px;margin:-10px 2px -10px -4px}   /* 「日本等 3 台 ▾」：點了列出是哪幾台 */
 .ev button.eh i{display:inline-block;font-style:normal;transition:transform var(--t-mid) var(--ease)}
 .ev.open button.eh i{transform:rotate(180deg)}
+.eh.stk{display:inline-flex;align-items:center;gap:4px;vertical-align:middle}
+.eh.stk b{font-weight:700}
+.hst{display:inline-flex;align-items:center}
+.hsa{width:22px;height:22px;border-radius:50%;margin-left:-7px;box-shadow:0 0 0 2px var(--card);overflow:hidden;display:inline-grid;place-items:center;flex:none;background:var(--s3)}
+.hsa:first-child{margin-left:0}
+.hsa .flag{width:100%;height:100%;object-fit:cover;border-radius:0;margin:0;box-shadow:none}
+.hsa .emoji{font-size:var(--fs-s)}
+.hsa.l{background:var(--grad);color:#fff;font-size:var(--fs-xs);font-weight:700}
 .ev .ehs{display:grid;grid-template-rows:0fr;opacity:0;transition:grid-template-rows var(--t-mid) var(--ease),opacity var(--t-mid) var(--ease)}
 .ev .ehs>div{overflow:hidden;min-height:0}
 .ev.open .ehs{grid-template-rows:1fr;opacity:1}
@@ -535,7 +553,21 @@ html.dhid .dash>.view{content-visibility:hidden;contain-intrinsic-size:auto none
 .trow{display:flex;align-items:center;gap:10px}
 .trow .tbig{margin-left:auto;font-size:var(--fs-2xl);font-weight:500;font-variant-numeric:tabular-nums}
 .trow .tbig small{font-size:var(--fs-s);color:var(--tx3);margin-left:4px}
-.trf .wv{margin-top:12px}
+.trf .tbar{position:relative;margin-top:12px;--vw:clamp(6px,var(--v),calc(100% - 9px))}
+.tbar .wv{display:block}
+.tpj{position:absolute;top:2px;height:8px;left:calc(var(--vw) + 3px);right:calc(100% - var(--pj));border-radius:0 var(--r-pill) var(--r-pill) 0;color:var(--p);
+  background:repeating-linear-gradient(135deg,color-mix(in oklab,currentColor 55%,transparent) 0 3px,transparent 3px 6px)}
+.tpj.w,.lp.w{color:var(--warn)}.tpj.b,.lp.b{color:var(--bad)}
+.ttd{position:absolute;top:-4px;bottom:-4px;left:var(--td);width:2px;margin-left:-1px;border-radius:var(--r-pill);background:var(--tx)}
+.tlg{display:flex;align-items:center;gap:14px;font-size:var(--fs-xs);color:var(--tx3);margin-top:10px}
+.tlg>span{display:inline-flex;align-items:center;gap:5px}
+.tlg i{display:inline-block;flex:none}
+.lw{width:14px;height:4px;border-radius:var(--r-pill);background:var(--p)}.lw.w{background:var(--warn)}.lw.b{background:var(--bad)}
+.lp{width:14px;height:8px;border-radius:var(--r-xs);color:var(--p);background:repeating-linear-gradient(135deg,color-mix(in oklab,currentColor 55%,transparent) 0 3px,transparent 3px 6px)}
+.lt{width:2px;height:11px;border-radius:var(--r-pill);background:var(--tx)}
+.trs{margin-left:auto;display:inline-flex;align-items:center;gap:4px}
+.trs svg{width:13px;height:13px}
+.trs b{font-weight:700;color:var(--tx2)}
 .tsm{display:flex;justify-content:space-between;gap:8px;font-size:var(--fs-xs);color:var(--tx3);margin-top:8px}
 /* 容器與服務 */
 .chips{display:flex;flex-wrap:wrap;gap:6px}
@@ -543,9 +575,12 @@ html.dhid .dash>.view{content-visibility:hidden;contain-intrinsic-size:auto none
 .chip span:last-child{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .grp{display:flex;align-items:center;gap:8px;font-size:var(--fs-xs);font-weight:500;color:var(--tx3);width:100%;padding:6px 2px 0}
 .grp:first-child{padding-top:0}
-.grp span{margin-left:auto}
 .cch .sum{margin-left:auto;font-size:var(--fs-s);color:var(--tx3)}
-.cch .sum b{color:var(--bad)}
+.chip.bad{background:var(--badc);color:var(--on-badc)}
+.bxn{display:inline-flex;align-items:center;gap:6px;height:26px;padding:0 10px 0 6px;border-radius:var(--r-pill);background:var(--badc);color:var(--on-badc);font-size:var(--fs-s)}
+.bxn b{font-weight:700}
+.bxn.ok{background:color-mix(in oklab,var(--ok) 16%,transparent);color:var(--ok)}
+.bxn.ok svg{width:14px;height:14px;stroke-width:2.6}
 /* 底下：系統更新 */
 .foot{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;padding:16px;background:var(--card);box-shadow:var(--cs);border-radius:var(--r-lg)}
 .foot .sub{line-height:1.6}
@@ -1447,8 +1482,11 @@ html.flyon .dash>.view{content-visibility:hidden;contain-intrinsic-size:auto non
 .rah{display:flex;align-items:center;gap:10px}.rah>div{display:flex;flex-direction:column;min-width:0}
 .rah b{font-weight:700;font-size:var(--fs-s)}.rah small{color:var(--tx2);font-size:var(--fs-xs);font-variant-numeric:tabular-nums}
 .rah .sf.lg{font-size:var(--fs-xl)}
-.rad{display:grid;grid-template-columns:repeat(auto-fill,minmax(7.5em,1fr));gap:8px 12px;margin-top:10px}
-.rad .w2{grid-column:span 2}.rad>div{display:flex;flex-direction:column;min-width:0}.rad small{color:var(--tx3);font-size:var(--fs-xs)}.rad b{font-weight:600;font-size:var(--fs-s)}
+.rad{display:grid;grid-template-columns:repeat(auto-fit,minmax(0,1fr));gap:6px;margin-top:10px}
+.rad>div{display:flex;flex-direction:column;align-items:center;gap:3px;min-width:0;padding:10px 4px 8px;border-radius:var(--r-md);background:var(--s3)}
+.rad svg{width:32px;height:32px;color:var(--p);margin-bottom:2px}
+.rad b{font-weight:700;font-size:var(--fs-l);line-height:1.2;white-space:nowrap}
+.rad small{color:var(--tx3);font-size:var(--fs-xs);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%}
 /* 進場排隊條：右邊是跑道，要降落的飛機照離跑道多遠排在線上，慢慢滑過去 */
 .rq{margin-top:10px;padding:10px 14px 12px;border-radius:var(--r-lg);background:var(--tw-bg);color:var(--tw-txt)}
 .rqh{display:flex;align-items:baseline;gap:10px;font-size:var(--fs-xs);color:var(--tw-dim)}.rqh b{margin-left:auto;font-size:var(--fs-s);font-weight:600;color:var(--tw-arr);text-align:right}
@@ -1659,3 +1697,21 @@ html.flyon .dash>.view{content-visibility:hidden;contain-intrinsic-size:auto non
 .ppkeys svg{width:26px;height:26px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
 .pindlg2 .pplinks{display:flex;justify-content:center;gap:18px;margin-top:4px;flex-wrap:wrap}
 .pindlg2 .msg{min-height:20px;margin-top:10px;text-align:center}
+
+/* 設定裡的版本、更新數量小標籤；防回收的處理器長條（直線是門檻） */
+.vbs{display:inline-flex;gap:6px;vertical-align:middle;margin:2px 0}
+.vbd{display:inline-flex;align-items:center;gap:4px;height:22px;padding:0 8px;border-radius:var(--r-pill);background:var(--s3);color:var(--tx2);font-size:var(--fs-xs);font-weight:700}
+.vbd svg{width:12px;height:12px;stroke-width:2.4}
+.vbd.w{background:var(--warnc);color:var(--on-warnc)}
+.vbd.ok{background:color-mix(in oklab,var(--ok) 16%,transparent);color:var(--ok)}
+.li .lab small.kpst{display:flex;align-items:center;gap:8px;margin-top:4px}
+.kpb{display:block;position:relative;width:120px;height:8px;border-radius:var(--r-pill);background:var(--s4);overflow:hidden;flex:none}
+.kpb i{position:absolute;inset:0;background:var(--p);border-radius:var(--r-pill);transform-origin:left;transform:scaleX(var(--k));transition:transform var(--t-slow) var(--ease)}
+.kpst.bad .kpb i{background:var(--bad)}
+.kpb u{position:absolute;top:0;bottom:0;left:40%;width:2px;background:var(--warn)}
+.kpst b{font-weight:700;color:var(--tx2)}
+.kpst.bad b{color:var(--bad)}
+.sig{display:inline-flex;align-items:flex-end;gap:2px;height:16px}
+.sig i{width:4px;border-radius:var(--r-xs);background:var(--s4)}
+.sig i:nth-child(1){height:6px}.sig i:nth-child(2){height:11px}.sig i:nth-child(3){height:16px}
+.sig.ok i.on{background:var(--ok)}.sig.bad i.on{background:var(--bad)}

@@ -1089,15 +1089,31 @@ function flyQueue(f, d, rw){
 function flyWxRow(f, d, rw){
   const w = d.wx, out = [], kmh = k => Math.round(k * 1.852);
   flyQueue(f, d, rw);
-  if (rw) out.push(["跑道", rw.wind ? `應該用 ${rw.n}` : `${rw.n} 起降`]);
-  if (w && w.ws != null) out.push(["風", w.ws < 1 ? "無風" : `${w.wd < 0 ? "風向不定" : FLYDIR[Math.round(w.wd / 45) % 8] + "風"} ${kmh(w.ws)} 公里/時${w.wg ? `，陣風 ${kmh(w.wg)}` : ""}`]);
-  if (w && w.vis != null) out.push(["能見度", w.vis >= 9999 ? "10 公里以上" : w.vis >= 1000 ? +(w.vis / 1000).toFixed(1) + " 公里" : w.vis + " 公尺"]);
-  if (w && w.wx) out.push(["天氣", w.wx]);
-  if (w && w.tmp != null) out.push(["溫度", `${w.tmp}°C`]);
-  const el = f.querySelector(".rwx"), html = out.map(([k, v]) => `<div${k === "風" ? ' class="w2"' : ""}><small>${k}</small><b>${esc(v)}</b></div>`).join("");
+  const sv = b => `<svg viewBox="0 0 34 34" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${b}</svg>`;
+  const tile = (ic, big, sub, tip) => `<div title="${esc(tip)}">${sv(ic)}<b class="num">${big}</b><small>${esc(sub)}</small></div>`;
+  if (rw) out.push(tile('<rect x="13" y="3" width="8" height="28" rx="1.5" fill="currentColor" fill-opacity=".18" stroke="none"/><path d="M17 9v18" stroke-dasharray="2.5 3"/><path d="m13.5 8 3.5-4 3.5 4"/>',
+    esc(rw.n), rw.wind ? "應該用" : "起降", `跑道 ${rw.n}`));
+  if (w && w.ws != null) {   // 箭頭指向風吹過去的方向（東北風往西南吹）
+    const dir = w.ws < 1 ? "無風" : w.wd < 0 ? "風向不定" : FLYDIR[Math.round(w.wd / 45) % 8] + "風";
+    out.push(tile(`<circle cx="17" cy="17" r="14" stroke-opacity=".35"/><path d="M17 1.5v4" stroke-width="2.4"/>${w.ws >= 1 && w.wd >= 0 ? `<g transform="rotate(${w.wd} 17 17)"><path d="M17 8v18M11.5 20.5 17 26l5.5-5.5" stroke-width="2.6"/></g>` : `<circle cx="17" cy="17" r="2.5" fill="currentColor"/>`}`,
+      w.ws < 1 ? "0" : kmh(w.ws), w.wg ? `陣風 ${kmh(w.wg)}` : "公里/時", `${dir} ${kmh(w.ws)} 公里/時${w.wg ? `，陣風 ${kmh(w.wg)}` : ""}`));
+  }
+  if (w && w.vis != null) {
+    const n = w.vis >= 9999 ? 5 : w.vis >= 5000 ? 4 : w.vis >= 3000 ? 3 : w.vis >= 1000 ? 2 : 1;
+    out.push(tile([0, 1, 2, 3, 4].map(i => `<rect x="${3 + i * 6}" y="${26 - i * 5}" width="4" height="${5 + i * 5}" rx="1" stroke="none" fill="currentColor"${i < n ? "" : ' fill-opacity=".2"'}/>`).join(""),
+      w.vis >= 9999 ? "10+" : w.vis >= 1000 ? +(w.vis / 1000).toFixed(1) : w.vis, w.vis >= 1000 ? "公里" : "公尺", "能見度"));
+  }
+  if (w && (w.tmp != null || w.wx)) {
+    const cl = '<path d="M9 22a6 6 0 1 1 1.6-11.8A8 8 0 0 1 26 13a5 5 0 0 1-1 9.9"/>';
+    const ic = !w.wx ? '<path d="M15 5a3 3 0 0 1 6 0v13a6 6 0 1 1-6 0Z"/><path d="M18 12v10"/>'
+      : w.wx === "雷雨" ? cl + '<path d="m18 18-3 6h5l-3 6"/>' : /雨/.test(w.wx) ? cl + '<path d="M11 26l-1.5 3M17 26l-1.5 3M23 26l-1.5 3"/>'
+      : '<path d="M5 12h24M3 18h28M7 24h20"/>';
+    out.push(tile(ic, w.tmp != null ? `${w.tmp}°` : "", w.wx || "溫度", `${w.wx ? w.wx + "，" : ""}${w.tmp != null ? w.tmp + "°C" : ""}`));
+  }
+  const el = f.querySelector(".rwx"), html = out.join("");
   const m = w && /\b(\d{2})(\d{2})(\d{2})Z\b/.exec(w.raw || "");
   const ltr = m ? String.fromCharCode(65 + ((+m[1] * 48 + +m[2] * 2 + (+m[3] >= 30 ? 1 : 0)) % 26)) : "";
-  txt(el.querySelector('[data-k="wx-t"]'), m ? `資訊 ${ltr}・${String((+m[2] + 8) % 24).padStart(2, "0")}:${m[3]} 發布` : "");
+  txt(el.querySelector('[data-k="wx-t"]'), m ? `${String((+m[2] + 8) % 24).padStart(2, "0")}:${m[3]}` : "");
   flapSet(el.querySelector(".rah .sf"), ltr || " ");
   const ad = el.querySelector(".rad");
   if (ad._h !== html) { ad._h = html; html ? swapHTML(ad, html) : ad.innerHTML = ""; }
