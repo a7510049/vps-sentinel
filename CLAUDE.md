@@ -174,6 +174,7 @@ android/           安卓 App：全螢幕打開主機的網頁（記住網址）
 - 設定檔會嚴格檢查欄位，多一個不認得的欄位就整個起不來。例如 `auth.methods.password.adminUsername` 是 2.1 才有的，stable 用的是 `auth.adminUsername`。
 - 容器只開在 `127.0.0.1:8099`，一律經由哨兵轉送（`/cloud/...`）。
 - 容量限制靠的是 `/var/lib/vps-cloud/disk.img`（ext4 映像檔），掛在 `/srv/cloud`；調整容量時要先卸載。
+- 整顆加密（使用者要求：新裝的一律加密，沒有不加密的選項）：空間檔是 LUKS2（AES-256-XTS、argon2id），鑰匙 `/etc/vps-cloud.key`（跟著每日備份的「雲端硬碟設定」），開機由 `vps-cloud-unlock.service` 解鎖成 `/dev/mapper/vps-cloud` 再掛上；調整容量三層一起改（`luks_grow`、縮小時留 32 MB 給檔頭）；舊的沒加密的用 `cloud.sh 加密`（設定 → 主機「雲端硬碟」旁的「加密」鈕，`cloud_encrypt`，systemd 單元 `vps-cloud-encrypt`）：新做加密空間檔、`cp -a`、`diff -rq` 比對、換檔名、打得開才刪舊的，失敗換回原本的；**兩台都加密好後，下個版本拿掉「加密」鈕和沒加密的寫法**（使用者要求）
 
 ## 改完要做的檢查
 

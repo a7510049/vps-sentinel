@@ -84,6 +84,7 @@ const P = {
   dl:'<path d="M12 3v12"/><path d="m7 10 5 5 5-5"/><path d="M5 21h14"/>',
   plug:'<path d="M9 2v5M15 2v5"/><path d="M6 7h12v4a6 6 0 0 1-12 0z"/><path d="M12 17v5"/>',
   clock:'<circle cx="12" cy="12" r="9.5"/><path d="M12 7v5l3 2"/>',
+  lock:'<rect x="5" y="11" width="14" height="10" rx="2.5"/><path d="M8 11V7.5a4 4 0 0 1 8 0V11"/>',
   power:'<path d="M12 2v10"/><path d="M18.4 6.6a9 9 0 1 1-12.77.04"/>',
   loc:'<circle cx="12" cy="12" r="7"/><circle cx="12" cy="12" r="2.5"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/>',
   mpin:'<path d="M12 21s7-6.2 7-12a7 7 0 0 0-14 0c0 5.8 7 12 7 12Z"/><circle cx="12" cy="9" r="2.5"/>',
@@ -1695,11 +1696,25 @@ function selfPaint(root){
   const ch = d.has && d.changes && d.changes.length ? `<ul class="chg">${d.changes.slice(0, 5).map(c => `<li>${esc(c.split("\n")[0])}</li>`).join("")}</ul>` : "";
   const c = d.cloud;
   const cst = !c ? "" : c.running ? `<span class="spin"></span>更新中…` : c.has ? `<span class="new">官方有新版可以更新</span>` : c.err ? `<span class="warn">${esc(c.err)}</span>` : c.has === false ? "ok" : "還沒檢查";
-  const crow = c ? `<div class="cl2">${IC("cloud", "")}<span>雲端硬碟<small>${cst === "ok" ? (c.version ? VOK(esc(c.version)) : VOK("最新")) : (c.version ? `<span class="vbs"><span class="vbd">${esc(c.version)}</span></span> ` : "") + cst}</small></span>
-    ${c.has && !c.running ? `<button class="ubtn sm" data-cloudup="${node}">更新</button>` : ""}</div>` : "";
+  const e = c && c.enc;                              // 整顆加密：好了是小鎖頭；舊的雲端硬碟才有「加密」鈕
+  const est = !e ? "" : e.running ? ` <span class="spin"></span>加密中…` : e.on ? ` <span class="vlk" title="已加密">${I("lock")}</span>` : "";
+  const ebtn = e && !e.on && !e.running && !c.running ? `<button class="ubtn sm" data-cloudenc="${node}"${e.need > e.free ? " disabled" : ""}>加密</button>` : "";
+  const crow = c ? `<div class="cl2">${IC("cloud", "")}<span>雲端硬碟<small>${cst === "ok" ? (c.version ? VOK(esc(c.version)) : VOK("最新")) : (c.version ? `<span class="vbs"><span class="vbd">${esc(c.version)}</span></span> ` : "") + cst}${est}</small></span>
+    ${c.has && !c.running ? `<button class="ubtn sm" data-cloudup="${node}">更新</button>` : ebtn}</div>` : "";
   const srow = `<div class="cl2 first"><span class="ico theme">${I("upd")}</span><span>哨兵<small title="${esc(d.build || "")}">${st ? (d.version ? `<span class="vbs"><span class="vbd">${esc(d.version)}</span></span> ` : "") + st : d.version ? VOK(esc(d.version)) : ""}</small>${ch}</span>
     ${d.has && !d.running ? `<button class="ubtn sm" data-selfup="${node}">更新</button>` : ""}</div>`;
   swapHTML(box, `<div class="selfrow">${srow}${crow}</div>`);
+}
+/* 舊的雲端硬碟換成整顆加密的：檔案搬過去、比對過才刪舊的 */
+async function cloudEncrypt(root, node){
+  const h = LIST.find(x => (x.node || "") === node), d = h && SELFST[keyOf(h)], e = d && d.cloud && d.cloud.enc;
+  if (!e) return;
+  const ok = await modal({icon: "lock", cls: "theme", title: "加密雲端硬碟？",
+    text: `要多 ${size(e.need)} 空位，搬完前打不開。`, ok: "開始加密"});
+  if (!ok) return;
+  try { const r = await selfCall(node, "cloud_encrypt"); toast(r.message || "已開始加密"); e.running = true; }
+  catch (x) { toast(x.message, "bad"); }
+  selfPaint(root);
 }
 /* jobs：[{node, kind:"self"|"cloud"}]；不給就是「全部更新」 */
 async function selfUpdate(root, jobs){
@@ -3150,6 +3165,8 @@ async function pageClick(e){
   if (sc) { sc.disabled = true; SELFCHK = true; selfPaint(view()); return selfStatus(view(), true).finally(() => { sc.disabled = false; SELFCHK = false; selfPaint(view()); }); }   // 按鈕的字不變（使用者要求），狀態寫在下面
   const su = t.closest("[data-selfup]");
   if (su) return selfUpdate(view(), su.dataset.selfup === "*" ? null : [{node: su.dataset.selfup, kind:"self"}]);
+  const ce = t.closest("[data-cloudenc]");
+  if (ce) return cloudEncrypt(view(), ce.dataset.cloudenc);
   const cu = t.closest("[data-cloudup]");
   if (cu) return selfUpdate(view(), [{node: cu.dataset.cloudup, kind:"cloud"}]);
   const pv = t.closest("[data-val]");
