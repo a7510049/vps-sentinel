@@ -1070,13 +1070,15 @@ function flyQueue(f, d, rw){
   txt(el.querySelector('[data-k="rq-nx"]'), q.length ? "" : x ? `下一班 ${x.fn || x.reg || ""} 約 ${flyRm(mn)} 分鐘後降落` : "");   // 線上已經有排隊的就不再寫一次下一班
   txt(el.querySelector('[data-k="rq-t"]'), rw ? `進場排隊・${rw.n} 跑道` : "進場排隊");
   const box = el.querySelector(".rqps"), seen = new Set();
+  const gap = 2600 / Math.max(box.clientWidth, 100), qxs = q.map(([, , b]) => flyQx(b.al));   // 兩條平行跑道上一樣遠的飛機：圓點錯開一格，不疊在一起
+  q.map((_, i) => i).sort((a, b) => qxs[b] - qxs[a] || a - b).reduce((p, i) => (qxs[i] = Math.min(qxs[i], p - gap), qxs[i]), 1e9);
   q.forEach(([m, o, b], i) => {
     const id = o.id; seen.add(id);
     let e = box.querySelector(`[data-id="${CSS.escape(id)}"]`);
-    if (!e) { e = document.createElement("span"); e.className = "rqp"; e.dataset.id = id; e.innerHTML = "<span><i></i><b></b><small></small></span>"; e.style.transform = `translateX(${flyQx(b.al)}%)`; box.appendChild(e); if (canAnim()) e.animate([{opacity:0}, {opacity:1}], {duration:T.mid, easing:EASE}); }
+    if (!e) { e = document.createElement("span"); e.className = "rqp"; e.dataset.id = id; e.innerHTML = "<span><i></i><b></b><small></small></span>"; e.style.transform = `translateX(${qxs[i]}%)`; box.appendChild(e); if (canAnim()) e.animate([{opacity:0}, {opacity:1}], {duration:T.mid, easing:EASE}); }
     if (e._bye) { e._bye = false; e.getAnimations().forEach(a => a.cancel()); if (canAnim()) e.animate([{opacity:0}, {opacity:1}], {duration:T.mid, easing:EASE}); }   // 正在淡出又回來了（例如看完整頁雷達）：停掉淡出、再淡入，不然會一直是透明的
     e.classList.toggle("up", i % 2 === 1); e.classList.toggle("emg", !!o.p.emg);
-    const qx = flyQx(b.al); e.style.transform = `translateX(${qx}%)`;
+    const qx = qxs[i]; e.style.transform = `translateX(${qx}%)`;
     e.style.setProperty("--sh", `${Math.max(0, (14 - qx) / 14) * 50 - Math.max(0, (qx - 86) / 14) * 50}%`);   // 靠近兩頭：字往裡面靠，不超出框
     txt(e.querySelector("i"), String(i + 1)); txt(e.querySelector("b"), o.p.fn || o.p.reg || ""); txt(e.querySelector("small"), m < 1 ? "快落地" : `${flyRm(m)} 分`);
   });
