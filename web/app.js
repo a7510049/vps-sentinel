@@ -551,14 +551,14 @@ const dayOf = t => { const d = new Date(t * 1000), n = new Date(), y = new Date(
   return d.toDateString() === n.toDateString() ? "今天" : d.toDateString() === y.toDateString() ? "昨天" : `${d.getMonth() + 1} 月 ${d.getDate()} 日`; };
 
 /* ═════════ 首頁的主機卡片（手機） ═════════ */
-const mrow = (l, p) => `<div class="mr"><span class="ml">${l}</span>${wave(p)}<span class="mv ${tier(p)}">${num(p)}%</span></div>`;
+const mrow = (l, p, ic) => `<div class="mr"><span class="ml${ic ? ` mi ${ic}" title="${l}">${I(ic)}` : `">${l}`}</span>${wave(p)}<span class="mv ${tier(p)}">${num(p)}%</span></div>`;
 function hostCard(s, i, mini){
   const lv = lvOf(s), k = keyOf(s);
   let b = `<div class="hcard ${lv}${mini ? " mini" : ""}" data-key="${esc(k)}" data-keyed data-open="${esc(k)}" role="button" tabindex="0" style="--i:${i}">
     <div class="ct" data-key="ct">${avatar(s)}<div class="nm"><div class="cn">${esc(s.name)}</div><div class="cp">${esc(place(s) || osShort(s.os))}</div></div>${mini ? "" : I("chev")}</div>`;
   if (!s.online) return b + offBox(s) + `</div>`;
   const d0 = disk0(s), ft = [PREF.show.traffic && s.traffic ? `<span title="本月流量">${I("month")}${size(s.traffic.used)}</span>` : "", `<span title="開機多久">${I("power")}${up(s.uptime)}</span>`].join("");   // 圖示＋數字，不寫「本月」「開機」
-  const mr = `<div class="mrows" data-key="mr">${mrow("處理器", s.cpu)}${mrow("記憶體", s.mem.pct)}${mrow("磁碟", d0.pct)}</div>`;
+  const mr = `<div class="mrows" data-key="mr">${mrow("處理器", s.cpu, mini && "cpu")}${mrow("記憶體", s.mem.pct, mini && "mem")}${mrow("磁碟", d0.pct, mini && "disk")}</div>`;   // 一行的：字換成小圖示，名字才放得下
   if (mini) return b + mr + `<span class="mch" data-key="ch">${I("chev")}</span></div>`;
   return b + alerts(s, 1) + mr + `<div class="cfoot" data-key="cf">${ft}</div></div>`;   // 處理器、記憶體、磁碟下面那格已經變色，不再放膠囊
 }
@@ -642,7 +642,7 @@ function tBar(t){
   if (!t.limit) return `<div class="tsm"><span>${t.projected ? `預估月底 ${size(t.projected)}` : ""}</span>${rst}</div>`;
   const pj = t.projected ? Math.min(100, t.projected / t.limit * 100) : 0, td = t.cycle_days ? Math.max(0, Math.min(100, (1 - t.days_left / t.cycle_days) * 100)) : 0, pt = tier(pj);
   return `<div class="tbar" style="--v:${Math.min(100, +t.pct || 0).toFixed(1)}%;--pj:${pj.toFixed(1)}%;--td:${td.toFixed(1)}%">${wave(t.pct)}${pj > t.pct ? `<i class="tpj ${pt}"></i>` : ""}<i class="ttd"></i></div>`
-    + `<div class="tlg"><span><i class="lw ${tier(t.pct)}"></i>已用</span>${pj > t.pct ? `<span title="預估月底 ${size(t.projected)}"><i class="lp ${pt}"></i>月底</span>` : ""}<span><i class="lt"></i>今天</span>${rst}</div>`;
+    + `<div class="tlg"><span><i class="lw ${tier(t.pct)}"></i>已用</span>${pj > t.pct ? `<span title="預估月底 ${size(t.projected)}"><i class="lp ${pt}"></i>月底</span>` : ""}<span><i class="ltk"></i>今天</span>${rst}</div>`;
 }
 /* 本月流量：點了開流量設定 */
 function trafficCard(s){
@@ -746,7 +746,11 @@ const cardMode = () => !DESK.matches;
 /* 主機總表的一列：名稱、三條用量、網路、流量、開機、⋯；連不上的整列寫原因 */
 function hostRowD(s, on){
   const k = esc(keyOf(s)), lv = s.online ? lvOf(s) : "bad", bar = p => `<span class="hc">${wave(p)}<b class="num ${tier(p)}">${num(p)}%</b></span>`;
-  const nm = `<span class="hc hn">${avatar(s)}<span><b>${esc(s.name)}</b><small>${esc(place(s) || osShort(s.os))}</small></span></span>`;
+  /* 有狀況的：名字下面直接放那件事的小膠囊（處理器、記憶體、磁碟那格已經變紅的不再放），不用點進去才知道 */
+  const bad = s.online ? (s.problems || []).filter(p => !tileKey(s, p)).map(p => alChip(noDup(s, String(p)), "bad", "b")) : [];
+  const warn = s.online ? (s.notices || []).map(p => alChip(String(p), "warn", "w")) : [];
+  const al = bad.concat(warn), sub = al.length ? `<small class="hal">${al[0]}${al.length > 1 ? `<i class="num">+${al.length - 1}</i>` : ""}</small>` : `<small>${esc(place(s) || osShort(s.os))}</small>`;
+  const nm = `<span class="hc hn">${avatar(s)}<span><b>${esc(s.name)}</b>${sub}</span></span>`;
   if (!s.online) return `<div class="htr off${on ? " on" : ""}" data-dsel="${k}" data-key="hr:${k}">${nm}<span class="hc hoff">${I("off")}連不上${s.last_seen ? `・${esc(seen(s))}` : ""}</span><span class="hc">${moreBtn(s)}</span></div>`;
   const d0 = disk0(s);
   return `<div class="htr ${lv}${on ? " on" : ""}" data-dsel="${k}" data-key="hr:${k}">${nm}${bar(s.cpu)}${bar(s.mem.pct)}${bar(d0.pct)}
@@ -782,7 +786,7 @@ function toolsPage(list){
   const dot = x => lvOf(x) === "ok" ? "" : `<span class="dot ${lvOf(x)}"></span>`;
   const pick = on.length > 1 ? hpick(on, s, dot) : "";
   const lh = `<div class="lbl" data-key="lth">主機</div>`;
-  if (D) return `<div class="wide" data-key="tools">${dbar("工具", pick)}${toolsBody(s, k, node, name)}<div class="lbl" data-key="ltf">不分主機</div><div class="tgrid" data-key="g-tf">${flyT}</div></div>`;   // 電腦：選主機放工具列，下面一格一格
+  if (D) return `<div class="wide" data-key="tools">${dbar("工具", pick)}${toolsBody(s, k, node, name)}<div class="lbl" data-key="ltf">不分主機</div>${fly}</div>`;   // 電腦：選主機放工具列，下面一格一格（格子撐滿一排）；機場起降跟手機一樣是一整條
   return h + fly + lh + pick + toolsBody(s, k, node, name) + `</div>`;
 }
 function toolsBody(s, k, node, name){
@@ -960,6 +964,12 @@ const NUM = /-?\d+(?:\.\d+)?/g;
 /* 不在畫面上的曲線就不做變形動畫，直接換成新的（手機上兩台主機的曲線常常有一半在畫面外） */
 const SEEN = new WeakMap();
 const seenIO = window.IntersectionObserver ? new IntersectionObserver(es => es.forEach(e => SEEN.set(e.target, e.isIntersecting))) : null;
+/* 波浪條捲出畫面就停（主機多時首頁幾十條，看不到的不用一直動，手機比較省電）；新長出來的自動加進來、拿掉的不再看 */
+const waveIO = window.IntersectionObserver ? new IntersectionObserver(es => es.forEach(e => e.target.classList.toggle("zz", !e.isIntersecting)), {rootMargin:"60px"}) : null;
+if (waveIO) new MutationObserver(ms => { for (const m of ms) {
+  for (const n of m.addedNodes) if (n.nodeType === 1) { if (n.classList.contains("wv")) waveIO.observe(n); else n.querySelectorAll(".wv").forEach(w => waveIO.observe(w)); }
+  for (const n of m.removedNodes) if (n.nodeType === 1) { if (n.classList.contains("wv")) waveIO.unobserve(n); else n.querySelectorAll(".wv").forEach(w => waveIO.unobserve(w)); }
+} }).observe(document.documentElement, {childList:true, subtree:true});
 /* 主機整頁打開時，後面那一頁看不到：不用動畫，直接換成新的值 */
 const behind = el => !!DET && !el.closest(".det");
 function onScreen(el){
