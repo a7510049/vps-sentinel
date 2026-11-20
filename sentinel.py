@@ -45,7 +45,7 @@ from collections import deque
 from concurrent.futures import ThreadPoolExecutor
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
-VERSION = "4.11"
+VERSION = "4.12"
 
 # ───────────────────────── 哨兵備份檔（.vsbk）─────────────────────────
 # 哨兵專用的備份格式：外面是自己的檔案格式，裡面用的是成熟、標準的加密方法（不自己發明加密）：
@@ -2080,6 +2080,31 @@ PIN_LOCK_AFTER, PIN_LOCK_MIN, PIN_OFF_AFTER = 5, 15, 10
 PIN_LK = threading.Lock()
 
 
+RECHECK = {}                                     # 登入鑰匙的 id → 再次確認過、到幾點前不用再問
+RECHECK_SECS = 300
+
+
+def recheck_need(path, d):
+    """會讓別人接管這台的動作：已經登入的裝置也要先再確認一次是本人（PIN 碼、手機金鑰或密碼）"""
+    act = d.get("action") if isinstance(d, dict) else None
+    return (path == "/api/token" or (path == "/api/pin" and act in ("set", "off"))
+            or (path == "/api/passkey" and act in ("begin", "delete")) or (path == "/api/telegram" and act == "save")
+            or (path == "/api/backup" and act == "key") or (path == "/api/pair-admin" and act == "code"))
+
+
+def recheck_ok(a):
+    """a 是網頁送來的確認資料：{"pin": {nonce, proof}}、手機金鑰的簽章，或 {"pw": 存取密碼}"""
+    if not isinstance(a, dict):
+        return False, "要先確認是你"
+    if isinstance(a.get("pin"), dict):
+        return pin_login(a["pin"])
+    if a.get("clientDataJSON"):
+        ok, msg = pk_login_finish(a)
+        return ok, "" if ok else msg
+    pw = str(a.get("pw") or "")
+    return bool(pw) and hmac.compare_digest(pw.encode(), TOKEN.encode()), "密碼不對"
+
+
 def pin_path():
     return os.path.join(DATA_DIR, "pin.json")
 
@@ -4054,10 +4079,33 @@ class Handler(BaseHTTPRequestHandler):
 
     def authed(self):
         given = self.headers.get("X-Token", "")
+        self.sess = None                             # 同一條連線上一次的不能沿用
         if given.startswith("vss_"):
             self.sess = sess_find(given)
             return bool(self.sess)
         return bool(given) and (hmac.compare_digest(given.encode(), TOKEN.encode()) or pair_key_ok(given))
+
+    def recheck(self):
+        """這台裝置 5 分鐘內確認過就放行；不然看 X-Recheck（base64 的 JSON），沒有或不對就回 403 要網頁先問"""
+        sid, now = self.sess.get("id", ""), time.time()
+        if RECHECK.get(sid, 0) > now:
+            return True
+        raw = self.headers.get("X-Recheck", "")
+        msg = "要先確認是你"
+        if raw:
+            try:
+                a = json.loads(base64.urlsafe_b64decode(raw + "=" * (-len(raw) % 4)))
+            except (ValueError, TypeError):
+                a = None
+            ok, msg = recheck_ok(a)
+            if ok:
+                for k in [k for k, v in RECHECK.items() if v < now]:
+                    del RECHECK[k]
+                RECHECK[sid] = now + RECHECK_SECS
+                return True
+            time.sleep(1)
+        self.send(403, json.dumps({"ok": False, "message": msg or "驗證失敗", "recheck": True}, ensure_ascii=False))
+        return False
 
     def sess_give(self, d, how):
         """登入成功：發一把這台裝置自己的鑰匙"""
@@ -4206,14 +4254,7 @@ class Handler(BaseHTTPRequestHandler):
 
     def cloud_open(self, body):
         d = self.jbody(body)
-        if isinstance(d.get("pin"), dict):
-            ok, msg = pin_login(d["pin"])
-        elif d.get("clientDataJSON"):
-            ok, msg = pk_login_finish(d)
-            msg = "" if ok else msg
-        else:
-            pw = str(d.get("pw") or "")
-            ok, msg = bool(pw) and hmac.compare_digest(pw.encode(), TOKEN.encode()), "密碼不對"
+        ok, msg = recheck_ok(d)
         if not ok:
             time.sleep(1)
             return self.send(401, json.dumps({"ok": False, "message": msg or "驗證失敗"}, ensure_ascii=False))
@@ -4569,6 +4610,8 @@ class Handler(BaseHTTPRequestHandler):
             return self.send(401, '{"error":"密碼錯誤"}')
         if u.path == "/api/cloud-open":             # 打開雲端硬碟：每次都在這台驗證 PIN 碼、手機金鑰或密碼，過了才發登入票
             return self.cloud_open(body)
+        if self.sess and recheck_need(u.path, self.jbody(body)) and not self.recheck():
+            return None                              # 用登入鑰匙的裝置要先再確認一次（主機之間、存取密碼本身不用）
         node = urllib.parse.parse_qs(u.query).get("node", [""])[0]
         if node:                                  # 轉給其他 VPS
             peer = next((p for p in PEERS if p["name"] == node), None)
