@@ -591,8 +591,9 @@ html.dhid .dash>.view{content-visibility:hidden;contain-intrinsic-size:auto none
 .chips{display:flex;flex-wrap:wrap;gap:6px}
 .chip{display:inline-flex;align-items:center;gap:8px;height:34px;padding:0 13px;border-radius:var(--r-pill);background:var(--chip);font-size:var(--fs-s);max-width:100%}
 .chip span:last-child{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.grp{display:flex;align-items:center;gap:8px;font-size:var(--fs-xs);font-weight:500;color:var(--tx3);width:100%;padding:6px 2px 0}
-.grp:first-child{padding-top:0}
+.grp{display:inline-flex;align-items:center;gap:6px;height:34px;padding:0 4px 0 2px;font-size:var(--fs-xs);font-weight:500;color:var(--tx3)}   /* 每組前面一個圖示：容器、服務；docker compose 專案多寫名字 */
+.grp svg{width:18px;height:18px;flex:none}
+.gbr{flex-basis:100%;height:0}
 .cch .sum{margin-left:auto;font-size:var(--fs-s);color:var(--tx3)}
 .chip.bad{background:var(--badc);color:var(--on-badc)}
 .bxn{display:inline-flex;align-items:center;gap:6px;height:26px;padding:0 10px 0 6px;border-radius:var(--r-pill);background:var(--badc);color:var(--on-badc);font-size:var(--fs-s)}
@@ -786,6 +787,7 @@ button.li.prs,a.li.prs{border-radius:var(--r-lg);transform:scale(.98);background
 .lfn{display:inline-grid;place-items:center;min-width:22px;height:20px;padding:0 6px;border-radius:var(--r-pill);background:color-mix(in srgb,currentColor 12%,transparent);font-size:var(--fs-xs);font-weight:700;font-variant-numeric:tabular-nums}
 .fchip.lfc{display:inline-flex;align-items:center;gap:6px}
 .fchip.lfc .lfn{margin-left:2px}
+@media (max-width:1023px){.lfc[data-logf=bad] .lfl,.lfc[data-logf=other] .lfl{display:none}}   /* 手機：有狀況、恢復只放圖示＋筆數，三顆擠得下一排 */
 .pane .li .val{color:inherit;opacity:.75}
 .scols{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:24px;align-items:start}
 .scol{min-width:0}
@@ -805,6 +807,8 @@ button.li.prs,a.li.prs{border-radius:var(--r-lg);transform:scale(.98);background
   transition:box-shadow var(--t-mid) var(--ease)}
 .hp .hname{font-size:var(--fs-2xl);font-weight:700;letter-spacing:-.01em;background:none;color:var(--tx)}   /* 電腦欄位裡是卡片標題，跟首頁卡片的主機名稱一樣 */
 .hp .hsub{font-size:var(--fs-s);margin-top:2px}
+.hup{display:inline-flex;align-items:center;gap:3px;white-space:nowrap;vertical-align:-2px}.hup svg{width:13px;height:13px;flex:none}
+.fc>svg{width:16px;height:16px;flex:none;color:var(--tx3)}
 .hp .hhead{padding:0 0 4px}
 @container (min-width:560px){.tiles{grid-template-columns:repeat(4,minmax(0,1fr))}}
 .aside{position:sticky;top:24px;display:flex;flex-direction:column;gap:12px}
@@ -852,6 +856,7 @@ body:has(.dash.d) .fwrap{max-width:var(--pw)}
 .rh{display:flex;align-items:center;gap:10px;height:36px;padding:0 10px;border-radius:var(--r-sm);color:var(--tx2);font-size:var(--fs-s);text-align:left;transition:background-color var(--t-fast) var(--ease)}
 .rh b{flex:1;min-width:0;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--tx)}
 .rh small{color:var(--tx3);font-size:var(--fs-xs)}
+.rh small svg{width:14px;height:14px;color:var(--bad);display:block}   /* 連不上：斷線圖示，不寫「離線」 */
 .rh.on{background:var(--s3)}
 @media (hover:hover){.rh:not(.on):hover{background:color-mix(in srgb,var(--tx) 5%,transparent)}}
 .dash.d .rail .rfoot{flex-direction:row;justify-content:space-between;align-items:center;padding:12px 4px 0 10px}
@@ -939,7 +944,7 @@ body:has(.dash.d) .fwrap{max-width:var(--pw)}
 .ltab .lh{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:var(--fs-s)}
 .ltab .lh .eh{margin:0}
 .ltab .ev .ehs{grid-column:auto}
-.ltab .lx{margin-left:8px;font-size:var(--fs-xs);color:var(--tx3)}
+.ev .lx{margin-left:8px;font-size:var(--fs-xs);color:var(--tx3)}
 .ltab .day{margin:0;padding:10px 18px 6px;font-size:var(--fs-xs);background:var(--s1);border-bottom:1px solid var(--line)}
 
 
@@ -1025,6 +1030,7 @@ textarea.field{height:auto;padding:12px 16px;resize:none}
 .dvi{flex:none;display:grid;place-items:center;width:40px;height:40px;border-radius:var(--r-sm);background:var(--s1);color:var(--tx)}
 .dvi svg{width:22px;height:22px}
 .dvi.etc svg{width:20px;height:20px;fill:none;color:var(--tx2)}
+.pkrow .dvme{flex:none;display:block;margin:0 10px 0 auto;padding:4px 10px;border-radius:var(--r-pill);background:var(--pc);color:var(--on-pc);font-size:var(--fs-xs);font-weight:700}
 .pcode{display:flex;flex-direction:column;gap:6px}.pcode:empty{display:none}
 .codebox{display:flex;align-items:center;gap:10px;padding:10px 8px 10px 14px;border-radius:var(--r-md);background:var(--s3)}
 .codebox code{flex:1;min-width:0;font:500 var(--fs-s)/1.45 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;word-break:break-all;user-select:all;color:var(--tx)}

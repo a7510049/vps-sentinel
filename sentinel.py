@@ -45,7 +45,7 @@ from collections import deque
 from concurrent.futures import ThreadPoolExecutor
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
-VERSION = "4.13"
+VERSION = "4.14"
 
 # ───────────────────────── 哨兵備份檔（.vsbk）─────────────────────────
 # 哨兵專用的備份格式：外面是自己的檔案格式，裡面用的是成熟、標準的加密方法（不自己發明加密）：
@@ -3845,9 +3845,15 @@ def ev_line(e):
     return {"bad": "🔴 ", "warn": "🟠 ", "ok": "✅ "}.get(k, "ℹ️ ") + t
 
 
-def tg_host_msg(name, lines):
-    """同一台主機的通知合成一則：只有一件事就一行，多件事就主機名稱當標題"""
-    name = html.escape(name)
+def tg_flag(geo):
+    """主機所在國家的國旗（🇯🇵），放在通知的主機名稱前面；不知道就空白"""
+    cc = str((geo or {}).get("cc") or "").upper() if isinstance(geo, dict) else ""
+    return "".join(chr(0x1F1E6 + ord(c) - 65) for c in cc) + " " if len(cc) == 2 and cc.isalpha() and cc.isascii() else ""
+
+
+def tg_host_msg(name, lines, geo=None):
+    """同一台主機的通知合成一則：只有一件事就一行，多件事就主機名稱當標題；主機名稱前面放國旗"""
+    name = tg_flag(geo) + html.escape(name)
     lines = [html.escape(x) for x in dict.fromkeys(lines)]          # 同樣的內容只留一次
     if len(lines) == 1:
         icon, _, rest = lines[0].partition(" ")
@@ -3873,12 +3879,12 @@ def alert_loop():
                         offline_count[key] = offline_count.get(key, 0) + 1
                         if offline_count[key] == 6 and key not in down:     # 連續約 3 分鐘連不上才通知
                             down.add(key)
-                            tg_send(f"🔌 <b>{html.escape(name)}</b>　連不上了\n{html.escape(s.get('error') or '')}".strip())
+                            tg_send(f"🔌 {tg_flag(s.get('geo'))}<b>{html.escape(name)}</b>　連不上了\n{html.escape(s.get('error') or '')}".strip())
                         continue
                     offline_count[key] = 0
                     if key in down:
                         down.discard(key)
-                        tg_send(f"✅ <b>{html.escape(name)}</b>　恢復連線了")
+                        tg_send(f"✅ {tg_flag(s.get('geo'))}<b>{html.escape(name)}</b>　恢復連線了")
                     evs = sorted((e for e in s.get("events") or [] if isinstance(e, dict) and isinstance(e.get("t"), (int, float))),
                                  key=lambda e: e["t"])          # 格式不對的事件跳過，不要害全部通知停擺
                     if not evs:
@@ -3895,7 +3901,7 @@ def alert_loop():
                     new = [e for e in evs if e["t"] >= last and e["t"] > own and (e["t"], e.get("text")) not in done]
                     lines = [x for x in (ev_line(e) for e in new) if x]
                     if lines:
-                        tg_send(tg_host_msg(name, lines[-10:]))
+                        tg_send(tg_host_msg(name, lines[-10:], s.get("geo")))
                     done.update((e["t"], e.get("text")) for e in new)
                     if len(done) > 200:
                         seen_ev[key] = {(e["t"], e.get("text")) for e in evs}

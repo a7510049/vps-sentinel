@@ -29,6 +29,13 @@ class TgIcons(unittest.TestCase):
         msg = S.tg_host_msg("主機A", [S.ev_line({"kind": "info", "text": "存取密碼已換新"})])
         self.assertEqual(msg, "🔐 <b>主機A</b>　存取密碼已換新")
 
+    def test_host_flag(self):
+        """主機名稱前面放國旗，開頭照樣是狀態符號；不知道國家就不放"""
+        msg = S.tg_host_msg("日本", [S.ev_line({"kind": "bad", "text": "容器 n8n 停止"})], {"cc": "jp"})
+        self.assertEqual(msg, "🔴 <b>🇯🇵 日本</b>　容器 n8n 停止")
+        self.assertEqual(S.tg_flag(None), "")
+        self.assertEqual(S.tg_flag({"cc": "??"}), "")
+
     def test_similar_problems_stay_apart(self):
         """名稱只差一個數字的容器、磁碟是兩件事；百分比變了還是同一件事"""
         self.assertNotEqual(S.ev_key("容器 app-worker-1 停止"), S.ev_key("容器 app-worker-2 停止"))
