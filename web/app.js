@@ -225,6 +225,8 @@ const ALC = [
   [/^需要重新開機$/, "power", () => "要重開"], [/^雲端硬碟快滿了（(\d+)/, "cloud", m => `<b>${m[1]}%</b>`],
   [/^IPv6 連不出去$/, "net", () => "IPv6" + ALX], [/^IPv6 位址不見了$/, "net", () => "IPv6 不見"],
   [/^(\d+) 個安全更新$/, "shield", m => `<b>${m[1]}</b>`], [/^(\d+) 天沒有成功備份$/, "archive", m => `<b>${m[1]} 天</b>`], [/^備份還沒成功過$/, "archive", () => "沒成功過"],
+  [/^SSH 允許空密碼登入$/, "key", () => "SSH 空密碼" + ALX], [/^root 能用密碼登入 SSH$/, "key", () => "root 密碼" + ALX],
+  [/^SSH 能用密碼登入$/, "key", () => "SSH 密碼"],
   [/Oracle|太閒/, "cpu", () => "太閒"]];
 function alChip(p, cls, key){
   for (const [re, ic, f] of ALC) { const m = p.match(re); if (m) return `<span class="alert ${cls}" data-key="${key}" title="${esc(p)}">${I(ic)}<span>${f(m)}</span></span>`; }

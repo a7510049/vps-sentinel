@@ -3502,6 +3502,9 @@ class Collector:
         elif BACKUP_ON and not BK["ok_t"] and BK["last"] and not BK["last"].get("ok"):
             notices.append("備份還沒成功過")
         notices += cert_soon
+        sb, sw = ssh_risks()                       # 機器人最常大量猜的就是 SSH 密碼
+        problems += sb
+        notices += sw
         if keep_notice():
             notices.append(keep_notice())
 
@@ -4329,6 +4332,43 @@ def gz_of(data, tag=None):
             GZ_KEEP.clear()
         GZ_KEEP[tag] = z
     return z
+
+
+SSHD = {"t": 0, "v": [], "bad": []}
+
+
+def ssh_risks():
+    """SSH 的門有沒有關好（一小時看一次 sshd -T，要 root）：回傳 (異常, 注意)；看不到就不說"""
+    if time.time() - SSHD["t"] < 3600:
+        return SSHD["bad"], SSHD["v"]
+    SSHD["t"] = time.time()
+    txt = os.environ.get("SENTINEL_SSHD_T")              # 測試用：假的 sshd -T 輸出
+    if txt is None:
+        exe = shutil.which("sshd") or ("/usr/sbin/sshd" if os.path.exists("/usr/sbin/sshd") else "")
+        if not exe or os.geteuid() != 0:
+            return [], []
+        try:
+            r = subprocess.run([exe, "-T"], capture_output=True, text=True, timeout=10)
+            txt = r.stdout if r.returncode == 0 else ""
+        except (OSError, subprocess.SubprocessError):
+            txt = ""
+    c = {}
+    for line in txt.splitlines():
+        k, _, v = line.strip().partition(" ")
+        c.setdefault(k.lower(), v.strip().lower())
+    if not c:
+        SSHD["bad"], SSHD["v"] = [], []
+        return [], []
+    bad, warn = [], []
+    pw = c.get("passwordauthentication") == "yes"
+    if c.get("permitemptypasswords") == "yes":
+        bad.append("SSH 允許空密碼登入")
+    if pw and c.get("permitrootlogin") == "yes":
+        bad.append("root 能用密碼登入 SSH")
+    elif pw:
+        warn.append("SSH 能用密碼登入")
+    SSHD["bad"], SSHD["v"] = bad, warn
+    return bad, warn
 
 
 MAX_CONN = max(16, int(os.environ.get("SENTINEL_MAX_CONN") or 200))   # 同時最多處理幾個連線（測試可以調小）
