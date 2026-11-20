@@ -1104,7 +1104,7 @@ function through(a, b){
   a.animate([{opacity:1}, {opacity:0}], {duration:T.fast / 2, easing:EXIT, fill:"forwards", id:"ui"}).onfinish = () => a.remove();
   b.style.animationDelay = T.fast / 2 + "ms";
 }
-/* 換成另一台主機的內容（data-sw）：舊的留在原地很快淡出，新的接著淡入浮上來；
+/* 換成另一台主機的內容（data-sw）：舊的留在原地很快淡出，新的同時淡入浮上來；
    高度每一格都跟著新內容實際的高度走（裡面讀到狀態又長高也一起跟上，不會最後才跳一下） */
 function swapIn(a, b){
   if (!canAnim() || !a.isConnected) return a.replaceWith(b);
@@ -1116,10 +1116,10 @@ function swapIn(a, b){
     b.after(a); still(a);
     a.animate([{opacity:1}, {opacity:0}], {duration:T.fast / 2, easing:EXIT, fill:"forwards", id:"ui"}).onfinish = () => a.remove();
   }
-  b.animate([{opacity:0, transform:"translateY(8px) scale(.985)"}, {opacity:1, transform:"none"}], {duration:T.mid, delay:T.fast / 2, easing:EASE, fill:"backwards", id:"ui"});
+  b.animate([{opacity:0, transform:"translateY(8px) scale(.985)"}, {opacity:1, transform:"none"}], {duration:T.mid, easing:EASE, fill:"backwards", id:"ui"});   // 跟舊的淡出同時開始（以前等舊的淡完才淡入，中間有一下兩邊都看不到，像閃一下）
   const own = [b.style.height, b.style.overflow];         // 自己本來就有的高度（例如曲線圖「讀取中」那格）要留著
   b.style.height = h0 + "px"; b.style.overflow = "hidden";
-  const t0 = performance.now(), dur = T.mid + T.fast / 2;
+  const t0 = performance.now(), dur = T.mid;
   const step = now => {
     if (!b.isConnected) return;
     const p = Math.min(1, (now - t0) / dur), e = 1 - Math.pow(1 - p, 4);
@@ -2182,8 +2182,9 @@ function stSet(el, t, b){
   const li = el.closest(".li"); txt(el, t);
   let g = li && li.querySelector(".stb");
   if (!g) return;
-  const h = !b ? "" : b === true ? I("check") : String(b);
-  if (g.innerHTML !== h) { g.innerHTML = h; g.className = "stb" + (typeof b === "number" ? " n" : ""); if (canAnim() && h) g.animate([{opacity:0, transform:"scale(.6)"}, {opacity:1, transform:"none"}], {duration:T.mid, easing:SPRING}); }
+  // 記住上次放的是什麼（瀏覽器存的勾勾圖形寫法跟 I("check") 不一樣，比 innerHTML 永遠不同，切換主機時勾勾會重播一次）
+  const v = !b ? "" : b === true ? "✓" : String(b), h = b === true ? I("check") : v;
+  if (g.dataset.v !== v) { g.dataset.v = v; g.innerHTML = h; g.className = "stb" + (typeof b === "number" ? " n" : ""); if (canAnim() && h) g.animate([{opacity:0, transform:"scale(.6)"}, {opacity:1, transform:"none"}], {duration:T.mid, easing:SPRING}); }
   g.hidden = !b;
 }
 /* ═════════ 登入的裝置：每台裝置登入後拿到自己的鑰匙，可以單獨登出一台 ═════════ */
