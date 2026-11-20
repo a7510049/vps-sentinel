@@ -184,7 +184,10 @@ document.addEventListener("click", e => {
   e.preventDefault();
   openCloud(LIST.find(x => keyOf(x) === a.dataset.sso));
 }, true);
-const linkSt = x => x.up === false ? `打不開：${x.err || "連不上"}` : x.up ? `正常・${x.ms} 毫秒` : x.err ? "剛剛沒回應，再確認一次中…" : "還沒檢查";
+const linkSt = x => x.up === false ? x.err || "連不上" : x.up ? `${x.ms} 毫秒` : x.err ? "確認中…" : "還沒檢查";
+/* 連結的訊號格：越快格數越多，打不開是一格紅的 */
+const linkSig = x => { const n = x.up === false ? 1 : x.up ? (x.ms < 200 ? 3 : x.ms < 600 ? 2 : 1) : 0, c = x.up === false ? "bad" : x.up ? "ok" : "";
+  return `<span class="sig ${c}" title="${x.up === false ? "打不開" : x.up ? "正常" : ""}">${[0, 1, 2].map(i => `<i${i < n ? ' class="on"' : ""}></i>`).join("")}</span>`; };
 /* 主機名稱旁的「⋯」：編輯、重新開機、移除（雲端硬碟、下載、連結都在「工具」） */
 const moreBtn = s => (s.online || s.node) ? `<button class="iconbtn" title="更多" data-more="${esc(keyOf(s))}">${I("more")}</button>` : "";
 /* 處理器、記憶體、主要磁碟的百分比下面的大數字已經有了，提示只寫發生什麼事 */
@@ -199,10 +202,27 @@ function tileKey(s, p){
   const m = p.match(/^磁碟 (\S+) 剩下不多/), d0 = disk0(s); return m && d0 && d0.path === m[1] ? "disk" : "";
 }
 const tileProb = s => Object.fromEntries((s.problems || []).map(p => [tileKey(s, p), 1]).filter(x => x[0]));
+/* 狀況改成小膠囊：圖示＋名稱，壞掉的加紅叉（完整的句子放在 title，滑鼠指著、讀屏都看得到）；認不得的照原句 */
+const ALX = `<i class="alx">${I("x")}</i>`, ALB = `<i class="alx">${I("bang")}</i>`;
+const ALC = [
+  [/^處理器持續偏高/, "cpu", () => "偏高"], [/^記憶體/, "mem", () => "快用完"],
+  [/^磁碟 (\S+) 剩下不多（(\d+)/, "disk", m => `${m[1]} ${m[2]}%`], [/^磁碟快滿了$/, "disk", () => "快滿"],
+  [/^容器 (.+) 停止$/, "box", m => esc(m[1]) + ALX], [/^容器 (.+) 不健康$/, "box", m => esc(m[1]) + ALB],
+  [/^服務 (.+) 沒在執行$/, "gear", m => esc(m[1]) + ALX], [/^「(.+)」打不開$/, "link", m => esc(m[1]) + ALX],
+  [/^「(.+)」的安全憑證過期了$/, "key", m => esc(m[1]) + ALX], [/^「(.+)」的安全憑證 (\d+) 天後到期$/, "key", m => `${esc(m[1])} <b>${m[2]} 天</b>`],
+  [/^本月流量已經用完$/, "month", () => "用完" + ALX], [/^本月流量已用 (\d+)%$/, "month", m => `<b>${m[1]}%</b>`], [/^本月流量預計會超過/, "month", () => "會超過"],
+  [/^需要重新開機$/, "power", () => "要重開"], [/^雲端硬碟快滿了（(\d+)/, "cloud", m => `<b>${m[1]}%</b>`],
+  [/^IPv6 連不出去$/, "net", () => "IPv6" + ALX], [/^IPv6 位址不見了$/, "net", () => "IPv6 不見"],
+  [/^(\d+) 個安全更新$/, "shield", m => `<b>${m[1]}</b>`], [/^(\d+) 天沒有成功備份$/, "archive", m => `<b>${m[1]} 天</b>`], [/^備份還沒成功過$/, "archive", () => "沒成功過"],
+  [/Oracle|太閒/, "cpu", () => "太閒"]];
+function alChip(p, cls, key){
+  for (const [re, ic, f] of ALC) { const m = p.match(re); if (m) return `<span class="alert ${cls}" data-key="${key}" title="${esc(p)}">${I(ic)}<span>${f(m)}</span></span>`; }
+  return `<span class="alert ${cls} long" data-key="${key}">${I(cls === "bad" ? "warn" : "alert")}<span>${esc(p)}</span></span>`;
+}
 function alerts(s, inTile){
   const k = t => esc(String(t).replace(/^\d+\s*|\s*[（(]?\d+(\.\d+)?\s*%[）)]?$/g, ""));   // 只拿掉會變的數字，名稱裡的數字要留（app-1、app-2 是兩件事）
-  const al = (s.problems||[]).filter(p => !(inTile && tileKey(s, p))).map(p => noDup(s, String(p))).map(p=>`<div class="alert bad" data-key="b:${k(p)}">${I("warn")}${esc(p)}</div>`)
-    .concat((s.notices||[]).map(p=>`<div class="alert warn" data-key="w:${k(p)}">${I("alert")}${esc(p)}</div>`));
+  const al = (s.problems||[]).filter(p => !(inTile && tileKey(s, p))).map(p => noDup(s, String(p))).map(p => alChip(p, "bad", "b:" + k(p)))
+    .concat((s.notices||[]).map(p => alChip(String(p), "warn", "w:" + k(p))));
   return al.length ? `<div class="alerts" data-key="al" data-keyed>${al.join("")}</div>` : "";
 }
 function itemsOf(s){
@@ -218,10 +238,12 @@ function itemsOf(s){
   (s.services||[]).forEach(v=>items.push({n:v.name, sn:v.name, g:"系統服務", st:v.state==="active"?"ok":"bad", s:STATE[v.state]||v.state, t:"服務"}));
   return items;
 }
+/* 版本、更新數量：小標籤（打勾＝已經是最新） */
+const VOK = t => `<span class="vbs"><span class="vbd ok">${I("chk")}${t}</span></span>`;
 function updateInfo(s){
   const n = s.updates ? s.updates.total : 0, u = s.update;
   if (u && u.running) return n ? `正在安裝 ${n} 個更新…` : `正在檢查更新…`;
-  let info = s.updates ? (n ? `${n} 個更新可安裝${s.updates.security?`（${s.updates.security} 個安全性）`:""}` : "已經是最新版 ✨") : "";
+  let info = s.updates ? (n ? `<span class="vbs"><span class="vbd" title="${n} 個更新可安裝">${I("box")}<b class="num">${n}</b></span>${s.updates.security ? `<span class="vbd w" title="${s.updates.security} 個安全性更新">${I("shield")}<b class="num">${s.updates.security}</b></span>` : ""}</span>` : VOK("最新")) : "";
   if (u && u.last) info += `${info?"<br>":""}上次更新${u.last.ok?"成功":`<span style="color:var(--bad)">失敗</span>`}・${when(u.last.time)}`;
   return info;
 }
@@ -500,7 +522,10 @@ function groupEv(ev){
 const hm = t => new Date(t * 1000).toLocaleTimeString("zh-TW", {hour:"2-digit", minute:"2-digit", hour12:false});
 const EVOPEN = new Set();                   // 好幾台合成一筆的事件：點開列出是哪幾台（記住哪幾筆是打開的，自動更新不會收起來）
 const evMany = e => e.hs && e.hs.length > 1;
-const evWho = e => evMany(e) ? `<button class="eh" data-evx="${esc(e.k)}" aria-expanded="${EVOPEN.has(e.k)}">${esc(e.hs[0])}等 ${e.hs.length} 台 <i>▾</i></button>` : `<span class="eh">${esc(e.h)}</span>`;
+/* 好幾台同一件事：疊在一起的國旗（沒有國旗用名字第一個字）＋台數，點了列出是哪幾台 */
+const hsMini = n => { const s = LIST.find(x => x.name === n), f = PREF.show.flag && s && s.geo ? flag(s.geo.cc) : "";
+  return f ? `<span class="hsa">${f}</span>` : `<span class="hsa l">${esc([...(n || "?")][0])}</span>`; };
+const evWho = e => evMany(e) ? `<button class="eh stk" data-evx="${esc(e.k)}" aria-expanded="${EVOPEN.has(e.k)}" title="${esc(e.hs.join("、"))}" aria-label="${esc(e.hs[0])}等 ${e.hs.length} 台"><span class="hst">${e.hs.slice(0, 3).map(hsMini).join("")}</span><b class="num">${e.hs.length}</b><i>▾</i></button>` : `<span class="eh">${esc(e.h)}</span>`;
 /* 事件前面的圖示：照內容挑（登入鑰匙、重新開機電源…），顏色是狀態（紅異常、橘注意、綠恢復、主題色通知） */
 const EVI = [[/登入|PIN|金鑰|密碼/, "key"], [/重新開機|開機|重開/, "power"], [/備份|還原/, "archive"], [/更新|新版/, "upd"], [/憑證|https|TLS/i, "shield"],
   [/記憶體/, "mem"], [/磁碟|硬碟/, "disk"], [/處理器|負載/, "cpu"], [/流量/, "month"], [/下載/, "dl"], [/Telegram|通知/, "bell"], [/連不上|連線|離線|上線|網路|IPv/, "net"], [/容器|Docker/i, "box"], [/服務/, "layers"]];
@@ -522,7 +547,7 @@ function hostCard(s, i, mini){
   const d0 = disk0(s), ft = [PREF.show.traffic && s.traffic ? `<span title="本月流量">${I("month")}${size(s.traffic.used)}</span>` : "", `<span title="開機多久">${I("power")}${up(s.uptime)}</span>`].join("");   // 圖示＋數字，不寫「本月」「開機」
   const mr = `<div class="mrows" data-key="mr">${mrow("處理器", s.cpu)}${mrow("記憶體", s.mem.pct)}${mrow("磁碟", d0.pct)}</div>`;
   if (mini) return b + mr + `<span class="mch" data-key="ch">${I("chev")}</span></div>`;
-  return b + alerts(s) + mr + `<div class="cfoot" data-key="cf">${ft}</div></div>`;
+  return b + alerts(s, 1) + mr + `<div class="cfoot" data-key="cf">${ft}</div></div>`;   // 處理器、記憶體、磁碟下面那格已經變色，不再放膠囊
 }
 /* 主機很多時（4 台以上、而且是卡片模式）：正常的主機縮成一行（名稱＋三個數字），有狀況的照舊是大卡片 */
 const MININ = 4;
@@ -531,16 +556,22 @@ function hostLists(list, wallCls){
   return `<div class="hosts${wallCls}" data-key="hosts" data-keyed${wallCls ? " data-grid" : ""}>${big.map((s, i) => hostCard(s, i)).join("")}</div>`
     + `<div class="minis" data-key="minis" data-keyed>${small.map((s, i) => hostCard(s, big.length + i, true)).join("")}${addHostBtn("addhost")}</div>`;
 }
-const offBox = (s, sub) => `<div class="offline" data-key="off">${I("off")}<div>連不上這台主機<div class="sub">${s.last_seen && !sub ? esc(seen(s)) + "<br>" : ""}${esc(s.error || "")}</div>${peerBtn(s)}</div></div>`;
+/* 連不上：最後連上的時間＋一條時間條（綠的是還連得上、紅斜線是斷掉之後；範圍照斷了多久換 30 分／6 小時／24 小時） */
+function offBox(s){
+  const d = s.last_seen ? Date.now()/1000 - s.last_seen : 1e9, span = d < 1800 ? [1800, "30 分前"] : d < 21600 ? [21600, "6 小時前"] : [86400, "24 小時前"];
+  const g = Math.max(0, Math.min(1, 1 - d / span[0])).toFixed(3), err = s.error && s.error !== "連不上" ? `<div class="sub">${esc(s.error)}</div>` : "";
+  return `<div class="offline" data-key="off">${I("off")}<div class="ofm"><b>${s.last_seen ? esc(ago(s.last_seen)) : "連不上"}</b>`
+    + `<div class="otl" style="--g:${g}"><i></i></div><div class="otx"><span>${span[1]}</span><span>現在</span></div>${err}${peerBtn(s)}</div></div>`;
+}
 /* 主機列表最後的「新增主機」：貼上新主機的配對暗號 */
 const addHostBtn = cls => `<button class="${cls}" data-addhost data-key="+add">${I("plus")}<span>新增主機</span></button>`;
 
 /* ═════════ 一台主機的內容：手機的整頁、電腦的欄位共用 ═════════ */
 const subOf = s => s.online ? `<span title="核心版本 ${esc(s.kernel)}">${esc([place(s), s.os].filter(Boolean).join("・"))}</span>・開機 ${up(s.uptime)}`
-  : (s.last_seen ? `離線・${ago(s.last_seen)}` : "目前連不上");
+  : "離線";   // 多久前寫在下面的時間條
 function hostBody(s, ph){
   let h = `<div class="hb" data-key="hb" data-keyed><div class="hhead" data-key="hh">${avatar(s)}<div class="nm"><h2 class="hname">${esc(s.name)}</h2><div class="hsub">${subOf(s)}</div></div>${ph ? "" : `<span class="hacts">${moreBtn(s)}</span>`}</div>`;
-  if (!s.online) return h + offBox(s, 1) + `</div>`;   // 標題下面已經寫了「離線・多久前」
+  if (!s.online) return h + offBox(s) + `</div>`;
   h += alerts(s, 1) + tiles(s) + factsRow(s, ph);
   const hs = PREF.show.chart ? histFor(s) : null;
   if (PREF.show.chart) h += `<div class="cc" data-key="cp"><div class="cch"><span class="lg"><i style="background:${COL.cpu}"></i>處理器</span><span class="lg"><i style="background:${COL.mem}"></i>記憶體</span>${rangeSeg()}</div>
@@ -591,15 +622,23 @@ function factsRow(s, ph){
   }
   return f.length ? `<div class="fcs" data-key="fcs">${f.join("")}</div>` : "";
 }
+/* 流量條：波浪是已用，斜線一路畫到預估月底會用到哪，直線是今天走到這個週期的哪裡；右邊是幾天後重置 */
+function tBar(t){
+  const rst = `<span class="trs" title="${t.reset_day} 號重置">${I("upd")}<b class="num">${t.days_left}</b> 天</span>`;
+  if (!t.limit) return `<div class="tsm"><span>${t.projected ? `預估月底 ${size(t.projected)}` : ""}</span>${rst}</div>`;
+  const pj = t.projected ? Math.min(100, t.projected / t.limit * 100) : 0, td = t.cycle_days ? Math.max(0, Math.min(100, (1 - t.days_left / t.cycle_days) * 100)) : 0, pt = tier(pj);
+  return `<div class="tbar" style="--v:${Math.min(100, +t.pct || 0).toFixed(1)}%;--pj:${pj.toFixed(1)}%;--td:${td.toFixed(1)}%">${wave(t.pct)}${pj > t.pct ? `<i class="tpj ${pt}"></i>` : ""}<i class="ttd"></i></div>`
+    + `<div class="tlg"><span><i class="lw ${tier(t.pct)}"></i>已用</span>${pj > t.pct ? `<span title="預估月底 ${size(t.projected)}"><i class="lp ${pt}"></i>月底</span>` : ""}<span><i class="lt"></i>今天</span>${rst}</div>`;
+}
 /* 本月流量：點了開流量設定 */
 function trafficCard(s){
   const t = s.traffic; if (!t || !PREF.show.traffic) return "";
   return `<button class="cc trf" data-key="tf" data-traffic="${esc(s.node || "")}" data-label="${esc(s.name)}" title="流量設定"><div class="trow">${IC("month")}<span>本月流量</span><span class="tbig">${size(t.used)}${t.limit ? `<small>／ ${size(t.limit)}</small>` : ""}</span></div>
-    ${t.limit ? wave(t.pct) : ""}<div class="tsm"><span>${t.projected ? `預估月底 ${size(t.projected)}` : "預估累積中"}</span><span>${t.reset_day} 號重置・還有 ${t.days_left} 天</span></div></button>`;
+    ${tBar(t)}</button>`;
 }
 /* 容器與服務：一個一個小膠囊，有分組（docker compose 專案、系統服務）就加小標題 */
 const boxSummary = items => { const bad = items.filter(x => x.st === "bad").length;
-  return bad ? `<b>${bad} 個異常</b>` : `${items.filter(x => x.st === "ok").length} 個正常`; };
+  return bad ? `<span class="bxn" title="${bad} 個異常">${ALX}<b class="num">${bad}</b></span>` : `<span class="bxn ok" title="全部正常">${I("chk")}<b class="num">${items.filter(x => x.st === "ok").length}</b></span>`; };
 function itemsCard(s){
   if (!PREF.show.items) return "";
   const items = itemsOf(s); if (!items.length) return "";
@@ -607,13 +646,13 @@ function itemsCard(s){
   let c = "";
   for (const g of groups) {
     const gi = items.filter(x => x.g === g);
-    if (head) c += `<div class="grp" data-key="grp:${esc(g)}">${g ? esc(g) : "其他容器"}<span>${gi.filter(x => x.st === "ok").length}／${gi.length}</span></div>`;
-    c += gi.map(x => `<span class="chip" data-key="${x.t}:${esc(x.n)}" title="${x.t}：${esc(x.n)}・${esc(x.s)}"><span class="dot ${x.st}"></span><span>${esc(x.sn || x.n)}${x.st === "ok" ? "" : `・${esc(x.s)}`}</span></span>`).join("");
+    if (head) c += `<div class="grp" data-key="grp:${esc(g)}">${g ? esc(g) : "其他容器"}</div>`;
+    c += gi.map(x => `<span class="chip${x.st === "bad" ? " bad" : ""}" data-key="${x.t}:${esc(x.n)}" title="${x.t}：${esc(x.n)}・${esc(x.s)}">${x.st === "bad" ? ALX : `<span class="dot ${x.st}"></span>`}<span>${esc(x.sn || x.n)}</span></span>`).join("");
   }
   return `<div class="cc" data-key="ib"><div class="cch"><span class="ct2">${IC("box")}容器與服務</span><span class="sum">${boxSummary(items)}</span></div><div class="chips" data-key="chips" data-keyed>${c}</div></div>`;
 }
 /* 常用連結（工具分頁）：每個連結多久打得開 */
-const linkRow = (x, sub) => `<a class="li" data-key="lk:${esc(x.url)}" href="${esc(x.url)}"${x.sso ? ` data-sso="${esc(x.sso)}"` : ""} target="_blank" rel="noopener noreferrer"><span class="lk"><i class="ld ${x.up === false ? "bad" : x.up ? "ok" : ""}"></i></span><span class="lab">${esc(x.name)}<small>${sub}</small></span>${EXT}</a>`;
+const linkRow = (x, sub) => `<a class="li" data-key="lk:${esc(x.url)}" href="${esc(x.url)}"${x.sso ? ` data-sso="${esc(x.sso)}"` : ""} target="_blank" rel="noopener noreferrer"><span class="lk">${linkSig(x)}</span><span class="lab">${esc(x.name)}<small>${sub}</small></span>${EXT}</a>`;
 const CNT = {both:"上傳＋下載", out:"只算上傳", in:"只算下載", max:"取較大的"};
 async function trafficModal(node, label){
   const s = LIST.find(x => (x.node || "") === node), t = s && s.traffic;
@@ -1609,13 +1648,13 @@ function selfPaint(root){
   if (!d) return;
   const node = esc(h.node || "");
   const st = d.running ? `<span class="spin"></span>更新中…` : SELFCHK ? `<span class="spin"></span>檢查中…` : d.old || d.supported === false ? `<span class="warn">${esc(d.err)}</span>`
-    : d.has ? `<span class="new">有新版可以更新</span>` : d.err ? esc(d.err) : "已經是最新版 ✨";
+    : d.has ? `<span class="new">有新版可以更新</span>` : d.err ? esc(d.err) : "";
   const ch = d.has && d.changes && d.changes.length ? `<ul class="chg">${d.changes.slice(0, 5).map(c => `<li>${esc(c.split("\n")[0])}</li>`).join("")}</ul>` : "";
   const c = d.cloud;
-  const cst = !c ? "" : c.running ? `<span class="spin"></span>更新中…` : c.has ? `<span class="new">官方有新版可以更新</span>` : c.err ? `<span class="warn">${esc(c.err)}</span>` : c.has === false ? "已經是最新版 ✨" : "還沒檢查";
-  const crow = c ? `<div class="cl2">${IC("cloud", "")}<span>雲端硬碟<small>${c.version ? `版本 ${esc(c.version)}・` : ""}${cst}</small></span>
+  const cst = !c ? "" : c.running ? `<span class="spin"></span>更新中…` : c.has ? `<span class="new">官方有新版可以更新</span>` : c.err ? `<span class="warn">${esc(c.err)}</span>` : c.has === false ? "ok" : "還沒檢查";
+  const crow = c ? `<div class="cl2">${IC("cloud", "")}<span>雲端硬碟<small>${cst === "ok" ? (c.version ? VOK(esc(c.version)) : VOK("最新")) : (c.version ? `<span class="vbs"><span class="vbd">${esc(c.version)}</span></span> ` : "") + cst}</small></span>
     ${c.has && !c.running ? `<button class="ubtn sm" data-cloudup="${node}">更新</button>` : ""}</div>` : "";
-  const srow = `<div class="cl2 first"><span class="ico theme">${I("upd")}</span><span>哨兵<small>${d.version ? `版本 ${esc(d.version)}・${esc(d.build || "")}・` : ""}${st}</small>${ch}</span>
+  const srow = `<div class="cl2 first"><span class="ico theme">${I("upd")}</span><span>哨兵<small title="${esc(d.build || "")}">${st ? (d.version ? `<span class="vbs"><span class="vbd">${esc(d.version)}</span></span> ` : "") + st : d.version ? VOK(esc(d.version)) : ""}</small>${ch}</span>
     ${d.has && !d.running ? `<button class="ubtn sm" data-selfup="${node}">更新</button>` : ""}</div>`;
   swapHTML(box, `<div class="selfrow">${srow}${crow}</div>`);
 }
@@ -2540,7 +2579,8 @@ function keepLine(k){
   if (!k.on) return `<small>已關閉</small>`;
   if (k.p95 == null) return `<small>收集資料中</small>`;
   const low = k.p95 < 20 && k.days >= 2;
-  return `<small class="kpst${low ? " bad" : ""}">${Math.min(7, Math.max(1, Math.ceil(k.days)))} 天處理器 ${k.p95}%・門檻 20%${k.now ? "・補量中" : ""}</small>`;
+  const dd = Math.min(7, Math.max(1, Math.ceil(k.days)));   // 長條 0～50%，直線是 20% 的門檻
+  return `<small class="kpst${low ? " bad" : ""}" title="${dd} 天處理器 ${k.p95}%・門檻 20%"><span class="kpb" style="--k:${Math.min(1, k.p95 / 50).toFixed(3)}"><i></i><u></u></span><b class="num">${Math.round(k.p95)}%</b>${k.now ? `<span class="spin"></span>` : ""}</small>`;
 }
 async function keepSet(t){
   const node = t.dataset.keepalive;
