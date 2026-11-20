@@ -1470,7 +1470,7 @@ function flySum(d){
 /* 小標籤：最多一個，只放最要緊的（其他變更看字的顏色：時間早綠晚橘、登機門和機型改了是橘字） */
 function flyTags(p, v){
   if (!p) return ["", ""];
-  if (p.emg) return ["緊急", "bad"];
+  if (p.emg && !/緊急/.test(v.st || "")) return ["緊急", "bad"];   // 狀態翻牌已經寫「緊急狀況」：不用再多一個標籤
   if (flyDone(p)) return ["", ""];                          // 已經到了、飛了：變更都不用再提醒
   if (v.gch) return ["改登機門", "late"];
   if (v.late && !/延誤/.test(v.st || "")) return [`晚 ${flyMin(v.late)}`, "late"];   // 狀態已經寫「延誤」、時間也是橘字：不用再多一個標籤

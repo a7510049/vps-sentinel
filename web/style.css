@@ -248,6 +248,7 @@ img.flag{width:28px;height:21px;object-fit:cover;border-radius:var(--r-xs);flex:
 .wq{transform:translateX(calc(100% - var(--vw)))}
 .wf svg{position:absolute;left:0;top:0;width:480px;height:12px;fill:none;stroke:currentColor;stroke-width:3.4;stroke-linecap:round;animation:wave 1.8s linear infinite}
 @keyframes wave{to{transform:translateX(-24px)}}
+.wv.zz svg{animation-play-state:paused}   /* 捲出畫面的波浪條先停（waveIO） */
 .wr{position:absolute;left:0;right:0;top:4px;height:4px;border-radius:var(--r-pill);overflow:hidden;transform:translateX(calc(var(--vw) + 5px));transition:transform var(--sp-slow)}
 .wr>i{position:absolute;inset:0;border-radius:var(--r-pill);background:var(--s4);transform:translateX(calc(-1 * (var(--vw) + 5px)));transition:transform var(--sp-slow)}
 /* 一般進度條（下載清單用） */
@@ -400,9 +401,19 @@ html.full .dock .tb.on::before{opacity:1;transform:none}
 .mini .ct{flex:1;min-width:0;gap:10px}
 .mini .cn{font-size:var(--fs-l);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;overflow-wrap:normal}
 .mini .cp{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.mini .mrows{margin:0;flex:none;grid-template-columns:repeat(3,62px);gap:6px}
-.mini .mr{background:none;padding:0;gap:3px}
-.mini .mr .mv{font-size:var(--fs-l)}
+.mini .mrows{margin:0;flex:none;grid-template-columns:repeat(3,50px);gap:6px}
+.mini .mr{background:none;padding:0;display:grid;grid-template-columns:14px minmax(0,1fr);grid-template-areas:"i v" "w w";column-gap:4px;row-gap:3px;align-items:center}
+.mini .mr .mv{grid-area:v;font-size:var(--fs-m)}
+.mini .mr .wv{grid-area:w}
+.mini .ml.mi{grid-area:i;width:14px;height:14px;display:block}
+.mini .ml.mi svg{width:14px;height:14px;display:block}
+.minis{container-type:inline-size}
+@container (max-width:310px){   /* 很窄的手機、或用大字：名字一排、三個數字換到下一排，名字才不會被切掉 */
+  .hcard.mini{flex-wrap:wrap;row-gap:8px}
+  .mini .ct{flex-basis:calc(100% - 40px)}
+  .mini .mch{order:2}
+  .mini .mrows{order:3;flex-basis:100%;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}
+}
 .mch{display:flex;flex:none;color:var(--tx3)}
 .mch svg{width:18px;height:18px;transform:rotate(-90deg)}
 .offline{display:flex;align-items:flex-start;gap:12px;margin-top:12px;padding:14px;border-radius:var(--r-md);background:var(--badc);color:var(--on-badc)}
@@ -582,7 +593,7 @@ html.dhid .dash>.view{content-visibility:hidden;contain-intrinsic-size:auto none
 .tlg i{display:inline-block;flex:none}
 .lw{width:14px;height:4px;border-radius:var(--r-pill);background:var(--p)}.lw.w{background:var(--warn)}.lw.b{background:var(--bad)}
 .lp{width:14px;height:8px;border-radius:var(--r-xs);color:var(--p);background:repeating-linear-gradient(135deg,color-mix(in oklab,currentColor 55%,transparent) 0 3px,transparent 3px 6px)}
-.lt{width:2px;height:11px;border-radius:var(--r-pill);background:var(--tx)}
+.ltk{width:2px;height:11px;border-radius:var(--r-pill);background:var(--tx)}
 .trs{margin-left:auto;display:inline-flex;align-items:center;gap:4px}
 .trs svg{width:13px;height:13px}
 .trs b{font-weight:700;color:var(--tx2)}
@@ -896,6 +907,11 @@ body:has(.dash.d) .fwrap{max-width:var(--pw)}
 .hn>span{display:flex;flex-direction:column;min-width:0}
 .hn b{color:var(--tx);font-weight:700;overflow:hidden;text-overflow:ellipsis}
 .hn small{color:var(--tx3);font-size:var(--fs-xs);overflow:hidden;text-overflow:ellipsis}
+.hn small.hal{display:flex;align-items:center;gap:4px;margin-top:2px;min-width:0}   /* 名字下面的狀況膠囊 */
+.hal .alert{min-height:0;padding:1px 8px 1px 6px;gap:4px;font-size:var(--fs-xs);min-width:0;overflow:hidden}
+.hal .alert>span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.hal .alert svg{width:12px;height:12px}
+.hal>i{font-style:normal;color:var(--tx3);flex:none}
 .hoff{grid-column:2 / -2;color:var(--bad);gap:6px}.hoff svg{width:16px;height:16px}
 .dgrid{display:grid;grid-template-columns:minmax(0,1fr) var(--side);gap:var(--gut);align-items:start}
 .dash.d .dgrid>.hp{border:1px solid var(--line);border-radius:var(--r-xl);padding:18px;box-shadow:var(--cs);animation:none}
@@ -928,7 +944,7 @@ body:has(.dash.d) .fwrap{max-width:var(--pw)}
 .sbody>.lbl[data-key="lh"]{justify-content:flex-end}
 .sbody>.group+.group{margin-top:var(--gut)}
 /* 工具：一格一格，固定寬度不撐滿 */
-.dash.d .tgrid{grid-template-columns:repeat(auto-fill,minmax(230px,1fr))}
+.dash.d .tgrid{grid-template-columns:repeat(auto-fit,minmax(230px,1fr))}
 .dash.d .v-tools .lbl{margin-top:26px}
 /* 紀錄：一張表（時間、主機、事件），日期是表裡的分段 */
 .ltab{background:var(--card);border:1px solid var(--line);border-radius:var(--r-lg);box-shadow:var(--cs);overflow:hidden}
@@ -1555,6 +1571,18 @@ html.flyon .dash>.view{content-visibility:hidden;contain-intrinsic-size:auto non
   .board{grid-column:1;border-radius:var(--r-xl) 0 0 var(--r-xl);padding:10px 14px;align-content:start;min-height:100%}   /* 看板長高、縮短的動畫不會比雷達那半邊短（同一張卡片不會缺一角）；雷達比較高時：列排在上面，下面留白，不要把列撐開 */
   .radar{grid-column:2;max-width:none;align-self:stretch;border-radius:0 var(--r-xl) var(--r-xl) 0;border-left:1px solid var(--s3)}
   .rin{position:sticky;top:16px}
+  .fr .m,.fr .reg,.fr .bx{min-width:max-content}                     /* 機型、登機門、轉盤不切成「7…」：放不下時改拿掉下面幾欄 */
+}
+/* 筆電寬度放不下全部：航空公司名稱拿掉（左邊的標誌還在），再窄一點連轉盤／櫃台也拿掉（班機細節裡有） */
+@media (min-width:1280px) and (max-width:1599px){
+  .board{grid-template-columns:auto auto auto minmax(5.6em,1fr) auto auto auto auto auto auto}
+  .fh .fk.al,.fr .fk.al{display:none}
+  .fr .fal{margin-right:0}
+}
+@media (min-width:1280px) and (max-width:1439px){
+  .fmain{grid-template-columns:minmax(0,1fr) 320px}
+  .board{grid-template-columns:auto auto auto minmax(3.5em,1fr) auto auto auto auto auto;column-gap:8px}
+  .fh .fk.bx,.fr .fk.bx{display:none}
 }
 /* 手機、平板：抵達／出發那排捲出畫面後，上面中間浮出小膠囊（不用捲回去才能換） */
 @media (max-width:1279px){

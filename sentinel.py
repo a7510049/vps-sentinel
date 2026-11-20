@@ -45,7 +45,7 @@ from collections import deque
 from concurrent.futures import ThreadPoolExecutor
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
-VERSION = "4.15"
+VERSION = "4.16"
 
 # ───────────────────────── 哨兵備份檔（.vsbk）─────────────────────────
 # 哨兵專用的備份格式：外面是自己的檔案格式，裡面用的是成熟、標準的加密方法（不自己發明加密）：
@@ -874,7 +874,29 @@ def geo_keep(g):
     """其他主機的國家、城市：只留顯示要用的兩個欄位（IP、電信商不存）"""
     if not isinstance(g, dict) or not re.fullmatch(r"[A-Z]{2}", str(g.get("cc") or "")):
         return None
-    return {"cc": g["cc"], "city": str(g.get("city") or "")[:40]}
+    return {"cc": g["cc"], "city": city_zh(str(g.get("city") or "")[:40], g["cc"])}
+
+
+CITY_ZH = None
+
+
+def city_zh(city, cc):
+    """查到的城市是英文（Tokyo）：用機場資料表的中文城市名換掉；查不到中文就不寫，網頁只寫國家"""
+    global CITY_ZH
+    if not city or not re.search(r"[A-Za-z]", city):
+        return city
+    if CITY_ZH is None:
+        t = {}
+        try:
+            with open(os.path.join(HERE, "data", "airports.tsv"), encoding="utf-8") as f:
+                for line in f:
+                    x = line.rstrip("\n").split("\t")
+                    if len(x) >= 8 and x[2] and x[7]:
+                        t.setdefault((x[2].lower(), x[3]), x[7])
+        except OSError:
+            pass
+        CITY_ZH = t
+    return CITY_ZH.get((city.lower(), cc), "")
 
 
 TG_SENT = {}                                    # 每台主機已經通知到哪一筆事件（事件時間，會存檔）
@@ -3062,6 +3084,7 @@ class Collector:
     def check_geo(self):
         g = lookup_geo()
         if g:
+            g["city"] = city_zh(g.get("city") or "", g.get("cc") or "")
             with self.lock:
                 self.geo = g
 
@@ -3227,6 +3250,7 @@ def fetch_peer(p, since=0):
         g = geo_keep(data.get("geo"))
         if g:
             PEER_GEO[p["name"]] = g
+            data["geo"] = {**data["geo"], "city": g["city"]}     # 舊版的主機給英文城市名：這裡換成中文
         return data
     except Exception as e:  # noqa: BLE001
         return {"name": PEER_NAME.get(p["name"]) or BK["names"].get(p["name"]) or p["name"], "node": p["name"], "online": False, "level": "bad",
