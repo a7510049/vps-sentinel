@@ -143,6 +143,7 @@
 .ico.safe{background:oklch(var(--tl) calc(var(--tc) * .7) 155);color:oklch(var(--fl) calc(var(--fc) * .75) 155)}
 .ico.devices{background:oklch(var(--tl) calc(var(--tc) * .5) 290);color:oklch(var(--fl) calc(var(--fc) * .55) 290)}
 .ico.note{background:oklch(var(--tl) var(--tc) 84);color:oklch(var(--fl) var(--fc) 84)}
+.ico.adblk{background:oklch(var(--tl) calc(var(--tc) * .75) 24);color:oklch(var(--fl) calc(var(--fc) * .8) 24)}
 .ico.theme{background:var(--pc);color:var(--on-pc)}                  /* 哨兵本身的動作（更新、編輯）：主題色 */
 .ico.warn{background:var(--warnc);color:var(--on-warnc)}            /* 要小心的動作（重新開機、換密碼） */
 .ico.bad{background:var(--badc);color:var(--on-badc)}               /* 刪除、移除、解除配對 */
@@ -1819,3 +1820,21 @@ html.flyon .dash>.view{content-visibility:hidden;contain-intrinsic-size:auto non
 .ntst svg{width:16px;height:16px;flex:none}
 .ntd .dlnew .ubtn{flex:1}
 .ntd .ubtn.ghost.ntwipe{width:100%;margin-top:8px;background:none;color:var(--bad)}
+/* 擋廣告 DNS：三個數字、最近 24 小時的長條、最常擋的網址 */
+.abn{display:grid;grid-template-columns:repeat(3,1fr);gap:6px}
+.abn>div{display:flex;flex-direction:column;align-items:center;gap:2px;padding:12px 4px;border-radius:var(--r-md);background:var(--s3)}
+.abn b{font-size:var(--fs-xl);font-weight:600;color:var(--tx);font-variant-numeric:tabular-nums}
+.abn small{font-size:var(--fs-xs);color:var(--tx3)}
+.abh{display:flex;align-items:flex-end;gap:2px;height:36px;margin:8px 2px 0}
+.abh i{flex:1;height:var(--h);min-height:2px;border-radius:var(--r-xs) var(--r-xs) 0 0;background:var(--p);opacity:.55}
+.abtop{display:flex;flex-direction:column;border-radius:var(--r-md);background:var(--s3);padding:4px 0}
+.abtop>div{display:flex;align-items:center;gap:10px;padding:7px 14px;font-size:var(--fs-s)}
+.abtop span{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--tx2)}
+.abtop b{font-weight:600;color:var(--tx);font-variant-numeric:tabular-nums}
+.abd .abos{margin-bottom:8px}
+.abd .abst{display:flex;flex-direction:column;gap:8px}
+.abd .abst>.ubtn{width:100%}
+.abd .abst .ubtn svg{width:16px;height:16px;margin-right:6px}
+.abd .dlnew{margin-top:14px}
+.abjob{display:flex;align-items:center;justify-content:center;gap:10px;padding:18px;color:var(--tx2);font-size:var(--fs-m)}
+.ntst.bad{color:var(--bad)}
