@@ -23,7 +23,7 @@ AB_URLS = ("https://static.adtidy.org/adguardhome/release/AdGuardHome_linux_{a}.
            "https://github.com/AdguardTeam/AdGuardHome/releases/latest/download/AdGuardHome_linux_{a}.tar.gz")
 AB_ARCH = {"x86_64": "amd64", "amd64": "amd64", "aarch64": "arm64", "arm64": "arm64", "armv7l": "armv7", "armv6l": "armv6", "i686": "386"}
 AB_LOCK = threading.Lock()
-AB = {"c": None, "job": "", "err": "", "stats": None, "st_t": 0, "down": 0, "upd_t": 0}
+AB = {"c": None, "job": "", "err": "", "stats": None, "st_t": 0, "down": 0, "upd_t": 0, "pub": "", "pub_t": 0}
 AB_TOK = {}                                                             # 一次性的 iPhone 描述檔連結：代碼 → (到期, 內容)
 
 
@@ -291,6 +291,25 @@ def ab_doh_ok():
         return False
 
 
+def ab_pub_check():
+    """從外面那條路（網域 → Caddy → AdGuard Home）問一次，跟 iPhone 走的一樣；回傳空字串是通的，不然是哪裡壞"""
+    url = ab_doh()
+    if not url:
+        return ""
+    q = b"\x00\x00\x01\x00\x00\x01\x00\x00\x00\x00\x00\x00" + b"\x07example\x03com\x00\x00\x01\x00\x01"
+    req = urllib.request.Request(url, data=q, headers={"Content-Type": "application/dns-message", "Accept": "application/dns-message"})
+    try:
+        with urllib.request.build_opener(urllib.request.ProxyHandler({})).open(req, timeout=10) as r:
+            ct, b = r.headers.get("Content-Type") or "", r.read()
+        if "dns-message" not in ct or len(b) <= 12:
+            return "轉到哨兵的網頁去了，不是 AdGuard Home"
+        return "" if b[3] & 15 == 0 else "AdGuard Home 查不到網址（上游 DNS 連不上）"
+    except urllib.error.HTTPError as e:
+        return f"網址回 {e.code}"
+    except (OSError, ValueError) as e:
+        return f"網址打不開（{str(getattr(e, 'reason', e))[:60]}）"
+
+
 def ab_doh_fix():
     """DoH 要讓 Caddy 用 http 轉進來：新版 AdGuard Home 這個開關搬到設定檔的 http.doh.insecure_enabled，API 設不到就直接改設定檔"""
     if ab_doh_ok():
@@ -431,6 +450,7 @@ def ab_info():
     if out["on"]:
         out["stats"] = ab_stats()
         out["down"] = AB["down"] >= 2
+        out["pub"] = AB["pub"]
     return out
 
 
@@ -707,6 +727,8 @@ def ab_loop():
                         c = dict(ab_conf())
                         c["dnsv"] = AB_DNSV
                         ab_save(c)
+                    if not AB_FAKE and time.time() - AB["pub_t"] > (60 if AB["pub"] else 300):
+                        AB["pub_t"], AB["pub"] = time.time(), ab_pub_check()
                     ab_stats(fresh=True)
                     if time.time() - AB["upd_t"] > 86400:
                         AB["upd_t"] = time.time()
