@@ -188,27 +188,45 @@ function sections(){
     ? `<div class="dh"><b>${g.d.y}年${g.d.mo}月</b><span class="num">${g.list.length}</span></div>`
     : `<div class="dh" data-day="${g.k}"><b>${fday(g.d, YR)}</b><span>${esc(dayPlaces(g.k))}</span></div>` : ""}<div class="rows"></div></section>`).join("");
 }
-function zoomWall(z, fx, fy){                                 // 換大小：每張從原本的位置滑到新位置
+function wallRects(){                                         // 現在畫面上每張的位置（動畫中、手指捏著的也算）
+  const vis = new Map(), H = innerHeight;
+  TILES.forEach((t, i) => { const r = t.getBoundingClientRect(); if (r.bottom > -60 && r.top < H + 60) vis.set(i, r); });
+  return vis;
+}
+const ZDUR = 520;
+const zEase = t => 1 - Math.pow(1 - t, 3.2);                  // 跟手指放開一樣的減速
+function zoomWall(z, fx, fy, pre){                            // 換大小：每張從現在的位置連續長大／縮小過去，照片不壓扁
   z = Math.min(3, Math.max(0, z));
   if (z === ZL || !$(".wall")) return false;
-  const vis = new Map(), H = innerHeight;
-  TILES.forEach((t, i) => { const r = t.getBoundingClientRect(); if (r.bottom > -40 && r.top < H + 40) vis.set(i, r); });
-  let anc = -1, best = 1e9;                                   // 手指下面那張留在原地
+  const vis = pre || wallRects(), H = innerHeight;
+  let anc = -1, best = 1e9;                                   // 手指下面那張留在手指下面
   vis.forEach((r, i) => { const d = Math.hypot(r.left + r.width / 2 - fx, r.top + r.height / 2 - fy); if (d < best) { best = d; anc = i; } });
   const a0 = anc >= 0 ? vis.get(anc) : null;
+  TILES.forEach(t => { t.getAnimations().forEach(a => a.cancel()); t.querySelectorAll("img,.bdg").forEach(x => x.getAnimations().forEach(a => a.cancel())); });
+  document.querySelectorAll(".dh").forEach(h => h.getAnimations().forEach(a => a.cancel()));
+  const w = $(".wall"); w.style.transform = ""; w.style.transformOrigin = "";
   ZL = z; store.set("vsa-zoom", z);
   sections(); layout(true);
   if (a0) { const r1 = TILES[anc].getBoundingClientRect(); scrollBy(0, (r1.top + r1.height / 2) - (a0.top + a0.height / 2)); }
   if (!anim()) return true;
+  const N = 14, fr = Array.from({length:N + 1}, (_, k) => zEase(k / N));
   TILES.forEach((t, i) => {
     const r0 = vis.get(i), r1 = t.getBoundingClientRect();
-    if (r1.bottom < -40 || r1.top > H + 40) return;
+    if (r1.bottom < -60 || r1.top > H + 60) return;
     t.classList.add("in");
-    if (!r0) { t.animate([{opacity:0, transform:"scale(.9)"}, {opacity:1, transform:"none"}], {duration:T.mid, easing:EASE, delay:T.fast}); return; }
-    t.animate([{transform:`translate(${r0.left - r1.left}px,${r0.top - r1.top}px) scale(${r0.width / r1.width},${r0.height / r1.height})`, transformOrigin:"0 0"},
-      {transform:"none", transformOrigin:"0 0"}], {duration:T.slow, easing:DEC});
+    if (!r0) { t.animate([{opacity:0, transform:"scale(.92)"}, {opacity:1, transform:"none"}], {duration:ZDUR, easing:DEC, delay:ZDUR * .35, fill:"backwards"}); return; }
+    const tk = [], ik = [];
+    fr.forEach(e => {
+      const x = r0.left + (r1.left - r0.left) * e, y = r0.top + (r1.top - r0.top) * e, ww = r0.width + (r1.width - r0.width) * e, hh = r0.height + (r1.height - r0.height) * e;
+      const sx = ww / r1.width, sy = hh / r1.height, c = Math.max(sx, sy);
+      tk.push({transform:`translate(${(x - r1.left).toFixed(2)}px,${(y - r1.top).toFixed(2)}px) scale(${sx.toFixed(4)},${sy.toFixed(4)})`});
+      ik.push({transform:`translate(${((ww - r1.width * c) / 2 / sx).toFixed(2)}px,${((hh - r1.height * c) / 2 / sy).toFixed(2)}px) scale(${(c / sx).toFixed(4)},${(c / sy).toFixed(4)})`});
+    });
+    t.animate(tk, {duration:ZDUR, easing:"linear"});
+    t.querySelectorAll("img").forEach(im => im.animate(ik, {duration:ZDUR, easing:"linear"}));   // 照片反著縮回來，看起來是等比例變大變小
+    const b = t.querySelector(".bdg"); if (b) b.animate([{opacity:0}, {opacity:0, offset:.6}, {opacity:1}], {duration:ZDUR, easing:"linear"});
   });
-  document.querySelectorAll(".dh").forEach(h => h.animate([{opacity:0}, {opacity:1}], {duration:T.mid, delay:T.fast, easing:EASE, fill:"backwards"}));
+  document.querySelectorAll(".dh").forEach(h => h.animate([{opacity:0, transform:"translateY(6px)"}, {opacity:1, transform:"none"}], {duration:ZDUR, delay:ZDUR * .3, easing:DEC, fill:"backwards"}));
   return true;
 }
 function dayPlaces(k){
@@ -289,9 +307,9 @@ function heroCycle(first){
     if (!cv || document.hidden || LB || SS || SY || scrollY > $(".hero").offsetHeight) return;
     let p; do p = pool[Math.floor(Math.random() * pool.length)]; while (p === last);
     last = p;
-    const im = new Image(); im.className = "hi"; im.alt = ""; im.src = src(p, "l");
-    const show = () => { if (!im.isConnected) return; requestAnimationFrame(() => im.classList.add("ok"));
-      setTimeout(() => cv.querySelectorAll(".hi").forEach(x => { if (x !== im) x.remove(); }), T.slow * 3); };
+    const im = new Image(); im.className = "hi cy"; im.alt = ""; im.src = src(p, "l");   // 新的一張慢慢淡入、一邊往前推近
+    const show = () => { if (!im.isConnected) return;
+      setTimeout(() => cv.querySelectorAll(".hi").forEach(x => { if (x !== im) x.remove(); }), 3200); };
     im.decode ? im.decode().then(() => { cv.appendChild(im); show(); }).catch(() => {}) : (im.onload = () => { cv.appendChild(im); show(); });
   };
   HCT = setTimeout(next, 7000);
@@ -387,18 +405,25 @@ addEventListener("scroll", onScroll, {passive:true});
   let p0 = null;
   const mid = t => [(t[0].clientX + t[1].clientX) / 2, (t[0].clientY + t[1].clientY) / 2], dist = t => Math.hypot(t[0].clientX - t[1].clientX, t[0].clientY - t[1].clientY);
   document.addEventListener("touchstart", e => { if (e.touches.length === 2 && !LB && !SS && !SY && e.target.closest(".wall")) { p0 = {d:dist(e.touches), m:mid(e.touches), k:1}; } }, {passive:true});
+  const live = k => {                                        // 捏的時候照片牆跟著手指縮放（越過門檻就有阻力）
+    const w = $(".wall"), d = k >= 1 ? 1 + (k - 1) * (ZL > 0 ? .9 : .25) : 1 - (1 - k) * (ZL < 3 ? .9 : .25);
+    w.style.transformOrigin = `${p0.m[0]}px ${p0.m[1] + scrollY - w.offsetTop}px`;
+    w.style.transform = `scale(${Math.max(.6, Math.min(1.6, d)).toFixed(4)})`;
+  };
   document.addEventListener("touchmove", e => {
     if (!p0 || e.touches.length !== 2) return;
     e.preventDefault();
-    p0.k = dist(e.touches) / p0.d;
-    const w = $(".wall"); w.style.transformOrigin = `${p0.m[0]}px ${p0.m[1] + scrollY - w.offsetTop}px`;
-    w.style.transform = `scale(${Math.max(.7, Math.min(1.4, p0.k)).toFixed(3)})`;
+    p0.k = dist(e.touches) / p0.d; p0.m = mid(e.touches);
+    const go = p0.k > 1.22 && ZL > 0 ? -1 : p0.k < .82 && ZL < 3 ? 1 : 0;
+    if (go) { zoomWall(ZL + go, p0.m[0], p0.m[1], wallRects()); p0.d = dist(e.touches); p0.k = 1; return; }   // 捏到就換，手指不用放開，可以一路捏下去
+    live(p0.k);
   }, {passive:false});
   const end = () => {
-    if (!p0) return; const k = p0.k, m = p0.m; p0 = null;
-    const w = $(".wall"), was = w.style.transform; w.style.transform = "";
-    const ch = k > 1.18 ? zoomWall(ZL - 1, m[0], m[1]) : k < .85 ? zoomWall(ZL + 1, m[0], m[1]) : false;
-    if (!ch && was && anim()) w.animate([{transform:was}, {transform:"none"}], {duration:T.mid, easing:DEC});
+    if (!p0) return; p0 = null;
+    const w = $(".wall"), was = w.style.transform;
+    if (!was) return;
+    w.style.transform = "";
+    if (anim()) w.animate([{transform:was}, {transform:"scale(1)"}], {duration:T.mid, easing:DEC});
   };
   document.addEventListener("touchend", end); document.addEventListener("touchcancel", end);
   /* iPhone 的 Safari 會跟著整頁放大（照片牆、看大圖都是自己縮放），一律擋掉，只讓照片動 */
@@ -789,6 +814,26 @@ function openLb(i){
     const del = e.target.closest("[data-cdel]");
     if (del) talk(S.i, {del:del.dataset.cdel}).then(ok => { if (ok) { inf.querySelector(".italk").outerHTML = talkHTML(PH[S.i]); social(); } });
   });
+  {                                                          // 資訊往下拉就關（捲到最上面時才算）
+    let d0 = null;
+    inf.addEventListener("touchstart", e => { if (e.touches.length === 1 && e.target !== document.activeElement) d0 = {y:e.touches[0].clientY, t:performance.now(), top:inf.scrollTop <= 0, dy:0, on:false}; }, {passive:true});
+    inf.addEventListener("touchmove", e => {
+      if (!d0 || matchMedia("(min-width:900px)").matches) return;
+      const dy = e.touches[0].clientY - d0.y;
+      if (!d0.on) { if (d0.top && inf.scrollTop <= 0 && dy > 6) { d0.on = true; d0.y0 = e.touches[0].clientY; inf.style.transition = "none"; } else return; }
+      e.preventDefault();
+      d0.dy = Math.max(0, e.touches[0].clientY - d0.y0);
+      inf.style.transform = `translateY(${d0.dy}px)`;
+    }, {passive:false});
+    const done = () => {
+      if (!d0) return; const q = d0; d0 = null; if (!q.on) return;
+      inf.style.transition = ""; inf.style.transform = "";
+      const v = q.dy / Math.max(1, performance.now() - q.t);
+      if (q.dy > inf.clientHeight * .22 || v > .6) setInfo(false);
+      else if (anim()) inf.animate([{transform:`translateY(${q.dy}px)`}, {transform:"none"}], {duration:T.mid, easing:DEC});
+    };
+    inf.addEventListener("touchend", done); inf.addEventListener("touchcancel", done);
+  }
   inf.addEventListener("submit", e => {
     e.preventDefault();
     const f = e.target, nm = f.querySelector("[name=n]"), tx = f.querySelector("[name=s]");

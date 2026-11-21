@@ -173,7 +173,7 @@ button.chip:active,a.chip:active{transform:scale(.95)}
   transform:translateY(102%);transition:transform var(--t-mid) var(--ease);overflow-y:auto;overscroll-behavior:contain;touch-action:pan-y;padding:10px 18px calc(24px + env(safe-area-inset-bottom));user-select:text;-webkit-user-select:text}
 .inf::before{content:"";display:block;width:40px;height:5px;border-radius:var(--r-pill);background:var(--s3);margin:0 auto 12px}
 .lb.info .inf{transform:none}
-.lb.info .stage{bottom:62%}
+.lb.info .stage{bottom:calc(62% + var(--r-xl))}
 @media (min-width:900px){
   .inf{left:auto;top:0;height:auto;width:380px;border-radius:0;transform:translateX(102%);padding:calc(env(safe-area-inset-top) + 24px) 22px 28px;box-shadow:-10px 0 40px rgba(0,0,0,.3)}
   .inf::before{display:none}
@@ -468,6 +468,8 @@ body{touch-action:pan-x pan-y}
 @keyframes bigh{0%{transform:scale(.2) rotate(-12deg);opacity:0}18%{transform:scale(1.15) rotate(4deg);opacity:1}32%{transform:scale(.95) rotate(0)}70%{transform:scale(1);opacity:1}100%{transform:translateY(-60px) scale(.7);opacity:0}}
 
 .hero .cv .hi{transition:opacity var(--t-long) var(--ease)}
+.hero .cv .hi.cy{opacity:1;animation:hcy 9s ease-in-out both}
+@keyframes hcy{0%{opacity:0;transform:scale(1.14)}28%{opacity:1}100%{opacity:1;transform:scale(1.02)}}
 /* 封面視差交給瀏覽器自己跑（不用每格算），手機捲起來才順；不支援的才用 JS */
 @supports (animation-timeline:scroll()){
   .hero .cv{animation:hpar linear both;animation-timeline:scroll(root);animation-range:0 100svh}
