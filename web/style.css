@@ -144,7 +144,6 @@
 .ico.devices{background:oklch(var(--tl) calc(var(--tc) * .5) 290);color:oklch(var(--fl) calc(var(--fc) * .55) 290)}
 .ico.note{background:oklch(var(--tl) var(--tc) 84);color:oklch(var(--fl) var(--fc) 84)}
 .ico.adblk{background:oklch(var(--tl) calc(var(--tc) * .75) 24);color:oklch(var(--fl) calc(var(--fc) * .8) 24)}
-.ico.adblk:has(img){background:#fff}.ico.adblk img{width:72%;height:72%;object-fit:contain}   /* AdGuard Home 自己的圖示：白底 */
 .ico.album{background:oklch(var(--tl) var(--tc) 335);color:oklch(var(--fl) var(--fc) 335)}
 .ico.theme{background:var(--pc);color:var(--on-pc)}                  /* 哨兵本身的動作（更新、編輯）：主題色 */
 .ico.warn{background:var(--warnc);color:var(--on-warnc)}            /* 要小心的動作（重新開機、換密碼） */

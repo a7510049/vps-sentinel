@@ -95,7 +95,7 @@ const P = {
   mpin:'<path d="M12 21s7-6.2 7-12a7 7 0 0 0-14 0c0 5.8 7 12 7 12Z"/><circle cx="12" cy="9" r="2.5"/>',
   plane:'<path d="M17.8 19.2 16 11l3.5-3.5C21 6 21.5 4 21 3c-1-.5-3 0-4.5 1.5L13 8 4.8 6.2c-.5-.1-.9.1-1.1.5l-.3.5c-.2.5-.1 1 .3 1.3L9 12l-2 3H4l-1 1 3 2 2 3 1-1v-3l3-2 3.5 5.3c.3.4.8.5 1.3.3l.5-.2c.4-.3.6-.7.5-1.2z"/>',
   tack:'<path d="M12 17v5M9 10.76a2 2 0 0 1-1.11 1.79l-1.78.9A2 2 0 0 0 5 15.24V16a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-.76a2 2 0 0 0-1.11-1.79l-1.78-.9A2 2 0 0 1 15 10.76V7a1 1 0 0 1 1-1 2 2 0 0 0 0-4H8a2 2 0 0 0 0 4 1 1 0 0 1 1 1z"/>',
-  funnel:'<path d="M3 4h18l-7 8.5V19l-4 2v-8.5z"/>',
+  noad:'<rect x="2.5" y="5.5" width="19" height="13" rx="3"/><path d="m6.5 15 2-6 2 6M7.2 13h2.6M13.5 9v6h1.3a3 3 0 0 0 0-6z"/><path d="m4 3 16 18"/>',
   album:'<rect x="3" y="7" width="14" height="14" rx="2.5"/><path d="M7 3h11a3 3 0 0 1 3 3v11"/><circle cx="8.5" cy="12" r="1.5"/><path d="m17 17.5-4-4-7.5 7.5"/>',
   folder:'<path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>',
   note:'<path d="M13.4 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-7.4"/><path d="M2 6h4M2 10h4M2 14h4M2 18h4"/><path d="M21.4 5.6a2.1 2.1 0 1 0-3-3L13 8l-1 4 4-1z"/>',
@@ -237,7 +237,7 @@ const ALC = [
   [/^(\d+) 個安全更新$/, "shield", m => `<b>${m[1]}</b>`], [/^(\d+) 天沒有成功備份$/, "archive", m => `<b>${m[1]} 天</b>`], [/^備份還沒成功過$/, "archive", () => "沒成功過"],
   [/^SSH 允許空密碼登入$/, "key", () => "SSH 空密碼" + ALX], [/^root 能用密碼登入 SSH$/, "key", () => "root 密碼" + ALX],
   [/^SSH 能用密碼登入$/, "key", () => "SSH 密碼"],
-  [/^AdGuard Home 停了$/, "funnel", () => "AdGuard" + ALX], [/Oracle|太閒/, "cpu", () => "太閒"]];
+  [/^AdGuard Home 停了$/, "noad", () => "AdGuard" + ALX], [/Oracle|太閒/, "cpu", () => "太閒"]];
 function alChip(p, cls, key){
   for (const [re, ic, f] of ALC) { const m = p.match(re); if (m) return `<span class="alert ${cls}" data-key="${key}" title="${esc(p)}">${I(ic)}<span>${f(m)}</span></span>`; }
   return `<span class="alert ${cls} long" data-key="${key}">${I(cls === "bad" ? "warn" : "alert")}<span>${esc(p)}</span></span>`;
@@ -466,8 +466,8 @@ const COL = {cpu:"var(--c-cpu)", mem:"var(--c-mem)", rx:"var(--c-rx)", tx:"var(-
 /* 概念 → [顏色樣式, 圖示] */
 const ICO = {cpu:["cpu","cpu"], mem:["mem","mem"], disk:["disk","disk"], load:["load","gauge"], down:["down","down"], up:["up","up"],
   net:["net","net"], trend:["trend","trend"], month:["month","month"], box:["box","box"], bell:["bell","bell"], info:["info","info"],
-  flag:["flag","flag"], keep:["keep","shield"], key:["key","key"], finger:["finger","finger"], pin:["pin","pin"], link:["link","link"], archive:["archive","archive"], sun:["sun","sun"], quote:["quote","quote"], dl:["dl","dl"], cloud:["cloud","cloud"], fly:["fly","plane"], devices:["devices","devices"], safe:["safe","lockok"], sky:["sky","radar"], note:["note","note"], adblk:["adblk","funnel"], album:["album","album"]};
-const IC = (k, cls="sm") => `<span class="ico ${cls} ${ICO[k][0]}">${k === "adblk" ? `<img src="/ab-icon.png?v=2" alt="">` : I(ICO[k][1])}</span>`;   // AdGuard Home 用它自己的圖示（主機抓好給）
+  flag:["flag","flag"], keep:["keep","shield"], key:["key","key"], finger:["finger","finger"], pin:["pin","pin"], link:["link","link"], archive:["archive","archive"], sun:["sun","sun"], quote:["quote","quote"], dl:["dl","dl"], cloud:["cloud","cloud"], fly:["fly","plane"], devices:["devices","devices"], safe:["safe","lockok"], sky:["sky","radar"], note:["note","note"], adblk:["adblk","noad"], album:["album","album"]};
+const IC = (k, cls="sm") => `<span class="ico ${cls} ${ICO[k][0]}">${I(ICO[k][1])}</span>`;
 
 /* ═════════ 共用的小元件 ═════════ */
 /* 標誌：主題色的圓角方塊＋白色盾牌 */
@@ -1212,7 +1212,7 @@ async function openAgh(node, name){
     send: c => pkCall("/api/adguard-open", {...c, node: node || ""}, 1)});
   if (!t || !t.ticket || !safeUrl(t.login)) return;
   if (window.open("", "vsagh")) return cloudSubmit(t, "vsagh");
-  modal({icon: "funnel", title: "AdGuard Home", text: "驗證好了", ok: "打開"}).then(go => { if (go) cloudSubmit(t, "_blank"); });
+  modal({icon: "noad", cls: "adblk", title: "AdGuard Home", text: "驗證好了", ok: "打開"}).then(go => { if (go) cloudSubmit(t, "_blank"); });
 }
 function abModal(node, name){
   const q = node ? `?node=${encodeURIComponent(node)}` : "";
@@ -1286,7 +1286,7 @@ function abModal(node, name){
       if (al) { const x = await run({action: al.dataset.on === "1" ? "allow" : "unallow", domain: al.dataset.abal}); if (x && x.message) toast(x.message); return; }
       const b = t.closest("[data-ab]"); if (!b) return;
       const act = b.dataset.ab;
-      if (act === "off" && !await modal({icon:"funnel", cls:"warn", title:"關掉 AdGuard Home？", text:"設好的手機會查不到網址，要先改回來。", ok:"關掉"})) return;
+      if (act === "off" && !await modal({icon:"noad", cls:"warn", title:"關掉 AdGuard Home？", text:"設好的手機會查不到網址，要先改回來。", ok:"關掉"})) return;
       const x = await run({action: act});
       if (x && act === "off") toast("已關掉");
     });

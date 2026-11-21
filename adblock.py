@@ -631,38 +631,6 @@ def ab_profile_get(k):
     return v[1] if v and v[0] > time.time() else None
 
 
-AB_ICON = os.path.join(DATA_DIR, "ab-icon.png")
-AB_ICON_URL = os.environ.get("SENTINEL_AB_ICON_URL") or "https://raw.githubusercontent.com/AdguardTeam/AdGuardHome/master/client/public/assets/apple-touch-icon-180x180.png"
-
-
-def ab_icon():
-    """AdGuard Home 自己的圖示（不放進專案）：先問本機的 AdGuard Home，沒裝再去官方 GitHub 拿，存一份 30 天"""
-    try:
-        if time.time() - os.path.getmtime(AB_ICON) < 30 * 86400:
-            with open(AB_ICON, "rb") as f:
-                return f.read()
-    except OSError:
-        pass
-    for u in (AB_API + "/assets/apple-touch-icon-180x180.png", AB_ICON_URL):
-        try:
-            with urllib.request.build_opener(*([urllib.request.ProxyHandler({})] if u.startswith(AB_API) else [])).open(
-                    urllib.request.Request(u, headers={"User-Agent": f"vps-sentinel/{VERSION}"}), timeout=8) as r:
-                b = r.read(200_000)
-            if b[:8] == b"\x89PNG\r\n\x1a\n":
-                os.makedirs(DATA_DIR, exist_ok=True)
-                with open(AB_ICON + ".tmp", "wb") as f:
-                    f.write(b)
-                os.replace(AB_ICON + ".tmp", AB_ICON)
-                return b
-        except (OSError, ValueError):
-            continue
-    try:
-        with open(AB_ICON, "rb") as f:                     # 過期但拿不到新的：照樣用舊的
-            return f.read()
-    except OSError:
-        return None
-
-
 # ───────────────────────── 管理頁（AdGuard Home 自己的網頁，經過哨兵才進得去） ─────────────────────────
 # 跟雲端硬碟一樣：每次打開先在主要主機驗證 PIN 碼／手機金鑰／密碼，拿一次性登入票，換這個瀏覽器的通行證（vs_agh）；
 # 哨兵轉過去時自己帶上 AdGuard Home 的帳號，所以不用另外記密碼。管理頁本身還是只開在本機。
