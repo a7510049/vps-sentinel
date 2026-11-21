@@ -95,6 +95,7 @@ const P = {
   mpin:'<path d="M12 21s7-6.2 7-12a7 7 0 0 0-14 0c0 5.8 7 12 7 12Z"/><circle cx="12" cy="9" r="2.5"/>',
   plane:'<path d="M17.8 19.2 16 11l3.5-3.5C21 6 21.5 4 21 3c-1-.5-3 0-4.5 1.5L13 8 4.8 6.2c-.5-.1-.9.1-1.1.5l-.3.5c-.2.5-.1 1 .3 1.3L9 12l-2 3H4l-1 1 3 2 2 3 1-1v-3l3-2 3.5 5.3c.3.4.8.5 1.3.3l.5-.2c.4-.3.6-.7.5-1.2z"/>',
   tack:'<path d="M12 17v5M9 10.76a2 2 0 0 1-1.11 1.79l-1.78.9A2 2 0 0 0 5 15.24V16a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-.76a2 2 0 0 0-1.11-1.79l-1.78-.9A2 2 0 0 1 15 10.76V7a1 1 0 0 1 1-1 2 2 0 0 0 0-4H8a2 2 0 0 0 0 4 1 1 0 0 1 1 1z"/>',
+  note:'<path d="M13.4 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-7.4"/><path d="M2 6h4M2 10h4M2 14h4M2 18h4"/><path d="M21.4 5.6a2.1 2.1 0 1 0-3-3L13 8l-1 4 4-1z"/>',
   off:'<path d="M12 20h.01M8.5 16.43a5 5 0 0 1 7 0M2 8.82a15 15 0 0 1 4.17-2.65M10.66 5c4.01-.36 8.14.9 11.34 3.76M16.85 11.25a10 10 0 0 1 2.22 1.68M5 13a10 10 0 0 1 5.24-2.76M2 2l20 20"/>',
 };
 P.server = '<rect x="3" y="4" width="18" height="7" rx="2"/><rect x="3" y="13" width="18" height="7" rx="2"/><path d="M7 7.5h.01M7 16.5h.01"/>';
@@ -462,7 +463,7 @@ const COL = {cpu:"var(--c-cpu)", mem:"var(--c-mem)", rx:"var(--c-rx)", tx:"var(-
 /* 概念 → [顏色樣式, 圖示] */
 const ICO = {cpu:["cpu","cpu"], mem:["mem","mem"], disk:["disk","disk"], load:["load","gauge"], down:["down","down"], up:["up","up"],
   net:["net","net"], trend:["trend","trend"], month:["month","month"], box:["box","box"], bell:["bell","bell"], info:["info","info"],
-  flag:["flag","flag"], keep:["keep","shield"], key:["key","key"], finger:["finger","finger"], pin:["pin","pin"], link:["link","link"], archive:["archive","archive"], sun:["sun","sun"], quote:["quote","quote"], dl:["dl","dl"], cloud:["cloud","cloud"], fly:["fly","plane"], devices:["devices","devices"], safe:["safe","lockok"], sky:["sky","radar"]};
+  flag:["flag","flag"], keep:["keep","shield"], key:["key","key"], finger:["finger","finger"], pin:["pin","pin"], link:["link","link"], archive:["archive","archive"], sun:["sun","sun"], quote:["quote","quote"], dl:["dl","dl"], cloud:["cloud","cloud"], fly:["fly","plane"], devices:["devices","devices"], safe:["safe","lockok"], sky:["sky","radar"], note:["note","note"]};
 const IC = (k, cls="sm") => `<span class="ico ${cls} ${ICO[k][0]}">${I(ICO[k][1])}</span>`;
 
 /* ═════════ 共用的小元件 ═════════ */
@@ -804,7 +805,8 @@ function toolsBody(s, k, node, name){
       <b>雲端硬碟</b><small>${c.total ? `${size(c.used)} / ${size(c.total)}` : ""}</small>${c.total ? wave(c.pct) : ""}</a>
     <button class="tbx" data-key="dl" data-dl="${node}" data-name="${name}"><span class="ttop">${IC("dl", "")}<span class="tgo nx">${CHEV}</span></span><b>遠端下載</b><small>存到雲端硬碟</small></button>`;
   h += `<button class="tbx" data-key="bk" data-bk="${node}" data-label="${name}"><span class="ttop">${IC("archive", "")}<span class="tgo nx">${CHEV}</span></span>
-      <b>每日備份</b><small class="bkst" data-n="${node}" data-keep data-ld>讀取中…</small><span class="bkdots" data-n="${node}" data-keep>${"<i></i>".repeat(7)}</span></button></div>`;
+      <b>每日備份</b><small class="bkst" data-n="${node}" data-keep data-ld>讀取中…</small><span class="bkdots" data-n="${node}" data-keep>${"<i></i>".repeat(7)}</span></button>
+    <button class="tbx" data-key="nt" data-notes="${node}" data-name="${name}"><span class="ttop">${IC("note", "")}<span class="tgo nx">${CHEV}</span></span><b>加密筆記</b><small data-x>${s.notes ? "已打開" : "還沒打開"}</small></button></div>`;
   const L = linksOf(s).filter(x => !x.fixed);
   if (L.length) h += `<div class="lbl" data-key="ll">常用連結</div><div class="group" data-key="g-lk:${k}">${L.map(x => linkRow(x, esc(linkSt(x)))).join("")}</div>`;
   return h + `</div>`;
@@ -1019,6 +1021,63 @@ function secModal(k){
       sayTo(msg, gen ? "金鑰已下載，只給這一次，請收好" : x.message || "加好了");
     } catch (x) { sayTo(msg, x.message); }
     b.disabled = false;
+  });
+}
+/* 加密筆記：Joplin 用 WebDAV 同步到這台（筆記在手機上先加密，主機只存亂碼） */
+function notesModal(node, name){
+  const q = node ? `?node=${encodeURIComponent(node)}` : "";
+  let D = null, pw = "", busy = false;
+  const v = document.createElement("div"); v.className = "veil";
+  v.innerHTML = `<div class="dialog pkd ntd">${IC("note", "big")}<h3>加密筆記</h3><p>${esc(name)}</p><div class="form"><div class="ntb">讀取中…</div><div class="msg"></div></div></div>`;
+  $("#layer").appendChild(v);
+  const body = v.querySelector(".ntb"), msg = v.querySelector(".msg");
+  const url = () => (D.base || location.origin.replace(/^http:/, "https:")) + D.path;   // 只收 https
+  const row = (k, val, x = "") => `<div class="codebox ntr"><span class="ntk">${k}</span><code${x}>${esc(val)}</code><button type="button" class="ubtn sm ghost" data-ntcp="${k}">複製</button></div>`;
+  const st = () => D.files ? `${D.files} 個檔案・${size(D.size)}${D.last ? `・${ago(D.last)}同步過` : ""}` : "還沒同步過";
+  const draw = () => swapHTML(body, !D.on
+    ? `<p class="ntx">用 Joplin App 同步，筆記在手機上先加密，主機只存亂碼。</p><button type="button" class="ubtn" data-nt="on">打開</button>`
+    : `<div class="pcode">${row("網址", url())}${row("帳號", D.user)}${row("密碼", pw || "•".repeat(24), pw ? "" : ' class="ipb" data-ntshow role="button" tabindex="0"')}</div>
+      <div class="lbl">在 Joplin 設定</div>
+      <ol class="ntsteps"><li>加密 → 啟用加密（先做這步）</li><li>同步 → 選 WebDAV，填上面三項</li>${D.self_signed ? "<li>同步的進階選項 → 勾「忽略 TLS 憑證錯誤」</li>" : ""}</ol>
+      <div class="ntst">${I("note")}<span>${st()}</span></div>
+      <div class="dlnew"><button type="button" class="ubtn sm ghost" data-nt="new">換密碼</button><button type="button" class="ubtn sm ghost" data-nt="off">關掉</button></div>`);
+  const call = async b => {
+    const r = await api("/api/notes" + q, {method:"POST", headers:{"X-Token":getTok(), "Content-Type":"application/json"}, body:JSON.stringify(b)});
+    const x = await r.json().catch(() => ({}));
+    if (r.status === 404) throw new Error("這台還沒更新到新版，先更新再試");
+    if (!r.ok || x.ok === false) throw new Error(x.message || x.error || "失敗了，請再試一次");
+    return x;
+  };
+  const run = async b => {
+    if (busy) return null; busy = true; sayTo(msg, "");
+    try { const x = await call(b); D = x; if (x.pw) pw = x.pw; if (b.action === "off") pw = ""; draw(); return x; }
+    catch (e) { sayTo(msg, e.message); return null; }
+    finally { busy = false; }
+  };
+  run({action:"info"});
+  return new Promise(res => {
+    const done = () => { if (v._d) return; v._d = 1; v.classList.add("closing"); setTimeout(() => { v.remove(); res(); }, 360); };
+    v._esc = done;
+    v.addEventListener("click", async e => {
+      if (e.target === v) return done();
+      const t = e.target;
+      if (t.closest("[data-ntshow]")) return run({action:"show"});
+      const cp = t.closest("[data-ntcp]");
+      if (cp) {
+        const k = cp.dataset.ntcp;
+        if (k === "密碼" && !pw && !await run({action:"show"})) return;
+        const txt = k === "網址" ? url() : k === "帳號" ? D.user : pw;
+        try { await navigator.clipboard.writeText(txt); toast(`已複製${k}`); }
+        catch (_) { const r = document.createRange(); r.selectNodeContents(cp.parentNode.querySelector("code")); getSelection().removeAllRanges(); getSelection().addRange(r); }
+        return;
+      }
+      const b = t.closest("[data-nt]"); if (!b) return;
+      const act = b.dataset.nt;
+      if (act === "new" && !await modal({icon:"key", cls:"warn", title:"換一組密碼？", text:"舊密碼會立刻失效，每台 Joplin 都要重填。", ok:"換密碼"})) return;
+      if (act === "off" && !await modal({icon:"note", cls:"warn", title:"關掉加密筆記？", text:"Joplin 會連不上，筆記還留在主機上。", ok:"關掉"})) return;
+      const x = await run({action: act});
+      if (x && act !== "on") toast(x.message || "好了");
+    });
   });
 }
 /* 系統更新（作業系統的套件）：跟哨兵、雲端硬碟的版本放在一起 */
@@ -3168,6 +3227,8 @@ async function pageClick(e){
   if (window._menu && !t.closest(".lmenu")) closeMenu();
   const dl = t.closest("[data-dl]");
   if (dl) return dlModal(dl.dataset.dl, dl.dataset.name);
+  const nb = t.closest("[data-notes]");
+  if (nb) return notesModal(nb.dataset.notes, nb.dataset.name).then(() => tick());
   const rb = t.closest("[data-reboot]");
   if (rb) return rebootModal(rb.dataset.reboot, rb.dataset.name);
   const rm = t.closest("[data-rmhost]");

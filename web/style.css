@@ -142,6 +142,7 @@
 .ico.sky{background:oklch(var(--tl) calc(var(--tc) * .5) 220);color:oklch(var(--fl) calc(var(--fc) * .55) 220)}
 .ico.safe{background:oklch(var(--tl) calc(var(--tc) * .7) 155);color:oklch(var(--fl) calc(var(--fc) * .75) 155)}
 .ico.devices{background:oklch(var(--tl) calc(var(--tc) * .5) 290);color:oklch(var(--fl) calc(var(--fc) * .55) 290)}
+.ico.note{background:oklch(var(--tl) var(--tc) 84);color:oklch(var(--fl) var(--fc) 84)}
 .ico.theme{background:var(--pc);color:var(--on-pc)}                  /* 哨兵本身的動作（更新、編輯）：主題色 */
 .ico.warn{background:var(--warnc);color:var(--on-warnc)}            /* 要小心的動作（重新開機、換密碼） */
 .ico.bad{background:var(--badc);color:var(--on-badc)}               /* 刪除、移除、解除配對 */
@@ -1806,3 +1807,14 @@ html.flyon .dash>.view{content-visibility:hidden;contain-intrinsic-size:auto non
 .pkrow.secrow .tog[disabled]{opacity:.5}
 .form label.pkrow.secrow{flex-direction:row;align-items:center;gap:12px;font-size:var(--fs-m);font-weight:400;color:var(--tx);cursor:pointer}
 .secd .form .lbl{flex-direction:row;align-items:center;justify-content:space-between;font-size:var(--fs-m);font-weight:600;color:var(--tx2)}
+/* 加密筆記（Joplin 同步） */
+.ntd .ntx{margin:0 4px 14px;color:var(--tx2);font-size:var(--fs-m);text-align:center}
+.ntd .ntb>.ubtn{width:100%}
+.ntd .ntr{padding:8px 8px 8px 14px}
+.ntd .ntk{flex:none;width:3em;color:var(--tx3);font-size:var(--fs-s)}
+.ntd .ntr code .ipb,.ntd .ntr code.ipb{cursor:pointer}
+.ntd .form .lbl{margin:16px 4px 8px;font-size:var(--fs-m);font-weight:600;color:var(--tx2)}
+.ntsteps{margin:0;padding:12px 16px 12px 34px;border-radius:var(--r-md);background:var(--s3);display:flex;flex-direction:column;gap:6px;font-size:var(--fs-m);color:var(--tx)}
+.ntst{display:flex;align-items:center;gap:8px;margin:12px 4px;color:var(--tx3);font-size:var(--fs-s)}
+.ntst svg{width:16px;height:16px;flex:none}
+.ntd .dlnew .ubtn{flex:1}

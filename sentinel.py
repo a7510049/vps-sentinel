@@ -45,7 +45,7 @@ from collections import deque
 from concurrent.futures import ThreadPoolExecutor
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
-VERSION = "4.26"
+VERSION = "4.27"
 
 # ───────────────────────── 哨兵備份檔（.vsbk）─────────────────────────
 # 哨兵專用的備份格式：外面是自己的檔案格式，裡面用的是成熟、標準的加密方法（不自己發明加密）：
@@ -597,7 +597,7 @@ CONF_PATH = os.environ.get("SENTINEL_CONF", "/etc/vps-sentinel-lite.conf")
 SEAL_KEY_PATH = os.environ.get("SENTINEL_SEAL_KEY") or os.path.splitext(CONF_PATH)[0] + ".key"
 SEAL_CONF = ("TOKEN", "TG_BOT_TOKEN", "TG_CHAT_ID", "BACKUP_KEY", "PEERS", "OPENSKY_ID", "OPENSKY_SECRET", "YT_PROXY", "LINKS")
 SEAL_FILES = ("tls-pins.json", "pin.json", "sessions.json", "passkeys.json", "state.json", "pairing.json", "yt-cookies.txt",
-              "downloads.json", "peers-cache.json", "fly-share.json")
+              "downloads.json", "peers-cache.json", "fly-share.json", "notes.json")
 SEAL_TXT = "vse1:"                                # 設定檔裡加密過的值
 SEAL_BIN = b"VSE1"                                # 加密過的檔案開頭
 SEAL = {"lib": None, "key": None, "ok": None}
@@ -1458,7 +1458,7 @@ def include(name):
         exec(compile(f.read(), path, "exec"), globals())   # noqa: S102
 
 
-SRC_FILES = ["sentinel.py", "pair.py", "download.py", "backup.py", "guard.py", "fly.py", "web/index.html", "web/style.css", "web/app.js", "web/pin.js", "web/fly.js", "web/font.woff2", "data/airports.tsv", "data/coast.tsv", "data/terrain.bin", "data/actypes.tsv", "data/apmap.tsv"]   # 程式本體（含機場起降）＋網頁三個檔＋機場資料、海岸線、地形、機型分類
+SRC_FILES = ["sentinel.py", "pair.py", "download.py", "backup.py", "guard.py", "fly.py", "notes.py", "web/index.html", "web/style.css", "web/app.js", "web/pin.js", "web/fly.js", "web/font.woff2", "data/airports.tsv", "data/coast.tsv", "data/terrain.bin", "data/actypes.tsv", "data/apmap.tsv"]   # 程式本體（含機場起降）＋網頁三個檔＋機場資料、海岸線、地形、機型分類
 
 
 def build_of(blobs):
@@ -2440,7 +2440,7 @@ def recheck_need(path, d):
     return (path == "/api/token" or (path == "/api/pin" and act in ("set", "off"))
             or (path == "/api/passkey" and act in ("begin", "delete")) or (path == "/api/telegram" and act == "save")
             or (path == "/api/backup" and act == "key") or (path == "/api/pair-admin" and act == "code")
-            or (path == "/api/sec" and act in ("fix", "undo", "key", "gen")))
+            or (path == "/api/sec" and act in ("fix", "undo", "key", "gen")) or (path == "/api/notes" and act in ("on", "show", "new")))
 
 
 def recheck_ok(a):
@@ -3534,7 +3534,7 @@ class Collector:
             "updates": updates, "reboot": reboot, "geo": geo, "update": upd, "events": events, "traffic": traffic, "bk_tz": BACKUP_TZ,
             "hist": {"t": [h[0] for h in hist], "cpu": [h[1] for h in hist], "mem": [h[2] for h in hist],
                      "rx": [h[3] for h in hist], "tx": [h[4] for h in hist]},
-            "problems": problems, "notices": notices, "tg_self": pair_load().get("self_t") or 0, "tlsfp": TLS["fp"], "sec": sec_info(),
+            "problems": problems, "notices": notices, "tg_self": pair_load().get("self_t") or 0, "tlsfp": TLS["fp"], "sec": sec_info(), "notes": bool(note_conf().get("pw")),
             "tg_off": not (TG_BOT and TG_CHAT) and not watchers(),   # 還沒設定 Telegram：首頁提醒一行
             "level": "bad" if problems else ("warn" if notices else "ok"),
         }
@@ -4350,6 +4350,7 @@ def gz_of(data, tag=None):
 # ───────────────────────── 安全檢查、SSH 上鎖、錯太多次封鎖（在 guard.py）─────────────────────────
 
 include("guard.py")
+include("notes.py")
 
 
 MAX_CONN = max(16, int(os.environ.get("SENTINEL_MAX_CONN") or 200))   # 同時最多處理幾個連線（測試可以調小）
@@ -4722,7 +4723,12 @@ class Handler(BaseHTTPRequestHandler):
         finally:
             conn.close()
 
+    def is_notes(self):
+        return note_is(urllib.parse.urlsplit(self.path).path)
+
     def do_PUT(self):
+        if self.is_notes():
+            return note_dav(self)
         return self.proxy_cloud() if self.is_cloud() else self.send(404, '{"error":"找不到"}')
     do_PATCH = do_DELETE = do_OPTIONS = do_PROPFIND = do_PROPPATCH = do_MKCOL = do_COPY = do_MOVE = do_LOCK = do_UNLOCK = do_PUT
 
@@ -4790,15 +4796,21 @@ class Handler(BaseHTTPRequestHandler):
         return self.send(200, json.dumps({"ok": True, "token": self.sess_give(d, "手機金鑰")}))
 
     def do_HEAD(self):
+        if self.is_notes():
+            return note_dav(self)
         if self.is_cloud():
             return self.proxy_cloud()
         self.send_response(200)
         self.end_headers()
 
     def do_GET(self):
+        if self.is_notes():
+            return note_dav(self)
         self.fly_gate(self.route_get)
 
     def do_POST(self):
+        if self.is_notes():
+            return note_dav(self)
         self.fly_gate(self.route_post)
 
     def fly_gate(self, run):
@@ -4977,7 +4989,7 @@ class Handler(BaseHTTPRequestHandler):
         u = urllib.parse.urlsplit(self.path)
         if u.path not in ("/api/update", "/api/rename", "/api/traffic", "/api/telegram", "/api/links", "/api/self", "/api/cloud-open", "/api/cloud-ticket", "/api/cloud-revoke", "/api/peer",
                           "/api/token", "/api/passkey", "/api/passkey-login", "/api/pin", "/api/pin-login", "/api/login", "/api/sessions", "/api/backup", "/api/backup-store",
-                          "/api/restore-upload", "/api/restore-run", "/api/pair", "/api/pair-admin", "/api/reboot", "/api/keepalive", "/api/download", "/api/fly-share", "/api/fly-claim", "/api/opensky", "/api/sec"):
+                          "/api/restore-upload", "/api/restore-run", "/api/pair", "/api/pair-admin", "/api/reboot", "/api/keepalive", "/api/download", "/api/fly-share", "/api/fly-claim", "/api/opensky", "/api/sec", "/api/notes"):
             return self.send(404, '{"error":"找不到"}')
         if u.path in ("/api/restore-upload", "/api/restore-run"):   # 網頁還原：要有安裝時給的代碼（或已經登入）
             if not (self.authed() or self.restore_code_ok()):
@@ -5119,6 +5131,14 @@ class Handler(BaseHTTPRequestHandler):
                                                       "Content-Type": "application/json"})
                 with urllib.request.urlopen(req, timeout=20) as r:
                     data = r.read()
+                if u.path == "/api/notes":           # 那台沒網域：Joplin 用這邊連過去的網址
+                    try:
+                        x = json.loads(data)
+                        if isinstance(x, dict) and not x.get("base"):
+                            x["base"] = peer["url"].rstrip("/")
+                            data = json.dumps(x, ensure_ascii=False).encode()
+                    except ValueError:
+                        pass
                 if u.path == "/api/token":           # 那台換了密碼：這邊也要記住，不然下次就連不上它
                     try:
                         set_peer_token(node, json.loads(data).get("token"))
@@ -5200,6 +5220,12 @@ class Handler(BaseHTTPRequestHandler):
                 return self.send(200, json.dumps(sec_detail(), ensure_ascii=False))
             ok, msg, extra = sec_act(d)
             return self.send(200 if ok else 400, json.dumps({**sec_detail(), **extra, "ok": ok, "message": msg}, ensure_ascii=False))
+        if u.path == "/api/notes":                   # 加密筆記（Joplin 同步）：看狀態、打開、看密碼、換密碼、關掉
+            d = self.jbody(body)
+            if d.get("action") in (None, "", "info"):
+                return self.send(200, json.dumps(note_info(), ensure_ascii=False))
+            ok, msg, extra = note_act(d)
+            return self.send(200 if ok else 400, json.dumps({**note_info(), **extra, "ok": ok, "message": msg}, ensure_ascii=False))
         if u.path == "/api/keepalive":               # 開關 Oracle 防回收
             ok, msg = set_keepalive(bool(self.jbody(body).get("on")))
             return self.send(200 if ok else 500, json.dumps({"ok": ok, "message": msg}, ensure_ascii=False))
