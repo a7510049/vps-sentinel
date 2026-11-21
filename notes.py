@@ -5,7 +5,7 @@ from email.utils import formatdate
 
 NOTE_PATH = "/notes"
 NOTE_USER = "joplin"
-NOTE_CONF = os.path.join(DATA_DIR, "notes.json")      # {"pw", "t", "last"}，加密存（SEAL_FILES）
+NOTE_CONF = os.path.join(DATA_DIR, "notes.json")      # {"pw", "ek", "t", "last"}，加密存（SEAL_FILES）
 NOTE_FAILS = {}                                         # 連線來源 → [輸錯的時間…]
 NOTE_BAN = 15 * 60                                      # 15 分鐘內錯 10 次：這個來源先不能再試
 NOTE_LOCK = threading.Lock()
@@ -70,8 +70,15 @@ def note_info():
     return out
 
 
+def note_ek_new():
+    """Joplin 的加密密碼（使用者要主機幫忙記著）：24 個不會看錯的字，6 個一組"""
+    a = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789"
+    k = "".join(secrets.choice(a) for _ in range(24))
+    return "-".join(k[i:i + 6] for i in range(0, 24, 6))
+
+
 def note_act(d):
-    """網頁的動作：on 打開（產生密碼）、show 看密碼、new 換一組密碼、off 關掉（筆記留著）"""
+    """網頁的動作：on 打開（產生密碼）、show 看密碼、new 換一組密碼、off 關掉（筆記留著）、wipe 全部清掉"""
     act = d.get("action")
     with NOTE_LOCK:
         c = dict(note_conf())
@@ -83,14 +90,35 @@ def note_act(d):
             except OSError:
                 return False, "建不了放筆記的資料夾", {}
             c["pw"] = secrets.token_urlsafe(18)       # 144 位元，猜不到；只給 Joplin 用，跟哨兵的登入無關
+            c.setdefault("ek", note_ek_new())         # 加密密碼一旦給了就不換（換了舊筆記就解不開）
             c.setdefault("t", int(time.time()))
             note_save(c)
             log("加密筆記：" + ("打開了" if act == "on" else "換了一組密碼"))
-            return True, "好了" if act == "on" else "已換新密碼，舊密碼立刻失效", {"pw": c["pw"]}
+            return True, "好了" if act == "on" else "已換新密碼，舊密碼立刻失效", {"pw": c["pw"], "ek": c["ek"]}
         if act == "show":
             if not c.get("pw"):
                 return False, "還沒打開", {}
-            return True, "", {"pw": c["pw"]}
+            if not c.get("ek"):                       # 4.28 打開的：補一組
+                c["ek"] = note_ek_new()
+                note_save(c)
+            return True, "", {"pw": c["pw"], "ek": c["ek"]}
+        if act == "wipe":                            # 清除所有筆記：檔案全部刪掉、密碼和加密密碼都換新（手機上的 Joplin 不動）
+            root = note_dir()
+            try:
+                for name in os.listdir(root):
+                    p = os.path.join(root, name)
+                    if os.path.isdir(p) and not os.path.islink(p):
+                        shutil.rmtree(p)
+                    else:
+                        os.remove(p)
+            except FileNotFoundError:
+                pass
+            except OSError:
+                return False, "沒刪乾淨，再試一次", {}
+            c = {"pw": secrets.token_urlsafe(18), "ek": note_ek_new(), "t": int(time.time())}   # 等於重新開一本：密碼、加密密碼都換新
+            note_save(c)
+            log("加密筆記：清除了所有筆記，重新開一本")
+            return True, "已清除，換了新的密碼", {"pw": c["pw"], "ek": c["ek"]}
         if act == "off":
             c.pop("pw", None)
             note_save(c)

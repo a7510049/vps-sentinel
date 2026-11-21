@@ -45,7 +45,7 @@ from collections import deque
 from concurrent.futures import ThreadPoolExecutor
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
-VERSION = "4.28"
+VERSION = "4.29"
 
 # ───────────────────────── 哨兵備份檔（.vsbk）─────────────────────────
 # 哨兵專用的備份格式：外面是自己的檔案格式，裡面用的是成熟、標準的加密方法（不自己發明加密）：
@@ -2440,7 +2440,7 @@ def recheck_need(path, d):
     return (path == "/api/token" or (path == "/api/pin" and act in ("set", "off"))
             or (path == "/api/passkey" and act in ("begin", "delete")) or (path == "/api/telegram" and act == "save")
             or (path == "/api/backup" and act == "key") or (path == "/api/pair-admin" and act == "code")
-            or (path == "/api/sec" and act in ("fix", "undo", "key", "gen")) or (path == "/api/notes" and act in ("on", "show", "new")))
+            or (path == "/api/sec" and act in ("fix", "undo", "key", "gen")) or (path == "/api/notes" and act in ("on", "show", "new", "wipe")))
 
 
 def recheck_ok(a):

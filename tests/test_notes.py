@@ -42,10 +42,13 @@ class Notes(Server):
         self.assertEqual(self.dav("PROPFIND", "/notes/", pw="x")[0], 404)       # 還沒打開
         c, d = self.call({"action": "on"})
         self.assertEqual(c, 200, d)
-        pw = d["pw"]
+        pw, ek = d["pw"], d["ek"]
         self.assertGreaterEqual(len(pw), 20)
+        self.assertRegex(ek, r"^([A-Za-z2-9]{6}-){3}[A-Za-z2-9]{6}$")              # Joplin 的加密密碼
         with open(os.path.join(self.tmp.name, "data", "notes.json"), "rb") as f:
-            self.assertNotIn(pw.encode(), f.read())                             # 密碼加密存
+            raw = f.read()
+            self.assertNotIn(pw.encode(), raw)                                  # 密碼加密存
+            self.assertNotIn(ek.encode(), raw)
         self.assertEqual(self.dav("PROPFIND", "/notes/", pw=pw, https=False)[0], 403)   # 只收 https
         self.assertEqual(self.dav("PROPFIND", "/notes/")[0], 401)
         s, b, _ = self.dav("PROPFIND", "/notes/", pw=pw, hdr={"Depth": "1"})
@@ -82,18 +85,32 @@ class Notes(Server):
         self.assertNotIn("pw", d)
         self.assertGreater(d["last"], 0)
         c, d = self.call({"action": "show"})
-        self.assertEqual(d["pw"], pw)
+        self.assertEqual((d["pw"], d["ek"]), (pw, ek))
         c, d = self.call({"action": "new"})
         self.assertNotEqual(d["pw"], pw)
+        self.assertEqual(d["ek"], ek)                                            # 加密密碼不跟著換
         self.assertEqual(self.dav("GET", "/notes/info.json", pw=pw)[0], 401)       # 舊密碼立刻失效
         self.assertEqual(self.dav("GET", "/notes/info.json", pw=d["pw"])[0], 200)
         c, d = self.call({"action": "off"})
         self.assertEqual(c, 200)
         self.assertEqual(self.dav("GET", "/notes/info.json", pw="x")[0], 404)
         self.assertTrue(os.path.exists(os.path.join(self.tmp.name, "data", "notes", "info.json")))   # 筆記留著
+        self.assertEqual(self.call({"action": "on"})[1]["ek"], ek)               # 再打開，加密密碼還是同一組
+
+    def test_3_wipe(self):
+        c, d = self.call({"action": "show"})
+        self.assertEqual(self.dav("PUT", "/notes/x.md", b"secret", pw=d["pw"])[0], 201)
+        c, d2 = self.call({"action": "wipe"})
+        self.assertEqual(c, 200, d2)
+        self.assertTrue(d2["on"])                                                 # 等於重新開一本
+        self.assertEqual(os.listdir(os.path.join(self.tmp.name, "data", "notes")), [])
+        self.assertNotEqual(d2["pw"], d["pw"])
+        self.assertNotEqual(d2["ek"], d["ek"])
+        self.assertEqual(self.dav("GET", "/notes/x.md", pw=d["pw"])[0], 401)
+        self.assertEqual(self.dav("GET", "/notes/x.md", pw=d2["pw"])[0], 404)
 
     def test_2_ban(self):
-        c, d = self.call({"action": "on"})
+        c, d = self.call({"action": "show"})
         pw = d["pw"]
         ip = "203.0.113.9"
         for _ in range(10):
