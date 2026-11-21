@@ -629,8 +629,7 @@ function openLb(i){
     $(".cap span", el).textContent = [p.p && d ? `${d.mo}月${d.d}日 ${ftime(d)}` : d ? ftime(d) : "", cam].filter(Boolean).join("・");
     const dl = $("[data-dl]", el); if (dl) dl.href = src(p, "o");
     $(".nav.l", el).disabled = S.i === 0; $(".nav.r", el).disabled = S.i === PH.length - 1;
-    if (S.info) inf.innerHTML = infoHTML(p);
-    if (S.info) infoMap();
+    if (S.info && (moved || !inf.firstChild)) { inf.innerHTML = infoHTML(p); infoMap(); }   // 同一張不重畫：安卓跳出鍵盤會改畫面大小，重畫會把正在打字的留言框收掉
     TILES.forEach((t, k) => t.classList.toggle("gone", k === S.i));
   }
   setAll();
