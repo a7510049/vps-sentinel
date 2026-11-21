@@ -8,7 +8,8 @@ import android.content.Intent
 import android.graphics.Bitmap
 import android.net.Uri
 import android.os.Bundle
-import android.view.ViewGroup
+import android.view.View
+import android.view.ViewGroup.LayoutParams.MATCH_PARENT
 import android.webkit.GeolocationPermissions
 import android.webkit.ValueCallback
 import android.webkit.WebChromeClient
@@ -16,9 +17,9 @@ import android.webkit.WebResourceError
 import android.webkit.WebResourceRequest
 import android.webkit.WebView
 import android.webkit.WebViewClient
+import android.widget.FrameLayout
 import androidx.activity.ComponentActivity
 import androidx.activity.OnBackPressedCallback
-import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedContent
@@ -39,7 +40,6 @@ import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.systemBarsPadding
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
@@ -62,21 +62,35 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.luminance
+import androidx.compose.ui.graphics.toArgb
+import androidx.compose.ui.platform.ComposeView
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.viewinterop.AndroidView
+import androidx.core.content.ContextCompat
+import androidx.core.view.ViewCompat
 import androidx.core.view.WindowCompat
+import androidx.core.view.WindowInsetsCompat
 
-/* App 就是全螢幕打開主機的網頁：第一次輸入網址，之後直接打開；畫面、登入都跟網頁一樣 */
+/* App 就是全螢幕打開主機的網頁：第一次輸入網址，之後直接打開；畫面、登入都跟網頁一樣
+   網頁直接放在視窗裡（不包在 Compose 裡、底色不透明），手機才能用最快的方式畫，捲動才順；
+   輸入網址、打不開的畫面是蓋在上面的另一層，用完就收起來 */
 class MainActivity : ComponentActivity() {
     private lateinit var store: Store
-    private var url by mutableStateOf("")
-    private var failed by mutableStateOf(false)
-    private var pageBg by mutableStateOf<Color?>(null)
+    private var urlS by mutableStateOf("")
+    private var failedS by mutableStateOf(false)
+    private var url: String
+        get() = urlS
+        set(v) { urlS = v; sync() }
+    private var failed: Boolean
+        get() = failedS
+        set(v) { failedS = v; sync() }
     private var web: WebView? = null
+    private lateinit var webBox: FrameLayout
+    private lateinit var cover: ComposeView
+    private var bg = 0
     private var fileCb: ValueCallback<Array<Uri>>? = null
     private var geoAsk: Pair<String, GeolocationPermissions.Callback>? = null
 
@@ -93,11 +107,39 @@ class MainActivity : ComponentActivity() {
         enableEdgeToEdge()
         super.onCreate(savedInstanceState)
         store = Store(this)
+        bg = ContextCompat.getColor(this, R.color.bg)
+        webBox = FrameLayout(this).apply { setBackgroundColor(bg) }
+        cover = ComposeView(this).apply {
+            setContent {
+                SentinelTheme(false) {
+                    Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.surface) {
+                        AnimatedContent(urlS.isEmpty() to failedS, label = "page",
+                            transitionSpec = { fadeIn(tween(300)) togetherWith fadeOut(tween(200)) }) { (empty, bad) ->
+                            when {
+                                empty -> Setup(store.url) { web?.let { webBox.removeView(it); it.destroy() }; web = null; store.url = it; failed = false; url = it }
+                                bad -> Failed({ failed = false; web?.reload() }, { url = "" })
+                                else -> Box(Modifier.fillMaxSize())
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        val root = FrameLayout(this)
+        root.addView(webBox, FrameLayout.LayoutParams(MATCH_PARENT, MATCH_PARENT))
+        root.addView(cover, FrameLayout.LayoutParams(MATCH_PARENT, MATCH_PARENT))
+        // 網頁避開狀態列、導覽列和鍵盤；上下露出來的地方是網頁的底色
+        ViewCompat.setOnApplyWindowInsetsListener(root) { _, ins ->
+            val b = ins.getInsets(WindowInsetsCompat.Type.systemBars() or WindowInsetsCompat.Type.ime())
+            webBox.setPadding(b.left, b.top, b.right, b.bottom)
+            ins
+        }
+        setContentView(root)
         url = if (BuildConfig.DEBUG) intent.getStringExtra("url") ?: store.url else store.url     // 自動測試用：直接帶網址進來
         onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
             override fun handleOnBackPressed() {
                 val w = web
-                if (w == null || failed) return quit()
+                if (w == null || failed || url.isEmpty()) return quit()
                 if (w.canGoBack()) return w.goBack()
                 // 不在首頁：先回首頁，在首頁才離開 App
                 w.evaluateJavascript("(typeof TAB!=='undefined'&&TAB!=='home'&&typeof setTab==='function')?(setTab('home'),1):0") { r ->
@@ -105,19 +147,18 @@ class MainActivity : ComponentActivity() {
                 }
             }
         })
-        setContent {
-            SentinelTheme(false) {
-                Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.surface) {
-                    AnimatedContent(url.isEmpty() to failed, label = "page",
-                        transitionSpec = { fadeIn(tween(300)) togetherWith fadeOut(tween(200)) }) { (empty, bad) ->
-                        when {
-                            empty -> Setup(store.url) { web?.destroy(); web = null; store.url = it; failed = false; url = it }
-                            bad -> Failed({ failed = false; web?.reload() }, { url = "" })
-                            else -> Box(Modifier.fillMaxSize().background(pageBg ?: MaterialTheme.colorScheme.surface)) { Web() }
-                        }
-                    }
-                }
-            }
+    }
+
+    /* 有網址就準備好網頁；要輸入網址或打不開時，把上面那層淡入，否則淡出收起來 */
+    private fun sync() {
+        if (url.isNotEmpty() && web == null) webBox.addView(makeWeb(), FrameLayout.LayoutParams(MATCH_PARENT, MATCH_PARENT))
+        val show = url.isEmpty() || failed
+        cover.animate().cancel()
+        if (show) {
+            cover.visibility = View.VISIBLE
+            cover.animate().alpha(1f).setDuration(300).start()
+        } else if (cover.visibility == View.VISIBLE) {
+            cover.animate().alpha(0f).setDuration(200).withEndAction { if (url.isNotEmpty() && !failed) cover.visibility = View.GONE }.start()
         }
     }
 
@@ -125,9 +166,11 @@ class MainActivity : ComponentActivity() {
         moveTaskToBack(true)
     }
 
-    /* 網頁換深淺色時，狀態列的字跟著換黑白 */
+    /* 網頁換深淺色時，狀態列的字跟著換黑白，網頁後面的底色也跟著換 */
     private fun tint(c: Color) {
-        pageBg = c
+        bg = c.toArgb()
+        webBox.setBackgroundColor(bg)
+        web?.setBackgroundColor(bg)
         val light = c.luminance() > 0.5f
         WindowCompat.getInsetsController(window, window.decorView).apply {
             isAppearanceLightStatusBars = light
@@ -136,64 +179,57 @@ class MainActivity : ComponentActivity() {
     }
 
     @SuppressLint("SetJavaScriptEnabled")
-    @Composable
-    private fun Web() {
-        AndroidView(modifier = Modifier.fillMaxSize().systemBarsPadding().imePadding(), factory = { ctx ->
-            (web ?: WebView(ctx).also { w ->
-                web = w
-                w.layoutParams = ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)
-                w.setBackgroundColor(android.graphics.Color.TRANSPARENT)
-                w.isVerticalScrollBarEnabled = false       // 不顯示拉條（網頁本身也不顯示）
-                w.isHorizontalScrollBarEnabled = false
-                w.settings.apply {
-                    javaScriptEnabled = true
-                    domStorageEnabled = true
-                    setGeolocationEnabled(true)
-                    setSupportMultipleWindows(false)       // 「另開視窗」的連結（雲端硬碟）直接在 App 裡打開，按返回回來
-                    mediaPlaybackRequiresUserGesture = true
-                }
-                w.webViewClient = object : WebViewClient() {
-                    override fun shouldOverrideUrlLoading(view: WebView, req: WebResourceRequest): Boolean {
-                        val u = req.url
-                        if (u.host == Uri.parse(url).host) return false
-                        runCatching { startActivity(Intent(Intent.ACTION_VIEW, u)) }   // 別的網站用手機的瀏覽器開
-                        return true
-                    }
+    private fun makeWeb(): WebView = WebView(this).also { w ->
+        web = w
+        w.setBackgroundColor(bg)                   // 不透明的底色：透明的話每一格都要多疊一次，捲動會卡
+        w.isVerticalScrollBarEnabled = false       // 不顯示拉條（網頁本身也不顯示）
+        w.isHorizontalScrollBarEnabled = false
+        w.settings.apply {
+            javaScriptEnabled = true
+            domStorageEnabled = true
+            setGeolocationEnabled(true)
+            setSupportMultipleWindows(false)       // 「另開視窗」的連結（雲端硬碟）直接在 App 裡打開，按返回回來
+            mediaPlaybackRequiresUserGesture = true
+        }
+        w.webViewClient = object : WebViewClient() {
+            override fun shouldOverrideUrlLoading(view: WebView, req: WebResourceRequest): Boolean {
+                val u = req.url
+                if (u.host == Uri.parse(url).host) return false
+                runCatching { startActivity(Intent(Intent.ACTION_VIEW, u)) }   // 別的網站用手機的瀏覽器開
+                return true
+            }
 
-                    override fun onPageStarted(view: WebView, u: String?, favicon: Bitmap?) { failed = false }
+            override fun onPageStarted(view: WebView, u: String?, favicon: Bitmap?) { failed = false }
 
-                    override fun onPageFinished(view: WebView, u: String?) {
-                        view.evaluateJavascript(BG) { s -> parse(s)?.let(::tint) }
-                    }
+            override fun onPageFinished(view: WebView, u: String?) {
+                view.evaluateJavascript(BG) { s -> parse(s)?.let(::tint) }
+                // 網頁切換深淺色、換主題色時通知 App
+                view.evaluateJavascript("""(function(){if(window.__vsbg)return;window.__vsbg=1;var l='',f=function(){var c=$BG;if(c!==l){l=c;VSApp.bg(c)}};
+                    new MutationObserver(f).observe(document.documentElement,{attributes:true});f();})()""", null)
+            }
 
-                    override fun onReceivedError(view: WebView, req: WebResourceRequest, err: WebResourceError) {
-                        if (req.isForMainFrame) failed = true
-                    }
-                }
-                w.webChromeClient = object : WebChromeClient() {
-                    override fun onShowFileChooser(v: WebView, cb: ValueCallback<Array<Uri>>, p: FileChooserParams): Boolean {
-                        fileCb?.onReceiveValue(null)
-                        fileCb = cb
-                        pickFile.launch("*/*")
-                        return true
-                    }
+            override fun onReceivedError(view: WebView, req: WebResourceRequest, err: WebResourceError) {
+                if (req.isForMainFrame) failed = true
+            }
+        }
+        w.webChromeClient = object : WebChromeClient() {
+            override fun onShowFileChooser(v: WebView, cb: ValueCallback<Array<Uri>>, p: FileChooserParams): Boolean {
+                fileCb?.onReceiveValue(null)
+                fileCb = cb
+                pickFile.launch("*/*")
+                return true
+            }
 
-                    override fun onGeolocationPermissionsShowPrompt(origin: String, cb: GeolocationPermissions.Callback) {
-                        geoAsk = origin to cb
-                        askLoc.launch(Manifest.permission.ACCESS_COARSE_LOCATION)
-                    }
-                }
-                w.addJavascriptInterface(object {
-                    @android.webkit.JavascriptInterface
-                    fun bg(s: String) { runOnUiThread { parse("\"$s\"")?.let(::tint) } }
-                }, "VSApp")
-                w.loadUrl(url)
-            }).also { (it.parent as? ViewGroup)?.removeView(it) }
-        }, update = { w ->
-            // 網頁切換深淺色、換主題色時通知 App
-            w.evaluateJavascript("""(function(){if(window.__vsbg)return;window.__vsbg=1;var f=function(){VSApp.bg($BG)};
-                new MutationObserver(f).observe(document.documentElement,{attributes:true});f();})()""", null)
-        })
+            override fun onGeolocationPermissionsShowPrompt(origin: String, cb: GeolocationPermissions.Callback) {
+                geoAsk = origin to cb
+                askLoc.launch(Manifest.permission.ACCESS_COARSE_LOCATION)
+            }
+        }
+        w.addJavascriptInterface(object {
+            @android.webkit.JavascriptInterface
+            fun bg(s: String) { runOnUiThread { parse("\"$s\"")?.let(::tint) } }
+        }, "VSApp")
+        w.loadUrl(url)
     }
 
     private fun parse(s: String?): Color? {
