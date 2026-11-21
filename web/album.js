@@ -229,7 +229,7 @@ function zoomWall(z, fx, fy, pre){                            // 換大小：每
     const r0 = vis.get(i), r1 = t.getBoundingClientRect();
     if (r1.bottom < -60 || r1.top > H + 60) return;
     t.classList.add("in");
-    if (!r0) { t.animate([{opacity:0, transform:"scale(.92)"}, {opacity:1, transform:"none"}], {duration:ZDUR, easing:DEC, delay:ZDUR * .35, fill:"backwards"}); return; }
+    if (!r0) { t.animate([{opacity:0, transform:"scale(.96)"}, {opacity:1, transform:"none"}], {duration:ZDUR * .8, easing:DEC}); return; }   // 原本不在畫面上的：馬上開始淡入（以前先空白一下再出來，像閃一下）
     const tk = [], ik = [];
     fr.forEach(e => {
       const x = r0.left + (r1.left - r0.left) * e, y = r0.top + (r1.top - r0.top) * e, ww = r0.width + (r1.width - r0.width) * e, hh = r0.height + (r1.height - r0.height) * e;
@@ -385,7 +385,7 @@ function tile(p, i){
   el.innerHTML = `${p.q ? `<img class="lq" alt="" src="data:image/jpeg;base64,${p.q}">` : ""}<img class="hi" alt="" loading="lazy" decoding="async" draggable="false" src="${src(p, "s")}"><span class="bdg"></span><span class="ck">${I("ck")}</span>`;
   setTimeout(() => badge(i));
   const hi = el.querySelector(".hi");
-  hi.addEventListener("load", () => { hi.classList.add("ok"); setTimeout(() => { const q = el.querySelector(".lq"); if (q) q.remove(); }, T.mid + 100); }, {once:true});
+  hi.addEventListener("load", () => { hi.decoding = "sync";   /* 換大小時照片會被拿下來再放回去：載好的改同步解碼，放回去那一格不會空白 */ hi.classList.add("ok"); setTimeout(() => { const q = el.querySelector(".lq"); if (q) q.remove(); }, T.mid + 100); }, {once:true});
   hi.addEventListener("error", () => { p.broken = 1; hi.remove(); el.insertAdjacentHTML("beforeend", `<span class="nope">${I("off")}</span>`); }, {once:true});
   if (IO) IO.observe(el); else el.classList.add("in");
   return el;
