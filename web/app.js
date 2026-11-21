@@ -237,7 +237,7 @@ const ALC = [
   [/^(\d+) 個安全更新$/, "shield", m => `<b>${m[1]}</b>`], [/^(\d+) 天沒有成功備份$/, "archive", m => `<b>${m[1]} 天</b>`], [/^備份還沒成功過$/, "archive", () => "沒成功過"],
   [/^SSH 允許空密碼登入$/, "key", () => "SSH 空密碼" + ALX], [/^root 能用密碼登入 SSH$/, "key", () => "root 密碼" + ALX],
   [/^SSH 能用密碼登入$/, "key", () => "SSH 密碼"],
-  [/^擋廣告 DNS 停了$/, "funnel", () => "DNS" + ALX], [/Oracle|太閒/, "cpu", () => "太閒"]];
+  [/^AdGuard Home 停了$/, "funnel", () => "AdGuard" + ALX], [/Oracle|太閒/, "cpu", () => "太閒"]];
 function alChip(p, cls, key){
   for (const [re, ic, f] of ALC) { const m = p.match(re); if (m) return `<span class="alert ${cls}" data-key="${key}" title="${esc(p)}">${I(ic)}<span>${f(m)}</span></span>`; }
   return `<span class="alert ${cls} long" data-key="${key}">${I(cls === "bad" ? "warn" : "alert")}<span>${esc(p)}</span></span>`;
@@ -467,7 +467,7 @@ const COL = {cpu:"var(--c-cpu)", mem:"var(--c-mem)", rx:"var(--c-rx)", tx:"var(-
 const ICO = {cpu:["cpu","cpu"], mem:["mem","mem"], disk:["disk","disk"], load:["load","gauge"], down:["down","down"], up:["up","up"],
   net:["net","net"], trend:["trend","trend"], month:["month","month"], box:["box","box"], bell:["bell","bell"], info:["info","info"],
   flag:["flag","flag"], keep:["keep","shield"], key:["key","key"], finger:["finger","finger"], pin:["pin","pin"], link:["link","link"], archive:["archive","archive"], sun:["sun","sun"], quote:["quote","quote"], dl:["dl","dl"], cloud:["cloud","cloud"], fly:["fly","plane"], devices:["devices","devices"], safe:["safe","lockok"], sky:["sky","radar"], note:["note","note"], adblk:["adblk","funnel"], album:["album","album"]};
-const IC = (k, cls="sm") => `<span class="ico ${cls} ${ICO[k][0]}">${I(ICO[k][1])}</span>`;
+const IC = (k, cls="sm") => `<span class="ico ${cls} ${ICO[k][0]}">${k === "adblk" ? `<img src="/ab-icon.png" alt="">` : I(ICO[k][1])}</span>`;   // AdGuard Home 用它自己的圖示（主機抓好給）
 
 /* ═════════ 共用的小元件 ═════════ */
 /* 標誌：主題色的圓角方塊＋白色盾牌 */
@@ -1204,12 +1204,12 @@ function albumModal(node, name){
 }
 /* 擋廣告 DNS（AdGuard Home）：手機的 DNS 設成這台，只開加密的 DoH／DoT */
 const abSt = a => a.job ? "設定中…" : a.on ? (a.pct != null ? `擋掉 ${a.pct}%` : "已打開") : "還沒打開";
-const abTile = (s, node, name) => s.adblock ? `<button class="tbx" data-key="ab" data-ab="${node}" data-name="${name}"><span class="ttop">${IC("adblk", "")}<span class="tgo nx">${CHEV}</span></span><b>擋廣告 DNS</b><small data-x>${abSt(s.adblock)}</small></button>` : "";
+const abTile = (s, node, name) => s.adblock ? `<button class="tbx" data-key="ab" data-ab="${node}" data-name="${name}"><span class="ttop">${IC("adblk", "")}<span class="tgo nx">${CHEV}</span></span><b>AdGuard Home</b><small data-x>${abSt(s.adblock)}</small></button>` : "";
 function abModal(node, name){
   const q = node ? `?node=${encodeURIComponent(node)}` : "";
   let D = null, busy = false, os = /iPhone|iPad|Macintosh/.test(navigator.userAgent) ? "ios" : "and", tm = 0, last = "";
   const v = document.createElement("div"); v.className = "veil";
-  v.innerHTML = `<div class="dialog pkd ntd abd">${IC("adblk", "big")}<h3>擋廣告 DNS</h3><p>${esc(name)}</p><div class="form"><div class="ntb">讀取中…</div><div class="msg"></div></div></div>`;
+  v.innerHTML = `<div class="dialog pkd ntd abd">${IC("adblk", "big")}<h3>AdGuard Home</h3><p>${esc(name)}</p><div class="form"><div class="ntb">讀取中…</div><div class="msg"></div></div></div>`;
   $("#layer").appendChild(v);
   const body = v.querySelector(".ntb"), msg = v.querySelector(".msg");
   const num = n => n >= 1e6 ? (n / 1e6).toFixed(1) + "M" : n >= 1e4 ? Math.round(n / 1e3) + "K" : String(n);
@@ -1270,7 +1270,7 @@ function abModal(node, name){
       }
       const b = t.closest("[data-ab]"); if (!b) return;
       const act = b.dataset.ab;
-      if (act === "off" && !await modal({icon:"funnel", cls:"warn", title:"關掉擋廣告 DNS？", text:"設好的手機會查不到網址，要先改回來。", ok:"關掉"})) return;
+      if (act === "off" && !await modal({icon:"funnel", cls:"warn", title:"關掉 AdGuard Home？", text:"設好的手機會查不到網址，要先改回來。", ok:"關掉"})) return;
       const x = await run({action: act});
       if (x && act === "off") toast("已關掉");
     });

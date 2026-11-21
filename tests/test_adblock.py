@@ -35,6 +35,12 @@ class FakeAGH(BaseHTTPRequestHandler):
         return want and self.headers.get("Authorization") == want
 
     def do_GET(self):
+        if self.path == "/assets/apple-touch-icon-180x180.png":
+            b = b"\x89PNG\r\n\x1a\nfake"
+            self.send_response(200)
+            self.send_header("Content-Length", str(len(b)))
+            self.end_headers()
+            return self.wfile.write(b)
         if self.path == "/control/install/get_addresses":
             return self.reply(200, {"web_port": 3000, "dns_port": 53, "interfaces": {}})
         if not self.authed():
@@ -81,7 +87,8 @@ class Adblock(Server):
         cls.abdir = tempfile.TemporaryDirectory()
         cls.EXTRA = "DOMAIN=dns.example.test\nHTTPS_PORT=9443\n"
         cls.ENV = {"SENTINEL_AB_FAKE": "1", "SENTINEL_AB_API": f"http://127.0.0.1:{cls.fake.server_port}",
-                   "SENTINEL_AB_CERTS": cls.certs.name, "SENTINEL_AB_DIR": cls.abdir.name, "SENTINEL_AB_EVERY": "1"}
+                   "SENTINEL_AB_CERTS": cls.certs.name, "SENTINEL_AB_DIR": cls.abdir.name, "SENTINEL_AB_EVERY": "1",
+                   "SENTINEL_AB_ICON_URL": f"http://127.0.0.1:{cls.fake.server_port}/none.png"}
         super().setUpClass()
 
     @classmethod
@@ -99,6 +106,12 @@ class Adblock(Server):
                 return r.status, json.loads(r.read())
         except urllib.error.HTTPError as e:
             return e.code, json.loads(e.read())
+
+    def test_icon(self):
+        """AdGuard Home 自己的圖示：不用登入就拿得到"""
+        with urllib.request.urlopen(f"http://127.0.0.1:{self.port}/ab-icon.png", timeout=15) as r:
+            self.assertEqual(r.headers["Content-Type"], "image/png")
+            self.assertTrue(r.read().startswith(b"\x89PNG"))
 
     def test_flow(self):
         c, d = self.call("/api/adblock", {})

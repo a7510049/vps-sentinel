@@ -4900,6 +4900,9 @@ class Handler(BaseHTTPRequestHandler):
             return self.send(200, ICON, "image/svg+xml", cache=True)
         if path == "/font.woff2":                  # 英數字型（公開的，不用登入）
             return self.send(200, FONT["b"], "font/woff2", cache=30 * 86400) if FONT["b"] else self.send(404, '{"error":"找不到"}')
+        if path == "/ab-icon.png":                 # AdGuard Home 的圖示（公開的，不用登入）
+            b = ab_icon()
+            return self.send(200, b, "image/png", cache=7 * 86400) if b else self.send(404, '{"error":"找不到"}')
         if path == "/dns.mobileconfig":            # iPhone 描述檔：網頁先拿一次性代碼（10 分鐘、用一次就失效）
             b = ab_profile_get(urllib.parse.parse_qs(urllib.parse.urlsplit(self.path).query).get("k", [""])[0])
             return self.send(200, b, "application/x-apple-aspen-config") if b else self.send(404, '{"error":"連結過期了，回網頁再按一次"}')
