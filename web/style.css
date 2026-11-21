@@ -1835,6 +1835,7 @@ html.flyon .dash>.view{content-visibility:hidden;contain-intrinsic-size:auto non
 .almbdg{position:absolute;top:10px;right:10px;display:flex;align-items:center;gap:4px;height:26px;padding:0 8px;border-radius:var(--r-pill);
   background:color-mix(in oklab,black 45%,transparent);color:white;-webkit-backdrop-filter:blur(10px);backdrop-filter:blur(10px);font-size:var(--fs-xs);font-weight:650}
 .almbdg svg{width:14px;height:14px}
+.almbdg.pend{background:var(--p);color:var(--on-p)}
 .almbdg em{font-style:normal}
 .almcard.add{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;background:transparent;box-shadow:inset 0 0 0 1.5px var(--line2,var(--s4));color:var(--tx2)}
 .almcard.add span{width:52px;height:52px;border-radius:50%;display:grid;place-items:center;background:var(--pc);color:var(--on-pc)}
@@ -1852,6 +1853,14 @@ html.flyon .dash>.view{content-visibility:hidden;contain-intrinsic-size:auto non
 .almacts>*:active{transform:scale(.95)}
 .almacts svg{width:22px;height:22px;color:var(--p)}
 .almacts small{font-size:var(--fs-xs);color:var(--tx3);font-weight:500}
+.almacts>.almnew{grid-column:1/-1;flex-direction:row;justify-content:flex-start;gap:12px;min-height:56px;padding:10px 16px}
+.almacts>.almnew.hot{background:color-mix(in oklab,var(--p) 14%,var(--s3))}
+.almups{display:grid;gap:14px;max-height:min(56vh,520px);overflow-y:auto;border-radius:var(--r-md)}
+.almups .almpk{max-height:none;overflow:visible}
+.almwho{display:grid;gap:8px}
+.almwho .almpkh small{margin-left:8px;color:var(--tx3);font-weight:500}
+.almnew span{font-size:var(--fs-m);font-weight:650}
+.almnew small{margin-left:auto}
 /* 分區設定：一區一張卡片 */
 .almsec{display:flex;flex-direction:column;gap:2px;padding:6px;border-radius:var(--r-lg);background:var(--s3)}
 .almsec h4{margin:8px 10px 4px;font-size:var(--fs-xs);font-weight:700;letter-spacing:.08em;color:var(--tx3)}
@@ -1865,6 +1874,8 @@ html.flyon .dash>.view{content-visibility:hidden;contain-intrinsic-size:auto non
 .almin{display:flex;gap:8px;align-items:center}
 .almin .field{flex:1;min-width:0}
 .almin .ubtn{flex:none}
+.almq .ubtn{flex:1;margin:0}
+.almpk em.ub{right:auto;left:5px;max-width:calc(100% - 10px);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .almb .almrw .seg{margin:0}
 /* 挑照片：方格，點一下拿掉／放回 */
 .almpkh{display:flex;align-items:center;gap:10px;padding:0 4px}

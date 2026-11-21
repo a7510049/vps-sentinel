@@ -45,7 +45,7 @@ from collections import deque
 from concurrent.futures import ThreadPoolExecutor
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
-VERSION = "4.46"
+VERSION = "4.47"
 
 # ───────────────────────── 哨兵備份檔（.vsbk）─────────────────────────
 # 哨兵專用的備份格式：外面是自己的檔案格式，裡面用的是成熟、標準的加密方法（不自己發明加密）：
@@ -4207,6 +4207,8 @@ def ev_line(e):
         return "❌ " + t
     if t.startswith("下載好了："):
         return "✅ " + t
+    if t.startswith("相簿上傳："):
+        return "📥 " + t[5:]                           # 朋友在分享的相簿放了照片
     if t.startswith("安全檢查："):
         return "🔐 " + t[5:]                           # 安全設定變差了
     if k == "info" and "登入了主機" in t:

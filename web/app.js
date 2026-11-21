@@ -82,6 +82,7 @@ const P = {
   upd:'<path d="M21 12a9 9 0 1 1-9-9c2.52 0 4.93 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/>',
   shield:'<path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="m8.5 12 2.5 2.5 4.5-5"/>',
   dl:'<path d="M12 3v12"/><path d="m7 10 5 5 5-5"/><path d="M5 21h14"/>',
+  upl:'<path d="M12 15V3"/><path d="m7 8 5-5 5 5"/><path d="M5 21h14"/>',
   qr:'<rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><path d="M14 14h3v3h-3zM21 14v.01M14 21h.01M17.5 21H21v-3.5"/>',
   plug:'<path d="M9 2v5M15 2v5"/><path d="M6 7h12v4a6 6 0 0 1-12 0z"/><path d="M12 17v5"/>',
   clock:'<circle cx="12" cy="12" r="9.5"/><path d="M12 7v5l3 2"/>',
@@ -1096,12 +1097,15 @@ function notesModal(node, name){
 const ALMT = [[86400, "1 天"], [604800, "7 天"], [2592000, "30 天"], [0, "不限"]];
 const ALMD = [[1, "1 支"], [3, "3 支"], [0, "不限"]];
 const ALMDL = [[0, "不給"], [1, "壓縮圖"], [2, "原圖"]];
+const ALMUP = [[0, "不開放"], [1, "要我確認"], [2, "直接放上去"]];
+const ALMUQ = [[1, "1 GB"], [5, "5 GB"], [20, "20 GB"]];
+const almGB = n => n >= 1e9 ? `${(n / 1e9).toFixed(1)} GB` : `${Math.max(n ? 1 : 0, Math.round(n / 1e6))} MB`;
 const almLeft = a => !a.exp ? "不會過期" : (s => s > 172800 ? `${Math.round(s / 86400)} 天後失效` : s > 3600 ? `${Math.round(s / 3600)} 小時後失效` : "快失效了")(a.exp - Date.now() / 1000);
 const almAgo = t => { const s = Date.now() / 1000 - t; return s < 120 ? "剛剛" : s < 3600 ? `${Math.round(s / 60)} 分鐘前` : s < 86400 ? `${Math.round(s / 3600)} 小時前` : `${Math.round(s / 86400)} 天前`; };
 function albumModal(node, name){
   const q = node ? `?node=${encodeURIComponent(node)}` : "";
   let D = null, view = "list", cur = null, dir = "", F = null, busy = false, PK = null, DV = null, TK = null, pwEdit = false;
-  const o = {secs:604800, loc:true, dl:2, dev:0, talk:true};
+  const o = {secs:604800, loc:true, dl:2, dev:0, talk:true, up:0, uq:1};
   const v = document.createElement("div"); v.className = "veil";
   v.innerHTML = `<div class="dialog pkd almd">${IC("album", "big")}<h3>相簿分享</h3><p>${esc(name)}</p><div class="form"><div class="almb">讀取中…</div><div class="msg"></div></div></div>`;
   $("#layer").appendChild(v);
@@ -1127,9 +1131,10 @@ function albumModal(node, name){
   const cover = a => a.cv ? `<img alt="" src="${esc(a.cv)}">` : `<i class="almph">${I("album")}</i>`;
   const meta = a => `${[a.n - (a.nv || 0) ? `${a.n - (a.nv || 0)} 張` : "", a.nv ? `${a.nv} 段影片` : ""].filter(Boolean).join("・")}${a.all > a.n ? `（共 ${a.all}）` : ""}・${almLeft(a)}`;
   const dlSide = d => ["朋友只能看", "長邊 2048 的 JPEG", "跟雲端硬碟裡一樣"][d];
+  const upSide = u => ["", "你確認了才出現", "朋友放了馬上出現"][u] || "";
   const pane = {
     list: () => `<div class="almgrid">${D.list.map(a => `<button type="button" class="almcard" data-almid="${esc(a.id)}"><span class="almcv">${cover(a)}</span>
-        <span class="almcap"><b>${esc(a.name)}</b><small>${meta(a)}</small></span>${a.pw || a.dev ? `<span class="almbdg">${a.pw ? I("lock") : ""}${a.dev ? `<em>${a.ndev}／${a.dev}</em>` : ""}</span>` : ""}</button>`).join("")}
+        <span class="almcap"><b>${esc(a.name)}</b><small>${meta(a)}</small></span>${a.pw || a.dev || a.npend ? `<span class="almbdg${a.npend ? " pend" : ""}">${a.npend ? `${I("upl")}<em>${a.npend}</em>` : ""}${a.pw ? I("lock") : ""}${a.dev ? `<em>${a.ndev}／${a.dev}</em>` : ""}</span>` : ""}</button>`).join("")}
         <button type="button" class="almcard add" data-alm="new"><span>${I("plus")}</span><b>${D.list.length ? "新增相簿" : "選一個資料夾"}</b></button></div>`,
     pick: () => `<div class="almcrumb"><button type="button" data-almdir="">雲端硬碟</button>${dir ? dir.split("/").map((p, i, a) => `<span>/</span><button type="button" data-almdir="${esc(a.slice(0, i + 1).join("/"))}">${esc(p)}</button>`).join("") : ""}</div>
       <div class="pklist almdirs">${F.subs.length ? F.subs.map(x => `<button type="button" class="pkrow" data-almdir="${esc((dir ? dir + "/" : "") + x.name)}">${I("folder")}<span><b>${esc(x.name)}</b><small>${x.n ? `${x.n} 張照片` : "沒有照片"}</small></span>${CHEV}</button>`).join("")
@@ -1139,19 +1144,20 @@ function albumModal(node, name){
     opts: () => `<label>名稱<input class="field" data-almk="name" maxlength="40" value="${esc(dir.split("/").pop() || "相簿")}"></label>
       <div class="almsec"><h4>誰能看</h4>${srow("clock", "能看多久", "secs", ALMT, o.secs)}${srow("devices", "幾支手機", "dev", ALMD, o.dev)}
         <div class="almrw col"><div class="almrh">${I("lock")}<span>密碼</span></div><input class="field" data-almk="pw" type="password" maxlength="64" autocomplete="new-password" placeholder="不設"></div></div>
-      <div class="almsec"><h4>能做什麼</h4>${srow("dl", "下載", "dl", ALMDL, o.dl, dlSide(o.dl))}${tg("loc", o.loc, "顯示地點和地圖", "mpin")}${tg("talk", o.talk, "朋友可以按愛心、留言", "chat")}</div>
+      <div class="almsec"><h4>能做什麼</h4>${srow("dl", "下載", "dl", ALMDL, o.dl, dlSide(o.dl))}${srow("upl", "朋友放照片", "up", ALMUP, o.up, upSide(o.up))}${srow("disk", "朋友最多放", "uq", ALMUQ, o.uq, "一個人最多四分之一")}${tg("loc", o.loc, "顯示地點和地圖", "mpin")}${tg("talk", o.talk, "朋友可以按愛心、留言", "chat")}</div>
       <button type="button" class="ubtn" data-alm="make">做好連結</button><button type="button" class="ubtn sm ghost" data-alm="pick">${I("back")}換資料夾</button>`,
     one: () => { const a = D.list.find(x => x.id === cur); if (!a) return pane.list();
       return `<div class="almhero"><span class="almcv">${cover(a)}</span><span class="almcap"><b>${esc(a.name)}</b><small>${meta(a)}</small></span></div>
       <div class="codebox"><code>${esc(link(a))}</code><button type="button" class="ubtn sm ghost" data-alm="copy">${navigator.share && matchMedia("(pointer:coarse)").matches ? "分享" : "複製"}</button></div>
       <div class="almacts"><a href="${esc(link(a))}" target="_blank" rel="noopener noreferrer">${EXT}<span>打開看看</span></a>
-        <button type="button" data-alm="photos">${I("album")}<span>挑照片</span><small>${a.n}／${a.all}</small></button>
+        ${a.nup ? `<button type="button" class="almnew${a.npend ? " hot" : ""}" data-alm="pend">${I("upl")}<span>朋友放的</span><small>${a.npend ? `${a.npend} 個等你確認` : `${a.nup} 個`}</small></button>` : ""}
+        <button type="button" data-alm="photos">${I("album")}<span>挑照片</span><small>${a.n}／${a.all - (a.npend || 0)}</small></button>
         <button type="button" data-alm="devs">${I("devices")}<span>看過的手機</span><small>${a.ndev}${a.dev ? `／${a.dev}` : ""}</small></button>
         <button type="button" data-alm="talk">${I("chat")}<span>留言</span><small>${a.ncm}${a.nlk ? `・♥ ${a.nlk}` : ""}</small></button></div>
       <div class="almsec"><h4>誰能看</h4>${srow("clock", "能看多久", "secs", ALMT, -1, almLeft(a))}${srow("devices", "幾支手機", "dev", ALMD, a.dev, a.dev ? `${a.ndev} 支在看` : "")}
         <div class="almrw col"><div class="almrh">${I("lock")}<span>密碼</span><small class="alms">${a.pw ? "已設定" : "沒有"}</small></div>
           <div class="almin"><input class="field" data-almk="pw" type="password" maxlength="64" autocomplete="new-password" placeholder="${a.pw ? "輸入新的就換掉" : "不設"}"><button type="button" class="ubtn sm" data-alm="pw">${a.pw ? "換" : "設定"}</button>${a.pw ? `<button type="button" class="ubtn sm ghost" data-alm="nopw">拿掉</button>` : ""}</div></div></div>
-      <div class="almsec"><h4>能做什麼</h4>${srow("dl", "下載", "dl", ALMDL, a.dl, dlSide(a.dl))}${tg("loc", a.loc, "顯示地點和地圖", "mpin")}${tg("talk", a.talk, "朋友可以按愛心、留言", "chat")}
+      <div class="almsec"><h4>能做什麼</h4>${srow("dl", "下載", "dl", ALMDL, a.dl, dlSide(a.dl))}${srow("upl", "朋友放照片", "up", ALMUP, a.up || 0, upSide(a.up || 0))}${srow("disk", "朋友最多放", "uq", ALMUQ, a.uq || 1, `已放 ${almGB(a.uused || 0)}`)}${tg("loc", a.loc, "顯示地點和地圖", "mpin")}${tg("talk", a.talk, "朋友可以按愛心、留言", "chat")}
         <div class="almrw">${I("music")}<span>幻燈片配樂</span><small class="alms">${a.mu ? esc(a.mu) : "放一首歌進資料夾就有"}</small></div>
         <div class="almrw col"><div class="almrh">${I("edit")}<span>浮水印</span><small class="alms">${a.wm ? (a.wmok ? "印在照片上" : "只蓋在畫面上") : "沒有"}</small></div>
           <div class="almin"><input class="field" data-almk="wm" maxlength="24" value="${esc(a.wm)}" placeholder="例如 © 你的名字"><button type="button" class="ubtn sm" data-alm="wm">${a.wm ? "換" : "加上"}</button>${a.wm ? `<button type="button" class="ubtn sm ghost" data-alm="nowm">拿掉</button>` : ""}</div></div></div>
@@ -1166,6 +1172,14 @@ function albumModal(node, name){
         : `<p class="ntx">還沒有人打開</p>`}
       <button type="button" class="ubtn sm ghost" data-alm="back">${I("back")}返回</button>`
   };
+  const pkImg = p => `${p.q ? `<img class="lq" alt="" src="data:image/jpeg;base64,${p.q}">` : ""}<img alt="" loading="lazy" src="${esc(`${PK.base || base()}/a/${PK.code}/i/${p.i}/s?v=${p.v}&own=${encodeURIComponent(PK.own)}`)}"><i>${I("ok")}</i>`;
+  pane.pend = () => { const L = PK.pend, n = L.filter(p => p.sel).length, np = L.filter(p => p.sel && p.pend).length, who = [...new Set(L.map(p => p.u))];
+    return `<div class="almpkh"><b>選了 <span class="num">${n}</span>／${L.length}</b><button type="button" class="ubtn sm ghost" data-alm="pdall">${n === L.length ? "全部不選" : "全選"}</button></div>
+      <div class="almups">${who.map(w => { const G = L.filter(p => p.u === w), k = G.filter(p => p.sel).length;
+        return `<div class="almwho"><div class="almpkh"><b>${esc(w)}<small class="num">${G.length}</small></b><button type="button" class="ubtn sm ghost" data-almw="${esc(w)}">${k === G.length ? "不選" : "選這個人全部"}</button></div>
+        <div class="almpk">${G.map(p => `<button type="button" class="${p.sel ? "" : "off"}" data-almq="${p.i}" aria-pressed="${!!p.sel}">${pkImg(p)}${p.pend ? `<em class="ub">等你確認</em>` : ""}</button>`).join("")}</div></div>`; }).join("")}</div>
+      <div class="almin almq">${L.some(p => p.pend) ? `<button type="button" class="ubtn" data-alm="okup"${np ? "" : " disabled"}>放上去</button>` : ""}<button type="button" class="ubtn ghost bad" data-alm="noup"${n ? "" : " disabled"}>${I("trash")}刪掉</button></div>
+      <button type="button" class="ubtn sm ghost" data-alm="back">${I("back")}返回</button>`; };
   pane.talk = () => { const im = (i, ver) => esc(`${TK.base || base()}/a/${TK.code}/i/${i}/s?v=${ver}&own=${encodeURIComponent(TK.own)}`);
     return `${TK.likes.length ? `<div class="almpkh"><b>最多愛心</b></div><div class="almlk">${TK.likes.map(l => `<span><img alt="" loading="lazy" src="${im(l.i, l.v)}"><em class="num">${I("heart")}${l.n}</em></span>`).join("")}</div>` : ""}
       <div class="almpkh"><b>${TK.c.length ? `${TK.c.length} 則留言` : "還沒有人留言"}</b></div>
@@ -1198,12 +1212,15 @@ function albumModal(node, name){
         const k = sb.parentNode.dataset.alms, val = +sb.dataset.v;
         sb.parentNode.querySelectorAll("button").forEach(x => x.classList.toggle("on", x === sb));
         if (k === "dl") side("dl", dlSide(val));
+        if (k === "up") side("up", upSide(val));
         if (view === "opts") { o[k] = val; return; }
         const x = await run({action:"edit", id:cur, [k]:val}); if (!x) return;
         const a = D.list.find(y => y.id === cur);
         if (k === "secs") { toast(val ? `從現在起 ${sb.textContent}` : "不會過期了"); if (a) side("secs", almLeft(a)); }
         if (k === "dev") { toast(val ? `只給 ${val} 支手機看` : "幾支手機都能看"); if (a) side("dev", val ? `${a.ndev} 支在看` : ""); }
         if (k === "dl") toast(["朋友不能下載了", "只能下載壓縮圖", "可以下載原圖"][val]);
+        if (k === "up") { toast(["朋友不能放照片了", "朋友放的要你確認", "朋友放的馬上出現"][val]); if (a && val === 2 && a.npend) draw(); }
+        if (k === "uq") toast(`朋友最多放 ${val} GB`);
         return;
       }
       const row = t.closest("[data-almid]");
@@ -1216,6 +1233,20 @@ function albumModal(node, name){
         const sv = v.querySelector('[data-alm="pksave"]'); if (sv) { sv.disabled = !n; sv.textContent = n ? "存好" : "至少留一張"; }
         const al = v.querySelector('[data-alm="pkall"]'); if (al) al.textContent = n === PK.photos.length ? "全部不選" : "全選";
         return; }
+      const pq = t.closest("[data-almq]");
+      if (pq) { const p = PK.pend.find(x => x.i === pq.dataset.almq); p.sel = !p.sel; pq.classList.toggle("off", !p.sel); pq.setAttribute("aria-pressed", String(p.sel));
+        return almPendSync(); }
+      const pw = t.closest("[data-almw]");
+      if (pw) { const G = PK.pend.filter(x => x.u === pw.dataset.almw), all = G.every(x => x.sel);
+        G.forEach(x => { x.sel = !all; const b = v.querySelector(`[data-almq="${x.i}"]`); if (b) { b.classList.toggle("off", !x.sel); b.setAttribute("aria-pressed", String(x.sel)); } });
+        return almPendSync(); }
+      function almPendSync(){
+        const L = PK.pend, n = L.filter(x => x.sel).length, h = v.querySelector(".almpkh .num"); if (h) h.textContent = n;
+        const ok = v.querySelector('[data-alm="okup"]'); if (ok) ok.disabled = !L.some(x => x.sel && x.pend);
+        const no = v.querySelector('[data-alm="noup"]'); if (no) no.disabled = !n;
+        const al = v.querySelector('[data-alm="pdall"]'); if (al) al.textContent = n === L.length ? "全部不選" : "全選";
+        v.querySelectorAll("[data-almw]").forEach(b => { const G = L.filter(x => x.u === b.dataset.almw); b.textContent = G.every(x => x.sel) ? "不選" : "選這個人全部"; });
+      }
       const tk = t.closest("[data-almtk]");
       if (tk) {
         if (!await modal({icon:"trash", cls:"bad", title:"刪掉這則留言？", text:"朋友那邊也會看不到。", ok:"刪掉"})) return;
@@ -1232,13 +1263,13 @@ function albumModal(node, name){
       const b = t.closest("[data-alm]"); if (!b) return;
       const act = b.dataset.alm, a = D && D.list.find(x => x.id === cur);
       if (act === "list") { view = "list"; return draw(); }
-      if (act === "back") { if (view === "talk" || view === "devs") await run({action:"list"}); view = "one"; return draw(); }
+      if (act === "back") { if (view === "talk" || view === "devs" || view === "pend") await run({action:"list"}); view = "one"; return draw(); }
       if (act === "new" || act === "pick") return goDir(act === "pick" ? dir.split("/").slice(0, -1).join("/") : "");
       if (act === "use") { view = "opts"; return draw(); }
       if (act === "make") {
         const nm = v.querySelector('[data-almk="name"]').value.trim(), pw = v.querySelector('[data-almk="pw"]').value;
         if (pw && pw.length < 4) return sayTo(msg, "密碼要 4 個字以上");
-        const x = await run({action:"add", dir, name:nm, pw, secs:o.secs, loc:o.loc, dl:o.dl, dev:o.dev, talk:o.talk});
+        const x = await run({action:"add", dir, name:nm, pw, secs:o.secs, loc:o.loc, dl:o.dl, dev:o.dev, talk:o.talk, up:o.up, uq:o.uq});
         if (!x) return;
         cur = x.id; view = "one"; draw();
         const na = D.list.find(y => y.id === cur); if (na) share(na);
@@ -1246,7 +1277,18 @@ function albumModal(node, name){
       }
       if (!a) return;
       if (act === "copy") return share(a);
-      if (act === "photos") { const x = await run({action:"photos", id:cur}); if (x) { PK = x; view = "photos"; draw(); } return; }
+      if (act === "photos" || act === "pend") { const x = await run({action:"photos", id:cur}); if (!x) return;
+        PK = {...x, photos:x.photos.filter(p => !p.u), pend:x.photos.filter(p => p.u).map(p => ({...p, sel:!!p.pend}))};
+        view = act === "pend" && PK.pend.length ? "pend" : "photos"; return draw(); }
+      if (act === "pdall") { const all = PK.pend.every(p => p.sel); PK.pend.forEach(p => { p.sel = !all; }); return draw(); }
+      if (act === "okup" || act === "noup") {
+        const ids = PK.pend.filter(p => p.sel && (act === "noup" || p.pend)).map(p => p.i); if (!ids.length) return;
+        if (act === "noup" && !await modal({icon:"trash", cls:"bad", title:`刪掉這 ${ids.length} 個？`, text:"會從雲端硬碟刪掉，救不回來。", ok:"刪掉"})) return;
+        if (!await run({action:"edit", id:cur, [act]:ids})) return;
+        toast(act === "okup" ? "放上去了" : "刪掉了");
+        await run({action:"list"});
+        PK.pend = act === "noup" ? PK.pend.filter(p => !ids.includes(p.i)) : PK.pend.map(p => ids.includes(p.i) ? {...p, pend:false, sel:false} : p);
+        view = PK.pend.length ? "pend" : "one"; return draw(); }
       if (act === "devs") { const x = await run({action:"devs", id:cur}); if (x) { DV = x; view = "devs"; draw(); } return; }
       if (act === "talk") { const x = await run({action:"talk", id:cur}); if (x) { TK = x; view = "talk"; draw(); } return; }
       if (act === "pkall") { const all = PK.photos.every(p => !p.hid); PK.photos.forEach(p => { p.hid = all; }); return draw(); }
