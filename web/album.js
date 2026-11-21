@@ -304,7 +304,7 @@ function draw(){
   const hi = $(".hero .hi");
   const hok = () => { hi.classList.add("ok"); setTimeout(() => { const q = $(".hero .lq"); if (q) q.remove(); }, T.slow + 100); };   // 糊的底圖拿掉，捲動時不用一直重畫模糊
   hi.complete ? hok() : hi.addEventListener("load", hok, {once:true});
-  heroCycle(cover); zbSync();
+  heroCycle(cover); zbSync(); tint(cover);
   if (D.wmo) document.documentElement.style.setProperty("--wm", JSON.stringify(D.wmo));
   document.documentElement.classList.toggle("wmo", !!D.wmo);
   TILES = PH.map((p, i) => tile(p, i));
@@ -346,6 +346,51 @@ async function whoSet(w, keep){
 }
 /* 封面每隔幾秒淡淡換成相簿裡隨機一張（捲走、看大圖、背景時先停） */
 let HCT = 0;
+/* 整頁顏色跟著封面照片：抓照片裡最多、最鮮豔的幾個色相，算成三個顏色（亮度、彩度固定，深淺模式都好讀），換封面時慢慢變過去 */
+function oklchOf(r, g, b){
+  const f = c => { c /= 255; return c <= .04045 ? c / 12.92 : Math.pow((c + .055) / 1.055, 2.4); };
+  r = f(r); g = f(g); b = f(b);
+  const l = Math.cbrt(.4122214708 * r + .5363325363 * g + .0514459929 * b), m = Math.cbrt(.2119034982 * r + .6806995451 * g + .1073969566 * b), s = Math.cbrt(.0883024619 * r + .2817188376 * g + .6299787005 * b);
+  const L = .2104542553 * l + .793617785 * m - .0040720468 * s, A = 1.9779984951 * l - 2.428592205 * m + .4505937099 * s, B = .0259040371 * l + .7827717662 * m - .808675766 * s;
+  return [L, Math.hypot(A, B), (Math.atan2(B, A) * 180 / Math.PI + 360) % 360];
+}
+function tintFrom(px){
+  const bins = new Float64Array(36);
+  let chroma = 0, n = 0;
+  for (let k = 0; k < px.length; k += 4) {
+    const [L, C, H] = oklchOf(px[k], px[k + 1], px[k + 2]);
+    if (L < .18 || L > .96) continue;                        // 太暗、太亮的不算
+    n++; chroma += C;
+    if (C < .03) continue;
+    const w = C * C * (1 - Math.abs(L - .62));               // 越鮮豔越算數
+    bins[Math.floor(H / 10) % 36] += w; bins[(Math.floor(H / 10) + 1) % 36] += w * .5; bins[(Math.floor(H / 10) + 35) % 36] += w * .5;
+  }
+  const order = [...bins.keys()].sort((a, b) => bins[b] - bins[a]);
+  const dist = (a, b) => { const d = Math.abs(a - b) % 36; return Math.min(d, 36 - d); };
+  const h1 = order[0] * 10 + 5;
+  const b2 = order.find(i => dist(i, order[0]) >= 5 && bins[i] > bins[order[0]] * .12);
+  const h2 = b2 != null ? b2 * 10 + 5 : h1 + 40;
+  const b3 = order.find(i => dist(i, order[0]) >= 5 && i !== b2 && (b2 == null || dist(i, b2) >= 4) && bins[i] > bins[order[0]] * .08);
+  const h3 = b3 != null ? b3 * 10 + 5 : h1 - 45;
+  const k = Math.min(1, Math.max(.7, (n ? chroma / n : 0) / .06));   // 照片本身灰灰的，顏色收斂一點（但不會變成灰色）
+  return [`oklch(.82 ${(.12 * k).toFixed(3)} ${h2})`, `oklch(.64 ${(.16 * k).toFixed(3)} ${h1})`, `oklch(.56 ${(.15 * k).toFixed(3)} ${h3})`];
+}
+let TINT = "";
+function tint(p){
+  if (!p || p.broken || TINT === p.i) return;
+  TINT = p.i;
+  const im = new Image();
+  im.onload = () => {
+    if (TINT !== p.i) return;
+    try {
+      const c = document.createElement("canvas"); c.width = 24; c.height = Math.max(1, Math.round(24 * im.naturalHeight / im.naturalWidth));
+      const x = c.getContext("2d", {willReadFrequently:true}); x.drawImage(im, 0, 0, c.width, c.height);
+      const [g1, g2, g3] = tintFrom(x.getImageData(0, 0, c.width, c.height).data), st = document.documentElement.style;
+      st.setProperty("--g1", g1); st.setProperty("--g2", g2); st.setProperty("--g3", g3);
+    } catch (e) {}
+  };
+  im.src = p.q ? `data:image/jpeg;base64,${p.q}` : src(p, "s");
+}
 function heroCycle(first){
   clearTimeout(HCT);
   const pool = PH.filter(p => !p.broken && !p.raw && !isVid(p));
@@ -360,7 +405,7 @@ function heroCycle(first){
     const im = new Image(); im.className = "hi cy"; im.alt = ""; im.src = src(p, "l");   // 新的一張慢慢淡入、一邊往前推近
     const show = () => { if (!im.isConnected) return;
       setTimeout(() => cv.querySelectorAll(".hi").forEach(x => { if (x !== im) x.remove(); }), 3200); };
-    im.decode ? im.decode().then(() => { cv.appendChild(im); show(); }).catch(() => {}) : (im.onload = () => { cv.appendChild(im); show(); });
+    im.decode ? im.decode().then(() => { cv.appendChild(im); show(); tint(p); }).catch(() => {}) : (im.onload = () => { cv.appendChild(im); show(); tint(p); });
   };
   HCT = setTimeout(next, 7000);
 }
