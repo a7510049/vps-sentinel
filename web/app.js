@@ -96,6 +96,8 @@ const P = {
   plane:'<path d="M17.8 19.2 16 11l3.5-3.5C21 6 21.5 4 21 3c-1-.5-3 0-4.5 1.5L13 8 4.8 6.2c-.5-.1-.9.1-1.1.5l-.3.5c-.2.5-.1 1 .3 1.3L9 12l-2 3H4l-1 1 3 2 2 3 1-1v-3l3-2 3.5 5.3c.3.4.8.5 1.3.3l.5-.2c.4-.3.6-.7.5-1.2z"/>',
   tack:'<path d="M12 17v5M9 10.76a2 2 0 0 1-1.11 1.79l-1.78.9A2 2 0 0 0 5 15.24V16a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-.76a2 2 0 0 0-1.11-1.79l-1.78-.9A2 2 0 0 1 15 10.76V7a1 1 0 0 1 1-1 2 2 0 0 0 0-4H8a2 2 0 0 0 0 4 1 1 0 0 1 1 1z"/>',
   funnel:'<path d="M3 4h18l-7 8.5V19l-4 2v-8.5z"/>',
+  album:'<rect x="3" y="7" width="14" height="14" rx="2.5"/><path d="M7 3h11a3 3 0 0 1 3 3v11"/><circle cx="8.5" cy="12" r="1.5"/><path d="m17 17.5-4-4-7.5 7.5"/>',
+  folder:'<path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>',
   note:'<path d="M13.4 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-7.4"/><path d="M2 6h4M2 10h4M2 14h4M2 18h4"/><path d="M21.4 5.6a2.1 2.1 0 1 0-3-3L13 8l-1 4 4-1z"/>',
   off:'<path d="M12 20h.01M8.5 16.43a5 5 0 0 1 7 0M2 8.82a15 15 0 0 1 4.17-2.65M10.66 5c4.01-.36 8.14.9 11.34 3.76M16.85 11.25a10 10 0 0 1 2.22 1.68M5 13a10 10 0 0 1 5.24-2.76M2 2l20 20"/>',
 };
@@ -464,7 +466,7 @@ const COL = {cpu:"var(--c-cpu)", mem:"var(--c-mem)", rx:"var(--c-rx)", tx:"var(-
 /* 概念 → [顏色樣式, 圖示] */
 const ICO = {cpu:["cpu","cpu"], mem:["mem","mem"], disk:["disk","disk"], load:["load","gauge"], down:["down","down"], up:["up","up"],
   net:["net","net"], trend:["trend","trend"], month:["month","month"], box:["box","box"], bell:["bell","bell"], info:["info","info"],
-  flag:["flag","flag"], keep:["keep","shield"], key:["key","key"], finger:["finger","finger"], pin:["pin","pin"], link:["link","link"], archive:["archive","archive"], sun:["sun","sun"], quote:["quote","quote"], dl:["dl","dl"], cloud:["cloud","cloud"], fly:["fly","plane"], devices:["devices","devices"], safe:["safe","lockok"], sky:["sky","radar"], note:["note","note"], adblk:["adblk","funnel"]};
+  flag:["flag","flag"], keep:["keep","shield"], key:["key","key"], finger:["finger","finger"], pin:["pin","pin"], link:["link","link"], archive:["archive","archive"], sun:["sun","sun"], quote:["quote","quote"], dl:["dl","dl"], cloud:["cloud","cloud"], fly:["fly","plane"], devices:["devices","devices"], safe:["safe","lockok"], sky:["sky","radar"], note:["note","note"], adblk:["adblk","funnel"], album:["album","album"]};
 const IC = (k, cls="sm") => `<span class="ico ${cls} ${ICO[k][0]}">${I(ICO[k][1])}</span>`;
 
 /* ═════════ 共用的小元件 ═════════ */
@@ -807,7 +809,8 @@ function toolsBody(s, k, node, name){
     <button class="tbx" data-key="dl" data-dl="${node}" data-name="${name}"><span class="ttop">${IC("dl", "")}<span class="tgo nx">${CHEV}</span></span><b>遠端下載</b><small>存到雲端硬碟</small></button>`;
   h += `<button class="tbx" data-key="bk" data-bk="${node}" data-label="${name}"><span class="ttop">${IC("archive", "")}<span class="tgo nx">${CHEV}</span></span>
       <b>每日備份</b><small class="bkst" data-n="${node}" data-keep data-ld>讀取中…</small><span class="bkdots" data-n="${node}" data-keep>${"<i></i>".repeat(7)}</span></button>
-    <button class="tbx" data-key="nt" data-notes="${node}" data-name="${name}"><span class="ttop">${IC("note", "")}<span class="tgo nx">${CHEV}</span></span><b>加密筆記</b><small data-x>${s.notes ? "已打開" : "還沒打開"}</small></button>${abTile(s, node, name)}</div>`;
+    <button class="tbx" data-key="nt" data-notes="${node}" data-name="${name}"><span class="ttop">${IC("note", "")}<span class="tgo nx">${CHEV}</span></span><b>加密筆記</b><small data-x>${s.notes ? "已打開" : "還沒打開"}</small></button>${abTile(s, node, name)}${c ? `
+    <button class="tbx" data-key="alm" data-album="${node}" data-name="${name}"><span class="ttop">${IC("album", "")}<span class="tgo nx">${CHEV}</span></span><b>相簿分享</b><small data-x>${s.albums ? `${s.albums} 本分享中` : "還沒分享"}</small></button>` : ""}</div>`;
   const L = linksOf(s).filter(x => !x.fixed);
   if (L.length) h += `<div class="lbl" data-key="ll">常用連結</div><div class="group" data-key="g-lk:${k}">${L.map(x => linkRow(x, esc(linkSt(x)))).join("")}</div>`;
   return h + `</div>`;
@@ -1082,6 +1085,120 @@ function notesModal(node, name){
       if (act === "wipe" && !await modal({icon:"trash", cls:"bad", title:"清除所有筆記？", text:"主機上的筆記全部刪掉、密碼都換新，救不回來；手機上的不動。", ok:"清除"})) return;
       const x = await run({action: act});
       if (x && act !== "on") toast(x.message || "好了");
+    });
+  });
+}
+/* 相簿分享：雲端硬碟選一個資料夾，做成照片牆連結給朋友（密碼、期限、地點、下載都能改，隨時收回） */
+const ALMT = [[86400, "1 天"], [604800, "7 天"], [2592000, "30 天"], [0, "不限"]];
+const almLeft = a => !a.exp ? "不會過期" : (s => s > 172800 ? `${Math.round(s / 86400)} 天後失效` : s > 3600 ? `${Math.round(s / 3600)} 小時後失效` : "快失效了")(a.exp - Date.now() / 1000);
+function albumModal(node, name){
+  const q = node ? `?node=${encodeURIComponent(node)}` : "";
+  let D = null, view = "list", cur = null, dir = "", F = null, busy = false;
+  const o = {secs:604800, loc:true, dl:true};
+  const v = document.createElement("div"); v.className = "veil";
+  v.innerHTML = `<div class="dialog pkd almd">${IC("album", "big")}<h3>相簿分享</h3><p>${esc(name)}</p><div class="form"><div class="almb">讀取中…</div><div class="msg"></div></div></div>`;
+  $("#layer").appendChild(v);
+  const body = v.querySelector(".almb"), msg = v.querySelector(".msg");
+  const base = () => (D && D.base) || location.origin;
+  const link = a => `${base()}/a/${a.code}`;
+  const call = async b => {
+    const r = await api("/api/album" + q, {method:"POST", headers:{"X-Token":getTok(), "Content-Type":"application/json"}, body:JSON.stringify(b)});
+    const x = await r.json().catch(() => ({}));
+    if (r.status === 404) throw new Error("這台還沒更新到新版，先更新再試");
+    if (!r.ok || x.ok === false) throw new Error(x.message || x.error || "失敗了，請再試一次");
+    return x;
+  };
+  const run = async b => {
+    if (busy) return null; busy = true; sayTo(msg, "");
+    try { const x = await call(b); if (x.list) D = x; return x; }
+    catch (e) { sayTo(msg, e.message); return null; }
+    finally { busy = false; }
+  };
+  const tg = (k, on, l) => `<label class="pkrow secrow"><span>${l}</span><input type="checkbox" class="tog" data-almo="${k}" aria-label="${l}"${on ? " checked" : ""}></label>`;
+  const sg = (val) => `<div class="seg" data-alms>${ALMT.map(([s, l]) => `<button type="button" class="${val === s ? "on" : ""}" data-v="${s}">${l}</button>`).join("")}</div>`;
+  const cover = a => a.cover ? `<img alt="" loading="lazy" src="${esc(`${base()}/a/${a.code}/i/${a.cover}/s`)}">` : I("album");
+  const pane = {
+    list: () => D.list.length ? `<div class="pklist">${D.list.map(a => `<button type="button" class="pkrow almrow" data-almid="${esc(a.id)}"><span class="almc">${cover(a)}</span>
+        <span><b>${esc(a.name)}</b><small>${a.n} 張・${almLeft(a)}${a.views ? `・看過 ${a.views} 次` : ""}</small></span>${a.pw ? `<span class="almi">${I("lock")}</span>` : ""}${CHEV}</button>`).join("")}</div>
+        <button type="button" class="ubtn" data-alm="new">${I("plus")}新增相簿</button>`
+      : `<p class="ntx">雲端硬碟裡選一個資料夾，做成照片牆連結給朋友。</p><button type="button" class="ubtn" data-alm="new">選資料夾</button>`,
+    pick: () => `<div class="almcrumb"><button type="button" data-almdir="">雲端硬碟</button>${dir ? dir.split("/").map((p, i, a) => `<span>/</span><button type="button" data-almdir="${esc(a.slice(0, i + 1).join("/"))}">${esc(p)}</button>`).join("") : ""}</div>
+      <div class="pklist almdirs">${F.subs.length ? F.subs.map(x => `<button type="button" class="pkrow" data-almdir="${esc((dir ? dir + "/" : "") + x.name)}">${I("folder")}<span><b>${esc(x.name)}</b><small>${x.n ? `${x.n} 張照片` : "沒有照片"}</small></span>${CHEV}</button>`).join("")
+        : `<div class="pkrow"><span><small>沒有其他資料夾</small></span></div>`}</div>
+      <button type="button" class="ubtn" data-alm="use"${F.n ? "" : " disabled"}>${F.n ? `用這個資料夾（${F.n} 張）` : "這裡沒有照片"}</button>
+      <button type="button" class="ubtn sm ghost" data-alm="list">${I("back")}返回</button>`,
+    opts: () => `<label>名稱<input class="field" data-almk="name" maxlength="40" value="${esc(dir.split("/").pop() || "相簿")}"></label>
+      <label>能看多久${sg(o.secs)}</label>
+      <label>密碼<input class="field" data-almk="pw" type="password" maxlength="64" autocomplete="new-password" placeholder="可不填"></label>
+      <div class="pklist">${tg("loc", o.loc, "顯示地點和地圖")}${tg("dl", o.dl, "可以下載原圖")}</div>
+      <button type="button" class="ubtn" data-alm="make">做好連結</button><button type="button" class="ubtn sm ghost" data-alm="pick">${I("back")}換資料夾</button>`,
+    one: () => { const a = D.list.find(x => x.id === cur); if (!a) return pane.list();
+      return `<div class="almhead"><span class="almc big">${cover(a)}</span><span><b>${esc(a.name)}</b><small>${a.n} 張・${almLeft(a)}${a.views ? `・看過 ${a.views} 次` : ""}</small></span></div>
+      <div class="codebox"><code>${esc(link(a))}</code><button type="button" class="ubtn sm ghost" data-alm="copy">${navigator.share && matchMedia("(pointer:coarse)").matches ? "分享" : "複製"}</button></div>
+      <div class="dlnew"><a class="ubtn sm ghost" href="${esc(link(a))}" target="_blank" rel="noopener noreferrer">${EXT}打開看看</a></div>
+      <label>能看多久<small class="alms">${almLeft(a)}</small>${sg(-1)}</label>
+      <div class="pklist">${tg("loc", a.loc, "顯示地點和地圖")}${tg("dl", a.dl, "可以下載原圖")}</div>
+      <label>密碼<div class="dlnew"><input class="field" data-almk="pw" type="password" maxlength="64" autocomplete="new-password" placeholder="${a.pw ? "已設定，輸入新的就換掉" : "可不填"}"><button type="button" class="ubtn sm ghost" data-alm="pw">設定</button>${a.pw ? `<button type="button" class="ubtn sm ghost" data-alm="nopw">拿掉</button>` : ""}</div></label>
+      <button type="button" class="ubtn sm ghost bad ntwipe" data-alm="del">${I("trash")}收回連結</button>
+      <button type="button" class="ubtn sm ghost" data-alm="list">${I("back")}全部相簿</button>`; }
+  };
+  const draw = () => swapHTML(body, pane[view]());
+  const share = async a => {
+    const url = link(a);
+    if (navigator.share && matchMedia("(pointer:coarse)").matches) { try { await navigator.share({title:a.name, url}); } catch (e) { /* 取消分享 */ } return; }
+    try { await navigator.clipboard.writeText(url); toast("已複製連結"); } catch (e) { toast("複製不了，請長按連結複製", "bad"); }
+  };
+  const goDir = async d => { const x = await run({action:"folders", dir:d}); if (x) { F = x; dir = x.dir; view = "pick"; draw(); } };
+  run({action:"list"}).then(x => { if (!x) return; if (!x.cloud) { swapHTML(body, `<p class="ntx">這台沒有雲端硬碟</p>`); return; } draw(); });
+  return new Promise(res => {
+    const done = () => { if (v._d) return; v._d = 1; v.classList.add("closing"); setTimeout(() => { v.remove(); res(); }, 360); };
+    v._esc = done;
+    v.addEventListener("change", async e => {
+      const t = e.target.closest("[data-almo]"); if (!t) return;
+      if (view === "opts") { o[t.dataset.almo] = t.checked; return; }
+      const x = await run({action:"edit", id:cur, [t.dataset.almo]:t.checked});
+      if (!x) t.checked = !t.checked; else toast(t.dataset.almo === "loc" ? (t.checked ? "朋友看得到地點" : "地點藏起來了，原圖也拿掉定位") : (t.checked ? "可以下載原圖" : "不能下載了"));
+    });
+    v.addEventListener("click", async e => {
+      if (e.target === v) return done();
+      const t = e.target;
+      const sb = t.closest("[data-alms] button");
+      if (sb) {
+        const s = +sb.dataset.v;
+        sb.parentNode.querySelectorAll("button").forEach(x => x.classList.toggle("on", x === sb));
+        if (view === "opts") { o.secs = s; return; }
+        const x = await run({action:"edit", id:cur, secs:s}); if (x) { toast(s ? `從現在起 ${sb.textContent}` : "不會過期了"); const a = D.list.find(y => y.id === cur); const sm = v.querySelector(".alms"); if (a && sm) sm.textContent = almLeft(a); }
+        return;
+      }
+      const row = t.closest("[data-almid]");
+      if (row) { cur = row.dataset.almid; view = "one"; return draw(); }
+      const dd = t.closest("[data-almdir]");
+      if (dd) return goDir(dd.dataset.almdir);
+      const b = t.closest("[data-alm]"); if (!b) return;
+      const act = b.dataset.alm, a = D && D.list.find(x => x.id === cur);
+      if (act === "list") { view = "list"; return draw(); }
+      if (act === "new" || act === "pick") return goDir(act === "pick" ? dir.split("/").slice(0, -1).join("/") : "");
+      if (act === "use") { view = "opts"; return draw(); }
+      if (act === "make") {
+        const nm = v.querySelector('[data-almk="name"]').value.trim(), pw = v.querySelector('[data-almk="pw"]').value;
+        const x = await run({action:"add", dir, name:nm, pw, secs:o.secs, loc:o.loc, dl:o.dl});
+        if (!x) return;
+        cur = x.id; view = "one"; draw();
+        const na = D.list.find(y => y.id === cur); if (na) share(na);
+        return;
+      }
+      if (!a) return;
+      if (act === "copy") return share(a);
+      if (act === "pw" || act === "nopw") {
+        const pw = act === "pw" ? v.querySelector('[data-almk="pw"]').value : "";
+        if (act === "pw" && pw.length < 4) return sayTo(msg, "密碼要 4 個字以上");
+        if (await run({action:"edit", id:cur, pw})) { toast(pw ? "密碼換好了，舊的立刻失效" : "拿掉密碼了"); draw(); }
+        return;
+      }
+      if (act === "del") {
+        if (!await modal({icon:"trash", cls:"bad", title:`收回「${a.name}」？`, text:"連結會立刻打不開，雲端硬碟裡的照片不動。", ok:"收回"})) return;
+        if (await run({action:"del", id:cur})) { toast("收回了"); view = "list"; draw(); }
+      }
     });
   });
 }
@@ -3310,6 +3427,8 @@ async function pageClick(e){
   if (dl) return dlModal(dl.dataset.dl, dl.dataset.name);
   const ab = t.closest("[data-ab]");
   if (ab && !ab.closest(".veil")) return abModal(ab.dataset.ab, ab.dataset.name).then(() => tick());
+  const alm = t.closest("[data-album]");
+  if (alm) return albumModal(alm.dataset.album, alm.dataset.name).then(() => tick());
   const nb = t.closest("[data-notes]");
   if (nb) return notesModal(nb.dataset.notes, nb.dataset.name).then(() => tick());
   const rb = t.closest("[data-reboot]");
