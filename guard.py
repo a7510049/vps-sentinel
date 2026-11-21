@@ -239,7 +239,8 @@ def ssh_key_ok():
 GUARD_TRIES, GUARD_WIN = 5, 600
 GUARD_EVERY = float(os.environ.get("SENTINEL_GUARD_EVERY") or 20)   # 測試用：看紀錄的間隔
 GUARD_BAN, GUARD_BAN2 = 3600, 86400
-GUARD = {"bans": {}, "seen": {}, "hits": {}, "ok": {}, "how": None, "cur": None, "err": ""}
+GUARD = {"bans": {}, "seen": {}, "hits": {}, "ok": {}, "how": None, "cur": None, "err": "", "ready": False}
+GUARD_LOCK = threading.RLock()
 GUARD_FILE = os.path.join(DATA_DIR, "ssh-guard.json")
 GUARD_PAT = (re.compile(r"Failed \S+ for (?:invalid user )?.* from (\S+) port \d+"),
              re.compile(r"Invalid user .* from (\S+) port \d+"),
@@ -268,20 +269,28 @@ def guard_fw(cmd, ip=None, secs=0):
         GUARD["how"] = "test"
         return True
     nft, ipt = shutil.which("nft"), shutil.which("iptables")
+    if GUARD["how"] == "iptables":
+        nft = None
     ports = ",".join(str(p) for p in SSHD["ports"] or [22])
     v6 = ip and ":" in ip
     if nft:
-        GUARD["how"] = "nft"
+        GUARD["how"] = GUARD["how"] or "nft"
         if cmd == "setup":
             run(["nft", "delete", "table", "inet", "vps_sentinel"], 10)
-            rule = (f"table inet vps_sentinel {{ set ban4 {{ type ipv4_addr; flags timeout; }} set ban6 {{ type ipv6_addr; flags timeout; }}"
-                    f" chain input {{ type filter hook input priority -5; policy accept;"
-                    f" tcp dport {{ {ports} }} ip saddr @ban4 drop; tcp dport {{ {ports} }} ip6 saddr @ban6 drop; }} }}")
+            rule = (f"table inet vps_sentinel {{\n  set ban4 {{ type ipv4_addr; flags timeout; }}\n  set ban6 {{ type ipv6_addr; flags timeout; }}\n"
+                    f"  chain input {{\n    type filter hook input priority -5; policy accept;\n"
+                    f"    tcp dport {{ {ports} }} ip saddr @ban4 drop\n    tcp dport {{ {ports} }} ip6 saddr @ban6 drop\n  }}\n}}\n")   # 一行一句（寫在同一行 nft 看不懂）
             try:
                 r = subprocess.run(["nft", "-f", "-"], input=rule, capture_output=True, text=True, timeout=10)
-                return r.returncode == 0
+                if r.returncode == 0:
+                    return True
+                log(f"SSH 封鎖：nftables 設定失敗（{(r.stderr or '').strip()[:160]}）")
             except (OSError, subprocess.SubprocessError):
+                pass
+            if not ipt:
                 return False
+            GUARD["how"] = "iptables"                     # nftables 不行：改用 iptables
+            return True
         if cmd == "clear":
             return run(["nft", "delete", "table", "inet", "vps_sentinel"], 10)[0] == 0
         s = "ban6" if v6 else "ban4"
@@ -368,28 +377,22 @@ def guard_loop():
         GUARD.update(bans=d.get("bans") or {}, seen=d.get("seen") or {}, ok=d.get("ok") or {})
     except (OSError, ValueError):
         pass
-    ready = False
+    tried = 0
     while True:
         try:
             now = time.time()
             if not guard_on():
-                if ready:
-                    guard_fw("clear")
-                    GUARD["bans"], ready = {}, False
-                    guard_save()
+                if GUARD["ready"]:
+                    guard_stop()
                 time.sleep(GUARD_EVERY)
                 continue
-            if not ready:
-                ssh_risks()
-                ready = guard_fw("setup")
-                for ip, t in list(GUARD["bans"].items()):   # 重新啟動前封的：剩下的時間接著封
-                    if t > now:
-                        guard_fw("add", ip, t - now)
-                if not ready:
-                    GUARD["err"] = "這台沒有防火牆工具（nftables）"
-                    time.sleep(600)
+            if not GUARD["ready"]:
+                if now - tried < 600:                     # 防火牆設不起來：10 分鐘再試（在網頁上打開會馬上試）
+                    time.sleep(GUARD_EVERY)
                     continue
-                GUARD["err"] = ""
+                tried = now
+                if not guard_ready():
+                    continue
             for ip, t in list(GUARD["bans"].items()):
                 if t <= now:
                     if GUARD["how"] == "iptables":
@@ -409,12 +412,41 @@ def guard_loop():
         time.sleep(GUARD_EVERY)
 
 
+def guard_ready():
+    """建好防火牆規則、把重新啟動前還沒到期的接著封"""
+    with GUARD_LOCK:
+        if GUARD["ready"]:
+            return True
+        ssh_risks()
+        GUARD["how"] = None
+        if not guard_fw("setup"):
+            GUARD["err"] = "防火牆設不起來"
+            return False
+        now = time.time()
+        for ip, t in list(GUARD["bans"].items()):
+            if t > now:
+                guard_fw("add", ip, t - now)
+        GUARD["err"], GUARD["ready"] = "", True
+        return True
+
+
+def guard_stop():
+    with GUARD_LOCK:
+        guard_fw("clear")
+        GUARD["bans"], GUARD["ready"], GUARD["err"] = {}, False, ""
+        guard_save()
+
+
 def guard_set(on):
+    if on and not guard_ready():
+        return False, "防火牆設不起來，沒辦法封鎖"
     try:
         write_conf({"SSH_GUARD": "on" if on else "off"})
     except OSError as e:
         return False, f"無法寫入設定檔：{e}"
     C["SSH_GUARD"] = "on" if on else "off"
+    if not on:
+        guard_stop()
     return True, ""
 
 
