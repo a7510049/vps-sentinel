@@ -457,7 +457,7 @@ const COL = {cpu:"var(--c-cpu)", mem:"var(--c-mem)", rx:"var(--c-rx)", tx:"var(-
 /* 概念 → [顏色樣式, 圖示] */
 const ICO = {cpu:["cpu","cpu"], mem:["mem","mem"], disk:["disk","disk"], load:["load","gauge"], down:["down","down"], up:["up","up"],
   net:["net","net"], trend:["trend","trend"], month:["month","month"], box:["box","box"], bell:["bell","bell"], info:["info","info"],
-  flag:["flag","flag"], keep:["keep","shield"], key:["key","key"], finger:["finger","finger"], pin:["pin","pin"], link:["link","link"], archive:["archive","archive"], sun:["sun","sun"], quote:["quote","quote"], dl:["dl","dl"], cloud:["cloud","cloud"], fly:["fly","plane"], devices:["devices","devices"]};
+  flag:["flag","flag"], keep:["keep","shield"], key:["key","key"], finger:["finger","finger"], pin:["pin","pin"], link:["link","link"], archive:["archive","archive"], sun:["sun","sun"], quote:["quote","quote"], dl:["dl","dl"], cloud:["cloud","cloud"], fly:["fly","plane"], devices:["devices","devices"], safe:["safe","shield"]};
 const IC = (k, cls="sm") => `<span class="ico ${cls} ${ICO[k][0]}">${I(ICO[k][1])}</span>`;
 
 /* ═════════ 共用的小元件 ═════════ */
@@ -929,7 +929,7 @@ function setPage(list){
     const s = on.find(x => keyOf(x) === TOOLH) || on.find(x => !x.node) || on[0], k = esc(keyOf(s)), node = esc(s.node || "");
     h += `<div class="lbl" data-key="lh">主機<button data-selfcheck>檢查新版</button></div><div class="selfsum" data-key="selfsum" data-keep data-ld></div>`;
     if (on.length > 1) h += hpick(on, s, x => x.self_has ? `<span class="dot info"></span>` : "");
-    h += `<div class="group" data-key="g-h:${k}" data-sw><div class="selfbox" data-key="self" data-n="${node}" data-keep data-ld><div class="selfwait">讀取中…</div></div>${sysRow(s)}<button class="li" data-newtok="${node}" data-label="${esc(s.name)}">${IC("key", "")}<span class="lab">換一組新密碼<small>舊密碼會立刻失效</small></span>${CHEV}</button>`
+    h += `<div class="group" data-key="g-h:${k}" data-sw><div class="selfbox" data-key="self" data-n="${node}" data-keep data-ld><div class="selfwait">讀取中…</div></div>${sysRow(s)}${secRow(s)}<button class="li" data-newtok="${node}" data-label="${esc(s.name)}">${IC("key", "")}<span class="lab">換一組新密碼<small>舊密碼會立刻失效</small></span>${CHEV}</button>`
       + (s.keep ? `<label class="li">${IC("keep", "")}<span class="lab">Oracle 防回收${keepLine(s.keep)}</span><input type="checkbox" class="tog" data-keepalive="${node}" aria-label="Oracle 防回收" ${s.keep.on ? "checked" : ""}></label>` : "")
       + (s.node ? "" : go("data-pair", "link", "配對暗號", "pairst")) + `</div>`;
   }
@@ -940,6 +940,81 @@ function setPage(list){
       <div class="sbody" data-key="sb:${c}" data-sw>${body}</div></div></div>`;
   }
   return `<div class="narrow" data-key="set"><h1 class="ptitle"><span>設定</span></h1>` + sec + h + look + out + `</div>`;   // 手機：常用的通知、登入放最上面，外觀設好就很少動，放最後
+}
+/* 安全檢查：存著的資料、網頁連線、雲端硬碟、備份、SSH 各自有沒有保護好 */
+/* 安全檢查：上面是自動做好的（只看），下面是可以自己開關的（SSH、封鎖、自動更新），最下面放 SSH 金鑰 */
+const SECI = [["seal", "shield", "密碼和資料", "兩層加密", "還沒加密"], ["web", "lock", "網頁連線", "TLS 1.3", "沒加密"],
+  ["cloud", "cloud", "雲端硬碟", "整顆加密", "還沒加密"], ["backup", "archive", "每日備份", "加密", "沒開"]];
+const SECO = [["sshpw", "key", "SSH 只能用金鑰登入", "關掉密碼登入"], ["sshroot", "finger", "root 不能用密碼登入", "只能用金鑰"],
+  ["guard", "alert", "錯太多次封鎖", "10 分鐘錯 5 次封 1 小時"], ["autoupd", "upd", "自動安裝安全更新", "不會自己重新開機"]];
+const secBad = s => [...SECI, ...SECO].filter(([k]) => s.sec && s.sec[k] === false).length;
+const secRow = s => !s.sec ? "" : `<button class="li" data-secchk="${esc(keyOf(s))}">${IC("safe", "")}<span class="lab">安全檢查${secBad(s) ? `<small class="warn">${secBad(s)} 項要注意</small>` : ""}</span>${secBad(s) ? "" : `<span class="stb" data-v="✓">${I("check")}</span>`}${CHEV}</button>`;
+function secModal(k){
+  const s = LIST.find(x => keyOf(x) === k); if (!s || !s.sec) return;
+  const node = s.node || "", q = node ? `?node=${encodeURIComponent(node)}` : "";
+  let D = {sec: s.sec, keys: null, users: [], me: "", keyok: false, bans: 0}, user = "";
+  const v = document.createElement("div"); v.className = "veil";
+  const head = () => { const n = [...SECI, ...SECO].filter(([x]) => D.sec[x] === false).length; return `<h3>${n ? `${n} 項要注意` : "全部保護好了"}</h3>`; };
+  const sub = (key, d) => key === "guard" && D.sec.guard && D.bans ? `封鎖中 ${D.bans} 個` : key === "sshpw" && !D.sec.sshpw && D.keys && !D.keyok ? "先放一把金鑰" : d;
+  const opts = () => SECO.filter(([x]) => D.sec[x] != null).map(([key, ic, name, d]) =>
+    `<label class="pkrow secrow" data-key="so:${key}">${I(ic)}<span>${name}<small>${sub(key, d)}</small></span><input type="checkbox" class="tog" data-sec="${key}" aria-label="${name}"${D.sec[key] ? " checked" : ""}></label>`).join("");
+  const keys = () => D.keys == null ? `<div class="pkrow secrow">${I("key")}<span>讀取中…</span></div>`
+    : D.keys.length ? D.keys.map(x => `<div class="pkrow secrow">${I("key")}<span>${esc(x.name || x.type)}<small>${esc(x.user)}・${esc(x.type)}・${esc(x.fp.slice(7, 15))}</small></span></div>`).join("")
+    : `<div class="pkrow secrow">${I("key")}<span>還沒有金鑰</span></div>`;
+  const users = () => D.users.length > 1 ? `<div class="hpick secu">${D.users.map(u => `<button type="button" class="fchip${u === user ? " on" : ""}" data-secu="${esc(u)}">${esc(u)}</button>`).join("")}</div>` : "";
+  v.innerHTML = `<div class="dialog pkd secd">${IC("safe", "big")}<div class="sech">${head()}</div><p>${esc(s.name)}</p>
+    <div class="form"><div class="pklist">${SECI.filter(([x]) => D.sec[x] != null).map(([key, ic, name, good, bad]) => { const ok = D.sec[key];
+      return `<div class="pkrow secrow">${I(ic)}<span>${name}<small>${ok ? good : bad}</small></span><span class="seck ${ok ? "ok" : "warn"}">${I(ok ? "check" : "warn")}</span></div>`; }).join("")}</div>
+      <div class="lbl">SSH 和更新</div><div class="pklist seco">${opts()}</div>
+      <div class="lbl">SSH 金鑰<button type="button" data-secadd>${I("plus")}加金鑰</button></div><div class="pklist seckeys">${keys()}</div>
+      <div class="dlck seknew" hidden><span class="secus"></span><textarea class="field pfield" rows="3" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="貼上 .pub 檔的內容"></textarea>
+        <div class="dlnew"><button type="button" class="ubtn sm ghost" data-secgen>幫我做一組</button><button type="button" class="ubtn sm" data-seckey>加進去</button></div></div>
+      <div class="msg"></div></div></div>`;
+  $("#layer").appendChild(v);
+  const msg = v.querySelector(".msg"), box = v.querySelector(".seknew");
+  const paint = () => { swapHTML(v.querySelector(".sech"), head()); v.querySelector(".seco").innerHTML = opts(); v.querySelector(".seckeys").innerHTML = keys(); v.querySelector(".secus").innerHTML = users(); };
+  const call = async body => {
+    const r = await api("/api/sec" + q, {method:"POST", headers:{"X-Token":getTok(), "Content-Type":"application/json"}, body:JSON.stringify(body)});
+    const x = await r.json().catch(() => ({}));
+    if (r.status === 404) throw new Error("這台還沒更新到新版，先更新再試");
+    if (x.sec) { D = x; s.sec = x.sec; if (!user) user = x.me || x.users[0] || ""; paint(); }
+    if (!r.ok || x.ok === false) throw new Error(x.message || x.error || "失敗了，請再試一次");
+    return x;
+  };
+  call({action:"info"}).catch(e => sayTo(msg, e.message));
+  const done = () => { if (v._d) return; v._d = 1; v.classList.add("closing"); setTimeout(() => v.remove(), 360); };
+  v._esc = done;
+  v.addEventListener("change", async e => {
+    const t = e.target; if (!t.dataset.sec) return;
+    const key = t.dataset.sec, on = t.checked;
+    if (key === "sshpw" && on && !D.keyok) { t.checked = false; reveal(box, true); return sayTo(msg, "先放一把金鑰，不然關掉後就進不來了"); }
+    if (key === "sshpw" && on && !await modal({icon:"key", cls:"warn", title:"關掉 SSH 密碼登入？", text:"之後只能用金鑰登入，已經連著的不會斷。", ok:"關掉"})) { t.checked = false; return; }
+    t.disabled = true; sayTo(msg, "");
+    try { await call({action: on ? "fix" : "undo", item: key}); toast(on ? "好了" : "已改回"); }
+    catch (x) { t.checked = !on; sayTo(msg, x.message); }
+    t.disabled = false;
+  });
+  v.addEventListener("click", async e => {
+    if (e.target === v) return done();
+    const t = e.target;
+    if (t.closest("[data-secadd]")) { reveal(box, box.hidden || box._hiding); return; }
+    const u = t.closest("[data-secu]"); if (u) { user = u.dataset.secu; v.querySelector(".secus").innerHTML = users(); return; }
+    const b = t.closest("[data-seckey],[data-secgen]"); if (!b) return;
+    const gen = b.matches("[data-secgen]"), ta = box.querySelector("textarea");
+    if (!gen && !ta.value.trim()) return ta.focus();
+    b.disabled = true; sayTo(msg, "");
+    try {
+      const x = await call(gen ? {action:"gen", user} : {action:"key", user, key: ta.value.trim()});
+      if (gen && x.priv) {                          // 私密金鑰只給這一次：存成檔案
+        const a = document.createElement("a"); a.href = URL.createObjectURL(new Blob([x.priv], {type:"application/octet-stream"}));
+        a.download = `${s.name}-${user}.key`.replace(/[\\/:*?"<>|\s]+/g, "-"); document.body.appendChild(a); a.click(); a.remove();
+        setTimeout(() => URL.revokeObjectURL(a.href), 4000);
+      }
+      ta.value = ""; reveal(box, false);
+      sayTo(msg, gen ? "金鑰已下載，只給這一次，請收好" : x.message || "加好了");
+    } catch (x) { sayTo(msg, x.message); }
+    b.disabled = false;
+  });
 }
 /* 系統更新（作業系統的套件）：跟哨兵、雲端硬碟的版本放在一起 */
 const sysRow = s => s.update && s.update.supported ? `<div class="selfrow" data-key="sys"><div class="cl2 first"><span class="ico info">${I("layers")}</span><span>系統<small data-x>${updateInfo(s) || "還沒檢查"}</small></span>${updateBtn(s)}</div></div>` : "";
@@ -1696,25 +1771,12 @@ function selfPaint(root){
   const ch = d.has && d.changes && d.changes.length ? `<ul class="chg">${d.changes.slice(0, 5).map(c => `<li>${esc(c.split("\n")[0])}</li>`).join("")}</ul>` : "";
   const c = d.cloud;
   const cst = !c ? "" : c.running ? `<span class="spin"></span>更新中…` : c.has ? `<span class="new">官方有新版可以更新</span>` : c.err ? `<span class="warn">${esc(c.err)}</span>` : c.has === false ? "ok" : "還沒檢查";
-  const e = c && c.enc;                              // 整顆加密：好了是小鎖頭；舊的雲端硬碟才有「加密」鈕
-  const est = !e ? "" : e.running ? ` <span class="spin"></span>加密中…` : e.on ? ` <span class="vlk" title="已加密">${I("lock")}</span>` : "";
-  const ebtn = e && !e.on && !e.running && !c.running ? `<button class="ubtn sm" data-cloudenc="${node}"${e.need > e.free ? " disabled" : ""}>加密</button>` : "";
+  const est = c && c.enc && c.enc.on ? ` <span class="vlk" title="已加密">${I("lock")}</span>` : "";   // 整顆加密：小鎖頭
   const crow = c ? `<div class="cl2">${IC("cloud", "")}<span>雲端硬碟<small>${cst === "ok" ? (c.version ? VOK(esc(c.version)) : VOK("最新")) : (c.version ? `<span class="vbs"><span class="vbd">${esc(c.version)}</span></span> ` : "") + cst}${est}</small></span>
-    ${c.has && !c.running ? `<button class="ubtn sm" data-cloudup="${node}">更新</button>` : ebtn}</div>` : "";
+    ${c.has && !c.running ? `<button class="ubtn sm" data-cloudup="${node}">更新</button>` : ""}</div>` : "";
   const srow = `<div class="cl2 first"><span class="ico theme">${I("upd")}</span><span>哨兵<small title="${esc(d.build || "")}">${st ? (d.version ? `<span class="vbs"><span class="vbd">${esc(d.version)}</span></span> ` : "") + st : d.version ? VOK(esc(d.version)) : ""}</small>${ch}</span>
     ${d.has && !d.running ? `<button class="ubtn sm" data-selfup="${node}">更新</button>` : ""}</div>`;
   swapHTML(box, `<div class="selfrow">${srow}${crow}</div>`);
-}
-/* 舊的雲端硬碟換成整顆加密的：檔案搬過去、比對過才刪舊的 */
-async function cloudEncrypt(root, node){
-  const h = LIST.find(x => (x.node || "") === node), d = h && SELFST[keyOf(h)], e = d && d.cloud && d.cloud.enc;
-  if (!e) return;
-  const ok = await modal({icon: "lock", cls: "theme", title: "加密雲端硬碟？",
-    text: `要多 ${size(e.need)} 空位，搬完前打不開。`, ok: "開始加密"});
-  if (!ok) return;
-  try { const r = await selfCall(node, "cloud_encrypt"); toast(r.message || "已開始加密"); e.running = true; }
-  catch (x) { toast(x.message, "bad"); }
-  selfPaint(root);
 }
 /* jobs：[{node, kind:"self"|"cloud"}]；不給就是「全部更新」 */
 async function selfUpdate(root, jobs){
@@ -3165,8 +3227,8 @@ async function pageClick(e){
   if (sc) { sc.disabled = true; SELFCHK = true; selfPaint(view()); return selfStatus(view(), true).finally(() => { sc.disabled = false; SELFCHK = false; selfPaint(view()); }); }   // 按鈕的字不變（使用者要求），狀態寫在下面
   const su = t.closest("[data-selfup]");
   if (su) return selfUpdate(view(), su.dataset.selfup === "*" ? null : [{node: su.dataset.selfup, kind:"self"}]);
-  const ce = t.closest("[data-cloudenc]");
-  if (ce) return cloudEncrypt(view(), ce.dataset.cloudenc);
+  const sk = t.closest("[data-secchk]");
+  if (sk) return secModal(sk.dataset.secchk);
   const cu = t.closest("[data-cloudup]");
   if (cu) return selfUpdate(view(), [{node: cu.dataset.cloudup, kind:"cloud"}]);
   const pv = t.closest("[data-val]");

@@ -45,7 +45,7 @@ from collections import deque
 from concurrent.futures import ThreadPoolExecutor
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
-VERSION = "4.24"
+VERSION = "4.25"
 
 # ───────────────────────── 哨兵備份檔（.vsbk）─────────────────────────
 # 哨兵專用的備份格式：外面是自己的檔案格式，裡面用的是成熟、標準的加密方法（不自己發明加密）：
@@ -1458,7 +1458,7 @@ def include(name):
         exec(compile(f.read(), path, "exec"), globals())   # noqa: S102
 
 
-SRC_FILES = ["sentinel.py", "pair.py", "download.py", "backup.py", "fly.py", "web/index.html", "web/style.css", "web/app.js", "web/pin.js", "web/fly.js", "web/font.woff2", "data/airports.tsv", "data/coast.tsv", "data/terrain.bin", "data/actypes.tsv", "data/apmap.tsv"]   # 程式本體（含機場起降）＋網頁三個檔＋機場資料、海岸線、地形、機型分類
+SRC_FILES = ["sentinel.py", "pair.py", "download.py", "backup.py", "guard.py", "fly.py", "web/index.html", "web/style.css", "web/app.js", "web/pin.js", "web/fly.js", "web/font.woff2", "data/airports.tsv", "data/coast.tsv", "data/terrain.bin", "data/actypes.tsv", "data/apmap.tsv"]   # 程式本體（含機場起降）＋網頁三個檔＋機場資料、海岸線、地形、機型分類
 
 
 def build_of(blobs):
@@ -1713,61 +1713,16 @@ def cloud_running():
     return out.strip() in ("active", "activating")
 
 
-CLOUD_ENC_UNIT = "vps-cloud-encrypt"
 CLOUD_IMG = os.environ.get("SENTINEL_CLOUD_IMG") or "/var/lib/vps-cloud/disk.img"
 
 
 def cloud_enc():
-    """雲端硬碟整顆加密了沒：{"on", "running", "need"（搬的時候要多幾位元組）, "free"}"""
+    """雲端硬碟整顆加密了沒：{"on"}；沒安裝是 None"""
     try:
         with open(CLOUD_IMG, "rb") as f:
-            on = f.read(6) == b"LUKS\xba\xbe"
+            return {"on": f.read(6) == b"LUKS\xba\xbe"}
     except OSError:
         return None
-    _, out = run(["systemctl", "is-active", CLOUD_ENC_UNIT], 5)
-    d = {"on": on, "running": out.strip() in ("active", "activating")}
-    if not on:
-        try:
-            used = disk(CLOUD_DIR) or {}
-            st = os.statvfs(os.path.dirname(CLOUD_IMG))
-            d.update(need=int(used.get("used") or 0) + (1 << 30), free=st.f_bavail * st.f_frsize)
-        except OSError:
-            pass
-    return d
-
-
-def cloud_encrypt():
-    d, enc = src_dir(), cloud_enc()
-    if not CLOUD_URL or not enc:
-        return False, "這台還沒安裝雲端硬碟"
-    if enc["on"]:
-        return False, "已經加密了"
-    if enc["running"] or cloud_running():
-        return False, "雲端硬碟正在處理中"
-    if not d or not os.path.isfile(os.path.join(d, "cloud.sh")):
-        return False, "找不到安裝資料夾，請先更新哨兵"
-    if enc.get("free") is not None and enc.get("need", 0) > enc["free"]:
-        return False, "主機硬碟空間不夠"
-    run(["systemctl", "reset-failed", CLOUD_ENC_UNIT], 5)
-    code, _ = run(["systemd-run", f"--unit={CLOUD_ENC_UNIT}", "--collect", "/bin/bash", os.path.join(d, "cloud.sh"), "加密"], 15)
-    if code != 0:
-        return False, "無法開始加密"
-    log("開始加密雲端硬碟")
-    COL.add_event("info", "開始加密雲端硬碟")
-
-    def wait():                                   # 做完記一筆（會傳 Telegram）
-        time.sleep(5)
-        for _ in range(6 * 3600 // 10):
-            e = cloud_enc() or {}
-            if not e.get("running"):
-                if e.get("on"):
-                    COL.add_event("ok", "雲端硬碟整顆加密好了")
-                else:
-                    COL.add_event("bad", "雲端硬碟加密失敗，檔案照原本的樣子")
-                return
-            time.sleep(10)
-    threading.Thread(target=wait, daemon=True).start()
-    return True, "已開始加密雲端硬碟"
 
 
 def cloud_check(force=False):
@@ -2484,7 +2439,8 @@ def recheck_need(path, d):
     act = d.get("action") if isinstance(d, dict) else None
     return (path == "/api/token" or (path == "/api/pin" and act in ("set", "off"))
             or (path == "/api/passkey" and act in ("begin", "delete")) or (path == "/api/telegram" and act == "save")
-            or (path == "/api/backup" and act == "key") or (path == "/api/pair-admin" and act == "code"))
+            or (path == "/api/backup" and act == "key") or (path == "/api/pair-admin" and act == "code")
+            or (path == "/api/sec" and act in ("fix", "undo", "key", "gen")))
 
 
 def recheck_ok(a):
@@ -3578,7 +3534,7 @@ class Collector:
             "updates": updates, "reboot": reboot, "geo": geo, "update": upd, "events": events, "traffic": traffic, "bk_tz": BACKUP_TZ,
             "hist": {"t": [h[0] for h in hist], "cpu": [h[1] for h in hist], "mem": [h[2] for h in hist],
                      "rx": [h[3] for h in hist], "tx": [h[4] for h in hist]},
-            "problems": problems, "notices": notices, "tg_self": pair_load().get("self_t") or 0, "tlsfp": TLS["fp"],
+            "problems": problems, "notices": notices, "tg_self": pair_load().get("self_t") or 0, "tlsfp": TLS["fp"], "sec": sec_info(),
             "tg_off": not (TG_BOT and TG_CHAT) and not watchers(),   # 還沒設定 Telegram：首頁提醒一行
             "level": "bad" if problems else ("warn" if notices else "ok"),
         }
@@ -4200,7 +4156,7 @@ def tg_cleanup():
 def ev_line(e):
     """事件 → 一句通順的通知；不需要通知的回傳空字串"""
     k, t = e.get("kind"), str(e.get("text") or "")
-    if t in ("哨兵開始監看這台主機", "開始系統更新", "開始加密雲端硬碟"):     # 自己按的更新不用再通知「開始」，等結果就好
+    if t in ("哨兵開始監看這台主機", "開始系統更新"):     # 自己按的更新不用再通知「開始」，等結果就好
         return ""
     if t == "系統更新完成":
         return "✅ 系統更新完成"
@@ -4391,41 +4347,9 @@ def gz_of(data, tag=None):
     return z
 
 
-SSHD = {"t": 0, "v": [], "bad": []}
+# ───────────────────────── 安全檢查、SSH 上鎖、錯太多次封鎖（在 guard.py）─────────────────────────
 
-
-def ssh_risks():
-    """SSH 的門有沒有關好（一小時看一次 sshd -T，要 root）：回傳 (異常, 注意)；看不到就不說"""
-    if time.time() - SSHD["t"] < 3600:
-        return SSHD["bad"], SSHD["v"]
-    SSHD["t"] = time.time()
-    txt = os.environ.get("SENTINEL_SSHD_T")              # 測試用：假的 sshd -T 輸出
-    if txt is None:
-        exe = shutil.which("sshd") or ("/usr/sbin/sshd" if os.path.exists("/usr/sbin/sshd") else "")
-        if not exe or os.geteuid() != 0:
-            return [], []
-        try:
-            r = subprocess.run([exe, "-T"], capture_output=True, text=True, timeout=10)
-            txt = r.stdout if r.returncode == 0 else ""
-        except (OSError, subprocess.SubprocessError):
-            txt = ""
-    c = {}
-    for line in txt.splitlines():
-        k, _, v = line.strip().partition(" ")
-        c.setdefault(k.lower(), v.strip().lower())
-    if not c:
-        SSHD["bad"], SSHD["v"] = [], []
-        return [], []
-    bad, warn = [], []
-    pw = c.get("passwordauthentication") == "yes"
-    if c.get("permitemptypasswords") == "yes":
-        bad.append("SSH 允許空密碼登入")
-    if pw and c.get("permitrootlogin") == "yes":
-        bad.append("root 能用密碼登入 SSH")
-    elif pw:
-        warn.append("SSH 能用密碼登入")
-    SSHD["bad"], SSHD["v"] = bad, warn
-    return bad, warn
+include("guard.py")
 
 
 MAX_CONN = max(16, int(os.environ.get("SENTINEL_MAX_CONN") or 200))   # 同時最多處理幾個連線（測試可以調小）
@@ -5053,7 +4977,7 @@ class Handler(BaseHTTPRequestHandler):
         u = urllib.parse.urlsplit(self.path)
         if u.path not in ("/api/update", "/api/rename", "/api/traffic", "/api/telegram", "/api/links", "/api/self", "/api/cloud-open", "/api/cloud-ticket", "/api/cloud-revoke", "/api/peer",
                           "/api/token", "/api/passkey", "/api/passkey-login", "/api/pin", "/api/pin-login", "/api/login", "/api/sessions", "/api/backup", "/api/backup-store",
-                          "/api/restore-upload", "/api/restore-run", "/api/pair", "/api/pair-admin", "/api/reboot", "/api/keepalive", "/api/download", "/api/fly-share", "/api/fly-claim", "/api/opensky"):
+                          "/api/restore-upload", "/api/restore-run", "/api/pair", "/api/pair-admin", "/api/reboot", "/api/keepalive", "/api/download", "/api/fly-share", "/api/fly-claim", "/api/opensky", "/api/sec"):
             return self.send(404, '{"error":"找不到"}')
         if u.path in ("/api/restore-upload", "/api/restore-run"):   # 網頁還原：要有安裝時給的代碼（或已經登入）
             if not (self.authed() or self.restore_code_ok()):
@@ -5270,6 +5194,12 @@ class Handler(BaseHTTPRequestHandler):
                            dl_stop(str(d.get("id") or "")) if act == "stop" else dl_retry(str(d.get("id") or "")))
                 return self.send(200 if ok else 400, json.dumps({**dl_status(), "ok": ok, "message": msg}, ensure_ascii=False))
             return self.send(200, json.dumps(dl_status(), ensure_ascii=False))
+        if u.path == "/api/sec":                     # 安全檢查頁：看全部、修好某一項、放 SSH 金鑰
+            d = self.jbody(body)
+            if d.get("action") in (None, "", "info"):
+                return self.send(200, json.dumps(sec_detail(), ensure_ascii=False))
+            ok, msg, extra = sec_act(d)
+            return self.send(200 if ok else 400, json.dumps({**sec_detail(), **extra, "ok": ok, "message": msg}, ensure_ascii=False))
         if u.path == "/api/keepalive":               # 開關 Oracle 防回收
             ok, msg = set_keepalive(bool(self.jbody(body).get("on")))
             return self.send(200 if ok else 500, json.dumps({"ok": ok, "message": msg}, ensure_ascii=False))
@@ -5323,8 +5253,6 @@ class Handler(BaseHTTPRequestHandler):
                 ok, msg = self_update()
             elif act == "cloud_update":
                 ok, msg = cloud_update()
-            elif act == "cloud_encrypt":
-                ok, msg = cloud_encrypt()
             else:
                 return self.send(200, json.dumps({"ok": True, **self_check(act == "check"), "cloud": cloud_check(act == "check")},
                                                  ensure_ascii=False))
@@ -5412,6 +5340,7 @@ def main():
     threading.Thread(target=keep_loop, daemon=True).start()       # 只有 Oracle 免費主機才會真的做事
     threading.Thread(target=yt_update_loop, daemon=True).start()  # 有裝 yt-dlp／deno 才會真的做事
     threading.Thread(target=alert_loop, daemon=True).start()      # 沒設定時也會跑，網頁上一設定好就開始通知
+    threading.Thread(target=guard_loop, daemon=True).start()      # SSH 錯太多次封鎖（要 root）
     dl_load()                                                     # 上次沒下載完的接著下載
     if FLY_OK:
         try:
@@ -5428,6 +5357,9 @@ def main():
 
 if __name__ == "__main__" and sys.argv[1:2] == ["--unwatch"]:      # 忘了密碼時：在主機上取消被監看
     print(pair_unwatch()[1])
+    sys.exit(0)
+if __name__ == "__main__" and sys.argv[1:2] == ["--sec-setup"]:     # 第一次安裝：安全的先設好，其他的列出來
+    sec_setup()
     sys.exit(0)
 if __name__ == "__main__" and sys.argv[1:2] == ["--pair-code"]:   # 安裝畫面用：產生配對暗號
     ok, out = pair_code(sys.argv[2] if len(sys.argv) > 2 else "")
