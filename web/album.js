@@ -163,24 +163,95 @@ function askPw(){
 }
 
 /* ═════════ 照片牆 ═════════ */
-let GROUPS = [];
+let GROUPS = [], YR = false;
+/* 照片牆的大小：0 大格、1 一般、2 小方格、3 按月份的小方格（兩指捏、Ctrl＋滾輪、＋－鍵） */
+const ZMUL = [1.7, 1, .62, .36];
+let ZL = Math.min(3, Math.max(0, +store.get("vsa-zoom") || 1));
+function groupsOf(z){
+  const days = [...new Set(PH.map(p => (pd(p.x.dt) || {}).k).filter(Boolean))];
+  if (z === 3) {                                             // 按月份
+    const by = {};
+    PH.forEach((p, i) => { const d = pd(p.x.dt), k = d ? `${d.y}${String(d.mo).padStart(2, "0")}` : "0"; (by[k] = by[k] || {k, d, m:1, list:[]}).list.push(i); });
+    return Object.values(by);
+  }
+  if (days.length > 1 && PH.length >= 6) {
+    const by = {};
+    PH.forEach((p, i) => { const d = pd(p.x.dt), k = d ? d.k : "0"; (by[k] = by[k] || {k, d, list:[]}).list.push(i); });
+    return Object.values(by);
+  }
+  return [{k:"", list:PH.map((_, i) => i)}];
+}
+function sections(){
+  GROUPS = groupsOf(ZL);
+  const w = $(".wall"); w.dataset.z = ZL;
+  w.innerHTML = GROUPS.map((g, gi) => `<section class="day" data-g="${gi}">${g.k && g.d ? g.m
+    ? `<div class="dh"><b>${g.d.y}年${g.d.mo}月</b><span class="num">${g.list.length}</span></div>`
+    : `<div class="dh" data-day="${g.k}"><b>${fday(g.d, YR)}</b><span>${esc(dayPlaces(g.k))}</span></div>` : ""}<div class="rows"></div></section>`).join("");
+}
+function zoomWall(z, fx, fy){                                 // 換大小：每張從原本的位置滑到新位置
+  z = Math.min(3, Math.max(0, z));
+  if (z === ZL || !$(".wall")) return false;
+  const vis = new Map(), H = innerHeight;
+  TILES.forEach((t, i) => { const r = t.getBoundingClientRect(); if (r.bottom > -40 && r.top < H + 40) vis.set(i, r); });
+  let anc = -1, best = 1e9;                                   // 手指下面那張留在原地
+  vis.forEach((r, i) => { const d = Math.hypot(r.left + r.width / 2 - fx, r.top + r.height / 2 - fy); if (d < best) { best = d; anc = i; } });
+  const a0 = anc >= 0 ? vis.get(anc) : null;
+  ZL = z; store.set("vsa-zoom", z);
+  sections(); layout(true);
+  if (a0) { const r1 = TILES[anc].getBoundingClientRect(); scrollBy(0, (r1.top + r1.height / 2) - (a0.top + a0.height / 2)); }
+  if (!anim()) return true;
+  TILES.forEach((t, i) => {
+    const r0 = vis.get(i), r1 = t.getBoundingClientRect();
+    if (r1.bottom < -40 || r1.top > H + 40) return;
+    t.classList.add("in");
+    if (!r0) { t.animate([{opacity:0, transform:"scale(.9)"}, {opacity:1, transform:"none"}], {duration:T.mid, easing:EASE, delay:T.fast}); return; }
+    t.animate([{transform:`translate(${r0.left - r1.left}px,${r0.top - r1.top}px) scale(${r0.width / r1.width},${r0.height / r1.height})`, transformOrigin:"0 0"},
+      {transform:"none", transformOrigin:"0 0"}], {duration:T.slow, easing:DEC});
+  });
+  document.querySelectorAll(".dh").forEach(h => h.animate([{opacity:0}, {opacity:1}], {duration:T.mid, delay:T.fast, easing:EASE, fill:"backwards"}));
+  return true;
+}
 function dayPlaces(k){
   const c = {};
   PH.forEach(p => { const d = pd(p.x.dt); if (d && d.k === k && p.p) c[p.p.n] = (c[p.p.n] || 0) + 1; });
   return Object.keys(c).sort((a, b) => c[b] - c[a]).slice(0, 2).join("・");
 }
+/* 最上面一排「回憶」：一天一個圓圈（只有一天就照地點），點了像限時動態一張一張看 */
+let MEMS = [];
+const SEEN = new Set(store.get("vsa-seen-" + CODE).split(",").filter(Boolean));
+function memsOf(){
+  const ok = i => !PH[i].broken && (!isVid(PH[i]) || PH[i].vr === 1);
+  const by = {}, order = [];
+  PH.forEach((p, i) => { const d = pd(p.x.dt); if (!d) return; if (!by[d.k]) { by[d.k] = {k:d.k, d, list:[]}; order.push(d.k); } by[d.k].list.push(i); });
+  let gs = order.map(k => by[k]);
+  const dn = d => Date.UTC(d.y, d.mo - 1, d.d) / 864e5;
+  if (gs.length > 1 && dn(gs[gs.length - 1].d) - dn(gs[0].d) <= 30)   // 一趟旅行：第幾天
+    gs = gs.map(g => ({...g, t:`第${dn(g.d) - dn(gs[0].d) + 1}天`, s:`${g.d.mo}月${g.d.d}日`}));
+  else if (gs.length > 1) gs = gs.map(g => ({...g, t:`${g.d.mo}月${g.d.d}日`, s:YR ? `${g.d.y}` : dayPlaces(g.k).split("・")[0]}));
+  else {                                                     // 只有一天：照地點分
+    const pl = {}, po = [];
+    PH.forEach((p, i) => { if (!p.p) return; const n = p.p.n; if (!pl[n]) { pl[n] = {k:"p" + n, list:[], t:n, s:""}; po.push(n); } pl[n].list.push(i); });
+    gs = po.length > 1 ? po.map(n => pl[n]) : [];
+  }
+  return gs.map(g => {
+    let list = g.list.filter(ok);
+    if (list.length > 12) { const st = list.length / 12; list = Array.from({length:12}, (_, k) => list[Math.floor(k * st)]); }
+    const cv = list.slice().sort((a, b) => (PH[b].lk || 0) - (PH[a].lk || 0))[0];
+    return {...g, list, cv:(PH[cv] && PH[cv].lk) ? cv : list.find(i => !isVid(PH[i])) ?? list[0]};
+  }).filter(g => g.list.length).slice(0, 40);
+}
+function mems(){
+  const box = $(".mems"); if (!box) return;
+  MEMS = memsOf();
+  box.hidden = MEMS.length < 2;
+  box.innerHTML = MEMS.length < 2 ? "" : `<div class="mrw">${MEMS.map((g, n) => `<button class="mem${SEEN.has(g.k) ? " seen" : ""}" data-mem="${n}" aria-label="${esc(g.t)}">
+    <span class="mring"><img alt="" loading="lazy" draggable="false" src="${src(PH[g.cv], "s")}"></span><b>${esc(g.t)}</b>${g.s ? `<small class="num">${esc(g.s)}</small>` : ""}</button>`).join("")}</div>`;
+}
 function draw(){
   const ds = PH.map(p => pd(p.x.dt)).filter(Boolean), real = PH.filter(p => !p.x.dtf).map(p => pd(p.x.dt)).filter(Boolean);
   const rd = real.length ? real : ds, a = rd[0], b = rd[rd.length - 1];
   const cover = PH.find(p => p.w > p.h * 1.15 && !p.raw) || PH[0];
-  const days = [...new Set(ds.map(d => d.k))];
-  const yr = a && b && a.y !== b.y;
-  GROUPS = [];
-  if (days.length > 1 && PH.length >= 6) {
-    const by = {};
-    PH.forEach((p, i) => { const d = pd(p.x.dt), k = d ? d.k : "0"; (by[k] = by[k] || {k, d, list:[]}).list.push(i); });
-    GROUPS = Object.values(by);
-  } else GROUPS = [{k:"", list:PH.map((_, i) => i)}];
+  YR = a && b && a.y !== b.y;
   const pl = (D.places || []).slice(0, 3).join("・");
   $("#app").innerHTML = `
     <header class="hero"><div class="cv">${cover.q ? `<img class="lq" alt="" src="data:image/jpeg;base64,${cover.q}">` : ""}<img class="hi" alt="" src="${src(cover, "l")}"></div>
@@ -189,7 +260,7 @@ function draw(){
         ${D.dl ? `<a class="chip" href="${BASE}/zip" download>${I("dl")}<span>全部下載</span></a>` : ""}</div></div>
       <button class="cue" aria-label="往下看"><i></i></button></header>
     <div class="bar"><b>${esc(D.name)}<small class="num">${cntTxt()}</small></b><button class="chip go" data-ss aria-label="播放">${I("play")}</button>${D.dl ? `<a class="chip" href="${BASE}/zip" download aria-label="全部下載">${I("dl")}</a>` : ""}</div>
-    <main class="wall">${GROUPS.map((g, gi) => `<section class="day" data-g="${gi}">${g.k && g.d ? `<div class="dh" data-day="${g.k}"><b>${fday(g.d, yr)}</b><span>${esc(dayPlaces(g.k))}</span></div>` : ""}<div class="rows"></div></section>`).join("")}</main>
+    <div class="mems"></div><main class="wall" data-z="${ZL}"></main>
     ${D.loc && PH.some(p => p.g) ? `<section class="msec"><div class="mh"><b>旅程</b><span class="num" data-km>${PH.filter(p => p.g).length} 個地點</span></div><div class="map" data-map></div></section>` : ""}
     <footer class="foot"><div class="fin">${esc(D.name)}</div>${D.exp ? `<span>${I("clock")}${left(D.exp)}</span>` : ""}</footer>`;
   const hi = $(".hero .hi");
@@ -197,7 +268,9 @@ function draw(){
   if (D.wmo) document.documentElement.style.setProperty("--wm", JSON.stringify(D.wmo));
   document.documentElement.classList.toggle("wmo", !!D.wmo);
   TILES = PH.map((p, i) => tile(p, i));
+  sections();
   layout();
+  mems();
   bigMap();
   onScroll();
 }
@@ -234,14 +307,23 @@ function badge(i){                                          // 格子上的小�
 let LW = 0;
 function layout(force){
   const wall = $(".wall"); if (!wall) return;
-  const cs = getComputedStyle(document.documentElement), rh = parseFloat(cs.getPropertyValue("--rh")) || 200, gap = parseFloat(cs.getPropertyValue("--gap")) || 4;
+  const cs = getComputedStyle(document.documentElement), rh = (parseFloat(cs.getPropertyValue("--rh")) || 200) * ZMUL[ZL], gap = ZL >= 2 ? 2 : parseFloat(cs.getPropertyValue("--gap")) || 4;
   const W = wall.querySelector(".rows").clientWidth;
   if (!force && Math.abs(W - LW) < 1) return;
   LW = W;
   GROUPS.forEach((g, gi) => {
     const box = wall.querySelector(`[data-g="${gi}"] .rows`), rows = [];
     let cur = [], sum = 0;
-    const big = g.list.length >= 5 && PH[g.list[0]].w / PH[g.list[0]].h >= 1.3 && W >= 320 ? g.list[0] : -1;   // 一天的第一張橫的放整排
+    if (ZL >= 2) {                                           // 小方格：一排固定幾張
+      const n = Math.max(ZL === 3 ? 6 : 4, Math.round((W + gap) / (rh + gap))), sz = (W - gap * (n - 1)) / n;
+      for (let k = 0; k < g.list.length; k += n) rows.push([g.list.slice(k, k + n).map(i => [i, 1]), sz]);
+      const frag = document.createDocumentFragment();
+      rows.forEach(([list, h]) => { const r = document.createElement("div"); r.className = "row sq"; r.style.height = h.toFixed(2) + "px";
+        list.forEach(([i]) => { const t = TILES[i]; t.style.width = t.style.height = h.toFixed(2) + "px"; r.appendChild(t); }); frag.appendChild(r); });
+      box.replaceChildren(frag);
+      return;
+    }
+    const big = ZL === 1 && g.list.length >= 5 && PH[g.list[0]].w / PH[g.list[0]].h >= 1.3 && W >= 320 ? g.list[0] : -1;   // 一天的第一張橫的放整排
     if (big >= 0) { const ar = Math.min(3, PH[big].w / PH[big].h); rows.push([[[big, W / Math.min(W / ar, innerHeight * .72)]], Math.min(W / ar, innerHeight * .72), 1]); }
     g.list.forEach(i => {
       if (i === big) return;
@@ -278,6 +360,35 @@ function onScroll(){
   });
 }
 addEventListener("scroll", onScroll, {passive:true});
+(() => {                                                     // 兩指捏照片牆
+  let p0 = null;
+  const mid = t => [(t[0].clientX + t[1].clientX) / 2, (t[0].clientY + t[1].clientY) / 2], dist = t => Math.hypot(t[0].clientX - t[1].clientX, t[0].clientY - t[1].clientY);
+  document.addEventListener("touchstart", e => { if (e.touches.length === 2 && !LB && !SS && !SY && e.target.closest(".wall")) { p0 = {d:dist(e.touches), m:mid(e.touches), k:1}; } }, {passive:true});
+  document.addEventListener("touchmove", e => {
+    if (!p0 || e.touches.length !== 2) return;
+    e.preventDefault();
+    p0.k = dist(e.touches) / p0.d;
+    const w = $(".wall"); w.style.transformOrigin = `${p0.m[0]}px ${p0.m[1] + scrollY - w.offsetTop}px`;
+    w.style.transform = `scale(${Math.max(.7, Math.min(1.4, p0.k)).toFixed(3)})`;
+  }, {passive:false});
+  const end = () => {
+    if (!p0) return; const k = p0.k, m = p0.m; p0 = null;
+    const w = $(".wall"), was = w.style.transform; w.style.transform = "";
+    const ch = k > 1.18 ? zoomWall(ZL - 1, m[0], m[1]) : k < .85 ? zoomWall(ZL + 1, m[0], m[1]) : false;
+    if (!ch && was && anim()) w.animate([{transform:was}, {transform:"none"}], {duration:T.mid, easing:DEC});
+  };
+  document.addEventListener("touchend", end); document.addEventListener("touchcancel", end);
+  document.addEventListener("gesturestart", e => { if (e.target.closest && e.target.closest(".wall")) e.preventDefault(); });
+  let wt = 0;
+  addEventListener("wheel", e => {                           // 觸控板捏、Ctrl＋滾輪
+    if (!e.ctrlKey || LB || SS || SY || !$(".wall")) return;
+    e.preventDefault();
+    if (performance.now() - wt < 450 || Math.abs(e.deltaY) < 2) return;
+    wt = performance.now(); zoomWall(ZL + (e.deltaY > 0 ? 1 : -1), e.clientX, e.clientY);
+  }, {passive:false});
+  addEventListener("keydown", e => { if (LB || SS || SY || e.target.closest("input")) return;
+    if (e.key === "+" || e.key === "=") zoomWall(ZL - 1, innerWidth / 2, innerHeight / 2); else if (e.key === "-") zoomWall(ZL + 1, innerWidth / 2, innerHeight / 2); });
+})();
 addEventListener("contextmenu", e => { if (e.target.closest(".ph,.zw,.mk,.hero")) e.preventDefault(); });   // 不能按右鍵、長按另存
 addEventListener("dragstart", e => { if (e.target.tagName === "IMG") e.preventDefault(); });
 document.addEventListener("click", e => {
@@ -285,6 +396,8 @@ document.addEventListener("click", e => {
   if (t) return openLb(+t.dataset.i);
   if (e.target.closest(".cue")) return scrollTo({top:$(".hero").offsetHeight - 8, behavior:anim() ? "smooth" : "auto"});
   if (e.target.closest("[data-ss]")) return show(0);
+  const mm = e.target.closest("[data-mem]");
+  if (mm) return story(+mm.dataset.mem, mm.querySelector(".mring"));
   const m = e.target.closest(".mk");
   if (m) return openLb(+m.dataset.i);
 });
@@ -415,10 +528,18 @@ function openLb(i){
     else v.pause();
     vSync();
   }
-  function live(){                                           // 原況照片：動一下
+  function live(){                                           // 原況照片：動一下（按住照片、或按上面的原況鈕）
     const p = PH[S.i], v = cur().querySelector(".lvv"); if (!p.lv || !v) return;
     if (!v.src) { v.src = src(p, "m"); v.addEventListener("ended", () => v.closest(".zw").classList.remove("moving")); }
     v.currentTime = 0; v.closest(".zw").classList.add("moving"); v.play().catch(() => v.closest(".zw").classList.remove("moving"));
+  }
+  function liveOff(){ const v = cur().querySelector(".lvv"); if (v) { v.pause(); v.closest(".zw").classList.remove("moving"); } }
+  function heartAt(x, y){                                    // 點兩下：中間跳出大愛心、按讚
+    const p = PH[S.i], h = document.createElement("i");
+    h.className = "bigh"; h.innerHTML = I("heart");
+    h.style.left = x + "px"; h.style.top = y + "px";
+    el.appendChild(h); setTimeout(() => h.remove(), T.slow * 2);
+    if (!p.me) like(S.i, $("[data-lk]", el), social);
   }
   function social(){
     const p = PH[S.i], lk = $("[data-lk]", el), cm = $("[data-cm]", el); if (!lk) return;
@@ -431,7 +552,6 @@ function openLb(i){
     if (moved) stopAll();
     $("[data-lv]", el).classList.toggle("show", !!p.lv);
     social(); vSync();
-    if (moved && p.lv && anim()) setTimeout(() => { if (LB === S && PH[S.i] === p) live(); }, 350);
     $(".cnt", el).textContent = `${S.i + 1} / ${PH.length}`;
     const cam = camName(p.x);
     $(".cap b", el).textContent = p.p ? p.p.n : d ? fdate(d) : p.n;
@@ -513,8 +633,10 @@ function openLb(i){
     if (S.closing) return;
     stage.setPointerCapture(e.pointerId);
     ptr.set(e.pointerId, {x:e.clientX, y:e.clientY});
-    if (ptr.size === 1) { finish(); g = {type:null, x0:e.clientX, y0:e.clientY, t0:performance.now(), lx:e.clientX, ly:e.clientY, lt:performance.now(), vx:0, vy:0, z0:{...S.z}}; }
-    else if (ptr.size === 2) { const [a, b] = [...ptr.values()]; g = {type:"pinch", d0:Math.hypot(a.x - b.x, a.y - b.y), m0:{x:(a.x + b.x) / 2, y:(a.y + b.y) / 2}, z0:{...S.z}}; }
+    clearTimeout(S.lvT);
+    if (ptr.size === 1) { finish(); g = {type:null, x0:e.clientX, y0:e.clientY, t0:performance.now(), lx:e.clientX, ly:e.clientY, lt:performance.now(), vx:0, vy:0, z0:{...S.z}};
+      if (PH[S.i].lv && S.z.s < 1.02) { const gg = g; S.lvT = setTimeout(() => { if (g === gg && !g.type) { g.type = "live"; live(); } }, 260); } }
+    else if (ptr.size === 2) { if (g && g.type === "live") liveOff(); const [a, b] = [...ptr.values()]; g = {type:"pinch", d0:Math.hypot(a.x - b.x, a.y - b.y), m0:{x:(a.x + b.x) / 2, y:(a.y + b.y) / 2}, z0:{...S.z}}; }
   });
   stage.addEventListener("pointermove", e => {
     if (!ptr.has(e.pointerId) || !g) return;
@@ -530,7 +652,9 @@ function openLb(i){
     const now = performance.now(), dt = Math.max(1, now - g.lt);
     g.vx = .8 * (e.clientX - g.lx) / dt + .2 * g.vx; g.vy = .8 * (e.clientY - g.ly) / dt + .2 * g.vy; g.lx = e.clientX; g.ly = e.clientY; g.lt = now;
     const dx = e.clientX - g.x0, dy = e.clientY - g.y0;
+    if (g.type === "live") return;
     if (!g.type) {
+      if (Math.hypot(dx, dy) > 8) clearTimeout(S.lvT);
       if (S.z.s > 1.02) g.type = "pan";
       else if (Math.hypot(dx, dy) > 8) g.type = Math.abs(dx) > Math.abs(dy) ? "swipe" : dy > 0 ? "down" : "up";
       else return;
@@ -557,6 +681,8 @@ function openLb(i){
       g = null; return;
     }
     if (ptr.size) return;
+    clearTimeout(S.lvT);
+    if (g.type === "live") { g = null; return liveOff(); }
     const dx = e.clientX - g.x0, dy = e.clientY - g.y0, dt = performance.now() - g.t0, type = g.type, vx = g.vx, vy = g.vy;
     g = null;
     if (type === "swipe") {
@@ -577,7 +703,7 @@ function openLb(i){
     if (type === "pan") return clampZoom();
     if (!type && dt < 350) {                                   // 點一下：開關上下的按鈕；點兩下：放大縮小
       const now = performance.now();
-      if (now - lastTap < 300) { clearTimeout(tapT); lastTap = 0; return dbl(e.clientX, e.clientY); }
+      if (now - lastTap < 300) { clearTimeout(tapT); lastTap = 0; return S.z.s > 1.02 || !D.talk || PH[S.i].broken ? dbl(e.clientX, e.clientY) : heartAt(e.clientX, e.clientY); }
       lastTap = now;
       tapT = setTimeout(() => { if (S.info) setInfo(false); else if (isVid(PH[S.i]) && vid()) { vToggle(); if (vid().paused) el.classList.remove("bare"); } else el.classList.toggle("bare"); }, 300);
     }
@@ -653,8 +779,8 @@ function openLb(i){
     else if (e.key === "i") setInfo(!S.info);
   };
 }
-addEventListener("keydown", e => SS ? SS.key(e) : LB && LB.key(e));
-addEventListener("popstate", () => { if (SS) SS.close(); else if (LB) LB.close(); });
+addEventListener("keydown", e => SY ? SY.key(e) : SS ? SS.key(e) : LB && LB.key(e));
+addEventListener("popstate", () => { if (SY) SY.close(); else if (SS) SS.close(); else if (LB) LB.close(); });
 
 /* ── 愛心、留言 ── */
 async function talk(i, body){
@@ -820,6 +946,143 @@ function show(start){
   if (anim()) el.animate([{opacity:0}, {opacity:1}], {duration:T.slow, easing:EASE});
   go(at, true);
   poke();
+}
+
+/* ═════════ 回憶：像限時動態，一張幾秒自己往下，點右邊下一張、左邊上一張、按住暫停、往下滑關掉 ═════════ */
+const SYD = 4500;
+let SY = null;
+function story(n, from){
+  if (SY || !MEMS[n]) return;
+  const el = document.createElement("div");
+  el.className = "sy";
+  el.innerHTML = `<div class="syv"></div><div class="syt"><div class="syp"></div><div class="syh"><span class="mring"><img alt=""></span><div><b></b><small class="num"></small></div>
+    <button class="rb" data-yx aria-label="關閉">${I("x")}</button></div></div>${D.talk ? `<div class="syb"><button class="sb" data-ylk aria-label="愛心">${I("heart")}<span class="num"></span></button></div>` : ""}`;
+  document.body.appendChild(el);
+  document.documentElement.style.overflow = "hidden";
+  const view = $(".syv", el), bars = $(".syp", el);
+  let g = n, at = 0, timer = 0, left = SYD, t0 = 0, held = false, ms = SYD;
+  const S = {el}; SY = S;
+  function head(){
+    const m = MEMS[g];
+    bars.innerHTML = m.list.map(() => `<i><b></b></i>`).join("");
+    $(".syh img", el).src = src(PH[m.cv], "s");
+    $(".syh b", el).textContent = m.t; $(".syh small", el).textContent = m.s || "";
+    SEEN.add(m.k); store.set("vsa-seen-" + CODE, [...SEEN].join(","));
+    const b = $(`.mem[data-mem="${g}"]`); if (b) b.classList.add("seen");
+  }
+  function heart(){
+    const b = $("[data-ylk]", el); if (!b) return;
+    const p = PH[MEMS[g].list[at]]; b.classList.toggle("on", !!p.me); b.querySelector("span").textContent = p.lk || "";
+  }
+  function bar(k){
+    bars.querySelectorAll("b").forEach((x, j) => { x.style.transition = "none"; x.style.transform = `scaleX(${j < k ? 1 : 0})`; });
+    const cur = bars.children[k] && bars.children[k].firstChild; if (!cur) return;
+    void cur.offsetWidth; cur.style.transition = `transform ${left}ms linear`; cur.style.transform = "scaleX(1)";
+  }
+  function show(k, dir){
+    clearTimeout(timer);
+    const m = MEMS[g];
+    if (k >= m.list.length) return MEMS[g + 1] ? jump(g + 1, 1) : history.back();
+    if (k < 0) return MEMS[g - 1] ? jump(g - 1, -1, true) : show(0);
+    at = k;
+    const i = m.list[at], p = PH[i], old = view.querySelector(".syl:not(.out)");
+    const L = document.createElement("div"), fill = Math.abs(Math.log((p.w / p.h) / (innerWidth / innerHeight))) < .35;
+    L.className = "syl";
+    L.innerHTML = `<img class="sbg" alt="" src="${src(p, "s")}"><div class="syf${fill ? " cv" : ""}">${isVid(p) ? `<video playsinline preload="auto" src="${src(p, "v")}"></video>` : `<img alt="" draggable="false" src="${src(p, "l")}">`}</div>`;
+    view.appendChild(L);
+    const v = L.querySelector("video");
+    ms = v ? Math.min(15000, p.vd * 1000) : SYD;
+    left = ms;
+    if (v) { v.muted = false; v.play().catch(() => { v.muted = true; v.play().catch(() => {}); }); }
+    const go = () => { L.classList.add("in"); if (old) { old.classList.add("out"); setTimeout(() => old.remove(), T.slow); }
+      if (anim() && !v) L.querySelector(".syf").animate([{transform:"scale(1)"}, {transform:"scale(1.06)"}], {duration:ms + T.slow, easing:"linear", fill:"forwards"});
+      if (anim() && dir) L.animate([{transform:`translateX(${dir * 6}%)`}, {transform:"none"}], {duration:T.mid, easing:DEC}); };
+    const img = L.querySelector(".syf img");
+    if (img && !img.complete) { img.addEventListener("load", go, {once:true}); img.addEventListener("error", go, {once:true}); } else requestAnimationFrame(go);
+    bar(at); heart();
+    t0 = performance.now();
+    if (held) hold(true); else timer = setTimeout(() => show(at + 1), ms);
+    const nx = m.list[at + 1]; if (nx != null && !isVid(PH[nx])) { const im = new Image(); im.src = src(PH[nx], "l"); }
+  }
+  function jump(k, dir, last){                               // 換到下一天／上一天
+    g = k; head();
+    if (anim()) view.animate([{opacity:.4, transform:`translateX(${dir * 12}%) scale(.96)`}, {opacity:1, transform:"none"}], {duration:T.mid, easing:DEC});
+    show(last ? MEMS[g].list.length - 1 : 0);
+  }
+  function hold(on){
+    held = on; el.classList.toggle("held", on);
+    const v = view.querySelector(".syl:not(.out) video"), cur = bars.children[at] && bars.children[at].firstChild;
+    view.querySelectorAll(".syl:not(.out) .syf").forEach(f => f.getAnimations().forEach(a => on ? a.pause() : a.play()));
+    if (on) {
+      clearTimeout(timer); left = Math.max(0, left - (performance.now() - t0));
+      if (cur) { const k = getComputedStyle(cur).transform; cur.style.transition = "none"; cur.style.transform = k === "none" ? "scaleX(0)" : k; }
+      if (v) v.pause();
+    } else {
+      t0 = performance.now();
+      if (cur) { cur.style.transition = `transform ${left}ms linear`; cur.style.transform = "scaleX(1)"; }
+      timer = setTimeout(() => show(at + 1), left);
+      if (v) v.play().catch(() => {});
+    }
+  }
+  function close(){
+    if (S.closing) return; S.closing = 1;
+    clearTimeout(timer);
+    view.querySelectorAll("video").forEach(v => v.pause());
+    const fin = () => { el.remove(); if (!LB && !SS) document.documentElement.style.overflow = ""; SY = null; };
+    if (!anim()) return fin();
+    const b = $(`.mem[data-mem="${g}"] .mring`), r = b && b.getBoundingClientRect();
+    const to = r && r.bottom > 0 && r.top < innerHeight ? `translate(${r.left + r.width / 2 - innerWidth / 2}px,${r.top + r.height / 2 - innerHeight / 2}px) scale(${r.width / innerWidth})` : "translateY(30%) scale(.8)";
+    const cur = getComputedStyle(el).transform;
+    el.animate([{transform:cur === "none" ? "none" : cur, opacity:1, borderRadius:"0"}, {transform:to, opacity:0, borderRadius:"50%"}], {duration:T.mid, easing:EASE, fill:"forwards"}).onfinish = fin;
+  }
+  S.close = close;
+  S.key = e => {
+    if (e.key === "Escape") history.back();
+    else if (e.key === "ArrowRight") show(at + 1, 1);
+    else if (e.key === "ArrowLeft") show(at - 1, -1);
+    else if (e.key === " ") { e.preventDefault(); hold(!held); }
+  };
+  let p0 = null, ht = 0;
+  el.addEventListener("pointerdown", e => {
+    if (e.target.closest("button")) return;
+    p0 = {x:e.clientX, y:e.clientY, t:performance.now(), h:false};
+    ht = setTimeout(() => { if (p0) { p0.h = true; hold(true); } }, 220);
+  });
+  el.addEventListener("pointermove", e => {
+    if (!p0) return;
+    const dy = e.clientY - p0.y;
+    if (dy > 10 && Math.abs(dy) > Math.abs(e.clientX - p0.x)) { p0.dn = true; el.style.transform = `translateY(${dy}px) scale(${1 - Math.min(.2, dy / innerHeight * .4)})`; el.style.borderRadius = "24px"; }
+  });
+  const up = e => {
+    clearTimeout(ht);
+    if (!p0) return;
+    const q = p0; p0 = null;
+    const dx = e.clientX - q.x, dy = e.clientY - q.y;
+    if (q.h) hold(false);
+    if (q.dn) {
+      if (dy > innerHeight * .14) return history.back();
+      const now = el.style.transform; el.style.transform = ""; el.style.borderRadius = "";
+      if (anim()) el.animate([{transform:now}, {transform:"none"}], {duration:T.mid, easing:DEC});
+      return;
+    }
+    if (Math.abs(dx) > 50 && Math.abs(dx) > Math.abs(dy)) return dx < 0 ? (MEMS[g + 1] ? jump(g + 1, 1) : history.back()) : MEMS[g - 1] && jump(g - 1, -1);
+    if (q.h || e.type === "pointercancel" || Math.hypot(dx, dy) > 10) return;
+    show(e.clientX < innerWidth * .3 ? at - 1 : at + 1, e.clientX < innerWidth * .3 ? -1 : 1);
+  };
+  el.addEventListener("pointerup", up); el.addEventListener("pointercancel", up);
+  el.addEventListener("click", e => {
+    if (e.target.closest("[data-yx]")) return history.back();
+    const lk = e.target.closest("[data-ylk]");
+    if (lk) like(MEMS[g].list[at], lk, heart);
+  });
+  el.addEventListener("contextmenu", e => e.preventDefault());
+  history.pushState({sy:1}, "");
+  if (anim()) {
+    const r = from && from.getBoundingClientRect();
+    el.animate([r ? {transform:`translate(${r.left + r.width / 2 - innerWidth / 2}px,${r.top + r.height / 2 - innerHeight / 2}px) scale(${r.width / innerWidth})`, borderRadius:"50%", opacity:.6}
+      : {transform:"scale(.9)", opacity:0}, {transform:"none", borderRadius:"0", opacity:1}], {duration:T.mid + 60, easing:DEC});
+  }
+  head(); show(0);
 }
 
 /* 照片資訊（越詳細越好）：時間、地點、相機、鏡頭、光圈、快門、ISO… */

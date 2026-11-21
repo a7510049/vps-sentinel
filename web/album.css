@@ -410,4 +410,58 @@ button.chip:active,a.chip:active{transform:scale(.95)}
 .ssend .chip.go{background:#fff;color:#111}
 .ssend .chip.go svg{color:#111}
 
+/* ═════════ 更好玩：照片牆兩指縮放、回憶圓圈、限時動態、點兩下愛心 ═════════ */
+.wall{transform-origin:50% 0;touch-action:pan-x pan-y}
+.wall[data-z="0"] .ph{border-radius:var(--r-sm)}
+.row.sq{gap:2px;margin-bottom:2px}
+.row.sq .ph{border-radius:0}
+.wall[data-z="2"] .day,.wall[data-z="3"] .day{margin-top:clamp(22px,4vw,44px)}
+.wall[data-z="2"] .day:first-child,.wall[data-z="3"] .day:first-child{margin-top:12px}
+.wall[data-z="2"] .dh,.wall[data-z="3"] .dh{grid-template-columns:auto 1fr auto;align-items:baseline;padding-bottom:8px;margin-bottom:10px}
+.wall[data-z="2"] .dh::before,.wall[data-z="3"] .dh::before{font-size:var(--fs-2xl);grid-row:auto}
+.wall[data-z="2"] .dh b,.wall[data-z="3"] .dh b{font-size:var(--fs-l)}
+.wall[data-z="3"] .dh span{justify-self:end}
+.wall[data-z="2"] .bdg .lkt,.wall[data-z="3"] .bdg>span{display:none}
+.wall[data-z="2"] .bdg .vt{right:3px;bottom:3px;height:18px;padding:0 5px}
+
+.mems{max-width:1600px;margin:0 auto;padding:clamp(8px,2vw,20px) 0 0}
+.mems[hidden]{display:none}
+.mrw{display:flex;gap:clamp(12px,2vw,20px);overflow-x:auto;padding:4px var(--pad) 6px;scroll-snap-type:x proximity;scrollbar-width:none;-webkit-overflow-scrolling:touch}
+.mrw::-webkit-scrollbar{display:none}
+.mem{flex:none;width:76px;display:grid;justify-items:center;gap:6px;scroll-snap-align:start;transition:transform var(--sp-fast)}
+.mem:active{transform:scale(.92)}
+.mring{position:relative;width:72px;height:72px;border-radius:50%;padding:3px;display:block;
+  background:conic-gradient(from 210deg,color-mix(in oklab,var(--seed) 80%,#fff),#ff6a88,#ffb36b,color-mix(in oklab,var(--seed) 80%,#fff))}
+.mring img{width:100%;height:100%;border-radius:50%;object-fit:cover;display:block;box-shadow:0 0 0 2.5px var(--bg);background:var(--s2);-webkit-touch-callout:none}
+.mem.seen .mring{background:var(--line);box-shadow:inset 0 0 0 1.5px color-mix(in oklab,var(--tx) 18%,transparent)}
+.mem b{font-family:var(--serif);font-weight:600;font-size:var(--fs-s);letter-spacing:.04em;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.mem small{margin-top:-6px;font-size:11px;color:var(--tx3)}
+@media (min-width:700px){.mem{width:92px}.mring{width:86px;height:86px}}
+
+.sy{position:fixed;inset:0;z-index:var(--z-veil);background:#000;color:#fff;touch-action:none;user-select:none;-webkit-user-select:none;overflow:hidden}
+.syv{position:absolute;inset:0}
+.syl{position:absolute;inset:0;opacity:0;transition:opacity var(--t-mid) var(--ease)}
+.syl.in{opacity:1}
+.syl.out{opacity:0}
+.syf{position:absolute;inset:0;will-change:transform}
+.syf img,.syf video{position:absolute;inset:0;width:100%;height:100%;object-fit:contain;-webkit-touch-callout:none;pointer-events:none}
+.syf.cv img,.syf.cv video{object-fit:cover}
+.syt{position:absolute;left:0;right:0;top:0;z-index:2;padding:calc(env(safe-area-inset-top) + 10px) 12px 40px;background:linear-gradient(rgba(0,0,0,.5),transparent);transition:opacity var(--t-mid) var(--ease)}
+.syp{display:flex;gap:4px}
+.syp i{flex:1;height:2.5px;border-radius:var(--r-pill);background:rgba(255,255,255,.32);overflow:hidden}
+.syp b{display:block;height:100%;background:#fff;transform-origin:0 50%;transform:scaleX(0)}
+.syh{display:flex;align-items:center;gap:10px;margin-top:12px}
+.syh .mring{width:38px;height:38px;padding:2px;flex:none}
+.syh .mring img{box-shadow:0 0 0 2px #000}
+.syh div{flex:1;min-width:0;display:flex;align-items:baseline;gap:8px}
+.syh b{font-family:var(--serif);font-weight:600;letter-spacing:.04em;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.syh small{color:rgba(255,255,255,.7);font-size:var(--fs-s)}
+.syb{position:absolute;right:14px;bottom:calc(18px + env(safe-area-inset-bottom));z-index:2;transition:opacity var(--t-mid) var(--ease)}
+.sy.held .syt,.sy.held .syb{opacity:0}
+
+.bigh{position:absolute;z-index:3;width:110px;height:110px;margin:-55px 0 0 -55px;pointer-events:none;color:#ff4d6a;filter:drop-shadow(0 6px 24px rgba(255,77,106,.55));
+  animation:bigh 1.1s var(--ease) forwards}
+.bigh svg{width:100%;height:100%;fill:currentColor;stroke:none}
+@keyframes bigh{0%{transform:scale(.2) rotate(-12deg);opacity:0}18%{transform:scale(1.15) rotate(4deg);opacity:1}32%{transform:scale(.95) rotate(0)}70%{transform:scale(1);opacity:1}100%{transform:translateY(-60px) scale(.7);opacity:0}}
+
 @media (prefers-reduced-motion:reduce){*,*::before,*::after{animation-duration:.001s!important;transition-duration:.001s!important}}
