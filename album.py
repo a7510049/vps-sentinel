@@ -1804,6 +1804,26 @@ def alb_near_city(lat, lon):
     return {"n": best[1], "a": "", "c": best[1], "cc": best[2][:2].upper()} if best and best[0] < 1 else None
 
 
+ALB_PLV = 3                                   # 地名格式版本：3 起城市另外照「城市那一級」問（中國的地址城市欄常是區）
+ALB_S2T = str.maketrans(dict(zip('区區县縣广廣东東门門龙龍汉漢湾灣庆慶阳陽宁寧苏蘇无無锡錫连連乌烏鲁魯齐齊尔爾滨濱长長兰蘭银銀贵貴厦廈闽閩头頭余餘鸡雞济濟郑鄭开開岛島烟煙潍濰临臨扬揚镇鎮绍紹兴興温溫华華义義丽麗黄黃冈岡荆荊张張凤鳳贺賀钦欽琼瓊亚亞萨薩内內辽遼绥綏郸鄲庄莊沧滄云雲丰豐历歷乡鄉号號园園场場馆館楼樓桥橋庙廟宫宮观觀车車机機厅廳厂廠铺鋪业業体體学學医醫处處关關际際国國环環贸貿万萬达達荟薈汇匯滩灘闸閘宝寶静靜闵閔杨楊贤賢浔潯吴吳盘盤栖棲邺鄴罗羅岗崗盐鹽坝壩从從萝蘿顺順禅禪鹤鶴庐廬岭嶺坛壇纪紀层層阁閣湿濕风風点點级級线線铁鐵轨軌运運动動栋棟单單邮郵电電视視农農渔漁码碼仓倉储儲疗療养養卫衛艺藝术術剧劇戏戲书書图圖档檔饭飯宾賓证證险險网網络絡讯訊软軟产產经經试試验驗们們个個这這进進过過还還时時间間乐樂浑渾邓鄧谭譚陆陸陈陳刘劉孙孫赵趙许許韩韓冯馮郓鄆枣棗滦灤岚嵐兖兗泸瀘绵綿凉涼毕畢铜銅钟鐘随隨荡蕩娄婁怀懷浏瀏帅帥钢鋼铝鋁'[0::2], '区區县縣广廣东東门門龙龍汉漢湾灣庆慶阳陽宁寧苏蘇无無锡錫连連乌烏鲁魯齐齊尔爾滨濱长長兰蘭银銀贵貴厦廈闽閩头頭余餘鸡雞济濟郑鄭开開岛島烟煙潍濰临臨扬揚镇鎮绍紹兴興温溫华華义義丽麗黄黃冈岡荆荊张張凤鳳贺賀钦欽琼瓊亚亞萨薩内內辽遼绥綏郸鄲庄莊沧滄云雲丰豐历歷乡鄉号號园園场場馆館楼樓桥橋庙廟宫宮观觀车車机機厅廳厂廠铺鋪业業体體学學医醫处處关關际際国國环環贸貿万萬达達荟薈汇匯滩灘闸閘宝寶静靜闵閔杨楊贤賢浔潯吴吳盘盤栖棲邺鄴罗羅岗崗盐鹽坝壩从從萝蘿顺順禅禪鹤鶴庐廬岭嶺坛壇纪紀层層阁閣湿濕风風点點级級线線铁鐵轨軌运運动動栋棟单單邮郵电電视視农農渔漁码碼仓倉储儲疗療养養卫衛艺藝术術剧劇戏戲书書图圖档檔饭飯宾賓证證险險网網络絡讯訊软軟产產经經试試验驗们們个個这這进進过過还還时時间間乐樂浑渾邓鄧谭譚陆陸陈陳刘劉孙孫赵趙许許韩韓冯馮郓鄆枣棗滦灤岚嵐兖兗泸瀘绵綿凉涼毕畢铜銅钟鐘随隨荡蕩娄婁怀懷浏瀏帅帥钢鋼铝鋁'[1::2])))   # 中國的地名常只有簡體：地名常見字換成繁體
+
+
+def alb_zh(s, cc):
+    return s.translate(ALB_S2T) if cc == "CN" and s else s
+
+
+def alb_city_name(j):
+    ad = j.get("address") or {}
+    name = j.get("name") if j.get("addresstype") in ("city", "town", "village", "municipality", "county", "state_district", "region", "province", "state") else ""
+    name = name or ad.get("city") or ad.get("town") or ad.get("municipality") or ad.get("county") or ad.get("state") or ""
+    st = ad.get("state") or ""
+    if name[-1:] in "区區县縣旗" and st[-1:] == "市":          # 北京、上海這類直轄市：城市是「省」那一級
+        name = st
+    if len(name) >= 3 and name[-1:] == "市":
+        name = name[:-1]
+    return name
+
+
 def alb_place_fmt(j):
     ad = j.get("address") or {}
     city = ad.get("city") or ad.get("town") or ad.get("village") or ad.get("county") or ""
@@ -1816,34 +1836,53 @@ def alb_place_fmt(j):
     for s in rest:
         if s not in seen:
             seen.append(s)
-    return {"n": top[:40], "a": "・".join(seen[:3])[:60], "c": (city or state or country)[:30], "cc": str(ad.get("country_code") or "").upper()[:2], "v": 2}
+    cc = str(ad.get("country_code") or "").upper()[:2]
+    return {"n": alb_zh(top, cc)[:40], "a": alb_zh("・".join(seen[:3]), cc)[:60], "c": alb_zh(city or state or country, cc)[:30], "cc": cc, "v": ALB_PLV}
+
+
+def alb_geo_ask(lat, lon, zoom):
+    gap = 1.1 - (time.time() - ALB["geo_t"])        # Nominatim 一秒最多一次
+    if gap > 0:
+        time.sleep(gap)
+    ALB["geo_t"] = time.time()
+    url = os.environ.get("SENTINEL_ALB_GEO") or "https://nominatim.openstreetmap.org/reverse"
+    q = urllib.parse.urlencode({"format": "jsonv2", "lat": f"{lat:.5f}", "lon": f"{lon:.5f}", "zoom": zoom, "accept-language": "zh-TW,zh"})
+    try:
+        req = urllib.request.Request(url + "?" + q, headers={"User-Agent": f"vps-sentinel/{VERSION} (+https://github.com/a7510049/vps-sentinel)"})
+        with urllib.request.urlopen(req, timeout=10) as r:
+            j = json.loads(r.read(1 << 20))
+        return j if isinstance(j, dict) and j.get("address") else None
+    except Exception:  # noqa: BLE001
+        return None
 
 
 def alb_place(lat, lon, wait=False):
     k = f"{lat:.3f},{lon:.3f}"
     d = alb_places()
-    if k in d and (not wait or d[k].get("v") or d[k].get("tmp")):   # 舊版存的沒有城市、國家：背景補問一次
+    if k in d and (not wait or d[k].get("v", 0) >= ALB_PLV or d[k].get("tmp")):   # 舊版存的城市不準：背景補問一次
         return d[k]
     if not wait:
         return None
     with ALB_PL["lock"]:
-        if k in d and (d[k].get("v") or d[k].get("tmp")):
+        if k in d and (d[k].get("v", 0) >= ALB_PLV or d[k].get("tmp")):
             return d[k]
-        gap = 1.1 - (time.time() - ALB["geo_t"])
-        if gap > 0:
-            time.sleep(gap)
-        ALB["geo_t"] = time.time()
-        url = os.environ.get("SENTINEL_ALB_GEO") or "https://nominatim.openstreetmap.org/reverse"
-        q = urllib.parse.urlencode({"format": "jsonv2", "lat": f"{lat:.5f}", "lon": f"{lon:.5f}", "zoom": 17, "accept-language": "zh-TW,zh"})
         res = None
-        try:
-            req = urllib.request.Request(url + "?" + q, headers={"User-Agent": f"vps-sentinel/{VERSION} (+https://github.com/a7510049/vps-sentinel)"})
-            with urllib.request.urlopen(req, timeout=10) as r:
-                j = json.loads(r.read(1 << 20))
-            if isinstance(j, dict) and j.get("address"):
-                res = alb_place_fmt(j)
-        except Exception:  # noqa: BLE001
-            res = None
+        j = alb_geo_ask(lat, lon, 17)
+        if j:
+            res = alb_place_fmt(j)
+            ck = f"c{lat:.2f},{lon:.2f}"                  # 城市那一級（一公里一格共用一次）
+            cn = d.get(ck)
+            if cn is None:
+                cj = alb_geo_ask(lat, lon, 10)
+                cn = alb_zh(alb_city_name(cj), res["cc"])[:30] if cj else ""
+                if cn:
+                    d[ck] = cn
+            if cn:
+                res["c"] = cn
+            elif res["c"][-1:] in "区區县縣":               # 問不到城市那一級：用最近的機場城市
+                nc = alb_near_city(lat, lon)
+                if nc and nc["cc"] == res["cc"]:
+                    res["c"] = nc["c"]
         if not res:
             res = alb_near_city(lat, lon)
             if not res:
@@ -1979,7 +2018,7 @@ def alb_manifest(a, th=""):
             pl = alb_place(m["g"][0], m["g"][1])
             if pl:
                 it["p"] = {"n": pl["n"], "a": pl.get("a", ""), "c": pl.get("c") or pl["n"], "cc": pl.get("cc", "")}
-                if not pl.get("v") and not pl.get("tmp"):
+                if pl.get("v", 0) < ALB_PLV and not pl.get("tmp"):
                     old_pl = True
                 c = pl.get("c") or pl["n"]
                 places[c] = places.get(c, 0) + 1
