@@ -143,7 +143,8 @@
 .ico.safe{background:oklch(var(--tl) calc(var(--tc) * .7) 155);color:oklch(var(--fl) calc(var(--fc) * .75) 155)}
 .ico.devices{background:oklch(var(--tl) calc(var(--tc) * .5) 290);color:oklch(var(--fl) calc(var(--fc) * .55) 290)}
 .ico.note{background:oklch(var(--tl) var(--tc) 84);color:oklch(var(--fl) var(--fc) 84)}
-.ico.album{background:oklch(var(--tl) var(--tc) 24);color:oklch(var(--fl) var(--fc) 24)}
+.ico.adblk{background:oklch(var(--tl) calc(var(--tc) * .75) 24);color:oklch(var(--fl) calc(var(--fc) * .8) 24)}
+.ico.album{background:oklch(var(--tl) var(--tc) 335);color:oklch(var(--fl) var(--fc) 335)}
 .ico.theme{background:var(--pc);color:var(--on-pc)}                  /* 哨兵本身的動作（更新、編輯）：主題色 */
 .ico.warn{background:var(--warnc);color:var(--on-warnc)}            /* 要小心的動作（重新開機、換密碼） */
 .ico.bad{background:var(--badc);color:var(--on-badc)}               /* 刪除、移除、解除配對 */
@@ -1812,29 +1813,29 @@ html.flyon .dash>.view{content-visibility:hidden;contain-intrinsic-size:auto non
 .ntd .ntx{margin:0 4px 14px;color:var(--tx2);font-size:var(--fs-m);text-align:center}
 .ntd .ntb>.ubtn{width:100%}
 /* 相簿分享 */
-.abd{max-width:440px}
-.abb{display:flex;flex-direction:column;gap:12px}
-.abb>.ubtn{width:100%}
-.abb .ntx{margin:0 4px;color:var(--tx2);font-size:var(--fs-m);text-align:center}
-.abrow{width:100%;text-align:left;font:inherit;cursor:pointer}
-.abrow b,.abhead b{font-weight:650;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.abrow .chev{width:18px;height:18px;flex:none;color:var(--tx3);transform:rotate(-90deg)}
-.abc{flex:none!important;display:grid!important;place-items:center;width:48px;height:48px;border-radius:var(--r-sm);overflow:hidden;background:var(--s1);color:var(--tx3)}
-.abc.big{width:64px;height:64px;border-radius:var(--r-md)}
-.abc img{width:100%;height:100%;object-fit:cover}
-.abc svg{width:22px;height:22px}
-.abi{flex:none!important;color:var(--tx3)}.abi svg{width:16px;height:16px}
-.abhead{display:flex;align-items:center;gap:14px;padding:2px 2px 4px}
-.abhead>span:last-child{flex:1;min-width:0;display:flex;flex-direction:column;gap:2px}
-.abhead small,.abs{color:var(--tx3);font-size:var(--fs-s);font-weight:400}
-.abs{margin-left:6px}
-.abcrumb{display:flex;flex-wrap:wrap;align-items:center;gap:2px 4px;font-size:var(--fs-s);color:var(--tx3)}
-.abcrumb button{padding:4px 8px;border-radius:var(--r-pill);background:var(--chip);color:var(--tx2);font:inherit;cursor:pointer}
-.abcrumb button:last-child{background:var(--pc);color:var(--on-pc);font-weight:600}
-.abdirs{max-height:300px;overflow-y:auto}
-.abdirs .pkrow{width:100%;text-align:left;font:inherit;cursor:pointer;flex-shrink:0}
-.abdirs .chev{width:18px;height:18px;flex:none;color:var(--tx3);transform:rotate(-90deg)}
-.abb .seg{margin-top:6px}
+.almd{max-width:440px}
+.almb{display:flex;flex-direction:column;gap:12px}
+.almb>.ubtn{width:100%}
+.almb .ntx{margin:0 4px;color:var(--tx2);font-size:var(--fs-m);text-align:center}
+.almrow{width:100%;text-align:left;font:inherit;cursor:pointer}
+.almrow b,.almhead b{font-weight:650;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.almrow .chev{width:18px;height:18px;flex:none;color:var(--tx3);transform:rotate(-90deg)}
+.almc{flex:none!important;display:grid!important;place-items:center;width:48px;height:48px;border-radius:var(--r-sm);overflow:hidden;background:var(--s1);color:var(--tx3)}
+.almc.big{width:64px;height:64px;border-radius:var(--r-md)}
+.almc img{width:100%;height:100%;object-fit:cover}
+.almc svg{width:22px;height:22px}
+.almi{flex:none!important;color:var(--tx3)}.almi svg{width:16px;height:16px}
+.almhead{display:flex;align-items:center;gap:14px;padding:2px 2px 4px}
+.almhead>span:last-child{flex:1;min-width:0;display:flex;flex-direction:column;gap:2px}
+.almhead small,.alms{color:var(--tx3);font-size:var(--fs-s);font-weight:400}
+.alms{margin-left:6px}
+.almcrumb{display:flex;flex-wrap:wrap;align-items:center;gap:2px 4px;font-size:var(--fs-s);color:var(--tx3)}
+.almcrumb button{padding:4px 8px;border-radius:var(--r-pill);background:var(--chip);color:var(--tx2);font:inherit;cursor:pointer}
+.almcrumb button:last-child{background:var(--pc);color:var(--on-pc);font-weight:600}
+.almdirs{max-height:300px;overflow-y:auto}
+.almdirs .pkrow{width:100%;text-align:left;font:inherit;cursor:pointer;flex-shrink:0}
+.almdirs .chev{width:18px;height:18px;flex:none;color:var(--tx3);transform:rotate(-90deg)}
+.almb .seg{margin-top:6px}
 .ntd .ntr{padding:8px 8px 8px 14px}
 .ntd .ntk{flex:none;width:3em;color:var(--tx3);font-size:var(--fs-s)}
 .ntd .ntr code .ipb,.ntd .ntr code.ipb{cursor:pointer}
@@ -1844,3 +1845,21 @@ html.flyon .dash>.view{content-visibility:hidden;contain-intrinsic-size:auto non
 .ntst svg{width:16px;height:16px;flex:none}
 .ntd .dlnew .ubtn{flex:1}
 .ntd .ubtn.ghost.ntwipe{width:100%;margin-top:8px;background:none;color:var(--bad)}
+/* 擋廣告 DNS：三個數字、最近 24 小時的長條、最常擋的網址 */
+.abn{display:grid;grid-template-columns:repeat(3,1fr);gap:6px}
+.abn>div{display:flex;flex-direction:column;align-items:center;gap:2px;padding:12px 4px;border-radius:var(--r-md);background:var(--s3)}
+.abn b{font-size:var(--fs-xl);font-weight:600;color:var(--tx);font-variant-numeric:tabular-nums}
+.abn small{font-size:var(--fs-xs);color:var(--tx3)}
+.abh{display:flex;align-items:flex-end;gap:2px;height:36px;margin:8px 2px 0}
+.abh i{flex:1;height:var(--h);min-height:2px;border-radius:var(--r-xs) var(--r-xs) 0 0;background:var(--p);opacity:.55}
+.abtop{display:flex;flex-direction:column;border-radius:var(--r-md);background:var(--s3);padding:4px 0}
+.abtop>div{display:flex;align-items:center;gap:10px;padding:7px 14px;font-size:var(--fs-s)}
+.abtop span{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--tx2)}
+.abtop b{font-weight:600;color:var(--tx);font-variant-numeric:tabular-nums}
+.abd .abos{margin-bottom:8px}
+.abd .abst{display:flex;flex-direction:column;gap:8px}
+.abd .abst>.ubtn{width:100%}
+.abd .abst .ubtn svg{width:16px;height:16px;margin-right:6px}
+.abd .dlnew{margin-top:14px}
+.abjob{display:flex;align-items:center;justify-content:center;gap:10px;padding:18px;color:var(--tx2);font-size:var(--fs-m)}
+.ntst.bad{color:var(--bad)}

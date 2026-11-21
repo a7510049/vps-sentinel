@@ -282,6 +282,7 @@ def backup_sources(cs=None):
              ("nginx", ["/etc/nginx"]),
              ("安全憑證", ["/root/.acme.sh", "/root/cert"] + xui_cert_paths()),
              ("排程", ["/var/spool/cron/crontabs/root"]),
+             ("擋廣告 DNS", [AB_YAML, AB_UNIT_PATH]),                # 設定和自己加的規則；程式本身還原後哨兵會自動重新下載
              ("雲端硬碟設定", ["/opt/vps-cloud/data", "/etc/vps-cloud.key"]),   # 整顆加密的鑰匙：不見了雲端硬碟就打不開
              ("其他", [p.strip() for p in C.get("BACKUP_PATHS", "").split(",") if p.strip()])]
     out = []
