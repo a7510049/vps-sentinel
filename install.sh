@@ -158,7 +158,7 @@ rm -rf "$DIR.prev"
 [ -f "$DIR/sentinel.py" ] && cp -a "$DIR" "$DIR.prev"   # 留一份舊版：新版啟動失敗就換回來
 install -d "$DIR"
 install -m 755 "$HERE/sentinel.py" "$DIR/sentinel.py"
-for f in pair.py download.py backup.py guard.py fly.py; do install -m 644 "$HERE/$f" "$DIR/$f"; done
+for f in pair.py download.py backup.py guard.py notes.py fly.py; do install -m 644 "$HERE/$f" "$DIR/$f"; done
 install -d "$DIR/web"
 install -m 644 "$HERE"/web/index.html "$HERE"/web/style.css "$HERE"/web/app.js "$HERE"/web/pin.js "$HERE"/web/fly.js "$HERE"/web/font.woff2 "$DIR/web/"
 install -d "$DIR/data"

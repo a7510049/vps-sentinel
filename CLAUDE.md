@@ -22,6 +22,7 @@ download.py        遠端下載、影片網站下載（`dl_`、`yt_` 開頭）
 guard.py           安全檢查頁（`sec_`）、SSH 上鎖和金鑰（`ssh_`）、錯太多次封鎖（`guard_`）、自動安全更新（`autoupd_`）
 backup.py          每日備份、網頁還原（`bk_`、`rsw_` 開頭；.vsbk 格式和 `--restore`／`--decrypt` 留在 sentinel.py，單獨一個檔就能解開、還原）
                    以上三個跟 fly.py 一樣用 include() 載入、共用同一組變數，位置照原本的順序（include 定義在 HERE 下面）；這三個出錯整個哨兵就起不來（安裝會自動換回舊版）
+notes.py           加密筆記（Joplin 同步，`note_` 開頭）：同樣用 include() 載入
 fly.py             機場起降、分享的後端；sentinel.py 用 include("fly.py") 載入到自己裡面，兩邊共用同一組變數（不是獨立模組）
 web/index.html     網頁骨架；/*@style.css*/ 和 /*@app.js*/ 兩個記號會在啟動時被換成對應檔案的內容
 web/style.css      所有樣式，最前面的 :root 是共用設計規則
@@ -104,6 +105,7 @@ android/           安卓 App：全螢幕打開主機的網頁（記住網址）
 - 沒網域的主機走 https（`tls_` 開頭）：`DOMAIN` 沒設、`BIND` 不是本機時，啟動用 openssl 產生自己簽的憑證（`DATA_DIR/tls/`，P-384、10 年，不用備份也行），只收 TLS 1.3；同一個連接埠第一個位元組是 0x16 才當 https（`Server.finish_request`），從外面用 http 開網頁轉到 https，`/api/`、本機、安卓 App（`; wv)`）照舊收 http；主機之間只認指紋（`TLS_PINS`／`_PinHTTPS`，存 `tls-pins.json`）：配對暗號版本 2 帶指紋（`pair_decode_fp`），舊的 http 主機看到 `/api/status` 的 `tlsfp` 自動換 https（`tls_upgrade`）；設定檔 `TLS=off` 關掉
 - SSH 的門（`ssh_risks`，一小時看一次 `sshd -T`）：能用密碼登入是注意、root 能用密碼登入或允許空密碼是異常，放進 notices／problems（首頁小膠囊、Telegram）；測試用 SENTINEL_SSHD_T
 - 安全檢查頁（使用者要求，guard.py；設定 → 主機「安全檢查」，`secModal`，`/api/sec`，改東西要先確認是你）：上面四項自動做好的只看（`SECI`），下面四個開關（`SECO`）：SSH 只能用金鑰、root 只能用金鑰（只寫自己的 `/etc/ssh/sshd_config.d/00-vps-sentinel.conf`，`sshd -t` 過了才 reload，不對就換回；主設定沒讀 sshd_config.d 就在最前面加 Include）、錯太多次封鎖（`guard_loop`：讀 journalctl 的 sshd，10 分鐘錯 5 次封 1 小時、7 天內再來封 24 小時，7 天內成功登入過的、內部網路不封；nftables 表 `inet vps_sentinel`，沒有就 iptables；設定檔 `SSH_GUARD=off` 關，預設開；存 `DATA_DIR/ssh-guard.json`）、自動安裝安全更新（`/etc/apt/apt.conf.d/20auto-upgrades`，沒裝 unattended-upgrades 先背景裝）；**沒有金鑰不准關密碼登入**（`ssh_key_ok`）；SSH 金鑰可以貼 .pub 或「幫我做一組」（ssh-keygen ed25519，私密的只給網頁下載一次、主機不留）；第一次安裝 install.sh 跑 `--sec-setup`（打開自動安全更新、印出狀況）；哪一項從好變不好（`SEC_BAD`，`sec_watch` 10 分鐘看一次，上次的存 `DATA_DIR/sec-last.json`）記一筆「安全檢查：…」傳 Telegram（🔐）；測試用 SENTINEL_SSH_ETC／SENTINEL_SSH_HOME／SENTINEL_GUARD_FW／SENTINEL_GUARD_LOG／SENTINEL_GUARD_EVERY／SENTINEL_AUTOUPD／SENTINEL_SEC_EVERY
+- 加密筆記（使用者要求，notes.py，`note_` 開頭；工具分頁「加密筆記」`notesModal`，`/api/notes`）：`/notes/` 是給 Joplin 的小型 WebDAV（PROPFIND、GET、PUT、DELETE、MKCOL、MOVE、COPY），帳號固定 `joplin`、密碼是主機產生的亂數（存在加密的 `notes.json`，看密碼、打開、換密碼要先確認是你）；只收 https（經過本機 Caddy 看 X-Forwarded-Proto）；15 分鐘錯 10 次擋那個來源；筆記放 `DATA_DIR/notes`（跟著每日備份，主機磁碟留 1 GB），資料夾不見時回 503 不當成空的（Joplin 會以為全被刪了）；加密靠 Joplin 自己的端對端加密（網頁步驟第一步就是啟用加密）；關掉時筆記留著
 - 備份做完馬上試開一次（`bk_verify`：解密、每個檔案讀到底），失敗就算備份失敗；從沒成功過也會提醒「備份還沒成功過」
 - 還沒設定 Telegram（`tg_off`，被監看的主機不算）：首頁主機下面（電腦在右邊欄）一行「Telegram 通知 還沒設定」（`tgHint`），點了直接設定
 - Telegram 通知排隊（`tg_send`／`tg_flush`、`TG_QUEUE`，存在 state.json）：連不上、429、5xx（`TG_AGAIN`）先留著，每 30 秒照順序補傳，晚 2 分鐘以上的註明幾點，一天還傳不出去就丟掉；密碼錯、被封鎖直接丟掉；驗證碼這類即時的不排隊
