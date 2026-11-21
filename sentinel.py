@@ -45,7 +45,7 @@ from collections import deque
 from concurrent.futures import ThreadPoolExecutor
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
-VERSION = "4.34"
+VERSION = "4.35"
 
 # ───────────────────────── 哨兵備份檔（.vsbk）─────────────────────────
 # 哨兵專用的備份格式：外面是自己的檔案格式，裡面用的是成熟、標準的加密方法（不自己發明加密）：
@@ -4937,9 +4937,6 @@ class Handler(BaseHTTPRequestHandler):
             return self.send(200, ICON, "image/svg+xml", cache=True)
         if path == "/font.woff2":                  # 英數字型（公開的，不用登入）
             return self.send(200, FONT["b"], "font/woff2", cache=30 * 86400) if FONT["b"] else self.send(404, '{"error":"找不到"}')
-        if path == "/ab-icon.png":                 # AdGuard Home 的圖示（公開的，不用登入）
-            b = ab_icon()
-            return self.send(200, b, "image/png", cache=7 * 86400) if b else self.send(404, '{"error":"找不到"}')
         if path == "/dns.mobileconfig":            # iPhone 描述檔：網頁先拿一次性代碼（10 分鐘、用一次就失效）
             b = ab_profile_get(urllib.parse.parse_qs(urllib.parse.urlsplit(self.path).query).get("k", [""])[0])
             return self.send(200, b, "application/x-apple-aspen-config") if b else self.send(404, '{"error":"連結過期了，回網頁再按一次"}')
@@ -5083,7 +5080,7 @@ class Handler(BaseHTTPRequestHandler):
             return None
         if u.path not in ("/api/update", "/api/rename", "/api/traffic", "/api/telegram", "/api/links", "/api/self", "/api/cloud-open", "/api/cloud-ticket", "/api/cloud-revoke", "/api/peer",
                           "/api/token", "/api/passkey", "/api/passkey-login", "/api/pin", "/api/pin-login", "/api/login", "/api/sessions", "/api/backup", "/api/backup-store",
-                          "/api/restore-upload", "/api/restore-run", "/api/pair", "/api/pair-admin", "/api/reboot", "/api/keepalive", "/api/download", "/api/fly-share", "/api/fly-claim", "/api/opensky", "/api/sec", "/api/notes", "/api/adblock", "/api/adblock-profile", "/api/adguard-open", "/api/adguard-ticket", "/api/album"):
+                          "/api/restore-upload", "/api/restore-run", "/api/pair", "/api/pair-admin", "/api/reboot", "/api/keepalive", "/api/download", "/api/fly-share", "/api/fly-claim", "/api/opensky", "/api/sec", "/api/notes", "/api/adblock", "/api/adblock-profile", "/api/adguard-open", "/api/adguard-ticket", "/api/ab-probe", "/api/album"):
             return self.send(404, '{"error":"找不到"}')
         if u.path in ("/api/restore-upload", "/api/restore-run"):   # 網頁還原：要有安裝時給的代碼（或已經登入）
             if not (self.authed() or self.restore_code_ok()):
@@ -5381,6 +5378,16 @@ class Handler(BaseHTTPRequestHandler):
             if self.sess or not ab_conf().get("on") or not ab_base():
                 return self.send(403 if self.sess else 404, '{"ok":false}')
             return self.send(200, json.dumps(ab_ticket()))
+        if u.path == "/api/ab-probe":               # 別台請這台從外面試連它的 853（看主機商的防火牆有沒有開；只給主機之間的鑰匙）
+            if self.sess:
+                return self.send(403, '{"ok":false}')
+            try:
+                h = ab_probe_ok(str(json.loads(body or b"{}").get("host") or ""))
+            except (ValueError, AttributeError):
+                h = ""
+            if not h:
+                return self.send(400, '{"ok":false}')
+            return self.send(200, json.dumps({"ok": True, "err": ab_dot_probe(h)}, ensure_ascii=False))
         if u.path == "/api/cloud-ticket":           # 主要主機驗證過了，來拿這台雲端硬碟的登入票（只給主機之間的鑰匙）
             if self.sess or not CLOUD_URL:
                 return self.send(403 if self.sess else 404, '{"ok":false}')

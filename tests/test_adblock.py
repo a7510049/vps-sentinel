@@ -35,12 +35,6 @@ class FakeAGH(BaseHTTPRequestHandler):
         return want and self.headers.get("Authorization") == want
 
     def do_GET(self):
-        if self.path == "/assets/apple-touch-icon-180x180.png":
-            b = b"\x89PNG\r\n\x1a\nfake"
-            self.send_response(200)
-            self.send_header("Content-Length", str(len(b)))
-            self.end_headers()
-            return self.wfile.write(b)
         if self.path == "/china.conf":
             b = "".join(f"server=/{d}/114.114.114.114\n" for d in ("example.cn", "bad..x", "foo-china.com")).encode()
             self.send_response(200)
@@ -61,6 +55,10 @@ class FakeAGH(BaseHTTPRequestHandler):
             return self.reply(200, {"num_dns_queries": 2000, "num_blocked_filtering": 500, "avg_processing_time": 0.012,
                                     "top_blocked_domains": [{"ads.example.com": 300}, {"track.example.net": 100}],
                                     "blocked_filtering": [1, 2, 3]})
+        if self.path.startswith("/control/querylog?"):
+            return self.reply(200, {"data": [{"question": {"name": "ads.example.com"}, "time": "2026-11-21T08:00:05.123456789+08:00"},
+                                             {"question": {"name": "ads.example.com"}, "time": "2026-11-21T07:59:00Z"},
+                                             {"question": {"name": "pix.example.org"}, "time": "2026-11-21T07:58:00Z"}]})
         self.reply(404, {})
 
     def body(self):
@@ -121,7 +119,6 @@ class Adblock(Server):
         cls.EXTRA = "DOMAIN=dns.example.test\nHTTPS_PORT=9443\n"
         cls.ENV = {"SENTINEL_AB_FAKE": "1", "SENTINEL_AB_API": f"http://127.0.0.1:{cls.fake.server_port}",
                    "SENTINEL_AB_CERTS": cls.certs.name, "SENTINEL_AB_DIR": cls.abdir.name, "SENTINEL_AB_EVERY": "1",
-                   "SENTINEL_AB_ICON_URL": f"http://127.0.0.1:{cls.fake.server_port}/none.png",
                    "SENTINEL_AB_CNLIST": f"http://127.0.0.1:{cls.fake.server_port}/china.conf", "NO_PROXY": "127.0.0.1", "no_proxy": "127.0.0.1"}
         super().setUpClass()
 
@@ -140,12 +137,6 @@ class Adblock(Server):
                 return r.status, json.loads(r.read())
         except urllib.error.HTTPError as e:
             return e.code, json.loads(e.read())
-
-    def test_icon(self):
-        """AdGuard Home 自己的圖示：不用登入就拿得到"""
-        with urllib.request.urlopen(f"http://127.0.0.1:{self.port}/ab-icon.png", timeout=15) as r:
-            self.assertEqual(r.headers["Content-Type"], "image/png")
-            self.assertTrue(r.read().startswith(b"\x89PNG"))
 
     def test_flow(self):
         c, d = self.call("/api/adblock", {})
@@ -179,6 +170,7 @@ class Adblock(Server):
             time.sleep(0.1)
         self.assertEqual(d["stats"]["pct"], 25)
         self.assertEqual(d["stats"]["top"][0], ["ads.example.com", 300])
+        self.assertEqual(d["stats"]["recent"], [["ads.example.com", 1795219205], ["pix.example.org", 1795247880]])   # 最近擋的，同一個只留最新
         with urllib.request.urlopen(urllib.request.Request(f"http://127.0.0.1:{self.port}/api/status", headers={"X-Token": TOKEN}), timeout=15) as r:
             st = json.loads(r.read())
         self.assertEqual(st["adblock"]["on"], True)
@@ -240,6 +232,13 @@ class Adblock(Server):
         with no.open(urllib.request.Request(base + "/adguard/control/proxied?x=1", headers={"Cookie": ck}), timeout=15) as r:
             self.assertEqual(json.loads(r.read())["cookie"], "agh_session=abc")
         self.assertGreaterEqual(GOT["login"], 1)
+
+        # 別台請這台從外面試連 853：網域不對不幫忙；連不上要回原因
+        c, x = self.call("/api/ab-probe", {"host": "bad host"})
+        self.assertEqual(c, 400)
+        c, x = self.call("/api/ab-probe", {"host": "localhost.localdomain"})
+        self.assertEqual(c, 200, x)
+        self.assertTrue(x["err"])
 
         c, d = self.call("/api/adblock", {"action": "off"})
         self.assertEqual(c, 200)

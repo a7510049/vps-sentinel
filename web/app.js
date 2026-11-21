@@ -82,6 +82,7 @@ const P = {
   upd:'<path d="M21 12a9 9 0 1 1-9-9c2.52 0 4.93 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/>',
   shield:'<path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="m8.5 12 2.5 2.5 4.5-5"/>',
   dl:'<path d="M12 3v12"/><path d="m7 10 5 5 5-5"/><path d="M5 21h14"/>',
+  qr:'<rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><path d="M14 14h3v3h-3zM21 14v.01M14 21h.01M17.5 21H21v-3.5"/>',
   plug:'<path d="M9 2v5M15 2v5"/><path d="M6 7h12v4a6 6 0 0 1-12 0z"/><path d="M12 17v5"/>',
   clock:'<circle cx="12" cy="12" r="9.5"/><path d="M12 7v5l3 2"/>',
   lock:'<rect x="5" y="11" width="14" height="10" rx="2.5"/><path d="M8 11V7.5a4 4 0 0 1 8 0V11"/>',
@@ -95,7 +96,7 @@ const P = {
   mpin:'<path d="M12 21s7-6.2 7-12a7 7 0 0 0-14 0c0 5.8 7 12 7 12Z"/><circle cx="12" cy="9" r="2.5"/>',
   plane:'<path d="M17.8 19.2 16 11l3.5-3.5C21 6 21.5 4 21 3c-1-.5-3 0-4.5 1.5L13 8 4.8 6.2c-.5-.1-.9.1-1.1.5l-.3.5c-.2.5-.1 1 .3 1.3L9 12l-2 3H4l-1 1 3 2 2 3 1-1v-3l3-2 3.5 5.3c.3.4.8.5 1.3.3l.5-.2c.4-.3.6-.7.5-1.2z"/>',
   tack:'<path d="M12 17v5M9 10.76a2 2 0 0 1-1.11 1.79l-1.78.9A2 2 0 0 0 5 15.24V16a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-.76a2 2 0 0 0-1.11-1.79l-1.78-.9A2 2 0 0 1 15 10.76V7a1 1 0 0 1 1-1 2 2 0 0 0 0-4H8a2 2 0 0 0 0 4 1 1 0 0 1 1 1z"/>',
-  funnel:'<path d="M3 4h18l-7 8.5V19l-4 2v-8.5z"/>',
+  noad:'<rect x="2.5" y="5.5" width="19" height="13" rx="3"/><path d="m6.5 15 2-6 2 6M7.2 13h2.6M13.5 9v6h1.3a3 3 0 0 0 0-6z"/><path d="m4 3 16 18"/>',
   album:'<rect x="3" y="7" width="14" height="14" rx="2.5"/><path d="M7 3h11a3 3 0 0 1 3 3v11"/><circle cx="8.5" cy="12" r="1.5"/><path d="m17 17.5-4-4-7.5 7.5"/>',
   folder:'<path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>',
   note:'<path d="M13.4 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-7.4"/><path d="M2 6h4M2 10h4M2 14h4M2 18h4"/><path d="M21.4 5.6a2.1 2.1 0 1 0-3-3L13 8l-1 4 4-1z"/>',
@@ -237,7 +238,7 @@ const ALC = [
   [/^(\d+) 個安全更新$/, "shield", m => `<b>${m[1]}</b>`], [/^(\d+) 天沒有成功備份$/, "archive", m => `<b>${m[1]} 天</b>`], [/^備份還沒成功過$/, "archive", () => "沒成功過"],
   [/^SSH 允許空密碼登入$/, "key", () => "SSH 空密碼" + ALX], [/^root 能用密碼登入 SSH$/, "key", () => "root 密碼" + ALX],
   [/^SSH 能用密碼登入$/, "key", () => "SSH 密碼"],
-  [/^AdGuard Home 停了$/, "funnel", () => "AdGuard" + ALX], [/Oracle|太閒/, "cpu", () => "太閒"]];
+  [/^AdGuard Home 停了$/, "noad", () => "AdGuard" + ALX], [/Oracle|太閒/, "cpu", () => "太閒"]];
 function alChip(p, cls, key){
   for (const [re, ic, f] of ALC) { const m = p.match(re); if (m) return `<span class="alert ${cls}" data-key="${key}" title="${esc(p)}">${I(ic)}<span>${f(m)}</span></span>`; }
   return `<span class="alert ${cls} long" data-key="${key}">${I(cls === "bad" ? "warn" : "alert")}<span>${esc(p)}</span></span>`;
@@ -466,8 +467,8 @@ const COL = {cpu:"var(--c-cpu)", mem:"var(--c-mem)", rx:"var(--c-rx)", tx:"var(-
 /* 概念 → [顏色樣式, 圖示] */
 const ICO = {cpu:["cpu","cpu"], mem:["mem","mem"], disk:["disk","disk"], load:["load","gauge"], down:["down","down"], up:["up","up"],
   net:["net","net"], trend:["trend","trend"], month:["month","month"], box:["box","box"], bell:["bell","bell"], info:["info","info"],
-  flag:["flag","flag"], keep:["keep","shield"], key:["key","key"], finger:["finger","finger"], pin:["pin","pin"], link:["link","link"], archive:["archive","archive"], sun:["sun","sun"], quote:["quote","quote"], dl:["dl","dl"], cloud:["cloud","cloud"], fly:["fly","plane"], devices:["devices","devices"], safe:["safe","lockok"], sky:["sky","radar"], note:["note","note"], adblk:["adblk","funnel"], album:["album","album"]};
-const IC = (k, cls="sm") => `<span class="ico ${cls} ${ICO[k][0]}">${k === "adblk" ? `<img src="/ab-icon.png?v=2" alt="">` : I(ICO[k][1])}</span>`;   // AdGuard Home 用它自己的圖示（主機抓好給）
+  flag:["flag","flag"], keep:["keep","shield"], key:["key","key"], finger:["finger","finger"], pin:["pin","pin"], link:["link","link"], archive:["archive","archive"], sun:["sun","sun"], quote:["quote","quote"], dl:["dl","dl"], cloud:["cloud","cloud"], fly:["fly","plane"], devices:["devices","devices"], safe:["safe","lockok"], sky:["sky","radar"], note:["note","note"], adblk:["adblk","noad"], album:["album","album"]};
+const IC = (k, cls="sm") => `<span class="ico ${cls} ${ICO[k][0]}">${I(ICO[k][1])}</span>`;
 
 /* ═════════ 共用的小元件 ═════════ */
 /* 標誌：主題色的圓角方塊＋白色盾牌 */
@@ -1212,11 +1213,67 @@ async function openAgh(node, name){
     send: c => pkCall("/api/adguard-open", {...c, node: node || ""}, 1)});
   if (!t || !t.ticket || !safeUrl(t.login)) return;
   if (window.open("", "vsagh")) return cloudSubmit(t, "vsagh");
-  modal({icon: "funnel", title: "AdGuard Home", text: "驗證好了", ok: "打開"}).then(go => { if (go) cloudSubmit(t, "_blank"); });
+  modal({icon: "noad", cls: "adblk", title: "AdGuard Home", text: "驗證好了", ok: "打開"}).then(go => { if (go) cloudSubmit(t, "_blank"); });
 }
+/* QR 碼（位元組模式、M 級，版本 1～10）：回傳模組矩陣；給電腦顯示讓 iPhone 掃 */
+function qrMat(text, fm){
+  const by = [...new TextEncoder().encode(text)];
+  const T = [[26,10,1,16,0,0],[44,16,1,28,0,0],[70,26,1,44,0,0],[100,18,2,32,0,0],[134,24,2,43,0,0],[172,16,4,27,0,0],[196,18,4,31,0,0],[242,22,2,38,2,39],[292,22,3,36,2,37],[346,26,4,43,1,44]];
+  let v = 0; for (; v < 10; v++) { const t = T[v], dc = t[2] * t[3] + t[4] * t[5]; if (4 + (v < 9 ? 8 : 16) + 8 * by.length <= dc * 8) break; }
+  if (v >= 10) return null;
+  const [, ec, n1, d1, n2, d2] = T[v], dc = n1 * d1 + n2 * d2, V = v + 1, N = 17 + 4 * V;
+  const bits = []; const put = (x, l) => { for (let i = l - 1; i >= 0; i--) bits.push(x >> i & 1); };
+  put(4, 4); put(by.length, V < 10 ? 8 : 16); by.forEach(b => put(b, 8)); put(0, Math.min(4, dc * 8 - bits.length));
+  while (bits.length % 8) bits.push(0);
+  const data = []; for (let i = 0; i < bits.length; i += 8) data.push(parseInt(bits.slice(i, i + 8).join(""), 2));
+  for (let p = 0; data.length < dc; p ^= 1) data.push(p ? 17 : 236);
+  const ex = [], lg = []; for (let i = 0, x = 1; i < 255; i++) { ex[i] = x; lg[x] = i; x = x << 1 ^ (x & 128 ? 0x11d : 0); }
+  const mul = (a, b) => a && b ? ex[(lg[a] + lg[b]) % 255] : 0;
+  let g = [1]; for (let i = 0; i < ec; i++) { const h = g.concat(0); for (let j = 0; j < g.length; j++) h[j + 1] ^= mul(g[j], ex[i]); g = h; }
+  const blk = [], ecb = []; let o = 0;
+  for (let b = 0; b < n1 + n2; b++) { const L = b < n1 ? d1 : d2, d = data.slice(o, o += L), r = d.concat(Array(ec).fill(0));
+    for (let i = 0; i < L; i++) { const c = r[i]; if (c) for (let j = 1; j < g.length; j++) r[i + j] ^= mul(g[j], c); }
+    blk.push(d); ecb.push(r.slice(L)); }
+  const cw = []; for (let i = 0; i < Math.max(d1, d2); i++) blk.forEach(d => i < d.length && cw.push(d[i]));
+  for (let i = 0; i < ec; i++) ecb.forEach(e => cw.push(e[i]));
+  const M = Array.from({length:N}, () => Array(N).fill(0)), F = Array.from({length:N}, () => Array(N).fill(0));
+  const set = (r, c, x) => { M[r][c] = x ? 1 : 0; F[r][c] = 1; };
+  const finder = (r, c) => { for (let i = -1; i < 8; i++) for (let j = -1; j < 8; j++) { const y = r + i, x = c + j; if (y < 0 || x < 0 || y >= N || x >= N) continue;
+    set(y, x, i >= 0 && i <= 6 && j >= 0 && j <= 6 && (i == 0 || i == 6 || j == 0 || j == 6 || (i >= 2 && i <= 4 && j >= 2 && j <= 4))); } };
+  finder(0, 0); finder(0, N - 7); finder(N - 7, 0);
+  for (let i = 8; i < N - 8; i++) { set(6, i, i % 2 == 0); set(i, 6, i % 2 == 0); }
+  const AP = [[], [18], [22], [26], [30], [34], [22, 38], [24, 42], [26, 46], [28, 50]][v], ap = AP.length ? [6, ...AP] : [];
+  ap.forEach(r => ap.forEach(c => { if (r < 9 && (c < 9 || c > N - 9) || r > N - 9 && c < 9) return; for (let i = -2; i <= 2; i++) for (let j = -2; j <= 2; j++) set(r + i, c + j, Math.max(Math.abs(i), Math.abs(j)) != 1); }));
+  const bch = (x, gp, gl) => { let r = x << gl - 1; const d = l => 31 - Math.clz32(l); while (d(r) >= d(gp)) r ^= gp << d(r) - d(gp); return x << gl - 1 | r; };
+  const fmt = m => { const f = bch(m, 0x537, 11) ^ 0x5412;
+    for (let i = 0; i < 15; i++) { const b = f >> i & 1;
+      if (i < 6) set(i, 8, b); else if (i < 8) set(i + 1, 8, b); else set(N - 15 + i, 8, b);
+      if (i < 8) set(8, N - 1 - i, b); else if (i < 9) set(8, 15 - i - 1 + 1, b); else set(8, 15 - i - 1, b); }
+    set(N - 8, 8, 1); };
+  fmt(0);
+  if (V >= 7) { const vb = bch(V, 0x1f25, 13); for (let i = 0; i < 18; i++) { const b = vb >> i & 1; set(Math.floor(i / 3), N - 11 + i % 3, b); set(N - 11 + i % 3, Math.floor(i / 3), b); } }
+  const pos = []; for (let c = N - 1, up = 1; c > 0; c -= 2, up ^= 1) { if (c == 6) c--; for (let k = 0; k < N; k++) { const r = up ? N - 1 - k : k; for (let j = 0; j < 2; j++) if (!F[r][c - j]) pos.push([r, c - j]); } }
+  const MK = [(r, c) => (r + c) % 2 == 0, r => r % 2 == 0, (r, c) => c % 3 == 0, (r, c) => (r + c) % 3 == 0, (r, c) => (Math.floor(r / 2) + Math.floor(c / 3)) % 2 == 0,
+    (r, c) => r * c % 2 + r * c % 3 == 0, (r, c) => (r * c % 2 + r * c % 3) % 2 == 0, (r, c) => ((r + c) % 2 + r * c % 3) % 2 == 0];
+  const draw = m => { pos.forEach(([r, c], i) => { M[r][c] = ((cw[i >> 3] >> (7 - (i & 7)) & 1) ^ (MK[m](r, c) ? 1 : 0)); }); fmt(m); };
+  const score = () => { let s = 0, dk = 0;
+    for (let a = 0; a < 2; a++) for (let i = 0; i < N; i++) { let run = 1; const at = j => a ? M[j][i] : M[i][j]; let line = "";
+      for (let j = 0; j < N; j++) { line += at(j); if (j && at(j) == at(j - 1)) { run++; if (run == 5) s += 3; else if (run > 5) s++; } else run = 1; }
+      s += 40 * ((line.match(/(?=1011101(0000))|(?=(0000)1011101)/g) || []).length); }
+    for (let r = 0; r < N - 1; r++) for (let c = 0; c < N - 1; c++) { const x = M[r][c]; if (x == M[r][c + 1] && x == M[r + 1][c] && x == M[r + 1][c + 1]) s += 3; }
+    M.forEach(r => r.forEach(x => dk += x)); return s + 10 * Math.floor(Math.abs(dk * 20 / (N * N) - 10)); };
+  let best = fm == null ? 0 : fm, bs = 1e9;
+  if (fm == null) for (let m = 0; m < 8; m++) { draw(m); const s = score(); if (s < bs) { bs = s; best = m; } }
+  draw(best);
+  return M;
+}
+const qrSvg = t => { const M = qrMat(t); if (!M) return ""; const n = M.length; let d = "";
+  M.forEach((r, y) => r.forEach((x, c) => { if (x) d += `M${c + 4} ${y + 4}h1v1h-1z`; }));
+  return `<svg class="qrc" viewBox="0 0 ${n + 8} ${n + 8}" shape-rendering="crispEdges" role="img" aria-label="QR 碼"><rect width="100%" height="100%" fill="#fff"/><path d="${d}" fill="#000"/></svg>`; };
 function abModal(node, name){
   const q = node ? `?node=${encodeURIComponent(node)}` : "";
-  let D = null, busy = false, os = /iPhone|iPad|Macintosh/.test(navigator.userAgent) ? "ios" : "and", tm = 0, last = "";
+  const ios = /iPhone|iPad/.test(navigator.userAgent) || navigator.maxTouchPoints > 1 && /Macintosh/.test(navigator.userAgent);
+  let D = null, busy = false, os = ios || /Macintosh/.test(navigator.userAgent) ? "ios" : "and", tm = 0, last = "", lt = "top", qrk = "";
   const v = document.createElement("div"); v.className = "veil";
   v.innerHTML = `<div class="dialog pkd ntd abd">${IC("adblk", "big")}<h3>AdGuard Home</h3><p>${esc(name)}</p><div class="form"><div class="ntb">讀取中…</div><div class="msg"></div></div></div>`;
   $("#layer").appendChild(v);
@@ -1227,22 +1284,26 @@ function abModal(node, name){
     const mx = Math.max(1, ...x.hrs);
     return `<div class="abn"><div><b>${num(x.q)}</b><small>查詢</small></div><div><b>${num(x.b)}</b><small>擋掉</small></div><div><b>${x.pct}%</b><small>比例</small></div></div>
       ${x.hrs.length ? `<div class="abh" title="最近 24 小時擋掉的次數">${x.hrs.map(n => `<i style="--h:${Math.max(4, Math.round(n * 100 / mx))}%"></i>`).join("")}</div>` : ""}
-      ${x.top.length ? `<div class="lbl">最常擋的</div><div class="abtop">${x.top.map(([d, n]) => alRow(d, n)).join("")}</div>` : ""}`;
+      ${x.top.length || (x.recent || []).length ? `<div class="seg abtab"><button type="button" class="${lt === "top" ? "on" : ""}" data-ablt="top">最常擋的</button><button type="button" class="${lt === "new" ? "on" : ""}" data-ablt="new">最近擋的</button></div><div class="abls">${abls(x)}</div>` : ""}`;
   };
+  const abls = x => { const r = lt === "top" ? x.top.map(([d, n]) => alRow(d, n)) : (x.recent || []).map(([d, t]) => alRow(d, null, ago(t)));
+    return r.length ? `<div class="abtop">${r.join("")}</div>` : `<div class="ntst">${I("info")}<span>還沒有</span></div>`; };
   /* 擋錯了一鍵放行（放行過的再按一次恢復擋） */
-  const alRow = (d, n) => { const ok = (D.allow || []).includes(d);
-    return `<div><span>${esc(d)}</span>${n == null ? "" : `<b>${num(n)}</b>`}<button type="button" class="ubtn sm ghost" data-abal="${esc(d)}" data-on="${ok ? 0 : 1}">${ok ? "恢復擋" : "放行"}</button></div>`; };
+  const alRow = (d, n, t) => { const ok = (D.allow || []).includes(d);
+    return `<div><span>${esc(d)}</span>${n == null ? "" : `<b>${num(n)}</b>`}${t ? `<small>${t}</small>` : ""}<button type="button" class="ubtn sm ghost" data-abal="${esc(d)}" data-on="${ok ? 0 : 1}">${ok ? "恢復擋" : "放行"}</button></div>`; };
   const alList = () => { const top = ((D.stats || {}).top || []).map(([d]) => d), r = (D.allow || []).filter(d => !top.includes(d));
     return r.length ? `<div class="lbl">已放行</div><div class="abtop">${r.map(d => alRow(d)).join("")}</div>` : ""; };
-  const steps = () => os === "ios"
+  const steps = () => os === "ios" ? (ios
     ? `<button type="button" class="ubtn" data-abp>${I("dl")}安裝描述檔</button><ol class="ntsteps"><li>允許下載</li><li>設定 → 已下載描述檔 → 安裝</li></ol>`
+    : qrk ? `<div class="abqr">${qrSvg(location.origin + "/dns.mobileconfig?k=" + encodeURIComponent(qrk))}</div><ol class="ntsteps"><li>用 iPhone 相機掃，允許下載</li><li>設定 → 已下載描述檔 → 安裝</li></ol>`
+    : `<button type="button" class="ubtn" data-abqr>${I("qr")}用 iPhone 掃 QR 碼</button>`)
     : `<div class="codebox ntr"><code>${esc(D.dot)}</code><button type="button" class="ubtn sm ghost" data-abcp>複製</button></div>
       <ol class="ntsteps"><li>設定 → 網路和網際網路 → 私人 DNS</li><li>選「私人 DNS 供應商主機名稱」，貼上</li></ol>`;
   const view = () => D.job ? `<div class="abjob"><span class="spin"></span><span>${esc(D.job)}…</span></div>`
     : !D.on ? `<p class="ntx">手機的廣告、追蹤網址直接擋掉，只走加密連線。</p>${D.cert ? "" : `<p class="ntx">還沒有網域的憑證</p>`}<button type="button" class="ubtn" data-ab="on"${D.cert ? "" : " disabled"}>打開</button>`
-    : `${D.down ? `<div class="ntst bad">${I("warn")}<span>停了，正在重新啟動</span></div>` : D.pub ? `<div class="ntst bad">${I("warn")}<span>手機連不上：${esc(D.pub)}</span></div>` : ""}${stats(D.stats)}${alList()}
+    : `${D.down ? `<div class="ntst bad">${I("warn")}<span>停了，正在重新啟動</span></div>` : D.pub ? `<div class="ntst bad">${I("warn")}<span>手機連不上：${esc(D.pub)}</span></div>` : D.ext ? `<div class="ntst bad">${I("warn")}<span>從${esc(D.ext_by)}連不到：到主機商的防火牆打開 TCP ${D.port}</span></div>` : ""}${stats(D.stats)}${alList()}
       <div class="lbl">手機設定</div><div class="seg abos"><button type="button" class="${os === "ios" ? "on" : ""}" data-abos="ios">iPhone</button><button type="button" class="${os === "and" ? "on" : ""}" data-abos="and">Android</button></div>
-      <div class="abst">${steps()}</div><div class="ntst">${I("info")}<span>連不上的話，到主機商的防火牆打開 TCP ${D.port}</span></div>
+      <div class="abst">${steps()}</div>${D.ext === "" || D.ext ? "" : `<div class="ntst">${I("info")}<span>連不上的話，到主機商的防火牆打開 TCP ${D.port}</span></div>`}
       <div class="dlnew"><button type="button" class="ubtn sm ghost" data-abweb>管理頁${EXT}</button><button type="button" class="ubtn sm ghost" data-ab="off">關掉</button></div>`;
   const draw = () => { const h = view(); if (h !== last) { last = h; swapHTML(body, h); } };
   const call = async b => {
@@ -1273,12 +1334,18 @@ function abModal(node, name){
         return;
       }
       if (t.closest("[data-abweb]")) return openAgh(node, name);
-      if (t.closest("[data-abp]")) {
+      const lb = t.closest("[data-ablt]");
+      if (lb) { if (lb.dataset.ablt === lt) return; lt = lb.dataset.ablt; v.querySelectorAll("[data-ablt]").forEach(x => x.classList.toggle("on", x === lb));
+        last = view(); swapHTML(v.querySelector(".abls"), abls(D.stats)); return; }
+      const pq = t.closest("[data-abp],[data-abqr]");
+      if (pq) {
         try {
           const r = await api("/api/adblock-profile", {method:"POST", headers:{"X-Token":getTok(), "Content-Type":"application/json"}, body:JSON.stringify({url:D.doh, name})});
           const x = await r.json().catch(() => ({}));
           if (!r.ok || !x.k) throw new Error(x.message || "失敗了，請再試一次");
-          location.href = "/dns.mobileconfig?k=" + encodeURIComponent(x.k);
+          if (pq.dataset.abqr == null) { location.href = "/dns.mobileconfig?k=" + encodeURIComponent(x.k); return; }
+          qrk = x.k; last = view(); swapHTML(v.querySelector(".abst"), steps());
+          setTimeout(() => { if (qrk === x.k) { qrk = ""; if (!v._d && os === "ios") { last = view(); swapHTML(v.querySelector(".abst"), steps()); } } }, 540000);
         } catch (x) { sayTo(msg, x.message); }
         return;
       }
@@ -1286,7 +1353,7 @@ function abModal(node, name){
       if (al) { const x = await run({action: al.dataset.on === "1" ? "allow" : "unallow", domain: al.dataset.abal}); if (x && x.message) toast(x.message); return; }
       const b = t.closest("[data-ab]"); if (!b) return;
       const act = b.dataset.ab;
-      if (act === "off" && !await modal({icon:"funnel", cls:"warn", title:"關掉 AdGuard Home？", text:"設好的手機會查不到網址，要先改回來。", ok:"關掉"})) return;
+      if (act === "off" && !await modal({icon:"noad", cls:"warn", title:"關掉 AdGuard Home？", text:"設好的手機會查不到網址，要先改回來。", ok:"關掉"})) return;
       const x = await run({action: act});
       if (x && act === "off") toast("已關掉");
     });
