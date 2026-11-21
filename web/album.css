@@ -412,7 +412,7 @@ button.chip:active,a.chip:active{transform:scale(.95)}
 
 /* ═════════ 更好玩：照片牆兩指縮放、回憶圓圈、限時動態、點兩下愛心 ═════════ */
 .wall{transform-origin:50% 0;touch-action:pan-x pan-y}
-body{touch-action:pan-x pan-y}
+html,body{touch-action:pan-x pan-y}
 .wall[data-z="0"] .ph{border-radius:var(--r-sm)}
 .row.sq{gap:2px;margin-bottom:2px}
 .row.sq .ph{border-radius:0}

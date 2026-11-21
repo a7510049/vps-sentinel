@@ -185,8 +185,8 @@ function sections(){
   GROUPS = groupsOf(ZL);
   const w = $(".wall"); w.dataset.z = ZL;
   w.innerHTML = GROUPS.map((g, gi) => `<section class="day" data-g="${gi}">${g.k && g.d ? g.m
-    ? `<div class="dh"><b>${g.d.y}年${g.d.mo}月</b><span class="num">${g.list.length}</span></div>`
-    : `<div class="dh" data-day="${g.k}"><b>${fday(g.d, YR)}</b><span>${esc(dayPlaces(g.k))}</span></div>` : ""}<div class="rows"></div></section>`).join("");
+    ? `<div class="dh" data-k="m${g.k}"><b>${g.d.y}年${g.d.mo}月</b><span class="num">${g.list.length}</span></div>`
+    : `<div class="dh" data-day="${g.k}" data-k="d${g.k}"><b>${fday(g.d, YR)}</b><span>${esc(dayPlaces(g.k))}</span></div>` : ""}<div class="rows"></div></section>`).join("");
 }
 function wallRects(){                                         // 現在畫面上每張的位置（動畫中、手指捏著的也算）
   const vis = new Map(), H = innerHeight;
@@ -204,6 +204,10 @@ function zoomWall(z, fx, fy, pre){                            // 換大小：每
   const a0 = anc >= 0 ? vis.get(anc) : null;
   TILES.forEach(t => { t.getAnimations().forEach(a => a.cancel()); t.querySelectorAll("img,.bdg").forEach(x => x.getAnimations().forEach(a => a.cancel())); });
   document.querySelectorAll(".dh").forEach(h => h.getAnimations().forEach(a => a.cancel()));
+  const OUT = [".mems", ".msec", ".foot"].map(q => $(q)).filter(Boolean);       // 照片牆上下的回憶、地圖、結尾也跟著滑
+  OUT.forEach(e => e.getAnimations().forEach(a => a.cancel()));
+  const o0 = OUT.map(e => e.getBoundingClientRect().top), h0 = new Map();
+  document.querySelectorAll(".dh[data-k]").forEach(h => h0.set(h.dataset.k, h.getBoundingClientRect().top));
   const w = $(".wall"); w.style.transform = ""; w.style.transformOrigin = "";
   ZL = z; store.set("vsa-zoom", z);
   sections(); layout(true);
@@ -226,7 +230,12 @@ function zoomWall(z, fx, fy, pre){                            // 換大小：每
     t.querySelectorAll("img").forEach(im => im.animate(ik, {duration:ZDUR, easing:"linear"}));   // 照片反著縮回來，看起來是等比例變大變小
     const b = t.querySelector(".bdg"); if (b) b.animate([{opacity:0}, {opacity:0, offset:.6}, {opacity:1}], {duration:ZDUR, easing:"linear"});
   });
-  document.querySelectorAll(".dh").forEach(h => h.animate([{opacity:0, transform:"translateY(6px)"}, {opacity:1, transform:"none"}], {duration:ZDUR, delay:ZDUR * .3, easing:DEC, fill:"backwards"}));
+  document.querySelectorAll(".dh").forEach(h => {
+    const y0 = h0.get(h.dataset.k), y1 = h.getBoundingClientRect().top;
+    if (y0 != null) h.animate([{transform:`translateY(${y0 - y1}px)`}, {transform:"none"}], {duration:ZDUR, easing:DEC});   // 同一天的標題滑過去
+    else h.animate([{opacity:0, transform:"translateY(6px)"}, {opacity:1, transform:"none"}], {duration:ZDUR, delay:ZDUR * .3, easing:DEC, fill:"backwards"});
+  });
+  OUT.forEach((e, k) => { const d = o0[k] - e.getBoundingClientRect().top; if (Math.abs(d) > 1) e.animate([{transform:`translateY(${d}px)`}, {transform:"none"}], {duration:ZDUR, easing:DEC}); });
   return true;
 }
 function dayPlaces(k){
