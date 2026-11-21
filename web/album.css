@@ -390,7 +390,11 @@ button.chip:active,a.chip:active{transform:scale(.95)}
 .ssl{position:absolute;inset:0;opacity:0;transition:opacity 1.4s cubic-bezier(.4,0,.2,1)}
 .ssl.in{opacity:1}
 .ssl.out{opacity:0}
-.sbg{position:absolute;inset:-8%;width:116%;height:116%;object-fit:cover;filter:blur(40px) brightness(.55) saturate(1.2)}
+/* 後面的模糊底：放大到邊緣都超出畫面（模糊邊緣會透出黑色），亮一點、顏色濃一點，慢慢飄 */
+.sbg{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;transform:scale(1.5);filter:blur(26px) brightness(.64) saturate(1.35);will-change:transform;
+  animation:sbg 14s ease-in-out infinite alternate}
+@keyframes sbg{from{transform:scale(1.5) translate3d(-3%,-2%,0)}to{transform:scale(1.62) translate3d(3%,2%,0)}}
+@media (prefers-reduced-motion:reduce){.sbg{animation:none}}
 .sfg{position:absolute;inset:0;will-change:transform}
 .sfg img,.sfg video{position:absolute;inset:0;width:100%;height:100%;object-fit:contain;-webkit-touch-callout:none}
 .sfg.cv img{object-fit:cover}
@@ -543,3 +547,88 @@ html::-webkit-scrollbar,body::-webkit-scrollbar{display:none;width:0;height:0}  
 .rb[hidden]{display:none}
 .rb.arm{background:var(--bad);color:#fff}
 @media (prefers-reduced-motion:reduce){.hero .cv,.hcap{animation:none}*,*::before,*::after{animation-duration:.001s!important;transition-duration:.001s!important}}
+
+/* ═════════ 相簿自己的樣子：跟標誌同一組顏色（桃橘、玫瑰粉、紫），不用哨兵的藍 ═════════ */
+:root{
+  --seed:#ff5c86; --g1:#ffb36b; --g2:#ff5c86; --g3:#8b6cff; --on-g:#fff;
+  --grad:linear-gradient(120deg,var(--g1),var(--g2) 52%,var(--g3));
+  --glow:0 8px 26px -8px color-mix(in oklab,var(--g2) 70%,transparent);
+  --bg:#0c0a0f; --s1:#16131b; --s2:#1f1b25; --s3:#2a2531; --on-p:#2b0613;
+}
+@media (prefers-color-scheme:light){:root:not([data-mode="dark"]){
+  --bg:#fbf7f6; --s1:#fff; --s2:#f4eef0; --s3:#ebe2e6; --tx:#1a1418; --tx2:#4e4550; --tx3:#857a84; --line:rgba(60,20,40,.09);
+  --p:#e23d68; --on-p:#fff; --glow:0 8px 24px -8px color-mix(in oklab,var(--g2) 55%,transparent)}}
+
+/* 封面下緣三色極光，慢慢飄（只動位置，交給顯示卡） */
+.hero::before{content:"";position:absolute;left:-20%;right:-20%;bottom:0;height:70%;-webkit-mask-image:linear-gradient(transparent,#000 35%,#000 62%,transparent 92%);mask-image:linear-gradient(transparent,#000 35%,#000 62%,transparent 92%);z-index:1;pointer-events:none;mix-blend-mode:screen;opacity:.75;
+  background:radial-gradient(34% 46% at 22% 70%,color-mix(in oklab,var(--g2) 55%,transparent),transparent 70%),
+    radial-gradient(30% 42% at 78% 66%,color-mix(in oklab,var(--g3) 55%,transparent),transparent 70%),
+    radial-gradient(26% 34% at 50% 82%,color-mix(in oklab,var(--g1) 50%,transparent),transparent 70%);
+  animation:aur 16s ease-in-out infinite alternate}
+@keyframes aur{0%{transform:translate3d(-4%,0,0) scale(1)}50%{transform:translate3d(3%,-3%,0) scale(1.06)}100%{transform:translate3d(5%,1%,0) scale(.98)}}
+.hcap{z-index:2}
+.eyebrow::before{background:linear-gradient(90deg,transparent,var(--g1));opacity:1}
+.eyebrow::after{background:linear-gradient(90deg,var(--g3),transparent);opacity:1}
+.hcap h1::after{content:"";display:block;width:56px;height:3px;margin:clamp(14px,2.4vh,22px) auto 0;border-radius:var(--r-pill);background:var(--grad);
+  transform-origin:50% 50%;animation:grow var(--t-long) var(--dec) .55s both}
+@keyframes grow{from{transform:scaleX(0);opacity:0}to{transform:none;opacity:1}}
+@media (prefers-color-scheme:light){:root:not([data-mode="dark"]) .hero::before{mix-blend-mode:normal;opacity:.5}}
+
+/* 主要的鈕：漸層＋一道光掃過去 */
+.chip.go,.hero .chip.go,.bar .chip.go{position:relative;overflow:hidden;background:var(--grad);color:var(--on-g);box-shadow:var(--glow)}
+.chip.go svg,.hero .chip.go svg{color:var(--on-g)}
+.chip.go::after{content:"";position:absolute;top:0;bottom:0;left:0;width:60%;background:linear-gradient(100deg,transparent,rgba(255,255,255,.45),transparent);
+  transform:translateX(-120%);animation:sheen 5.5s var(--ease) 1.2s infinite;pointer-events:none}
+@keyframes sheen{0%{transform:translateX(-120%)}22%,100%{transform:translateX(260%)}}
+@media (prefers-color-scheme:light){:root:not([data-mode="dark"]) .hero .chip.go{background:var(--grad);color:var(--on-g)}
+  :root:not([data-mode="dark"]) .hero .chip.go svg{color:var(--on-g)}}
+.btn,.card .btn,.csend{background:var(--grad);color:var(--on-g);box-shadow:var(--glow)}
+
+/* 誰放的分頁：選到的是漸層 */
+.who .chip.on{background:var(--grad);color:var(--on-g);box-shadow:var(--glow)}
+.who .chip.on svg,.who .chip.on small{color:var(--on-g)}
+.who .chip.on .av{background:rgba(255,255,255,.24);color:var(--on-g)}
+
+/* 回憶圓圈：還沒看的外圈三色慢慢轉（只轉外圈，照片不動） */
+.mring{background:none;isolation:isolate}
+.mring::before{content:"";position:absolute;inset:0;z-index:-1;border-radius:50%;background:conic-gradient(var(--g1),var(--g2),var(--g3),var(--g2),var(--g1));animation:spin 7s linear infinite}
+.mem.seen .mring::before{animation:none;background:color-mix(in oklab,var(--tx) 16%,transparent)}
+.mem.seen .mring{background:none;box-shadow:none}
+@keyframes spin{to{transform:rotate(1turn)}}
+.mems .mem{animation:memin var(--t-slow) var(--dec) both}
+@keyframes memin{from{opacity:0;translate:0 14px;scale:.9}to{opacity:1;translate:0 0;scale:1}}
+.mems .mem:nth-child(2){animation-delay:.06s}.mems .mem:nth-child(3){animation-delay:.12s}.mems .mem:nth-child(4){animation-delay:.18s}
+.mems .mem:nth-child(5){animation-delay:.24s}.mems .mem:nth-child(n+6){animation-delay:.3s}
+
+/* 每一章：號碼是漸層，下面的細線從粉色淡出 */
+.dh::before{background:var(--grad);-webkit-background-clip:text;background-clip:text;color:transparent;opacity:1;padding-right:.08em}
+.dh,.mh{border-bottom:0;background:linear-gradient(90deg,color-mix(in oklab,var(--g2) 55%,transparent),var(--line) 45%,transparent) left bottom/100% 1px no-repeat}
+@supports (animation-timeline:view()){
+  .dh::before{animation:chn linear both;animation-timeline:view();animation-range:entry 0% entry 70%}
+  .dh b,.dh span{animation:chb linear both;animation-timeline:view();animation-range:entry 10% entry 80%}
+}
+@keyframes chn{from{opacity:0;translate:-18px 0}to{opacity:1;translate:0 0}}
+@keyframes chb{from{opacity:0;translate:0 10px}to{opacity:1;translate:0 0}}
+
+/* 捲動進度：上面那條的底下一條漸層線 */
+@supports (animation-timeline:scroll()){
+  .bar::after{content:"";position:absolute;left:0;right:0;bottom:-1px;height:2px;background:var(--grad);transform-origin:0 50%;animation:prog linear both;animation-timeline:scroll(root)}
+  @keyframes prog{from{transform:scaleX(0)}to{transform:scaleX(1)}}
+}
+
+/* 地圖、選取、上傳、限時動態：同一組顏色 */
+.route .rt{stroke:var(--g2)}
+.route .rdot{stroke:var(--g2);filter:drop-shadow(0 0 6px var(--g2))}
+.mk i{background:var(--grad);color:var(--on-g)}
+.ph.on .ck{background:var(--grad);border-color:#fff;color:var(--on-g)}
+.ubar i{background:var(--grad)}
+.syp b{background:var(--grad)}
+.sb.on svg,.italk .th svg{fill:var(--g2);stroke:var(--g2)}
+.ph:focus-visible{outline-color:var(--g2)}
+
+/* 結尾：標誌當作句點 */
+.foot::before{content:"";width:44px;height:44px;border-radius:12px;background:url(/a/icon.svg) center/cover;box-shadow:var(--glow);margin-bottom:6px}
+.fin::before{background:linear-gradient(90deg,transparent,var(--g1));box-shadow:none;opacity:1}
+.fin::after{background:linear-gradient(90deg,var(--g3),transparent);box-shadow:none;opacity:1}
+
+@media (prefers-reduced-motion:reduce){.hero::before,.chip.go::after,.mring::before{animation:none}}
