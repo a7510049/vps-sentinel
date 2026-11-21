@@ -1693,6 +1693,7 @@ html.flyon .dash>.view{content-visibility:hidden;contain-intrinsic-size:auto non
 .fgh .lab small{display:block;font-weight:400;font-size:var(--fs-s);color:var(--tx3)}
 .fgh .ubtn{gap:6px}
 .fgh .ubtn svg.ext{width:14px;height:14px}
+.abd .ubtn svg.ext{width:14px;height:14px;margin-left:4px}
 .fgm{border-radius:var(--r-lg);overflow:hidden;background:var(--chip);aspect-ratio:3/2}
 .fgm svg{display:block;width:100%;height:100%}
 .fgv{transition:transform var(--t-slow) var(--dec);--fz:1}

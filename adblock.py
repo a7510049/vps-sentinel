@@ -23,7 +23,7 @@ AB_URLS = ("https://static.adtidy.org/adguardhome/release/AdGuardHome_linux_{a}.
            "https://github.com/AdguardTeam/AdGuardHome/releases/latest/download/AdGuardHome_linux_{a}.tar.gz")
 AB_ARCH = {"x86_64": "amd64", "amd64": "amd64", "aarch64": "arm64", "arm64": "arm64", "armv7l": "armv7", "armv6l": "armv6", "i686": "386"}
 AB_LOCK = threading.Lock()
-AB = {"c": None, "job": "", "err": "", "stats": None, "st_t": 0, "down": 0, "upd_t": 0}
+AB = {"c": None, "job": "", "err": "", "stats": None, "st_t": 0, "down": 0, "upd_t": 0, "pub": "", "pub_t": 0}
 AB_TOK = {}                                                             # 一次性的 iPhone 描述檔連結：代碼 → (到期, 內容)
 
 
@@ -227,6 +227,34 @@ def ab_fw(on):
         ab_sh(["netfilter-persistent", "save"])
 
 
+# 國際網站：常用的國際 DNS 一起用（哪家快就多問哪家）；Google、Quad9（dns11）、AdGuard 會照手機的網段回答（ECS）
+AB_UP = ["https://dns.google/dns-query", "https://cloudflare-dns.com/dns-query", "https://dns11.quad9.net/dns-query",
+         "https://unfiltered.adguard-dns.com/dns-query", "https://doh.opendns.com/dns-query"]
+# 大陸網站才問大陸的 DNS（阿里、騰訊 DNSPod、360），其他一律不經過它們
+AB_CN_UP = ["https://dns.alidns.com/dns-query", "https://doh.pub/dns-query", "https://doh.360.cn/dns-query"]
+AB_CN = ("cn xn--fiqs8s baidu.com bdstatic.com bcebos.com baidupcs.com qq.com gtimg.com tencent.com myqcloud.com "
+         "wechat.com weixin.com taobao.com tmall.com alicdn.com alipay.com aliyun.com alibaba.com alibabacloud.com "
+         "jd.com 360buyimg.com bilibili.com hdslb.com biliapi.net douyin.com douyinvod.com douyincdn.com bytedance.com "
+         "toutiao.com pstatp.com snssdk.com kuaishou.com iqiyi.com youku.com weibo.com sina.com 163.com 126.net "
+         "netease.com xiaohongshu.com xhscdn.com meituan.com dianping.com pinduoduo.com yangkeduo.com zhihu.com zhimg.com "
+         "csdn.net ctrip.com amap.com autonavi.com sohu.com ifeng.com dingtalk.com kugou.com ximalaya.com douban.com "
+         "doubanio.com xiaomi.com mi.com 10010.com 360.com so.com mgtv.com").split()
+AB_DNSV = 2       # 這份清單改了就加一，舊的設定會換成新的
+
+
+def ab_upstreams():
+    dom = "/".join(AB_CN)
+    return AB_UP + [f"[/{dom}/]{u}" for u in AB_CN_UP]
+
+
+def ab_dns():
+    """國際網站只問國際 DNS、大陸網站問大陸 DNS；查詢帶上手機所在的網段（ECS），大陸、台灣連進來的拿到離自己近的位址。
+    清單版本（c["dnsv"]）沒變就不再設，之後在管理頁改的不會被蓋掉"""
+    code, _ = ab_req("/control/dns_config", {"upstream_dns": ab_upstreams(), "upstream_mode": "load_balance",
+                                             "edns_cs_enabled": True, "edns_cs_use_custom": False}, timeout=15)
+    return code == 200
+
+
 def ab_tls(cert):
     body = {"enabled": True, "server_name": ab_domain(), "force_https": False, "port_https": 0,
             "port_dns_over_tls": AB_DOT, "port_dns_over_quic": 0, "port_dnscrypt": 0, "dnscrypt_config_file": "",
@@ -261,6 +289,31 @@ def ab_doh_ok():
             return r.status == 200 and len(r.read()) > 12
     except (OSError, ValueError):
         return False
+
+
+def ab_pub_check():
+    """從網域那頭用 853（DNS-over-TLS）問一次，跟手機走的一樣；回傳空字串是通的，不然是哪裡壞"""
+    dom = ab_domain()
+    if not dom:
+        return ""
+    q = b"\x00\x01\x01\x00\x00\x01\x00\x00\x00\x00\x00\x00" + b"\x07example\x03com\x00\x00\x01\x00\x01"
+    try:
+        with socket.create_connection((dom, AB_DOT), timeout=10) as raw, \
+                ssl.create_default_context().wrap_socket(raw, server_hostname=dom) as t:
+            t.sendall(len(q).to_bytes(2, "big") + q)
+            b = b""
+            while len(b) < 14:
+                x = t.recv(4096)
+                if not x:
+                    break
+                b += x
+        if len(b) < 14:
+            return "AdGuard Home 沒有回答"
+        return "" if b[5] & 15 == 0 else "AdGuard Home 查不到網址（上游 DNS 連不上）"
+    except ssl.SSLError:
+        return "憑證不對"
+    except (OSError, ValueError) as e:
+        return f"{AB_DOT} 埠連不上（{str(getattr(e, 'strerror', '') or e)[:40]}）"
 
 
 def ab_doh_fix():
@@ -326,6 +379,8 @@ def ab_install():
         if not ok:
             raise RuntimeError(f"加密設定失敗（{out[:120]}）")
         c["crt"] = cert[2]
+        if c.get("dnsv") != AB_DNSV and ab_dns():
+            c["dnsv"] = AB_DNSV
         ab_req("/control/querylog/config/update", {"enabled": True, "interval": 86400000, "anonymize_client_ip": False, "ignored": []}, method="PUT")
         ab_req("/control/stats/config/update", {"enabled": True, "interval": 86400000, "ignored": []}, method="PUT")
         time.sleep(0.5)
@@ -401,6 +456,7 @@ def ab_info():
     if out["on"]:
         out["stats"] = ab_stats()
         out["down"] = AB["down"] >= 2
+        out["pub"] = AB["pub"]
     return out
 
 
@@ -433,9 +489,18 @@ def ab_profile(url, name):
     if u.scheme != "https" or u.path != "/dns-query" or u.hostname not in hosts - {"", None} or u.query or u.username:
         return None
     pid = str(uuid.uuid5(uuid.NAMESPACE_URL, url)).upper()
+    # iPhone 也走 853 的 DNS-over-TLS（跟 Android 一樣）：DoH 網址裡的 9443 會被 iPhone 忽略，直接敲 443（常被別的程式佔著）
+    dns = {"DNSProtocol": "TLS", "ServerName": u.hostname}
+    try:                                    # 附上主機的位址：iPhone 不用先查網域就連得到（少一個卡住的地方）
+        ips = sorted({a[4][0] for a in socket.getaddrinfo(u.hostname, None, proto=socket.IPPROTO_TCP)
+                      if not ipaddress.ip_address(a[4][0]).is_private and not ipaddress.ip_address(a[4][0]).is_loopback})
+        if ips:
+            dns["ServerAddresses"] = ips[:4]
+    except (OSError, ValueError):
+        pass
     title = f"AdGuard Home・{str(name)[:40]}"
     body = plistlib.dumps({
-        "PayloadContent": [{"DNSSettings": {"DNSProtocol": "HTTPS", "ServerURL": url},
+        "PayloadContent": [{"DNSSettings": dns,
                             "PayloadDisplayName": title, "PayloadIdentifier": f"com.vps-sentinel.dns.{pid}.dns",
                             "PayloadType": "com.apple.dnsSettings.managed", "PayloadUUID": str(uuid.uuid5(uuid.NAMESPACE_URL, url + "#dns")).upper(),
                             "PayloadVersion": 1}],
@@ -486,6 +551,165 @@ def ab_icon():
         return None
 
 
+# ───────────────────────── 管理頁（AdGuard Home 自己的網頁，經過哨兵才進得去） ─────────────────────────
+# 跟雲端硬碟一樣：每次打開先在主要主機驗證 PIN 碼／手機金鑰／密碼，拿一次性登入票，換這個瀏覽器的通行證（vs_agh）；
+# 哨兵轉過去時自己帶上 AdGuard Home 的帳號，所以不用另外記密碼。管理頁本身還是只開在本機。
+AB_PATH = "/adguard"
+AB_SESS = {"c": "", "t": 0}
+
+
+def ab_base():
+    dom = ab_domain()
+    if not dom:
+        return ""
+    port = C.get("HTTPS_PORT") or "443"
+    return f"https://{dom}" + ("" if port == "443" else f":{port}")
+
+
+def ab_ticket():
+    n, exp = secrets.token_urlsafe(12), int(time.time()) + CLOUD_TK_MIN * 60
+    return {"ok": True, "ticket": f"{n}.{exp}.{_sign(f'agh-sso:v1:{n}:{exp}')}", "login": ab_base() + "/adguard-sso"}
+
+
+def ab_ticket_use(t):
+    n, exp, sig = (str(t or "").split(".") + ["", "", ""])[:3]
+    if not (re.fullmatch(r"[A-Za-z0-9_-]{8,40}", n) and re.fullmatch(r"[0-9]{1,12}", exp)
+            and hmac.compare_digest(sig.encode(), _sign(f"agh-sso:v1:{n}:{exp}").encode())):
+        return False
+    now = time.time()
+    with CLOUD_TK_LOCK:
+        for k in [k for k, v in CLOUD_TK_USED.items() if v < now]:
+            del CLOUD_TK_USED[k]
+        if int(exp) < now or "agh:" + n in CLOUD_TK_USED:
+            return False
+        CLOUD_TK_USED["agh:" + n] = int(exp)
+    return True
+
+
+def ab_cookie_value():
+    exp, g = int(time.time() + CLOUD_HOURS * 3600), cloud_gen()       # 登出裝置時跟雲端硬碟一起作廢
+    return f"{exp}.{g}.{_sign(f'agh-cookie:v1:{g}:{exp}')}"
+
+
+def ab_cookie_ok(v):
+    p = (v or "").split(".")
+    if len(p) != 3:
+        return False
+    exp, g, sig = p
+    return (bool(re.fullmatch(r"[0-9]{1,12}", exp)) and int(exp) > time.time() and g == str(cloud_gen())
+            and hmac.compare_digest(sig.encode(), _sign(f"agh-cookie:v1:{g}:{exp}").encode()))
+
+
+def ab_session(fresh=False):
+    """哨兵自己登入 AdGuard Home 拿的登入 cookie（管理頁轉過去時帶上），6 小時換一次"""
+    if not fresh and AB_SESS["c"] and time.time() - AB_SESS["t"] < 6 * 3600:
+        return AB_SESS["c"]
+    pw = ab_conf().get("pw")
+    if not pw:
+        return ""
+    req = urllib.request.Request(AB_API + "/control/login", data=json.dumps({"name": AB_USER, "password": pw}).encode(),
+                                 headers={"Content-Type": "application/json"}, method="POST")
+    try:
+        with urllib.request.build_opener(urllib.request.ProxyHandler({})).open(req, timeout=8) as r:
+            ck = [h.split(";")[0].strip() for h in r.headers.get_all("Set-Cookie") or []]
+    except (OSError, ValueError):
+        ck = []
+    AB_SESS["c"], AB_SESS["t"] = "; ".join(c for c in ck if "=" in c), time.time()
+    return AB_SESS["c"]
+
+
+def ab_is(path):
+    return path in (AB_PATH, AB_PATH + "-sso") or path.startswith(AB_PATH + "/")
+
+
+def ab_proxy(h):
+    """/adguard/… 轉給本機的 AdGuard Home 管理頁"""
+    u = urllib.parse.urlsplit(h.path)
+    if u.path == AB_PATH + "-sso":                  # 從哨兵點進來：一次性登入票（表單送的）換這個瀏覽器的通行證
+        ok = False
+        if h.command == "POST":
+            try:
+                n = min(int(h.headers.get("Content-Length") or 0), 4096)
+                ok = ab_ticket_use(urllib.parse.parse_qs(h.rfile.read(n).decode("utf-8", "replace")).get("t", [""])[0])
+            except (ValueError, OSError):
+                ok = False
+        h.send_response(303)
+        if ok:
+            secure = "; Secure" if h.https() else ""
+            h.send_header("Set-Cookie", f"vs_agh={ab_cookie_value()}; Path={AB_PATH}/; HttpOnly; SameSite=Lax{secure}")
+        h.send_header("Location", AB_PATH + "/" if ok or ab_authed(h) else "/")
+        h.send_header("Cache-Control", "no-store")
+        h.send_header("Content-Length", "0")
+        h.end_headers()
+        return None
+    if not ab_authed(h) or not ab_conf().get("on"):
+        if h.command == "GET" and "text/html" in (h.headers.get("Accept") or ""):
+            h.send_response(302)                      # 沒通行證：回哨兵（從 AdGuard Home 視窗再點一次）
+            h.send_header("Location", "/")
+            h.send_header("Content-Length", "0")
+            h.end_headers()
+            return None
+        return h.send(401, '{"error":"請先登入"}')
+    if u.path == AB_PATH:
+        h.send_response(301)
+        h.send_header("Location", AB_PATH + "/")
+        h.send_header("Content-Length", "0")
+        h.end_headers()
+        return None
+    path = h.path[len(AB_PATH):] or "/"
+    body = None
+    n = int(h.headers.get("Content-Length") or 0)
+    if n:
+        body = h.rfile.read(min(n, 8 << 20))
+    for again in (False, True):
+        hd = {k: v for k, v in h.headers.items() if k.lower() not in h.HOP and k.lower() not in ("host", "cookie", "authorization", "content-length", "accept-encoding")}
+        own = [c.strip() for c in (h.headers.get("Cookie") or "").split(";") if c.strip() and not c.strip().startswith(("vs_", "agh_session"))]
+        sess = ab_session(fresh=again)
+        hd["Cookie"] = "; ".join(own + ([sess] if sess else []))
+        hd["Authorization"] = "Basic " + base64.b64encode(f"{AB_USER}:{ab_conf().get('pw', '')}".encode()).decode()
+        hd["X-Forwarded-For"] = h.client_ip()
+        try:
+            req = urllib.request.Request(AB_API + path, data=body, headers=hd, method=h.command)
+            opener = urllib.request.build_opener(urllib.request.ProxyHandler({}), _NoRedirect)
+            try:
+                r = opener.open(req, timeout=60)
+            except urllib.error.HTTPError as e:
+                r = e
+            data, st, hs = r.read(), r.status if hasattr(r, "status") else r.code, list(r.headers.items())
+        except (OSError, ValueError):
+            return h.send(502, "<meta charset=utf-8><p style='font:16px sans-serif;padding:24px'>AdGuard Home 目前打不開，請稍後再試</p>", "text/html; charset=utf-8")
+        loc = dict((k.lower(), v) for k, v in hs).get("location", "")
+        if not again and (st == 401 or "login.html" in loc):          # 哨兵的登入過期了：重新登入再試一次
+            continue
+        break
+    h.send_response(st)
+    for k, v in hs:
+        kl = k.lower()
+        if kl in h.HOP or kl in ("content-length", "set-cookie", "content-encoding"):
+            continue
+        if kl == "location" and v.startswith("/") and not v.startswith("//"):
+            v = AB_PATH + v
+        h.send_header(k, v)
+    h.send_header("Content-Length", str(len(data)))
+    h.end_headers()
+    if h.command != "HEAD":
+        h.wfile.write(data)
+    return None
+
+
+def ab_authed(h):
+    for part in (h.headers.get("Cookie") or "").split(";"):
+        k, _, v = part.strip().partition("=")
+        if k == "vs_agh" and ab_cookie_ok(v):
+            return True
+    return False
+
+
+class _NoRedirect(urllib.request.HTTPRedirectHandler):
+    def redirect_request(self, *a, **k):
+        return None
+
+
 def ab_problems():
     c = ab_conf()
     return ["AdGuard Home 停了"] if c.get("on") and AB["down"] >= 2 and not AB["job"] else []
@@ -514,6 +738,12 @@ def ab_loop():
                         if ab_plain_dns_open():
                             ab_sh(["systemctl", "stop", AB_UNIT])
                             AB["err"] = "一般 DNS 關不掉，已停下來"
+                    if c.get("dnsv") != AB_DNSV and ab_dns():               # 舊版打開的：補設一次
+                        c = dict(ab_conf())
+                        c["dnsv"] = AB_DNSV
+                        ab_save(c)
+                    if not AB_FAKE and time.time() - AB["pub_t"] > (60 if AB["pub"] else 300):
+                        AB["pub_t"], AB["pub"] = time.time(), ab_pub_check()
                     ab_stats(fresh=True)
                     if time.time() - AB["upd_t"] > 86400:
                         AB["upd_t"] = time.time()

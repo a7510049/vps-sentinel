@@ -45,7 +45,7 @@ from collections import deque
 from concurrent.futures import ThreadPoolExecutor
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
-VERSION = "4.32"
+VERSION = "4.33"
 
 # ───────────────────────── 哨兵備份檔（.vsbk）─────────────────────────
 # 哨兵專用的備份格式：外面是自己的檔案格式，裡面用的是成熟、標準的加密方法（不自己發明加密）：
@@ -4759,9 +4759,14 @@ class Handler(BaseHTTPRequestHandler):
     def is_notes(self):
         return note_is(urllib.parse.urlsplit(self.path).path)
 
+    def is_agh(self):
+        return ab_is(urllib.parse.urlsplit(self.path).path)
+
     def do_PUT(self):
         if self.is_notes():
             return note_dav(self)
+        if self.is_agh():
+            return ab_proxy(self)
         return self.proxy_cloud() if self.is_cloud() else self.send(404, '{"error":"找不到"}')
     do_PATCH = do_DELETE = do_OPTIONS = do_PROPFIND = do_PROPPATCH = do_MKCOL = do_COPY = do_MOVE = do_LOCK = do_UNLOCK = do_PUT
 
@@ -4786,6 +4791,32 @@ class Handler(BaseHTTPRequestHandler):
         else:
             return self.send(200, json.dumps({"ok": True, "keys": pk_list(), "max": PASSKEY_MAX}, ensure_ascii=False))
         return self.send(200 if ok else 400, json.dumps({"ok": ok, "message": msg, "keys": pk_list()}, ensure_ascii=False))
+
+    def agh_open(self, body):
+        d = self.jbody(body)
+        ok, msg = recheck_ok(d)
+        if not ok:
+            time.sleep(1)
+            return self.send(401, json.dumps({"ok": False, "message": msg or "驗證失敗"}, ensure_ascii=False))
+        node = str(d.get("node") or "")
+        if not node:
+            if not ab_conf().get("on") or not ab_base():
+                return self.send(404, json.dumps({"ok": False, "message": "這台還沒打開 AdGuard Home"}, ensure_ascii=False))
+            return self.send(200, json.dumps(ab_ticket()))
+        peer = next((p for p in PEERS if p["name"] == node), None)
+        if not peer:
+            return self.send(404, json.dumps({"ok": False, "message": "找不到這台主機"}, ensure_ascii=False))
+        try:
+            req = urllib.request.Request(peer["url"] + "/api/adguard-ticket", data=b"{}", method="POST",
+                                         headers={"X-Token": peer["token"], "Content-Type": "application/json"})
+            with urllib.request.urlopen(req, timeout=15) as r:
+                t = json.loads(r.read())
+            return self.send(200, json.dumps({"ok": True, "ticket": str(t["ticket"]), "login": str(t["login"])}))
+        except urllib.error.HTTPError as e:
+            msg = f"「{node}」要先更新哨兵" if e.code == 404 else "那台主機不給登入票"
+        except Exception as e:  # noqa: BLE001
+            msg = peer_error(e, peer["url"])
+        return self.send(502, json.dumps({"ok": False, "message": msg}, ensure_ascii=False))
 
     def cloud_open(self, body):
         d = self.jbody(body)
@@ -4831,6 +4862,8 @@ class Handler(BaseHTTPRequestHandler):
     def do_HEAD(self):
         if self.is_notes():
             return note_dav(self)
+        if self.is_agh():
+            return ab_proxy(self)
         if self.is_cloud():
             return self.proxy_cloud()
         self.send_response(200)
@@ -4839,12 +4872,16 @@ class Handler(BaseHTTPRequestHandler):
     def do_GET(self):
         if self.is_notes():
             return note_dav(self)
+        if self.is_agh():
+            return ab_proxy(self)
         if not self.must_pin():
             self.fly_gate(self.route_get)
 
     def do_POST(self):
         if self.is_notes():
             return note_dav(self)
+        if self.is_agh():
+            return ab_proxy(self)
         if not self.must_pin():
             self.fly_gate(self.route_post)
 
@@ -5046,7 +5083,7 @@ class Handler(BaseHTTPRequestHandler):
             return None
         if u.path not in ("/api/update", "/api/rename", "/api/traffic", "/api/telegram", "/api/links", "/api/self", "/api/cloud-open", "/api/cloud-ticket", "/api/cloud-revoke", "/api/peer",
                           "/api/token", "/api/passkey", "/api/passkey-login", "/api/pin", "/api/pin-login", "/api/login", "/api/sessions", "/api/backup", "/api/backup-store",
-                          "/api/restore-upload", "/api/restore-run", "/api/pair", "/api/pair-admin", "/api/reboot", "/api/keepalive", "/api/download", "/api/fly-share", "/api/fly-claim", "/api/opensky", "/api/sec", "/api/notes", "/api/adblock", "/api/adblock-profile", "/api/album"):
+                          "/api/restore-upload", "/api/restore-run", "/api/pair", "/api/pair-admin", "/api/reboot", "/api/keepalive", "/api/download", "/api/fly-share", "/api/fly-claim", "/api/opensky", "/api/sec", "/api/notes", "/api/adblock", "/api/adblock-profile", "/api/adguard-open", "/api/adguard-ticket", "/api/album"):
             return self.send(404, '{"error":"找不到"}')
         if u.path in ("/api/restore-upload", "/api/restore-run"):   # 網頁還原：要有安裝時給的代碼（或已經登入）
             if not (self.authed() or self.restore_code_ok()):
@@ -5111,7 +5148,7 @@ class Handler(BaseHTTPRequestHandler):
             return self.send(200 if ok else 400, json.dumps({"ok": ok, "message": msg}, ensure_ascii=False))
         try:
             size = min(int(self.headers.get("Content-Length") or 0),
-                       16384 if u.path.startswith("/api/passkey") or u.path == "/api/cloud-open" else 400000 if u.path == "/api/download" else 4096)
+                       16384 if u.path.startswith("/api/passkey") or u.path in ("/api/cloud-open", "/api/adguard-open") else 400000 if u.path == "/api/download" else 4096)
             body = self.rfile.read(size) if size else b""
         except (ValueError, OSError):
             body = b""
@@ -5173,6 +5210,8 @@ class Handler(BaseHTTPRequestHandler):
         if not self.authed():
             time.sleep(1)
             return self.send(401, '{"error":"密碼錯誤"}')
+        if u.path == "/api/adguard-open":           # 打開 AdGuard Home 管理頁：跟雲端硬碟一樣先驗證，過了才給登入票
+            return self.agh_open(body)
         if u.path == "/api/cloud-open":             # 打開雲端硬碟：每次都在這台驗證 PIN 碼、手機金鑰或密碼，過了才發登入票
             return self.cloud_open(body)
         first = u.path == "/api/pin" and "node=" not in u.query and self.jbody(body).get("action") == "set" and pin_temp()
@@ -5338,6 +5377,10 @@ class Handler(BaseHTTPRequestHandler):
         if u.path == "/api/cloud-revoke":           # 主要主機登出了一台裝置：這台的雲端硬碟通行證也全部作廢
             cloud_revoke()
             return self.send(200, '{"ok":true}')
+        if u.path == "/api/adguard-ticket":         # 主要主機驗證過了，來拿這台 AdGuard Home 管理頁的登入票（只給主機之間的鑰匙）
+            if self.sess or not ab_conf().get("on") or not ab_base():
+                return self.send(403 if self.sess else 404, '{"ok":false}')
+            return self.send(200, json.dumps(ab_ticket()))
         if u.path == "/api/cloud-ticket":           # 主要主機驗證過了，來拿這台雲端硬碟的登入票（只給主機之間的鑰匙）
             if self.sess or not CLOUD_URL:
                 return self.send(403 if self.sess else 404, '{"ok":false}')

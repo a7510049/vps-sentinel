@@ -37,7 +37,7 @@ class PinTest(Server):
         self.assertEqual(code, 200, d)
         self.assertTrue(d["on"])
         self.assertTrue(self.call("/api/passkey-login", {"action": "has"})[1]["pin"])
-        self.assertNotIn("4826", read_text(self.conf, self.pin_file()))                     # 存的是雜湊，不是 PIN 碼本身
+        self.assertNotIn("4826", [str(v) for v in json.loads(read_text(self.conf, self.pin_file())).values()])  # 存的是雜湊，不是 PIN 碼本身（雜湊的十六進位裡剛好有 4826 不算）
 
         code, d = self.call("/api/pin-login", {"pin": "4826", "dev": "iPhone・Safari"})
         self.assertEqual(code, 200)
