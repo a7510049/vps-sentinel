@@ -143,6 +143,9 @@ class Album(Server):
         self.assertAlmostEqual(p0["g"][0], 25 + 2 / 60 + 24 / 3600, places=4)
         self.assertAlmostEqual(p0["g"][1], 121 + 33 / 60 + 42 / 3600, places=4)
         self.assertEqual(p0["g"][2], 35)
+        if p0.get("p"):                                                                # 地名查不到時用最近的機場城市，帶國家給城市分類
+            self.assertTrue(p0["p"]["c"])
+            self.assertEqual(p0["p"]["cc"], "TW")
         self.assertEqual(self.req("GET", "/a/AAAAAAAAAA/m")[0], 404)
 
         # 沒有 ffmpeg：瀏覽器看得了的原圖直接給

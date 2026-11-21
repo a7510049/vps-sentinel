@@ -1798,10 +1798,10 @@ def alb_near_city(lat, lon):
                 except ValueError:
                     continue
                 if best is None or d < best[0]:
-                    best = (d, x[7])
+                    best = (d, x[7], x[3])
     except OSError:
         pass
-    return {"n": best[1], "a": ""} if best and best[0] < 1 else None
+    return {"n": best[1], "a": "", "c": best[1], "cc": best[2][:2].upper()} if best and best[0] < 1 else None
 
 
 def alb_place_fmt(j):
@@ -1816,18 +1816,18 @@ def alb_place_fmt(j):
     for s in rest:
         if s not in seen:
             seen.append(s)
-    return {"n": top[:40], "a": "・".join(seen[:3])[:60], "c": city or state}
+    return {"n": top[:40], "a": "・".join(seen[:3])[:60], "c": (city or state or country)[:30], "cc": str(ad.get("country_code") or "").upper()[:2], "v": 2}
 
 
 def alb_place(lat, lon, wait=False):
     k = f"{lat:.3f},{lon:.3f}"
     d = alb_places()
-    if k in d:
+    if k in d and (not wait or d[k].get("v") or d[k].get("tmp")):   # 舊版存的沒有城市、國家：背景補問一次
         return d[k]
     if not wait:
         return None
     with ALB_PL["lock"]:
-        if k in d:
+        if k in d and (d[k].get("v") or d[k].get("tmp")):
             return d[k]
         gap = 1.1 - (time.time() - ALB["geo_t"])
         if gap > 0:
@@ -1940,6 +1940,7 @@ def alb_manifest(a, th=""):
     talk = alb_talk_of(a, th) if a.get("talk", True) else {}
     ph = idx.get("ph") or {}
     out, places, hid, upd = [], {}, alb_hid(a), a.get("upd") or {}
+    old_pl = False
     for pid in idx.get("order", []):
         if pid in hid:
             continue
@@ -1977,11 +1978,13 @@ def alb_manifest(a, th=""):
             it["g"] = m["g"]
             pl = alb_place(m["g"][0], m["g"][1])
             if pl:
-                it["p"] = {"n": pl["n"], "a": pl.get("a", "")}
+                it["p"] = {"n": pl["n"], "a": pl.get("a", ""), "c": pl.get("c") or pl["n"], "cc": pl.get("cc", "")}
+                if not pl.get("v") and not pl.get("tmp"):
+                    old_pl = True
                 c = pl.get("c") or pl["n"]
                 places[c] = places.get(c, 0) + 1
         out.append(it)
-    if alb_ready(a, idx) < 1 or any(x.get("vr") == -1 for x in out) or (a["loc"] and any("g" in x and "p" not in x for x in out)):
+    if alb_ready(a, idx) < 1 or any(x.get("vr") == -1 for x in out) or (a["loc"] and (old_pl or any("g" in x and "p" not in x for x in out))):
         alb_kick(a["id"])
     wmo = a.get("wm") if a.get("wm") and not alb_wm_bake(a) else ""
     return {"ok": True, "name": a["name"], "photos": out, "dl": alb_dl(a), "loc": a["loc"], "exp": a["exp"], "wmo": wmo,
