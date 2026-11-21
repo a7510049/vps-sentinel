@@ -45,7 +45,7 @@ from collections import deque
 from concurrent.futures import ThreadPoolExecutor
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
-VERSION = "4.29"
+VERSION = "4.30"
 
 # ───────────────────────── 哨兵備份檔（.vsbk）─────────────────────────
 # 哨兵專用的備份格式：外面是自己的檔案格式，裡面用的是成熟、標準的加密方法（不自己發明加密）：
@@ -597,7 +597,7 @@ CONF_PATH = os.environ.get("SENTINEL_CONF", "/etc/vps-sentinel-lite.conf")
 SEAL_KEY_PATH = os.environ.get("SENTINEL_SEAL_KEY") or os.path.splitext(CONF_PATH)[0] + ".key"
 SEAL_CONF = ("TOKEN", "TG_BOT_TOKEN", "TG_CHAT_ID", "BACKUP_KEY", "PEERS", "OPENSKY_ID", "OPENSKY_SECRET", "YT_PROXY", "LINKS")
 SEAL_FILES = ("tls-pins.json", "pin.json", "sessions.json", "passkeys.json", "state.json", "pairing.json", "yt-cookies.txt",
-              "downloads.json", "peers-cache.json", "fly-share.json", "notes.json")
+              "downloads.json", "peers-cache.json", "fly-share.json", "notes.json", "adblock.json")
 SEAL_TXT = "vse1:"                                # 設定檔裡加密過的值
 SEAL_BIN = b"VSE1"                                # 加密過的檔案開頭
 SEAL = {"lib": None, "key": None, "ok": None}
@@ -1458,7 +1458,7 @@ def include(name):
         exec(compile(f.read(), path, "exec"), globals())   # noqa: S102
 
 
-SRC_FILES = ["sentinel.py", "pair.py", "download.py", "backup.py", "guard.py", "fly.py", "notes.py", "web/index.html", "web/style.css", "web/app.js", "web/pin.js", "web/fly.js", "web/font.woff2", "data/airports.tsv", "data/coast.tsv", "data/terrain.bin", "data/actypes.tsv", "data/apmap.tsv"]   # 程式本體（含機場起降）＋網頁三個檔＋機場資料、海岸線、地形、機型分類
+SRC_FILES = ["sentinel.py", "pair.py", "download.py", "backup.py", "guard.py", "fly.py", "notes.py", "adblock.py", "web/index.html", "web/style.css", "web/app.js", "web/pin.js", "web/fly.js", "web/font.woff2", "data/airports.tsv", "data/coast.tsv", "data/terrain.bin", "data/actypes.tsv", "data/apmap.tsv"]   # 程式本體（含機場起降）＋網頁三個檔＋機場資料、海岸線、地形、機型分類
 
 
 def build_of(blobs):
@@ -3548,6 +3548,7 @@ class Collector:
         notices += sw
         if keep_notice():
             notices.append(keep_notice())
+        problems += ab_problems()                  # 擋廣告 DNS 打開了卻停了
 
         return {
             "name": NAME, "node": "", "online": True, "version": VERSION, "time": time.time(), "links": links_status(), "build": BUILD, "self_has": bool(SELF["has"] or (CLOUD_URL and CLOUDUP["has"])),
@@ -3562,7 +3563,7 @@ class Collector:
             "updates": updates, "reboot": reboot, "geo": geo, "update": upd, "events": events, "traffic": traffic, "bk_tz": BACKUP_TZ,
             "hist": {"t": [h[0] for h in hist], "cpu": [h[1] for h in hist], "mem": [h[2] for h in hist],
                      "rx": [h[3] for h in hist], "tx": [h[4] for h in hist]},
-            "problems": problems, "notices": notices, "tg_self": pair_load().get("self_t") or 0, "tlsfp": TLS["fp"], "sec": sec_info(), "notes": bool(note_conf().get("pw")),
+            "problems": problems, "notices": notices, "tg_self": pair_load().get("self_t") or 0, "tlsfp": TLS["fp"], "sec": sec_info(), "notes": bool(note_conf().get("pw")), "adblock": ab_brief(),
             "tg_off": not (TG_BOT and TG_CHAT) and not watchers(),   # 還沒設定 Telegram：首頁提醒一行
             "level": "bad" if problems else ("warn" if notices else "ok"),
         }
@@ -4381,6 +4382,7 @@ def gz_of(data, tag=None):
 
 include("guard.py")
 include("notes.py")
+include("adblock.py")
 
 
 MAX_CONN = max(16, int(os.environ.get("SENTINEL_MAX_CONN") or 200))   # 同時最多處理幾個連線（測試可以調小）
@@ -4895,6 +4897,9 @@ class Handler(BaseHTTPRequestHandler):
             return self.send(200, ICON, "image/svg+xml", cache=True)
         if path == "/font.woff2":                  # 英數字型（公開的，不用登入）
             return self.send(200, FONT["b"], "font/woff2", cache=30 * 86400) if FONT["b"] else self.send(404, '{"error":"找不到"}')
+        if path == "/dns.mobileconfig":            # iPhone 描述檔：網頁先拿一次性代碼（10 分鐘、用一次就失效）
+            b = ab_profile_get(urllib.parse.parse_qs(urllib.parse.urlsplit(self.path).query).get("k", [""])[0])
+            return self.send(200, b, "application/x-apple-aspen-config") if b else self.send(404, '{"error":"連結過期了，回網頁再按一次"}')
         m = re.fullmatch(r"/flag/([a-z]{2})\.png", path)
         if m:                                      # 國旗（公開的，不用登入）
             b = flag_img(m[1])
@@ -5033,7 +5038,7 @@ class Handler(BaseHTTPRequestHandler):
         u = urllib.parse.urlsplit(self.path)
         if u.path not in ("/api/update", "/api/rename", "/api/traffic", "/api/telegram", "/api/links", "/api/self", "/api/cloud-open", "/api/cloud-ticket", "/api/cloud-revoke", "/api/peer",
                           "/api/token", "/api/passkey", "/api/passkey-login", "/api/pin", "/api/pin-login", "/api/login", "/api/sessions", "/api/backup", "/api/backup-store",
-                          "/api/restore-upload", "/api/restore-run", "/api/pair", "/api/pair-admin", "/api/reboot", "/api/keepalive", "/api/download", "/api/fly-share", "/api/fly-claim", "/api/opensky", "/api/sec", "/api/notes"):
+                          "/api/restore-upload", "/api/restore-run", "/api/pair", "/api/pair-admin", "/api/reboot", "/api/keepalive", "/api/download", "/api/fly-share", "/api/fly-claim", "/api/opensky", "/api/sec", "/api/notes", "/api/adblock", "/api/adblock-profile"):
             return self.send(404, '{"error":"找不到"}')
         if u.path in ("/api/restore-upload", "/api/restore-run"):   # 網頁還原：要有安裝時給的代碼（或已經登入）
             if not (self.authed() or self.restore_code_ok()):
@@ -5271,6 +5276,18 @@ class Handler(BaseHTTPRequestHandler):
                 return self.send(200, json.dumps(note_info(), ensure_ascii=False))
             ok, msg, extra = note_act(d)
             return self.send(200 if ok else 400, json.dumps({**note_info(), **extra, "ok": ok, "message": msg}, ensure_ascii=False))
+        if u.path == "/api/adblock":                 # 擋廣告 DNS：看狀態、打開、關掉
+            d = self.jbody(body)
+            if d.get("action") in (None, "", "info"):
+                return self.send(200, json.dumps(ab_info(), ensure_ascii=False))
+            ok, msg, extra = ab_act(d)
+            return self.send(200 if ok else 400, json.dumps({**ab_info(), **extra, "ok": ok, "message": msg}, ensure_ascii=False))
+        if u.path == "/api/adblock-profile":         # iPhone 描述檔：給一次性的下載連結（網址可以是別台主機的）
+            d = self.jbody(body)
+            k = ab_profile(str(d.get("url") or ""), str(d.get("name") or NAME))
+            if not k:
+                return self.send(400, '{"ok":false,"message":"網址不對"}')
+            return self.send(200, json.dumps({"ok": True, "k": k}))
         if u.path == "/api/keepalive":               # 開關 Oracle 防回收
             ok, msg = set_keepalive(bool(self.jbody(body).get("on")))
             return self.send(200 if ok else 500, json.dumps({"ok": ok, "message": msg}, ensure_ascii=False))
@@ -5413,6 +5430,7 @@ def main():
     threading.Thread(target=alert_loop, daemon=True).start()      # 沒設定時也會跑，網頁上一設定好就開始通知
     threading.Thread(target=guard_loop, daemon=True).start()      # SSH 錯太多次封鎖（要 root）
     threading.Thread(target=sec_watch_loop, daemon=True).start()  # 安全檢查哪一項變差就通知
+    threading.Thread(target=ab_loop, daemon=True).start()         # 擋廣告 DNS：有打開才會真的做事
     dl_load()                                                     # 上次沒下載完的接著下載
     if FLY_OK:
         try:

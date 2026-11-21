@@ -95,6 +95,7 @@ const P = {
   mpin:'<path d="M12 21s7-6.2 7-12a7 7 0 0 0-14 0c0 5.8 7 12 7 12Z"/><circle cx="12" cy="9" r="2.5"/>',
   plane:'<path d="M17.8 19.2 16 11l3.5-3.5C21 6 21.5 4 21 3c-1-.5-3 0-4.5 1.5L13 8 4.8 6.2c-.5-.1-.9.1-1.1.5l-.3.5c-.2.5-.1 1 .3 1.3L9 12l-2 3H4l-1 1 3 2 2 3 1-1v-3l3-2 3.5 5.3c.3.4.8.5 1.3.3l.5-.2c.4-.3.6-.7.5-1.2z"/>',
   tack:'<path d="M12 17v5M9 10.76a2 2 0 0 1-1.11 1.79l-1.78.9A2 2 0 0 0 5 15.24V16a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-.76a2 2 0 0 0-1.11-1.79l-1.78-.9A2 2 0 0 1 15 10.76V7a1 1 0 0 1 1-1 2 2 0 0 0 0-4H8a2 2 0 0 0 0 4 1 1 0 0 1 1 1z"/>',
+  funnel:'<path d="M3 4h18l-7 8.5V19l-4 2v-8.5z"/>',
   note:'<path d="M13.4 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-7.4"/><path d="M2 6h4M2 10h4M2 14h4M2 18h4"/><path d="M21.4 5.6a2.1 2.1 0 1 0-3-3L13 8l-1 4 4-1z"/>',
   off:'<path d="M12 20h.01M8.5 16.43a5 5 0 0 1 7 0M2 8.82a15 15 0 0 1 4.17-2.65M10.66 5c4.01-.36 8.14.9 11.34 3.76M16.85 11.25a10 10 0 0 1 2.22 1.68M5 13a10 10 0 0 1 5.24-2.76M2 2l20 20"/>',
 };
@@ -234,7 +235,7 @@ const ALC = [
   [/^(\d+) 個安全更新$/, "shield", m => `<b>${m[1]}</b>`], [/^(\d+) 天沒有成功備份$/, "archive", m => `<b>${m[1]} 天</b>`], [/^備份還沒成功過$/, "archive", () => "沒成功過"],
   [/^SSH 允許空密碼登入$/, "key", () => "SSH 空密碼" + ALX], [/^root 能用密碼登入 SSH$/, "key", () => "root 密碼" + ALX],
   [/^SSH 能用密碼登入$/, "key", () => "SSH 密碼"],
-  [/Oracle|太閒/, "cpu", () => "太閒"]];
+  [/^擋廣告 DNS 停了$/, "funnel", () => "DNS" + ALX], [/Oracle|太閒/, "cpu", () => "太閒"]];
 function alChip(p, cls, key){
   for (const [re, ic, f] of ALC) { const m = p.match(re); if (m) return `<span class="alert ${cls}" data-key="${key}" title="${esc(p)}">${I(ic)}<span>${f(m)}</span></span>`; }
   return `<span class="alert ${cls} long" data-key="${key}">${I(cls === "bad" ? "warn" : "alert")}<span>${esc(p)}</span></span>`;
@@ -463,7 +464,7 @@ const COL = {cpu:"var(--c-cpu)", mem:"var(--c-mem)", rx:"var(--c-rx)", tx:"var(-
 /* 概念 → [顏色樣式, 圖示] */
 const ICO = {cpu:["cpu","cpu"], mem:["mem","mem"], disk:["disk","disk"], load:["load","gauge"], down:["down","down"], up:["up","up"],
   net:["net","net"], trend:["trend","trend"], month:["month","month"], box:["box","box"], bell:["bell","bell"], info:["info","info"],
-  flag:["flag","flag"], keep:["keep","shield"], key:["key","key"], finger:["finger","finger"], pin:["pin","pin"], link:["link","link"], archive:["archive","archive"], sun:["sun","sun"], quote:["quote","quote"], dl:["dl","dl"], cloud:["cloud","cloud"], fly:["fly","plane"], devices:["devices","devices"], safe:["safe","lockok"], sky:["sky","radar"], note:["note","note"]};
+  flag:["flag","flag"], keep:["keep","shield"], key:["key","key"], finger:["finger","finger"], pin:["pin","pin"], link:["link","link"], archive:["archive","archive"], sun:["sun","sun"], quote:["quote","quote"], dl:["dl","dl"], cloud:["cloud","cloud"], fly:["fly","plane"], devices:["devices","devices"], safe:["safe","lockok"], sky:["sky","radar"], note:["note","note"], adblk:["adblk","funnel"]};
 const IC = (k, cls="sm") => `<span class="ico ${cls} ${ICO[k][0]}">${I(ICO[k][1])}</span>`;
 
 /* ═════════ 共用的小元件 ═════════ */
@@ -806,7 +807,7 @@ function toolsBody(s, k, node, name){
     <button class="tbx" data-key="dl" data-dl="${node}" data-name="${name}"><span class="ttop">${IC("dl", "")}<span class="tgo nx">${CHEV}</span></span><b>遠端下載</b><small>存到雲端硬碟</small></button>`;
   h += `<button class="tbx" data-key="bk" data-bk="${node}" data-label="${name}"><span class="ttop">${IC("archive", "")}<span class="tgo nx">${CHEV}</span></span>
       <b>每日備份</b><small class="bkst" data-n="${node}" data-keep data-ld>讀取中…</small><span class="bkdots" data-n="${node}" data-keep>${"<i></i>".repeat(7)}</span></button>
-    <button class="tbx" data-key="nt" data-notes="${node}" data-name="${name}"><span class="ttop">${IC("note", "")}<span class="tgo nx">${CHEV}</span></span><b>加密筆記</b><small data-x>${s.notes ? "已打開" : "還沒打開"}</small></button></div>`;
+    <button class="tbx" data-key="nt" data-notes="${node}" data-name="${name}"><span class="ttop">${IC("note", "")}<span class="tgo nx">${CHEV}</span></span><b>加密筆記</b><small data-x>${s.notes ? "已打開" : "還沒打開"}</small></button>${abTile(s, node, name)}</div>`;
   const L = linksOf(s).filter(x => !x.fixed);
   if (L.length) h += `<div class="lbl" data-key="ll">常用連結</div><div class="group" data-key="g-lk:${k}">${L.map(x => linkRow(x, esc(linkSt(x)))).join("")}</div>`;
   return h + `</div>`;
@@ -1081,6 +1082,80 @@ function notesModal(node, name){
       if (act === "wipe" && !await modal({icon:"trash", cls:"bad", title:"清除所有筆記？", text:"主機上的筆記全部刪掉、密碼都換新，救不回來；手機上的不動。", ok:"清除"})) return;
       const x = await run({action: act});
       if (x && act !== "on") toast(x.message || "好了");
+    });
+  });
+}
+/* 擋廣告 DNS（AdGuard Home）：手機的 DNS 設成這台，只開加密的 DoH／DoT */
+const abSt = a => a.job ? "設定中…" : a.on ? (a.pct != null ? `擋掉 ${a.pct}%` : "已打開") : "還沒打開";
+const abTile = (s, node, name) => s.adblock ? `<button class="tbx" data-key="ab" data-ab="${node}" data-name="${name}"><span class="ttop">${IC("adblk", "")}<span class="tgo nx">${CHEV}</span></span><b>擋廣告 DNS</b><small data-x>${abSt(s.adblock)}</small></button>` : "";
+function abModal(node, name){
+  const q = node ? `?node=${encodeURIComponent(node)}` : "";
+  let D = null, busy = false, os = /iPhone|iPad|Macintosh/.test(navigator.userAgent) ? "ios" : "and", tm = 0, last = "";
+  const v = document.createElement("div"); v.className = "veil";
+  v.innerHTML = `<div class="dialog pkd ntd abd">${IC("adblk", "big")}<h3>擋廣告 DNS</h3><p>${esc(name)}</p><div class="form"><div class="ntb">讀取中…</div><div class="msg"></div></div></div>`;
+  $("#layer").appendChild(v);
+  const body = v.querySelector(".ntb"), msg = v.querySelector(".msg");
+  const num = n => n >= 1e6 ? (n / 1e6).toFixed(1) + "M" : n >= 1e4 ? Math.round(n / 1e3) + "K" : String(n);
+  const stats = x => {
+    if (!x) return `<div class="ntst">${I("clock")}<span>統計讀取中</span></div>`;
+    const mx = Math.max(1, ...x.hrs);
+    return `<div class="abn"><div><b>${num(x.q)}</b><small>查詢</small></div><div><b>${num(x.b)}</b><small>擋掉</small></div><div><b>${x.pct}%</b><small>比例</small></div></div>
+      ${x.hrs.length ? `<div class="abh" title="最近 24 小時擋掉的次數">${x.hrs.map(n => `<i style="--h:${Math.max(4, Math.round(n * 100 / mx))}%"></i>`).join("")}</div>` : ""}
+      ${x.top.length ? `<div class="lbl">最常擋的</div><div class="abtop">${x.top.map(([d, n]) => `<div><span>${esc(d)}</span><b>${num(n)}</b></div>`).join("")}</div>` : ""}`;
+  };
+  const steps = () => os === "ios"
+    ? `<button type="button" class="ubtn" data-abp>${I("dl")}安裝描述檔</button><ol class="ntsteps"><li>允許下載</li><li>設定 → 已下載描述檔 → 安裝</li></ol>`
+    : `<div class="codebox ntr"><code>${esc(D.dot)}</code><button type="button" class="ubtn sm ghost" data-abcp>複製</button></div>
+      <ol class="ntsteps"><li>設定 → 網路和網際網路 → 私人 DNS</li><li>選「私人 DNS 供應商主機名稱」，貼上</li></ol>
+      <div class="ntst">${I("info")}<span>連不上的話，到主機商的防火牆打開 TCP ${D.port}</span></div>`;
+  const view = () => D.job ? `<div class="abjob"><span class="spin"></span><span>${esc(D.job)}…</span></div>`
+    : !D.on ? `<p class="ntx">手機的廣告、追蹤網址直接擋掉，只走加密連線。</p>${D.cert ? "" : `<p class="ntx">還沒有網域的憑證</p>`}<button type="button" class="ubtn" data-ab="on"${D.cert ? "" : " disabled"}>打開</button>`
+    : `${D.down ? `<div class="ntst bad">${I("warn")}<span>停了，正在重新啟動</span></div>` : ""}${stats(D.stats)}
+      <div class="lbl">手機設定</div><div class="seg abos"><button type="button" class="${os === "ios" ? "on" : ""}" data-abos="ios">iPhone</button><button type="button" class="${os === "and" ? "on" : ""}" data-abos="and">Android</button></div>
+      <div class="abst">${steps()}</div>
+      <div class="dlnew"><button type="button" class="ubtn sm ghost" data-ab="off">關掉</button></div>`;
+  const draw = () => { const h = view(); if (h !== last) { last = h; swapHTML(body, h); } };
+  const call = async b => {
+    const r = await api("/api/adblock" + q, {method:"POST", headers:{"X-Token":getTok(), "Content-Type":"application/json"}, body:JSON.stringify(b)});
+    const x = await r.json().catch(() => ({}));
+    if (r.status === 404) throw new Error("這台還沒更新到新版，先更新再試");
+    if (!r.ok || x.ok === false) throw new Error(x.message || x.error || "失敗了，請再試一次");
+    return x;
+  };
+  const run = async b => {
+    if (busy) return null; busy = true;
+    try { const x = await call(b); D = x; sayTo(msg, x.err || ""); draw(); return x; }
+    catch (e) { sayTo(msg, e.message); return null; }
+    finally { busy = false; clearTimeout(tm); if (D && !v._d) tm = setTimeout(() => run({action:"info"}), D.job ? 1500 : 30000); }
+  };
+  run({action:"info"});
+  return new Promise(res => {
+    const done = () => { if (v._d) return; v._d = 1; clearTimeout(tm); v.classList.add("closing"); setTimeout(() => { v.remove(); res(); }, 360); };
+    v._esc = done;
+    v.addEventListener("click", async e => {
+      if (e.target === v) return done();
+      const t = e.target;
+      const o = t.closest("[data-abos]");
+      if (o) { os = o.dataset.abos; v.querySelectorAll("[data-abos]").forEach(x => x.classList.toggle("on", x === o)); last = view(); swapHTML(v.querySelector(".abst"), steps()); return; }
+      if (t.closest("[data-abcp]")) {
+        try { await navigator.clipboard.writeText(D.dot); toast("已複製"); }
+        catch (_) { const r = document.createRange(); r.selectNodeContents(v.querySelector(".abst code")); getSelection().removeAllRanges(); getSelection().addRange(r); }
+        return;
+      }
+      if (t.closest("[data-abp]")) {
+        try {
+          const r = await api("/api/adblock-profile", {method:"POST", headers:{"X-Token":getTok(), "Content-Type":"application/json"}, body:JSON.stringify({url:D.doh, name})});
+          const x = await r.json().catch(() => ({}));
+          if (!r.ok || !x.k) throw new Error(x.message || "失敗了，請再試一次");
+          location.href = "/dns.mobileconfig?k=" + encodeURIComponent(x.k);
+        } catch (x) { sayTo(msg, x.message); }
+        return;
+      }
+      const b = t.closest("[data-ab]"); if (!b) return;
+      const act = b.dataset.ab;
+      if (act === "off" && !await modal({icon:"funnel", cls:"warn", title:"關掉擋廣告 DNS？", text:"設好的手機會查不到網址，要先改回來。", ok:"關掉"})) return;
+      const x = await run({action: act});
+      if (x && act === "off") toast("已關掉");
     });
   });
 }
@@ -3233,6 +3308,8 @@ async function pageClick(e){
   if (window._menu && !t.closest(".lmenu")) closeMenu();
   const dl = t.closest("[data-dl]");
   if (dl) return dlModal(dl.dataset.dl, dl.dataset.name);
+  const ab = t.closest("[data-ab]");
+  if (ab && !ab.closest(".veil")) return abModal(ab.dataset.ab, ab.dataset.name).then(() => tick());
   const nb = t.closest("[data-notes]");
   if (nb) return notesModal(nb.dataset.notes, nb.dataset.name).then(() => tick());
   const rb = t.closest("[data-reboot]");

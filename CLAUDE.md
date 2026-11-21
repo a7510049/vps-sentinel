@@ -23,6 +23,7 @@ guard.py           安全檢查頁（`sec_`）、SSH 上鎖和金鑰（`ssh_`）
 backup.py          每日備份、網頁還原（`bk_`、`rsw_` 開頭；.vsbk 格式和 `--restore`／`--decrypt` 留在 sentinel.py，單獨一個檔就能解開、還原）
                    以上三個跟 fly.py 一樣用 include() 載入、共用同一組變數，位置照原本的順序（include 定義在 HERE 下面）；這三個出錯整個哨兵就起不來（安裝會自動換回舊版）
 notes.py           加密筆記（Joplin 同步，`note_` 開頭）：同樣用 include() 載入
+adblock.py         擋廣告 DNS（AdGuard Home，`ab_` 開頭）：同樣用 include() 載入
 fly.py             機場起降、分享的後端；sentinel.py 用 include("fly.py") 載入到自己裡面，兩邊共用同一組變數（不是獨立模組）
 web/index.html     網頁骨架；/*@style.css*/ 和 /*@app.js*/ 兩個記號會在啟動時被換成對應檔案的內容
 web/style.css      所有樣式，最前面的 :root 是共用設計規則
@@ -106,6 +107,7 @@ android/           安卓 App：全螢幕打開主機的網頁（記住網址）
 - SSH 的門（`ssh_risks`，一小時看一次 `sshd -T`）：能用密碼登入是注意、root 能用密碼登入或允許空密碼是異常，放進 notices／problems（首頁小膠囊、Telegram）；測試用 SENTINEL_SSHD_T
 - 安全檢查頁（使用者要求，guard.py；設定 → 主機「安全檢查」，`secModal`，`/api/sec`，改東西要先確認是你）：上面四項自動做好的只看（`SECI`），下面四個開關（`SECO`）：SSH 只能用金鑰、root 只能用金鑰（只寫自己的 `/etc/ssh/sshd_config.d/00-vps-sentinel.conf`，`sshd -t` 過了才 reload，不對就換回；主設定沒讀 sshd_config.d 就在最前面加 Include）、錯太多次封鎖（`guard_loop`：讀 journalctl 的 sshd，10 分鐘錯 5 次封 1 小時、7 天內再來封 24 小時，7 天內成功登入過的、內部網路不封；nftables 表 `inet vps_sentinel`，沒有就 iptables；設定檔 `SSH_GUARD=off` 關，預設開；存 `DATA_DIR/ssh-guard.json`）、自動安裝安全更新（`/etc/apt/apt.conf.d/20auto-upgrades`，沒裝 unattended-upgrades 先背景裝）；**沒有金鑰不准關密碼登入**（`ssh_key_ok`）；SSH 金鑰可以貼 .pub 或「幫我做一組」（ssh-keygen ed25519，私密的只給網頁下載一次、主機不留）；第一次安裝 install.sh 跑 `--sec-setup`（打開自動安全更新、印出狀況）；哪一項從好變不好（`SEC_BAD`，`sec_watch` 10 分鐘看一次，上次的存 `DATA_DIR/sec-last.json`）記一筆「安全檢查：…」傳 Telegram（🔐）；測試用 SENTINEL_SSH_ETC／SENTINEL_SSH_HOME／SENTINEL_GUARD_FW／SENTINEL_GUARD_LOG／SENTINEL_GUARD_EVERY／SENTINEL_AUTOUPD／SENTINEL_SEC_EVERY
 - 加密筆記（使用者要求，notes.py，`note_` 開頭；工具分頁「加密筆記」`notesModal`，`/api/notes`）：`/notes/` 是給 Joplin 的小型 WebDAV（PROPFIND、GET、PUT、DELETE、MKCOL、MOVE、COPY），帳號固定 `joplin`、密碼是主機產生的亂數；Joplin 端對端加密的密碼也由主機產生、記著（`ek`，使用者要求「存著就好」，打開後就不換，換同步密碼、關掉也留著；都存在加密的 `notes.json`，看密碼、打開、換密碼要先確認是你）；只收 https（經過本機 Caddy 看 X-Forwarded-Proto）；15 分鐘錯 10 次擋那個來源；筆記放 `DATA_DIR/notes`（跟著每日備份，主機磁碟留 1 GB），資料夾不見時回 503 不當成空的（Joplin 會以為全被刪了）；加密靠 Joplin 自己的端對端加密（網頁步驟第一步就是啟用加密）；關掉時筆記留著；「清除所有筆記」（`wipe`，要先確認是你）刪掉主機上全部筆記、密碼和加密密碼都換新（使用者說等於重新開一本），手機上的 Joplin 不動
+- 擋廣告 DNS（使用者要求，adblock.py，`ab_` 開頭；工具分頁「擋廣告 DNS」`abModal`，`/api/adblock`）：要有網域才出現（`ab_brief` 回 None 就不顯示方塊）；打開時在背景下載 AdGuard Home 到 `/opt/vps-adblock`（`ab_download`，static.adtidy.org、失敗換 GitHub）、寫 `vps-adblock.service`，第一次用它的設定精靈 API 設好（管理網頁只開 `127.0.0.1:3053`，帳號 `sentinel`、亂數密碼存在加密的 `DATA_DIR/adblock.json`），再用 `/control/tls/configure` **關掉一般 DNS（`serve_plain_dns:false`）**、開 853 的 DNS-over-TLS（用 Caddy 申請的憑證 `ab_cert`，換新時重設）和給 Caddy 轉的 DoH；Caddy 加 `vps-sentinel.d/adblock.caddy` 把 `/dns-query` 轉過去；本機防火牆開 853（雲端主機商那邊要自己開）；每分鐘檢查（`ab_loop`）：停了兩次記「擋廣告 DNS 停了」、一般 DNS 不小心開著就停掉、每天讓它自己更新；iPhone 描述檔 `/api/adblock-profile` 給一次性代碼，`/dns.mobileconfig?k=` 下載（只給自己或配對主機的網域）；設定檔和服務檔跟著每日備份，還原後程式不在會自動重裝；測試用 SENTINEL_AB_FAKE／SENTINEL_AB_API／SENTINEL_AB_CERTS／SENTINEL_AB_DIR／SENTINEL_AB_EVERY
 - 備份做完馬上試開一次（`bk_verify`：解密、每個檔案讀到底），失敗就算備份失敗；從沒成功過也會提醒「備份還沒成功過」
 - 還沒設定 Telegram（`tg_off`，被監看的主機不算）：首頁主機下面（電腦在右邊欄）一行「Telegram 通知 還沒設定」（`tgHint`），點了直接設定
 - Telegram 通知排隊（`tg_send`／`tg_flush`、`TG_QUEUE`，存在 state.json）：連不上、429、5xx（`TG_AGAIN`）先留著，每 30 秒照順序補傳，晚 2 分鐘以上的註明幾點，一天還傳不出去就丟掉；密碼錯、被封鎖直接丟掉；驗證碼這類即時的不排隊
@@ -148,7 +150,7 @@ android/           安卓 App：全螢幕打開主機的網頁（記住網址）
 
   不要寫死 px 圓角、px 字級、cubic-bezier、linear()、毫秒數、z-index 或顏色（顏色只能寫在 `--變數:` 和 `.ico.名稱` 裡，白色、黑色例外）。
 - **圖示顏色**（`python3 tools/style_check.py` 會檢查圓形圖示有沒有用規定的顏色）：
-  - 圓形圖示：**每個概念一個自己的色相，不能重複**（檢查會擋下兩個概念共用顏色）。資料（處理器藍、記憶體紫、磁碟橘、負載綠、下載青、上傳粉紅、流量黃、容器靛、概況灰）；功能各自一色（通知桃紅、備份焦糖、手機金鑰青綠、雲端硬碟湖水藍、PIN 碼紫羅蘭、配對萊姆、換密碼石板藍、國旗翡翠、天氣夕陽、心情小語海藍、防回收琥珀、遠端下載黃綠、機場起降藍紫、安全檢查綠、OpenSky 灰藍、系統玫瑰灰）；**圖案也不能兩個概念共用**（`ICO` 第二個值，檢查會擋；色相差不到 10 度也會擋）。新增圖示時挑一個還沒用過的色相，照 `oklch(var(--tl) var(--tc) 色相)` 的寫法加一個 `.ico.名稱`；主題色 `theme` 只給哨兵本身的動作（更新、編輯）。
+  - 圓形圖示：**每個概念一個自己的色相，不能重複**（檢查會擋下兩個概念共用顏色）。資料（處理器藍、記憶體紫、磁碟橘、負載綠、下載青、上傳粉紅、流量黃、容器靛、概況灰）；功能各自一色（擋廣告 DNS 朱紅、通知桃紅、備份焦糖、手機金鑰青綠、雲端硬碟湖水藍、PIN 碼紫羅蘭、配對萊姆、換密碼石板藍、國旗翡翠、天氣夕陽、心情小語海藍、防回收琥珀、遠端下載黃綠、機場起降藍紫、安全檢查綠、OpenSky 灰藍、系統玫瑰灰）；**圖案也不能兩個概念共用**（`ICO` 第二個值，檢查會擋；色相差不到 10 度也會擋）。新增圖示時挑一個還沒用過的色相，照 `oklch(var(--tl) var(--tc) 色相)` 的寫法加一個 `.ico.名稱`；主題色 `theme` 只給哨兵本身的動作（更新、編輯）。
   - 確認視窗的圖示和確定鈕看「動作」：一般用主題色；要小心的（重新開機、換密碼）用 `warn` 橘色；刪除、移除、解除配對用 `bad` 紅色（`modal({cls:"bad"})` 會連確定鈕一起變紅）。
   - 線條圖示：一般灰色；連結和重點用 `var(--p)`；選單裡有風險的項目，圖示和文字一起變色。
   - 綠／橘／紅的文字、圓點、線條圖示只用來表示狀態（正常／注意／異常）或有風險的動作，不拿來裝飾（開關打開用主題色）。
