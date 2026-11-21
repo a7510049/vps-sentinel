@@ -239,20 +239,122 @@ AB_CN = ("cn xn--fiqs8s baidu.com bdstatic.com bcebos.com baidupcs.com qq.com gt
          "netease.com xiaohongshu.com xhscdn.com meituan.com dianping.com pinduoduo.com yangkeduo.com zhihu.com zhimg.com "
          "csdn.net ctrip.com amap.com autonavi.com sohu.com ifeng.com dingtalk.com kugou.com ximalaya.com douban.com "
          "doubanio.com xiaomi.com mi.com 10010.com 360.com so.com mgtv.com").split()
-AB_DNSV = 2       # 這份清單改了就加一，舊的設定會換成新的
+AB_DNSV = 3       # 這份設定改了就加一，舊的設定會換成新的
+# 完整的大陸網站清單（大家維護的 dnsmasq-china-list，約 10 萬個網域），每週更新；抓不到就用上面那份
+AB_CNLIST = os.environ.get("SENTINEL_AB_CNLIST") or "https://raw.githubusercontent.com/felixonmars/dnsmasq-china-list/master/accelerated-domains.china.conf"
+AB_UPFILE = os.path.join(AB_DIR, "upstream.txt")
+AB_DOMRE = re.compile(r"(?=.{1,253}$)([a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)*(?:[a-z0-9-]{1,63}|xn--[a-z0-9-]{1,59})")
 
 
-def ab_upstreams():
-    dom = "/".join(AB_CN)
-    return AB_UP + [f"[/{dom}/]{u}" for u in AB_CN_UP]
+def ab_cn_fetch():
+    """下載完整的大陸網站清單；壞掉或太少就回 None"""
+    try:
+        req = urllib.request.Request(AB_CNLIST, headers={"User-Agent": f"vps-sentinel/{VERSION}"})
+        with urllib.request.urlopen(req, timeout=60) as r:
+            txt = r.read(30 << 20).decode("utf-8", "replace")
+    except (OSError, ValueError):
+        return None
+    out = set()
+    for ln in txt.splitlines():
+        m = re.match(r"server=/([^/]+)/", ln.strip())
+        if m and AB_DOMRE.fullmatch(m.group(1).lower()):
+            out.add(m.group(1).lower())
+    return sorted(out) if len(out) >= 1000 or AB_FAKE else None
 
 
-def ab_dns():
-    """國際網站只問國際 DNS、大陸網站問大陸 DNS；查詢帶上手機所在的網段（ECS），大陸、台灣連進來的拿到離自己近的位址。
-    清單版本（c["dnsv"]）沒變就不再設，之後在管理頁改的不會被蓋掉"""
-    code, _ = ab_req("/control/dns_config", {"upstream_dns": ab_upstreams(), "upstream_mode": "load_balance",
-                                             "edns_cs_enabled": True, "edns_cs_use_custom": False}, timeout=15)
-    return code == 200
+def ab_upstreams(cn=None):
+    """上游 DNS 設定檔的每一行：國際的放前面；大陸網站一千個一行、指給大陸的 DNS"""
+    doms = sorted(set(AB_CN) | set(cn or []))
+    lines = list(AB_UP)
+    for i in range(0, len(doms), 1000):
+        part = "/".join(doms[i:i + 1000])
+        lines += [f"[/{part}/]{u}" for u in AB_CN_UP]
+    return lines
+
+
+def ab_dns(c):
+    """國際網站只問國際 DNS、大陸網站問大陸 DNS；查詢帶上手機所在的網段（ECS）；快取過期先給舊的答案、背景再更新（開網頁快）；
+    檢查答案有沒有被竄改（DNSSEC）；同一支手機每秒最多 100 次（原本 20 次，開網頁時常常不夠）。
+    設定版本（c["dnsv"]）沒變就只每週更新大陸清單；回傳更新過的 c（沒成功回 None）"""
+    cn = ab_cn_fetch()
+    try:
+        tmp = AB_UPFILE + ".tmp"
+        with open(tmp, "w", encoding="utf-8") as f:
+            f.write("\n".join(ab_upstreams(cn)) + "\n")
+        os.replace(tmp, AB_UPFILE)
+    except OSError:
+        return None
+    base = {"upstream_dns": AB_UP, "upstream_dns_file": AB_UPFILE, "upstream_mode": "load_balance",
+            "edns_cs_enabled": True, "edns_cs_use_custom": False, "cache_optimistic": True, "cache_size": 8 << 20}
+    more = {"enable_dnssec": True, "ratelimit": 100, "blocked_response_ttl": 10,
+            "bootstrap_dns": ["1.1.1.1", "8.8.8.8", "9.9.9.10", "223.5.5.5"],
+            "fallback_dns": ["https://dns.google/dns-query", "https://cloudflare-dns.com/dns-query"]}
+    code, _ = ab_req("/control/dns_config", {**base, **more}, timeout=60)
+    if code != 200:                     # 版本不認得其中幾個欄位：至少把分流、快取設好
+        code, _ = ab_req("/control/dns_config", base, timeout=60)
+    if code != 200:
+        return None
+    c = dict(c)
+    c["dnsv"], c["cn_t"], c["cn_n"] = AB_DNSV, time.time(), len(cn or AB_CN)
+    return c
+
+
+def ab_dns_due(c):
+    return c.get("dnsv") != AB_DNSV or time.time() - float(c.get("cn_t") or 0) > 7 * 86400
+
+
+# 擋廣告清單：AdGuard Home 官方整理的清單庫裡挑的（預設那份「AdGuard DNS filter」原本就有）
+AB_LIST_URL = "https://adguardteam.github.io/HostlistsRegistry/assets/filter_{}.txt"
+AB_LISTS = (("中文廣告（anti-AD）", 21), ("惡意網站（URLhaus）", 11), ("釣魚網站（Phishing Army）", 18),
+            ("釣魚網站（PhishTank、OpenPhish）", 30), ("詐騙網站（DurableNapkin）", 10))
+AB_LISTV = 1
+
+
+def ab_lists():
+    """把上面那幾份清單加進去（已經有的不重複加，在管理頁刪掉的下次改版本才會再加）"""
+    code, out = ab_req("/control/filtering/status", timeout=10)
+    try:
+        have = {str(f.get("url")) for f in (json.loads(out).get("filters") or []) if isinstance(f, dict)} if code == 200 else None
+    except (ValueError, AttributeError):
+        have = None
+    if have is None:
+        return False
+    ok = ab_req("/control/filtering/config", {"enabled": True, "interval": 12}, timeout=10)[0] == 200    # 清單每 12 小時更新
+    for name, n in AB_LISTS:
+        u = AB_LIST_URL.format(n)
+        if u not in have:
+            ok = ab_req("/control/filtering/add_url", {"name": name, "url": u, "whitelist": False}, timeout=90)[0] == 200 and ok
+    return ok
+
+
+# 擋錯了一鍵放行：寫成 AdGuard Home 自己的規則「@@||網域^$important」
+def ab_rules():
+    code, out = ab_req("/control/filtering/status", timeout=10)
+    try:
+        r = json.loads(out).get("user_rules") if code == 200 else None
+    except (ValueError, AttributeError):
+        r = None
+    return [str(x) for x in r] if isinstance(r, list) else None
+
+
+def ab_allowed(rules=None):
+    rules = ab_rules() if rules is None else rules
+    return [m.group(1) for m in (re.fullmatch(r"@@\|\|([^\^]+)\^\$important", x) for x in rules or []) if m]
+
+
+def ab_allow(dom, on):
+    dom = str(dom or "").strip().lower().rstrip(".")
+    if not AB_DOMRE.fullmatch(dom):
+        return False, "網址不對"
+    rules = ab_rules()
+    if rules is None:
+        return False, "AdGuard Home 沒回應"
+    rule = f"@@||{dom}^$important"
+    rules = [x for x in rules if x != rule] + ([rule] if on else [])
+    if ab_req("/control/filtering/set_rules", {"rules": rules}, timeout=15)[0] != 200:
+        return False, "設定失敗"
+    AB["st_t"] = 0
+    return True, f"已放行 {dom}" if on else f"{dom} 照常擋"
 
 
 def ab_tls(cert):
@@ -379,8 +481,12 @@ def ab_install():
         if not ok:
             raise RuntimeError(f"加密設定失敗（{out[:120]}）")
         c["crt"] = cert[2]
-        if c.get("dnsv") != AB_DNSV and ab_dns():
-            c["dnsv"] = AB_DNSV
+        AB["job"] = "設定上游 DNS"
+        if ab_dns_due(c):
+            c = ab_dns(c) or c
+        AB["job"] = "下載擋廣告清單"
+        if c.get("listv") != AB_LISTV and ab_lists():
+            c["listv"] = AB_LISTV
         ab_req("/control/querylog/config/update", {"enabled": True, "interval": 86400000, "anonymize_client_ip": False, "ignored": []}, method="PUT")
         ab_req("/control/stats/config/update", {"enabled": True, "interval": 86400000, "ignored": []}, method="PUT")
         time.sleep(0.5)
@@ -457,6 +563,7 @@ def ab_info():
         out["stats"] = ab_stats()
         out["down"] = AB["down"] >= 2
         out["pub"] = AB["pub"]
+        out["allow"] = ab_allowed() or []
     return out
 
 
@@ -471,6 +578,11 @@ def ab_act(d):
             AB["job"], AB["err"] = "準備中", ""
             threading.Thread(target=ab_install, daemon=True).start()
             return True, "", {}
+        if act in ("allow", "unallow"):
+            if not ab_conf().get("on"):
+                return False, "還沒打開", {}
+            ok, msg = ab_allow(d.get("domain"), act == "allow")
+            return ok, msg, {}
         if act == "off":
             if not ab_conf().get("on"):
                 return True, "", {}
@@ -738,9 +850,14 @@ def ab_loop():
                         if ab_plain_dns_open():
                             ab_sh(["systemctl", "stop", AB_UNIT])
                             AB["err"] = "一般 DNS 關不掉，已停下來"
-                    if c.get("dnsv") != AB_DNSV and ab_dns():               # 舊版打開的：補設一次
+                    if ab_dns_due(c):                               # 舊版打開的補設一次；大陸網站清單每週更新
+                        c2 = ab_dns(ab_conf())
+                        if c2:
+                            ab_save(c2)
+                            c = c2
+                    if c.get("listv") != AB_LISTV and ab_lists():
                         c = dict(ab_conf())
-                        c["dnsv"] = AB_DNSV
+                        c["listv"] = AB_LISTV
                         ab_save(c)
                     if not AB_FAKE and time.time() - AB["pub_t"] > (60 if AB["pub"] else 300):
                         AB["pub_t"], AB["pub"] = time.time(), ab_pub_check()

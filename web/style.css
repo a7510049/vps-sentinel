@@ -1858,6 +1858,7 @@ html.flyon .dash>.view{content-visibility:hidden;contain-intrinsic-size:auto non
 .abtop>div{display:flex;align-items:center;gap:10px;padding:7px 14px;font-size:var(--fs-s)}
 .abtop span{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--tx2)}
 .abtop b{font-weight:600;color:var(--tx);font-variant-numeric:tabular-nums}
+.abtop .ubtn{flex:none;width:5.5em;justify-content:center}
 .abd .abos{margin-bottom:8px}
 .abd .abst{display:flex;flex-direction:column;gap:8px}
 .abd .abst>.ubtn{width:100%}
