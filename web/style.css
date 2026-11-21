@@ -138,7 +138,9 @@
 .ico.quote{background:oklch(var(--tl) var(--tc) 232);color:oklch(var(--fl) var(--fc) 232)}
 .ico.keep{background:oklch(var(--tl) calc(var(--tc) * .6) 45);color:oklch(var(--fl) calc(var(--fc) * .65) 45)}
 .ico.dl{background:oklch(var(--tl) calc(var(--tc) * .8) 112);color:oklch(var(--fl) calc(var(--fc) * .85) 112)}
-.ico.safe{background:oklch(var(--tl) var(--tc) 84);color:oklch(var(--fl) var(--fc) 84)}
+.ico.sys{background:oklch(var(--tl) calc(var(--tc) * .45) 0);color:oklch(var(--fl) calc(var(--fc) * .5) 0)}
+.ico.sky{background:oklch(var(--tl) calc(var(--tc) * .5) 220);color:oklch(var(--fl) calc(var(--fc) * .55) 220)}
+.ico.safe{background:oklch(var(--tl) calc(var(--tc) * .7) 155);color:oklch(var(--fl) calc(var(--fc) * .75) 155)}
 .ico.devices{background:oklch(var(--tl) calc(var(--tc) * .5) 290);color:oklch(var(--fl) calc(var(--fc) * .55) 290)}
 .ico.theme{background:var(--pc);color:var(--on-pc)}                  /* 哨兵本身的動作（更新、編輯）：主題色 */
 .ico.warn{background:var(--warnc);color:var(--on-warnc)}            /* 要小心的動作（重新開機、換密碼） */

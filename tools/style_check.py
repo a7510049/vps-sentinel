@@ -65,6 +65,18 @@ for m in re.finditer(r'\b([a-z]+):\["([a-z]+)","[a-z]+"\]', js):
     if m.group(2) in seen:
         report("app.js", jline0, js, m.start(), f"「{m.group(1)}」跟「{seen[m.group(2)]}」用了同一個顏色，請給它自己的色調")
     seen.setdefault(m.group(2), m.group(1))
+glyph = {}
+for m in re.finditer(r'\b([a-z]+):\["[a-z]+","([a-z]+)"\]', js):   # 圖案也不能兩個概念共用
+    if m.group(2) in glyph:
+        report("app.js", jline0, js, m.start(), f"「{m.group(1)}」跟「{glyph[m.group(2)]}」用了同一個圖案，請畫一個自己的")
+    glyph.setdefault(m.group(2), m.group(1))
+hues = []
+for m in re.finditer(r"\.ico\.([a-z]+)\{background:oklch\(var\(--tl\) (var\(--tc\)|calc\(var\(--tc\) \* [.0-9]+\)) ([0-9]+)\)", body_css):
+    h = int(m.group(3))
+    for n, c, h2 in hues:                                      # 一樣鮮豔、色相差不到 10 度，看起來就是同一個顏色
+        if c == m.group(2) and min(abs(h - h2), 360 - abs(h - h2)) < 10:
+            report("style.css", line0, body_css, m.start(), f".ico.{m.group(1)} 跟 .ico.{n} 顏色太像（色相差不到 10 度）")
+    hues.append((m.group(1), m.group(2), h))
 bgs = {}
 for m in re.finditer(r"\.ico\.([a-z]+)\{background:([^}]+)\}", body_css):
     if m.group(2) in bgs:

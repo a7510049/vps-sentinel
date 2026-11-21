@@ -85,6 +85,11 @@ const P = {
   plug:'<path d="M9 2v5M15 2v5"/><path d="M6 7h12v4a6 6 0 0 1-12 0z"/><path d="M12 17v5"/>',
   clock:'<circle cx="12" cy="12" r="9.5"/><path d="M12 7v5l3 2"/>',
   lock:'<rect x="5" y="11" width="14" height="10" rx="2.5"/><path d="M8 11V7.5a4 4 0 0 1 8 0V11"/>',
+  reset:'<path d="M3.5 12a8.5 8.5 0 1 0 2.5-6"/><path d="M3.5 3.5V8H8"/>',
+  radar:'<circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="4.5"/><path d="m12 12 6.4-6.4"/>',
+  user:'<circle cx="12" cy="8" r="4"/><path d="M4.5 21a7.5 7.5 0 0 1 15 0"/>',
+  ban:'<circle cx="12" cy="12" r="9"/><path d="m5.6 5.6 12.8 12.8"/>',
+  lockok:'<rect x="4.5" y="10.5" width="15" height="11" rx="2.5"/><path d="M8 10.5V7a4 4 0 0 1 8 0v3.5"/><path d="m9.3 16 1.9 1.9 3.6-3.8"/>',
   power:'<path d="M12 2v10"/><path d="M18.4 6.6a9 9 0 1 1-12.77.04"/>',
   loc:'<circle cx="12" cy="12" r="7"/><circle cx="12" cy="12" r="2.5"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/>',
   mpin:'<path d="M12 21s7-6.2 7-12a7 7 0 0 0-14 0c0 5.8 7 12 7 12Z"/><circle cx="12" cy="9" r="2.5"/>',
@@ -457,7 +462,7 @@ const COL = {cpu:"var(--c-cpu)", mem:"var(--c-mem)", rx:"var(--c-rx)", tx:"var(-
 /* 概念 → [顏色樣式, 圖示] */
 const ICO = {cpu:["cpu","cpu"], mem:["mem","mem"], disk:["disk","disk"], load:["load","gauge"], down:["down","down"], up:["up","up"],
   net:["net","net"], trend:["trend","trend"], month:["month","month"], box:["box","box"], bell:["bell","bell"], info:["info","info"],
-  flag:["flag","flag"], keep:["keep","shield"], key:["key","key"], finger:["finger","finger"], pin:["pin","pin"], link:["link","link"], archive:["archive","archive"], sun:["sun","sun"], quote:["quote","quote"], dl:["dl","dl"], cloud:["cloud","cloud"], fly:["fly","plane"], devices:["devices","devices"], safe:["safe","shield"]};
+  flag:["flag","flag"], keep:["keep","shield"], key:["key","key"], finger:["finger","finger"], pin:["pin","pin"], link:["link","link"], archive:["archive","archive"], sun:["sun","sun"], quote:["quote","quote"], dl:["dl","dl"], cloud:["cloud","cloud"], fly:["fly","plane"], devices:["devices","devices"], safe:["safe","lockok"], sky:["sky","radar"]};
 const IC = (k, cls="sm") => `<span class="ico ${cls} ${ICO[k][0]}">${I(ICO[k][1])}</span>`;
 
 /* ═════════ 共用的小元件 ═════════ */
@@ -920,10 +925,10 @@ function setPage(list){
       <label class="li"><span class="lab">動畫</span>${tog("motion", "動畫")}</label>
       <button class="li" data-shows>${IC("trend", "")}<span class="lab">要顯示的內容<small class="showst">${showSum()}</small></span>${CHEV}</button></div>`;
   const secG = `<div class="group" data-key="g-sec">${go("data-tg", "bell", "Telegram 通知", "tgst")}${PK_OK && self ? go("data-pk", "finger", "手機金鑰登入", "pkst") : ""}${self ? go("data-pin", "pin", "PIN 碼登入", "pinst") + go("data-sess", "devices", "登入的裝置", "sessst") : ""}</div>`;
-  const skyG = self && !SHARE ? `<div class="group" data-key="g-sky">${go("data-sky", "fly", "OpenSky 帳號", "skyst")}</div>` : "";
+  const skyG = self && !SHARE ? `<div class="group" data-key="g-sky">${go("data-sky", "sky", "OpenSky 帳號", "skyst")}</div>` : "";
   const sec = `<div class="lbl" data-key="lsec">通知與登入</div>${secG}` + (skyG ? `<div class="lbl" data-key="lsky">機場起降</div>${skyG}` : "");
   const out = `<div class="sp" data-key="sp"></div><div class="group" data-key="g-out"><button class="li" data-logout><span class="ico info">${I("logout")}</span><span class="lab">登出</span></button>
-      <button class="li" data-reset><span class="ico info">${I("upd")}</span><span class="lab">恢復預設值</span></button></div>`;
+      <button class="li" data-reset><span class="ico info">${I("reset")}</span><span class="lab">恢復預設值</span></button></div>`;
   let h = "";
   if (on.length) {
     const s = on.find(x => keyOf(x) === TOOLH) || on.find(x => !x.node) || on[0], k = esc(keyOf(s)), node = esc(s.node || "");
@@ -943,10 +948,10 @@ function setPage(list){
 }
 /* 安全檢查：存著的資料、網頁連線、雲端硬碟、備份、SSH 各自有沒有保護好 */
 /* 安全檢查：上面是自動做好的（只看），下面是可以自己開關的（SSH、封鎖、自動更新），最下面放 SSH 金鑰 */
-const SECI = [["seal", "shield", "密碼和資料", "兩層加密", "還沒加密"], ["web", "lock", "網頁連線", "TLS 1.3", "沒加密"],
+const SECI = [["seal", "lock", "密碼和資料", "兩層加密", "還沒加密"], ["web", "net", "網頁連線", "TLS 1.3", "沒加密"],
   ["cloud", "cloud", "雲端硬碟", "整顆加密", "還沒加密"], ["backup", "archive", "每日備份", "加密", "沒開"]];
-const SECO = [["sshpw", "key", "SSH 只能用金鑰登入", "關掉密碼登入"], ["sshroot", "finger", "root 不能用密碼登入", "只能用金鑰"],
-  ["guard", "alert", "錯太多次封鎖", "10 分鐘錯 5 次封 1 小時"], ["autoupd", "upd", "自動安裝安全更新", "不會自己重新開機"]];
+const SECO = [["sshpw", "key", "SSH 只能用金鑰登入", "關掉密碼登入"], ["sshroot", "user", "root 不能用密碼登入", "只能用金鑰"],
+  ["guard", "ban", "錯太多次封鎖", "10 分鐘錯 5 次封 1 小時"], ["autoupd", "layers", "自動安裝安全更新", "不會自己重新開機"]];
 const secBad = s => [...SECI, ...SECO].filter(([k]) => s.sec && s.sec[k] === false).length;
 const secRow = s => !s.sec ? "" : `<button class="li" data-secchk="${esc(keyOf(s))}">${IC("safe", "")}<span class="lab">安全檢查${secBad(s) ? `<small class="warn">${secBad(s)} 項要注意</small>` : ""}</span>${secBad(s) ? "" : `<span class="stb" data-v="✓">${I("check")}</span>`}${CHEV}</button>`;
 function secModal(k){
@@ -1017,7 +1022,7 @@ function secModal(k){
   });
 }
 /* 系統更新（作業系統的套件）：跟哨兵、雲端硬碟的版本放在一起 */
-const sysRow = s => s.update && s.update.supported ? `<div class="selfrow" data-key="sys"><div class="cl2 first"><span class="ico info">${I("layers")}</span><span>系統<small data-x>${updateInfo(s) || "還沒檢查"}</small></span>${updateBtn(s)}</div></div>` : "";
+const sysRow = s => s.update && s.update.supported ? `<div class="selfrow" data-key="sys"><div class="cl2 first"><span class="ico sys">${I("layers")}</span><span>系統<small data-x>${updateInfo(s) || "還沒檢查"}</small></span>${updateBtn(s)}</div></div>` : "";
 /* 要顯示的內容、畫面更新頻率：收在一個視窗裡（手機從下面滑上來） */
 function showsModal(){
   const v = document.createElement("div"); v.className = "veil";
@@ -2053,7 +2058,7 @@ async function skyStatus(root){
 async function skyModal(){
   const st = await skyCall({action:"status"}).catch(() => ({}));
   const v = document.createElement("div"); v.className = "veil";
-  v.innerHTML = `<div class="dialog skyd">${IC("fly","big")}<h3>OpenSky 帳號</h3>
+  v.innerHTML = `<div class="dialog skyd">${IC("sky","big")}<h3>OpenSky 帳號</h3>
     <p>填了每天可以查 4000 次（沒填 400 次）</p>
     <div class="form">
       <button type="button" class="ubtn ghost find" data-file>${I("archive")}選帳號檔（credentials.json）</button>
