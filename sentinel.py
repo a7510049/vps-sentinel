@@ -45,7 +45,7 @@ from collections import deque
 from concurrent.futures import ThreadPoolExecutor
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
-VERSION = "4.37"
+VERSION = "4.38"
 
 # ───────────────────────── 哨兵備份檔（.vsbk）─────────────────────────
 # 哨兵專用的備份格式：外面是自己的檔案格式，裡面用的是成熟、標準的加密方法（不自己發明加密）：
@@ -597,7 +597,7 @@ CONF_PATH = os.environ.get("SENTINEL_CONF", "/etc/vps-sentinel-lite.conf")
 SEAL_KEY_PATH = os.environ.get("SENTINEL_SEAL_KEY") or os.path.splitext(CONF_PATH)[0] + ".key"
 SEAL_CONF = ("TOKEN", "TG_BOT_TOKEN", "TG_CHAT_ID", "BACKUP_KEY", "PEERS", "OPENSKY_ID", "OPENSKY_SECRET", "YT_PROXY", "LINKS")
 SEAL_FILES = ("tls-pins.json", "pin.json", "sessions.json", "passkeys.json", "state.json", "pairing.json", "yt-cookies.txt",
-              "downloads.json", "peers-cache.json", "fly-share.json", "notes.json", "adblock.json", "albums.json", "album-places.json")
+              "downloads.json", "peers-cache.json", "fly-share.json", "notes.json", "adblock.json", "albums.json", "album-places.json", "album-talk.json")
 SEAL_TXT = "vse1:"                                # 設定檔裡加密過的值
 SEAL_BIN = b"VSE1"                                # 加密過的檔案開頭
 SEAL = {"lib": None, "key": None, "ok": None}

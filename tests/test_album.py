@@ -230,6 +230,41 @@ class Album(Server):
         self.call({"action": "del", "id": aid})
 
 
+    def test_3_talk(self):
+        """朋友按愛心、留言、刪自己的；主人看得到、刪得掉；關掉就不能留"""
+        s, d = self.call({"action": "add", "dir": "旅行/台北"})
+        a = next(x for x in d["list"] if x["id"] == d["id"])
+        code, aid = a["code"], a["id"]
+        s, b, h = self.req("GET", f"/a/{code}/m")
+        ck = h["Set-Cookie"].split(";")[0]
+        pid = json.loads(b)["photos"][0]["i"]
+        post = lambda body, c=ck: self.req("POST", f"/a/{code}/talk", body, {"Cookie": c, "Content-Type": "application/json"} if c else {})
+        self.assertEqual(post({"i": pid, "like": True}, "")[0], 403)                   # 沒打開過相簿的不能按
+        s, b, _ = post({"i": pid, "like": True})
+        self.assertEqual((s, json.loads(b)["lk"], json.loads(b)["me"]), (200, 1, True))
+        self.assertEqual(post({"i": pid, "s": "好看", "n": ""})[0], 400)                 # 要寫名字
+        s, b, _ = post({"i": pid, "s": "好看\u202e<script>", "n": "小明"})
+        c = json.loads(b)["cm"][0]
+        self.assertEqual((c["n"], c["s"], c["me"]), ("小明", "好看 <script>", True))
+        self.assertEqual(post({"i": pid, "s": "再一則", "n": "小明"})[0], 429)            # 太快
+        s, b, _ = self.req("GET", f"/a/{code}/m", hdr={"Cookie": ck})
+        p = json.loads(b)["photos"][0]
+        self.assertEqual((p["lk"], p["me"], len(p["cm"])), (1, True, 1))
+        s, b, _ = self.req("GET", f"/a/{code}/m")                                       # 別支手機：看得到，但不是自己的
+        p = json.loads(b)["photos"][0]
+        self.assertEqual((p["me"], p["cm"][0]["me"]), (False, False))
+        s, t = self.call({"action": "talk", "id": aid})
+        self.assertEqual(([x["s"] for x in t["c"]], t["likes"][0]["n"]), (["好看 <script>"], 1))
+        self.assertEqual(next(x for x in self.call({"action": "devs", "id": aid})[1]["devs"] if x.get("nm"))["nm"], "小明")
+        s, t = self.call({"action": "talkdel", "id": aid, "i": pid, "cid": c["id"]})
+        self.assertEqual(t["c"], [])
+        self.call({"action": "edit", "id": aid, "talk": False})
+        self.assertEqual(post({"i": pid, "like": False})[0], 403)
+        with open(os.path.join(self.tmp.name, "data", "album-talk.json"), "rb") as f:
+            self.assertEqual(f.read(4), b"VSE1")
+        self.call({"action": "del", "id": aid})
+
+
 @unittest.skipUnless(shutil.which("ffmpeg"), "沒有 ffmpeg")
 class AlbumThumbs(Server):
     ENV = {"SENTINEL_ALB_DIR": ROOT_DIR + "-t", "SENTINEL_ALB_GEO": "http://127.0.0.1:9/none"}
@@ -246,6 +281,14 @@ class AlbumThumbs(Server):
             t = tiff([(0x0112, 3, 6)], [], [])
             app1 = b"Exif\x00\x00" + t
             f.write(b[:2] + b"\xff\xe1" + struct.pack(">H", len(app1) + 2) + app1 + b[2:])
+        d = os.path.join(ROOT_DIR + "-t", "影片")
+        os.makedirs(d, exist_ok=True)
+        ff = ["ffmpeg", "-v", "error", "-y"]
+        subprocess.run([*ff, "-f", "lavfi", "-i", "testsrc2=s=1920x1080:r=25:d=4", "-f", "lavfi", "-i", "sine=d=4", "-c:v", "libx264", "-c:a", "aac", "-shortest",
+                        "-metadata", "location=+25.0330+121.5654/", "-metadata", "creation_time=2026-11-03T06:00:00Z", os.path.join(d, "VID_1.mov")], check=True)
+        subprocess.run([*ff, "-f", "lavfi", "-i", "testsrc2=s=640x480", "-frames:v", "1", os.path.join(d, "IMG_2.jpg")], check=True)
+        subprocess.run([*ff, "-f", "lavfi", "-i", "testsrc2=s=640x480:r=25:d=2", "-c:v", "libx264", os.path.join(d, "IMG_2.mov")], check=True)
+        subprocess.run([*ff, "-f", "lavfi", "-i", "sine=d=2", os.path.join(d, "歌.mp3")], check=True)
         super().setUpClass()
 
     @classmethod
@@ -287,6 +330,58 @@ class AlbumThumbs(Server):
             if f.endswith(".jpg"):
                 with open(os.path.join(self.tmp.name, "data", "album-cache", f), "rb") as fh:
                     self.assertEqual(fh.read(4), b"VSE1")                              # 存在主機上的小圖是加密的
+
+
+    def test_video(self):
+        """影片轉成 720p、原況照片掛在照片上、背景音樂、iPhone 要的分段"""
+        c = http.client.HTTPConnection("127.0.0.1", self.port, timeout=60)
+        c.request("POST", "/api/album", body=json.dumps({"action": "add", "dir": "影片", "dl": 1}), headers={"X-Token": TOKEN})
+        d = json.loads(c.getresponse().read())
+        a = next(x for x in d["list"] if x["dir"] == "影片")
+        self.assertEqual((a["n"], a["nv"], a["mu"]), (2, 1, "歌.mp3"))                 # 原況那段不另外列
+        code = a["code"]
+        deadline, m = time.time() + 90, {}
+        while time.time() < deadline:
+            c.request("GET", f"/a/{code}/m")
+            m = json.loads(c.getresponse().read())
+            if all(p.get("vr", 1) == 1 for p in m["photos"]) and any(p.get("lv") for p in m["photos"]):
+                break
+            time.sleep(0.5)
+        else:
+            self.fail(f"影片沒有轉好：{m}")
+        v = next(p for p in m["photos"] if p.get("vd"))
+        self.assertEqual((v["w"], v["h"], v["x"]["dt"], v["g"][:2]), (1920, 1080, time.strftime("%Y:%m:%d %H:%M:%S", time.localtime(1793685600)), [25.033, 121.5654]))
+        self.assertAlmostEqual(v["vd"], 4, delta=0.2)
+        self.assertTrue(m["mu"])
+        c.request("GET", f"/a/{code}/i/{v['i']}/v", headers={"Range": "bytes=0-99"})
+        r = c.getresponse()
+        b = r.read()
+        self.assertEqual((r.status, len(b), b[4:8]), (206, 100, b"ftyp"))
+        total = int(r.getheader("Content-Range").split("/")[1])
+        c.request("GET", f"/a/{code}/i/{v['i']}/v", headers={"Range": f"bytes={total - 10}-"})
+        r = c.getresponse()
+        self.assertEqual((r.status, len(r.read())), (206, 10))
+        c.request("GET", f"/a/{code}/i/{v['i']}/v")
+        r = c.getresponse()
+        b = r.read()
+        self.assertEqual(len(b), total)
+        self.assertNotIn(b"121.5654", b)                                               # 轉過的影片沒有定位
+        c.request("GET", f"/a/{code}/i/{v['i']}/o")                                    # 只給壓縮的：下載的也是轉過的
+        r = c.getresponse()
+        self.assertEqual((r.status, len(r.read())), (200, total))
+        self.assertIn(".mp4", r.getheader("Content-Disposition"))
+        lv = next(p for p in m["photos"] if p.get("lv"))
+        c.request("GET", f"/a/{code}/i/{lv['i']}/m")
+        r = c.getresponse()
+        self.assertEqual((r.status, r.read()[4:8]), (200, b"ftyp"))
+        c.request("GET", f"/a/{code}/music", headers={"Range": "bytes=0-"})
+        r = c.getresponse()
+        self.assertEqual((r.status, r.getheader("Content-Type")), (206, "audio/mpeg"))
+        r.read()
+        for f in os.listdir(os.path.join(self.tmp.name, "data", "album-cache")):
+            if f.endswith(".bin"):
+                with open(os.path.join(self.tmp.name, "data", "album-cache", f), "rb") as fh:
+                    self.assertEqual(fh.read(4), b"VSE1")                              # 影片也是加密存的
 
 
 if __name__ == "__main__":

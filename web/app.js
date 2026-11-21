@@ -99,6 +99,9 @@ const P = {
   noad:'<rect x="2.5" y="5.5" width="19" height="13" rx="3"/><path d="m6.5 15 2-6 2 6M7.2 13h2.6M13.5 9v6h1.3a3 3 0 0 0 0-6z"/><path d="m4 3 16 18"/>',
   album:'<rect x="3" y="7" width="14" height="14" rx="2.5"/><path d="M7 3h11a3 3 0 0 1 3 3v11"/><circle cx="8.5" cy="12" r="1.5"/><path d="m17 17.5-4-4-7.5 7.5"/>',
   folder:'<path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>',
+  chat:'<path d="M20 12a8 8 0 0 1-11.7 7.1L4 20l.9-4.1A8 8 0 1 1 20 12Z"/>',
+  heart:'<path d="M12 20.5S3.5 15.3 3.5 9.2A4.7 4.7 0 0 1 12 6.6a4.7 4.7 0 0 1 8.5 2.6c0 6.1-8.5 11.3-8.5 11.3Z"/>',
+  music:'<path d="M9 18V5l11-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="17" cy="16" r="3"/>',
   note:'<path d="M13.4 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-7.4"/><path d="M2 6h4M2 10h4M2 14h4M2 18h4"/><path d="M21.4 5.6a2.1 2.1 0 1 0-3-3L13 8l-1 4 4-1z"/>',
   off:'<path d="M12 20h.01M8.5 16.43a5 5 0 0 1 7 0M2 8.82a15 15 0 0 1 4.17-2.65M10.66 5c4.01-.36 8.14.9 11.34 3.76M16.85 11.25a10 10 0 0 1 2.22 1.68M5 13a10 10 0 0 1 5.24-2.76M2 2l20 20"/>',
 };
@@ -1097,8 +1100,8 @@ const almLeft = a => !a.exp ? "不會過期" : (s => s > 172800 ? `${Math.round(
 const almAgo = t => { const s = Date.now() / 1000 - t; return s < 120 ? "剛剛" : s < 3600 ? `${Math.round(s / 60)} 分鐘前` : s < 86400 ? `${Math.round(s / 3600)} 小時前` : `${Math.round(s / 86400)} 天前`; };
 function albumModal(node, name){
   const q = node ? `?node=${encodeURIComponent(node)}` : "";
-  let D = null, view = "list", cur = null, dir = "", F = null, busy = false, PK = null, DV = null, pwEdit = false;
-  const o = {secs:604800, loc:true, dl:2, dev:0};
+  let D = null, view = "list", cur = null, dir = "", F = null, busy = false, PK = null, DV = null, TK = null, pwEdit = false;
+  const o = {secs:604800, loc:true, dl:2, dev:0, talk:true};
   const v = document.createElement("div"); v.className = "veil";
   v.innerHTML = `<div class="dialog pkd almd">${IC("album", "big")}<h3>相簿分享</h3><p>${esc(name)}</p><div class="form"><div class="almb">讀取中…</div><div class="msg"></div></div></div>`;
   $("#layer").appendChild(v);
@@ -1122,7 +1125,7 @@ function albumModal(node, name){
   const sg = (k, list, val) => `<div class="seg" data-alms="${k}">${list.map(([s, l]) => `<button type="button" class="${val === s ? "on" : ""}" data-v="${s}">${l}</button>`).join("")}</div>`;
   const srow = (ic, l, k, list, val, side = "") => `<div class="almrw col"><div class="almrh">${I(ic)}<span>${l}</span><small class="alms" data-side="${k}">${side}</small></div>${sg(k, list, val)}</div>`;
   const cover = a => a.cv ? `<img alt="" src="${esc(a.cv)}">` : `<i class="almph">${I("album")}</i>`;
-  const meta = a => `${a.n} 張${a.all > a.n ? `（共 ${a.all}）` : ""}・${almLeft(a)}`;
+  const meta = a => `${[a.n - (a.nv || 0) ? `${a.n - (a.nv || 0)} 張` : "", a.nv ? `${a.nv} 段影片` : ""].filter(Boolean).join("・")}${a.all > a.n ? `（共 ${a.all}）` : ""}・${almLeft(a)}`;
   const dlSide = d => ["朋友只能看", "長邊 2048 的 JPEG", "跟雲端硬碟裡一樣"][d];
   const pane = {
     list: () => `<div class="almgrid">${D.list.map(a => `<button type="button" class="almcard" data-almid="${esc(a.id)}"><span class="almcv">${cover(a)}</span>
@@ -1136,31 +1139,38 @@ function albumModal(node, name){
     opts: () => `<label>名稱<input class="field" data-almk="name" maxlength="40" value="${esc(dir.split("/").pop() || "相簿")}"></label>
       <div class="almsec"><h4>誰能看</h4>${srow("clock", "能看多久", "secs", ALMT, o.secs)}${srow("devices", "幾支手機", "dev", ALMD, o.dev)}
         <div class="almrw col"><div class="almrh">${I("lock")}<span>密碼</span></div><input class="field" data-almk="pw" type="password" maxlength="64" autocomplete="new-password" placeholder="不設"></div></div>
-      <div class="almsec"><h4>能做什麼</h4>${srow("dl", "下載", "dl", ALMDL, o.dl, dlSide(o.dl))}${tg("loc", o.loc, "顯示地點和地圖", "mpin")}</div>
+      <div class="almsec"><h4>能做什麼</h4>${srow("dl", "下載", "dl", ALMDL, o.dl, dlSide(o.dl))}${tg("loc", o.loc, "顯示地點和地圖", "mpin")}${tg("talk", o.talk, "朋友可以按愛心、留言", "chat")}</div>
       <button type="button" class="ubtn" data-alm="make">做好連結</button><button type="button" class="ubtn sm ghost" data-alm="pick">${I("back")}換資料夾</button>`,
     one: () => { const a = D.list.find(x => x.id === cur); if (!a) return pane.list();
       return `<div class="almhero"><span class="almcv">${cover(a)}</span><span class="almcap"><b>${esc(a.name)}</b><small>${meta(a)}</small></span></div>
       <div class="codebox"><code>${esc(link(a))}</code><button type="button" class="ubtn sm ghost" data-alm="copy">${navigator.share && matchMedia("(pointer:coarse)").matches ? "分享" : "複製"}</button></div>
       <div class="almacts"><a href="${esc(link(a))}" target="_blank" rel="noopener noreferrer">${EXT}<span>打開看看</span></a>
         <button type="button" data-alm="photos">${I("album")}<span>挑照片</span><small>${a.n}／${a.all}</small></button>
-        <button type="button" data-alm="devs">${I("devices")}<span>看過的手機</span><small>${a.ndev}${a.dev ? `／${a.dev}` : ""}</small></button></div>
+        <button type="button" data-alm="devs">${I("devices")}<span>看過的手機</span><small>${a.ndev}${a.dev ? `／${a.dev}` : ""}</small></button>
+        <button type="button" data-alm="talk">${I("chat")}<span>留言</span><small>${a.ncm}${a.nlk ? `・♥ ${a.nlk}` : ""}</small></button></div>
       <div class="almsec"><h4>誰能看</h4>${srow("clock", "能看多久", "secs", ALMT, -1, almLeft(a))}${srow("devices", "幾支手機", "dev", ALMD, a.dev, a.dev ? `${a.ndev} 支在看` : "")}
         <div class="almrw col"><div class="almrh">${I("lock")}<span>密碼</span><small class="alms">${a.pw ? "已設定" : "沒有"}</small></div>
           <div class="almin"><input class="field" data-almk="pw" type="password" maxlength="64" autocomplete="new-password" placeholder="${a.pw ? "輸入新的就換掉" : "不設"}"><button type="button" class="ubtn sm" data-alm="pw">${a.pw ? "換" : "設定"}</button>${a.pw ? `<button type="button" class="ubtn sm ghost" data-alm="nopw">拿掉</button>` : ""}</div></div></div>
-      <div class="almsec"><h4>能做什麼</h4>${srow("dl", "下載", "dl", ALMDL, a.dl, dlSide(a.dl))}${tg("loc", a.loc, "顯示地點和地圖", "mpin")}
+      <div class="almsec"><h4>能做什麼</h4>${srow("dl", "下載", "dl", ALMDL, a.dl, dlSide(a.dl))}${tg("loc", a.loc, "顯示地點和地圖", "mpin")}${tg("talk", a.talk, "朋友可以按愛心、留言", "chat")}
+        <div class="almrw">${I("music")}<span>幻燈片配樂</span><small class="alms">${a.mu ? esc(a.mu) : "放一首歌進資料夾就有"}</small></div>
         <div class="almrw col"><div class="almrh">${I("edit")}<span>浮水印</span><small class="alms">${a.wm ? (a.wmok ? "印在照片上" : "只蓋在畫面上") : "沒有"}</small></div>
           <div class="almin"><input class="field" data-almk="wm" maxlength="24" value="${esc(a.wm)}" placeholder="例如 © 你的名字"><button type="button" class="ubtn sm" data-alm="wm">${a.wm ? "換" : "加上"}</button>${a.wm ? `<button type="button" class="ubtn sm ghost" data-alm="nowm">拿掉</button>` : ""}</div></div></div>
       <button type="button" class="ubtn sm ghost bad ntwipe" data-alm="del">${I("trash")}收回連結</button>
       <button type="button" class="ubtn sm ghost" data-alm="list">${I("back")}全部相簿</button>`; },
     photos: () => { const n = PK.photos.filter(p => !p.hid).length;
       return `<div class="almpkh"><b>分享 <span class="num">${n}</span>／${PK.photos.length} 張</b><button type="button" class="ubtn sm ghost" data-alm="pkall">${n === PK.photos.length ? "全部不選" : "全選"}</button></div>
-      <div class="almpk">${PK.photos.map(p => `<button type="button" class="${p.hid ? "off" : ""}" data-almp="${p.i}" aria-pressed="${!p.hid}">${p.q ? `<img class="lq" alt="" src="data:image/jpeg;base64,${p.q}">` : ""}<img alt="" loading="lazy" src="${esc(`${PK.base || base()}/a/${PK.code}/i/${p.i}/s?v=${p.v}&own=${encodeURIComponent(PK.own)}`)}"><i>${I("ok")}</i></button>`).join("")}</div>
+      <div class="almpk">${PK.photos.map(p => `<button type="button" class="${p.hid ? "off" : ""}" data-almp="${p.i}" aria-pressed="${!p.hid}">${p.q ? `<img class="lq" alt="" src="data:image/jpeg;base64,${p.q}">` : ""}<img alt="" loading="lazy" src="${esc(`${PK.base || base()}/a/${PK.code}/i/${p.i}/s?v=${p.v}&own=${encodeURIComponent(PK.own)}`)}"><i>${I("ok")}</i>${p.vd ? `<em class="num">${Math.floor(p.vd / 60)}:${String(Math.round(p.vd % 60)).padStart(2, "0")}</em>` : ""}</button>`).join("")}</div>
       <button type="button" class="ubtn" data-alm="pksave"${n ? "" : " disabled"}>${n ? "存好" : "至少留一張"}</button><button type="button" class="ubtn sm ghost" data-alm="back">${I("back")}返回</button>`; },
     devs: () => `${DV.devs.length || DV.dev ? `<div class="almpkh"><b>${DV.dev ? `限 ${DV.dev} 支手機・用了 ${DV.devs.length} 支` : `${DV.devs.length} 支手機看過`}</b></div>` : ""}
-      ${DV.devs.length ? `<div class="pklist">${DV.devs.map(d => `<div class="pkrow almdv">${I(/iPhone|Android|手機|SM-|Pixel/.test(d.n) ? "devices" : "home")}<span><b>${esc(d.n)}</b><small>${almAgo(d.t)}・看了 ${d.c} 次</small></span><button type="button" class="ubtn sm ghost bad" data-almkick="${esc(d.h)}">踢掉</button></div>`).join("")}</div>`
+      ${DV.devs.length ? `<div class="pklist">${DV.devs.map(d => `<div class="pkrow almdv">${I(/iPhone|Android|手機|SM-|Pixel/.test(d.n) ? "devices" : "home")}<span><b>${esc(d.nm ? `${d.nm}・${d.n}` : d.n)}</b><small>${almAgo(d.t)}・看了 ${d.c} 次</small></span><button type="button" class="ubtn sm ghost bad" data-almkick="${esc(d.h)}">踢掉</button></div>`).join("")}</div>`
         : `<p class="ntx">還沒有人打開</p>`}
       <button type="button" class="ubtn sm ghost" data-alm="back">${I("back")}返回</button>`
   };
+  pane.talk = () => { const im = (i, ver) => esc(`${TK.base || base()}/a/${TK.code}/i/${i}/s?v=${ver}&own=${encodeURIComponent(TK.own)}`);
+    return `${TK.likes.length ? `<div class="almpkh"><b>最多愛心</b></div><div class="almlk">${TK.likes.map(l => `<span><img alt="" loading="lazy" src="${im(l.i, l.v)}"><em class="num">${I("heart")}${l.n}</em></span>`).join("")}</div>` : ""}
+      <div class="almpkh"><b>${TK.c.length ? `${TK.c.length} 則留言` : "還沒有人留言"}</b></div>
+      ${TK.c.length ? `<div class="pklist almtk">${TK.c.map(c => `<div class="pkrow"><img alt="" loading="lazy" src="${im(c.i, c.v)}"><span><b>${esc(c.n)}<small>${almAgo(c.t)}</small></b><small>${esc(c.s)}</small></span><button type="button" class="ubtn sm ghost bad" data-almtk="${esc(c.i)}|${esc(c.id)}" aria-label="刪掉">${I("trash")}</button></div>`).join("")}</div>` : ""}
+      <button type="button" class="ubtn sm ghost" data-alm="back">${I("back")}返回</button>`; };
   const draw = () => swapHTML(body, pane[view]());
   const share = async a => {
     const url = link(a);
@@ -1176,8 +1186,9 @@ function albumModal(node, name){
     v.addEventListener("change", async e => {
       const t = e.target.closest("[data-almo]"); if (!t) return;
       if (view === "opts") { o[t.dataset.almo] = t.checked; return; }
-      const x = await run({action:"edit", id:cur, [t.dataset.almo]:t.checked});
-      if (!x) t.checked = !t.checked; else toast(t.checked ? "朋友看得到地點" : "地點藏起來了，下載的照片也拿掉定位");
+      const k = t.dataset.almo, x = await run({action:"edit", id:cur, [k]:t.checked});
+      if (!x) t.checked = !t.checked;
+      else toast(k === "talk" ? (t.checked ? "朋友可以按愛心、留言" : "關掉了，之前的留言還留著") : t.checked ? "朋友看得到地點" : "地點藏起來了，下載的照片也拿掉定位");
     });
     v.addEventListener("click", async e => {
       if (e.target === v) return done();
@@ -1205,6 +1216,13 @@ function albumModal(node, name){
         const sv = v.querySelector('[data-alm="pksave"]'); if (sv) { sv.disabled = !n; sv.textContent = n ? "存好" : "至少留一張"; }
         const al = v.querySelector('[data-alm="pkall"]'); if (al) al.textContent = n === PK.photos.length ? "全部不選" : "全選";
         return; }
+      const tk = t.closest("[data-almtk]");
+      if (tk) {
+        if (!await modal({icon:"trash", cls:"bad", title:"刪掉這則留言？", text:"朋友那邊也會看不到。", ok:"刪掉"})) return;
+        const [i, cid] = tk.dataset.almtk.split("|"), x = await run({action:"talkdel", id:cur, i, cid});
+        if (x) { TK = x; draw(); toast("刪掉了"); }
+        return;
+      }
       const kk = t.closest("[data-almkick]");
       if (kk) {
         if (!await modal({icon:"ban", cls:"bad", title:"踢掉這支手機？", text:"這支手機之後打不開這本相簿。", ok:"踢掉"})) return;
@@ -1214,13 +1232,13 @@ function albumModal(node, name){
       const b = t.closest("[data-alm]"); if (!b) return;
       const act = b.dataset.alm, a = D && D.list.find(x => x.id === cur);
       if (act === "list") { view = "list"; return draw(); }
-      if (act === "back") { view = "one"; return draw(); }
+      if (act === "back") { if (view === "talk" || view === "devs") await run({action:"list"}); view = "one"; return draw(); }
       if (act === "new" || act === "pick") return goDir(act === "pick" ? dir.split("/").slice(0, -1).join("/") : "");
       if (act === "use") { view = "opts"; return draw(); }
       if (act === "make") {
         const nm = v.querySelector('[data-almk="name"]').value.trim(), pw = v.querySelector('[data-almk="pw"]').value;
         if (pw && pw.length < 4) return sayTo(msg, "密碼要 4 個字以上");
-        const x = await run({action:"add", dir, name:nm, pw, secs:o.secs, loc:o.loc, dl:o.dl, dev:o.dev});
+        const x = await run({action:"add", dir, name:nm, pw, secs:o.secs, loc:o.loc, dl:o.dl, dev:o.dev, talk:o.talk});
         if (!x) return;
         cur = x.id; view = "one"; draw();
         const na = D.list.find(y => y.id === cur); if (na) share(na);
@@ -1230,6 +1248,7 @@ function albumModal(node, name){
       if (act === "copy") return share(a);
       if (act === "photos") { const x = await run({action:"photos", id:cur}); if (x) { PK = x; view = "photos"; draw(); } return; }
       if (act === "devs") { const x = await run({action:"devs", id:cur}); if (x) { DV = x; view = "devs"; draw(); } return; }
+      if (act === "talk") { const x = await run({action:"talk", id:cur}); if (x) { TK = x; view = "talk"; draw(); } return; }
       if (act === "pkall") { const all = PK.photos.every(p => !p.hid); PK.photos.forEach(p => { p.hid = all; }); return draw(); }
       if (act === "pksave") { if (await run({action:"edit", id:cur, hide:PK.photos.filter(p => p.hid).map(p => p.i)})) { toast("存好了"); view = "one"; draw(); } return; }
       if (act === "pw" || act === "nopw") {

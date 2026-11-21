@@ -296,4 +296,118 @@ button.chip:active,a.chip:active{transform:scale(.95)}
   text-shadow:0 1px 3px rgba(0,0,0,.45);pointer-events:none;font-size:clamp(10px,3.4cqmin,28px)}
 .ph,.zw{container-type:size}
 
+/* ═════════ 回憶與分享：影片、原況、旅程路線、愛心留言、幻燈片 ═════════ */
+.bdg{position:absolute;inset:0;pointer-events:none;z-index:1}
+.bdg>span{position:absolute;display:inline-flex;align-items:center;gap:4px;height:22px;padding:0 8px;border-radius:var(--r-pill);background:rgba(0,0,0,.42);color:#fff;
+  -webkit-backdrop-filter:blur(10px);backdrop-filter:blur(10px);font:650 11px/1 var(--font)}
+.bdg svg{width:12px;height:12px}
+.bdg .vt{right:6px;bottom:6px}
+.bdg .vt svg{width:9px;height:9px}
+.bdg .lvt{left:6px;top:6px;width:24px;padding:0;justify-content:center}
+.bdg .lvt svg{width:15px;height:15px}
+.bdg .lkt{left:6px;bottom:6px}
+.bdg .lkt svg{fill:currentColor;stroke:none}
+
+/* 旅程：照時間連起來的路線 */
+.route{position:absolute;inset:0;width:100%;height:100%;z-index:1;pointer-events:none;overflow:visible}
+.route path{fill:none;stroke-linecap:round;stroke-linejoin:round}
+.route .rt0{stroke:rgba(0,0,0,.25);stroke-width:7;opacity:0;transition:opacity var(--t-slow) var(--ease)}
+.route .rt{stroke:var(--p);stroke-width:3.5;stroke-dasharray:var(--len) var(--len);stroke-dashoffset:var(--len)}
+.drawn .route .rt{stroke-dashoffset:0;transition:stroke-dashoffset 2.4s cubic-bezier(.45,0,.2,1)}
+.drawn .route .rt0{opacity:1}
+.route .rdot{fill:#fff;stroke:var(--p);stroke-width:3;opacity:0;transition:opacity var(--t-slow) var(--ease) 2.4s;filter:drop-shadow(0 0 6px var(--p))}
+.drawn .route .rdot{opacity:1}
+.dayn{position:absolute;z-index:2;height:20px;padding:0 8px;border-radius:var(--r-pill);display:grid;place-items:center;background:var(--tx);color:var(--bg);white-space:nowrap;
+  font:700 11px/1 var(--font);box-shadow:var(--sh-pop);opacity:0;transform:translate(-50%,24px) scale(.4);transition:opacity var(--t-mid) var(--ease),transform var(--sp-fast)}
+.drawn .dayn{opacity:1;transform:translate(-50%,30px)}
+.drawn .dayn:nth-of-type(2){transition-delay:.5s}.drawn .dayn:nth-of-type(3){transition-delay:1s}.drawn .dayn:nth-of-type(n+4){transition-delay:1.5s}
+
+/* 看大圖：影片、原況、愛心留言 */
+.lvb{display:none}
+.lvb.show{display:grid}
+.lbb{flex-direction:column;align-items:stretch;gap:10px}
+.lbr{display:flex;align-items:center;gap:8px}
+.sb{display:inline-flex;align-items:center;gap:6px;height:40px;padding:0 12px;border-radius:var(--r-pill);background:rgba(255,255,255,.12);-webkit-backdrop-filter:blur(16px);backdrop-filter:blur(16px);
+  font-weight:650;font-size:var(--fs-s);position:relative;transition:transform var(--sp-fast),background var(--t-fast) var(--ease)}
+.sb svg{width:20px;height:20px}
+.sb span:empty{display:none}
+.sb:active{transform:scale(.92)}
+.sb.on svg{fill:#ff4d6a;stroke:#ff4d6a}
+.burst{position:absolute;left:12px;top:50%;width:20px;height:20px;margin-top:-10px;border-radius:50%;box-shadow:0 0 0 2px #ff4d6a;pointer-events:none;animation:burst var(--t-slow) var(--dec) forwards}
+@keyframes burst{from{transform:scale(.6);opacity:1}to{transform:scale(2.4);opacity:0}}
+.vbar{display:none;align-items:center;gap:10px}
+.lb.isv .vbar{display:flex}
+.vpp{width:36px;height:36px;display:grid;place-items:center;flex:none}
+.vpp svg{width:20px;height:20px}
+.vtr{flex:1;height:22px;position:relative;cursor:pointer}
+.vtr::before,.vtr i{content:"";position:absolute;left:0;right:0;top:50%;height:4px;margin-top:-2px;border-radius:var(--r-pill);background:rgba(255,255,255,.28)}
+.vtr i{background:#fff;transform-origin:0 50%;transform:scaleX(0)}
+.vt0,.vt1{font-size:var(--fs-xs);color:rgba(255,255,255,.8);min-width:32px}
+.zw video{position:absolute;inset:0;width:100%;height:100%;object-fit:contain;opacity:0;transition:opacity var(--t-mid) var(--ease);pointer-events:none}
+.zw.playing .vv,.zw.moving .lvv{opacity:1}
+.vbig{position:absolute;left:50%;top:50%;width:72px;height:72px;margin:-36px 0 0 -36px;border-radius:50%;display:grid;place-items:center;background:rgba(0,0,0,.38);
+  -webkit-backdrop-filter:blur(14px);backdrop-filter:blur(14px);color:#fff;box-shadow:inset 0 0 0 1px rgba(255,255,255,.25);transition:opacity var(--t-mid) var(--ease),transform var(--t-mid) var(--ease);pointer-events:none}
+.vbig svg{width:30px;height:30px;margin-left:4px}
+.zw.playing .vbig{opacity:0;transform:scale(1.2)}
+.spin{width:26px;height:26px;border-radius:50%;border:3px solid rgba(255,255,255,.3);border-top-color:#fff;animation:rot .9s linear infinite}
+@keyframes rot{to{transform:rotate(1turn)}}
+
+.italk{padding:14px 16px 12px}
+.italk .th{display:flex;align-items:center;justify-content:space-between;margin-bottom:4px}
+.italk .th b{font-family:var(--serif);font-weight:600;font-size:var(--fs-l);letter-spacing:.04em}
+.italk .th span{display:inline-flex;align-items:center;gap:5px;color:var(--tx3);font-size:var(--fs-s);font-weight:600}
+.italk .th svg{width:15px;height:15px;fill:#ff4d6a;stroke:#ff4d6a}
+.cmt{display:flex;gap:10px;padding:10px 0;align-items:flex-start}
+.cmt+.cmt{box-shadow:0 -1px 0 var(--line)}
+.cmt .av{width:32px;height:32px;border-radius:50%;flex:none;display:grid;place-items:center;font-weight:700;font-size:var(--fs-s);background:color-mix(in oklab,var(--seed) 22%,var(--s2));color:var(--p)}
+.cb{flex:1;min-width:0}
+.cn{display:flex;gap:8px;align-items:baseline}
+.cn b{font-weight:700;font-size:var(--fs-s)}
+.cn span{color:var(--tx3);font-size:var(--fs-xs)}
+.cb p{margin:2px 0 0;overflow-wrap:anywhere;line-height:1.45}
+.cx{width:28px;height:28px;display:grid;place-items:center;color:var(--tx3);flex:none;border-radius:50%}
+.cx svg{width:14px;height:14px}
+.cform{margin-top:8px;display:grid;gap:8px}
+.crow{display:flex;gap:8px}
+.cin{flex:1;min-width:0;height:44px;border-radius:var(--r-pill);border:0;background:var(--s2);color:var(--tx);padding:0 16px;font:500 16px/1 var(--font);outline:0;box-shadow:inset 0 0 0 1.5px transparent;transition:box-shadow var(--t-fast) var(--ease)}
+.cin:focus{box-shadow:inset 0 0 0 1.5px var(--p)}
+.csend{width:44px;height:44px;border-radius:50%;display:grid;place-items:center;background:var(--p);color:var(--on-p);flex:none;transition:transform var(--sp-fast),opacity var(--t-fast)}
+.csend svg{width:20px;height:20px}
+.csend:active{transform:scale(.9)}
+.csend:disabled{opacity:.5}
+
+/* 幻燈片：整個畫面、後面是糊掉的同一張、慢慢推近 */
+.ss{position:fixed;inset:0;z-index:var(--z-veil);background:#000;color:#fff;touch-action:none;user-select:none;-webkit-user-select:none;overflow:hidden;cursor:none}
+.ss:not(.bare){cursor:auto}
+.ssv{position:absolute;inset:0}
+.ssl{position:absolute;inset:0;opacity:0;transition:opacity 1.4s cubic-bezier(.4,0,.2,1)}
+.ssl.in{opacity:1}
+.ssl.out{opacity:0}
+.sbg{position:absolute;inset:-8%;width:116%;height:116%;object-fit:cover;filter:blur(40px) brightness(.55) saturate(1.2)}
+.sfg{position:absolute;inset:0;will-change:transform}
+.sfg img,.sfg video{position:absolute;inset:0;width:100%;height:100%;object-fit:contain;-webkit-touch-callout:none}
+.sfg.cv img{object-fit:cover}
+.scap{position:absolute;left:0;right:0;bottom:0;padding:80px max(var(--pad),5vw) calc(46px + env(safe-area-inset-bottom));background:linear-gradient(transparent,rgba(0,0,0,.5));
+  opacity:0;transform:translateY(10px);transition:opacity var(--t-slow) var(--ease) .8s,transform var(--t-slow) var(--dec) .8s}
+.ssl.in .scap{opacity:1;transform:none}
+.scap b{display:block;font-family:var(--serif);font-weight:600;font-size:clamp(22px,4vw,40px);letter-spacing:.06em;text-shadow:0 2px 20px rgba(0,0,0,.4)}
+.scap span{display:block;margin-top:4px;font-size:var(--fs-s);letter-spacing:.14em;color:rgba(255,255,255,.75)}
+.ssp{position:absolute;left:0;right:0;top:0;height:2px;background:rgba(255,255,255,.18);z-index:2;transition:opacity var(--t-mid) var(--ease)}
+.ssp i{position:absolute;inset:0;background:#fff;transform-origin:0 50%;transform:scaleX(0)}
+.ssc{position:absolute;left:0;right:0;top:0;display:flex;align-items:center;gap:10px;padding:calc(env(safe-area-inset-top) + 14px) 14px 30px;z-index:2;background:linear-gradient(rgba(0,0,0,.45),transparent);
+  transition:opacity var(--t-mid) var(--ease),transform var(--t-mid) var(--ease)}
+.ssc span{flex:1;text-align:center;font-weight:600;font-size:var(--fs-s);color:rgba(255,255,255,.8)}
+.ssn{position:absolute;left:0;right:0;top:50%;margin-top:-26px;display:none;justify-content:space-between;padding:0 18px;z-index:2;pointer-events:none;transition:opacity var(--t-mid) var(--ease)}
+.ssn .rb{width:52px;height:52px;pointer-events:auto}
+@media (hover:hover) and (min-width:700px){.ssn{display:flex}}
+.ss.bare .ssc{opacity:0;transform:translateY(-12px);pointer-events:none}
+.ss.bare .ssn{opacity:0}
+.ss.bare .ssn .rb{pointer-events:none}
+.ss.bare .ssp{opacity:.5}
+.ssend{position:absolute;inset:0;display:grid;place-content:center;justify-items:center;gap:26px;animation:up var(--t-slow) var(--dec) .8s both}
+.ssend .fin{color:#fff;font-size:clamp(24px,4vw,40px)}
+.ssend .fin::before,.ssend .fin::after{background:rgba(255,255,255,.5);box-shadow:none}
+.ssend .chip.go{background:#fff;color:#111}
+.ssend .chip.go svg{color:#111}
+
 @media (prefers-reduced-motion:reduce){*,*::before,*::after{animation-duration:.001s!important;transition-duration:.001s!important}}
