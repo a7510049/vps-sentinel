@@ -11,6 +11,7 @@ const P = {
   x:'<path d="M18 6 6 18M6 6l12 12"/>', info:'<circle cx="12" cy="12" r="9"/><path d="M12 16v-4M12 8h.01"/>',
   dl:'<path d="M12 4v11M7 10l5 5 5-5M5 20h14"/>', l:'<path d="m15 18-6-6 6-6"/>', r:'<path d="m9 18 6-6-6-6"/>',
   pin:'<path d="M12 21s-7-6.2-7-11.5A7 7 0 0 1 19 9.5C19 14.8 12 21 12 21Z"/><circle cx="12" cy="9.5" r="2.5"/>',
+  phone:'<rect x="7" y="3" width="10" height="18" rx="2.5"/><path d="M11 17.5h2"/>',
   lock:'<rect x="4" y="10.5" width="16" height="10.5" rx="3"/><path d="M8 10.5V7.5a4 4 0 0 1 8 0v3"/>',
   photo:'<rect x="3" y="4" width="18" height="16" rx="3"/><circle cx="9" cy="10" r="2"/><path d="m21 16-5-5-9 9"/>',
   off:'<path d="M3 3l18 18M10.6 5H18a3 3 0 0 1 3 3v8.4M3 7.8V17a3 3 0 0 0 3 3h11.2"/><path d="m21 16-4-4M14 17l-4-4-7 7"/>',
@@ -72,17 +73,18 @@ const DIR8 = ["北", "東北", "東", "東南", "南", "西南", "西", "西北"
 const mapUrl = (lat, lon, q) => /iPhone|iPad|Macintosh/.test(navigator.userAgent) ? `https://maps.apple.com/?ll=${lat},${lon}&q=${encodeURIComponent(q || "照片地點")}`
   : `https://www.google.com/maps/search/?api=1&query=${lat},${lon}`;
 
-/* ── 地圖：CARTO 的底圖（OpenStreetMap 資料），自己算要哪幾格 ── */
+/* ── 地圖：OpenStreetMap 的圖塊，主機幫忙拿（朋友不用連外面）；高一級的圖塊縮一半放，手機上才清楚 ── */
 const lx = (lon, z) => (lon + 180) / 360 * 256 * 2 ** z;
 const ly = (lat, z) => { const s = Math.sin(lat * Math.PI / 180); return (.5 - Math.log((1 + s) / (1 - s)) / (4 * Math.PI)) * 256 * 2 ** z; };
 function tiles(el, cx, cy, z, W, H){
-  const sty = DARK.matches ? "dark_all" : "rastertiles/voyager", n = 2 ** z;
+  const hi = z < 19 ? 2 : 1, Z = z + (hi > 1 ? 1 : 0), n = 2 ** Z, T = 256 / hi;
+  const X = cx * hi, Y = cy * hi, w = W * hi, h0 = H * hi;
   let h = "";
-  for (let tx = Math.floor((cx - W / 2) / 256); tx <= Math.floor((cx + W / 2) / 256); tx++)
-    for (let ty = Math.floor((cy - H / 2) / 256); ty <= Math.floor((cy + H / 2) / 256); ty++) {
+  for (let tx = Math.floor((X - w / 2) / 256); tx <= Math.floor((X + w / 2) / 256); tx++)
+    for (let ty = Math.floor((Y - h0 / 2) / 256); ty <= Math.floor((Y + h0 / 2) / 256); ty++) {
       if (ty < 0 || ty >= n) continue;
-      const x = ((tx % n) + n) % n, s = "abcd"[(x + ty) % 4];
-      h += `<img class="tl" alt="" draggable="false" style="left:${tx * 256 - cx + W / 2}px;top:${ty * 256 - cy + H / 2}px" src="https://${s}.basemaps.cartocdn.com/${sty}/${z}/${x}/${ty}@2x.png">`;
+      const x = ((tx % n) + n) % n;
+      h += `<img class="tl" alt="" draggable="false" style="left:${(tx * 256 - X + w / 2) / hi}px;top:${(ty * 256 - Y + h0 / 2) / hi}px;width:${T}px;height:${T}px" src="${BASE}/t/${Z}/${x}/${ty}">`;
     }
   el.insertAdjacentHTML("afterbegin", h);
   el.querySelectorAll(".tl").forEach(t => { if (t.complete && t.naturalWidth) return t.classList.add("ok");
@@ -95,7 +97,9 @@ async function boot(){
   try { r = await fetch(BASE + "/m", {credentials:"same-origin", cache:"no-store"}); }
   catch (e) { return gate("off", "連不上，等一下再試"); }
   if (r.status === 401) return askPw();
-  if (!r.ok) return gate("off", "這本相簿已經收回或過期");
+  if (r.status === 403) { const x = await r.json().catch(() => ({}));
+    return gate("phone", x.ban ? "這支手機不能看這本相簿" : "名額已經滿了", "", x.ban ? "" : "這本相簿只給指定的手機看"); }
+  if (!r.ok) return gate("off", "這本相簿已經看不到了", "", "連結已經收回或過期");
   D = await r.json();
   PH = D.photos || [];
   document.title = D.name;
@@ -118,12 +122,13 @@ async function refresh(){                                  // 地名在主機背
     if (PH.some(p => p.g && !p.p) && ++REF < 5) setTimeout(refresh, 8000);
   } catch (e) {}
 }
-function gate(ic, title, form){
-  $("#app").innerHTML = `<div class="gate"><form class="card">${`<div class="ic">${I(ic)}</div>`}<h2>${esc(title)}</h2>${form || ""}</form></div>`;
+function gate(ic, title, form, sub){
+  document.title = title;
+  $("#app").innerHTML = `<div class="gate"><div class="glow"></div><form class="card"><div class="ic">${I(ic)}</div><h2>${esc(title)}</h2>${sub ? `<p>${esc(sub)}</p>` : ""}${form || ""}</form></div>`;
   return $(".card");
 }
 function askPw(){
-  const f = gate("lock", "輸入密碼", `<input class="field" type="password" autocomplete="current-password" aria-label="密碼" required><button class="btn">打開</button><div class="msg"></div>`);
+  const f = gate("lock", "這本相簿上了鎖", `<input class="field" type="password" autocomplete="current-password" aria-label="密碼" placeholder="密碼" required><button class="btn">打開相簿</button><div class="msg"></div>`);
   const inp = f.querySelector("input"), btn = f.querySelector("button"), msg = f.querySelector(".msg");
   setTimeout(() => inp.focus(), 300);
   f.addEventListener("submit", async e => {
@@ -166,15 +171,18 @@ function draw(){
   const pl = (D.places || []).slice(0, 3).join("・");
   $("#app").innerHTML = `
     <header class="hero"><div class="cv">${cover.q ? `<img class="lq" alt="" src="data:image/jpeg;base64,${cover.q}">` : ""}<img class="hi" alt="" src="${src(cover, "l")}"></div>
-      <div class="hcap"><div class="eyebrow">${esc(frange(a, b))}</div><h1>${esc(D.name)}</h1>
+      <div class="hcap">${a ? `<div class="eyebrow num">${esc(frange(a, b))}</div>` : ""}<h1>${esc(D.name)}</h1>
         <div class="hmeta"><span class="chip">${I("photo")}<span class="num">${PH.length} 張</span></span>${pl ? `<span class="chip" data-pl>${I("pin")}<span>${esc(pl)}</span></span>` : ""}
-        ${D.dl ? `<a class="chip go" href="${BASE}/zip" download>${I("dl")}<span>全部下載</span></a>` : ""}</div></div></header>
+        ${D.dl ? `<a class="chip go" href="${BASE}/zip" download>${I("dl")}<span>全部下載</span></a>` : ""}</div></div>
+      <button class="cue" aria-label="往下看"><i></i></button></header>
     <div class="bar"><b>${esc(D.name)}<small class="num">${PH.length} 張</small></b>${D.dl ? `<a class="chip go" href="${BASE}/zip" download>${I("dl")}<span>全部下載</span></a>` : ""}</div>
     <main class="wall">${GROUPS.map((g, gi) => `<section class="day" data-g="${gi}">${g.k && g.d ? `<div class="dh" data-day="${g.k}"><b>${fday(g.d, yr)}</b><span>${esc(dayPlaces(g.k))}</span></div>` : ""}<div class="rows"></div></section>`).join("")}</main>
     ${D.loc && PH.some(p => p.g) ? `<section class="msec"><div class="mh"><b>拍攝地點</b><span class="num">${PH.filter(p => p.g).length} 張有地點</span></div><div class="map" data-map></div></section>` : ""}
-    <footer class="foot">${D.exp ? `<span>${I("clock")}${left(D.exp)}</span>` : ""}</footer>`;
+    <footer class="foot"><div class="fin">${esc(D.name)}</div>${D.exp ? `<span>${I("clock")}${left(D.exp)}</span>` : ""}</footer>`;
   const hi = $(".hero .hi");
   hi.complete ? hi.classList.add("ok") : hi.addEventListener("load", () => hi.classList.add("ok"), {once:true});
+  if (D.wmo) document.documentElement.style.setProperty("--wm", JSON.stringify(D.wmo));
+  document.documentElement.classList.toggle("wmo", !!D.wmo);
   TILES = PH.map((p, i) => tile(p, i));
   layout();
   bigMap();
@@ -210,15 +218,18 @@ function layout(force){
   GROUPS.forEach((g, gi) => {
     const box = wall.querySelector(`[data-g="${gi}"] .rows`), rows = [];
     let cur = [], sum = 0;
+    const big = g.list.length >= 5 && PH[g.list[0]].w / PH[g.list[0]].h >= 1.3 && W >= 320 ? g.list[0] : -1;   // 一天的第一張橫的放整排
+    if (big >= 0) { const ar = Math.min(3, PH[big].w / PH[big].h); rows.push([[[big, W / Math.min(W / ar, innerHeight * .72)]], Math.min(W / ar, innerHeight * .72), 1]); }
     g.list.forEach(i => {
+      if (i === big) return;
       const p = PH[i], ar = Math.min(3, Math.max(.4, p.w / p.h));
       cur.push([i, ar]); sum += ar;
       if (sum * rh + gap * (cur.length - 1) >= W) { rows.push([cur, (W - gap * (cur.length - 1)) / sum]); cur = []; sum = 0; }
     });
     if (cur.length) rows.push([cur, Math.min(rh * 1.1, (W - gap * (cur.length - 1)) / sum)]);
     const frag = document.createDocumentFragment();
-    rows.forEach(([list, h]) => {
-      const r = document.createElement("div"); r.className = "row"; r.style.height = h.toFixed(2) + "px";
+    rows.forEach(([list, h, feat]) => {
+      const r = document.createElement("div"); r.className = feat ? "row feat" : "row"; r.style.height = h.toFixed(2) + "px";
       list.forEach(([i, ar]) => { const t = TILES[i]; t.style.width = (ar * h).toFixed(2) + "px"; t.style.height = h.toFixed(2) + "px"; r.appendChild(t); });
       frag.appendChild(r);
     });
@@ -244,9 +255,12 @@ function onScroll(){
   });
 }
 addEventListener("scroll", onScroll, {passive:true});
+addEventListener("contextmenu", e => { if (e.target.closest(".ph,.zw,.mk,.hero")) e.preventDefault(); });   // 不能按右鍵、長按另存
+addEventListener("dragstart", e => { if (e.target.tagName === "IMG") e.preventDefault(); });
 document.addEventListener("click", e => {
   const t = e.target.closest(".ph");
   if (t) return openLb(+t.dataset.i);
+  if (e.target.closest(".cue")) return scrollTo({top:$(".hero").offsetHeight - 8, behavior:anim() ? "smooth" : "auto"});
   const m = e.target.closest(".mk");
   if (m) return openLb(+m.dataset.i);
 });
@@ -265,7 +279,7 @@ function bigMap(){
   if (pts.length === 1) z = 13;
   const xs = pts.map(([p]) => lx(p.g[1], z)), ys = pts.map(([p]) => ly(p.g[0], z));
   const cx = (Math.max(...xs) + Math.min(...xs)) / 2, cy = (Math.max(...ys) + Math.min(...ys)) / 2;
-  el.innerHTML = `<span class="attr">© OpenStreetMap © CARTO</span>`;
+  el.innerHTML = `<span class="attr">© OpenStreetMap</span>`;
   tiles(el, cx, cy, z, W, H);
   const cl = [];
   pts.forEach(([p, i], k) => {
@@ -283,7 +297,7 @@ function openLb(i){
   const el = document.createElement("div");
   el.className = "lb";
   el.innerHTML = `<div class="bg"></div><div class="stage"><div class="track"></div></div>
-    <div class="lbt"><button class="rb" data-x aria-label="關閉">${I("x")}</button><span class="cnt num"></span><button class="rb" data-inf aria-label="照片資訊">${I("info")}</button>${D.dl ? `<a class="rb" data-dl download aria-label="下載原圖">${I("dl")}</a>` : ""}</div>
+    <div class="lbt"><button class="rb" data-x aria-label="關閉">${I("x")}</button><span class="cnt num"></span><button class="rb" data-inf aria-label="照片資訊">${I("info")}</button>${D.dl ? `<a class="rb" data-dl download aria-label="${D.dl > 1 ? "下載原圖" : "下載"}">${I("dl")}</a>` : ""}</div>
     <button class="rb nav l" aria-label="上一張">${I("l")}</button><button class="rb nav r" aria-label="下一張">${I("r")}</button>
     <div class="lbb"><div class="cap"><b></b><span></span></div></div><div class="inf"></div>`;
   document.body.appendChild(el);
@@ -517,7 +531,7 @@ function infoHTML(p){
   let h = d ? `<div class="idt">${fdate(d)}</div><div class="itm num">${x.dtf ? "檔案時間 " : ""}${ftime(d)}${x.oz ? `・UTC${x.oz.replace(":00", "")}` : ""}</div>` : "";
   if (p.g) {
     const [lat, lon, alt, dir] = p.g, nm = p.p ? p.p.n : "拍攝地點", sub = p.p && p.p.a ? p.p.a : `${lat.toFixed(5)}, ${lon.toFixed(5)}`;
-    h += `<div class="ibox"><a class="imap" href="${mapUrl(lat, lon, nm)}" target="_blank" rel="noopener noreferrer" aria-label="在地圖上打開">${dir != null ? `<span class="cone" style="transform:rotate(${dir}deg)"></span>` : ""}<span class="pin"></span><span class="attr">© OpenStreetMap © CARTO</span></a>
+    h += `<div class="ibox"><a class="imap" href="${mapUrl(lat, lon, nm)}" target="_blank" rel="noopener noreferrer" aria-label="在地圖上打開">${dir != null ? `<span class="cone" style="transform:rotate(${dir}deg)"></span>` : ""}<span class="pin"></span><span class="attr">© OpenStreetMap</span></a>
       <a class="ipl" href="${mapUrl(lat, lon, nm)}" target="_blank" rel="noopener noreferrer"><span class="pi">${I("pin")}</span><span><b>${esc(nm)}</b><span>${esc(sub)}</span></span><span class="go">${I("ext")}</span></a></div>`;
   }
   const cells = [["ISO", x.iso || ""], ["焦距", f35 ? `${f35} mm` : fl ? `${Math.round(fl)} mm` : ""], ["曝光", x.ev != null ? `${x.ev > 0 ? "+" : ""}${+x.ev.toFixed(1)} ev` : ""],
@@ -542,7 +556,7 @@ function infoHTML(p){
   if (x.sw) kv.push(["軟體", x.sw]);
   kv.push(["檔名", p.n]);
   h += `<div class="ibox ikv">${kv.filter(r => r[1]).map(([k, v]) => `<div><span>${k}</span><b>${esc(v)}</b></div>`).join("")}</div>`;
-  if (D.dl) h += `<div class="idl"><a class="pr" href="${src(p, "o")}" download>${I("dl")}下載原圖</a></div>`;
+  if (D.dl) h += `<div class="idl"><a class="pr" href="${src(p, "o")}" download>${I("dl")}${D.dl > 1 ? "下載原圖" : "下載"}</a></div>`;
   return h;
 }
 
