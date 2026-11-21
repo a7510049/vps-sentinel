@@ -1280,6 +1280,12 @@ function show(start){
 /* ═════════ 回憶：像限時動態，一張幾秒自己往下，點右邊下一張、左邊上一張、按住暫停、往下滑關掉 ═════════ */
 const SYD = 4500;
 let SY = null;
+/* 限時動態的裁切框：有 r 是那個圓圈，沒有是整個畫面（兩頭同一種寫法才能連續變） */
+function syClip(r){
+  if (!r) return "inset(0px 0px 0px 0px round 0px)";
+  const R = r.width / 2;
+  return `inset(${r.top}px ${innerWidth - r.right}px ${innerHeight - r.bottom}px ${r.left}px round ${R}px)`;
+}
 function story(n, from){
   if (SY || !MEMS[n]) return;
   const el = document.createElement("div");
@@ -1374,9 +1380,10 @@ function story(n, from){
     const fin = () => { el.remove(); if (!LB && !SS) document.documentElement.style.overflow = ""; SY = null; };
     if (!anim()) return fin();
     const b = $(`.mem[data-mem="${g}"] .mring`), r = b && b.getBoundingClientRect();
-    const to = r && r.bottom > 0 && r.top < innerHeight ? `translate(${r.left + r.width / 2 - innerWidth / 2}px,${r.top + r.height / 2 - innerHeight / 2}px) scale(${r.width / innerWidth})` : "translateY(30%) scale(.8)";
-    const cur = getComputedStyle(el).transform;
-    el.animate([{transform:cur === "none" ? "none" : cur, opacity:1, borderRadius:"0"}, {transform:to, opacity:0, borderRadius:"50%"}], {duration:T.mid, easing:EASE, fill:"forwards"}).onfinish = fin;
+    const cur = getComputedStyle(el).transform, t0 = cur === "none" ? "none" : cur;
+    // 收回圓圈用裁切不用縮放：安卓縮放整頁大小的圖層，放回原大時會有一格下半部是空的（看得到後面的頁面）
+    if (r && r.bottom > 0 && r.top < innerHeight && t0 === "none") el.animate([{clipPath:syClip(), opacity:1}, {clipPath:syClip(r), opacity:0}], {duration:T.mid, easing:EASE, fill:"forwards"}).onfinish = fin;
+    else el.animate([{transform:t0, opacity:1}, {transform:"translateY(30%) scale(.8)", opacity:0}], {duration:T.mid, easing:EASE, fill:"forwards"}).onfinish = fin;
   }
   S.close = close;
   S.key = e => {
@@ -1422,8 +1429,8 @@ function story(n, from){
   history.pushState({sy:1}, "");
   if (anim()) {
     const r = from && from.getBoundingClientRect();
-    el.animate([r ? {transform:`translate(${r.left + r.width / 2 - innerWidth / 2}px,${r.top + r.height / 2 - innerHeight / 2}px) scale(${r.width / innerWidth})`, borderRadius:"50%", opacity:.6}
-      : {transform:"scale(.9)", opacity:0}, {transform:"none", borderRadius:"0", opacity:1}], {duration:T.mid + 60, easing:DEC});
+    if (r) el.animate([{clipPath:syClip(r), opacity:.6}, {clipPath:syClip(), opacity:1}], {duration:T.mid + 60, easing:DEC});   // 從圓圈撐開（裁切，不縮放圖層）
+    else el.animate([{transform:"scale(.9)", opacity:0}, {transform:"none", opacity:1}], {duration:T.mid + 60, easing:DEC});
   }
   head(); show(0);
 }
