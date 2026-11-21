@@ -8,6 +8,7 @@ const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;", "<":"&l
 const RM = matchMedia("(prefers-reduced-motion: reduce)");
 const DARK = matchMedia("(prefers-color-scheme: dark)");
 const P = {
+  zin:'<circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5M8 11h6M11 8v6"/>', zout:'<circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5M8 11h6"/>',
   x:'<path d="M18 6 6 18M6 6l12 12"/>', info:'<circle cx="12" cy="12" r="9"/><path d="M12 16v-4M12 8h.01"/>',
   dl:'<path d="M12 4v11M7 10l5 5 5-5M5 20h14"/>', l:'<path d="m15 18-6-6 6-6"/>', r:'<path d="m9 18 6-6-6-6"/>',
   pin:'<path d="M12 21s-7-6.2-7-11.5A7 7 0 0 1 19 9.5C19 14.8 12 21 12 21Z"/><circle cx="12" cy="9.5" r="2.5"/>',
@@ -195,6 +196,8 @@ function wallRects(){                                         // 現在畫面上
 }
 const ZDUR = 520;
 const zEase = t => 1 - Math.pow(1 - t, 3.2);                  // 跟手指放開一樣的減速
+const IOS = /iPhone|iPad|iPod/.test(navigator.userAgent) || (/Macintosh/.test(navigator.userAgent) && navigator.maxTouchPoints > 1);   // iPhone 的捏常被 Safari 搶走，上面多放大小鈕
+function zbSync(){ document.querySelectorAll("[data-zb]").forEach(b => { b.disabled = ZL + +b.dataset.zb < 0 || ZL + +b.dataset.zb > 3; }); }
 function zoomWall(z, fx, fy, pre){                            // 換大小：每張從現在的位置連續長大／縮小過去，照片不壓扁
   z = Math.min(3, Math.max(0, z));
   if (z === ZL || !$(".wall")) return false;
@@ -210,6 +213,7 @@ function zoomWall(z, fx, fy, pre){                            // 換大小：每
   document.querySelectorAll(".dh[data-k]").forEach(h => h0.set(h.dataset.k, h.getBoundingClientRect().top));
   const w = $(".wall"); w.style.transform = ""; w.style.transformOrigin = "";
   ZL = z; store.set("vsa-zoom", z);
+  zbSync();
   sections(); layout(true);
   if (a0) { const r1 = TILES[anc].getBoundingClientRect(); scrollBy(0, (r1.top + r1.height / 2) - (a0.top + a0.height / 2)); }
   if (!anim()) return true;
@@ -286,14 +290,14 @@ function draw(){
         <div class="hmeta"><button class="chip go" data-ss>${I("play")}<span>播放</span></button><span class="chip">${I("photo")}<span class="num">${cntTxt()}</span></span>${pl ? `<span class="chip" data-pl>${I("pin")}<span>${esc(pl)}</span></span>` : ""}
         ${D.dl ? `<a class="chip" href="${BASE}/zip" download>${I("dl")}<span>全部下載</span></a>` : ""}</div></div>
       <button class="cue" aria-label="往下看"><i></i></button></header>
-    <div class="bar"><b>${esc(D.name)}<small class="num">${cntTxt()}</small></b><button class="chip go" data-ss aria-label="播放">${I("play")}</button>${D.dl ? `<a class="chip" href="${BASE}/zip" download aria-label="全部下載">${I("dl")}</a>` : ""}</div>
+    <div class="bar"><b>${esc(D.name)}<small class="num">${cntTxt()}</small></b>${IOS ? `<span class="chip zb"><button data-zb="-1" aria-label="放大">${I("zin")}</button><button data-zb="1" aria-label="縮小">${I("zout")}</button></span>` : ""}<button class="chip go" data-ss aria-label="播放">${I("play")}</button>${D.dl ? `<a class="chip" href="${BASE}/zip" download aria-label="全部下載">${I("dl")}</a>` : ""}</div>
     <div class="mems"></div><main class="wall" data-z="${ZL}"></main>
     ${D.loc && PH.some(p => p.g) ? `<section class="msec"><div class="mh"><b>旅程</b><span class="num" data-km>${PH.filter(p => p.g).length} 個地點</span></div><div class="map" data-map></div></section>` : ""}
     <footer class="foot"><div class="fin">${esc(D.name)}</div>${D.exp ? `<span>${I("clock")}${left(D.exp)}</span>` : ""}</footer>`;
   const hi = $(".hero .hi");
   const hok = () => { hi.classList.add("ok"); setTimeout(() => { const q = $(".hero .lq"); if (q) q.remove(); }, T.slow + 100); };   // 糊的底圖拿掉，捲動時不用一直重畫模糊
   hi.complete ? hok() : hi.addEventListener("load", hok, {once:true});
-  heroCycle(cover);
+  heroCycle(cover); zbSync();
   if (D.wmo) document.documentElement.style.setProperty("--wm", JSON.stringify(D.wmo));
   document.documentElement.classList.toggle("wmo", !!D.wmo);
   TILES = PH.map((p, i) => tile(p, i));
@@ -454,6 +458,7 @@ document.addEventListener("click", e => {
   const t = e.target.closest(".ph");
   if (t) return openLb(+t.dataset.i);
   if (e.target.closest(".cue")) return scrollTo({top:$(".hero").offsetHeight - 8, behavior:anim() ? "smooth" : "auto"});
+  { const zb = e.target.closest("[data-zb]"); if (zb) return zoomWall(ZL + +zb.dataset.zb, innerWidth / 2, innerHeight / 2); }
   if (e.target.closest("[data-ss]")) return show(0);
   const mm = e.target.closest("[data-mem]");
   if (mm) return story(+mm.dataset.mem, mm.querySelector(".mring"));

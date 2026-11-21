@@ -67,6 +67,11 @@ button.chip:active,a.chip:active{transform:scale(.95)}
 .bar b{flex:1;min-width:0;font-size:var(--fs-l);font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .bar small{color:var(--tx3);font-weight:500;margin-left:8px;font-size:var(--fs-s)}
 .bar .chip{height:34px;-webkit-backdrop-filter:none;backdrop-filter:none}
+.chip.zb{padding:0 4px;gap:0}                                     /* iPhone 的大小鈕：放大、縮小兩顆合成一顆膠囊 */
+.zb button{display:grid;place-items:center;width:34px;height:100%;color:var(--tx);transition:opacity var(--t-fast) var(--ease),transform var(--sp-fast)}
+.zb button:active{transform:scale(.88)}
+.zb button:disabled{opacity:.3}
+.zb svg{width:18px;height:18px;color:currentColor}
 
 /* ── 照片牆：每一列等高、左右剛好對齊 ── */
 .wall{max-width:1600px;margin:0 auto;padding:0 var(--pad) 40px}
