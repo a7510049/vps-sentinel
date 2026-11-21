@@ -635,3 +635,57 @@ html::-webkit-scrollbar,body::-webkit-scrollbar{display:none;width:0;height:0}  
 .fin::after{background:linear-gradient(90deg,var(--g3),transparent);box-shadow:none;opacity:1}
 
 @media (prefers-reduced-motion:reduce){.hero::before,.chip.go::after,.mring::before{animation:none}}
+
+/* ═════════ 豐富一點（參考 Exposure、Pixieset、iOS／Google 相簿）：背景透出照片的顏色、數字卡、章節小標、結尾一疊照片 ═════════ */
+/* 整頁背景淡淡透出照片的三個顏色（跟著頁面捲，不固定，不吃效能） */
+#app{background:radial-gradient(70% 14% at 0% 46%,color-mix(in oklab,var(--g2) 13%,transparent),transparent 70%),
+  radial-gradient(60% 16% at 100% 62%,color-mix(in oklab,var(--g3) 12%,transparent),transparent 70%),
+  radial-gradient(70% 16% at 10% 82%,color-mix(in oklab,var(--g1) 10%,transparent),transparent 70%),
+  radial-gradient(60% 16% at 90% 100%,color-mix(in oklab,var(--g2) 12%,transparent),transparent 70%)}
+@media (prefers-color-scheme:light){:root:not([data-mode="dark"]) #app{background:radial-gradient(70% 14% at 0% 46%,color-mix(in oklab,var(--g2) 9%,transparent),transparent 70%),
+  radial-gradient(60% 16% at 100% 62%,color-mix(in oklab,var(--g3) 8%,transparent),transparent 70%),
+  radial-gradient(70% 16% at 10% 82%,color-mix(in oklab,var(--g1) 9%,transparent),transparent 70%),
+  radial-gradient(60% 16% at 90% 100%,color-mix(in oklab,var(--g2) 8%,transparent),transparent 70%)}}
+
+/* 數字卡：幾張、幾天、幾個地點、幾公里 */
+.stats{max-width:1600px;margin:clamp(18px,3vw,32px) auto 0;padding:0 var(--pad);display:grid;grid-template-columns:repeat(auto-fit,minmax(72px,1fr));justify-content:start;gap:clamp(8px,1.4vw,14px)}
+.stats[hidden],.st[hidden]{display:none}
+.st{position:relative;overflow:hidden;padding:clamp(12px,2vw,18px) clamp(12px,2vw,20px);border-radius:var(--r-lg);background:color-mix(in oklab,var(--g2) 9%,var(--s1));
+  box-shadow:inset 0 0 0 1px color-mix(in oklab,var(--g2) 18%,transparent),var(--sh-card);display:grid;gap:2px;animation:memin var(--t-slow) var(--dec) both}
+.st:nth-child(2){animation-delay:.06s}.st:nth-child(3){animation-delay:.12s}.st:nth-child(4){animation-delay:.18s}.st:nth-child(5){animation-delay:.24s}
+.st::after{content:"";position:absolute;right:-30%;top:-60%;width:90%;height:160%;background:radial-gradient(closest-side,color-mix(in oklab,var(--g3) 22%,transparent),transparent);pointer-events:none}
+.st b{font-family:var(--serif);font-weight:600;font-size:clamp(26px,6.4vw,44px);line-height:1;letter-spacing:-.01em;background:var(--grad);-webkit-background-clip:text;background-clip:text;color:transparent;padding-bottom:2px}
+.st small{font-size:var(--fs-xs);color:var(--tx3);letter-spacing:.08em;font-weight:600}
+
+/* 章節：地點前面一個小圖釘、右邊幾張 */
+.dh{grid-template-columns:auto 1fr auto}
+.dh span{display:inline-flex;align-items:center;gap:4px}
+.dh span svg{width:13px;height:13px;color:var(--g2);flex:none}
+.dct{grid-column:3;grid-row:1 / span 2;align-self:end;font-style:normal;font-size:var(--fs-xs);font-weight:700;color:var(--tx2);height:24px;min-width:24px;padding:0 9px;border-radius:var(--r-pill);
+  display:grid;place-items:center;background:color-mix(in oklab,var(--g2) 14%,var(--s2))}
+
+/* 照片：圓角大一點、電腦上指著時浮起來、帶照片顏色的影子 */
+.ph{border-radius:var(--r-sm)}
+@media (min-width:700px){.ph{border-radius:var(--r-md)}}
+.wall[data-z="2"] .ph,.wall[data-z="3"] .ph{border-radius:var(--r-xs)}
+@media (hover:hover){.ph{transition:opacity var(--t-slow) var(--ease),transform var(--t-slow) var(--dec),box-shadow var(--t-mid) var(--ease)}
+  .ph.in:hover{transform:translateY(-3px);box-shadow:0 14px 30px -14px color-mix(in oklab,var(--g2) 60%,transparent)}}
+
+/* 結尾：三張照片疊成一疊，點了播放 */
+.fcol{position:relative;width:min(240px,56vw);aspect-ratio:1.15;margin:0 auto 18px;display:block}
+.fcol span{position:absolute;left:18%;top:8%;width:64%;height:84%;padding:5px;border-radius:var(--r-md);background:#fff;box-shadow:var(--sh-card),0 18px 40px -18px color-mix(in oklab,var(--g2) 70%,transparent);
+  transition:transform var(--sp),rotate var(--sp)}
+.fcol span img{width:100%;height:100%;object-fit:cover;border-radius:var(--r-sm);display:block}
+.fcol span:nth-child(1){rotate:-12deg;translate:-18% 4%}
+.fcol span:nth-child(2){rotate:10deg;translate:18% 2%}
+.fcol span:nth-child(3){rotate:-1deg}
+.fcol i{position:absolute;left:50%;top:50%;width:52px;height:52px;margin:-26px 0 0 -26px;border-radius:50%;display:grid;place-items:center;background:var(--grad);color:var(--on-g);box-shadow:var(--glow);z-index:1}
+.fcol i svg{width:22px;height:22px}
+@media (hover:hover){.fcol:hover span:nth-child(1){rotate:-16deg;translate:-26% 2%}.fcol:hover span:nth-child(2){rotate:14deg;translate:26% 0}}
+.fcol:active i{transform:scale(.92)}
+@supports (animation-timeline:view()){
+  .fcol span{animation:fan linear both;animation-timeline:view();animation-range:entry 10% entry 90%}
+  @keyframes fan{from{rotate:0deg;translate:0 20%;opacity:0}}
+}
+.foot:has(.fcol)::before{display:none}
+@media (min-width:900px){.stats{grid-template-columns:repeat(auto-fit,minmax(150px,200px))}}

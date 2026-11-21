@@ -194,7 +194,7 @@ function sections(){
   const w = $(".wall"); w.dataset.z = ZL;
   w.innerHTML = GROUPS.map((g, gi) => `<section class="day" data-g="${gi}">${g.k && g.d ? g.m
     ? `<div class="dh" data-k="m${g.k}"><b>${g.d.y}年${g.d.mo}月</b><span class="num">${g.list.length}</span></div>`
-    : `<div class="dh" data-day="${g.k}" data-k="d${g.k}"><b>${fday(g.d, YR)}</b><span>${esc(dayPlaces(g.k))}</span></div>` : ""}<div class="rows"></div></section>`).join("");
+    : `<div class="dh" data-day="${g.k}" data-k="d${g.k}"><b>${fday(g.d, YR)}</b><span>${dayPlaces(g.k) ? `${I("pin")}${esc(dayPlaces(g.k))}` : ""}</span><i class="dct num">${g.list.length}</i></div>` : ""}<div class="rows"></div></section>`).join("");
 }
 function wallRects(){                                         // 現在畫面上每張的位置（動畫中、手指捏著的也算）
   const vis = new Map(), H = innerHeight;
@@ -214,7 +214,7 @@ function zoomWall(z, fx, fy, pre){                            // 換大小：每
   const a0 = anc >= 0 ? vis.get(anc) : null;
   TILES.forEach(t => { t.getAnimations().forEach(a => a.cancel()); t.querySelectorAll("img,.bdg").forEach(x => x.getAnimations().forEach(a => a.cancel())); });
   document.querySelectorAll(".dh").forEach(h => h.getAnimations().forEach(a => a.cancel()));
-  const OUT = [".mems", ".msec", ".foot"].map(q => $(q)).filter(Boolean);       // 照片牆上下的回憶、地圖、結尾也跟著滑
+  const OUT = [".mems", ".stats", ".msec", ".foot"].map(q => $(q)).filter(Boolean);       // 照片牆上下的回憶、地圖、結尾也跟著滑
   OUT.forEach(e => e.getAnimations().forEach(a => a.cancel()));
   const o0 = OUT.map(e => e.getBoundingClientRect().top), h0 = new Map();
   document.querySelectorAll(".dh[data-k]").forEach(h => h0.set(h.dataset.k, h.getBoundingClientRect().top));
@@ -285,6 +285,35 @@ function mems(){
   box.innerHTML = MEMS.length < 2 ? "" : `<div class="mrw">${MEMS.map((g, n) => `<button class="mem${SEEN.has(g.k) ? " seen" : ""}" data-mem="${n}" aria-label="${esc(g.t)}">
     <span class="mring"><img alt="" loading="lazy" draggable="false" src="${src(PH[g.cv], "s")}"></span><b>${esc(g.t)}</b>${g.s ? `<small class="num">${esc(g.s)}</small>` : ""}</button>`).join("")}</div>`;
 }
+/* 封面下面一排數字：幾張、幾天、幾個地點、走了幾公里（捲到時數字往上跳） */
+let STIO = null;
+function stats(){
+  const box = $(".stats"); if (!box) return;
+  const days = new Set(), pl = new Set();
+  PH.forEach(p => { const d = pd(p.x.dt); if (d) days.add(d.k); if (p.p) pl.add(p.p.n); });
+  const v = PH.filter(isVid).length, it = [[PH.length - v, "張照片"], [v, "段影片"], [days.size, "天"], [D.loc ? pl.size : 0, "個地點"]].filter(x => x[0] > 0);
+  box.hidden = !!WHO || it.length < 2;
+  box.innerHTML = it.map(([n, t]) => `<div class="st"><b class="num" data-n="${n}">${n}</b><small>${t}</small></div>`).join("")
+    + (D.loc && !WHO ? `<div class="st" data-skm hidden><b class="num" data-n="0">0</b><small>公里</small></div>` : "");
+  if (!anim() || !("IntersectionObserver" in window)) return;
+  box.querySelectorAll("b").forEach(b => { b.textContent = "0"; });
+  if (STIO) STIO.disconnect();
+  STIO = new IntersectionObserver(es => { if (!es.some(e => e.isIntersecting)) return; STIO.disconnect(); STIO = null;
+    const t0 = performance.now(), bs = [...box.querySelectorAll("b")];
+    const step = t => { const k = Math.min(1, (t - t0) / (T.slow * 2)), e = 1 - Math.pow(1 - k, 3);
+      bs.forEach(b => { const n = +b.dataset.n, d = String(b.dataset.n).includes(".") ? 1 : 0; b.textContent = (n * e).toFixed(d); });
+      if (k < 1) requestAnimationFrame(step); };
+    requestAnimationFrame(step); }, {threshold:.6});
+  STIO.observe(box);
+}
+/* 結尾：三張照片疊成一疊（跟標誌一樣），點了播放 */
+function finCol(){
+  const ok = PH.filter(p => !p.broken && !p.raw && !isVid(p));
+  if (ok.length < 3) return "";
+  const liked = ok.slice().sort((a, b) => (b.lk || 0) - (a.lk || 0));
+  const pick = liked[0].lk ? [liked[0], liked[1], liked[2]] : [ok[0], ok[Math.floor(ok.length / 2)], ok[ok.length - 1]];
+  return `<button class="fcol" data-ss aria-label="播放">${pick.map(p => `<span><img alt="" loading="lazy" draggable="false" src="${src(p, "s")}"></span>`).join("")}<i>${I("play")}</i></button>`;
+}
 function draw(){
   const ds = PH.map(p => pd(p.x.dt)).filter(Boolean), real = PH.filter(p => !p.x.dtf).map(p => pd(p.x.dt)).filter(Boolean);
   const rd = real.length ? real : ds, a = rd[0], b = rd[rd.length - 1];
@@ -298,9 +327,9 @@ function draw(){
         ${D.dl ? `<a class="chip" href="${BASE}/zip" download>${I("dl")}<span>全部下載</span></a><button class="chip" data-sel>${I("sel")}<span>選取</span></button>` : ""}${D.up ? `<button class="chip" data-up>${I("up")}<span>放照片</span></button>` : ""}</div></div>
       <button class="cue" aria-label="往下看"><i></i></button></header>
     <div class="bar"><b>${esc(D.name)}<small class="num">${cntTxt()}</small></b>${IOS ? `<span class="chip zb"><button data-zb="-1" aria-label="放大">${I("zin")}</button><button data-zb="1" aria-label="縮小">${I("zout")}</button></span>` : ""}${D.up ? `<button class="chip" data-up aria-label="放照片">${I("up")}</button>` : ""}${D.dl ? `<button class="chip" data-sel aria-label="選取">${I("sel")}</button>` : ""}<button class="chip go" data-ss aria-label="播放">${I("play")}</button></div>
-    <nav class="who" hidden></nav><div class="mems"></div><main class="wall" data-z="${ZL}"></main>
+    <nav class="who" hidden></nav><div class="mems"></div><div class="stats"></div><main class="wall" data-z="${ZL}"></main>
     ${D.loc && ALL.some(p => p.g && !p.u) ? `<section class="msec"${WHO ? " hidden" : ""}><div class="mh"><b>旅程</b><span class="num" data-km>${ALL.filter(p => p.g && !p.u).length} 個地點</span></div><div class="map" data-map></div></section>` : ""}
-    <footer class="foot"><div class="fin">${esc(D.name)}</div>${D.exp ? `<span>${I("clock")}${left(D.exp)}</span>` : ""}</footer>`;
+    <footer class="foot">${finCol()}<div class="fin">${esc(D.name)}</div>${D.exp ? `<span>${I("clock")}${left(D.exp)}</span>` : ""}</footer>`;
   const hi = $(".hero .hi");
   const hok = () => { hi.classList.add("ok"); setTimeout(() => { const q = $(".hero .lq"); if (q) q.remove(); }, T.slow + 100); };   // 糊的底圖拿掉，捲動時不用一直重畫模糊
   hi.complete ? hok() : hi.addEventListener("load", hok, {once:true});
@@ -309,6 +338,7 @@ function draw(){
   document.documentElement.classList.toggle("wmo", !!D.wmo);
   TILES = PH.map((p, i) => tile(p, i));
   whoBar();
+  stats();
   sections();
   layout();
   mems();
@@ -330,13 +360,13 @@ async function whoSet(w, keep){
   if (w === WHO && !keep) return;
   if (WHOBZ) return; WHOBZ = 1;
   if (SEL.on) popBack();
-  const parts = [".mems", ".wall", ".msec"].map(q => $(q)).filter(Boolean);
+  const parts = [".mems", ".stats", ".wall", ".msec"].map(q => $(q)).filter(Boolean);
   if (anim()) await Promise.all(parts.map(x => x.animate([{opacity:1}, {opacity:0, transform:"translateY(6px)"}], {duration:T.fast, easing:EXIT, fill:"forwards"}).finished.catch(() => {})));
   WHO = w; PH = pickW();
   TILES.forEach(t => t.classList.remove("on"));
   TILES = PH.map((p, i) => { const t = TM.get(p.i); if (t) { t.dataset.i = i; return t; } return tile(p, i); });
   whoBar();
-  sections(); layout(true); mems(); bigMap();
+  sections(); layout(true); mems(); stats(); bigMap();
   const ms = $(".msec"); if (ms) ms.hidden = !!WHO || !(D.loc && PH.some(p => p.g));
   document.querySelectorAll(".hmeta .chip .num, .bar small").forEach(x => { x.textContent = cntTxt(); });
   const nav = $(".who"), top = nav && !nav.hidden ? nav.getBoundingClientRect().top + scrollY - 70 : 0;
@@ -599,6 +629,8 @@ function route(el, pts, W, H){
     const h = Math.sin((a2 - a1) * r / 2) ** 2 + Math.cos(a1 * r) * Math.cos(a2 * r) * Math.sin((o2 - o1) * r / 2) ** 2;
     km += 12742 * Math.asin(Math.min(1, Math.sqrt(h)));
   }
+  const sk = $("[data-skm]");
+  if (sk && km >= 1) { sk.hidden = false; const b = sk.querySelector("b"); b.dataset.n = km >= 100 ? Math.round(km) : +km.toFixed(1); if (!STIO) b.textContent = b.dataset.n; }
   const kmEl = $("[data-km]");
   if (kmEl) kmEl.textContent = km >= 1 ? `走了約 ${km >= 100 ? Math.round(km) : +km.toFixed(1)} 公里` : km >= .05 ? `走了約 ${Math.round(km * 1000 / 10) * 10} 公尺` : `${pts.length} 個地點`;
   const r = [];
