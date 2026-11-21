@@ -709,6 +709,7 @@ function openLb(i){
     stopAll();
     if (n < 0 || n >= PH.length) return snap();
     finish();
+    clearTimeout(S.infT); sl.forEach(s => { s.style.visibility = ""; });
     const from = curX(), to = -d * (W() + GAPX);
     setZoom(1, 0, 0);
     const a = track.animate([{transform:`translateX(${from}px)`}, {transform:`translateX(${to}px)`}], {duration:anim() ? T.mid : 1, easing:DEC});
@@ -750,6 +751,8 @@ function openLb(i){
     S.info = on; el.classList.toggle("info", on);
     $("[data-inf]", el).classList.toggle("on", on);
     if (on) { inf.innerHTML = infoHTML(PH[S.i]); inf.scrollTop = 0; setTimeout(infoMap, 30); }
+    [sl[0], sl[2]].forEach(s => { s.style.visibility = "hidden"; });   // 電腦上畫面變窄時，旁邊那張會被排到看得到的地方：換位置的這段先藏起來
+    clearTimeout(S.infT); S.infT = setTimeout(() => sl.forEach(s => { s.style.visibility = ""; }), T.mid + 60);
     S.fitAll();
   }
   function infoMap(){
