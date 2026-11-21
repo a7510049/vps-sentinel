@@ -124,6 +124,11 @@ class Album(Server):
         s, b, h = self.req("GET", f"/a/{code}")
         self.assertEqual(s, 200)
         self.assertIn("Content-Security-Policy", h)
+        self.assertIn('og:title" content="台北一日遊"', b.decode())                    # 傳到聊天室：預覽有相簿名稱、相簿自己的圖示
+        self.assertRegex(b.decode(), r'og:image" content="http://127\.0\.0\.1:\d+/a/icon-512\.png')
+        for u, ct in (("/a/icon.svg", "image/svg+xml"), ("/a/icon-180.png", "image/png"), ("/a/icon-512.png", "image/png")):
+            s2, b2, h2 = self.req("GET", u)
+            self.assertEqual((s2, h2.get("Content-Type", "").split(";")[0]), (200, ct))
         s, b, _ = self.req("GET", f"/a/{code}/m")
         m = json.loads(b)
         self.assertEqual(m["name"], "台北一日遊")
@@ -170,6 +175,7 @@ class Album(Server):
         # 密碼：輸對才拿得到通行證（只給這本的路徑），錯太多次先鎖住
         self.call({"action": "edit", "id": a["id"], "pw": "abcd1234"})
         self.assertEqual(self.req("GET", f"/a/{code}/m")[0], 401)
+        self.assertNotIn("台北一日遊", self.req("GET", f"/a/{code}")[1].decode())         # 有密碼的預覽不露出名稱
         self.assertEqual(self.req("GET", f"/a/{code}/i/{p0['i']}/s")[0], 401)
         s, b, h = self.req("POST", f"/a/{code}/open", {"pw": "abcd1234"}, {"X-Forwarded-For": "1.2.3.4"})
         self.assertEqual(s, 200)
