@@ -10,6 +10,13 @@ ALB_CACHE = os.path.join(DATA_DIR, "album-cache")                 # 小圖、大
 ALB_PLACES = os.path.join(DATA_DIR, "album-places.json")          # 座標 → 地名（加密，SEAL_FILES）
 ALB_EXT = {".jpg", ".jpeg", ".png", ".webp", ".gif", ".heic", ".heif", ".avif"}
 ALB_SHOW = {".jpg", ".jpeg", ".png", ".webp", ".gif", ".avif"}    # 做不出小圖時，瀏覽器直接看得了原圖的
+ALB_VID = {".mp4", ".mov", ".m4v", ".webm", ".3gp", ".mkv"}        # 影片（主機轉成 720p 的 H.264 給朋友看）
+ALB_AUD = {".mp3", ".m4a", ".aac", ".ogg", ".opus", ".flac", ".wav"}   # 資料夾裡放一首歌：幻燈片的背景音樂
+ALB_VMAX = 20 * 60                                                # 影片最長幾秒（太長的不放）
+ALB_LIVE = 3.6                                                    # 跟照片同名、這麼短的影片算原況照片會動的那段
+ALB_VCH = 1 << 20                                                 # 影片分段加密，每段 1 MB（拖進度條只解要的那幾段）
+ALB_TALK = os.path.join(DATA_DIR, "album-talk.json")              # 朋友的愛心、留言（加密，SEAL_FILES；跟著備份）
+ALB_TALK_MAX = (300, 20, 200, 3000)                               # 一則留言幾個字、名字幾個字、一張最多幾則、一本最多幾則
 ALB_TIMES = (86400, 7 * 86400, 30 * 86400, 0)                     # 能選的期限（0 = 不會過期）
 ALB_MAX = 2000                                                    # 一本最多幾張
 ALB_PW_TRY = (5, 15 * 60)                                         # 同一個來源 15 分鐘錯 5 次先鎖住
@@ -20,7 +27,7 @@ ALB_DLS = (0, 1, 2)                                               # 下載：不
 ALB_OWN_S = 900                                                   # 主人挑照片時看小圖的通行證（15 分鐘）
 ALB_LOCK = threading.Lock()
 ALB_FAILS = {}                                                    # (相簿, 來源) → [輸錯的時間…]
-ALB = {"d": None, "q": [], "ff": None, "busy": set(), "geo_t": 0}
+ALB = {"d": None, "q": [], "ff": None, "busy": set(), "geo_t": 0, "talk": None, "tpost": {}}
 ALB_GEN = threading.BoundedSemaphore(2)                           # 同時最多做兩張（另外一個背景慢慢做）
 ALB_KEY_RE = re.compile(r"[A-Za-z0-9]{10}")
 
@@ -41,6 +48,80 @@ def alb_save(d):
     ALB["d"] = d
     os.makedirs(DATA_DIR, exist_ok=True)
     sec_dump(ALB_FILE, d)
+
+
+def alb_talk_all():
+    """{相簿: {照片: {"l": [手機…], "c": [{id, d: 手機, n: 名字, s: 留言, t}]}}}"""
+    if ALB["talk"] is None:
+        try:
+            d = sec_load(ALB_TALK)
+        except (OSError, ValueError):
+            d = {}
+        ALB["talk"] = d if isinstance(d, dict) else {}
+    return ALB["talk"]
+
+
+def alb_talk_save():
+    os.makedirs(DATA_DIR, exist_ok=True)
+    sec_dump(ALB_TALK, ALB["talk"] or {})
+
+
+def alb_talk_of(a, th=""):
+    """這本每張照片的愛心數、自己按了沒、留言"""
+    out = {}
+    for pid, t in (alb_talk_all().get(a["id"]) or {}).items():
+        out[pid] = {"lk": len(t.get("l") or []), "me": th in (t.get("l") or []),
+                    "cm": [{"id": c["id"], "n": c["n"], "s": c["s"], "t": int(c["t"]), "me": c["d"] == th} for c in t.get("c") or []]}
+    return out
+
+
+def alb_clean_txt(s, n):
+    return re.sub(r"\s+", " ", re.sub(r"[\x00-\x1f\x7f\u200b-\u200f\u202a-\u202e\u2066-\u2069]", " ", str(s or ""))).strip()[:n]
+
+
+def alb_talk_post(a, th, d):
+    """朋友按愛心、留言、刪自己的留言；回傳 (狀態碼, 內容)"""
+    pid = str(d.get("i") or "")
+    idx = alb_index(a, scan=False)
+    if pid not in (idx.get("order") or []) or pid in (a.get("hide") or []):
+        return 404, {"ok": False, "message": "找不到這張"}
+    now = time.time()
+    with ALB_LOCK:
+        talk = alb_talk_all()
+        t = talk.setdefault(a["id"], {}).setdefault(pid, {"l": [], "c": []})
+        if d.get("like") is not None:
+            ls = t.setdefault("l", [])
+            if d["like"] and th not in ls:
+                ls.append(th)
+                del ls[:-500]
+            elif not d["like"] and th in ls:
+                ls.remove(th)
+        elif d.get("del"):
+            t["c"] = [c for c in t.get("c") or [] if not (c["id"] == d["del"] and c["d"] == th)]
+        else:
+            txt, name = alb_clean_txt(d.get("s"), ALB_TALK_MAX[0]), alb_clean_txt(d.get("n"), ALB_TALK_MAX[1])
+            if not txt:
+                return 400, {"ok": False, "message": "還沒寫字"}
+            if not name:
+                return 400, {"ok": False, "message": "先寫你的名字"}
+            if now - ALB["tpost"].get((a["id"], th), 0) < 3:
+                return 429, {"ok": False, "message": "慢一點，等幾秒再留"}
+            ALB["tpost"][(a["id"], th)] = now
+            if len(ALB["tpost"]) > 5000:
+                ALB["tpost"].clear()
+            cs = t.setdefault("c", [])
+            cs.append({"id": secrets.token_hex(4), "d": th, "n": name, "s": txt, "t": now})
+            del cs[:-ALB_TALK_MAX[2]]
+            alls = sorted(((c["t"], q) for q, x in talk[a["id"]].items() for c in x.get("c") or []))
+            for _, q in alls[:max(0, len(alls) - ALB_TALK_MAX[3])]:   # 整本太多：最早的先拿掉
+                talk[a["id"]][q]["c"].pop(0)
+            all_ = alb_all()                               # 名字記在看過的手機上（主人看得到是誰）
+            dv = (all_.get(a["id"]) or {}).get("devs", {}).get(th)
+            if dv is not None and dv.get("nm") != name:
+                dv["nm"] = name
+                alb_save(all_)
+        alb_talk_save()
+    return 200, {"ok": True, **alb_talk_of(a, th).get(pid, {"lk": 0, "me": False, "cm": []})}
 
 
 def alb_root():
@@ -195,7 +276,7 @@ def alb_photos_in(p):
     try:
         with os.scandir(p) as it:
             for e in it:
-                if e.name.startswith(".") or os.path.splitext(e.name)[1].lower() not in ALB_EXT:
+                if e.name.startswith(".") or os.path.splitext(e.name)[1].lower() not in ALB_EXT | ALB_VID:
                     continue
                 try:
                     if e.is_file(follow_symlinks=False):
@@ -276,7 +357,7 @@ def alb_add(d):
          "dir": os.path.relpath(p, root).replace(os.sep, "/"), "pw": alb_pw_hash(pw) if pw else None, "exp": now + secs if secs else 0,
          "t0": now, "loc": d.get("loc", True) is not False, "dl": alb_dl({"dl": d.get("dl", 2)}), "views": 0, "last": 0,
          "k": secrets.token_hex(16), "dev": d.get("dev") if d.get("dev") in ALB_DEVS else 0, "devs": {}, "ban": [], "hide": [],
-         "wm": alb_clean_wm(d.get("wm"))}
+         "wm": alb_clean_wm(d.get("wm")), "talk": d.get("talk", True) is not False}
     if a["dir"] == ".":
         a["dir"] = ""
     with ALB_LOCK:
@@ -309,6 +390,8 @@ def alb_edit(d):
             a["name"] = alb_clean_name(d.get("name"), a["name"])
         if "loc" in d:
             a["loc"] = bool(d["loc"])
+        if "talk" in d:
+            a["talk"] = bool(d["talk"])
         if "dl" in d:
             a["dl"] = alb_dl({"dl": d["dl"]})
         if "dev" in d and d["dev"] in ALB_DEVS:
@@ -355,6 +438,9 @@ def alb_del(aid):
         os.remove(os.path.join(ALB_CACHE, f"idx-{a['id']}.json"))
     except OSError:
         pass
+    with ALB_LOCK:
+        if alb_talk_all().pop(a["id"], None) is not None:
+            alb_talk_save()
     threading.Thread(target=alb_gc, daemon=True).start()
     log(f"收回相簿「{a['name']}」")
     return True, "收回了，連結已經打不開"
@@ -377,7 +463,11 @@ def alb_list():
         out.append({"id": a["id"], "code": a["code"], "name": a["name"], "dir": a["dir"], "exp": a["exp"], "t0": a["t0"],
                     "pw": bool(a.get("pw")), "loc": a["loc"], "dl": alb_dl(a), "views": a.get("views", 0), "last": a.get("last", 0),
                     "n": len([x for x in ph if x not in hid]), "all": len(ph), "cv": alb_cover(a, idx), "ready": alb_ready(a, idx),
-                    "dev": a.get("dev") or 0, "ndev": len(a.get("devs") or {}), "wm": a.get("wm") or "", "wmok": not a.get("wm") or alb_wm_bake(a)})
+                    "dev": a.get("dev") or 0, "ndev": len(a.get("devs") or {}), "wm": a.get("wm") or "", "wmok": not a.get("wm") or alb_wm_bake(a),
+                    "talk": a.get("talk", True), "mu": (idx.get("mu") or {}).get("n", ""),
+                    "nv": len([x for x in ph if x not in hid and (idx.get("ph") or {}).get(x, {}).get("vid")]),
+                    "nlk": sum(len(t.get("l") or []) for t in (alb_talk_all().get(a["id"]) or {}).values()),
+                    "ncm": sum(len(t.get("c") or []) for t in (alb_talk_all().get(a["id"]) or {}).values())})
     return {"ok": True, "list": out, "base": alb_base(), "cloud": bool(alb_root()), "times": ALB_TIMES}
 
 
@@ -683,9 +773,47 @@ def alb_heic(f, size):
     return w, h, exif, rot
 
 
+def alb_vmeta(path):
+    """影片的資訊：交給 ffmpeg 讀檔頭（長度、大小、轉向、拍攝時間、地點、哪支手機）"""
+    info = alb_ff_info(path)
+    m = re.search(r"Duration: (\d+):(\d\d):(\d\d(?:\.\d+)?)", info)
+    v = re.search(r"Stream #[^\n]*Video: [^\n]*?, (\d{2,5})x(\d{2,5})[ ,\[]", info)
+    if not (m and v):
+        return {"w": 4, "h": 3, "x": {}, "g": None, "ori": 1, "gs": [], "vid": 1, "dur": 0, "bad": 1}
+    dur = int(m[1]) * 3600 + int(m[2]) * 60 + float(m[3])
+    w, h = int(v[1]), int(v[2])
+    r = re.search(r"(?:rotate\s*:\s*|rotation of )(-?\d+)", info)
+    if r and abs(int(r[1])) % 180 == 90:
+        w, h = h, w
+    x = {}
+    d = re.search(r"com\.apple\.quicktime\.creationdate\s*:\s*(\d{4})-(\d\d)-(\d\d)T(\d\d):(\d\d):(\d\d)(?:\.\d+)?([+-]\d\d):?(\d\d)?", info)
+    if d and d[1] > "1971":
+        x["dt"] = f"{d[1]}:{d[2]}:{d[3]} {d[4]}:{d[5]}:{d[6]}"
+        x["oz"] = f"{d[7]}:{d[8] or '00'}"
+    else:
+        d = re.search(r"creation_time\s*:\s*(\d{4})-(\d\d)-(\d\d)T(\d\d):(\d\d):(\d\d)", info)
+        if d and d[1] > "1971":                        # 這個是世界標準時間：換成主機的時區
+            t = datetime(*map(int, d.groups()), tzinfo=timezone.utc).astimezone()
+            x["dt"] = t.strftime("%Y:%m:%d %H:%M:%S")
+    for k, pat in (("mk", r"com\.apple\.quicktime\.make\s*:\s*([^\n]+)"), ("md", r"com\.apple\.quicktime\.model\s*:\s*([^\n]+)"),
+                   ("sw", r"com\.apple\.quicktime\.software\s*:\s*([^\n]+)")):
+        mm = re.search(pat, info)
+        if mm:
+            x[k] = mm[1].strip()[:60]
+    g = None
+    loc = re.search(r"(?:com\.apple\.quicktime\.location\.ISO6709|location)\s*:\s*([+-]\d+(?:\.\d+)?)([+-]\d+(?:\.\d+)?)([+-]\d+(?:\.\d+)?)?", info)
+    if loc:
+        lat, lon = float(loc[1]), float(loc[2])
+        if -90 <= lat <= 90 and -180 <= lon <= 180 and (lat or lon):
+            g = [round(lat, 6), round(lon, 6), round(float(loc[3]), 1) if loc[3] else None, None]
+    return {"w": w, "h": h, "x": x, "g": g, "ori": 1, "gs": [], "vid": 1, "dur": round(dur, 2)}
+
+
 def alb_meta(path):
     """一張照片的資訊：{w, h, x: 相機資訊, g: [緯度, 經度, 高度, 方向], ori, tx: EXIF 在檔案裡的位置, gs: 定位資料的位置}"""
     ext = os.path.splitext(path)[1].lower()
+    if ext in ALB_VID:
+        return alb_vmeta(path)
     w = h = 0
     exif = None
     rot = 0
@@ -766,14 +894,43 @@ def alb_index(a, scan=True):
         m.update(n=name, sz=size, mt=mt)
         ph[pid] = m
         changed = True
+    # 原況照片：跟照片同名的短影片掛在照片上（不另外列）
+    stems = {os.path.splitext(m["n"])[0].lower(): pid for pid, m in ph.items() if not m.get("vid")}
+    for pid, m in ph.items():
+        if m.get("vid"):
+            of = stems.get(os.path.splitext(m["n"])[0].lower()) if 0 < m.get("dur", 0) <= ALB_LIVE else None
+            if m.get("of") != of:
+                m["of"] = of
+                changed = True
+    for pid, m in ph.items():
+        if not m.get("vid"):
+            lv = next(({"n": v["n"], "sz": v["sz"], "mt": v["mt"]} for v in ph.values() if v.get("of") == pid), None)
+            if m.get("lv") != lv:
+                m["lv"] = lv
+                changed = True
+    mu = alb_music_in(p) if p else None
+    if mu != idx.get("mu"):
+        changed = True
     if changed or "order" not in idx:
         def key(i):
             m = ph[i]
             return (m["x"].get("dt") or time.strftime("%Y:%m:%d %H:%M:%S", time.localtime(m["mt"])), m["n"].lower())
-        idx = {"ph": ph, "order": sorted(ph, key=key)}
+        show = [i for i in ph if not ph[i].get("of") and not (ph[i].get("vid") and not 0 < ph[i].get("dur", 0) <= ALB_VMAX)]
+        idx = {"ph": ph, "order": sorted(show, key=key), "mu": mu}
         os.makedirs(ALB_CACHE, mode=0o700, exist_ok=True)
         sec_dump(fn, idx)
     return idx
+
+
+def alb_music_in(p):
+    """資料夾裡第一首歌（照檔名排）：幻燈片的背景音樂"""
+    try:
+        with os.scandir(p) as it:
+            songs = sorted((e.name, e.stat(follow_symlinks=False).st_size) for e in it
+                           if not e.name.startswith(".") and os.path.splitext(e.name)[1].lower() in ALB_AUD and e.is_file(follow_symlinks=False))
+    except OSError:
+        return None
+    return {"n": songs[0][0], "sz": songs[0][1]} if songs else None
 
 
 def alb_ckey(a, pid, m):
@@ -791,8 +948,11 @@ def alb_ready(a, idx=None):
     ph = idx.get("ph") or {}
     if not ph:
         return 1
-    done = sum(1 for pid, m in ph.items() if m.get("bad") or os.path.exists(alb_cfile(alb_ckey(a, pid, m), "s")))
-    return round(done / len(ph), 2)
+    order = idx.get("order") or []
+    if not order:
+        return 1
+    done = sum(1 for pid in order if ph[pid].get("bad") or os.path.exists(alb_cfile(alb_ckey(a, pid, ph[pid]), "s")))
+    return round(done / len(order), 2)
 
 
 # ── 小圖、大圖：交給 ffmpeg（主機上的，沒有就借雲端硬碟容器裡的） ──
@@ -837,6 +997,26 @@ def alb_run_ff(args, data=None, src=None, timeout=120):
     return r.stdout if r.returncode == 0 and r.stdout[:2] == b"\xff\xd8" else None
 
 
+def alb_ff_src(src):
+    ff = alb_ff()
+    if not ff:
+        return None, None
+    cmd, mount = ff
+    return cmd, (mount + src[len(alb_root()):] if mount else src)
+
+
+def alb_ff_info(src):
+    """ffmpeg -i 印出來的檔案資訊（沒有輸出檔，所以它會說失敗，照樣讀得到）"""
+    cmd, s2 = alb_ff_src(src)
+    if not cmd:
+        return ""
+    try:
+        r = subprocess.run(["nice", "-n", "15", *cmd, "-hide_banner", "-nostdin", "-i", s2], capture_output=True, timeout=60)
+    except (OSError, subprocess.SubprocessError):
+        return ""
+    return r.stderr.decode("utf-8", "replace")
+
+
 def alb_make(a, pid, m):
     """做大圖（長邊 2048）、小圖（高 480）、模糊預覽（寬 24）；不留任何 EXIF"""
     p = alb_path(a["dir"])
@@ -848,6 +1028,7 @@ def alb_make(a, pid, m):
     src = os.path.join(p, m["n"])
     ext = os.path.splitext(m["n"])[1].lower()
     rot = ALB_ROT.get(m.get("ori", 1), "") if ext in (".jpg", ".jpeg") else ""
+    pre = ["-ss", f"{min(1.0, m.get('dur', 0) / 3):.2f}"] if m.get("vid") else []   # 影片：拿一開始的一格當封面
     out = ["-map_metadata", "-1", "-frames:v", "1", "-f", "image2pipe", "-c:v", "mjpeg", "-pix_fmt", "yuvj420p"]
     vf, tf = rot + "scale='if(gt(iw,ih),min(2048,iw),-2)':'if(gt(iw,ih),-2,min(2048,ih))':flags=lanczos", None
     if alb_wm_bake(a):                                 # 浮水印：右下角半透明白字
@@ -857,7 +1038,7 @@ def alb_make(a, pid, m):
         vf += (f",drawtext=fontfile='{alb_font(a['wm'])}':textfile='{tf.name}':fontcolor=white@0.6:fontsize='min(w,h)*0.042'"
                ":x='w-tw-min(w,h)*0.035':y='h-th-min(w,h)*0.035':shadowcolor=black@0.35:shadowx=2:shadowy=2")
     try:
-        big = alb_run_ff((["-noautorotate"] if ext in (".jpg", ".jpeg") else []) + ["-i", "{src}", "-vf", vf, *out, "-q:v", "4", "-"], src=src, timeout=180)
+        big = alb_run_ff((["-noautorotate"] if ext in (".jpg", ".jpeg") else []) + pre + ["-i", "{src}", "-vf", vf, *out, "-q:v", "4", "-"], src=src, timeout=180)
     finally:
         if tf:
             try:
@@ -895,12 +1076,119 @@ def alb_get(a, pid, kind):
         return None, m["n"]
 
 
-def alb_mark_bad(a, pid):
+# ── 影片：轉成 720p 的 H.264（每支手機都放得了、省流量、不帶定位），分段加密存著 ──
+def alb_vfile(ck, kind):
+    return os.path.join(ALB_CACHE, f"{ck}-{kind}.json")
+
+
+def alb_vpart(ck, kind, i):
+    return os.path.join(ALB_CACHE, f"{ck}-{kind}-{i}.bin")
+
+
+def alb_vinfo(ck, kind):
+    try:
+        d = json.loads(sec_read(alb_vfile(ck, kind)))
+        return d if isinstance(d, dict) and d.get("sz") else None
+    except (OSError, ValueError):
+        return None
+
+
+def alb_vread(ck, kind, start, end):
+    """回傳 start～end（含）這一段，一次一個分段解開"""
+    ch = ALB_VCH
+    for i in range(start // ch, end // ch + 1):
+        b = sec_read(alb_vpart(ck, kind, i))
+        lo = max(start - i * ch, 0)
+        hi = min(end - i * ch + 1, len(b))
+        if lo < hi:
+            yield b[lo:hi]
+
+
+def alb_vmake(a, pid, m, kind):
+    """kind v＝影片本身、m＝原況照片會動的那段（沒有聲音）"""
+    p = alb_path(a["dir"])
+    if not p:
+        return False
+    ck = alb_ckey(a, pid, m)
+    if alb_vinfo(ck, kind):
+        return True
+    name = m["n"] if kind == "v" else (m.get("lv") or {}).get("n")
+    if not name:
+        return False
+    cmd, src = alb_ff_src(os.path.join(p, name))
+    if not cmd:
+        return False
+    vf, tf = "scale='if(gt(iw,ih),min(1280,iw),-2)':'if(gt(iw,ih),-2,min(1280,ih))',pad=ceil(iw/2)*2:ceil(ih/2)*2", None
+    if alb_wm_bake(a):
+        tf = tempfile.NamedTemporaryFile("w", suffix=".txt", delete=False, encoding="utf-8")  # noqa: SIM115
+        tf.write(a["wm"])
+        tf.close()
+        vf += (f",drawtext=fontfile='{alb_font(a['wm'])}':textfile='{tf.name}':fontcolor=white@0.6:fontsize='min(w,h)*0.042'"
+               ":x='w-tw-min(w,h)*0.035':y='h-th-min(w,h)*0.035':shadowcolor=black@0.35:shadowx=2:shadowy=2")
+    mount = alb_ff()[1]
+    tmp = f"/tmp/vsalb-{ck}-{kind}.mp4" if mount else os.path.join(ALB_CACHE, f".{ck}-{kind}.mp4")
+    args = ["-i", src, "-map", "0:v:0", *(["-map", "0:a:0?"] if kind == "v" else ["-an"]), "-map_metadata", "-1", "-vf", vf,
+            "-c:v", "libx264", "-preset", "veryfast", "-crf", "27", "-pix_fmt", "yuv420p", "-threads", "2",
+            *(["-c:a", "aac", "-b:a", "96k", "-ac", "2"] if kind == "v" else []), "-movflags", "+faststart", "-f", "mp4", tmp]
+    os.makedirs(ALB_CACHE, mode=0o700, exist_ok=True)
+    ok = False
+    try:
+        r = subprocess.run(["nice", "-n", "17", *cmd, "-v", "error", "-nostdin", "-y", *args], capture_output=True,
+                           timeout=max(300, m.get("dur", 4) * 6))
+        if r.returncode == 0:
+            if mount:                                  # 容器裡做的：倒出來再刪掉
+                pr = subprocess.Popen(["docker", "exec", "vps-cloud", "cat", tmp], stdout=subprocess.PIPE)  # noqa: S607
+                ok = alb_vstore(ck, kind, pr.stdout)
+                pr.wait(timeout=60)
+                ok = ok and pr.returncode == 0
+            else:
+                with open(tmp, "rb") as f:
+                    ok = alb_vstore(ck, kind, f)
+    except (OSError, subprocess.SubprocessError, ValueError) as e:
+        log(f"相簿影片轉不出來（{name}：{str(e)[:80]}）")
+    finally:
+        for x in [tf.name] if tf else []:
+            try:
+                os.remove(x)
+            except OSError:
+                pass
+        try:
+            if mount:
+                subprocess.run(["docker", "exec", "vps-cloud", "rm", "-f", tmp], capture_output=True, timeout=30)  # noqa: S607
+            else:
+                os.remove(tmp)
+        except (OSError, subprocess.SubprocessError):
+            pass
+    return ok
+
+
+def alb_vstore(ck, kind, f):
+    """一段一段加密寫進去，最後寫清單（有清單就代表整支好了）"""
+    n = sz = 0
+    while True:
+        b = f.read(ALB_VCH)
+        while b and len(b) < ALB_VCH:                  # 管線一次給不滿
+            more = f.read(ALB_VCH - len(b))
+            if not more:
+                break
+            b += more
+        if not b:
+            break
+        sec_write(alb_vpart(ck, kind, n), b)
+        n += 1
+        sz += len(b)
+    if not sz:
+        return False
+    sec_dump(alb_vfile(ck, kind), {"n": n, "sz": sz})
+    return True
+
+
+def alb_mark_bad(a, pid, key="bad"):
     fn = os.path.join(ALB_CACHE, f"idx-{a['id']}.json")
     with ALB_LOCK:
         idx = alb_index(a, scan=False)
         if pid in (idx.get("ph") or {}):
-            idx["ph"][pid]["bad"] = 1
+            idx["ph"][pid][key] = 1
             sec_dump(fn, idx)
 
 
@@ -939,6 +1227,13 @@ def alb_worker():
                         g = idx["ph"][pid].get("g")
                         if g:
                             alb_place(g[0], g[1], wait=True)
+                for pid in idx.get("order", []):        # 照片都好了再慢慢轉影片
+                    if aid not in alb_all():
+                        break
+                    m = idx["ph"][pid]
+                    kind = "v" if m.get("vid") else "m" if m.get("lv") else ""
+                    if kind and not m.get("vbad") and not alb_vinfo(alb_ckey(a, pid, m), kind) and not alb_vmake(a, pid, m, kind):
+                        alb_mark_bad(a, pid, "vbad")
         except Exception as e:  # noqa: BLE001  相簿出錯不影響監控
             log(f"相簿小圖做不出來（{str(e)[:120]}）")
         with ALB_LOCK:
@@ -958,7 +1253,7 @@ def alb_gc():
             keep.add(alb_ckey(a, pid, m))
     try:
         for fn in os.listdir(ALB_CACHE):
-            m = re.fullmatch(r"([0-9a-f]{24})-[slq]\.jpg", fn)
+            m = re.fullmatch(r"\.?([0-9a-f]{24})-(?:[slq]\.jpg|[vm](?:-\d+\.bin|\.json|\.mp4))", fn)
             if m and m[1] not in keep:
                 os.remove(os.path.join(ALB_CACHE, fn))
     except OSError:
@@ -1112,8 +1407,9 @@ def alb_page():
         return "<meta charset=utf-8><p>找不到相簿的網頁檔案，請重新執行 bash install.sh</p>"
 
 
-def alb_manifest(a):
+def alb_manifest(a, th=""):
     idx = alb_index(a)
+    talk = alb_talk_of(a, th) if a.get("talk", True) else {}
     ph = idx.get("ph") or {}
     out, places, hid = [], {}, set(a.get("hide") or [])
     for pid in idx.get("order", []):
@@ -1129,6 +1425,13 @@ def alb_manifest(a):
         it = {"i": pid, "w": m["w"], "h": m["h"], "n": m["n"], "sz": m["sz"], "x": m["x"], "v": ck[:8], "q": q}
         if m.get("bad"):
             it["raw"] = os.path.splitext(m["n"])[1].lower() in ALB_SHOW
+        if m.get("vid"):                               # 影片：長度、轉好了沒
+            it["vd"] = m["dur"]
+            it["vr"] = 0 if m.get("vbad") else 1 if alb_vinfo(ck, "v") else -1
+        elif m.get("lv") and not m.get("vbad") and alb_vinfo(ck, "m"):
+            it["lv"] = 1                               # 原況照片：會動的那段好了
+        if pid in talk:
+            it.update(talk[pid])
         if not it["x"].get("dt"):
             it["x"] = {**it["x"], "dt": time.strftime("%Y:%m:%d %H:%M:%S", time.localtime(m["mt"])), "dtf": 1}
         if a["loc"] and m.get("g"):
@@ -1139,10 +1442,11 @@ def alb_manifest(a):
                 c = pl.get("c") or pl["n"]
                 places[c] = places.get(c, 0) + 1
         out.append(it)
-    if alb_ready(a, idx) < 1 or (a["loc"] and any("g" in x and "p" not in x for x in out)):
+    if alb_ready(a, idx) < 1 or any(x.get("vr") == -1 for x in out) or (a["loc"] and any("g" in x and "p" not in x for x in out)):
         alb_kick(a["id"])
     wmo = a.get("wm") if a.get("wm") and not alb_wm_bake(a) else ""
     return {"ok": True, "name": a["name"], "photos": out, "dl": alb_dl(a), "loc": a["loc"], "exp": a["exp"], "wmo": wmo,
+            "talk": a.get("talk", True), "mu": bool(idx.get("mu")),
             "places": [k for k, _ in sorted(places.items(), key=lambda x: -x[1])][:6], "ready": alb_ready(a, idx)}
 
 
@@ -1184,6 +1488,53 @@ def alb_strip_gps(f, spans, out, total):
         out.write(b"\x00" * n)
         pos += n
     shutil.copyfileobj(f, out, 1 << 20)
+
+
+def alb_file_read(path, start, end):
+    with open(path, "rb") as f:
+        f.seek(start)
+        left = end - start + 1
+        while left > 0:
+            b = f.read(min(left, 1 << 20))
+            if not b:
+                return
+            left -= len(b)
+            yield b
+
+
+def alb_send_part(h, total, read, ctype, extra=()):
+    """影片、音樂：照瀏覽器要的那一段給（iPhone 一定要能這樣要，不然放不出來）"""
+    rg = re.fullmatch(r"bytes=(\d*)-(\d*)", (h.headers.get("Range") or "").strip())
+    s0, e0, part = 0, total - 1, False
+    if rg and (rg[1] or rg[2]):
+        if rg[1]:
+            s0, e0 = int(rg[1]), min(int(rg[2]) if rg[2] else total - 1, total - 1)
+        else:
+            s0 = max(0, total - int(rg[2]))
+        part = True
+        if s0 > e0 or s0 >= total:
+            h.send_response(416)
+            h.send_header("Content-Range", f"bytes */{total}")
+            h.send_header("Content-Length", "0")
+            h.end_headers()
+            return True
+    h.send_response(206 if part else 200)
+    h.send_header("Content-Type", ctype)
+    h.send_header("Content-Length", str(e0 - s0 + 1))
+    h.send_header("Accept-Ranges", "bytes")
+    if part:
+        h.send_header("Content-Range", f"bytes {s0}-{e0}/{total}")
+    h.send_header("Cache-Control", "private, max-age=86400")
+    h.send_header("X-Content-Type-Options", "nosniff")
+    for k, v in extra:
+        h.send_header(k, v)
+    h.end_headers()
+    try:
+        for b in read(s0, e0):
+            h.wfile.write(b)
+    except (BrokenPipeError, ConnectionResetError, OSError, ValueError):
+        pass
+    return True
 
 
 def alb_http(h, method):
@@ -1232,9 +1583,22 @@ def alb_http(h, method):
         h.end_headers()
         h.wfile.write(b'{"ok":true}')
         return True
+    if rest == "/talk" and method == "POST":          # 朋友按愛心、留言
+        if not a.get("talk", True):
+            return h.send(403, '{"ok":false}') or True
+        ok, why, _ = alb_dev_check(h, a, False)
+        tok = alb_dev_tok(h, a)
+        if not (alb_cookie_ok(h, a) and ok and tok):
+            return h.send(403, json.dumps({"ok": False, "message": "重新打開相簿再試"}, ensure_ascii=False)) or True
+        try:
+            n = min(int(h.headers.get("Content-Length") or 0), 4096)
+        except ValueError:
+            n = 0
+        code2, out = alb_talk_post(a, alb_dev_hash(tok), h.jbody(h.rfile.read(n) if n else b""))
+        return h.send(code2, json.dumps(out, ensure_ascii=False), cache=False) or True
     if method != "GET":
         return h.send(404, '{"error":"找不到"}') or True
-    own = bool(re.fullmatch(r"/i/[0-9a-f]{12}/[slq]", rest)) and alb_own_ok(h, a)   # 主人挑照片
+    own = bool(re.fullmatch(r"/i/[0-9a-f]{12}/[slqvm]", rest)) and alb_own_ok(h, a)   # 主人挑照片
     if not own and not alb_cookie_ok(h, a):
         return h.send(401, json.dumps({"ok": False, "pw": True}), cache=False) or True
     if not own:
@@ -1244,7 +1608,20 @@ def alb_http(h, method):
         if rest == "/m":
             extra = [("Set-Cookie", f"vsad_{a['id']}={new}; Path=/a/{code}; Max-Age={400 * 86400}; HttpOnly; SameSite=Strict"
                       + ("; Secure" if h.https() else ""))] if new else []
-            return h.send(200, json.dumps(alb_manifest(a), ensure_ascii=False, separators=(",", ":")), extra=extra) or True
+            th = alb_dev_hash(new or alb_dev_tok(h, a))
+            return h.send(200, json.dumps(alb_manifest(a, th), ensure_ascii=False, separators=(",", ":")), extra=extra) or True
+    if rest == "/music":                               # 幻燈片的背景音樂（資料夾裡的那首歌）
+        mu = alb_index(a, scan=False).get("mu")
+        p = alb_path(a["dir"])
+        src = os.path.join(p, mu["n"]) if mu and p else ""
+        try:
+            st = os.stat(src)
+        except OSError:
+            return h.send(404, '{"error":"找不到"}') or True
+        ext = os.path.splitext(src)[1].lower()
+        ct = {".mp3": "audio/mpeg", ".m4a": "audio/mp4", ".aac": "audio/aac", ".ogg": "audio/ogg", ".opus": "audio/ogg",
+              ".flac": "audio/flac", ".wav": "audio/wav"}.get(ext, "application/octet-stream")
+        return alb_send_part(h, st.st_size, lambda s0, e0: alb_file_read(src, s0, e0), ct)
     m = re.fullmatch(r"/t/(\d{1,2})/(\d{1,6})/(\d{1,6})", rest)
     if m:                                              # 地圖底圖：主機幫忙拿 OpenStreetMap 的圖塊（朋友不用連外面、不用金鑰）
         if not a["loc"]:
@@ -1263,7 +1640,7 @@ def alb_http(h, method):
         except (BrokenPipeError, ConnectionResetError, OSError):
             pass
         return True
-    m = re.fullmatch(r"/i/([0-9a-f]{12})/([slqo])", rest)
+    m = re.fullmatch(r"/i/([0-9a-f]{12})/([slqovm])", rest)
     if m:
         pid, kind = m[1], m[2]
         idx = alb_index(a, scan=False)
@@ -1271,6 +1648,18 @@ def alb_http(h, method):
         if not meta or (pid in (a.get("hide") or []) and not own):
             return h.send(404, '{"error":"找不到"}') or True
         dlm = alb_dl(a)
+        vk = "v" if kind == "v" and meta.get("vid") else "m" if kind == "m" and meta.get("lv") else ""
+        if kind == "o" and meta.get("vid") and (dlm == 1 or not a["loc"]):   # 影片只給壓縮的（定位也一起拿掉了）
+            vk = "v"
+        if vk or kind in ("v", "m"):
+            ck = alb_ckey(a, pid, meta)
+            info = alb_vinfo(ck, vk) if vk else None
+            if not info:
+                return h.send(202 if vk and not meta.get("vbad") else 404, json.dumps({"ok": False, "wait": True}), cache=False) or True
+            if kind == "o" and not dlm:
+                return h.send(403, '{"error":"不能下載"}') or True
+            extra = [("Content-Disposition", "attachment; filename*=UTF-8''" + urllib.parse.quote(os.path.splitext(meta["n"])[0] + ".mp4"))] if kind == "o" else []
+            return alb_send_part(h, info["sz"], lambda s0, e0: alb_vread(ck, vk, s0, e0), "video/mp4", extra)
         if kind == "o" and dlm == 1 and not meta.get("bad"):   # 只給壓縮圖：下載的是大圖
             b, _ = alb_get(a, pid, "l")
             if not b:
@@ -1290,7 +1679,8 @@ def alb_http(h, method):
             with f:
                 ext = os.path.splitext(meta["n"])[1].lower()
                 ct = {".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".png": "image/png", ".webp": "image/webp", ".gif": "image/gif",
-                      ".heic": "image/heic", ".heif": "image/heif", ".avif": "image/avif"}.get(ext, "application/octet-stream")
+                      ".heic": "image/heic", ".heif": "image/heif", ".avif": "image/avif", ".mp4": "video/mp4", ".m4v": "video/mp4",
+                      ".mov": "video/quicktime", ".webm": "video/webm"}.get(ext, "application/octet-stream")
                 h.send_response(200)
                 h.send_header("Content-Type", ct)
                 h.send_header("Content-Length", str(st.st_size))
@@ -1344,6 +1734,14 @@ def alb_http(h, method):
                     meta = idx["ph"][pid]
                     if pid in hid or (dlm < 2 and meta.get("bad")):
                         continue
+                    if meta.get("vid") and (dlm == 1 or not a["loc"]):   # 影片：壓縮過、沒有定位的那份
+                        ck = alb_ckey(a, pid, meta)
+                        info = alb_vinfo(ck, "v")
+                        if info:
+                            with z.open(zipfile.ZipInfo(os.path.splitext(meta["n"])[0] + ".mp4", time.localtime(meta["mt"])[:6]), "w", force_zip64=True) as w:
+                                for b in alb_vread(ck, "v", 0, info["sz"] - 1):
+                                    w.write(b)
+                        continue
                     if dlm == 1:
                         b, _ = alb_get(a, pid, "l")
                         if b:
@@ -1382,6 +1780,24 @@ def alb_api(d):
     if act == "del":
         ok, msg = alb_del(d.get("id"))
         return (200 if ok else 400), {**alb_list(), "ok": ok, "message": msg}
+    if act in ("talk", "talkdel"):                     # 主人看朋友的留言、刪掉
+        a = alb_all().get(str(d.get("id") or ""))
+        if not a:
+            return 400, {"ok": False, "message": "這本已經收回了"}
+        with ALB_LOCK:
+            t = alb_talk_all().get(a["id"]) or {}
+            if act == "talkdel":
+                x = t.get(str(d.get("i") or ""))
+                if x:
+                    x["c"] = [c for c in x.get("c") or [] if c["id"] != d.get("cid")]
+                    alb_talk_save()
+        idx = alb_index(a, scan=False)
+        ph = idx.get("ph") or {}
+        out = sorted(({"i": q, "v": alb_ckey(a, q, ph[q])[:8], "id": c["id"], "n": c["n"], "s": c["s"], "t": int(c["t"])}
+                      for q, x in t.items() if q in ph for c in x.get("c") or []), key=lambda c: -c["t"])
+        likes = sorted(((len(x.get("l") or []), q) for q, x in t.items() if q in ph and x.get("l")), reverse=True)[:12]
+        return 200, {"ok": True, "c": out, "likes": [{"i": q, "v": alb_ckey(a, q, ph[q])[:8], "n": n} for n, q in likes],
+                     "own": alb_own_val(a, time.time() + ALB_OWN_S), "base": alb_base(), "code": a["code"]}
     if act in ("photos", "devs"):
         a = alb_all().get(str(d.get("id") or ""))
         if not a:
@@ -1398,6 +1814,6 @@ def alb_api(d):
                 q = base64.b64encode(sec_read(alb_cfile(alb_ckey(a, pid, m), "q"))).decode()
             except (OSError, ValueError):
                 pass
-            out.append({"i": pid, "w": m["w"], "h": m["h"], "v": alb_ckey(a, pid, m)[:8], "q": q, "hid": pid in hid})
+            out.append({"i": pid, "w": m["w"], "h": m["h"], "v": alb_ckey(a, pid, m)[:8], "q": q, "hid": pid in hid, "vd": m.get("dur") if m.get("vid") else 0})
         return 200, {"ok": True, "photos": out, "own": alb_own_val(a, time.time() + ALB_OWN_S), "base": alb_base(), "code": a["code"]}
     return 200, alb_list()

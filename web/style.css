@@ -1845,7 +1845,8 @@ html.flyon .dash>.view{content-visibility:hidden;contain-intrinsic-size:auto non
 .almhero .almcap{padding:48px 18px 16px}
 .almhero .almcap b{font-size:var(--fs-xl);font-weight:750}
 .almhero .almcap small{font-size:var(--fs-s)}
-.almacts{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
+.almacts{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px}
+.almacts span{white-space:nowrap;font-size:var(--fs-xs)}
 .almacts>*{text-decoration:none;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;min-height:84px;padding:10px 6px;border-radius:var(--r-md);background:var(--s3);
   color:var(--tx);font:inherit;font-size:var(--fs-s);font-weight:600;cursor:pointer;transition:transform var(--sp-fast)}
 .almacts>*:active{transform:scale(.95)}
@@ -1878,6 +1879,18 @@ html.flyon .dash>.view{content-visibility:hidden;contain-intrinsic-size:auto non
 .almpk .off img{opacity:.28;transform:scale(.94)}
 .almpk .off i{opacity:0;transform:scale(.4)}
 .almdv .ubtn{flex:none}
+.almpk em{position:absolute;right:5px;bottom:5px;padding:1px 6px;border-radius:var(--r-pill);background:rgba(0,0,0,.5);color:white;font-style:normal;font-size:var(--fs-xs);font-weight:650}
+.almlk{display:flex;gap:8px;overflow-x:auto;padding:2px 4px 6px;scrollbar-width:none}
+.almlk span{position:relative;flex:none;width:72px;height:72px;border-radius:var(--r-sm);overflow:hidden;background:var(--s3)}
+.almlk img{width:100%;height:100%;object-fit:cover}
+.almlk em{position:absolute;left:4px;bottom:4px;display:inline-flex;align-items:center;gap:3px;padding:1px 6px;border-radius:var(--r-pill);background:rgba(0,0,0,.5);color:white;font-style:normal;font-size:var(--fs-xs);font-weight:650}
+.almlk em svg{width:11px;height:11px;fill:currentColor}
+.almtk .pkrow{align-items:flex-start}
+.almtk .pkrow>img{width:44px;height:44px;border-radius:var(--r-xs);object-fit:cover;flex:none;background:var(--s3)}
+.almtk .pkrow b{display:flex;gap:8px;align-items:baseline}
+.almtk .pkrow b small{font-weight:500}
+.almtk .pkrow>span>small{white-space:normal;overflow-wrap:anywhere;color:var(--tx2)}
+.almtk .ubtn{flex:none}
 .almcrumb{display:flex;flex-wrap:wrap;align-items:center;gap:2px 4px;font-size:var(--fs-s);color:var(--tx3)}
 .almcrumb button{padding:4px 8px;border-radius:var(--r-pill);background:var(--chip);color:var(--tx2);font:inherit;cursor:pointer}
 .almcrumb button:last-child{background:var(--pc);color:var(--on-pc);font-weight:600}
