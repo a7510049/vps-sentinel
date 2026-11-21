@@ -264,7 +264,9 @@ function draw(){
     ${D.loc && PH.some(p => p.g) ? `<section class="msec"><div class="mh"><b>旅程</b><span class="num" data-km>${PH.filter(p => p.g).length} 個地點</span></div><div class="map" data-map></div></section>` : ""}
     <footer class="foot"><div class="fin">${esc(D.name)}</div>${D.exp ? `<span>${I("clock")}${left(D.exp)}</span>` : ""}</footer>`;
   const hi = $(".hero .hi");
-  hi.complete ? hi.classList.add("ok") : hi.addEventListener("load", () => hi.classList.add("ok"), {once:true});
+  const hok = () => { hi.classList.add("ok"); setTimeout(() => { const q = $(".hero .lq"); if (q) q.remove(); }, T.slow + 100); };   // 糊的底圖拿掉，捲動時不用一直重畫模糊
+  hi.complete ? hok() : hi.addEventListener("load", hok, {once:true});
+  heroCycle(cover);
   if (D.wmo) document.documentElement.style.setProperty("--wm", JSON.stringify(D.wmo));
   document.documentElement.classList.toggle("wmo", !!D.wmo);
   TILES = PH.map((p, i) => tile(p, i));
@@ -273,6 +275,26 @@ function draw(){
   mems();
   bigMap();
   onScroll();
+}
+/* 封面每隔幾秒淡淡換成相簿裡隨機一張（捲走、看大圖、背景時先停） */
+let HCT = 0;
+function heroCycle(first){
+  clearTimeout(HCT);
+  const pool = PH.filter(p => !p.broken && !p.raw && !isVid(p));
+  if (pool.length < 2 || !anim()) return;
+  let last = first;
+  const next = () => {
+    HCT = setTimeout(next, 7000);
+    const cv = $(".hero .cv");
+    if (!cv || document.hidden || LB || SS || SY || scrollY > $(".hero").offsetHeight) return;
+    let p; do p = pool[Math.floor(Math.random() * pool.length)]; while (p === last);
+    last = p;
+    const im = new Image(); im.className = "hi"; im.alt = ""; im.src = src(p, "l");
+    const show = () => { if (!im.isConnected) return; requestAnimationFrame(() => im.classList.add("ok"));
+      setTimeout(() => cv.querySelectorAll(".hi").forEach(x => { if (x !== im) x.remove(); }), T.slow * 3); };
+    im.decode ? im.decode().then(() => { cv.appendChild(im); show(); }).catch(() => {}) : (im.onload = () => { cv.appendChild(im); show(); });
+  };
+  HCT = setTimeout(next, 7000);
 }
 function cntTxt(){
   const v = PH.filter(isVid).length, n = PH.length - v;
@@ -294,7 +316,7 @@ function tile(p, i){
   el.innerHTML = `${p.q ? `<img class="lq" alt="" src="data:image/jpeg;base64,${p.q}">` : ""}<img class="hi" alt="" loading="lazy" decoding="async" draggable="false" src="${src(p, "s")}"><span class="bdg"></span>`;
   setTimeout(() => badge(i));
   const hi = el.querySelector(".hi");
-  hi.addEventListener("load", () => hi.classList.add("ok"), {once:true});
+  hi.addEventListener("load", () => { hi.classList.add("ok"); setTimeout(() => { const q = el.querySelector(".lq"); if (q) q.remove(); }, T.mid + 100); }, {once:true});
   hi.addEventListener("error", () => { p.broken = 1; hi.remove(); el.insertAdjacentHTML("beforeend", `<span class="nope">${I("off")}</span>`); }, {once:true});
   if (IO) IO.observe(el); else el.classList.add("in");
   return el;
@@ -346,14 +368,15 @@ addEventListener("resize", () => { clearTimeout(RZ); RZ = setTimeout(() => { lay
 
 /* 捲動：封面慢一點往上（視差）、標題淡掉，捲過封面上面浮出一條 */
 let SCQ = 0;
+const CSSPAR = window.CSS && CSS.supports && CSS.supports("animation-timeline:scroll()");
 function onScroll(){
   if (SCQ) return;
   SCQ = requestAnimationFrame(() => {
     SCQ = 0;
     const hero = $(".hero"); if (!hero) return;
     const y = scrollY, H = hero.offsetHeight;
-    if (y < H && anim()) {
-      $(".hero .cv").style.transform = `translate3d(0,${(y * .38).toFixed(1)}px,0) scale(${(1 + y / H * .06).toFixed(4)})`;
+    if (y < H && anim() && !CSSPAR) {
+      $(".hero .cv").style.transform = `translate3d(0,${(y * .38).toFixed(1)}px,0)`;
       const c = $(".hcap"); c.style.opacity = Math.max(0, 1 - y / (H * .55)).toFixed(3); c.style.transform = `translate3d(0,${(y * .18).toFixed(1)}px,0)`;
     }
     $(".bar").classList.toggle("on", y > H - 90);
@@ -378,7 +401,9 @@ addEventListener("scroll", onScroll, {passive:true});
     if (!ch && was && anim()) w.animate([{transform:was}, {transform:"none"}], {duration:T.mid, easing:DEC});
   };
   document.addEventListener("touchend", end); document.addEventListener("touchcancel", end);
-  document.addEventListener("gesturestart", e => { if (e.target.closest && e.target.closest(".wall")) e.preventDefault(); });
+  /* iPhone 的 Safari 會跟著整頁放大（照片牆、看大圖都是自己縮放），一律擋掉，只讓照片動 */
+  ["gesturestart", "gesturechange", "gestureend"].forEach(t => document.addEventListener(t, e => e.preventDefault(), {passive:false}));
+  document.addEventListener("touchmove", e => { if (e.touches.length > 1) e.preventDefault(); }, {passive:false});
   let wt = 0;
   addEventListener("wheel", e => {                           // 觸控板捏、Ctrl＋滾輪
     if (!e.ctrlKey || LB || SS || SY || !$(".wall")) return;
@@ -564,11 +589,19 @@ function openLb(i){
   }
   setAll();
   S.chrome = chrome; S.vToggle = vToggle;
+  function toTile(r, f){                                     // 格子的位置：等比例放大到蓋滿格子、多的裁掉（不壓扁）
+    const sr = stage.getBoundingClientRect(), k = Math.max(r.width / f.w, r.height / f.h);
+    const x = r.left - sr.left + r.width / 2 - f.w * k / 2 - f.l, y = r.top - sr.top + r.height / 2 - f.h * k / 2 - f.t;
+    const ix = Math.max(0, (f.w - r.width / k) / 2), iy = Math.max(0, (f.h - r.height / k) / 2), rd = 6 / k;
+    return {t:`translate(${x}px,${y}px) scale(${k})`, c:`inset(${iy}px ${ix}px ${iy}px ${ix}px round ${rd}px)`};
+  }
+  const NOCLIP = "inset(0px 0px 0px 0px round 0px)";
 
   /* 從格子裡的那張長大 */
   const t0 = TILES[i], r0 = t0.getBoundingClientRect(), f0 = fit(PH[i]);
   if (anim()) {
-    cur().animate([{transform:`translate(${r0.left - f0.l}px,${r0.top - f0.t}px) scale(${r0.width / f0.w},${r0.height / f0.h})`, borderRadius:"12px"}, {transform:"none"}], {duration:T.mid + 60, easing:DEC});
+    const a0 = toTile(r0, f0);
+    cur().animate([{transform:a0.t, clipPath:a0.c}, {transform:"translate(0px,0px) scale(1)", clipPath:NOCLIP}], {duration:T.mid + 60, easing:DEC});
     bg.animate([{opacity:0}, {opacity:1}], {duration:T.mid, easing:EASE, fill:"forwards"});
     el.querySelectorAll(".lbt,.lbb,.nav").forEach(x => x.animate([{opacity:0}, {opacity:1}], {duration:T.mid, delay:T.fast, easing:EASE, fill:"backwards"}));
   } else bg.style.opacity = 1;
@@ -608,7 +641,8 @@ function openLb(i){
     if (!anim()) return end();
     el.querySelectorAll(".lbt,.lbb,.nav,.inf").forEach(x => { x.style.opacity = 0; });
     S.info = false; el.classList.remove("info");
-    zw.animate([{transform:now === "none" ? "none" : now}, {transform:`translate(${r.left - f.l - stage.getBoundingClientRect().left}px,${r.top - f.t - stage.getBoundingClientRect().top}px) scale(${r.width / f.w},${r.height / f.h})`}],
+    const a1 = toTile(r, f);
+    zw.animate([{transform:now === "none" ? "translate(0px,0px) scale(1)" : now, clipPath:NOCLIP}, {transform:a1.t, clipPath:a1.c}],
       {duration:T.mid, easing:EASE, fill:"forwards"}).onfinish = end;
     bg.animate([{opacity:getComputedStyle(bg).opacity}, {opacity:0}], {duration:T.mid, easing:EASE, fill:"forwards"});
   }
@@ -974,34 +1008,47 @@ function story(n, from){
     const b = $("[data-ylk]", el); if (!b) return;
     const p = PH[MEMS[g].list[at]]; b.classList.toggle("on", !!p.me); b.querySelector("span").textContent = p.lk || "";
   }
-  function bar(k){
+  function bar(k, still){
     bars.querySelectorAll("b").forEach((x, j) => { x.style.transition = "none"; x.style.transform = `scaleX(${j < k ? 1 : 0})`; });
-    const cur = bars.children[k] && bars.children[k].firstChild; if (!cur) return;
+    const cur = bars.children[k] && bars.children[k].firstChild; if (!cur || still) return;
     void cur.offsetWidth; cur.style.transition = `transform ${left}ms linear`; cur.style.transform = "scaleX(1)";
   }
+  let seq = 0, ready = false, waitT = 0, pend = null;
   function show(k, dir){
-    clearTimeout(timer);
+    clearTimeout(timer); clearTimeout(waitT);
     const m = MEMS[g];
     if (k >= m.list.length) return MEMS[g + 1] ? jump(g + 1, 1) : history.back();
     if (k < 0) return MEMS[g - 1] ? jump(g - 1, -1, true) : show(0);
-    at = k;
-    const i = m.list[at], p = PH[i], old = view.querySelector(".syl:not(.out)");
+    at = k; ready = false;
+    const my = ++seq, i = m.list[at], p = PH[i], old = view.querySelector(".syl:not(.out)");
+    view.querySelectorAll(".syl:not(.out) video").forEach(v => v.pause());
     const L = document.createElement("div"), fill = Math.abs(Math.log((p.w / p.h) / (innerWidth / innerHeight))) < .35;
     L.className = "syl";
-    L.innerHTML = `<img class="sbg" alt="" src="${src(p, "s")}"><div class="syf${fill ? " cv" : ""}">${isVid(p) ? `<video playsinline preload="auto" src="${src(p, "v")}"></video>` : `<img alt="" draggable="false" src="${src(p, "l")}">`}</div>`;
-    view.appendChild(L);
-    const v = L.querySelector("video");
-    ms = v ? Math.min(15000, p.vd * 1000) : SYD;
-    left = ms;
-    if (v) { v.muted = false; v.play().catch(() => { v.muted = true; v.play().catch(() => {}); }); }
-    const go = () => { L.classList.add("in"); if (old) { old.classList.add("out"); setTimeout(() => old.remove(), T.slow); }
+    L.innerHTML = `<img class="sbg" alt="" src="${p.q ? `data:image/jpeg;base64,${p.q}` : src(p, "s")}"><div class="syf${fill ? " cv" : ""}">${isVid(p) ? `<video playsinline preload="auto" src="${src(p, "v")}"></video>` : `<img alt="" draggable="false" src="${src(p, "l")}">`}</div>`;
+    const v = L.querySelector("video"), img = L.querySelector(".syf img");
+    if (pend && !pend.isConnected) { pend.pause(); pend.removeAttribute("src"); pend.load(); }   // 上一個還沒載好就被跳過的影片別在背後響
+    pend = v;
+    ms = v ? Math.min(15000, p.vd * 1000) : SYD; left = ms;
+    bar(at, true); heart();
+    waitT = setTimeout(() => { if (my === seq) el.classList.add("wait"); }, 250);   // 還沒載好：轉圈，先不倒數
+    const go = () => {                                         // 載好了才換上、才開始倒數
+      if (my !== seq || S.closing) return;
+      clearTimeout(waitT); el.classList.remove("wait");
+      view.appendChild(L); void L.offsetWidth; L.classList.add("in");
+      if (old) { old.classList.add("out"); setTimeout(() => old.remove(), T.mid + 80); }   // 舊的留著墊底，新的蓋上去才拿掉，不會閃黑
+      if (v && isFinite(v.duration) && v.duration > 0) ms = left = Math.min(15000, v.duration * 1000);
       if (anim() && !v) L.querySelector(".syf").animate([{transform:"scale(1)"}, {transform:"scale(1.06)"}], {duration:ms + T.slow, easing:"linear", fill:"forwards"});
-      if (anim() && dir) L.animate([{transform:`translateX(${dir * 6}%)`}, {transform:"none"}], {duration:T.mid, easing:DEC}); };
-    const img = L.querySelector(".syf img");
-    if (img && !img.complete) { img.addEventListener("load", go, {once:true}); img.addEventListener("error", go, {once:true}); } else requestAnimationFrame(go);
-    bar(at); heart();
-    t0 = performance.now();
-    if (held) hold(true); else timer = setTimeout(() => show(at + 1), ms);
+      if (anim() && dir) L.animate([{transform:`translateX(${dir * 6}%)`}, {transform:"none"}], {duration:T.mid, easing:DEC});
+      ready = true; t0 = performance.now();
+      if (held) { if (v) v.pause(); return hold(true); }
+      bar(at); timer = setTimeout(() => show(at + 1), ms);
+    };
+    if (v) {
+      v.addEventListener("playing", go, {once:true});
+      v.addEventListener("error", () => { if (my === seq) show(at + 1); }, {once:true});
+      v.play().catch(() => { v.muted = true; v.play().catch(() => {}); });
+    } else if (img.complete && img.naturalWidth) requestAnimationFrame(go);
+    else { img.addEventListener("load", go, {once:true}); img.addEventListener("error", go, {once:true}); }
     const nx = m.list[at + 1]; if (nx != null && !isVid(PH[nx])) { const im = new Image(); im.src = src(PH[nx], "l"); }
   }
   function jump(k, dir, last){                               // 換到下一天／上一天
@@ -1011,6 +1058,7 @@ function story(n, from){
   }
   function hold(on){
     held = on; el.classList.toggle("held", on);
+    if (!ready) return;
     const v = view.querySelector(".syl:not(.out) video"), cur = bars.children[at] && bars.children[at].firstChild;
     view.querySelectorAll(".syl:not(.out) .syf").forEach(f => f.getAnimations().forEach(a => on ? a.pause() : a.play()));
     if (on) {
@@ -1026,8 +1074,8 @@ function story(n, from){
   }
   function close(){
     if (S.closing) return; S.closing = 1;
-    clearTimeout(timer);
-    view.querySelectorAll("video").forEach(v => v.pause());
+    clearTimeout(timer); clearTimeout(waitT); seq++;
+    view.querySelectorAll("video").forEach(v => v.pause()); if (pend) pend.pause();
     const fin = () => { el.remove(); if (!LB && !SS) document.documentElement.style.overflow = ""; SY = null; };
     if (!anim()) return fin();
     const b = $(`.mem[data-mem="${g}"] .mring`), r = b && b.getBoundingClientRect();

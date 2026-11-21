@@ -76,7 +76,7 @@ button.chip:active,a.chip:active{transform:scale(.95)}
 .dh b{font-size:var(--fs-xl);font-weight:750;letter-spacing:-.01em}
 .dh span{font-size:var(--fs-s);color:var(--tx3);font-weight:500}
 .row{display:flex;gap:var(--gap);margin-bottom:var(--gap)}
-.ph{position:relative;flex:none;overflow:hidden;border-radius:var(--r-xs);background:var(--s2);cursor:zoom-in;content-visibility:auto;
+.ph{position:relative;flex:none;overflow:hidden;border-radius:var(--r-xs);background:var(--s2);cursor:zoom-in;
   opacity:0;transform:translateY(14px) scale(.985);transition:opacity var(--t-slow) var(--ease),transform var(--t-slow) var(--dec)}
 @media (min-width:700px){.ph{border-radius:var(--r-sm)}}
 .ph.in{opacity:1;transform:none}
@@ -234,7 +234,7 @@ button.chip:active,a.chip:active{transform:scale(.95)}
 .eyebrow::before,.eyebrow::after{content:"";width:clamp(20px,6vw,56px);height:1px;background:currentColor;opacity:.6}
 .hcap h1{font-family:var(--serif);font-weight:600;letter-spacing:.06em;line-height:1.12;font-size:clamp(38px,9vw,104px);color:#fff;text-shadow:0 2px 30px rgba(0,0,0,.35)}
 .hmeta{justify-content:center;margin-top:26px}
-.hero .chip{background:rgba(255,255,255,.14);color:#fff;box-shadow:inset 0 0 0 1px rgba(255,255,255,.26)}
+.hero .chip{background:rgba(255,255,255,.14);color:#fff;box-shadow:inset 0 0 0 1px rgba(255,255,255,.26);-webkit-backdrop-filter:none;backdrop-filter:none}
 .hero .chip svg{color:rgba(255,255,255,.85)}
 .hero .chip.go{background:#fff;color:#111;box-shadow:none}
 .hero .chip.go svg{color:#111}
@@ -412,6 +412,7 @@ button.chip:active,a.chip:active{transform:scale(.95)}
 
 /* ═════════ 更好玩：照片牆兩指縮放、回憶圓圈、限時動態、點兩下愛心 ═════════ */
 .wall{transform-origin:50% 0;touch-action:pan-x pan-y}
+body{touch-action:pan-x pan-y}
 .wall[data-z="0"] .ph{border-radius:var(--r-sm)}
 .row.sq{gap:2px;margin-bottom:2px}
 .row.sq .ph{border-radius:0}
@@ -442,7 +443,9 @@ button.chip:active,a.chip:active{transform:scale(.95)}
 .syv{position:absolute;inset:0}
 .syl{position:absolute;inset:0;opacity:0;transition:opacity var(--t-mid) var(--ease)}
 .syl.in{opacity:1}
-.syl.out{opacity:0}
+.sy::after{content:"";position:absolute;left:50%;top:50%;width:34px;height:34px;margin:-17px 0 0 -17px;border-radius:50%;border:3px solid rgba(255,255,255,.25);border-top-color:#fff;
+  opacity:0;transition:opacity var(--t-mid) var(--ease);animation:rot .9s linear infinite;pointer-events:none;z-index:1}
+.sy.wait::after{opacity:1}
 .syf{position:absolute;inset:0;will-change:transform}
 .syf img,.syf video{position:absolute;inset:0;width:100%;height:100%;object-fit:contain;-webkit-touch-callout:none;pointer-events:none}
 .syf.cv img,.syf.cv video{object-fit:cover}
@@ -464,4 +467,12 @@ button.chip:active,a.chip:active{transform:scale(.95)}
 .bigh svg{width:100%;height:100%;fill:currentColor;stroke:none}
 @keyframes bigh{0%{transform:scale(.2) rotate(-12deg);opacity:0}18%{transform:scale(1.15) rotate(4deg);opacity:1}32%{transform:scale(.95) rotate(0)}70%{transform:scale(1);opacity:1}100%{transform:translateY(-60px) scale(.7);opacity:0}}
 
-@media (prefers-reduced-motion:reduce){*,*::before,*::after{animation-duration:.001s!important;transition-duration:.001s!important}}
+.hero .cv .hi{transition:opacity var(--t-long) var(--ease)}
+/* 封面視差交給瀏覽器自己跑（不用每格算），手機捲起來才順；不支援的才用 JS */
+@supports (animation-timeline:scroll()){
+  .hero .cv{animation:hpar linear both;animation-timeline:scroll(root);animation-range:0 100svh}
+  .hcap{animation:hcap linear both;animation-timeline:scroll(root);animation-range:0 55svh}
+  @keyframes hpar{to{transform:translate3d(0,38svh,0)}}
+  @keyframes hcap{to{opacity:0;transform:translate3d(0,10svh,0)}}
+}
+@media (prefers-reduced-motion:reduce){.hero .cv,.hcap{animation:none}*,*::before,*::after{animation-duration:.001s!important;transition-duration:.001s!important}}
