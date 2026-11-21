@@ -136,6 +136,15 @@ def ab_bind_ip():
         return "0.0.0.0"
 
 
+def ab_pick(t):
+    """壓縮檔裡的程式本體：路徑可能是 AdGuardHome/AdGuardHome 或 ./AdGuardHome/AdGuardHome"""
+    for m in t.getmembers():
+        parts = [x for x in m.name.split("/") if x not in ("", ".")]
+        if m.isfile() and parts[-2:] == ["AdGuardHome", "AdGuardHome"]:
+            return m
+    return None
+
+
 def ab_download():
     arch = AB_ARCH.get(os.uname().machine)
     if not arch:
@@ -149,8 +158,8 @@ def ab_download():
                 with urllib.request.urlopen(urllib.request.Request(u.format(a=arch), headers={"User-Agent": f"vps-sentinel/{VERSION}"}), timeout=120) as r, open(tgz, "wb") as f:
                     shutil.copyfileobj(r, f, 1 << 20)
                 with tarfile.open(tgz) as t:
-                    m = t.getmember("AdGuardHome/AdGuardHome")
-                    if not m.isfile():
+                    m = ab_pick(t)
+                    if not m:
                         raise RuntimeError("下載的檔案不對")
                     src = t.extractfile(m)
                     with open(AB_BIN + ".new", "wb") as f:

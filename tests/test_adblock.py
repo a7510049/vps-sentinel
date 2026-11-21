@@ -154,5 +154,25 @@ class Adblock(Server):
         self.assertFalse(d["on"])
 
 
+class Pick(unittest.TestCase):
+    """下載的壓縮檔：路徑前面有沒有「./」都要找得到程式"""
+    def test_pick(self):
+        import io
+        import tarfile
+        from test_passkey import load_sentinel
+        S = load_sentinel()
+        for name in ("AdGuardHome/AdGuardHome", "./AdGuardHome/AdGuardHome"):
+            b = io.BytesIO()
+            with tarfile.open(fileobj=b, mode="w:gz") as t:
+                for n, data in ((name.replace("AdGuardHome/AdGuardHome", "AdGuardHome/README.md"), b"r"), (name, b"bin")):
+                    ti = tarfile.TarInfo(n)
+                    ti.size = len(data)
+                    t.addfile(ti, io.BytesIO(data))
+            b.seek(0)
+            with tarfile.open(fileobj=b) as t:
+                m = S.ab_pick(t)
+                self.assertEqual(t.extractfile(m).read(), b"bin")
+
+
 if __name__ == "__main__":
     unittest.main()
