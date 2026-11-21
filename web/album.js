@@ -454,6 +454,13 @@ addEventListener("scroll", onScroll, {passive:true});
 })();
 addEventListener("contextmenu", e => { if (e.target.closest(".ph,.zw,.mk,.hero")) e.preventDefault(); });   // 不能按右鍵、長按另存
 addEventListener("dragstart", e => { if (e.target.tagName === "IMG") e.preventDefault(); });
+{                                                            // 點照片自己判斷：往下滑關掉大圖後，手機有時不送 click，要等一下才點得開
+  let pt = null;
+  document.addEventListener("pointerdown", e => { const t = e.isPrimary && e.button === 0 && e.target.closest(".ph"); pt = t ? {t, x:e.clientX, y:e.clientY, at:performance.now()} : null; }, true);
+  document.addEventListener("pointerup", e => { const q = pt; pt = null;
+    if (q && e.target.closest(".ph") === q.t && Math.hypot(e.clientX - q.x, e.clientY - q.y) < 10 && performance.now() - q.at < 500) openLb(+q.t.dataset.i); }, true);
+  document.addEventListener("pointercancel", () => { pt = null; }, true);
+}
 document.addEventListener("click", e => {
   const t = e.target.closest(".ph");
   if (t) return openLb(+t.dataset.i);
@@ -645,7 +652,7 @@ function openLb(i){
     el.querySelectorAll(".lbt,.lbb,.nav").forEach(x => x.animate([{opacity:0}, {opacity:1}], {duration:T.mid, delay:T.fast, easing:EASE, fill:"backwards"}));
   } else bg.style.opacity = 1;
   bg.style.opacity = 1;
-  history.pushState({lb:1}, "");
+  if (POPSKIP) S.push = 1; else history.pushState({lb:1}, "");   // 上一張的返回還沒處理完：等它處理完再記
 
   function go(d){
     const n = S.i + d;
@@ -767,7 +774,7 @@ function openLb(i){
       return snap();
     }
     if (type === "down" && !S.info) {
-      if (dy > H() * .16 || vy > .6) return history.back();
+      if (dy > H() * .16 || vy > .6) return lbBack(S);
       el.classList.remove("bare"); bg.style.opacity = 1;
       const zw = cur(), now = zw.style.transform; zw.style.transform = "";
       if (anim()) zw.animate([{transform:now}, {transform:"none"}], {duration:T.mid, easing:DEC});
@@ -814,7 +821,7 @@ function openLb(i){
   }, {passive:false});
 
   el.addEventListener("click", e => {
-    if (e.target.closest("[data-x]")) return history.back();
+    if (e.target.closest("[data-x]")) return lbBack(S);
     if (e.target.closest("[data-inf]")) return setInfo(!S.info);
     if (e.target.closest("[data-lv]")) return live();
     if (e.target.closest("[data-ssi]")) return show(S.i);
@@ -871,12 +878,17 @@ function openLb(i){
     if (e.key === " " && isVid(PH[S.i])) { e.preventDefault(); return vToggle(); }
     if (e.key === "ArrowRight") go(1);
     else if (e.key === "ArrowLeft") go(-1);
-    else if (e.key === "Escape") S.info ? setInfo(false) : history.back();
+    else if (e.key === "Escape") S.info ? setInfo(false) : lbBack(S);
     else if (e.key === "i") setInfo(!S.info);
   };
 }
 addEventListener("keydown", e => SY ? SY.key(e) : SS ? SS.key(e) : LB && LB.key(e));
-addEventListener("popstate", () => { if (SY) SY.close(); else if (SS) SS.close(); else if (LB) LB.close(); });
+/* 自己關大圖（×、往下滑、Esc）時馬上開始收，不等瀏覽器的返回（iPhone 上要等一下，這段時間點別張會沒反應） */
+let POPSKIP = 0;
+function lbBack(o){ if (o.closing) return; o.close(); POPSKIP++; history.back(); }
+addEventListener("popstate", () => {
+  if (POPSKIP) { POPSKIP--; if (LB && LB.push) { LB.push = 0; history.pushState({lb:1}, ""); } return; }
+  if (SY) SY.close(); else if (SS) SS.close(); else if (LB) LB.close(); });
 
 /* ── 愛心、留言 ── */
 async function talk(i, body){
