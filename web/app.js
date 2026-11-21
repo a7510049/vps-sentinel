@@ -1032,13 +1032,15 @@ function notesModal(node, name){
   $("#layer").appendChild(v);
   const body = v.querySelector(".ntb"), msg = v.querySelector(".msg");
   const url = () => (D.base || location.origin.replace(/^http:/, "https:")) + D.path;   // 只收 https
-  const row = (k, val, x = "") => `<div class="codebox ntr"><span class="ntk">${k}</span><code${x}>${esc(val)}</code><button type="button" class="ubtn sm ghost" data-ntcp="${k}">複製</button></div>`;
+  const row = (k, val, x = "", more = "") => `<div class="codebox ntr"><span class="ntk">${k}</span><code${x}>${esc(val)}</code>${more}<button type="button" class="ubtn sm ghost" data-ntcp="${k}">複製</button></div>`;
+  let ek = "";   // Joplin 的加密密碼（主機產生、加密存著；跟密碼一起，確認是你才給）
   const st = () => D.files ? `${D.files} 個檔案・${size(D.size)}${D.last ? `・${ago(D.last)}同步過` : ""}` : "還沒同步過";
   const draw = () => swapHTML(body, !D.on
     ? `<p class="ntx">用 Joplin App 同步，筆記在手機上先加密，主機只存亂碼。</p><button type="button" class="ubtn" data-nt="on">打開</button>`
-    : `<div class="pcode">${row("網址", url())}${row("帳號", D.user)}${row("密碼", pw || "•".repeat(24), pw ? "" : ' class="ipb" data-ntshow role="button" tabindex="0"')}</div>
+    : `<div class="pcode">${row("網址", url())}${row("帳號", D.user)}${row("密碼", pw || "•".repeat(24), pw ? "" : ' class="ipb" data-ntshow role="button" tabindex="0"')}${row("加密", ek || "•".repeat(27), ek ? "" : ' class="ipb" data-ntshow role="button" tabindex="0"')}</div>
       <div class="lbl">在 Joplin 設定</div>
-      <ol class="ntsteps"><li>加密 → 啟用加密（先做這步）</li><li>同步 → 選 WebDAV，填上面三項</li>${D.self_signed ? "<li>同步的進階選項 → 勾「忽略 TLS 憑證錯誤」</li>" : ""}</ol>
+      <ol class="ntsteps"><li>加密 → 啟用加密，填「加密」那組（先做這步）</li><li>同步 → 選 WebDAV，填網址、帳號、密碼</li>${D.self_signed ? "<li>同步的進階選項 → 勾「忽略 TLS 憑證錯誤」</li>" : ""}</ol>
+
       <div class="ntst">${I("note")}<span>${st()}</span></div>
       <div class="dlnew"><button type="button" class="ubtn sm ghost" data-nt="new">換密碼</button><button type="button" class="ubtn sm ghost" data-nt="off">關掉</button></div>`);
   const call = async b => {
@@ -1050,7 +1052,7 @@ function notesModal(node, name){
   };
   const run = async b => {
     if (busy) return null; busy = true; sayTo(msg, "");
-    try { const x = await call(b); D = x; if (x.pw) pw = x.pw; if (b.action === "off") pw = ""; draw(); return x; }
+    try { const x = await call(b); D = x; if (x.pw) pw = x.pw; if (x.ek) ek = x.ek; if (b.action === "off") pw = ek = ""; draw(); return x; }
     catch (e) { sayTo(msg, e.message); return null; }
     finally { busy = false; }
   };
@@ -1065,8 +1067,8 @@ function notesModal(node, name){
       const cp = t.closest("[data-ntcp]");
       if (cp) {
         const k = cp.dataset.ntcp;
-        if (k === "密碼" && !pw && !await run({action:"show"})) return;
-        const txt = k === "網址" ? url() : k === "帳號" ? D.user : pw;
+        if ((k === "密碼" && !pw || k === "加密" && !ek) && !await run({action:"show"})) return;
+        const txt = k === "網址" ? url() : k === "帳號" ? D.user : k === "加密" ? ek : pw;
         try { await navigator.clipboard.writeText(txt); toast(`已複製${k}`); }
         catch (_) { const r = document.createRange(); r.selectNodeContents(cp.parentNode.querySelector("code")); getSelection().removeAllRanges(); getSelection().addRange(r); }
         return;
