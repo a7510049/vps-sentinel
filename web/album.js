@@ -25,6 +25,8 @@ const P = {
   live:'<circle cx="12" cy="12" r="2.6" fill="currentColor" stroke="none"/><circle cx="12" cy="12" r="5.8"/><circle cx="12" cy="12" r="9.2" stroke-dasharray="1.6 2.4"/>',
   snd:'<path d="M4 9.5v5h3.5L12 18.5v-13L7.5 9.5H4Z"/><path d="M15.5 9a4 4 0 0 1 0 6M18.3 6.5a7.5 7.5 0 0 1 0 11"/>',
   mute:'<path d="M4 9.5v5h3.5L12 18.5v-13L7.5 9.5H4Z"/><path d="m16 9.5 5 5M21 9.5l-5 5"/>',
+  up:'<path d="M12 15V4M7 9l5-5 5 5M5 20h14"/>', sel:'<circle cx="12" cy="12" r="9"/><path d="m8 12.3 2.7 2.7L16 9.5"/>', ck:'<path d="m6 12.5 4 4 8-9"/>',
+  trash:'<path d="M4 7h16M10 11v6M14 11v6M6 7l1 12a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2l1-12M9 7V4h6v3"/>',
   send:'<path d="M4.5 12h13M12.5 6l6 6-6 6"/>', again:'<path d="M4 12a8 8 0 1 0 2.4-5.7L4 8.5M4 4v4.5h4.5"/>'
 };
 const I = n => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${P[n]}</svg>`;
@@ -35,6 +37,9 @@ const dur = t => { t = Math.max(0, Math.round(t)); return `${Math.floor(t / 60)}
 const ago = t => { const s = Date.now() / 1000 - t; return s < 60 ? "剛剛" : s < 3600 ? `${Math.floor(s / 60)} 分鐘前` : s < 86400 ? `${Math.floor(s / 3600)} 小時前` : s < 86400 * 30 ? `${Math.floor(s / 86400)} 天前` : new Date(t * 1000).toLocaleDateString("zh-TW"); };
 const store = {get:k => { try { return localStorage.getItem(k) || ""; } catch (e) { return ""; } }, set:(k, v) => { try { localStorage.setItem(k, v); } catch (e) {} }};
 let D = null, PH = [], TILES = [], SS = null;
+let ALL = [], WHO = "";                                      // 全部照片；現在看的分頁（空字串＝主人的，不然是朋友的資料夾）
+const TM = new Map();                                        // 照片編號 → 格子（換分頁時重用）
+const pickW = () => ALL.filter(p => (p.u || "") === WHO);
 
 /* ── 日期：EXIF 的「2026:11:03 14:22:10」是拍照當地的時間，照原樣顯示 ── */
 const WD = "日一二三四五六";
@@ -114,11 +119,13 @@ async function boot(){
     return gate("phone", x.ban ? "這支手機不能看這本相簿" : "名額已經滿了", "", x.ban ? "" : "這本相簿只給指定的手機看"); }
   if (!r.ok) return gate("off", "這本相簿已經看不到了", "", "連結已經收回或過期");
   D = await r.json();
-  PH = D.photos || [];
+  ALL = D.photos || [];
+  if (!ALL.some(p => !p.u) && ALL.length) WHO = ALL[0].u;
+  PH = pickW();
   document.title = D.name;
-  if (!PH.length) return gate("photo", "這本相簿還沒有照片");
+  if (!PH.length) return gate("photo", "這本相簿還沒有照片", D.up ? `<button type="button" class="btn" data-up>放照片</button>` : "");
   draw();
-  if ((D.loc && PH.some(p => p.g && !p.p)) || PH.some(p => p.vr === -1)) setTimeout(refresh, 6000);
+  if ((D.loc && ALL.some(p => p.g && !p.p)) || ALL.some(p => p.vr === -1)) setTimeout(refresh, 6000);
 }
 let REF = 0;
 async function refresh(){                                  // 地名在主機背景慢慢查：查到了補上去
@@ -126,14 +133,14 @@ async function refresh(){                                  // 地名在主機背
     const r = await fetch(BASE + "/m", {credentials:"same-origin", cache:"no-store"});
     if (!r.ok) return;
     const d = await r.json(), by = Object.fromEntries((d.photos || []).map(p => [p.i, p]));
-    PH.forEach((p, k) => { const n = by[p.i]; if (!n) return; p.p = n.p; if (!p.q && n.q) p.q = n.q;
-      if (n.vr !== p.vr || n.lv !== p.lv) { p.vr = n.vr; p.lv = n.lv; badge(k); if (LB && LB.i === k) LB.chrome(); } });
+    ALL.forEach(p => { const n = by[p.i]; if (!n) return; p.p = n.p; if (!p.q && n.q) p.q = n.q;
+      if (n.vr !== p.vr || n.lv !== p.lv || n.gf !== p.gf) { p.vr = n.vr; p.lv = n.lv; p.gf = n.gf; const k = PH.indexOf(p); if (k >= 0) { badge(k); if (LB && LB.i === k) LB.chrome(); } } });
     D.places = d.places;
     const ch = $(".hmeta [data-pl]");
     if (ch && D.places.length) ch.lastChild.textContent = D.places.slice(0, 3).join("・");
     else if (!ch && D.places.length) $(".hmeta").insertAdjacentHTML("beforeend", `<span class="chip" data-pl>${I("pin")}<span>${esc(D.places.slice(0, 3).join("・"))}</span></span>`);
     document.querySelectorAll(".dh[data-day]").forEach(h => { const s = h.querySelector("span"), t = dayPlaces(h.dataset.day); if (s && t) s.textContent = t; });
-    if (PH.some(p => p.vr === -1) ? ++REF < 90 : PH.some(p => p.g && !p.p) && ++REF < 5) setTimeout(refresh, 8000);
+    if (ALL.some(p => p.vr === -1) ? ++REF < 90 : ALL.some(p => p.g && !p.p) && ++REF < 5) setTimeout(refresh, 8000);
   } catch (e) {}
 }
 function gate(ic, title, form, sub){
@@ -273,7 +280,7 @@ function memsOf(){
 }
 function mems(){
   const box = $(".mems"); if (!box) return;
-  MEMS = memsOf();
+  MEMS = WHO ? [] : memsOf();                                // 回憶、地圖只給主人的照片
   box.hidden = MEMS.length < 2;
   box.innerHTML = MEMS.length < 2 ? "" : `<div class="mrw">${MEMS.map((g, n) => `<button class="mem${SEEN.has(g.k) ? " seen" : ""}" data-mem="${n}" aria-label="${esc(g.t)}">
     <span class="mring"><img alt="" loading="lazy" draggable="false" src="${src(PH[g.cv], "s")}"></span><b>${esc(g.t)}</b>${g.s ? `<small class="num">${esc(g.s)}</small>` : ""}</button>`).join("")}</div>`;
@@ -288,11 +295,11 @@ function draw(){
     <header class="hero"><div class="cv">${cover.q ? `<img class="lq" alt="" src="data:image/jpeg;base64,${cover.q}">` : ""}<img class="hi" alt="" src="${src(cover, "l")}"></div>
       <div class="hcap">${a ? `<div class="eyebrow num">${esc(frange(a, b))}</div>` : ""}<h1>${esc(D.name)}</h1>
         <div class="hmeta"><button class="chip go" data-ss>${I("play")}<span>播放</span></button><span class="chip">${I("photo")}<span class="num">${cntTxt()}</span></span>${pl ? `<span class="chip" data-pl>${I("pin")}<span>${esc(pl)}</span></span>` : ""}
-        ${D.dl ? `<a class="chip" href="${BASE}/zip" download>${I("dl")}<span>全部下載</span></a>` : ""}</div></div>
+        ${D.dl ? `<a class="chip" href="${BASE}/zip" download>${I("dl")}<span>全部下載</span></a><button class="chip" data-sel>${I("sel")}<span>選取</span></button>` : ""}${D.up ? `<button class="chip" data-up>${I("up")}<span>放照片</span></button>` : ""}</div></div>
       <button class="cue" aria-label="往下看"><i></i></button></header>
-    <div class="bar"><b>${esc(D.name)}<small class="num">${cntTxt()}</small></b>${IOS ? `<span class="chip zb"><button data-zb="-1" aria-label="放大">${I("zin")}</button><button data-zb="1" aria-label="縮小">${I("zout")}</button></span>` : ""}<button class="chip go" data-ss aria-label="播放">${I("play")}</button>${D.dl ? `<a class="chip" href="${BASE}/zip" download aria-label="全部下載">${I("dl")}</a>` : ""}</div>
-    <div class="mems"></div><main class="wall" data-z="${ZL}"></main>
-    ${D.loc && PH.some(p => p.g) ? `<section class="msec"><div class="mh"><b>旅程</b><span class="num" data-km>${PH.filter(p => p.g).length} 個地點</span></div><div class="map" data-map></div></section>` : ""}
+    <div class="bar"><b>${esc(D.name)}<small class="num">${cntTxt()}</small></b>${IOS ? `<span class="chip zb"><button data-zb="-1" aria-label="放大">${I("zin")}</button><button data-zb="1" aria-label="縮小">${I("zout")}</button></span>` : ""}${D.up ? `<button class="chip" data-up aria-label="放照片">${I("up")}</button>` : ""}${D.dl ? `<button class="chip" data-sel aria-label="選取">${I("sel")}</button>` : ""}<button class="chip go" data-ss aria-label="播放">${I("play")}</button></div>
+    <nav class="who" hidden></nav><div class="mems"></div><main class="wall" data-z="${ZL}"></main>
+    ${D.loc && ALL.some(p => p.g && !p.u) ? `<section class="msec"${WHO ? " hidden" : ""}><div class="mh"><b>旅程</b><span class="num" data-km>${ALL.filter(p => p.g && !p.u).length} 個地點</span></div><div class="map" data-map></div></section>` : ""}
     <footer class="foot"><div class="fin">${esc(D.name)}</div>${D.exp ? `<span>${I("clock")}${left(D.exp)}</span>` : ""}</footer>`;
   const hi = $(".hero .hi");
   const hok = () => { hi.classList.add("ok"); setTimeout(() => { const q = $(".hero .lq"); if (q) q.remove(); }, T.slow + 100); };   // 糊的底圖拿掉，捲動時不用一直重畫模糊
@@ -301,11 +308,41 @@ function draw(){
   if (D.wmo) document.documentElement.style.setProperty("--wm", JSON.stringify(D.wmo));
   document.documentElement.classList.toggle("wmo", !!D.wmo);
   TILES = PH.map((p, i) => tile(p, i));
+  whoBar();
   sections();
   layout();
   mems();
   bigMap();
   onScroll();
+}
+/* 朋友放的：每個人一個分頁，不跟主人的照片混在一起 */
+function whoBar(){
+  const nav = $(".who"); if (!nav) return;
+  const ws = [...new Set(ALL.filter(p => p.u).map(p => p.u))];
+  nav.hidden = !ws.length;
+  if (!ws.length) { nav.innerHTML = ""; return; }
+  const cnt = w => ALL.filter(p => (p.u || "") === w).length, mine = w => ALL.some(p => p.u === w && p.um);
+  const tabs = [...(ALL.some(p => !p.u) ? [["", "相簿", "photo"]] : []), ...ws.map(w => [w, w, mine(w) ? "up" : ""])];
+  nav.innerHTML = `<div class="whr">${tabs.map(([w, l, ic]) => `<button class="chip${w === WHO ? " on" : ""}" data-who="${esc(w)}">${ic ? I(ic) : `<i class="av">${esc([...l][0])}</i>`}<span>${esc(l)}</span><small class="num">${cnt(w)}</small></button>`).join("")}</div>`;
+}
+let WHOBZ = 0;
+async function whoSet(w, keep){
+  if (w === WHO && !keep) return;
+  if (WHOBZ) return; WHOBZ = 1;
+  if (SEL.on) popBack();
+  const parts = [".mems", ".wall", ".msec"].map(q => $(q)).filter(Boolean);
+  if (anim()) await Promise.all(parts.map(x => x.animate([{opacity:1}, {opacity:0, transform:"translateY(6px)"}], {duration:T.fast, easing:EXIT, fill:"forwards"}).finished.catch(() => {})));
+  WHO = w; PH = pickW();
+  TILES.forEach(t => t.classList.remove("on"));
+  TILES = PH.map((p, i) => { const t = TM.get(p.i); if (t) { t.dataset.i = i; return t; } return tile(p, i); });
+  whoBar();
+  sections(); layout(true); mems(); bigMap();
+  const ms = $(".msec"); if (ms) ms.hidden = !!WHO || !(D.loc && PH.some(p => p.g));
+  document.querySelectorAll(".hmeta .chip .num, .bar small").forEach(x => { x.textContent = cntTxt(); });
+  const nav = $(".who"), top = nav && !nav.hidden ? nav.getBoundingClientRect().top + scrollY - 70 : 0;
+  if (nav && scrollY > top) scrollTo({top, behavior:"auto"});
+  parts.forEach(x => { x.getAnimations().forEach(a => a.cancel()); if (anim()) x.animate([{opacity:0, transform:"translateY(6px)"}, {opacity:1, transform:"none"}], {duration:T.mid, easing:DEC}); });
+  WHOBZ = 0;
 }
 /* 封面每隔幾秒淡淡換成相簿裡隨機一張（捲走、看大圖、背景時先停） */
 let HCT = 0;
@@ -343,8 +380,9 @@ const IO = "IntersectionObserver" in window ? new IntersectionObserver(es => {
 }, {rootMargin:"0px 0px -4% 0px"}) : null;
 function tile(p, i){
   const el = document.createElement("button");
-  el.className = "ph"; el.dataset.i = i; el.setAttribute("aria-label", p.n);
-  el.innerHTML = `${p.q ? `<img class="lq" alt="" src="data:image/jpeg;base64,${p.q}">` : ""}<img class="hi" alt="" loading="lazy" decoding="async" draggable="false" src="${src(p, "s")}"><span class="bdg"></span>`;
+  el.className = "ph"; el.dataset.i = i; el.setAttribute("aria-label", p.n.split("/").pop());
+  TM.set(p.i, el);
+  el.innerHTML = `${p.q ? `<img class="lq" alt="" src="data:image/jpeg;base64,${p.q}">` : ""}<img class="hi" alt="" loading="lazy" decoding="async" draggable="false" src="${src(p, "s")}"><span class="bdg"></span><span class="ck">${I("ck")}</span>`;
   setTimeout(() => badge(i));
   const hi = el.querySelector(".hi");
   hi.addEventListener("load", () => { hi.classList.add("ok"); setTimeout(() => { const q = el.querySelector(".lq"); if (q) q.remove(); }, T.mid + 100); }, {once:true});
@@ -355,7 +393,7 @@ function tile(p, i){
 function badge(i){                                          // 格子上的小標：影片長度、原況、愛心
   const t = TILES[i], p = PH[i]; if (!t) return;
   const b = t.querySelector(".bdg");
-  b.innerHTML = `${isVid(p) ? `<span class="vt num">${I("play")}${dur(p.vd)}</span>` : p.lv ? `<span class="lvt">${I("live")}</span>` : ""}${p.lk ? `<span class="lkt num">${I("heart")}${p.lk}</span>` : ""}`;
+  b.innerHTML = `${isVid(p) ? `<span class="vt num">${I("play")}${dur(p.vd)}</span>` : p.gf ? `<span class="vt">GIF</span>` : p.lv ? `<span class="lvt">${I("live")}</span>` : ""}${p.lk ? `<span class="lkt num">${I("heart")}${p.lk}</span>` : ""}`;
 }
 let LW = 0;
 function layout(force){
@@ -455,15 +493,25 @@ addEventListener("scroll", onScroll, {passive:true});
 addEventListener("contextmenu", e => { if (e.target.closest(".ph,.zw,.mk,.hero")) e.preventDefault(); });   // 不能按右鍵、長按另存
 addEventListener("dragstart", e => { if (e.target.tagName === "IMG") e.preventDefault(); });
 {                                                            // 點照片自己判斷：往下滑關掉大圖後，手機有時不送 click，要等一下才點得開
-  let pt = null;
-  document.addEventListener("pointerdown", e => { const t = e.isPrimary && e.button === 0 && e.target.closest(".ph"); pt = t ? {t, x:e.clientX, y:e.clientY, at:performance.now()} : null; }, true);
-  document.addEventListener("pointerup", e => { const q = pt; pt = null;
-    if (q && e.target.closest(".ph") === q.t && Math.hypot(e.clientX - q.x, e.clientY - q.y) < 10 && performance.now() - q.at < 500) openLb(+q.t.dataset.i); }, true);
-  document.addEventListener("pointercancel", () => { pt = null; }, true);
+  let pt = null;                                             // 按住不放：進入選取（可以下載的相簿）
+  document.addEventListener("pointerdown", e => { const t = e.isPrimary && e.button === 0 && e.target.closest(".ph"); clearTimeout(pt && pt.lp);
+    pt = t ? {t, x:e.clientX, y:e.clientY, at:performance.now()} : null;
+    if (pt && D.dl && !SEL.on) { const q = pt; q.lp = setTimeout(() => { if (pt === q) { q.done = 1; selOn(+q.t.dataset.i); } }, 450); } }, true);
+  document.addEventListener("pointermove", e => { if (pt && Math.hypot(e.clientX - pt.x, e.clientY - pt.y) >= 10) clearTimeout(pt.lp); }, true);
+  document.addEventListener("pointerup", e => { const q = pt; pt = null; if (!q) return; clearTimeout(q.lp);
+    if (q.done || e.target.closest(".ph") !== q.t || Math.hypot(e.clientX - q.x, e.clientY - q.y) >= 10) return;
+    if (SEL.on) return selFlip(+q.t.dataset.i);
+    if (performance.now() - q.at < 500) openLb(+q.t.dataset.i); }, true);
+  document.addEventListener("pointercancel", () => { if (pt) clearTimeout(pt.lp); pt = null; }, true);
 }
 document.addEventListener("click", e => {
   const t = e.target.closest(".ph");
+  if (t && SEL.on) { if (!e.detail) selFlip(+t.dataset.i); return; }   // 鍵盤按的才在這裡切換（手指、滑鼠在 pointerup）
   if (t) return openLb(+t.dataset.i);
+  if (e.target.closest("[data-up]")) return SEL.on || upPick();
+  { const wb = e.target.closest("[data-who]"); if (wb) return whoSet(wb.dataset.who); }
+  if (e.target.closest("[data-sel]")) return selOn();
+  if (SEL.on && e.target.closest("[data-ss],[data-mem]")) return;
   if (e.target.closest(".cue")) return scrollTo({top:$(".hero").offsetHeight - 8, behavior:anim() ? "smooth" : "auto"});
   { const zb = e.target.closest("[data-zb]"); if (zb) return zoomWall(ZL + +zb.dataset.zb, innerWidth / 2, innerHeight / 2); }
   if (e.target.closest("[data-ss]")) return show(0);
@@ -475,7 +523,7 @@ document.addEventListener("click", e => {
 
 /* 全部照片的拍攝地點：一張地圖、照片圓圈，太近的合成一顆＋數字 */
 function bigMap(){
-  const el = $("[data-map]"); if (!el) return;
+  const el = $("[data-map]"); if (!el || WHO) return;
   const pts = PH.map((p, i) => [p, i]).filter(([p]) => p.g && !p.broken);
   const W = el.clientWidth, H = el.clientHeight;
   if (!pts.length || !W) return;
@@ -537,7 +585,7 @@ function openLb(i){
   const el = document.createElement("div");
   el.className = "lb";
   el.innerHTML = `<div class="bg"></div><div class="stage"><div class="track"></div></div>
-    <div class="lbt"><button class="rb" data-x aria-label="關閉">${I("x")}</button><span class="cnt num"></span><button class="rb lvb" data-lv aria-label="原況">${I("live")}</button><button class="rb" data-ssi aria-label="從這張開始播放">${I("play")}</button><button class="rb" data-inf aria-label="照片資訊">${I("info")}</button>${D.dl ? `<a class="rb" data-dl download aria-label="${D.dl > 1 ? "下載原圖" : "下載"}">${I("dl")}</a>` : ""}</div>
+    <div class="lbt"><button class="rb" data-x aria-label="關閉">${I("x")}</button><span class="cnt num"></span><button class="rb lvb" data-lv aria-label="原況">${I("live")}</button><button class="rb" data-ssi aria-label="從這張開始播放">${I("play")}</button><button class="rb" data-inf aria-label="照片資訊">${I("info")}</button><button class="rb" data-del hidden aria-label="刪掉">${I("trash")}</button>${D.dl ? `<a class="rb" data-dl download aria-label="${D.dl > 1 ? "下載原圖" : "下載"}">${I("dl")}</a>` : ""}</div>
     <button class="rb nav l" aria-label="上一張">${I("l")}</button><button class="rb nav r" aria-label="下一張">${I("r")}</button>
     <div class="lbb"><div class="vbar"><button class="vpp" data-vpp aria-label="播放">${I("play")}</button><span class="vt0 num">0:00</span><div class="vtr" data-vseek><i></i></div><span class="vt1 num"></span><button class="vpp" data-vmu aria-label="聲音">${I("snd")}</button></div>
       <div class="lbr"><div class="cap"><b></b><span></span></div>${D.talk ? `<button class="sb" data-lk aria-label="愛心">${I("heart")}<span class="num"></span></button><button class="sb" data-cm aria-label="留言">${I("chat")}<span class="num"></span></button>` : ""}</div></div><div class="inf"></div>`;
@@ -562,7 +610,8 @@ function openLb(i){
     zw.dataset.i = idx;
     if (p.broken) { zw.innerHTML = `<div class="nope">${I("off")}</div>`; return; }
     zw.innerHTML = `<img class="s1" alt="" draggable="false" src="${p.q ? `data:image/jpeg;base64,${p.q}` : src(p, "s")}"><img class="s1" alt="" draggable="false" src="${src(p, "s")}"><img class="s2" alt="" draggable="false" src="${src(p, "l")}">`
-      + (isVid(p) ? `<video class="vv" playsinline preload="none" disablepictureinpicture></video><span class="vbig">${p.vr === 1 ? I("play") : `<i class="spin"></i>`}</span>` : p.lv ? `<video class="lvv" muted playsinline preload="none"></video>` : "");
+      + (isVid(p) ? `<video class="vv" playsinline preload="none" disablepictureinpicture></video><span class="vbig">${p.vr === 1 ? I("play") : `<i class="spin"></i>`}</span>` : p.gf === 2 ? `<img class="awp" alt="" draggable="false" src="${src(p, "a")}">` : p.lv ? `<video class="lvv" muted playsinline preload="none"${p.gf ? " loop" : ""}></video>` : "");
+    const aw = zw.querySelector(".awp"); if (aw) aw.complete && aw.naturalWidth ? aw.classList.add("ok") : aw.addEventListener("load", () => aw.classList.add("ok"), {once:true});
     const big = zw.querySelector(".s2");
     big.complete && big.naturalWidth ? big.classList.add("ok") : big.addEventListener("load", () => big.classList.add("ok"), {once:true});
   }
@@ -621,16 +670,17 @@ function openLb(i){
     const p = PH[S.i], d = pd(p.x.dt), moved = S.at !== S.i;
     S.at = S.i;
     if (moved) stopAll();
-    $("[data-lv]", el).classList.toggle("show", !!p.lv);
+    if (moved && p.gf && p.lv) setTimeout(() => { if (LB === S && S.at === S.i && !S.closing) live(); }, anim() ? T.mid : 0);   // 會動的 GIF：自己一直動
+    $("[data-lv]", el).classList.toggle("show", !!p.lv && !p.gf);
     social(); vSync();
     $(".cnt", el).textContent = `${S.i + 1} / ${PH.length}`;
     const cam = camName(p.x);
     $(".cap b", el).textContent = p.p ? p.p.n : d ? fdate(d) : p.n;
-    $(".cap span", el).textContent = [p.p && d ? `${d.mo}月${d.d}日 ${ftime(d)}` : d ? ftime(d) : "", cam].filter(Boolean).join("・");
+    $(".cap span", el).textContent = [p.p && d ? `${d.mo}月${d.d}日 ${ftime(d)}` : d ? ftime(d) : "", p.ub ? `${p.ub} 放的` : "", cam].filter(Boolean).join("・");
+    const del = $("[data-del]", el); del.hidden = !p.um; if (moved) del.classList.remove("arm");
     const dl = $("[data-dl]", el); if (dl) dl.href = src(p, "o");
     $(".nav.l", el).disabled = S.i === 0; $(".nav.r", el).disabled = S.i === PH.length - 1;
-    if (S.info) inf.innerHTML = infoHTML(p);
-    if (S.info) infoMap();
+    if (S.info && (moved || !inf.firstChild)) { inf.innerHTML = infoHTML(p); infoMap(); }   // 同一張不重畫：安卓跳出鍵盤會改畫面大小，重畫會把正在打字的留言框收掉
     TILES.forEach((t, k) => t.classList.toggle("gone", k === S.i));
   }
   setAll();
@@ -718,7 +768,7 @@ function openLb(i){
     ptr.set(e.pointerId, {x:e.clientX, y:e.clientY});
     clearTimeout(S.lvT);
     if (ptr.size === 1) { finish(); g = {type:null, x0:e.clientX, y0:e.clientY, t0:performance.now(), lx:e.clientX, ly:e.clientY, lt:performance.now(), vx:0, vy:0, z0:{...S.z}};
-      if (PH[S.i].lv && S.z.s < 1.02) { const gg = g; S.lvT = setTimeout(() => { if (g === gg && !g.type) { g.type = "live"; live(); } }, 260); } }
+      if (PH[S.i].lv && !PH[S.i].gf && S.z.s < 1.02) { const gg = g; S.lvT = setTimeout(() => { if (g === gg && !g.type) { g.type = "live"; live(); } }, 260); } }
     else if (ptr.size === 2) { if (g && g.type === "live") liveOff(); const [a, b] = [...ptr.values()]; g = {type:"pinch", d0:Math.hypot(a.x - b.x, a.y - b.y), m0:{x:(a.x + b.x) / 2, y:(a.y + b.y) / 2}, z0:{...S.z}}; }
   });
   stage.addEventListener("pointermove", e => {
@@ -822,6 +872,9 @@ function openLb(i){
 
   el.addEventListener("click", e => {
     if (e.target.closest("[data-x]")) return lbBack(S);
+    { const b = e.target.closest("[data-del]");                // 自己放的才能刪：按兩下才刪
+      if (b) { clearTimeout(S.dT); if (!b.classList.contains("arm")) { b.classList.add("arm"); toast("再按一次刪掉"); S.dT = setTimeout(() => b.classList.remove("arm"), 3000); return; }
+        b.classList.remove("arm"); return upDel(S.i); } }
     if (e.target.closest("[data-inf]")) return setInfo(!S.info);
     if (e.target.closest("[data-lv]")) return live();
     if (e.target.closest("[data-ssi]")) return show(S.i);
@@ -882,13 +935,14 @@ function openLb(i){
     else if (e.key === "i") setInfo(!S.info);
   };
 }
-addEventListener("keydown", e => SY ? SY.key(e) : SS ? SS.key(e) : LB && LB.key(e));
+addEventListener("keydown", e => { if (SH) return e.key === "Escape" && popBack();
+  if (SY) SY.key(e); else if (SS) SS.key(e); else if (LB) LB.key(e); else if (SEL.on && e.key === "Escape") popBack(); });
 /* 自己關大圖（×、往下滑、Esc）時馬上開始收，不等瀏覽器的返回（iPhone 上要等一下，這段時間點別張會沒反應） */
 let POPSKIP = 0;
 function lbBack(o){ if (o.closing) return; o.close(); POPSKIP++; history.back(); }
 addEventListener("popstate", () => {
   if (POPSKIP) { POPSKIP--; if (LB && LB.push) { LB.push = 0; history.pushState({lb:1}, ""); } return; }
-  if (SY) SY.close(); else if (SS) SS.close(); else if (LB) LB.close(); });
+  if (SH) SH.close(); else if (SY) SY.close(); else if (SS) SS.close(); else if (LB) LB.close(); else if (SEL.on) selOff(); });
 
 /* ── 愛心、留言 ── */
 async function talk(i, body){
@@ -917,6 +971,173 @@ function talkHTML(p){
     ${cs.map(c => `<div class="cmt"><div class="av">${esc([...c.n][0] || "?")}</div><div class="cb"><div class="cn"><b>${esc(c.n)}</b><span>${ago(c.t)}</span></div><p>${esc(c.s)}</p></div>${c.me ? `<button class="cx" data-cdel="${esc(c.id)}" aria-label="刪掉">${I("x")}</button>` : ""}</div>`).join("")}
     <form class="cform">${nm ? "" : `<input class="cin nm" name="n" maxlength="20" placeholder="你的名字" autocomplete="nickname">`}<div class="crow"><input class="cin" name="s" maxlength="300" placeholder="${cs.length ? "說點什麼…" : "第一個留言"}" autocomplete="off"><button class="csend" aria-label="送出">${I("send")}</button></div></form></div>`;
 }
+/* ═════════ 選幾張一起下載 ═════════ */
+const SEL = {on:false, s:new Set()};
+const ALBMAX = 500;
+function popBack(){ POPSKIP++; if (SH) SH.close(); else if (SEL.on) selOff(); history.back(); }
+function selOn(i){
+  if (SEL.on || !D.dl || LB || SS || SY) return;
+  SEL.on = true; SEL.s.clear();
+  document.documentElement.classList.add("selm");
+  if (i != null) { selFlip(i); if (navigator.vibrate) try { navigator.vibrate(8); } catch (e) {} }
+  selBar(); history.pushState({sel:1}, "");
+}
+function selOff(){
+  if (!SEL.on) return;
+  SEL.on = false; SEL.s.clear();
+  document.documentElement.classList.remove("selm");
+  TILES.forEach(t => t.classList.remove("on"));
+  selBar();
+}
+function selFlip(i){
+  if (SEL.s.has(i)) SEL.s.delete(i);
+  else { if (SEL.s.size >= ALBMAX) return toast(`一次最多選 ${ALBMAX} 個`); SEL.s.add(i); }
+  TILES[i].classList.toggle("on", SEL.s.has(i));
+  selBar();
+}
+function selBar(){
+  let b = $(".selb");
+  if (!b) {
+    if (!SEL.on) return;
+    b = document.createElement("div"); b.className = "selb";
+    b.innerHTML = `<button class="sx" data-selx aria-label="不選了">${I("x")}</button><b class="num"></b><button class="chip" data-selall></button><button class="chip go" data-seldl>${I("dl")}<span>下載</span></button>`;
+    document.body.appendChild(b);
+    b.addEventListener("click", e => {
+      if (e.target.closest("[data-selx]")) return popBack();
+      if (e.target.closest("[data-selall]")) {
+        const all = SEL.s.size === Math.min(ALBMAX, PH.length);
+        SEL.s.clear(); if (!all) PH.slice(0, ALBMAX).forEach((_, k) => SEL.s.add(k));
+        TILES.forEach((t, k) => t.classList.toggle("on", SEL.s.has(k)));
+        return selBar();
+      }
+      if (e.target.closest("[data-seldl]") && SEL.s.size) {
+        const a = document.createElement("a");
+        a.href = `${BASE}/zip?ids=${[...SEL.s].sort((x, y) => x - y).map(k => PH[k].i).join(",")}`; a.download = "";
+        document.body.appendChild(a); a.click(); a.remove();
+        toast(`開始下載 ${SEL.s.size} 個`); popBack();
+      }
+    });
+    void b.offsetWidth;
+  }
+  const n = SEL.s.size;
+  b.classList.toggle("on", SEL.on);
+  b.querySelector("b").textContent = n ? `已選 ${n} 個` : "點照片來選";
+  b.querySelector("[data-selall]").textContent = n && n === Math.min(ALBMAX, PH.length) ? "全不選" : "全選";
+  b.querySelector("[data-seldl]").disabled = !n;
+}
+
+/* ═════════ 朋友一起放照片 ═════════ */
+let SH = null, UPING = 0;
+function nameSheet(then){                                    // 第一次放照片先問名字（照片上會寫是誰放的）
+  const bg = document.createElement("div");
+  bg.className = "shbg";
+  bg.innerHTML = `<form class="sh"><div class="ic">${I("up")}</div><h3>你的名字</h3><p>照片上會寫是你放的</p><input class="field" name="n" maxlength="20" autocomplete="nickname" aria-label="你的名字" required><button class="btn">好</button></form>`;
+  document.body.appendChild(bg);
+  const f = bg.querySelector("form"), inp = f.querySelector("input");
+  inp.value = store.get("vsa-name");
+  void bg.offsetWidth; bg.classList.add("on");
+  setTimeout(() => inp.focus(), T.fast);
+  SH = {close(){ if (SH && SH.bg === bg) SH = null; bg.classList.remove("on"); bg.style.pointerEvents = "none"; setTimeout(() => bg.remove(), T.mid + 50); }, bg};
+  history.pushState({sh:1}, "");
+  bg.addEventListener("click", e => { if (e.target === bg) popBack(); });
+  f.addEventListener("submit", e => {
+    e.preventDefault();
+    const v = inp.value.trim(); if (!v) return inp.focus();
+    store.set("vsa-name", v); popBack(); then();
+  });
+}
+function upPick(){
+  if (UPING) return toast("還在放上一批");
+  if (!store.get("vsa-name").trim()) return nameSheet(upPick);
+  const f = document.createElement("input");
+  f.type = "file"; f.multiple = true; f.accept = "image/*,video/*"; f.hidden = true;
+  f.addEventListener("change", () => { const fs = [...f.files]; f.remove(); if (fs.length) upGo(fs); }, {once:true});
+  document.body.appendChild(f); f.click();
+}
+const upLim = f => /^video\//.test(f.type) || /\.(mov|mp4|m4v|3gp|webm|mkv)$/i.test(f.name) ? 500 << 20 : 50 << 20;   // 影片 500 MB、照片 50 MB
+function upBox(){
+  let b = $(".upb");
+  if (!b) { b = document.createElement("div"); b.className = "upb"; b.innerHTML = `<div class="ut"><b></b><span class="num"></span></div><div class="ubar"><i></i></div>`; document.body.appendChild(b); void b.offsetWidth; }
+  b.classList.add("on");
+  return b;
+}
+function upShow(b, k, n, pr){
+  b.querySelector("b").textContent = n > 1 ? `放上去 ${k + 1}／${n}` : "放上去";
+  b.querySelector("span").textContent = `${Math.round(pr * 100)}%`;
+  b.querySelector("i").style.transform = `scaleX(${((k + pr) / n).toFixed(4)})`;
+}
+function upOne(f, prog){
+  return new Promise(res => {
+    const x = new XMLHttpRequest();
+    x.open("POST", `${BASE}/up?n=${encodeURIComponent(f.name)}&w=${encodeURIComponent(store.get("vsa-name").trim())}`);
+    x.withCredentials = true;
+    x.upload.onprogress = e => { if (e.lengthComputable) prog(e.loaded / e.total); };
+    x.onload = () => { let d = {}; try { d = JSON.parse(x.responseText); } catch (e) {}
+      res({ok:x.status === 200 && !!d.ok, message:d.message, stop:[403, 404, 409, 429, 507].includes(x.status)}); };
+    x.onerror = () => res({ok:false, message:"連不上，等一下再試", stop:true});
+    x.send(f);
+  });
+}
+async function upGo(files){
+  const big = files.filter(f => f.size > upLim(f));
+  files = files.filter(f => f.size <= upLim(f));
+  if (!files.length) return toast(big.length ? "檔案太大（照片最多 50 MB、影片 500 MB）" : "沒有選到照片");
+  UPING = 1;
+  const b = upBox();
+  let ok = 0, err = "";
+  for (let k = 0; k < files.length; k++) {
+    upShow(b, k, files.length, 0);
+    const r = await upOne(files[k], pr => upShow(b, k, files.length, pr));
+    if (r.ok) ok++; else { err = r.message || "沒有放上去"; if (r.stop) break; }
+  }
+  upShow(b, files.length - 1, files.length, 1);
+  setTimeout(() => b.classList.remove("on"), T.mid);
+  UPING = 0;
+  const miss = files.length + big.length - ok;
+  toast(!ok ? err : miss ? `放好 ${ok} 個，${miss} 個沒放上去` : D.up === 1 ? "放好了，主人確認後就會出現" : "放好了");
+  if (ok && D.up !== 1) reload();
+}
+addEventListener("beforeunload", e => { if (UPING) { e.preventDefault(); e.returnValue = ""; } });
+async function upDel(i){
+  try {
+    const r = await fetch(BASE + "/up", {method:"POST", credentials:"same-origin", headers:{"Content-Type":"application/json"}, body:JSON.stringify({del:PH[i].i})});
+    const d = await r.json().catch(() => ({}));
+    if (!r.ok) return toast(d.message || "沒有刪掉，等一下再試");
+  } catch (e) { return toast("連不上，等一下再試"); }
+  toast("刪掉了");
+  if (LB) lbBack(LB);
+  setTimeout(reload, T.mid + 260);
+}
+/* 照片有增減：重拿清單，原本的格子留著、新的長出來、沒了的淡掉，其他的滑到新位置 */
+async function reload(){
+  let d;
+  try { const r = await fetch(BASE + "/m", {credentials:"same-origin", cache:"no-store"}); if (!r.ok) return; d = await r.json(); } catch (e) { return; }
+  if (LB || SS || SY) return setTimeout(reload, 1500);
+  if (SEL.on) popBack();
+  const old = new Map(PH.map((p, k) => [p.i, TILES[k]]));
+  const mineB = new Set(ALL.filter(p => p.um).map(p => p.i));
+  D = d; ALL = d.photos || [];
+  const fresh = ALL.find(p => p.um && !mineB.has(p.i));      // 剛放上去的：跳到自己的分頁
+  if (fresh && (fresh.u || "") !== WHO && $(".wall")) { ALL.forEach(p => { const t = TM.get(p.i); if (t) t.dataset.i = -1; }); return whoSet(fresh.u, 1); }
+  if (!ALL.some(p => (p.u || "") === WHO) && ALL.length) WHO = ALL.some(p => !p.u) ? "" : ALL[0].u;
+  PH = pickW();
+  if (!PH.length || !$(".wall")) return PH.length ? draw() : boot();
+  whoBar();
+  const was = new Map(), H = innerHeight;
+  TILES.forEach(t => { const r = t.getBoundingClientRect(); if (r.bottom > -60 && r.top < H + 60) was.set(t, r); });
+  TILES = PH.map((p, i) => { const t = old.get(p.i); if (t) { old.delete(p.i); t.dataset.i = i; return t; } return TM.get(p.i) || tile(p, i); });
+  const gone = [...old.values()].filter(t => was.has(t));
+  if (gone.length && anim()) await Promise.all(gone.map(t => t.animate([{opacity:1, transform:"none"}, {opacity:0, transform:"scale(.9)"}], {duration:T.mid, easing:EXIT, fill:"forwards"}).finished.catch(() => {})));
+  sections(); layout(true); mems(); bigMap();
+  TILES.forEach((t, i) => { badge(i); const a = was.get(t); if (!a || !anim()) return;
+    const r = t.getBoundingClientRect(); if (r.bottom < 0 || r.top > H) return;
+    const dx = a.left - r.left, dy = a.top - r.top, sx = a.width / r.width, sy = a.height / r.height;
+    if (Math.abs(dx) + Math.abs(dy) < 1 && Math.abs(sx - 1) + Math.abs(sy - 1) < .01) return;
+    t.animate([{transformOrigin:"0 0", transform:`translate(${dx}px,${dy}px) scale(${sx},${sy})`}, {transformOrigin:"0 0", transform:"none"}], {duration:ZDUR, easing:DEC});
+  });
+  document.querySelectorAll(".hmeta .chip .num, .bar small").forEach(x => { x.textContent = cntTxt(); });
+}
+
 let TT;
 function toast(t){
   let el = $(".toast");
@@ -1238,7 +1459,7 @@ function infoHTML(p){
   if (p.g && p.g[3] != null) kv.push(["拍攝方向", `${DIR8[Math.round(p.g[3] / 45) % 8]}（${p.g[3]}°）`]);
   if (p.g) kv.push(["座標", `${p.g[0].toFixed(5)}, ${p.g[1].toFixed(5)}`]);
   if (x.sw) kv.push(["軟體", x.sw]);
-  kv.push(["檔名", p.n]);
+  kv.push(["檔名", p.n.split("/").pop()]);
   h += `<div class="ibox ikv">${kv.filter(r => r[1]).map(([k, v]) => `<div><span>${k}</span><b>${esc(v)}</b></div>`).join("")}</div>`;
   if (D.dl) h += `<div class="idl"><a class="pr" href="${src(p, "o")}" download>${I("dl")}${D.dl > 1 ? (isVid(p) ? "下載影片" : "下載原圖") : "下載"}</a></div>`;
   return h;

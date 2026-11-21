@@ -9,6 +9,7 @@ import struct
 import tempfile
 import time
 import unittest
+import urllib.parse
 import zipfile
 
 from test_smoke import TOKEN, Server
@@ -243,6 +244,9 @@ class Album(Server):
         s, b, _ = post({"i": pid, "like": True})
         self.assertEqual((s, json.loads(b)["lk"], json.loads(b)["me"]), (200, 1, True))
         self.assertEqual(post({"i": pid, "s": "好看", "n": ""})[0], 400)                 # 要寫名字
+        for bad in ("看這裡 https://evil.com", "去 evil . com", "javascript:alert(1)", "www.x.tw"):
+            self.assertEqual(post({"i": pid, "s": bad, "n": "小明"})[0], 400)            # 留言不能放連結
+        self.assertEqual(post({"i": pid, "s": "好看", "n": "bit.ly/x"})[0], 400)
         s, b, _ = post({"i": pid, "s": "好看\u202e<script>", "n": "小明"})
         c = json.loads(b)["cm"][0]
         self.assertEqual((c["n"], c["s"], c["me"]), ("小明", "好看 <script>", True))
@@ -262,6 +266,81 @@ class Album(Server):
         self.assertEqual(post({"i": pid, "like": False})[0], 403)
         with open(os.path.join(self.tmp.name, "data", "album-talk.json"), "rb") as f:
             self.assertEqual(f.read(4), b"VSE1")
+        self.call({"action": "del", "id": aid})
+
+
+    def test_4_upload(self):
+        """朋友上傳：沒開不能放、要確認的先藏起來、主人確認／刪掉、朋友刪自己的；勾選下載只打包選到的"""
+        s, d = self.call({"action": "add", "dir": "旅行/台北"})
+        a = next(x for x in d["list"] if x["id"] == d["id"])
+        code, aid = a["code"], a["id"]
+        self.assertEqual(a["up"], 0)
+        s, b, h = self.req("GET", f"/a/{code}/m")
+        ck = h["Set-Cookie"].split(";")[0]
+        pids = [p["i"] for p in json.loads(b)["photos"]]
+        up = lambda name, body, c=ck, who="小美": self.req("POST", f"/a/{code}/up?n={urllib.parse.quote(name)}&w={urllib.parse.quote(who)}", body, {"Cookie": c} if c else {})
+        self.assertEqual(up("a.jpg", photo())[0], 403)                                 # 沒開放
+        self.call({"action": "edit", "id": aid, "up": 1})
+        self.assertEqual(up("a.jpg", photo(), "")[0], 403)                             # 沒打開過相簿
+        self.assertEqual(up("a.jpg", photo(), who="")[0], 400)                         # 要寫名字
+        self.assertEqual(up("a.txt", b"hello")[0], 415)                                # 不是照片
+        self.assertEqual(up("a.jpg", b"<html>not a photo</html>")[0], 415)             # 副檔名騙人
+        bomb = b"\x89PNG\r\n\x1a\n" + struct.pack(">I", 13) + b"IHDR" + struct.pack(">II", 20000, 20000) + b"\x08\x02\x00\x00\x00" + b"\x00" * 64
+        self.assertEqual(up("b.png", bomb)[0], 415)                                    # 炸彈圖（4 億像素）
+        self.assertFalse(os.path.exists(os.path.join(ROOT_DIR, "旅行", "台北", "朋友放的", "小美", "b.png")))
+        self.assertEqual(up("IMG_0.jpg", photo(dt="2026:11:09 10:00:00"))[0], 200)      # 放進「朋友放的／小美」
+        self.assertEqual(up("IMG_0.jpg", photo(dt="2026:11:09 10:00:00"))[0], 200)      # 同名：不蓋掉
+        mine = os.path.join(ROOT_DIR, "旅行", "台北", "朋友放的", "小美")
+        names = sorted(os.listdir(mine))
+        self.assertEqual(names, ["IMG_0 (2).jpg", "IMG_0.jpg"])
+        self.assertIn("IMG_0.jpg", os.listdir(os.path.join(ROOT_DIR, "旅行", "台北")))    # 主人原本的還在
+        s, b, h3 = self.req("GET", f"/a/{code}/m")                                     # 別支手機也叫小美：分開一個資料夾
+        ck3 = h3["Set-Cookie"].split(";")[0]
+        self.assertEqual(up("z.jpg", photo(), ck3)[0], 200)
+        self.assertTrue(os.path.isfile(os.path.join(ROOT_DIR, "旅行", "台北", "朋友放的", "小美 2", "z.jpg")))
+        s, b, _ = self.req("GET", f"/a/{code}/m", hdr={"Cookie": ck})
+        m = json.loads(b)
+        self.assertEqual((m["up"], len(m["photos"])), (1, 3))                         # 等主人確認：還看不到
+        s, d = self.call({"action": "photos", "id": aid})
+        self.assertEqual(sum(1 for p in d["photos"] if p["pend"]), 3)
+        keep = next(p["i"] for p in d["photos"] if p["pend"] and p["u"] == "小美")
+        self.call({"action": "edit", "id": aid, "noup": [p["i"] for p in d["photos"] if p["pend"] and p["i"] != keep]})
+        self.assertFalse(os.path.exists(os.path.join(ROOT_DIR, "旅行", "台北", "朋友放的", "小美 2")))   # 空了的資料夾拿掉
+        s, d = self.call({"action": "photos", "id": aid})
+        new = next(p for p in d["photos"] if p["pend"])
+        self.assertEqual(new["ub"], "小美")
+        self.assertEqual(next(x for x in self.call({"action": "edit", "id": aid})[1]["list"] if x["id"] == aid)["npend"], 1)
+        self.assertEqual(self.req("GET", f"/a/{code}/i/{new['i']}/s", hdr={"Cookie": ck})[0], 404)
+        self.call({"action": "edit", "id": aid, "okup": [new["i"]]})                    # 主人確認
+        s, b, _ = self.req("GET", f"/a/{code}/m", hdr={"Cookie": ck})
+        p = next(x for x in json.loads(b)["photos"] if x["i"] == new["i"])
+        self.assertEqual((p["ub"], p.get("um"), p["u"]), ("小美", 1, "小美"))
+        self.assertNotIn("u", next(x for x in json.loads(b)["photos"] if x["i"] == pids[0]))
+        self.assertNotIn("g", p)                                                        # 朋友放的照片不給別人看到定位
+        self.assertIn("g", next(x for x in json.loads(b)["photos"] if x["i"] == pids[0]))
+        s, b, h2 = self.req("GET", f"/a/{code}/m")                                     # 別支手機：看得到誰放的，但不能刪
+        ck2 = h2["Set-Cookie"].split(";")[0]
+        self.assertNotIn("um", next(x for x in json.loads(b)["photos"] if x["i"] == new["i"]))
+        dl = lambda pid, c: self.req("POST", f"/a/{code}/up", {"del": pid}, {"Cookie": c, "Content-Type": "application/json"})
+        self.assertEqual(dl(new["i"], ck2)[0], 403)
+        self.assertEqual(dl(pids[0], ck)[0], 403)                                       # 主人原本的不能刪
+        self.call({"action": "edit", "id": aid, "up": 2})                               # 直接放上去
+        s, b, _ = up("b.jpg", photo())
+        b2 = json.loads(b)
+        self.assertFalse(b2["pend"])
+        s, b, _ = self.req("GET", f"/a/{code}/m", hdr={"Cookie": ck})
+        self.assertIn(b2["i"], [x["i"] for x in json.loads(b)["photos"]])
+        self.assertEqual(dl(new["i"], ck)[0], 200)                                      # 刪自己的
+        self.assertEqual(os.listdir(mine), ["b.jpg"])
+        self.call({"action": "edit", "id": aid, "up": 1})
+        s, b, _ = up("c.jpg", photo())
+        self.call({"action": "edit", "id": aid, "noup": [json.loads(b)["i"], pids[1]]})  # 主人不要：刪檔（原本的不會被刪）
+        self.assertNotIn("c.jpg", os.listdir(mine))
+        self.assertIn("IMG_1.jpg", os.listdir(os.path.join(ROOT_DIR, "旅行", "台北")))
+        s, b, _ = self.req("GET", f"/a/{code}/zip?ids={pids[0]},{pids[2]}", hdr={"Cookie": ck})   # 勾選下載
+        self.assertEqual(sorted(zipfile.ZipFile(io.BytesIO(b)).namelist()), ["IMG_0.jpg", "IMG_2.jpg"])
+        self.assertEqual(self.req("GET", f"/a/{code}/zip?ids=zz", hdr={"Cookie": ck})[0], 400)
+        shutil.rmtree(os.path.join(ROOT_DIR, "旅行", "台北", "朋友放的"))
         self.call({"action": "del", "id": aid})
 
 
@@ -289,6 +368,13 @@ class AlbumThumbs(Server):
         subprocess.run([*ff, "-f", "lavfi", "-i", "testsrc2=s=640x480", "-frames:v", "1", os.path.join(d, "IMG_2.jpg")], check=True)
         subprocess.run([*ff, "-f", "lavfi", "-i", "testsrc2=s=640x480:r=25:d=2", "-c:v", "libx264", os.path.join(d, "IMG_2.mov")], check=True)
         subprocess.run([*ff, "-f", "lavfi", "-i", "sine=d=2", os.path.join(d, "歌.mp3")], check=True)
+        d = os.path.join(ROOT_DIR + "-t", "動圖")
+        os.makedirs(d, exist_ok=True)
+        src = ["-f", "lavfi", "-i", "testsrc2=s=160x120:r=10:d=1"]
+        subprocess.run([*ff, *src, "-loop", "0", os.path.join(d, "a.gif")], check=True)
+        subprocess.run([*ff, *src, "-plays", "0", "-f", "apng", os.path.join(d, "b.png")], check=True)
+        subprocess.run([*ff, *src, "-loop", "0", "-c:v", "libwebp", "-f", "webp", os.path.join(d, "c.webp")], check=True)
+        subprocess.run([*ff, *src, "-frames:v", "1", os.path.join(d, "d.gif")], check=True)
         super().setUpClass()
 
     @classmethod
@@ -331,6 +417,57 @@ class AlbumThumbs(Server):
                 with open(os.path.join(self.tmp.name, "data", "album-cache", f), "rb") as fh:
                     self.assertEqual(fh.read(4), b"VSE1")                              # 存在主機上的小圖是加密的
 
+
+    def test_anim(self):
+        """會動的 GIF、PNG 轉成會動的那段；會動的 WebP 直接給；放上來打不開的刪掉"""
+        c = http.client.HTTPConnection("127.0.0.1", self.port, timeout=60)
+        c.request("POST", "/api/album", body=json.dumps({"action": "add", "dir": "動圖", "up": 2}), headers={"X-Token": TOKEN})
+        d = json.loads(c.getresponse().read())
+        a = next(x for x in d["list"] if x["dir"] == "動圖")
+        self.assertEqual((a["up"], a["uq"]), (2, 1))
+        code = a["code"]
+        deadline, m = time.time() + 60, {}
+        while time.time() < deadline:
+            c.request("GET", f"/a/{code}/m")
+            r = c.getresponse()
+            ck = (r.getheader("Set-Cookie") or "").split(";")[0] or locals().get("ck", "")
+            m = {p["n"]: p for p in json.loads(r.read())["photos"]}
+            if m.get("a.gif", {}).get("gf") and m.get("b.png", {}).get("gf"):
+                break
+            time.sleep(0.5)
+        else:
+            self.fail(f"動圖沒有轉好：{m}")
+        self.assertEqual((m["a.gif"]["gf"], m["b.png"]["gf"], m["c.webp"]["gf"]), (1, 1, 2))
+        self.assertNotIn("gf", m["d.gif"])                                              # 只有一格的不算
+        c.request("GET", f"/a/{code}/i/{m['c.webp']['i']}/a")
+        r = c.getresponse()
+        b = r.read()
+        self.assertEqual((r.status, b[:4], b[8:12], b"ANIM" in b), (200, b"RIFF", b"WEBP", True))
+        c.request("GET", f"/a/{code}/i/{m['c.webp']['i']}/s")                           # 會動的 WebP 也做得出小圖
+        self.assertEqual(c.getresponse().read()[:2], b"\xff\xd8")
+        c.request("GET", f"/a/{code}/i/{m['a.gif']['i']}/a")
+        self.assertEqual(c.getresponse().status, 404)
+        fake = b"\xff\xd8\xff\xe0" + os.urandom(4000)                                  # 檔頭像 JPEG，其實打不開
+        c.request("POST", f"/a/{code}/up?n=x.jpg&w=%E5%B0%8F%E7%BE%8E", body=fake, headers={"Cookie": ck})
+        r = c.getresponse()
+        self.assertEqual(r.status, 415)
+        r.read()
+        c = http.client.HTTPConnection("127.0.0.1", self.port, timeout=60)
+        self.assertFalse(os.path.exists(os.path.join(ROOT_DIR + "-t", "動圖", "朋友放的", "小美", "x.jpg")))
+        with open(os.path.join(ROOT_DIR + "-t", "動圖", "a.gif"), "rb") as f:
+            c.request("POST", f"/a/{code}/up?n=g.gif&w=%E5%B0%8F%E7%BE%8E", body=f.read(), headers={"Cookie": ck})
+        r = c.getresponse()
+        self.assertEqual(r.status, 200, r.read())
+        self.assertTrue(os.path.isfile(os.path.join(ROOT_DIR + "-t", "動圖", "朋友放的", "小美", "g.gif")))
+        c = http.client.HTTPConnection("127.0.0.1", self.port, timeout=60)
+        with open(os.path.join(ROOT_DIR + "-t", "動圖", "c.webp"), "rb") as f:               # 會動的 WebP 也收
+            c.request("POST", f"/a/{code}/up?n=w.webp&w=%E5%B0%8F%E7%BE%8E", body=f.read(), headers={"Cookie": ck})
+        r = c.getresponse()
+        self.assertEqual(r.status, 200, r.read())
+        c = http.client.HTTPConnection("127.0.0.1", self.port, timeout=60)
+        c.request("POST", f"/a/{code}/up?n=g2.gif&w=x", body=b"GIF89a" + b"0" * 100, headers={"Cookie": ck, "Sec-Fetch-Site": "cross-site"})
+        r = c.getresponse()
+        self.assertEqual(r.status, 403)                                                # 別的網站送來的不收
 
     def test_video(self):
         """影片轉成 720p、原況照片掛在照片上、背景音樂、iPhone 要的分段"""

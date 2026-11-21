@@ -2,6 +2,7 @@
 雲端硬碟裡選一個資料夾，做成一頁照片牆的連結給朋友看：小圖、大圖由主機做好（加密存著），
 朋友打開 /a/十碼 就能看、左右滑、看相機資訊和地點、下載原圖。
 sentinel.py 用 include("album.py") 載入到自己裡面，兩邊共用同一組變數（不是獨立模組）"""
+import resource
 import struct
 import zipfile
 
@@ -24,10 +25,22 @@ ALB_COOKIE_H = 12                                                 # 輸對密碼
 ALB_DEVS = (0, 1, 3)                                              # 幾支手機能看（0 = 不限）
 ALB_DEVKEEP = 60                                                  # 看過的手機最多記幾支
 ALB_DLS = (0, 1, 2)                                               # 下載：不給、只給壓縮圖、給原圖
+ALB_UPDIR = "朋友放的"                                             # 朋友上傳的放這個資料夾下面，一支手機一個資料夾
+ALB_UPS = (0, 1, 2)                                               # 朋友上傳：不開放、要主人確認、直接放上去
+ALB_UP_MAX = 500 << 20                                            # 朋友一次上傳一個影片最大多少
+ALB_UP_PIC = 50 << 20                                             # 照片、動圖最大多少
+ALB_UQ = (1, 5, 20)                                               # 朋友總共最多放幾 GB（主人選；一個人最多四分之一）
+ALB_UP_HOST = 2 << 30                                             # 主機本身至少留這麼多（轉影片、小圖放在主機上）
+ALB_UP_PAR = 3                                                    # 一本相簿同時最多幾個人在放
+ALB_UP_PX = 100_000_000                                           # 照片最多幾個像素（太大的「炸彈圖」解開會吃光記憶體）
+ALB_UP_DAY = 300                                                  # 一支手機一天最多放幾個
+ALB_UP_SPARE = 1 << 30                                            # 雲端硬碟至少留這麼多
+ALB_UP_EV = 120                                                   # 同一個人連續上傳，停下來這麼久才記一筆（傳 Telegram）
+ALB_ZIP_MAX = 500                                                 # 勾選下載一次最多幾個
 ALB_OWN_S = 900                                                   # 主人挑照片時看小圖的通行證（15 分鐘）
 ALB_LOCK = threading.Lock()
 ALB_FAILS = {}                                                    # (相簿, 來源) → [輸錯的時間…]
-ALB = {"d": None, "q": [], "ff": None, "busy": set(), "geo_t": 0, "talk": None, "tpost": {}}
+ALB = {"d": None, "q": [], "ff": None, "busy": set(), "geo_t": 0, "talk": None, "tpost": {}, "upev": {}, "upfl": {}}
 ALB_GEN = threading.BoundedSemaphore(2)                           # 同時最多做兩張（另外一個背景慢慢做）
 ALB_KEY_RE = re.compile(r"[A-Za-z0-9]{10}")
 
@@ -79,11 +92,19 @@ def alb_clean_txt(s, n):
     return re.sub(r"\s+", " ", re.sub(r"[\x00-\x1f\x7f\u200b-\u200f\u202a-\u202e\u2066-\u2069]", " ", str(s or ""))).strip()[:n]
 
 
+ALB_LINK = re.compile(r"(?:\b(?:javascript|data|vbscript|file|mailto|intent|blob):|[a-z][a-z0-9+.-]*:/|www\.|[a-z0-9-]+(?:\.[a-z0-9-]+)*\s*[.。．]\s*(?:com|net|org|info|biz|io|co|me|tw|cn|hk|jp|kr|us|uk|ru|ly|gl|gg|cc|tv|xyz|top|app|dev|link|site|online|club|shop|vip|tk|ml|ga|cf|to|im|ai)\b|[a-z0-9]+\.[a-z]{2,}/)", re.I)
+
+
+def alb_has_link(s):
+    """留言、名字只能是文字、表情符號：看起來像網址的一律不收"""
+    return bool(ALB_LINK.search(s or ""))
+
+
 def alb_talk_post(a, th, d):
     """朋友按愛心、留言、刪自己的留言；回傳 (狀態碼, 內容)"""
     pid = str(d.get("i") or "")
     idx = alb_index(a, scan=False)
-    if pid not in (idx.get("order") or []) or pid in (a.get("hide") or []):
+    if pid not in (idx.get("order") or []) or pid in alb_hid(a):
         return 404, {"ok": False, "message": "找不到這張"}
     now = time.time()
     with ALB_LOCK:
@@ -104,6 +125,8 @@ def alb_talk_post(a, th, d):
                 return 400, {"ok": False, "message": "還沒寫字"}
             if not name:
                 return 400, {"ok": False, "message": "先寫你的名字"}
+            if alb_has_link(txt) or alb_has_link(name):
+                return 400, {"ok": False, "message": "留言不能放連結"}
             if now - ALB["tpost"].get((a["id"], th), 0) < 3:
                 return 429, {"ok": False, "message": "慢一點，等幾秒再留"}
             ALB["tpost"][(a["id"], th)] = now
@@ -289,6 +312,60 @@ def alb_photos_in(p):
     return out
 
 
+def alb_up_files(p):
+    """朋友放的：相簿資料夾裡「朋友放的／某人／」的照片、影片（檔名帶著這兩層）"""
+    out, root = [], os.path.join(p, ALB_UPDIR)
+    try:
+        with os.scandir(root) as it:
+            subs = [e for e in it if not e.name.startswith(".") and e.is_dir(follow_symlinks=False)]
+    except OSError:
+        return out
+    for e in subs:
+        out += [(f"{ALB_UPDIR}/{e.name}/{n}", sz, mt) for n, sz, mt in alb_photos_in(e.path)]
+    return out
+
+
+def alb_uq(a):
+    v = a.get("uq", 1)
+    return v if v in ALB_UQ else 1
+
+
+def alb_up_used(a, th=""):
+    """朋友總共放了多少、這支手機放了多少（位元組）"""
+    sub = (a.get("ufd") or {}).get(th) if th else None
+    tot = mine = 0
+    for m in (alb_index(a, scan=False).get("ph") or {}).values():
+        w = alb_up_who(m.get("n", ""))
+        if w:
+            tot += m.get("sz", 0)
+            if sub and w == sub:
+                mine += m.get("sz", 0)
+    return tot, mine
+
+
+def alb_up_who(n):
+    """朋友放的檔案是誰的資料夾（不是朋友放的回空字串）"""
+    k = n.split("/")
+    return k[1] if len(k) == 3 and k[0] == ALB_UPDIR else ""
+
+
+def alb_up_folder(a, th, who):
+    """這支手機的資料夾名稱：第一次放照片時照名字取，名字一樣的別支手機加編號"""
+    ufd = a.setdefault("ufd", {})
+    if th in ufd:
+        return ufd[th]
+    base = re.sub(r'[\x00-\x1f\x7f/\\:*?"<>|\u200b-\u200f\u202a-\u202e\u2066-\u2069]', "", who).strip().lstrip(".")[:20] or "朋友"
+    p = alb_path(a["dir"]) or ""
+    for k, v in list(ufd.items()):                     # 資料夾已經被整理掉的：名字讓出來（那支手機下次放再重取）
+        if not os.path.isdir(os.path.join(p, ALB_UPDIR, v)):
+            ufd.pop(k)
+    used, n, k = set(ufd.values()), base, 2
+    while n in used:
+        n, k = f"{base} {k}", k + 1
+    ufd[th] = n
+    return n
+
+
 def alb_folders(rel):
     """資料夾裡的子資料夾（各有幾張照片），給網頁選"""
     p = alb_path(rel)
@@ -335,6 +412,286 @@ def alb_pw_ok(a, pw):
     return hmac.compare_digest(h, p["h"])
 
 
+def alb_hid(a):
+    """朋友看不到的：主人挑掉的、朋友上傳還沒確認的"""
+    return set(a.get("hide") or []) | set(a.get("pend") or [])
+
+
+def alb_up(a):
+    v = a.get("up", 0)
+    return v if v in ALB_UPS else 0
+
+
+def alb_sniff(head, ext):
+    """上傳的檔案真的是照片、影片嗎（看檔頭，不看副檔名）"""
+    if head[:2] == b"\xff\xd8":
+        return ext in (".jpg", ".jpeg")
+    if head[:8] == b"\x89PNG\r\n\x1a\n":
+        return ext == ".png"
+    if head[:6] in (b"GIF87a", b"GIF89a"):
+        return ext == ".gif"
+    if head[:4] == b"RIFF" and head[8:12] == b"WEBP":
+        return ext == ".webp"
+    if head[4:8] == b"ftyp":
+        return ext in (".heic", ".heif", ".avif", ".mp4", ".mov", ".m4v", ".3gp")
+    if head[:4] == b"\x1a\x45\xdf\xa3":
+        return ext in (".webm", ".mkv")
+    return False
+
+
+def alb_up_name(p, name):
+    """朋友上傳的檔名：拿掉怪字、不蓋掉原本的檔案"""
+    name = re.sub(r'[\x00-\x1f\x7f/\\:*?"<>|\u200b-\u200f\u202a-\u202e\u2066-\u2069]', "", os.path.basename(str(name or ""))).strip().lstrip(".")[:120]
+    stem, ext = os.path.splitext(name)
+    ext = ext.lower()
+    stem = stem or time.strftime("上傳-%Y%m%d-%H%M%S")
+    for k in range(1, 1000):
+        n = f"{stem}{'' if k == 1 else f' ({k})'}{ext}"
+        if not os.path.lexists(os.path.join(p, n)):
+            return n
+    return f"{stem}-{secrets.token_hex(3)}{ext}"
+
+
+def alb_up_note(a, th, who, pend):
+    """朋友上傳：停下來一陣子才記一筆（一次放好幾張只通知一次）"""
+    key = (a["id"], th)
+    with ALB_LOCK:
+        e = ALB["upev"].setdefault(key, {"n": 0})
+        e["n"] += 1
+        e.update(who=who, pend=pend, name=a["name"])
+        if e.get("tm"):
+            e["tm"].cancel()
+        e["tm"] = threading.Timer(ALB_UP_EV, alb_up_flush, (key,))
+        e["tm"].daemon = True
+        e["tm"].start()
+
+
+def alb_up_flush(key):
+    with ALB_LOCK:
+        e = ALB["upev"].pop(key, None)
+    if e and e["n"]:
+        COL.add_event("info", f"相簿上傳：{e['who']} 在「{e['name']}」放了 {e['n']} 個" + ("，等你確認" if e["pend"] else ""))
+
+
+def alb_upload(h, a, code):
+    """朋友上傳一個檔案（POST /a/十碼/up?n=檔名&w=名字，內容就是檔案本身）"""
+    h.close_connection = True                          # 上傳完（或沒收下）就斷線，沒讀的資料不會留在連線上
+    mode = alb_up(a)
+    ok, _, _ = alb_dev_check(h, a, False)
+    tok = alb_dev_tok(h, a)
+    if not mode:
+        return 403, {"ok": False, "message": "這本相簿沒開放上傳"}
+    if not (alb_cookie_ok(h, a) and ok and tok):
+        return 403, {"ok": False, "message": "重新打開相簿再試"}
+    th = alb_dev_hash(tok)
+    q = urllib.parse.parse_qs(urllib.parse.urlsplit(h.path).query)
+    who = alb_clean_txt((q.get("w") or [""])[0], ALB_TALK_MAX[1])
+    if not who:
+        return 400, {"ok": False, "message": "先寫你的名字"}
+    if alb_has_link(who):
+        return 400, {"ok": False, "message": "名字不能放連結"}
+    try:
+        n = int(h.headers.get("Content-Length") or -1)
+    except ValueError:
+        n = -1
+    if n <= 0:
+        return 411, {"ok": False, "message": "檔案是空的"}
+    p = alb_path(a["dir"])
+    if not p:
+        return 404, {"ok": False, "message": "主機上找不到這本相簿的資料夾"}
+    name = os.path.basename((q.get("n") or [""])[0])
+    ext = os.path.splitext(name)[1].lower()
+    if ext not in ALB_EXT | ALB_VID:
+        return 415, {"ok": False, "message": "只能放照片、影片"}
+    lim = ALB_UP_MAX if ext in ALB_VID else ALB_UP_PIC
+    if n > lim:
+        return 413, {"ok": False, "message": f"檔案太大（{'影片' if ext in ALB_VID else '照片'}最多 {lim >> 20} MB）"}
+    with ALB_LOCK:                                     # 同時在放的：一本最多 ALB_UP_PAR 個、一支手機一次一個，空間先算進去
+        fl = ALB["upfl"].setdefault(a["id"], {})
+        if th in fl:
+            return 429, {"ok": False, "message": "上一個還在放"}
+        if len(fl) >= ALB_UP_PAR:
+            return 429, {"ok": False, "message": "大家正在放，等一下再試"}
+        busy = sum(fl.values())
+        fl[th] = n
+    try:
+        return alb_upload_go(h, a, mode, th, who, n, p, name, ext, busy)
+    finally:
+        with ALB_LOCK:
+            fl.pop(th, None)
+
+
+def alb_upload_go(h, a, mode, th, who, n, p, name, ext, busy):
+    tot, mine = alb_up_used(a, th)
+    tot += busy
+    cap = alb_uq(a) << 30
+    if tot + n > cap:
+        return 409, {"ok": False, "message": "相簿滿了"}
+    if mine + n > cap // 4:
+        return 409, {"ok": False, "message": "你放的已經到上限了"}
+    now = time.time()
+    with ALB_LOCK:
+        upd = (alb_all().get(a["id"]) or {}).get("upd") or {}
+        today = sum(1 for u in upd.values() if u.get("by") == th and now - u.get("t", 0) < 86400)
+    if today >= ALB_UP_DAY:
+        return 429, {"ok": False, "message": "今天放太多了，明天再來"}
+    if len(alb_index(a, scan=False).get("ph") or {}) >= ALB_MAX:
+        return 409, {"ok": False, "message": "相簿滿了"}
+    for d, keep in ((p, ALB_UP_SPARE), (DATA_DIR, ALB_UP_HOST)):    # 雲端硬碟、主機本身都要留空間
+        try:
+            st = os.statvfs(d)
+            if st.f_bavail * st.f_frsize - n < keep:
+                return 507, {"ok": False, "message": "相簿滿了"}
+        except OSError:
+            pass
+    with ALB_LOCK:
+        all_ = alb_all()
+        b = all_.get(a["id"])
+        if not b:
+            return 404, {"ok": False, "message": "這本相簿已經看不到了"}
+        sub = alb_up_folder(b, th, who)
+        alb_save(all_)
+    dst = os.path.join(p, ALB_UPDIR, sub)
+    try:
+        for d in (os.path.join(p, ALB_UPDIR), dst):
+            if not os.path.isdir(d):
+                os.mkdir(d, 0o755)
+                if os.geteuid() == 0:
+                    os.chown(d, 1000, 1000)
+    except OSError:
+        return 500, {"ok": False, "message": "沒放上去，再試一次"}
+    if os.path.islink(os.path.join(p, ALB_UPDIR)) or os.path.islink(dst):
+        return 500, {"ok": False, "message": "沒放上去，再試一次"}
+    tmp = os.path.join(dst, f".vsup-{secrets.token_hex(6)}.part")
+    try:
+        fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o644)
+        try:
+            if os.geteuid() == 0:
+                os.fchown(fd, 1000, 1000)              # 雲端硬碟程式用 1000 在跑，要是它的才改得動
+        except OSError:
+            pass
+        left, head = n, b""
+        with os.fdopen(fd, "wb") as f:
+            while left:
+                b = h.rfile.read(min(left, 1 << 20))
+                if not b:
+                    raise OSError("斷線了")
+                if len(head) < 32:
+                    head += b[:32 - len(head)]
+                    if len(head) >= 12 and not alb_sniff(head, ext):
+                        raise ValueError("不是照片或影片")
+                f.write(b)
+                left -= len(b)
+        if not alb_sniff(head, ext):
+            raise ValueError("不是照片或影片")
+        with ALB_LOCK:
+            final = alb_up_name(dst, name)
+            os.rename(tmp, os.path.join(dst, final))
+        final = f"{ALB_UPDIR}/{sub}/{final}"
+    except ValueError as e:
+        h.close_connection = True
+        try:
+            os.remove(tmp)
+        except OSError:
+            pass
+        return 415, {"ok": False, "message": str(e)}
+    except OSError:
+        h.close_connection = True
+        try:
+            os.remove(tmp)
+        except OSError:
+            pass
+        return 500, {"ok": False, "message": "沒放上去，再試一次"}
+    pid = alb_pid(final)
+    m = alb_meta(os.path.join(p, final))
+    m.update(n=final, sz=n, mt=int(os.path.getmtime(os.path.join(p, final))))
+    bad = ""
+    if not m.get("vid") and m.get("w", 0) * m.get("h", 0) > ALB_UP_PX:
+        bad = "照片太大（最多 1 億像素）"                   # 炸彈圖：檔案小、解開很大
+    elif alb_ff():                                     # 真的打開一次：做不出小圖就不是照片、影片
+        if os.path.splitext(final)[1].lower() in (".gif", ".png", ".webp"):
+            m["anim"] = alb_anim(os.path.join(p, final))
+        with ALB_GEN:
+            if not alb_make(a, pid, m):
+                bad = "打不開這個檔案"
+    if bad:
+        try:
+            os.remove(os.path.join(p, final))
+        except OSError:
+            pass
+        return 415, {"ok": False, "message": bad}
+    with ALB_LOCK:
+        all_ = alb_all()
+        b = all_.get(a["id"])
+        if b:
+            b.setdefault("upd", {})[pid] = {"by": th, "n": who, "t": now, "f": final}
+            if mode == 1:
+                b["pend"] = (b.get("pend") or [])[-(ALB_MAX - 1):] + [pid]
+            alb_save(all_)
+            a = b
+    try:
+        alb_index(a)
+    except Exception:  # noqa: BLE001
+        pass
+    alb_kick(a["id"])
+    alb_up_note(a, th, who, mode == 1)
+    return 200, {"ok": True, "i": pid, "pend": mode == 1}
+
+
+def alb_up_del(h, a):
+    """朋友刪掉自己放的那張"""
+    ok, _, _ = alb_dev_check(h, a, False)
+    tok = alb_dev_tok(h, a)
+    if not (alb_cookie_ok(h, a) and ok and tok):
+        return 403, {"ok": False, "message": "重新打開相簿再試"}
+    try:
+        n = min(int(h.headers.get("Content-Length") or 0), 1024)
+    except ValueError:
+        n = 0
+    pid = str(h.jbody(h.rfile.read(n) if n else b"").get("del") or "")
+    th = alb_dev_hash(tok)
+    with ALB_LOCK:
+        all_ = alb_all()
+        b = all_.get(a["id"])
+        u = ((b or {}).get("upd") or {}).get(pid)
+        if not (b and u and u.get("by") == th):
+            return 403, {"ok": False, "message": "只能刪自己放的"}
+        if not alb_up_drop(b, [pid]):
+            return 404, {"ok": False, "message": "已經不在了"}
+        b["upd"].pop(pid, None)
+        b["pend"] = [x for x in b.get("pend") or [] if x != pid]
+        alb_save(all_)
+    try:
+        alb_index(b)
+    except Exception:  # noqa: BLE001
+        pass
+    return 200, {"ok": True}
+
+
+def alb_up_drop(a, pids):
+    """刪掉朋友上傳的檔案（主人不要、或朋友刪自己的）"""
+    p = alb_path(a["dir"])
+    idx = alb_index(a, scan=False).get("ph") or {}
+    gone = []
+    for pid in pids:
+        m = idx.get(pid)
+        u = (a.get("upd") or {}).get(pid)
+        if not (m and u and p) or m.get("n") != u.get("f"):    # 只刪朋友上傳的那個檔案
+            continue
+        for fn in [m["n"]] + ([m["lv"]["n"]] if m.get("lv") else []):
+            try:
+                os.remove(os.path.join(p, fn))
+            except OSError:
+                pass
+        if alb_up_who(m["n"]):                         # 那個人的資料夾空了就拿掉
+            try:
+                os.rmdir(os.path.join(p, os.path.dirname(m["n"])))
+            except OSError:
+                pass
+        gone.append(pid)
+    return gone
+
+
 def alb_clean_name(s, dflt=""):
     s = re.sub(r"[\x00-\x1f<>]", "", str(s or "")).strip()[:40]
     return s or dflt
@@ -357,7 +714,8 @@ def alb_add(d):
          "dir": os.path.relpath(p, root).replace(os.sep, "/"), "pw": alb_pw_hash(pw) if pw else None, "exp": now + secs if secs else 0,
          "t0": now, "loc": d.get("loc", True) is not False, "dl": alb_dl({"dl": d.get("dl", 2)}), "views": 0, "last": 0,
          "k": secrets.token_hex(16), "dev": d.get("dev") if d.get("dev") in ALB_DEVS else 0, "devs": {}, "ban": [], "hide": [],
-         "wm": alb_clean_wm(d.get("wm")), "talk": d.get("talk", True) is not False}
+         "wm": alb_clean_wm(d.get("wm")), "talk": d.get("talk", True) is not False,
+         "up": d.get("up") if d.get("up") in ALB_UPS else 0, "upd": {}, "pend": [], "uq": d.get("uq") if d.get("uq") in ALB_UQ else 1}
     if a["dir"] == ".":
         a["dir"] = ""
     with ALB_LOCK:
@@ -394,6 +752,21 @@ def alb_edit(d):
             a["talk"] = bool(d["talk"])
         if "dl" in d:
             a["dl"] = alb_dl({"dl": d["dl"]})
+        if d.get("uq") in ALB_UQ:
+            a["uq"] = d["uq"]
+        if "up" in d and d["up"] in ALB_UPS:
+            a["up"] = d["up"]
+            if a["up"] == 2:                           # 改成直接放上去：等著確認的也一起放上去
+                a["pend"] = []
+        if isinstance(d.get("okup"), list):            # 主人確認朋友上傳的：放上去
+            ok = set(map(str, d["okup"]))
+            a["pend"] = [x for x in a.get("pend") or [] if x not in ok]
+        if isinstance(d.get("noup"), list):            # 主人不要：刪掉檔案
+            gone = set(alb_up_drop(a, [str(x) for x in d["noup"]][:ALB_MAX]))
+            a["pend"] = [x for x in a.get("pend") or [] if x not in gone]
+            for x in gone:
+                (a.get("upd") or {}).pop(x, None)
+            regen = regen or bool(gone)
         if "dev" in d and d["dev"] in ALB_DEVS:
             a["dev"] = d["dev"]
             devs = a.get("devs") or {}
@@ -410,7 +783,7 @@ def alb_edit(d):
             a["hide"] = [x for x in d["hide"] if isinstance(x, str) and x in (idx.get("ph") or {})][:ALB_MAX]
         if "wm" in d:
             wm = alb_clean_wm(d["wm"])
-            regen = wm != (a.get("wm") or "")
+            regen = regen or wm != (a.get("wm") or "")
             a["wm"] = wm
         if "pw" in d:
             pw = str(d.get("pw") or "")
@@ -422,6 +795,11 @@ def alb_edit(d):
             s = int(d["secs"])
             a["exp"] = time.time() + s if s else 0
         alb_save(all_)
+    if isinstance(d.get("noup"), list):
+        try:
+            alb_index(a)
+        except Exception:  # noqa: BLE001
+            pass
     if a["loc"] or regen:
         alb_kick(a["id"])
     return True, "改好了"
@@ -459,12 +837,15 @@ def alb_list():
     for a in sorted(alb_all().values(), key=lambda x: -x.get("t0", 0)):
         idx = alb_index(a, scan=False)
         ph = idx.get("order") or []
-        hid = set(a.get("hide") or [])
+        hid = alb_hid(a)
         out.append({"id": a["id"], "code": a["code"], "name": a["name"], "dir": a["dir"], "exp": a["exp"], "t0": a["t0"],
                     "pw": bool(a.get("pw")), "loc": a["loc"], "dl": alb_dl(a), "views": a.get("views", 0), "last": a.get("last", 0),
                     "n": len([x for x in ph if x not in hid]), "all": len(ph), "cv": alb_cover(a, idx), "ready": alb_ready(a, idx),
                     "dev": a.get("dev") or 0, "ndev": len(a.get("devs") or {}), "wm": a.get("wm") or "", "wmok": not a.get("wm") or alb_wm_bake(a),
-                    "talk": a.get("talk", True), "mu": (idx.get("mu") or {}).get("n", ""),
+                    "talk": a.get("talk", True), "mu": (idx.get("mu") or {}).get("n", ""), "up": alb_up(a),
+                    "npend": len([x for x in a.get("pend") or [] if x in (idx.get("ph") or {})]),
+                    "uq": alb_uq(a), "uused": alb_up_used(a)[0],
+                    "nup": len([m for m in (idx.get("ph") or {}).values() if alb_up_who(m.get("n", "")) and not m.get("of")]),
                     "nv": len([x for x in ph if x not in hid and (idx.get("ph") or {}).get(x, {}).get("vid")]),
                     "nlk": sum(len(t.get("l") or []) for t in (alb_talk_all().get(a["id"]) or {}).values()),
                     "ncm": sum(len(t.get("c") or []) for t in (alb_talk_all().get(a["id"]) or {}).values())})
@@ -473,7 +854,7 @@ def alb_list():
 
 def alb_cover(a, idx):
     """主人清單的封面：直接帶小圖（有密碼的相簿用連結會被擋；別台主機也不用另外連）"""
-    hid = set(a.get("hide") or [])
+    hid = alb_hid(a)
     order = [x for x in idx.get("order") or [] if x not in hid]
     for pid in order[:6]:
         m = (idx.get("ph") or {}).get(pid)
@@ -881,7 +1262,7 @@ def alb_index(a, scan=True):
     if not scan:
         return idx
     p = alb_path(a["dir"])
-    files = alb_photos_in(p) if p else []
+    files = (alb_photos_in(p) + alb_up_files(p)) if p else []
     old = idx.get("ph") or {}
     ph, changed = {}, len(old) != len(files)
     for name, size, mt in files[:ALB_MAX]:
@@ -903,7 +1284,16 @@ def alb_index(a, scan=True):
                 m["of"] = of
                 changed = True
     for pid, m in ph.items():
-        if not m.get("vid"):
+        if os.path.splitext(m["n"])[1].lower() in (".gif", ".png", ".webp") and "anim" not in m:
+            m["anim"] = alb_anim(os.path.join(p, m["n"]))
+            changed = True
+    for pid, m in ph.items():
+        if m.get("anim") == 1:                              # 會動的 GIF：自己就是會動的那段（轉成影片放）
+            lv = {"n": m["n"], "sz": m["sz"], "mt": m["mt"]}
+            if m.get("lv") != lv:
+                m["lv"] = lv
+                changed = True
+        elif not m.get("vid"):
             lv = next(({"n": v["n"], "sz": v["sz"], "mt": v["mt"]} for v in ph.values() if v.get("of") == pid), None)
             if m.get("lv") != lv:
                 m["lv"] = lv
@@ -920,6 +1310,70 @@ def alb_index(a, scan=True):
         os.makedirs(ALB_CACHE, mode=0o700, exist_ok=True)
         sec_dump(fn, idx)
     return idx
+
+
+def alb_anim(path):
+    """會動的圖嗎：GIF（好幾格）、APNG（會動的 PNG）回 1（轉成影片放），會動的 WebP 回 2（直接給瀏覽器放）"""
+    try:
+        with open(path, "rb") as f:
+            b = f.read(32 << 20)
+    except OSError:
+        return 0
+    if b[:6] in (b"GIF87a", b"GIF89a"):
+        return 1 if b.count(b"\x21\xf9\x04") > 1 else 0
+    if b[:8] == b"\x89PNG\r\n\x1a\n":
+        i, d = b.find(b"acTL"), b.find(b"IDAT")
+        return 1 if 0 < i < (d if d > 0 else len(b)) else 0
+    if b[:4] == b"RIFF" and b[8:12] == b"WEBP" and b[12:16] == b"VP8X":
+        return 2 if b[20] & 0x02 else 0
+    return 0
+
+
+def alb_webp_still(path):
+    """會動的 WebP 的第一格，包成一張普通的 WebP（ffmpeg 讀不了會動的 WebP）"""
+    try:
+        with open(path, "rb") as f:
+            b = f.read(64 << 20)
+    except OSError:
+        return None
+    if b[:4] != b"RIFF" or b[8:12] != b"WEBP":
+        return None
+    p = 12
+    while p + 8 <= len(b):
+        t, n = b[p:p + 4], struct.unpack("<I", b[p + 4:p + 8])[0]
+        if t == b"ANMF":
+            d = b[p + 8:p + 8 + n]
+            fw, fh = int.from_bytes(d[6:9], "little") + 1, int.from_bytes(d[9:12], "little") + 1
+            sub, q, out, alpha = d[16:], 0, b"", False
+            while q + 8 <= len(sub):
+                st, sn = sub[q:q + 4], struct.unpack("<I", sub[q + 4:q + 8])[0]
+                if st == b"ALPH":
+                    alpha = True
+                if st in (b"ALPH", b"VP8 ", b"VP8L"):
+                    out += sub[q:q + 8 + sn + (sn & 1)]
+                q += 8 + sn + (sn & 1)
+            if alpha:
+                out = b"VP8X" + struct.pack("<I", 10) + bytes([0x10, 0, 0, 0]) + (fw - 1).to_bytes(3, "little") + (fh - 1).to_bytes(3, "little") + out
+            return b"RIFF" + struct.pack("<I", 4 + len(out)) + b"WEBP" + out if out else None
+        p += 8 + n + (n & 1)
+    return None
+
+
+def alb_webp_clean(path):
+    """會動的 WebP 給朋友看：拿掉 EXIF、XMP（可能有定位）"""
+    with open(path, "rb") as f:
+        b = f.read(64 << 20)
+    out, p = [], 12
+    while p + 8 <= len(b):
+        t, n = b[p:p + 4], struct.unpack("<I", b[p + 4:p + 8])[0]
+        c = b[p:p + 8 + n + (n & 1)]
+        if t == b"VP8X":
+            c = c[:8] + bytes([c[8] & ~0x0C]) + c[9:]  # 拿掉「有 EXIF、XMP」的旗子
+        if t not in (b"EXIF", b"XMP "):
+            out.append(c)
+        p += 8 + n + (n & 1)
+    body = b"".join(out)
+    return b"RIFF" + struct.pack("<I", 4 + len(body)) + b"WEBP" + body
 
 
 def alb_music_in(p):
@@ -980,20 +1434,53 @@ def alb_ff():
 ALB_ROT = {2: "hflip,", 3: "hflip,vflip,", 4: "vflip,", 5: "transpose=0,", 6: "transpose=1,", 7: "transpose=3,", 8: "transpose=2,"}
 
 
+ALB_FF_UID = 1000                                                 # ffmpeg 用雲端硬碟那個一般帳號跑
+ALB_FF_MEM = 3 << 30                                              # ffmpeg 最多用這麼多記憶體
+
+
+def alb_ff_pre():
+    """主機上的 ffmpeg：記憶體有上限、不用最高權限跑（惡意的照片、影片就算打穿 ffmpeg 也拿不到整台主機）；
+    檔案由哨兵打開後交給它（fd:），所以它自己不用讀得到雲端硬碟"""
+    root = os.geteuid() == 0
+
+    def pre():
+        resource.setrlimit(resource.RLIMIT_AS, (ALB_FF_MEM, ALB_FF_MEM))
+        if root:
+            os.setgroups([])
+            os.setgid(ALB_FF_UID)
+            os.setuid(ALB_FF_UID)
+    return pre
+
+
+def alb_ff_give(path):
+    """給一般帳號用的暫存檔（浮水印的字）：改成它的"""
+    if os.geteuid() == 0 and not alb_ff()[1]:
+        try:
+            os.chown(path, ALB_FF_UID, ALB_FF_UID)
+        except OSError:
+            pass
+
+
 def alb_run_ff(args, data=None, src=None, timeout=120):
     ff = alb_ff()
     if not ff:
         return None
     cmd, mount = ff
-    if src:
-        if mount:                                       # 容器裡看到的雲端硬碟在 /folder
-            src = mount + src[len(alb_root()):]
-        args = [a if a != "{src}" else src for a in args]
+    fin = None
     try:
-        r = subprocess.run(["nice", "-n", "15", *cmd, "-v", "error", "-nostdin" if data is None else "-y", *args],
-                           input=data, capture_output=True, timeout=timeout)
+        if src:
+            if mount:                                   # 容器裡看到的雲端硬碟在 /folder
+                args = [a if a != "{src}" else mount + src[len(alb_root()):] for a in args]
+            else:
+                fin = open(src, "rb")                   # noqa: SIM115  哨兵打開，ffmpeg 只拿到這個檔案
+                args = [a if a != "{src}" else "fd:" for a in args]
+        r = subprocess.run(["nice", "-n", "15", *cmd, "-v", "error", "-y", *args], stdin=fin, input=None if fin else data,
+                           capture_output=True, timeout=timeout, preexec_fn=None if mount else alb_ff_pre())
     except (OSError, subprocess.SubprocessError):
         return None
+    finally:
+        if fin:
+            fin.close()
     return r.stdout if r.returncode == 0 and r.stdout[:2] == b"\xff\xd8" else None
 
 
@@ -1010,8 +1497,11 @@ def alb_ff_info(src):
     cmd, s2 = alb_ff_src(src)
     if not cmd:
         return ""
+    mount = alb_ff()[1]
     try:
-        r = subprocess.run(["nice", "-n", "15", *cmd, "-hide_banner", "-nostdin", "-i", s2], capture_output=True, timeout=60)
+        with open(os.devnull if mount else src, "rb") as fin:
+            r = subprocess.run(["nice", "-n", "15", *cmd, "-hide_banner", "-nostdin", "-i", s2 if mount else "fd:"], stdin=fin,
+                               capture_output=True, timeout=60, preexec_fn=None if mount else alb_ff_pre())
     except (OSError, subprocess.SubprocessError):
         return ""
     return r.stderr.decode("utf-8", "replace")
@@ -1035,10 +1525,15 @@ def alb_make(a, pid, m):
         tf = tempfile.NamedTemporaryFile("w", suffix=".txt", delete=False, encoding="utf-8")  # noqa: SIM115
         tf.write(a["wm"])
         tf.close()
+        alb_ff_give(tf.name)
         vf += (f",drawtext=fontfile='{alb_font(a['wm'])}':textfile='{tf.name}':fontcolor=white@0.6:fontsize='min(w,h)*0.042'"
                ":x='w-tw-min(w,h)*0.035':y='h-th-min(w,h)*0.035':shadowcolor=black@0.35:shadowx=2:shadowy=2")
+    still = alb_webp_still(src) if m.get("anim") == 2 else None
     try:
-        big = alb_run_ff((["-noautorotate"] if ext in (".jpg", ".jpeg") else []) + pre + ["-i", "{src}", "-vf", vf, *out, "-q:v", "4", "-"], src=src, timeout=180)
+        if still:                                      # 會動的 WebP：拿第一格做
+            big = alb_run_ff(["-f", "webp_pipe", "-i", "pipe:0", "-vf", vf, *out, "-q:v", "4", "-"], data=still, timeout=180)
+        else:
+            big = alb_run_ff((["-noautorotate"] if ext in (".jpg", ".jpeg") else []) + pre + ["-i", "{src}", "-vf", vf, *out, "-q:v", "4", "-"], src=src, timeout=180)
     finally:
         if tf:
             try:
@@ -1123,18 +1618,26 @@ def alb_vmake(a, pid, m, kind):
         tf = tempfile.NamedTemporaryFile("w", suffix=".txt", delete=False, encoding="utf-8")  # noqa: SIM115
         tf.write(a["wm"])
         tf.close()
+        alb_ff_give(tf.name)
         vf += (f",drawtext=fontfile='{alb_font(a['wm'])}':textfile='{tf.name}':fontcolor=white@0.6:fontsize='min(w,h)*0.042'"
                ":x='w-tw-min(w,h)*0.035':y='h-th-min(w,h)*0.035':shadowcolor=black@0.35:shadowx=2:shadowy=2")
     mount = alb_ff()[1]
-    tmp = f"/tmp/vsalb-{ck}-{kind}.mp4" if mount else os.path.join(ALB_CACHE, f".{ck}-{kind}.mp4")
+    tdir = None
+    if mount:
+        tmp = f"/tmp/vsalb-{ck}-{kind}.mp4"
+    else:                                              # 一般帳號寫得進去的暫存資料夾（只有它和 root 看得到）
+        tdir = tempfile.mkdtemp(prefix="vsalb-")
+        alb_ff_give(tdir)
+        tmp, src = os.path.join(tdir, "o.mp4"), "fd:"
     args = ["-i", src, "-map", "0:v:0", *(["-map", "0:a:0?"] if kind == "v" else ["-an"]), "-map_metadata", "-1", "-vf", vf,
             "-c:v", "libx264", "-preset", "veryfast", "-crf", "27", "-pix_fmt", "yuv420p", "-threads", "2",
             *(["-c:a", "aac", "-b:a", "96k", "-ac", "2"] if kind == "v" else []), "-movflags", "+faststart", "-f", "mp4", tmp]
     os.makedirs(ALB_CACHE, mode=0o700, exist_ok=True)
     ok = False
     try:
-        r = subprocess.run(["nice", "-n", "17", *cmd, "-v", "error", "-nostdin", "-y", *args], capture_output=True,
-                           timeout=max(300, m.get("dur", 4) * 6))
+        with open(os.devnull if mount else os.path.join(p, name), "rb") as fin:
+            r = subprocess.run(["nice", "-n", "17", *cmd, "-v", "error", "-nostdin", "-y", *args], stdin=fin, capture_output=True,
+                               timeout=max(300, m.get("dur", 4) * 6), preexec_fn=None if mount else alb_ff_pre())
         if r.returncode == 0:
             if mount:                                  # 容器裡做的：倒出來再刪掉
                 pr = subprocess.Popen(["docker", "exec", "vps-cloud", "cat", tmp], stdout=subprocess.PIPE)  # noqa: S607
@@ -1156,7 +1659,7 @@ def alb_vmake(a, pid, m, kind):
             if mount:
                 subprocess.run(["docker", "exec", "vps-cloud", "rm", "-f", tmp], capture_output=True, timeout=30)  # noqa: S607
             else:
-                os.remove(tmp)
+                shutil.rmtree(tdir, ignore_errors=True)
         except (OSError, subprocess.SubprocessError):
             pass
     return ok
@@ -1245,9 +1748,17 @@ def alb_worker():
 
 
 def alb_gc():
-    """清掉已經沒有相簿用到的小圖"""
+    """清掉已經沒有相簿用到的小圖；朋友放到一半斷線留下的暫存檔（一天以上）"""
     keep = set()
     for a in alb_all().values():
+        p = alb_path(a["dir"])
+        for d in [os.path.join(p, ALB_UPDIR, x) for x in (a.get("ufd") or {}).values()] if p else []:
+            try:
+                for e in os.scandir(d):
+                    if e.name.startswith(".vsup-") and e.name.endswith(".part") and time.time() - e.stat(follow_symlinks=False).st_mtime > 86400:
+                        os.remove(e.path)
+            except OSError:
+                pass
         idx = alb_index(a, scan=False)
         for pid, m in (idx.get("ph") or {}).items():
             keep.add(alb_ckey(a, pid, m))
@@ -1411,7 +1922,7 @@ def alb_manifest(a, th=""):
     idx = alb_index(a)
     talk = alb_talk_of(a, th) if a.get("talk", True) else {}
     ph = idx.get("ph") or {}
-    out, places, hid = [], {}, set(a.get("hide") or [])
+    out, places, hid, upd = [], {}, alb_hid(a), a.get("upd") or {}
     for pid in idx.get("order", []):
         if pid in hid:
             continue
@@ -1430,11 +1941,22 @@ def alb_manifest(a, th=""):
             it["vr"] = 0 if m.get("vbad") else 1 if alb_vinfo(ck, "v") else -1
         elif m.get("lv") and not m.get("vbad") and alb_vinfo(ck, "m"):
             it["lv"] = 1                               # 原況照片：會動的那段好了
+            if m.get("anim"):
+                it["gf"] = 1                           # 會動的 GIF、PNG：看大圖時自己一直動
+        if m.get("anim") == 2 and not m.get("bad") and not alb_wm_bake(a):
+            it["gf"] = 2                               # 會動的 WebP：瀏覽器自己放（/i/編號/a）
         if pid in talk:
             it.update(talk[pid])
+        u = upd.get(pid)
+        if alb_up_who(m["n"]):                         # 朋友放的：哪個人的分頁
+            it["u"] = alb_up_who(m["n"])
+        if u and u.get("f") == m["n"]:                 # 朋友上傳的：誰放的、是不是這支手機放的（可以自己刪）
+            it["ub"] = u["n"]
+            if th and u.get("by") == th:
+                it["um"] = 1
         if not it["x"].get("dt"):
             it["x"] = {**it["x"], "dt": time.strftime("%Y:%m:%d %H:%M:%S", time.localtime(m["mt"])), "dtf": 1}
-        if a["loc"] and m.get("g"):
+        if a["loc"] and m.get("g") and not alb_up_who(m["n"]):   # 朋友放的照片不給別人看到他的定位
             it["g"] = m["g"]
             pl = alb_place(m["g"][0], m["g"][1])
             if pl:
@@ -1446,7 +1968,7 @@ def alb_manifest(a, th=""):
         alb_kick(a["id"])
     wmo = a.get("wm") if a.get("wm") and not alb_wm_bake(a) else ""
     return {"ok": True, "name": a["name"], "photos": out, "dl": alb_dl(a), "loc": a["loc"], "exp": a["exp"], "wmo": wmo,
-            "talk": a.get("talk", True), "mu": bool(idx.get("mu")),
+            "talk": a.get("talk", True), "mu": bool(idx.get("mu")), "up": alb_up(a),
             "places": [k for k, _ in sorted(places.items(), key=lambda x: -x[1])][:6], "ready": alb_ready(a, idx)}
 
 
@@ -1546,6 +2068,8 @@ def alb_http(h, method):
     code, rest = m[1], m[2] or ""
     if rest == "" and method == "GET":
         return h.send(200, alb_page(), "text/html; charset=utf-8", etag=True) or True
+    if method == "POST" and (h.headers.get("Sec-Fetch-Site") or "") in ("cross-site", "same-site"):
+        return h.send(403, '{"ok":false,"message":"只能從相簿頁面送出"}') or True   # 別的網站假冒朋友送東西（通行證已經是 SameSite=Strict，這裡再擋一層）
     a = alb_find(code)
     if not a:
         time.sleep(1)
@@ -1596,6 +2120,12 @@ def alb_http(h, method):
             n = 0
         code2, out = alb_talk_post(a, alb_dev_hash(tok), h.jbody(h.rfile.read(n) if n else b""))
         return h.send(code2, json.dumps(out, ensure_ascii=False), cache=False) or True
+    if rest == "/up" and method == "POST":             # 朋友上傳照片、影片；或刪掉自己放的
+        if (h.headers.get("Content-Type") or "").startswith("application/json"):
+            code2, out = alb_up_del(h, a)
+        else:
+            code2, out = alb_upload(h, a, code)
+        return h.send(code2, json.dumps(out, ensure_ascii=False), cache=False) or True
     if method != "GET":
         return h.send(404, '{"error":"找不到"}') or True
     own = bool(re.fullmatch(r"/i/[0-9a-f]{12}/[slqvm]", rest)) and alb_own_ok(h, a)   # 主人挑照片
@@ -1640,16 +2170,25 @@ def alb_http(h, method):
         except (BrokenPipeError, ConnectionResetError, OSError):
             pass
         return True
-    m = re.fullmatch(r"/i/([0-9a-f]{12})/([slqovm])", rest)
+    m = re.fullmatch(r"/i/([0-9a-f]{12})/([slqovma])", rest)
     if m:
         pid, kind = m[1], m[2]
         idx = alb_index(a, scan=False)
         meta = (idx.get("ph") or {}).get(pid)
-        if not meta or (pid in (a.get("hide") or []) and not own):
+        if not meta or (pid in alb_hid(a) and not own):
             return h.send(404, '{"error":"找不到"}') or True
+        if kind == "a":                                # 會動的 WebP：原本的動畫（拿掉 EXIF、XMP）
+            p = alb_path(a["dir"])
+            if meta.get("anim") != 2 or not p or meta.get("sz", 0) > 64 << 20:
+                return h.send(404, '{"error":"找不到"}') or True
+            try:
+                b = alb_webp_clean(os.path.join(p, meta["n"]))
+            except OSError:
+                return h.send(404, '{"error":"找不到"}') or True
+            return h.send(200, b, "image/webp", cache=86400) or True
         dlm = alb_dl(a)
         vk = "v" if kind == "v" and meta.get("vid") else "m" if kind == "m" and meta.get("lv") else ""
-        if kind == "o" and meta.get("vid") and (dlm == 1 or not a["loc"]):   # 影片只給壓縮的（定位也一起拿掉了）
+        if kind == "o" and meta.get("vid") and (dlm == 1 or not a["loc"] or alb_up_who(meta["n"])):   # 影片只給壓縮的（定位也一起拿掉了）
             vk = "v"
         if vk or kind in ("v", "m"):
             ck = alb_ckey(a, pid, meta)
@@ -1658,13 +2197,13 @@ def alb_http(h, method):
                 return h.send(202 if vk and not meta.get("vbad") else 404, json.dumps({"ok": False, "wait": True}), cache=False) or True
             if kind == "o" and not dlm:
                 return h.send(403, '{"error":"不能下載"}') or True
-            extra = [("Content-Disposition", "attachment; filename*=UTF-8''" + urllib.parse.quote(os.path.splitext(meta["n"])[0] + ".mp4"))] if kind == "o" else []
+            extra = [("Content-Disposition", "attachment; filename*=UTF-8''" + urllib.parse.quote(os.path.splitext(os.path.basename(meta["n"]))[0] + ".mp4"))] if kind == "o" else []
             return alb_send_part(h, info["sz"], lambda s0, e0: alb_vread(ck, vk, s0, e0), "video/mp4", extra)
         if kind == "o" and dlm == 1 and not meta.get("bad"):   # 只給壓縮圖：下載的是大圖
             b, _ = alb_get(a, pid, "l")
             if not b:
                 return h.send(404, '{"error":"找不到"}') or True
-            fn = os.path.splitext(meta["n"])[0] + ".jpg"
+            fn = os.path.splitext(os.path.basename(meta["n"]))[0] + ".jpg"
             return h.send(200, b, "image/jpeg", extra=[("Content-Disposition", "attachment; filename*=UTF-8''" + urllib.parse.quote(fn))]) or True
         if kind == "o" or meta.get("bad"):            # 原圖（下載；或做不出小圖時直接看）
             if dlm < 2:                                # 不給原圖的相簿一律不給（做不出小圖的也一樣）
@@ -1688,10 +2227,10 @@ def alb_http(h, method):
                 h.send_header("X-Content-Type-Options", "nosniff")
                 h.send_header("Content-Security-Policy", "sandbox")
                 if kind == "o":
-                    h.send_header("Content-Disposition", "attachment; filename*=UTF-8''" + urllib.parse.quote(meta["n"]))
+                    h.send_header("Content-Disposition", "attachment; filename*=UTF-8''" + urllib.parse.quote(os.path.basename(meta["n"])))
                 h.end_headers()
                 try:
-                    if a["loc"] or not meta.get("gs"):
+                    if (a["loc"] and not alb_up_who(meta["n"])) or not meta.get("gs"):   # 朋友放的一律拿掉定位
                         shutil.copyfileobj(f, h.wfile, 1 << 20)
                     else:
                         alb_strip_gps(f, meta["gs"], h.wfile, st.st_size)
@@ -1720,6 +2259,12 @@ def alb_http(h, method):
         p = alb_path(a["dir"])
         if not p:
             return h.send(404, '{"error":"找不到"}') or True
+        pick = None                                    # 勾選下載：只打包這幾個
+        ids = (urllib.parse.parse_qs(urllib.parse.urlsplit(h.path).query).get("ids") or [""])[0]
+        if ids:
+            pick = {x for x in ids.split(",") if re.fullmatch(r"[0-9a-f]{12}", x)}
+            if not pick or len(pick) > ALB_ZIP_MAX:
+                return h.send(400, '{"error":"選太多了"}') or True
         h.close_connection = True
         h.send_response(200)
         h.send_header("Content-Type", "application/zip")
@@ -1729,10 +2274,10 @@ def alb_http(h, method):
         h.end_headers()
         try:
             with zipfile.ZipFile(h.wfile, "w", zipfile.ZIP_STORED, allowZip64=True) as z:
-                hid = set(a.get("hide") or [])
+                hid = alb_hid(a)
                 for pid in idx.get("order", []):
                     meta = idx["ph"][pid]
-                    if pid in hid or (dlm < 2 and meta.get("bad")):
+                    if pid in hid or (pick is not None and pid not in pick) or (dlm < 2 and meta.get("bad")):
                         continue
                     if meta.get("vid") and (dlm == 1 or not a["loc"]):   # 影片：壓縮過、沒有定位的那份
                         ck = alb_ckey(a, pid, meta)
@@ -1751,7 +2296,7 @@ def alb_http(h, method):
                     try:
                         zi = zipfile.ZipInfo(meta["n"], time.localtime(meta["mt"])[:6])
                         with open(src, "rb") as f, z.open(zi, "w", force_zip64=True) as w:
-                            if a["loc"] or not meta.get("gs"):
+                            if (a["loc"] and not alb_up_who(meta["n"])) or not meta.get("gs"):   # 朋友放的一律拿掉定位
                                 shutil.copyfileobj(f, w, 1 << 20)
                             else:
                                 alb_strip_gps(f, meta["gs"], w, meta["sz"])
@@ -1806,7 +2351,7 @@ def alb_api(d):
             devs = a.get("devs") or {}
             return 200, {"ok": True, "dev": a.get("dev") or 0, "devs": [{"h": k, **v} for k, v in sorted(devs.items(), key=lambda x: -x[1].get("t", 0))]}
         idx = alb_index(a)                             # 挑照片：小圖用短時間的通行證看
-        hid, out = set(a.get("hide") or []), []
+        hid, out, pend, upd = set(a.get("hide") or []), [], set(a.get("pend") or []), a.get("upd") or {}
         for pid in idx.get("order", []):
             m = idx["ph"][pid]
             q = ""
@@ -1814,6 +2359,7 @@ def alb_api(d):
                 q = base64.b64encode(sec_read(alb_cfile(alb_ckey(a, pid, m), "q"))).decode()
             except (OSError, ValueError):
                 pass
-            out.append({"i": pid, "w": m["w"], "h": m["h"], "v": alb_ckey(a, pid, m)[:8], "q": q, "hid": pid in hid, "vd": m.get("dur") if m.get("vid") else 0})
+            out.append({"i": pid, "w": m["w"], "h": m["h"], "v": alb_ckey(a, pid, m)[:8], "q": q, "hid": pid in hid, "vd": m.get("dur") if m.get("vid") else 0,
+                        "pend": pid in pend, "u": alb_up_who(m["n"]), "ub": (upd.get(pid) or {}).get("n", "") if (upd.get(pid) or {}).get("f") == m["n"] else ""})
         return 200, {"ok": True, "photos": out, "own": alb_own_val(a, time.time() + ALB_OWN_S), "base": alb_base(), "code": a["code"]}
     return 200, alb_list()

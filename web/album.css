@@ -350,6 +350,8 @@ button.chip:active,a.chip:active{transform:scale(.95)}
 .vt0,.vt1{font-size:var(--fs-xs);color:rgba(255,255,255,.8);min-width:32px}
 .zw video{position:absolute;inset:0;width:100%;height:100%;object-fit:contain;opacity:0;transition:opacity var(--t-mid) var(--ease);pointer-events:none}
 .zw.playing .vv,.zw.moving .lvv{opacity:1}
+.zw .awp{position:absolute;inset:0;width:100%;height:100%;object-fit:contain;opacity:0;transition:opacity var(--t-mid) var(--ease);pointer-events:none}
+.zw .awp.ok{opacity:1}
 .vbig{position:absolute;left:50%;top:50%;width:72px;height:72px;margin:-36px 0 0 -36px;border-radius:50%;display:grid;place-items:center;background:rgba(0,0,0,.38);
   -webkit-backdrop-filter:blur(14px);backdrop-filter:blur(14px);color:#fff;box-shadow:inset 0 0 0 1px rgba(255,255,255,.25);transition:opacity var(--t-mid) var(--ease),transform var(--t-mid) var(--ease);pointer-events:none}
 .vbig svg{width:30px;height:30px;margin-left:4px}
@@ -484,4 +486,60 @@ html::-webkit-scrollbar,body::-webkit-scrollbar{display:none;width:0;height:0}  
   @keyframes hpar{to{transform:translate3d(0,38svh,0)}}
   @keyframes hcap{to{opacity:0;transform:translate3d(0,10svh,0)}}
 }
+/* ── 朋友放的：每個人一個分頁 ── */
+.who{max-width:1600px;margin:0 auto;padding:clamp(12px,2vw,20px) 0 4px}
+.who[hidden],.msec[hidden]{display:none}
+.whr{display:flex;gap:8px;overflow-x:auto;padding:2px var(--pad) 6px;scrollbar-width:none}
+.whr::-webkit-scrollbar{display:none}
+.who .chip{flex:none;-webkit-backdrop-filter:none;backdrop-filter:none;background:var(--s2);box-shadow:none;transition:background var(--t-mid) var(--ease),color var(--t-mid) var(--ease),transform var(--sp-fast)}
+.who .chip:active{transform:scale(.95)}
+.who .chip small{color:var(--tx3);font-weight:500}
+.who .chip.on{background:var(--p);color:var(--on-p)}
+.who .chip.on svg,.who .chip.on small{color:var(--on-p)}
+.who .av{width:20px;height:20px;margin-left:-6px;border-radius:50%;display:grid;place-items:center;font-style:normal;font-size:var(--fs-xs);font-weight:700;background:color-mix(in oklab,var(--p) 22%,var(--s3));color:var(--tx)}
+.who .chip.on .av{background:color-mix(in oklab,var(--on-p) 22%,transparent);color:var(--on-p)}
+
+/* ── 選幾張一起下載：按住照片或按「選取」，右上角打勾、照片縮一點 ── */
+.ph{-webkit-user-select:none;user-select:none}
+.ph .ck{position:absolute;top:7px;right:7px;z-index:2;width:24px;height:24px;border-radius:50%;display:grid;place-items:center;border:2px solid #fff;background:rgba(0,0,0,.22);color:transparent;
+  opacity:0;transform:scale(.5);transition:opacity var(--t-fast) var(--ease),transform var(--sp-fast),background var(--t-fast) var(--ease),border-color var(--t-fast) var(--ease);pointer-events:none;box-shadow:0 1px 4px rgba(0,0,0,.3)}
+.ph .ck svg{width:14px;height:14px;stroke-width:3}
+.selm .ph{cursor:pointer}
+.selm .ph .ck{opacity:1;transform:none}
+.ph.on .ck{background:var(--p);border-color:var(--p);color:var(--on-p)}
+.ph.on .hi,.ph.on .lq{transform:scale(.86);border-radius:var(--r-xs)}
+.selm .bdg{opacity:0;transition:opacity var(--t-fast) var(--ease)}
+.selb{position:fixed;left:50%;bottom:calc(16px + env(safe-area-inset-bottom));z-index:var(--z-bar);display:flex;align-items:center;gap:6px;padding:6px;border-radius:var(--r-pill);
+  background:var(--glass);-webkit-backdrop-filter:blur(22px) saturate(1.7);backdrop-filter:blur(22px) saturate(1.7);box-shadow:var(--sh-pop),var(--hl);
+  max-width:calc(100% - var(--pad) * 2);transform:translate(-50%,calc(100% + 40px));transition:transform var(--t-mid) var(--ease)}
+.selb.on{transform:translate(-50%,0);transition:transform var(--sp)}
+.selb b{padding:0 8px 0 2px;font-size:var(--fs-m);font-weight:700;white-space:nowrap;min-width:6.5em}
+.selb .sx{width:36px;height:36px;border-radius:50%;display:grid;place-items:center;flex:none;color:var(--tx2)}
+.selb .sx svg{width:20px;height:20px}
+.selb .chip{flex:none;-webkit-backdrop-filter:none;backdrop-filter:none;white-space:nowrap;transition:opacity var(--t-fast) var(--ease),transform var(--sp-fast)}
+.selb .chip:active{transform:scale(.95)}
+.selb .chip:disabled{opacity:.4}
+.selm .toast{bottom:calc(84px + env(safe-area-inset-bottom))}
+
+/* ── 朋友一起放照片：先問名字、下面一條進度 ── */
+.shbg{position:fixed;inset:0;z-index:var(--z-veil);display:grid;place-items:end center;background:rgba(0,0,0,.45);opacity:0;transition:opacity var(--t-mid) var(--ease)}
+.shbg.on{opacity:1}
+.sh{width:min(420px,100%);padding:26px 22px calc(22px + env(safe-area-inset-bottom));border-radius:var(--r-xl) var(--r-xl) 0 0;background:var(--s1);box-shadow:var(--sh-card);text-align:center;
+  transform:translateY(100%);transition:transform var(--t-mid) var(--ease)}
+.shbg.on .sh{transform:none;transition:transform var(--t-mid) var(--dec)}
+@media (min-width:600px){.shbg{place-items:center}.sh{border-radius:var(--r-xl);padding-bottom:22px;transform:translateY(24px) scale(.96)}}
+.sh .ic{width:48px;height:48px;margin:0 auto 12px;border-radius:50%;display:grid;place-items:center;background:color-mix(in oklab,var(--p) 18%,transparent);color:var(--p)}
+.sh .ic svg{width:24px;height:24px}
+.sh h3{font-size:var(--fs-xl);font-weight:700}
+.sh p{margin:6px 0 16px;color:var(--tx3);font-size:var(--fs-s)}
+.upb{position:fixed;left:50%;bottom:calc(16px + env(safe-area-inset-bottom));z-index:var(--z-toast);width:min(320px,calc(100% - var(--pad) * 2));padding:12px 16px 14px;border-radius:var(--r-lg);
+  background:var(--glass);-webkit-backdrop-filter:blur(22px) saturate(1.7);backdrop-filter:blur(22px) saturate(1.7);box-shadow:var(--sh-pop),var(--hl);
+  transform:translate(-50%,calc(100% + 40px));transition:transform var(--t-mid) var(--ease)}
+.upb.on{transform:translate(-50%,0);transition:transform var(--sp)}
+.upb .ut{display:flex;justify-content:space-between;font-size:var(--fs-s);margin-bottom:8px}
+.upb .ut span{color:var(--tx3)}
+.ubar{height:6px;border-radius:var(--r-pill);background:var(--glass2);overflow:hidden}
+.ubar i{display:block;height:100%;background:var(--p);transform-origin:0 50%;transform:scaleX(0);transition:transform var(--t-mid) var(--ease)}
+.rb[hidden]{display:none}
+.rb.arm{background:var(--bad);color:#fff}
 @media (prefers-reduced-motion:reduce){.hero .cv,.hcap{animation:none}*,*::before,*::after{animation-duration:.001s!important;transition-duration:.001s!important}}
