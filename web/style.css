@@ -143,6 +143,7 @@
 .ico.safe{background:oklch(var(--tl) calc(var(--tc) * .7) 155);color:oklch(var(--fl) calc(var(--fc) * .75) 155)}
 .ico.devices{background:oklch(var(--tl) calc(var(--tc) * .5) 290);color:oklch(var(--fl) calc(var(--fc) * .55) 290)}
 .ico.note{background:oklch(var(--tl) var(--tc) 84);color:oklch(var(--fl) var(--fc) 84)}
+.ico.album{background:oklch(var(--tl) var(--tc) 24);color:oklch(var(--fl) var(--fc) 24)}
 .ico.theme{background:var(--pc);color:var(--on-pc)}                  /* 哨兵本身的動作（更新、編輯）：主題色 */
 .ico.warn{background:var(--warnc);color:var(--on-warnc)}            /* 要小心的動作（重新開機、換密碼） */
 .ico.bad{background:var(--badc);color:var(--on-badc)}               /* 刪除、移除、解除配對 */
@@ -1810,6 +1811,30 @@ html.flyon .dash>.view{content-visibility:hidden;contain-intrinsic-size:auto non
 /* 加密筆記（Joplin 同步） */
 .ntd .ntx{margin:0 4px 14px;color:var(--tx2);font-size:var(--fs-m);text-align:center}
 .ntd .ntb>.ubtn{width:100%}
+/* 相簿分享 */
+.abd{max-width:440px}
+.abb{display:flex;flex-direction:column;gap:12px}
+.abb>.ubtn{width:100%}
+.abb .ntx{margin:0 4px;color:var(--tx2);font-size:var(--fs-m);text-align:center}
+.abrow{width:100%;text-align:left;font:inherit;cursor:pointer}
+.abrow b,.abhead b{font-weight:650;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.abrow .chev{width:18px;height:18px;flex:none;color:var(--tx3);transform:rotate(-90deg)}
+.abc{flex:none!important;display:grid!important;place-items:center;width:48px;height:48px;border-radius:var(--r-sm);overflow:hidden;background:var(--s1);color:var(--tx3)}
+.abc.big{width:64px;height:64px;border-radius:var(--r-md)}
+.abc img{width:100%;height:100%;object-fit:cover}
+.abc svg{width:22px;height:22px}
+.abi{flex:none!important;color:var(--tx3)}.abi svg{width:16px;height:16px}
+.abhead{display:flex;align-items:center;gap:14px;padding:2px 2px 4px}
+.abhead>span:last-child{flex:1;min-width:0;display:flex;flex-direction:column;gap:2px}
+.abhead small,.abs{color:var(--tx3);font-size:var(--fs-s);font-weight:400}
+.abs{margin-left:6px}
+.abcrumb{display:flex;flex-wrap:wrap;align-items:center;gap:2px 4px;font-size:var(--fs-s);color:var(--tx3)}
+.abcrumb button{padding:4px 8px;border-radius:var(--r-pill);background:var(--chip);color:var(--tx2);font:inherit;cursor:pointer}
+.abcrumb button:last-child{background:var(--pc);color:var(--on-pc);font-weight:600}
+.abdirs{max-height:300px;overflow-y:auto}
+.abdirs .pkrow{width:100%;text-align:left;font:inherit;cursor:pointer;flex-shrink:0}
+.abdirs .chev{width:18px;height:18px;flex:none;color:var(--tx3);transform:rotate(-90deg)}
+.abb .seg{margin-top:6px}
 .ntd .ntr{padding:8px 8px 8px 14px}
 .ntd .ntk{flex:none;width:3em;color:var(--tx3);font-size:var(--fs-s)}
 .ntd .ntr code .ipb,.ntd .ntr code.ipb{cursor:pointer}

@@ -45,7 +45,7 @@ from collections import deque
 from concurrent.futures import ThreadPoolExecutor
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
-VERSION = "4.29"
+VERSION = "4.31"
 
 # ───────────────────────── 哨兵備份檔（.vsbk）─────────────────────────
 # 哨兵專用的備份格式：外面是自己的檔案格式，裡面用的是成熟、標準的加密方法（不自己發明加密）：
@@ -597,7 +597,7 @@ CONF_PATH = os.environ.get("SENTINEL_CONF", "/etc/vps-sentinel-lite.conf")
 SEAL_KEY_PATH = os.environ.get("SENTINEL_SEAL_KEY") or os.path.splitext(CONF_PATH)[0] + ".key"
 SEAL_CONF = ("TOKEN", "TG_BOT_TOKEN", "TG_CHAT_ID", "BACKUP_KEY", "PEERS", "OPENSKY_ID", "OPENSKY_SECRET", "YT_PROXY", "LINKS")
 SEAL_FILES = ("tls-pins.json", "pin.json", "sessions.json", "passkeys.json", "state.json", "pairing.json", "yt-cookies.txt",
-              "downloads.json", "peers-cache.json", "fly-share.json", "notes.json")
+              "downloads.json", "peers-cache.json", "fly-share.json", "notes.json", "albums.json", "album-places.json")
 SEAL_TXT = "vse1:"                                # 設定檔裡加密過的值
 SEAL_BIN = b"VSE1"                                # 加密過的檔案開頭
 SEAL = {"lib": None, "key": None, "ok": None}
@@ -1113,7 +1113,7 @@ TG_PART = int(os.environ.get("SENTINEL_TG_PART") or 45 * 1024 * 1024)   # 備份
 TG_PARTS_MAX = 20                                  # 最多切幾段（大約 900 MB）；再大就不傳 Telegram
 BK_SKIP_DIRS = {"cache", ".cache", "tmp", "log", "logs", "node_modules"}
 # 哨兵自己抓來的資料（機場起降的飛機資料庫、標誌、航班表、照片）：還原後會自己重抓，不用備份
-BK_REGEN = ("aircraft-db", "fly-logos", "flags", "fids", "fly-photos.json", "fly-owners.json", "fly-aircraft.json", "peers-cache.json")
+BK_REGEN = ("aircraft-db", "fly-logos", "flags", "fids", "fly-photos.json", "fly-owners.json", "fly-aircraft.json", "peers-cache.json", "album-cache")
 BK_RUN = threading.Lock()                         # 同一時間只跑一次備份
 BK_MAKE = threading.Lock()                        # 同一時間只打包一份
 BK = {"last": None, "ok_t": None, "day": None, "key_t": 0, "names": {}, "tg": {}, "running": False}  # 會存檔
@@ -1458,7 +1458,7 @@ def include(name):
         exec(compile(f.read(), path, "exec"), globals())   # noqa: S102
 
 
-SRC_FILES = ["sentinel.py", "pair.py", "download.py", "backup.py", "guard.py", "fly.py", "notes.py", "web/index.html", "web/style.css", "web/app.js", "web/pin.js", "web/fly.js", "web/font.woff2", "data/airports.tsv", "data/coast.tsv", "data/terrain.bin", "data/actypes.tsv", "data/apmap.tsv"]   # 程式本體（含機場起降）＋網頁三個檔＋機場資料、海岸線、地形、機型分類
+SRC_FILES = ["sentinel.py", "pair.py", "download.py", "backup.py", "guard.py", "fly.py", "notes.py", "album.py", "web/index.html", "web/style.css", "web/app.js", "web/pin.js", "web/fly.js", "web/font.woff2", "web/album.html", "web/album.css", "web/album.js", "data/airports.tsv", "data/coast.tsv", "data/terrain.bin", "data/actypes.tsv", "data/apmap.tsv"]   # 程式本體（含機場起降）＋網頁三個檔＋機場資料、海岸線、地形、機型分類
 
 
 def build_of(blobs):
@@ -3562,7 +3562,7 @@ class Collector:
             "updates": updates, "reboot": reboot, "geo": geo, "update": upd, "events": events, "traffic": traffic, "bk_tz": BACKUP_TZ,
             "hist": {"t": [h[0] for h in hist], "cpu": [h[1] for h in hist], "mem": [h[2] for h in hist],
                      "rx": [h[3] for h in hist], "tx": [h[4] for h in hist]},
-            "problems": problems, "notices": notices, "tg_self": pair_load().get("self_t") or 0, "tlsfp": TLS["fp"], "sec": sec_info(), "notes": bool(note_conf().get("pw")),
+            "problems": problems, "notices": notices, "tg_self": pair_load().get("self_t") or 0, "tlsfp": TLS["fp"], "sec": sec_info(), "notes": bool(note_conf().get("pw")), "albums": alb_count(),
             "tg_off": not (TG_BOT and TG_CHAT) and not watchers(),   # 還沒設定 Telegram：首頁提醒一行
             "level": "bad" if problems else ("warn" if notices else "ok"),
         }
@@ -4381,6 +4381,7 @@ def gz_of(data, tag=None):
 
 include("guard.py")
 include("notes.py")
+include("album.py")
 
 
 MAX_CONN = max(16, int(os.environ.get("SENTINEL_MAX_CONN") or 200))   # 同時最多處理幾個連線（測試可以調小）
@@ -4874,6 +4875,8 @@ class Handler(BaseHTTPRequestHandler):
         if self.is_cloud():
             return self.proxy_cloud()
         path = urllib.parse.urlsplit(self.path).path
+        if path.startswith("/a/") and alb_http(self, "GET"):   # 相簿分享連結（不用登入，靠連結上的代碼和密碼）
+            return None
         if path == "/fly" or re.fullmatch(r"/s/[A-Za-z0-9]{8}", path):   # 機場起降分享連結：只給網頁，資料要靠連結上的代碼
             return self.send(200, share_page(), "text/html; charset=utf-8", etag=True)
         if path == "/":
@@ -5031,9 +5034,11 @@ class Handler(BaseHTTPRequestHandler):
         if self.is_cloud():
             return self.proxy_cloud()
         u = urllib.parse.urlsplit(self.path)
+        if u.path.startswith("/a/") and alb_http(self, "POST"):   # 相簿分享：朋友輸入密碼
+            return None
         if u.path not in ("/api/update", "/api/rename", "/api/traffic", "/api/telegram", "/api/links", "/api/self", "/api/cloud-open", "/api/cloud-ticket", "/api/cloud-revoke", "/api/peer",
                           "/api/token", "/api/passkey", "/api/passkey-login", "/api/pin", "/api/pin-login", "/api/login", "/api/sessions", "/api/backup", "/api/backup-store",
-                          "/api/restore-upload", "/api/restore-run", "/api/pair", "/api/pair-admin", "/api/reboot", "/api/keepalive", "/api/download", "/api/fly-share", "/api/fly-claim", "/api/opensky", "/api/sec", "/api/notes"):
+                          "/api/restore-upload", "/api/restore-run", "/api/pair", "/api/pair-admin", "/api/reboot", "/api/keepalive", "/api/download", "/api/fly-share", "/api/fly-claim", "/api/opensky", "/api/sec", "/api/notes", "/api/album"):
             return self.send(404, '{"error":"找不到"}')
         if u.path in ("/api/restore-upload", "/api/restore-run"):   # 網頁還原：要有安裝時給的代碼（或已經登入）
             if not (self.authed() or self.restore_code_ok()):
@@ -5176,7 +5181,7 @@ class Handler(BaseHTTPRequestHandler):
                                                       "Content-Type": "application/json"})
                 with urllib.request.urlopen(req, timeout=20) as r:
                     data = r.read()
-                if u.path == "/api/notes":           # 那台沒網域：Joplin 用這邊連過去的網址
+                if u.path in ("/api/notes", "/api/album"):   # 那台沒網域：Joplin、相簿連結用這邊連過去的網址
                     try:
                         x = json.loads(data)
                         if isinstance(x, dict) and not x.get("base"):
@@ -5265,6 +5270,9 @@ class Handler(BaseHTTPRequestHandler):
                 return self.send(200, json.dumps(sec_detail(), ensure_ascii=False))
             ok, msg, extra = sec_act(d)
             return self.send(200 if ok else 400, json.dumps({**sec_detail(), **extra, "ok": ok, "message": msg}, ensure_ascii=False))
+        if u.path == "/api/album":                   # 相簿分享：清單、選資料夾、新增、修改、收回
+            code, out = alb_api(self.jbody(body))
+            return self.send(code, json.dumps(out, ensure_ascii=False))
         if u.path == "/api/notes":                   # 加密筆記（Joplin 同步）：看狀態、打開、看密碼、換密碼、關掉
             d = self.jbody(body)
             if d.get("action") in (None, "", "info"):

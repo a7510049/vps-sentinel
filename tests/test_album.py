@@ -1,0 +1,253 @@
+"""相簿分享：選資料夾、做連結、相機資訊和地點、密碼、拿掉定位、打包下載、收回。只用 Python 內建模組。"""
+import base64
+import http.client
+import io
+import json
+import os
+import shutil
+import struct
+import tempfile
+import time
+import unittest
+import zipfile
+
+from test_smoke import TOKEN, Server
+
+# 8×6 的小 JPEG（ffmpeg 做的），測試時在前面塞自己寫的 EXIF
+JPG = base64.b64decode("/9j/4AAQSkZJRgABAgAAAQABAAD//gAQTGF2YzYwLjMxLjEwMgD/2wBDAAgQEBMQExYWFhYWFhoYGhsbGxoaGhobGxsdHR0iIiIdHR0bGx0dICAiIiUmJSMjIiMmJigoKDAwLi44ODpFRVP/"
+                       "xABMAAEBAAAAAAAAAAAAAAAAAAAABgEBAQAAAAAAAAAAAAAAAAAABQYQAQAAAAAAAAAAAAAAAAAAAAARAQAAAAAAAAAAAAAAAAAAAAD/wAARCAAGAAgDASIAAhEAAxEA/9oADAMBAAIRAxEAPwCdAVQB/9k=")
+
+
+def tiff(ifd0, exif, gps):
+    """小端序 TIFF：IFD0（帶 Exif、GPS 的指標）、Exif、GPS 三組"""
+    out = bytearray(b"II*\x00\x08\x00\x00\x00")
+
+    def put(entries, at):
+        """回傳 (IFD 那一段, 放在後面的值)"""
+        n = len(entries)
+        head = bytearray(struct.pack("<H", n))
+        data = bytearray()
+        vat = at + 2 + n * 12 + 4
+        for tag, typ, val in sorted(entries, key=lambda e: e[0]):
+            if typ == 2:
+                raw = val.encode() + b"\x00"
+                cnt = len(raw)
+            elif typ == 3:
+                raw, cnt = struct.pack("<H", val), 1
+            elif typ == 4:
+                raw, cnt = struct.pack("<I", val), 1
+            elif typ == 5:
+                vs = val if isinstance(val, list) else [val]
+                raw, cnt = b"".join(struct.pack("<II", *v) for v in vs), len(vs)
+            elif typ == 1:
+                raw, cnt = bytes(val), len(val)
+            if len(raw) <= 4:
+                head += struct.pack("<HHI", tag, typ, cnt) + raw.ljust(4, b"\x00")
+            else:
+                head += struct.pack("<HHII", tag, typ, cnt, vat + len(data))
+                data += raw + (b"\x00" if len(raw) % 2 else b"")
+        head += b"\x00\x00\x00\x00"
+        return head, data
+
+    # 先算各段的位置：IFD0 → Exif → GPS
+    p0 = 8
+    h0, d0 = put(ifd0 + [(0x8769, 4, 0), (0x8825, 4, 0)], p0)
+    pe = p0 + len(h0) + len(d0)
+    he, de = put(exif, pe)
+    pg = pe + len(he) + len(de)
+    h0, d0 = put(ifd0 + [(0x8769, 4, pe), (0x8825, 4, pg)], p0)
+    hg, dg = put(gps, pg)
+    out += h0 + d0 + he + de + hg + dg
+    return bytes(out)
+
+
+def photo(ori=1, gps=True, dt="2026:11:03 14:22:10"):
+    t = tiff([(0x010F, 2, "Apple"), (0x0110, 2, "iPhone 15 Pro"), (0x0112, 3, ori), (0x0131, 2, "18.1")],
+             [(0x829A, 5, (1, 120)), (0x829D, 5, (178, 100)), (0x8827, 3, 50), (0x9003, 2, dt), (0x9011, 2, "+08:00"),
+              (0x920A, 5, (6765, 1000)), (0xA405, 3, 24), (0xA434, 2, "iPhone 15 Pro back triple camera 6.765mm f/1.78")],
+             [(1, 2, "N"), (2, 5, [(25, 1), (2, 1), (2400, 100)]), (3, 2, "E"), (4, 5, [(121, 1), (33, 1), (4200, 100)]),
+              (5, 1, [0]), (6, 5, (35, 1))] if gps else [])
+    app1 = b"Exif\x00\x00" + t
+    return JPG[:2] + b"\xff\xe1" + struct.pack(">H", len(app1) + 2) + app1 + JPG[2:]
+
+
+ROOT_DIR = tempfile.mkdtemp()
+os.makedirs(os.path.join(ROOT_DIR, "旅行", "台北"))
+os.makedirs(os.path.join(ROOT_DIR, "空的"))
+for i in range(3):
+    with open(os.path.join(ROOT_DIR, "旅行", "台北", f"IMG_{i}.jpg"), "wb") as f:
+        f.write(photo(ori=6 if i == 1 else 1, dt=f"2026:11:0{3 + i} 1{i}:00:00"))
+with open(os.path.join(ROOT_DIR, "旅行", "台北", "說明.txt"), "w") as f:
+    f.write("不是照片")
+
+
+class Album(Server):
+    ENV = {"SENTINEL_ALB_DIR": ROOT_DIR, "SENTINEL_ALB_GEO": "http://127.0.0.1:9/none", "SENTINEL_ALB_FF": "none"}
+
+    @classmethod
+    def tearDownClass(cls):
+        super().tearDownClass()
+        shutil.rmtree(ROOT_DIR, ignore_errors=True)
+
+    def req(self, method, path, body=None, hdr=None):
+        c = http.client.HTTPConnection("127.0.0.1", self.port, timeout=20)
+        c.request(method, path, body=json.dumps(body).encode() if isinstance(body, dict) else body, headers=hdr or {})
+        r = c.getresponse()
+        out = r.status, r.read(), dict(r.getheaders())
+        c.close()
+        return out
+
+    def call(self, body):
+        s, b, _ = self.req("POST", "/api/album", body, {"X-Token": TOKEN, "Content-Type": "application/json"})
+        return s, json.loads(b)
+
+    def test_1_flow(self):
+        self.assertEqual(self.req("POST", "/api/album", {"action": "list"})[0], 401)        # 要登入
+        s, d = self.call({"action": "folders", "dir": ""})
+        self.assertEqual(s, 200, d)
+        self.assertEqual({x["name"]: x["sub"] for x in d["subs"]}, {"旅行": True, "空的": False})
+        s, d = self.call({"action": "folders", "dir": "旅行/台北"})
+        self.assertEqual(d["n"], 3)
+        self.assertEqual(self.call({"action": "folders", "dir": "../.."})[0], 400)      # 不能跑出雲端硬碟
+        self.assertEqual(self.call({"action": "add", "dir": "空的"})[0], 400)
+        s, d = self.call({"action": "add", "dir": "旅行/台北", "name": "台北一日遊", "secs": 86400})
+        self.assertEqual(s, 200, d)
+        a = next(x for x in d["list"] if x["id"] == d["id"])
+        self.assertEqual((a["name"], a["n"], a["pw"]), ("台北一日遊", 3, False))
+        code = a["code"]
+        self.assertRegex(code, r"^[A-Za-z0-9]{10}$")
+        with open(os.path.join(self.tmp.name, "data", "albums.json"), "rb") as f:
+            self.assertNotIn(code.encode(), f.read())                                  # 清單加密存
+
+        s, b, h = self.req("GET", f"/a/{code}")
+        self.assertEqual(s, 200)
+        self.assertIn("Content-Security-Policy", h)
+        s, b, _ = self.req("GET", f"/a/{code}/m")
+        m = json.loads(b)
+        self.assertEqual(m["name"], "台北一日遊")
+        self.assertEqual([p["n"] for p in m["photos"]], ["IMG_0.jpg", "IMG_1.jpg", "IMG_2.jpg"])   # 照拍攝時間排
+        p0, p1 = m["photos"][0], m["photos"][1]
+        self.assertEqual((p0["w"], p0["h"]), (8, 6))
+        self.assertEqual((p1["w"], p1["h"]), (6, 8))                                   # 轉 90 度的照片寬高對調
+        x = p0["x"]
+        self.assertEqual((x["mk"], x["md"], x["iso"], x["f"], x["et"], x["f35"], x["dt"], x["oz"]),
+                         ("Apple", "iPhone 15 Pro", 50, 1.78, [1, 120], 24, "2026:11:03 10:00:00", "+08:00"))
+        self.assertIn("triple camera", x["ln"])
+        self.assertAlmostEqual(p0["g"][0], 25 + 2 / 60 + 24 / 3600, places=4)
+        self.assertAlmostEqual(p0["g"][1], 121 + 33 / 60 + 42 / 3600, places=4)
+        self.assertEqual(p0["g"][2], 35)
+        self.assertEqual(self.req("GET", "/a/AAAAAAAAAA/m")[0], 404)
+
+        # 沒有 ffmpeg：瀏覽器看得了的原圖直接給
+        s, b, h = self.req("GET", f"/a/{code}/i/{p0['i']}/s")
+        self.assertEqual(s, 200)
+        self.assertEqual(b[:2], b"\xff\xd8")
+        s, b, h = self.req("GET", f"/a/{code}/i/{p0['i']}/o")
+        self.assertIn("attachment", h["Content-Disposition"])
+        with open(os.path.join(ROOT_DIR, "旅行", "台北", "IMG_0.jpg"), "rb") as f:
+            self.assertEqual(b, f.read())                                              # 顯示地點：原圖原封不動
+
+        # 藏起地點：清單沒有座標，下載的原圖定位清成 0（大小不變）
+        self.assertEqual(self.call({"action": "edit", "id": a["id"], "loc": False})[0], 200)
+        m = json.loads(self.req("GET", f"/a/{code}/m")[1])
+        self.assertNotIn("g", m["photos"][0])
+        s, b, _ = self.req("GET", f"/a/{code}/i/{p0['i']}/o")
+        self.assertEqual(len(b), len(photo(dt="2026:11:03 10:00:00")))
+        self.assertNotIn(struct.pack("<II", 2400, 100), b)                              # 秒數那個分數不見了
+        self.assertIn(b"iPhone 15 Pro", b)                                             # 相機資訊留著
+        s, b, _ = self.req("GET", f"/a/{code}/zip")
+        z = zipfile.ZipFile(io.BytesIO(b))
+        self.assertEqual(sorted(z.namelist()), ["IMG_0.jpg", "IMG_1.jpg", "IMG_2.jpg"])
+        self.assertNotIn(struct.pack("<II", 4200, 100), z.read("IMG_2.jpg"))
+
+        # 不能下載
+        self.call({"action": "edit", "id": a["id"], "dl": False})
+        self.assertEqual(self.req("GET", f"/a/{code}/i/{p0['i']}/o")[0], 403)
+        self.assertEqual(self.req("GET", f"/a/{code}/zip")[0], 403)
+
+        # 密碼：輸對才拿得到通行證（只給這本的路徑），錯太多次先鎖住
+        self.call({"action": "edit", "id": a["id"], "pw": "abcd1234"})
+        self.assertEqual(self.req("GET", f"/a/{code}/m")[0], 401)
+        self.assertEqual(self.req("GET", f"/a/{code}/i/{p0['i']}/s")[0], 401)
+        s, b, h = self.req("POST", f"/a/{code}/open", {"pw": "abcd1234"}, {"X-Forwarded-For": "1.2.3.4"})
+        self.assertEqual(s, 200)
+        ck = h["Set-Cookie"]
+        self.assertIn(f"Path=/a/{code}", ck)
+        self.assertIn("HttpOnly", ck)
+        cookie = ck.split(";")[0]
+        self.assertEqual(self.req("GET", f"/a/{code}/m", hdr={"Cookie": cookie})[0], 200)
+        self.assertEqual(self.req("GET", f"/a/{code}/m", hdr={"Cookie": cookie[:-3] + "xyz"})[0], 401)
+        codes = [self.req("POST", f"/a/{code}/open", {"pw": "nope"})[0] for _ in range(6)]
+        self.assertEqual(codes[:5], [401] * 5)
+        self.assertEqual(codes[5], 429)
+        self.call({"action": "edit", "id": a["id"], "pw": "zzzz9999"})                   # 換密碼：之前的通行證失效
+        self.assertEqual(self.req("GET", f"/a/{code}/m", hdr={"Cookie": cookie})[0], 401)
+
+        # 收回：連結立刻打不開
+        s, d = self.call({"action": "del", "id": a["id"]})
+        self.assertEqual(s, 200)
+        self.assertEqual(self.req("GET", f"/a/{code}/m")[0], 404)
+        self.assertEqual(self.call({"action": "list"})[1]["list"], [])
+
+
+@unittest.skipUnless(shutil.which("ffmpeg"), "沒有 ffmpeg")
+class AlbumThumbs(Server):
+    ENV = {"SENTINEL_ALB_DIR": ROOT_DIR + "-t", "SENTINEL_ALB_GEO": "http://127.0.0.1:9/none"}
+
+    @classmethod
+    def setUpClass(cls):
+        os.makedirs(os.path.join(ROOT_DIR + "-t", "相簿"), exist_ok=True)
+        import subprocess
+        p = os.path.join(ROOT_DIR + "-t", "相簿", "big.jpg")
+        subprocess.run(["ffmpeg", "-v", "error", "-f", "lavfi", "-i", "testsrc2=s=3000x2000", "-frames:v", "1", "-y", p], check=True)
+        with open(p, "rb") as f:
+            b = f.read()
+        with open(p, "wb") as f:                       # 轉 90 度
+            t = tiff([(0x0112, 3, 6)], [], [])
+            app1 = b"Exif\x00\x00" + t
+            f.write(b[:2] + b"\xff\xe1" + struct.pack(">H", len(app1) + 2) + app1 + b[2:])
+        super().setUpClass()
+
+    @classmethod
+    def tearDownClass(cls):
+        super().tearDownClass()
+        shutil.rmtree(ROOT_DIR + "-t", ignore_errors=True)
+
+    def test_thumbs(self):
+        c = http.client.HTTPConnection("127.0.0.1", self.port, timeout=60)
+        c.request("POST", "/api/album", body=json.dumps({"action": "add", "dir": "相簿"}), headers={"X-Token": TOKEN})
+        d = json.loads(c.getresponse().read())
+        code = d["list"][0]["code"]
+        c.request("GET", f"/a/{code}/m")
+        m = json.loads(c.getresponse().read())
+        p = m["photos"][0]
+        self.assertEqual((p["w"], p["h"]), (2000, 3000))
+        sizes = {}
+        for k in "sl":
+            c.request("GET", f"/a/{code}/i/{p['i']}/{k}")
+            r = c.getresponse()
+            b = r.read()
+            self.assertEqual(r.status, 200)
+            i = b.index(b"\xff\xc0")
+            h, w = struct.unpack(">HH", b[i + 5:i + 9])
+            sizes[k] = (w, h)
+            self.assertNotIn(b"Exif", b[:200])                                         # 小圖不帶任何 EXIF
+        self.assertEqual(sizes["s"][1], 480)
+        self.assertLess(sizes["s"][0], sizes["s"][1])                                  # 轉正了（直的）
+        self.assertEqual(max(sizes["l"]), 2560)
+        deadline = time.time() + 20
+        while time.time() < deadline:
+            c.request("GET", f"/a/{code}/m")
+            if json.loads(c.getresponse().read())["photos"][0]["q"]:
+                break
+            time.sleep(0.3)
+        else:
+            self.fail("模糊預覽沒有做出來")
+        for f in os.listdir(os.path.join(self.tmp.name, "data", "album-cache")):
+            if f.endswith(".jpg"):
+                with open(os.path.join(self.tmp.name, "data", "album-cache", f), "rb") as fh:
+                    self.assertEqual(fh.read(4), b"VSE1")                              # 存在主機上的小圖是加密的
+
+
+if __name__ == "__main__":
+    unittest.main()
