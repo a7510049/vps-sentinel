@@ -285,6 +285,9 @@ class Album(Server):
         self.assertEqual(up("a.jpg", photo(), who="")[0], 400)                         # 要寫名字
         self.assertEqual(up("a.txt", b"hello")[0], 415)                                # 不是照片
         self.assertEqual(up("a.jpg", b"<html>not a photo</html>")[0], 415)             # 副檔名騙人
+        bomb = b"\x89PNG\r\n\x1a\n" + struct.pack(">I", 13) + b"IHDR" + struct.pack(">II", 20000, 20000) + b"\x08\x02\x00\x00\x00" + b"\x00" * 64
+        self.assertEqual(up("b.png", bomb)[0], 415)                                    # 炸彈圖（4 億像素）
+        self.assertFalse(os.path.exists(os.path.join(ROOT_DIR, "旅行", "台北", "朋友放的", "小美", "b.png")))
         self.assertEqual(up("IMG_0.jpg", photo(dt="2026:11:09 10:00:00"))[0], 200)      # 放進「朋友放的／小美」
         self.assertEqual(up("IMG_0.jpg", photo(dt="2026:11:09 10:00:00"))[0], 200)      # 同名：不蓋掉
         mine = os.path.join(ROOT_DIR, "旅行", "台北", "朋友放的", "小美")
@@ -313,6 +316,8 @@ class Album(Server):
         p = next(x for x in json.loads(b)["photos"] if x["i"] == new["i"])
         self.assertEqual((p["ub"], p.get("um"), p["u"]), ("小美", 1, "小美"))
         self.assertNotIn("u", next(x for x in json.loads(b)["photos"] if x["i"] == pids[0]))
+        self.assertNotIn("g", p)                                                        # 朋友放的照片不給別人看到定位
+        self.assertIn("g", next(x for x in json.loads(b)["photos"] if x["i"] == pids[0]))
         s, b, h2 = self.req("GET", f"/a/{code}/m")                                     # 別支手機：看得到誰放的，但不能刪
         ck2 = h2["Set-Cookie"].split(";")[0]
         self.assertNotIn("um", next(x for x in json.loads(b)["photos"] if x["i"] == new["i"]))

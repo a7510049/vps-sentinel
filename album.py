@@ -2,6 +2,7 @@
 雲端硬碟裡選一個資料夾，做成一頁照片牆的連結給朋友看：小圖、大圖由主機做好（加密存著），
 朋友打開 /a/十碼 就能看、左右滑、看相機資訊和地點、下載原圖。
 sentinel.py 用 include("album.py") 載入到自己裡面，兩邊共用同一組變數（不是獨立模組）"""
+import resource
 import struct
 import zipfile
 
@@ -30,6 +31,8 @@ ALB_UP_MAX = 500 << 20                                            # 朋友一次
 ALB_UP_PIC = 50 << 20                                             # 照片、動圖最大多少
 ALB_UQ = (1, 5, 20)                                               # 朋友總共最多放幾 GB（主人選；一個人最多四分之一）
 ALB_UP_HOST = 2 << 30                                             # 主機本身至少留這麼多（轉影片、小圖放在主機上）
+ALB_UP_PAR = 3                                                    # 一本相簿同時最多幾個人在放
+ALB_UP_PX = 100_000_000                                           # 照片最多幾個像素（太大的「炸彈圖」解開會吃光記憶體）
 ALB_UP_DAY = 300                                                  # 一支手機一天最多放幾個
 ALB_UP_SPARE = 1 << 30                                            # 雲端硬碟至少留這麼多
 ALB_UP_EV = 120                                                   # 同一個人連續上傳，停下來這麼久才記一筆（傳 Telegram）
@@ -37,7 +40,7 @@ ALB_ZIP_MAX = 500                                                 # 勾選下載
 ALB_OWN_S = 900                                                   # 主人挑照片時看小圖的通行證（15 分鐘）
 ALB_LOCK = threading.Lock()
 ALB_FAILS = {}                                                    # (相簿, 來源) → [輸錯的時間…]
-ALB = {"d": None, "q": [], "ff": None, "busy": set(), "geo_t": 0, "talk": None, "tpost": {}, "upev": {}}
+ALB = {"d": None, "q": [], "ff": None, "busy": set(), "geo_t": 0, "talk": None, "tpost": {}, "upev": {}, "upfl": {}}
 ALB_GEN = threading.BoundedSemaphore(2)                           # 同時最多做兩張（另外一個背景慢慢做）
 ALB_KEY_RE = re.compile(r"[A-Za-z0-9]{10}")
 
@@ -351,7 +354,7 @@ def alb_up_folder(a, th, who):
     ufd = a.setdefault("ufd", {})
     if th in ufd:
         return ufd[th]
-    base = re.sub(r'[\x00-\x1f\x7f/\\:*?"<>|]', "", who).strip().lstrip(".")[:20] or "朋友"
+    base = re.sub(r'[\x00-\x1f\x7f/\\:*?"<>|\u200b-\u200f\u202a-\u202e\u2066-\u2069]', "", who).strip().lstrip(".")[:20] or "朋友"
     p = alb_path(a["dir"]) or ""
     for k, v in list(ufd.items()):                     # 資料夾已經被整理掉的：名字讓出來（那支手機下次放再重取）
         if not os.path.isdir(os.path.join(p, ALB_UPDIR, v)):
@@ -438,7 +441,7 @@ def alb_sniff(head, ext):
 
 def alb_up_name(p, name):
     """朋友上傳的檔名：拿掉怪字、不蓋掉原本的檔案"""
-    name = re.sub(r'[\x00-\x1f\x7f/\\:*?"<>|]', "", os.path.basename(str(name or ""))).strip().lstrip(".")[:120]
+    name = re.sub(r'[\x00-\x1f\x7f/\\:*?"<>|\u200b-\u200f\u202a-\u202e\u2066-\u2069]', "", os.path.basename(str(name or ""))).strip().lstrip(".")[:120]
     stem, ext = os.path.splitext(name)
     ext = ext.lower()
     stem = stem or time.strftime("上傳-%Y%m%d-%H%M%S")
@@ -503,7 +506,24 @@ def alb_upload(h, a, code):
     lim = ALB_UP_MAX if ext in ALB_VID else ALB_UP_PIC
     if n > lim:
         return 413, {"ok": False, "message": f"檔案太大（{'影片' if ext in ALB_VID else '照片'}最多 {lim >> 20} MB）"}
+    with ALB_LOCK:                                     # 同時在放的：一本最多 ALB_UP_PAR 個、一支手機一次一個，空間先算進去
+        fl = ALB["upfl"].setdefault(a["id"], {})
+        if th in fl:
+            return 429, {"ok": False, "message": "上一個還在放"}
+        if len(fl) >= ALB_UP_PAR:
+            return 429, {"ok": False, "message": "大家正在放，等一下再試"}
+        busy = sum(fl.values())
+        fl[th] = n
+    try:
+        return alb_upload_go(h, a, mode, th, who, n, p, name, ext, busy)
+    finally:
+        with ALB_LOCK:
+            fl.pop(th, None)
+
+
+def alb_upload_go(h, a, mode, th, who, n, p, name, ext, busy):
     tot, mine = alb_up_used(a, th)
+    tot += busy
     cap = alb_uq(a) << 30
     if tot + n > cap:
         return 409, {"ok": False, "message": "相簿滿了"}
@@ -583,19 +603,23 @@ def alb_upload(h, a, code):
             pass
         return 500, {"ok": False, "message": "沒放上去，再試一次"}
     pid = alb_pid(final)
-    if alb_ff():                                       # 真的打開一次：做不出小圖就不是照片、影片，刪掉
-        m = alb_meta(os.path.join(p, final))
-        m.update(n=final, sz=n, mt=int(os.path.getmtime(os.path.join(p, final))))
+    m = alb_meta(os.path.join(p, final))
+    m.update(n=final, sz=n, mt=int(os.path.getmtime(os.path.join(p, final))))
+    bad = ""
+    if not m.get("vid") and m.get("w", 0) * m.get("h", 0) > ALB_UP_PX:
+        bad = "照片太大（最多 1 億像素）"                   # 炸彈圖：檔案小、解開很大
+    elif alb_ff():                                     # 真的打開一次：做不出小圖就不是照片、影片
         if os.path.splitext(final)[1].lower() in (".gif", ".png", ".webp"):
             m["anim"] = alb_anim(os.path.join(p, final))
         with ALB_GEN:
-            good = alb_make(a, pid, m)
-        if not good:
-            try:
-                os.remove(os.path.join(p, final))
-            except OSError:
-                pass
-            return 415, {"ok": False, "message": "打不開這個檔案"}
+            if not alb_make(a, pid, m):
+                bad = "打不開這個檔案"
+    if bad:
+        try:
+            os.remove(os.path.join(p, final))
+        except OSError:
+            pass
+        return 415, {"ok": False, "message": bad}
     with ALB_LOCK:
         all_ = alb_all()
         b = all_.get(a["id"])
@@ -1410,20 +1434,53 @@ def alb_ff():
 ALB_ROT = {2: "hflip,", 3: "hflip,vflip,", 4: "vflip,", 5: "transpose=0,", 6: "transpose=1,", 7: "transpose=3,", 8: "transpose=2,"}
 
 
+ALB_FF_UID = 1000                                                 # ffmpeg 用雲端硬碟那個一般帳號跑
+ALB_FF_MEM = 3 << 30                                              # ffmpeg 最多用這麼多記憶體
+
+
+def alb_ff_pre():
+    """主機上的 ffmpeg：記憶體有上限、不用最高權限跑（惡意的照片、影片就算打穿 ffmpeg 也拿不到整台主機）；
+    檔案由哨兵打開後交給它（fd:），所以它自己不用讀得到雲端硬碟"""
+    root = os.geteuid() == 0
+
+    def pre():
+        resource.setrlimit(resource.RLIMIT_AS, (ALB_FF_MEM, ALB_FF_MEM))
+        if root:
+            os.setgroups([])
+            os.setgid(ALB_FF_UID)
+            os.setuid(ALB_FF_UID)
+    return pre
+
+
+def alb_ff_give(path):
+    """給一般帳號用的暫存檔（浮水印的字）：改成它的"""
+    if os.geteuid() == 0 and not alb_ff()[1]:
+        try:
+            os.chown(path, ALB_FF_UID, ALB_FF_UID)
+        except OSError:
+            pass
+
+
 def alb_run_ff(args, data=None, src=None, timeout=120):
     ff = alb_ff()
     if not ff:
         return None
     cmd, mount = ff
-    if src:
-        if mount:                                       # 容器裡看到的雲端硬碟在 /folder
-            src = mount + src[len(alb_root()):]
-        args = [a if a != "{src}" else src for a in args]
+    fin = None
     try:
-        r = subprocess.run(["nice", "-n", "15", *cmd, "-v", "error", "-nostdin" if data is None else "-y", *args],
-                           input=data, capture_output=True, timeout=timeout)
+        if src:
+            if mount:                                   # 容器裡看到的雲端硬碟在 /folder
+                args = [a if a != "{src}" else mount + src[len(alb_root()):] for a in args]
+            else:
+                fin = open(src, "rb")                   # noqa: SIM115  哨兵打開，ffmpeg 只拿到這個檔案
+                args = [a if a != "{src}" else "fd:" for a in args]
+        r = subprocess.run(["nice", "-n", "15", *cmd, "-v", "error", "-y", *args], stdin=fin, input=None if fin else data,
+                           capture_output=True, timeout=timeout, preexec_fn=None if mount else alb_ff_pre())
     except (OSError, subprocess.SubprocessError):
         return None
+    finally:
+        if fin:
+            fin.close()
     return r.stdout if r.returncode == 0 and r.stdout[:2] == b"\xff\xd8" else None
 
 
@@ -1440,8 +1497,11 @@ def alb_ff_info(src):
     cmd, s2 = alb_ff_src(src)
     if not cmd:
         return ""
+    mount = alb_ff()[1]
     try:
-        r = subprocess.run(["nice", "-n", "15", *cmd, "-hide_banner", "-nostdin", "-i", s2], capture_output=True, timeout=60)
+        with open(os.devnull if mount else src, "rb") as fin:
+            r = subprocess.run(["nice", "-n", "15", *cmd, "-hide_banner", "-nostdin", "-i", s2 if mount else "fd:"], stdin=fin,
+                               capture_output=True, timeout=60, preexec_fn=None if mount else alb_ff_pre())
     except (OSError, subprocess.SubprocessError):
         return ""
     return r.stderr.decode("utf-8", "replace")
@@ -1465,6 +1525,7 @@ def alb_make(a, pid, m):
         tf = tempfile.NamedTemporaryFile("w", suffix=".txt", delete=False, encoding="utf-8")  # noqa: SIM115
         tf.write(a["wm"])
         tf.close()
+        alb_ff_give(tf.name)
         vf += (f",drawtext=fontfile='{alb_font(a['wm'])}':textfile='{tf.name}':fontcolor=white@0.6:fontsize='min(w,h)*0.042'"
                ":x='w-tw-min(w,h)*0.035':y='h-th-min(w,h)*0.035':shadowcolor=black@0.35:shadowx=2:shadowy=2")
     still = alb_webp_still(src) if m.get("anim") == 2 else None
@@ -1557,18 +1618,26 @@ def alb_vmake(a, pid, m, kind):
         tf = tempfile.NamedTemporaryFile("w", suffix=".txt", delete=False, encoding="utf-8")  # noqa: SIM115
         tf.write(a["wm"])
         tf.close()
+        alb_ff_give(tf.name)
         vf += (f",drawtext=fontfile='{alb_font(a['wm'])}':textfile='{tf.name}':fontcolor=white@0.6:fontsize='min(w,h)*0.042'"
                ":x='w-tw-min(w,h)*0.035':y='h-th-min(w,h)*0.035':shadowcolor=black@0.35:shadowx=2:shadowy=2")
     mount = alb_ff()[1]
-    tmp = f"/tmp/vsalb-{ck}-{kind}.mp4" if mount else os.path.join(ALB_CACHE, f".{ck}-{kind}.mp4")
+    tdir = None
+    if mount:
+        tmp = f"/tmp/vsalb-{ck}-{kind}.mp4"
+    else:                                              # 一般帳號寫得進去的暫存資料夾（只有它和 root 看得到）
+        tdir = tempfile.mkdtemp(prefix="vsalb-")
+        alb_ff_give(tdir)
+        tmp, src = os.path.join(tdir, "o.mp4"), "fd:"
     args = ["-i", src, "-map", "0:v:0", *(["-map", "0:a:0?"] if kind == "v" else ["-an"]), "-map_metadata", "-1", "-vf", vf,
             "-c:v", "libx264", "-preset", "veryfast", "-crf", "27", "-pix_fmt", "yuv420p", "-threads", "2",
             *(["-c:a", "aac", "-b:a", "96k", "-ac", "2"] if kind == "v" else []), "-movflags", "+faststart", "-f", "mp4", tmp]
     os.makedirs(ALB_CACHE, mode=0o700, exist_ok=True)
     ok = False
     try:
-        r = subprocess.run(["nice", "-n", "17", *cmd, "-v", "error", "-nostdin", "-y", *args], capture_output=True,
-                           timeout=max(300, m.get("dur", 4) * 6))
+        with open(os.devnull if mount else os.path.join(p, name), "rb") as fin:
+            r = subprocess.run(["nice", "-n", "17", *cmd, "-v", "error", "-nostdin", "-y", *args], stdin=fin, capture_output=True,
+                               timeout=max(300, m.get("dur", 4) * 6), preexec_fn=None if mount else alb_ff_pre())
         if r.returncode == 0:
             if mount:                                  # 容器裡做的：倒出來再刪掉
                 pr = subprocess.Popen(["docker", "exec", "vps-cloud", "cat", tmp], stdout=subprocess.PIPE)  # noqa: S607
@@ -1590,7 +1659,7 @@ def alb_vmake(a, pid, m, kind):
             if mount:
                 subprocess.run(["docker", "exec", "vps-cloud", "rm", "-f", tmp], capture_output=True, timeout=30)  # noqa: S607
             else:
-                os.remove(tmp)
+                shutil.rmtree(tdir, ignore_errors=True)
         except (OSError, subprocess.SubprocessError):
             pass
     return ok
@@ -1679,9 +1748,17 @@ def alb_worker():
 
 
 def alb_gc():
-    """清掉已經沒有相簿用到的小圖"""
+    """清掉已經沒有相簿用到的小圖；朋友放到一半斷線留下的暫存檔（一天以上）"""
     keep = set()
     for a in alb_all().values():
+        p = alb_path(a["dir"])
+        for d in [os.path.join(p, ALB_UPDIR, x) for x in (a.get("ufd") or {}).values()] if p else []:
+            try:
+                for e in os.scandir(d):
+                    if e.name.startswith(".vsup-") and e.name.endswith(".part") and time.time() - e.stat(follow_symlinks=False).st_mtime > 86400:
+                        os.remove(e.path)
+            except OSError:
+                pass
         idx = alb_index(a, scan=False)
         for pid, m in (idx.get("ph") or {}).items():
             keep.add(alb_ckey(a, pid, m))
@@ -1879,7 +1956,7 @@ def alb_manifest(a, th=""):
                 it["um"] = 1
         if not it["x"].get("dt"):
             it["x"] = {**it["x"], "dt": time.strftime("%Y:%m:%d %H:%M:%S", time.localtime(m["mt"])), "dtf": 1}
-        if a["loc"] and m.get("g"):
+        if a["loc"] and m.get("g") and not alb_up_who(m["n"]):   # 朋友放的照片不給別人看到他的定位
             it["g"] = m["g"]
             pl = alb_place(m["g"][0], m["g"][1])
             if pl:
@@ -2111,7 +2188,7 @@ def alb_http(h, method):
             return h.send(200, b, "image/webp", cache=86400) or True
         dlm = alb_dl(a)
         vk = "v" if kind == "v" and meta.get("vid") else "m" if kind == "m" and meta.get("lv") else ""
-        if kind == "o" and meta.get("vid") and (dlm == 1 or not a["loc"]):   # 影片只給壓縮的（定位也一起拿掉了）
+        if kind == "o" and meta.get("vid") and (dlm == 1 or not a["loc"] or alb_up_who(meta["n"])):   # 影片只給壓縮的（定位也一起拿掉了）
             vk = "v"
         if vk or kind in ("v", "m"):
             ck = alb_ckey(a, pid, meta)
@@ -2153,7 +2230,7 @@ def alb_http(h, method):
                     h.send_header("Content-Disposition", "attachment; filename*=UTF-8''" + urllib.parse.quote(os.path.basename(meta["n"])))
                 h.end_headers()
                 try:
-                    if a["loc"] or not meta.get("gs"):
+                    if (a["loc"] and not alb_up_who(meta["n"])) or not meta.get("gs"):   # 朋友放的一律拿掉定位
                         shutil.copyfileobj(f, h.wfile, 1 << 20)
                     else:
                         alb_strip_gps(f, meta["gs"], h.wfile, st.st_size)
@@ -2219,7 +2296,7 @@ def alb_http(h, method):
                     try:
                         zi = zipfile.ZipInfo(meta["n"], time.localtime(meta["mt"])[:6])
                         with open(src, "rb") as f, z.open(zi, "w", force_zip64=True) as w:
-                            if a["loc"] or not meta.get("gs"):
+                            if (a["loc"] and not alb_up_who(meta["n"])) or not meta.get("gs"):   # 朋友放的一律拿掉定位
                                 shutil.copyfileobj(f, w, 1 << 20)
                             else:
                                 alb_strip_gps(f, meta["gs"], w, meta["sz"])
