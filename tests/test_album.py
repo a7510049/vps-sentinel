@@ -82,7 +82,8 @@ with open(os.path.join(ROOT_DIR, "旅行", "台北", "說明.txt"), "w") as f:
 
 
 class Album(Server):
-    ENV = {"SENTINEL_ALB_DIR": ROOT_DIR, "SENTINEL_ALB_GEO": "http://127.0.0.1:9/none", "SENTINEL_ALB_FF": "none"}
+    ENV = {"SENTINEL_ALB_DIR": ROOT_DIR, "SENTINEL_ALB_GEO": "http://127.0.0.1:9/none", "SENTINEL_ALB_FF": "none",
+           "SENTINEL_ALB_TILE": "http://127.0.0.1:9/{z}/{x}/{y}.png"}
 
     @classmethod
     def tearDownClass(cls):
@@ -189,6 +190,45 @@ class Album(Server):
         self.assertEqual(self.req("GET", f"/a/{code}/m")[0], 404)
         self.assertEqual(self.call({"action": "list"})[1]["list"], [])
 
+    def test_2_perms(self):
+        """限定手機數、踢掉、挑照片、不給下載、主人預覽、地圖圖塊連不到"""
+        s, d = self.call({"action": "add", "dir": "旅行/台北", "dev": 1, "dl": 0})
+        a = next(x for x in d["list"] if x["id"] == d["id"])
+        code, aid = a["code"], a["id"]
+        self.assertEqual((a["dev"], a["dl"]), (1, 0))
+        s, _, h = self.req("GET", f"/a/{code}/m", hdr={"User-Agent": "Mozilla/5.0 (iPhone; CPU iPhone OS 18_0)"})
+        self.assertEqual(s, 200)
+        ck = h["Set-Cookie"].split(";")[0]
+        self.assertTrue(ck.startswith(f"vsad_{aid}="))
+        self.assertIn("HttpOnly", h["Set-Cookie"])
+        s, b, _ = self.req("GET", f"/a/{code}/m")                                       # 第二支：名額滿了
+        self.assertEqual((s, json.loads(b).get("full")), (403, True))
+        s, b, _ = self.req("GET", f"/a/{code}/m", hdr={"Cookie": ck})
+        m = json.loads(b)
+        pid = m["photos"][0]["i"]
+        self.assertEqual(self.req("GET", f"/a/{code}/i/{pid}/s")[0], 403)               # 沒登記的手機拿不到照片
+        self.assertEqual(self.req("GET", f"/a/{code}/i/{pid}/o", hdr={"Cookie": ck})[0], 403)   # 不給下載就沒有原圖
+        self.assertEqual(self.req("GET", f"/a/{code}/zip", hdr={"Cookie": ck})[0], 403)
+
+        s, d = self.call({"action": "devs", "id": aid})
+        self.assertEqual([x["n"] for x in d["devs"]], ["iPhone"])
+        self.call({"action": "edit", "id": aid, "hide": [pid]})                          # 挑照片：藏起第一張
+        s, b, _ = self.req("GET", f"/a/{code}/m", hdr={"Cookie": ck})
+        self.assertNotIn(pid, [p["i"] for p in json.loads(b)["photos"]])
+        s, d = self.call({"action": "photos", "id": aid})
+        self.assertEqual([p["hid"] for p in d["photos"]], [True, False, False])
+        own = d["own"]
+        self.assertEqual(self.req("GET", f"/a/{code}/i/{pid}/o?own={own}")[0], 403)      # 主人預覽也只看不能拿原圖
+        self.assertEqual(self.req("GET", f"/a/{code}/i/{pid}/s?own=x.y")[0], 403)
+
+        self.call({"action": "edit", "id": aid, "kick": self.call({"action": "devs", "id": aid})[1]["devs"][0]["h"]})
+        s, b, _ = self.req("GET", f"/a/{code}/m", hdr={"Cookie": ck})                   # 踢掉：這支再也打不開
+        self.assertEqual((s, json.loads(b).get("ban")), (403, True))
+        s, _, h = self.req("GET", f"/a/{code}/m")                                       # 名額空出來給別支
+        self.assertEqual(s, 200)
+        self.assertEqual(self.req("GET", f"/a/{code}/t/3/6/3", hdr={"Cookie": h["Set-Cookie"].split(";")[0]})[0], 404)                 # 地圖圖塊連不到
+        self.call({"action": "del", "id": aid})
+
 
 @unittest.skipUnless(shutil.which("ffmpeg"), "沒有 ffmpeg")
 class AlbumThumbs(Server):
@@ -234,7 +274,7 @@ class AlbumThumbs(Server):
             self.assertNotIn(b"Exif", b[:200])                                         # 小圖不帶任何 EXIF
         self.assertEqual(sizes["s"][1], 480)
         self.assertLess(sizes["s"][0], sizes["s"][1])                                  # 轉正了（直的）
-        self.assertEqual(max(sizes["l"]), 2560)
+        self.assertEqual(max(sizes["l"]), 2048)
         deadline = time.time() + 20
         while time.time() < deadline:
             c.request("GET", f"/a/{code}/m")

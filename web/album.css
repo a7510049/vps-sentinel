@@ -1,6 +1,7 @@
 /* ═════════ 相簿分享（朋友打開的那一頁）：數值跟 style.css 的共用規則一樣，深淺照手機設定 ═════════ */
 @font-face{font-family:"Plus Jakarta Sans";font-style:normal;font-weight:200 800;font-display:swap;src:url(/font.woff2) format("woff2");unicode-range:U+0000-00FF,U+2000-206F,U+2122,U+2212}
 :root{
+  --serif:"Noto Serif TC","Noto Serif CJK TC","Source Han Serif TC","Songti TC","STSong","PMingLiU",Georgia,"Times New Roman",serif;
   --font:"Plus Jakarta Sans",-apple-system,BlinkMacSystemFont,"PingFang TC","Noto Sans TC","Microsoft JhengHei",sans-serif;
   --r-xs:6px; --r-sm:12px; --r-md:16px; --r-lg:24px; --r-xl:28px; --r-pill:999px;
   --fs-xs:12px; --fs-s:13px; --fs-m:14.5px; --fs-l:16px; --fs-xl:19px; --fs-2xl:23px; --fs-3xl:30px; --fs-4xl:36px; --fs-hero:clamp(36px,6.4vw,76px);
@@ -14,7 +15,7 @@
   --p:color-mix(in oklab,var(--seed) 55%,#fff); --on-p:#06091a; --bad:#ffb4ab;
   --glass:rgba(18,19,24,.62); --glass2:rgba(255,255,255,.1); --hl:inset 0 1px 0 rgba(255,255,255,.07);
   --sh-card:0 18px 48px -22px rgba(0,0,0,.85); --sh-pop:0 10px 30px -8px rgba(0,0,0,.5);
-  --map-f:none;
+  --map-f:invert(1) hue-rotate(180deg) brightness(.92) contrast(.88) saturate(.55);
 }
 @supports (transition-timing-function:linear(0,1)){:root{
   --sp-fast:.33s linear(0,.022 2%,.088 5%,.221 8%,.658 18%,.821 22%,.94 26%,1.024 31%,1.075 36%,1.093 41%,1.069 51%,1.006 68%,.991 84%,1);
@@ -24,7 +25,7 @@
   --bg:#f6f6f8; --s1:#fff; --s2:#eeeff3; --s3:#e2e4ea; --tx:#15161c; --tx2:#4a4d5c; --tx3:#7a7d8c; --line:rgba(20,24,40,.08);
   --p:color-mix(in oklab,var(--seed) 85%,#000); --on-p:#fff; --bad:#ba1a1a;
   --glass:rgba(255,255,255,.7); --glass2:rgba(20,24,40,.06); --hl:inset 0 1px 0 rgba(255,255,255,.6);
-  --sh-card:0 1px 2px rgba(30,40,90,.05),0 16px 40px -20px rgba(30,40,90,.28); --sh-pop:0 10px 30px -10px rgba(30,40,90,.3)}}
+  --sh-card:0 1px 2px rgba(30,40,90,.05),0 16px 40px -20px rgba(30,40,90,.28); --sh-pop:0 10px 30px -10px rgba(30,40,90,.3); --map-f:saturate(.7) contrast(.95)}}
 @media (min-width:700px){:root{--gap:6px; --pad:28px; --rh:220px}}
 @media (min-width:1200px){:root{--gap:8px; --pad:48px; --rh:260px}}
 
@@ -95,7 +96,7 @@ button.chip:active,a.chip:active{transform:scale(.95)}
 .mh b{font-size:var(--fs-xl);font-weight:750}
 .mh span{font-size:var(--fs-s);color:var(--tx3)}
 .map{position:relative;height:clamp(260px,42vw,460px);border-radius:var(--r-xl);overflow:hidden;background:var(--s2);box-shadow:var(--sh-card);isolation:isolate}
-.map .tl{position:absolute;width:256px;height:256px;opacity:0;transition:opacity var(--t-slow) var(--ease);filter:var(--map-f);user-select:none;-webkit-user-drag:none}
+.map .tl{position:absolute;opacity:0;transition:opacity var(--t-slow) var(--ease);filter:var(--map-f);user-select:none;-webkit-user-drag:none}
 .map .tl.ok{opacity:1}
 .mk{position:absolute;width:48px;height:48px;margin:-24px 0 0 -24px;border-radius:50%;border:3px solid #fff;box-shadow:var(--sh-pop);overflow:hidden;background:var(--s3);z-index:1;
   transition:transform var(--sp-fast);animation:pop var(--t-slow) var(--sp-fast) both}
@@ -191,7 +192,7 @@ button.chip:active,a.chip:active{transform:scale(.95)}
 .ipl .go{margin-left:auto;color:var(--p);flex:none}
 .ipl .go svg{width:20px;height:20px}
 .imap{position:relative;height:160px;overflow:hidden;background:var(--s2);display:block}
-.imap .tl{position:absolute;width:256px;height:256px;opacity:0;transition:opacity var(--t-mid) var(--ease);filter:var(--map-f)}
+.imap .tl{position:absolute;opacity:0;transition:opacity var(--t-mid) var(--ease);filter:var(--map-f)}
 .imap .tl.ok{opacity:1}
 .imap .pin{position:absolute;left:50%;top:50%;width:22px;height:22px;margin:-11px 0 0 -11px;border-radius:50%;background:var(--p);border:3px solid #fff;box-shadow:var(--sh-pop);z-index:1}
 .imap .pin::after{content:"";position:absolute;inset:-12px;border-radius:50%;background:var(--p);opacity:.25;animation:ring 2.4s var(--ease) infinite}
@@ -221,5 +222,78 @@ button.chip:active,a.chip:active{transform:scale(.95)}
 .toast{position:fixed;left:50%;bottom:calc(24px + env(safe-area-inset-bottom));z-index:var(--z-toast);transform:translate(-50%,20px);opacity:0;padding:12px 18px;border-radius:var(--r-pill);
   background:var(--tx);color:var(--bg);font-weight:600;font-size:var(--fs-s);transition:opacity var(--t-mid) var(--ease),transform var(--t-mid) var(--ease);pointer-events:none}
 .toast.on{opacity:1;transform:translate(-50%,0)}
+
+/* ═════════ 藝術感：書本、雜誌的排版（襯線標題、細線、整排的主角照片） ═════════ */
+.hero{height:100svh;min-height:520px}
+.hero .cv .hi.ok{animation:kb 26s var(--ease) both}
+@keyframes kb{from{transform:scale(1.08)}to{transform:none}}
+.hero::after{background:radial-gradient(120% 90% at 50% 40%,transparent 45%,rgba(0,0,0,.35) 100%),
+  linear-gradient(180deg,rgba(0,0,0,.32) 0,transparent 22%,transparent 42%,color-mix(in oklab,var(--bg) 62%,transparent) 78%,var(--bg) 100%)}
+.hcap{text-align:center;padding-bottom:calc(clamp(64px,13vh,140px) + env(safe-area-inset-bottom))}
+.eyebrow{display:inline-flex;align-items:center;gap:14px;font-size:var(--fs-xs);font-weight:600;letter-spacing:.16em;color:rgba(255,255,255,.82);margin-bottom:18px;text-shadow:0 1px 12px rgba(0,0,0,.4)}
+.eyebrow::before,.eyebrow::after{content:"";width:clamp(20px,6vw,56px);height:1px;background:currentColor;opacity:.6}
+.hcap h1{font-family:var(--serif);font-weight:600;letter-spacing:.06em;line-height:1.12;font-size:clamp(38px,9vw,104px);color:#fff;text-shadow:0 2px 30px rgba(0,0,0,.35)}
+.hmeta{justify-content:center;margin-top:26px}
+.hero .chip{background:rgba(255,255,255,.14);color:#fff;box-shadow:inset 0 0 0 1px rgba(255,255,255,.26)}
+.hero .chip svg{color:rgba(255,255,255,.85)}
+.hero .chip.go{background:#fff;color:#111;box-shadow:none}
+.hero .chip.go svg{color:#111}
+.cue{position:absolute;left:50%;bottom:calc(18px + env(safe-area-inset-bottom));z-index:1;width:44px;height:56px;margin-left:-22px;display:grid;place-items:center;opacity:0;animation:up var(--t-slow) var(--dec) .5s forwards}
+.cue i{position:relative;width:1px;height:38px;background:rgba(255,255,255,.3);overflow:hidden}
+.cue i::after{content:"";position:absolute;left:0;top:-40%;width:1px;height:40%;background:#fff;animation:fall 2.2s var(--ease) infinite}
+@keyframes fall{to{top:100%}}
+@media (prefers-color-scheme:light){
+  .eyebrow{color:var(--tx2);text-shadow:none}
+  .hcap h1{color:var(--tx);text-shadow:0 1px 24px color-mix(in oklab,var(--bg) 60%,transparent)}
+  .hero .chip{background:var(--glass);color:var(--tx);box-shadow:inset 0 0 0 1px var(--line)}
+  .hero .chip svg{color:var(--tx2)}
+  .hero .chip.go{background:var(--tx);color:var(--bg)}
+  .hero .chip.go svg{color:var(--bg)}
+  .cue i{background:color-mix(in oklab,var(--tx) 25%,transparent)}
+  .cue i::after{background:var(--tx)}
+}
+.bar b{font-family:var(--serif);font-weight:600;letter-spacing:.04em}
+
+/* 每一天是一章：大大的章節號碼、襯線日期、細線 */
+.wall{counter-reset:ch}
+.day{counter-increment:ch;margin-top:clamp(40px,8vw,96px)}
+.day:first-child{margin-top:clamp(20px,4vw,40px)}
+.dh{display:grid;grid-template-columns:auto 1fr;align-items:end;column-gap:16px;row-gap:2px;margin:0 2px clamp(14px,2.4vw,24px);padding-bottom:12px;border-bottom:1px solid var(--line)}
+.dh::before{content:counter(ch,decimal-leading-zero);grid-row:span 2;font-family:var(--serif);font-style:italic;font-weight:400;font-size:clamp(40px,7vw,64px);line-height:.85;color:var(--tx3);opacity:.7}
+.dh b{font-family:var(--serif);font-weight:600;font-size:clamp(19px,2.6vw,26px);letter-spacing:.03em}
+.dh span{font-size:var(--fs-s);color:var(--tx3);letter-spacing:.06em}
+.dh span:empty{display:none}
+.row.feat{margin-bottom:calc(var(--gap) * 2 + 6px)}
+.row.feat .ph{border-radius:var(--r-sm)}
+@media (min-width:700px){.row.feat .ph{border-radius:var(--r-md)}}
+
+.msec{margin-top:clamp(40px,8vw,96px)}
+.mh{padding-bottom:12px;border-bottom:1px solid var(--line);margin-bottom:clamp(14px,2.4vw,24px)}
+.mh b{font-family:var(--serif);font-weight:600;letter-spacing:.03em;font-size:clamp(19px,2.6vw,26px)}
+.foot{flex-direction:column;text-align:center;justify-content:center;gap:10px;padding-top:clamp(56px,10vw,120px)}
+.fin{display:flex;align-items:center;gap:16px;font-family:var(--serif);font-size:var(--fs-xl);font-weight:600;letter-spacing:.08em;color:var(--tx2)}
+.fin::before,.fin::after{content:"";width:40px;height:1px;background:var(--line);box-shadow:0 0 0 .5px var(--tx3);opacity:.6}
+
+/* 等待、密碼、看不到：跟相簿同一套（襯線標題、細線框、柔光） */
+.gate::before{display:none}
+.gate .glow{position:absolute;inset:-20%;background:radial-gradient(38% 34% at 28% 30%,color-mix(in oklab,var(--seed) 30%,transparent),transparent 70%),
+  radial-gradient(34% 30% at 74% 70%,color-mix(in oklab,#d9a066 26%,transparent),transparent 70%);filter:blur(40px);animation:drift 20s var(--ease) infinite alternate}
+.card{background:transparent;box-shadow:none;-webkit-backdrop-filter:none;backdrop-filter:none;width:min(360px,100%);padding:8px 8px 0}
+.card .ic{width:72px;height:72px;margin-bottom:26px;background:transparent;color:var(--tx);box-shadow:inset 0 0 0 1px var(--line),0 0 0 10px color-mix(in oklab,var(--tx) 3%,transparent)}
+.card .ic svg{width:26px;height:26px;stroke-width:1.5}
+.card h2{font-family:var(--serif);font-weight:600;font-size:clamp(26px,6vw,34px);letter-spacing:.06em;margin-bottom:10px}
+.card p{color:var(--tx3);letter-spacing:.04em;margin-bottom:0}
+.card .field{margin-top:30px;height:54px;border:0;border-bottom:1px solid color-mix(in oklab,var(--tx) 28%,transparent);border-radius:0;background:transparent;font-size:var(--fs-input,18px);letter-spacing:.3em}
+.card .field::placeholder{color:var(--tx3);letter-spacing:.2em;font-size:var(--fs-m)}
+.card .field:focus{border-color:var(--tx)}
+.card .btn{margin-top:26px;background:var(--tx);color:var(--bg);letter-spacing:.12em}
+.skw{display:none}
+#app>.hero.sk{height:100svh;min-height:520px}
+
+/* 照片不能長按另存；主機印不了浮水印時，畫面上蓋一層字 */
+.ph img,.zw img,.mk img,.hero img{-webkit-touch-callout:none;-webkit-user-select:none;user-select:none}
+.wmo .ph::after,.wmo .zw::after{content:var(--wm);position:absolute;right:4%;bottom:4%;color:rgba(255,255,255,.62);font-weight:700;letter-spacing:.06em;
+  text-shadow:0 1px 3px rgba(0,0,0,.45);pointer-events:none;font-size:clamp(10px,3.4cqmin,28px)}
+.ph,.zw{container-type:size}
 
 @media (prefers-reduced-motion:reduce){*,*::before,*::after{animation-duration:.001s!important;transition-duration:.001s!important}}

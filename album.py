@@ -14,6 +14,10 @@ ALB_TIMES = (86400, 7 * 86400, 30 * 86400, 0)                     # 能選的期
 ALB_MAX = 2000                                                    # 一本最多幾張
 ALB_PW_TRY = (5, 15 * 60)                                         # 同一個來源 15 分鐘錯 5 次先鎖住
 ALB_COOKIE_H = 12                                                 # 輸對密碼後這個瀏覽器能看幾小時
+ALB_DEVS = (0, 1, 3)                                              # 幾支手機能看（0 = 不限）
+ALB_DEVKEEP = 60                                                  # 看過的手機最多記幾支
+ALB_DLS = (0, 1, 2)                                               # 下載：不給、只給壓縮圖、給原圖
+ALB_OWN_S = 900                                                   # 主人挑照片時看小圖的通行證（15 分鐘）
 ALB_LOCK = threading.Lock()
 ALB_FAILS = {}                                                    # (相簿, 來源) → [輸錯的時間…]
 ALB = {"d": None, "q": [], "ff": None, "busy": set(), "geo_t": 0}
@@ -66,6 +70,124 @@ def alb_count():
         return len(alb_all())
     except Exception:  # noqa: BLE001
         return 0
+
+
+def alb_dl(a):
+    """下載：0 不給、1 只給壓縮圖、2 給原圖（舊版存的是 True／False）"""
+    v = a.get("dl", 2)
+    return 2 if v is True else 0 if v is False or v not in ALB_DLS else v
+
+
+def alb_ua_name(ua):
+    """看過的手機叫什麼：機型＋瀏覽器（看不出來就寫電腦、手機）"""
+    ua = ua or ""
+    dev = "iPhone" if "iPhone" in ua else "iPad" if "iPad" in ua else ""
+    if not dev and "Android" in ua:
+        m = re.search(r"Android [\d.]+;(?: [a-z]{2}[-_][A-Za-z]{2};)? ([^;)]+?)(?: Build/[^;)]*)?\)", ua)
+        dev = m[1].strip() if m and m[1].strip() not in ("K", "wv") else "Android 手機"
+    if not dev:
+        dev = "Mac" if "Macintosh" in ua else "Windows 電腦" if "Windows" in ua else "Linux 電腦" if "Linux" in ua else "裝置"
+    for k, n in (("Line/", "LINE"), ("Instagram", "Instagram"), ("FBAN", "Facebook"), ("FB_IAB", "Facebook"), ("MicroMessenger", "微信"),
+                 ("EdgA/", "Edge"), ("Edg/", "Edge"), ("SamsungBrowser", "三星瀏覽器"), ("Firefox/", "Firefox"), ("FxiOS", "Firefox"),
+                 ("CriOS", "Chrome"), ("Chrome/", "Chrome"), ("Safari/", "Safari")):
+        if k in ua:
+            return f"{dev}・{n}"[:60]
+    return dev[:60]
+
+
+def alb_dev_tok(h, a):
+    for part in (h.headers.get("Cookie") or "").split(";"):
+        k, _, v = part.strip().partition("=")
+        if k == f"vsad_{a['id']}" and re.fullmatch(r"[0-9a-f]{32}", v):
+            return v
+    return ""
+
+
+def alb_dev_hash(tok):
+    return hashlib.sha256(tok.encode()).hexdigest()[:24]
+
+
+def alb_dev_check(h, a, register):
+    """這支手機能不能看；register＝打開相簿那一下（要記下來、可能佔一個名額）。回傳 (能不能看, 原因, 要給的新 cookie)"""
+    tok, new = alb_dev_tok(h, a), ""
+    lim = a.get("dev") or 0
+    if not tok:
+        if not register:
+            return lim == 0, "full", ""
+        tok = new = secrets.token_hex(16)
+    th = alb_dev_hash(tok)
+    if th in (a.get("ban") or []):
+        return False, "ban", ""
+    if not register:
+        return lim == 0 or th in (a.get("devs") or {}), "full", ""
+    now = time.time()
+    with ALB_LOCK:
+        all_ = alb_all()
+        b = all_.get(a["id"])
+        if not b:
+            return False, "gone", ""
+        devs = b.setdefault("devs", {})
+        d = devs.get(th)
+        if not d:
+            if lim and len(devs) >= lim:
+                return False, "full", ""
+            d = devs[th] = {"n": alb_ua_name(h.headers.get("User-Agent")), "t0": now, "t": 0, "c": 0}
+            if len(devs) > ALB_DEVKEEP:
+                for k in sorted(devs, key=lambda x: devs[x].get("t", 0))[:len(devs) - ALB_DEVKEEP]:
+                    devs.pop(k, None)
+        if now - d.get("t", 0) > 1800:                 # 半小時內同一支再打開不重算
+            d["c"] = d.get("c", 0) + 1
+            b["views"] = b.get("views", 0) + 1
+        d["t"] = b["last"] = now
+        try:
+            alb_save(all_)
+        except OSError:
+            pass
+    return True, "", new
+
+
+def alb_own_val(a, exp):
+    exp = int(exp)
+    return f"{exp}.{hmac.new((a['k'] + '|own').encode(), (a['id'] + '|' + str(exp)).encode(), hashlib.sha256).hexdigest()[:32]}"
+
+
+def alb_own_ok(h, a):
+    """主人挑照片時看小圖（帶短時間的通行證，不用密碼、不佔手機名額）"""
+    v = (urllib.parse.parse_qs(urllib.parse.urlsplit(h.path).query).get("own") or [""])[0]
+    exp = v.split(".")[0]
+    return exp.isdigit() and time.time() < int(exp) and hmac.compare_digest(v, alb_own_val(a, exp))
+
+
+ALB_FONT = {"f": None}
+
+
+def alb_font(text):
+    """浮水印用的字型（主機上要有；中文要有中文字型）；沒有就回空字串"""
+    if ALB_FONT["f"] is None:
+        f = {"cjk": "", "any": ""}
+        env = os.environ.get("SENTINEL_ALB_FONT")
+        if env is not None:
+            f = {"cjk": env, "any": env}
+        else:
+            try:
+                r = subprocess.run(["fc-list", ":lang=zh-tw", "file"], capture_output=True, text=True, timeout=10)
+                fs = sorted(x.split(":")[0].strip() for x in r.stdout.splitlines() if x.strip())
+                f["cjk"] = next((x for x in fs if re.search(r"(?i)(sans|hei|gothic)", x)), fs[0] if fs else "")
+                r = subprocess.run(["fc-match", "-f", "%{file}", "sans:bold"], capture_output=True, text=True, timeout=10)
+                f["any"] = f["cjk"] or r.stdout.strip()
+            except (OSError, subprocess.SubprocessError):
+                pass
+        ALB_FONT["f"] = f
+    f = ALB_FONT["f"]
+    font = f["any"] if text.isascii() else f["cjk"]
+    return font if font and os.path.exists(font) and "'" not in font and ":" not in font else ""
+
+
+def alb_wm_bake(a):
+    """浮水印能不能直接印在照片上（要主機上的 ffmpeg 和字型；在雲端硬碟容器裡做的看不到主機的字型）"""
+    wm = a.get("wm") or ""
+    ff = alb_ff()
+    return bool(wm and ff and not ff[1] and alb_font(wm))
 
 
 def alb_photos_in(p):
@@ -152,8 +274,9 @@ def alb_add(d):
     root = alb_root()
     a = {"id": secrets.token_hex(6), "code": alb_new_code(), "name": alb_clean_name(d.get("name"), os.path.basename(p) or "相簿"),
          "dir": os.path.relpath(p, root).replace(os.sep, "/"), "pw": alb_pw_hash(pw) if pw else None, "exp": now + secs if secs else 0,
-         "t0": now, "loc": d.get("loc", True) is not False, "dl": d.get("dl", True) is not False, "views": 0, "last": 0,
-         "k": secrets.token_hex(16)}
+         "t0": now, "loc": d.get("loc", True) is not False, "dl": alb_dl({"dl": d.get("dl", 2)}), "views": 0, "last": 0,
+         "k": secrets.token_hex(16), "dev": d.get("dev") if d.get("dev") in ALB_DEVS else 0, "devs": {}, "ban": [], "hide": [],
+         "wm": alb_clean_wm(d.get("wm"))}
     if a["dir"] == ".":
         a["dir"] = ""
     with ALB_LOCK:
@@ -171,7 +294,12 @@ def alb_add(d):
     return True, "好了", {"id": a["id"]}
 
 
+def alb_clean_wm(s):
+    return re.sub(r"[\x00-\x1f\x7f]", "", str(s or "")).strip()[:24]
+
+
 def alb_edit(d):
+    regen = False
     with ALB_LOCK:
         all_ = alb_all()
         a = all_.get(str(d.get("id") or ""))
@@ -179,9 +307,28 @@ def alb_edit(d):
             return False, "這本已經收回了"
         if "name" in d:
             a["name"] = alb_clean_name(d.get("name"), a["name"])
-        for k in ("loc", "dl"):
-            if k in d:
-                a[k] = bool(d[k])
+        if "loc" in d:
+            a["loc"] = bool(d["loc"])
+        if "dl" in d:
+            a["dl"] = alb_dl({"dl": d["dl"]})
+        if "dev" in d and d["dev"] in ALB_DEVS:
+            a["dev"] = d["dev"]
+            devs = a.get("devs") or {}
+            if a["dev"] and len(devs) > a["dev"]:          # 名額變少：留最近看的那幾支
+                keep = sorted(devs, key=lambda x: -devs[x].get("t", 0))[:a["dev"]]
+                a["devs"] = {k: devs[k] for k in keep}
+        if "kick" in d:                                   # 踢掉一支手機：之後這支打不開
+            th = str(d["kick"])
+            if th in (a.get("devs") or {}):
+                a["devs"].pop(th)
+                a["ban"] = (a.get("ban") or [])[-199:] + [th]
+        if "hide" in d and isinstance(d["hide"], list):
+            idx = alb_index(a, scan=False)
+            a["hide"] = [x for x in d["hide"] if isinstance(x, str) and x in (idx.get("ph") or {})][:ALB_MAX]
+        if "wm" in d:
+            wm = alb_clean_wm(d["wm"])
+            regen = wm != (a.get("wm") or "")
+            a["wm"] = wm
         if "pw" in d:
             pw = str(d.get("pw") or "")
             if pw and not 4 <= len(pw) <= 64:
@@ -192,7 +339,7 @@ def alb_edit(d):
             s = int(d["secs"])
             a["exp"] = time.time() + s if s else 0
         alb_save(all_)
-    if a["loc"]:
+    if a["loc"] or regen:
         alb_kick(a["id"])
     return True, "改好了"
 
@@ -226,10 +373,28 @@ def alb_list():
     for a in sorted(alb_all().values(), key=lambda x: -x.get("t0", 0)):
         idx = alb_index(a, scan=False)
         ph = idx.get("order") or []
+        hid = set(a.get("hide") or [])
         out.append({"id": a["id"], "code": a["code"], "name": a["name"], "dir": a["dir"], "exp": a["exp"], "t0": a["t0"],
-                    "pw": bool(a.get("pw")), "loc": a["loc"], "dl": a["dl"], "views": a.get("views", 0), "last": a.get("last", 0),
-                    "n": len(ph), "cover": ph[0] if ph else "", "ready": alb_ready(a, idx)})
+                    "pw": bool(a.get("pw")), "loc": a["loc"], "dl": alb_dl(a), "views": a.get("views", 0), "last": a.get("last", 0),
+                    "n": len([x for x in ph if x not in hid]), "all": len(ph), "cv": alb_cover(a, idx), "ready": alb_ready(a, idx),
+                    "dev": a.get("dev") or 0, "ndev": len(a.get("devs") or {}), "wm": a.get("wm") or "", "wmok": not a.get("wm") or alb_wm_bake(a)})
     return {"ok": True, "list": out, "base": alb_base(), "cloud": bool(alb_root()), "times": ALB_TIMES}
+
+
+def alb_cover(a, idx):
+    """主人清單的封面：直接帶小圖（有密碼的相簿用連結會被擋；別台主機也不用另外連）"""
+    hid = set(a.get("hide") or [])
+    order = [x for x in idx.get("order") or [] if x not in hid]
+    for pid in order[:6]:
+        m = (idx.get("ph") or {}).get(pid)
+        if not m or m.get("bad"):
+            continue
+        fn = alb_cfile(alb_ckey(a, pid, m), "s")
+        try:
+            return "data:image/jpeg;base64," + base64.b64encode(sec_read(fn)).decode()
+        except (OSError, ValueError):
+            continue
+    return ""
 
 
 def alb_find(code):
@@ -613,7 +778,8 @@ def alb_index(a, scan=True):
 
 def alb_ckey(a, pid, m):
     root = alb_root() or ""
-    return hashlib.sha256(f"{root}/{a['dir']}/{m['n']}|{m['sz']}|{m['mt']}".encode()).hexdigest()[:24]
+    wm = (a.get("wm") or "") if alb_wm_bake(a) else ""
+    return hashlib.sha256(f"{root}/{a['dir']}/{m['n']}|{m['sz']}|{m['mt']}|2048|{wm}".encode()).hexdigest()[:24]
 
 
 def alb_cfile(ck, kind):
@@ -672,7 +838,7 @@ def alb_run_ff(args, data=None, src=None, timeout=120):
 
 
 def alb_make(a, pid, m):
-    """做大圖（長邊 2560）、小圖（高 480）、模糊預覽（寬 24）；不留任何 EXIF"""
+    """做大圖（長邊 2048）、小圖（高 480）、模糊預覽（寬 24）；不留任何 EXIF"""
     p = alb_path(a["dir"])
     if not p:
         return False
@@ -683,8 +849,21 @@ def alb_make(a, pid, m):
     ext = os.path.splitext(m["n"])[1].lower()
     rot = ALB_ROT.get(m.get("ori", 1), "") if ext in (".jpg", ".jpeg") else ""
     out = ["-map_metadata", "-1", "-frames:v", "1", "-f", "image2pipe", "-c:v", "mjpeg", "-pix_fmt", "yuvj420p"]
-    big = alb_run_ff((["-noautorotate"] if ext in (".jpg", ".jpeg") else []) + ["-i", "{src}", "-vf",
-                     rot + "scale='if(gt(iw,ih),min(2560,iw),-2)':'if(gt(iw,ih),-2,min(2560,ih))':flags=lanczos", *out, "-q:v", "3", "-"], src=src, timeout=180)
+    vf, tf = rot + "scale='if(gt(iw,ih),min(2048,iw),-2)':'if(gt(iw,ih),-2,min(2048,ih))':flags=lanczos", None
+    if alb_wm_bake(a):                                 # 浮水印：右下角半透明白字
+        tf = tempfile.NamedTemporaryFile("w", suffix=".txt", delete=False, encoding="utf-8")  # noqa: SIM115
+        tf.write(a["wm"])
+        tf.close()
+        vf += (f",drawtext=fontfile='{alb_font(a['wm'])}':textfile='{tf.name}':fontcolor=white@0.6:fontsize='min(w,h)*0.042'"
+               ":x='w-tw-min(w,h)*0.035':y='h-th-min(w,h)*0.035':shadowcolor=black@0.35:shadowx=2:shadowy=2")
+    try:
+        big = alb_run_ff((["-noautorotate"] if ext in (".jpg", ".jpeg") else []) + ["-i", "{src}", "-vf", vf, *out, "-q:v", "4", "-"], src=src, timeout=180)
+    finally:
+        if tf:
+            try:
+                os.remove(tf.name)
+            except OSError:
+                pass
     if not big:
         return False
     small = alb_run_ff(["-f", "mjpeg", "-i", "pipe:0", "-vf", "scale=-2:'min(480,ih)':flags=lanczos", *out, "-q:v", "4", "-"], data=big)
@@ -764,6 +943,10 @@ def alb_worker():
             log(f"相簿小圖做不出來（{str(e)[:120]}）")
         with ALB_LOCK:
             ALB["q"].pop(0)
+            last = not ALB["q"]
+        if last:                                       # 清單空了就結束（之後再排進來的會另開一個）
+            alb_gc()                                   # 換了浮水印、大小，舊的小圖清掉
+            return
 
 
 def alb_gc():
@@ -874,6 +1057,48 @@ def alb_place(lat, lon, wait=False):
 
 
 # ── 朋友那邊：網頁、照片清單、圖、下載 ──
+ALB_TILE_DIR = os.path.join(DATA_DIR, "album-tiles")             # 地圖圖塊（不備份，重抓得到）
+ALB_TILE_URL = os.environ.get("SENTINEL_ALB_TILE") or "https://tile.openstreetmap.org/{z}/{x}/{y}.png"
+ALB_TILE_DAYS = 30
+ALB_TILE_GATE = threading.BoundedSemaphore(4)
+
+
+def alb_tile(z, x, y):
+    """OpenStreetMap 的一格地圖（照它的規定：寫清楚是哪個程式、存起來重複用）"""
+    if not (0 <= z <= 19 and x < 2 ** z and y < 2 ** z):
+        return None
+    fn = os.path.join(ALB_TILE_DIR, str(z), str(x), f"{y}.png")
+    try:
+        st = os.stat(fn)
+        if time.time() - st.st_mtime < ALB_TILE_DAYS * 86400:
+            with open(fn, "rb") as f:
+                return f.read()
+    except OSError:
+        st = None
+    url = ALB_TILE_URL.format(z=z, x=x, y=y)
+    try:
+        with ALB_TILE_GATE:
+            req = urllib.request.Request(url, headers={"User-Agent": f"vps-sentinel/{VERSION} (+https://github.com/a7510049/vps-sentinel)"})
+            with urllib.request.urlopen(req, timeout=15) as r:  # noqa: S310
+                b = r.read(2 << 20)
+        if not b.startswith(b"\x89PNG"):
+            raise ValueError("not png")
+        os.makedirs(os.path.dirname(fn), mode=0o700, exist_ok=True)
+        tmp = fn + ".tmp"
+        with open(tmp, "wb") as f:
+            f.write(b)
+        os.replace(tmp, fn)
+        return b
+    except (OSError, ValueError):
+        if st:                                         # 連不上就先用舊的
+            try:
+                with open(fn, "rb") as f:
+                    return f.read()
+            except OSError:
+                pass
+        return None
+
+
 def alb_page():
     try:
         with open(os.path.join(HERE, "web", "album.html"), encoding="utf-8") as f:
@@ -890,8 +1115,10 @@ def alb_page():
 def alb_manifest(a):
     idx = alb_index(a)
     ph = idx.get("ph") or {}
-    out, places = [], {}
+    out, places, hid = [], {}, set(a.get("hide") or [])
     for pid in idx.get("order", []):
+        if pid in hid:
+            continue
         m = ph[pid]
         ck = alb_ckey(a, pid, m)
         q = ""
@@ -914,7 +1141,8 @@ def alb_manifest(a):
         out.append(it)
     if alb_ready(a, idx) < 1 or (a["loc"] and any("g" in x and "p" not in x for x in out)):
         alb_kick(a["id"])
-    return {"ok": True, "name": a["name"], "photos": out, "dl": a["dl"], "loc": a["loc"], "exp": a["exp"],
+    wmo = a.get("wm") if a.get("wm") and not alb_wm_bake(a) else ""
+    return {"ok": True, "name": a["name"], "photos": out, "dl": alb_dl(a), "loc": a["loc"], "exp": a["exp"], "wmo": wmo,
             "places": [k for k, _ in sorted(places.items(), key=lambda x: -x[1])][:6], "ready": alb_ready(a, idx)}
 
 
@@ -1006,28 +1234,51 @@ def alb_http(h, method):
         return True
     if method != "GET":
         return h.send(404, '{"error":"找不到"}') or True
-    if not alb_cookie_ok(h, a):
+    own = bool(re.fullmatch(r"/i/[0-9a-f]{12}/[slq]", rest)) and alb_own_ok(h, a)   # 主人挑照片
+    if not own and not alb_cookie_ok(h, a):
         return h.send(401, json.dumps({"ok": False, "pw": True}), cache=False) or True
-    if rest == "/m":
-        with ALB_LOCK:
-            all_ = alb_all()
-            if a["id"] in all_ and time.time() - all_[a["id"]].get("last", 0) > 1800:   # 半小時內同一本再打開不重算
-                all_[a["id"]]["views"] = all_[a["id"]].get("views", 0) + 1
-                all_[a["id"]]["last"] = time.time()
-                try:
-                    alb_save(all_)
-                except OSError:
-                    pass
-        return h.send(200, json.dumps(alb_manifest(a), ensure_ascii=False, separators=(",", ":"))) or True
+    if not own:
+        ok, why, new = alb_dev_check(h, a, rest == "/m")
+        if not ok:
+            return h.send(403, json.dumps({"ok": False, why: True}), cache=False) or True
+        if rest == "/m":
+            extra = [("Set-Cookie", f"vsad_{a['id']}={new}; Path=/a/{code}; Max-Age={400 * 86400}; HttpOnly; SameSite=Strict"
+                      + ("; Secure" if h.https() else ""))] if new else []
+            return h.send(200, json.dumps(alb_manifest(a), ensure_ascii=False, separators=(",", ":")), extra=extra) or True
+    m = re.fullmatch(r"/t/(\d{1,2})/(\d{1,6})/(\d{1,6})", rest)
+    if m:                                              # 地圖底圖：主機幫忙拿 OpenStreetMap 的圖塊（朋友不用連外面、不用金鑰）
+        if not a["loc"]:
+            return h.send(404, '{"error":"找不到"}') or True
+        b = alb_tile(int(m[1]), int(m[2]), int(m[3]))
+        if not b:
+            return h.send(404, '{"error":"找不到"}') or True
+        h.send_response(200)
+        h.send_header("Content-Type", "image/png")
+        h.send_header("Content-Length", str(len(b)))
+        h.send_header("Cache-Control", "private, max-age=604800")
+        h.send_header("X-Content-Type-Options", "nosniff")
+        h.end_headers()
+        try:
+            h.wfile.write(b)
+        except (BrokenPipeError, ConnectionResetError, OSError):
+            pass
+        return True
     m = re.fullmatch(r"/i/([0-9a-f]{12})/([slqo])", rest)
     if m:
         pid, kind = m[1], m[2]
         idx = alb_index(a, scan=False)
         meta = (idx.get("ph") or {}).get(pid)
-        if not meta:
+        if not meta or (pid in (a.get("hide") or []) and not own):
             return h.send(404, '{"error":"找不到"}') or True
+        dlm = alb_dl(a)
+        if kind == "o" and dlm == 1 and not meta.get("bad"):   # 只給壓縮圖：下載的是大圖
+            b, _ = alb_get(a, pid, "l")
+            if not b:
+                return h.send(404, '{"error":"找不到"}') or True
+            fn = os.path.splitext(meta["n"])[0] + ".jpg"
+            return h.send(200, b, "image/jpeg", extra=[("Content-Disposition", "attachment; filename*=UTF-8''" + urllib.parse.quote(fn))]) or True
         if kind == "o" or meta.get("bad"):            # 原圖（下載；或做不出小圖時直接看）
-            if kind == "o" and not a["dl"]:
+            if dlm < 2:                                # 不給原圖的相簿一律不給（做不出小圖的也一樣）
                 return h.send(403, '{"error":"不能下載"}') or True
             p = alb_path(a["dir"])
             src = os.path.join(p, meta["n"]) if p else ""
@@ -1071,8 +1322,9 @@ def alb_http(h, method):
         except (BrokenPipeError, ConnectionResetError, OSError):
             pass
         return True
-    if rest == "/zip":                                 # 全部原圖打包（不壓縮，邊讀邊送）
-        if not a["dl"]:
+    if rest == "/zip":                                 # 全部打包（不壓縮，邊讀邊送；只給壓縮圖的打包大圖）
+        dlm = alb_dl(a)
+        if not dlm:
             return h.send(403, '{"error":"不能下載"}') or True
         idx = alb_index(a, scan=False)
         p = alb_path(a["dir"])
@@ -1087,8 +1339,16 @@ def alb_http(h, method):
         h.end_headers()
         try:
             with zipfile.ZipFile(h.wfile, "w", zipfile.ZIP_STORED, allowZip64=True) as z:
+                hid = set(a.get("hide") or [])
                 for pid in idx.get("order", []):
                     meta = idx["ph"][pid]
+                    if pid in hid or (dlm < 2 and meta.get("bad")):
+                        continue
+                    if dlm == 1:
+                        b, _ = alb_get(a, pid, "l")
+                        if b:
+                            z.writestr(zipfile.ZipInfo(os.path.splitext(meta["n"])[0] + ".jpg", time.localtime(meta["mt"])[:6]), b)
+                        continue
                     src = os.path.join(p, meta["n"])
                     try:
                         zi = zipfile.ZipInfo(meta["n"], time.localtime(meta["mt"])[:6])
@@ -1122,4 +1382,22 @@ def alb_api(d):
     if act == "del":
         ok, msg = alb_del(d.get("id"))
         return (200 if ok else 400), {**alb_list(), "ok": ok, "message": msg}
+    if act in ("photos", "devs"):
+        a = alb_all().get(str(d.get("id") or ""))
+        if not a:
+            return 400, {"ok": False, "message": "這本已經收回了"}
+        if act == "devs":                              # 看過的手機
+            devs = a.get("devs") or {}
+            return 200, {"ok": True, "dev": a.get("dev") or 0, "devs": [{"h": k, **v} for k, v in sorted(devs.items(), key=lambda x: -x[1].get("t", 0))]}
+        idx = alb_index(a)                             # 挑照片：小圖用短時間的通行證看
+        hid, out = set(a.get("hide") or []), []
+        for pid in idx.get("order", []):
+            m = idx["ph"][pid]
+            q = ""
+            try:
+                q = base64.b64encode(sec_read(alb_cfile(alb_ckey(a, pid, m), "q"))).decode()
+            except (OSError, ValueError):
+                pass
+            out.append({"i": pid, "w": m["w"], "h": m["h"], "v": alb_ckey(a, pid, m)[:8], "q": q, "hid": pid in hid})
+        return 200, {"ok": True, "photos": out, "own": alb_own_val(a, time.time() + ALB_OWN_S), "base": alb_base(), "code": a["code"]}
     return 200, alb_list()
