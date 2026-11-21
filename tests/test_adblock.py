@@ -14,7 +14,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 from test_smoke import TOKEN, Server
 
-GOT = {"configure": None, "tls": None, "auth": [], "dns": None, "login": 0}
+GOT = {"configure": None, "tls": None, "auth": [], "dns": None, "login": 0, "filters": [], "rules": []}
 
 
 class FakeAGH(BaseHTTPRequestHandler):
@@ -41,12 +41,20 @@ class FakeAGH(BaseHTTPRequestHandler):
             self.send_header("Content-Length", str(len(b)))
             self.end_headers()
             return self.wfile.write(b)
+        if self.path == "/china.conf":
+            b = "".join(f"server=/{d}/114.114.114.114\n" for d in ("example.cn", "bad..x", "foo-china.com")).encode()
+            self.send_response(200)
+            self.send_header("Content-Length", str(len(b)))
+            self.end_headers()
+            return self.wfile.write(b)
         if self.path == "/control/install/get_addresses":
             return self.reply(200, {"web_port": 3000, "dns_port": 53, "interfaces": {}})
         if not self.authed():
             return self.reply(401, {})
         if self.path == "/control/status":
             return self.reply(200, {"running": True, "version": "v0.107.99"})
+        if self.path == "/control/filtering/status":
+            return self.reply(200, {"filters": [{"url": u} for u in GOT["filters"]], "user_rules": GOT["rules"]})
         if self.path == "/control/proxied?x=1":
             return self.reply(200, {"cookie": self.headers.get("Cookie") or ""})
         if self.path == "/control/stats":
@@ -74,6 +82,14 @@ class FakeAGH(BaseHTTPRequestHandler):
             return self.reply(401, {})
         if self.path == "/control/dns_config":
             GOT["dns"] = d
+            with open(d["upstream_dns_file"], encoding="utf-8") as f:
+                GOT["upfile"] = f.read()
+            return self.reply(200, {})
+        if self.path == "/control/filtering/add_url":
+            GOT["filters"].append(d["url"])
+            return self.reply(200, {})
+        if self.path == "/control/filtering/set_rules":
+            GOT["rules"] = d["rules"]
             return self.reply(200, {})
         if self.path == "/control/tls/configure":
             GOT["tls"] = d
@@ -105,7 +121,8 @@ class Adblock(Server):
         cls.EXTRA = "DOMAIN=dns.example.test\nHTTPS_PORT=9443\n"
         cls.ENV = {"SENTINEL_AB_FAKE": "1", "SENTINEL_AB_API": f"http://127.0.0.1:{cls.fake.server_port}",
                    "SENTINEL_AB_CERTS": cls.certs.name, "SENTINEL_AB_DIR": cls.abdir.name, "SENTINEL_AB_EVERY": "1",
-                   "SENTINEL_AB_ICON_URL": f"http://127.0.0.1:{cls.fake.server_port}/none.png"}
+                   "SENTINEL_AB_ICON_URL": f"http://127.0.0.1:{cls.fake.server_port}/none.png",
+                   "SENTINEL_AB_CNLIST": f"http://127.0.0.1:{cls.fake.server_port}/china.conf", "NO_PROXY": "127.0.0.1", "no_proxy": "127.0.0.1"}
         super().setUpClass()
 
     @classmethod
@@ -181,10 +198,24 @@ class Adblock(Server):
 
         # 大陸連進來拿當地的位址：查詢交給國際 DNS，帶上手機的網段
         self.assertEqual(GOT["dns"]["edns_cs_enabled"], True)
-        up = GOT["dns"]["upstream_dns"]
+        self.assertTrue(GOT["dns"]["cache_optimistic"])                       # 快取過期先給舊答案
+        self.assertTrue(GOT["dns"]["enable_dnssec"])
+        up = GOT["upfile"].splitlines()
         self.assertIn("https://dns.google/dns-query", up)
         cn = [u for u in up if "alidns" in u or "doh.pub" in u or "360.cn" in u]
-        self.assertTrue(cn and all(u.startswith("[/cn/") and "/qq.com/" in u for u in cn))   # 大陸 DNS 只給大陸網站
+        self.assertTrue(cn and all(u.startswith("[/") and "/qq.com/" in u for u in cn))   # 大陸 DNS 只給大陸網站
+        self.assertTrue(all("/example.cn/" in u and "/foo-china.com/" in u and "bad..x" not in u for u in cn))   # 下載的完整清單也加進去
+        self.assertIn("https://adguardteam.github.io/HostlistsRegistry/assets/filter_21.txt", GOT["filters"])   # 中文廣告清單
+
+        # 擋錯了一鍵放行、恢復擋
+        c, x = self.call("/api/adblock", {"action": "allow", "domain": "ads.example.com"})
+        self.assertEqual(c, 200, x)
+        self.assertEqual(x["allow"], ["ads.example.com"])
+        self.assertIn("@@||ads.example.com^$important", GOT["rules"])
+        c, x = self.call("/api/adblock", {"action": "allow", "domain": "bad domain^x"})
+        self.assertEqual(c, 400)
+        c, x = self.call("/api/adblock", {"action": "unallow", "domain": "ads.example.com"})
+        self.assertEqual((c, x["allow"], GOT["rules"]), (200, [], []))
 
         # 管理頁：沒通行證進不去；驗證過拿登入票換通行證，哨兵自己帶 AdGuard Home 的帳號轉過去
         base = f"http://127.0.0.1:{self.port}"

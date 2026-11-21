@@ -467,7 +467,7 @@ const COL = {cpu:"var(--c-cpu)", mem:"var(--c-mem)", rx:"var(--c-rx)", tx:"var(-
 const ICO = {cpu:["cpu","cpu"], mem:["mem","mem"], disk:["disk","disk"], load:["load","gauge"], down:["down","down"], up:["up","up"],
   net:["net","net"], trend:["trend","trend"], month:["month","month"], box:["box","box"], bell:["bell","bell"], info:["info","info"],
   flag:["flag","flag"], keep:["keep","shield"], key:["key","key"], finger:["finger","finger"], pin:["pin","pin"], link:["link","link"], archive:["archive","archive"], sun:["sun","sun"], quote:["quote","quote"], dl:["dl","dl"], cloud:["cloud","cloud"], fly:["fly","plane"], devices:["devices","devices"], safe:["safe","lockok"], sky:["sky","radar"], note:["note","note"], adblk:["adblk","funnel"], album:["album","album"]};
-const IC = (k, cls="sm") => `<span class="ico ${cls} ${ICO[k][0]}">${k === "adblk" ? `<img src="/ab-icon.png" alt="">` : I(ICO[k][1])}</span>`;   // AdGuard Home 用它自己的圖示（主機抓好給）
+const IC = (k, cls="sm") => `<span class="ico ${cls} ${ICO[k][0]}">${k === "adblk" ? `<img src="/ab-icon.png?v=2" alt="">` : I(ICO[k][1])}</span>`;   // AdGuard Home 用它自己的圖示（主機抓好給）
 
 /* ═════════ 共用的小元件 ═════════ */
 /* 標誌：主題色的圓角方塊＋白色盾牌 */
@@ -1227,15 +1227,20 @@ function abModal(node, name){
     const mx = Math.max(1, ...x.hrs);
     return `<div class="abn"><div><b>${num(x.q)}</b><small>查詢</small></div><div><b>${num(x.b)}</b><small>擋掉</small></div><div><b>${x.pct}%</b><small>比例</small></div></div>
       ${x.hrs.length ? `<div class="abh" title="最近 24 小時擋掉的次數">${x.hrs.map(n => `<i style="--h:${Math.max(4, Math.round(n * 100 / mx))}%"></i>`).join("")}</div>` : ""}
-      ${x.top.length ? `<div class="lbl">最常擋的</div><div class="abtop">${x.top.map(([d, n]) => `<div><span>${esc(d)}</span><b>${num(n)}</b></div>`).join("")}</div>` : ""}`;
+      ${x.top.length ? `<div class="lbl">最常擋的</div><div class="abtop">${x.top.map(([d, n]) => alRow(d, n)).join("")}</div>` : ""}`;
   };
+  /* 擋錯了一鍵放行（放行過的再按一次恢復擋） */
+  const alRow = (d, n) => { const ok = (D.allow || []).includes(d);
+    return `<div><span>${esc(d)}</span>${n == null ? "" : `<b>${num(n)}</b>`}<button type="button" class="ubtn sm ghost" data-abal="${esc(d)}" data-on="${ok ? 0 : 1}">${ok ? "恢復擋" : "放行"}</button></div>`; };
+  const alList = () => { const top = ((D.stats || {}).top || []).map(([d]) => d), r = (D.allow || []).filter(d => !top.includes(d));
+    return r.length ? `<div class="lbl">已放行</div><div class="abtop">${r.map(d => alRow(d)).join("")}</div>` : ""; };
   const steps = () => os === "ios"
     ? `<button type="button" class="ubtn" data-abp>${I("dl")}安裝描述檔</button><ol class="ntsteps"><li>允許下載</li><li>設定 → 已下載描述檔 → 安裝</li></ol>`
     : `<div class="codebox ntr"><code>${esc(D.dot)}</code><button type="button" class="ubtn sm ghost" data-abcp>複製</button></div>
       <ol class="ntsteps"><li>設定 → 網路和網際網路 → 私人 DNS</li><li>選「私人 DNS 供應商主機名稱」，貼上</li></ol>`;
   const view = () => D.job ? `<div class="abjob"><span class="spin"></span><span>${esc(D.job)}…</span></div>`
     : !D.on ? `<p class="ntx">手機的廣告、追蹤網址直接擋掉，只走加密連線。</p>${D.cert ? "" : `<p class="ntx">還沒有網域的憑證</p>`}<button type="button" class="ubtn" data-ab="on"${D.cert ? "" : " disabled"}>打開</button>`
-    : `${D.down ? `<div class="ntst bad">${I("warn")}<span>停了，正在重新啟動</span></div>` : D.pub ? `<div class="ntst bad">${I("warn")}<span>手機連不上：${esc(D.pub)}</span></div>` : ""}${stats(D.stats)}
+    : `${D.down ? `<div class="ntst bad">${I("warn")}<span>停了，正在重新啟動</span></div>` : D.pub ? `<div class="ntst bad">${I("warn")}<span>手機連不上：${esc(D.pub)}</span></div>` : ""}${stats(D.stats)}${alList()}
       <div class="lbl">手機設定</div><div class="seg abos"><button type="button" class="${os === "ios" ? "on" : ""}" data-abos="ios">iPhone</button><button type="button" class="${os === "and" ? "on" : ""}" data-abos="and">Android</button></div>
       <div class="abst">${steps()}</div><div class="ntst">${I("info")}<span>連不上的話，到主機商的防火牆打開 TCP ${D.port}</span></div>
       <div class="dlnew"><button type="button" class="ubtn sm ghost" data-abweb>管理頁${EXT}</button><button type="button" class="ubtn sm ghost" data-ab="off">關掉</button></div>`;
@@ -1277,6 +1282,8 @@ function abModal(node, name){
         } catch (x) { sayTo(msg, x.message); }
         return;
       }
+      const al = t.closest("[data-abal]");
+      if (al) { const x = await run({action: al.dataset.on === "1" ? "allow" : "unallow", domain: al.dataset.abal}); if (x && x.message) toast(x.message); return; }
       const b = t.closest("[data-ab]"); if (!b) return;
       const act = b.dataset.ab;
       if (act === "off" && !await modal({icon:"funnel", cls:"warn", title:"關掉 AdGuard Home？", text:"設好的手機會查不到網址，要先改回來。", ok:"關掉"})) return;
