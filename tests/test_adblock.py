@@ -35,6 +35,12 @@ class FakeAGH(BaseHTTPRequestHandler):
         return want and self.headers.get("Authorization") == want
 
     def do_GET(self):
+        if self.path == "/assets/apple-touch-icon-180x180.png":
+            b = b"\x89PNG\r\n\x1a\nfake"
+            self.send_response(200)
+            self.send_header("Content-Length", str(len(b)))
+            self.end_headers()
+            return self.wfile.write(b)
         if self.path == "/control/install/get_addresses":
             return self.reply(200, {"web_port": 3000, "dns_port": 53, "interfaces": {}})
         if not self.authed():
@@ -81,7 +87,8 @@ class Adblock(Server):
         cls.abdir = tempfile.TemporaryDirectory()
         cls.EXTRA = "DOMAIN=dns.example.test\nHTTPS_PORT=9443\n"
         cls.ENV = {"SENTINEL_AB_FAKE": "1", "SENTINEL_AB_API": f"http://127.0.0.1:{cls.fake.server_port}",
-                   "SENTINEL_AB_CERTS": cls.certs.name, "SENTINEL_AB_DIR": cls.abdir.name, "SENTINEL_AB_EVERY": "1"}
+                   "SENTINEL_AB_CERTS": cls.certs.name, "SENTINEL_AB_DIR": cls.abdir.name, "SENTINEL_AB_EVERY": "1",
+                   "SENTINEL_AB_ICON_URL": f"http://127.0.0.1:{cls.fake.server_port}/none.png"}
         super().setUpClass()
 
     @classmethod
@@ -99,6 +106,12 @@ class Adblock(Server):
                 return r.status, json.loads(r.read())
         except urllib.error.HTTPError as e:
             return e.code, json.loads(e.read())
+
+    def test_icon(self):
+        """AdGuard Home 自己的圖示：不用登入就拿得到"""
+        with urllib.request.urlopen(f"http://127.0.0.1:{self.port}/ab-icon.png", timeout=15) as r:
+            self.assertEqual(r.headers["Content-Type"], "image/png")
+            self.assertTrue(r.read().startswith(b"\x89PNG"))
 
     def test_flow(self):
         c, d = self.call("/api/adblock", {})
@@ -152,6 +165,26 @@ class Adblock(Server):
         c, d = self.call("/api/adblock", {"action": "off"})
         self.assertEqual(c, 200)
         self.assertFalse(d["on"])
+
+
+class Pick(unittest.TestCase):
+    """下載的壓縮檔：路徑前面有沒有「./」都要找得到程式"""
+    def test_pick(self):
+        import io
+        import tarfile
+        from test_passkey import load_sentinel
+        S = load_sentinel()
+        for name in ("AdGuardHome/AdGuardHome", "./AdGuardHome/AdGuardHome"):
+            b = io.BytesIO()
+            with tarfile.open(fileobj=b, mode="w:gz") as t:
+                for n, data in ((name.replace("AdGuardHome/AdGuardHome", "AdGuardHome/README.md"), b"r"), (name, b"bin")):
+                    ti = tarfile.TarInfo(n)
+                    ti.size = len(data)
+                    t.addfile(ti, io.BytesIO(data))
+            b.seek(0)
+            with tarfile.open(fileobj=b) as t:
+                m = S.ab_pick(t)
+                self.assertEqual(t.extractfile(m).read(), b"bin")
 
 
 if __name__ == "__main__":

@@ -136,6 +136,15 @@ def ab_bind_ip():
         return "0.0.0.0"
 
 
+def ab_pick(t):
+    """壓縮檔裡的程式本體：路徑可能是 AdGuardHome/AdGuardHome 或 ./AdGuardHome/AdGuardHome"""
+    for m in t.getmembers():
+        parts = [x for x in m.name.split("/") if x not in ("", ".")]
+        if m.isfile() and parts[-2:] == ["AdGuardHome", "AdGuardHome"]:
+            return m
+    return None
+
+
 def ab_download():
     arch = AB_ARCH.get(os.uname().machine)
     if not arch:
@@ -149,8 +158,8 @@ def ab_download():
                 with urllib.request.urlopen(urllib.request.Request(u.format(a=arch), headers={"User-Agent": f"vps-sentinel/{VERSION}"}), timeout=120) as r, open(tgz, "wb") as f:
                     shutil.copyfileobj(r, f, 1 << 20)
                 with tarfile.open(tgz) as t:
-                    m = t.getmember("AdGuardHome/AdGuardHome")
-                    if not m.isfile():
+                    m = ab_pick(t)
+                    if not m:
                         raise RuntimeError("下載的檔案不對")
                     src = t.extractfile(m)
                     with open(AB_BIN + ".new", "wb") as f:
@@ -329,12 +338,12 @@ def ab_install():
         c["on"] = True
         ab_save(c)
         AB["err"], AB["down"], AB["st_t"] = "" if doh else "iPhone 用的連線沒通，Android 照樣能用", 0, 0
-        log("擋廣告 DNS：打開了")
+        log("AdGuard Home：打開了")
     except Exception as e:          # noqa: BLE001  背景工作：任何錯都要停下服務、讓網頁看得到
         AB["err"] = str(e) or "失敗了"
         if not AB_FAKE:
             ab_sh(["systemctl", "disable", "--now", AB_UNIT])
-        log("擋廣告 DNS：", AB["err"])
+        log("AdGuard Home：", AB["err"])
     finally:
         AB["job"] = ""
 
@@ -347,7 +356,7 @@ def ab_off():
     c["on"] = False
     ab_save(c)
     AB["stats"] = None
-    log("擋廣告 DNS：關掉了")
+    log("AdGuard Home：關掉了")
 
 
 def ab_stats(fresh=False):
@@ -424,7 +433,7 @@ def ab_profile(url, name):
     if u.scheme != "https" or u.path != "/dns-query" or u.hostname not in hosts - {"", None} or u.query or u.username:
         return None
     pid = str(uuid.uuid5(uuid.NAMESPACE_URL, url)).upper()
-    title = f"擋廣告 DNS・{str(name)[:40]}"
+    title = f"AdGuard Home・{str(name)[:40]}"
     body = plistlib.dumps({
         "PayloadContent": [{"DNSSettings": {"DNSProtocol": "HTTPS", "ServerURL": url},
                             "PayloadDisplayName": title, "PayloadIdentifier": f"com.vps-sentinel.dns.{pid}.dns",
@@ -445,9 +454,41 @@ def ab_profile_get(k):
     return v[1] if v and v[0] > time.time() else None
 
 
+AB_ICON = os.path.join(DATA_DIR, "ab-icon.png")
+AB_ICON_URL = os.environ.get("SENTINEL_AB_ICON_URL") or "https://raw.githubusercontent.com/AdguardTeam/AdGuardHome/master/client/public/assets/apple-touch-icon-180x180.png"
+
+
+def ab_icon():
+    """AdGuard Home 自己的圖示（不放進專案）：先問本機的 AdGuard Home，沒裝再去官方 GitHub 拿，存一份 30 天"""
+    try:
+        if time.time() - os.path.getmtime(AB_ICON) < 30 * 86400:
+            with open(AB_ICON, "rb") as f:
+                return f.read()
+    except OSError:
+        pass
+    for u in (AB_API + "/assets/apple-touch-icon-180x180.png", AB_ICON_URL):
+        try:
+            with urllib.request.build_opener(*([urllib.request.ProxyHandler({})] if u.startswith(AB_API) else [])).open(
+                    urllib.request.Request(u, headers={"User-Agent": f"vps-sentinel/{VERSION}"}), timeout=8) as r:
+                b = r.read(200_000)
+            if b[:8] == b"\x89PNG\r\n\x1a\n":
+                os.makedirs(DATA_DIR, exist_ok=True)
+                with open(AB_ICON + ".tmp", "wb") as f:
+                    f.write(b)
+                os.replace(AB_ICON + ".tmp", AB_ICON)
+                return b
+        except (OSError, ValueError):
+            continue
+    try:
+        with open(AB_ICON, "rb") as f:                     # 過期但拿不到新的：照樣用舊的
+            return f.read()
+    except OSError:
+        return None
+
+
 def ab_problems():
     c = ab_conf()
-    return ["擋廣告 DNS 停了"] if c.get("on") and AB["down"] >= 2 and not AB["job"] else []
+    return ["AdGuard Home 停了"] if c.get("on") and AB["down"] >= 2 and not AB["job"] else []
 
 
 def ab_loop():
@@ -484,5 +525,5 @@ def ab_loop():
                         if isinstance(v, dict) and v.get("can_autoupdate") and v.get("new_version"):
                             ab_req("/control/update", {}, timeout=120)
         except Exception as e:      # noqa: BLE001  背景迴圈不能停
-            log("擋廣告 DNS 檢查失敗：", e)
+            log("AdGuard Home 檢查失敗：", e)
         time.sleep(int(os.environ.get("SENTINEL_AB_EVERY") or 60))
