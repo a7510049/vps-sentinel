@@ -515,7 +515,15 @@ if [ -n "$RCODE" ]; then
   printf '  %s備份檔可以從 Telegram，或另一台主機雲端硬碟裡的「哨兵備份」資料夾下載%s\n' "$D" "$N"
 else
   printf '  %s✅ VPS 哨兵%s好了%s\n\n' "$B" "$( [ -n "$NEWCONF" ] && echo 裝 || echo 更新 )" "$N"
-  printf '  用手機打開這個網址（第一次會自動記住密碼）：\n     %s%s#t=%s%s\n\n' "$B$C" "$BASE" "$TOKEN" "$N"
+  TPIN=""
+  [ -n "$NEWCONF" ] && TPIN="$(SENTINEL_CONF="$CONF" python3 "$DIR/sentinel.py" --first-pin 2>/dev/null || true)"
+  if [ -n "$TPIN" ]; then                       # 第一次安裝：網址不帶密碼，用隨機的臨時 PIN 碼登入，登入後一定要換掉
+    printf '  用手機打開這個網址：\n     %s%s%s\n\n' "$B$C" "$BASE" "$N"
+    printf '  第一次登入的 PIN 碼：%s%s%s（登入後要換一組）\n' "$B$C" "$TPIN" "$N"
+    printf '  %s忘了 PIN 碼：sudo python3 %s/sentinel.py --new-pin%s\n\n' "$D" "$DIR" "$N"
+  else
+    printf '  用手機打開這個網址（第一次會自動記住密碼）：\n     %s%s#t=%s%s\n\n' "$B$C" "$BASE" "$TOKEN" "$N"
+  fi
   printf '  %s設定檔：%s（改完執行 sudo systemctl restart vps-sentinel-lite）%s\n' "$D" "$CONF" "$N"
   if [ -n "$NEWCONF" ] && PCODE="$(SENTINEL_CONF="$CONF" python3 "$DIR/sentinel.py" --pair-code "${BASE%/}" 2>/dev/null)"; then
     printf '\n  要加到主要主機：在主要主機按「新增主機」，貼上這組配對暗號（24 小時內有效）\n     %s%s%s\n' "$B$C" "$PCODE" "$N"

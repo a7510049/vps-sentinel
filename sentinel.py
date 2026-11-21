@@ -45,7 +45,7 @@ from collections import deque
 from concurrent.futures import ThreadPoolExecutor
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
-VERSION = "4.26"
+VERSION = "4.27"
 
 # ───────────────────────── 哨兵備份檔（.vsbk）─────────────────────────
 # 哨兵專用的備份格式：外面是自己的檔案格式，裡面用的是成熟、標準的加密方法（不自己發明加密）：
@@ -2488,7 +2488,35 @@ def pin_status():
     if not p:
         return {"on": False}
     left = int(p.get("lock_until", 0) - time.time())
-    return {"on": True, "locked": max(0, left)}
+    return {"on": True, "locked": max(0, left), "temp": bool(p.get("temp"))}
+
+
+# 臨時 PIN 碼：第一次安裝（或忘了 PIN 碼時在主機上 --new-pin）隨機給 8 位數，登入後一定要先換掉才能用其他功能
+PIN_TMP = {"m": None, "v": False}
+
+
+def pin_temp():
+    """現在的 PIN 碼是不是臨時的（照檔案的修改時間記著，不用每次都解密）"""
+    try:
+        m = os.stat(pin_path()).st_mtime_ns
+    except OSError:
+        return False
+    if PIN_TMP["m"] != m:
+        p = pin_load()
+        PIN_TMP.update(m=m, v=bool(p and p.get("temp")))
+    return PIN_TMP["v"]
+
+
+def pin_temp_new():
+    """隨機產生一組 8 位數的臨時 PIN 碼存起來，回傳 PIN 碼本身（只印在主機畫面上）"""
+    pin = ""
+    while len(set(pin)) < 4:                       # 不要 11112222 這種
+        pin = "".join(secrets.choice("0123456789") for _ in range(8))
+    salt, n = secrets.token_hex(16), 200_000
+    with PIN_LK:
+        pin_save({"hash": _pin_hash(pin, salt, n), "salt": salt, "n": n, "fails": 0, "streak": 0, "lock_until": 0,
+                  "set": int(time.time()), "temp": True})
+    return pin
 
 
 def pin_set(pin):
@@ -4178,6 +4206,8 @@ def ev_line(e):
         return "❌ " + t
     if t.startswith("下載好了："):
         return "✅ " + t
+    if t.startswith("安全檢查："):
+        return "🔐 " + t[5:]                           # 安全設定變差了
     if k == "info" and "登入了主機" in t:
         return "🔑 " + t
     if k == "info" and ("配對" in t or "監看" in t):
@@ -4779,7 +4809,7 @@ class Handler(BaseHTTPRequestHandler):
         act = d.get("action")
         if act == "has":                             # 登入頁問：有沒有登記過手機金鑰、有沒有設定 PIN 碼（沒有就不顯示）
             rp = pk_rp(self.headers.get("Host"))
-            return self.send(200, json.dumps({"has": any(k.get("rp") == rp for k in pk_load()), "pin": bool(pin_load())}))
+            return self.send(200, json.dumps({"has": any(k.get("rp") == rp for k in pk_load()), "pin": bool(pin_load()), "temp": pin_temp()}))
         if act == "begin":
             return self.send(200, json.dumps({"challenge": pk_challenge("webauthn.get"), "rp": pk_rp(self.headers.get("Host"))}))
         ok, res = pk_login_finish(d)
@@ -4796,10 +4826,24 @@ class Handler(BaseHTTPRequestHandler):
         self.end_headers()
 
     def do_GET(self):
-        self.fly_gate(self.route_get)
+        if not self.must_pin():
+            self.fly_gate(self.route_get)
 
     def do_POST(self):
-        self.fly_gate(self.route_post)
+        if not self.must_pin():
+            self.fly_gate(self.route_post)
+
+    PIN_FREE = ("/api/pin", "/api/pin-login", "/api/login", "/api/passkey-login", "/api/sessions")
+
+    def must_pin(self):
+        """還在用臨時 PIN 碼：登入的裝置只能先換 PIN 碼（或登出），其他 API 一律回 403 mustpin"""
+        path = urllib.parse.urlsplit(self.path).path
+        tok = self.headers.get("X-Token", "")
+        if not path.startswith("/api/") or path in self.PIN_FREE or not tok.startswith("vss_") or not pin_temp() or not sess_find(tok):
+            return False
+        self.close_connection = True               # 沒讀的資料不要留在連線上
+        self.send(403, json.dumps({"mustpin": True, "message": "要先換掉臨時 PIN 碼"}, ensure_ascii=False))
+        return True
 
     def fly_gate(self, run):
         """機場起降的連線另外算：載入失敗或同時太多就先不處理，不會拖到監控"""
@@ -5106,8 +5150,9 @@ class Handler(BaseHTTPRequestHandler):
             return self.send(401, '{"error":"密碼錯誤"}')
         if u.path == "/api/cloud-open":             # 打開雲端硬碟：每次都在這台驗證 PIN 碼、手機金鑰或密碼，過了才發登入票
             return self.cloud_open(body)
-        if self.sess and recheck_need(u.path, self.jbody(body)) and not self.recheck():
-            return None                              # 用登入鑰匙的裝置要先再確認一次（主機之間、存取密碼本身不用）
+        first = u.path == "/api/pin" and "node=" not in u.query and self.jbody(body).get("action") == "set" and pin_temp()
+        if self.sess and not first and recheck_need(u.path, self.jbody(body)) and not self.recheck():
+            return None                              # 用登入鑰匙的裝置要先再確認一次（主機之間、存取密碼本身不用；剛用臨時 PIN 碼登入、要換掉它時不用）
         node = urllib.parse.parse_qs(u.query).get("node", [""])[0]
         if node:                                  # 轉給其他 VPS
             peer = next((p for p in PEERS if p["name"] == node), None)
@@ -5341,6 +5386,7 @@ def main():
     threading.Thread(target=yt_update_loop, daemon=True).start()  # 有裝 yt-dlp／deno 才會真的做事
     threading.Thread(target=alert_loop, daemon=True).start()      # 沒設定時也會跑，網頁上一設定好就開始通知
     threading.Thread(target=guard_loop, daemon=True).start()      # SSH 錯太多次封鎖（要 root）
+    threading.Thread(target=sec_watch_loop, daemon=True).start()  # 安全檢查哪一項變差就通知
     dl_load()                                                     # 上次沒下載完的接著下載
     if FLY_OK:
         try:
@@ -5360,6 +5406,12 @@ if __name__ == "__main__" and sys.argv[1:2] == ["--unwatch"]:      # 忘了密�
     sys.exit(0)
 if __name__ == "__main__" and sys.argv[1:2] == ["--sec-setup"]:     # 第一次安裝：安全的先設好，其他的列出來
     sec_setup()
+    sys.exit(0)
+if __name__ == "__main__" and sys.argv[1:2] in (["--first-pin"], ["--new-pin"]):   # 第一次安裝／忘了 PIN 碼：給一組臨時的
+    if sys.argv[1] == "--first-pin" and pin_load():
+        sys.exit(0)                                # 已經有 PIN 碼（例如重新安裝）：不動
+    tp = pin_temp_new()
+    print(tp if sys.argv[1] == "--first-pin" else f"臨時 PIN 碼：{tp}（登入後要換一組）")
     sys.exit(0)
 if __name__ == "__main__" and sys.argv[1:2] == ["--pair-code"]:   # 安裝畫面用：產生配對暗號
     ok, out = pair_code(sys.argv[2] if len(sys.argv) > 2 else "")
