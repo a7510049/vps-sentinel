@@ -175,7 +175,7 @@ class Adblock(Server):
         with urllib.request.urlopen(u, timeout=15) as r:
             self.assertEqual(r.headers["Content-Type"], "application/x-apple-aspen-config")
             p = plistlib.loads(r.read())
-        self.assertEqual(p["PayloadContent"][0]["DNSSettings"], {"DNSProtocol": "HTTPS", "ServerURL": d["doh"]})
+        self.assertEqual(p["PayloadContent"][0]["DNSSettings"], {"DNSProtocol": "TLS", "ServerName": "dns.example.test"})
         with self.assertRaises(urllib.error.HTTPError):
             urllib.request.urlopen(u, timeout=15)
 

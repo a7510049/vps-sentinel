@@ -292,22 +292,28 @@ def ab_doh_ok():
 
 
 def ab_pub_check():
-    """從外面那條路（網域 → Caddy → AdGuard Home）問一次，跟 iPhone 走的一樣；回傳空字串是通的，不然是哪裡壞"""
-    url = ab_doh()
-    if not url:
+    """從網域那頭用 853（DNS-over-TLS）問一次，跟手機走的一樣；回傳空字串是通的，不然是哪裡壞"""
+    dom = ab_domain()
+    if not dom:
         return ""
-    q = b"\x00\x00\x01\x00\x00\x01\x00\x00\x00\x00\x00\x00" + b"\x07example\x03com\x00\x00\x01\x00\x01"
-    req = urllib.request.Request(url, data=q, headers={"Content-Type": "application/dns-message", "Accept": "application/dns-message"})
+    q = b"\x00\x01\x01\x00\x00\x01\x00\x00\x00\x00\x00\x00" + b"\x07example\x03com\x00\x00\x01\x00\x01"
     try:
-        with urllib.request.build_opener(urllib.request.ProxyHandler({})).open(req, timeout=10) as r:
-            ct, b = r.headers.get("Content-Type") or "", r.read()
-        if "dns-message" not in ct or len(b) <= 12:
-            return "轉到哨兵的網頁去了，不是 AdGuard Home"
-        return "" if b[3] & 15 == 0 else "AdGuard Home 查不到網址（上游 DNS 連不上）"
-    except urllib.error.HTTPError as e:
-        return f"網址回 {e.code}"
+        with socket.create_connection((dom, AB_DOT), timeout=10) as raw, \
+                ssl.create_default_context().wrap_socket(raw, server_hostname=dom) as t:
+            t.sendall(len(q).to_bytes(2, "big") + q)
+            b = b""
+            while len(b) < 14:
+                x = t.recv(4096)
+                if not x:
+                    break
+                b += x
+        if len(b) < 14:
+            return "AdGuard Home 沒有回答"
+        return "" if b[5] & 15 == 0 else "AdGuard Home 查不到網址（上游 DNS 連不上）"
+    except ssl.SSLError:
+        return "憑證不對"
     except (OSError, ValueError) as e:
-        return f"網址打不開（{str(getattr(e, 'reason', e))[:60]}）"
+        return f"{AB_DOT} 埠連不上（{str(getattr(e, 'strerror', '') or e)[:40]}）"
 
 
 def ab_doh_fix():
@@ -483,9 +489,18 @@ def ab_profile(url, name):
     if u.scheme != "https" or u.path != "/dns-query" or u.hostname not in hosts - {"", None} or u.query or u.username:
         return None
     pid = str(uuid.uuid5(uuid.NAMESPACE_URL, url)).upper()
+    # iPhone 也走 853 的 DNS-over-TLS（跟 Android 一樣）：DoH 網址裡的 9443 會被 iPhone 忽略，直接敲 443（常被別的程式佔著）
+    dns = {"DNSProtocol": "TLS", "ServerName": u.hostname}
+    try:                                    # 附上主機的位址：iPhone 不用先查網域就連得到（少一個卡住的地方）
+        ips = sorted({a[4][0] for a in socket.getaddrinfo(u.hostname, None, proto=socket.IPPROTO_TCP)
+                      if not ipaddress.ip_address(a[4][0]).is_private and not ipaddress.ip_address(a[4][0]).is_loopback})
+        if ips:
+            dns["ServerAddresses"] = ips[:4]
+    except (OSError, ValueError):
+        pass
     title = f"AdGuard Home・{str(name)[:40]}"
     body = plistlib.dumps({
-        "PayloadContent": [{"DNSSettings": {"DNSProtocol": "HTTPS", "ServerURL": url},
+        "PayloadContent": [{"DNSSettings": dns,
                             "PayloadDisplayName": title, "PayloadIdentifier": f"com.vps-sentinel.dns.{pid}.dns",
                             "PayloadType": "com.apple.dnsSettings.managed", "PayloadUUID": str(uuid.uuid5(uuid.NAMESPACE_URL, url + "#dns")).upper(),
                             "PayloadVersion": 1}],
