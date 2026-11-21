@@ -23,7 +23,7 @@ AB_URLS = ("https://static.adtidy.org/adguardhome/release/AdGuardHome_linux_{a}.
            "https://github.com/AdguardTeam/AdGuardHome/releases/latest/download/AdGuardHome_linux_{a}.tar.gz")
 AB_ARCH = {"x86_64": "amd64", "amd64": "amd64", "aarch64": "arm64", "arm64": "arm64", "armv7l": "armv7", "armv6l": "armv6", "i686": "386"}
 AB_LOCK = threading.Lock()
-AB = {"c": None, "job": "", "err": "", "stats": None, "st_t": 0, "down": 0, "upd_t": 0, "pub": "", "pub_t": 0}
+AB = {"c": None, "job": "", "err": "", "stats": None, "st_t": 0, "down": 0, "upd_t": 0, "pub": "", "pub_t": 0, "ext": None, "ext_by": "", "ext_t": 0}
 AB_TOK = {}                                                             # 一次性的 iPhone 描述檔連結：代碼 → (到期, 內容)
 
 
@@ -396,8 +396,25 @@ def ab_doh_ok():
 def ab_pub_check():
     """從網域那頭用 853（DNS-over-TLS）問一次，跟手機走的一樣；回傳空字串是通的，不然是哪裡壞"""
     dom = ab_domain()
-    if not dom:
+    return ab_dot_probe(dom) if dom else ""
+
+
+def ab_probe_ok(host):
+    """別台叫我幫忙測的網域：要是正常網域、而且指到公開的位址（不能拿來掃內部網路）"""
+    host = str(host or "").strip().lower().rstrip(".")
+    if not AB_DOMRE.fullmatch(host) or "." not in host:
         return ""
+    try:
+        ips = {a[4][0] for a in socket.getaddrinfo(host, AB_DOT, proto=socket.IPPROTO_TCP)}
+    except OSError:
+        return host                                 # 查不到網域：照樣去試，會回「連不上」
+    if not AB_FAKE and any(not ipaddress.ip_address(i.split("%")[0]).is_global for i in ips):
+        return ""
+    return host
+
+
+def ab_dot_probe(dom):
+    """用 853（DNS-over-TLS）問 dom 一次；回傳空字串是通的，不然是哪裡壞"""
     q = b"\x00\x01\x01\x00\x00\x01\x00\x00\x00\x00\x00\x00" + b"\x07example\x03com\x00\x00\x01\x00\x01"
     try:
         with socket.create_connection((dom, AB_DOT), timeout=10) as raw, \
@@ -416,6 +433,23 @@ def ab_pub_check():
         return "憑證不對"
     except (OSError, ValueError) as e:
         return f"{AB_DOT} 埠連不上（{str(getattr(e, 'strerror', '') or e)[:40]}）"
+
+
+def ab_ext_check():
+    """請配對的其他主機從外面連 853 試試（主機商的防火牆擋住時，從主機自己測不出來）；
+    回傳 (結果, 哪一台)：結果 "" 是通的、None 是沒有別台能幫忙"""
+    dom = ab_domain()
+    for p in PEERS if dom else []:
+        try:
+            req = urllib.request.Request(p["url"] + "/api/ab-probe", data=json.dumps({"host": dom}).encode(), method="POST",
+                                         headers={"X-Token": p["token"], "Content-Type": "application/json"})
+            with urllib.request.urlopen(req, timeout=25) as r:
+                d = json.loads(r.read())
+            if isinstance(d, dict) and "err" in d:
+                return str(d["err"] or "")[:120], p["name"]
+        except Exception:  # noqa: BLE001  那台舊版或連不上：換下一台
+            continue
+    return None, ""
 
 
 def ab_doh_fix():
@@ -539,11 +573,34 @@ def ab_stats(fresh=False):
                 top.append([str(k)[:80], int(v or 0)])
         hrs = ([0] * 24 + [int(x or 0) for x in (d.get("blocked_filtering") or [])])[-24:]   # 最近 24 小時，不夠的補 0
         AB["stats"] = {"q": q, "b": b, "pct": round(b * 100 / q) if q else 0, "top": top, "hrs": hrs,
-                       "ms": round(float(d.get("avg_processing_time") or 0) * 1000)}
+                       "ms": round(float(d.get("avg_processing_time") or 0) * 1000), "recent": ab_recent()}
         AB["st_t"] = time.time()
     except (ValueError, TypeError, AttributeError):
         pass
     return AB["stats"]
+
+
+def ab_recent(n=15):
+    """最近擋掉的網址（同一個只留最新那次）：[[網址, 時間]]"""
+    code, out = ab_req("/control/querylog?limit=200&response_status=blocked", timeout=8)
+    try:
+        rows = json.loads(out).get("data") if code == 200 else None
+    except (ValueError, AttributeError):
+        rows = None
+    res, seen = [], set()
+    for r in rows or []:
+        try:
+            d = str(r["question"]["name"]).lower().rstrip(".")[:80]
+            t = re.sub(r"(\.\d{6})\d+", r"\1", str(r.get("time") or "")).replace("Z", "+00:00")
+            ts = int(datetime.fromisoformat(t).timestamp())
+        except (KeyError, TypeError, ValueError):
+            continue
+        if d and d not in seen:
+            seen.add(d)
+            res.append([d, ts])
+        if len(res) >= n:
+            break
+    return res
 
 
 def ab_brief():
@@ -563,6 +620,7 @@ def ab_info():
         out["stats"] = ab_stats()
         out["down"] = AB["down"] >= 2
         out["pub"] = AB["pub"]
+        out["ext"], out["ext_by"] = AB["ext"], AB["ext_by"]
         out["allow"] = ab_allowed() or []
     return out
 
@@ -829,6 +887,9 @@ def ab_loop():
                         ab_save(c)
                     if not AB_FAKE and time.time() - AB["pub_t"] > (60 if AB["pub"] else 300):
                         AB["pub_t"], AB["pub"] = time.time(), ab_pub_check()
+                    if PEERS and time.time() - AB["ext_t"] > (120 if AB["ext"] else 1800):
+                        AB["ext_t"] = time.time()
+                        AB["ext"], AB["ext_by"] = ab_ext_check()
                     ab_stats(fresh=True)
                     if time.time() - AB["upd_t"] > 86400:
                         AB["upd_t"] = time.time()

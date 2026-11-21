@@ -5080,7 +5080,7 @@ class Handler(BaseHTTPRequestHandler):
             return None
         if u.path not in ("/api/update", "/api/rename", "/api/traffic", "/api/telegram", "/api/links", "/api/self", "/api/cloud-open", "/api/cloud-ticket", "/api/cloud-revoke", "/api/peer",
                           "/api/token", "/api/passkey", "/api/passkey-login", "/api/pin", "/api/pin-login", "/api/login", "/api/sessions", "/api/backup", "/api/backup-store",
-                          "/api/restore-upload", "/api/restore-run", "/api/pair", "/api/pair-admin", "/api/reboot", "/api/keepalive", "/api/download", "/api/fly-share", "/api/fly-claim", "/api/opensky", "/api/sec", "/api/notes", "/api/adblock", "/api/adblock-profile", "/api/adguard-open", "/api/adguard-ticket", "/api/album"):
+                          "/api/restore-upload", "/api/restore-run", "/api/pair", "/api/pair-admin", "/api/reboot", "/api/keepalive", "/api/download", "/api/fly-share", "/api/fly-claim", "/api/opensky", "/api/sec", "/api/notes", "/api/adblock", "/api/adblock-profile", "/api/adguard-open", "/api/adguard-ticket", "/api/ab-probe", "/api/album"):
             return self.send(404, '{"error":"找不到"}')
         if u.path in ("/api/restore-upload", "/api/restore-run"):   # 網頁還原：要有安裝時給的代碼（或已經登入）
             if not (self.authed() or self.restore_code_ok()):
@@ -5378,6 +5378,16 @@ class Handler(BaseHTTPRequestHandler):
             if self.sess or not ab_conf().get("on") or not ab_base():
                 return self.send(403 if self.sess else 404, '{"ok":false}')
             return self.send(200, json.dumps(ab_ticket()))
+        if u.path == "/api/ab-probe":               # 別台請這台從外面試連它的 853（看主機商的防火牆有沒有開；只給主機之間的鑰匙）
+            if self.sess:
+                return self.send(403, '{"ok":false}')
+            try:
+                h = ab_probe_ok(str(json.loads(body or b"{}").get("host") or ""))
+            except (ValueError, AttributeError):
+                h = ""
+            if not h:
+                return self.send(400, '{"ok":false}')
+            return self.send(200, json.dumps({"ok": True, "err": ab_dot_probe(h)}, ensure_ascii=False))
         if u.path == "/api/cloud-ticket":           # 主要主機驗證過了，來拿這台雲端硬碟的登入票（只給主機之間的鑰匙）
             if self.sess or not CLOUD_URL:
                 return self.send(403 if self.sess else 404, '{"ok":false}')

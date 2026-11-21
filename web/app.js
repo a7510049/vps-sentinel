@@ -82,6 +82,7 @@ const P = {
   upd:'<path d="M21 12a9 9 0 1 1-9-9c2.52 0 4.93 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/>',
   shield:'<path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="m8.5 12 2.5 2.5 4.5-5"/>',
   dl:'<path d="M12 3v12"/><path d="m7 10 5 5 5-5"/><path d="M5 21h14"/>',
+  qr:'<rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><path d="M14 14h3v3h-3zM21 14v.01M14 21h.01M17.5 21H21v-3.5"/>',
   plug:'<path d="M9 2v5M15 2v5"/><path d="M6 7h12v4a6 6 0 0 1-12 0z"/><path d="M12 17v5"/>',
   clock:'<circle cx="12" cy="12" r="9.5"/><path d="M12 7v5l3 2"/>',
   lock:'<rect x="5" y="11" width="14" height="10" rx="2.5"/><path d="M8 11V7.5a4 4 0 0 1 8 0V11"/>',
@@ -1214,9 +1215,65 @@ async function openAgh(node, name){
   if (window.open("", "vsagh")) return cloudSubmit(t, "vsagh");
   modal({icon: "noad", cls: "adblk", title: "AdGuard Home", text: "驗證好了", ok: "打開"}).then(go => { if (go) cloudSubmit(t, "_blank"); });
 }
+/* QR 碼（位元組模式、M 級，版本 1～10）：回傳模組矩陣；給電腦顯示讓 iPhone 掃 */
+function qrMat(text, fm){
+  const by = [...new TextEncoder().encode(text)];
+  const T = [[26,10,1,16,0,0],[44,16,1,28,0,0],[70,26,1,44,0,0],[100,18,2,32,0,0],[134,24,2,43,0,0],[172,16,4,27,0,0],[196,18,4,31,0,0],[242,22,2,38,2,39],[292,22,3,36,2,37],[346,26,4,43,1,44]];
+  let v = 0; for (; v < 10; v++) { const t = T[v], dc = t[2] * t[3] + t[4] * t[5]; if (4 + (v < 9 ? 8 : 16) + 8 * by.length <= dc * 8) break; }
+  if (v >= 10) return null;
+  const [, ec, n1, d1, n2, d2] = T[v], dc = n1 * d1 + n2 * d2, V = v + 1, N = 17 + 4 * V;
+  const bits = []; const put = (x, l) => { for (let i = l - 1; i >= 0; i--) bits.push(x >> i & 1); };
+  put(4, 4); put(by.length, V < 10 ? 8 : 16); by.forEach(b => put(b, 8)); put(0, Math.min(4, dc * 8 - bits.length));
+  while (bits.length % 8) bits.push(0);
+  const data = []; for (let i = 0; i < bits.length; i += 8) data.push(parseInt(bits.slice(i, i + 8).join(""), 2));
+  for (let p = 0; data.length < dc; p ^= 1) data.push(p ? 17 : 236);
+  const ex = [], lg = []; for (let i = 0, x = 1; i < 255; i++) { ex[i] = x; lg[x] = i; x = x << 1 ^ (x & 128 ? 0x11d : 0); }
+  const mul = (a, b) => a && b ? ex[(lg[a] + lg[b]) % 255] : 0;
+  let g = [1]; for (let i = 0; i < ec; i++) { const h = g.concat(0); for (let j = 0; j < g.length; j++) h[j + 1] ^= mul(g[j], ex[i]); g = h; }
+  const blk = [], ecb = []; let o = 0;
+  for (let b = 0; b < n1 + n2; b++) { const L = b < n1 ? d1 : d2, d = data.slice(o, o += L), r = d.concat(Array(ec).fill(0));
+    for (let i = 0; i < L; i++) { const c = r[i]; if (c) for (let j = 1; j < g.length; j++) r[i + j] ^= mul(g[j], c); }
+    blk.push(d); ecb.push(r.slice(L)); }
+  const cw = []; for (let i = 0; i < Math.max(d1, d2); i++) blk.forEach(d => i < d.length && cw.push(d[i]));
+  for (let i = 0; i < ec; i++) ecb.forEach(e => cw.push(e[i]));
+  const M = Array.from({length:N}, () => Array(N).fill(0)), F = Array.from({length:N}, () => Array(N).fill(0));
+  const set = (r, c, x) => { M[r][c] = x ? 1 : 0; F[r][c] = 1; };
+  const finder = (r, c) => { for (let i = -1; i < 8; i++) for (let j = -1; j < 8; j++) { const y = r + i, x = c + j; if (y < 0 || x < 0 || y >= N || x >= N) continue;
+    set(y, x, i >= 0 && i <= 6 && j >= 0 && j <= 6 && (i == 0 || i == 6 || j == 0 || j == 6 || (i >= 2 && i <= 4 && j >= 2 && j <= 4))); } };
+  finder(0, 0); finder(0, N - 7); finder(N - 7, 0);
+  for (let i = 8; i < N - 8; i++) { set(6, i, i % 2 == 0); set(i, 6, i % 2 == 0); }
+  const AP = [[], [18], [22], [26], [30], [34], [22, 38], [24, 42], [26, 46], [28, 50]][v], ap = AP.length ? [6, ...AP] : [];
+  ap.forEach(r => ap.forEach(c => { if (r < 9 && (c < 9 || c > N - 9) || r > N - 9 && c < 9) return; for (let i = -2; i <= 2; i++) for (let j = -2; j <= 2; j++) set(r + i, c + j, Math.max(Math.abs(i), Math.abs(j)) != 1); }));
+  const bch = (x, gp, gl) => { let r = x << gl - 1; const d = l => 31 - Math.clz32(l); while (d(r) >= d(gp)) r ^= gp << d(r) - d(gp); return x << gl - 1 | r; };
+  const fmt = m => { const f = bch(m, 0x537, 11) ^ 0x5412;
+    for (let i = 0; i < 15; i++) { const b = f >> i & 1;
+      if (i < 6) set(i, 8, b); else if (i < 8) set(i + 1, 8, b); else set(N - 15 + i, 8, b);
+      if (i < 8) set(8, N - 1 - i, b); else if (i < 9) set(8, 15 - i - 1 + 1, b); else set(8, 15 - i - 1, b); }
+    set(N - 8, 8, 1); };
+  fmt(0);
+  if (V >= 7) { const vb = bch(V, 0x1f25, 13); for (let i = 0; i < 18; i++) { const b = vb >> i & 1; set(Math.floor(i / 3), N - 11 + i % 3, b); set(N - 11 + i % 3, Math.floor(i / 3), b); } }
+  const pos = []; for (let c = N - 1, up = 1; c > 0; c -= 2, up ^= 1) { if (c == 6) c--; for (let k = 0; k < N; k++) { const r = up ? N - 1 - k : k; for (let j = 0; j < 2; j++) if (!F[r][c - j]) pos.push([r, c - j]); } }
+  const MK = [(r, c) => (r + c) % 2 == 0, r => r % 2 == 0, (r, c) => c % 3 == 0, (r, c) => (r + c) % 3 == 0, (r, c) => (Math.floor(r / 2) + Math.floor(c / 3)) % 2 == 0,
+    (r, c) => r * c % 2 + r * c % 3 == 0, (r, c) => (r * c % 2 + r * c % 3) % 2 == 0, (r, c) => ((r + c) % 2 + r * c % 3) % 2 == 0];
+  const draw = m => { pos.forEach(([r, c], i) => { M[r][c] = ((cw[i >> 3] >> (7 - (i & 7)) & 1) ^ (MK[m](r, c) ? 1 : 0)); }); fmt(m); };
+  const score = () => { let s = 0, dk = 0;
+    for (let a = 0; a < 2; a++) for (let i = 0; i < N; i++) { let run = 1; const at = j => a ? M[j][i] : M[i][j]; let line = "";
+      for (let j = 0; j < N; j++) { line += at(j); if (j && at(j) == at(j - 1)) { run++; if (run == 5) s += 3; else if (run > 5) s++; } else run = 1; }
+      s += 40 * ((line.match(/(?=1011101(0000))|(?=(0000)1011101)/g) || []).length); }
+    for (let r = 0; r < N - 1; r++) for (let c = 0; c < N - 1; c++) { const x = M[r][c]; if (x == M[r][c + 1] && x == M[r + 1][c] && x == M[r + 1][c + 1]) s += 3; }
+    M.forEach(r => r.forEach(x => dk += x)); return s + 10 * Math.floor(Math.abs(dk * 20 / (N * N) - 10)); };
+  let best = fm == null ? 0 : fm, bs = 1e9;
+  if (fm == null) for (let m = 0; m < 8; m++) { draw(m); const s = score(); if (s < bs) { bs = s; best = m; } }
+  draw(best);
+  return M;
+}
+const qrSvg = t => { const M = qrMat(t); if (!M) return ""; const n = M.length; let d = "";
+  M.forEach((r, y) => r.forEach((x, c) => { if (x) d += `M${c + 4} ${y + 4}h1v1h-1z`; }));
+  return `<svg class="qrc" viewBox="0 0 ${n + 8} ${n + 8}" shape-rendering="crispEdges" role="img" aria-label="QR 碼"><rect width="100%" height="100%" fill="#fff"/><path d="${d}" fill="#000"/></svg>`; };
 function abModal(node, name){
   const q = node ? `?node=${encodeURIComponent(node)}` : "";
-  let D = null, busy = false, os = /iPhone|iPad|Macintosh/.test(navigator.userAgent) ? "ios" : "and", tm = 0, last = "";
+  const ios = /iPhone|iPad/.test(navigator.userAgent) || navigator.maxTouchPoints > 1 && /Macintosh/.test(navigator.userAgent);
+  let D = null, busy = false, os = ios || /Macintosh/.test(navigator.userAgent) ? "ios" : "and", tm = 0, last = "", lt = "top", qrk = "";
   const v = document.createElement("div"); v.className = "veil";
   v.innerHTML = `<div class="dialog pkd ntd abd">${IC("adblk", "big")}<h3>AdGuard Home</h3><p>${esc(name)}</p><div class="form"><div class="ntb">讀取中…</div><div class="msg"></div></div></div>`;
   $("#layer").appendChild(v);
@@ -1227,22 +1284,26 @@ function abModal(node, name){
     const mx = Math.max(1, ...x.hrs);
     return `<div class="abn"><div><b>${num(x.q)}</b><small>查詢</small></div><div><b>${num(x.b)}</b><small>擋掉</small></div><div><b>${x.pct}%</b><small>比例</small></div></div>
       ${x.hrs.length ? `<div class="abh" title="最近 24 小時擋掉的次數">${x.hrs.map(n => `<i style="--h:${Math.max(4, Math.round(n * 100 / mx))}%"></i>`).join("")}</div>` : ""}
-      ${x.top.length ? `<div class="lbl">最常擋的</div><div class="abtop">${x.top.map(([d, n]) => alRow(d, n)).join("")}</div>` : ""}`;
+      ${x.top.length || (x.recent || []).length ? `<div class="seg abtab"><button type="button" class="${lt === "top" ? "on" : ""}" data-ablt="top">最常擋的</button><button type="button" class="${lt === "new" ? "on" : ""}" data-ablt="new">最近擋的</button></div><div class="abls">${abls(x)}</div>` : ""}`;
   };
+  const abls = x => { const r = lt === "top" ? x.top.map(([d, n]) => alRow(d, n)) : (x.recent || []).map(([d, t]) => alRow(d, null, ago(t)));
+    return r.length ? `<div class="abtop">${r.join("")}</div>` : `<div class="ntst">${I("info")}<span>還沒有</span></div>`; };
   /* 擋錯了一鍵放行（放行過的再按一次恢復擋） */
-  const alRow = (d, n) => { const ok = (D.allow || []).includes(d);
-    return `<div><span>${esc(d)}</span>${n == null ? "" : `<b>${num(n)}</b>`}<button type="button" class="ubtn sm ghost" data-abal="${esc(d)}" data-on="${ok ? 0 : 1}">${ok ? "恢復擋" : "放行"}</button></div>`; };
+  const alRow = (d, n, t) => { const ok = (D.allow || []).includes(d);
+    return `<div><span>${esc(d)}</span>${n == null ? "" : `<b>${num(n)}</b>`}${t ? `<small>${t}</small>` : ""}<button type="button" class="ubtn sm ghost" data-abal="${esc(d)}" data-on="${ok ? 0 : 1}">${ok ? "恢復擋" : "放行"}</button></div>`; };
   const alList = () => { const top = ((D.stats || {}).top || []).map(([d]) => d), r = (D.allow || []).filter(d => !top.includes(d));
     return r.length ? `<div class="lbl">已放行</div><div class="abtop">${r.map(d => alRow(d)).join("")}</div>` : ""; };
-  const steps = () => os === "ios"
+  const steps = () => os === "ios" ? (ios
     ? `<button type="button" class="ubtn" data-abp>${I("dl")}安裝描述檔</button><ol class="ntsteps"><li>允許下載</li><li>設定 → 已下載描述檔 → 安裝</li></ol>`
+    : qrk ? `<div class="abqr">${qrSvg(location.origin + "/dns.mobileconfig?k=" + encodeURIComponent(qrk))}</div><ol class="ntsteps"><li>用 iPhone 相機掃，允許下載</li><li>設定 → 已下載描述檔 → 安裝</li></ol>`
+    : `<button type="button" class="ubtn" data-abqr>${I("qr")}用 iPhone 掃 QR 碼</button>`)
     : `<div class="codebox ntr"><code>${esc(D.dot)}</code><button type="button" class="ubtn sm ghost" data-abcp>複製</button></div>
       <ol class="ntsteps"><li>設定 → 網路和網際網路 → 私人 DNS</li><li>選「私人 DNS 供應商主機名稱」，貼上</li></ol>`;
   const view = () => D.job ? `<div class="abjob"><span class="spin"></span><span>${esc(D.job)}…</span></div>`
     : !D.on ? `<p class="ntx">手機的廣告、追蹤網址直接擋掉，只走加密連線。</p>${D.cert ? "" : `<p class="ntx">還沒有網域的憑證</p>`}<button type="button" class="ubtn" data-ab="on"${D.cert ? "" : " disabled"}>打開</button>`
-    : `${D.down ? `<div class="ntst bad">${I("warn")}<span>停了，正在重新啟動</span></div>` : D.pub ? `<div class="ntst bad">${I("warn")}<span>手機連不上：${esc(D.pub)}</span></div>` : ""}${stats(D.stats)}${alList()}
+    : `${D.down ? `<div class="ntst bad">${I("warn")}<span>停了，正在重新啟動</span></div>` : D.pub ? `<div class="ntst bad">${I("warn")}<span>手機連不上：${esc(D.pub)}</span></div>` : D.ext ? `<div class="ntst bad">${I("warn")}<span>從${esc(D.ext_by)}連不到：到主機商的防火牆打開 TCP ${D.port}</span></div>` : ""}${stats(D.stats)}${alList()}
       <div class="lbl">手機設定</div><div class="seg abos"><button type="button" class="${os === "ios" ? "on" : ""}" data-abos="ios">iPhone</button><button type="button" class="${os === "and" ? "on" : ""}" data-abos="and">Android</button></div>
-      <div class="abst">${steps()}</div><div class="ntst">${I("info")}<span>連不上的話，到主機商的防火牆打開 TCP ${D.port}</span></div>
+      <div class="abst">${steps()}</div>${D.ext === "" || D.ext ? "" : `<div class="ntst">${I("info")}<span>連不上的話，到主機商的防火牆打開 TCP ${D.port}</span></div>`}
       <div class="dlnew"><button type="button" class="ubtn sm ghost" data-abweb>管理頁${EXT}</button><button type="button" class="ubtn sm ghost" data-ab="off">關掉</button></div>`;
   const draw = () => { const h = view(); if (h !== last) { last = h; swapHTML(body, h); } };
   const call = async b => {
@@ -1273,12 +1334,18 @@ function abModal(node, name){
         return;
       }
       if (t.closest("[data-abweb]")) return openAgh(node, name);
-      if (t.closest("[data-abp]")) {
+      const lb = t.closest("[data-ablt]");
+      if (lb) { if (lb.dataset.ablt === lt) return; lt = lb.dataset.ablt; v.querySelectorAll("[data-ablt]").forEach(x => x.classList.toggle("on", x === lb));
+        last = view(); swapHTML(v.querySelector(".abls"), abls(D.stats)); return; }
+      const pq = t.closest("[data-abp],[data-abqr]");
+      if (pq) {
         try {
           const r = await api("/api/adblock-profile", {method:"POST", headers:{"X-Token":getTok(), "Content-Type":"application/json"}, body:JSON.stringify({url:D.doh, name})});
           const x = await r.json().catch(() => ({}));
           if (!r.ok || !x.k) throw new Error(x.message || "失敗了，請再試一次");
-          location.href = "/dns.mobileconfig?k=" + encodeURIComponent(x.k);
+          if (pq.dataset.abqr == null) { location.href = "/dns.mobileconfig?k=" + encodeURIComponent(x.k); return; }
+          qrk = x.k; last = view(); swapHTML(v.querySelector(".abst"), steps());
+          setTimeout(() => { if (qrk === x.k) { qrk = ""; if (!v._d && os === "ios") { last = view(); swapHTML(v.querySelector(".abst"), steps()); } } }, 540000);
         } catch (x) { sayTo(msg, x.message); }
         return;
       }
