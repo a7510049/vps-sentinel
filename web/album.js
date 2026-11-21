@@ -521,7 +521,7 @@ function route(el, pts, W, H){
 let LB = null;
 const GAPX = 28;
 function openLb(i){
-  if (LB) return;
+  if (LB) { if (LB.closing && LB.kill) LB.kill(); else return; }   // 上一張還在收：直接收完，這次點的照樣打開
   const el = document.createElement("div");
   el.className = "lb";
   el.innerHTML = `<div class="bg"></div><div class="stage"><div class="track"></div></div>
@@ -671,8 +671,11 @@ function openLb(i){
     if (r.bottom < 0 || r.top > innerHeight) { t.scrollIntoView({block:"center"}); r = t.getBoundingClientRect(); }
     const zw = cur(), f = fit(p), now = getComputedStyle(zw).transform;
     stopAll();
-    const end = () => { el.remove(); TILES.forEach(x => x.classList.remove("gone")); document.documentElement.style.overflow = ""; LB = null; onScroll(); };
+    let gone = false;
+    const end = () => { if (gone) return; gone = true; el.remove(); TILES.forEach(x => x.classList.remove("gone")); document.documentElement.style.overflow = ""; if (LB === S) LB = null; onScroll(); };
+    S.kill = end; el.style.pointerEvents = "none";
     if (!anim()) return end();
+    setTimeout(end, T.mid + 200);                              // 安卓返回手勢時動畫有時不會結束：時間到一定收掉
     el.querySelectorAll(".lbt,.lbb,.nav,.inf").forEach(x => { x.style.opacity = 0; });
     S.info = false; el.classList.remove("info");
     const a1 = toTile(r, f);
