@@ -2194,7 +2194,7 @@ let DLGN = 0, DLGSKIP = 0;
 new MutationObserver(ms => { for (const m of ms) {
   for (const v of m.addedNodes) {
     const d = v.classList && v.classList.contains("veil") && v.querySelector(".dialog"); if (!d) continue;
-    if (!v.classList.contains("upv") && !d.querySelector(".dx")) {
+    if (!v.classList.contains("upv") && !v.classList.contains("stay") && !d.querySelector(".dx")) {
       d.insertAdjacentHTML("afterbegin", `<button type="button" class="dx" aria-label="關閉">${I("x")}</button>`);
       d.firstChild.addEventListener("click", e => { e.stopPropagation(); if (v._esc) v._esc(); });
     }
@@ -2478,18 +2478,19 @@ async function pinStatus(root){
     el.classList.toggle("on", !!d.on && !d.locked);
   } catch(e) { txt(el, e.message); }
 }
-async function pinModal(){
+/* force：還在用安裝時給的臨時 PIN 碼，換好才能用（關不掉、沒有「關閉 PIN 碼」） */
+async function pinModal(force){
   const st = await pinCall({action:"status"}).catch(() => ({}));
-  const v = document.createElement("div"); v.className = "veil";
-  v.innerHTML = `<div class="dialog pindlg2">${IC("pin","big")}<h3>${st.on ? "換一組 PIN 碼" : "設定 PIN 碼"}</h3>
+  const v = document.createElement("div"); v.className = "veil" + (force ? " stay" : "");
+  v.innerHTML = `<div class="dialog pindlg2">${IC("pin","big")}<h3>${force ? "換掉臨時 PIN 碼" : st.on ? "換一組 PIN 碼" : "設定 PIN 碼"}</h3>
     <p data-t>輸入 4～8 位數字</p><div class="ppbox"></div><div class="msg"></div>
-    <div class="btns">${st.on ? `<button class="ubtn ghost" data-off>關閉 PIN 碼</button>` : ""}<button class="ubtn" data-ppgo>確定</button></div></div>`;
+    <div class="btns">${st.on && !force ? `<button class="ubtn ghost" data-off>關閉 PIN 碼</button>` : ""}<button class="ubtn" data-ppgo>確定</button></div></div>`;
   $("#layer").appendChild(v);
   const msg = v.querySelector(".msg"), tip = v.querySelector("[data-t]");
   return new Promise(res => {
     let busy = false, first = "";
     const done = () => { if (v._d) return; v._d = 1; v.classList.add("closing"); setTimeout(() => { v.remove(); res(); }, 360); };
-    v._esc = done;
+    if (!force) v._esc = done;
     const bad = t => { msg.className = "msg bad"; sayTo(msg, t); };
     const pad = pinPad(v.querySelector(".ppbox"), {okBtn: v.querySelector("[data-ppgo]"), ok: async p => {      // 先輸入一次，鍵盤重新打亂再輸入一次；PIN 碼在這裡算好雜湊才送出
       if (!first) {
@@ -2503,7 +2504,7 @@ async function pinModal(){
       if (d.ok) { toast(d.message); done(); } else { first = ""; txt(tip, "輸入 4～8 位數字"); bad(d.message || "設定失敗"); pad.again(); }
     }});
     v.addEventListener("click", async e => {
-      if (e.target === v || e.target.closest("[data-r]")) return done();
+      if (!force && (e.target === v || e.target.closest("[data-r]"))) return done();
       if (busy) return;
       if (e.target.closest("[data-off]")) {
         busy = true;
@@ -3014,6 +3015,7 @@ function login(msg){
       if (canAnim()) b.animate([{opacity:0, transform:"translateY(-4px)"}, {opacity:1, transform:"none"}], {duration:T.mid, easing:EASE}); };
     if (PIN_ON && !box.querySelector("[data-pinlogin]")) add(pinBtn);
     if (PK_OK && d.has && !box.querySelector("[data-pklogin]")) add(pkBtn);
+    if (d.temp && !window._tmpAsk) { window._tmpAsk = 1; pinLoginClick(); }   // 剛裝好：直接打開 PIN 碼鍵盤
   }).catch(() => {});
   fetch("/api/restore", {cache:"no-store"}).then(r => r.json()).then(d => {   // 剛裝好、正在等待還原：多一個入口
     const box = $("#app .login");
@@ -3429,6 +3431,10 @@ async function tick(){
     const since = Object.fromEntries(Object.entries(HIST).map(([k, h]) => [k, h.t[h.t.length - 1]]).filter(x => x[1]));
     const r = await fetch("/api/all" + (Object.keys(since).length ? "?since=" + encodeURIComponent(JSON.stringify(since)) : ""), {headers:{"X-Token":getTok()}, cache:"no-store", signal: AbortSignal.timeout ? AbortSignal.timeout(20000) : undefined});   // 網路卡住最多等 20 秒，不會一直轉
     if (r.status === 401) { const was = getTok(); setTok(""); LIST = []; for (const k in HIST) delete HIST[k]; endSplash(); return login(/^vss_/.test(was) ? "請重新登入" : "密碼不對，再試一次"); }
+    if (r.status === 403 && (await r.clone().json().catch(() => ({}))).mustpin) {   // 還在用臨時 PIN 碼：先換掉
+      endSplash(); if (window._mustPin) return true;
+      window._mustPin = 1; await pinModal(true); window._mustPin = 0; return tick();
+    }
     const data = await r.json();
     if (id !== TICKID || !getTok()) return true;
     LOST0 = 0; if (LOST) { LOST = false; document.documentElement.classList.remove("lost"); }   // 又連上了：數字恢復、標題照實際狀況

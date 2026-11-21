@@ -23,7 +23,7 @@ PUB = "ssh-ed25519 " + base64.b64encode(blob).decode() + " me@phone"
 
 class Sec(Server):
     ENV = {"SENTINEL_SSH_ETC": ETC, "SENTINEL_SSH_HOME": HOME, "SENTINEL_GUARD_FW": FW, "SENTINEL_GUARD_LOG": LOG,
-           "SENTINEL_GUARD_EVERY": "0.3", "SENTINEL_AUTOUPD": APT,
+           "SENTINEL_GUARD_EVERY": "0.3", "SENTINEL_AUTOUPD": APT, "SENTINEL_SEC_EVERY": "0.3",
            "SENTINEL_SSHD_T": "port 22\npermitrootlogin yes\npasswordauthentication yes\npermitemptypasswords no\n"}
 
     def call(self, body):
@@ -94,6 +94,18 @@ class Sec(Server):
         self.assertIs(d["sec"]["autoupd"], True)
         with open(APT, encoding="utf-8") as f:
             self.assertIn('Unattended-Upgrade "1"', f.read())
+
+    def test_5_watch(self):
+        time.sleep(1)                                             # 先記下現在的樣子（自動更新是開的）
+        self.call({"action": "undo", "item": "autoupd"})
+        for _ in range(50):
+            req = urllib.request.Request(f"http://127.0.0.1:{self.port}/api/status", headers={"X-Token": TOKEN})
+            with urllib.request.urlopen(req, timeout=15) as r:
+                ev = [e for e in json.loads(r.read())["events"] if "安全檢查：" in str(e)]
+            if ev:
+                break
+            time.sleep(0.2)
+        self.assertIn("自動安裝安全更新關掉了", str(ev))             # 從好變不好：記一筆（會傳 Telegram）
 
 
 if __name__ == "__main__":
