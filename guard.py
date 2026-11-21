@@ -515,6 +515,41 @@ def sec_info():
             "guard": guard, "autoupd": autoupd_state()}
 
 
+SEC_BAD = {"seal": "存著的密碼和資料沒有加密", "web": "網頁連線沒有加密", "cloud": "雲端硬碟沒有加密", "backup": "每日備份關掉了",
+           "guard": "SSH 錯太多次封鎖關掉了", "autoupd": "自動安裝安全更新關掉了"}    # SSH 密碼登入另外由 ssh_risks 提醒
+SEC_FILE = os.path.join(DATA_DIR, "sec-last.json")
+SEC_EVERY = float(os.environ.get("SENTINEL_SEC_EVERY") or 600)      # 測試用：多久看一次
+
+
+def sec_watch():
+    """安全檢查哪一項從好變成要注意：記一筆（會傳 Telegram）；第一次看只記下來"""
+    now = sec_info()
+    try:
+        with open(SEC_FILE, encoding="utf-8") as f:
+            last = json.load(f)
+    except (OSError, ValueError):
+        last = None
+    if isinstance(last, dict):
+        for k, txt in SEC_BAD.items():
+            if last.get(k) is True and now.get(k) is False:
+                COL.add_event("warn", f"安全檢查：{txt}")
+    try:
+        os.makedirs(DATA_DIR, exist_ok=True)
+        sec_write(SEC_FILE, json.dumps({k: now.get(k) for k in SEC_BAD}), plain=True)
+    except OSError:
+        pass
+
+
+def sec_watch_loop():
+    time.sleep(min(60, SEC_EVERY))                    # 剛啟動：讓封鎖、加密先準備好
+    while True:
+        try:
+            sec_watch()
+        except Exception as e:  # noqa: BLE001
+            log(f"安全檢查出錯：{str(e)[:120]}")
+        time.sleep(SEC_EVERY)
+
+
 def sec_detail():
     """安全檢查頁要的全部資料"""
     now = time.time()
