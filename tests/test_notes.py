@@ -97,6 +97,18 @@ class Notes(Server):
         self.assertTrue(os.path.exists(os.path.join(self.tmp.name, "data", "notes", "info.json")))   # 筆記留著
         self.assertEqual(self.call({"action": "on"})[1]["ek"], ek)               # 再打開，加密密碼還是同一組
 
+    def test_3_wipe(self):
+        c, d = self.call({"action": "show"})
+        self.assertEqual(self.dav("PUT", "/notes/x.md", b"secret", pw=d["pw"])[0], 201)
+        c, d2 = self.call({"action": "wipe"})
+        self.assertEqual(c, 200, d2)
+        self.assertTrue(d2["on"])                                                 # 等於重新開一本
+        self.assertEqual(os.listdir(os.path.join(self.tmp.name, "data", "notes")), [])
+        self.assertNotEqual(d2["pw"], d["pw"])
+        self.assertNotEqual(d2["ek"], d["ek"])
+        self.assertEqual(self.dav("GET", "/notes/x.md", pw=d["pw"])[0], 401)
+        self.assertEqual(self.dav("GET", "/notes/x.md", pw=d2["pw"])[0], 404)
+
     def test_2_ban(self):
         c, d = self.call({"action": "show"})
         pw = d["pw"]

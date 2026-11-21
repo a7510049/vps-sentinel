@@ -2440,7 +2440,7 @@ def recheck_need(path, d):
     return (path == "/api/token" or (path == "/api/pin" and act in ("set", "off"))
             or (path == "/api/passkey" and act in ("begin", "delete")) or (path == "/api/telegram" and act == "save")
             or (path == "/api/backup" and act == "key") or (path == "/api/pair-admin" and act == "code")
-            or (path == "/api/sec" and act in ("fix", "undo", "key", "gen")) or (path == "/api/notes" and act in ("on", "show", "new")))
+            or (path == "/api/sec" and act in ("fix", "undo", "key", "gen")) or (path == "/api/notes" and act in ("on", "show", "new", "wipe")))
 
 
 def recheck_ok(a):

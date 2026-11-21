@@ -1042,7 +1042,8 @@ function notesModal(node, name){
       <ol class="ntsteps"><li>加密 → 啟用加密，填「加密」那組（先做這步）</li><li>同步 → 選 WebDAV，填網址、帳號、密碼</li>${D.self_signed ? "<li>同步的進階選項 → 勾「忽略 TLS 憑證錯誤」</li>" : ""}</ol>
 
       <div class="ntst">${I("note")}<span>${st()}</span></div>
-      <div class="dlnew"><button type="button" class="ubtn sm ghost" data-nt="new">換密碼</button><button type="button" class="ubtn sm ghost" data-nt="off">關掉</button></div>`);
+      <div class="dlnew"><button type="button" class="ubtn sm ghost" data-nt="new">換密碼</button><button type="button" class="ubtn sm ghost" data-nt="off">關掉</button></div>
+      <button type="button" class="ubtn sm ghost bad ntwipe" data-nt="wipe">${I("trash")}清除所有筆記</button>`);
   const call = async b => {
     const r = await api("/api/notes" + q, {method:"POST", headers:{"X-Token":getTok(), "Content-Type":"application/json"}, body:JSON.stringify(b)});
     const x = await r.json().catch(() => ({}));
@@ -1077,6 +1078,7 @@ function notesModal(node, name){
       const act = b.dataset.nt;
       if (act === "new" && !await modal({icon:"key", cls:"warn", title:"換一組密碼？", text:"舊密碼會立刻失效，每台 Joplin 都要重填。", ok:"換密碼"})) return;
       if (act === "off" && !await modal({icon:"note", cls:"warn", title:"關掉加密筆記？", text:"Joplin 會連不上，筆記還留在主機上。", ok:"關掉"})) return;
+      if (act === "wipe" && !await modal({icon:"trash", cls:"bad", title:"清除所有筆記？", text:"主機上的筆記全部刪掉、密碼都換新，救不回來；手機上的不動。", ok:"清除"})) return;
       const x = await run({action: act});
       if (x && act !== "on") toast(x.message || "好了");
     });

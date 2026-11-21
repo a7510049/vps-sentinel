@@ -78,7 +78,7 @@ def note_ek_new():
 
 
 def note_act(d):
-    """網頁的動作：on 打開（產生密碼）、show 看密碼、new 換一組密碼、off 關掉（筆記留著）"""
+    """網頁的動作：on 打開（產生密碼）、show 看密碼、new 換一組密碼、off 關掉（筆記留著）、wipe 全部清掉"""
     act = d.get("action")
     with NOTE_LOCK:
         c = dict(note_conf())
@@ -102,6 +102,23 @@ def note_act(d):
                 c["ek"] = note_ek_new()
                 note_save(c)
             return True, "", {"pw": c["pw"], "ek": c["ek"]}
+        if act == "wipe":                            # 清除所有筆記：檔案全部刪掉、密碼和加密密碼都換新（手機上的 Joplin 不動）
+            root = note_dir()
+            try:
+                for name in os.listdir(root):
+                    p = os.path.join(root, name)
+                    if os.path.isdir(p) and not os.path.islink(p):
+                        shutil.rmtree(p)
+                    else:
+                        os.remove(p)
+            except FileNotFoundError:
+                pass
+            except OSError:
+                return False, "沒刪乾淨，再試一次", {}
+            c = {"pw": secrets.token_urlsafe(18), "ek": note_ek_new(), "t": int(time.time())}   # 等於重新開一本：密碼、加密密碼都換新
+            note_save(c)
+            log("加密筆記：清除了所有筆記，重新開一本")
+            return True, "已清除，換了新的密碼", {"pw": c["pw"], "ek": c["ek"]}
         if act == "off":
             c.pop("pw", None)
             note_save(c)
