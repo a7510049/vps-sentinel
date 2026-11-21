@@ -198,6 +198,7 @@ class Adblock(Server):
         self.assertTrue(cn and all(u.startswith("[/") and "/qq.com/" in u for u in cn))   # 大陸 DNS 只給大陸網站
         self.assertTrue(all("/example.cn/" in u and "/foo-china.com/" in u and "bad..x" not in u for u in cn))   # 下載的完整清單也加進去
         self.assertIn("https://adguardteam.github.io/HostlistsRegistry/assets/filter_21.txt", GOT["filters"])   # 中文廣告清單
+        self.assertIn("https://adguardteam.github.io/HostlistsRegistry/assets/filter_44.txt", GOT["filters"])   # 威脅情報
 
         # 擋錯了一鍵放行、恢復擋
         c, x = self.call("/api/adblock", {"action": "allow", "domain": "ads.example.com"})
