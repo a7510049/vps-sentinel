@@ -39,7 +39,9 @@ const store = {get:k => { try { return localStorage.getItem(k) || ""; } catch (e
 let D = null, PH = [], TILES = [], SS = null;
 let ALL = [], WHO = "";                                      // 全部照片；現在看的分頁（空字串＝主人的，不然是朋友的資料夾）
 const TM = new Map();                                        // 照片編號 → 格子（換分頁時重用）
-const pickW = () => ALL.filter(p => (p.u || "") === WHO);
+let CITY = "";                                               // 只看哪個城市（點城市卡片）
+const cityKey = p => p.p && p.p.c ? `${p.p.cc || ""}|${p.p.c}` : "";
+const pickW = () => ALL.filter(p => (p.u || "") === WHO && (!CITY || cityKey(p) === CITY));
 
 /* ── 日期：EXIF 的「2026:11:03 14:22:10」是拍照當地的時間，照原樣顯示 ── */
 const WD = "日一二三四五六";
@@ -249,10 +251,11 @@ function zoomWall(z, fx, fy, pre){                            // 換大小：每
   OUT.forEach((e, k) => { const d = o0[k] - e.getBoundingClientRect().top; if (Math.abs(d) > 1) e.animate([{transform:`translateY(${d}px)`}, {transform:"none"}], {duration:ZDUR, easing:DEC}); });
   return true;
 }
-function dayPlaces(k){
-  const c = {};
-  PH.forEach(p => { const d = pd(p.x.dt); if (d && d.k === k && p.p) c[p.p.n] = (c[p.p.n] || 0) + 1; });
-  return Object.keys(c).sort((a, b) => c[b] - c[a]).slice(0, 2).join("・");
+function dayPlaces(k){                                       // 這天的城市＋最常拍的地方，例如「阿雷佐・聖方濟各聖殿」
+  const c = {}, cc = {};
+  PH.forEach(p => { const d = pd(p.x.dt); if (d && d.k === k && p.p) { c[p.p.n] = (c[p.p.n] || 0) + 1; if (p.p.c) cc[p.p.c] = (cc[p.p.c] || 0) + 1; } });
+  const city = Object.keys(cc).sort((a, b) => cc[b] - cc[a])[0] || "";
+  return [city, ...Object.keys(c).filter(n => n !== city).sort((a, b) => c[b] - c[a]).slice(0, city ? 1 : 2)].filter(Boolean).join("・");
 }
 /* 最上面一排「回憶」：一天一個圓圈（只有一天就照地點），點了像限時動態一張一張看 */
 let MEMS = [];
@@ -289,9 +292,10 @@ function mems(){
 let STIO = null;
 function stats(){
   const box = $(".stats"); if (!box) return;
-  const days = new Set(), pl = new Set();
-  PH.forEach(p => { const d = pd(p.x.dt); if (d) days.add(d.k); if (p.p) pl.add(p.p.n); });
-  const v = PH.filter(isVid).length, it = [[PH.length - v, "張照片"], [v, "段影片"], [days.size, "天"], [D.loc ? pl.size : 0, "個地點"]].filter(x => x[0] > 0);
+  const days = new Set(), pl = new Set(), ct = new Set(), cc = new Set();
+  PH.forEach(p => { const d = pd(p.x.dt); if (d) days.add(d.k); if (p.p) { pl.add(p.p.n); if (cityKey(p)) ct.add(cityKey(p)); if (p.p.cc) cc.add(p.p.cc); } });
+  const many = ct.size > 1;
+  const v = PH.filter(isVid).length, it = [[PH.length - v, "張照片"], [v, "段影片"], [days.size, "天"], [D.loc && cc.size > 1 ? cc.size : 0, "個國家"], [D.loc ? (many ? ct.size : pl.size) : 0, many ? "個城市" : "個地點"]].filter(x => x[0] > 0);
   box.hidden = !!WHO || it.length < 2;
   box.innerHTML = it.map(([n, t]) => `<div class="st"><b class="num" data-n="${n}">${n}</b><small>${t}</small></div>`).join("")
     + (D.loc && !WHO ? `<div class="st" data-skm hidden><b class="num" data-n="0">0</b><small>公里</small></div>` : "");
@@ -327,8 +331,8 @@ function draw(){
         ${D.dl ? `<a class="chip" href="${BASE}/zip" download>${I("dl")}<span>全部下載</span></a><button class="chip" data-sel>${I("sel")}<span>選取</span></button>` : ""}${D.up ? `<button class="chip" data-up>${I("up")}<span>放照片</span></button>` : ""}</div></div>
       <button class="cue" aria-label="往下看"><i></i></button></header>
     <div class="bar"><b>${esc(D.name)}<small class="num">${cntTxt()}</small></b>${IOS ? `<span class="chip zb"><button data-zb="-1" aria-label="放大">${I("zin")}</button><button data-zb="1" aria-label="縮小">${I("zout")}</button></span>` : ""}${D.up ? `<button class="chip" data-up aria-label="放照片">${I("up")}</button>` : ""}${D.dl ? `<button class="chip" data-sel aria-label="選取">${I("sel")}</button>` : ""}<button class="chip go" data-ss aria-label="播放">${I("play")}</button></div>
-    <nav class="who" hidden></nav><div class="mems"></div><div class="stats"></div><main class="wall" data-z="${ZL}"></main>
-    ${D.loc && ALL.some(p => p.g && !p.u) ? `<section class="msec"${WHO ? " hidden" : ""}><div class="mh"><b>旅程</b><span class="num" data-km>${ALL.filter(p => p.g && !p.u).length} 個地點</span></div><div class="map" data-map></div></section>` : ""}
+    <nav class="who" hidden></nav><div class="mems"></div><div class="stats"></div><div class="cityf" hidden></div><main class="wall" data-z="${ZL}"></main>
+    ${D.loc && ALL.some(p => p.g && !p.u) ? `<section class="msec"${WHO ? " hidden" : ""}><div class="mh"><b data-mt>地點</b><span class="num" data-km></span></div><div class="cities"></div><div class="map" data-map></div></section>` : ""}
     <footer class="foot">${finCol()}<div class="fin">${esc(D.name)}</div>${D.exp ? `<span>${I("clock")}${left(D.exp)}</span>` : ""}</footer>`;
   const hi = $(".hero .hi");
   const hok = () => { hi.classList.add("ok"); setTimeout(() => { const q = $(".hero .lq"); if (q) q.remove(); }, T.slow + 100); };   // 糊的底圖拿掉，捲動時不用一直重畫模糊
@@ -360,14 +364,15 @@ async function whoSet(w, keep){
   if (w === WHO && !keep) return;
   if (WHOBZ) return; WHOBZ = 1;
   if (SEL.on) popBack();
-  const parts = [".mems", ".stats", ".wall", ".msec"].map(q => $(q)).filter(Boolean);
+  const parts = [".mems", ".stats", ".cityf", ".wall", ".msec"].map(q => $(q)).filter(Boolean);
   if (anim()) await Promise.all(parts.map(x => x.animate([{opacity:1}, {opacity:0, transform:"translateY(6px)"}], {duration:T.fast, easing:EXIT, fill:"forwards"}).finished.catch(() => {})));
-  WHO = w; PH = pickW();
+  if (!keep || w !== WHO) CITY = "";
+  WHO = w; PH = pickW(); citybar();
   TILES.forEach(t => t.classList.remove("on"));
   TILES = PH.map((p, i) => { const t = TM.get(p.i); if (t) { t.dataset.i = i; return t; } return tile(p, i); });
   whoBar();
   sections(); layout(true); mems(); stats(); bigMap();
-  const ms = $(".msec"); if (ms) ms.hidden = !!WHO || !(D.loc && PH.some(p => p.g));
+  const ms = $(".msec"); if (ms) ms.hidden = !!WHO || !!CITY || !(D.loc && PH.some(p => p.g));
   document.querySelectorAll(".hmeta .chip .num, .bar small").forEach(x => { x.textContent = cntTxt(); });
   const nav = $(".who"), top = nav && !nav.hidden ? nav.getBoundingClientRect().top + scrollY - 70 : 0;
   if (nav && scrollY > top) scrollTo({top, behavior:"auto"});
@@ -592,33 +597,115 @@ document.addEventListener("click", e => {
   if (e.target.closest("[data-ss]")) return show(0);
   const mm = e.target.closest("[data-mem]");
   if (mm) return story(+mm.dataset.mem, mm.querySelector(".mring"));
+  const ct = e.target.closest("[data-city]");
+  if (ct) return citySet(ct.dataset.city);
+  if (e.target.closest("[data-cityx]")) return citySet("");
   const m = e.target.closest(".mk");
   if (m) return openLb(+m.dataset.i);
 });
 
-/* 全部照片的拍攝地點：一張地圖、照片圓圈，太近的合成一顆＋數字 */
+/* 去過的城市：照片照城市分組（主機從拍攝地點查到的城市、國家） */
+function citiesOf(){
+  const by = new Map();
+  ALL.forEach(p => {
+    if (p.u || p.broken || !p.g) return;
+    const k = cityKey(p); if (!k) return;
+    let c = by.get(k);
+    if (!c) { c = {k, c:p.p.c, cc:p.p.cc || "", ps:[], la:0, lo:0}; by.set(k, c); }
+    c.ps.push(p); c.la += p.g[0]; c.lo += p.g[1];
+  });
+  const out = [...by.values()].map(c => {
+    const ds = c.ps.map(p => pd(p.x.dt)).filter(Boolean).sort((a, b) => a.k < b.k ? -1 : 1);
+    return {...c, la:c.la / c.ps.length, lo:c.lo / c.ps.length, d0:ds[0], d1:ds[ds.length - 1]};
+  });
+  return out.sort((a, b) => (a.d0 ? a.d0.k : "z") < (b.d0 ? b.d0.k : "z") ? -1 : 1);
+}
+function cityDates(a, b){
+  if (!a) return "";
+  const y = YR ? `${a.y}年` : "";
+  if (!b || a.k === b.k) return `${y}${a.mo}月${a.d}日`;
+  if (a.y === b.y && a.mo === b.mo) return `${y}${a.mo}月${a.d}－${b.d}日`;
+  if (a.y === b.y) return `${y}${a.mo}月${a.d}日－${b.mo}月${b.d}日`;
+  return `${a.y}年${a.mo}月－${b.y}年${b.mo}月`;
+}
+/* 同一趟旅行：有定位的照片日期連續（最多隔一天）、前後兩週以內，才畫路線、寫第幾天 */
+function isTrip(){
+  const ks = [...new Set(ALL.filter(p => p.g && !p.u).map(p => pd(p.x.dt)).filter(Boolean).map(d => Date.UTC(d.y, d.mo - 1, d.d) / 864e5))].sort((a, b) => a - b);
+  if (ks.length < 2) return true;
+  if (ks[ks.length - 1] - ks[0] > 14) return false;
+  return ks.every((v, k) => !k || v - ks[k - 1] <= 2);
+}
+const flagImg = cc => /^[A-Z]{2}$/.test(cc) ? `<img class="flg" alt="" loading="lazy" src="/flag/${cc.toLowerCase()}.png">` : "";
+function flagFix(root){ root.querySelectorAll("img.flg").forEach(f => f.addEventListener("error", () => f.remove(), {once:true})); }
+function cityCards(cs){
+  const box = $(".msec .cities"); if (!box) return;
+  box.hidden = cs.length < 2;
+  box.innerHTML = cs.length < 2 ? "" : cs.map(c => {
+    const pick = c.ps.filter(p => !isVid(p)).slice(0, 3), ims = (pick.length ? pick : c.ps.slice(0, 1));
+    return `<button class="cty" data-city="${esc(c.k)}"><span class="ctc n${ims.length}">${ims.map(p => `<img alt="" loading="lazy" draggable="false" src="${src(p, "s")}">`).join("")}</span>
+      <span class="ctt"><b>${flagImg(c.cc)}<span>${esc(c.c)}</span><i class="num">${c.ps.length}</i></b><small class="num">${esc(cityDates(c.d0, c.d1))}</small></span></button>`;
+  }).join("");
+  flagFix(box);
+}
+function citySet(k){
+  if (k === CITY) return;
+  CITY = k;
+  whoSet(WHO, true).then(() => { const w = $(".cityf"); if (w && !w.hidden) scrollTo({top:w.getBoundingClientRect().top + scrollY - 70, behavior:anim() ? "smooth" : "auto"}); });
+}
+function citybar(){
+  const b = $(".cityf"); if (!b) return;
+  const c = CITY && citiesOf().find(x => x.k === CITY);
+  b.hidden = !c;
+  b.innerHTML = c ? `<span class="chip on">${flagImg(c.cc)}<span>${esc(c.c)}</span><small class="num">${c.ps.length} 張</small></span><button class="chip" data-cityx>${I("x")}<span>全部城市</span></button>` : "";
+  flagFix(b);
+}
+
+/* 地圖：同一趟旅行畫走過的路線；不是的話每個城市一顆（不連線），只有一個城市就標拍照的點 */
 function bigMap(){
   const el = $("[data-map]"); if (!el || WHO) return;
-  const pts = PH.map((p, i) => [p, i]).filter(([p]) => p.g && !p.broken);
+  const cs = citiesOf(), trip = isTrip(), byCity = !trip && cs.length > 1;
+  cityCards(cs);
+  const mt = $("[data-mt]"); if (mt) mt.textContent = trip ? "旅程" : cs.length > 1 ? "去過的城市" : "拍照的地方";
+  const pts = byCity ? cs.map(c => [{g:[c.la, c.lo]}, ALL.indexOf(c.ps[0]), c]) : PH.map((p, i) => [p, i]).filter(([p]) => p.g && !p.broken);
   const W = el.clientWidth, H = el.clientHeight;
   if (!pts.length || !W) return;
-  let z = 15;
+  let z = byCity ? 12 : 15;
   for (; z > 2; z--) {
     const xs = pts.map(([p]) => lx(p.g[1], z)), ys = pts.map(([p]) => ly(p.g[0], z));
-    if (Math.max(...xs) - Math.min(...xs) <= W - 110 && Math.max(...ys) - Math.min(...ys) <= H - 110) break;
+    if (Math.max(...xs) - Math.min(...xs) <= W - 130 && Math.max(...ys) - Math.min(...ys) <= H - 130) break;
   }
-  if (pts.length === 1) z = 13;
+  if (pts.length === 1) z = byCity ? 10 : 13;
   const xs = pts.map(([p]) => lx(p.g[1], z)), ys = pts.map(([p]) => ly(p.g[0], z));
   const cx = (Math.max(...xs) + Math.min(...xs)) / 2, cy = (Math.max(...ys) + Math.min(...ys)) / 2;
   el.innerHTML = `<span class="attr">© OpenStreetMap</span>`;
+  el.classList.toggle("bycity", byCity);
   tiles(el, cx, cy, z, W, H);
+  if (byCity) {
+    const ps = pts.map((x, k) => ({x:xs[k] - cx + W / 2, y:ys[k] - cy + H / 2}));
+    for (let n = 0; n < 40; n++) {             // 靠太近的城市互相推開，泡泡和名字不疊在一起
+      let mv = 0;
+      ps.forEach((a, i) => ps.forEach((b, j) => {
+        if (j <= i) return;
+        const dx = b.x - a.x, dy = b.y - a.y, d = Math.hypot(dx, dy) || .01, need = 84;
+        if (d >= need) return;
+        const f = (need - d) / 2, ux = d > .02 ? dx / d : 1, uy = d > .02 ? dy / d : 0;
+        a.x -= ux * f; a.y -= uy * f; b.x += ux * f; b.y += uy * f; mv = 1;
+      }));
+      ps.forEach(q => { q.x = Math.max(40, Math.min(W - 40, q.x)); q.y = Math.max(36, Math.min(H - 50, q.y)); });
+      if (!mv) break;
+    }
+    el.insertAdjacentHTML("beforeend", pts.map(([, , c], k) => `<button class="mk cmk" data-city="${esc(c.k)}" style="left:${ps[k].x.toFixed(1)}px;top:${ps[k].y.toFixed(1)}px;animation-delay:${Math.min(k * 60, 600)}ms"><img alt="" loading="lazy" src="${src(c.ps[0], "s")}"><i class="num">${c.ps.length}</i><em>${esc(c.c)}</em></button>`).join(""));
+    const kmEl = $("[data-km]"); if (kmEl) kmEl.textContent = `${cs.length} 個城市`;
+    return;
+  }
   const cl = [];
   pts.forEach(([p, i], k) => {
     const x = xs[k] - cx + W / 2, y = ys[k] - cy + H / 2, c = cl.find(c => Math.hypot(c.x - x, c.y - y) < 46);
     if (c) c.n++; else cl.push({x, y, i, n:1});
   });
   el.insertAdjacentHTML("beforeend", cl.map((c, k) => `<button class="mk" data-i="${c.i}" style="left:${c.x.toFixed(1)}px;top:${c.y.toFixed(1)}px;animation-delay:${Math.min(k * 40, 600)}ms"><img alt="" loading="lazy" src="${src(PH[c.i], "s")}">${c.n > 1 ? `<i class="num">${c.n}</i>` : ""}</button>`).join(""));
-  route(el, pts.map(([p], k) => ({x:xs[k] - cx + W / 2, y:ys[k] - cy + H / 2, g:p.g, d:pd(p.x.dt)})), W, H);
+  if (trip) route(el, pts.map(([p], k) => ({x:xs[k] - cx + W / 2, y:ys[k] - cy + H / 2, g:p.g, d:pd(p.x.dt)})), W, H);
+  else { const kmEl = $("[data-km]"); if (kmEl) kmEl.textContent = `${cl.length} 個地方`; }
 }
 
 /* 旅程路線：照拍攝時間把地點連起來，捲到時一筆畫出來，再有一個亮點沿著走 */

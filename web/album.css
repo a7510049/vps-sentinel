@@ -689,3 +689,40 @@ html::-webkit-scrollbar,body::-webkit-scrollbar{display:none;width:0;height:0}  
 }
 .foot:has(.fcol)::before{display:none}
 @media (min-width:900px){.stats{grid-template-columns:repeat(auto-fit,minmax(150px,200px))}}
+
+/* 去過的城市：一個城市一張卡（三張照片＋國旗、城市、日期、張數），點了只看那個城市 */
+.cities{display:grid;grid-auto-flow:column;grid-auto-columns:minmax(200px,240px);gap:12px;overflow-x:auto;scrollbar-width:none;margin:0 calc(-1 * var(--pad)) 14px;padding:4px var(--pad) 10px;scroll-snap-type:x mandatory;scroll-padding:0 var(--pad)}
+.cities::-webkit-scrollbar{display:none}
+.cities[hidden]{display:none}
+.cty{display:flex;flex-direction:column;gap:10px;padding:8px 8px 12px;border-radius:var(--r-lg);background:var(--s1);box-shadow:var(--sh-card);text-align:left;color:inherit;scroll-snap-align:start;
+  transition:transform var(--sp-fast);animation:memin var(--t-slow) var(--dec) both}
+.cty:nth-child(2){animation-delay:60ms}.cty:nth-child(3){animation-delay:120ms}.cty:nth-child(n+4){animation-delay:180ms}
+.cty:active{transform:scale(.97)}
+@media (hover:hover){.cty:hover{transform:translateY(-3px)}}
+.ctc{display:grid;gap:3px;height:118px;border-radius:var(--r-md);overflow:hidden;background:var(--s2)}
+.ctc.n2{grid-template-columns:1fr 1fr}
+.ctc.n3{grid-template-columns:1.4fr 1fr;grid-template-rows:1fr 1fr}
+.ctc.n3 img:first-child{grid-row:1 / span 2}
+.ctc img{width:100%;height:100%;object-fit:cover;display:block;min-height:0}
+.ctt{display:flex;flex-direction:column;gap:3px;padding:0 4px}
+.ctt b{display:flex;align-items:center;gap:7px;font-size:var(--fs-l);font-weight:750;min-width:0}
+.ctt b span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.ctt small{font-size:var(--fs-xs);color:var(--tx3)}
+.flg{width:20px;height:14px;border-radius:3px;object-fit:cover;flex:none;box-shadow:0 0 0 1px rgba(0,0,0,.08)}
+
+/* 只看一個城市時照片牆上面那排 */
+.cityf{max-width:1600px;margin:0 auto;padding:clamp(12px,2vw,20px) var(--pad) 4px;display:flex;gap:8px;flex-wrap:wrap;animation:memin var(--t-mid) var(--dec) both}
+.cityf[hidden]{display:none}
+.cityf .chip{-webkit-backdrop-filter:none;backdrop-filter:none;box-shadow:none}
+.cityf .chip.on{background:var(--grad);color:var(--on-g)}
+.cityf .chip.on small{opacity:.8;font-weight:500}
+.cityf button.chip{background:var(--s2)}
+
+/* 地圖：底圖去掉顏色、蓋一層照片的顏色，比較安靜；城市是一顆照片泡泡＋名字 */
+.map .tl{filter:var(--map-f) grayscale(.85)}
+.map::after{content:"";position:absolute;inset:0;pointer-events:none;background:color-mix(in oklab,var(--g2) 22%,transparent);mix-blend-mode:color;transition:background 1.6s var(--ease)}
+.mk.cmk{width:58px;height:58px;margin:-29px 0 0 -29px}
+.mk.cmk em{position:absolute;left:50%;top:calc(100% + 6px);translate:-50% 0;white-space:nowrap;font-style:normal;font-size:var(--fs-xs);font-weight:700;padding:3px 9px;border-radius:var(--r-pill);
+  background:var(--s1);color:var(--tx);box-shadow:var(--sh-pop);max-width:120px;overflow:hidden;text-overflow:ellipsis}
+.ctt b i{margin-left:auto;flex:none;font-style:normal;font-size:var(--fs-xs);font-weight:700;color:var(--tx2);height:22px;min-width:22px;padding:0 8px;border-radius:var(--r-pill);display:grid;place-items:center;background:color-mix(in oklab,var(--g2) 14%,var(--s2))}
+.ctt small{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
