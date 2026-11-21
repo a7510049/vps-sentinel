@@ -467,7 +467,7 @@ const COL = {cpu:"var(--c-cpu)", mem:"var(--c-mem)", rx:"var(--c-rx)", tx:"var(-
 /* 概念 → [顏色樣式, 圖示] */
 const ICO = {cpu:["cpu","cpu"], mem:["mem","mem"], disk:["disk","disk"], load:["load","gauge"], down:["down","down"], up:["up","up"],
   net:["net","net"], trend:["trend","trend"], month:["month","month"], box:["box","box"], bell:["bell","bell"], info:["info","info"],
-  flag:["flag","flag"], keep:["keep","shield"], key:["key","key"], finger:["finger","finger"], pin:["pin","pin"], link:["link","link"], archive:["archive","archive"], sun:["sun","sun"], quote:["quote","quote"], dl:["dl","dl"], cloud:["cloud","cloud"], fly:["fly","plane"], devices:["devices","devices"], safe:["safe","lockok"], sky:["sky","radar"], note:["note","note"], adblk:["adblk","noad"], album:["album","album"]};
+  flag:["flag","flag"], keep:["keep","shield"], key:["key","key"], finger:["finger","finger"], pin:["pin","pin"], link:["link","link"], archive:["archive","archive"], sun:["sun","sun"], quote:["quote","quote"], dl:["dl","dl"], cloud:["cloud","cloud"], fly:["fly","plane"], devices:["devices","devices"], safe:["safe","lockok"], sky:["sky","radar"], note:["note","note"], dnsf:["dnsf","noad"], album:["album","album"]};
 const IC = (k, cls="sm") => `<span class="ico ${cls} ${ICO[k][0]}">${I(ICO[k][1])}</span>`;
 
 /* ═════════ 共用的小元件 ═════════ */
@@ -1205,15 +1205,15 @@ function albumModal(node, name){
 }
 /* 擋廣告 DNS（AdGuard Home）：手機的 DNS 設成這台，只開加密的 DoH／DoT */
 const abSt = a => a.job ? "設定中…" : a.on ? (a.pct != null ? `擋掉 ${a.pct}%` : "已打開") : "還沒打開";
-const abTile = (s, node, name) => s.adblock ? `<button class="tbx" data-key="ab" data-ab="${node}" data-name="${name}"><span class="ttop">${IC("adblk", "")}<span class="tgo nx">${CHEV}</span></span><b>AdGuard Home</b><small data-x>${abSt(s.adblock)}</small></button>` : "";
+const abTile = (s, node, name) => s.adblock ? `<button class="tbx" data-key="ab" data-ab="${node}" data-name="${name}"><span class="ttop">${IC("dnsf", "")}<span class="tgo nx">${CHEV}</span></span><b>AdGuard Home</b><small data-x>${abSt(s.adblock)}</small></button>` : "";
 /* AdGuard Home 自己的管理頁：跟雲端硬碟一樣先驗證是你，再用一次性登入票進去（不用記它的帳號密碼） */
 async function openAgh(node, name){
   const has = await pkCall("/api/passkey-login", {action:"has"}).catch(() => ({}));
-  const t = await pinAsk({title: "打開 AdGuard Home", sub: name, icon: "adblk", pin: !!has.pin, passkey: PK_OK && !!has.has,
+  const t = await pinAsk({title: "打開 AdGuard Home", sub: name, icon: "dnsf", pin: !!has.pin, passkey: PK_OK && !!has.has,
     send: c => pkCall("/api/adguard-open", {...c, node: node || ""}, 1)});
   if (!t || !t.ticket || !safeUrl(t.login)) return;
   if (window.open("", "vsagh")) return cloudSubmit(t, "vsagh");
-  modal({icon: "noad", cls: "adblk", title: "AdGuard Home", text: "驗證好了", ok: "打開"}).then(go => { if (go) cloudSubmit(t, "_blank"); });
+  modal({icon: "noad", cls: "dnsf", title: "AdGuard Home", text: "驗證好了", ok: "打開"}).then(go => { if (go) cloudSubmit(t, "_blank"); });
 }
 /* QR 碼（位元組模式、M 級，版本 1～10）：回傳模組矩陣；給電腦顯示讓 iPhone 掃 */
 function qrMat(text, fm){
@@ -1275,7 +1275,7 @@ function abModal(node, name){
   const ios = /iPhone|iPad/.test(navigator.userAgent) || navigator.maxTouchPoints > 1 && /Macintosh/.test(navigator.userAgent);
   let D = null, busy = false, os = ios || /Macintosh/.test(navigator.userAgent) ? "ios" : "and", tm = 0, last = "", lt = "top", qrk = "";
   const v = document.createElement("div"); v.className = "veil";
-  v.innerHTML = `<div class="dialog pkd ntd abd">${IC("adblk", "big")}<h3>AdGuard Home</h3><p>${esc(name)}</p><div class="form"><div class="ntb">讀取中…</div><div class="msg"></div></div></div>`;
+  v.innerHTML = `<div class="dialog pkd ntd abd">${IC("dnsf", "big")}<h3>AdGuard Home</h3><p>${esc(name)}</p><div class="form"><div class="ntb">讀取中…</div><div class="msg"></div></div></div>`;
   $("#layer").appendChild(v);
   const body = v.querySelector(".ntb"), msg = v.querySelector(".msg");
   const num = n => n >= 1e6 ? (n / 1e6).toFixed(1) + "M" : n >= 1e4 ? Math.round(n / 1e3) + "K" : String(n);

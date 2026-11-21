@@ -306,8 +306,9 @@ def ab_dns_due(c):
 # 擋廣告清單：AdGuard Home 官方整理的清單庫裡挑的（預設那份「AdGuard DNS filter」原本就有）
 AB_LIST_URL = "https://adguardteam.github.io/HostlistsRegistry/assets/filter_{}.txt"
 AB_LISTS = (("中文廣告（anti-AD）", 21), ("惡意網站（URLhaus）", 11), ("釣魚網站（Phishing Army）", 18),
-            ("釣魚網站（PhishTank、OpenPhish）", 30), ("詐騙網站（DurableNapkin）", 10))
-AB_LISTV = 1
+            ("釣魚網站（PhishTank、OpenPhish）", 30), ("詐騙網站（DurableNapkin）", 10),
+            ("威脅情報（HaGeZi）", 44), ("惡意網站（Dandelion Sprout）", 12))
+AB_LISTV = 2
 
 
 def ab_lists():
