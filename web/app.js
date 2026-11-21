@@ -1205,6 +1205,15 @@ function albumModal(node, name){
 /* 擋廣告 DNS（AdGuard Home）：手機的 DNS 設成這台，只開加密的 DoH／DoT */
 const abSt = a => a.job ? "設定中…" : a.on ? (a.pct != null ? `擋掉 ${a.pct}%` : "已打開") : "還沒打開";
 const abTile = (s, node, name) => s.adblock ? `<button class="tbx" data-key="ab" data-ab="${node}" data-name="${name}"><span class="ttop">${IC("adblk", "")}<span class="tgo nx">${CHEV}</span></span><b>AdGuard Home</b><small data-x>${abSt(s.adblock)}</small></button>` : "";
+/* AdGuard Home 自己的管理頁：跟雲端硬碟一樣先驗證是你，再用一次性登入票進去（不用記它的帳號密碼） */
+async function openAgh(node, name){
+  const has = await pkCall("/api/passkey-login", {action:"has"}).catch(() => ({}));
+  const t = await pinAsk({title: "打開 AdGuard Home", sub: name, icon: "adblk", pin: !!has.pin, passkey: PK_OK && !!has.has,
+    send: c => pkCall("/api/adguard-open", {...c, node: node || ""}, 1)});
+  if (!t || !t.ticket || !safeUrl(t.login)) return;
+  if (window.open("", "vsagh")) return cloudSubmit(t, "vsagh");
+  modal({icon: "funnel", title: "AdGuard Home", text: "驗證好了", ok: "打開"}).then(go => { if (go) cloudSubmit(t, "_blank"); });
+}
 function abModal(node, name){
   const q = node ? `?node=${encodeURIComponent(node)}` : "";
   let D = null, busy = false, os = /iPhone|iPad|Macintosh/.test(navigator.userAgent) ? "ios" : "and", tm = 0, last = "";
@@ -1230,7 +1239,7 @@ function abModal(node, name){
     : `${D.down ? `<div class="ntst bad">${I("warn")}<span>停了，正在重新啟動</span></div>` : ""}${stats(D.stats)}
       <div class="lbl">手機設定</div><div class="seg abos"><button type="button" class="${os === "ios" ? "on" : ""}" data-abos="ios">iPhone</button><button type="button" class="${os === "and" ? "on" : ""}" data-abos="and">Android</button></div>
       <div class="abst">${steps()}</div>
-      <div class="dlnew"><button type="button" class="ubtn sm ghost" data-ab="off">關掉</button></div>`;
+      <div class="dlnew"><button type="button" class="ubtn sm ghost" data-abweb>管理頁${EXT}</button><button type="button" class="ubtn sm ghost" data-ab="off">關掉</button></div>`;
   const draw = () => { const h = view(); if (h !== last) { last = h; swapHTML(body, h); } };
   const call = async b => {
     const r = await api("/api/adblock" + q, {method:"POST", headers:{"X-Token":getTok(), "Content-Type":"application/json"}, body:JSON.stringify(b)});
@@ -1259,6 +1268,7 @@ function abModal(node, name){
         catch (_) { const r = document.createRange(); r.selectNodeContents(v.querySelector(".abst code")); getSelection().removeAllRanges(); getSelection().addRange(r); }
         return;
       }
+      if (t.closest("[data-abweb]")) return openAgh(node, name);
       if (t.closest("[data-abp]")) {
         try {
           const r = await api("/api/adblock-profile", {method:"POST", headers:{"X-Token":getTok(), "Content-Type":"application/json"}, body:JSON.stringify({url:D.doh, name})});

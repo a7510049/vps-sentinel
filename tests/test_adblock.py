@@ -14,7 +14,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 from test_smoke import TOKEN, Server
 
-GOT = {"configure": None, "tls": None, "auth": []}
+GOT = {"configure": None, "tls": None, "auth": [], "dns": None, "login": 0}
 
 
 class FakeAGH(BaseHTTPRequestHandler):
@@ -47,6 +47,8 @@ class FakeAGH(BaseHTTPRequestHandler):
             return self.reply(401, {})
         if self.path == "/control/status":
             return self.reply(200, {"running": True, "version": "v0.107.99"})
+        if self.path == "/control/proxied?x=1":
+            return self.reply(200, {"cookie": self.headers.get("Cookie") or ""})
         if self.path == "/control/stats":
             return self.reply(200, {"num_dns_queries": 2000, "num_blocked_filtering": 500, "avg_processing_time": 0.012,
                                     "top_blocked_domains": [{"ads.example.com": 300}, {"track.example.net": 100}],
@@ -61,8 +63,18 @@ class FakeAGH(BaseHTTPRequestHandler):
         if self.path == "/control/install/configure":
             GOT["configure"] = d
             return self.reply(200, {})
+        if self.path == "/control/login":
+            GOT["login"] += 1
+            self.send_response(200)
+            self.send_header("Set-Cookie", "agh_session=abc; Path=/; HttpOnly")
+            self.send_header("Content-Length", "0")
+            self.end_headers()
+            return None
         if not self.authed():
             return self.reply(401, {})
+        if self.path == "/control/dns_config":
+            GOT["dns"] = d
+            return self.reply(200, {})
         if self.path == "/control/tls/configure":
             GOT["tls"] = d
             return self.reply(200, {})
@@ -71,6 +83,11 @@ class FakeAGH(BaseHTTPRequestHandler):
     def do_PUT(self):
         self.body()
         self.reply(200 if self.authed() else 401, {})
+
+
+class NoRedir(urllib.request.HTTPRedirectHandler):
+    def redirect_request(self, *a, **k):
+        return None
 
 
 class Adblock(Server):
@@ -161,6 +178,37 @@ class Adblock(Server):
         self.assertEqual(p["PayloadContent"][0]["DNSSettings"], {"DNSProtocol": "HTTPS", "ServerURL": d["doh"]})
         with self.assertRaises(urllib.error.HTTPError):
             urllib.request.urlopen(u, timeout=15)
+
+        # 大陸連進來拿當地的位址：查詢交給國際 DNS，帶上手機的網段
+        self.assertEqual(GOT["dns"]["edns_cs_enabled"], True)
+        up = GOT["dns"]["upstream_dns"]
+        self.assertIn("https://dns.google/dns-query", up)
+        cn = [u for u in up if "alidns" in u or "doh.pub" in u or "360.cn" in u]
+        self.assertTrue(cn and all(u.startswith("[/cn/") and "/qq.com/" in u for u in cn))   # 大陸 DNS 只給大陸網站
+
+        # 管理頁：沒通行證進不去；驗證過拿登入票換通行證，哨兵自己帶 AdGuard Home 的帳號轉過去
+        base = f"http://127.0.0.1:{self.port}"
+        no = urllib.request.build_opener(NoRedir)
+        with self.assertRaises(urllib.error.HTTPError) as e:
+            no.open(base + "/adguard/control/proxied?x=1", timeout=15)
+        self.assertEqual(e.exception.code, 401)
+        c, x = self.call("/api/adguard-open", {"pw": "wrong"})
+        self.assertEqual(c, 401)
+        c, x = self.call("/api/adguard-open", {"pw": TOKEN})
+        self.assertEqual(c, 200, x)
+        self.assertTrue(x["login"].endswith("/adguard-sso"))
+        sso = urllib.request.Request(base + "/adguard-sso", data=f"t={x['ticket']}".encode(), method="POST")
+        with self.assertRaises(urllib.error.HTTPError) as e:
+            no.open(sso, timeout=15)
+        self.assertEqual(e.exception.code, 303)
+        ck = e.exception.headers["Set-Cookie"].split(";")[0]
+        self.assertTrue(ck.startswith("vs_agh="))
+        with self.assertRaises(urllib.error.HTTPError) as e:      # 同一張票不能用第二次
+            no.open(urllib.request.Request(base + "/adguard-sso", data=f"t={x['ticket']}".encode(), method="POST"), timeout=15)
+        self.assertIsNone(e.exception.headers["Set-Cookie"])
+        with no.open(urllib.request.Request(base + "/adguard/control/proxied?x=1", headers={"Cookie": ck}), timeout=15) as r:
+            self.assertEqual(json.loads(r.read())["cookie"], "agh_session=abc")
+        self.assertGreaterEqual(GOT["login"], 1)
 
         c, d = self.call("/api/adblock", {"action": "off"})
         self.assertEqual(c, 200)
