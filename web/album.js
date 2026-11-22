@@ -208,8 +208,8 @@ async function boot(){
   catch (e) { return gate("off", "連不上，等一下再試"); }
   if (r.status === 401) return askPw();
   if (r.status === 403) { const x = await r.json().catch(() => ({}));
-    if (x.lock) return gate("phone", "這支裝置已被停用", "", "按了截圖，等主人解除");
-    return gate("phone", x.ban ? "這支手機不能看這本相簿" : "名額已經滿了", "", x.ban ? "" : "這本相簿只給指定的手機看"); }
+    if (x.lock) return gate("phone", "這台設備已被停用", "", "按了截圖，等主人解除");
+    return gate("phone", x.ban ? "這台設備不能看這本相簿" : "名額已經滿了", "", x.ban ? "" : "這本相簿只給指定的設備看"); }
   if (!r.ok) return gate("off", "這本相簿已經看不到了", "", "連結已經收回或過期");
   D = await r.json();
   ALL = D.photos || [];
@@ -1150,7 +1150,7 @@ addEventListener("pagehide", () => shy(true));
 addEventListener("pageshow", () => shy(false));
 document.addEventListener("visibilitychange", () => shy(document.hidden));
 let SNAPD = 0;
-function snapHit(){                                          // 主人開了「截圖就鎖住」：真的按到截圖鍵就鎖住這支裝置
+function snapHit(){                                          // 主人開了「截圖就鎖住」：真的按到截圖鍵就鎖住這台設備
   if (!D || !D.snap || SNAPD) return;
   SNAPD = 1;
   fetch(BASE + "/snap", {method:"POST", credentials:"same-origin"}).then(r => r.json()).then(j => { if (j.lock) location.reload(); else SNAPD = 0; }).catch(() => { SNAPD = 0; });
