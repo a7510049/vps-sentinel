@@ -10,7 +10,7 @@
   --t-fast:.2s; --t-mid:.38s; --t-slow:.62s; --t-long:.9s;
   --ease:cubic-bezier(.2,0,0,1); --dec:cubic-bezier(.05,.7,.1,1); --exit:cubic-bezier(.3,0,.8,.15);
   --sp:.38s cubic-bezier(.3,1.1,.55,1); --sp-fast:.33s cubic-bezier(.34,1.4,.64,1);
-  --z-bar:5; --z-veil:50; --z-toast:60; --z-spl:70;
+  --z-bar:5; --z-veil:50; --z-toast:60; --z-spl:70; --z-shy:80;
   --seed:#4a7dff; --gap:3px; --pad:16px; --rh:150px; --wmax:1600px;
   color-scheme:dark;
   --bg:#08090c; --s1:#121318; --s2:#1a1b22; --s3:#24262e; --tx:#f1f2f6; --tx2:#b9bcc8; --tx3:#7f8392; --line:rgba(255,255,255,.08);
@@ -1465,3 +1465,9 @@ html.splx #spl svg{animation:splOut var(--t-mid) var(--ease) forwards}
 html.splx .hero .cv{transition-duration:var(--t-fast)}
 @keyframes splOut{to{opacity:0;transform:scale(1.14)}}
 @media (prefers-color-scheme:light){:root:not([data-mode="dark"]) #spl svg{filter:drop-shadow(0 14px 24px rgba(30,40,90,.22))}}
+
+/* 離開畫面、按截圖快速鍵時照片先糊掉（album.js 的 shy）：一下子蓋上，回來慢慢淡掉 */
+body::after{content:"";position:fixed;inset:0;z-index:var(--z-shy);pointer-events:none;visibility:hidden;opacity:0;
+  -webkit-backdrop-filter:blur(40px) saturate(.6);backdrop-filter:blur(40px) saturate(.6);background:color-mix(in oklab,var(--bg) 35%,transparent);
+  transition:opacity var(--t-mid) var(--ease),visibility 0s linear var(--t-mid)}
+html.shy body::after{visibility:visible;opacity:1;transition:none}

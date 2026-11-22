@@ -191,9 +191,20 @@ function splGo(fn){
 }
 
 /* ═════════ 進場：讀照片清單（要密碼就先問） ═════════ */
+async function swOn(){                                       // 照片加密送來，交給 album-sw.js 在背景解開
+  const sw = navigator.serviceWorker;
+  if (!sw || !isSecureContext) return false;
+  try {
+    await sw.register("/a/sw.js", {scope:"/a/"});
+    if (sw.controller) return true;
+    return await new Promise(res => { const t = setTimeout(() => res(!!sw.controller), 4000);
+      sw.addEventListener("controllerchange", () => { clearTimeout(t); res(true); }, {once:true}); });
+  } catch (e) { return false; }
+}
 async function boot(){
   let r;
-  try { r = await fetch(BASE + "/m", {credentials:"same-origin", cache:"no-store"}); }
+  const sw = await swOn();                                   // 不能在背景解開的瀏覽器（例如 LINE 裡面的）跟主機說一聲，照舊給一般圖片
+  try { r = await fetch(BASE + "/m" + (sw ? "" : "?pl=1"), {credentials:"same-origin", cache:"no-store"}); }
   catch (e) { return gate("off", "連不上，等一下再試"); }
   if (r.status === 401) return askPw();
   if (r.status === 403) { const x = await r.json().catch(() => ({}));
@@ -1123,6 +1134,25 @@ function scrubLabel(y){                                      // 那個位置的�
     if (e.key === "+" || e.key === "=") zoomWall(ZL - 1, innerWidth / 2, innerHeight / 2); else if (e.key === "-") zoomWall(ZL + 1, innerWidth / 2, innerHeight / 2); });
 })();
 addEventListener("contextmenu", e => { if (e.target.closest(".ph,.zw,.mk,.hero")) e.preventDefault(); });
+/* 離開畫面（切到別的程式、截圖工具）或按下截圖快速鍵時，照片先糊掉；回來馬上清楚（手機按鍵截圖網頁不會知道，擋不了） */
+let SHYT = 0;
+function shy(on, ms){
+  if (on && !(D && D.shy !== false)) return;                // 主人在權限裡關掉了
+  clearTimeout(SHYT);
+  document.documentElement.classList.toggle("shy", on);
+  if (on && ms) SHYT = setTimeout(() => shy(false), ms);
+}
+addEventListener("blur", () => shy(true));
+addEventListener("focus", () => shy(false));
+addEventListener("pagehide", () => shy(true));
+addEventListener("pageshow", () => shy(false));
+document.addEventListener("visibilitychange", () => shy(document.hidden));
+addEventListener("keydown", e => {                            // PrintScreen、Mac 的 ⌘⇧3／4／5、Windows 的 Win+Shift+S：按下 ⌘／Win＋Shift 就先糊
+  if (e.key === "PrintScreen" || (e.metaKey && e.shiftKey)) return shy(true, 6000);
+  if (!["Meta", "Shift", "OS"].includes(e.key) && document.documentElement.classList.contains("shy") && document.hasFocus()) shy(false);
+}, true);
+addEventListener("keyup", e => { if (e.key === "PrintScreen") shy(true, 6000); }, true);
+addEventListener("pointerdown", () => { if (document.hasFocus() && !document.hidden) shy(false); }, true);
 ["copy", "cut", "selectstart", "dragstart"].forEach(t => addEventListener(t, e => { if (!(e.target.closest && e.target.closest("input,textarea,[contenteditable]"))) e.preventDefault(); }));   // 整頁不能複製（輸入框照樣能用）   // 不能按右鍵、長按另存
 addEventListener("dragstart", e => { if (e.target.tagName === "IMG") e.preventDefault(); });
 {                                                            // 點照片自己判斷：往下滑關掉大圖後，手機有時不送 click，要等一下才點得開

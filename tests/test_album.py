@@ -12,6 +12,7 @@ import unittest
 import urllib.parse
 import zipfile
 
+from seal_util import seal_mod
 from test_smoke import TOKEN, Server
 
 # 8×6 的小 JPEG（ffmpeg 做的），測試時在前面塞自己寫的 EXIF
@@ -148,10 +149,27 @@ class Album(Server):
             self.assertEqual(p0["p"]["cc"], "TW")
         self.assertEqual(self.req("GET", "/a/AAAAAAAAAA/m")[0], 404)
 
-        # 沒有 ffmpeg：瀏覽器看得了的原圖直接給
+        # 沒有 ffmpeg：瀏覽器看得了的原圖直接給；看的照片一律加密送出，直接抓網址拿到的是亂碼
         s, b, h = self.req("GET", f"/a/{code}/i/{p0['i']}/s")
         self.assertEqual(s, 200)
-        self.assertEqual(b[:2], b"\xff\xd8")
+        self.assertNotEqual(b[:2], b"\xff\xd8")
+        self.assertEqual((h["Content-Type"], h["X-Alb-E"], h["X-Alb-T"]), ("application/octet-stream", "0", "image/jpeg"))
+        k = json.loads(self.req("GET", f"/a/{code}/k")[1])
+        g = seal_mod(self.conf)
+        self.assertTrue(g["_seal_lib"]())
+        plain = g["_gcm"](True, base64.b64decode(k["k"]), b[:12], b[12:], b"")
+        self.assertEqual(plain[:2], b"\xff\xd8")
+        c = http.client.HTTPConnection("127.0.0.1", self.port, timeout=20)             # 不能在背景解開的瀏覽器：登記時說一聲，照舊給一般圖片
+        c.request("GET", f"/a/{code}/m?pl=1")
+        r = c.getresponse()
+        r.read()
+        ck = "; ".join(x.split(";")[0] for x in r.msg.get_all("Set-Cookie"))
+        c.close()
+        self.assertIn("vsap_", ck)
+        s, b, h = self.req("GET", f"/a/{code}/i/{p0['i']}/s", hdr={"Cookie": ck})
+        self.assertEqual((b[:2], h["Content-Type"]), (b"\xff\xd8", "image/jpeg"))
+        k2 = json.loads(self.req("GET", f"/a/{code}/k", hdr={"Cookie": ck})[1])
+        self.assertNotEqual(k2["k"], k["k"])                                             # 每支手機的鑰匙不一樣
         s, b, h = self.req("GET", f"/a/{code}/i/{p0['i']}/o")
         self.assertIn("attachment", h["Content-Disposition"])
         with open(os.path.join(ROOT_DIR, "旅行", "台北", "IMG_0.jpg"), "rb") as f:
@@ -389,7 +407,7 @@ class Album(Server):
 
 @unittest.skipUnless(shutil.which("ffmpeg"), "沒有 ffmpeg")
 class AlbumThumbs(Server):
-    ENV = {"SENTINEL_ALB_DIR": ROOT_DIR + "-t", "SENTINEL_ALB_GEO": "http://127.0.0.1:9/none", "SENTINEL_ALB_WX": "http://127.0.0.1:9/none", "SENTINEL_ALB_WX2": "http://127.0.0.1:9/none"}
+    ENV = {"SENTINEL_ALB_E": "0", "SENTINEL_ALB_DIR": ROOT_DIR + "-t", "SENTINEL_ALB_GEO": "http://127.0.0.1:9/none", "SENTINEL_ALB_WX": "http://127.0.0.1:9/none", "SENTINEL_ALB_WX2": "http://127.0.0.1:9/none"}
 
     @classmethod
     def setUpClass(cls):

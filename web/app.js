@@ -1105,7 +1105,7 @@ const almAgo = t => { const s = Date.now() / 1000 - t; return s < 120 ? "剛剛"
 function albumModal(node, name){
   const q = node ? `?node=${encodeURIComponent(node)}` : "";
   let D = null, view = "list", cur = null, dir = "", F = null, busy = false, PK = null, DV = null, TK = null, pwEdit = false;
-  const o = {secs:604800, loc:true, dl:2, dev:0, talk:true, up:0, uq:1};
+  const o = {secs:604800, loc:true, dl:2, dev:0, talk:true, shy:true, up:0, uq:1};
   const v = document.createElement("div"); v.className = "veil";
   v.innerHTML = `<div class="dialog pkd almd">${IC("album", "big")}<h3>相簿分享</h3><p>${esc(name)}</p><div class="form"><div class="almb">讀取中…</div><div class="msg"></div></div></div>`;
   $("#layer").appendChild(v);
@@ -1144,7 +1144,7 @@ function albumModal(node, name){
     opts: () => `<label>名稱<input class="field" data-almk="name" maxlength="40" value="${esc(dir.split("/").pop() || "相簿")}"></label>
       <div class="almsec"><h4>誰能看</h4>${srow("clock", "能看多久", "secs", ALMT, o.secs)}${srow("devices", "幾支手機", "dev", ALMD, o.dev)}
         <div class="almrw col"><div class="almrh">${I("lock")}<span>密碼</span></div><input class="field" data-almk="pw" type="password" maxlength="64" autocomplete="new-password" placeholder="不設"></div></div>
-      <div class="almsec"><h4>能做什麼</h4>${srow("dl", "下載", "dl", ALMDL, o.dl, dlSide(o.dl))}${srow("upl", "朋友放照片", "up", ALMUP, o.up, upSide(o.up))}${srow("disk", "朋友最多放", "uq", ALMUQ, o.uq, "一個人最多四分之一")}${tg("loc", o.loc, "顯示地點和地圖", "mpin")}${tg("talk", o.talk, "朋友可以按愛心、留言", "chat")}</div>
+      <div class="almsec"><h4>能做什麼</h4>${srow("dl", "下載", "dl", ALMDL, o.dl, dlSide(o.dl))}${srow("upl", "朋友放照片", "up", ALMUP, o.up, upSide(o.up))}${srow("disk", "朋友最多放", "uq", ALMUQ, o.uq, "一個人最多四分之一")}${tg("loc", o.loc, "顯示地點和地圖", "mpin")}${tg("talk", o.talk, "朋友可以按愛心、留言", "chat")}${tg("shy", o.shy, "離開畫面、截圖時照片變糊", "shield")}</div>
       <button type="button" class="ubtn" data-alm="make">做好連結</button><button type="button" class="ubtn sm ghost" data-alm="pick">${I("back")}換資料夾</button>`,
     one: () => { const a = D.list.find(x => x.id === cur); if (!a) return pane.list();
       return `<div class="almhero"><span class="almcv">${cover(a)}</span><span class="almcap"><b>${esc(a.name)}</b><small>${meta(a)}</small></span></div>
@@ -1159,7 +1159,7 @@ function albumModal(node, name){
       <div class="almsec"><h4>誰能看</h4>${srow("clock", "能看多久", "secs", ALMT, -1, almLeft(a))}${srow("devices", "幾支手機", "dev", ALMD, a.dev, a.dev ? `${a.ndev} 支在看` : "")}
         <div class="almrw col"><div class="almrh">${I("lock")}<span>密碼</span><small class="alms">${a.pw ? "已設定" : "沒有"}</small></div>
           <div class="almin"><input class="field" data-almk="pw" type="password" maxlength="64" autocomplete="new-password" placeholder="${a.pw ? "輸入新的就換掉" : "不設"}"><button type="button" class="ubtn sm" data-alm="pw">${a.pw ? "換" : "設定"}</button>${a.pw ? `<button type="button" class="ubtn sm ghost" data-alm="nopw">拿掉</button>` : ""}</div></div></div>
-      <div class="almsec"><h4>能做什麼</h4>${srow("dl", "下載", "dl", ALMDL, a.dl, dlSide(a.dl))}${srow("upl", "朋友放照片", "up", ALMUP, a.up || 0, upSide(a.up || 0))}${srow("disk", "朋友最多放", "uq", ALMUQ, a.uq || 1, `已放 ${almGB(a.uused || 0)}`)}${tg("loc", a.loc, "顯示地點和地圖", "mpin")}${tg("talk", a.talk, "朋友可以按愛心、留言", "chat")}
+      <div class="almsec"><h4>能做什麼</h4>${srow("dl", "下載", "dl", ALMDL, a.dl, dlSide(a.dl))}${srow("upl", "朋友放照片", "up", ALMUP, a.up || 0, upSide(a.up || 0))}${srow("disk", "朋友最多放", "uq", ALMUQ, a.uq || 1, `已放 ${almGB(a.uused || 0)}`)}${tg("loc", a.loc, "顯示地點和地圖", "mpin")}${tg("talk", a.talk, "朋友可以按愛心、留言", "chat")}${tg("shy", a.shy !== false, "離開畫面、截圖時照片變糊", "shield")}
         <div class="almrw">${I("music")}<span>幻燈片配樂</span><small class="alms">${a.mu ? esc(a.mu) : "放一首歌進資料夾就有"}</small></div>
         <div class="almrw col"><div class="almrh">${I("edit")}<span>浮水印</span><small class="alms">${a.wm ? (a.wmok ? "印在照片上" : "只蓋在畫面上") : "沒有"}</small></div>
           <div class="almin"><input class="field" data-almk="wm" maxlength="24" value="${esc(a.wm)}" placeholder="例如 © 你的名字"><button type="button" class="ubtn sm" data-alm="wm">${a.wm ? "換" : "加上"}</button>${a.wm ? `<button type="button" class="ubtn sm ghost" data-alm="nowm">拿掉</button>` : ""}</div></div></div>
@@ -1271,7 +1271,7 @@ function albumModal(node, name){
       if (act === "make") {
         const nm = v.querySelector('[data-almk="name"]').value.trim(), pw = v.querySelector('[data-almk="pw"]').value;
         if (pw && pw.length < 4) return sayTo(msg, "密碼要 4 個字以上");
-        const x = await run({action:"add", dir, name:nm, pw, secs:o.secs, loc:o.loc, dl:o.dl, dev:o.dev, talk:o.talk, up:o.up, uq:o.uq});
+        const x = await run({action:"add", dir, name:nm, pw, secs:o.secs, loc:o.loc, dl:o.dl, dev:o.dev, talk:o.talk, shy:o.shy, up:o.up, uq:o.uq});
         if (!x) return;
         cur = x.id; view = "one"; draw();
         const na = D.list.find(y => y.id === cur); if (na) share(na);
