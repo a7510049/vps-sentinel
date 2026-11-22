@@ -980,12 +980,13 @@ html,body{touch-action:pan-x pan-y}
 .scrub.on{opacity:1}
 .scrub .stk2{position:absolute;right:8px;top:0;bottom:0;width:6px}
 .scrub .stk2 b{position:absolute;left:1px;width:4px;height:4px;border-radius:50%;background:color-mix(in oklab,var(--tx) 35%,transparent)}
-.sth{position:absolute;right:3px;width:12px;height:44px;top:calc(var(--f,0) * (100% - 44px));border-radius:var(--r-pill);background:var(--glass);box-shadow:var(--sh-pop),var(--hl);
+.sth{position:absolute;right:3px;width:12px;height:44px;top:0;transform:translateY(calc(var(--f,0) * (var(--th,600px) - 44px)));will-change:transform;border-radius:var(--r-pill);background:var(--glass);box-shadow:var(--sh-pop),var(--hl);
   -webkit-backdrop-filter:blur(14px);backdrop-filter:blur(14px);touch-action:none;cursor:grab;transition:width var(--sp-fast),right var(--sp-fast)}
 .sth::before{content:"";position:absolute;inset:14px 4px;border-radius:var(--r-pill);background:var(--grad,var(--p))}
 .sth::after{content:"";position:absolute;inset:-6px -14px -6px -24px}
 .scrub.on .sth{pointer-events:auto}
 .scrub.drag .sth{width:16px;right:5px;cursor:grabbing}
+.scrub.drag .sth,.scrub.drag .sbl{-webkit-backdrop-filter:none;backdrop-filter:none;background:var(--s1,var(--bg))}   /* 拖的時候不用毛玻璃：每一格底下的照片都在換，手機重算模糊很吃力 */
 .sbl{position:absolute;right:calc(100% + 12px);top:50%;transform:translate(8px,-50%) scale(.9);transform-origin:right center;opacity:0;white-space:nowrap;padding:9px 16px;border-radius:var(--r-pill);
   background:var(--glass);-webkit-backdrop-filter:blur(18px) saturate(1.6);backdrop-filter:blur(18px) saturate(1.6);box-shadow:var(--sh-pop),var(--hl);font:600 var(--fs-l)/1 var(--serif);color:var(--tx);transition:opacity var(--t-fast) var(--ease),transform var(--sp-fast);pointer-events:none}
 .scrub.drag .sbl:not(:empty){opacity:1;transform:translate(0,-50%)}
