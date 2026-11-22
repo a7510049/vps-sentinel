@@ -9,7 +9,7 @@
   --ease:cubic-bezier(.2,0,0,1); --dec:cubic-bezier(.05,.7,.1,1); --exit:cubic-bezier(.3,0,.8,.15);
   --sp:.38s cubic-bezier(.3,1.1,.55,1); --sp-fast:.33s cubic-bezier(.34,1.4,.64,1);
   --z-bar:5; --z-veil:50; --z-toast:60;
-  --seed:#4a7dff; --gap:3px; --pad:16px; --rh:150px;
+  --seed:#4a7dff; --gap:3px; --pad:16px; --rh:150px; --wmax:1600px;
   color-scheme:dark;
   --bg:#08090c; --s1:#121318; --s2:#1a1b22; --s3:#24262e; --tx:#f1f2f6; --tx2:#b9bcc8; --tx3:#7f8392; --line:rgba(255,255,255,.08);
   --p:color-mix(in oklab,var(--seed) 55%,#fff); --on-p:#06091a; --bad:#ffb4ab;
@@ -27,7 +27,7 @@
   --glass:rgba(255,255,255,.7); --glass2:rgba(20,24,40,.06); --hl:inset 0 1px 0 rgba(255,255,255,.6);
   --sh-card:0 1px 2px rgba(30,40,90,.05),0 16px 40px -20px rgba(30,40,90,.28); --sh-pop:0 10px 30px -10px rgba(30,40,90,.3); --map-f:saturate(.7) contrast(.95)}}
 @media (min-width:700px){:root{--gap:6px; --pad:28px; --rh:220px}}
-@media (min-width:1200px){:root{--gap:8px; --pad:48px; --rh:260px}}
+@media (min-width:1200px){:root{--gap:8px; --pad:clamp(32px,2.6vw,56px); --rh:260px; --wmax:2400px}}
 
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
 /* 整頁不能選取、複製（輸入框例外）：長按、拖過去不會出現選取框 */
@@ -53,7 +53,7 @@ svg{display:block}
 .hero:not(.rdy){background:linear-gradient(100deg,var(--s1) 30%,var(--s2) 50%,var(--s1) 70%);background-size:300% 100%;animation:shim 1.4s linear infinite}
 .hero:not(.rdy) .hcap,.hero:not(.rdy) .hcap *,.hero:not(.rdy) .cue,.hero:not(.rdy) .cv .hi{animation-play-state:paused}
 .hero::after{content:"";position:absolute;inset:0;background:linear-gradient(180deg,rgba(0,0,0,.28) 0,transparent 26%,transparent 46%,color-mix(in oklab,var(--bg) 70%,transparent) 82%,var(--bg) 100%);pointer-events:none}
-.hcap{position:absolute;left:0;right:0;bottom:0;z-index:1;padding:0 var(--pad) clamp(28px,6vh,64px);max-width:1600px;margin:0 auto;will-change:transform,opacity}
+.hcap{position:absolute;left:0;right:0;bottom:0;z-index:1;padding:0 var(--pad) clamp(28px,6vh,64px);max-width:var(--wmax);margin:0 auto;will-change:transform,opacity}
 .eyebrow{font-size:var(--fs-s);font-weight:600;letter-spacing:.04em;color:var(--tx2);margin-bottom:10px;opacity:0;animation:up var(--t-slow) var(--dec) .1s forwards}
 .hcap h1{margin:0;font-size:var(--fs-hero);line-height:1.04;font-weight:800;letter-spacing:-.025em;text-wrap:balance;opacity:0;animation:up var(--t-slow) var(--dec) .16s forwards}
 .hmeta{display:flex;flex-wrap:wrap;gap:8px;margin-top:18px;opacity:0;animation:up var(--t-slow) var(--dec) .24s forwards}
@@ -82,7 +82,7 @@ button.chip:active,a.chip:active{transform:scale(.95)}
 .zb svg{width:18px;height:18px;color:currentColor}
 
 /* ── 照片牆：每一列等高、左右剛好對齊 ── */
-.wall{max-width:1600px;margin:0 auto;padding:0 var(--pad) 40px}
+.wall{max-width:var(--wmax);margin:0 auto;padding:0 var(--pad) 40px}
 .day{margin-top:clamp(22px,4vw,44px)}
 .day:first-child{margin-top:6px}
 .dh{display:flex;align-items:baseline;gap:10px;margin:0 2px 12px;flex-wrap:wrap}
@@ -108,7 +108,7 @@ button.chip:active,a.chip:active{transform:scale(.95)}
 .ph:focus-visible{outline:2px solid var(--p);outline-offset:2px}
 
 /* ── 拍攝地點地圖 ── */
-.msec{max-width:1600px;margin:0 auto;padding:12px var(--pad) 8px}
+.msec{max-width:var(--wmax);margin:0 auto;padding:12px var(--pad) 8px}
 .mh{display:flex;align-items:baseline;gap:10px;margin:0 2px 12px}
 .mh b{font-size:var(--fs-xl);font-weight:750}
 .mh span{font-size:var(--fs-s);color:var(--tx3)}
@@ -125,7 +125,7 @@ button.chip:active,a.chip:active{transform:scale(.95)}
 @keyframes pop{from{transform:scale(.3);opacity:0}to{transform:none;opacity:1}}
 .attr{position:absolute;right:10px;bottom:8px;font-size:10px;color:var(--tx3);background:var(--glass);padding:2px 8px;border-radius:var(--r-pill);z-index:2}
 
-.foot{max-width:1600px;margin:0 auto;padding:28px var(--pad) calc(36px + env(safe-area-inset-bottom));color:var(--tx3);font-size:var(--fs-s);display:flex;gap:14px;flex-wrap:wrap;align-items:center}
+.foot{max-width:var(--wmax);margin:0 auto;padding:28px var(--pad) calc(36px + env(safe-area-inset-bottom));color:var(--tx3);font-size:var(--fs-s);display:flex;gap:14px;flex-wrap:wrap;align-items:center}
 .foot svg{width:15px;height:15px;display:inline-block;vertical-align:-2px;margin-right:6px}
 
 /* ── 等待、密碼、失效 ── */
@@ -150,7 +150,7 @@ button.chip:active,a.chip:active{transform:scale(.95)}
 @keyframes shake{20%,60%{transform:translateX(-8px)}40%,80%{transform:translateX(8px)}}
 .sk{background:linear-gradient(100deg,var(--s1) 30%,var(--s2) 50%,var(--s1) 70%);background-size:300% 100%;animation:shim 1.4s linear infinite}
 @keyframes shim{to{background-position:-150% 0}}
-.skw{max-width:1600px;margin:0 auto;padding:20px var(--pad);display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:var(--gap)}
+.skw{max-width:var(--wmax);margin:0 auto;padding:20px var(--pad);display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:var(--gap)}
 .skw i{aspect-ratio:4/3;border-radius:var(--r-sm)}
 
 /* ═════════ 看大圖：全黑、左右滑、兩指放大、往下滑關掉 ═════════ */
@@ -473,7 +473,7 @@ html,body{touch-action:pan-x pan-y}
 .wall[data-z="2"] .bdg .lkt,.wall[data-z="3"] .bdg>span{display:none}
 .wall[data-z="2"] .bdg .vt{right:3px;bottom:3px;height:18px;padding:0 5px}
 
-.mems{max-width:1600px;margin:0 auto;padding:clamp(8px,2vw,20px) 0 0}
+.mems{max-width:var(--wmax);margin:0 auto;padding:clamp(8px,2vw,20px) 0 0}
 .mems[hidden]{display:none}
 .mrw{display:flex;gap:clamp(12px,2vw,20px);overflow-x:auto;padding:4px var(--pad) 6px;scroll-snap-type:x proximity;scrollbar-width:none}
 .mrw::-webkit-scrollbar{display:none}
@@ -526,7 +526,7 @@ html,body{touch-action:pan-x pan-y}
   @keyframes hcap{to{opacity:0;transform:translate3d(0,10svh,0)}}
 }
 /* ── 朋友放的：每個人一個分頁 ── */
-.who{max-width:1600px;margin:0 auto;padding:clamp(12px,2vw,20px) 0 4px}
+.who{max-width:var(--wmax);margin:0 auto;padding:clamp(12px,2vw,20px) 0 4px}
 .who[hidden],.msec[hidden]{display:none}
 .whr{display:flex;gap:8px;overflow-x:auto;padding:2px var(--pad) 6px;scrollbar-width:none}
 .whr::-webkit-scrollbar{display:none}
@@ -683,7 +683,7 @@ html,body{touch-action:pan-x pan-y}
   radial-gradient(60% 16% at 90% 100%,color-mix(in oklab,var(--g2) 8%,transparent),transparent 70%)}}
 
 /* 數字卡：幾張、幾天、幾個地點、幾公里 */
-.stats{max-width:1600px;margin:clamp(18px,3vw,32px) auto 0;padding:0 var(--pad);display:grid;grid-template-columns:repeat(auto-fit,minmax(72px,1fr));justify-content:start;gap:clamp(8px,1.4vw,14px)}
+.stats{max-width:var(--wmax);margin:clamp(18px,3vw,32px) auto 0;padding:0 var(--pad);display:grid;grid-template-columns:repeat(auto-fit,minmax(72px,1fr));justify-content:start;gap:clamp(8px,1.4vw,14px)}
 .stats[hidden],.st[hidden]{display:none}
 .st{position:relative;overflow:hidden;padding:clamp(12px,2vw,18px) clamp(12px,2vw,20px);border-radius:var(--r-lg);background:color-mix(in oklab,var(--g2) 9%,var(--s1));
   box-shadow:inset 0 0 0 1px color-mix(in oklab,var(--g2) 18%,transparent),var(--sh-card);display:grid;gap:2px;animation:memin var(--t-slow) var(--dec) both}
@@ -748,7 +748,7 @@ html,body{touch-action:pan-x pan-y}
 .flg{width:20px;height:14px;border-radius:3px;object-fit:cover;flex:none;box-shadow:0 0 0 1px rgba(0,0,0,.08)}
 
 /* 只看一個城市時照片牆上面那排 */
-.cityf{max-width:1600px;margin:0 auto;padding:clamp(12px,2vw,20px) var(--pad) 4px;display:flex;gap:8px;flex-wrap:wrap;animation:memin var(--t-mid) var(--dec) both}
+.cityf{max-width:var(--wmax);margin:0 auto;padding:clamp(12px,2vw,20px) var(--pad) 4px;display:flex;gap:8px;flex-wrap:wrap;animation:memin var(--t-mid) var(--dec) both}
 .cityf[hidden]{display:none}
 .cityf .chip{-webkit-backdrop-filter:none;backdrop-filter:none;box-shadow:none}
 .cityf .chip.on{background:var(--grad);color:var(--on-g)}
@@ -900,7 +900,7 @@ html,body{touch-action:pan-x pan-y}
 @media (min-width:900px){.lb.info .lbs{right:380px}}
 
 /* 精選：最多愛心的幾張，大圖左右滑 */
-.hl{max-width:1600px;margin:clamp(24px,3.6vw,44px) auto 0;padding:0 var(--pad)}
+.hl{max-width:var(--wmax);margin:clamp(24px,3.6vw,44px) auto 0;padding:0 var(--pad)}
 .hl[hidden]{display:none}
 .hlh b{display:inline-flex;align-items:center;gap:8px;font-family:var(--serif);font-size:var(--fs-2xl);font-weight:600;letter-spacing:.04em}
 .hlh svg{width:18px;height:18px;color:var(--g2);fill:currentColor}
@@ -926,7 +926,7 @@ html,body{touch-action:pan-x pan-y}
 /* 電腦上地圖跟著捲動：照片牆右邊固定一張地圖 */
 .smap[hidden]{display:none}
 @media (min-width:1200px){
-  .wwrap.side{display:grid;grid-template-columns:minmax(0,1fr) clamp(320px,28vw,440px);gap:clamp(20px,2vw,36px);max-width:1600px;margin:0 auto;padding-right:var(--pad);align-items:start}
+  .wwrap.side{display:grid;grid-template-columns:minmax(0,1fr) clamp(320px,28vw,440px);gap:clamp(20px,2vw,36px);max-width:var(--wmax);margin:0 auto;padding-right:var(--pad);align-items:start}
   .wwrap.side .wall{max-width:none;margin:0;padding-right:0}
   .smap{position:sticky;top:84px;height:calc(100svh - 108px);margin-top:clamp(40px,8vw,96px);border-radius:var(--r-xl);overflow:hidden;background:var(--s2);box-shadow:var(--sh-card);isolation:isolate}
 }
@@ -1023,9 +1023,23 @@ html.scrubbing .ph .hi{filter:none;transform:none}
 html:has(.lb,.ss,.sy) .scrub{opacity:0;pointer-events:none}
 
 /* 器材：用了哪幾台相機、哪幾顆鏡頭、常用焦段（點了只看那台拍的） */
-.gear{max-width:1600px;margin:clamp(40px,8vw,96px) auto 0;padding:0 var(--pad)}
+.gear{max-width:var(--wmax);margin:clamp(40px,8vw,96px) auto 0;padding:0 var(--pad)}
 .gear[hidden]{display:none}
-.gcams{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:10px;align-content:start}
+.gcams{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:12px;align-content:start}
+.gbox{border-radius:var(--r-lg);background:var(--s1);box-shadow:var(--sh-card);overflow:hidden}
+.gbox .gcam{width:100%;box-shadow:none;background:none}
+.gcams{align-items:start}
+.gbox .gcam.on{box-shadow:inset 0 0 0 2px var(--g2)}
+.glz{display:grid;gap:2px;padding:0 10px 10px;position:relative}
+.glz::before{content:"";position:absolute;left:36px;top:0;bottom:22px;width:2px;border-radius:var(--r-pill);background:var(--s2)}
+.glr{display:grid;grid-template-columns:20px minmax(0,1fr) minmax(48px,120px) 32px;align-items:center;gap:10px;padding:8px 10px 8px 46px;border-radius:var(--r-md);text-align:left;font-size:var(--fs-s);position:relative;transition:background var(--t-fast) var(--ease)}
+.glr::before{content:"";position:absolute;left:26px;top:50%;width:14px;height:2px;border-radius:var(--r-pill);background:var(--s2)}
+.glr svg{width:18px;height:18px;color:var(--g2)}
+.glr>span:first-of-type{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-weight:600}
+.glr small{color:var(--tx3);font-weight:600;text-align:right}
+.glr:hover{background:var(--s2)}
+.glr.on{background:color-mix(in oklab,var(--g2) 16%,transparent)}
+@media (max-width:560px){.glr{grid-template-columns:20px minmax(0,1fr) 28px}.glr .gbr{display:none}}
 .gcam{display:grid;grid-template-columns:auto 1fr;grid-template-rows:auto auto;column-gap:12px;row-gap:8px;align-items:center;padding:14px 16px;border-radius:var(--r-lg);background:var(--s1);box-shadow:var(--sh-card);text-align:left;
   transition:transform var(--sp-fast),box-shadow var(--t-fast) var(--ease)}
 .gcam:active{transform:scale(.98)}
@@ -1076,10 +1090,12 @@ html:has(.lb,.ss,.sy) .scrub{opacity:0;pointer-events:none}
 .ihl{display:flex;justify-content:space-between;align-items:center;font-size:10px;color:var(--tx3);font-weight:600}
 .ihl b{font-size:var(--fs-xs);color:var(--tx2);font-weight:650}
 @media (min-width:900px){
-  .gear{display:grid;grid-template-columns:minmax(0,1fr) minmax(320px,420px);column-gap:16px;align-items:start}
+  .gear{display:grid;grid-template-columns:minmax(0,1fr) minmax(340px,440px);column-gap:16px;align-items:stretch}
   .gear .mh{grid-column:1 / -1}
-  .gear .gcams,.gear .glens{grid-column:1}
-  .gear .gfoc{grid-column:2;grid-row:2 / span 2;margin-top:0}
+  .gear .gcams{grid-column:1}
+  .gear .gcams:last-child{grid-column:1 / -1}
+  .gear .gfoc{grid-column:2;grid-row:2;margin-top:0;display:flex;flex-direction:column}
+  .gear .gfoc .gfc{flex:1;align-items:end}
 }
 
 /* 旅程路線：照片、第幾天等線畫到那裡才跳出來；右下角重播 */
@@ -1316,3 +1332,18 @@ button.dct:active{transform:scale(.92)}
 .dh.hue b{display:inline-flex;align-items:center;gap:10px}
 .dh.hue .cdot{width:16px;height:16px}
 .cdot.mu{background:linear-gradient(135deg,#d9c7b8,#b9c3cc)}
+
+/* 電腦大螢幕（使用者說左右留白太多、看起來是手機排法）：各段撐滿同一個寬度、左右對齊 */
+@media (min-width:900px){
+  .stats,.stats:is(*){grid-auto-columns:minmax(0,1fr)}
+  .mrw{justify-content:safe center}
+  .cities{grid-auto-flow:row;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));overflow:visible;margin:0 0 14px;padding:4px 0 10px}
+  .cities .ctc{height:clamp(118px,11vw,200px)}
+  .tmac{flex-wrap:wrap}
+  .tmt{flex-basis:calc(100% - 54px)}
+  .tml{width:100%;order:3;padding-left:54px;min-height:0}
+  .gbk{max-width:var(--wmax)}
+  .gbk .gbf{max-width:720px;margin:16px 0 0}
+  .gbk .cadd{margin:16px 0 0}
+  .gbl{grid-template-columns:repeat(auto-fill,minmax(300px,1fr))}
+}

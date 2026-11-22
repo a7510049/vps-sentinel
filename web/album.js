@@ -1165,9 +1165,10 @@ function gearSet(k, keep){
 const FOCB = [[0, 20, "超廣角"], [20, 35, "廣角"], [35, 70, "標準"], [70, 135, "中望遠"], [135, 1e9, "望遠"]];
 function gear(){
   const box = $(".gear"); if (!box) return;
-  const base = ALL.filter(p => (p.u || "") === WHO && (!CITY || cityKey(p) === CITY) && !isVid(p)), cams = {}, lens = {}, fb = FOCB.map(() => 0), fl = {};
+  const base = ALL.filter(p => (p.u || "") === WHO && (!CITY || cityKey(p) === CITY) && !isVid(p)), cams = {}, lens = {}, cl = {}, fb = FOCB.map(() => 0), fl = {};
   base.forEach(p => { const c = camName(p.x), l = lensName(p.x), f = p.x.f35 || 0;
     if (c) cams[c] = (cams[c] || 0) + 1; if (l) lens[l] = (lens[l] || 0) + 1;
+    if (c && l) { const m = cl[c] || (cl[c] = {}); m[l] = (m[l] || 0) + 1; }   // 每台相機各用了哪幾顆鏡頭
     if (f) { fb[FOCB.findIndex(b => f >= b[0] && f < b[1])]++; fl[f] = (fl[f] || 0) + 1; } });
   const cs = Object.entries(cams).sort((a, b) => b[1] - a[1]), ls = Object.entries(lens).sort((a, b) => b[1] - a[1]).slice(0, 8);
   const nf = fb.reduce((a, b) => a + b, 0), top = Object.entries(fl).sort((a, b) => b[1] - a[1])[0], mx = Math.max(1, ...fb);
@@ -1175,8 +1176,8 @@ function gear(){
   if (box.hidden) { box.innerHTML = ""; return; }
   const n0 = cs[0][1];
   box.innerHTML = `<div class="mh"><b>器材</b><span class="num">${cs.length} 台相機${ls.length ? `・${Object.keys(lens).length} 顆鏡頭` : ""}</span></div>
-    <div class="gcams">${cs.slice(0, 6).map(([c, n]) => `<button class="gcam${GEAR === "c:" + c ? " on" : ""}" data-gear="c:${esc(c)}"><i class="gic">${I("cam")}</i><span class="gt2"><b>${esc(c)}</b><small class="num">${n} 張</small></span><span class="gbr"><i style="width:${(n / n0 * 100).toFixed(1)}%"></i></span></button>`).join("")}</div>
-    ${ls.length > 1 || (ls.length && cs.length > 1) ? `<div class="glens">${ls.map(([l, n]) => `<button class="chip${GEAR === "l:" + l ? " on" : ""}" data-gear="l:${esc(l)}">${I("lens")}<span>${esc(l)}</span><small class="num">${n}</small></button>`).join("")}</div>` : ""}
+    <div class="gcams">${cs.slice(0, 6).map(([c, n]) => { const lz = Object.entries(cl[c] || {}).sort((a, b) => b[1] - a[1]).slice(0, 6);
+      return `<div class="gbox"><button class="gcam${GEAR === "c:" + c ? " on" : ""}" data-gear="c:${esc(c)}"><i class="gic">${I("cam")}</i><span class="gt2"><b>${esc(c)}</b><small class="num">${n} 張</small></span><span class="gbr"><i style="width:${(n / n0 * 100).toFixed(1)}%"></i></span></button>${lz.length ? `<div class="glz">${lz.map(([l, m]) => `<button class="glr${GEAR === "l:" + l ? " on" : ""}" data-gear="l:${esc(l)}">${I("lens")}<span>${esc(l)}</span><span class="gbr"><i style="width:${(m / n * 100).toFixed(1)}%"></i></span><small class="num">${m}</small></button>`).join("")}</div>` : ""}</div>`; }).join("")}</div>
     ${nf >= 3 ? `<div class="gfoc"><div class="gfh"><small>常用焦段</small>${top ? `<b class="num">${top[0]} mm</b>` : ""}</div><div class="gfc">${FOCB.map((b, k) => `<div class="${fb[k] === mx ? "top" : ""}"><span><i style="height:${fb[k] ? Math.max(8, fb[k] / mx * 100).toFixed(0) : 0}%"></i></span><b class="num">${fb[k] || ""}</b><small>${b[2]}</small></div>`).join("")}</div></div>` : ""}`;
 }
 function citybar(){
@@ -1577,10 +1578,10 @@ function openLb(i, from){
   if (POPSKIP) S.push = 1; else history.pushState({lb:1}, "");   // 上一張的返回還沒處理完：等它處理完再記
 
   function go(d){
+    finish();                                                  // 上一張還在滑：先收好再算下一張（不然連按會白按一次）
     const n = S.i + d;
     stopAll();
     if (n < 0 || n >= PH.length) return snap();
-    finish();
     clearTimeout(S.infT); sl.forEach(s => { s.style.visibility = ""; });
     const from = curX(), to = -d * (W() + GAPX);
     setZoom(1, 0, 0);
@@ -1644,12 +1645,20 @@ function openLb(i, from){
   }
   function infSet(p, dir, q){
     const y = inf.scrollTop, om = inf.querySelector(".imap"), old = om && om._c ? {c:om._c, t:[...om.querySelectorAll(".tl.ok")]} : null;
-    const kl = inf.querySelector(".kbar i"), k0 = kl ? kl.style.left : "";
+    const kl = inf.querySelector(".kbar i"), k0 = kl ? kl.style.left : "", tx0 = dir ? leafText(inf) : null;
     inf.innerHTML = infoHTML(p); inf.scrollTop = y;            // 換張時停在原本看的地方
     infoMap(old, !!dir);
     const mv = dir && q && q !== p && anim() ? morph(q, p, k0) : null;
-    if (dir) panIn(inf, dir, mv);
+    if (tx0 && anim()) {                                         // 換張時只有變了的字淡入換上，其他不動（使用者說不要整塊抖一下）
+      const tx1 = leafText(inf);
+      tx1.forEach((v, k) => { if (tx0.get(k) !== v.t && !v.e.closest("[data-mv]")) v.e.animate([{opacity:.15}, {opacity:1}], {duration:T.mid, easing:DEC}); });
+    }
     [-1, 1].forEach(d => { const q = PH[S.i + d]; if (q && !q.pal && !q.broken) palette(q); });   // 旁邊兩張先算好顏色，換過去不用等
+  }
+  function leafText(P){                                     // 面板裡每個最底層的字：照位置記下來，換張時比對哪些變了
+    const m = new Map(), walk = (e, k) => { const c = [...e.children].filter(x => !(x instanceof SVGElement));
+      if (!c.length || e.matches("b,small,span.tag,.idt,.itm")) m.set(k, {t:e.textContent + (e.querySelector("svg") ? "|" + e.querySelector("svg").innerHTML.length : ""), e}); else c.forEach((x, i) => walk(x, k + "." + i)); };
+    [...P.children].forEach((x, i) => walk(x, String(i))); return m;
   }
   function panIn(P, dir, keep){                              // 換張時面板裡的內容跟著照片的方向滑進來（一塊一塊、不先變空白）
     if (!anim()) return;
@@ -1664,7 +1673,7 @@ function openLb(i, from){
       jobs.push(t => { const v = log ? Math.exp(Math.log(v0) + (Math.log(v1) - Math.log(v0)) * t) : v0 + (v1 - v0) * t;
         if (sv && svg) { const n = document.createRange().createContextualFragment(svg(v)).firstChild; sv.replaceChildren(...n.childNodes); }
         if (tb) tb.textContent = t < 1 && txt ? txt(v) : fin; });
-      keep.add(box(cell)); done.add(cell);
+      keep.add(box(cell)); done.add(cell); cell.dataset.mv = 1;
     };
     const G = k => inf.querySelector(`.iex [data-gk="${k}"]`);
     add(G("f"), a.f, b.f, v => gIris(v), v => `ƒ${v.toFixed(1)}`, 1);
@@ -1678,7 +1687,6 @@ function openLb(i, from){
       const h0 = da.h + da.mi / 60, h1 = db.h + db.mi / 60;
       if (h0 !== h1) jobs.push(t => { const h = h0 + (h1 - h0) * t, n = document.createRange().createContextualFragment(gSun({h:Math.floor(h), mi:(h % 1) * 60})).firstChild; sn.replaceChildren(...n.childNodes); sn.setAttribute("class", n.getAttribute("class")); });
     }
-    keep.forEach(x => x.querySelectorAll(".iex > div").forEach(c => { if (!done.has(c)) c.animate([{opacity:.25}, {opacity:1}], {duration:T.mid, easing:DEC}); }));   // 沒有數值可以轉的那幾格淡入
     const kl = inf.querySelector(".kbar i");
     if (kl && k0 && k0 !== kl.style.left) kl.animate([{left:k0}, {left:kl.style.left}], {duration:T.slow, easing:DEC});
     if (!jobs.length) return keep;
@@ -2878,4 +2886,5 @@ function infoHTML(p){
   return h;
 }
 
+try { history.scrollRestoration = "manual"; } catch (e) {}   // 關大圖時會照返回的紀錄把頁面捲回打開時的位置：自己管，照片牆才停在看到的那張
 boot();
