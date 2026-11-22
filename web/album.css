@@ -1075,12 +1075,6 @@ html:has(.lb,.ss,.sy) .scrub{opacity:0;pointer-events:none}
 .igear svg{width:15px;height:15px;color:var(--tx3);flex:none}
 .igear .brd{display:inline-flex;align-items:center;flex:none;margin-right:5px}
 .igear .brd svg{width:auto;height:auto;color:var(--tx);fill:currentColor;stroke:none}
-.igear .brd.sub{font-style:normal;font-weight:800;font-size:var(--fs-s);letter-spacing:.04em;color:var(--tx);line-height:1}
-.igear .brd.lumix{font-weight:900;letter-spacing:.08em;transform:skewX(-8deg)}
-.igear .brd.alpha{font-family:var(--serif);font-weight:700;font-size:var(--fs-l);font-style:italic;letter-spacing:0;margin-right:1px}
-.igear .brd.alpha+b{margin-left:0}
-.igear .brd.eos,.igear .brd.gr{font-weight:900;letter-spacing:.1em}
-.igear .brd.cs{font-style:italic;font-weight:700;letter-spacing:0}
 .igear.sm{display:inline;flex:none;color:var(--p);font-weight:600}
 .icam .t .igear b{flex:none}
 
