@@ -10,7 +10,7 @@
   --t-fast:.2s; --t-mid:.38s; --t-slow:.62s; --t-long:.9s;
   --ease:cubic-bezier(.2,0,0,1); --dec:cubic-bezier(.05,.7,.1,1); --exit:cubic-bezier(.3,0,.8,.15);
   --sp:.38s cubic-bezier(.3,1.1,.55,1); --sp-fast:.33s cubic-bezier(.34,1.4,.64,1);
-  --z-bar:5; --z-veil:50; --z-toast:60;
+  --z-bar:5; --z-veil:50; --z-toast:60; --z-spl:70;
   --seed:#4a7dff; --gap:3px; --pad:16px; --rh:150px; --wmax:1600px;
   color-scheme:dark;
   --bg:#08090c; --s1:#121318; --s2:#1a1b22; --s3:#24262e; --tx:#f1f2f6; --tx2:#b9bcc8; --tx3:#7f8392; --line:rgba(255,255,255,.08);
@@ -1423,3 +1423,25 @@ button.dct:active{transform:scale(.92)}
 .gsb .on small{color:var(--p)}
 @media (hover:hover){.gsb>button:not(:disabled):hover span{box-shadow:inset 0 0 0 2px var(--line)}}
 @media (min-width:900px){.gear .gst{grid-column:2;grid-row:2;margin-top:0;align-self:start}.gsb small{font-size:10px}}
+
+/* ── 打開相簿的開場：一疊照片攤開、照片顯影、一道光掃過，好了就像光圈打開一樣露出封面（album.js 的 splGo） ── */
+#spl{position:fixed;inset:0;z-index:var(--z-spl);display:grid;place-items:center;background:var(--bg);animation:splSafe var(--t-mid) 12s forwards}
+@keyframes splSafe{to{opacity:0;visibility:hidden}}
+#spl svg{width:clamp(88px,24vmin,124px);height:auto;overflow:visible;filter:drop-shadow(0 18px 28px rgba(0,0,0,.32))}
+#spl .c1,#spl .c2,#spl .c3,#spl .mt,#spl .gl{transform-box:view-box}
+#spl .c1{transform-origin:50px 56px;animation:splIn var(--t-slow) var(--dec) both}
+@keyframes splIn{from{opacity:0;transform:translateY(10px) scale(.72)}}
+#spl .c3{transform-origin:41px 52px;transform:rotate(-14deg);animation:splF3 var(--sp) .3s both}
+@keyframes splF3{from{opacity:0;transform:rotate(0) translate(8px,4px)}}
+#spl .c2{transform-origin:59px 48px;transform:rotate(12deg);animation:splF2 var(--sp) .38s both}
+@keyframes splF2{from{opacity:0;transform:rotate(0) translate(-10px,8px)}}
+#spl .mt{animation:splMt var(--t-slow) var(--dec) .42s both}
+@keyframes splMt{from{transform:translateY(24px)}}
+#spl .sun{transform-box:fill-box;transform-origin:center;animation:splSun var(--sp-fast) .58s both}
+@keyframes splSun{from{transform:scale(0)}}
+#spl .gl{transform:translateX(0) skewX(-18deg);animation:splGl 1.8s var(--ease) .78s infinite}
+@keyframes splGl{0%{transform:translateX(0) skewX(-18deg)}45%,100%{transform:translateX(140px) skewX(-18deg)}}
+html.splx #spl svg{animation:splOut var(--t-mid) var(--ease) forwards}
+html.splx .hero .cv{transition-duration:var(--t-fast)}
+@keyframes splOut{to{opacity:0;transform:scale(1.14)}}
+@media (prefers-color-scheme:light){:root:not([data-mode="dark"]) #spl svg{filter:drop-shadow(0 14px 24px rgba(30,40,90,.22))}}

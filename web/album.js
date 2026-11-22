@@ -170,6 +170,26 @@ function tiles(el, cx, cy, z, W, H){
     t.addEventListener("load", () => t.classList.add("ok"), {once:true}); t.addEventListener("error", () => t.remove(), {once:true}); });
 }
 
+/* ═════════ 開場動畫：一疊照片攤開（album.css 的 #spl），封面好了就像光圈打開一樣露出來 ═════════ */
+function splGo(fn){
+  const s = document.getElementById("spl");
+  if (!s || s.dataset.go) return fn && fn();
+  s.dataset.go = 1;
+  setTimeout(() => {                                          // 開場那段至少放完（約 1 秒），之後照片好了就開
+    const app = $("#app"); let done = 0;
+    const end = () => { if (done++) return; s.remove(); app.style.removeProperty("position"); app.style.removeProperty("z-index"); };
+    fn && fn();
+    document.documentElement.classList.add("splx");
+    if (matchMedia("(prefers-reduced-motion: reduce)").matches || !app.animate) return s.animate([{opacity:1}, {opacity:0}], {duration:T.mid, fill:"forwards"}).onfinish = end;
+    const r = app.getBoundingClientRect(), cx = innerWidth / 2 - r.left, cy = innerHeight / 2 - r.top, R = Math.hypot(innerWidth, innerHeight) / 2 / Math.cos(Math.PI / 6) + 4;
+    const poly = (k) => `polygon(${[0, 1, 2, 3, 4, 5].map(j => { const a = (30 + 70 * k + 60 * j) * Math.PI / 180;      // 六片光圈葉片：邊開邊轉
+      return `${(cx + Math.cos(a) * R * k).toFixed(1)}px ${(cy + Math.sin(a) * R * k).toFixed(1)}px`; }).join(",")})`;
+    app.style.position = "relative"; app.style.zIndex = 71;
+    const a = app.animate(Array.from({length:13}, (_, i) => ({clipPath:poly(i / 12)})), {duration:T.long, delay:T.fast * .6, easing:DEC, fill:"backwards"});
+    a.onfinish = end; setTimeout(end, T.long + 800);
+  }, Math.max(0, 1050 - performance.now()));
+}
+
 /* ═════════ 進場：讀照片清單（要密碼就先問） ═════════ */
 async function boot(){
   let r;
@@ -207,6 +227,7 @@ async function refresh(){                                  // 地名在主機背
 function gate(ic, title, form, sub){
   document.title = title;
   $("#app").innerHTML = `<div class="gate"><div class="glow"></div><form class="card"><div class="ic">${I(ic)}</div><h2>${esc(title)}</h2>${sub ? `<p>${esc(sub)}</p>` : ""}${form || ""}</form></div>`;
+  splGo();
   return $(".card");
 }
 function askPw(){
@@ -720,7 +741,7 @@ function draw(){
     ${D.talk ? `<section class="gbk"></section>` : ""}
     <footer class="foot">${finCol()}<div class="fin">${esc(D.name)}</div>${D.exp ? `<span class="fexp">${expRing()}${left(D.exp)}</span>` : ""}</footer>`;
   const hi = $(".hero .hi");
-  const hero = $(".hero"), rdy = () => requestAnimationFrame(() => requestAnimationFrame(() => hero.classList.add("rdy")));   // 開場：封面照片好了才淡入、片頭字才開始（最多等 2.5 秒）
+  const hero = $(".hero"), rdy = () => splGo(() => requestAnimationFrame(() => requestAnimationFrame(() => hero.classList.add("rdy"))));   // 開場：封面照片好了才淡入、片頭字才開始（最多等 2.5 秒）
   const hok = () => { hi.classList.add("ok"); rdy(); setTimeout(() => { const q = $(".hero .lq"); if (q) q.remove(); }, T.slow + 100); };   // 糊的底圖拿掉，捲動時不用一直重畫模糊
   hi.complete && hi.naturalWidth ? hok() : (hi.addEventListener("load", hok, {once:true}), hi.addEventListener("error", rdy, {once:true}), setTimeout(rdy, 2500));
   heroCycle(cover); zbSync(); tint(cover); flagFix($(".hero"));
