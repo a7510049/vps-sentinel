@@ -30,6 +30,9 @@
 @media (min-width:1200px){:root{--gap:8px; --pad:48px; --rh:260px}}
 
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+/* 整頁不能選取、複製（輸入框例外）：長按、拖過去不會出現選取框 */
+html{-webkit-user-select:none;user-select:none;-webkit-touch-callout:none}
+input,textarea,[contenteditable]{-webkit-user-select:text;user-select:text;-webkit-touch-callout:default}
 html{background:var(--bg)}
 body{margin:0;background:var(--bg);color:var(--tx);font:400 var(--fs-m)/1.5 var(--font);-webkit-font-smoothing:antialiased;min-height:100svh;overflow-x:hidden}
 button{font:inherit;color:inherit;border:0;background:none;padding:0;cursor:pointer}
@@ -153,8 +156,11 @@ button.chip:active,a.chip:active{transform:scale(.95)}
 .zw .s2.ok{opacity:1}
 .zw .nope{position:absolute;inset:0;display:grid;place-items:center;color:rgba(255,255,255,.5);text-align:center;font-size:var(--fs-m)}
 .lbt,.lbb{position:absolute;left:0;right:0;display:flex;align-items:center;gap:10px;padding:0 14px;transition:opacity var(--t-mid) var(--ease),transform var(--t-mid) var(--ease);z-index:2}
-.lbt{top:0;padding-top:calc(env(safe-area-inset-top) + 10px);padding-bottom:30px;background:linear-gradient(rgba(0,0,0,.5),transparent)}
-.lbb{bottom:0;padding-bottom:calc(env(safe-area-inset-bottom) + 12px);padding-top:34px;background:linear-gradient(transparent,rgba(0,0,0,.55))}
+.lbt{top:0;padding-top:calc(env(safe-area-inset-top) + 10px);padding-bottom:30px}
+.lbb{bottom:0;padding-bottom:calc(env(safe-area-inset-bottom) + 12px);padding-top:34px}
+.lbt::before,.lbb::before{content:"";position:absolute;inset:0;z-index:-1;pointer-events:none;background:linear-gradient(rgba(0,0,0,.5),transparent);transition:opacity var(--t-slow) var(--ease)}
+.lbb::before{background:linear-gradient(transparent,rgba(0,0,0,.55))}
+.lb.ng .lbt::before,.lb.ng .lbb::before{opacity:0}
 .lb.bare .lbt{opacity:0;transform:translateY(-12px);pointer-events:none}
 .lb.bare .lbb{opacity:0;transform:translateY(12px);pointer-events:none}
 .lbt .cnt{flex:1;text-align:center;font-weight:600;font-size:var(--fs-m);color:rgba(255,255,255,.85)}
@@ -175,7 +181,7 @@ button.chip:active,a.chip:active{transform:scale(.95)}
 
 /* 照片資訊：手機從下面滑上來，電腦在右邊 */
 .inf{position:absolute;left:0;right:0;bottom:0;height:62%;z-index:3;background:var(--bg);color:var(--tx);border-radius:var(--r-xl) var(--r-xl) 0 0;box-shadow:0 -10px 40px rgba(0,0,0,.35);
-  transform:translateY(102%);transition:transform var(--t-mid) var(--ease);overflow-y:auto;overscroll-behavior:contain;touch-action:pan-y;padding:10px 18px calc(24px + env(safe-area-inset-bottom));user-select:text;-webkit-user-select:text}
+  transform:translateY(102%);transition:transform var(--t-mid) var(--ease);overflow-y:auto;overscroll-behavior:contain;touch-action:pan-y;padding:10px 18px calc(24px + env(safe-area-inset-bottom))}
 .inf::before{content:"";display:block;width:40px;height:5px;border-radius:var(--r-pill);background:var(--s3);margin:0 auto 12px}
 .lb.info .inf{transform:none}
 .lb.info .stage{bottom:calc(62% + var(--r-xl))}
@@ -433,8 +439,8 @@ button.chip:active,a.chip:active{transform:scale(.95)}
 /* ═════════ 更好玩：照片牆兩指縮放、回憶圓圈、限時動態、點兩下愛心 ═════════ */
 .wall{transform-origin:50% 0;touch-action:pan-x pan-y}
 html,body{touch-action:pan-x pan-y}
-html{scrollbar-width:none}
-html::-webkit-scrollbar,body::-webkit-scrollbar{display:none;width:0;height:0}   /* 旁邊的捲軸藏起來，比較沉浸 */
+*{scrollbar-width:none}
+*::-webkit-scrollbar{display:none;width:0;height:0}   /* 所有捲軸都藏起來（整頁、看大圖的資訊、搜尋、選單…），比較沉浸 */
 .wall[data-z="0"] .ph{border-radius:var(--r-sm)}
 .row.sq{gap:2px;margin-bottom:2px}
 .row.sq .ph{border-radius:0}
@@ -450,7 +456,7 @@ html::-webkit-scrollbar,body::-webkit-scrollbar{display:none;width:0;height:0}  
 
 .mems{max-width:1600px;margin:0 auto;padding:clamp(8px,2vw,20px) 0 0}
 .mems[hidden]{display:none}
-.mrw{display:flex;gap:clamp(12px,2vw,20px);overflow-x:auto;padding:4px var(--pad) 6px;scroll-snap-type:x proximity;scrollbar-width:none;-webkit-overflow-scrolling:touch}
+.mrw{display:flex;gap:clamp(12px,2vw,20px);overflow-x:auto;padding:4px var(--pad) 6px;scroll-snap-type:x proximity;scrollbar-width:none}
 .mrw::-webkit-scrollbar{display:none}
 .mem{flex:none;width:76px;display:grid;justify-items:center;gap:6px;scroll-snap-align:start;transition:transform var(--sp-fast)}
 .mem:active{transform:scale(.92)}
@@ -1249,3 +1255,30 @@ button.dct:active{transform:scale(.92)}
 .kbar i{position:absolute;top:50%;width:14px;height:14px;margin:-7px 0 0 -7px;border-radius:50%;background:#fff;box-shadow:var(--sh-pop),0 0 0 2px var(--tx2)}
 .isty>.kel{flex:1 1 100%}
 .isty>i+div{min-width:min(50%,180px)}
+
+/* 中性灰背景：看顏色用（後面不透出照片的顏色、四周不壓暗） */
+:root{--ngc:#777}
+.lb .bg::before{content:"";position:absolute;inset:0;z-index:2;background:var(--ngc);opacity:0;transition:opacity var(--t-slow) var(--ease)}
+.lb.ng .bg::before{opacity:1}
+.ipw{display:grid;gap:10px}
+.ipw:empty{display:none}
+.ngb{display:flex;align-items:center;gap:10px;width:100%;min-height:44px;margin-top:2px;padding:0;color:var(--tx);font-size:var(--fs-s);font-weight:650;text-align:left;cursor:pointer}
+.ipw:not(:empty)+.ngb{padding-top:12px;border-top:1px solid var(--line)}
+.ngb svg{width:18px;height:18px;flex:none;color:var(--tx2)}
+.ngb span{flex:1}
+.ngb .sw{position:relative;width:40px;height:24px;flex:none;border-radius:var(--r-pill);background:var(--s3);transition:background var(--t-mid) var(--ease)}
+.ngb .sw::after{content:"";position:absolute;left:3px;top:3px;width:18px;height:18px;border-radius:50%;background:#fff;box-shadow:var(--sh-1,0 1px 2px rgba(0,0,0,.2));transition:transform var(--sp-fast)}
+.ngb[aria-pressed="true"] .sw{background:var(--p)}
+.ngb[aria-pressed="true"] .sw::after{transform:translateX(16px)}
+/* 照顏色排 */
+.sqhue{display:flex;align-items:center;gap:12px;width:100%;margin-top:8px;padding:10px 14px 10px 10px;border-radius:var(--r-md);background:var(--s2);text-align:left;cursor:pointer;transition:transform var(--sp-fast);animation:memin var(--t-mid) var(--dec) both}
+.sqhue:active{transform:scale(.98)}
+.sqhue .rbw{width:40px;height:40px;flex:none;border-radius:var(--r-sm);background:conic-gradient(from -90deg,#e5484d,#f08a3c,#f2c94c,#46a758,#30b5c4,#3e7bfa,#8e5cf7,#f076b8,#e5484d)}
+.sqhue span{flex:1;min-width:0;display:grid;gap:1px}
+.sqhue b{font-size:var(--fs-m);font-weight:700}
+.sqhue small{font-size:var(--fs-xs);color:var(--tx3)}
+.sqhue svg{width:18px;height:18px;color:var(--tx3);flex:none}
+.sqhue.on svg{color:var(--p)}
+.dh.hue b{display:inline-flex;align-items:center;gap:10px}
+.dh.hue .cdot{width:16px;height:16px}
+.cdot.mu{background:linear-gradient(135deg,#d9c7b8,#b9c3cc)}
