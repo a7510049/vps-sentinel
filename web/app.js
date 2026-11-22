@@ -1095,7 +1095,7 @@ function notesModal(node, name){
 }
 /* 相簿分享：雲端硬碟選一個資料夾，做成照片牆連結給朋友（誰能看、下載、浮水印、挑照片都能改，隨時收回） */
 const ALMT = [[86400, "1 天"], [604800, "7 天"], [2592000, "30 天"], [0, "不限"]];
-const ALMD = [[1, "1 支"], [3, "3 支"], [0, "不限"]];
+const ALMD = [[1, "1 台"], [3, "3 台"], [0, "不限"]];
 const ALMDL = [[0, "不給"], [1, "壓縮圖"], [2, "原圖"]];
 const ALMUP = [[0, "不開放"], [1, "要我確認"], [2, "直接放上去"]];
 const ALMUQ = [[1, "1 GB"], [5, "5 GB"], [20, "20 GB"]];
@@ -1142,9 +1142,9 @@ function albumModal(node, name){
       <button type="button" class="ubtn" data-alm="use"${F.n ? "" : " disabled"}>${F.n ? `用這個資料夾（${F.n} 張）` : "這裡沒有照片"}</button>
       <button type="button" class="ubtn sm ghost" data-alm="list">${I("back")}返回</button>`,
     opts: () => `<label>名稱<input class="field" data-almk="name" maxlength="40" value="${esc(dir.split("/").pop() || "相簿")}"></label>
-      <div class="almsec"><h4>誰能看</h4>${srow("clock", "能看多久", "secs", ALMT, o.secs)}${srow("devices", "幾支手機", "dev", ALMD, o.dev)}
+      <div class="almsec"><h4>誰能看</h4>${srow("clock", "能看多久", "secs", ALMT, o.secs)}${srow("devices", "幾台設備", "dev", ALMD, o.dev)}
         <div class="almrw col"><div class="almrh">${I("lock")}<span>密碼</span></div><input class="field" data-almk="pw" type="password" maxlength="64" autocomplete="new-password" placeholder="不設"></div></div>
-      <div class="almsec"><h4>能做什麼</h4>${srow("dl", "下載", "dl", ALMDL, o.dl, dlSide(o.dl))}${srow("upl", "朋友放照片", "up", ALMUP, o.up, upSide(o.up))}${srow("disk", "朋友最多放", "uq", ALMUQ, o.uq, "一個人最多四分之一")}${tg("loc", o.loc, "顯示地點和地圖", "mpin")}${tg("talk", o.talk, "朋友可以按愛心、留言", "chat")}${tg("shy", o.shy, "離開畫面、截圖時照片變糊", "shield")}${tg("snap", o.snap, "按截圖鍵就鎖住那支裝置", "lock")}</div>
+      <div class="almsec"><h4>能做什麼</h4>${srow("dl", "下載", "dl", ALMDL, o.dl, dlSide(o.dl))}${srow("upl", "朋友放照片", "up", ALMUP, o.up, upSide(o.up))}${srow("disk", "朋友最多放", "uq", ALMUQ, o.uq, "一個人最多四分之一")}${tg("loc", o.loc, "顯示地點和地圖", "mpin")}${tg("talk", o.talk, "朋友可以按愛心、留言", "chat")}${tg("shy", o.shy, "離開畫面、截圖時照片變糊", "shield")}${tg("snap", o.snap, "按截圖鍵就鎖住那台設備", "lock")}</div>
       <button type="button" class="ubtn" data-alm="make">做好連結</button><button type="button" class="ubtn sm ghost" data-alm="pick">${I("back")}換資料夾</button>`,
     one: () => { const a = D.list.find(x => x.id === cur); if (!a) return pane.list();
       return `<div class="almhero"><span class="almcv">${cover(a)}</span><span class="almcap"><b>${esc(a.name)}</b><small>${meta(a)}</small></span></div>
@@ -1152,14 +1152,14 @@ function albumModal(node, name){
       <div class="almacts"><a href="${esc(link(a))}" target="_blank" rel="noopener noreferrer">${EXT}<span>打開看看</span></a>
         ${a.nup ? `<button type="button" class="almnew${a.npend ? " hot" : ""}" data-alm="pend">${I("upl")}<span>朋友放的</span><small>${a.npend ? `${a.npend} 個等你確認` : `${a.nup} 個`}</small></button>` : ""}
         <button type="button" data-alm="photos">${I("album")}<span>挑照片</span><small>${a.n}／${a.all - (a.npend || 0)}</small></button>
-        <button type="button" data-alm="devs">${I("devices")}<span>看過的手機</span><small>${a.nlock ? `${I("lock")}${a.nlock}・` : ""}${a.ndev}${a.dev ? `／${a.dev}` : ""}</small></button>
+        <button type="button" data-alm="devs">${I("devices")}<span>看過的設備</span><small>${a.nlock ? `${I("lock")}${a.nlock}・` : ""}${a.ndev}${a.dev ? `／${a.dev}` : ""}</small></button>
         <button type="button" data-alm="talk">${I("chat")}<span>留言</span><small>${a.ncm}${a.nlk ? `・♥ ${a.nlk}` : ""}</small></button></div>
       <div class="almsec"><h4>介紹</h4><div class="almrw col"><textarea class="field" data-almk="intro" rows="3" maxlength="300" placeholder="寫幾句話，放在封面下面">${esc(a.intro || "")}</textarea>
         <div class="almin"><button type="button" class="ubtn sm" data-alm="intro">存好</button></div></div></div>
-      <div class="almsec"><h4>誰能看</h4>${srow("clock", "能看多久", "secs", ALMT, -1, almLeft(a))}${srow("devices", "幾支手機", "dev", ALMD, a.dev, a.dev ? `${a.ndev} 支在看` : "")}
+      <div class="almsec"><h4>誰能看</h4>${srow("clock", "能看多久", "secs", ALMT, -1, almLeft(a))}${srow("devices", "幾台設備", "dev", ALMD, a.dev, a.dev ? `${a.ndev} 台在看` : "")}
         <div class="almrw col"><div class="almrh">${I("lock")}<span>密碼</span><small class="alms">${a.pw ? "已設定" : "沒有"}</small></div>
           <div class="almin"><input class="field" data-almk="pw" type="password" maxlength="64" autocomplete="new-password" placeholder="${a.pw ? "輸入新的就換掉" : "不設"}"><button type="button" class="ubtn sm" data-alm="pw">${a.pw ? "換" : "設定"}</button>${a.pw ? `<button type="button" class="ubtn sm ghost" data-alm="nopw">拿掉</button>` : ""}</div></div></div>
-      <div class="almsec"><h4>能做什麼</h4>${srow("dl", "下載", "dl", ALMDL, a.dl, dlSide(a.dl))}${srow("upl", "朋友放照片", "up", ALMUP, a.up || 0, upSide(a.up || 0))}${srow("disk", "朋友最多放", "uq", ALMUQ, a.uq || 1, `已放 ${almGB(a.uused || 0)}`)}${tg("loc", a.loc, "顯示地點和地圖", "mpin")}${tg("talk", a.talk, "朋友可以按愛心、留言", "chat")}${tg("shy", a.shy !== false, "離開畫面、截圖時照片變糊", "shield")}${tg("snap", a.snap, "按截圖鍵就鎖住那支裝置", "lock")}
+      <div class="almsec"><h4>能做什麼</h4>${srow("dl", "下載", "dl", ALMDL, a.dl, dlSide(a.dl))}${srow("upl", "朋友放照片", "up", ALMUP, a.up || 0, upSide(a.up || 0))}${srow("disk", "朋友最多放", "uq", ALMUQ, a.uq || 1, `已放 ${almGB(a.uused || 0)}`)}${tg("loc", a.loc, "顯示地點和地圖", "mpin")}${tg("talk", a.talk, "朋友可以按愛心、留言", "chat")}${tg("shy", a.shy !== false, "離開畫面、截圖時照片變糊", "shield")}${tg("snap", a.snap, "按截圖鍵就鎖住那台設備", "lock")}
         <div class="almrw">${I("music")}<span>幻燈片配樂</span><small class="alms">${a.mu ? esc(a.mu) : "放一首歌進資料夾就有"}</small></div>
         <div class="almrw col"><div class="almrh">${I("edit")}<span>浮水印</span><small class="alms">${a.wm ? (a.wmok ? "印在照片上" : "只蓋在畫面上") : "沒有"}</small></div>
           <div class="almin"><input class="field" data-almk="wm" maxlength="24" value="${esc(a.wm)}" placeholder="例如 © 你的名字"><button type="button" class="ubtn sm" data-alm="wm">${a.wm ? "換" : "加上"}</button>${a.wm ? `<button type="button" class="ubtn sm ghost" data-alm="nowm">拿掉</button>` : ""}</div></div></div>
@@ -1169,7 +1169,7 @@ function albumModal(node, name){
       return `<div class="almpkh"><b>分享 <span class="num">${n}</span>／${PK.photos.length} 張</b><button type="button" class="ubtn sm ghost" data-alm="pkall">${n === PK.photos.length ? "全部不選" : "全選"}</button></div>
       <div class="almpk">${PK.photos.map(p => `<button type="button" class="${p.hid ? "off" : ""}" data-almp="${p.i}" aria-pressed="${!p.hid}">${p.q ? `<img class="lq" alt="" src="data:image/jpeg;base64,${p.q}">` : ""}<img alt="" loading="lazy" src="${esc(`${PK.base || base()}/a/${PK.code}/i/${p.i}/s?v=${p.v}&own=${encodeURIComponent(PK.own)}`)}"><i>${I("ok")}</i>${p.vd ? `<em class="num">${Math.floor(p.vd / 60)}:${String(Math.round(p.vd % 60)).padStart(2, "0")}</em>` : ""}</button>`).join("")}</div>
       <button type="button" class="ubtn" data-alm="pksave"${n ? "" : " disabled"}>${n ? "存好" : "至少留一張"}</button><button type="button" class="ubtn sm ghost" data-alm="back">${I("back")}返回</button>`; },
-    devs: () => `${DV.devs.length || DV.dev ? `<div class="almpkh"><b>${DV.dev ? `限 ${DV.dev} 支手機・用了 ${DV.devs.length} 支` : `${DV.devs.length} 支手機看過`}</b></div>` : ""}
+    devs: () => `${DV.devs.length || DV.dev ? `<div class="almpkh"><b>${DV.dev ? `限 ${DV.dev} 台・用了 ${DV.devs.length} 台` : `${DV.devs.length} 台設備看過`}</b></div>` : ""}
       ${DV.devs.length ? `<div class="pklist">${DV.devs.map(d => `<div class="pkrow almdv">${I(/iPhone|Android|手機|SM-|Pixel/.test(d.n) ? "devices" : "home")}<span><b>${esc(d.nm ? `${d.nm}・${d.n}` : d.n)}</b><small>${d.lk ? `${almAgo(d.lk)}按了截圖，鎖住了` : `${almAgo(d.t)}・看了 ${d.c} 次`}</small></span>${d.lk ? `<button type="button" class="ubtn sm" data-almunlk="${esc(d.h)}">解除</button>` : ""}<button type="button" class="ubtn sm ghost bad" data-almkick="${esc(d.h)}">踢掉</button></div>`).join("")}</div>`
         : `<p class="ntx">還沒有人打開</p>`}
       <button type="button" class="ubtn sm ghost" data-alm="back">${I("back")}返回</button>`
@@ -1205,7 +1205,7 @@ function albumModal(node, name){
       const k = t.dataset.almo, x = await run({action:"edit", id:cur, [k]:t.checked});
       if (!x) t.checked = !t.checked;
       else toast({talk:["朋友可以按愛心、留言", "關掉了，之前的留言還留著"], loc:["朋友看得到地點", "地點藏起來了，下載的照片也拿掉定位"],
-        shy:["離開畫面、截圖時照片會變糊", "照片不會變糊了"], snap:["按截圖鍵就鎖住那支裝置", "按截圖鍵不會鎖住了"]}[k]?.[t.checked ? 0 : 1] || "改好了");
+        shy:["離開畫面、截圖時照片會變糊", "照片不會變糊了"], snap:["按截圖鍵就鎖住那台設備", "按截圖鍵不會鎖住了"]}[k]?.[t.checked ? 0 : 1] || "改好了");
     });
     v.addEventListener("click", async e => {
       if (e.target === v) return done();
@@ -1220,7 +1220,7 @@ function albumModal(node, name){
         const x = await run({action:"edit", id:cur, [k]:val}); if (!x) return;
         const a = D.list.find(y => y.id === cur);
         if (k === "secs") { toast(val ? `從現在起 ${sb.textContent}` : "不會過期了"); if (a) side("secs", almLeft(a)); }
-        if (k === "dev") { toast(val ? `只給 ${val} 支手機看` : "幾支手機都能看"); if (a) side("dev", val ? `${a.ndev} 支在看` : ""); }
+        if (k === "dev") { toast(val ? `只給 ${val} 台設備看` : "幾台設備都能看"); if (a) side("dev", val ? `${a.ndev} 台在看` : ""); }
         if (k === "dl") toast(["朋友不能下載了", "只能下載壓縮圖", "可以下載原圖"][val]);
         if (k === "up") { toast(["朋友不能放照片了", "朋友放的要你確認", "朋友放的馬上出現"][val]); if (a && val === 2 && a.npend) draw(); }
         if (k === "uq") toast(`朋友最多放 ${val} GB`);
@@ -1264,7 +1264,7 @@ function albumModal(node, name){
       }
       const kk = t.closest("[data-almkick]");
       if (kk) {
-        if (!await modal({icon:"ban", cls:"bad", title:"踢掉這支手機？", text:"這支手機之後打不開這本相簿。", ok:"踢掉"})) return;
+        if (!await modal({icon:"ban", cls:"bad", title:"踢掉這台設備？", text:"這台設備之後打不開這本相簿。", ok:"踢掉"})) return;
         if (await run({action:"edit", id:cur, kick:kk.dataset.almkick})) { const x = await run({action:"devs", id:cur}); if (x) { DV = x; draw(); toast("踢掉了"); } }
         return;
       }
