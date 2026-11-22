@@ -1377,16 +1377,6 @@ button.dct:active{transform:scale(.92)}
 .iset div.warn .gin .gs{stroke:var(--warn)}
 
 /* 拍攝習慣：光圈、快門、ISO 各一張小長條圖，點一段只看那樣拍的 */
-.ghab{display:grid;gap:12px;margin-top:12px}
-.ghab .gfoc{margin-top:0}
-.gfc.hb{grid-template-columns:repeat(7,1fr);gap:6px}
-.gfc>button{display:grid;justify-items:center;gap:4px;padding:0;border:0;background:none;color:inherit;font:inherit;cursor:pointer;-webkit-tap-highlight-color:transparent}
-.gfc>button:disabled{cursor:default}
-.gfc>button span{transition:box-shadow var(--t-fast) var(--ease)}
-.gfc>button.on span{box-shadow:inset 0 0 0 2px var(--p)}
-.gfc>button.on small{color:var(--p)}
-@media (hover:hover){.gfc>button:not(:disabled):hover span{box-shadow:inset 0 0 0 2px var(--line)}}
-@media (min-width:900px){.gear .ghab{grid-column:1 / -1;grid-template-columns:repeat(3,minmax(0,1fr))}.gear .ghab .gfoc{grid-column:auto;grid-row:auto}}
 
 /* 兩張並排比較 */
 .cmpv{position:fixed;inset:0;z-index:calc(var(--z-veil) + 2);display:grid;grid-template-rows:auto minmax(0,1fr) auto;background:#000;color:#fff;opacity:0;transition:opacity var(--t-mid) var(--ease);touch-action:none;user-select:none;-webkit-user-select:none}
@@ -1412,3 +1402,24 @@ button.dct:active{transform:scale(.92)}
 .cmpk.in{opacity:1;box-shadow:inset 0 0 0 2px rgba(255,255,255,.7)}
 .cmpk.act{box-shadow:inset 0 0 0 2px var(--p)}
 @media (max-width:440px){.lbt{gap:6px;padding-left:10px;padding-right:10px}.lbt .cnt{white-space:nowrap;font-size:var(--fs-s)}}
+
+/* 拍攝習慣：一張卡、一種一行（左邊名稱＋最常用，右邊細長條，長條下面小字） */
+.gst{margin-top:12px;padding:6px 16px;border-radius:var(--r-lg);background:var(--s1);box-shadow:var(--sh-card)}
+.gsr{display:grid;grid-template-columns:64px minmax(0,1fr);align-items:center;gap:12px;padding:10px 0}
+.gsr+.gsr{border-top:1px solid var(--line)}
+.gsl{display:grid;gap:2px;min-width:0}
+.gsl small{color:var(--tx3);font-size:var(--fs-xs);font-weight:700;letter-spacing:.06em}
+.gsl b{font-weight:750;font-size:var(--fs-m);white-space:nowrap;display:grid}
+.gsl b small{letter-spacing:0;font-weight:600}
+.gsb{display:grid;grid-template-columns:repeat(var(--n),minmax(0,1fr));gap:4px}
+.gsb>*{display:grid;justify-items:center;gap:3px;padding:0;border:0;background:none;color:inherit;font:inherit;min-width:0;-webkit-tap-highlight-color:transparent}
+.gsb>button{cursor:pointer}
+.gsb>button:disabled{cursor:default}
+.gsb span{width:100%;height:26px;display:flex;align-items:flex-end;border-radius:4px;background:var(--s2);overflow:hidden;transition:box-shadow var(--t-fast) var(--ease)}
+.gsb span i{display:block;width:100%;background:color-mix(in oklab,var(--g2) 45%,transparent);border-radius:3px 3px 0 0}
+.gsb .top span i{background:var(--grad,var(--g2))}
+.gsb small{font-size:9px;color:var(--tx3);font-weight:600;white-space:nowrap;max-width:100%;overflow:hidden;letter-spacing:-.02em}
+.gsb .on span{box-shadow:inset 0 0 0 2px var(--p)}
+.gsb .on small{color:var(--p)}
+@media (hover:hover){.gsb>button:not(:disabled):hover span{box-shadow:inset 0 0 0 2px var(--line)}}
+@media (min-width:900px){.gear .gst{grid-column:2;grid-row:2;margin-top:0;align-self:start}.gsb small{font-size:10px}}

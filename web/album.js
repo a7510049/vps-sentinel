@@ -1242,9 +1242,16 @@ function gear(){
   box.innerHTML = `<div class="mh"><b>器材</b><span class="num">${cs.length} 台相機${ls.length ? `・${Object.keys(lens).length} 顆鏡頭` : ""}</span></div>
     <div class="gcams">${cs.slice(0, 6).map(([c, n]) => { const lz = Object.entries(cl[c] || {}).sort((a, b) => b[1] - a[1]).slice(0, 6);
       return `<div class="gbox"><button class="gcam${GEAR === "c:" + c ? " on" : ""}" data-gear="c:${esc(c)}"><i class="gic">${I("cam")}</i><span class="gt2"><b>${esc(c)}</b><small class="num">${n} 張</small></span><span class="gbr"><i style="width:${(n / n0 * 100).toFixed(1)}%"></i></span></button>${lz.length ? `<div class="glz">${lz.map(([l, m]) => `<button class="glr${GEAR === "l:" + l ? " on" : ""}" data-gear="l:${esc(l)}">${I("lens")}<span>${esc(l)}</span><span class="gbr"><i style="width:${(m / n * 100).toFixed(1)}%"></i></span><small class="num">${m}</small></button>`).join("")}</div>` : ""}</div>`; }).join("")}</div>
-    ${nf >= 3 ? `<div class="gfoc"><div class="gfh"><small>常用焦段</small>${top ? `<b class="num">${top[0]} mm</b>` : ""}</div><div class="gfc">${FOCB.map((b, k) => `<div class="${fb[k] === mx ? "top" : ""}"><span><i style="height:${fb[k] ? Math.max(8, fb[k] / mx * 100).toFixed(0) : 0}%"></i></span><b class="num">${fb[k] || ""}</b><small>${b[2]}</small></div>`).join("")}</div></div>` : ""}
-    ${hb.length ? `<div class="ghab">${hb.map(({k, h, c}) => { const m = Math.max(...c), tk = c.indexOf(m);
-      return `<div class="gfoc"><div class="gfh"><small>${h.n}</small><b class="num">${h.l[tk]}</b></div><div class="gfc hb">${h.l.map((l, j) => `<button class="${c[j] === m ? "top" : ""}${GEAR === `${k}:${j}` ? " on" : ""}" data-gear="${k}:${j}"${c[j] ? "" : " disabled"} aria-label="${h.n} ${l}：${c[j]} 張"><span><i style="height:${c[j] ? Math.max(8, c[j] / m * 100).toFixed(0) : 0}%"></i></span><b class="num">${c[j] || ""}</b><small class="num">${l}</small></button>`).join("")}</div></div>`; }).join("")}</div>` : ""}`;
+    ${gstat(nf >= 3 ? {n:"焦段", l:FOCB.map(b => b[2]), c:fb, t:top ? `${top[0]} mm` : ""} : null, hb)}`;
+}
+/* 拍攝習慣：焦段、光圈、快門、ISO 合成一張，一種一行細長條（使用者說四張大卡太佔版面）；點長條只看那些照片 */
+function gstat(fo, hb){
+  const rows = (fo ? [{k:"", h:fo, c:fo.c}] : []).concat(hb);
+  if (!rows.length) return "";
+  return `<div class="gst">${rows.map(({k, h, c}) => { const m = Math.max(1, ...c), tk = c.indexOf(Math.max(...c)), sel = k && GEAR && GEAR[0] === k ? +GEAR.slice(2) : -1;
+    const v = sel >= 0 ? `${h.l[sel]}<small class="num">${c[sel]} 張</small>` : (h.t || h.l[tk]);
+    return `<div class="gsr"><div class="gsl"><small>${h.n}</small><b class="num">${v}</b></div><div class="gsb" style="--n:${c.length}">${h.l.map((l, j) => { const cls = `${j === tk ? "top" : ""}${sel === j ? " on" : ""}`, bar = `<span><i style="height:${c[j] ? Math.max(12, c[j] / m * 100).toFixed(0) : 0}%"></i></span><small class="num">${l}</small>`;
+      return k ? `<button class="${cls}" data-gear="${k}:${j}"${c[j] ? "" : " disabled"} aria-label="${h.n} ${l}：${c[j]} 張">${bar}</button>` : `<div class="${cls}" aria-label="${l}：${c[j]} 張">${bar}</div>`; }).join("")}</div></div>`; }).join("")}</div>`;
 }
 function citybar(){
   const b = $(".cityf"); if (!b) return;
