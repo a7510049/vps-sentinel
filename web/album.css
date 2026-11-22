@@ -610,7 +610,7 @@ html::-webkit-scrollbar,body::-webkit-scrollbar{display:none;width:0;height:0}  
 .dh,.mh{border-bottom:0;background:linear-gradient(90deg,color-mix(in oklab,var(--g2) 55%,transparent),var(--line) 45%,transparent) left bottom/100% 1px no-repeat}
 @supports (animation-timeline:view()){
   .dh::before{animation:chn linear both;animation-timeline:view();animation-range:entry 0% entry 70%}
-  .dh b,.dh span{animation:chb linear both;animation-timeline:view();animation-range:entry 10% entry 80%}
+  .dh b,.dh span,.dh .dsum{animation:chb linear both;animation-timeline:view();animation-range:entry 10% entry 80%}
 }
 @keyframes chn{from{opacity:0;translate:-18px 0}to{opacity:1;translate:0 0}}
 @keyframes chb{from{opacity:0;translate:0 10px}to{opacity:1;translate:0 0}}
@@ -1140,3 +1140,4 @@ button.dct:active{transform:scale(.92)}
 @media (hover:hover){.cmt:hover .crep{max-height:28px;opacity:1;padding:4px 0}}
 .cmt{cursor:default;-webkit-tap-highlight-color:transparent}
 .sb[hidden]{display:none}
+.gbc.old{animation:none}
