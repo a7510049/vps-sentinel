@@ -356,6 +356,48 @@ class PhotoUnit(unittest.TestCase):
         self.assertEqual(afp({}, {"fp": (300, 200, 0, 0)}, 1, 0, 600, 400), [.5, .5, .1])
 
 
+    def test_canon_nikon_af(self):
+        """Canon AFInfo2（畫面中間是原點、往上是正，對準的點用位元標）、Nikon Z 系列 AFInfo2（左上角原點）"""
+        n = 3                                           # 三個點：左上、中間（對準）、右下（對準）
+        w = [0, 2, n, n, 6000, 4000, 6000, 4000, *[200] * n, *[200] * n, -1000, 0, 1000, 1000, 0, -1000, 0b110, 0]
+        cf = P["pic_canon_af"](struct.pack("<%dh" % len(w), *w), "<")
+        self.assertEqual(cf[:4], (3500, 2500, 6000, 4000))   # 中間（3000,2000）和右下（4000,3000）合起來的中心
+        self.assertAlmostEqual(cf[4], 1200 / 4000)
+        w[1] = 0
+        self.assertIsNone(P["pic_canon_af"](struct.pack("<%dh" % len(w), *w), "<"))   # 手動對焦
+        d = bytearray(0x50)
+        d[:4], d[7] = b"0400", 1
+        struct.pack_into(">6H", d, 0x3E, 8256, 5504, 2064, 4128, 500, 500)
+        self.assertEqual(P["pic_nikon_af"](bytes(d), ">")[:4], (2064, 4128, 8256, 5504))
+        d[7] = 0
+        self.assertIsNone(P["pic_nikon_af"](bytes(d), ">"))   # 沒有座標（只有點的編號）
+
+    def test_camera_clock(self):
+        """相機時間：時區沒換的照手機換成當地時間；跟手機拍到很像的畫面兩組以上、差的時間一致，整台相機照手機調"""
+        import bisect
+        import calendar
+        src = open(os.path.join(ROOT, "album.py"), encoding="utf-8").read()
+        G = {"re": re, "time": time, "calendar": calendar, "bisect": bisect}
+        for n in ast.parse(src).body:
+            if (isinstance(n, ast.FunctionDef) and n.name in ("alb_clock", "alb_oz_s")) or \
+               (isinstance(n, ast.Assign) and getattr(n.targets[0], "id", "") == "ALB_PHONE"):
+                exec(compile(ast.Module([n], []), "album.py", "exec"), G)   # noqa: S102
+        ph = lambda i, dt, dh: {"i": i, "n": i, "dh": dh, "x": {"mk": "Apple", "md": "iPhone 16", "dt": dt, "oz": "+09:00"}}
+        cam = lambda i, dt, dh, oz=None: {"i": i, "n": i, "dh": dh, "x": {"mk": "Panasonic", "md": "DC-S5M2X", "dt": dt, **({"oz": oz} if oz else {})}}
+        out = G["alb_clock"]([ph("p1", "2026:05:01 10:00:00", "00ff00ff00ff00ff"), ph("p2", "2026:05:01 15:00:00", "ffff0000ffff0000"),
+                              cam("c1", "2026:05:01 09:56:40", "00ff00ff00ff00fe"), cam("c2", "2026:05:01 14:56:45", "ffff0000ffff0001"),
+                              cam("c3", "2026:05:01 12:00:00", "123456789abcdef0")])
+        x = {o["i"]: o["x"] for o in out}
+        self.assertEqual(x["c3"]["dt"], "2026:05:01 12:03:18")   # 慢 3 分 18 秒（兩組的中位數）
+        self.assertEqual(x["c3"]["dtc"][0], 198)
+        self.assertEqual(x["c3"]["oz"], "+09:00")
+        self.assertEqual([o["i"] for o in out], ["c1", "p1", "c3", "p2", "c2"])
+        out = G["alb_clock"]([ph("p1", "2026:05:01 10:00:00", None), cam("c1", "2026:05:01 09:10:00", None, "+08:00")])
+        c = next(o for o in out if o["i"] == "c1")["x"]
+        self.assertEqual((c["dt"], c["oz"], c["dtc"]), ("2026:05:01 10:10:00", "+09:00", [0, "2026:05:01 09:10:00", "+08:00"]))
+        out = G["alb_clock"]([ph("p1", "2026:05:01 10:00:00", "00ff00ff00ff00ff"), cam("c1", "2026:05:01 09:56:40", "00ff00ff00ff00fe")])
+        self.assertNotIn("dtc", out[1]["x"] if out[1]["i"] == "c1" else out[0]["x"])   # 只有一組：不調
+
     def test_gps_timezone(self):
         """沒寫時區的照片（很多相機）：用定位附帶的世界標準時間算出時區，差 5 分鐘內才算"""
         src = open(os.path.join(ROOT, "album.py"), encoding="utf-8").read()

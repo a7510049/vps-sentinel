@@ -360,7 +360,7 @@ def pic_maker(b, more):
         return {}
     s, n = mk
     e0 = "<" if b[:2] == b"II" else ">"
-    v = {}
+    v, raw = {}, {}
     try:
         if b[s:s + 9] == b"Panasonic":
             walk = pic_tiff_walk(b, 0, e0, s + 12, 1, "m")
@@ -384,6 +384,8 @@ def pic_maker(b, more):
             if vo + TIFF_SZ.get(typ, 0) * cnt > s + n + (1 << 16):   # 跑出製造商資料太遠的不算
                 continue
             v[tag] = (typ, pic_tval(b, typ, cnt, vo, e))
+            if tag in (0x26, 0x3C, 0xB7) and name in ("canon", "nikon"):   # 對焦點的整段資料（比 pic_tval 讀的 64 格長）
+                raw[tag] = (b[vo:vo + TIFF_SZ.get(typ, 0) * cnt], e)
     except (struct.error, IndexError, ValueError):
         return {}
 
@@ -465,6 +467,14 @@ def pic_maker(b, more):
             kv = t[1][9]
         if txt(0x95):
             out["ln"] = txt(0x95)[:80]
+        t = v.get(0x04)                                # ShotInfo：對焦距離的上下限（公分，655.35 公尺以上是無限遠）
+        if t and t[0] == 3 and isinstance(t[1], list) and len(t[1]) > 20 and t[1][19]:
+            up, lo = t[1][19] / 100, t[1][20] / 100
+            if up < 655:
+                out["fd"] = round((up + lo) / 2 if 0 < lo <= up else up, 2)
+        fp = pic_canon_af(*(raw.get(0x26) or raw.get(0x3C) or (b"", "<")))
+        if fp:
+            out["fp"] = fp
     elif name == "nikon":
         t = v.get(0x23)
         if t and t[0] == 7 and isinstance(t[1], bytes) and t[1][:2] in (b"01", b"02", b"03"):
@@ -473,6 +483,9 @@ def pic_maker(b, more):
             if pc in PIC_NIKON_ST:
                 out["sl"] = "優化校準"
                 out["st"] = PIC_NIKON_ST[pc]
+        fp = pic_nikon_af(*(raw.get(0xB7) or (b"", "<")))
+        if fp:
+            out["fp"] = fp
     if fx:
         out["fx"] = fx
     if isinstance(kv, int) and 1800 <= kv <= 15000:   # 拍攝時的白平衡色溫（K）
@@ -480,6 +493,43 @@ def pic_maker(b, more):
     if list(out) in (["sl"], []):
         return {}
     return out
+
+
+def pic_canon_af(d, e):
+    """Canon AFInfo2／AFInfo3：對準的那幾個對焦點合起來的中心和大小；座標以畫面中間為原點、往上是正"""
+    if len(d) < 16:
+        return None
+    w = list(struct.unpack_from(e + "%dh" % (len(d) // 2), d))
+    n, aw, ah = w[2], w[6], w[7]
+    if w[1] == 0 or not 0 < n <= 1024 or aw <= 0 or ah <= 0 or len(w) < 8 + 4 * n + (n + 15) // 16:
+        return None                                    # 手動對焦
+    ws, hs, xs, ys = (w[8 + k * n:8 + (k + 1) * n] for k in range(4))
+    bits = w[8 + 4 * n:8 + 4 * n + (n + 15) // 16]
+    on = [i for i in range(n) if (bits[i // 16] >> (i % 16)) & 1 and ws[i] > 0]
+    if not on:
+        return None
+    x0 = min(xs[i] - ws[i] / 2 for i in on) + aw / 2
+    x1 = max(xs[i] + ws[i] / 2 for i in on) + aw / 2
+    y0 = ah / 2 - max(ys[i] + hs[i] / 2 for i in on)
+    y1 = ah / 2 - min(ys[i] - hs[i] / 2 for i in on)
+    return ((x0 + x1) / 2, (y0 + y1) / 2, aw, ah, max(.04, min(.3, max(x1 - x0, y1 - y0) / min(aw, ah))))
+
+
+PIC_NIKON_AF = {b"0100": (0x10, 1), b"0101": (0x46, 1), b"0300": (0x2A, 0), b"0301": (0x2A, 0),
+                b"0400": (0x3E, 0), b"0401": (0x3E, 0), b"0402": (0x3E, 0)}   # 版本 → (寬高、位置、框大小那段的位置, 只有反差對焦才有)
+
+
+def pic_nikon_af(d, e):
+    """Nikon AFInfo2：對焦框的中心和大小（左上角是原點）；Z 系列要「有座標」那一格是 1"""
+    o = PIC_NIKON_AF.get(d[:4])
+    if not o or len(d) < o[0] + 12:
+        return None
+    if (d[4] != 1) if o[1] else (d[7] != 1):           # 單眼的觀景窗對焦只有點的編號，沒有座標
+        return None
+    iw, ih, x, y, bw, bh = struct.unpack_from(e + "6H", d, o[0])
+    if not (iw and ih and x and y):
+        return None
+    return (x, y, iw, ih, max(.04, min(.3, max(bw, bh) / min(iw, ih))) if bw and bh else .1)
 
 
 def pic_cs(icc, more):
