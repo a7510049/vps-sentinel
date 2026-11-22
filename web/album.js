@@ -39,7 +39,7 @@ const P = {
   wstorm:'<path d="M7 14h10.5a4 4 0 0 0 .5-8 6 6 0 0 0-11.4 1.6A3.3 3.3 0 0 0 7 14Z"/><path d="m12.5 15-2 3.5h3l-2 3.5"/>',
   cam:'<path d="M3.5 8.5a2 2 0 0 1 2-2h2.3l1.5-2.2h5.4l1.5 2.2h2.3a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2h-13a2 2 0 0 1-2-2Z"/><circle cx="12" cy="13" r="3.6"/>',
   lens:'<circle cx="12" cy="12" r="8.5"/><circle cx="12" cy="12" r="4.5"/><path d="M12 3.5v4.5M19.4 16.3l-3.9-2.3M4.6 16.3l3.9-2.3"/>',
-  send:'<path d="M4.5 12h13M12.5 6l6 6-6 6"/>', again:'<path d="M4 12a8 8 0 1 0 2.4-5.7L4 8.5M4 4v4.5h4.5"/>'
+  send:'<path d="M4.5 12h13M12.5 6l6 6-6 6"/>', pen:'<path d="M4 20h4L19 9a2.8 2.8 0 0 0-4-4L4 16v4Z"/><path d="m13.5 6.5 4 4"/>', again:'<path d="M4 12a8 8 0 1 0 2.4-5.7L4 8.5M4 4v4.5h4.5"/>'
 };
 const I = n => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${P[n]}</svg>`;
 const src = (p, k) => `${BASE}/i/${p.i}/${k}?v=${p.v}`;
@@ -190,15 +190,19 @@ function askPw(){
 let GROUPS = [], YR = false;
 /* 連拍收成一疊：同一台相機、幾秒內連著拍的 3 張以上，照片牆只放第一張（右上角寫幾張），點了才攤開 */
 let STK = new Map(), STKOF = new Map(), STKOPEN = new Set();
+const dham = (a, b) => { let n = 0; for (let k = 0; k < 16; k += 8) { let x = (parseInt(a.slice(k, k + 8), 16) ^ parseInt(b.slice(k, k + 8), 16)) >>> 0; while (x) { x &= x - 1; n++; } } return n; };   // 兩張的指紋差幾格
+const best = list => list.reduce((b, i) => (PH[i].qs ?? -1) > (PH[b].qs ?? -1) ? i : b, list[0]);   // 分數最高的那張（主機算的：清楚、曝光好）
 function stackCalc(){
   STK = new Map(); STKOF = new Map();
   const sec = p => { const d = pd(p.x.dt); if (!d || p.x.dtf) return null; const m = /:(\d\d)$/.exec(p.x.dt.slice(0, 19)); return Date.UTC(d.y, d.mo - 1, d.d, d.h, d.mi, m ? +m[1] : 0) / 1000; };
-  let run = [];
-  const end = () => { if (run.length >= 3) { STK.set(run[0], run.slice()); run.forEach(i => STKOF.set(i, run[0])); } run = []; };
+  let run = [], like = 0;                                     // like：這一串是因為長得像才收在一起（兩張就收）
+  const end = () => { if (run.length >= 3 || (run.length === 2 && like)) { const c = best(run); STK.set(c, run.slice()); run.forEach(i => STKOF.set(i, c)); } run = []; like = 0; };
   PH.forEach((p, i) => {
     const t = sec(p), q = PH[i - 1], tq = q && sec(q);
-    const same = q && t != null && tq != null && !isVid(p) && !isVid(q) && Math.abs(t - tq) <= 2 && camName(p.x) === camName(q.x) && (p.w > p.h) === (q.w > q.h) && (p.u || "") === (q.u || "");
-    if (!same) end();
+    const ok = q && t != null && tq != null && !isVid(p) && !isVid(q) && camName(p.x) === camName(q.x) && (p.w > p.h) === (q.w > q.h) && (p.u || "") === (q.u || "");
+    const burst = ok && Math.abs(t - tq) <= 2, sim = ok && !burst && Math.abs(t - tq) <= 120 && p.dh && q.dh && dham(p.dh, q.dh) <= 10;
+    if (!burst && !sim) end();
+    if (sim) like = 1;
     if (!isVid(p) && t != null) run.push(i); else end();
   });
   end();
@@ -226,7 +230,7 @@ function stackToggle(c){                                    // 攤開／收起�
   };
   if (!open && anim()) {                                      // 收起：攤開的那幾張先縮回第一張那裡
     const r0 = TILES[c].getBoundingClientRect();
-    Promise.all(STK.get(c).slice(1).map(i => { const t = TILES[i], r = t.getBoundingClientRect();
+    Promise.all(STK.get(c).filter(i => i !== c).map(i => { const t = TILES[i], r = t.getBoundingClientRect();
       return t.animate([{opacity:1, transform:"none"}, {opacity:0, transform:`translate(${r0.left - r.left}px,${r0.top - r.top}px) scale(.6)`}], {duration:T.mid, easing:EXIT, fill:"forwards"}).finished.catch(() => {}); }))
       .then(() => { STK.get(c).forEach(i => TILES[i].getAnimations().forEach(a => a.cancel())); go(); });
   } else go();
@@ -253,7 +257,7 @@ function sections(){
   const w = $(".wall"); w.dataset.z = ZL;
   w.innerHTML = GROUPS.map((g, gi) => `<section class="day" data-g="${gi}">${g.k && g.d ? g.m
     ? `<div class="dh" data-k="m${g.k}"><b>${g.d.y}年${g.d.mo}月</b><span class="num">${g.list.length}</span></div>`
-    : `<div class="dh" data-day="${g.k}" data-k="d${g.k}"><b>${fday(g.d, YR)}${wxTag(g.k)}</b><span>${dayPlaces(g.k) ? `${I("pin")}${esc(dayPlaces(g.k))}` : ""}</span>${g.list.length > 1 ? `<button class="dct num" data-dplay="${g.k}" aria-label="播放這天">${I("play")}${g.list.length}</button>` : `<i class="dct num">${g.list.length}</i>`}${dayClock(g.list)}</div>` : ""}<div class="rows"></div></section>`).join("");
+    : `<div class="dh" data-day="${g.k}" data-k="d${g.k}"><b>${fday(g.d, YR)}${wxTag(g.k)}</b>${((pl, sm) => `<span>${pl ? `${I("pin")}${esc(sm ? pl.split("・")[0] : pl)}` : ""}</span>${sm ? `<i class="dsum">${esc(sm)}</i>` : ""}`)(dayPlaces(g.k), daySum(g.k))}${g.list.length > 1 ? `<button class="dct num" data-dplay="${g.k}" aria-label="播放這天">${I("play")}${g.list.length}</button>` : `<i class="dct num">${g.list.length}</i>`}${dayClock(g.list)}</div>` : ""}<div class="rows"></div></section>`).join("");
 }
 /* 那天的天氣：主機照拍照的地點、日期查的（世界氣象組織的天氣代碼） */
 function wxIco(c){ return c <= 1 ? "wsun" : c <= 3 ? "wpart" : c <= 48 ? "wfog" : c >= 95 ? "wstorm" : (c >= 71 && c <= 77) || c === 85 || c === 86 ? "wsnow" : c >= 51 ? "wrain" : "wcld"; }
@@ -328,6 +332,21 @@ function zoomWall(z, fx, fy, pre){                            // 換大小：每
   OUT.forEach((e, k) => { const d = o0[k] - e.getBoundingClientRect().top; if (Math.abs(d) > 1) e.animate([{transform:`translateY(${d}px)`}, {transform:"none"}], {duration:ZDUR, easing:DEC}); });
   return true;
 }
+/* 這天一句話：早上在哪、下午到哪、走了幾公里（照拍照的時間和地點自動寫） */
+function daySum(k){
+  const ps = PH.filter(p => !p.x.dtf && p.p && (pd(p.x.dt) || {}).k === k);
+  if (ps.length < 3) return "";
+  const SG = ["早上", "中午", "下午", "晚上"], by = [{}, {}, {}, {}];
+  ps.forEach(p => { const h = pd(p.x.dt).h, s = h < 5 ? 3 : h < 11 ? 0 : h < 14 ? 1 : h < 18 ? 2 : 3; by[s][p.p.n] = (by[s][p.p.n] || 0) + 1; });
+  const parts = [];
+  let last = "";
+  by.forEach((o, s) => { const n = Object.keys(o).sort((a, b) => o[b] - o[a])[0]; if (!n || n === last) return; parts.push(`${SG[s]}${parts.length ? "到" : "在"}${n}`); last = n; });
+  const g = ps.filter(p => p.g);
+  let m = 0;
+  for (let i = 1; i < g.length; i++) m += gdist(g[i - 1].g, g[i].g);
+  const km = m >= 1000 ? `${m < 30000 ? "走了" : "移動了"} ${m < 10000 ? (m / 1000).toFixed(1).replace(/\.0$/, "") : Math.round(m / 1000)} 公里` : "";
+  return parts.length > 1 || (parts.length && km) ? [...parts, km].filter(Boolean).join("，") : "";
+}
 function dayPlaces(k){                                       // 這天的城市＋最常拍的地方，例如「阿雷佐・聖方濟各聖殿」
   const c = {}, cc = {};
   PH.forEach(p => { const d = pd(p.x.dt); if (d && d.k === k && p.p) { c[p.p.n] = (c[p.p.n] || 0) + 1; if (p.p.c) cc[p.p.c] = (cc[p.p.c] || 0) + 1; } });
@@ -353,9 +372,14 @@ function memsOf(){
   }
   return gs.map(g => {
     let list = g.list.filter(ok);
-    if (list.length > 12) { const st = list.length / 12; list = Array.from({length:12}, (_, k) => list[Math.floor(k * st)]); }
-    const cv = list.slice().sort((a, b) => (PH[b].lk || 0) - (PH[a].lk || 0))[0];
-    return {...g, list, cv:(PH[cv] && PH[cv].lk) ? cv : list.find(i => !isVid(PH[i])) ?? list[0]};
+    if (list.length > 12) {                                  // 太多張：一疊只留最好的、再挑分數高的 12 張（照時間排）
+      let one = list.filter(i => !STKOF.has(i) || STKOF.get(i) === i);
+      if (one.length < 12) one = list;
+      if (one.some(i => PH[i].qs != null)) list = one.slice().sort((a, b) => (PH[b].qs ?? 0) - (PH[a].qs ?? 0)).slice(0, 12).sort((a, b) => a - b);
+      else { const st = one.length / 12; list = Array.from({length:12}, (_, k) => one[Math.floor(k * st)]); }
+    }
+    const cv = list.slice().sort((a, b) => (PH[b].lk || 0) - (PH[a].lk || 0))[0], ph = list.filter(i => !isVid(PH[i]));
+    return {...g, list, cv:(PH[cv] && PH[cv].lk) ? cv : ph.length ? best(ph) : list[0]};
   }).filter(g => g.list.length).slice(0, 40);
 }
 function mems(){
@@ -607,7 +631,8 @@ function layout(force){
       box.replaceChildren(frag);
       return;
     }
-    const big = ZL === 1 && list.length >= 3 && !STK.has(list[0]) && PH[list[0]].w / PH[list[0]].h >= 1.3 && W >= 320 ? list[0] : -1;   // 一天的第一張橫的放整排，當這天的封面
+    const wide = list.filter(i => !STK.has(i) && !isVid(PH[i]) && PH[i].w / PH[i].h >= 1.3), top = wide.length && PH[wide[0]].qs != null ? best(wide) : list[0];
+    const big = ZL === 1 && list.length >= 3 && !STK.has(top) && PH[top].w / PH[top].h >= 1.3 && W >= 320 ? top : -1;   // 這天拍得最好的橫幅放整排，當這天的封面（沒有分數就用第一張）
     const sec = box.parentNode, dh = sec.querySelector(".dh[data-day]");
     sec.classList.toggle("cov", big >= 0 && !!dh);
     if (big >= 0) { const ar = Math.min(3, PH[big].w / PH[big].h), fh = Math.min(W / ar, innerHeight * .72); sec.style.setProperty("--fh", fh.toFixed(1) + "px"); rows.push([[[big, W / fh]], fh, 1]); }
@@ -1322,9 +1347,11 @@ function openLb(i, from){
     const gb = e.target.closest("[data-gear]");                // 點相機、鏡頭：關掉大圖，照片牆只看那台拍的
     if (gb) { lbBack(S); setTimeout(() => gearSet(gb.dataset.gear, true), anim() ? T.mid + 60 : 0); return; }
     const rp = e.target.closest("[data-crep]");                // 回覆：輸入框上面寫「回覆 某某」
-    if (rp) { const f = $(".cform", inf), b = $(".cre", f); f.dataset.re = rp.dataset.crep; b.querySelector("span").textContent = `回覆 ${rp.dataset.cn}`; b.hidden = false;
+    if (rp) { const f = $(".cform", inf), b = $(".cre", f); cOpen(f, 1); f.dataset.re = rp.dataset.crep; b.querySelector("span").textContent = `回覆 ${rp.dataset.cn}`; b.hidden = false;
       if (anim()) b.animate([{opacity:0, transform:"translateY(4px)"}, {opacity:1, transform:"none"}], {duration:T.fast, easing:DEC});
       const tx = f.querySelector("[name=s]"); tx.placeholder = `回覆 ${rp.dataset.cn}…`; tx.focus(); return; }
+    const cm = e.target.closest(".cmt");                       // 點一則留言才露出「回覆」
+    if (cm && !e.target.closest("button")) { inf.querySelectorAll(".cmt.on").forEach(x => { if (x !== cm) x.classList.remove("on"); }); cm.classList.toggle("on"); return; }
     if (e.target.closest("[data-crex]")) { const f = $(".cform", inf); delete f.dataset.re; $(".cre", f).hidden = true; f.querySelector("[name=s]").placeholder = "說點什麼…"; return; }
     const del = e.target.closest("[data-cdel]");
     if (del) talk(S.i, {del:del.dataset.cdel}).then(ok => { if (ok) { inf.querySelector(".italk").outerHTML = talkHTML(PH[S.i]); social(); } });
@@ -1442,17 +1469,29 @@ function lkWho(p){                                             // 「小明、�
   if (!ns.length) return String(n);
   return esc(ns.join("、")) + (n > ns.length ? ` 等 ${n} 人` : "");
 }
+/* 留言的輸入框平常收著，按了「留言」才展開（要用的時候才出現） */
+function cOpen(f, nofocus){
+  if (!f || !f.classList.contains("fold")) return;
+  const b = f.previousElementSibling;
+  f.classList.remove("fold");
+  if (b && b.matches("[data-cadd]")) b.hidden = true;
+  if (anim()) f.animate([{opacity:0, transform:"translateY(-6px) scale(.98)"}, {opacity:1, transform:"none"}], {duration:T.mid, easing:DEC});
+  if (nofocus) return;
+  const nm = f.querySelector("[name=n]");
+  (nm && !nm.value ? nm : f.querySelector("[name=s]")).focus();
+}
+document.addEventListener("click", e => { const b = e.target.closest("[data-cadd]"); if (b) cOpen(b.nextElementSibling); });
 /* 留言簿：在最後給整本留一句話 */
 const GB = "_gb";
 function gbook(){
   const box = $(".gbk"); if (!box) return;
   const cs = D.gb || [], nm = store.get("vsa-name"), sig = cs.map(c => c.id).join() + "|" + !!nm;
   box.hidden = !!WHO;
-  if (box.dataset.sig === sig) return;                         // 沒有新留言就不重畫（打到一半的字留著）
+  if (box.dataset.sig === sig || (box.dataset.sig && (box.querySelector(".gbf:not(.fold) [name=s]") || {}).value)) return;   // 沒有新留言就不重畫；打到一半的字留著
   box.dataset.sig = sig;
   box.innerHTML = `<div class="mh"><b>留言簿</b><span class="num">${cs.length ? `${cs.length} 則` : ""}</span></div>
     <div class="gbl">${cs.length ? cs.slice().reverse().map((c, k) => `<div class="gbc" style="--i:${Math.min(k, 8)}"><p>${esc(c.s)}</p><div class="gbn"><i class="av">${esc([...c.n][0] || "?")}</i><b>${esc(c.n)}</b><span>${ago(c.t)}</span>${c.me ? `<button class="cx" data-gbdel="${esc(c.id)}" aria-label="刪掉">${I("x")}</button>` : ""}</div></div>`).join("") : `<div class="gbe">${I("chat")}<span>看完了嗎？留一句話給${esc(D.name)}</span></div>`}</div>
-    <form class="cform gbf">${nm ? "" : `<input class="cin nm" name="n" maxlength="20" placeholder="你的名字" autocomplete="nickname">`}<div class="crow"><input class="cin" name="s" maxlength="300" placeholder="寫一句話…" autocomplete="off"><button class="csend" aria-label="送出">${I("send")}</button></div></form>`;
+    <button type="button" class="cadd" data-cadd>${I("pen")}<span>留一句話</span></button><form class="cform gbf fold">${nm ? "" : `<input class="cin nm" name="n" maxlength="20" placeholder="你的名字" autocomplete="nickname">`}<div class="crow"><input class="cin" name="s" maxlength="300" placeholder="寫一句話…" autocomplete="off"><button class="csend" aria-label="送出">${I("send")}</button></div></form>`;
 }
 async function gbPost(body){
   try {
@@ -1493,7 +1532,7 @@ function talkHTML(p){
   const cs = p.cm || [], nm = store.get("vsa-name");
   return `<div class="ibox italk"><div class="th"><b>留言</b>${p.lk ? `<span class="num lkw">${I("heart")}${lkWho(p)}</span>` : ""}${Object.entries(p.rx || {}).map(([e, n]) => `<span class="num"><i class="rxe">${e}</i>${n}</span>`).join("")}</div>
     ${talkOrder(cs).map(c => `<div class="cmt${c.r ? " rep" : ""}" data-cid="${esc(c.id)}"><div class="av">${esc([...c.n][0] || "?")}</div><div class="cb"><div class="cn"><b>${esc(c.n)}</b><span>${ago(c.t)}</span></div><p>${esc(c.s)}</p><button class="crep" data-crep="${esc(c.id)}" data-cn="${esc(c.n)}">回覆</button></div>${c.me ? `<button class="cx" data-cdel="${esc(c.id)}" aria-label="刪掉">${I("x")}</button>` : ""}</div>`).join("")}
-    <form class="cform"><div class="cre" hidden><span></span><button type="button" data-crex aria-label="不回覆了">${I("x")}</button></div>${nm ? "" : `<input class="cin nm" name="n" maxlength="20" placeholder="你的名字" autocomplete="nickname">`}<div class="crow"><input class="cin" name="s" maxlength="300" placeholder="${cs.length ? "說點什麼…" : "第一個留言"}" autocomplete="off"><button class="csend" aria-label="送出">${I("send")}</button></div></form></div>`;
+    <button type="button" class="cadd" data-cadd>${I("chat")}<span>${cs.length ? "留言" : "第一個留言"}</span></button><form class="cform fold"><div class="cre" hidden><span></span><button type="button" data-crex aria-label="不回覆了">${I("x")}</button></div>${nm ? "" : `<input class="cin nm" name="n" maxlength="20" placeholder="你的名字" autocomplete="nickname">`}<div class="crow"><input class="cin" name="s" maxlength="300" placeholder="說點什麼…" autocomplete="off"><button class="csend" aria-label="送出">${I("send")}</button></div></form></div>`;
 }
 /* ═════════ 選幾張一起下載 ═════════ */
 const SEL = {on:false, s:new Set()};
@@ -1720,9 +1759,9 @@ function show(start, day){
     const i = it.i, p = PH[i], d = pd(p.x.dt), L = document.createElement("div");
     L.className = "ssl";
     if (it.ch) {
-      const n = allDays.indexOf(it.ch) + 1, pl = dayPlaces(it.ch);
+      const n = allDays.indexOf(it.ch) + 1, sm = daySum(it.ch), pl = sm ? dayPlaces(it.ch).split("・")[0] : dayPlaces(it.ch);   // 有一句話時地點只寫城市（不重複）
       L.classList.add("sch");
-      L.innerHTML = `<img class="sbg" alt="" src="${src(p, "s")}"><div class="sct">${allDays.length > 1 ? `<i class="num">第 ${n} 天</i>` : ""}<b>${d ? fday(d, YR) : ""}</b>${pl ? `<span>${I("pin")}${esc(pl)}</span>` : ""}${wxTag(it.ch)}</div>`;
+      L.innerHTML = `<img class="sbg" alt="" src="${src(p, "s")}"><div class="sct">${allDays.length > 1 ? `<i class="num">第 ${n} 天</i>` : ""}<b>${d ? fday(d, YR) : ""}</b>${pl ? `<span>${I("pin")}${esc(pl)}</span>` : ""}${wxTag(it.ch)}${sm ? `<em class="dsum">${esc(sm)}</em>` : ""}</div>`;
       return L;
     }
     const where = p.p ? p.p.n : "", when = d ? `${d.y}年${d.mo}月${d.d}日` : "";
@@ -1997,7 +2036,11 @@ function highlights(){
   const ok = PH.map((p, i) => [p, i]).filter(([p]) => !p.broken && !p.raw);
   let pick = ok.filter(([p]) => p.lk > 0).sort((a, b) => b[0].lk - a[0].lk).slice(0, 8);
   const liked = pick.length >= 3;
-  if (!liked && ok.length >= 10) {
+  if (!liked && ok.length >= 10 && ok.some(([p]) => p.qs != null)) {   // 沒什麼人按愛心：挑拍得最好的（一疊只算一張、一天最多兩張）
+    const day = {}, n = Math.min(8, Math.max(3, Math.round(ok.length / 8)));
+    pick = ok.filter(([p, i]) => !isVid(p) && (!STKOF.has(i) || STKOF.get(i) === i)).sort((a, b) => (b[0].qs ?? 0) - (a[0].qs ?? 0))
+      .filter(([p]) => { const k = (pd(p.x.dt) || {}).k || ""; day[k] = (day[k] || 0) + 1; return day[k] <= 2; }).slice(0, n).sort((a, b) => a[1] - b[1]);
+  } else if (!liked && ok.length >= 10) {
     const land = ok.filter(([p]) => p.w > p.h && !isVid(p)), from = land.length >= 6 ? land : ok, n = Math.min(6, from.length);
     pick = Array.from({length:n}, (_, k) => from[Math.floor((k + .5) * from.length / n)]);
   } else if (!liked) pick = [];

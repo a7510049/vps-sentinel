@@ -418,12 +418,38 @@ class AlbumThumbs(Server):
         subprocess.run([*ff, *src, "-plays", "0", "-f", "apng", os.path.join(d, "b.png")], check=True)
         subprocess.run([*ff, *src, "-loop", "0", "-c:v", "libwebp", "-f", "webp", os.path.join(d, "c.webp")], check=True)
         subprocess.run([*ff, *src, "-frames:v", "1", os.path.join(d, "d.gif")], check=True)
+        d = os.path.join(ROOT_DIR + "-t", "智慧")
+        os.makedirs(d, exist_ok=True)
+        subprocess.run([*ff, "-f", "lavfi", "-i", "testsrc2=s=1600x1200", "-frames:v", "1", os.path.join(d, "a.jpg")], check=True)
+        subprocess.run([*ff, "-f", "lavfi", "-i", "testsrc2=s=1600x1200", "-frames:v", "1", "-vf", "gblur=sigma=8", os.path.join(d, "b.jpg")], check=True)
+        subprocess.run([*ff, "-f", "lavfi", "-i", "testsrc2=s=1600x1200", "-frames:v", "1", "-vf", "eq=brightness=-0.45", os.path.join(d, "c.jpg")], check=True)
         super().setUpClass()
 
     @classmethod
     def tearDownClass(cls):
         super().tearDownClass()
         shutil.rmtree(ROOT_DIR + "-t", ignore_errors=True)
+
+    def test_smart(self):
+        """主機替每張打分數：清楚、曝光正常的比拍糊、太暗的高；長得像的指紋只差幾格"""
+        c = http.client.HTTPConnection("127.0.0.1", self.port, timeout=60)
+        c.request("POST", "/api/album", body=json.dumps({"action": "add", "dir": "智慧"}), headers={"X-Token": TOKEN})
+        code = next(x for x in json.loads(c.getresponse().read())["list"] if x["dir"] == "智慧")["code"]
+        deadline, ps = time.time() + 40, {}
+        while time.time() < deadline:
+            c.request("GET", f"/a/{code}/m")
+            ps = {p["n"]: p for p in json.loads(c.getresponse().read())["photos"]}
+            if len(ps) == 3 and all("qs" in p for p in ps.values()):
+                break
+            time.sleep(0.5)
+        else:
+            self.fail(f"分數沒有算出來：{ps}")
+        a, b, k = ps["a.jpg"], ps["b.jpg"], ps["c.jpg"]
+        self.assertGreater(a["qs"], b["qs"] + 10)                                     # 拍糊的分數低
+        self.assertGreater(a["qs"], k["qs"] + 10)                                     # 太暗的分數低
+        ham = bin(int(a["dh"], 16) ^ int(b["dh"], 16)).count("1")
+        self.assertLessEqual(ham, 10)                                                  # 同一個畫面：指紋幾乎一樣
+        self.assertTrue(any(f.endswith("-a.json") for f in os.listdir(os.path.join(self.tmp.name, "data", "album-cache"))))
 
     def test_thumbs(self):
         c = http.client.HTTPConnection("127.0.0.1", self.port, timeout=60)

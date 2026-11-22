@@ -1120,3 +1120,22 @@ button.dct:active{transform:scale(.92)}
 
 /* 誰按了愛心 */
 .lkw{display:inline-flex;align-items:center;gap:4px;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+
+/* 每天一句話（早上在哪、下午到哪、走了幾公里） */
+.dsum{grid-column:1;font-style:normal;font-family:var(--serif);font-size:var(--fs-m);line-height:1.6;color:var(--tx2);letter-spacing:.02em;margin-top:2px;text-wrap:pretty}
+.day.cov .dsum{color:rgba(255,255,255,.9);text-shadow:0 1px 10px rgba(0,0,0,.4)}
+.wall[data-z="2"] .dsum,.wall[data-z="3"] .dsum{display:none}
+.sct .dsum{color:rgba(255,255,255,.85);font-size:var(--fs-l);max-width:30em;margin-top:4px}
+
+/* 留言輸入框平常收著：只放一顆鈕 */
+.cform.fold{display:none}
+.cadd{margin-top:10px;display:inline-flex;align-items:center;gap:8px;height:40px;padding:0 16px;border-radius:var(--r-pill);background:var(--s2);color:var(--tx2);font:600 var(--fs-m)/1 var(--font);transition:transform var(--sp-fast),background var(--t-fast)}
+.cadd svg{width:17px;height:17px;color:var(--p)}
+.cadd:active{transform:scale(.95)}
+.gbk .cadd{display:flex;margin:16px auto 0}
+.gbk .cadd[hidden],.cadd[hidden]{display:none}
+/* 「回覆」平常藏著：點那則留言（電腦滑鼠指著）才出現 */
+.crep{display:block;max-height:0;opacity:0;overflow:hidden;padding:0;margin-top:0;transition:max-height var(--t-mid) var(--ease),opacity var(--t-fast) var(--ease),padding var(--t-mid) var(--ease)}
+.cmt.on .crep{max-height:28px;opacity:1;padding:4px 0}
+@media (hover:hover){.cmt:hover .crep{max-height:28px;opacity:1;padding:4px 0}}
+.cmt{cursor:default;-webkit-tap-highlight-color:transparent}

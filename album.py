@@ -18,9 +18,9 @@ ALB_LIVE = 3.6                                                    # 跟照片同
 ALB_VCH = 1 << 20                                                 # 影片分段加密，每段 1 MB（拖進度條只解要的那幾段）
 ALB_TALK = os.path.join(DATA_DIR, "album-talk.json")              # 朋友的愛心、留言（加密，SEAL_FILES；跟著備份）
 ALB_TALK_MAX = (300, 20, 200, 3000)                               # 一則留言幾個字、名字幾個字、一張最多幾則、一本最多幾則
-ALB_RX = ("😂", "😮", "👍", "🥹")
+ALB_RX = ("😂", "😮", "👍", "🥹")                                # 愛心以外能按的表情
 ALB_GB = "_gb"                                                    # 留言簿（整本的留言）存在 album-talk.json 這個代號底下
-ALB_INTRO = 300                                                   # 相簿介紹最多幾個字                                  # 愛心以外能按的表情
+ALB_INTRO = 300                                                   # 相簿介紹最多幾個字
 ALB_TIMES = (86400, 7 * 86400, 30 * 86400, 0)                     # 能選的期限（0 = 不會過期）
 ALB_MAX = 2000                                                    # 一本最多幾張
 ALB_PW_TRY = (5, 15 * 60)                                         # 同一個來源 15 分鐘錯 5 次先鎖住
@@ -1495,7 +1495,7 @@ def alb_ff_give(path):
             pass
 
 
-def alb_run_ff(args, data=None, src=None, timeout=120):
+def alb_run_ff(args, data=None, src=None, timeout=120, raw=0):
     ff = alb_ff()
     if not ff:
         return None
@@ -1515,6 +1515,8 @@ def alb_run_ff(args, data=None, src=None, timeout=120):
     finally:
         if fin:
             fin.close()
+    if raw:                                             # 要的是原始像素：長度對才算
+        return r.stdout if r.returncode == 0 and len(r.stdout) == raw else None
     return r.stdout if r.returncode == 0 and r.stdout[:2] == b"\xff\xd8" else None
 
 
@@ -1584,7 +1586,88 @@ def alb_make(a, pid, m):
     for kind, b in (("l", big), ("q", tiny or b""), ("s", small)):   # 小圖最後寫：有小圖就代表三個都好了
         if b:
             sec_write(alb_cfile(ck, kind), b)
+    alb_qa_make(a, pid, m, big)
     return True
+
+
+# ── 智慧挑照片：清不清楚、曝光好不好（給每張打分數），長得像不像（給每張一個指紋） ──
+ALB_QA_N = 384                                    # 縮成 384×384 的灰階來算
+ALB_QAK = {}                                      # 相簿 → 上次補算分數的時間
+ALB_QA = {}                                       # 快取鍵 → {"s": 分數, "h": 指紋}（讀過的記在記憶體，不用每次解密）
+
+
+def alb_qa_calc(big):
+    """回傳 {"s": 0～100 分, "h": 16 碼指紋}；算不出來回 None"""
+    n = ALB_QA_N
+    px = alb_run_ff(["-f", "mjpeg", "-i", "pipe:0", "-vf", f"scale={n}:{n}:flags=area,format=gray", "-f", "rawvideo", "-pix_fmt", "gray", "-"], data=big, raw=n * n)
+    if not px:
+        return None
+    rows = [px[y * n:(y + 1) * n] for y in range(n)]
+    g, cs = 6, n // 6                             # 清不清楚：切成 6×6 格，每格算邊緣的變化量，拿最清楚的三格（背景模糊的人像也算清楚）
+    sm, sq, ct = [0.0] * (g * g), [0.0] * (g * g), [0] * (g * g)
+    for y in range(1, n - 1):
+        r, u, d, gy = rows[y], rows[y - 1], rows[y + 1], min(g - 1, y // cs) * g
+        lap = [4 * c - a - b - e - f for c, a, b, e, f in zip(r[1:-1], r[:-2], r[2:], u[1:-1], d[1:-1])]
+        for k in range(g):
+            seg = lap[max(0, k * cs - 1):(k + 1) * cs - 1]
+            sm[gy + k] += sum(seg)
+            sq[gy + k] += sum(v * v for v in seg)
+            ct[gy + k] += len(seg)
+    var = sorted((sq[k] / ct[k] - (sm[k] / ct[k]) ** 2 for k in range(g * g) if ct[k]), reverse=True)
+    v = sum(var[:3]) / 3 if len(var) >= 3 else 0
+    hist = [0] * 256
+    for r in rows:
+        for c in r:
+            hist[c] += 1
+    tot = n * n
+    mean = sum(i * c for i, c in enumerate(hist)) / tot
+    std = (sum(c * (i - mean) ** 2 for i, c in enumerate(hist)) / tot) ** .5
+    clip = (sum(hist[:6]) + sum(hist[251:])) / tot   # 全黑、過曝的比例
+    sh = min(1, max(0, (math.log10(max(v, 1)) - 2) / 1.6))   # 2048 大圖輕微手震約 1000、拍糊約 100～400、清楚的 3000 以上
+    ex = (1 - min(1, abs(mean - 120) / 105) ** 2) * (1 - min(1, max(0, clip - .02) * 4))
+    co = min(1, std / 60)
+    bits = 0                                      # 指紋：縮成 9×8 格，每格跟右邊那格比亮暗
+    for y in range(8):
+        ys = range(y * n // 8, (y + 1) * n // 8, 4)
+        cells = []
+        for x in range(9):
+            xs = range(x * n // 9, (x + 1) * n // 9, 4)
+            cells.append(sum(rows[yy][xx] for yy in ys for xx in xs))
+        for x in range(8):
+            bits = bits << 1 | (cells[x] > cells[x + 1])
+    return {"s": round(100 * (.5 * sh + .3 * ex + .2 * co)), "h": f"{bits:016x}"}
+
+
+def alb_qa_get(ck):
+    if ck in ALB_QA:
+        return ALB_QA[ck]
+    try:
+        q = json.loads(sec_read(os.path.join(ALB_CACHE, f"{ck}-a.json")))
+    except (OSError, ValueError):
+        return None
+    if len(ALB_QA) > 20000:
+        ALB_QA.clear()
+    ALB_QA[ck] = q
+    return q
+
+
+def alb_qa_make(a, pid, m, big=None):
+    """算這張的分數、指紋（影片不算）；big 沒給就拿做好的大圖"""
+    if m.get("vid") or m.get("bad"):
+        return
+    ck = alb_ckey(a, pid, m)
+    fn = os.path.join(ALB_CACHE, f"{ck}-a.json")
+    if os.path.exists(fn):
+        return
+    if big is None:
+        try:
+            big = sec_read(alb_cfile(ck, "l"))
+        except (OSError, ValueError):
+            return
+    q = alb_qa_calc(big)
+    if q:
+        sec_write(fn, json.dumps(q).encode())
+        ALB_QA[ck] = q
 
 
 def alb_get(a, pid, kind):
@@ -1759,6 +1842,12 @@ def alb_worker():
                             ok = alb_make(a, pid, m)
                         if not ok:
                             alb_mark_bad(a, pid)
+                for pid in idx.get("order", []):        # 以前做好的小圖：補算分數、指紋
+                    if aid not in alb_all():
+                        break
+                    m = idx["ph"][pid]
+                    if os.path.exists(alb_cfile(alb_ckey(a, pid, m), "s")):
+                        alb_qa_make(a, pid, m)
                 if a.get("loc"):
                     for pid in idx.get("order", []):
                         g = idx["ph"][pid].get("g")
@@ -1800,7 +1889,7 @@ def alb_gc():
             keep.add(alb_ckey(a, pid, m))
     try:
         for fn in os.listdir(ALB_CACHE):
-            m = re.fullmatch(r"\.?([0-9a-f]{24})-(?:[slq]\.jpg|[vm](?:-\d+\.bin|\.json|\.mp4))", fn)
+            m = re.fullmatch(r"\.?([0-9a-f]{24})-(?:[slq]\.jpg|a\.json|[vm](?:-\d+\.bin|\.json|\.mp4))", fn)
             if m and m[1] not in keep:
                 os.remove(os.path.join(ALB_CACHE, fn))
     except OSError:
@@ -2104,6 +2193,9 @@ def alb_manifest(a, th=""):
                 it["gf"] = 1                           # 會動的 GIF、PNG：看大圖時自己一直動
         if m.get("anim") == 2 and not m.get("bad") and not alb_wm_bake(a):
             it["gf"] = 2                               # 會動的 WebP：瀏覽器自己放（/i/編號/a）
+        qa = None if m.get("vid") else alb_qa_get(ck)
+        if qa:                                         # 智慧挑照片：分數、長得像不像的指紋
+            it["qs"], it["dh"] = qa["s"], qa["h"]
         if pid in talk:
             it.update(talk[pid])
         u = upd.get(pid)
@@ -2133,7 +2225,10 @@ def alb_manifest(a, th=""):
                 wx[day] = w
             elif (k := f"w{g[0]:.1f},{g[1]:.1f},{day}") not in alb_places() and day <= time.strftime("%Y%m%d") and time.time() - ALB_WXF.get(k, 0) >= 3600:
                 wx_miss = True
-    if alb_ready(a, idx) < 1 or any(x.get("vr") == -1 for x in out) or (a["loc"] and (old_pl or wx_miss or any("g" in x and "p" not in x for x in out))):
+    qa_miss = any("qs" not in x and "vd" not in x and "raw" not in x for x in out) and time.time() - ALB_QAK.get(a["id"], 0) > 3600 and alb_ff()
+    if qa_miss:                                        # 以前做好的照片還沒打分數（一小時最多補一次，算不出來的不一直重來）
+        ALB_QAK[a["id"]] = time.time()
+    if alb_ready(a, idx) < 1 or any(x.get("vr") == -1 for x in out) or qa_miss or (a["loc"] and (old_pl or wx_miss or any("g" in x and "p" not in x for x in out))):
         alb_kick(a["id"])
     wmo = a.get("wm") if a.get("wm") and not alb_wm_bake(a) else ""
     return {"ok": True, "name": a["name"], "photos": out, "dl": alb_dl(a), "loc": a["loc"], "exp": a["exp"], "es": a.get("es") or a.get("t0", 0), "wmo": wmo, "wx": wx, "intro": a.get("intro", ""), "gb": talk.get(ALB_GB, {}).get("cm", []) if a.get("talk", True) else [],
