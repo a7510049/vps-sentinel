@@ -1857,6 +1857,15 @@ function openLb(i, from){
     add(G("iso"), a.iso, b.iso, v => gIso(v), v => String(Math.round(v)), 1);
     add(G("fl"), a.f35, b.f35, v => gFov(v), v => `${Math.round(v)} mm`, 1);
     add(G("ev"), a.ev, b.ev, v => gEv(v), v => `${v > 0 ? "+" : ""}${v.toFixed(1)} ev`, 0);
+    const l0 = lvOf(q), l1 = lvOf(p), lc = inf.querySelector('.iset [data-gk="lv"]');   // 光線：三角形沿著尺滑過去、LV 數字跟著跳
+    if (lc && l0 != null && l1 != null && l0 !== l1) { const sv = lc.querySelector("svg"), sm = lc.querySelector("small"), fin = sm.textContent;
+      jobs.push(t => { const n = document.createRange().createContextualFragment(gLv(l0 + (l1 - l0) * t)).firstChild; sv.replaceChildren(...n.childNodes); sm.textContent = t < 1 ? `光線 LV ${Math.round(l0 + (l1 - l0) * t)}` : fin; });
+      keep.add(box(lc)); }
+    const d0 = dofOf(q), d1 = dofOf(p), dc = inf.querySelector('.iset [data-gk="dof"]');   // 景深：清楚的那段、對焦線從上一張的位置移過來
+    if (dc && d0 && d1) { const P0 = dofX(d0), P1 = dofX(d1);
+      if (P0.some((v, k) => Math.abs(v - P1[k]) > .05)) { const sv = dc.querySelector("svg");
+        jobs.push(t => { const n = document.createRange().createContextualFragment(gDof(d1, P0.map((v, k) => v + (P1[k] - v) * t))).firstChild; sv.replaceChildren(...n.childNodes); });
+        keep.add(box(dc)); } }
     const da = pd(a.dt), db = pd(b.dt), sn = inf.querySelector(".ihd .gsun");
     if (da && db && da.h != null && db.h != null && sn && !a.dtf && !b.dtf) {
       const h0 = da.h + da.mi / 60, h1 = db.h + db.mi / 60;
@@ -2995,8 +3004,9 @@ function dofOf(p){
 const dofN = (v, d) => v >= 10 ? String(Math.round(v)) : v.toFixed(d);
 const dofM = (v, u) => v < 1 ? `${Math.round(v * 100)} ${u ? "cm" : "公分"}` : `${dofN(v, 1)} ${u ? "m" : "公尺"}`;   // u：格子裡用短的單位（跟 mm、s 一樣）
 const dofR = (a, b) => b < 1 ? `${Math.round(a * 100)}～${Math.round(b * 100)} cm` : `${dofN(a, b - a < .3 ? 2 : 1)}～${dofN(b, b - a < .3 ? 2 : 1)} m`;
-const gDof = d => {                                          // 一條往前的距離線：清楚的那段亮起來，對焦的地方一條直線（離越遠壓得越扁）
-  const R = d.s, X = v => v === Infinity ? 21.5 : 5 + 16.5 * v / (v + R), a = X(d.n), b = X(d.f), c = X(d.s);
+const dofX = d => { const R = d.s, X = v => v === Infinity ? 21.5 : 5 + 16.5 * v / (v + R); return [X(d.n), X(d.f), X(d.s)]; };   // 景深圖上近、遠、對焦三個位置（換張時照這三個位置慢慢移）
+const gDof = (d, P) => {                                     // 一條往前的距離線：清楚的那段亮起來，對焦的地方一條直線（離越遠壓得越扁）
+  const [a, b, c] = P || dofX(d);
   return `<svg class="gin gb" viewBox="0 0 24 24" aria-hidden="true"><path d="M1.5 13l3.5-3v6Z" class="gd"/><rect x="${a.toFixed(1)}" y="6" width="${Math.max(.8, b - a).toFixed(1)}" height="13" rx="2" class="gf"/><path d="M5 19.5H22.5" class="gs"/><path d="M${c.toFixed(1)} 3V21" class="gl"/></svg>`;
 };
 /* 光線：照光圈、快門、ISO（再扣掉曝光補償）算現場的亮度 LV（ISO 100 的曝光值）；閃光燈打過的不算 */
@@ -3194,8 +3204,8 @@ function infoHTML(p){
   if (x.wb != null) st.push([gWb(x.wb), x.wb ? "手動" : "自動", "白平衡"]);
   if (x.sc && SC[x.sc]) st.push([gDial("SCN"), SC[x.sc], "場景"]);
   if (x.afp && !isVid(p)) st.push([gAf(p), p.fm ? "可能跑焦" : p.fs >= 60 ? "清楚" : "標出位置", "對焦點", ` class="iaf${AFON ? " on" : ""}${p.fm ? " miss" : ""}" data-af role="button" tabindex="0" aria-pressed="${AFON}"`]);
-  { const dof = dofOf(p); if (dof) st.push([gDof(dof), dof.t, dof.k]); }
-  { const lv = lvOf(p); if (lv != null) st.push([gLv(lv), lvName(lv), `光線 LV ${Math.round(lv)}`]); }
+  { const dof = dofOf(p); if (dof) st.push([gDof(dof), dof.t, dof.k, ` data-gk="dof"`]); }
+  { const lv = lvOf(p); if (lv != null) st.push([gLv(lv), lvName(lv), `光線 LV ${Math.round(lv)}`, ` data-gk="lv"`]); }
   { const sk = shakeOf(p); if (sk) st.push([gShake, "可能手震", `安全快門 1/${sk}`, ` class="warn"`]); }
   { const c = STKOF.get(PH.indexOf(p)); if (c != null && STKB.has(c)) { const ev = STK.get(c).map(i => PH[i].x.ev).sort((a, b) => a - b);
     kv.push(["包圍曝光", `${ev.length} 張・${ev.map(v => `${v > 0 ? "+" : v < 0 ? "−" : "±"}${Math.abs(+v.toFixed(1))}`).join(" / ")} EV`]); } }
