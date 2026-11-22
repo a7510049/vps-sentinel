@@ -735,6 +735,7 @@ function draw(){
   smapOn();
   sections();
   layout();
+  wallWatch();
   mems();
   bigMap();
   gear();
@@ -973,7 +974,13 @@ function layout(force){
     box.replaceChildren(frag);
   });
 }
-let RZ;
+let RZ, WRO;
+function wallWatch(){                                         // 照片牆的寬度一變就重排（打開時量到的寬度偶爾不對，只靠視窗大小改變不夠）
+  if (!("ResizeObserver" in window)) return;
+  if (WRO) WRO.disconnect();
+  WRO = new ResizeObserver(() => { const rw = $(".wall .rows"), w = rw && rw.clientWidth; if (w && Math.abs(w - LW) >= 1) requestAnimationFrame(() => layout()); });
+  WRO.observe($(".wall"));
+}
 addEventListener("resize", () => { clearTimeout(RZ); RZ = setTimeout(() => { if (smapOn()) smapWatch(); layout(); bigMap(); smapGo(SMK, true); if (LB) LB.fitAll(); }, 120); });
 
 /* 捲動：封面慢一點往上（視差）、標題淡掉，捲過封面上面浮出一條 */
