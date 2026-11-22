@@ -39,7 +39,7 @@ const P = {
   wstorm:'<path d="M7 14h10.5a4 4 0 0 0 .5-8 6 6 0 0 0-11.4 1.6A3.3 3.3 0 0 0 7 14Z"/><path d="m12.5 15-2 3.5h3l-2 3.5"/>',
   cam:'<path d="M3.5 8.5a2 2 0 0 1 2-2h2.3l1.5-2.2h5.4l1.5 2.2h2.3a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2h-13a2 2 0 0 1-2-2Z"/><circle cx="12" cy="13" r="3.6"/>',
   lens:'<circle cx="12" cy="12" r="8.5"/><circle cx="12" cy="12" r="4.5"/><path d="M12 3.5v4.5M19.4 16.3l-3.9-2.3M4.6 16.3l3.9-2.3"/>',
-  send:'<path d="M4.5 12h13M12.5 6l6 6-6 6"/>', find:'<circle cx="11" cy="11" r="6.5"/><path d="m20 20-4.4-4.4"/>', scr:'<rect x="3" y="4.5" width="18" height="12" rx="2"/><path d="M9 20h6M12 16.5V20"/>', pen:'<path d="M4 20h4L19 9a2.8 2.8 0 0 0-4-4L4 16v4Z"/><path d="m13.5 6.5 4 4"/>', again:'<path d="M4 12a8 8 0 1 0 2.4-5.7L4 8.5M4 4v4.5h4.5"/>'
+  send:'<path d="M4.5 12h13M12.5 6l6 6-6 6"/>', find:'<circle cx="11" cy="11" r="6.5"/><path d="m20 20-4.4-4.4"/>', ng:'<rect x="3.5" y="3.5" width="17" height="17" rx="3"/><rect x="8" y="8" width="8" height="8" rx="1.2"/>', hue:'<circle cx="12" cy="12" r="8.5"/><path d="M12 3.5v17M3.5 12h17M6 6l12 12M18 6 6 18"/>', scr:'<rect x="3" y="4.5" width="18" height="12" rx="2"/><path d="M9 20h6M12 16.5V20"/>', pen:'<path d="M4 20h4L19 9a2.8 2.8 0 0 0-4-4L4 16v4Z"/><path d="m13.5 6.5 4 4"/>', again:'<path d="M4 12a8 8 0 1 0 2.4-5.7L4 8.5M4 4v4.5h4.5"/>'
 };
 const I = n => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${P[n]}</svg>`;
 const src = (p, k) => `${BASE}/i/${p.i}/${k}?v=${p.v}`;
@@ -55,7 +55,9 @@ let CITY = "";                                               // 只看哪個城�
 const cityKey = p => p.p && p.p.c ? `${p.p.cc || ""}|${p.p.c}` : "";
 let GEAR = "";                                               // 只看哪台相機（c:名稱）或哪顆鏡頭（l:名稱）
 const gearOf = (p, k) => k[0] === "c" ? camName(p.x) === k.slice(2) : lensName(p.x) === k.slice(2);
-const pickW = () => { const t = SQ ? sqTerms(SQ) : null; return ALL.filter(p => (p.u || "") === WHO && (!CITY || cityKey(p) === CITY) && (!GEAR || gearOf(p, GEAR)) && (!t || sqHit(p, t))); };
+const pickW = () => { const t = SQ ? sqTerms(SQ) : null, l = ALL.filter(p => (p.u || "") === WHO && (!CITY || cityKey(p) === CITY) && (!GEAR || gearOf(p, GEAR)) && (!t || sqHit(p, t)));
+  return HUE ? l.map((p, k) => [p, p._hk || [COLS.length + 2, 0, 0], k]).sort((a, b) => a[1][0] - b[1][0] || a[1][1] - b[1][1] || a[1][2] - b[1][2] || a[2] - b[2]).map(x => x[0]) : l; };
+let HUE = 0;                                                  // 照顏色排：紅、橘、黃…一路排成彩虹
 
 /* ── 日期：EXIF 的「2026:11:03 14:22:10」是拍照當地的時間，照原樣顯示 ── */
 const WD = "日一二三四五六";
@@ -194,6 +196,7 @@ const dham = (a, b) => { let n = 0; for (let k = 0; k < 16; k += 8) { let x = (p
 const best = list => list.reduce((b, i) => (PH[i].qs ?? -1) > (PH[b].qs ?? -1) ? i : b, list[0]);   // 分數最高的那張（主機算的：清楚、曝光好）
 function stackCalc(){
   STK = new Map(); STKOF = new Map();
+  if (HUE) return;                                            // 照顏色排時前後不是同一時間拍的，不收成一疊
   const sec = p => { const d = pd(p.x.dt); if (!d || p.x.dtf) return null; const m = /:(\d\d)$/.exec(p.x.dt.slice(0, 19)); return Date.UTC(d.y, d.mo - 1, d.d, d.h, d.mi, m ? +m[1] : 0) / 1000; };
   let run = [], like = 0;                                     // like：這一串是因為長得像才收在一起（兩張就收）
   const end = () => { if (run.length >= 3 || (run.length === 2 && like)) { const c = best(run); STK.set(c, run.slice()); run.forEach(i => STKOF.set(i, c)); } run = []; like = 0; };
@@ -239,6 +242,11 @@ function stackToggle(c){                                    // 攤開／收起�
 const ZMUL = [1.7, 1, .62, .36];
 let ZL = Math.min(3, Math.max(0, +store.get("vsa-zoom") || 1));
 function groupsOf(z){
+  if (HUE) {                                                 // 照顏色排：一個色系一段
+    const by = new Map();
+    PH.forEach((p, i) => { const c = (p._hk || [COLS.length + 2])[0]; if (!by.has(c)) by.set(c, {k:"c" + c, c, list:[]}); by.get(c).list.push(i); });
+    return [...by.values()];
+  }
   const days = [...new Set(PH.map(p => (pd(p.x.dt) || {}).k).filter(Boolean))];
   if (z === 3) {                                             // 按月份
     const by = {};
@@ -255,10 +263,12 @@ function groupsOf(z){
 function sections(){
   GROUPS = groupsOf(ZL);
   const w = $(".wall"); w.dataset.z = ZL;
-  w.innerHTML = GROUPS.map((g, gi) => `<section class="day" data-g="${gi}">${g.k && g.d ? g.m
+  w.innerHTML = GROUPS.map((g, gi) => `<section class="day" data-g="${gi}">${g.c != null ? `<div class="dh hue" data-k="${g.k}"><b>${hueDot(g.c)}${HUEN(g.c)}</b><i class="dct num">${g.list.length}</i></div>` : g.k && g.d ? g.m
     ? `<div class="dh" data-k="m${g.k}"><b>${g.d.y}年${g.d.mo}月</b><span class="num">${g.list.length}</span></div>`
     : `<div class="dh" data-day="${g.k}" data-k="d${g.k}"><b>${fday(g.d, YR)}${wxTag(g.k)}</b>${((pl, sm) => `<span>${pl ? `${I("pin")}${esc(sm ? pl.split("・")[0] : pl)}` : ""}</span>${sm ? `<i class="dsum">${esc(sm)}</i>` : ""}`)(dayPlaces(g.k), daySum(g.k))}${g.list.length > 1 ? `<button class="dct num" data-dplay="${g.k}" aria-label="播放這天">${I("play")}${g.list.length}</button>` : `<i class="dct num">${g.list.length}</i>`}${dayClock(g.list)}</div>` : ""}<div class="rows"></div></section>`).join("");
 }
+const HUEN = c => c < COLS.length ? COLS[c][0] + "色" : ["淡色", "黑白", "其他"][c - COLS.length];
+const hueDot = c => c < COLS.length ? `<i class="cdot" style="background:${COLS[c][2]}"></i>` : `<i class="cdot ${["mu", "bw", "mu"][c - COLS.length]}"></i>`;
 /* 那天的天氣：主機照拍照的地點、日期查的（世界氣象組織的天氣代碼） */
 function wxIco(c){ return c <= 1 ? "wsun" : c <= 3 ? "wpart" : c <= 48 ? "wfog" : c >= 95 ? "wstorm" : (c >= 71 && c <= 77) || c === 85 || c === 86 ? "wsnow" : c >= 51 ? "wrain" : "wcld"; }
 const WXN = {wsun:"晴", wpart:"多雲", wcld:"陰", wfog:"霧", wrain:"雨", wsnow:"雪", wstorm:"雷雨"};
@@ -458,27 +468,31 @@ function colorsAll(){
     im.onload = () => {
       const w = cv.width = Math.min(24, im.width), h = cv.height = Math.max(1, Math.round(im.height * w / im.width));
       cx.drawImage(im, 0, 0, w, h);
-      const px = cx.getImageData(0, 0, w, h).data, wt = COLS.map(() => 0);
-      let col = 0, n = 0;
+      const px = cx.getImageData(0, 0, w, h).data, wt = COLS.map(() => 0), hs = COLS.map(() => [0, 0]);
+      let col = 0, n = 0, Ls = 0, ax = 0, ay = 0;
       for (let k = 0; k < px.length; k += 4) {
         const R = px[k] / 255, G = px[k + 1] / 255, B = px[k + 2] / 255, mx = Math.max(R, G, B), mn = Math.min(R, G, B), c = mx - mn;
-        n++;
+        n++; Ls += mx;
+        if (mx > .1 && c > .03) { const h0 = (mx === R ? ((G - B) / c) % 6 : mx === G ? (B - R) / c + 2 : (R - G) / c + 4) * Math.PI / 3; ax += Math.cos(h0) * c; ay += Math.sin(h0) * c; }
         if (mx < .18 || c / mx < .28 || c < .12) continue;
         let hu = mx === R ? ((G - B) / c) % 6 : mx === G ? (B - R) / c + 2 : (R - G) / c + 4;
         hu = (hu * 60 + 360) % 360;
         let b = 0, bd = 999;
         COLS.forEach(([, h0], j) => { const dd = Math.min(Math.abs(hu - h0), 360 - Math.abs(hu - h0)); if (dd < bd) { bd = dd; b = j; } });
-        wt[b] += c * mx; col++;
+        wt[b] += c * mx; col++; hs[b][0] += Math.cos(hu * Math.PI / 180) * c * mx; hs[b][1] += Math.sin(hu * Math.PI / 180) * c * mx;
       }
       const sum = wt.reduce((a, b) => a + b, 0), out = [];
       if (col / n < .03 || /單色|ACROS|黑白|棕褐/.test((p.x.ms || {}).st || "")) out.push("黑白");
       else if (col / n >= .12) wt.map((v, j) => [v, j]).sort((a, b) => b[0] - a[0]).slice(0, 2).forEach(([v, j]) => { if (v >= sum * .3) out.push(COLS[j][0]); });
-      p._co = out; p._st = ""; res();
+      p._co = out; p._st = "";
+      const deg = (x, y) => (Math.atan2(y, x) * 180 / Math.PI + 360) % 360, top = wt.indexOf(Math.max(...wt));   // 照顏色排：哪一色系、色相、亮度
+      p._hk = out[0] === "黑白" ? [COLS.length + 1, 0, -Ls / n] : col / n >= .06 ? [top, (deg(...hs[top]) - COLS[top][1] + 540) % 360 - 180, -Ls / n] : [COLS.length, deg(ax, ay), -Ls / n];
+      res();
     };
     im.onerror = () => res();
     im.src = `data:image/jpeg;base64,${p.q}`;
   });
-  return COLQ = (async () => { const ps = ALL.filter(p => !p.u); for (let k = 0; k < ps.length; k++) { await one(ps[k]); if (k % 40 === 39) await new Promise(r => setTimeout(r)); } })();
+  return COLQ = (async () => { const ps = ALL; for (let k = 0; k < ps.length; k++) { await one(ps[k]); if (k % 40 === 39) await new Promise(r => setTimeout(r)); } })();
 }
 function srchSugg(){                                         // 建議：這本真的有的才列（有幾張寫在後面）
   const base = ALL.filter(p => (p.u || "") === WHO), cnt = q => base.filter(p => sqHit(p, sqTerms(q))).length, out = [];
@@ -512,7 +526,7 @@ function srchOpen(){
   SH = {close(){ if (SH && SH.bg === bg) SH = null; bg.classList.remove("on"); bg.style.pointerEvents = "none"; inp.blur(); setTimeout(() => bg.remove(), T.mid + 50); }, bg};
   history.pushState({sh:1}, "");
   let hits = [], shown = "";
-  const sugg = () => { sqs.innerHTML = srchSugg().map(([g, l]) => `<div class="sqg"><small>${g}</small><div>${l.map(([q, n]) => sqChip(q, n)).join("")}</div></div>`).join(""); };
+  const sugg = () => { sqs.innerHTML = `<button class="sqhue${HUE ? " on" : ""}" data-hue><i class="rbw"></i><span><b>照顏色排</b><small>${HUE ? "正在照顏色排" : "紅、橘、黃…排成一條彩虹"}</small></span>${I(HUE ? "ck" : "r")}</button>` + srchSugg().map(([g, l]) => `<div class="sqg"><small>${g}</small><div>${l.map(([q, n]) => sqChip(q, n)).join("")}</div></div>`).join(""); };
   const run = () => {
     const q = inp.value.trim(), terms = sqTerms(q);
     clr.hidden = !q;
@@ -537,6 +551,7 @@ function srchOpen(){
     if (e.target === bg) return popBack();
     const c = e.target.closest("[data-sq]"); if (c) { inp.value = c.dataset.sq; run(); return; }
     if (e.target.closest("[data-sqgo]")) return go(inp.value);
+    if (e.target.closest("[data-hue]")) { const on = !HUE; popBack(); setTimeout(() => hueSet(on), anim() ? T.mid : 0); return; }
     const t = e.target.closest("[data-sqi]"); if (t) return go(inp.value, t.dataset.sqi);
   });
   sugg(); run();
@@ -549,7 +564,7 @@ function memsOf(){
   const ok = i => !PH[i].broken && (!isVid(PH[i]) || PH[i].vr === 1);
   const by = {}, order = [];
   PH.forEach((p, i) => { const d = pd(p.x.dt); if (!d) return; if (!by[d.k]) { by[d.k] = {k:d.k, d, list:[]}; order.push(d.k); } by[d.k].list.push(i); });
-  let gs = order.map(k => by[k]);
+  let gs = order.sort().map(k => by[k]);
   const dn = d => Date.UTC(d.y, d.mo - 1, d.d) / 864e5;
   if (gs.length > 1 && dn(gs[gs.length - 1].d) - dn(gs[0].d) <= 30)   // 一趟旅行：第幾天
     gs = gs.map(g => ({...g, t:`第${dn(g.d) - dn(gs[0].d) + 1}天`, s:`${g.d.mo}月${g.d.d}日`}));
@@ -670,18 +685,47 @@ function whoBar(){
   nav.innerHTML = `<div class="whr">${tabs.map(([w, l, ic]) => `<button class="chip${w === WHO ? " on" : ""}" data-who="${esc(w)}">${ic ? I(ic) : `<i class="av">${esc([...l][0])}</i>`}<span>${esc(l)}</span><small class="num">${cnt(w)}</small></button>`).join("")}</div>`;
 }
 let WHOBZ = 0;
+const msHide = () => !!WHO || !!CITY || !!GEAR || !!SQ || !!HUE || !(D.loc && PH.some(p => p.g));
+/* 照顏色排：照片從原本的位置飛到新的位置，排成一條彩虹 */
+async function hueSet(on){
+  on = on ? 1 : 0;
+  if (on === HUE || WHOBZ) return;
+  WHOBZ = 1;
+  if (on) await colorsAll();
+  if (SEL.on) popBack();
+  const vis = wallRects(), dh = [...document.querySelectorAll(".wall .dh,.wall .scn")];
+  if (anim() && dh.length) await Promise.all(dh.map(h => h.animate([{opacity:1}, {opacity:0}], {duration:T.fast, easing:EXIT, fill:"forwards"}).finished.catch(() => {})));
+  HUE = on;
+  PH = pickW(); citybar(); stackCalc();
+  TILES.forEach(t => t.classList.remove("on"));
+  TILES = PH.map((p, i) => { const t = TM.get(p.i); if (t) { t.dataset.i = i; return t; } return tile(p, i); });
+  const ms = $(".msec"); if (ms) ms.hidden = msHide();
+  smapOn(); sections(); layout(true); SCR.rows = null;
+  if (!ms || !ms.hidden) bigMap();
+  smapWatch();
+  const cf = $(".cityf"), at = cf && !cf.hidden ? cf : $(".wwrap"), y = at ? at.getBoundingClientRect().top + scrollY - 70 : 0;
+  if (at && Math.abs(scrollY - y) > 4) {                     // 捲到照片牆最上面：照片從原本在畫面上的位置飛過去
+    scrollTo({top:y, behavior:"auto"});
+  }
+  if (anim()) {
+    flyTiles(vis, ZDUR * 1.5);
+    document.querySelectorAll(".wall .dh,.wall .scn").forEach((h, k) => h.animate([{opacity:0, transform:"translateY(8px)"}, {opacity:1, transform:"none"}], {duration:T.mid, delay:ZDUR * .5 + k * 40, easing:DEC, fill:"backwards"}));
+    if (cf) cf.animate([{opacity:0, transform:"translateY(6px)"}, {opacity:1, transform:"none"}], {duration:T.mid, easing:DEC});
+  }
+  WHOBZ = 0;
+}
 async function whoSet(w, keep){
   if (w === WHO && !keep) return;
   if (WHOBZ) return; WHOBZ = 1;
   if (SEL.on) popBack();
   const parts = [".mems", ".stats", ".hl", ".cityf", ".wall", ".gear", ".msec", ".smap", ".gbk"].map(q => $(q)).filter(Boolean);
   if (anim()) await Promise.all(parts.map(x => x.animate([{opacity:1}, {opacity:0, transform:"translateY(6px)"}], {duration:T.fast, easing:EXIT, fill:"forwards"}).finished.catch(() => {})));
-  if (!keep || w !== WHO) { CITY = ""; GEAR = ""; SQ = ""; }
+  if (!keep || w !== WHO) { CITY = ""; GEAR = ""; SQ = ""; HUE = 0; }
   WHO = w; PH = pickW(); citybar(); stackCalc();
   TILES.forEach(t => t.classList.remove("on"));
   TILES = PH.map((p, i) => { const t = TM.get(p.i); if (t) { t.dataset.i = i; return t; } return tile(p, i); });
   whoBar();
-  const ms = $(".msec"); if (ms) ms.hidden = !!WHO || !!CITY || !!GEAR || !!SQ || !(D.loc && PH.some(p => p.g));   // 先決定要不要顯示，地圖才量得到大小（以前篩選完再回來，地圖還是篩選時那幾張）
+  const ms = $(".msec"); if (ms) ms.hidden = msHide();   // 先決定要不要顯示，地圖才量得到大小（以前篩選完再回來，地圖還是篩選時那幾張）
   smapOn(); sections(); layout(true); mems(); stats(); highlights(); bigMap(); gear(); gbook(); smapWatch();
   document.querySelectorAll(".hmeta .chip .num, .bar small").forEach(x => { x.textContent = cntTxt(); });
   const nav = $(".who"), top = nav && !nav.hidden ? nav.getBoundingClientRect().top + scrollY - 70 : 0;
@@ -823,7 +867,7 @@ function layout(force){
       return;
     }
     const wide = list.filter(i => !STK.has(i) && !isVid(PH[i]) && PH[i].w / PH[i].h >= 1.3), top = wide.length && PH[wide[0]].qs != null ? best(wide) : list[0];
-    const big = ZL === 1 && list.length >= 3 && !STK.has(top) && PH[top].w / PH[top].h >= 1.3 && W >= 320 ? top : -1;   // 這天拍得最好的橫幅放整排，當這天的封面（沒有分數就用第一張）
+    const big = !HUE && ZL === 1 && list.length >= 3 && !STK.has(top) && PH[top].w / PH[top].h >= 1.3 && W >= 320 ? top : -1;   // 這天拍得最好的橫幅放整排，當這天的封面（沒有分數就用第一張）
     const sec = box.parentNode, dh = sec.querySelector(".dh[data-day]");
     sec.classList.toggle("cov", big >= 0 && !!dh);
     if (big >= 0) { const ar = Math.min(3, PH[big].w / PH[big].h), fh = Math.min(W / ar, innerHeight * .72); sec.style.setProperty("--fh", fh.toFixed(1) + "px"); rows.push([[[big, W / fh]], fh, 1]); }
@@ -903,6 +947,7 @@ function scrubLabel(y){                                      // 那個位置的�
   const t = y + innerHeight * .3; let best = SCR.rows[0];
   for (const r of SCR.rows) { if (r[0] > t) break; best = r; }
   const p = best && PH[best[1]], d = p && pd(p.x.dt);
+  if (HUE) return p && p._hk ? HUEN(p._hk[0]) : "";
   return d ? ZL === 3 ? `${d.y}年${d.mo}月` : `${YR ? d.y + "年" : ""}${d.mo}月${d.d}日` : "";
 }
 {
@@ -956,7 +1001,8 @@ function scrubLabel(y){                                      // 那個位置的�
   addEventListener("keydown", e => { if (LB || SS || SY || e.target.closest("input")) return;
     if (e.key === "+" || e.key === "=") zoomWall(ZL - 1, innerWidth / 2, innerHeight / 2); else if (e.key === "-") zoomWall(ZL + 1, innerWidth / 2, innerHeight / 2); });
 })();
-addEventListener("contextmenu", e => { if (e.target.closest(".ph,.zw,.mk,.hero")) e.preventDefault(); });   // 不能按右鍵、長按另存
+addEventListener("contextmenu", e => { if (e.target.closest(".ph,.zw,.mk,.hero")) e.preventDefault(); });
+["copy", "cut", "selectstart", "dragstart"].forEach(t => addEventListener(t, e => { if (!(e.target.closest && e.target.closest("input,textarea,[contenteditable]"))) e.preventDefault(); }));   // 整頁不能複製（輸入框照樣能用）   // 不能按右鍵、長按另存
 addEventListener("dragstart", e => { if (e.target.tagName === "IMG") e.preventDefault(); });
 {                                                            // 點照片自己判斷：往下滑關掉大圖後，手機有時不送 click，要等一下才點得開
   let pt = null;                                             // 按住不放：進入選取（可以下載的相簿）
@@ -995,6 +1041,7 @@ document.addEventListener("click", e => {
   if (e.target.closest("[data-gearx]")) return gearSet("");
   if (e.target.closest("[data-find]")) return SEL.on || srchOpen();
   if (e.target.closest("[data-sqx]")) { SQ = ""; return whoSet(WHO, true); }
+  if (e.target.closest("[data-huex]")) return hueSet(0);
   { const gb = e.target.closest(".gear [data-gear]"); if (gb) return gearSet(gb.dataset.gear); }
   const m = e.target.closest(".mk");
   if (m && m.dataset.cl) return placeSheet(m.dataset.cl.split(",").map(Number));   // 好幾張疊在一起：先列出那裡拍的全部
@@ -1084,8 +1131,8 @@ function gear(){
 function citybar(){
   const b = $(".cityf"); if (!b) return;
   const c = CITY && citiesOf().find(x => x.k === CITY);
-  b.hidden = !c && !GEAR && !SQ;
-  b.innerHTML = (SQ ? `<button class="chip on" data-find>${I("find")}<span>${esc(SQ)}</span><small class="num">${PH.length} 張</small></button><button class="chip" data-sqx>${I("x")}<span>全部照片</span></button>` : "") + (c ? `<span class="chip on">${flagImg(c.cc)}<span>${esc(c.c)}</span><small class="num">${c.ps.length} 張</small></span><button class="chip" data-cityx>${I("x")}<span>全部城市</span></button>` : "")
+  b.hidden = !c && !GEAR && !SQ && !HUE;
+  b.innerHTML = (HUE ? `<span class="chip on">${I("hue")}<span>照顏色排</span></span><button class="chip" data-huex>${I("x")}<span>照日期排</span></button>` : "") + (SQ ? `<button class="chip on" data-find>${I("find")}<span>${esc(SQ)}</span><small class="num">${PH.length} 張</small></button><button class="chip" data-sqx>${I("x")}<span>全部照片</span></button>` : "") + (c ? `<span class="chip on">${flagImg(c.cc)}<span>${esc(c.c)}</span><small class="num">${c.ps.length} 張</small></span><button class="chip" data-cityx>${I("x")}<span>全部城市</span></button>` : "")
     + (GEAR ? `<span class="chip on">${I(GEAR[0] === "c" ? "cam" : "lens")}<span>${esc(GEAR.slice(2))}</span><small class="num">${PH.length} 張</small></span><button class="chip" data-gearx>${I("x")}<span>全部器材</span></button>` : "");
   flagFix(b);
 }
@@ -1282,7 +1329,7 @@ function openLb(i, from){
   const el = document.createElement("div");
   el.className = "lb";
   const STRIP = matchMedia("(pointer:fine) and (min-width:900px)").matches && PH.length > 1;
-  el.className = STRIP ? "lb strip" : "lb";
+  el.className = (STRIP ? "lb strip" : "lb") + (NG ? " ng" : "");
   el.innerHTML = `<div class="bg"></div><div class="stage"><div class="track"></div></div>
     <div class="lbt"><button class="rb" data-x aria-label="關閉">${I("x")}</button><span class="cnt num"></span><button class="rb lvb" data-lv aria-label="原況">${I("live")}</button><button class="rb" data-ssi aria-label="從這張開始播放">${I("play")}</button><button class="rb" data-shr aria-label="分享這張">${I("shr")}</button><button class="rb" data-inf aria-label="照片資訊">${I("info")}</button><button class="rb" data-del hidden aria-label="刪掉">${I("trash")}</button>${D.dl ? `<a class="rb" data-dl download aria-label="${D.dl > 1 ? "下載原圖" : "下載"}">${I("dl")}</a>` : ""}</div>
     <button class="rb nav l" aria-label="上一張">${I("l")}</button><button class="rb nav r" aria-label="下一張">${I("r")}</button>
@@ -1394,6 +1441,10 @@ function openLb(i, from){
     if (S.info && (moved || !inf.firstChild)) { inf.innerHTML = infoHTML(p); infoMap(); }   // 同一張不重畫：安卓跳出鍵盤會改畫面大小，重畫會把正在打字的留言框收掉
     TILES.forEach((t, k) => t.classList.toggle("gone", k === S.i));
     if (moved) { amb(p); stripAt(); }
+  }
+  function ngSet(on){
+    NG = on; store.set("vsa-ng", on ? "1" : ""); el.classList.toggle("ng", on);
+    el.querySelectorAll("[data-ng]").forEach(b => b.setAttribute("aria-pressed", on));
   }
   function amb(p){                                           // 後面透出這張的顏色：糊開的小圖，換張時慢慢變過去
     if (p.broken) return;
@@ -1620,6 +1671,7 @@ function openLb(i, from){
       if (b) { clearTimeout(S.dT); if (!b.classList.contains("arm")) { b.classList.add("arm"); toast("再按一次刪掉"); S.dT = setTimeout(() => b.classList.remove("arm"), 3000); return; }
         b.classList.remove("arm"); return upDel(S.i); } }
     if (e.target.closest("[data-inf]")) return setInfo(!S.info);
+    if (e.target.closest("[data-ng]")) return ngSet(!NG);
     if (e.target.closest("[data-lv]")) return live();
     if (e.target.closest("[data-ssi]")) return show(S.i);
     if (e.target.closest("[data-vpp]")) return vToggle();
@@ -1693,6 +1745,7 @@ function openLb(i, from){
   S.key = e => {
     if (e.target.closest && e.target.closest("input,textarea")) return;
     if (e.key === " " && isVid(PH[S.i])) { e.preventDefault(); return vToggle(); }
+    if (e.key === "g" || e.key === "G") return ngSet(!NG);
     if (e.key === "ArrowRight") go(1);
     else if (e.key === "ArrowLeft") go(-1);
     else if (e.key === "Escape") S.info ? setInfo(false) : lbBack(S);
@@ -2375,7 +2428,7 @@ function deepLink(){
 let SMK = "", SMIO = null;
 function smapOn(){
   const wr = $(".wwrap"), a = $(".smap"); if (!wr || !a) return false;
-  const on = innerWidth >= 1200 && D.loc && !WHO && PH.some(p => p.g && pd(p.x.dt));
+  const on = innerWidth >= 1200 && D.loc && !WHO && !HUE && PH.some(p => p.g && pd(p.x.dt));
   const was = wr.classList.contains("side");
   wr.classList.toggle("side", !!on); a.hidden = !on;
   if (!on && SMIO) { SMIO.disconnect(); SMIO = null; }
@@ -2579,6 +2632,8 @@ function nearHTML(p){
   if (!ns.length) return "";
   return `<div class="inear"><div class="inh"><b>在這附近拍的</b><span class="num">${ns.length} 張</span></div><div class="inr">${ns.slice(0, 16).map(([k, m]) => `<button class="inp" data-go="${k}" aria-label="第 ${k + 1} 張"><img alt="" loading="lazy" draggable="false" src="${src(PH[k], "s")}"><small class="num">${m < 15 ? "同一處" : `${Math.round(m / 10) * 10} 公尺`}</small></button>`).join("")}</div></div>`;
 }
+/* 看片用中性灰背景：後面不透出照片的顏色，眼睛判斷顏色才準（記在這台） */
+let NG = store.get("vsa-ng") === "1";
 function infoHTML(p){
   const x = p.x, d = pd(x.dt), cam = camName(x), lens = lensName(x), ext = (p.n.split(".").pop() || "").toUpperCase().replace("JPG", "JPEG");
   const mp = p.w * p.h / 1e6, f35 = x.f35 || 0, fl = x.fl || 0;
@@ -2602,7 +2657,7 @@ function infoHTML(p){
     h += `<div class="ibox isty">${ms.st || ms.lut ? `<i class="${mono ? "mono" : ""}"></i><div><small>${esc(ms.sl || "風格")}</small><b>${esc(ms.st || ms.lut)}</b></div>${[...(ms.fx || []), ...(ms.st && ms.lut ? [`LUT ${ms.lut}`] : [])].map(t => `<span class="tag">${esc(t)}</span>`).join("")}` : ""}
       ${ms.k ? `<div class="kel"><small>白平衡</small><b class="num">${ms.k} K</b><span class="kbar"><i style="left:${kp.toFixed(1)}%"></i></span></div>` : ""}</div>`;
   }
-  if (!isVid(p)) h += `<div class="ibox ipal" data-pal aria-label="直方圖和主要顏色">${palHTML(p)}</div>`;
+  if (!isVid(p)) h += `<div class="ibox ipal"><div class="ipw" data-pal aria-label="直方圖和主要顏色">${palHTML(p)}</div><button class="ngb" data-ng aria-pressed="${!!NG}">${I("ng")}<span>中性灰背景</span><i class="sw"></i></button></div>`;
   const kv = [];
   if (x.ln) kv.push(["鏡頭", x.lmk && !x.ln.startsWith(x.lmk) ? `${x.lmk} ${x.ln}` : x.ln]);
   if (fl && f35 && Math.round(fl) !== f35) kv.push(["實際焦距", `${+fl.toFixed(2)} mm`]);
