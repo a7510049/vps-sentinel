@@ -88,7 +88,7 @@ def alb_talk_of(a, th=""):
         for e in (t.get("r") or {}).values():
             rx[e] = rx.get(e, 0) + 1
         out[pid] = {"lk": len(t.get("l") or []), "me": th in (t.get("l") or []), "rx": rx, "mr": (t.get("r") or {}).get(th, ""),
-                    "cm": [{"id": c["id"], "n": c["n"], "s": c["s"], "t": int(c["t"]), "me": c["d"] == th} for c in t.get("c") or []]}
+                    "cm": [{"id": c["id"], "n": c["n"], "s": c["s"], "t": int(c["t"]), "me": c["d"] == th, **({"r": c["r"]} if c.get("r") else {})} for c in t.get("c") or []]}
     return out
 
 
@@ -146,7 +146,11 @@ def alb_talk_post(a, th, d):
             if len(ALB["tpost"]) > 5000:
                 ALB["tpost"].clear()
             cs = t.setdefault("c", [])
-            cs.append({"id": secrets.token_hex(4), "d": th, "n": name, "s": txt, "t": now})
+            c = {"id": secrets.token_hex(4), "d": th, "n": name, "s": txt, "t": now}
+            pa = next((x for x in cs if x["id"] == str(d.get("re") or "")), None)   # 回覆某一則：只有一層，回覆別人的回覆就掛在同一串
+            if pa:
+                c["r"] = pa.get("r") or pa["id"]
+            cs.append(c)
             del cs[:-ALB_TALK_MAX[2]]
             alls = sorted(((c["t"], q) for q, x in talk[a["id"]].items() for c in x.get("c") or []))
             for _, q in alls[:max(0, len(alls) - ALB_TALK_MAX[3])]:   # 整本太多：最早的先拿掉

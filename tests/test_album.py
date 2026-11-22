@@ -260,6 +260,12 @@ class Album(Server):
         c = json.loads(b)["cm"][0]
         self.assertEqual((c["n"], c["s"], c["me"]), ("小明", "好看 <script>", True))
         self.assertEqual(post({"i": pid, "s": "再一則", "n": "小明"})[0], 429)            # 太快
+        time.sleep(3.1)
+        s, b, _ = post({"i": pid, "s": "同意", "n": "小明", "re": c["id"]})          # 回覆那一則
+        self.assertEqual(json.loads(b)["cm"][-1].get("r"), c["id"])
+        time.sleep(3.1)
+        s, b, _ = post({"i": pid, "s": "再回", "n": "小明", "re": json.loads(b)["cm"][-1]["id"]})   # 回覆回覆：掛在同一串
+        self.assertEqual(json.loads(b)["cm"][-1].get("r"), c["id"])
         s, b, _ = post({"i": pid, "rx": "😂"})                                         # 其他表情：一支手機一個
         self.assertEqual((s, json.loads(b)["rx"], json.loads(b)["mr"]), (200, {"😂": 1}, "😂"))
         s, b, _ = post({"i": pid, "rx": "👍"})                                         # 換一個
@@ -269,16 +275,16 @@ class Album(Server):
         post({"i": pid, "rx": "🥹"})
         s, b, _ = self.req("GET", f"/a/{code}/m", hdr={"Cookie": ck})
         p = json.loads(b)["photos"][0]
-        self.assertEqual((p["lk"], p["me"], len(p["cm"])), (1, True, 1))
+        self.assertEqual((p["lk"], p["me"], len(p["cm"])), (1, True, 3))
         self.assertEqual((p["rx"], p["mr"], p["lk"]), ({"🥹": 1}, "🥹", 1))
         s, b, _ = self.req("GET", f"/a/{code}/m")                                       # 別支手機：看得到，但不是自己的
         p = json.loads(b)["photos"][0]
         self.assertEqual((p["me"], p["cm"][0]["me"]), (False, False))
         s, t = self.call({"action": "talk", "id": aid})
-        self.assertEqual(([x["s"] for x in t["c"]], t["likes"][0]["n"]), (["好看 <script>"], 1))
+        self.assertEqual(([x["s"] for x in t["c"]], t["likes"][0]["n"]), (["再回", "同意", "好看 <script>"], 1))
         self.assertEqual(next(x for x in self.call({"action": "devs", "id": aid})[1]["devs"] if x.get("nm"))["nm"], "小明")
         s, t = self.call({"action": "talkdel", "id": aid, "i": pid, "cid": c["id"]})
-        self.assertEqual(t["c"], [])
+        self.assertEqual([x["s"] for x in t["c"]], ["再回", "同意"])                  # 回覆留著
         self.call({"action": "edit", "id": aid, "talk": False})
         self.assertEqual(post({"i": pid, "like": False})[0], 403)
         with open(os.path.join(self.tmp.name, "data", "album-talk.json"), "rb") as f:

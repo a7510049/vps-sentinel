@@ -941,7 +941,23 @@ function route(el, pts, W, H){
     ${days.length > 1 ? days.map((q, k) => `<span class="dayn num" style="left:${q.x.toFixed(1)}px;top:${q.y.toFixed(1)}px" title="${esc(fday(q.d))}">第 ${k + 1} 天</span>`).join("") : ""}`);
   const path = el.querySelector(".rt"), len = path.getTotalLength();
   el.style.setProperty("--len", len.toFixed(0));
+  /* 照片、第幾天等線畫到那裡才跳出來（線是 cubic-bezier(.45,0,.2,1) 畫 2.4 秒，反推到那一點的時間） */
+  const smp = []; for (let k = 0; k <= 160; k++) { const q = path.getPointAtLength(len * k / 160); smp.push([q.x, q.y, k / 160]); }
+  const fracAt = (x, y) => smp.reduce((b, q) => { const d = Math.hypot(q[0] - x, q[1] - y); return d < b[0] ? [d, q[2]] : b; }, [1e9, 0])[1];
+  const bz = t => { const u = 1 - t; return [3 * u * u * t * .45 + 3 * u * t * t * .2 + t ** 3, 3 * u * t * t + t ** 3]; };   // 回傳 [x(時間), y(進度)]
+  const tAt = f => { let lo = 0, hi = 1; for (let n = 0; n < 24; n++) { const m = (lo + hi) / 2; if (bz(m)[1] < f) lo = m; else hi = m; } return bz(lo)[0]; };
+  el.classList.add("trip");
+  el.querySelectorAll(".mk").forEach(m => { m.style.animationDelay = `${Math.max(0, tAt(fracAt(parseFloat(m.style.left), parseFloat(m.style.top))) * 2.4 - .12).toFixed(2)}s`; });
+  el.querySelectorAll(".dayn").forEach(m => { m.style.transitionDelay = `${(tAt(fracAt(parseFloat(m.style.left), parseFloat(m.style.top))) * 2.4).toFixed(2)}s`; });
+  el.insertAdjacentHTML("beforeend", `<button class="rplay" data-replay aria-label="重播旅程">${I("again")}</button>`);
   const go = () => { el.classList.add("drawn"); setTimeout(() => { const m = el.querySelector("animateMotion"); try { m && m.beginElement(); } catch (e) {} }, anim() ? 2400 : 0); };
+  el.querySelector("[data-replay]").addEventListener("click", () => {   // 重播：線收回去、照片縮回去，再畫一次
+    el.classList.remove("drawn");
+    el.querySelectorAll(".mk").forEach(m => { m.style.animationName = "none"; });
+    void el.offsetWidth;
+    el.querySelectorAll(".mk").forEach(m => { m.style.animationName = ""; });
+    requestAnimationFrame(() => requestAnimationFrame(go));
+  });
   if (!anim() || !("IntersectionObserver" in window)) return go();
   const io = new IntersectionObserver(es => { if (es.some(e => e.isIntersecting)) { io.disconnect(); go(); } }, {threshold:.35});
   io.observe(el);
@@ -1301,6 +1317,11 @@ function openLb(i, from){
   inf.addEventListener("click", e => {
     const gb = e.target.closest("[data-gear]");                // 點相機、鏡頭：關掉大圖，照片牆只看那台拍的
     if (gb) { lbBack(S); setTimeout(() => gearSet(gb.dataset.gear, true), anim() ? T.mid + 60 : 0); return; }
+    const rp = e.target.closest("[data-crep]");                // 回覆：輸入框上面寫「回覆 某某」
+    if (rp) { const f = $(".cform", inf), b = $(".cre", f); f.dataset.re = rp.dataset.crep; b.querySelector("span").textContent = `回覆 ${rp.dataset.cn}`; b.hidden = false;
+      if (anim()) b.animate([{opacity:0, transform:"translateY(4px)"}, {opacity:1, transform:"none"}], {duration:T.fast, easing:DEC});
+      const tx = f.querySelector("[name=s]"); tx.placeholder = `回覆 ${rp.dataset.cn}…`; tx.focus(); return; }
+    if (e.target.closest("[data-crex]")) { const f = $(".cform", inf); delete f.dataset.re; $(".cre", f).hidden = true; f.querySelector("[name=s]").placeholder = "說點什麼…"; return; }
     const del = e.target.closest("[data-cdel]");
     if (del) talk(S.i, {del:del.dataset.cdel}).then(ok => { if (ok) { inf.querySelector(".italk").outerHTML = talkHTML(PH[S.i]); social(); } });
   });
@@ -1332,11 +1353,13 @@ function openLb(i, from){
     if (!tx.value.trim()) return tx.focus();
     store.set("vsa-name", name);
     f.querySelector("button").disabled = true;
-    talk(S.i, {s:tx.value, n:name}).then(ok => {
+    const re = f.dataset.re || "";
+    talk(S.i, re ? {s:tx.value, n:name, re} : {s:tx.value, n:name}).then(ok => {
       f.querySelector("button").disabled = false;
       if (!ok) return;
       const box = inf.querySelector(".italk"); box.outerHTML = talkHTML(PH[S.i]); social();
-      const last = inf.querySelector(".italk .cmt:last-of-type"); if (last && anim()) last.animate([{opacity:0, transform:"translateY(8px)"}, {opacity:1, transform:"none"}], {duration:T.mid, easing:DEC});
+      const cm = PH[S.i].cm || [], nw = cm[cm.length - 1];
+      const last = nw && inf.querySelector(`.italk .cmt[data-cid="${nw.id}"]`); if (last && anim()) last.animate([{opacity:0, transform:"translateY(8px)"}, {opacity:1, transform:"none"}], {duration:T.mid, easing:DEC});
     });
   });
   S.key = e => {
@@ -1410,12 +1433,17 @@ function rxPick(i, btn, after){
     talk(i, {rx:em}).then(ok => { if (!ok) Object.assign(p, was); after(); badge(i); });
   });
 }
+function talkOrder(cs){                                        // 回覆排在那一則下面（那一則被刪了就照時間放）
+  const ids = new Set(cs.map(c => c.id)), top = cs.filter(c => !c.r || !ids.has(c.r)), out = [];
+  top.forEach(c => { out.push(c); cs.forEach(x => { if (x.r === c.id) out.push(x); }); });
+  return out;
+}
 function talkHTML(p){
   if (!D.talk) return "";
   const cs = p.cm || [], nm = store.get("vsa-name");
   return `<div class="ibox italk"><div class="th"><b>留言</b>${p.lk ? `<span class="num">${I("heart")}${p.lk}</span>` : ""}${Object.entries(p.rx || {}).map(([e, n]) => `<span class="num"><i class="rxe">${e}</i>${n}</span>`).join("")}</div>
-    ${cs.map(c => `<div class="cmt"><div class="av">${esc([...c.n][0] || "?")}</div><div class="cb"><div class="cn"><b>${esc(c.n)}</b><span>${ago(c.t)}</span></div><p>${esc(c.s)}</p></div>${c.me ? `<button class="cx" data-cdel="${esc(c.id)}" aria-label="刪掉">${I("x")}</button>` : ""}</div>`).join("")}
-    <form class="cform">${nm ? "" : `<input class="cin nm" name="n" maxlength="20" placeholder="你的名字" autocomplete="nickname">`}<div class="crow"><input class="cin" name="s" maxlength="300" placeholder="${cs.length ? "說點什麼…" : "第一個留言"}" autocomplete="off"><button class="csend" aria-label="送出">${I("send")}</button></div></form></div>`;
+    ${talkOrder(cs).map(c => `<div class="cmt${c.r ? " rep" : ""}" data-cid="${esc(c.id)}"><div class="av">${esc([...c.n][0] || "?")}</div><div class="cb"><div class="cn"><b>${esc(c.n)}</b><span>${ago(c.t)}</span></div><p>${esc(c.s)}</p><button class="crep" data-crep="${esc(c.id)}" data-cn="${esc(c.n)}">回覆</button></div>${c.me ? `<button class="cx" data-cdel="${esc(c.id)}" aria-label="刪掉">${I("x")}</button>` : ""}</div>`).join("")}
+    <form class="cform"><div class="cre" hidden><span></span><button type="button" data-crex aria-label="不回覆了">${I("x")}</button></div>${nm ? "" : `<input class="cin nm" name="n" maxlength="20" placeholder="你的名字" autocomplete="nickname">`}<div class="crow"><input class="cin" name="s" maxlength="300" placeholder="${cs.length ? "說點什麼…" : "第一個留言"}" autocomplete="off"><button class="csend" aria-label="送出">${I("send")}</button></div></form></div>`;
 }
 /* ═════════ 選幾張一起下載 ═════════ */
 const SEL = {on:false, s:new Set()};
@@ -2075,6 +2103,13 @@ function palHTML(p){
   const t = pl.reduce((a, c) => a + c[1], 0);
   return `${histSvg(p)}<div class="pbar">${pl.map(([c, n]) => `<i style="background:${c};flex:${Math.max(.06, n / t).toFixed(3)}"></i>`).join("")}</div>`;
 }
+/* 在這附近拍的其他照片（300 公尺內，近的先）：點了直接換過去 */
+function gdist(a, b){ const r = Math.PI / 180, h = Math.sin((b[0] - a[0]) * r / 2) ** 2 + Math.cos(a[0] * r) * Math.cos(b[0] * r) * Math.sin((b[1] - a[1]) * r / 2) ** 2; return 12742000 * Math.asin(Math.min(1, Math.sqrt(h))); }
+function nearHTML(p){
+  const ns = PH.map((q, k) => [q, k]).filter(([q]) => q !== p && q.g && !q.broken).map(([q, k]) => [k, gdist(p.g, q.g)]).filter(x => x[1] <= 300).sort((a, b) => a[1] - b[1]);
+  if (!ns.length) return "";
+  return `<div class="inear"><div class="inh"><b>在這附近拍的</b><span class="num">${ns.length} 張</span></div><div class="inr">${ns.slice(0, 16).map(([k, m]) => `<button class="inp" data-go="${k}" aria-label="第 ${k + 1} 張"><img alt="" loading="lazy" draggable="false" src="${src(PH[k], "s")}"><small class="num">${m < 15 ? "同一處" : `${Math.round(m / 10) * 10} 公尺`}</small></button>`).join("")}</div></div>`;
+}
 function infoHTML(p){
   const x = p.x, d = pd(x.dt), cam = camName(x), lens = lensName(x), ext = (p.n.split(".").pop() || "").toUpperCase().replace("JPG", "JPEG");
   const mp = p.w * p.h / 1e6, f35 = x.f35 || 0, fl = x.fl || 0;
@@ -2083,7 +2118,7 @@ function infoHTML(p){
   if (p.g) {
     const [lat, lon, alt, dir] = p.g, nm = p.p ? p.p.n : "拍攝地點", sub = p.p && p.p.a ? p.p.a : `${lat.toFixed(5)}, ${lon.toFixed(5)}`;
     h += `<div class="ibox"><a class="imap" href="${mapUrl(lat, lon, nm)}" target="_blank" rel="noopener noreferrer" aria-label="在地圖上打開">${dir != null ? `<span class="cone" style="transform:rotate(${dir}deg)"></span>` : ""}<span class="pin"></span><span class="attr">© OpenStreetMap</span></a>
-      <a class="ipl" href="${mapUrl(lat, lon, nm)}" target="_blank" rel="noopener noreferrer"><span class="pi">${I("pin")}</span><span><b>${esc(nm)}</b><span>${esc(sub)}</span></span><span class="go">${I("ext")}</span></a></div>`;
+      <a class="ipl" href="${mapUrl(lat, lon, nm)}" target="_blank" rel="noopener noreferrer"><span class="pi">${I("pin")}</span><span><b>${esc(nm)}</b><span>${esc(sub)}</span></span><span class="go">${I("ext")}</span></a>${nearHTML(p)}</div>`;
   }
   const fe = f35 || (fl ? Math.round(fl) : 0);
   const cells = [["光圈", x.f ? `ƒ${+x.f.toFixed(2)}` : "", x.f ? gIris(x.f) : ""], ["快門", shutter(x.et).replace(" 秒", " s"), x.et ? gShut(x.et) : ""],

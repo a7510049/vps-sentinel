@@ -1033,3 +1033,36 @@ html:has(.lb,.ss,.sy) .scrub{opacity:0;pointer-events:none}
   .gear .gcams,.gear .glens{grid-column:1}
   .gear .gfoc{grid-column:2;grid-row:2 / span 2;margin-top:0}
 }
+
+/* 旅程路線：照片、第幾天等線畫到那裡才跳出來；右下角重播 */
+.map.trip .mk{animation-play-state:paused}
+.map.trip.drawn .mk{animation-play-state:running}
+.map.trip:not(.drawn) .dayn{transition:none!important}
+.rplay{position:absolute;right:12px;bottom:28px;z-index:3;width:40px;height:40px;border-radius:50%;display:grid;place-items:center;background:var(--glass);-webkit-backdrop-filter:blur(14px);backdrop-filter:blur(14px);box-shadow:var(--sh-pop);color:var(--tx);
+  opacity:0;transition:opacity var(--t-mid) var(--ease) 2.6s,transform var(--sp-fast)}
+.drawn .rplay{opacity:1}
+.rplay:active{transform:scale(.9)}
+.rplay svg{width:18px;height:18px}
+
+/* 留言回覆：縮排在那一則下面 */
+.cmt.rep{padding-left:42px}
+.cmt+.cmt.rep{box-shadow:none;padding-top:2px}
+.cmt.rep .av{width:24px;height:24px;font-size:var(--fs-xs)}
+.crep{margin-top:2px;font-size:var(--fs-xs);font-weight:650;color:var(--tx3);padding:4px 0}
+.crep:active{color:var(--p)}
+.cre{display:flex;align-items:center;gap:6px;justify-self:start;height:28px;padding:0 4px 0 12px;border-radius:var(--r-pill);background:var(--s2);font-size:var(--fs-xs);font-weight:650;color:var(--tx2)}
+.cre[hidden]{display:none}
+.cre button{width:22px;height:22px;display:grid;place-items:center;border-radius:50%}
+.cre svg{width:13px;height:13px}
+
+/* 看大圖：在這附近拍的其他照片 */
+.inear{padding:12px 16px 14px;border-top:1px solid var(--line)}
+.inh{display:flex;align-items:baseline;justify-content:space-between;margin-bottom:10px}
+.inh b{font-size:var(--fs-s);font-weight:700}
+.inh span{font-size:var(--fs-xs);color:var(--tx3);font-weight:600}
+.inr{display:flex;gap:8px;overflow-x:auto;scrollbar-width:none;margin:0 -16px;padding:0 16px;scroll-snap-type:x proximity}
+.inr::-webkit-scrollbar{display:none}
+.inp{flex:none;width:76px;display:grid;gap:5px;scroll-snap-align:start;transition:transform var(--sp-fast)}
+.inp img{width:76px;height:76px;object-fit:cover;border-radius:var(--r-sm);display:block;background:var(--s2)}
+.inp small{font-size:10px;color:var(--tx3);font-weight:600;text-align:center;white-space:nowrap}
+.inp:active{transform:scale(.95)}
