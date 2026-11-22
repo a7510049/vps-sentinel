@@ -735,6 +735,7 @@ function draw(){
   smapOn();
   sections();
   layout();
+  wallWatch();
   mems();
   bigMap();
   gear();
@@ -973,7 +974,13 @@ function layout(force){
     box.replaceChildren(frag);
   });
 }
-let RZ;
+let RZ, WRO;
+function wallWatch(){                                         // 照片牆的寬度一變就重排（打開時量到的寬度偶爾不對，只靠視窗大小改變不夠）
+  if (!("ResizeObserver" in window)) return;
+  if (WRO) WRO.disconnect();
+  WRO = new ResizeObserver(() => { const rw = $(".wall .rows"), w = rw && rw.clientWidth; if (w && Math.abs(w - LW) >= 1) requestAnimationFrame(() => layout()); });
+  WRO.observe($(".wall"));
+}
 addEventListener("resize", () => { clearTimeout(RZ); RZ = setTimeout(() => { if (smapOn()) smapWatch(); layout(); bigMap(); smapGo(SMK, true); if (LB) LB.fitAll(); }, 120); });
 
 /* 捲動：封面慢一點往上（視差）、標題淡掉，捲過封面上面浮出一條 */
@@ -1235,9 +1242,16 @@ function gear(){
   box.innerHTML = `<div class="mh"><b>器材</b><span class="num">${cs.length} 台相機${ls.length ? `・${Object.keys(lens).length} 顆鏡頭` : ""}</span></div>
     <div class="gcams">${cs.slice(0, 6).map(([c, n]) => { const lz = Object.entries(cl[c] || {}).sort((a, b) => b[1] - a[1]).slice(0, 6);
       return `<div class="gbox"><button class="gcam${GEAR === "c:" + c ? " on" : ""}" data-gear="c:${esc(c)}"><i class="gic">${I("cam")}</i><span class="gt2"><b>${esc(c)}</b><small class="num">${n} 張</small></span><span class="gbr"><i style="width:${(n / n0 * 100).toFixed(1)}%"></i></span></button>${lz.length ? `<div class="glz">${lz.map(([l, m]) => `<button class="glr${GEAR === "l:" + l ? " on" : ""}" data-gear="l:${esc(l)}">${I("lens")}<span>${esc(l)}</span><span class="gbr"><i style="width:${(m / n * 100).toFixed(1)}%"></i></span><small class="num">${m}</small></button>`).join("")}</div>` : ""}</div>`; }).join("")}</div>
-    ${nf >= 3 ? `<div class="gfoc"><div class="gfh"><small>常用焦段</small>${top ? `<b class="num">${top[0]} mm</b>` : ""}</div><div class="gfc">${FOCB.map((b, k) => `<div class="${fb[k] === mx ? "top" : ""}"><span><i style="height:${fb[k] ? Math.max(8, fb[k] / mx * 100).toFixed(0) : 0}%"></i></span><b class="num">${fb[k] || ""}</b><small>${b[2]}</small></div>`).join("")}</div></div>` : ""}
-    ${hb.length ? `<div class="ghab">${hb.map(({k, h, c}) => { const m = Math.max(...c), tk = c.indexOf(m);
-      return `<div class="gfoc"><div class="gfh"><small>${h.n}</small><b class="num">${h.l[tk]}</b></div><div class="gfc hb">${h.l.map((l, j) => `<button class="${c[j] === m ? "top" : ""}${GEAR === `${k}:${j}` ? " on" : ""}" data-gear="${k}:${j}"${c[j] ? "" : " disabled"} aria-label="${h.n} ${l}：${c[j]} 張"><span><i style="height:${c[j] ? Math.max(8, c[j] / m * 100).toFixed(0) : 0}%"></i></span><b class="num">${c[j] || ""}</b><small class="num">${l}</small></button>`).join("")}</div></div>`; }).join("")}</div>` : ""}`;
+    ${gstat(nf >= 3 ? {n:"焦段", l:FOCB.map(b => b[2]), c:fb, t:top ? `${top[0]} mm` : ""} : null, hb)}`;
+}
+/* 拍攝習慣：焦段、光圈、快門、ISO 合成一張，一種一行細長條（使用者說四張大卡太佔版面）；點長條只看那些照片 */
+function gstat(fo, hb){
+  const rows = (fo ? [{k:"", h:fo, c:fo.c}] : []).concat(hb);
+  if (!rows.length) return "";
+  return `<div class="gst">${rows.map(({k, h, c}) => { const m = Math.max(1, ...c), tk = c.indexOf(Math.max(...c)), sel = k && GEAR && GEAR[0] === k ? +GEAR.slice(2) : -1;
+    const v = sel >= 0 ? `${h.l[sel]}<small class="num">${c[sel]} 張</small>` : (h.t || h.l[tk]);
+    return `<div class="gsr"><div class="gsl"><small>${h.n}</small><b class="num">${v}</b></div><div class="gsb" style="--n:${c.length}">${h.l.map((l, j) => { const cls = `${j === tk ? "top" : ""}${sel === j ? " on" : ""}`, bar = `<span><i style="height:${c[j] ? Math.max(12, c[j] / m * 100).toFixed(0) : 0}%"></i></span><small class="num">${l}</small>`;
+      return k ? `<button class="${cls}" data-gear="${k}:${j}"${c[j] ? "" : " disabled"} aria-label="${h.n} ${l}：${c[j]} 張">${bar}</button>` : `<div class="${cls}" aria-label="${l}：${c[j]} 張">${bar}</div>`; }).join("")}</div></div>`; }).join("")}</div>`;
 }
 function citybar(){
   const b = $(".cityf"); if (!b) return;
@@ -1488,7 +1502,7 @@ function openLb(i, from){
     zw.dataset.zb = key;
     let r; try { r = zbCalc(p, im); } catch (e) { return; }
     zw.querySelectorAll(".zb").forEach(x => x.remove());
-    [["hi", "zbh"], ["lo", "zbs"]].forEach(([k, c]) => { if (!r[k]) return; const d = document.createElement("i"); d.className = `zb ${c}`; d.style.webkitMaskImage = d.style.maskImage = `url(${r[k]})`; zw.appendChild(d); });
+    [["hi", "zbh"], ["lo", "zbs"]].forEach(([k, c]) => { if (!r[k]) return; const d = document.createElement("b"), m = document.createElement("i"); d.className = `zb ${c}`; m.style.webkitMaskImage = m.style.maskImage = `url(${r[k]})`; d.appendChild(m); zw.appendChild(d); });
     const n = inf.querySelector("[data-zbn]"); if (n) n.textContent = zbTxt(p);
     if (im === sm && big) big.addEventListener("load", () => { if (ZEB && cur() === zw) zbMake(); }, {once:true});
   }
@@ -2930,7 +2944,7 @@ function lvOf(p){
   const v = Math.log2(x.f * x.f / t) - Math.log2(x.iso / 100) + (x.ev || 0);
   return v > -8 && v < 22 ? v : null;
 }
-const LVN = [[14.5, "大太陽"], [12.5, "晴天"], [10.5, "陰天"], [8.5, "傍晚、陰影"], [6.5, "明亮的室內"], [4.5, "室內"], [1.5, "夜晚的街上"], [-99, "很暗的夜晚"]];
+const LVN = [[14.5, "非常亮"], [12.5, "很亮"], [10.5, "明亮"], [8.5, "柔和"], [6.5, "偏暗"], [4.5, "暗"], [1.5, "很暗"], [-99, "極暗"]];
 const lvName = v => LVN.find(r => v >= r[0])[1];
 const gLv = v => {                                           // 一條由暗到亮的尺（−2～16），左邊暗、右邊亮，三角形指在現場的亮度
   const x = 3 + Math.max(0, Math.min(1, (v + 2) / 18)) * 18;
@@ -2954,9 +2968,25 @@ function zbCalc(p, im){
   const g = c.getContext("2d", {willReadFrequently:true}); g.drawImage(im, 0, 0, w, h);
   const d = g.getImageData(0, 0, w, h), px = d.data, hi = new ImageData(w, h), lo = new ImageData(w, h);
   let nh = 0, nl = 0;
-  for (let i = 0; i < px.length; i += 4) {
+  const f = new Uint8Array(w * h);                                // 1 過曝、2 死黑
+  for (let i = 0, j = 0; i < px.length; i += 4, j++) {
     const mx = Math.max(px[i], px[i + 1], px[i + 2]);
-    if (mx >= 253) { hi.data[i + 3] = 255; nh++; } else if (mx <= 3) { lo.data[i + 3] = 255; nl++; }
+    if (mx >= 253) { f[j] = 1; nh++; } else if (mx <= 3) { f[j] = 2; nl++; }
+  }
+  const sm = v => {                                              // 邊上的雜點先抹掉：5×5 裡過半同類才算（積分圖，一格一次）
+    const S = new Int32Array((w + 1) * (h + 1));
+    for (let y = 0; y < h; y++) { let row = 0; for (let x = 0; x < w; x++) { row += f[y * w + x] === v; S[(y + 1) * (w + 1) + x + 1] = S[y * (w + 1) + x + 1] + row; } }
+    return (x, y) => { const x0 = Math.max(0, x - 2), y0 = Math.max(0, y - 2), x1 = Math.min(w, x + 3), y1 = Math.min(h, y + 3);
+      return (S[y1 * (w + 1) + x1] - S[y0 * (w + 1) + x1] - S[y1 * (w + 1) + x0] + S[y0 * (w + 1) + x0]) * 2 > (x1 - x0) * (y1 - y0); };
+  };
+  const sh = nh ? sm(1) : null, sl = nl ? sm(2) : null, g2 = new Uint8Array(w * h);
+  for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) g2[y * w + x] = sh && sh(x, y) ? 1 : sl && sl(x, y) ? 2 : 0;
+  f.set(g2);
+  const R = Math.max(1, Math.round(Math.max(w, h) / 360));      // 只描邊（使用者說斜紋看了不舒服）：鄰近 R 格有不同的就算邊
+  for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
+    const j = y * w + x, v = f[j]; if (!v) continue;
+    const at = (xx, yy) => xx < 0 || yy < 0 || xx >= w || yy >= h ? v : f[yy * w + xx];
+    if (at(x - R, y) !== v || at(x + R, y) !== v || at(x, y - R) !== v || at(x, y + R) !== v) (v === 1 ? hi : lo).data[j * 4 + 3] = 255;
   }
   const url = m => { g.clearRect(0, 0, w, h); g.putImageData(m, 0, 0); return c.toDataURL("image/png"); };
   p._zb = [nh / (w * h) * 100, nl / (w * h) * 100];
