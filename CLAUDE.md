@@ -32,7 +32,7 @@ web/style.css      所有樣式，最前面的 :root 是共用設計規則
 web/app.js         所有畫面邏輯與動畫；機場起降的 web/fly.js 用到才下載（`flyLib`／`flyEnter`，`/fly.js?v=` 版本由主機換掉 /*@flyv*/；用過機場起降的首頁好了就先在背景下載；跟 app.js 共用名字，最外層不能重複）
 web/pin.js         PIN 碼數字鍵盤（每次打亂）和 PIN 碼答案的算法（`pinPad`／`pinProof`／`pinMake`）；首頁塞在 app.js 前面，被監看那頁用 /pin.js
 web/font.woff2     英數字型（Plus Jakarta Sans 拉丁字母那份，SIL OFL；主機給 /font.woff2，不用等 Google）
-web/seed-rg.woff2、seed-bd.woff2  相簿用的中文字型 LINE Seed TW（SIL OFL，只留 Big5 常用字約 5400 個，每個約 1 MB；主機給 /a/seed-rg.woff2，`ALB_FONTS`；使用者選只用在相簿）
+web/seed-rg.woff2、seed-bd.woff2  相簿用的中文字型 LINE Seed TW（SIL OFL，只留 Big5 常用字約 5400 個，每個約 1 MB；主機給 /a/seed-rg.woff2，`ALB_FONTS`；使用者選只用在相簿，標題、英文數字也都用它，`--serif` 指到 `--font`）
 web/fly.js         機場起降、整頁雷達、分享的畫面（主機另外給 /fly.js；app.js 一定要先有的 FLYS、SHARE、flyHM 放在 app.js；style_check、test_webjs 會跟 app.js 一起檢查）
 DESIGN.md          美術設計規範
 README.md          GitHub 首頁的介紹（功能改了要跟著改）；docs/ 放介紹用的截圖

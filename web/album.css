@@ -3,8 +3,8 @@
 @font-face{font-family:"LINE Seed TW";font-style:normal;font-weight:550 900;font-display:swap;src:url(/a/seed-bd.woff2) format("woff2")}
 @font-face{font-family:"Plus Jakarta Sans";font-style:normal;font-weight:200 800;font-display:swap;src:url(/font.woff2) format("woff2");unicode-range:U+0000-00FF,U+2000-206F,U+2122,U+2212}
 :root{
-  --serif:"Noto Serif TC","Noto Serif CJK TC","Source Han Serif TC","Songti TC","STSong","PMingLiU",Georgia,"Times New Roman",serif;
-  --font:"Plus Jakarta Sans","LINE Seed TW",-apple-system,BlinkMacSystemFont,"PingFang TC","Noto Sans TC","Microsoft JhengHei",sans-serif;
+  --serif:var(--font);                       /* 標題也用 LINE Seed（使用者要求整本同一套字） */
+  --font:"LINE Seed TW","Plus Jakarta Sans",-apple-system,BlinkMacSystemFont,"PingFang TC","Noto Sans TC","Microsoft JhengHei",sans-serif;
   --r-xs:6px; --r-sm:12px; --r-md:16px; --r-lg:24px; --r-xl:28px; --r-pill:999px;
   --fs-xs:12px; --fs-s:13px; --fs-m:14.5px; --fs-l:16px; --fs-xl:19px; --fs-2xl:23px; --fs-3xl:30px; --fs-4xl:36px; --fs-hero:clamp(36px,6.4vw,76px);
   --t-fast:.2s; --t-mid:.38s; --t-slow:.62s; --t-long:.9s;
