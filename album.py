@@ -2,6 +2,7 @@
 雲端硬碟裡選一個資料夾，做成一頁照片牆的連結給朋友看：小圖、大圖由主機做好（加密存著），
 朋友打開 /a/十碼 就能看、左右滑、看相機資訊和地點、下載原圖。
 sentinel.py 用 include("album.py") 載入到自己裡面，兩邊共用同一組變數（不是獨立模組）"""
+import calendar
 import resource
 import struct
 import zipfile
@@ -14,7 +15,7 @@ ALB_EXT2 = {".hif"} | PIC_RAW                                       # 只在雲�
 ALB_HEIF = {".heic", ".heif", ".hif", ".avif"}
 ALB_VV = 2                                                        # 影片轉檔的做法版本：轉不出來的影片換新做法後再試一次
 ALB_XL = 3840                                                     # 大螢幕看大圖的清晰版：長邊幾點（有人在大螢幕打開才做）
-ALB_MV = 4                                                        # 照片資訊的格式版本（舊的重讀一次：色彩空間、HDR、原始檔）
+ALB_MV = 5                                                        # 照片資訊的格式版本（舊的重讀一次：色彩空間、HDR、原始檔）
 ALB_SHOW = {".jpg", ".jpeg", ".png", ".webp", ".gif", ".avif"}    # 做不出小圖時，瀏覽器直接看得了原圖的
 ALB_VID = {".mp4", ".mov", ".m4v", ".webm", ".3gp", ".mkv"}        # 影片（主機轉成 720p 的 H.264 給朋友看）
 ALB_AUD = {".mp3", ".m4a", ".aac", ".ogg", ".opus", ".flac", ".wav"}   # 資料夾裡放一首歌：幻燈片的背景音樂
@@ -920,7 +921,7 @@ def alb_find(code):
 EXIF_T = {0x010F: "mk", 0x0110: "md", 0x0112: "ori", 0x0131: "sw", 0x0132: "dt0", 0x829A: "et", 0x829D: "f", 0x8822: "ep",
           0x8827: "iso", 0x9003: "dt", 0x9011: "oz", 0x9010: "oz0", 0x9204: "ev", 0x9207: "mm", 0x9209: "fla", 0x920A: "fl",
           0xA405: "f35", 0xA402: "em", 0xA403: "wb", 0xA433: "lmk", 0xA434: "ln", 0xA406: "sc", 0xA002: "pw", 0xA003: "ph",
-          0x9214: "sa", 0xA20E: "fpx", 0xA20F: "fpy", 0xA210: "fpu"}
+          0x9214: "sa", 0x9206: "sd", 0xA20E: "fpx", 0xA20F: "fpy", 0xA210: "fpu"}
 GPS_T = {1: "latr", 2: "lat", 3: "lonr", 4: "lon", 5: "altr", 6: "alt", 7: "gts", 0x10: "dirr", 0x11: "dir", 0x1D: "gds"}
 TIFF_SZ = {1: 1, 2: 1, 3: 2, 4: 4, 5: 8, 6: 1, 7: 1, 8: 2, 9: 4, 10: 8, 11: 4, 12: 8}
 
@@ -1043,10 +1044,10 @@ def alb_afp(t, ms, ori, irot, w, h):
     fp = ms.pop("fp", None)
     pt = None
     if fp:                                             # 製造商資料：(x, y, 參考寬, 參考高)；比例的參考是 1，0 代表照片本身的大小
-        fx, fy, rw, rh = fp
+        fx, fy, rw, rh = fp[:4]
         rw, rh = rw or int(t.get("pw") or 0) or w, rh or int(t.get("ph") or 0) or h
         if rw and rh:
-            pt = [fx / rw, fy / rh, .1]
+            pt = [fx / rw, fy / rh, fp[4] if len(fp) > 4 else .1]
     sa = t.get("sa")
     if not pt and isinstance(sa, list) and len(sa) in (2, 3, 4):   # EXIF 的 SubjectArea（手機、部分相機）
         rw, rh = int(t.get("pw") or 0) or w, int(t.get("ph") or 0) or h
@@ -1310,6 +1311,31 @@ def alb_vmeta(path):
         lat, lon = float(loc[1]), float(loc[2])
         if -90 <= lat <= 90 and -180 <= lon <= 180 and (lat or lon):
             g = [round(lat, 6), round(lon, 6), round(float(loc[3]), 1) if loc[3] else None, None]
+    vl = re.search(r"Stream #[^\n]*Video: ([^\n]*)", info)
+    if vl:                                             # 編碼、位元深度、色度取樣、格率、位元率（專業一點的人會看）
+        vl = vl[1]
+        cn = {"hevc": "HEVC", "h264": "H.264", "prores": "ProRes", "av1": "AV1", "vp9": "VP9", "mpeg4": "MPEG-4", "mjpeg": "Motion JPEG"}.get(vl.split(" ")[0].strip(","))
+        if cn:
+            pr = re.match(r"\S+ \(([^)]+)\)", vl)
+            if cn == "ProRes" and pr and pr[1] not in ("apcn", "apch", "apcs", "apco", "ap4h"):
+                cn += " " + pr[1].split(")")[0]
+            pf = re.search(r"\byuv(4\d\d)p(\d\d)?", vl)
+            x["vc"] = cn + (f" {pf[2]} bit" if pf and pf[2] else "") + (f" {pf[1][0]}:{pf[1][1]}:{pf[1][2]}" if pf and pf[1] != "420" else "")
+        fps = re.search(r", ([\d.]+) fps", vl)
+        if fps and 0 < float(fps[1]) <= 1000:
+            x["fps"] = round(float(fps[1]), 3)
+        br = re.search(r", (\d+) kb/s", vl) or re.search(r"bitrate: (\d+) kb/s", info)
+        if br and int(br[1]) >= 100:
+            x["vb"] = round(int(br[1]) / 1000, 1)
+    sx = os.path.splitext(path)[0] + "M01.XML"           # Sony 的影片旁邊一個 XML：拍的時候用哪一種 Log
+    try:
+        if os.path.getsize(sx) < 1 << 16:
+            with open(sx, encoding="utf-8", errors="replace") as f:
+                gm = re.search(r'CaptureGammaEquation"?\s+value="([^"]+)"', f.read())
+            if gm and gm[1].lower().startswith("s-log"):
+                x["gm"] = "S-Log" + gm[1][5:6]
+    except OSError:
+        pass
     out = {"w": w, "h": h, "x": x, "g": g, "ori": 1, "gs": [], "vid": 1, "dur": round(dur, 2), "mv": ALB_MV}
     if v and re.search(r"arib-std-b67|smpte2084", v[0]):   # HDR 影片（iPhone 的 HLG／杜比視界、相機的 HLG）
         out["hdr"] = "hlg" if "arib" in v[0] else "pq"
@@ -1375,6 +1401,9 @@ def alb_meta(path):
     afp = alb_afp(t, ms, ori, rot if ext in ALB_HEIF else 0, w, h)
     if afp:
         x["afp"] = afp
+    fd = ms.pop("fd", None) or _rat(t.get("sd"))        # 對焦距離（公尺）：製造商資料優先，再看 EXIF 的 SubjectDistance
+    if isinstance(fd, (int, float)) and .02 <= fd < 1000:
+        x["fd"] = round(fd, 2)
     if list(ms) == ["sl"]:
         ms = {}
     if ms:
@@ -1722,9 +1751,34 @@ def alb_run_ff(args, data=None, src=None, timeout=120, raw=0):
     finally:
         if fin:
             fin.close()
-    if raw:                                             # 要的是原始像素：長度對才算
-        return r.stdout if r.returncode == 0 and len(r.stdout) == raw else None
+    if raw:                                             # 要的是原始像素：長度對才算（-1：有多少算多少）
+        return r.stdout if r.returncode == 0 and (len(r.stdout) == raw or raw < 0 and r.stdout) else None
     return r.stdout if r.returncode == 0 and r.stdout[:2] == b"\xff\xd8" else None
+
+
+def alb_vpick(src, dur):
+    """影片封面：前面一段平均抽 8 格（96×96 灰階），挑最清楚、不太暗不過曝的那一格；回傳秒數"""
+    d0 = min(1.0, dur / 3)
+    if dur < 1.5:
+        return d0
+    t0, w, k, n = min(.3, dur / 10), min(8.0, dur * .6), 8, 96
+    px = alb_run_ff(["-ss", f"{t0:.2f}", "-t", f"{w:.2f}", "-i", "{src}", "-an", "-vf", f"fps={k / w:.4f},scale={n}:{n}:flags=area,format=gray",
+                     "-frames:v", str(k), "-f", "rawvideo", "-pix_fmt", "gray", "-"], src=src, timeout=120, raw=-1)
+    if not px or len(px) < n * n:
+        return d0
+    best, bt = -1.0, d0
+    for j in range(min(k, len(px) // (n * n))):
+        f = px[j * n * n:(j + 1) * n * n]
+        mean = sum(f) / len(f)
+        if not 25 <= mean <= 225:                      # 全黑（片頭）、一片白的不要
+            continue
+        v = 0.0
+        for y in range(1, n - 1, 2):
+            r, u, dn = f[y * n:(y + 1) * n], f[(y - 1) * n:y * n], f[(y + 1) * n:(y + 2) * n]
+            v += sum((4 * c - a - b - e - g) ** 2 for c, a, b, e, g in zip(r[1:-1], r[:-2], r[2:], u[1:-1], dn[1:-1]))
+        if v > best:
+            best, bt = v, t0 + (j + .5) * w / k
+    return round(bt, 2)
 
 
 def alb_ff_src(src):
@@ -1764,7 +1818,7 @@ def alb_make(a, pid, m, edge=2048):
     ext = os.path.splitext(m["n"])[1].lower()
     jpg = ext in (".jpg", ".jpeg") or ext in PIC_RAW
     rot = ALB_ROT.get(m.get("ori", 1), "") if jpg else ""
-    pre = ["-ss", f"{min(1.0, m.get('dur', 0) / 3):.2f}"] if m.get("vid") else []   # 影片：拿一開始的一格當封面
+    pre = ["-ss", f"{alb_vpick(src, m.get('dur', 0)) if not xl else min(1.0, m.get('dur', 0) / 3):.2f}"] if m.get("vid") else []   # 影片：前幾秒裡最清楚的一格當封面
     out = ["-map_metadata", "-1", "-frames:v", "1", "-f", "image2pipe", "-c:v", "mjpeg", "-pix_fmt", "yuvj420p"]
     scale = f"scale='if(gt(iw,ih),min({edge},iw),-2)':'if(gt(iw,ih),-2,min({edge},ih))':flags=lanczos"
     vf, tf = rot + scale, None
@@ -2136,8 +2190,10 @@ def alb_vmake(a, pid, m, kind):
     if not cmd:
         return False
     tries = [(1, 1, 0), (0, 1, 0), (0, 0, 1)] if m.get("hdr") and kind == "v" and alb_ff_has("zscale") else [(0, 1, 0), (0, 0, 1)]
+    if kind == "v" and alb_ff_has("loudnorm"):         # 音量拉平（跟串流平台一樣 −16 LUFS）：先試，不行照原本的音量
+        tries = [(h, 2 if s else 0, ln) for h, s, ln in tries[:1]] + tries
     for hdr, snd, lean in tries:                       # 轉不出來時退一步再試：不壓 HDR、不要聲音、少用幾條執行緒
-        ok, err = alb_vrun(a, ck, p, name, kind, cmd, src, hdr, snd and kind == "v", lean, m.get("dur", 4))
+        ok, err = alb_vrun(a, ck, p, name, kind, cmd, src, hdr, snd if kind == "v" else 0, lean, m.get("dur", 4))
         if ok:
             return True
     log(f"相簿影片轉不出來（{name}：{err[-160:] or '不明原因'}）")
@@ -2168,6 +2224,7 @@ def alb_vrun(a, ck, p, name, kind, cmd, src, hdr, snd, lean, dur):
     args = [*(["-threads", "1", "-filter_threads", "1"] if lean else []), "-i", src, "-map", "0:v:0", *(["-map", "0:a:0?"] if snd else ["-an"]),
             "-map_metadata", "-1", "-vf", vf,
             "-c:v", "libx264", "-preset", "veryfast", "-crf", "27", "-pix_fmt", "yuv420p", "-threads", "1" if lean else "2",
+            *(["-af", "loudnorm=I=-16:TP=-1.5:LRA=11", "-ar", "48000"] if snd == 2 else []),
             *(["-c:a", "aac", "-b:a", "96k", "-ac", "2"] if snd else []), "-movflags", "+faststart", "-f", "mp4", tmp]
     os.makedirs(ALB_CACHE, mode=0o700, exist_ok=True)
     ok, err = False, ""
@@ -2682,6 +2739,7 @@ def alb_manifest(a, th=""):
                 c = pl.get("c") or pl["n"]
                 places[c] = places.get(c, 0) + 1
         out.append(it)
+    out = alb_clock(out)
     wx, wx_miss = {}, False
     if a["loc"]:
         for day, g in alb_wx_days(a, idx).items():
@@ -2699,6 +2757,83 @@ def alb_manifest(a, th=""):
     return {"ok": True, "name": a["name"], "photos": out, "dl": alb_dl(a), "loc": a["loc"], "exp": a["exp"], "es": a.get("es") or a.get("t0", 0), "wmo": wmo, "wx": wx, "intro": a.get("intro", ""), "gb": talk.get(ALB_GB, {}).get("cm", []) if a.get("talk", True) else [],
             "talk": a.get("talk", True), "mu": bool(idx.get("mu")), "up": alb_up(a),
             "places": [k for k, _ in sorted(places.items(), key=lambda x: -x[1])][:6], "ready": alb_ready(a, idx)}
+
+
+ALB_PHONE = ("apple", "google", "samsung", "xiaomi", "redmi", "poco", "huawei", "honor", "oneplus", "oppo", "vivo", "realme", "motorola", "nothing")
+
+
+def alb_oz_s(oz):
+    m = re.fullmatch(r"([+-])(\d\d):(\d\d)", oz or "")
+    return (1 if m.group(1) == "+" else -1) * (int(m.group(2)) * 3600 + int(m.group(3)) * 60) if m else None
+
+
+def alb_clock(out):
+    """相機時間校正：手機的時間會自己對網路，相機常常慢幾分鐘、出國忘了換時區。
+    1. 相機和手機拍到很像的畫面（亮暗指紋差 8 格內、3 小時內）至少兩組、差的時間一致（一分鐘內）→ 整台相機照手機調整
+    2. 相機有寫時區、跟同一段時間手機的時區不一樣 → 換成手機那邊的當地時間（拍的那一刻本來就對）
+    回傳照新時間排好的清單；有調整的照片 x 多一個 dtc：[調了幾秒, 原本的時間, 原本的時區]"""
+    rows = []
+    for it in out:
+        x = it["x"]
+        if x.get("dtf") or not x.get("dt"):
+            continue
+        try:
+            t = calendar.timegm(time.strptime(x["dt"][:19], "%Y:%m:%d %H:%M:%S"))
+        except ValueError:
+            continue
+        oz = alb_oz_s(x.get("oz"))
+        mk = (x.get("mk") or "").lower().split(" ")[0]
+        rows.append((it, t, oz, oz is not None and mk in ALB_PHONE))
+    refs = [(t - oz, t, oz, it) for it, t, oz, r in rows if r]
+    if not refs:
+        return out
+    by_u, by_l = sorted(refs, key=lambda r: r[0]), sorted(refs, key=lambda r: r[1])
+    ku, kl = [r[0] for r in by_u], [r[1] for r in by_l]
+    cams, moved = {}, False
+    for row in rows:
+        x = row[0]["x"]
+        if not row[3] and x.get("mk") and x.get("md") and (x.get("mk") or "").lower().split(" ")[0] not in ALB_PHONE:
+            cams.setdefault((x["mk"], x["md"]), []).append(row)
+    for lst in cams.values():
+        pairs = []
+        for it, t, oz, _ in lst:
+            if not it.get("dh"):
+                continue
+            c, (ks, rs) = (t - oz, (ku, by_u)) if oz is not None else (t, (kl, by_l))
+            h = int(it["dh"], 16)
+            for j in range(bisect.bisect_left(ks, c - 10800), bisect.bisect_right(ks, c + 10800)):
+                r = rs[j][3]
+                if r.get("dh") and bin(h ^ int(r["dh"], 16)).count("1") <= 8:
+                    pairs.append((ks[j] - c, it["i"], r["i"]))
+        sh = 0
+        if len(pairs) >= 2:
+            best = max((sorted(q for q in pairs if abs(q[0] - p[0]) <= 60) for p in pairs), key=len)
+            if len(best) >= 2 and len({q[1] for q in best}) >= 2 and len({q[2] for q in best}) >= 2 and len(best) >= .6 * len(pairs):
+                sh = int(round((best[(len(best) - 1) // 2][0] + best[len(best) // 2][0]) / 2))   # 中位數
+                sh = sh if abs(sh) >= 60 else 0
+        for it, t, oz, _ in lst:
+            t2, oz2 = t + sh, oz
+            if oz is not None:                         # 時區：照同一段時間（12 小時內）最近的那張手機照片
+                u = t2 - oz
+                j = bisect.bisect_left(ku, u)
+                near = min((by_u[k] for k in (j - 1, j) if 0 <= k < len(by_u)), key=lambda r: abs(r[0] - u), default=None)
+                if near and abs(near[0] - u) <= 43200 and near[2] != oz:
+                    t2, oz2 = u + near[2], near[2]
+            elif sh:
+                j = bisect.bisect_left(kl, t2)
+                near = min((by_l[k] for k in (j - 1, j) if 0 <= k < len(by_l)), key=lambda r: abs(r[1] - t2), default=None)
+                oz2 = near[2] if near and abs(near[1] - t2) <= 43200 else None
+            if t2 == t and oz2 == oz:
+                continue
+            x = it["x"]
+            nx = {**x, "dt": time.strftime("%Y:%m:%d %H:%M:%S", time.gmtime(t2)), "dtc": [sh, x["dt"], x.get("oz", "")]}
+            if oz2 is not None:
+                nx["oz"] = f"{'+' if oz2 >= 0 else '-'}{abs(oz2) // 3600:02d}:{abs(oz2) % 3600 // 60:02d}"
+            it["x"] = nx
+            moved = True
+    if moved:
+        out.sort(key=lambda it: (it["x"].get("dt") or "", it["n"].lower()))
+    return out
 
 
 def alb_cookie_name(a):

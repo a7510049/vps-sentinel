@@ -2811,6 +2811,23 @@ const gAf = p => {                                           // 對焦點：照�
   const cx = x0 + a[0] * W, cy = y0 + a[1] * H, h = 3.2, c = (dx, dy) => `M${(cx + dx * h).toFixed(1)} ${(cy + dy * h - dy * 1.6).toFixed(1)}V${(cy + dy * h).toFixed(1)}H${(cx + dx * h - dx * 1.6).toFixed(1)}`;
   return `<svg class="gin gb" viewBox="0 0 24 24" aria-hidden="true"><rect x="${x0.toFixed(1)}" y="${y0.toFixed(1)}" width="${W.toFixed(1)}" height="${H.toFixed(1)}" rx="2" class="gafr"/><path d="${c(-1, -1)}${c(1, -1)}${c(-1, 1)}${c(1, 1)}" class="gl gaf"/></svg>`;
 };
+/* 景深：鏡頭焦距、光圈、感光元件大小（等效焦距換算）算清楚的範圍；相機沒記對焦距離就寫超焦距（對在那裡，一半距離到無限遠都清楚） */
+function dofOf(p){
+  const x = p.x, fl = x.fl, N = x.f, cr = x.f35 && fl ? x.f35 / fl : 0;
+  if (isVid(p) || !fl || !N || !(cr > .4 && cr < 12)) return null;
+  const H = fl * fl / (N * .03 / cr) + fl;                   // 超焦距（mm）：容許模糊圈 0.03 mm（全片幅），小感光元件照比例縮小
+  if (!x.fd) return H < 2e5 ? {k:"超焦距", t:dofM(H / 1e3, 1), s:H, n:H / 2, f:Infinity} : null;
+  const s = x.fd * 1e3; if (s < fl * 2) return null;
+  const n = s * (H - fl) / (H + s - 2 * fl), f = s < H ? s * (H - fl) / (H - s) : Infinity;
+  return {k:"景深", t:f === Infinity ? `${dofM(n / 1e3, 1)}～∞` : dofR(n / 1e3, f / 1e3), s, n, f};
+}
+const dofN = (v, d) => v >= 10 ? String(Math.round(v)) : v.toFixed(d);
+const dofM = (v, u) => v < 1 ? `${Math.round(v * 100)} ${u ? "cm" : "公分"}` : `${dofN(v, 1)} ${u ? "m" : "公尺"}`;   // u：格子裡用短的單位（跟 mm、s 一樣）
+const dofR = (a, b) => b < 1 ? `${Math.round(a * 100)}～${Math.round(b * 100)} cm` : `${dofN(a, b - a < .3 ? 2 : 1)}～${dofN(b, b - a < .3 ? 2 : 1)} m`;
+const gDof = d => {                                          // 一條往前的距離線：清楚的那段亮起來，對焦的地方一條直線（離越遠壓得越扁）
+  const R = d.s, X = v => v === Infinity ? 21.5 : 5 + 16.5 * v / (v + R), a = X(d.n), b = X(d.f), c = X(d.s);
+  return `<svg class="gin gb" viewBox="0 0 24 24" aria-hidden="true"><path d="M2 14.5l3-2.5v5Z" class="gd"/><rect x="${a.toFixed(1)}" y="10" width="${Math.max(.8, b - a).toFixed(1)}" height="9" rx="1.5" class="gf"/><path d="M5 18.5H22" class="gs"/><path d="M${c.toFixed(1)} 7.5V20" class="gl"/></svg>`;
+};
 const gBolt = on => `<svg class="gin gb${on ? "" : " off"}" viewBox="0 0 24 24" aria-hidden="true"><path d="M13 2 5 13.5h6L10 22l9-12h-6Z" class="gd"/>${on ? "" : `<path d="M4 4l16 16" class="gl"/>`}</svg>`;
 
 /* 照片的五個主要顏色：小圖畫到畫布上、照顏色分堆，越多的那段越長 */
@@ -2923,9 +2940,9 @@ function infoHTML(p){
   const fe = f35 || (fl ? Math.round(fl) : 0);
   const cells = [["光圈", x.f ? `ƒ${+x.f.toFixed(2)}` : "", x.f ? gIris(x.f) : "", "f"], ["快門", shutter(x.et).replace(" 秒", " s"), x.et ? gShut(x.et) : "", "et"],
     ["ISO", x.iso || "", x.iso ? gIso(x.iso) : "", "iso"], ["焦距", fe ? `${fe} mm` : "", f35 ? gFov(f35) : "", "fl"], ["曝光", x.ev != null ? `${x.ev > 0 ? "+" : ""}${+x.ev.toFixed(1)} ev` : "", x.ev != null ? gEv(x.ev) : "", "ev"]];
-  h += `<div class="ibox"><div class="icam"><div class="t">${cam && !isVid(p) ? `<button class="igear" data-gear="c:${esc(cam)}">${brandSvg(x)}<b>${esc(brandSvg(x) ? cam.replace(new RegExp("^" + (MKS[(x.mk || "").toLowerCase()] || x.mk || "").replace(/[.*+?^${}()|[\]\\]/g, "\\$&") + "\\s+", "i"), "") : cam)}</b>${I("r")}</button>` : `<b>${esc(cam || (isVid(p) ? "影片" : "相機資訊"))}</b>`}<span class="tag">${esc(ext)}</span>${p.rw && p.rw !== ext ? `<span class="tag">+${esc(p.rw)}</span>` : ""}${p.cs ? `<span class="tag">${esc(p.cs.replace("Display ", ""))}</span>` : ""}${p.hdr && !isVid(p) ? `<span class="tag hdr">HDR</span>` : ""}</div>
+  h += `<div class="ibox"><div class="icam"><div class="t">${cam && !isVid(p) ? `<button class="igear" data-gear="c:${esc(cam)}">${brandSvg(x)}<b>${esc(brandSvg(x) ? cam.replace(new RegExp("^" + (MKS[(x.mk || "").toLowerCase()] || x.mk || "").replace(/[.*+?^${}()|[\]\\]/g, "\\$&") + "\\s+", "i"), "") : cam)}</b>${I("r")}</button>` : `<b>${esc(cam || (isVid(p) ? "影片" : "相機資訊"))}</b>`}<span class="tag">${esc(ext)}</span>${p.rw && p.rw !== ext ? `<span class="tag">+${esc(p.rw)}</span>` : ""}${p.cs ? `<span class="tag">${esc(p.cs.replace("Display ", ""))}</span>` : ""}${p.hdr && !isVid(p) ? `<span class="tag hdr">HDR</span>` : ""}${isVid(p) && x.vc ? `<span class="tag">${esc(x.vc)}</span>` : ""}${isVid(p) && (x.gm || p.hdr) ? `<span class="tag hdr">${esc(x.gm || (p.hdr === "pq" ? "HDR PQ" : "HLG"))}</span>` : ""}</div>
       ${lens || f35 ? `<div class="l">${esc(f35 ? `${lensKind(f35)}・等效${x.f35e ? "約" : ""} ${f35} mm` : "")}${lens ? `${f35 ? "　" : ""}<button class="igear sm" data-gear="l:${esc(lens)}">${esc(lens)}</button>` : ""}</div>` : ""}
-      <div class="l2 num">${p.w && p.h ? `<i class="gar" style="aspect-ratio:${p.w} / ${p.h}"></i>` : ""}<span>${isVid(p) ? `影片 ${dur(p.vd)}・` : mp >= .1 ? `${mp >= 10 ? Math.round(mp) : mp.toFixed(1)} MP・` : ""}${p.w} × ${p.h}・${size(p.sz)}</span></div></div>
+      <div class="l2 num">${p.w && p.h ? `<i class="gar" style="aspect-ratio:${p.w} / ${p.h}"></i>` : ""}<span>${isVid(p) ? `影片 ${dur(p.vd)}・${x.fps ? `${+x.fps.toFixed(2)} fps・` : ""}${x.vb ? `${x.vb >= 10 ? Math.round(x.vb) : x.vb} Mbps・` : ""}` : mp >= .1 ? `${mp >= 10 ? Math.round(mp) : mp.toFixed(1)} MP・` : ""}${p.w} × ${p.h}・${size(p.sz)}</span></div></div>
     ${cells.some(c => c[1]) ? `<div class="iex num">${cells.map(([k, v, g, gk]) => `<div data-gk="${gk}"${v ? "" : ` class="no"`}>${g || SV(`<circle cx="16" cy="16" r="12" class="gt"/>`)}<b>${esc(v || "—")}</b><small>${k}</small></div>`).join("")}</div>` : ""}</div>`;
   const ms = x.ms;
   if (ms && (ms.st || ms.lut || ms.k)) {
@@ -2937,6 +2954,9 @@ function infoHTML(p){
   const kv = [];
   if (x.ln) kv.push(["鏡頭", x.lmk && !x.ln.startsWith(x.lmk) ? `${x.lmk} ${x.ln}` : x.ln]);
   if (fl && f35 && Math.round(fl) !== f35) kv.push(["實際焦距", `${+fl.toFixed(2)} mm`]);
+  if (x.dtc) { const [sh, , oz0] = x.dtc, m = Math.round(Math.abs(sh) / 60);   // 相機時間照手機調過（主機 alb_clock）
+    kv.push(["相機時間", [sh ? `相機${sh > 0 ? "慢" : "快"} ${m >= 60 ? `${Math.floor(m / 60)} 小時${m % 60 ? ` ${m % 60} 分` : ""}` : `${m} 分鐘`}` : "", oz0 && oz0 !== x.oz ? `相機設在 UTC${oz0.replace(":00", "")}` : ""].filter(Boolean).join("・") + "，已照手機調整"]); }
+  if (x.fd && !isVid(p)) kv.push(["對焦距離", dofM(x.fd)]);
   if (ms && (ms.af || ms.sub)) kv.push(["對焦", [ms.af, ms.sub].filter(Boolean).join("・")]);
   if (ms && ms.is) kv.push(["防手震", ms.is]);
   // 拍攝設定：一格一個小圖（模式轉盤、測光方式、閃光燈、白平衡、場景），不再一行一行寫字
@@ -2948,6 +2968,7 @@ function infoHTML(p){
   if (x.wb != null) st.push([gWb(x.wb), x.wb ? "手動" : "自動", "白平衡"]);
   if (x.sc && SC[x.sc]) st.push([gDial("SCN"), SC[x.sc], "場景"]);
   if (x.afp && !isVid(p)) st.push([gAf(p), p.fm ? "可能跑焦" : p.fs >= 60 ? "清楚" : "標出位置", "對焦點", ` class="iaf${AFON ? " on" : ""}${p.fm ? " miss" : ""}" data-af role="button" tabindex="0" aria-pressed="${AFON}"`]);
+  { const dof = dofOf(p); if (dof) st.push([gDof(dof), dof.t, dof.k]); }
   { const c = STKOF.get(PH.indexOf(p)); if (c != null && STKB.has(c)) { const ev = STK.get(c).map(i => PH[i].x.ev).sort((a, b) => a - b);
     kv.push(["包圍曝光", `${ev.length} 張・${ev.map(v => `${v > 0 ? "+" : v < 0 ? "−" : "±"}${Math.abs(+v.toFixed(1))}`).join(" / ")} EV`]); } }
   if (p.g && p.g[2] != null) kv.push(["海拔", `${Math.round(p.g[2])} 公尺`, gMtn]);
