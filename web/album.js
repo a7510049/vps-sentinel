@@ -684,7 +684,7 @@ function draw(){
     ${D.intro ? `<section class="intro"><p>${esc(D.intro).replace(/\n/g, "<br>")}</p></section>` : ""}<nav class="who" hidden></nav><div class="mems"></div><div class="stats"></div><section class="hl" hidden></section><div class="cityf" hidden></div><div class="wwrap"><main class="wall" data-z="${ZL}"></main><aside class="smap" hidden><div class="smv"></div><div class="smc"></div></aside></div>
     <section class="gear" hidden></section>
     ${D.loc && ALL.some(p => p.g && !p.u) ? `<section class="msec"${WHO ? " hidden" : ""}><div class="mh"><b data-mt>地點</b><span class="num" data-km></span></div><div class="cities"></div><div class="map" data-map></div></section>` : ""}
-    <div class="scrub" aria-hidden="true"><div class="stk2"></div><i class="sth"><span class="sbl num"></span></i></div>
+    <div class="scrub" aria-hidden="true"><div class="stk2"></div><i class="sth"><span class="sbl num"><img class="sbi" alt="" hidden><b></b></span></i></div>
     ${D.talk ? `<section class="gbk"></section>` : ""}
     <footer class="foot">${finCol()}<div class="fin">${esc(D.name)}</div>${D.exp ? `<span class="fexp">${expRing()}${left(D.exp)}</span>` : ""}</footer>`;
   const hi = $(".hero .hi");
@@ -985,6 +985,7 @@ function scrubLabel(y){                                      // 那個位置的�
   const t = y + innerHeight * .3; let best = SCR.rows[0];
   for (const r of SCR.rows) { if (r[0] > t) break; best = r; }
   const p = best && PH[best[1]], d = p && pd(p.x.dt);
+  SCR.p = p;
   if (HUE) return p && p._hk ? HUEN(p._hk[0]) : "";
   return d ? ZL === 3 ? `${d.y}年${d.mo}月` : `${YR ? d.y + "年" : ""}${d.mo}月${d.d}日` : "";
 }
@@ -994,13 +995,19 @@ function scrubLabel(y){                                      // 那個位置的�
     const sc = $(".scrub"), rg = SCR.rg; if (!sc || !rg || SCR.y == null) return;
     const f = Math.max(0, Math.min(1, (SCR.y - SCR.top) / SCR.h)), y = rg[0] + f * (rg[1] - rg[0]);
     sc.style.setProperty("--f", f.toFixed(4)); scrollTo({top:y, behavior:"auto"});
-    const l = sc.querySelector(".sbl"), tx = scrubLabel(y); if (l.textContent !== tx) l.textContent = tx; };
+    sblSet(sc, scrubLabel(y)); };
+  /* 日期旁邊放那一排第一張的小圖（模糊預覽，馬上有）：手機重畫照片牆跟不上手指時，也看得到拖到哪裡 */
+  const sblSet = (sc, tx) => { const l = sc.querySelector(".sbl"), b = l.querySelector("b"), im = l.querySelector(".sbi"), p = SCR.p;
+    if (b.textContent !== tx) b.textContent = tx;
+    l.classList.toggle("on", !!tx);
+    const u = p && p.q ? `data:image/jpeg;base64,${p.q}` : "";
+    if (im.dataset.u !== u) { im.dataset.u = u; if (u) im.src = u; im.hidden = !u; } };
   const at = e => { SCR.y = e.clientY; if (!SCR.raf) SCR.raf = requestAnimationFrame(go); };
   document.addEventListener("pointerdown", e => { const th = e.target.closest(".scrub.on .sth"); if (!th) return;
     e.preventDefault(); SCR.drag = false; SCR.rg = scrubRange(); SCR.drag = true; SCR.rows = null; SCR.y = null; clearTimeout(SCR.t);
     const sc = th.closest(".scrub"), r = sc.getBoundingClientRect(); SCR.top = r.top; SCR.h = r.height; sc.style.setProperty("--th", r.height + "px");
     sc.classList.add("drag"); document.documentElement.classList.add("scrubbing"); th.setPointerCapture(e.pointerId);
-    sc.querySelector(".sbl").textContent = scrubLabel(scrollY); });
+    sblSet(sc, scrubLabel(scrollY)); });
   document.addEventListener("pointermove", e => { if (SCR.drag) at(e); });
   const up = () => { if (!SCR.drag) return; if (SCR.raf) { cancelAnimationFrame(SCR.raf); go(); } SCR.drag = false; SCR.rg = null; const sc = $(".scrub"); if (sc) sc.classList.remove("drag"); document.documentElement.classList.remove("scrubbing"); scrubSync(); };
   document.addEventListener("pointerup", up); document.addEventListener("pointercancel", up);
@@ -1089,7 +1096,7 @@ document.addEventListener("click", e => {
   if (m && m.dataset.cl) return placeSheet(m.dataset.cl.split(",").map(Number));   // 好幾張疊在一起：先列出那裡拍的全部
   if (m) return openLb(+m.dataset.i, m.querySelector("img") || m);
   const hg = e.target.closest("[data-hlgo]");
-  if (hg) { const r = hg.closest(".hl").querySelector(".hlr"); return r.scrollBy({left:+hg.dataset.hlgo * r.clientWidth * .8, behavior:anim() ? "smooth" : "auto"}); }
+  if (hg) { const r = hg.closest(".hl").querySelector(".hlr"); return glideX(r, (r._tx != null ? r._tx : r.scrollLeft) + +hg.dataset.hlgo * r.clientWidth * .8); }
   const hc = e.target.closest("[data-hl]");
   if (hc) { const k = PH.findIndex(p => p.i === hc.dataset.hl); return k < 0 ? undefined : openLb(k, hc.querySelector("img")); }   // 用照片編號找（照片牆換過順序也對得上）
 });
@@ -1475,7 +1482,7 @@ function openLb(i, from){
     if (th && th.dataset.v !== h) { const was = th.dataset.v != null; th.innerHTML = h; th.dataset.v = h; if (was && anim()) [...th.children].slice(1).forEach(x => x.animate([{opacity:0, transform:"translateY(3px)"}, {opacity:1, transform:"none"}], {duration:T.mid, easing:DEC})); }
   }
   function chrome(){
-    const p = PH[S.i], d = pd(p.x.dt), moved = S.at !== S.i;
+    const p = PH[S.i], d = pd(p.x.dt), moved = S.at !== S.i, dir = S.at == null ? 0 : Math.sign(S.i - S.at), was = PH[S.at];
     S.at = S.i;
     if (moved) stopAll();
     if (moved && p.gf && p.lv) setTimeout(() => { if (LB === S && S.at === S.i && !S.closing) live(); }, anim() ? T.mid : 0);   // 會動的 GIF：自己一直動
@@ -1490,8 +1497,8 @@ function openLb(i, from){
     const del = $("[data-del]", el); del.hidden = !p.um; if (moved) del.classList.remove("arm");
     const dl = $("[data-dl]", el); if (dl) dl.href = src(p, "o");
     $(".nav.l", el).disabled = S.i === 0; $(".nav.r", el).disabled = S.i === PH.length - 1;
-    if (S.info === "info" && (moved || !inf.firstChild)) infSet(p);
-    if (S.info === "cm" && moved) cmSet(p);                     // 同一張不重畫：安卓跳出鍵盤會改畫面大小，重畫會把正在打字的留言收掉
+    if (S.info === "info" && (moved || !inf.firstChild)) infSet(p, moved ? dir : 0, moved ? was : null);
+    if (S.info === "cm" && moved) cmSet(p, dir);                     // 同一張不重畫：安卓跳出鍵盤會改畫面大小，重畫會把正在打字的留言收掉
     const fromOb = S.ob && S.i === S.fi;
     TILES.forEach((t, k) => t.classList.toggle("gone", k === S.i && !fromOb));
     if (S.ob) S.ob.classList.toggle("lbo", fromOb);
@@ -1503,13 +1510,19 @@ function openLb(i, from){
   }
   function amb(p){                                           // 後面透出這張的顏色：糊開的小圖，換張時慢慢變過去
     if (p.broken) return;
-    const im = document.createElement("img"); im.className = "amb"; im.alt = ""; im.src = p.q ? `data:image/jpeg;base64,${p.q}` : src(p, "s");
-    let w = bg.querySelector(".ambw");                         // 包一層、透明度放在外層：新的蓋上舊的時整體亮度不變（以前兩張疊在一起先變亮，舊的拿掉又突然變暗）
-    if (!w) { w = document.createElement("div"); w.className = "ambw"; bg.prepend(w); }
-    w.appendChild(im);
-    const old = [...w.querySelectorAll(".amb")].slice(0, -1);
-    const on = () => { im.classList.add("ok"); setTimeout(() => old.forEach(o => o.remove()), T.long + 100); };
-    im.complete && im.naturalWidth ? requestAnimationFrame(on) : im.addEventListener("load", on, {once:true});
+    const A = .55, im = document.createElement("img"); im.className = "amb"; im.alt = ""; im.src = p.q ? `data:image/jpeg;base64,${p.q}` : src(p, "s");
+    const old = [...bg.querySelectorAll(".amb")];
+    bg.appendChild(im);
+    /* 新的淡入、舊的同時淡出，兩張疊起來的總亮度一直是 A（不會先變亮再突然變暗）；都用 WAAPI 交給顯示卡，iPhone、安卓都看得到漸變 */
+    const go = () => {
+      if (!anim()) { im.style.opacity = A; old.forEach(o => o.remove()); return; }
+      const st = [0, .2, .4, .6, .8, 1], sm = t => t * t * (3 - 2 * t);
+      im.animate(st.map(t => ({offset:t, opacity:A * sm(t)})), {duration:T.long, fill:"forwards"});
+      old.forEach(o => { const a0 = +getComputedStyle(o).opacity || A;
+        o.getAnimations().forEach(x => x.cancel());
+        o.animate(st.map(t => { const n = A * sm(t); return {offset:t, opacity:Math.max(0, Math.min(a0, (A - n) / (1 - n) * (a0 / A)))}; }), {duration:T.long, fill:"forwards"}).finished.then(() => o.remove(), () => {}); });
+    };
+    im.complete && im.naturalWidth ? go() : im.addEventListener("load", go, {once:true});
   }
   function stripAt(){                                        // 下面那排小圖：這張亮起來、捲到中間
     const r = $(".lbsr", el); if (!r) return;
@@ -1531,13 +1544,23 @@ function openLb(i, from){
     const sr = stage.getBoundingClientRect(), ri = g.ri, rc = g.rc, k = Math.max(ri.width / f.w, ri.height / f.h);
     const L = ri.left + ri.width / 2 - f.w * k / 2, Tp = ri.top + ri.height / 2 - f.h * k / 2;
     const x = L - sr.left - f.l, y = Tp - sr.top - f.t, c = v => Math.max(0, v / k).toFixed(2);
-    return {t:`translate(${x}px,${y}px) scale(${k})`, c:`inset(${c(rc.top - Tp)}px ${c(L + f.w * k - rc.right)}px ${c(Tp + f.h * k - rc.bottom)}px ${c(rc.left - L)}px round ${(g.rad / k).toFixed(2)}px)`};
+    const rd = (g.rads || [g.rad, g.rad, g.rad, g.rad]).map(v => (v / k).toFixed(2) + "px").join(" ");
+    return {t:`translate(${x}px,${y}px) scale(${k})`, c:`inset(${c(rc.top - Tp)}px ${c(L + f.w * k - rc.right)}px ${c(Tp + f.h * k - rc.bottom)}px ${c(rc.left - L)}px round ${rd})`};
   }
   function tgt(x, any){                                      // 格子（或精選卡片）在畫面上的哪裡；any：看不到也給
     if (!x || !x.isConnected) return null;
     const box = x.tagName === "IMG" ? x.closest(".ph,.hlc,.inp,.lbst,button,a") || x : x, im = x.tagName === "IMG" ? x : box.querySelector("img.hi") || box.querySelector("img") || box;
-    const rc = box.getBoundingClientRect(); if (!rc.width || (!any && (rc.bottom <= 0 || rc.top >= innerHeight))) return null;
-    return {ri:im.getBoundingClientRect(), rc, rad:parseFloat(getComputedStyle(box).borderTopLeftRadius) || 0};
+    const r0 = box.getBoundingClientRect(); if (!r0.width) return null;
+    let L = r0.left, Tq = r0.top, R = r0.right, B = r0.bottom;   // 被捲動框切掉的部分（精選那排最右邊那張只露出一半）：裁成看得到的那塊
+    for (let a = box.parentElement; a && a !== document.body; a = a.parentElement) {
+      const cs = getComputedStyle(a); if (cs.overflowX === "visible" && cs.overflowY === "visible") continue;
+      const q = a.getBoundingClientRect(); L = Math.max(L, q.left); Tq = Math.max(Tq, q.top); R = Math.min(R, q.right); B = Math.min(B, q.bottom);
+    }
+    if (R - L < 2 || B - Tq < 2) return null;
+    if (!any && (B <= 0 || Tq >= innerHeight)) return null;
+    const rad = parseFloat(getComputedStyle(box).borderTopLeftRadius) || 0, e = 1;
+    const cl = L > r0.left + e, cr = R < r0.right - e, ct = Tq > r0.top + e, cb = B < r0.bottom - e;   // 被切掉的那一邊是直的
+    return {ri:im.getBoundingClientRect(), rc:{left:L, top:Tq, right:R, bottom:B}, rad, rads:[cl || ct ? 0 : rad, cr || ct ? 0 : rad, cr || cb ? 0 : rad, cl || cb ? 0 : rad]};
   }
   const NOCLIP = "inset(0px 0px 0px 0px round 0px)";
 
@@ -1578,8 +1601,12 @@ function openLb(i, from){
   function close(){
     if (S.closing) return; S.closing = 1;
     finish();
-    /* 縮回哪裡（整頁不捲動）：同一張回到打開的地方；換過張就回到那張的格子，格子不在畫面上就回到打開的地方；都不在畫面上就原地淡掉 */
-    const p = PH[S.i], to = S.i === S.fi ? S.o : tgt(tileOf(S.i)) ? tileOf(S.i) : S.o;
+    /* 縮回哪裡：同一張回到打開的地方；換過張就回到那張自己的格子，格子不在畫面上就先在大圖後面把照片牆捲到那裡（像手機相簿），再縮回去 */
+    const p = PH[S.i], tl = tileOf(S.i);
+    if (S.i !== S.fi && tl && tl.isConnected && !tgt(tl) && tl.closest(".wall")) {
+      const q = tl.getBoundingClientRect(); if (q.width) window.scrollTo({top:Math.max(0, scrollY + q.top + q.height / 2 - innerHeight / 2), behavior:"instant"});
+    }
+    const to = S.i === S.fi ? S.o : tgt(tl) ? tl : S.o;
     let r = tgt(to);
     const box = r && to ? (to.tagName === "IMG" ? to.closest(".ph,.hlc") : to) : null;
     const ovl = box ? [...box.querySelectorAll(".bdg,.hlc>i,.hlc>em"), ...(box.closest(".row.feat") && box.closest(".cov") ? [box.closest(".cov").querySelector(".dh")] : [])].filter(Boolean) : [];
@@ -1615,18 +1642,60 @@ function openLb(i, from){
     clearTimeout(S.infT); S.infT = setTimeout(() => sl.forEach(s => { s.style.visibility = ""; }), T.mid + 60);
     S.fitAll();
   }
-  function infSet(p){
+  function infSet(p, dir, q){
     const y = inf.scrollTop, om = inf.querySelector(".imap"), old = om && om._c ? {c:om._c, t:[...om.querySelectorAll(".tl.ok")]} : null;
+    const kl = inf.querySelector(".kbar i"), k0 = kl ? kl.style.left : "";
     inf.innerHTML = infoHTML(p); inf.scrollTop = y;            // 換張時停在原本看的地方
-    infoMap(old);
+    infoMap(old, !!dir);
+    const mv = dir && q && q !== p && anim() ? morph(q, p, k0) : null;
+    if (dir) panIn(inf, dir, mv);
     [-1, 1].forEach(d => { const q = PH[S.i + d]; if (q && !q.pal && !q.broken) palette(q); });   // 旁邊兩張先算好顏色，換過去不用等
   }
-  function cmSet(p){
-    cmp.innerHTML = talkHTML(p);
+  function panIn(P, dir, keep){                              // 換張時面板裡的內容跟著照片的方向滑進來（一塊一塊、不先變空白）
+    if (!anim()) return;
+    [...P.children].slice(0, 8).filter(c => !(keep && keep.has(c))).forEach((c, k) => c.animate([{opacity:.25, transform:`translateX(${dir * 22}px)`}, {opacity:1, transform:"none"}], {duration:T.mid, delay:k * 40, easing:DEC, fill:"backwards"}));
+  }
+  function morph(q, p, k0){                                  // 換張時光圈、快門、ISO、焦距、曝光、拍攝時間、色溫從上一張的數值轉到這一張（葉片收放、指針轉、數字跟著跳）
+    const a = q.x || {}, b = p.x || {}, keep = new Set(), done = new Set(), jobs = [];
+    const box = c => c.closest(".ibox");
+    const add = (cell, v0, v1, svg, txt, log) => {
+      if (!cell || v0 == null || v1 == null || !(v0 > 0 || !log) || !(v1 > 0 || !log) || v0 === v1) return;
+      const sv = cell.querySelector("svg"), tb = cell.querySelector("b"), fin = tb ? tb.textContent : "";
+      jobs.push(t => { const v = log ? Math.exp(Math.log(v0) + (Math.log(v1) - Math.log(v0)) * t) : v0 + (v1 - v0) * t;
+        if (sv && svg) { const n = document.createRange().createContextualFragment(svg(v)).firstChild; sv.replaceChildren(...n.childNodes); }
+        if (tb) tb.textContent = t < 1 && txt ? txt(v) : fin; });
+      keep.add(box(cell)); done.add(cell);
+    };
+    const G = k => inf.querySelector(`.iex [data-gk="${k}"]`);
+    add(G("f"), a.f, b.f, v => gIris(v), v => `ƒ${v.toFixed(1)}`, 1);
+    const et = x => x.et ? x.et[0] / x.et[1] : null;
+    add(G("et"), et(a), et(b), v => gShut([v, 1]), v => v >= 1 ? `${v.toFixed(1)} s` : `1/${Math.round(1 / v)} s`, 1);
+    add(G("iso"), a.iso, b.iso, v => gIso(v), v => String(Math.round(v)), 1);
+    add(G("fl"), a.f35, b.f35, v => gFov(v), v => `${Math.round(v)} mm`, 1);
+    add(G("ev"), a.ev, b.ev, v => gEv(v), v => `${v > 0 ? "+" : ""}${v.toFixed(1)} ev`, 0);
+    const da = pd(a.dt), db = pd(b.dt), sn = inf.querySelector(".ihd .gsun");
+    if (da && db && da.h != null && db.h != null && sn && !a.dtf && !b.dtf) {
+      const h0 = da.h + da.mi / 60, h1 = db.h + db.mi / 60;
+      if (h0 !== h1) jobs.push(t => { const h = h0 + (h1 - h0) * t, n = document.createRange().createContextualFragment(gSun({h:Math.floor(h), mi:(h % 1) * 60})).firstChild; sn.replaceChildren(...n.childNodes); sn.setAttribute("class", n.getAttribute("class")); });
+    }
+    keep.forEach(x => x.querySelectorAll(".iex > div").forEach(c => { if (!done.has(c)) c.animate([{opacity:.25}, {opacity:1}], {duration:T.mid, easing:DEC}); }));   // 沒有數值可以轉的那幾格淡入
+    const kl = inf.querySelector(".kbar i");
+    if (kl && k0 && k0 !== kl.style.left) kl.animate([{left:k0}, {left:kl.style.left}], {duration:T.slow, easing:DEC});
+    if (!jobs.length) return keep;
+    const t0 = performance.now(), run = now => {
+      if (LB !== S || !inf.isConnected || PH[S.i] !== p) return;
+      const t = Math.min(1, (now - t0) / T.slow), e = 1 - Math.pow(1 - t, 3);
+      jobs.forEach(j => j(t < 1 ? e : 1)); if (t < 1) requestAnimationFrame(run);
+    };
+    run(t0); return keep;
+  }
+  function cmSet(p, dir){
+    cmp.innerHTML = talkHTML(p); if (dir) panIn(cmp.querySelector(".italk") || cmp, dir);
     const l = cmp.querySelector(".cml"); if (l) l.scrollTop = l.scrollHeight;
   }
-  function infoMap(old){
+  function infoMap(old, swap){
     const p = PH[S.i], pb = $("[data-pal]", inf);
+    if (pb && p.pal && swap && anim()) { const hg = pb.querySelector(".ihist svg"); if (hg) hg.animate([{opacity:.3, transform:"scaleY(.4)"}, {opacity:1, transform:"none"}], {duration:T.slow, easing:DEC}); pb.querySelectorAll(".pbar i").forEach((x, k) => x.animate([{opacity:.3, transform:"scaleX(.5)"}, {opacity:1, transform:"none"}], {duration:T.slow, delay:k * 40, easing:DEC, fill:"backwards"})); }   // 換張時直方圖、顏色條照樣長出來
     if (pb && !p.pal) palette(p).then(() => { if (pb.isConnected && PH[S.i] === p) { pb.innerHTML = palHTML(p); const hg = pb.querySelector(".ihist svg"); if (hg && anim()) hg.animate([{opacity:0, transform:"scaleY(.2)"}, {opacity:1, transform:"none"}], {duration:T.slow, easing:DEC}); if (anim()) pb.querySelectorAll(".pbar i").forEach((x, k) => x.animate([{opacity:0, transform:"scaleX(.4)"}, {opacity:1, transform:"none"}], {duration:T.slow, delay:k * 50, easing:DEC, fill:"backwards"})); } });
     const m = $(".imap", inf); if (!m || !p.g) return;
     const z = 15, W2 = m.clientWidth, H2 = m.clientHeight, cx = lx(p.g[1], z), cy = ly(p.g[0], z);
@@ -2516,9 +2585,23 @@ function dragX(r){
   addEventListener("pointerup", () => { if (!d) return; const m = d.m; d = null; r.classList.remove("drag");
     if (m) { r.addEventListener("click", e => { e.stopPropagation(); e.preventDefault(); }, {capture:true, once:true}); setTimeout(() => r.style.scrollSnapType = "", 0); } });
   r.addEventListener("wheel", e => { if (Math.abs(e.deltaX) > Math.abs(e.deltaY)) return;
-    const max = r.scrollWidth - r.clientWidth, to = r.scrollLeft + e.deltaY;
-    if ((e.deltaY < 0 && r.scrollLeft <= 0) || (e.deltaY > 0 && r.scrollLeft >= max - 1)) return;
-    e.preventDefault(); r.scrollBy({left:e.deltaY * 1.4, behavior:"auto"}); void to; }, {passive:false});
+    const max = r.scrollWidth - r.clientWidth, cur = r._tx != null ? r._tx : r.scrollLeft;
+    if ((e.deltaY < 0 && cur <= 0) || (e.deltaY > 0 && cur >= max - 1)) return;   // 捲到頭才捲整頁
+    e.preventDefault(); glideX(r, cur + e.deltaY * (e.deltaMode === 1 ? 40 : 1.2)); }, {passive:false});
+  r.addEventListener("pointerdown", () => { r._tx = null; });
+}
+/* 橫的一排平順地滑到某個位置（滾輪一格一格的、左右鈕都走這裡）：每一格畫面往目標靠近一點，連續滾就接著滑，不會一頓一頓 */
+function glideX(r, x){
+  r._tx = Math.max(0, Math.min(r.scrollWidth - r.clientWidth, x));
+  if (!anim()) { r.scrollLeft = r._tx; r._tx = null; return; }
+  if (r._raf) return;
+  const step = () => {
+    if (r._tx == null) { r._raf = 0; return; }
+    const d = r._tx - r.scrollLeft;
+    if (Math.abs(d) < .6) { r.scrollLeft = r._tx; r._tx = null; r._raf = 0; return; }
+    r.scrollLeft += d * .18; r._raf = requestAnimationFrame(step);
+  };
+  r._raf = requestAnimationFrame(step);
 }
 
 /* ── 分享單張：連結打開就直接看那張（#p=編號） ── */
@@ -2758,12 +2841,12 @@ function infoHTML(p){
       <a class="ipl" href="${mapUrl(lat, lon, nm)}" target="_blank" rel="noopener noreferrer"><span class="pi">${I("pin")}</span><span><b>${esc(nm)}</b><span>${esc(sub)}</span></span><span class="go">${I("ext")}</span></a>${nearHTML(p)}</div>`;
   }
   const fe = f35 || (fl ? Math.round(fl) : 0);
-  const cells = [["光圈", x.f ? `ƒ${+x.f.toFixed(2)}` : "", x.f ? gIris(x.f) : ""], ["快門", shutter(x.et).replace(" 秒", " s"), x.et ? gShut(x.et) : ""],
-    ["ISO", x.iso || "", x.iso ? gIso(x.iso) : ""], ["焦距", fe ? `${fe} mm` : "", f35 ? gFov(f35) : ""], ["曝光", x.ev != null ? `${x.ev > 0 ? "+" : ""}${+x.ev.toFixed(1)} ev` : "", x.ev != null ? gEv(x.ev) : ""]];
+  const cells = [["光圈", x.f ? `ƒ${+x.f.toFixed(2)}` : "", x.f ? gIris(x.f) : "", "f"], ["快門", shutter(x.et).replace(" 秒", " s"), x.et ? gShut(x.et) : "", "et"],
+    ["ISO", x.iso || "", x.iso ? gIso(x.iso) : "", "iso"], ["焦距", fe ? `${fe} mm` : "", f35 ? gFov(f35) : "", "fl"], ["曝光", x.ev != null ? `${x.ev > 0 ? "+" : ""}${+x.ev.toFixed(1)} ev` : "", x.ev != null ? gEv(x.ev) : "", "ev"]];
   h += `<div class="ibox"><div class="icam"><div class="t">${cam && !isVid(p) ? `<button class="igear" data-gear="c:${esc(cam)}">${brandSvg(x)}<b>${esc(brandSvg(x) ? cam.replace(new RegExp("^" + (MKS[(x.mk || "").toLowerCase()] || x.mk || "").replace(/[.*+?^${}()|[\]\\]/g, "\\$&") + "\\s+", "i"), "") : cam)}</b>${I("r")}</button>` : `<b>${esc(cam || (isVid(p) ? "影片" : "相機資訊"))}</b>`}<span class="tag">${esc(ext)}</span>${p.rw && p.rw !== ext ? `<span class="tag">+${esc(p.rw)}</span>` : ""}${p.cs ? `<span class="tag">${esc(p.cs.replace("Display ", ""))}</span>` : ""}${p.hdr && !isVid(p) ? `<span class="tag hdr">HDR</span>` : ""}</div>
       ${lens || f35 ? `<div class="l">${esc(f35 ? `${lensKind(f35)}・等效 ${f35} mm` : "")}${lens ? `${f35 ? "　" : ""}<button class="igear sm" data-gear="l:${esc(lens)}">${esc(lens)}</button>` : ""}</div>` : ""}
       <div class="l2 num">${p.w && p.h ? `<i class="gar" style="aspect-ratio:${p.w} / ${p.h}"></i>` : ""}<span>${isVid(p) ? `影片 ${dur(p.vd)}・` : mp >= .1 ? `${mp >= 10 ? Math.round(mp) : mp.toFixed(1)} MP・` : ""}${p.w} × ${p.h}・${size(p.sz)}</span></div></div>
-    ${cells.some(c => c[1]) ? `<div class="iex num">${cells.map(([k, v, g]) => `<div${v ? "" : ` class="no"`}>${g || SV(`<circle cx="16" cy="16" r="12" class="gt"/>`)}<b>${esc(v || "—")}</b><small>${k}</small></div>`).join("")}</div>` : ""}</div>`;
+    ${cells.some(c => c[1]) ? `<div class="iex num">${cells.map(([k, v, g, gk]) => `<div data-gk="${gk}"${v ? "" : ` class="no"`}>${g || SV(`<circle cx="16" cy="16" r="12" class="gt"/>`)}<b>${esc(v || "—")}</b><small>${k}</small></div>`).join("")}</div>` : ""}</div>`;
   const ms = x.ms;
   if (ms && (ms.st || ms.lut || ms.k)) {
     const mono = /單色|ACROS|黑白|棕褐/.test(ms.st || ""), kp = ms.k ? Math.max(0, Math.min(100, (Math.log(ms.k) - Math.log(2000)) / (Math.log(12000) - Math.log(2000)) * 100)) : 0;
