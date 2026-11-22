@@ -415,10 +415,11 @@ function draw(){
         ${D.dl ? `<a class="chip" href="${BASE}/zip" download>${I("dl")}<span>全部下載</span></a><button class="chip" data-sel>${I("sel")}<span>選取</span></button>` : ""}${D.up ? `<button class="chip" data-up>${I("up")}<span>放照片</span></button>` : ""}</div></div>
       <button class="cue" aria-label="往下看"><i></i></button></header>
     <div class="bar"><b>${esc(D.name)}<small class="num">${cntTxt()}</small></b>${IOS ? `<span class="chip zb"><button data-zb="-1" aria-label="放大">${I("zin")}</button><button data-zb="1" aria-label="縮小">${I("zout")}</button></span>` : ""}${D.up ? `<button class="chip" data-up aria-label="放照片">${I("up")}</button>` : ""}${D.dl ? `<button class="chip" data-sel aria-label="選取">${I("sel")}</button>` : ""}<button class="chip go" data-ss aria-label="播放">${I("play")}</button></div>
-    <nav class="who" hidden></nav><div class="mems"></div><div class="stats"></div><section class="hl" hidden></section><div class="cityf" hidden></div><div class="wwrap"><main class="wall" data-z="${ZL}"></main><aside class="smap" hidden><div class="smv"></div><div class="smc"></div></aside></div>
+    ${D.intro ? `<section class="intro"><p>${esc(D.intro).replace(/\n/g, "<br>")}</p></section>` : ""}<nav class="who" hidden></nav><div class="mems"></div><div class="stats"></div><section class="hl" hidden></section><div class="cityf" hidden></div><div class="wwrap"><main class="wall" data-z="${ZL}"></main><aside class="smap" hidden><div class="smv"></div><div class="smc"></div></aside></div>
     <section class="gear" hidden></section>
     ${D.loc && ALL.some(p => p.g && !p.u) ? `<section class="msec"${WHO ? " hidden" : ""}><div class="mh"><b data-mt>地點</b><span class="num" data-km></span></div><div class="cities"></div><div class="map" data-map></div></section>` : ""}
     <div class="scrub" aria-hidden="true"><div class="stk2"></div><i class="sth"><span class="sbl num"></span></i></div>
+    ${D.talk ? `<section class="gbk"></section>` : ""}
     <footer class="foot">${finCol()}<div class="fin">${esc(D.name)}</div>${D.exp ? `<span class="fexp">${expRing()}${left(D.exp)}</span>` : ""}</footer>`;
   const hi = $(".hero .hi");
   const hok = () => { hi.classList.add("ok"); setTimeout(() => { const q = $(".hero .lq"); if (q) q.remove(); }, T.slow + 100); };   // 糊的底圖拿掉，捲動時不用一直重畫模糊
@@ -438,6 +439,7 @@ function draw(){
   mems();
   bigMap();
   gear();
+  gbook();
   smapWatch();
   onScroll();
   deepLink();
@@ -457,14 +459,14 @@ async function whoSet(w, keep){
   if (w === WHO && !keep) return;
   if (WHOBZ) return; WHOBZ = 1;
   if (SEL.on) popBack();
-  const parts = [".mems", ".stats", ".hl", ".cityf", ".wall", ".gear", ".msec", ".smap"].map(q => $(q)).filter(Boolean);
+  const parts = [".mems", ".stats", ".hl", ".cityf", ".wall", ".gear", ".msec", ".smap", ".gbk"].map(q => $(q)).filter(Boolean);
   if (anim()) await Promise.all(parts.map(x => x.animate([{opacity:1}, {opacity:0, transform:"translateY(6px)"}], {duration:T.fast, easing:EXIT, fill:"forwards"}).finished.catch(() => {})));
   if (!keep || w !== WHO) { CITY = ""; GEAR = ""; }
   WHO = w; PH = pickW(); citybar(); stackCalc();
   TILES.forEach(t => t.classList.remove("on"));
   TILES = PH.map((p, i) => { const t = TM.get(p.i); if (t) { t.dataset.i = i; return t; } return tile(p, i); });
   whoBar();
-  smapOn(); sections(); layout(true); mems(); stats(); highlights(); bigMap(); gear(); smapWatch();
+  smapOn(); sections(); layout(true); mems(); stats(); highlights(); bigMap(); gear(); gbook(); smapWatch();
   const ms = $(".msec"); if (ms) ms.hidden = !!WHO || !!CITY || !!GEAR || !(D.loc && PH.some(p => p.g));
   document.querySelectorAll(".hmeta .chip .num, .bar small").forEach(x => { x.textContent = cntTxt(); });
   const nav = $(".who"), top = nav && !nav.hidden ? nav.getBoundingClientRect().top + scrollY - 70 : 0;
@@ -1388,7 +1390,7 @@ async function talk(i, body){
     const r = await fetch(BASE + "/talk", {method:"POST", credentials:"same-origin", headers:{"Content-Type":"application/json"}, body:JSON.stringify({i:PH[i].i, ...body})});
     const d = await r.json().catch(() => ({}));
     if (!r.ok) { toast(d.message || "沒有送出去，等一下再試"); return false; }
-    Object.assign(PH[i], {lk:d.lk, me:d.me, cm:d.cm, rx:d.rx || {}, mr:d.mr || ""});
+    Object.assign(PH[i], {lk:d.lk, me:d.me, cm:d.cm, rx:d.rx || {}, mr:d.mr || "", lkn:d.lkn || []});
     badge(i);
     return true;
   } catch (e) { toast("連不上，等一下再試"); return false; }
@@ -1435,6 +1437,52 @@ function rxPick(i, btn, after){
     talk(i, {rx:em}).then(ok => { if (!ok) Object.assign(p, was); after(); badge(i); });
   });
 }
+function lkWho(p){                                             // 「小明、小美 等 5 人」：沒留過名字的只算人數
+  const ns = (p.lkn || []).slice(0, 2), n = p.lk || 0;
+  if (!ns.length) return String(n);
+  return esc(ns.join("、")) + (n > ns.length ? ` 等 ${n} 人` : "");
+}
+/* 留言簿：在最後給整本留一句話 */
+const GB = "_gb";
+function gbook(){
+  const box = $(".gbk"); if (!box) return;
+  const cs = D.gb || [], nm = store.get("vsa-name"), sig = cs.map(c => c.id).join() + "|" + !!nm;
+  box.hidden = !!WHO;
+  if (box.dataset.sig === sig) return;                         // 沒有新留言就不重畫（打到一半的字留著）
+  box.dataset.sig = sig;
+  box.innerHTML = `<div class="mh"><b>留言簿</b><span class="num">${cs.length ? `${cs.length} 則` : ""}</span></div>
+    <div class="gbl">${cs.length ? cs.slice().reverse().map((c, k) => `<div class="gbc" style="--i:${Math.min(k, 8)}"><p>${esc(c.s)}</p><div class="gbn"><i class="av">${esc([...c.n][0] || "?")}</i><b>${esc(c.n)}</b><span>${ago(c.t)}</span>${c.me ? `<button class="cx" data-gbdel="${esc(c.id)}" aria-label="刪掉">${I("x")}</button>` : ""}</div></div>`).join("") : `<div class="gbe">${I("chat")}<span>看完了嗎？留一句話給${esc(D.name)}</span></div>`}</div>
+    <form class="cform gbf">${nm ? "" : `<input class="cin nm" name="n" maxlength="20" placeholder="你的名字" autocomplete="nickname">`}<div class="crow"><input class="cin" name="s" maxlength="300" placeholder="寫一句話…" autocomplete="off"><button class="csend" aria-label="送出">${I("send")}</button></div></form>`;
+}
+async function gbPost(body){
+  try {
+    const r = await fetch(BASE + "/talk", {method:"POST", credentials:"same-origin", headers:{"Content-Type":"application/json"}, body:JSON.stringify({i:GB, ...body})});
+    const d = await r.json().catch(() => ({}));
+    if (!r.ok) { toast(d.message || "沒有送出去，等一下再試"); return false; }
+    D.gb = d.cm || []; return true;
+  } catch (e) { toast("連不上，等一下再試"); return false; }
+}
+document.addEventListener("submit", e => {
+  const f = e.target.closest(".gbf"); if (!f) return;
+  e.preventDefault();
+  const nm = f.querySelector("[name=n]"), tx = f.querySelector("[name=s]"), name = (nm ? nm.value : store.get("vsa-name")).trim();
+  if (!name) { if (nm) nm.focus(); return toast("先寫你的名字"); }
+  if (!tx.value.trim()) return tx.focus();
+  store.set("vsa-name", name);
+  f.querySelector("button").disabled = true;
+  gbPost({s:tx.value, n:name}).then(ok => {
+    f.querySelector("button").disabled = false;
+    if (!ok) return;
+    gbook();
+    const first = $(".gbk .gbc"); if (first && anim()) first.animate([{opacity:0, transform:"translateY(10px) scale(.97)"}, {opacity:1, transform:"none"}], {duration:T.slow, easing:DEC});
+  });
+});
+document.addEventListener("click", e => {
+  const b = e.target.closest("[data-gbdel]"); if (!b) return;
+  const c = b.closest(".gbc");
+  gbPost({del:b.dataset.gbdel}).then(ok => { if (!ok) return;
+    if (c && anim()) c.animate([{opacity:1}, {opacity:0, transform:"scale(.96)"}], {duration:T.fast, easing:EXIT, fill:"forwards"}).finished.then(gbook, gbook); else gbook(); });
+});
 function talkOrder(cs){                                        // 回覆排在那一則下面（那一則被刪了就照時間放）
   const ids = new Set(cs.map(c => c.id)), top = cs.filter(c => !c.r || !ids.has(c.r)), out = [];
   top.forEach(c => { out.push(c); cs.forEach(x => { if (x.r === c.id) out.push(x); }); });
@@ -1443,7 +1491,7 @@ function talkOrder(cs){                                        // 回覆排在�
 function talkHTML(p){
   if (!D.talk) return "";
   const cs = p.cm || [], nm = store.get("vsa-name");
-  return `<div class="ibox italk"><div class="th"><b>留言</b>${p.lk ? `<span class="num">${I("heart")}${p.lk}</span>` : ""}${Object.entries(p.rx || {}).map(([e, n]) => `<span class="num"><i class="rxe">${e}</i>${n}</span>`).join("")}</div>
+  return `<div class="ibox italk"><div class="th"><b>留言</b>${p.lk ? `<span class="num lkw">${I("heart")}${lkWho(p)}</span>` : ""}${Object.entries(p.rx || {}).map(([e, n]) => `<span class="num"><i class="rxe">${e}</i>${n}</span>`).join("")}</div>
     ${talkOrder(cs).map(c => `<div class="cmt${c.r ? " rep" : ""}" data-cid="${esc(c.id)}"><div class="av">${esc([...c.n][0] || "?")}</div><div class="cb"><div class="cn"><b>${esc(c.n)}</b><span>${ago(c.t)}</span></div><p>${esc(c.s)}</p><button class="crep" data-crep="${esc(c.id)}" data-cn="${esc(c.n)}">回覆</button></div>${c.me ? `<button class="cx" data-cdel="${esc(c.id)}" aria-label="刪掉">${I("x")}</button>` : ""}</div>`).join("")}
     <form class="cform"><div class="cre" hidden><span></span><button type="button" data-crex aria-label="不回覆了">${I("x")}</button></div>${nm ? "" : `<input class="cin nm" name="n" maxlength="20" placeholder="你的名字" autocomplete="nickname">`}<div class="crow"><input class="cin" name="s" maxlength="300" placeholder="${cs.length ? "說點什麼…" : "第一個留言"}" autocomplete="off"><button class="csend" aria-label="送出">${I("send")}</button></div></form></div>`;
 }
@@ -1621,7 +1669,7 @@ async function reload(){
   TILES = PH.map((p, i) => { const t = old.get(p.i); if (t) { old.delete(p.i); t.dataset.i = i; return t; } return TM.get(p.i) || tile(p, i); });
   const gone = [...old.values()].filter(t => was.has(t));
   if (gone.length && anim()) await Promise.all(gone.map(t => t.animate([{opacity:1, transform:"none"}, {opacity:0, transform:"scale(.9)"}], {duration:T.mid, easing:EXIT, fill:"forwards"}).finished.catch(() => {})));
-  sections(); layout(true); mems(); bigMap(); gear();
+  sections(); layout(true); mems(); bigMap(); gear(); gbook();
   TILES.forEach((t, i) => { badge(i); const a = was.get(t); if (!a || !anim() || !t.isConnected) return;
     const r = t.getBoundingClientRect(); if (r.bottom < 0 || r.top > H) return;
     const dx = a.left - r.left, dy = a.top - r.top, sx = a.width / r.width, sy = a.height / r.height;

@@ -1154,6 +1154,8 @@ function albumModal(node, name){
         <button type="button" data-alm="photos">${I("album")}<span>挑照片</span><small>${a.n}／${a.all - (a.npend || 0)}</small></button>
         <button type="button" data-alm="devs">${I("devices")}<span>看過的手機</span><small>${a.ndev}${a.dev ? `／${a.dev}` : ""}</small></button>
         <button type="button" data-alm="talk">${I("chat")}<span>留言</span><small>${a.ncm}${a.nlk ? `・♥ ${a.nlk}` : ""}</small></button></div>
+      <div class="almsec"><h4>介紹</h4><div class="almrw col"><textarea class="field" data-almk="intro" rows="3" maxlength="300" placeholder="寫幾句話，放在封面下面">${esc(a.intro || "")}</textarea>
+        <div class="almin"><button type="button" class="ubtn sm" data-alm="intro">存好</button></div></div></div>
       <div class="almsec"><h4>誰能看</h4>${srow("clock", "能看多久", "secs", ALMT, -1, almLeft(a))}${srow("devices", "幾支手機", "dev", ALMD, a.dev, a.dev ? `${a.ndev} 支在看` : "")}
         <div class="almrw col"><div class="almrh">${I("lock")}<span>密碼</span><small class="alms">${a.pw ? "已設定" : "沒有"}</small></div>
           <div class="almin"><input class="field" data-almk="pw" type="password" maxlength="64" autocomplete="new-password" placeholder="${a.pw ? "輸入新的就換掉" : "不設"}"><button type="button" class="ubtn sm" data-alm="pw">${a.pw ? "換" : "設定"}</button>${a.pw ? `<button type="button" class="ubtn sm ghost" data-alm="nopw">拿掉</button>` : ""}</div></div></div>
@@ -1183,7 +1185,7 @@ function albumModal(node, name){
   pane.talk = () => { const im = (i, ver) => esc(`${TK.base || base()}/a/${TK.code}/i/${i}/s?v=${ver}&own=${encodeURIComponent(TK.own)}`);
     return `${TK.likes.length ? `<div class="almpkh"><b>最多愛心</b></div><div class="almlk">${TK.likes.map(l => `<span><img alt="" loading="lazy" src="${im(l.i, l.v)}"><em class="num">${I("heart")}${l.n}</em></span>`).join("")}</div>` : ""}
       <div class="almpkh"><b>${TK.c.length ? `${TK.c.length} 則留言` : "還沒有人留言"}</b></div>
-      ${TK.c.length ? `<div class="pklist almtk">${TK.c.map(c => `<div class="pkrow"><img alt="" loading="lazy" src="${im(c.i, c.v)}"><span><b>${esc(c.n)}<small>${almAgo(c.t)}</small></b><small>${esc(c.s)}</small></span><button type="button" class="ubtn sm ghost bad" data-almtk="${esc(c.i)}|${esc(c.id)}" aria-label="刪掉">${I("trash")}</button></div>`).join("")}</div>` : ""}
+      ${TK.c.length ? `<div class="pklist almtk">${TK.c.map(c => `<div class="pkrow">${c.gb ? `<span class="almgb">${I("chat")}</span>` : `<img alt="" loading="lazy" src="${im(c.i, c.v)}">`}<span><b>${esc(c.n)}<small>${almAgo(c.t)}</small></b><small>${esc(c.s)}</small></span><button type="button" class="ubtn sm ghost bad" data-almtk="${esc(c.i)}|${esc(c.id)}" aria-label="刪掉">${I("trash")}</button></div>`).join("")}</div>` : ""}
       <button type="button" class="ubtn sm ghost" data-alm="back">${I("back")}返回</button>`; };
   const draw = () => swapHTML(body, pane[view]());
   const share = async a => {
@@ -1297,6 +1299,11 @@ function albumModal(node, name){
         const pw = act === "pw" ? v.querySelector('[data-almk="pw"]').value : "";
         if (act === "pw" && pw.length < 4) return sayTo(msg, "密碼要 4 個字以上");
         if (await run({action:"edit", id:cur, pw})) { toast(pw ? "密碼換好了，舊的立刻失效" : "拿掉密碼了"); draw(); }
+        return;
+      }
+      if (act === "intro") {
+        const intro = v.querySelector('[data-almk="intro"]').value.trim();
+        if (await run({action:"edit", id:cur, intro})) toast(intro ? "介紹存好了" : "拿掉介紹了");
         return;
       }
       if (act === "wm" || act === "nowm") {

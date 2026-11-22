@@ -285,6 +285,26 @@ class Album(Server):
         self.assertEqual(next(x for x in self.call({"action": "devs", "id": aid})[1]["devs"] if x.get("nm"))["nm"], "小明")
         s, t = self.call({"action": "talkdel", "id": aid, "i": pid, "cid": c["id"]})
         self.assertEqual([x["s"] for x in t["c"]], ["再回", "同意"])                  # 回覆留著
+        self.assertEqual(json.loads(self.req("GET", f"/a/{code}/m", hdr={"Cookie": ck})[1])["photos"][0]["lkn"], ["小明"])   # 誰按了愛心
+        self.assertEqual(post({"i": "_gb", "like": True})[0], 400)                    # 留言簿只能留言
+        time.sleep(3.1)
+        s, b, _ = post({"i": "_gb", "s": "謝謝分享", "n": "小明"})
+        self.assertEqual((s, json.loads(b)["cm"][0]["s"]), (200, "謝謝分享"))
+        m = json.loads(self.req("GET", f"/a/{code}/m", hdr={"Cookie": ck})[1])
+        self.assertEqual((m["gb"][0]["s"], m["gb"][0]["me"]), ("謝謝分享", True))
+        self.assertNotIn("d", m["gb"][0])                                              # 不給手機的代號
+        self.assertEqual(json.loads(self.req("GET", f"/a/{code}/m")[1])["gb"][0]["me"], False)
+        s, t = self.call({"action": "talk", "id": aid})
+        self.assertTrue(any(x.get("gb") and x["s"] == "謝謝分享" for x in t["c"]))
+        s, d = self.call({"action": "edit", "id": aid, "intro": "看 www.x.tw"})        # 介紹不能放連結
+        self.assertFalse(d.get("ok", s == 200))
+        s, d = self.call({"action": "edit", "id": aid, "intro": " 第一行\n\n\n\n第二行\u202e "})
+        self.assertEqual(next(x for x in d["list"] if x["id"] == aid)["intro"], "第一行\n\n第二行")
+        self.assertEqual(json.loads(self.req("GET", f"/a/{code}/m", hdr={"Cookie": ck})[1])["intro"], "第一行\n\n第二行")
+        for _ in range(61):                                                            # 看過的手機記滿了：剛打開的這支不能被擠掉
+            h = self.req("GET", f"/a/{code}/m")[2]
+        self.assertEqual(post({"i": "_gb", "s": "最後一支", "n": "阿華"}, h["Set-Cookie"].split(";")[0])[0], 200)
+        self.assertIn("阿華", [x.get("nm") for x in self.call({"action": "devs", "id": aid})[1]["devs"]])
         self.call({"action": "edit", "id": aid, "talk": False})
         self.assertEqual(post({"i": pid, "like": False})[0], 403)
         with open(os.path.join(self.tmp.name, "data", "album-talk.json"), "rb") as f:

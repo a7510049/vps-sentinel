@@ -18,7 +18,9 @@ ALB_LIVE = 3.6                                                    # 跟照片同
 ALB_VCH = 1 << 20                                                 # 影片分段加密，每段 1 MB（拖進度條只解要的那幾段）
 ALB_TALK = os.path.join(DATA_DIR, "album-talk.json")              # 朋友的愛心、留言（加密，SEAL_FILES；跟著備份）
 ALB_TALK_MAX = (300, 20, 200, 3000)                               # 一則留言幾個字、名字幾個字、一張最多幾則、一本最多幾則
-ALB_RX = ("😂", "😮", "👍", "🥹")                                  # 愛心以外能按的表情
+ALB_RX = ("😂", "😮", "👍", "🥹")
+ALB_GB = "_gb"                                                    # 留言簿（整本的留言）存在 album-talk.json 這個代號底下
+ALB_INTRO = 300                                                   # 相簿介紹最多幾個字                                  # 愛心以外能按的表情
 ALB_TIMES = (86400, 7 * 86400, 30 * 86400, 0)                     # 能選的期限（0 = 不會過期）
 ALB_MAX = 2000                                                    # 一本最多幾張
 ALB_PW_TRY = (5, 15 * 60)                                         # 同一個來源 15 分鐘錯 5 次先鎖住
@@ -82,12 +84,17 @@ def alb_talk_save():
 
 def alb_talk_of(a, th=""):
     """這本每張照片的愛心數、自己按了沒、留言"""
-    out = {}
+    out, devs = {}, a.get("devs") or {}
     for pid, t in (alb_talk_all().get(a["id"]) or {}).items():
+        nms = []                                        # 誰按了愛心：留過名字的手機才寫得出名字
+        for h in reversed(t.get("l") or []):
+            nm = (devs.get(h) or {}).get("nm")
+            if nm and nm not in nms:
+                nms.append(nm)
         rx = {}
         for e in (t.get("r") or {}).values():
             rx[e] = rx.get(e, 0) + 1
-        out[pid] = {"lk": len(t.get("l") or []), "me": th in (t.get("l") or []), "rx": rx, "mr": (t.get("r") or {}).get(th, ""),
+        out[pid] = {"lk": len(t.get("l") or []), "me": th in (t.get("l") or []), "rx": rx, "mr": (t.get("r") or {}).get(th, ""), "lkn": nms[:6],
                     "cm": [{"id": c["id"], "n": c["n"], "s": c["s"], "t": int(c["t"]), "me": c["d"] == th, **({"r": c["r"]} if c.get("r") else {})} for c in t.get("c") or []]}
     return out
 
@@ -108,7 +115,10 @@ def alb_talk_post(a, th, d):
     """朋友按愛心、留言、刪自己的留言；回傳 (狀態碼, 內容)"""
     pid = str(d.get("i") or "")
     idx = alb_index(a, scan=False)
-    if pid not in (idx.get("order") or []) or pid in alb_hid(a):
+    if pid == ALB_GB:                                    # 留言簿：給整本留一句話（只能留言，不能按愛心、表情）
+        if d.get("rx") is not None or d.get("like") is not None:
+            return 400, {"ok": False, "message": "留言簿只能留言"}
+    elif pid not in (idx.get("order") or []) or pid in alb_hid(a):
         return 404, {"ok": False, "message": "找不到這張"}
     now = time.time()
     with ALB_LOCK:
@@ -254,7 +264,7 @@ def alb_dev_check(h, a, register):
                 return False, "full", ""
             d = devs[th] = {"n": alb_ua_name(h.headers.get("User-Agent")), "t0": now, "t": 0, "c": 0}
             if len(devs) > ALB_DEVKEEP:
-                for k in sorted(devs, key=lambda x: devs[x].get("t", 0))[:len(devs) - ALB_DEVKEEP]:
+                for k in sorted((x for x in devs if x != th), key=lambda x: devs[x].get("t", 0))[:len(devs) - ALB_DEVKEEP]:   # 剛打開的這支不能被擠掉
                     devs.pop(k, None)
         if now - d.get("t", 0) > 1800:                 # 半小時內同一支再打開不重算
             d["c"] = d.get("c", 0) + 1
@@ -763,6 +773,12 @@ def alb_edit(d):
             return False, "這本已經收回了"
         if "name" in d:
             a["name"] = alb_clean_name(d.get("name"), a["name"])
+        if "intro" in d:                                   # 相簿介紹：可以換行，最多空一行
+            t = re.sub(r"[\x00-\x09\x0b-\x1f\x7f\u200b-\u200f\u202a-\u202e\u2066-\u2069]", " ", str(d.get("intro") or ""))
+            t = re.sub(r"\n{3,}", "\n\n", "\n".join(re.sub(r"[ \t]+", " ", x).strip() for x in t.replace("\r", "").split("\n"))).strip()[:ALB_INTRO]
+            if alb_has_link(t):
+                return False, "介紹不能放連結"
+            a["intro"] = t
         if "loc" in d:
             a["loc"] = bool(d["loc"])
         if "talk" in d:
@@ -860,7 +876,7 @@ def alb_list():
                     "pw": bool(a.get("pw")), "loc": a["loc"], "dl": alb_dl(a), "views": a.get("views", 0), "last": a.get("last", 0),
                     "n": len([x for x in ph if x not in hid]), "all": len(ph), "cv": alb_cover(a, idx), "ready": alb_ready(a, idx),
                     "dev": a.get("dev") or 0, "ndev": len(a.get("devs") or {}), "wm": a.get("wm") or "", "wmok": not a.get("wm") or alb_wm_bake(a),
-                    "talk": a.get("talk", True), "mu": (idx.get("mu") or {}).get("n", ""), "up": alb_up(a),
+                    "talk": a.get("talk", True), "mu": (idx.get("mu") or {}).get("n", ""), "up": alb_up(a), "intro": a.get("intro", ""),
                     "npend": len([x for x in a.get("pend") or [] if x in (idx.get("ph") or {})]),
                     "uq": alb_uq(a), "uused": alb_up_used(a)[0],
                     "nup": len([m for m in (idx.get("ph") or {}).values() if alb_up_who(m.get("n", "")) and not m.get("of")]),
@@ -2120,7 +2136,7 @@ def alb_manifest(a, th=""):
     if alb_ready(a, idx) < 1 or any(x.get("vr") == -1 for x in out) or (a["loc"] and (old_pl or wx_miss or any("g" in x and "p" not in x for x in out))):
         alb_kick(a["id"])
     wmo = a.get("wm") if a.get("wm") and not alb_wm_bake(a) else ""
-    return {"ok": True, "name": a["name"], "photos": out, "dl": alb_dl(a), "loc": a["loc"], "exp": a["exp"], "es": a.get("es") or a.get("t0", 0), "wmo": wmo, "wx": wx,
+    return {"ok": True, "name": a["name"], "photos": out, "dl": alb_dl(a), "loc": a["loc"], "exp": a["exp"], "es": a.get("es") or a.get("t0", 0), "wmo": wmo, "wx": wx, "intro": a.get("intro", ""), "gb": talk.get(ALB_GB, {}).get("cm", []) if a.get("talk", True) else [],
             "talk": a.get("talk", True), "mu": bool(idx.get("mu")), "up": alb_up(a),
             "places": [k for k, _ in sorted(places.items(), key=lambda x: -x[1])][:6], "ready": alb_ready(a, idx)}
 
@@ -2494,8 +2510,8 @@ def alb_api(d):
                     alb_talk_save()
         idx = alb_index(a, scan=False)
         ph = idx.get("ph") or {}
-        out = sorted(({"i": q, "v": alb_ckey(a, q, ph[q])[:8], "id": c["id"], "n": c["n"], "s": c["s"], "t": int(c["t"])}
-                      for q, x in t.items() if q in ph for c in x.get("c") or []), key=lambda c: -c["t"])
+        out = sorted(({"i": q, "v": alb_ckey(a, q, ph[q])[:8] if q in ph else "", "id": c["id"], "n": c["n"], "s": c["s"], "t": int(c["t"]), **({"gb": True} if q == ALB_GB else {})}
+                      for q, x in t.items() if q in ph or q == ALB_GB for c in x.get("c") or []), key=lambda c: -c["t"])
         likes = sorted(((len(x.get("l") or []), q) for q, x in t.items() if q in ph and x.get("l")), reverse=True)[:12]
         return 200, {"ok": True, "c": out, "likes": [{"i": q, "v": alb_ckey(a, q, ph[q])[:8], "n": n} for n, q in likes],
                      "own": alb_own_val(a, time.time() + ALB_OWN_S), "base": alb_base(), "code": a["code"]}

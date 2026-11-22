@@ -1096,3 +1096,27 @@ button.dct:active{transform:scale(.92)}
 .shg i{position:absolute;right:6px;bottom:6px;width:22px;height:22px;border-radius:50%;display:grid;place-items:center;background:rgba(0,0,0,.45);color:#fff}
 .shg i svg{width:10px;height:10px;fill:currentColor;stroke:none}
 .shg button:active{transform:scale(.96)}
+
+/* 相簿介紹（主人寫的一段話，封面下面） */
+.intro{max-width:680px;margin:clamp(28px,5vw,56px) auto 0;padding:0 var(--pad);text-align:center}
+.intro p{font-family:var(--serif);font-size:clamp(16px,2vw,19px);line-height:1.9;letter-spacing:.04em;color:var(--tx2);text-wrap:pretty;animation:intro var(--t-long) var(--dec) both}
+.intro p::before,.intro p::after{content:"";display:block;width:28px;height:1px;margin:0 auto 18px;background:var(--grad);opacity:.7}
+.intro p::after{margin:18px auto 0}
+@keyframes intro{from{opacity:0;transform:translateY(10px)}}
+
+/* 留言簿（結尾給整本留一句話） */
+.gbk{max-width:1100px;margin:clamp(48px,8vw,96px) auto 0;padding:0 var(--pad)}
+.gbl{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:12px}
+.gbc{background:var(--s1);border-radius:var(--r-lg);padding:16px 16px 12px;box-shadow:var(--sh-card);display:flex;flex-direction:column;gap:12px;animation:gbin var(--t-slow) var(--dec) both;animation-delay:calc(var(--i) * 50ms)}
+.gbc p{font-family:var(--serif);font-size:var(--fs-m);line-height:1.7;color:var(--tx);word-break:break-word;margin:0}
+.gbn{display:flex;align-items:center;gap:8px;margin-top:auto;font-size:var(--fs-s);color:var(--tx3)}
+.gbn .av{width:24px;height:24px;border-radius:50%;flex:none;display:grid;place-items:center;font-style:normal;font-weight:700;font-size:var(--fs-xs);background:color-mix(in oklab,var(--seed) 22%,var(--s2));color:var(--p)}
+.gbn b{color:var(--tx2);font-weight:650;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.gbn .cx{margin-left:auto}
+.gbe{display:flex;align-items:center;gap:10px;padding:18px;border-radius:var(--r-lg);background:var(--s1);color:var(--tx3);font-size:var(--fs-m)}
+.gbe svg{width:22px;height:22px;flex:none;color:var(--p)}
+.gbf{max-width:560px;margin:16px auto 0}
+@keyframes gbin{from{opacity:0;transform:translateY(10px) scale(.98)}}
+
+/* 誰按了愛心 */
+.lkw{display:inline-flex;align-items:center;gap:4px;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
