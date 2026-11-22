@@ -1488,7 +1488,7 @@ function openLb(i, from){
     zw.dataset.zb = key;
     let r; try { r = zbCalc(p, im); } catch (e) { return; }
     zw.querySelectorAll(".zb").forEach(x => x.remove());
-    [["hi", "zbh"], ["lo", "zbs"]].forEach(([k, c]) => { if (!r[k]) return; const d = document.createElement("i"); d.className = `zb ${c}`; d.style.webkitMaskImage = d.style.maskImage = `url(${r[k]})`; zw.appendChild(d); });
+    [["hi", "zbh"], ["lo", "zbs"]].forEach(([k, c]) => { if (!r[k]) return; const d = document.createElement("b"), m = document.createElement("i"); d.className = `zb ${c}`; m.style.webkitMaskImage = m.style.maskImage = `url(${r[k]})`; d.appendChild(m); zw.appendChild(d); });
     const n = inf.querySelector("[data-zbn]"); if (n) n.textContent = zbTxt(p);
     if (im === sm && big) big.addEventListener("load", () => { if (ZEB && cur() === zw) zbMake(); }, {once:true});
   }
@@ -2954,9 +2954,25 @@ function zbCalc(p, im){
   const g = c.getContext("2d", {willReadFrequently:true}); g.drawImage(im, 0, 0, w, h);
   const d = g.getImageData(0, 0, w, h), px = d.data, hi = new ImageData(w, h), lo = new ImageData(w, h);
   let nh = 0, nl = 0;
-  for (let i = 0; i < px.length; i += 4) {
+  const f = new Uint8Array(w * h);                                // 1 過曝、2 死黑
+  for (let i = 0, j = 0; i < px.length; i += 4, j++) {
     const mx = Math.max(px[i], px[i + 1], px[i + 2]);
-    if (mx >= 253) { hi.data[i + 3] = 255; nh++; } else if (mx <= 3) { lo.data[i + 3] = 255; nl++; }
+    if (mx >= 253) { f[j] = 1; nh++; } else if (mx <= 3) { f[j] = 2; nl++; }
+  }
+  const sm = v => {                                              // 邊上的雜點先抹掉：5×5 裡過半同類才算（積分圖，一格一次）
+    const S = new Int32Array((w + 1) * (h + 1));
+    for (let y = 0; y < h; y++) { let row = 0; for (let x = 0; x < w; x++) { row += f[y * w + x] === v; S[(y + 1) * (w + 1) + x + 1] = S[y * (w + 1) + x + 1] + row; } }
+    return (x, y) => { const x0 = Math.max(0, x - 2), y0 = Math.max(0, y - 2), x1 = Math.min(w, x + 3), y1 = Math.min(h, y + 3);
+      return (S[y1 * (w + 1) + x1] - S[y0 * (w + 1) + x1] - S[y1 * (w + 1) + x0] + S[y0 * (w + 1) + x0]) * 2 > (x1 - x0) * (y1 - y0); };
+  };
+  const sh = nh ? sm(1) : null, sl = nl ? sm(2) : null, g2 = new Uint8Array(w * h);
+  for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) g2[y * w + x] = sh && sh(x, y) ? 1 : sl && sl(x, y) ? 2 : 0;
+  f.set(g2);
+  const R = Math.max(1, Math.round(Math.max(w, h) / 360));      // 只描邊（使用者說斜紋看了不舒服）：鄰近 R 格有不同的就算邊
+  for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
+    const j = y * w + x, v = f[j]; if (!v) continue;
+    const at = (xx, yy) => xx < 0 || yy < 0 || xx >= w || yy >= h ? v : f[yy * w + xx];
+    if (at(x - R, y) !== v || at(x + R, y) !== v || at(x, y - R) !== v || at(x, y + R) !== v) (v === 1 ? hi : lo).data[j * 4 + 3] = 255;
   }
   const url = m => { g.clearRect(0, 0, w, h); g.putImageData(m, 0, 0); return c.toDataURL("image/png"); };
   p._zb = [nh / (w * h) * 100, nl / (w * h) * 100];

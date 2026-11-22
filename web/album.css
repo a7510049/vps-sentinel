@@ -1363,13 +1363,12 @@ button.dct:active{transform:scale(.92)}
 :root{--zbh:#ff3b3b; --zbs:#2f7bff; --warn:#ffb870}
 @media (prefers-color-scheme:light){:root:not([data-mode="dark"]){--warn:#9a5200}}
 .lb .zb{position:absolute;inset:0;pointer-events:none;opacity:0;transition:opacity var(--t-mid) var(--ease);
-  -webkit-mask-size:100% 100%;mask-size:100% 100%;-webkit-mask-repeat:no-repeat;mask-repeat:no-repeat;
-  background-size:12px 12px;animation:zbm calc(var(--t-long) * 1.2) linear infinite}
-.lb .zbh{background-image:repeating-linear-gradient(45deg,var(--zbh) 0 3px,transparent 3px 6px)}
-.lb .zbs{background-image:repeating-linear-gradient(-45deg,var(--zbs) 0 3px,transparent 3px 6px)}
-.lb.zbon .zb{opacity:.9}
-@keyframes zbm{to{background-position:12px 0}}
-@media (prefers-reduced-motion:reduce){.lb .zb{animation:none}}
+  filter:drop-shadow(0 0 2px var(--c)) drop-shadow(0 0 5px var(--c))}   /* 只描邊＋光暈，像相機的對焦峰值（光暈放外層，遮罩會切掉自己的濾鏡） */
+.lb .zb>i{position:absolute;inset:0;background:var(--c);
+  -webkit-mask-size:100% 100%;mask-size:100% 100%;-webkit-mask-repeat:no-repeat;mask-repeat:no-repeat}
+.lb .zbh{--c:var(--zbh)}
+.lb .zbs{--c:var(--zbs)}
+.lb.zbon .zb{opacity:1}
 .ngb small{color:var(--tx3);font-weight:650;margin-right:2px}
 
 /* 光線、手震：拍攝設定那排的格子 */
