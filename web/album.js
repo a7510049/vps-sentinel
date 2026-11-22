@@ -1963,10 +1963,13 @@ function gIso(iso){                      // 感光度儀表：ISO 越高指針�
   const ticks = [0, .25, .5, .75, 1].map(t => `<path d="M${P(t, 9.6)}L${P(t, 11.2)}" class="gl"/>`).join("");
   return SV(`${arc(0, 1, "gtk")}${k > .01 ? arc(0, k, "gsk") : ""}${ticks}<path d="M16 24L${P(k, 10.5)}" class="gs"/><circle cx="16" cy="24" r="2.3" class="gd"/>`);
 }
-function gFov(f35){                      // 側面看的相機：廣角是扁扁的餅乾鏡、望遠是長長的鏡頭（照等效焦距）
-  const L = 2.5 + lg(f35, 14, 600) * 10, o = (32 - 13 - L) / 2, X = v => (o + v).toFixed(1);
-  return SV(`<g transform="translate(16 17.5) scale(1.3) translate(-16 -17.5)"><path d="M${X(1)} 12.5a2 2 0 0 1 2-2h2.2l1.4-2.6h3.8l1.4 2.6H${X(13)}V26H${X(3)}a2 2 0 0 1-2-2Z" class="gs"/><circle cx="${X(7)}" cy="18" r="3" class="gs"/>
-    <rect x="${X(13)}" y="12" width="${L.toFixed(1)}" height="13" rx="1.4" class="gf"/>${L > 6 ? `<path d="M${X(13 + L * .4)} 12v13M${X(13 + L * .62)} 12v13" class="gk"/>` : ""}</g>`);
+function gFov(f35){                      // 取景框：外面淡淡的是超廣角看到的整片風景，亮框是這顆鏡頭拍到的範圍（望遠越小）
+  const k = Math.max(.24, Math.min(1, 1 - lg(f35, 14, 400) * .76)), w = 26 * k, h = 20 * k, x = 16 - w / 2, y = 16 - h / 2, r = (2.6 * k + .6).toFixed(1);
+  const id = "fv" + Math.round(f35), box = `x="${x.toFixed(1)}" y="${y.toFixed(1)}" width="${w.toFixed(1)}" height="${h.toFixed(1)}" rx="${r}"`;
+  const scene = `<path d="M3 23l7-8 5 5 4-5 10 9v2H3Z" class="gf"/><circle cx="22" cy="11.5" r="2.4" class="gf"/>`;
+  return SV(`<defs><clipPath id="${id}a"><rect x="3" y="6" width="26" height="20" rx="3"/></clipPath><clipPath id="${id}b"><rect ${box}/></clipPath></defs>
+    <g clip-path="url(#${id}a)" class="gscn">${scene}</g><rect x="3" y="6" width="26" height="20" rx="3" class="gl"/>
+    <rect ${box} class="gh"/><g clip-path="url(#${id}b)">${scene}</g><rect ${box} class="gs"/>`);
 }
 function gEv(ev){                        // 相機裡的曝光尺：−3 … 0 … +3，下面的三角形指著這張
   const v = Math.max(-3, Math.min(3, ev)), X = i => 16 + i * 4.3, x = X(v);
