@@ -47,6 +47,11 @@ svg{display:block}
 .hero .cv .lq{filter:blur(24px);transform:scale(1.15)}
 .hero .cv .hi{opacity:0;transition:opacity var(--t-slow) var(--ease)}
 .hero .cv .hi.ok{opacity:1}
+/* 開場：封面照片還沒好時一道光掃過，好了整張淡入、片頭字接著出來 */
+.hero .cv{transition:opacity var(--t-long) var(--ease)}
+.hero:not(.rdy) .cv{opacity:0}
+.hero:not(.rdy){background:linear-gradient(100deg,var(--s1) 30%,var(--s2) 50%,var(--s1) 70%);background-size:300% 100%;animation:shim 1.4s linear infinite}
+.hero:not(.rdy) .hcap,.hero:not(.rdy) .hcap *,.hero:not(.rdy) .cue,.hero:not(.rdy) .cv .hi{animation-play-state:paused}
 .hero::after{content:"";position:absolute;inset:0;background:linear-gradient(180deg,rgba(0,0,0,.28) 0,transparent 26%,transparent 46%,color-mix(in oklab,var(--bg) 70%,transparent) 82%,var(--bg) 100%);pointer-events:none}
 .hcap{position:absolute;left:0;right:0;bottom:0;z-index:1;padding:0 var(--pad) clamp(28px,6vh,64px);max-width:1600px;margin:0 auto;will-change:transform,opacity}
 .eyebrow{font-size:var(--fs-s);font-weight:600;letter-spacing:.04em;color:var(--tx2);margin-bottom:10px;opacity:0;animation:up var(--t-slow) var(--dec) .1s forwards}
@@ -92,7 +97,11 @@ button.chip:active,a.chip:active{transform:scale(.95)}
 .ph .lq{filter:blur(12px);transform:scale(1.12)}
 .ph .hi{opacity:0;transition:opacity var(--t-mid) var(--ease),transform var(--t-slow) var(--ease)}
 .ph .hi.ok{opacity:1}
-.ph.gone{visibility:hidden}
+.ph.gone,.lbo{visibility:hidden}
+.ph.wt::after{content:"";position:absolute;top:0;bottom:0;left:0;width:60%;background:linear-gradient(100deg,transparent,color-mix(in oklab,var(--tx) 9%,transparent),transparent);transform:translateX(-100%);animation:wtshim 1.5s var(--ease) infinite}
+@keyframes wtshim{to{transform:translateX(270%)}}
+.zw .lbw{position:absolute;left:50%;top:50%;margin:-13px 0 0 -13px;z-index:2;transition:opacity var(--t-mid) var(--ease)}
+.zw .lbw.off{opacity:0}
 .ph .nope{position:absolute;inset:0;display:grid;place-items:center;color:var(--tx3)}
 .ph .nope svg{width:28px;height:28px}
 @media (hover:hover){.ph:hover .hi{transform:scale(1.035)}}
@@ -183,7 +192,16 @@ button.chip:active,a.chip:active{transform:scale(.95)}
 .inf{position:absolute;left:0;right:0;bottom:0;height:62%;z-index:3;background:var(--bg);color:var(--tx);border-radius:var(--r-xl) var(--r-xl) 0 0;box-shadow:0 -10px 40px rgba(0,0,0,.35);
   transform:translateY(102%);transition:transform var(--t-mid) var(--ease);overflow-y:auto;overscroll-behavior:contain;touch-action:pan-y;padding:10px 18px calc(24px + env(safe-area-inset-bottom))}
 .inf::before{content:"";display:block;width:40px;height:5px;border-radius:var(--r-pill);background:var(--s3);margin:0 auto 12px}
-.lb.info .inf{transform:none}
+.lb.info:not(.cmo) .inf:not(.cmp),.lb.cmo .cmp{transform:none}
+/* 留言面板：上面誰按了愛心，中間留言自己捲，輸入框一直在最下面 */
+.cmp{display:flex;flex-direction:column;overflow:hidden;padding-bottom:0}
+.cmp .italk{flex:1;min-height:0;display:flex;flex-direction:column;padding:0}
+.cmp .th{flex:none;padding:0 0 10px;margin:0;box-shadow:0 1px 0 var(--line)}
+.cml{flex:1;min-height:0;overflow-y:auto;overscroll-behavior:contain;touch-action:pan-y;padding:2px 0 8px}
+.cmp .cform{flex:none;margin:0 -18px;padding:10px 18px calc(12px + env(safe-area-inset-bottom));box-shadow:0 -1px 0 var(--line);background:var(--bg)}
+.cme{display:grid;justify-items:center;gap:8px;padding:48px 0;color:var(--tx3);font-size:var(--fs-s)}
+.cme svg{width:28px;height:28px}
+@media (min-width:900px){.cmp .cform{margin:0 -22px;padding:12px 22px 20px}}
 .lb.info .stage{bottom:calc(62% + var(--r-xl))}
 @media (min-width:900px){
   .inf{left:auto;top:0;height:auto;width:380px;border-radius:0;transform:translateX(102%);padding:calc(env(safe-area-inset-top) + 24px) 22px 28px;box-shadow:-10px 0 40px rgba(0,0,0,.3)}
@@ -353,6 +371,7 @@ button.chip:active,a.chip:active{transform:scale(.95)}
 .sb span:empty{display:none}
 .sb:active{transform:scale(.92)}
 .sb.on svg{fill:#ff4d6a;stroke:#ff4d6a}
+.sb[data-cm].on svg{fill:currentColor;stroke:currentColor}
 .burst{position:absolute;left:12px;top:50%;width:20px;height:20px;margin-top:-10px;border-radius:50%;box-shadow:0 0 0 2px #ff4d6a;pointer-events:none;animation:burst var(--t-slow) var(--dec) forwards}
 @keyframes burst{from{transform:scale(.6);opacity:1}to{transform:scale(2.4);opacity:0}}
 .vbar{display:none;align-items:center;gap:10px}
@@ -864,8 +883,9 @@ html,body{touch-action:pan-x pan-y}
 
 /* 看大圖：後面透出這張照片的顏色 */
 .lb .bg{overflow:hidden}
+.lb .bg .ambw{position:absolute;inset:0;opacity:.55}
 .lb .bg .amb{position:absolute;inset:-12%;width:124%;height:124%;object-fit:cover;filter:blur(48px) saturate(1.6);opacity:0;transition:opacity var(--t-long) var(--ease)}
-.lb .bg .amb.ok{opacity:.55}
+.lb .bg .amb.ok{opacity:1}
 .lb .bg::after{content:"";position:absolute;inset:0;background:radial-gradient(120% 90% at 50% 45%,rgba(0,0,0,.2),rgba(0,0,0,.7))}
 
 /* 電腦看大圖：下面一排小圖，點了直接跳過去 */
@@ -886,6 +906,12 @@ html,body{touch-action:pan-x pan-y}
 .hl[hidden]{display:none}
 .hlh b{display:inline-flex;align-items:center;gap:8px;font-family:var(--serif);font-size:var(--fs-2xl);font-weight:600;letter-spacing:.04em}
 .hlh svg{width:18px;height:18px;color:var(--g2);fill:currentColor}
+.hlh{display:flex;align-items:center;justify-content:space-between}
+.hla{display:none;gap:8px}
+.hla .rb{width:38px;height:38px;border-radius:50%;display:grid;place-items:center;background:var(--s2);color:var(--tx);border:0;cursor:pointer;transition:opacity var(--t-fast) var(--ease),background var(--t-fast) var(--ease)}
+.hla .rb svg{width:18px;height:18px;fill:none;stroke:currentColor;stroke-width:2.2}
+.hla .rb:disabled{opacity:.3;cursor:default}
+@media (pointer:fine){.hla{display:flex}.hla[hidden]{display:none}.hlr{cursor:grab}.hlr.drag{cursor:grabbing;scroll-snap-type:none}.hlr.drag .hlc{pointer-events:none}}
 .hlr{display:flex;gap:12px;overflow-x:auto;scrollbar-width:none;margin:12px calc(-1 * var(--pad)) 0;padding:6px var(--pad) 20px;scroll-snap-type:x mandatory;scroll-padding:0 var(--pad)}
 .hlr::-webkit-scrollbar{display:none}
 .hlc{position:relative;flex:none;height:clamp(230px,58vw,440px);aspect-ratio:var(--ar);max-width:84vw;border-radius:var(--r-lg);overflow:hidden;scroll-snap-align:start;background:var(--s2);
@@ -980,15 +1006,16 @@ html,body{touch-action:pan-x pan-y}
 .scrub.on{opacity:1}
 .scrub .stk2{position:absolute;right:8px;top:0;bottom:0;width:6px}
 .scrub .stk2 b{position:absolute;left:1px;width:4px;height:4px;border-radius:50%;background:color-mix(in oklab,var(--tx) 35%,transparent)}
-.sth{position:absolute;right:3px;width:12px;height:44px;top:0;transform:translateY(calc(var(--f,0) * (var(--th,600px) - 44px)));will-change:transform;border-radius:var(--r-pill);background:var(--glass);box-shadow:var(--sh-pop),var(--hl);
-  -webkit-backdrop-filter:blur(14px);backdrop-filter:blur(14px);touch-action:none;cursor:grab;transition:width var(--sp-fast),right var(--sp-fast)}
+.sth{position:absolute;right:3px;width:12px;height:44px;top:0;transform:translateY(calc(var(--f,0) * (var(--th,600px) - 44px)));will-change:transform;border-radius:var(--r-pill);background:var(--s1,var(--bg));box-shadow:var(--sh-pop),var(--hl);
+  touch-action:none;cursor:grab;transition:width var(--sp-fast),right var(--sp-fast)}
 .sth::before{content:"";position:absolute;inset:14px 4px;border-radius:var(--r-pill);background:var(--grad,var(--p))}
 .sth::after{content:"";position:absolute;inset:-6px -14px -6px -24px}
 .scrub.on .sth{pointer-events:auto}
 .scrub.drag .sth{width:16px;right:5px;cursor:grabbing}
-.scrub.drag .sth,.scrub.drag .sbl{-webkit-backdrop-filter:none;backdrop-filter:none;background:var(--s1,var(--bg))}   /* 拖的時候不用毛玻璃：每一格底下的照片都在換，手機重算模糊很吃力 */
+/* 捲軸不用毛玻璃（拖的時候底下的照片每一格都在換，手機重算模糊很吃力，切換時還會閃）；拖的時候新出現的照片直接出現，不跑顯影動畫 */
+html.scrubbing .ph,html.scrubbing .ph .hi{transition:none;animation:none}
 .sbl{position:absolute;right:calc(100% + 12px);top:50%;transform:translate(8px,-50%) scale(.9);transform-origin:right center;opacity:0;white-space:nowrap;padding:9px 16px;border-radius:var(--r-pill);
-  background:var(--glass);-webkit-backdrop-filter:blur(18px) saturate(1.6);backdrop-filter:blur(18px) saturate(1.6);box-shadow:var(--sh-pop),var(--hl);font:600 var(--fs-l)/1 var(--serif);color:var(--tx);transition:opacity var(--t-fast) var(--ease),transform var(--sp-fast);pointer-events:none}
+  background:var(--s1,var(--bg));box-shadow:var(--sh-pop),var(--hl);font:600 var(--fs-l)/1 var(--serif);color:var(--tx);transition:opacity var(--t-fast) var(--ease),transform var(--sp-fast);pointer-events:none}
 .scrub.drag .sbl:not(:empty){opacity:1;transform:translate(0,-50%)}
 html:has(.lb,.ss,.sy) .scrub{opacity:0;pointer-events:none}
 
@@ -1029,6 +1056,8 @@ html:has(.lb,.ss,.sy) .scrub{opacity:0;pointer-events:none}
 .igear{display:inline-flex;align-items:center;gap:4px;min-width:0;flex:1;text-align:left}
 .igear b{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .igear svg{width:15px;height:15px;color:var(--tx3);flex:none}
+.igear .brd{display:inline-flex;align-items:center;flex:none;margin-right:5px}
+.igear .brd svg{width:auto;height:auto;color:var(--tx);fill:currentColor;stroke:none}
 .igear.sm{display:inline;flex:none;color:var(--p);font-weight:600}
 .icam .t .igear b{flex:none}
 
@@ -1123,6 +1152,7 @@ button.dct:active{transform:scale(.92)}
 /* 留言簿（結尾給整本留一句話） */
 .gbk{max-width:1100px;margin:clamp(48px,8vw,96px) auto 0;padding:0 var(--pad)}
 .gbl{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:12px}
+.gbl:empty{display:none}
 .gbc{background:var(--s1);border-radius:var(--r-lg);padding:16px 16px 12px;box-shadow:var(--sh-card);display:flex;flex-direction:column;gap:12px;animation:gbin var(--t-slow) var(--dec) both;animation-delay:calc(var(--i) * 50ms)}
 .gbc p{font-family:var(--serif);font-size:var(--fs-m);line-height:1.7;color:var(--tx);word-break:break-word;margin:0}
 .gbn{display:flex;align-items:center;gap:8px;margin-top:auto;font-size:var(--fs-s);color:var(--tx3)}
