@@ -1957,10 +1957,11 @@ function gShut(et){                      // 碼錶：1/8000 只走一點點、30
   const big = k > .5 ? 1 : 0, x = 16 + 10.5 * Math.cos(a), y = 18 + 10.5 * Math.sin(a);
   return SV(`<path d="M13.5 3.5h5M16 3.5v3.5M24.5 8.5l1.8-1.8" class="gs"/><path d="M16 18V7.5A10.5 10.5 0 ${big} 1 ${x.toFixed(1)} ${y.toFixed(1)}Z" class="gf"/><circle cx="16" cy="18" r="11.5" class="gs"/><circle cx="16" cy="18" r="1.6" class="gd"/>`);
 }
-const GRAIN = [[7,9],[20,8],[13,13],[25,15],[9,20],[18,21],[24,23],[11,11],[16,9],[22,18],[8,15],[14,24],[26,10],[19,14],[10,24],[15,17],[23,12],[7,23],[21,25],[12,18],[17,12],[25,20],[9,12],[19,23]];
-function gIso(iso){                      // 感光元件上的雜點：ISO 越高點越多
-  const n = Math.round(3 + lg(iso, 50, 12800) * 21);
-  return SV(`<rect x="4" y="5" width="24" height="22" rx="3.5" class="gw"/>${GRAIN.slice(0, n).map(([x, y]) => `<circle cx="${x}" cy="${y}" r="1.15" class="gd"/>`).join("")}<rect x="4" y="5" width="24" height="22" rx="3.5" class="gs"/><path d="M8 2.5v2.5M13 2.5v2.5M19 2.5v2.5M24 2.5v2.5M8 27v2.5M13 27v2.5M19 27v2.5M24 27v2.5" class="gl"/>`);
+function gIso(iso){                      // 感光度儀表：ISO 越高指針越往右（右邊那段是高感光、容易有雜訊）
+  const k = lg(iso, 50, 12800), A = t => Math.PI * (1 + t), P = (t, r) => `${(16 + r * Math.cos(A(t))).toFixed(1)} ${(24 + r * Math.sin(A(t))).toFixed(1)}`;
+  const arc = (t0, t1, cls) => `<path d="M${P(t0, 13.5)}A13.5 13.5 0 0 1 ${P(t1, 13.5)}" class="${cls}"/>`;
+  const ticks = [0, .25, .5, .75, 1].map(t => `<path d="M${P(t, 9.6)}L${P(t, 11.2)}" class="gl"/>`).join("");
+  return SV(`${arc(0, 1, "gtk")}${k > .01 ? arc(0, k, "gsk") : ""}${ticks}<path d="M16 24L${P(k, 10.5)}" class="gs"/><circle cx="16" cy="24" r="2.3" class="gd"/>`);
 }
 function gFov(f35){                      // 側面看的相機：廣角是扁扁的餅乾鏡、望遠是長長的鏡頭（照等效焦距）
   const L = 2.5 + lg(f35, 14, 600) * 10, o = (32 - 13 - L) / 2, X = v => (o + v).toFixed(1);

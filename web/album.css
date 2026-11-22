@@ -743,6 +743,8 @@ html::-webkit-scrollbar,body::-webkit-scrollbar{display:none;width:0;height:0}  
 .gx .gs,.gin .gs{fill:none;stroke:var(--g2);stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
 .gx .gk{fill:none;stroke:var(--s1);stroke-width:1.1}
 .gx g .gs{stroke-width:1.3}
+.gx .gtk{fill:none;stroke:color-mix(in oklab,var(--g2) 18%,transparent);stroke-width:3.4;stroke-linecap:round}
+.gx .gsk{fill:none;stroke:var(--g2);stroke-width:3.4;stroke-linecap:round}
 .gx .gw{fill:color-mix(in oklab,var(--g2) 13%,transparent)}
 .gx .gh{fill:color-mix(in oklab,var(--g2) 34%,var(--s1))}
 .iex .no .gx .gs{stroke:var(--tx3)}
