@@ -18,6 +18,7 @@ ALB_LIVE = 3.6                                                    # 跟照片同
 ALB_VCH = 1 << 20                                                 # 影片分段加密，每段 1 MB（拖進度條只解要的那幾段）
 ALB_TALK = os.path.join(DATA_DIR, "album-talk.json")              # 朋友的愛心、留言（加密，SEAL_FILES；跟著備份）
 ALB_TALK_MAX = (300, 20, 200, 3000)                               # 一則留言幾個字、名字幾個字、一張最多幾則、一本最多幾則
+ALB_RX = ("😂", "😮", "👍", "🥹")                                  # 愛心以外能按的表情
 ALB_TIMES = (86400, 7 * 86400, 30 * 86400, 0)                     # 能選的期限（0 = 不會過期）
 ALB_MAX = 2000                                                    # 一本最多幾張
 ALB_PW_TRY = (5, 15 * 60)                                         # 同一個來源 15 分鐘錯 5 次先鎖住
@@ -83,7 +84,10 @@ def alb_talk_of(a, th=""):
     """這本每張照片的愛心數、自己按了沒、留言"""
     out = {}
     for pid, t in (alb_talk_all().get(a["id"]) or {}).items():
-        out[pid] = {"lk": len(t.get("l") or []), "me": th in (t.get("l") or []),
+        rx = {}
+        for e in (t.get("r") or {}).values():
+            rx[e] = rx.get(e, 0) + 1
+        out[pid] = {"lk": len(t.get("l") or []), "me": th in (t.get("l") or []), "rx": rx, "mr": (t.get("r") or {}).get(th, ""),
                     "cm": [{"id": c["id"], "n": c["n"], "s": c["s"], "t": int(c["t"]), "me": c["d"] == th} for c in t.get("c") or []]}
     return out
 
@@ -110,7 +114,16 @@ def alb_talk_post(a, th, d):
     with ALB_LOCK:
         talk = alb_talk_all()
         t = talk.setdefault(a["id"], {}).setdefault(pid, {"l": [], "c": []})
-        if d.get("like") is not None:
+        if d.get("rx") is not None:                      # 其他表情：一支手機一個，再按一次同一個就拿掉
+            rs = t.setdefault("r", {})
+            e = str(d["rx"])
+            if e in ALB_RX and rs.get(th) != e:
+                rs[th] = e
+                while len(rs) > 500:
+                    rs.pop(next(iter(rs)))
+            else:
+                rs.pop(th, None)
+        elif d.get("like") is not None:
             ls = t.setdefault("l", [])
             if d["like"] and th not in ls:
                 ls.append(th)
@@ -144,7 +157,7 @@ def alb_talk_post(a, th, d):
                 dv["nm"] = name
                 alb_save(all_)
         alb_talk_save()
-    return 200, {"ok": True, **alb_talk_of(a, th).get(pid, {"lk": 0, "me": False, "cm": []})}
+    return 200, {"ok": True, **alb_talk_of(a, th).get(pid, {"lk": 0, "me": False, "rx": {}, "mr": "", "cm": []})}
 
 
 def alb_root():
@@ -1731,6 +1744,8 @@ def alb_worker():
                         g = idx["ph"][pid].get("g")
                         if g:
                             alb_place(g[0], g[1], wait=True)
+                    for day, g in alb_wx_days(a, idx).items():
+                        alb_wx(g[0], g[1], day, wait=True)
                 for pid in idx.get("order", []):        # 照片都好了再慢慢轉影片
                     if aid not in alb_all():
                         break
@@ -1910,6 +1925,64 @@ def alb_place(lat, lon, wait=False):
         return res
 
 
+# ── 那天的天氣：Open-Meteo 的歷史天氣（照拍照的地點、日期，問過的記在地名那個檔裡） ──
+ALB_WX_URL = os.environ.get("SENTINEL_ALB_WX") or "https://archive-api.open-meteo.com/v1/archive"
+ALB_WXF = {}                                                      # 剛問過、還沒有資料的（一小時內不再問）
+ALB_WX_URL2 = os.environ.get("SENTINEL_ALB_WX2") or "https://api.open-meteo.com/v1/forecast"   # 最近幾天歷史資料還沒有：用預報那邊的
+
+
+def alb_wx_days(a, idx):
+    """每天第一張有定位的照片 → {日期: (緯度, 經度)}（朋友放的不算）"""
+    out = {}
+    for pid in idx.get("order", []):
+        m = idx["ph"].get(pid) or {}
+        dt, g = (m.get("x") or {}).get("dt", ""), m.get("g")
+        if not g or alb_up_who(m.get("n", "")) or not re.match(r"\d{4}:\d\d:\d\d", dt):
+            continue
+        out.setdefault(dt[:10].replace(":", ""), g)
+    return out
+
+
+def alb_wx(lat, lon, day, wait=False):
+    """[天氣代碼, 最高溫, 最低溫]；問不到回 None"""
+    k = f"w{lat:.1f},{lon:.1f},{day}"
+    d = alb_places()
+    if k in d:
+        return d[k] or None
+    try:
+        dd = date(int(day[:4]), int(day[4:6]), int(day[6:8]))
+    except ValueError:
+        return None
+    today = date.today()
+    if not wait or dd > today or dd.year < 1940 or time.time() - ALB_WXF.get(k, 0) < 3600:
+        return None
+    ds = dd.isoformat()
+    res = None
+    for url in (ALB_WX_URL, ALB_WX_URL2):
+        q = urllib.parse.urlencode({"latitude": f"{lat:.2f}", "longitude": f"{lon:.2f}", "start_date": ds, "end_date": ds,
+                                    "daily": "weather_code,temperature_2m_max,temperature_2m_min", "timezone": "auto"})
+        try:
+            req = urllib.request.Request(url + "?" + q, headers={"User-Agent": f"vps-sentinel/{VERSION} (+https://github.com/a7510049/vps-sentinel)"})
+            with urllib.request.urlopen(req, timeout=10) as r:
+                j = (json.loads(r.read(1 << 18)) or {}).get("daily") or {}
+            v = [(j.get(x) or [None])[0] for x in ("weather_code", "temperature_2m_max", "temperature_2m_min")]
+            if None not in v:
+                res = [int(v[0]), round(float(v[1])), round(float(v[2]))]
+                break
+        except Exception:  # noqa: BLE001
+            continue
+    if res is None and (today - dd).days < 10:
+        ALB_WXF[k] = time.time()                       # 最近幾天的還沒有：一小時後再問
+        return None
+    with ALB_PL["lock"]:
+        d[k] = res or []
+        try:
+            sec_dump(ALB_PLACES, d)
+        except OSError:
+            pass
+    return res
+
+
 # ── 朋友那邊：網頁、照片清單、圖、下載 ──
 ALB_TILE_DIR = os.path.join(DATA_DIR, "album-tiles")             # 地圖圖塊（不備份，重抓得到）
 ALB_TILE_URL = os.environ.get("SENTINEL_ALB_TILE") or "https://tile.openstreetmap.org/{z}/{x}/{y}.png"
@@ -2032,10 +2105,18 @@ def alb_manifest(a, th=""):
                 c = pl.get("c") or pl["n"]
                 places[c] = places.get(c, 0) + 1
         out.append(it)
-    if alb_ready(a, idx) < 1 or any(x.get("vr") == -1 for x in out) or (a["loc"] and (old_pl or any("g" in x and "p" not in x for x in out))):
+    wx, wx_miss = {}, False
+    if a["loc"]:
+        for day, g in alb_wx_days(a, idx).items():
+            w = alb_wx(g[0], g[1], day)
+            if w:
+                wx[day] = w
+            elif (k := f"w{g[0]:.1f},{g[1]:.1f},{day}") not in alb_places() and day <= time.strftime("%Y%m%d") and time.time() - ALB_WXF.get(k, 0) >= 3600:
+                wx_miss = True
+    if alb_ready(a, idx) < 1 or any(x.get("vr") == -1 for x in out) or (a["loc"] and (old_pl or wx_miss or any("g" in x and "p" not in x for x in out))):
         alb_kick(a["id"])
     wmo = a.get("wm") if a.get("wm") and not alb_wm_bake(a) else ""
-    return {"ok": True, "name": a["name"], "photos": out, "dl": alb_dl(a), "loc": a["loc"], "exp": a["exp"], "es": a.get("es") or a.get("t0", 0), "wmo": wmo,
+    return {"ok": True, "name": a["name"], "photos": out, "dl": alb_dl(a), "loc": a["loc"], "exp": a["exp"], "es": a.get("es") or a.get("t0", 0), "wmo": wmo, "wx": wx,
             "talk": a.get("talk", True), "mu": bool(idx.get("mu")), "up": alb_up(a),
             "places": [k for k, _ in sorted(places.items(), key=lambda x: -x[1])][:6], "ready": alb_ready(a, idx)}
 

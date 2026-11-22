@@ -83,7 +83,7 @@ with open(os.path.join(ROOT_DIR, "旅行", "台北", "說明.txt"), "w") as f:
 
 
 class Album(Server):
-    ENV = {"SENTINEL_ALB_DIR": ROOT_DIR, "SENTINEL_ALB_GEO": "http://127.0.0.1:9/none", "SENTINEL_ALB_FF": "none",
+    ENV = {"SENTINEL_ALB_DIR": ROOT_DIR, "SENTINEL_ALB_GEO": "http://127.0.0.1:9/none", "SENTINEL_ALB_WX": "http://127.0.0.1:9/none", "SENTINEL_ALB_WX2": "http://127.0.0.1:9/none", "SENTINEL_ALB_FF": "none",
            "SENTINEL_ALB_TILE": "http://127.0.0.1:9/{z}/{x}/{y}.png"}
 
     @classmethod
@@ -260,9 +260,17 @@ class Album(Server):
         c = json.loads(b)["cm"][0]
         self.assertEqual((c["n"], c["s"], c["me"]), ("小明", "好看 <script>", True))
         self.assertEqual(post({"i": pid, "s": "再一則", "n": "小明"})[0], 429)            # 太快
+        s, b, _ = post({"i": pid, "rx": "😂"})                                         # 其他表情：一支手機一個
+        self.assertEqual((s, json.loads(b)["rx"], json.loads(b)["mr"]), (200, {"😂": 1}, "😂"))
+        s, b, _ = post({"i": pid, "rx": "👍"})                                         # 換一個
+        self.assertEqual((json.loads(b)["rx"], json.loads(b)["mr"]), ({"👍": 1}, "👍"))
+        s, b, _ = post({"i": pid, "rx": "💩"})                                         # 不認得的：當成拿掉
+        self.assertEqual((json.loads(b)["rx"], json.loads(b)["mr"]), ({}, ""))
+        post({"i": pid, "rx": "🥹"})
         s, b, _ = self.req("GET", f"/a/{code}/m", hdr={"Cookie": ck})
         p = json.loads(b)["photos"][0]
         self.assertEqual((p["lk"], p["me"], len(p["cm"])), (1, True, 1))
+        self.assertEqual((p["rx"], p["mr"], p["lk"]), ({"🥹": 1}, "🥹", 1))
         s, b, _ = self.req("GET", f"/a/{code}/m")                                       # 別支手機：看得到，但不是自己的
         p = json.loads(b)["photos"][0]
         self.assertEqual((p["me"], p["cm"][0]["me"]), (False, False))
@@ -355,7 +363,7 @@ class Album(Server):
 
 @unittest.skipUnless(shutil.which("ffmpeg"), "沒有 ffmpeg")
 class AlbumThumbs(Server):
-    ENV = {"SENTINEL_ALB_DIR": ROOT_DIR + "-t", "SENTINEL_ALB_GEO": "http://127.0.0.1:9/none"}
+    ENV = {"SENTINEL_ALB_DIR": ROOT_DIR + "-t", "SENTINEL_ALB_GEO": "http://127.0.0.1:9/none", "SENTINEL_ALB_WX": "http://127.0.0.1:9/none", "SENTINEL_ALB_WX2": "http://127.0.0.1:9/none"}
 
     @classmethod
     def setUpClass(cls):
