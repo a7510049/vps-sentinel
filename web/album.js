@@ -1084,11 +1084,14 @@ function openLb(i, from){
     const rb = $("[data-rx]", el), rn = Object.values(p.rx || {}).reduce((a, b) => a + b, 0);
     rb.classList.toggle("on", !!p.mr); rb.querySelector("svg, .rxe").outerHTML = p.mr ? `<i class="rxe">${p.mr}</i>` : I("smile");
     rb.querySelector(".num").textContent = rn || "";
-    if (rb.hidden !== !rn) {                                  // 其他表情：有人按過才出現（平常按住愛心選）
-      rb.hidden = !rn;
-      if (rn && anim()) rb.animate([{opacity:0, transform:"scale(.6)"}, {opacity:1, transform:"none"}], {duration:T.mid, easing:DEC});
-    }
+    if (rb.hidden !== !rn && !(rb.out && !rn)) {              // 其他表情：有人按過才出現（平常按住愛心選），拿掉時縮小淡出
+      if (rb.out) { rb.out.cancel(); rb.out = null; }
+      if (rn || !anim()) { rb.hidden = !rn; if (rn && anim()) rb.animate([{opacity:0, transform:"scale(.6)"}, {opacity:1, transform:"none"}], {duration:T.mid, easing:DEC}); }
+      else { rb.out = rb.animate([{opacity:1}, {opacity:0, transform:"scale(.6)"}], {duration:T.fast, easing:EXIT, fill:"forwards"}); rb.out.finished.then(() => { rb.hidden = true; rb.out.cancel(); rb.out = null; }, () => {}); }
+    } else if (rn && rb.out) { rb.out.cancel(); rb.out = null; }
     cm.querySelector("span").textContent = (p.cm || []).length || "";
+    const th = $(".italk .th", el), h = talkHead(p);           // 資訊裡的「誰按了愛心」跟著換（文字變了才換、淡入）
+    if (th && th.dataset.v !== h) { const was = th.dataset.v != null; th.innerHTML = h; th.dataset.v = h; if (was && anim()) [...th.children].slice(1).forEach(x => x.animate([{opacity:0, transform:"translateY(3px)"}, {opacity:1, transform:"none"}], {duration:T.mid, easing:DEC})); }
   }
   function chrome(){
     const p = PH[S.i], d = pd(p.x.dt), moved = S.at !== S.i;
@@ -1358,7 +1361,12 @@ function openLb(i, from){
     if (cm && !e.target.closest("button")) { inf.querySelectorAll(".cmt.on").forEach(x => { if (x !== cm) x.classList.remove("on"); }); cm.classList.toggle("on"); return; }
     if (e.target.closest("[data-crex]")) { const f = $(".cform", inf); delete f.dataset.re; $(".cre", f).hidden = true; f.querySelector("[name=s]").placeholder = "說點什麼…"; return; }
     const del = e.target.closest("[data-cdel]");
-    if (del) talk(S.i, {del:del.dataset.cdel}).then(ok => { if (ok) { inf.querySelector(".italk").outerHTML = talkHTML(PH[S.i]); social(); } });
+    if (del) talk(S.i, {del:del.dataset.cdel}).then(async ok => {    // 刪掉的那則（連同回覆）收起來，再換上新的
+      if (!ok) return;
+      const box = inf.querySelector(".italk"), gone = [...box.querySelectorAll(".cmt")].filter(c => !(PH[S.i].cm || []).some(x => x.id === c.dataset.cid));
+      if (anim() && gone.length) await Promise.all(gone.map(c => (c.style.overflow = "hidden", c).animate([{opacity:1, height:c.offsetHeight + "px"}, {opacity:0, height:"0px", paddingTop:0, paddingBottom:0}], {duration:T.mid, easing:EXIT, fill:"forwards"}).finished.catch(() => {})));
+      box.outerHTML = talkHTML(PH[S.i], !box.querySelector(".cform.fold")); social();
+    });
   });
   {                                                          // 資訊往下拉就關（捲到最上面時才算）
     let d0 = null;
@@ -1387,12 +1395,13 @@ function openLb(i, from){
     if (!name) { if (nm) nm.focus(); return toast("先寫你的名字"); }
     if (!tx.value.trim()) return tx.focus();
     store.set("vsa-name", name);
-    f.querySelector("button").disabled = true;
+    const sb = f.querySelector(".csend"); if (sb.disabled) return;
+    sb.disabled = true;
     const re = f.dataset.re || "";
     talk(S.i, re ? {s:tx.value, n:name, re} : {s:tx.value, n:name}).then(ok => {
-      f.querySelector("button").disabled = false;
+      sb.disabled = false;
       if (!ok) return;
-      const box = inf.querySelector(".italk"); box.outerHTML = talkHTML(PH[S.i]); social();
+      const box = inf.querySelector(".italk"); box.outerHTML = talkHTML(PH[S.i], 1); social();   // 剛留完：輸入框留著，可以接著寫
       const cm = PH[S.i].cm || [], nw = cm[cm.length - 1];
       const last = nw && inf.querySelector(`.italk .cmt[data-cid="${nw.id}"]`); if (last && anim()) last.animate([{opacity:0, transform:"translateY(8px)"}, {opacity:1, transform:"none"}], {duration:T.mid, easing:DEC});
     });
@@ -1486,16 +1495,22 @@ function cOpen(f, nofocus){
 }
 document.addEventListener("click", e => { const b = e.target.closest("[data-cadd]"); if (b) cOpen(b.nextElementSibling); });
 /* 留言簿：在最後給整本留一句話 */
-const GB = "_gb";
-function gbook(){
+const GB = "_gb", GBSEEN = new Set();                           // GBSEEN：看過的留言不再重播進場動畫
+function gbook(open){
   const box = $(".gbk"); if (!box) return;
+  if (open === undefined) open = !!box.querySelector(".gbf:not(.fold)");   // 本來打開著就留著
   const cs = D.gb || [], nm = store.get("vsa-name"), sig = cs.map(c => c.id).join() + "|" + !!nm;
   box.hidden = !!WHO;
   if (box.dataset.sig === sig || (box.dataset.sig && (box.querySelector(".gbf:not(.fold) [name=s]") || {}).value)) return;   // 沒有新留言就不重畫；打到一半的字留著
   box.dataset.sig = sig;
+  const r0 = new Map([...box.querySelectorAll(".gbc[data-id]")].map(c => [c.dataset.id, c.getBoundingClientRect()]));   // 換之前每張卡的位置（刪一張時其他的滑過去）
   box.innerHTML = `<div class="mh"><b>留言簿</b><span class="num">${cs.length ? `${cs.length} 則` : ""}</span></div>
-    <div class="gbl">${cs.length ? cs.slice().reverse().map((c, k) => `<div class="gbc" style="--i:${Math.min(k, 8)}"><p>${esc(c.s)}</p><div class="gbn"><i class="av">${esc([...c.n][0] || "?")}</i><b>${esc(c.n)}</b><span>${ago(c.t)}</span>${c.me ? `<button class="cx" data-gbdel="${esc(c.id)}" aria-label="刪掉">${I("x")}</button>` : ""}</div></div>`).join("") : `<div class="gbe">${I("chat")}<span>看完了嗎？留一句話給${esc(D.name)}</span></div>`}</div>
-    <button type="button" class="cadd" data-cadd>${I("pen")}<span>留一句話</span></button><form class="cform gbf fold">${nm ? "" : `<input class="cin nm" name="n" maxlength="20" placeholder="你的名字" autocomplete="nickname">`}<div class="crow"><input class="cin" name="s" maxlength="300" placeholder="寫一句話…" autocomplete="off"><button class="csend" aria-label="送出">${I("send")}</button></div></form>`;
+    <div class="gbl">${cs.length ? cs.slice().reverse().map((c, k) => `<div class="gbc${GBSEEN.has(c.id) ? " old" : ""}" data-id="${esc(c.id)}" style="--i:${Math.min(k, 8)}"><p>${esc(c.s)}</p><div class="gbn"><i class="av">${esc([...c.n][0] || "?")}</i><b>${esc(c.n)}</b><span>${ago(c.t)}</span>${c.me ? `<button class="cx" data-gbdel="${esc(c.id)}" aria-label="刪掉">${I("x")}</button>` : ""}</div></div>`).join("") : `<div class="gbe">${I("chat")}<span>看完了嗎？留一句話給${esc(D.name)}</span></div>`}</div>
+    <button type="button" class="cadd" data-cadd${open ? " hidden" : ""}>${I("pen")}<span>留一句話</span></button><form class="cform gbf${open ? "" : " fold"}">${nm ? "" : `<input class="cin nm" name="n" maxlength="20" placeholder="你的名字" autocomplete="nickname">`}<div class="crow"><input class="cin" name="s" maxlength="300" placeholder="寫一句話…" autocomplete="off"><button class="csend" aria-label="送出">${I("send")}</button></div></form>`;
+  cs.forEach(c => GBSEEN.add(c.id));
+  if (!anim() || !r0.size) return;
+  box.querySelectorAll(".gbc[data-id]").forEach(c => { const a = r0.get(c.dataset.id); if (!a) return; const b = c.getBoundingClientRect(), dx = a.left - b.left, dy = a.top - b.top;
+    if (Math.abs(dx) + Math.abs(dy) > 1) c.animate([{transform:`translate(${dx}px,${dy}px)`}, {transform:"none"}], {duration:T.slow, easing:DEC}); });
 }
 async function gbPost(body){
   try {
@@ -1512,31 +1527,32 @@ document.addEventListener("submit", e => {
   if (!name) { if (nm) nm.focus(); return toast("先寫你的名字"); }
   if (!tx.value.trim()) return tx.focus();
   store.set("vsa-name", name);
-  f.querySelector("button").disabled = true;
+  const sb = f.querySelector(".csend"); if (sb.disabled) return;
+  sb.disabled = true;
   gbPost({s:tx.value, n:name}).then(ok => {
-    f.querySelector("button").disabled = false;
+    sb.disabled = false;
     if (!ok) return;
-    gbook();
-    const first = $(".gbk .gbc"); if (first && anim()) first.animate([{opacity:0, transform:"translateY(10px) scale(.97)"}, {opacity:1, transform:"none"}], {duration:T.slow, easing:DEC});
+    tx.value = ""; gbook(1);
   });
 });
 document.addEventListener("click", e => {
   const b = e.target.closest("[data-gbdel]"); if (!b) return;
   const c = b.closest(".gbc");
   gbPost({del:b.dataset.gbdel}).then(ok => { if (!ok) return;
-    if (c && anim()) c.animate([{opacity:1}, {opacity:0, transform:"scale(.96)"}], {duration:T.fast, easing:EXIT, fill:"forwards"}).finished.then(gbook, gbook); else gbook(); });
+    if (c && anim()) c.animate([{opacity:1}, {opacity:0, transform:"scale(.96)"}], {duration:T.fast, easing:EXIT, fill:"forwards"}).finished.then(() => gbook(), () => gbook()); else gbook(); });
 });
 function talkOrder(cs){                                        // 回覆排在那一則下面（那一則被刪了就照時間放）
   const ids = new Set(cs.map(c => c.id)), top = cs.filter(c => !c.r || !ids.has(c.r)), out = [];
   top.forEach(c => { out.push(c); cs.forEach(x => { if (x.r === c.id) out.push(x); }); });
   return out;
 }
-function talkHTML(p){
+const talkHead = p => `<b>留言</b>${p.lk ? `<span class="num lkw">${I("heart")}${lkWho(p)}</span>` : ""}${Object.entries(p.rx || {}).filter(r => r[1] > 0).map(([e, n]) => `<span class="num"><i class="rxe">${e}</i>${n}</span>`).join("")}`;
+function talkHTML(p, open){
   if (!D.talk) return "";
   const cs = p.cm || [], nm = store.get("vsa-name");
-  return `<div class="ibox italk"><div class="th"><b>留言</b>${p.lk ? `<span class="num lkw">${I("heart")}${lkWho(p)}</span>` : ""}${Object.entries(p.rx || {}).map(([e, n]) => `<span class="num"><i class="rxe">${e}</i>${n}</span>`).join("")}</div>
+  return `<div class="ibox italk"><div class="th">${talkHead(p)}</div>
     ${talkOrder(cs).map(c => `<div class="cmt${c.r ? " rep" : ""}" data-cid="${esc(c.id)}"><div class="av">${esc([...c.n][0] || "?")}</div><div class="cb"><div class="cn"><b>${esc(c.n)}</b><span>${ago(c.t)}</span></div><p>${esc(c.s)}</p><button class="crep" data-crep="${esc(c.id)}" data-cn="${esc(c.n)}">回覆</button></div>${c.me ? `<button class="cx" data-cdel="${esc(c.id)}" aria-label="刪掉">${I("x")}</button>` : ""}</div>`).join("")}
-    <button type="button" class="cadd" data-cadd>${I("chat")}<span>${cs.length ? "留言" : "第一個留言"}</span></button><form class="cform fold"><div class="cre" hidden><span></span><button type="button" data-crex aria-label="不回覆了">${I("x")}</button></div>${nm ? "" : `<input class="cin nm" name="n" maxlength="20" placeholder="你的名字" autocomplete="nickname">`}<div class="crow"><input class="cin" name="s" maxlength="300" placeholder="說點什麼…" autocomplete="off"><button class="csend" aria-label="送出">${I("send")}</button></div></form></div>`;
+    <button type="button" class="cadd" data-cadd${open ? " hidden" : ""}>${I("chat")}<span>${cs.length ? "留言" : "第一個留言"}</span></button><form class="cform${open ? "" : " fold"}"><div class="cre" hidden><span></span><button type="button" data-crex aria-label="不回覆了">${I("x")}</button></div>${nm ? "" : `<input class="cin nm" name="n" maxlength="20" placeholder="你的名字" autocomplete="nickname">`}<div class="crow"><input class="cin" name="s" maxlength="300" placeholder="說點什麼…" autocomplete="off"><button class="csend" aria-label="送出">${I("send")}</button></div></form></div>`;
 }
 /* ═════════ 選幾張一起下載 ═════════ */
 const SEL = {on:false, s:new Set()};
