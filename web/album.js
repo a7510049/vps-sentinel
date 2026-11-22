@@ -39,8 +39,9 @@ const P = {
   wsnow:'<path d="M7 14h10.5a4 4 0 0 0 .5-8 6 6 0 0 0-11.4 1.6A3.3 3.3 0 0 0 7 14Z"/><path d="M9 18h.01M12 20h.01M15 18h.01M12 17h.01"/>',
   wstorm:'<path d="M7 14h10.5a4 4 0 0 0 .5-8 6 6 0 0 0-11.4 1.6A3.3 3.3 0 0 0 7 14Z"/><path d="m12.5 15-2 3.5h3l-2 3.5"/>',
   cam:'<path d="M3.5 8.5a2 2 0 0 1 2-2h2.3l1.5-2.2h5.4l1.5 2.2h2.3a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2h-13a2 2 0 0 1-2-2Z"/><circle cx="12" cy="13" r="3.6"/>',
+  dial:'<circle cx="12" cy="12" r="8.5"/><path d="M12 12l4.5-4.5M12 3.5v2M20.5 12h-2M12 20.5v-2M3.5 12h2"/>',
   lens:'<circle cx="12" cy="12" r="8.5"/><circle cx="12" cy="12" r="4.5"/><path d="M12 3.5v4.5M19.4 16.3l-3.9-2.3M4.6 16.3l3.9-2.3"/>',
-  send:'<path d="M4.5 12h13M12.5 6l6 6-6 6"/>', find:'<circle cx="11" cy="11" r="6.5"/><path d="m20 20-4.4-4.4"/>', ng:'<rect x="3.5" y="3.5" width="17" height="17" rx="3"/><rect x="8" y="8" width="8" height="8" rx="1.2"/>', hue:'<circle cx="12" cy="12" r="8.5"/><path d="M12 3.5v17M3.5 12h17M6 6l12 12M18 6 6 18"/>', scr:'<rect x="3" y="4.5" width="18" height="12" rx="2"/><path d="M9 20h6M12 16.5V20"/>', pen:'<path d="M4 20h4L19 9a2.8 2.8 0 0 0-4-4L4 16v4Z"/><path d="m13.5 6.5 4 4"/>', again:'<path d="M4 12a8 8 0 1 0 2.4-5.7L4 8.5M4 4v4.5h4.5"/>'
+  send:'<path d="M4.5 12h13M12.5 6l6 6-6 6"/>', find:'<circle cx="11" cy="11" r="6.5"/><path d="m20 20-4.4-4.4"/>', ng:'<rect x="3.5" y="3.5" width="17" height="17" rx="3"/><rect x="8" y="8" width="8" height="8" rx="1.2"/>', hue:'<circle cx="12" cy="12" r="8.5"/><path d="M12 3.5v17M3.5 12h17M6 6l12 12M18 6 6 18"/>', scr:'<rect x="3" y="4.5" width="18" height="12" rx="2"/><path d="M9 20h6M12 16.5V20"/>', pen:'<path d="M4 20h4L19 9a2.8 2.8 0 0 0-4-4L4 16v4Z"/><path d="m13.5 6.5 4 4"/>', again:'<path d="M4 12a8 8 0 1 0 2.4-5.7L4 8.5M4 4v4.5h4.5"/>', zeb:'<rect x="3.5" y="3.5" width="17" height="17" rx="3"/><path d="M3.5 13 13 3.5M7 20.5 20.5 7M13.5 20.5l7-7"/>', cmp:'<rect x="3" y="5" width="7.5" height="14" rx="1.5"/><rect x="13.5" y="5" width="7.5" height="14" rx="1.5"/><path d="M12 2.5v19"/>'
 };
 const I = n => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${P[n]}</svg>`;
 const src = (p, k) => `${BASE}/i/${p.i}/${k}?v=${p.v}`;
@@ -55,7 +56,7 @@ const TM = new Map();                                        // 照片編號 →
 let CITY = "";                                               // 只看哪個城市（點城市卡片）
 const cityKey = p => p.p && p.p.c ? `${p.p.cc || ""}|${p.p.c}` : "";
 let GEAR = "";                                               // 只看哪台相機（c:名稱）或哪顆鏡頭（l:名稱）
-const gearOf = (p, k) => k[0] === "c" ? camName(p.x) === k.slice(2) : lensName(p.x) === k.slice(2);
+const gearOf = (p, k) => k[0] === "c" ? camName(p.x) === k.slice(2) : k[0] === "l" ? lensName(p.x) === k.slice(2) : !isVid(p) && habOf(p, k[0]) === +k.slice(2);
 const pickW = () => { const t = SQ ? sqTerms(SQ) : null, l = ALL.filter(p => (p.u || "") === WHO && (!CITY || cityKey(p) === CITY) && (!GEAR || gearOf(p, GEAR)) && (!t || sqHit(p, t)));
   return HUE ? l.map((p, k) => [p, p._hk || [COLS.length + 2, 0, 0], k]).sort((a, b) => a[1][0] - b[1][0] || a[1][1] - b[1][1] || a[1][2] - b[1][2] || a[2] - b[2]).map(x => x[0]) : l; };
 let HUE = 0;                                                  // 照顏色排：紅、橘、黃…一路排成彩虹
@@ -1204,6 +1205,18 @@ function gearSet(k, keep){
   GEAR = k;
   whoSet(WHO, true).then(() => { const w = $(".cityf"); if (w && !w.hidden) scrollTo({top:w.getBoundingClientRect().top + scrollY - 70, behavior:anim() ? "smooth" : "auto"}); });
 }
+/* 拍攝習慣：光圈、快門、ISO 各分幾段（照相機上一級一級的刻度），點一段只看那樣拍的 */
+const HAB = {
+  a:{n:"光圈", b:[1.7, 2.4, 3.4, 4.8, 6.7, 9.5], l:["ƒ1.4", "ƒ2", "ƒ2.8", "ƒ4", "ƒ5.6", "ƒ8", "ƒ11+"], v:x => x.f},
+  t:{n:"快門", b:[1 / 750, 1 / 350, 1 / 180, 1 / 90, 1 / 45, 1 / 20], l:["1/1000", "1/500", "1/250", "1/125", "1/60", "1/30", "更慢"], v:x => x.et && x.et[1] ? x.et[0] / x.et[1] : 0},
+  i:{n:"ISO", b:[141, 283, 566, 1131, 2263, 4525], l:["100", "200", "400", "800", "1600", "3200", "6400+"], v:x => x.iso}};
+function habOf(p, k){ const h = HAB[k], v = h && h.v(p.x); if (!v) return -1; const i = h.b.findIndex(b => v < b); return i < 0 ? h.b.length : i; }
+function habits(base){                                       // 至少 8 張有資料、用到兩段以上才畫
+  return Object.entries(HAB).map(([k, h]) => { const c = h.l.map(() => 0); let n = 0;
+    base.forEach(p => { const i = habOf(p, k); if (i >= 0) { c[i]++; n++; } });
+    return n >= 8 && c.filter(Boolean).length >= 2 ? {k, h, c, n} : null; }).filter(Boolean);
+}
+const habLabel = g => `${HAB[g[0]].n} ${HAB[g[0]].l[+g.slice(2)]}`;
 /* 器材：這本用了哪幾台相機、哪幾顆鏡頭、常用的焦段（點了只看那台／那顆拍的） */
 const FOCB = [[0, 20, "超廣角"], [20, 35, "廣角"], [35, 70, "標準"], [70, 135, "中望遠"], [135, 1e9, "望遠"]];
 function gear(){
@@ -1215,20 +1228,23 @@ function gear(){
     if (f) { fb[FOCB.findIndex(b => f >= b[0] && f < b[1])]++; fl[f] = (fl[f] || 0) + 1; } });
   const cs = Object.entries(cams).sort((a, b) => b[1] - a[1]), ls = Object.entries(lens).sort((a, b) => b[1] - a[1]).slice(0, 8);
   const nf = fb.reduce((a, b) => a + b, 0), top = Object.entries(fl).sort((a, b) => b[1] - a[1])[0], mx = Math.max(1, ...fb);
-  box.hidden = cs.reduce((a, c) => a + c[1], 0) < 3 || (cs.length < 2 && ls.length < 2 && fb.filter(Boolean).length < 2);   // 只有一台相機、一顆鏡頭、一種焦段：沒得選就不列
+  const hb = habits(base);
+  box.hidden = cs.reduce((a, c) => a + c[1], 0) < 3 || (cs.length < 2 && ls.length < 2 && fb.filter(Boolean).length < 2 && !hb.length);   // 只有一台相機、一顆鏡頭、一種焦段、拍法都一樣：沒得選就不列
   if (box.hidden) { box.innerHTML = ""; return; }
   const n0 = cs[0][1];
   box.innerHTML = `<div class="mh"><b>器材</b><span class="num">${cs.length} 台相機${ls.length ? `・${Object.keys(lens).length} 顆鏡頭` : ""}</span></div>
     <div class="gcams">${cs.slice(0, 6).map(([c, n]) => { const lz = Object.entries(cl[c] || {}).sort((a, b) => b[1] - a[1]).slice(0, 6);
       return `<div class="gbox"><button class="gcam${GEAR === "c:" + c ? " on" : ""}" data-gear="c:${esc(c)}"><i class="gic">${I("cam")}</i><span class="gt2"><b>${esc(c)}</b><small class="num">${n} 張</small></span><span class="gbr"><i style="width:${(n / n0 * 100).toFixed(1)}%"></i></span></button>${lz.length ? `<div class="glz">${lz.map(([l, m]) => `<button class="glr${GEAR === "l:" + l ? " on" : ""}" data-gear="l:${esc(l)}">${I("lens")}<span>${esc(l)}</span><span class="gbr"><i style="width:${(m / n * 100).toFixed(1)}%"></i></span><small class="num">${m}</small></button>`).join("")}</div>` : ""}</div>`; }).join("")}</div>
-    ${nf >= 3 ? `<div class="gfoc"><div class="gfh"><small>常用焦段</small>${top ? `<b class="num">${top[0]} mm</b>` : ""}</div><div class="gfc">${FOCB.map((b, k) => `<div class="${fb[k] === mx ? "top" : ""}"><span><i style="height:${fb[k] ? Math.max(8, fb[k] / mx * 100).toFixed(0) : 0}%"></i></span><b class="num">${fb[k] || ""}</b><small>${b[2]}</small></div>`).join("")}</div></div>` : ""}`;
+    ${nf >= 3 ? `<div class="gfoc"><div class="gfh"><small>常用焦段</small>${top ? `<b class="num">${top[0]} mm</b>` : ""}</div><div class="gfc">${FOCB.map((b, k) => `<div class="${fb[k] === mx ? "top" : ""}"><span><i style="height:${fb[k] ? Math.max(8, fb[k] / mx * 100).toFixed(0) : 0}%"></i></span><b class="num">${fb[k] || ""}</b><small>${b[2]}</small></div>`).join("")}</div></div>` : ""}
+    ${hb.length ? `<div class="ghab">${hb.map(({k, h, c}) => { const m = Math.max(...c), tk = c.indexOf(m);
+      return `<div class="gfoc"><div class="gfh"><small>${h.n}</small><b class="num">${h.l[tk]}</b></div><div class="gfc hb">${h.l.map((l, j) => `<button class="${c[j] === m ? "top" : ""}${GEAR === `${k}:${j}` ? " on" : ""}" data-gear="${k}:${j}"${c[j] ? "" : " disabled"} aria-label="${h.n} ${l}：${c[j]} 張"><span><i style="height:${c[j] ? Math.max(8, c[j] / m * 100).toFixed(0) : 0}%"></i></span><b class="num">${c[j] || ""}</b><small class="num">${l}</small></button>`).join("")}</div></div>`; }).join("")}</div>` : ""}`;
 }
 function citybar(){
   const b = $(".cityf"); if (!b) return;
   const c = CITY && citiesOf().find(x => x.k === CITY);
   b.hidden = !c && !GEAR && !SQ && !HUE;
   b.innerHTML = (HUE ? `<span class="chip on">${I("hue")}<span>照顏色排</span></span><button class="chip" data-huex>${I("x")}<span>照日期排</span></button>` : "") + (SQ ? `<button class="chip on" data-find>${I("find")}<span>${esc(SQ)}</span><small class="num">${PH.length} 張</small></button><button class="chip" data-sqx>${I("x")}<span>全部照片</span></button>` : "") + (c ? `<span class="chip on">${flagImg(c.cc)}<span>${esc(c.c)}</span><small class="num">${c.ps.length} 張</small></span><button class="chip" data-cityx>${I("x")}<span>全部城市</span></button>` : "")
-    + (GEAR ? `<span class="chip on">${I(GEAR[0] === "c" ? "cam" : "lens")}<span>${esc(GEAR.slice(2))}</span><small class="num">${PH.length} 張</small></span><button class="chip" data-gearx>${I("x")}<span>全部器材</span></button>` : "");
+    + (GEAR ? `<span class="chip on">${I(GEAR[0] === "c" ? "cam" : GEAR[0] === "l" ? "lens" : "dial")}<span>${esc("cl".includes(GEAR[0]) ? GEAR.slice(2) : habLabel(GEAR))}</span><small class="num">${PH.length} 張</small></span><button class="chip" data-gearx>${I("x")}<span>全部器材</span></button>` : "");
   flagFix(b);
 }
 
@@ -1422,9 +1438,9 @@ function openLb(i, from){
   const el = document.createElement("div");
   el.className = "lb";
   const STRIP = matchMedia("(pointer:fine) and (min-width:900px)").matches && PH.length > 1;
-  el.className = (STRIP ? "lb strip" : "lb") + (NG ? " ng" : "") + (AFON ? " afon" : "");
+  el.className = (STRIP ? "lb strip" : "lb") + (NG ? " ng" : "") + (AFON ? " afon" : "") + (ZEB ? " zbon" : "");
   el.innerHTML = `<div class="bg"></div><div class="stage"><div class="track"></div></div>
-    <div class="lbt"><button class="rb" data-x aria-label="關閉">${I("x")}</button><span class="cnt num"></span><button class="rb lvb" data-lv aria-label="原況">${I("live")}</button><button class="rb" data-ssi aria-label="從這張開始播放">${I("play")}</button><button class="rb" data-shr aria-label="分享這張">${I("shr")}</button><button class="rb" data-inf aria-label="照片資訊">${I("info")}</button><button class="rb" data-del hidden aria-label="刪掉">${I("trash")}</button>${D.dl ? `<a class="rb" data-dl download aria-label="${D.dl > 1 ? "下載原圖" : "下載"}">${I("dl")}</a>` : ""}</div>
+    <div class="lbt"><button class="rb" data-x aria-label="關閉">${I("x")}</button><span class="cnt num"></span><button class="rb lvb" data-lv aria-label="原況">${I("live")}</button><button class="rb" data-ssi aria-label="從這張開始播放">${I("play")}</button><button class="rb" data-shr aria-label="分享這張">${I("shr")}</button><button class="rb" data-cmpb hidden aria-label="跟同一疊的比較">${I("cmp")}</button><button class="rb" data-inf aria-label="照片資訊">${I("info")}</button><button class="rb" data-del hidden aria-label="刪掉">${I("trash")}</button>${D.dl ? `<a class="rb" data-dl download aria-label="${D.dl > 1 ? "下載原圖" : "下載"}">${I("dl")}</a>` : ""}</div>
     <button class="rb nav l" aria-label="上一張">${I("l")}</button><button class="rb nav r" aria-label="下一張">${I("r")}</button>
     <div class="lbb"><div class="vbar"><button class="vpp" data-vpp aria-label="播放">${I("play")}</button><span class="vt0 num">0:00</span><div class="vtr" data-vseek><i></i></div><span class="vt1 num"></span><button class="vpp" data-vmu aria-label="聲音">${I("snd")}</button></div>
       <div class="lbr"><div class="cap"><b></b><span></span></div>${D.talk ? `<button class="sb" data-lk aria-label="愛心（按住選其他表情）">${I("heart")}<span class="num"></span></button><button class="sb rxb" data-rx aria-label="其他表情" hidden>${I("smile")}<span class="num"></span></button><button class="sb" data-cm aria-label="留言">${I("chat")}<span class="num"></span></button>` : ""}</div></div><div class="inf"></div>${D.talk ? `<div class="inf cmp"></div>` : ""}${STRIP ? `<div class="lbs"><div class="lbsr">${PH.map((p, k) => `<button class="lbst" data-go="${k}" aria-label="第 ${k + 1} 張"><img alt="" loading="lazy" draggable="false" src="${src(p, "s")}"></button>`).join("")}</div></div>` : ""}`;
@@ -1462,7 +1478,25 @@ function openLb(i, from){
     }
   }
   function place(){ sl.forEach((s, k) => { s.style.transform = `translateX(${(k - 1) * (W() + GAPX)}px)`; }); }
-  function setAll(){ fill(sl[0], S.i - 1); fill(sl[1], S.i); fill(sl[2], S.i + 1); place(); chrome(); xlSoon(); }
+  function setAll(){ fill(sl[0], S.i - 1); fill(sl[1], S.i); fill(sl[2], S.i + 1); place(); chrome(); xlSoon(); if (ZEB) zbMake(); }
+  function zbMake(){                                          // 這張的過曝、死黑標示（大圖好了再算一次，比較準）
+    const zw = cur(), p = PH[S.i]; if (!zw || !p || isVid(p) || p.broken) return;
+    const big = zw.querySelector(".s2"), sm = zw.querySelectorAll(".s1")[1], im = big && big.complete && big.naturalWidth ? big : sm && sm.complete && sm.naturalWidth ? sm : null;
+    const key = `${S.i}:${im ? im.currentSrc : ""}`;
+    if (!im) { if (big) big.addEventListener("load", () => { if (ZEB && cur() === zw) zbMake(); }, {once:true}); return; }
+    if (zw.dataset.zb === key) return;
+    zw.dataset.zb = key;
+    let r; try { r = zbCalc(p, im); } catch (e) { return; }
+    zw.querySelectorAll(".zb").forEach(x => x.remove());
+    [["hi", "zbh"], ["lo", "zbs"]].forEach(([k, c]) => { if (!r[k]) return; const d = document.createElement("i"); d.className = `zb ${c}`; d.style.webkitMaskImage = d.style.maskImage = `url(${r[k]})`; zw.appendChild(d); });
+    const n = inf.querySelector("[data-zbn]"); if (n) n.textContent = zbTxt(p);
+    if (im === sm && big) big.addEventListener("load", () => { if (ZEB && cur() === zw) zbMake(); }, {once:true});
+  }
+  function zbSet(on){
+    ZEB = on; store.set("vsa-zb", on ? "1" : ""); el.classList.toggle("zbon", on);
+    el.querySelectorAll("[data-zb]").forEach(b => b.setAttribute("aria-pressed", on));
+    if (on) zbMake();
+  }
   /* 大螢幕（或放大看）：大圖 2048 不夠清楚時，停在這張一下才跟主機要長邊 3840 的清晰版，好了再換上（滑過去的那幾張不做） */
   function xlSoon(){ clearTimeout(S.xlT); S.xlT = setTimeout(xlGo, 450); }
   function xlGo(){
@@ -1551,6 +1585,7 @@ function openLb(i, from){
     $(".cap span", el).textContent = cam && !cl.includes(cam) ? `${cl}${cl ? "・" : ""}${cam}` : cl;
     if (moved && S.at0 && anim()) $(".cap", el).animate([{opacity:.25, transform:"translateY(3px)"}, {opacity:1, transform:"none"}], {duration:T.mid, easing:DEC});
     const del = $("[data-del]", el); del.hidden = !p.um; if (moved) del.classList.remove("arm");
+    { const c = STKOF.get(S.i), l = c != null && STK.get(c); $("[data-cmpb]", el).hidden = !(l && l.length > 1 && l.every(k => !isVid(PH[k]))); }   // 在一疊裡的才能比較
     const dl = $("[data-dl]", el); if (dl) dl.href = src(p, "o");
     $(".nav.l", el).disabled = S.i === 0; $(".nav.r", el).disabled = S.i === PH.length - 1;
     if (S.info === "info" && (moved || !inf.firstChild)) infSet(p, moved ? dir : 0, moved ? was : null);
@@ -1906,6 +1941,8 @@ function openLb(i, from){
     if (e.target.closest("[data-inf]")) return setInfo(S.info !== "info");
     if (e.target.closest("[data-ng]")) return ngSet(!NG);
     if (e.target.closest("[data-af]")) return afSet(!AFON);
+    if (e.target.closest("[data-zb]")) return zbSet(!ZEB);
+    if (e.target.closest("[data-cmpb]")) { const l = STK.get(STKOF.get(S.i)); return cmpOpen(l, S.i, l.find(k => k !== S.i)); }
     if (e.target.closest("[data-lv]")) return live();
     if (e.target.closest("[data-ssi]")) return show(S.i);
     if (e.target.closest("[data-vpp]")) return vToggle();
@@ -1994,6 +2031,8 @@ function openLb(i, from){
     if (e.key === " " && isVid(PH[S.i])) { e.preventDefault(); return vToggle(); }
     if (e.key === "g" || e.key === "G") return ngSet(!NG);
     if ((e.key === "f" || e.key === "F") && PH[S.i] && PH[S.i].x.afp) return afSet(!AFON);
+    if ((e.key === "z" || e.key === "Z") && PH[S.i] && !isVid(PH[S.i])) return zbSet(!ZEB);
+    if ((e.key === "c" || e.key === "C") && !$("[data-cmpb]", el).hidden) return $("[data-cmpb]", el).click();
     if (e.key === "ArrowRight") go(1);
     else if (e.key === "ArrowLeft") go(-1);
     else if (e.key === "Escape") S.info ? setInfo(false) : lbBack(S);
@@ -2218,6 +2257,62 @@ function nameSheet(then){                                    // 第一次放照�
     e.preventDefault();
     const v = inp.value.trim(); if (!v) return inp.focus();
     store.set("vsa-name", v); popBack(); then();
+  });
+}
+/* 兩張並排比較（同一疊連拍、包圍曝光）：左右（手機上下）各一張，放大、拖曳兩張一起動；下面一排換要比的那張 */
+function cmpOpen(list, a, b){
+  if (SH || !list || b == null) return;
+  const bg = document.createElement("div"), sel = [a, b], z = {s:1, x:0, y:0};
+  let act = 1;
+  const best = list.reduce((m, k) => (PH[k].qs ?? -1) > (PH[m].qs ?? -1) ? k : m, list[0]);
+  const lab = k => { const p = PH[k], x = p.x, t = [];
+    if (k === best && list.length > 1 && p.qs != null) t.push(`<em class="good">最清楚</em>`);
+    if (p.fm) t.push(`<em class="bad">可能跑焦</em>`); else if (shakeOf(p)) t.push(`<em class="bad">可能手震</em>`);
+    const ex = [x.f ? `ƒ${+x.f.toFixed(1)}` : "", shutter(x.et).replace(" 秒", " s"), x.iso ? `ISO ${x.iso}` : "", x.ev != null ? `${x.ev > 0 ? "+" : x.ev < 0 ? "−" : "±"}${Math.abs(+x.ev.toFixed(1))} EV` : ""].filter(Boolean).join("・");
+    const d = pd(x.dt); return `${t.join("")}<span class="num">${esc(ex)}${d ? `${ex ? "・" : ""}${ftime(d)}${x.dt.slice(17, 19) ? `:${x.dt.slice(17, 19)}` : ""}` : ""}</span>`; };
+  bg.className = "cmpv";
+  bg.innerHTML = `<div class="cmpt"><button class="rb" data-x aria-label="關閉">${I("x")}</button><b>比較</b><span class="num">${list.length} 張</span></div>
+    <div class="cmpp">${[0, 1].map(j => `<div class="cp${j === act ? " on" : ""}" data-j="${j}"><div class="cz"><img alt="" draggable="false"></div><div class="cpl"></div></div>`).join("")}</div>
+    <div class="cmps">${list.map(k => `<button class="cmpk" data-k="${k}" aria-label="換成這張"><img alt="" loading="lazy" draggable="false" src="${src(PH[k], "s")}"></button>`).join("")}</div>`;
+  document.body.appendChild(bg);
+  const panes = [...bg.querySelectorAll(".cp")], wrap = bg.querySelector(".cmpp");
+  const put = j => { const k = sel[j], p = PH[k], im = panes[j].querySelector("img");
+    im.src = src(p, z.s > 1.5 && Math.max(p.w, p.h) >= 2700 ? "x" : "l"); panes[j].querySelector(".cpl").innerHTML = lab(k);
+    if (anim()) panes[j].animate([{opacity:.4}, {opacity:1}], {duration:T.mid, easing:DEC});
+    mark(); };
+  const mark = () => bg.querySelectorAll(".cmpk").forEach(t => { const kk = +t.dataset.k; t.classList.toggle("in", sel.includes(kk)); t.classList.toggle("act", kk === sel[act]); });
+  const tz = () => { const w = panes[0].clientWidth, h = panes[0].clientHeight, mx = (z.s - 1) * w / 2, my = (z.s - 1) * h / 2;
+    z.x = Math.max(-mx, Math.min(mx, z.x)); z.y = Math.max(-my, Math.min(my, z.y));
+    panes.forEach(pn => { pn.querySelector(".cz").style.transform = z.s === 1 ? "" : `translate(${z.x}px,${z.y}px) scale(${z.s})`; });
+    if (z.s > 1.5 && !bg.dataset.hi) { bg.dataset.hi = 1; [0, 1].forEach(j => { const p = PH[sel[j]]; if (Math.max(p.w, p.h) >= 2700) panes[j].querySelector("img").src = src(p, "x"); }); } };
+  const zoomAt = (s1, cx, cy) => {                              // 照指著的那一點放大（兩張同一個位置）
+    const pn = panes.find(x => { const r = x.getBoundingClientRect(); return cx >= r.left && cx <= r.right && cy >= r.top && cy <= r.bottom; }) || panes[0];
+    const r = pn.getBoundingClientRect(), px = cx - r.left - r.width / 2, py = cy - r.top - r.height / 2, s0 = z.s;
+    s1 = Math.max(1, Math.min(6, s1));
+    z.x = px - (px - z.x) * s1 / s0; z.y = py - (py - z.y) * s1 / s0; z.s = s1; tz(); };
+  [0, 1].forEach(put);
+  void bg.offsetWidth; bg.classList.add("on");
+  SH = {close(){ if (SH && SH.bg === bg) SH = null; bg.classList.remove("on"); bg.style.pointerEvents = "none"; setTimeout(() => bg.remove(), T.mid + 50); }, bg};
+  history.pushState({sh:1}, "");
+  const pts = new Map(); let last = null, moved = 0;
+  wrap.addEventListener("pointerdown", e => { wrap.setPointerCapture(e.pointerId); pts.set(e.pointerId, [e.clientX, e.clientY]); last = null; moved = 0; });
+  wrap.addEventListener("pointermove", e => {
+    if (!pts.has(e.pointerId)) return;
+    const p0 = pts.get(e.pointerId); pts.set(e.pointerId, [e.clientX, e.clientY]);
+    if (pts.size === 2) { const [q1, q2] = [...pts.values()], d = Math.hypot(q1[0] - q2[0], q1[1] - q2[1]), cx = (q1[0] + q2[0]) / 2, cy = (q1[1] + q2[1]) / 2;
+      if (last) zoomAt(z.s * d / last, cx, cy); last = d; moved = 9; }
+    else if (z.s > 1) { z.x += e.clientX - p0[0]; z.y += e.clientY - p0[1]; moved += Math.abs(e.clientX - p0[0]) + Math.abs(e.clientY - p0[1]); tz(); }
+  });
+  const up = e => { if (!pts.has(e.pointerId)) return; pts.delete(e.pointerId); last = null;
+    if (!pts.size && moved < 6) { const pn = e.target.closest(".cp"); if (pn) { act = +pn.dataset.j; panes.forEach(x => x.classList.toggle("on", x === pn)); mark(); } } };
+  wrap.addEventListener("pointerup", up); wrap.addEventListener("pointercancel", up);
+  wrap.addEventListener("dblclick", e => zoomAt(z.s > 1 ? 1 : 3, e.clientX, e.clientY));
+  wrap.addEventListener("wheel", e => { e.preventDefault(); zoomAt(z.s * Math.exp(-e.deltaY / 300), e.clientX, e.clientY); }, {passive:false});
+  bg.addEventListener("click", e => {
+    if (e.target.closest("[data-x]")) return popBack();
+    const t = e.target.closest(".cmpk"); if (!t) return;
+    const k = +t.dataset.k; if (sel.includes(k)) return;
+    sel[act] = k; put(act);
   });
 }
 function upPick(){
@@ -2828,6 +2923,45 @@ const gDof = d => {                                          // 一條往前的�
   const R = d.s, X = v => v === Infinity ? 21.5 : 5 + 16.5 * v / (v + R), a = X(d.n), b = X(d.f), c = X(d.s);
   return `<svg class="gin gb" viewBox="0 0 24 24" aria-hidden="true"><path d="M2 14.5l3-2.5v5Z" class="gd"/><rect x="${a.toFixed(1)}" y="10" width="${Math.max(.8, b - a).toFixed(1)}" height="9" rx="1.5" class="gf"/><path d="M5 18.5H22" class="gs"/><path d="M${c.toFixed(1)} 7.5V20" class="gl"/></svg>`;
 };
+/* 光線：照光圈、快門、ISO（再扣掉曝光補償）算現場的亮度 LV（ISO 100 的曝光值）；閃光燈打過的不算 */
+function lvOf(p){
+  const x = p.x; if (isVid(p) || !x.f || !x.et || !x.iso || (x.fla & 1)) return null;
+  const t = x.et[0] / x.et[1]; if (!(t > 0)) return null;
+  const v = Math.log2(x.f * x.f / t) - Math.log2(x.iso / 100) + (x.ev || 0);
+  return v > -8 && v < 22 ? v : null;
+}
+const LVN = [[14.5, "大太陽"], [12.5, "晴天"], [10.5, "陰天"], [8.5, "傍晚、陰影"], [6.5, "明亮的室內"], [4.5, "室內"], [1.5, "夜晚的街上"], [-99, "很暗的夜晚"]];
+const lvName = v => LVN.find(r => v >= r[0])[1];
+const gLv = v => {                                           // 一條由暗到亮的尺（−2～16），左邊暗、右邊亮，三角形指在現場的亮度
+  const x = 3 + Math.max(0, Math.min(1, (v + 2) / 18)) * 18;
+  return `<svg class="gin gb" viewBox="0 0 24 24" aria-hidden="true"><circle cx="5" cy="7" r="2.2" class="gs"/><circle cx="19" cy="7" r="2.6" class="gd"/><path d="M19 2.2v1M19 10.8v1M14.2 7h1M22.8 7h1" class="gs"/><rect x="3" y="15.5" width="18" height="3" rx="1.5" class="gf"/><path d="M${x.toFixed(1)} 15l-2-3.4h4Z" class="gd"/></svg>`;
+};
+/* 可能手震：快門比安全快門（1／等效焦距，有防手震再寬四級）還慢，而且整張都不清楚（只有對焦處糊的是跑焦，不算手震）；手機不算 */
+function shakeOf(p){
+  const x = p.x; if (isVid(p) || !x.et || !x.f35 || p.fm || PHONES.test(x.mk || "")) return 0;
+  const t = x.et[0] / x.et[1], is = x.ms && x.ms.is && x.ms.is !== "關", safe = 1 / x.f35 * (is ? 16 : 1), sh = p.fs != null ? p.fs : p.qs;
+  return t > safe * 1.5 && sh != null && sh < 50 ? Math.round(1 / safe) || 1 : 0;
+}
+const PHONES = /^(apple|google|samsung|xiaomi|redmi|poco|huawei|honor|oneplus|oppo|vivo|realme|motorola|nothing)/i;
+const gShake = `<svg class="gin gb" viewBox="0 0 24 24" aria-hidden="true"><rect x="6" y="8" width="12" height="9" rx="2" class="gf"/><circle cx="12" cy="12.5" r="2.4" class="gs"/><path d="M3 9.5l-1 3 1 3M21 9.5l1 3-1 3" class="gl"/></svg>`;
+/* 過曝／死黑：大圖畫到畫布上，紅、綠、藍任何一個到頂（≥ 253）算過曝，全部 ≤ 3 算死黑；在看的人的設備上算 */
+let ZEB = store.get("vsa-zb") === "1";
+const zbTxt = p => p._zb ? (p._zb[0] < .05 && p._zb[1] < .05 ? "沒有" : `${zbPct(p._zb[0])}／${zbPct(p._zb[1])}`) : "";
+const zbPct = v => v < .05 ? "0%" : `${v < 10 ? v.toFixed(1) : Math.round(v)}%`;
+function zbCalc(p, im){
+  const k = Math.min(1, 720 / Math.max(im.naturalWidth, im.naturalHeight)), w = Math.max(1, Math.round(im.naturalWidth * k)), h = Math.max(1, Math.round(im.naturalHeight * k));
+  const c = document.createElement("canvas"); c.width = w; c.height = h;
+  const g = c.getContext("2d", {willReadFrequently:true}); g.drawImage(im, 0, 0, w, h);
+  const d = g.getImageData(0, 0, w, h), px = d.data, hi = new ImageData(w, h), lo = new ImageData(w, h);
+  let nh = 0, nl = 0;
+  for (let i = 0; i < px.length; i += 4) {
+    const mx = Math.max(px[i], px[i + 1], px[i + 2]);
+    if (mx >= 253) { hi.data[i + 3] = 255; nh++; } else if (mx <= 3) { lo.data[i + 3] = 255; nl++; }
+  }
+  const url = m => { g.clearRect(0, 0, w, h); g.putImageData(m, 0, 0); return c.toDataURL("image/png"); };
+  p._zb = [nh / (w * h) * 100, nl / (w * h) * 100];
+  return {hi:nh ? url(hi) : "", lo:nl ? url(lo) : ""};
+}
 const gBolt = on => `<svg class="gin gb${on ? "" : " off"}" viewBox="0 0 24 24" aria-hidden="true"><path d="M13 2 5 13.5h6L10 22l9-12h-6Z" class="gd"/>${on ? "" : `<path d="M4 4l16 16" class="gl"/>`}</svg>`;
 
 /* 照片的五個主要顏色：小圖畫到畫布上、照顏色分堆，越多的那段越長 */
@@ -2950,7 +3084,7 @@ function infoHTML(p){
     h += `<div class="ibox isty">${ms.st || ms.lut ? `<i class="${mono ? "mono" : ""}"></i><div><small>${esc(ms.sl || "風格")}</small><b>${esc(ms.st || ms.lut)}</b></div>${[...(ms.fx || []), ...(ms.st && ms.lut ? [`LUT ${ms.lut}`] : [])].map(t => `<span class="tag">${esc(t)}</span>`).join("")}` : ""}
       ${ms.k ? `<div class="kel"><small>白平衡</small><b class="num">${ms.k} K</b><span class="kbar"><i style="left:${kp.toFixed(1)}%"></i></span></div>` : ""}</div>`;
   }
-  if (!isVid(p)) h += `<div class="ibox ipal"><div class="ipw" data-pal aria-label="直方圖和主要顏色">${palHTML(p)}</div><button class="ngb" data-ng aria-pressed="${!!NG}">${I("ng")}<span>中性灰背景</span><i class="sw"></i></button></div>`;
+  if (!isVid(p)) h += `<div class="ibox ipal"><div class="ipw" data-pal aria-label="直方圖和主要顏色">${palHTML(p)}</div><button class="ngb" data-ng aria-pressed="${!!NG}">${I("ng")}<span>中性灰背景</span><i class="sw"></i></button><button class="ngb" data-zb aria-pressed="${!!ZEB}">${I("zeb")}<span>過曝／死黑</span><small class="num" data-zbn>${zbTxt(p)}</small><i class="sw"></i></button></div>`;
   const kv = [];
   if (x.ln) kv.push(["鏡頭", x.lmk && !x.ln.startsWith(x.lmk) ? `${x.lmk} ${x.ln}` : x.ln]);
   if (fl && f35 && Math.round(fl) !== f35) kv.push(["實際焦距", `${+fl.toFixed(2)} mm`]);
@@ -2969,6 +3103,8 @@ function infoHTML(p){
   if (x.sc && SC[x.sc]) st.push([gDial("SCN"), SC[x.sc], "場景"]);
   if (x.afp && !isVid(p)) st.push([gAf(p), p.fm ? "可能跑焦" : p.fs >= 60 ? "清楚" : "標出位置", "對焦點", ` class="iaf${AFON ? " on" : ""}${p.fm ? " miss" : ""}" data-af role="button" tabindex="0" aria-pressed="${AFON}"`]);
   { const dof = dofOf(p); if (dof) st.push([gDof(dof), dof.t, dof.k]); }
+  { const lv = lvOf(p); if (lv != null) st.push([gLv(lv), lvName(lv), `光線 LV ${Math.round(lv)}`]); }
+  { const sk = shakeOf(p); if (sk) st.push([gShake, "可能手震", `安全快門 1/${sk}`, ` class="warn"`]); }
   { const c = STKOF.get(PH.indexOf(p)); if (c != null && STKB.has(c)) { const ev = STK.get(c).map(i => PH[i].x.ev).sort((a, b) => a - b);
     kv.push(["包圍曝光", `${ev.length} 張・${ev.map(v => `${v > 0 ? "+" : v < 0 ? "−" : "±"}${Math.abs(+v.toFixed(1))}`).join(" / ")} EV`]); } }
   if (p.g && p.g[2] != null) kv.push(["海拔", `${Math.round(p.g[2])} 公尺`, gMtn]);
