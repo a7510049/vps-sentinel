@@ -1358,3 +1358,58 @@ button.dct:active{transform:scale(.92)}
   .gbk .cadd{margin:16px 0 0}
   .gbl{grid-template-columns:repeat(auto-fill,minmax(300px,1fr))}
 }
+
+/* 過曝／死黑：照片上蓋一層斜紋（紅＝過曝、藍＝死黑，跟修圖軟體一樣），斜紋慢慢移動像相機的斑馬紋 */
+:root{--zbh:#ff3b3b; --zbs:#2f7bff; --warn:#ffb870}
+@media (prefers-color-scheme:light){:root:not([data-mode="dark"]){--warn:#9a5200}}
+.lb .zb{position:absolute;inset:0;pointer-events:none;opacity:0;transition:opacity var(--t-mid) var(--ease);
+  -webkit-mask-size:100% 100%;mask-size:100% 100%;-webkit-mask-repeat:no-repeat;mask-repeat:no-repeat;
+  background-size:12px 12px;animation:zbm calc(var(--t-long) * 1.2) linear infinite}
+.lb .zbh{background-image:repeating-linear-gradient(45deg,var(--zbh) 0 3px,transparent 3px 6px)}
+.lb .zbs{background-image:repeating-linear-gradient(-45deg,var(--zbs) 0 3px,transparent 3px 6px)}
+.lb.zbon .zb{opacity:.9}
+@keyframes zbm{to{background-position:12px 0}}
+@media (prefers-reduced-motion:reduce){.lb .zb{animation:none}}
+.ngb small{color:var(--tx3);font-weight:650;margin-right:2px}
+
+/* 光線、手震：拍攝設定那排的格子 */
+.iset div.warn b{color:var(--warn)}
+.iset div.warn .gin .gf{fill:color-mix(in oklab,var(--warn) 70%,transparent)}
+.iset div.warn .gin .gs{stroke:var(--warn)}
+
+/* 拍攝習慣：光圈、快門、ISO 各一張小長條圖，點一段只看那樣拍的 */
+.ghab{display:grid;gap:12px;margin-top:12px}
+.ghab .gfoc{margin-top:0}
+.gfc.hb{grid-template-columns:repeat(7,1fr);gap:6px}
+.gfc>button{display:grid;justify-items:center;gap:4px;padding:0;border:0;background:none;color:inherit;font:inherit;cursor:pointer;-webkit-tap-highlight-color:transparent}
+.gfc>button:disabled{cursor:default}
+.gfc>button span{transition:box-shadow var(--t-fast) var(--ease)}
+.gfc>button.on span{box-shadow:inset 0 0 0 2px var(--p)}
+.gfc>button.on small{color:var(--p)}
+@media (hover:hover){.gfc>button:not(:disabled):hover span{box-shadow:inset 0 0 0 2px var(--line)}}
+@media (min-width:900px){.gear .ghab{grid-column:1 / -1;grid-template-columns:repeat(3,minmax(0,1fr))}.gear .ghab .gfoc{grid-column:auto;grid-row:auto}}
+
+/* 兩張並排比較 */
+.cmpv{position:fixed;inset:0;z-index:calc(var(--z-veil) + 2);display:grid;grid-template-rows:auto minmax(0,1fr) auto;background:#000;color:#fff;opacity:0;transition:opacity var(--t-mid) var(--ease);touch-action:none;user-select:none;-webkit-user-select:none}
+.cmpv.on{opacity:1}
+.cmpt{display:flex;align-items:center;gap:10px;padding:calc(env(safe-area-inset-top) + 10px) 14px 8px}
+.cmpt b{font-size:var(--fs-l);font-weight:750}
+.cmpt span{color:rgba(255,255,255,.6);font-size:var(--fs-s)}
+.cmpp{display:grid;grid-template-columns:1fr 1fr;gap:4px;min-height:0;padding:0 4px}
+@media (orientation:portrait){.cmpp{grid-template-columns:none;grid-template-rows:1fr 1fr}}
+.cp{position:relative;overflow:hidden;min-height:0;border-radius:var(--r-sm);background:#0b0b0d;box-shadow:inset 0 0 0 2px transparent;transition:box-shadow var(--t-fast) var(--ease)}
+.cp.on{box-shadow:inset 0 0 0 2px var(--p)}
+.cz{position:absolute;inset:0;transform-origin:50% 50%;will-change:transform}
+.cz img{width:100%;height:100%;object-fit:contain;display:block}
+.cpl{position:absolute;left:8px;right:8px;bottom:8px;display:flex;flex-wrap:wrap;align-items:center;gap:6px;pointer-events:none}
+.cpl span{padding:4px 9px;border-radius:var(--r-pill);background:rgba(0,0,0,.55);font-size:var(--fs-xs);font-weight:650}
+.cpl em{padding:4px 9px;border-radius:var(--r-pill);font-size:var(--fs-xs);font-weight:750;font-style:normal;background:rgba(0,0,0,.55)}
+.cpl em.good{background:var(--p);color:var(--on-p)}
+.cpl em.bad{background:color-mix(in oklab,var(--bad) 85%,#000);color:#fff}
+.cmps{display:flex;gap:6px;overflow-x:auto;padding:10px 12px calc(env(safe-area-inset-bottom) + 12px);scrollbar-width:none;justify-content:safe center}
+.cmps::-webkit-scrollbar{display:none}
+.cmpk{flex:none;width:56px;height:56px;padding:0;border:0;border-radius:var(--r-xs);overflow:hidden;background:#111;opacity:.55;box-shadow:inset 0 0 0 2px transparent;cursor:pointer;transition:opacity var(--t-fast),box-shadow var(--t-fast)}
+.cmpk img{width:100%;height:100%;object-fit:cover;display:block;pointer-events:none}
+.cmpk.in{opacity:1;box-shadow:inset 0 0 0 2px rgba(255,255,255,.7)}
+.cmpk.act{box-shadow:inset 0 0 0 2px var(--p)}
+@media (max-width:440px){.lbt{gap:6px;padding-left:10px;padding-right:10px}.lbt .cnt{white-space:nowrap;font-size:var(--fs-s)}}
