@@ -9,7 +9,8 @@ const RM = matchMedia("(prefers-reduced-motion: reduce)");
 const DARK = matchMedia("(prefers-color-scheme: dark)");
 const P = {
   zin:'<circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5M8 11h6M11 8v6"/>', zout:'<circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5M8 11h6"/>',
-  x:'<path d="M18 6 6 18M6 6l12 12"/>', info:'<circle cx="12" cy="12" r="9"/><path d="M12 16v-4M12 8h.01"/>',
+  x:'<path d="M18 6 6 18M6 6l12 12"/>', shr:'<circle cx="18" cy="5" r="2.5"/><circle cx="6" cy="12" r="2.5"/><circle cx="18" cy="19" r="2.5"/><path d="m8.2 10.8 7.6-4.4M8.2 13.2l7.6 4.4"/>',
+  star:'<path d="m12 3.5 2.6 5.3 5.9.9-4.3 4.1 1 5.8-5.2-2.7-5.2 2.7 1-5.8-4.3-4.1 5.9-.9z"/>', info:'<circle cx="12" cy="12" r="9"/><path d="M12 16v-4M12 8h.01"/>',
   dl:'<path d="M12 4v11M7 10l5 5 5-5M5 20h14"/>', l:'<path d="m15 18-6-6 6-6"/>', r:'<path d="m9 18 6-6-6-6"/>',
   pin:'<path d="M12 21s-7-6.2-7-11.5A7 7 0 0 1 19 9.5C19 14.8 12 21 12 21Z"/><circle cx="12" cy="9.5" r="2.5"/>',
   phone:'<rect x="7" y="3" width="10" height="18" rx="2.5"/><path d="M11 17.5h2"/>',
@@ -196,7 +197,15 @@ function sections(){
   const w = $(".wall"); w.dataset.z = ZL;
   w.innerHTML = GROUPS.map((g, gi) => `<section class="day" data-g="${gi}">${g.k && g.d ? g.m
     ? `<div class="dh" data-k="m${g.k}"><b>${g.d.y}年${g.d.mo}月</b><span class="num">${g.list.length}</span></div>`
-    : `<div class="dh" data-day="${g.k}" data-k="d${g.k}"><b>${fday(g.d, YR)}</b><span>${dayPlaces(g.k) ? `${I("pin")}${esc(dayPlaces(g.k))}` : ""}</span><i class="dct num">${g.list.length}</i></div>` : ""}<div class="rows"></div></section>`).join("");
+    : `<div class="dh" data-day="${g.k}" data-k="d${g.k}"><b>${fday(g.d, YR)}</b><span>${dayPlaces(g.k) ? `${I("pin")}${esc(dayPlaces(g.k))}` : ""}</span><i class="dct num">${g.list.length}</i>${dayClock(g.list)}</div>` : ""}<div class="rows"></div></section>`).join("");
+}
+/* 每天的標題下面一條 24 小時的時間條：拍照的時間點一個點（夜裡暗、白天亮），看得出那天從幾點拍到幾點 */
+function dayClock(list){
+  const hs = list.map(i => PH[i]).filter(p => !p.x.dtf).map(p => pd(p.x.dt)).filter(Boolean).map(d => d.h + d.mi / 60);
+  if (!hs.length) return "";
+  const a = Math.min(...hs), b = Math.max(...hs), pc = v => (v / 24 * 100).toFixed(2);
+  const dots = [...new Set(hs.map(h => Math.round(h * 4) / 4))];
+  return `<i class="dhr" aria-hidden="true"><em style="left:${pc(a)}%;width:${(+pc(b) - +pc(a)).toFixed(2)}%"></em>${dots.map(h => `<b style="left:${pc(h)}%"></b>`).join("")}</i>`;
 }
 function wallRects(){                                         // 現在畫面上每張的位置（動畫中、手指捏著的也算）
   const vis = new Map(), H = innerHeight;
@@ -297,7 +306,13 @@ function stats(){
   const many = ct.size > 1;
   const v = PH.filter(isVid).length, it = [[PH.length - v, "張照片"], [v, "段影片"], [days.size, "天"], [D.loc && cc.size > 1 ? cc.size : 0, "個國家"], [D.loc ? (many ? ct.size : pl.size) : 0, many ? "個城市" : "個地點"]].filter(x => x[0] > 0);
   box.hidden = !!WHO || it.length < 2;
-  box.innerHTML = it.map(([n, t]) => `<div class="st"><b class="num" data-n="${n}">${n}</b><small>${t}</small></div>`).join("")
+  const per = {}; PH.forEach(p => { const d = pd(p.x.dt); if (d) per[d.k] = (per[d.k] || 0) + 1; });
+  const ks = Object.keys(per).sort(), mx = Math.max(1, ...Object.values(per));
+  const gfx = t => t === "天" && ks.length > 1 && ks.length <= 40   // 每天幾張的小長條
+      ? `<span class="sgb" aria-hidden="true">${ks.map(k => `<i style="height:${Math.max(12, per[k] / mx * 100).toFixed(0)}%"></i>`).join("")}</span>`
+    : t === "個國家" ? `<span class="sgf" aria-hidden="true">${[...cc].slice(0, 5).map(flagImg).join("")}</span>`   // 去過的國家疊成一排國旗
+    : t === "段影片" && PH.length > v ? `<span class="sgr" aria-hidden="true"><i style="width:${(v / PH.length * 100).toFixed(1)}%"></i></span>` : "";   // 影片佔多少
+  box.innerHTML = it.map(([n, t]) => `<div class="st"><b class="num" data-n="${n}">${n}</b><small>${t}</small>${gfx(t)}</div>`).join("")
     + (D.loc && !WHO ? `<div class="st" data-skm hidden><b class="num" data-n="0">0</b><small>公里</small></div>` : "");
   if (!anim() || !("IntersectionObserver" in window)) return;
   box.querySelectorAll("b").forEach(b => { b.textContent = "0"; });
@@ -309,6 +324,7 @@ function stats(){
       if (k < 1) requestAnimationFrame(step); };
     requestAnimationFrame(step); }, {threshold:.6});
   STIO.observe(box);
+  flagFix(box);
 }
 /* 結尾：三張照片疊成一疊（跟標誌一樣），點了播放 */
 function finCol(){
@@ -326,28 +342,33 @@ function draw(){
   const pl = (D.places || []).slice(0, 3).join("・");
   $("#app").innerHTML = `
     <header class="hero"><div class="cv">${cover.q ? `<img class="lq" alt="" src="data:image/jpeg;base64,${cover.q}">` : ""}<img class="hi" alt="" src="${src(cover, "l")}"></div>
-      <div class="hcap">${a ? `<div class="eyebrow num">${esc(frange(a, b))}</div>` : ""}<h1>${esc(D.name)}</h1>
-        <div class="hmeta"><button class="chip go" data-ss>${I("play")}<span>播放</span></button><span class="chip">${I("photo")}<span class="num">${cntTxt()}</span></span>${pl ? `<span class="chip" data-pl>${I("pin")}<span>${esc(pl)}</span></span>` : ""}
+      <div class="hcap">${a ? `<div class="eyebrow num">${esc(frange(a, b))}</div>` : ""}<h1 style="--n:${[...D.name].length}">${[...D.name].map((c, k) => c === " " ? " " : `<span class="ch" style="--i:${k}">${esc(c)}</span>`).join("")}</h1>
+        <div class="hmeta"><button class="chip go" data-ss>${I("play")}<span>播放</span></button><span class="chip">${I("photo")}<span class="num">${cntTxt()}</span></span>${pl ? `<span class="chip" data-pl>${heroFlags() || I("pin")}<span>${esc(pl)}</span></span>` : ""}
         ${D.dl ? `<a class="chip" href="${BASE}/zip" download>${I("dl")}<span>全部下載</span></a><button class="chip" data-sel>${I("sel")}<span>選取</span></button>` : ""}${D.up ? `<button class="chip" data-up>${I("up")}<span>放照片</span></button>` : ""}</div></div>
       <button class="cue" aria-label="往下看"><i></i></button></header>
     <div class="bar"><b>${esc(D.name)}<small class="num">${cntTxt()}</small></b>${IOS ? `<span class="chip zb"><button data-zb="-1" aria-label="放大">${I("zin")}</button><button data-zb="1" aria-label="縮小">${I("zout")}</button></span>` : ""}${D.up ? `<button class="chip" data-up aria-label="放照片">${I("up")}</button>` : ""}${D.dl ? `<button class="chip" data-sel aria-label="選取">${I("sel")}</button>` : ""}<button class="chip go" data-ss aria-label="播放">${I("play")}</button></div>
-    <nav class="who" hidden></nav><div class="mems"></div><div class="stats"></div><div class="cityf" hidden></div><main class="wall" data-z="${ZL}"></main>
+    <nav class="who" hidden></nav><div class="mems"></div><div class="stats"></div><section class="hl" hidden></section><div class="cityf" hidden></div><div class="wwrap"><main class="wall" data-z="${ZL}"></main><aside class="smap" hidden><div class="smv"></div><div class="smc"></div></aside></div>
     ${D.loc && ALL.some(p => p.g && !p.u) ? `<section class="msec"${WHO ? " hidden" : ""}><div class="mh"><b data-mt>地點</b><span class="num" data-km></span></div><div class="cities"></div><div class="map" data-map></div></section>` : ""}
-    <footer class="foot">${finCol()}<div class="fin">${esc(D.name)}</div>${D.exp ? `<span>${I("clock")}${left(D.exp)}</span>` : ""}</footer>`;
+    <footer class="foot">${finCol()}<div class="fin">${esc(D.name)}</div>${D.exp ? `<span class="fexp">${expRing()}${left(D.exp)}</span>` : ""}</footer>`;
   const hi = $(".hero .hi");
   const hok = () => { hi.classList.add("ok"); setTimeout(() => { const q = $(".hero .lq"); if (q) q.remove(); }, T.slow + 100); };   // 糊的底圖拿掉，捲動時不用一直重畫模糊
   hi.complete ? hok() : hi.addEventListener("load", hok, {once:true});
-  heroCycle(cover); zbSync(); tint(cover);
+  heroCycle(cover); zbSync(); tint(cover); flagFix($(".hero"));
+  const hf = $(".hfl"); if (hf) hf.querySelectorAll("img").forEach(f => f.addEventListener("error", () => { if (!hf.querySelector("img")) hf.outerHTML = I("pin"); }));   // 國旗都抓不到就換回圖釘
   if (D.wmo) document.documentElement.style.setProperty("--wm", JSON.stringify(D.wmo));
   document.documentElement.classList.toggle("wmo", !!D.wmo);
   TILES = PH.map((p, i) => tile(p, i));
   whoBar();
   stats();
+  highlights();
+  smapOn();
   sections();
   layout();
   mems();
   bigMap();
+  smapWatch();
   onScroll();
+  deepLink();
 }
 /* 朋友放的：每個人一個分頁，不跟主人的照片混在一起 */
 function whoBar(){
@@ -364,14 +385,14 @@ async function whoSet(w, keep){
   if (w === WHO && !keep) return;
   if (WHOBZ) return; WHOBZ = 1;
   if (SEL.on) popBack();
-  const parts = [".mems", ".stats", ".cityf", ".wall", ".msec"].map(q => $(q)).filter(Boolean);
+  const parts = [".mems", ".stats", ".hl", ".cityf", ".wall", ".msec", ".smap"].map(q => $(q)).filter(Boolean);
   if (anim()) await Promise.all(parts.map(x => x.animate([{opacity:1}, {opacity:0, transform:"translateY(6px)"}], {duration:T.fast, easing:EXIT, fill:"forwards"}).finished.catch(() => {})));
   if (!keep || w !== WHO) CITY = "";
   WHO = w; PH = pickW(); citybar();
   TILES.forEach(t => t.classList.remove("on"));
   TILES = PH.map((p, i) => { const t = TM.get(p.i); if (t) { t.dataset.i = i; return t; } return tile(p, i); });
   whoBar();
-  sections(); layout(true); mems(); stats(); bigMap();
+  smapOn(); sections(); layout(true); mems(); stats(); highlights(); bigMap(); smapWatch();
   const ms = $(".msec"); if (ms) ms.hidden = !!WHO || !!CITY || !(D.loc && PH.some(p => p.g));
   document.querySelectorAll(".hmeta .chip .num, .bar small").forEach(x => { x.textContent = cntTxt(); });
   const nav = $(".who"), top = nav && !nav.hidden ? nav.getBoundingClientRect().top + scrollY - 70 : 0;
@@ -444,9 +465,19 @@ function heroCycle(first){
   };
   HCT = setTimeout(next, 7000);
 }
+/* 封面的地點膠囊：去過幾國就疊幾面國旗（最多 3 面），沒有國家才放圖釘 */
+function heroFlags(){
+  const cc = [...new Set(PH.filter(p => p.p && p.p.cc).map(p => p.p.cc))].filter(c => /^[A-Z]{2}$/.test(c)).slice(0, 3);
+  return cc.length ? `<span class="hfl">${cc.map(flagImg).join("")}</span>` : "";
+}
 function cntTxt(){
   const v = PH.filter(isVid).length, n = PH.length - v;
   return [n ? `${n} 張` : "", v ? `${v} 段影片` : ""].filter(Boolean).join("・");
+}
+/* 還剩多少時間：一個圈，剩下的那段亮著 */
+function expRing(){
+  const all = D.exp - (D.es || 0), k = all > 0 ? Math.max(0, Math.min(1, (D.exp - Date.now() / 1000) / all)) : 1, L = 2 * Math.PI * 8;
+  return `<svg class="ring" viewBox="0 0 20 20" aria-hidden="true"><circle cx="10" cy="10" r="8"/><circle class="rk" cx="10" cy="10" r="8" stroke-dasharray="${(L * k).toFixed(2)} ${L.toFixed(2)}"/></svg>`;
 }
 function left(exp){
   const s = exp - Date.now() / 1000;
@@ -465,7 +496,7 @@ function tile(p, i){
   el.innerHTML = `${p.q ? `<img class="lq" alt="" src="data:image/jpeg;base64,${p.q}">` : ""}<img class="hi" alt="" loading="lazy" decoding="async" draggable="false" src="${src(p, "s")}"><span class="bdg"></span><span class="ck">${I("ck")}</span>`;
   setTimeout(() => badge(i));
   const hi = el.querySelector(".hi");
-  hi.addEventListener("load", () => { hi.decoding = "sync";   /* 換大小時照片會被拿下來再放回去：載好的改同步解碼，放回去那一格不會空白 */ hi.classList.add("ok"); setTimeout(() => { const q = el.querySelector(".lq"); if (q) q.remove(); }, T.mid + 100); }, {once:true});
+  hi.addEventListener("load", () => { hi.decoding = "sync";   /* 換大小時照片會被拿下來再放回去：載好的改同步解碼，放回去那一格不會空白 */ hi.classList.add("ok"); setTimeout(() => { const q = el.querySelector(".lq"); if (q) q.remove(); }, T.slow * 2); }, {once:true});
   hi.addEventListener("error", () => { p.broken = 1; hi.remove(); el.insertAdjacentHTML("beforeend", `<span class="nope">${I("off")}</span>`); }, {once:true});
   if (IO) IO.observe(el); else el.classList.add("in");
   return el;
@@ -485,6 +516,7 @@ function layout(force){
   GROUPS.forEach((g, gi) => {
     const box = wall.querySelector(`[data-g="${gi}"] .rows`), rows = [];
     let cur = [], sum = 0;
+    box.parentNode.classList.remove("cov");
     if (ZL >= 2) {                                           // 小方格：一排固定幾張
       const n = Math.max(ZL === 3 ? 6 : 4, Math.round((W + gap) / (rh + gap))), sz = (W - gap * (n - 1)) / n;
       for (let k = 0; k < g.list.length; k += n) rows.push([g.list.slice(k, k + n).map(i => [i, 1]), sz]);
@@ -494,8 +526,10 @@ function layout(force){
       box.replaceChildren(frag);
       return;
     }
-    const big = ZL === 1 && g.list.length >= 5 && PH[g.list[0]].w / PH[g.list[0]].h >= 1.3 && W >= 320 ? g.list[0] : -1;   // 一天的第一張橫的放整排
-    if (big >= 0) { const ar = Math.min(3, PH[big].w / PH[big].h); rows.push([[[big, W / Math.min(W / ar, innerHeight * .72)]], Math.min(W / ar, innerHeight * .72), 1]); }
+    const big = ZL === 1 && g.list.length >= 3 && PH[g.list[0]].w / PH[g.list[0]].h >= 1.3 && W >= 320 ? g.list[0] : -1;   // 一天的第一張橫的放整排，當這天的封面
+    const sec = box.parentNode, dh = sec.querySelector(".dh[data-day]");
+    sec.classList.toggle("cov", big >= 0 && !!dh);
+    if (big >= 0) { const ar = Math.min(3, PH[big].w / PH[big].h), fh = Math.min(W / ar, innerHeight * .72); sec.style.setProperty("--fh", fh.toFixed(1) + "px"); rows.push([[[big, W / fh]], fh, 1]); }
     g.list.forEach(i => {
       if (i === big) return;
       const p = PH[i], ar = Math.min(3, Math.max(.4, p.w / p.h));
@@ -513,7 +547,7 @@ function layout(force){
   });
 }
 let RZ;
-addEventListener("resize", () => { clearTimeout(RZ); RZ = setTimeout(() => { layout(); bigMap(); if (LB) LB.fitAll(); }, 120); });
+addEventListener("resize", () => { clearTimeout(RZ); RZ = setTimeout(() => { if (smapOn()) smapWatch(); layout(); bigMap(); smapGo(SMK, true); if (LB) LB.fitAll(); }, 120); });
 
 /* 捲動：封面慢一點往上（視差）、標題淡掉，捲過封面上面浮出一條 */
 let SCQ = 0;
@@ -601,7 +635,9 @@ document.addEventListener("click", e => {
   if (ct) return citySet(ct.dataset.city);
   if (e.target.closest("[data-cityx]")) return citySet("");
   const m = e.target.closest(".mk");
-  if (m) return openLb(+m.dataset.i);
+  if (m) return openLb(+m.dataset.i, m.querySelector("img") || m);
+  const hc = e.target.closest("[data-hl]");
+  if (hc) return openLb(+hc.dataset.hl, hc.querySelector("img"));
 });
 
 /* 去過的城市：照片照城市分組（主機從拍攝地點查到的城市、國家） */
@@ -639,11 +675,18 @@ const flagImg = cc => /^[A-Z]{2}$/.test(cc) ? `<img class="flg" alt="" loading="
 function flagFix(root){ root.querySelectorAll("img.flg").forEach(f => f.addEventListener("error", () => f.remove(), {once:true})); }
 function cityCards(cs){
   const box = $(".msec .cities"); if (!box) return;
+  const sig = cs.map(c => `${c.k}${c.ps.length}${c.ps[0].i}`).join();
+  if (box.dataset.sig === sig) return;
+  box.dataset.sig = sig;
   box.hidden = cs.length < 2;
+  const dn = d => d ? Date.UTC(d.y, d.mo - 1, d.d) / 864e5 : null, ns = cs.flatMap(c => [dn(c.d0), dn(c.d1)]).filter(x => x !== null);
+  const s0 = Math.min(...ns), sp = Math.max(...ns) - s0;
+  // 這個城市在整本相簿的哪幾天（一條細線上的一段）
+  const tl = c => sp > 0 && c.d0 ? `<i class="ctl" aria-hidden="true"><em style="left:${((dn(c.d0) - s0) / (sp + 1) * 100).toFixed(1)}%;width:${((dn(c.d1) - dn(c.d0) + 1) / (sp + 1) * 100).toFixed(1)}%"></em></i>` : "";
   box.innerHTML = cs.length < 2 ? "" : cs.map(c => {
     const pick = c.ps.filter(p => !isVid(p)).slice(0, 3), ims = (pick.length ? pick : c.ps.slice(0, 1));
-    return `<button class="cty" data-city="${esc(c.k)}"><span class="ctc n${ims.length}">${ims.map(p => `<img alt="" loading="lazy" draggable="false" src="${src(p, "s")}">`).join("")}</span>
-      <span class="ctt"><b>${flagImg(c.cc)}<span>${esc(c.c)}</span><i class="num">${c.ps.length}</i></b><small class="num">${esc(cityDates(c.d0, c.d1))}</small></span></button>`;
+    return `<button class="cty" data-city="${esc(c.k)}"><span class="ctc n${ims.length}">${ims.map(p => `<img alt="" loading="lazy" draggable="false" src="${src(p, "s")}">`).join("")}<i class="num">${I("photo")}${c.ps.length}</i></span>
+      <span class="ctt"><b>${flagImg(c.cc)}<span>${esc(c.c)}</span></b><small class="num">${esc(cityDates(c.d0, c.d1))}</small>${tl(c)}</span></button>`;
   }).join("");
   flagFix(box);
 }
@@ -669,6 +712,10 @@ function bigMap(){
   const pts = byCity ? cs.map(c => [{g:[c.la, c.lo]}, ALL.indexOf(c.ps[0]), c]) : PH.map((p, i) => [p, i]).filter(([p]) => p.g && !p.broken);
   const W = el.clientWidth, H = el.clientHeight;
   if (!pts.length || !W) return;
+  // 手機上下捲時網址列縮放會觸發 resize：大小、內容都沒變就不重畫（以前整張地圖、城市卡片重新淡入，看起來在閃）
+  const sig = `${W}x${H}|${byCity ? cs.map(c => c.k + c.ps.length).join() : pts.map(([p, i]) => i).join()}|${trip}`;
+  if (el.dataset.sig === sig) return;
+  el.dataset.sig = sig;
   let z = byCity ? 12 : 15;
   for (; z > 2; z--) {
     const xs = pts.map(([p]) => lx(p.g[1], z)), ys = pts.map(([p]) => ly(p.g[0], z));
@@ -686,7 +733,7 @@ function bigMap(){
       let mv = 0;
       ps.forEach((a, i) => ps.forEach((b, j) => {
         if (j <= i) return;
-        const dx = b.x - a.x, dy = b.y - a.y, d = Math.hypot(dx, dy) || .01, need = 84;
+        const dx = b.x - a.x, dy = b.y - a.y, d = Math.hypot(dx, dy) || .01, need = 96;
         if (d >= need) return;
         const f = (need - d) / 2, ux = d > .02 ? dx / d : 1, uy = d > .02 ? dy / d : 0;
         a.x -= ux * f; a.y -= uy * f; b.x += ux * f; b.y += uy * f; mv = 1;
@@ -744,19 +791,21 @@ function route(el, pts, W, H){
 /* ═════════ 看大圖 ═════════ */
 let LB = null;
 const GAPX = 28;
-function openLb(i){
+function openLb(i, from){
   if (LB) { if (LB.closing && LB.kill) LB.kill(); else return; }   // 上一張還在收：直接收完，這次點的照樣打開
   const el = document.createElement("div");
   el.className = "lb";
+  const STRIP = matchMedia("(pointer:fine) and (min-width:900px)").matches && PH.length > 1;
+  el.className = STRIP ? "lb strip" : "lb";
   el.innerHTML = `<div class="bg"></div><div class="stage"><div class="track"></div></div>
-    <div class="lbt"><button class="rb" data-x aria-label="關閉">${I("x")}</button><span class="cnt num"></span><button class="rb lvb" data-lv aria-label="原況">${I("live")}</button><button class="rb" data-ssi aria-label="從這張開始播放">${I("play")}</button><button class="rb" data-inf aria-label="照片資訊">${I("info")}</button><button class="rb" data-del hidden aria-label="刪掉">${I("trash")}</button>${D.dl ? `<a class="rb" data-dl download aria-label="${D.dl > 1 ? "下載原圖" : "下載"}">${I("dl")}</a>` : ""}</div>
+    <div class="lbt"><button class="rb" data-x aria-label="關閉">${I("x")}</button><span class="cnt num"></span><button class="rb lvb" data-lv aria-label="原況">${I("live")}</button><button class="rb" data-ssi aria-label="從這張開始播放">${I("play")}</button><button class="rb" data-shr aria-label="分享這張">${I("shr")}</button><button class="rb" data-inf aria-label="照片資訊">${I("info")}</button><button class="rb" data-del hidden aria-label="刪掉">${I("trash")}</button>${D.dl ? `<a class="rb" data-dl download aria-label="${D.dl > 1 ? "下載原圖" : "下載"}">${I("dl")}</a>` : ""}</div>
     <button class="rb nav l" aria-label="上一張">${I("l")}</button><button class="rb nav r" aria-label="下一張">${I("r")}</button>
     <div class="lbb"><div class="vbar"><button class="vpp" data-vpp aria-label="播放">${I("play")}</button><span class="vt0 num">0:00</span><div class="vtr" data-vseek><i></i></div><span class="vt1 num"></span><button class="vpp" data-vmu aria-label="聲音">${I("snd")}</button></div>
-      <div class="lbr"><div class="cap"><b></b><span></span></div>${D.talk ? `<button class="sb" data-lk aria-label="愛心">${I("heart")}<span class="num"></span></button><button class="sb" data-cm aria-label="留言">${I("chat")}<span class="num"></span></button>` : ""}</div></div><div class="inf"></div>`;
+      <div class="lbr"><div class="cap"><b></b><span></span></div>${D.talk ? `<button class="sb" data-lk aria-label="愛心">${I("heart")}<span class="num"></span></button><button class="sb" data-cm aria-label="留言">${I("chat")}<span class="num"></span></button>` : ""}</div></div><div class="inf"></div>${STRIP ? `<div class="lbs"><div class="lbsr">${PH.map((p, k) => `<button class="lbst" data-go="${k}" aria-label="第 ${k + 1} 張"><img alt="" loading="lazy" draggable="false" src="${src(p, "s")}"></button>`).join("")}</div></div>` : ""}`;
   document.body.appendChild(el);
   document.documentElement.style.overflow = "hidden";
   const stage = $(".stage", el), track = $(".track", el), bg = $(".bg", el), inf = $(".inf", el);
-  const S = {el, i, z:{s:1, x:0, y:0}, info:false, busy:null};
+  const S = {el, i, z:{s:1, x:0, y:0}, info:false, busy:null, from:from && from.isConnected ? from : null, fi:i};
   LB = S;
   const W = () => stage.clientWidth, H = () => stage.clientHeight;
   const mk = () => { const s = document.createElement("div"); s.className = "slide"; s.innerHTML = `<div class="zw"></div>`; track.appendChild(s); return s; };
@@ -846,6 +895,29 @@ function openLb(i){
     $(".nav.l", el).disabled = S.i === 0; $(".nav.r", el).disabled = S.i === PH.length - 1;
     if (S.info && (moved || !inf.firstChild)) { inf.innerHTML = infoHTML(p); infoMap(); }   // 同一張不重畫：安卓跳出鍵盤會改畫面大小，重畫會把正在打字的留言框收掉
     TILES.forEach((t, k) => t.classList.toggle("gone", k === S.i));
+    if (moved) { amb(p); stripAt(); }
+  }
+  function amb(p){                                           // 後面透出這張的顏色：糊開的小圖，換張時慢慢變過去
+    if (p.broken) return;
+    const im = document.createElement("img"); im.className = "amb"; im.alt = ""; im.src = p.q ? `data:image/jpeg;base64,${p.q}` : src(p, "s");
+    bg.appendChild(im);
+    const old = [...bg.querySelectorAll(".amb")].slice(0, -1);
+    const on = () => { im.classList.add("ok"); setTimeout(() => old.forEach(o => o.remove()), T.slow + 100); };
+    im.complete && im.naturalWidth ? requestAnimationFrame(on) : im.addEventListener("load", on, {once:true});
+  }
+  function stripAt(){                                        // 下面那排小圖：這張亮起來、捲到中間
+    const r = $(".lbsr", el); if (!r) return;
+    r.querySelectorAll(".on").forEach(x => x.classList.remove("on"));
+    const b = r.children[S.i]; if (!b) return;
+    b.classList.add("on");
+    const box = r.parentNode, x = b.offsetLeft + b.offsetWidth / 2 - box.clientWidth / 2;
+    box.scrollTo({left:x, behavior:S.at0 && anim() ? "smooth" : "auto"}); S.at0 = 1;
+  }
+  function jump(n){                                          // 點小圖直接跳過去：淡一下換好
+    if (n === S.i || n < 0 || n >= PH.length) return;
+    finish(); stopAll(); setZoom(1, 0, 0);
+    S.i = n; setAll();
+    if (anim()) sl[1].animate([{opacity:0, transform:"scale(.97)"}, {opacity:1, transform:"none"}], {duration:T.mid, easing:DEC});
   }
   setAll();
   S.chrome = chrome; S.vToggle = vToggle;
@@ -858,12 +930,12 @@ function openLb(i){
   const NOCLIP = "inset(0px 0px 0px 0px round 0px)";
 
   /* 從格子裡的那張長大 */
-  const t0 = TILES[i], r0 = t0.getBoundingClientRect(), f0 = fit(PH[i]);
+  const t0 = S.from || TILES[i], r0 = t0.getBoundingClientRect(), f0 = fit(PH[i]);
   if (anim()) {
     const a0 = toTile(r0, f0);
     cur().animate([{transform:a0.t, clipPath:a0.c}, {transform:"translate(0px,0px) scale(1)", clipPath:NOCLIP}], {duration:T.mid + 60, easing:DEC});
     bg.animate([{opacity:0}, {opacity:1}], {duration:T.mid, easing:EASE, fill:"forwards"});
-    el.querySelectorAll(".lbt,.lbb,.nav").forEach(x => x.animate([{opacity:0}, {opacity:1}], {duration:T.mid, delay:T.fast, easing:EASE, fill:"backwards"}));
+    el.querySelectorAll(".lbt,.lbb,.nav,.lbs").forEach(x => x.animate([{opacity:0}, {opacity:1}], {duration:T.mid, delay:T.fast, easing:EASE, fill:"backwards"}));
   } else bg.style.opacity = 1;
   bg.style.opacity = 1;
   if (POPSKIP) S.push = 1; else history.pushState({lb:1}, "");   // 上一張的返回還沒處理完：等它處理完再記
@@ -893,9 +965,9 @@ function openLb(i){
   function close(){
     if (S.closing) return; S.closing = 1;
     finish();
-    const p = PH[S.i], t = TILES[S.i];
+    const p = PH[S.i], back = S.from && S.i === S.fi && S.from.isConnected, t = back ? S.from : TILES[S.i];   // 從精選、地圖打開的：同一張就縮回原本那裡
     let r = t.getBoundingClientRect();
-    if (r.bottom < 0 || r.top > innerHeight) { t.scrollIntoView({block:"center"}); r = t.getBoundingClientRect(); }
+    if (!back && (r.bottom < 0 || r.top > innerHeight)) { t.scrollIntoView({block:"center"}); r = t.getBoundingClientRect(); }
     const zw = cur(), f = fit(p), now = getComputedStyle(zw).transform;
     stopAll();
     let gone = false;
@@ -903,7 +975,7 @@ function openLb(i){
     S.kill = end; el.style.pointerEvents = "none";
     if (!anim()) return end();
     setTimeout(end, T.mid + 200);                              // 安卓返回手勢時動畫有時不會結束：時間到一定收掉
-    el.querySelectorAll(".lbt,.lbb,.nav,.inf").forEach(x => { x.style.opacity = 0; });
+    el.querySelectorAll(".lbt,.lbb,.nav,.inf,.lbs").forEach(x => { x.style.opacity = 0; });
     S.info = false; el.classList.remove("info");
     const a1 = toTile(r, f);
     zw.animate([{transform:now === "none" ? "translate(0px,0px) scale(1)" : now, clipPath:NOCLIP}, {transform:a1.t, clipPath:a1.c}],
@@ -1053,6 +1125,8 @@ function openLb(i){
     if (e.target.closest("[data-cm]")) { if (!S.info) setInfo(true); setTimeout(() => { const t = $(".italk", inf); if (t) t.scrollIntoView({behavior:anim() ? "smooth" : "auto", block:"start"}); }, S.info ? 0 : T.mid); return; }
     if (e.target.closest(".nav.l")) return go(-1);
     if (e.target.closest(".nav.r")) return go(1);
+    const gb = e.target.closest("[data-go]"); if (gb) return jump(+gb.dataset.go);
+    if (e.target.closest("[data-shr]")) return shareOne(PH[S.i]);
   });
   inf.addEventListener("click", e => {
     const del = e.target.closest("[data-cdel]");
@@ -1603,38 +1677,176 @@ function story(n, from){
 }
 
 /* 照片資訊（越詳細越好）：時間、地點、相機、鏡頭、光圈、快門、ISO… */
+/* 照片資訊的小圖：光圈開多大、快門多久、ISO 多高、焦距看多寬、曝光補償偏哪邊 */
+const lg = (v, a, b) => Math.max(0, Math.min(1, (Math.log(v) - Math.log(a)) / (Math.log(b) - Math.log(a))));
+/* ── 精選：最多愛心的幾張（還沒人按愛心就平均挑幾張橫的），封面下面左右滑 ── */
+function highlights(){
+  const box = $(".hl"); if (!box) return;
+  const ok = PH.map((p, i) => [p, i]).filter(([p]) => !p.broken && !p.raw);
+  let pick = ok.filter(([p]) => p.lk > 0).sort((a, b) => b[0].lk - a[0].lk).slice(0, 8);
+  const liked = pick.length >= 3;
+  if (!liked && ok.length >= 10) {
+    const land = ok.filter(([p]) => p.w > p.h && !isVid(p)), from = land.length >= 6 ? land : ok, n = Math.min(6, from.length);
+    pick = Array.from({length:n}, (_, k) => from[Math.floor((k + .5) * from.length / n)]);
+  } else if (!liked) pick = [];
+  box.hidden = !!WHO || !!CITY || pick.length < 3;
+  box.innerHTML = box.hidden ? "" : `<div class="hlh"><b>${I(liked ? "heart" : "star")}精選</b></div><div class="hlr">${pick.map(([p, i], k) =>
+    `<button class="hlc" data-hl="${i}" style="--ar:${Math.max(.6, Math.min(1.8, p.w / p.h)).toFixed(3)};animation-delay:${k * 70}ms"><img alt="" loading="lazy" draggable="false" src="${src(p, "l")}">${p.lk ? `<i class="num">${I("heart")}${p.lk}</i>` : ""}${isVid(p) ? `<em>${I("play")}</em>` : ""}</button>`).join("")}</div>`;
+  const r = box.querySelector(".hlr"); if (r) requestAnimationFrame(() => { r.scrollLeft = 0; });
+}
+
+/* ── 分享單張：連結打開就直接看那張（#p=編號） ── */
+async function shareOne(p){
+  const url = `${location.origin}${BASE}#p=${encodeURIComponent(p.i)}`;
+  if (navigator.share && matchMedia("(pointer:coarse)").matches) { try { await navigator.share({title:D.name, url}); } catch (e) {} return; }
+  try { await navigator.clipboard.writeText(url); toast("連結複製好了"); }
+  catch (e) { prompt("複製這個連結", url); }
+}
+let DEEP = 1;
+function deepLink(){
+  if (!DEEP) return; DEEP = 0;
+  const m = /^#p=(.+)$/.exec(location.hash); if (!m) return;
+  history.replaceState(history.state, "", location.pathname + location.search);
+  const id = decodeURIComponent(m[1]), a = ALL.find(p => String(p.i) === id); if (!a) return;
+  const open = () => { const k = PH.indexOf(a); if (k >= 0) { TILES[k].scrollIntoView({block:"center"}); setTimeout(() => openLb(k), 60); } };
+  if ((a.u || "") !== WHO) whoSet(a.u || "").then(() => setTimeout(open, T.mid)); else setTimeout(open, anim() ? T.slow : 0);
+}
+
+/* ── 電腦上地圖跟著捲動：右邊固定一張地圖，捲到哪一天就飛到那天拍照的地方 ── */
+let SMK = "", SMIO = null;
+function smapOn(){
+  const wr = $(".wwrap"), a = $(".smap"); if (!wr || !a) return false;
+  const on = innerWidth >= 1200 && D.loc && !WHO && PH.some(p => p.g && pd(p.x.dt));
+  const was = wr.classList.contains("side");
+  wr.classList.toggle("side", !!on); a.hidden = !on;
+  if (!on && SMIO) { SMIO.disconnect(); SMIO = null; }
+  return !!on !== was;
+}
+function smapWatch(){
+  if (SMIO) SMIO.disconnect(); SMIO = null; SMK = "";
+  if (!$(".wwrap.side") || !("IntersectionObserver" in window)) return;
+  const vis = new Map();
+  SMIO = new IntersectionObserver(es => {
+    es.forEach(e => { if (e.isIntersecting) vis.set(e.target, e.target.getBoundingClientRect().top); else vis.delete(e.target); });
+    const sec = [...vis.keys()].sort((a, b) => a.getBoundingClientRect().top - b.getBoundingClientRect().top)[0];
+    const dh = sec && sec.querySelector(".dh[data-day]"); if (dh) smapGo(dh.dataset.day);
+  }, {rootMargin:"-35% 0px -55% 0px"});
+  document.querySelectorAll(".wall .day").forEach(d => SMIO.observe(d));
+  const first = $(".wall .dh[data-day]"); smapGo(first ? first.dataset.day : "", true);
+}
+function smapGo(k, force){
+  const box = $(".smap:not([hidden]) .smv"); if (!box) return;
+  if (k === SMK && !force) return;
+  let ps = PH.map((p, i) => [p, i]).filter(([p]) => p.g && !p.broken && (!k || (pd(p.x.dt) || {}).k === k));
+  if (!ps.length) return;
+  SMK = k;
+  ps.sort((a, b) => (a[0].x.dt || "") < (b[0].x.dt || "") ? -1 : 1);
+  const W = box.clientWidth, H = box.clientHeight; if (!W) return;
+  let z = 16;
+  for (; z > 2; z--) { const xs = ps.map(([p]) => lx(p.g[1], z)), ys = ps.map(([p]) => ly(p.g[0], z));
+    if (Math.max(...xs) - Math.min(...xs) <= W - 140 && Math.max(...ys) - Math.min(...ys) <= H - 180) break; }
+  if (ps.length === 1) z = 14;
+  const xs = ps.map(([p]) => lx(p.g[1], z)), ys = ps.map(([p]) => ly(p.g[0], z));
+  const cx = (Math.max(...xs) + Math.min(...xs)) / 2, cy = (Math.max(...ys) + Math.min(...ys)) / 2 - 20;
+  const ly2 = document.createElement("div"); ly2.className = "sml";
+  tiles(ly2, cx, cy, z, W, H);
+  const cl = [];
+  ps.forEach(([p, i], n) => { const x = xs[n] - cx + W / 2, y = ys[n] - cy + H / 2, c = cl.find(c => Math.hypot(c.x - x, c.y - y) < 40);
+    if (c) c.n++; else cl.push({x, y, i, n:1}); });
+  const pts = cl.map(c => `${c.x.toFixed(1)},${c.y.toFixed(1)}`).join(" ");
+  ly2.insertAdjacentHTML("beforeend", (cl.length > 1 ? `<svg class="smr" viewBox="0 0 ${W} ${H}" aria-hidden="true"><polyline points="${pts}"/></svg>` : "")
+    + cl.map((c, n) => `<button class="mk" data-i="${c.i}" style="left:${c.x.toFixed(1)}px;top:${c.y.toFixed(1)}px;animation-delay:${Math.min(n * 50, 500)}ms"><img alt="" loading="lazy" src="${src(PH[c.i], "s")}">${c.n > 1 ? `<i class="num">${c.n}</i>` : ""}</button>`).join(""));
+  const old = [...box.querySelectorAll(".sml")];
+  box.appendChild(ly2);
+  if (anim()) {
+    ly2.animate([{opacity:0, transform:"scale(1.06)"}, {opacity:1, transform:"none"}], {duration:T.slow, easing:DEC});
+    old.forEach(o => o.animate([{opacity:1}, {opacity:0, transform:"scale(.96)"}], {duration:T.mid, easing:EASE, fill:"forwards"}).onfinish = () => o.remove());
+  } else old.forEach(o => o.remove());
+  const d = k && pd(ps[0][0].x.dt), c = $(".smap .smc");
+  if (c) {
+    const days = [...new Set(PH.map(p => (pd(p.x.dt) || {}).k).filter(Boolean))].sort(), n = days.indexOf(k) + 1;
+    const html = d ? `${isTrip() && days.length > 1 ? `<i class="num">第 ${n} 天</i>` : ""}<b>${esc(fday(d, YR))}</b>${dayPlaces(k) ? `<span>${I("pin")}${esc(dayPlaces(k))}</span>` : ""}` : "";
+    if (c.dataset.k !== k) { c.dataset.k = k; c.innerHTML = html; if (anim()) c.animate([{opacity:0, transform:"translateY(6px)"}, {opacity:1, transform:"none"}], {duration:T.mid, easing:DEC}); }
+  }
+}
+
+const SV = (b, cls = "") => `<svg class="gx ${cls}" viewBox="0 0 32 32" aria-hidden="true">${b}</svg>`;
+function gIris(f){                       // ƒ1.4 開最大、ƒ22 只剩一個小洞
+  const k = 1 - lg(f, 1.2, 22), r = 3 + 9.5 * k, pts = [];
+  for (let i = 0; i < 6; i++) { const a = Math.PI / 3 * i + .3; pts.push(`${(16 + r * Math.cos(a)).toFixed(1)},${(16 + r * Math.sin(a)).toFixed(1)}`); }
+  return SV(`<circle cx="16" cy="16" r="13" class="gt"/><polygon points="${pts.join(" ")}" class="gf"/>`);
+}
+function gShut(et){                      // 1/8000 一點點、30 秒繞一圈
+  const v = et[0] / et[1], k = Math.max(.04, lg(v, 1 / 8000, 30)), a = k * 2 * Math.PI - Math.PI / 2;
+  const big = k > .5 ? 1 : 0, x = 16 + 12 * Math.cos(a), y = 16 + 12 * Math.sin(a);
+  return SV(`<circle cx="16" cy="16" r="12" class="gt"/><path d="M16 16V4A12 12 0 ${big} 1 ${x.toFixed(1)} ${y.toFixed(1)}Z" class="gf"/>`);
+}
+function gIso(iso){                      // 五格，越高越多格（ISO 越高越多雜訊）
+  const n = Math.max(1, Math.round(1 + lg(iso, 50, 12800) * 4));
+  return SV([0, 1, 2, 3, 4].map(i => `<rect x="${3 + i * 5.6}" y="${22 - i * 4}" width="4" height="${6 + i * 4}" rx="1.5" class="${i < n ? "gf" : "gt"}"/>`).join(""));
+}
+function gFov(f35){                      // 實際看到的角度（等效 35mm 的對角線視角）
+  const h = Math.min(70, Math.atan(21.6 / f35) * 180 / Math.PI), r = 20, a1 = (-90 - h) * Math.PI / 180, a2 = (-90 + h) * Math.PI / 180;
+  const p = a => `${(16 + r * Math.cos(a)).toFixed(1)} ${(28 + r * Math.sin(a)).toFixed(1)}`;
+  return SV(`<path d="M16 28L${p(a1)}A${r} ${r} 0 0 1 ${p(a2)}Z" class="gf"/><circle cx="16" cy="28" r="2.2" class="gd"/>`);
+}
+function gEv(ev){                        // -3 到 +3 的尺，點在哪就偏哪邊
+  const x = 16 + Math.max(-3, Math.min(3, ev)) * 4.2;
+  return SV(`<path d="M3 20h26" class="gl"/>${[-2, -1, 0, 1, 2].map(i => `<path d="M${16 + i * 4.2} ${i ? 17.5 : 15}v${i ? 5 : 10}" class="gl"/>`).join("")}<circle cx="${x.toFixed(1)}" cy="20" r="4" class="gd"/>`);
+}
+function gSun(d){                        // 拍攝時間在一天的哪裡：太陽沿弧線走，晚上是月亮
+  const hr = d.h + d.mi / 60, day = hr >= 6 && hr < 18;
+  const a = Math.PI * (1 - (hr - 6) / 12), x = 24 + 18 * Math.cos(a), y = 24 - 18 * Math.sin(a);
+  return `<svg class="gsun${day ? "" : " night"}" viewBox="0 0 48 28" aria-hidden="true"><path d="M6 24A18 18 0 0 1 42 24" class="gl"/><path d="M2 24.5h44" class="gl"/>${day ? `<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="4" class="gd"/>` : `<path d="M27 8a6 6 0 1 0 5 9.5A5 5 0 0 1 27 8Z" class="gd"/>`}</svg>`;
+}
+const gArrow = deg => `<svg class="gin" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9.5" class="gt"/><path d="M12 5l3.5 9L12 12.5 8.5 14Z" class="gd" transform="rotate(${deg} 12 12)"/></svg>`;
+const EPL = {1:"M", 2:"P", 3:"A", 4:"S", 5:"P", 6:"S", 7:"A", 8:"A"};
+const gDial = t => `<svg class="gin gb" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="10" class="gf"/><text x="12" y="12" dy=".36em" text-anchor="middle" class="gtx${t.length > 1 ? " sm" : ""}">${t}</text></svg>`;
+function gMeter(m){                      // 點測光一個點、中央重點一個圈、評價／多點是格子、平均整片
+  const fr = `<rect x="2.5" y="4.5" width="19" height="15" rx="3" class="gt"/>`;
+  const in_ = m === 3 ? `<circle cx="12" cy="12" r="2" class="gd"/>` : m === 2 ? `<circle cx="12" cy="12" r="4.5" class="gf"/>`
+    : m === 1 ? `<rect x="5" y="7" width="14" height="10" rx="1.5" class="gf"/>` : [0, 1, 2].flatMap(i => [0, 1].map(j => `<rect x="${5.2 + i * 4.8}" y="${7.4 + j * 4.8}" width="3.8" height="3.8" rx=".8" class="${i === 1 ? "gd" : "gf"}"/>`)).join("");
+  return `<svg class="gin gb" viewBox="0 0 24 24" aria-hidden="true">${fr}${in_}</svg>`;
+}
+const gWb = man => `<svg class="gin gb" viewBox="0 0 24 24" aria-hidden="true"><rect x="2" y="5" width="20" height="14" rx="4" class="gf"/><text x="12" y="12" dy=".36em" text-anchor="middle" class="gtx sm">${man ? "WB" : "AWB"}</text></svg>`;
+const gMtn = `<svg class="gin" viewBox="0 0 24 24" aria-hidden="true"><path d="M2 19l6.5-10 4 6 2.5-3.5L22 19Z" class="gf"/></svg>`;
+const gBolt = on => `<svg class="gin gb${on ? "" : " off"}" viewBox="0 0 24 24" aria-hidden="true"><path d="M13 2 5 13.5h6L10 22l9-12h-6Z" class="gd"/>${on ? "" : `<path d="M4 4l16 16" class="gl"/>`}</svg>`;
+
 function infoHTML(p){
   const x = p.x, d = pd(x.dt), cam = camName(x), lens = lensName(x), ext = (p.n.split(".").pop() || "").toUpperCase().replace("JPG", "JPEG");
   const mp = p.w * p.h / 1e6, f35 = x.f35 || 0, fl = x.fl || 0;
-  let h = d ? `<div class="idt">${fdate(d)}</div><div class="itm num">${x.dtf ? "檔案時間 " : ""}${ftime(d)}${x.oz ? `・UTC${x.oz.replace(":00", "")}` : ""}</div>` : "";
+  let h = d ? `<div class="ihd"><div><div class="idt">${fdate(d)}</div><div class="itm num">${x.dtf ? "檔案時間 " : ""}${ftime(d)}${x.oz ? `・UTC${x.oz.replace(":00", "")}` : ""}</div></div>${x.dtf || d.h == null ? "" : gSun(d)}</div>` : "";
   h += talkHTML(p);
   if (p.g) {
     const [lat, lon, alt, dir] = p.g, nm = p.p ? p.p.n : "拍攝地點", sub = p.p && p.p.a ? p.p.a : `${lat.toFixed(5)}, ${lon.toFixed(5)}`;
     h += `<div class="ibox"><a class="imap" href="${mapUrl(lat, lon, nm)}" target="_blank" rel="noopener noreferrer" aria-label="在地圖上打開">${dir != null ? `<span class="cone" style="transform:rotate(${dir}deg)"></span>` : ""}<span class="pin"></span><span class="attr">© OpenStreetMap</span></a>
       <a class="ipl" href="${mapUrl(lat, lon, nm)}" target="_blank" rel="noopener noreferrer"><span class="pi">${I("pin")}</span><span><b>${esc(nm)}</b><span>${esc(sub)}</span></span><span class="go">${I("ext")}</span></a></div>`;
   }
-  const cells = [["ISO", x.iso || ""], ["焦距", f35 ? `${f35} mm` : fl ? `${Math.round(fl)} mm` : ""], ["曝光", x.ev != null ? `${x.ev > 0 ? "+" : ""}${+x.ev.toFixed(1)} ev` : ""],
-    ["光圈", x.f ? `ƒ${+x.f.toFixed(2)}` : ""], ["快門", shutter(x.et).replace(" 秒", " s")]];
+  const fe = f35 || (fl ? Math.round(fl) : 0);
+  const cells = [["光圈", x.f ? `ƒ${+x.f.toFixed(2)}` : "", x.f ? gIris(x.f) : ""], ["快門", shutter(x.et).replace(" 秒", " s"), x.et ? gShut(x.et) : ""],
+    ["ISO", x.iso || "", x.iso ? gIso(x.iso) : ""], ["焦距", fe ? `${fe} mm` : "", f35 ? gFov(f35) : ""], ["曝光", x.ev != null ? `${x.ev > 0 ? "+" : ""}${+x.ev.toFixed(1)} ev` : "", x.ev != null ? gEv(x.ev) : ""]];
   h += `<div class="ibox"><div class="icam"><div class="t"><b>${esc(cam || (isVid(p) ? "影片" : "相機資訊"))}</b><span class="tag">${esc(ext)}</span></div>
       ${lens || f35 ? `<div class="l">${esc([f35 ? `${lensKind(f35)}・等效 ${f35} mm` : "", lens].filter(Boolean).join("　"))}</div>` : ""}
-      <div class="l2 num">${isVid(p) ? `影片 ${dur(p.vd)}・` : mp >= .1 ? `${mp >= 10 ? Math.round(mp) : mp.toFixed(1)} MP・` : ""}${p.w} × ${p.h}・${size(p.sz)}</div></div>
-    ${cells.some(c => c[1]) ? `<div class="iex num">${cells.map(([k, v]) => `<div><small>${k}</small>${esc(v || "—")}</div>`).join("")}</div>` : ""}</div>`;
+      <div class="l2 num">${p.w && p.h ? `<i class="gar" style="aspect-ratio:${p.w} / ${p.h}"></i>` : ""}<span>${isVid(p) ? `影片 ${dur(p.vd)}・` : mp >= .1 ? `${mp >= 10 ? Math.round(mp) : mp.toFixed(1)} MP・` : ""}${p.w} × ${p.h}・${size(p.sz)}</span></div></div>
+    ${cells.some(c => c[1]) ? `<div class="iex num">${cells.map(([k, v, g]) => `<div${v ? "" : ` class="no"`}>${g || SV(`<circle cx="16" cy="16" r="12" class="gt"/>`)}<b>${esc(v || "—")}</b><small>${k}</small></div>`).join("")}</div>` : ""}</div>`;
   const kv = [];
   if (x.ln) kv.push(["鏡頭", x.lmk && !x.ln.startsWith(x.lmk) ? `${x.lmk} ${x.ln}` : x.ln]);
   if (fl && f35 && Math.round(fl) !== f35) kv.push(["實際焦距", `${+fl.toFixed(2)} mm`]);
-  if (x.et) kv.push(["快門", shutter(x.et)]);
-  if (x.ep) kv.push(["曝光程式", EP[x.ep] || ""]);
-  if (x.em != null) kv.push(["曝光模式", ["自動曝光", "手動曝光", "自動包圍"][x.em] || ""]);
-  if (x.mm) kv.push(["測光", MM[x.mm] || ""]);
-  if (x.fla != null) kv.push(["閃光燈", x.fla & 1 ? "有閃" : "沒閃"]);
-  if (x.wb != null) kv.push(["白平衡", x.wb ? "手動" : "自動"]);
-  if (x.sc) kv.push(["場景", SC[x.sc] || ""]);
-  if (p.g && p.g[2] != null) kv.push(["海拔", `${Math.round(p.g[2])} 公尺`]);
-  if (p.g && p.g[3] != null) kv.push(["拍攝方向", `${DIR8[Math.round(p.g[3] / 45) % 8]}（${p.g[3]}°）`]);
+  // 拍攝設定：一格一個小圖（模式轉盤、測光方式、閃光燈、白平衡、場景），不再一行一行寫字
+  const st = [];
+  if (x.ep && EP[x.ep]) st.push([gDial(EPL[x.ep] || "P"), EP[x.ep], "模式"]);
+  else if (x.em != null && x.em < 3) st.push([gDial(["A", "M", "B"][x.em]), ["自動曝光", "手動曝光", "自動包圍"][x.em], "模式"]);
+  if (x.mm && MM[x.mm]) st.push([gMeter(x.mm), MM[x.mm], "測光"]);
+  if (x.fla != null) st.push([gBolt(x.fla & 1), x.fla & 1 ? "有閃" : "沒閃", "閃光燈"]);
+  if (x.wb != null) st.push([gWb(x.wb), x.wb ? "手動" : "自動", "白平衡"]);
+  if (x.sc && SC[x.sc]) st.push([gDial("SCN"), SC[x.sc], "場景"]);
+  if (p.g && p.g[2] != null) kv.push(["海拔", `${Math.round(p.g[2])} 公尺`, gMtn]);
+  if (p.g && p.g[3] != null) kv.push(["拍攝方向", `${DIR8[Math.round(p.g[3] / 45) % 8]}（${p.g[3]}°）`, gArrow(p.g[3])]);
   if (p.g) kv.push(["座標", `${p.g[0].toFixed(5)}, ${p.g[1].toFixed(5)}`]);
   if (x.sw) kv.push(["軟體", x.sw]);
   kv.push(["檔名", p.n.split("/").pop()]);
-  h += `<div class="ibox ikv">${kv.filter(r => r[1]).map(([k, v]) => `<div><span>${k}</span><b>${esc(v)}</b></div>`).join("")}</div>`;
+  if (st.length) h += `<div class="ibox iset${st.length === 5 ? " w3" : ""}" style="--n:${st.length === 5 ? 3 : Math.min(st.length, 4)}">${st.map(([g, v, k]) => `<div>${g}<b>${esc(v)}</b><small>${k}</small></div>`).join("")}</div>`;
+  h += `<div class="ibox ikv">${kv.filter(r => r[1]).map(([k, v, g]) => `<div><span>${k}</span><b>${g || ""}${esc(v)}</b></div>`).join("")}</div>`;
   if (D.dl) h += `<div class="idl"><a class="pr" href="${src(p, "o")}" download>${I("dl")}${D.dl > 1 ? (isVid(p) ? "下載影片" : "下載原圖") : "下載"}</a></div>`;
   return h;
 }
