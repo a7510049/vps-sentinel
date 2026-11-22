@@ -107,6 +107,22 @@ function brandSvg(x){
   const [vx, vy, vw, vh] = b[0].split(" ").map(Number), h = vw / vh > 2 ? 13 : 18;
   return `<i class="brd" aria-hidden="true"><svg viewBox="${b[0]}" width="${(h * vw / vh).toFixed(1)}" height="${h}"><path d="${b[1]}"/></svg></i>`;
 }
+/* 相機上真正印的系列標誌（使用者說 LUMIX 的要掛 LUMIX、Sony α 要掛 α）：認得的換成系列字樣＋大家習慣叫的型號 */
+const ROM = ["", "", "II", "III", "IV", "V", "VI", "VII", "VIII"];
+function series(x){
+  const mk = (MKS[(x.mk || "").toLowerCase()] || x.mk || "").toLowerCase(), md = (x.md || "").trim();
+  if (mk.startsWith("panasonic") && /^(DC|DMC)-/i.test(md))
+    return {m:"LUMIX", c:"lumix", n:md.replace(/^(DC|DMC)-/i, "").replace(/M([2-8])(X?)$/i, (a, d, s) => ROM[d] + s)};
+  if (mk.startsWith("sony") && /^(ILCE|ILCA|SLT)-/i.test(md)) {
+    const q = /^(?:ILCE|ILCA|SLT)-(\d+)([A-Z]*?)(?:M(\d))?$/i.exec(md);
+    return {m:"α", c:"alpha", n:q ? `${q[1]}${q[2] || ""}${q[3] ? " " + ROM[q[3]] : ""}` : md.replace(/^(ILCE|ILCA|SLT)-/i, "")};
+  }
+  if (mk.startsWith("sony") && /^DSC-RX/i.test(md)) return {m:"Cyber-shot", c:"cs", n:md.replace(/^DSC-/i, "").replace(/M(\d)$/, (a, d) => " " + ROM[d])};
+  if (mk.startsWith("canon") && /\bEOS\b/i.test(md)) return {m:"EOS", c:"eos", n:md.replace(/^canon\s+/i, "").replace(/^EOS\s*/i, "")};
+  if ((mk.startsWith("om") || mk.startsWith("olympus")) && /^OM-\d/i.test(md)) return {m:"OM SYSTEM", c:"om", n:md};
+  if (mk.startsWith("ricoh") && /^GR\b/i.test(md)) return {m:"GR", c:"gr", n:md.replace(/^GR\s*/i, "") || "GR"};
+  return null;
+}
 function camName(x){
   const mk = x.mk ? (MKS[x.mk.toLowerCase()] || x.mk.replace(/\s+(corporation|corp\.?|co\.,? ?ltd\.?|imaging)$/i, "")) : "";
   const md = x.md || "";
@@ -2851,7 +2867,7 @@ function infoHTML(p){
   const fe = f35 || (fl ? Math.round(fl) : 0);
   const cells = [["光圈", x.f ? `ƒ${+x.f.toFixed(2)}` : "", x.f ? gIris(x.f) : "", "f"], ["快門", shutter(x.et).replace(" 秒", " s"), x.et ? gShut(x.et) : "", "et"],
     ["ISO", x.iso || "", x.iso ? gIso(x.iso) : "", "iso"], ["焦距", fe ? `${fe} mm` : "", f35 ? gFov(f35) : "", "fl"], ["曝光", x.ev != null ? `${x.ev > 0 ? "+" : ""}${+x.ev.toFixed(1)} ev` : "", x.ev != null ? gEv(x.ev) : "", "ev"]];
-  h += `<div class="ibox"><div class="icam"><div class="t">${cam && !isVid(p) ? `<button class="igear" data-gear="c:${esc(cam)}">${brandSvg(x)}<b>${esc(brandSvg(x) ? cam.replace(new RegExp("^" + (MKS[(x.mk || "").toLowerCase()] || x.mk || "").replace(/[.*+?^${}()|[\]\\]/g, "\\$&") + "\\s+", "i"), "") : cam)}</b>${I("r")}</button>` : `<b>${esc(cam || (isVid(p) ? "影片" : "相機資訊"))}</b>`}<span class="tag">${esc(ext)}</span>${p.rw && p.rw !== ext ? `<span class="tag">+${esc(p.rw)}</span>` : ""}${p.cs ? `<span class="tag">${esc(p.cs.replace("Display ", ""))}</span>` : ""}${p.hdr && !isVid(p) ? `<span class="tag hdr">HDR</span>` : ""}</div>
+  h += `<div class="ibox"><div class="icam"><div class="t">${cam && !isVid(p) ? `<button class="igear" data-gear="c:${esc(cam)}">${series(x) ? `<i class="brd sub ${series(x).c}" aria-label="${esc(series(x).m)}">${esc(series(x).m)}</i><b>${esc(series(x).n)}</b>` : `${brandSvg(x)}<b>${esc(brandSvg(x) ? cam.replace(new RegExp("^" + (MKS[(x.mk || "").toLowerCase()] || x.mk || "").replace(/[.*+?^${}()|[\]\\]/g, "\\$&") + "\\s+", "i"), "") : cam)}</b>`}${I("r")}</button>` : `<b>${esc(cam || (isVid(p) ? "影片" : "相機資訊"))}</b>`}<span class="tag">${esc(ext)}</span>${p.rw && p.rw !== ext ? `<span class="tag">+${esc(p.rw)}</span>` : ""}${p.cs ? `<span class="tag">${esc(p.cs.replace("Display ", ""))}</span>` : ""}${p.hdr && !isVid(p) ? `<span class="tag hdr">HDR</span>` : ""}</div>
       ${lens || f35 ? `<div class="l">${esc(f35 ? `${lensKind(f35)}・等效 ${f35} mm` : "")}${lens ? `${f35 ? "　" : ""}<button class="igear sm" data-gear="l:${esc(lens)}">${esc(lens)}</button>` : ""}</div>` : ""}
       <div class="l2 num">${p.w && p.h ? `<i class="gar" style="aspect-ratio:${p.w} / ${p.h}"></i>` : ""}<span>${isVid(p) ? `影片 ${dur(p.vd)}・` : mp >= .1 ? `${mp >= 10 ? Math.round(mp) : mp.toFixed(1)} MP・` : ""}${p.w} × ${p.h}・${size(p.sz)}</span></div></div>
     ${cells.some(c => c[1]) ? `<div class="iex num">${cells.map(([k, v, g, gk]) => `<div data-gk="${gk}"${v ? "" : ` class="no"`}>${g || SV(`<circle cx="16" cy="16" r="12" class="gt"/>`)}<b>${esc(v || "—")}</b><small>${k}</small></div>`).join("")}</div>` : ""}</div>`;
