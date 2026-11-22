@@ -1038,7 +1038,8 @@ html.scrubbing .ph,html.scrubbing .ph .hi{transition:none;animation:none}
   background:var(--s1,var(--bg));box-shadow:var(--sh-pop),var(--hl);font:600 var(--fs-l)/1 var(--serif);color:var(--tx);transition:opacity var(--t-fast) var(--ease),transform var(--sp-fast);pointer-events:none}
 .scrub.drag .sbl.on{opacity:1;transform:translate(0,-50%)}
 .sbl{display:flex;align-items:center;gap:10px}
-.sbl .sbi{width:56px;height:56px;margin:-8px 0 -8px -10px;border-radius:var(--r-sm);object-fit:cover;background:center/cover no-repeat var(--s2)}
+.sbl:has(.sbi:not([hidden])){padding:6px 16px 6px 6px;border-radius:var(--r-lg)}   /* 有小圖時外框改圓角方形，小圖整張收在框裡（以前角落超出膠囊） */
+.sbl .sbi{width:48px;height:48px;flex:none;border-radius:var(--r-md);object-fit:cover;background:center/cover no-repeat var(--s2)}
 .sbl .sbi[hidden]{display:none}
 html.scrubbing .ph .lq{filter:none;transform:none}
 html.scrubbing .ph .hi{filter:none;transform:none}
@@ -1471,3 +1472,10 @@ body::after{content:"";position:fixed;inset:0;z-index:var(--z-shy);pointer-event
   -webkit-backdrop-filter:blur(40px) saturate(.6);backdrop-filter:blur(40px) saturate(.6);background:color-mix(in oklab,var(--bg) 35%,transparent);
   transition:opacity var(--t-mid) var(--ease),visibility 0s linear var(--t-mid)}
 html.shy body::after{visibility:visible;opacity:1;transition:none}
+html.shy,html.shy body{overflow:hidden}
+#shyc{position:fixed;inset:0;z-index:calc(var(--z-shy) + 1);display:grid;place-content:center;justify-items:center;gap:6px;pointer-events:none;text-align:center;color:var(--tx);
+  visibility:hidden;opacity:0;scale:.94;transition:opacity var(--t-mid) var(--ease),scale var(--t-mid) var(--ease),visibility 0s linear var(--t-mid)}
+html.shy #shyc{visibility:visible;opacity:1;scale:1;transition:opacity var(--t-fast) var(--dec),scale var(--t-fast) var(--dec)}
+#shyc svg{width:56px;height:56px;padding:14px;margin-bottom:6px;border-radius:50%;background:color-mix(in oklab,var(--bg) 70%,transparent);box-shadow:var(--sh-pop);fill:none;stroke:currentColor;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
+#shyc b{font-size:var(--fs-l)}
+#shyc small{font-size:var(--fs-s);color:var(--tx2)}
