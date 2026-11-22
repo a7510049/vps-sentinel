@@ -805,3 +805,95 @@ html::-webkit-scrollbar,body::-webkit-scrollbar{display:none;width:0;height:0}  
 .st .sgr{width:min(100%,56px)}
 @media (min-width:900px){.stats,.stats:is(*){grid-template-columns:none;grid-auto-columns:minmax(0,180px);justify-content:start}}
 @media (min-width:900px){.st:first-child{padding-left:0;justify-items:start;text-align:left}.st{justify-items:start;text-align:left;padding-left:clamp(18px,2vw,28px)}.st .sgb{justify-content:flex-start}}
+
+/* ── 參考 Exposure、Pic-Time、Glass、Polarsteps 加的 ── */
+/* 開場片頭：封面從放大慢慢退回來，相簿名稱一個字一個字浮出 */
+.hcap h1{opacity:1;animation:none}
+.hcap h1 .ch{display:inline-block;opacity:0;animation:chin 1.1s var(--dec) calc(.4s + var(--i) * .08s) forwards}
+@keyframes chin{from{opacity:0;transform:translateY(.4em);filter:blur(10px)}to{opacity:1;transform:none;filter:none}}
+.hcap h1::after{animation-delay:1.1s}
+.hmeta{animation-delay:1.2s}
+@keyframes kb{0%{transform:scale(1.3)}14%{transform:scale(1.07)}100%{transform:none}}
+
+/* 每天一張大圖開章：這天第一張橫的放整排，日期、地點疊在上面，捲動時照片慢一點（視差） */
+.day.cov{position:relative}
+.day.cov .dh{position:absolute;left:0;right:0;top:0;height:var(--fh);margin:0;padding:clamp(18px,3.2vw,40px);z-index:2;pointer-events:none;align-content:end;
+  border-radius:var(--r-sm);background:linear-gradient(180deg,transparent 40%,rgba(0,0,0,.6));color:#fff}
+@media (min-width:700px){.day.cov .dh{border-radius:var(--r-md)}}
+.day.cov .dh b{color:#fff;font-size:clamp(24px,3.8vw,44px);text-shadow:0 2px 18px rgba(0,0,0,.35)}
+.day.cov .dh span{color:rgba(255,255,255,.88)}
+.day.cov .dh span svg{color:#fff}
+.day.cov .dct{background:rgba(255,255,255,.22);color:#fff;align-self:end}
+.day.cov .dhr{background:rgba(255,255,255,.22)}
+.day.cov .dhr em{background:rgba(255,255,255,.35)}
+.day.cov .dhr b{background:#fff;box-shadow:0 0 0 1.5px rgba(0,0,0,.25)}
+.day.cov .dhr::before,.day.cov .dhr::after{background:rgba(255,255,255,.4)}
+.day.cov .row.feat .ph img{top:-7%;bottom:auto;height:114%}
+@supports (animation-timeline:view()){
+  .day.cov .row.feat .ph img{animation:fpar linear both;animation-timeline:view()}
+  @keyframes fpar{from{translate:0 -6%}to{translate:0 6%}}
+}
+
+/* 照片慢慢顯影：從淡淡、稍微放大慢慢變清楚 */
+.ph .hi{transform:scale(1.06);filter:saturate(.3) brightness(1.06)}
+.ph .hi.ok{transform:none;filter:none;transition:opacity var(--t-slow) var(--ease),transform 1.1s var(--dec),filter 1.1s var(--ease)}
+
+/* 看大圖：後面透出這張照片的顏色 */
+.lb .bg{overflow:hidden}
+.lb .bg .amb{position:absolute;inset:-12%;width:124%;height:124%;object-fit:cover;filter:blur(48px) saturate(1.6);opacity:0;transition:opacity var(--t-long) var(--ease)}
+.lb .bg .amb.ok{opacity:.55}
+.lb .bg::after{content:"";position:absolute;inset:0;background:radial-gradient(120% 90% at 50% 45%,rgba(0,0,0,.2),rgba(0,0,0,.7))}
+
+/* 電腦看大圖：下面一排小圖，點了直接跳過去 */
+.lb.strip .stage,.lb.strip.info .stage{bottom:88px}
+.lb.strip .lbb{bottom:88px}
+.lbs{position:absolute;left:0;right:0;bottom:0;height:88px;z-index:2;overflow-x:auto;scrollbar-width:none;padding:14px 20px 18px;transition:opacity var(--t-mid) var(--ease),transform var(--t-mid) var(--ease)}
+.lbs::-webkit-scrollbar{display:none}
+.lbsr{display:flex;gap:6px;width:max-content;margin:0 auto}
+.lbst{flex:none;width:56px;height:56px;border-radius:var(--r-xs);overflow:hidden;opacity:.42;transition:opacity var(--t-fast) var(--ease),transform var(--sp-fast),box-shadow var(--t-fast) var(--ease)}
+.lbst img{width:100%;height:100%;object-fit:cover;display:block}
+.lbst:hover{opacity:.85}
+.lbst.on{opacity:1;transform:scale(1.1);box-shadow:0 0 0 2px #fff}
+.lb.bare .lbs{opacity:0;transform:translateY(12px);pointer-events:none}
+@media (min-width:900px){.lb.info .lbs{right:380px}}
+
+/* 精選：最多愛心的幾張，大圖左右滑 */
+.hl{max-width:1600px;margin:clamp(24px,3.6vw,44px) auto 0;padding:0 var(--pad)}
+.hl[hidden]{display:none}
+.hlh b{display:inline-flex;align-items:center;gap:8px;font-family:var(--serif);font-size:var(--fs-2xl);font-weight:600;letter-spacing:.04em}
+.hlh svg{width:18px;height:18px;color:var(--g2);fill:currentColor}
+.hlr{display:flex;gap:12px;overflow-x:auto;scrollbar-width:none;margin:12px calc(-1 * var(--pad)) 0;padding:6px var(--pad) 20px;scroll-snap-type:x mandatory;scroll-padding:0 var(--pad)}
+.hlr::-webkit-scrollbar{display:none}
+.hlc{position:relative;flex:none;height:clamp(230px,58vw,440px);aspect-ratio:var(--ar);max-width:84vw;border-radius:var(--r-lg);overflow:hidden;scroll-snap-align:start;background:var(--s2);
+  box-shadow:var(--sh-card),0 24px 40px -26px color-mix(in oklab,var(--g2) 75%,transparent);animation:hlin var(--t-slow) var(--dec) both;transition:transform var(--sp-fast)}
+@keyframes hlin{from{opacity:0;translate:0 16px}}
+.hlc img{width:100%;height:100%;object-fit:cover;display:block;transition:transform var(--t-long) var(--dec)}
+@media (hover:hover){.hlc:hover img{transform:scale(1.04)}}
+.hlc:active{transform:scale(.98)}
+.hlc i,.hlc em{position:absolute;display:inline-flex;align-items:center;gap:5px;height:28px;padding:0 11px;border-radius:var(--r-pill);background:rgba(0,0,0,.42);color:#fff;font:700 var(--fs-xs)/1 var(--font);font-style:normal;-webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px)}
+.hlc i{left:12px;bottom:12px}
+.hlc em{right:12px;top:12px;width:28px;padding:0;justify-content:center}
+.hlc i svg,.hlc em svg{width:13px;height:13px;fill:currentColor}
+
+/* 電腦上地圖跟著捲動：照片牆右邊固定一張地圖 */
+.smap[hidden]{display:none}
+@media (min-width:1200px){
+  .wwrap.side{display:grid;grid-template-columns:minmax(0,1fr) clamp(320px,28vw,440px);gap:clamp(20px,2vw,36px);max-width:1600px;margin:0 auto;padding-right:var(--pad);align-items:start}
+  .wwrap.side .wall{max-width:none;margin:0;padding-right:0}
+  .smap{position:sticky;top:84px;height:calc(100svh - 108px);margin-top:clamp(40px,8vw,96px);border-radius:var(--r-xl);overflow:hidden;background:var(--s2);box-shadow:var(--sh-card);isolation:isolate}
+}
+.smv,.sml{position:absolute;inset:0}
+.sml .tl{position:absolute;opacity:0;transition:opacity var(--t-slow) var(--ease);filter:var(--map-f) grayscale(.85);user-select:none;-webkit-user-drag:none}
+.sml .tl.ok{opacity:1}
+.sml::after{content:"";position:absolute;inset:0;background:color-mix(in oklab,var(--g2) 10%,transparent);pointer-events:none}
+.smr{position:absolute;inset:0;width:100%;height:100%;z-index:1;pointer-events:none;overflow:visible}
+.smr polyline{fill:none;stroke:var(--g2);stroke-width:3;stroke-linecap:round;stroke-linejoin:round;stroke-dasharray:1 9;opacity:.9}
+.sml .mk{z-index:2}
+.smc{position:absolute;left:14px;right:14px;top:14px;z-index:3;padding:12px 16px;border-radius:var(--r-lg);background:var(--glass);-webkit-backdrop-filter:blur(14px);backdrop-filter:blur(14px);box-shadow:var(--sh-pop);display:grid;gap:3px}
+.smc:empty{display:none}
+.smc i{font-style:normal;font-size:var(--fs-xs);font-weight:700;letter-spacing:.12em;background:var(--grad);-webkit-background-clip:text;background-clip:text;color:transparent;justify-self:start}
+.smc b{font-family:var(--serif);font-size:var(--fs-xl);font-weight:600}
+.smc span{display:flex;align-items:center;gap:4px;color:var(--tx3);font-size:var(--fs-s);min-width:0}
+.smc span svg{width:13px;height:13px;color:var(--g2);flex:none}
+.day.cov .row.feat .bdg .lkt{left:auto;right:12px;top:12px;bottom:auto}
+.day.cov .row.feat .bdg .lvt{left:12px;top:12px}

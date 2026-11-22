@@ -9,7 +9,8 @@ const RM = matchMedia("(prefers-reduced-motion: reduce)");
 const DARK = matchMedia("(prefers-color-scheme: dark)");
 const P = {
   zin:'<circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5M8 11h6M11 8v6"/>', zout:'<circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5M8 11h6"/>',
-  x:'<path d="M18 6 6 18M6 6l12 12"/>', info:'<circle cx="12" cy="12" r="9"/><path d="M12 16v-4M12 8h.01"/>',
+  x:'<path d="M18 6 6 18M6 6l12 12"/>', shr:'<circle cx="18" cy="5" r="2.5"/><circle cx="6" cy="12" r="2.5"/><circle cx="18" cy="19" r="2.5"/><path d="m8.2 10.8 7.6-4.4M8.2 13.2l7.6 4.4"/>',
+  star:'<path d="m12 3.5 2.6 5.3 5.9.9-4.3 4.1 1 5.8-5.2-2.7-5.2 2.7 1-5.8-4.3-4.1 5.9-.9z"/>', info:'<circle cx="12" cy="12" r="9"/><path d="M12 16v-4M12 8h.01"/>',
   dl:'<path d="M12 4v11M7 10l5 5 5-5M5 20h14"/>', l:'<path d="m15 18-6-6 6-6"/>', r:'<path d="m9 18 6-6-6-6"/>',
   pin:'<path d="M12 21s-7-6.2-7-11.5A7 7 0 0 1 19 9.5C19 14.8 12 21 12 21Z"/><circle cx="12" cy="9.5" r="2.5"/>',
   phone:'<rect x="7" y="3" width="10" height="18" rx="2.5"/><path d="M11 17.5h2"/>',
@@ -341,12 +342,12 @@ function draw(){
   const pl = (D.places || []).slice(0, 3).join("・");
   $("#app").innerHTML = `
     <header class="hero"><div class="cv">${cover.q ? `<img class="lq" alt="" src="data:image/jpeg;base64,${cover.q}">` : ""}<img class="hi" alt="" src="${src(cover, "l")}"></div>
-      <div class="hcap">${a ? `<div class="eyebrow num">${esc(frange(a, b))}</div>` : ""}<h1>${esc(D.name)}</h1>
+      <div class="hcap">${a ? `<div class="eyebrow num">${esc(frange(a, b))}</div>` : ""}<h1 style="--n:${[...D.name].length}">${[...D.name].map((c, k) => c === " " ? " " : `<span class="ch" style="--i:${k}">${esc(c)}</span>`).join("")}</h1>
         <div class="hmeta"><button class="chip go" data-ss>${I("play")}<span>播放</span></button><span class="chip">${I("photo")}<span class="num">${cntTxt()}</span></span>${pl ? `<span class="chip" data-pl>${heroFlags() || I("pin")}<span>${esc(pl)}</span></span>` : ""}
         ${D.dl ? `<a class="chip" href="${BASE}/zip" download>${I("dl")}<span>全部下載</span></a><button class="chip" data-sel>${I("sel")}<span>選取</span></button>` : ""}${D.up ? `<button class="chip" data-up>${I("up")}<span>放照片</span></button>` : ""}</div></div>
       <button class="cue" aria-label="往下看"><i></i></button></header>
     <div class="bar"><b>${esc(D.name)}<small class="num">${cntTxt()}</small></b>${IOS ? `<span class="chip zb"><button data-zb="-1" aria-label="放大">${I("zin")}</button><button data-zb="1" aria-label="縮小">${I("zout")}</button></span>` : ""}${D.up ? `<button class="chip" data-up aria-label="放照片">${I("up")}</button>` : ""}${D.dl ? `<button class="chip" data-sel aria-label="選取">${I("sel")}</button>` : ""}<button class="chip go" data-ss aria-label="播放">${I("play")}</button></div>
-    <nav class="who" hidden></nav><div class="mems"></div><div class="stats"></div><div class="cityf" hidden></div><main class="wall" data-z="${ZL}"></main>
+    <nav class="who" hidden></nav><div class="mems"></div><div class="stats"></div><section class="hl" hidden></section><div class="cityf" hidden></div><div class="wwrap"><main class="wall" data-z="${ZL}"></main><aside class="smap" hidden><div class="smv"></div><div class="smc"></div></aside></div>
     ${D.loc && ALL.some(p => p.g && !p.u) ? `<section class="msec"${WHO ? " hidden" : ""}><div class="mh"><b data-mt>地點</b><span class="num" data-km></span></div><div class="cities"></div><div class="map" data-map></div></section>` : ""}
     <footer class="foot">${finCol()}<div class="fin">${esc(D.name)}</div>${D.exp ? `<span class="fexp">${expRing()}${left(D.exp)}</span>` : ""}</footer>`;
   const hi = $(".hero .hi");
@@ -359,11 +360,15 @@ function draw(){
   TILES = PH.map((p, i) => tile(p, i));
   whoBar();
   stats();
+  highlights();
+  smapOn();
   sections();
   layout();
   mems();
   bigMap();
+  smapWatch();
   onScroll();
+  deepLink();
 }
 /* 朋友放的：每個人一個分頁，不跟主人的照片混在一起 */
 function whoBar(){
@@ -380,14 +385,14 @@ async function whoSet(w, keep){
   if (w === WHO && !keep) return;
   if (WHOBZ) return; WHOBZ = 1;
   if (SEL.on) popBack();
-  const parts = [".mems", ".stats", ".cityf", ".wall", ".msec"].map(q => $(q)).filter(Boolean);
+  const parts = [".mems", ".stats", ".hl", ".cityf", ".wall", ".msec", ".smap"].map(q => $(q)).filter(Boolean);
   if (anim()) await Promise.all(parts.map(x => x.animate([{opacity:1}, {opacity:0, transform:"translateY(6px)"}], {duration:T.fast, easing:EXIT, fill:"forwards"}).finished.catch(() => {})));
   if (!keep || w !== WHO) CITY = "";
   WHO = w; PH = pickW(); citybar();
   TILES.forEach(t => t.classList.remove("on"));
   TILES = PH.map((p, i) => { const t = TM.get(p.i); if (t) { t.dataset.i = i; return t; } return tile(p, i); });
   whoBar();
-  sections(); layout(true); mems(); stats(); bigMap();
+  smapOn(); sections(); layout(true); mems(); stats(); highlights(); bigMap(); smapWatch();
   const ms = $(".msec"); if (ms) ms.hidden = !!WHO || !!CITY || !(D.loc && PH.some(p => p.g));
   document.querySelectorAll(".hmeta .chip .num, .bar small").forEach(x => { x.textContent = cntTxt(); });
   const nav = $(".who"), top = nav && !nav.hidden ? nav.getBoundingClientRect().top + scrollY - 70 : 0;
@@ -491,7 +496,7 @@ function tile(p, i){
   el.innerHTML = `${p.q ? `<img class="lq" alt="" src="data:image/jpeg;base64,${p.q}">` : ""}<img class="hi" alt="" loading="lazy" decoding="async" draggable="false" src="${src(p, "s")}"><span class="bdg"></span><span class="ck">${I("ck")}</span>`;
   setTimeout(() => badge(i));
   const hi = el.querySelector(".hi");
-  hi.addEventListener("load", () => { hi.decoding = "sync";   /* 換大小時照片會被拿下來再放回去：載好的改同步解碼，放回去那一格不會空白 */ hi.classList.add("ok"); setTimeout(() => { const q = el.querySelector(".lq"); if (q) q.remove(); }, T.mid + 100); }, {once:true});
+  hi.addEventListener("load", () => { hi.decoding = "sync";   /* 換大小時照片會被拿下來再放回去：載好的改同步解碼，放回去那一格不會空白 */ hi.classList.add("ok"); setTimeout(() => { const q = el.querySelector(".lq"); if (q) q.remove(); }, T.slow * 2); }, {once:true});
   hi.addEventListener("error", () => { p.broken = 1; hi.remove(); el.insertAdjacentHTML("beforeend", `<span class="nope">${I("off")}</span>`); }, {once:true});
   if (IO) IO.observe(el); else el.classList.add("in");
   return el;
@@ -511,6 +516,7 @@ function layout(force){
   GROUPS.forEach((g, gi) => {
     const box = wall.querySelector(`[data-g="${gi}"] .rows`), rows = [];
     let cur = [], sum = 0;
+    box.parentNode.classList.remove("cov");
     if (ZL >= 2) {                                           // 小方格：一排固定幾張
       const n = Math.max(ZL === 3 ? 6 : 4, Math.round((W + gap) / (rh + gap))), sz = (W - gap * (n - 1)) / n;
       for (let k = 0; k < g.list.length; k += n) rows.push([g.list.slice(k, k + n).map(i => [i, 1]), sz]);
@@ -520,8 +526,10 @@ function layout(force){
       box.replaceChildren(frag);
       return;
     }
-    const big = ZL === 1 && g.list.length >= 5 && PH[g.list[0]].w / PH[g.list[0]].h >= 1.3 && W >= 320 ? g.list[0] : -1;   // 一天的第一張橫的放整排
-    if (big >= 0) { const ar = Math.min(3, PH[big].w / PH[big].h); rows.push([[[big, W / Math.min(W / ar, innerHeight * .72)]], Math.min(W / ar, innerHeight * .72), 1]); }
+    const big = ZL === 1 && g.list.length >= 3 && PH[g.list[0]].w / PH[g.list[0]].h >= 1.3 && W >= 320 ? g.list[0] : -1;   // 一天的第一張橫的放整排，當這天的封面
+    const sec = box.parentNode, dh = sec.querySelector(".dh[data-day]");
+    sec.classList.toggle("cov", big >= 0 && !!dh);
+    if (big >= 0) { const ar = Math.min(3, PH[big].w / PH[big].h), fh = Math.min(W / ar, innerHeight * .72); sec.style.setProperty("--fh", fh.toFixed(1) + "px"); rows.push([[[big, W / fh]], fh, 1]); }
     g.list.forEach(i => {
       if (i === big) return;
       const p = PH[i], ar = Math.min(3, Math.max(.4, p.w / p.h));
@@ -539,7 +547,7 @@ function layout(force){
   });
 }
 let RZ;
-addEventListener("resize", () => { clearTimeout(RZ); RZ = setTimeout(() => { layout(); bigMap(); if (LB) LB.fitAll(); }, 120); });
+addEventListener("resize", () => { clearTimeout(RZ); RZ = setTimeout(() => { if (smapOn()) smapWatch(); layout(); bigMap(); smapGo(SMK, true); if (LB) LB.fitAll(); }, 120); });
 
 /* 捲動：封面慢一點往上（視差）、標題淡掉，捲過封面上面浮出一條 */
 let SCQ = 0;
@@ -627,7 +635,9 @@ document.addEventListener("click", e => {
   if (ct) return citySet(ct.dataset.city);
   if (e.target.closest("[data-cityx]")) return citySet("");
   const m = e.target.closest(".mk");
-  if (m) return openLb(+m.dataset.i);
+  if (m) return openLb(+m.dataset.i, m.querySelector("img") || m);
+  const hc = e.target.closest("[data-hl]");
+  if (hc) return openLb(+hc.dataset.hl, hc.querySelector("img"));
 });
 
 /* 去過的城市：照片照城市分組（主機從拍攝地點查到的城市、國家） */
@@ -781,19 +791,21 @@ function route(el, pts, W, H){
 /* ═════════ 看大圖 ═════════ */
 let LB = null;
 const GAPX = 28;
-function openLb(i){
+function openLb(i, from){
   if (LB) { if (LB.closing && LB.kill) LB.kill(); else return; }   // 上一張還在收：直接收完，這次點的照樣打開
   const el = document.createElement("div");
   el.className = "lb";
+  const STRIP = matchMedia("(pointer:fine) and (min-width:900px)").matches && PH.length > 1;
+  el.className = STRIP ? "lb strip" : "lb";
   el.innerHTML = `<div class="bg"></div><div class="stage"><div class="track"></div></div>
-    <div class="lbt"><button class="rb" data-x aria-label="關閉">${I("x")}</button><span class="cnt num"></span><button class="rb lvb" data-lv aria-label="原況">${I("live")}</button><button class="rb" data-ssi aria-label="從這張開始播放">${I("play")}</button><button class="rb" data-inf aria-label="照片資訊">${I("info")}</button><button class="rb" data-del hidden aria-label="刪掉">${I("trash")}</button>${D.dl ? `<a class="rb" data-dl download aria-label="${D.dl > 1 ? "下載原圖" : "下載"}">${I("dl")}</a>` : ""}</div>
+    <div class="lbt"><button class="rb" data-x aria-label="關閉">${I("x")}</button><span class="cnt num"></span><button class="rb lvb" data-lv aria-label="原況">${I("live")}</button><button class="rb" data-ssi aria-label="從這張開始播放">${I("play")}</button><button class="rb" data-shr aria-label="分享這張">${I("shr")}</button><button class="rb" data-inf aria-label="照片資訊">${I("info")}</button><button class="rb" data-del hidden aria-label="刪掉">${I("trash")}</button>${D.dl ? `<a class="rb" data-dl download aria-label="${D.dl > 1 ? "下載原圖" : "下載"}">${I("dl")}</a>` : ""}</div>
     <button class="rb nav l" aria-label="上一張">${I("l")}</button><button class="rb nav r" aria-label="下一張">${I("r")}</button>
     <div class="lbb"><div class="vbar"><button class="vpp" data-vpp aria-label="播放">${I("play")}</button><span class="vt0 num">0:00</span><div class="vtr" data-vseek><i></i></div><span class="vt1 num"></span><button class="vpp" data-vmu aria-label="聲音">${I("snd")}</button></div>
-      <div class="lbr"><div class="cap"><b></b><span></span></div>${D.talk ? `<button class="sb" data-lk aria-label="愛心">${I("heart")}<span class="num"></span></button><button class="sb" data-cm aria-label="留言">${I("chat")}<span class="num"></span></button>` : ""}</div></div><div class="inf"></div>`;
+      <div class="lbr"><div class="cap"><b></b><span></span></div>${D.talk ? `<button class="sb" data-lk aria-label="愛心">${I("heart")}<span class="num"></span></button><button class="sb" data-cm aria-label="留言">${I("chat")}<span class="num"></span></button>` : ""}</div></div><div class="inf"></div>${STRIP ? `<div class="lbs"><div class="lbsr">${PH.map((p, k) => `<button class="lbst" data-go="${k}" aria-label="第 ${k + 1} 張"><img alt="" loading="lazy" draggable="false" src="${src(p, "s")}"></button>`).join("")}</div></div>` : ""}`;
   document.body.appendChild(el);
   document.documentElement.style.overflow = "hidden";
   const stage = $(".stage", el), track = $(".track", el), bg = $(".bg", el), inf = $(".inf", el);
-  const S = {el, i, z:{s:1, x:0, y:0}, info:false, busy:null};
+  const S = {el, i, z:{s:1, x:0, y:0}, info:false, busy:null, from:from && from.isConnected ? from : null, fi:i};
   LB = S;
   const W = () => stage.clientWidth, H = () => stage.clientHeight;
   const mk = () => { const s = document.createElement("div"); s.className = "slide"; s.innerHTML = `<div class="zw"></div>`; track.appendChild(s); return s; };
@@ -883,6 +895,29 @@ function openLb(i){
     $(".nav.l", el).disabled = S.i === 0; $(".nav.r", el).disabled = S.i === PH.length - 1;
     if (S.info && (moved || !inf.firstChild)) { inf.innerHTML = infoHTML(p); infoMap(); }   // 同一張不重畫：安卓跳出鍵盤會改畫面大小，重畫會把正在打字的留言框收掉
     TILES.forEach((t, k) => t.classList.toggle("gone", k === S.i));
+    if (moved) { amb(p); stripAt(); }
+  }
+  function amb(p){                                           // 後面透出這張的顏色：糊開的小圖，換張時慢慢變過去
+    if (p.broken) return;
+    const im = document.createElement("img"); im.className = "amb"; im.alt = ""; im.src = p.q ? `data:image/jpeg;base64,${p.q}` : src(p, "s");
+    bg.appendChild(im);
+    const old = [...bg.querySelectorAll(".amb")].slice(0, -1);
+    const on = () => { im.classList.add("ok"); setTimeout(() => old.forEach(o => o.remove()), T.slow + 100); };
+    im.complete && im.naturalWidth ? requestAnimationFrame(on) : im.addEventListener("load", on, {once:true});
+  }
+  function stripAt(){                                        // 下面那排小圖：這張亮起來、捲到中間
+    const r = $(".lbsr", el); if (!r) return;
+    r.querySelectorAll(".on").forEach(x => x.classList.remove("on"));
+    const b = r.children[S.i]; if (!b) return;
+    b.classList.add("on");
+    const box = r.parentNode, x = b.offsetLeft + b.offsetWidth / 2 - box.clientWidth / 2;
+    box.scrollTo({left:x, behavior:S.at0 && anim() ? "smooth" : "auto"}); S.at0 = 1;
+  }
+  function jump(n){                                          // 點小圖直接跳過去：淡一下換好
+    if (n === S.i || n < 0 || n >= PH.length) return;
+    finish(); stopAll(); setZoom(1, 0, 0);
+    S.i = n; setAll();
+    if (anim()) sl[1].animate([{opacity:0, transform:"scale(.97)"}, {opacity:1, transform:"none"}], {duration:T.mid, easing:DEC});
   }
   setAll();
   S.chrome = chrome; S.vToggle = vToggle;
@@ -895,12 +930,12 @@ function openLb(i){
   const NOCLIP = "inset(0px 0px 0px 0px round 0px)";
 
   /* 從格子裡的那張長大 */
-  const t0 = TILES[i], r0 = t0.getBoundingClientRect(), f0 = fit(PH[i]);
+  const t0 = S.from || TILES[i], r0 = t0.getBoundingClientRect(), f0 = fit(PH[i]);
   if (anim()) {
     const a0 = toTile(r0, f0);
     cur().animate([{transform:a0.t, clipPath:a0.c}, {transform:"translate(0px,0px) scale(1)", clipPath:NOCLIP}], {duration:T.mid + 60, easing:DEC});
     bg.animate([{opacity:0}, {opacity:1}], {duration:T.mid, easing:EASE, fill:"forwards"});
-    el.querySelectorAll(".lbt,.lbb,.nav").forEach(x => x.animate([{opacity:0}, {opacity:1}], {duration:T.mid, delay:T.fast, easing:EASE, fill:"backwards"}));
+    el.querySelectorAll(".lbt,.lbb,.nav,.lbs").forEach(x => x.animate([{opacity:0}, {opacity:1}], {duration:T.mid, delay:T.fast, easing:EASE, fill:"backwards"}));
   } else bg.style.opacity = 1;
   bg.style.opacity = 1;
   if (POPSKIP) S.push = 1; else history.pushState({lb:1}, "");   // 上一張的返回還沒處理完：等它處理完再記
@@ -930,9 +965,9 @@ function openLb(i){
   function close(){
     if (S.closing) return; S.closing = 1;
     finish();
-    const p = PH[S.i], t = TILES[S.i];
+    const p = PH[S.i], back = S.from && S.i === S.fi && S.from.isConnected, t = back ? S.from : TILES[S.i];   // 從精選、地圖打開的：同一張就縮回原本那裡
     let r = t.getBoundingClientRect();
-    if (r.bottom < 0 || r.top > innerHeight) { t.scrollIntoView({block:"center"}); r = t.getBoundingClientRect(); }
+    if (!back && (r.bottom < 0 || r.top > innerHeight)) { t.scrollIntoView({block:"center"}); r = t.getBoundingClientRect(); }
     const zw = cur(), f = fit(p), now = getComputedStyle(zw).transform;
     stopAll();
     let gone = false;
@@ -940,7 +975,7 @@ function openLb(i){
     S.kill = end; el.style.pointerEvents = "none";
     if (!anim()) return end();
     setTimeout(end, T.mid + 200);                              // 安卓返回手勢時動畫有時不會結束：時間到一定收掉
-    el.querySelectorAll(".lbt,.lbb,.nav,.inf").forEach(x => { x.style.opacity = 0; });
+    el.querySelectorAll(".lbt,.lbb,.nav,.inf,.lbs").forEach(x => { x.style.opacity = 0; });
     S.info = false; el.classList.remove("info");
     const a1 = toTile(r, f);
     zw.animate([{transform:now === "none" ? "translate(0px,0px) scale(1)" : now, clipPath:NOCLIP}, {transform:a1.t, clipPath:a1.c}],
@@ -1090,6 +1125,8 @@ function openLb(i){
     if (e.target.closest("[data-cm]")) { if (!S.info) setInfo(true); setTimeout(() => { const t = $(".italk", inf); if (t) t.scrollIntoView({behavior:anim() ? "smooth" : "auto", block:"start"}); }, S.info ? 0 : T.mid); return; }
     if (e.target.closest(".nav.l")) return go(-1);
     if (e.target.closest(".nav.r")) return go(1);
+    const gb = e.target.closest("[data-go]"); if (gb) return jump(+gb.dataset.go);
+    if (e.target.closest("[data-shr]")) return shareOne(PH[S.i]);
   });
   inf.addEventListener("click", e => {
     const del = e.target.closest("[data-cdel]");
@@ -1642,6 +1679,97 @@ function story(n, from){
 /* 照片資訊（越詳細越好）：時間、地點、相機、鏡頭、光圈、快門、ISO… */
 /* 照片資訊的小圖：光圈開多大、快門多久、ISO 多高、焦距看多寬、曝光補償偏哪邊 */
 const lg = (v, a, b) => Math.max(0, Math.min(1, (Math.log(v) - Math.log(a)) / (Math.log(b) - Math.log(a))));
+/* ── 精選：最多愛心的幾張（還沒人按愛心就平均挑幾張橫的），封面下面左右滑 ── */
+function highlights(){
+  const box = $(".hl"); if (!box) return;
+  const ok = PH.map((p, i) => [p, i]).filter(([p]) => !p.broken && !p.raw);
+  let pick = ok.filter(([p]) => p.lk > 0).sort((a, b) => b[0].lk - a[0].lk).slice(0, 8);
+  const liked = pick.length >= 3;
+  if (!liked && ok.length >= 10) {
+    const land = ok.filter(([p]) => p.w > p.h && !isVid(p)), from = land.length >= 6 ? land : ok, n = Math.min(6, from.length);
+    pick = Array.from({length:n}, (_, k) => from[Math.floor((k + .5) * from.length / n)]);
+  } else if (!liked) pick = [];
+  box.hidden = !!WHO || !!CITY || pick.length < 3;
+  box.innerHTML = box.hidden ? "" : `<div class="hlh"><b>${I(liked ? "heart" : "star")}精選</b></div><div class="hlr">${pick.map(([p, i], k) =>
+    `<button class="hlc" data-hl="${i}" style="--ar:${Math.max(.6, Math.min(1.8, p.w / p.h)).toFixed(3)};animation-delay:${k * 70}ms"><img alt="" loading="lazy" draggable="false" src="${src(p, "l")}">${p.lk ? `<i class="num">${I("heart")}${p.lk}</i>` : ""}${isVid(p) ? `<em>${I("play")}</em>` : ""}</button>`).join("")}</div>`;
+  const r = box.querySelector(".hlr"); if (r) requestAnimationFrame(() => { r.scrollLeft = 0; });
+}
+
+/* ── 分享單張：連結打開就直接看那張（#p=編號） ── */
+async function shareOne(p){
+  const url = `${location.origin}${BASE}#p=${encodeURIComponent(p.i)}`;
+  if (navigator.share && matchMedia("(pointer:coarse)").matches) { try { await navigator.share({title:D.name, url}); } catch (e) {} return; }
+  try { await navigator.clipboard.writeText(url); toast("連結複製好了"); }
+  catch (e) { prompt("複製這個連結", url); }
+}
+let DEEP = 1;
+function deepLink(){
+  if (!DEEP) return; DEEP = 0;
+  const m = /^#p=(.+)$/.exec(location.hash); if (!m) return;
+  history.replaceState(history.state, "", location.pathname + location.search);
+  const id = decodeURIComponent(m[1]), a = ALL.find(p => String(p.i) === id); if (!a) return;
+  const open = () => { const k = PH.indexOf(a); if (k >= 0) { TILES[k].scrollIntoView({block:"center"}); setTimeout(() => openLb(k), 60); } };
+  if ((a.u || "") !== WHO) whoSet(a.u || "").then(() => setTimeout(open, T.mid)); else setTimeout(open, anim() ? T.slow : 0);
+}
+
+/* ── 電腦上地圖跟著捲動：右邊固定一張地圖，捲到哪一天就飛到那天拍照的地方 ── */
+let SMK = "", SMIO = null;
+function smapOn(){
+  const wr = $(".wwrap"), a = $(".smap"); if (!wr || !a) return false;
+  const on = innerWidth >= 1200 && D.loc && !WHO && PH.some(p => p.g && pd(p.x.dt));
+  const was = wr.classList.contains("side");
+  wr.classList.toggle("side", !!on); a.hidden = !on;
+  if (!on && SMIO) { SMIO.disconnect(); SMIO = null; }
+  return !!on !== was;
+}
+function smapWatch(){
+  if (SMIO) SMIO.disconnect(); SMIO = null; SMK = "";
+  if (!$(".wwrap.side") || !("IntersectionObserver" in window)) return;
+  const vis = new Map();
+  SMIO = new IntersectionObserver(es => {
+    es.forEach(e => { if (e.isIntersecting) vis.set(e.target, e.target.getBoundingClientRect().top); else vis.delete(e.target); });
+    const sec = [...vis.keys()].sort((a, b) => a.getBoundingClientRect().top - b.getBoundingClientRect().top)[0];
+    const dh = sec && sec.querySelector(".dh[data-day]"); if (dh) smapGo(dh.dataset.day);
+  }, {rootMargin:"-35% 0px -55% 0px"});
+  document.querySelectorAll(".wall .day").forEach(d => SMIO.observe(d));
+  const first = $(".wall .dh[data-day]"); smapGo(first ? first.dataset.day : "", true);
+}
+function smapGo(k, force){
+  const box = $(".smap:not([hidden]) .smv"); if (!box) return;
+  if (k === SMK && !force) return;
+  let ps = PH.map((p, i) => [p, i]).filter(([p]) => p.g && !p.broken && (!k || (pd(p.x.dt) || {}).k === k));
+  if (!ps.length) return;
+  SMK = k;
+  ps.sort((a, b) => (a[0].x.dt || "") < (b[0].x.dt || "") ? -1 : 1);
+  const W = box.clientWidth, H = box.clientHeight; if (!W) return;
+  let z = 16;
+  for (; z > 2; z--) { const xs = ps.map(([p]) => lx(p.g[1], z)), ys = ps.map(([p]) => ly(p.g[0], z));
+    if (Math.max(...xs) - Math.min(...xs) <= W - 140 && Math.max(...ys) - Math.min(...ys) <= H - 180) break; }
+  if (ps.length === 1) z = 14;
+  const xs = ps.map(([p]) => lx(p.g[1], z)), ys = ps.map(([p]) => ly(p.g[0], z));
+  const cx = (Math.max(...xs) + Math.min(...xs)) / 2, cy = (Math.max(...ys) + Math.min(...ys)) / 2 - 20;
+  const ly2 = document.createElement("div"); ly2.className = "sml";
+  tiles(ly2, cx, cy, z, W, H);
+  const cl = [];
+  ps.forEach(([p, i], n) => { const x = xs[n] - cx + W / 2, y = ys[n] - cy + H / 2, c = cl.find(c => Math.hypot(c.x - x, c.y - y) < 40);
+    if (c) c.n++; else cl.push({x, y, i, n:1}); });
+  const pts = cl.map(c => `${c.x.toFixed(1)},${c.y.toFixed(1)}`).join(" ");
+  ly2.insertAdjacentHTML("beforeend", (cl.length > 1 ? `<svg class="smr" viewBox="0 0 ${W} ${H}" aria-hidden="true"><polyline points="${pts}"/></svg>` : "")
+    + cl.map((c, n) => `<button class="mk" data-i="${c.i}" style="left:${c.x.toFixed(1)}px;top:${c.y.toFixed(1)}px;animation-delay:${Math.min(n * 50, 500)}ms"><img alt="" loading="lazy" src="${src(PH[c.i], "s")}">${c.n > 1 ? `<i class="num">${c.n}</i>` : ""}</button>`).join(""));
+  const old = [...box.querySelectorAll(".sml")];
+  box.appendChild(ly2);
+  if (anim()) {
+    ly2.animate([{opacity:0, transform:"scale(1.06)"}, {opacity:1, transform:"none"}], {duration:T.slow, easing:DEC});
+    old.forEach(o => o.animate([{opacity:1}, {opacity:0, transform:"scale(.96)"}], {duration:T.mid, easing:EASE, fill:"forwards"}).onfinish = () => o.remove());
+  } else old.forEach(o => o.remove());
+  const d = k && pd(ps[0][0].x.dt), c = $(".smap .smc");
+  if (c) {
+    const days = [...new Set(PH.map(p => (pd(p.x.dt) || {}).k).filter(Boolean))].sort(), n = days.indexOf(k) + 1;
+    const html = d ? `${isTrip() && days.length > 1 ? `<i class="num">第 ${n} 天</i>` : ""}<b>${esc(fday(d, YR))}</b>${dayPlaces(k) ? `<span>${I("pin")}${esc(dayPlaces(k))}</span>` : ""}` : "";
+    if (c.dataset.k !== k) { c.dataset.k = k; c.innerHTML = html; if (anim()) c.animate([{opacity:0, transform:"translateY(6px)"}, {opacity:1, transform:"none"}], {duration:T.mid, easing:DEC}); }
+  }
+}
+
 const SV = (b, cls = "") => `<svg class="gx ${cls}" viewBox="0 0 32 32" aria-hidden="true">${b}</svg>`;
 function gIris(f){                       // ƒ1.4 開最大、ƒ22 只剩一個小洞
   const k = 1 - lg(f, 1.2, 22), r = 3 + 9.5 * k, pts = [];
