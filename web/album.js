@@ -1133,7 +1133,7 @@ function scrubLabel(y){                                      // 那個位置的�
   addEventListener("keydown", e => { if (LB || SS || SY || e.target.closest("input")) return;
     if (e.key === "+" || e.key === "=") zoomWall(ZL - 1, innerWidth / 2, innerHeight / 2); else if (e.key === "-") zoomWall(ZL + 1, innerWidth / 2, innerHeight / 2); });
 })();
-addEventListener("contextmenu", e => { if (e.target.closest(".ph,.zw,.mk,.hero")) e.preventDefault(); });
+addEventListener("contextmenu", e => { if (!(e.target.closest && e.target.closest("input,textarea,[contenteditable]"))) e.preventDefault(); });   // 整頁都不跳長按選單（精選、城市卡片、回憶…的照片都算）
 /* 離開畫面（切到別的程式、截圖工具）或按下截圖快速鍵時，照片先糊掉；回來馬上清楚（手機按鍵截圖網頁不會知道，擋不了） */
 let SHYT = 0;
 function shy(on, ms){

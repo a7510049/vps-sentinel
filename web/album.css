@@ -331,7 +331,7 @@ button.chip:active,a.chip:active{transform:scale(.95)}
 #app>.hero.sk{height:100svh;min-height:520px}
 
 /* 照片不能長按另存；主機印不了浮水印時，畫面上蓋一層字 */
-.ph img,.zw img,.mk img,.hero img{-webkit-touch-callout:none;-webkit-user-select:none;user-select:none}
+img,video,.ph img,.zw img,.mk img,.hero img{-webkit-touch-callout:none;-webkit-user-select:none;user-select:none;-webkit-user-drag:none}
 .wmo .ph::after,.wmo .zw::after{content:var(--wm);position:absolute;right:4%;bottom:4%;color:rgba(255,255,255,.62);font-weight:700;letter-spacing:.06em;
   text-shadow:0 1px 3px rgba(0,0,0,.45);pointer-events:none;font-size:clamp(10px,3.4cqmin,28px)}
 .ph,.zw{container-type:size}
