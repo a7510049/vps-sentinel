@@ -306,6 +306,8 @@ def alb_dev_check(h, a, register):
     th = alb_dev_hash(tok)
     if th in (a.get("ban") or []):
         return False, "ban", ""
+    if th in (a.get("lock") or {}):                    # 按了截圖鍵被鎖住：等主人解除
+        return False, "lock", ""
     if not register:
         return lim == 0 or th in (a.get("devs") or {}), "full", ""
     now = time.time()
@@ -548,6 +550,26 @@ def alb_up_note(a, th, who, pend):
         e["tm"] = threading.Timer(ALB_UP_EV, alb_up_flush, (key,))
         e["tm"].daemon = True
         e["tm"].start()
+
+
+def alb_snap_lock(a, th):
+    """鎖住按了截圖鍵的手機，記一筆（會傳 Telegram）；已經鎖住的不重記"""
+    with ALB_LOCK:
+        all_ = alb_all()
+        b = all_.get(a["id"])
+        if not b or th in (b.get("lock") or {}):
+            return
+        lk = b.setdefault("lock", {})
+        lk[th] = time.time()
+        while len(lk) > 200:
+            lk.pop(min(lk, key=lk.get))
+        nm = ((b.get("devs") or {}).get(th) or {})
+        who = nm.get("nm") or nm.get("n") or "一支手機"
+        try:
+            alb_save(all_)
+        except OSError:
+            return
+    COL.add_event("warn", f"相簿截圖：{who} 在「{b['name']}」按了截圖，已鎖住")
 
 
 def alb_up_flush(key):
@@ -798,7 +820,7 @@ def alb_add(d):
          "dir": os.path.relpath(p, root).replace(os.sep, "/"), "pw": alb_pw_hash(pw) if pw else None, "exp": now + secs if secs else 0,
          "t0": now, "loc": d.get("loc", True) is not False, "dl": alb_dl({"dl": d.get("dl", 2)}), "views": 0, "last": 0,
          "k": secrets.token_hex(16), "dev": d.get("dev") if d.get("dev") in ALB_DEVS else 0, "devs": {}, "ban": [], "hide": [],
-         "wm": alb_clean_wm(d.get("wm")), "talk": d.get("talk", True) is not False, "shy": d.get("shy", True) is not False,
+         "wm": alb_clean_wm(d.get("wm")), "talk": d.get("talk", True) is not False, "shy": d.get("shy", True) is not False, "snap": d.get("snap") is True, "lock": {},
          "up": d.get("up") if d.get("up") in ALB_UPS else 0, "upd": {}, "pend": [], "uq": d.get("uq") if d.get("uq") in ALB_UQ else 1}
     if a["dir"] == ".":
         a["dir"] = ""
@@ -842,6 +864,10 @@ def alb_edit(d):
             a["talk"] = bool(d["talk"])
         if "shy" in d:
             a["shy"] = bool(d["shy"])
+        if "snap" in d:
+            a["snap"] = bool(d["snap"])
+        if "unlock" in d:                                 # 解除截圖鎖住的手機
+            (a.get("lock") or {}).pop(str(d["unlock"]), None)
         if "dl" in d:
             a["dl"] = alb_dl({"dl": d["dl"]})
         if d.get("uq") in ALB_UQ:
@@ -935,7 +961,7 @@ def alb_list():
                     "pw": bool(a.get("pw")), "loc": a["loc"], "dl": alb_dl(a), "views": a.get("views", 0), "last": a.get("last", 0),
                     "n": len([x for x in ph if x not in hid]), "all": len(ph), "cv": alb_cover(a, idx), "ready": alb_ready(a, idx),
                     "dev": a.get("dev") or 0, "ndev": len(a.get("devs") or {}), "wm": a.get("wm") or "", "wmok": not a.get("wm") or alb_wm_bake(a),
-                    "talk": a.get("talk", True), "shy": a.get("shy", True), "mu": (idx.get("mu") or {}).get("n", ""), "up": alb_up(a), "intro": a.get("intro", ""),
+                    "talk": a.get("talk", True), "shy": a.get("shy", True), "snap": bool(a.get("snap")), "nlock": len(a.get("lock") or {}), "mu": (idx.get("mu") or {}).get("n", ""), "up": alb_up(a), "intro": a.get("intro", ""),
                     "npend": len([x for x in a.get("pend") or [] if x in (idx.get("ph") or {})]),
                     "uq": alb_uq(a), "uused": alb_up_used(a)[0],
                     "nup": len([m for m in (idx.get("ph") or {}).values() if alb_up_who(m.get("n", "")) and not m.get("of")]),
@@ -2808,7 +2834,7 @@ def alb_manifest(a, th=""):
         alb_kick(a["id"])
     wmo = a.get("wm") if a.get("wm") and not alb_wm_bake(a) else ""
     return {"ok": True, "name": a["name"], "photos": out, "dl": alb_dl(a), "loc": a["loc"], "exp": a["exp"], "es": a.get("es") or a.get("t0", 0), "wmo": wmo, "wx": wx, "intro": a.get("intro", ""), "gb": talk.get(ALB_GB, {}).get("cm", []) if a.get("talk", True) else [],
-            "talk": a.get("talk", True), "shy": a.get("shy", True), "mu": bool(idx.get("mu")), "up": alb_up(a),
+            "talk": a.get("talk", True), "shy": a.get("shy", True), "snap": bool(a.get("snap")), "mu": bool(idx.get("mu")), "up": alb_up(a),
             "places": [k for k, _ in sorted(places.items(), key=lambda x: -x[1])][:6], "ready": alb_ready(a, idx)}
 
 
@@ -3060,6 +3086,12 @@ def alb_http(h, method):
             n = 0
         code2, out = alb_talk_post(a, alb_dev_hash(tok), h.jbody(h.rfile.read(n) if n else b""))
         return h.send(code2, json.dumps(out, ensure_ascii=False), cache=False) or True
+    if rest == "/snap" and method == "POST":           # 朋友按了截圖鍵：主人開了「截圖就鎖住」就鎖住這支手機
+        tok = alb_dev_tok(h, a)
+        if not (a.get("snap") and tok and alb_cookie_ok(h, a)):
+            return h.send(200, '{"ok":true,"lock":false}', cache=False) or True
+        alb_snap_lock(a, alb_dev_hash(tok))
+        return h.send(200, '{"ok":true,"lock":true}', cache=False) or True
     if rest == "/up" and method == "POST":             # 朋友上傳照片、影片；或刪掉自己放的
         if (h.headers.get("Content-Type") or "").startswith("application/json"):
             code2, out = alb_up_del(h, a)
@@ -3297,7 +3329,8 @@ def alb_api(d):
             return 400, {"ok": False, "message": "這本已經收回了"}
         if act == "devs":                              # 看過的手機
             devs = a.get("devs") or {}
-            return 200, {"ok": True, "dev": a.get("dev") or 0, "devs": [{"h": k, **v} for k, v in sorted(devs.items(), key=lambda x: -x[1].get("t", 0))]}
+            lk = a.get("lock") or {}
+            return 200, {"ok": True, "dev": a.get("dev") or 0, "devs": [{"h": k, **v, **({"lk": lk[k]} if k in lk else {})} for k, v in sorted(devs.items(), key=lambda x: (x[0] not in lk, -x[1].get("t", 0)))]}
         idx = alb_index(a)                             # 挑照片：小圖用短時間的通行證看
         hid, out, pend, upd = set(a.get("hide") or []), [], set(a.get("pend") or []), a.get("upd") or {}
         for pid in idx.get("order", []):

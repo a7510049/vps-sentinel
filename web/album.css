@@ -331,7 +331,7 @@ button.chip:active,a.chip:active{transform:scale(.95)}
 #app>.hero.sk{height:100svh;min-height:520px}
 
 /* 照片不能長按另存；主機印不了浮水印時，畫面上蓋一層字 */
-.ph img,.zw img,.mk img,.hero img{-webkit-touch-callout:none;-webkit-user-select:none;user-select:none}
+img,video,.ph img,.zw img,.mk img,.hero img{-webkit-touch-callout:none;-webkit-user-select:none;user-select:none;-webkit-user-drag:none}
 .wmo .ph::after,.wmo .zw::after{content:var(--wm);position:absolute;right:4%;bottom:4%;color:rgba(255,255,255,.62);font-weight:700;letter-spacing:.06em;
   text-shadow:0 1px 3px rgba(0,0,0,.45);pointer-events:none;font-size:clamp(10px,3.4cqmin,28px)}
 .ph,.zw{container-type:size}
@@ -1436,11 +1436,11 @@ button.dct:active{transform:scale(.92)}
 @media (min-width:900px){.gear .gst{grid-column:2;grid-row:2;margin-top:0;align-self:start}.gsb small{font-size:10px}}
 
 /* ── 打開相簿的開場：一疊照片攤開、照片顯影、一道光掃過，好了就像光圈打開一樣露出封面（album.js 的 splGo） ── */
-#spl{position:fixed;inset:0;z-index:var(--z-spl);display:grid;place-items:center;background:var(--bg);animation:splSafe var(--t-mid) 12s forwards}
+#spl{position:fixed;inset:0;z-index:var(--z-spl);display:grid;place-items:center;overflow:hidden;background:var(--bg);animation:splSafe var(--t-mid) 12s forwards}
 @keyframes splSafe{to{opacity:0;visibility:hidden}}
-#spl>svg,#spl::before{grid-area:1/1}
+#spl>svg{grid-area:1/1}
 #spl svg{width:clamp(88px,24vmin,124px);height:auto;overflow:visible;filter:drop-shadow(0 18px 28px rgba(0,0,0,.32)) drop-shadow(0 0 22px rgba(255,120,150,.38))}
-#spl::before{content:"";width:min(120vmin,760px);aspect-ratio:1;pointer-events:none;opacity:0;
+#spl::before{content:"";position:absolute;left:50%;top:50%;translate:-50% -50%;width:min(120vmin,760px);aspect-ratio:1;pointer-events:none;opacity:0;
   background:radial-gradient(30% 30% at 38% 42%,rgba(255,143,163,.55),transparent),radial-gradient(28% 28% at 64% 40%,rgba(255,180,120,.45),transparent),radial-gradient(32% 32% at 50% 62%,rgba(124,108,240,.55),transparent);
   animation:splG 1.2s var(--dec) .1s forwards,splR 10s linear infinite,splP 3.2s ease-in-out 1.3s infinite alternate}
 @keyframes splG{from{opacity:0;scale:.35}to{opacity:1;scale:1}}
