@@ -244,6 +244,57 @@ def alb_dev_hash(tok):
     return hashlib.sha256(tok.encode()).hexdigest()[:24]
 
 
+ALB_E = os.environ.get("SENTINEL_ALB_E", "1") != "0"     # 照片加密傳送（測試可關掉）
+
+
+def alb_ekey(a, th):
+    """這支手機看這本相簿的照片鑰匙（AES-256-GCM）：主機不用記，每次照通行證算出來"""
+    return hmac.new((a["k"] + "|e").encode(), (a["id"] + "|" + th).encode(), hashlib.sha256).digest()
+
+
+def alb_pl_val(a, th):
+    return hmac.new((a["k"] + "|pl").encode(), (a["id"] + "|" + th).encode(), hashlib.sha256).hexdigest()[:32]
+
+
+def alb_th(h, a):
+    tok = alb_dev_tok(h, a)
+    return alb_dev_hash(tok) if tok else ""
+
+
+def alb_plain_ok(h, a, th):
+    """瀏覽器不能在背景解開照片（例如 LINE 裡面的瀏覽器）：這支手機登記時說過，就照舊給一般圖片"""
+    for part in (h.headers.get("Cookie") or "").split(";"):
+        k, _, v = part.strip().partition("=")
+        if k == f"vsap_{a['id']}":
+            return hmac.compare_digest(v, alb_pl_val(a, th))
+    return False
+
+
+def alb_img_out(h, a, b, ct, cache="private, max-age=604800, immutable", own=False):
+    """看的照片一律加密送出（album-sw.js 在看的人的瀏覽器裡解開）；直接抓網址、用下載工具拿到的是亂碼"""
+    extra = []
+    if ALB_E and not own and _seal_lib():
+        th = alb_th(h, a)
+        if not alb_plain_ok(h, a, th):
+            iv = secrets.token_bytes(12)
+            b = iv + _gcm(False, alb_ekey(a, th), iv, b, b"")
+            extra = [("X-Alb-E", th[:8] or "0"), ("X-Alb-T", ct)]
+            ct = "application/octet-stream"
+    h.send_response(200)
+    h.send_header("Content-Type", ct)
+    h.send_header("Content-Length", str(len(b)))
+    h.send_header("Cache-Control", cache)
+    h.send_header("X-Content-Type-Options", "nosniff")
+    for k, v in extra:
+        h.send_header(k, v)
+    h.end_headers()
+    try:
+        h.wfile.write(b)
+    except (BrokenPipeError, ConnectionResetError, OSError):
+        pass
+    return True
+
+
 def alb_dev_check(h, a, register):
     """這支手機能不能看；register＝打開相簿那一下（要記下來、可能佔一個名額）。回傳 (能不能看, 原因, 要給的新 cookie)"""
     tok, new = alb_dev_tok(h, a), ""
@@ -747,7 +798,7 @@ def alb_add(d):
          "dir": os.path.relpath(p, root).replace(os.sep, "/"), "pw": alb_pw_hash(pw) if pw else None, "exp": now + secs if secs else 0,
          "t0": now, "loc": d.get("loc", True) is not False, "dl": alb_dl({"dl": d.get("dl", 2)}), "views": 0, "last": 0,
          "k": secrets.token_hex(16), "dev": d.get("dev") if d.get("dev") in ALB_DEVS else 0, "devs": {}, "ban": [], "hide": [],
-         "wm": alb_clean_wm(d.get("wm")), "talk": d.get("talk", True) is not False,
+         "wm": alb_clean_wm(d.get("wm")), "talk": d.get("talk", True) is not False, "shy": d.get("shy", True) is not False,
          "up": d.get("up") if d.get("up") in ALB_UPS else 0, "upd": {}, "pend": [], "uq": d.get("uq") if d.get("uq") in ALB_UQ else 1}
     if a["dir"] == ".":
         a["dir"] = ""
@@ -789,6 +840,8 @@ def alb_edit(d):
             a["loc"] = bool(d["loc"])
         if "talk" in d:
             a["talk"] = bool(d["talk"])
+        if "shy" in d:
+            a["shy"] = bool(d["shy"])
         if "dl" in d:
             a["dl"] = alb_dl({"dl": d["dl"]})
         if d.get("uq") in ALB_UQ:
@@ -882,7 +935,7 @@ def alb_list():
                     "pw": bool(a.get("pw")), "loc": a["loc"], "dl": alb_dl(a), "views": a.get("views", 0), "last": a.get("last", 0),
                     "n": len([x for x in ph if x not in hid]), "all": len(ph), "cv": alb_cover(a, idx), "ready": alb_ready(a, idx),
                     "dev": a.get("dev") or 0, "ndev": len(a.get("devs") or {}), "wm": a.get("wm") or "", "wmok": not a.get("wm") or alb_wm_bake(a),
-                    "talk": a.get("talk", True), "mu": (idx.get("mu") or {}).get("n", ""), "up": alb_up(a), "intro": a.get("intro", ""),
+                    "talk": a.get("talk", True), "shy": a.get("shy", True), "mu": (idx.get("mu") or {}).get("n", ""), "up": alb_up(a), "intro": a.get("intro", ""),
                     "npend": len([x for x in a.get("pend") or [] if x in (idx.get("ph") or {})]),
                     "uq": alb_uq(a), "uused": alb_up_used(a)[0],
                     "nup": len([m for m in (idx.get("ph") or {}).values() if alb_up_who(m.get("n", "")) and not m.get("of")]),
@@ -2755,7 +2808,7 @@ def alb_manifest(a, th=""):
         alb_kick(a["id"])
     wmo = a.get("wm") if a.get("wm") and not alb_wm_bake(a) else ""
     return {"ok": True, "name": a["name"], "photos": out, "dl": alb_dl(a), "loc": a["loc"], "exp": a["exp"], "es": a.get("es") or a.get("t0", 0), "wmo": wmo, "wx": wx, "intro": a.get("intro", ""), "gb": talk.get(ALB_GB, {}).get("cm", []) if a.get("talk", True) else [],
-            "talk": a.get("talk", True), "mu": bool(idx.get("mu")), "up": alb_up(a),
+            "talk": a.get("talk", True), "shy": a.get("shy", True), "mu": bool(idx.get("mu")), "up": alb_up(a),
             "places": [k for k, _ in sorted(places.items(), key=lambda x: -x[1])][:6], "ready": alb_ready(a, idx)}
 
 
@@ -2939,6 +2992,13 @@ def alb_http(h, method):
                 ALB_FONTB[path] = b""
         b = ALB_FONTB[path]
         return (h.send(200, b, "font/woff2", cache=30 * 86400) if b else h.send(404, '{"error":"找不到"}')) or True
+    if path == "/a/sw.js" and method == "GET":         # 在看的人的瀏覽器裡解開加密的照片
+        try:
+            with open(os.path.join(HERE, "web", "album-sw.js"), "rb") as fh:
+                b = fh.read()
+        except OSError:
+            return h.send(404, '{"error":"找不到"}') or True
+        return h.send(200, b, "text/javascript; charset=utf-8") or True
     if path in ALB_ICONS and method == "GET":
         b, ct = ALB_ICONS[path]
         return h.send(200, b, ct, cache=True) or True
@@ -3015,11 +3075,18 @@ def alb_http(h, method):
         ok, why, new = alb_dev_check(h, a, rest == "/m")
         if not ok:
             return h.send(403, json.dumps({"ok": False, why: True}), cache=False) or True
+        sec = "; Secure" if h.https() else ""
         if rest == "/m":
-            extra = [("Set-Cookie", f"vsad_{a['id']}={new}; Path=/a/{code}; Max-Age={400 * 86400}; HttpOnly; SameSite=Strict"
-                      + ("; Secure" if h.https() else ""))] if new else []
+            extra = [("Set-Cookie", f"vsad_{a['id']}={new}; Path=/a/{code}; Max-Age={400 * 86400}; HttpOnly; SameSite=Strict" + sec)] if new else []
             th = alb_dev_hash(new or alb_dev_tok(h, a))
+            if "pl=1" in (urllib.parse.urlsplit(h.path).query or ""):     # 這個瀏覽器不能在背景解開照片
+                extra.append(("Set-Cookie", f"vsap_{a['id']}={alb_pl_val(a, th)}; Path=/a/{code}; Max-Age={400 * 86400}; HttpOnly; SameSite=Strict" + sec))
+            elif f"vsap_{a['id']}=" in (h.headers.get("Cookie") or ""):
+                extra.append(("Set-Cookie", f"vsap_{a['id']}=; Path=/a/{code}; Max-Age=0; HttpOnly; SameSite=Strict" + sec))
             return h.send(200, json.dumps(alb_manifest(a, th), ensure_ascii=False, separators=(",", ":")), extra=extra) or True
+    if rest == "/k" and not own:                       # 這支手機解開照片的鑰匙（album-sw.js 來拿）
+        th = alb_th(h, a)
+        return h.send(200, json.dumps({"k": base64.b64encode(alb_ekey(a, th)).decode(), "id": th[:8] or "0"}), cache=False) or True
     if rest == "/music":                               # 幻燈片的背景音樂（資料夾裡的那首歌）
         mu = alb_index(a, scan=False).get("mu")
         p = alb_path(a["dir"])
@@ -3065,7 +3132,7 @@ def alb_http(h, method):
                 b = alb_webp_clean(os.path.join(p, meta["n"]))
             except OSError:
                 return h.send(404, '{"error":"找不到"}') or True
-            return h.send(200, b, "image/webp", cache=86400) or True
+            return alb_img_out(h, a, b, "image/webp", "private, max-age=86400", own)
         dlm = alb_dl(a)
         vk = "v" if kind == "v" and meta.get("vid") else "m" if kind == "m" and meta.get("lv") else ""
         if kind == "o" and meta.get("vid") and (dlm == 1 or not a["loc"] or alb_up_who(meta["n"])):   # 影片只給壓縮的（定位也一起拿掉了）
@@ -3097,6 +3164,17 @@ def alb_http(h, method):
                 return h.send(404, '{"error":"找不到"}') or True
             with f:
                 ext = os.path.splitext(meta["n"])[1].lower()
+                if kind != "o" and ALB_E and not own and st.st_size <= 64 << 20 and ext in ALB_SHOW:   # 做不出小圖、直接看原圖：一樣加密
+                    buf = io.BytesIO()
+                    try:
+                        if (a["loc"] and not alb_up_who(meta["n"])) or not meta.get("gs"):
+                            shutil.copyfileobj(f, buf, 1 << 20)
+                        else:
+                            alb_strip_gps(f, meta["gs"], buf, st.st_size)
+                    except OSError:
+                        return h.send(404, '{"error":"找不到"}') or True
+                    ct0 = {".png": "image/png", ".webp": "image/webp", ".gif": "image/gif", ".avif": "image/avif"}.get(ext, "image/jpeg")
+                    return alb_img_out(h, a, buf.getvalue(), ct0, "private, max-age=3600")
                 ct = {".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".png": "image/png", ".webp": "image/webp", ".gif": "image/gif",
                       ".heic": "image/heic", ".heif": "image/heif", ".avif": "image/avif", ".mp4": "video/mp4", ".m4v": "video/mp4",
                       ".mov": "video/quicktime", ".webm": "video/webm"}.get(ext, "application/octet-stream")
@@ -3120,17 +3198,7 @@ def alb_http(h, method):
         b, _ = alb_get(a, pid, kind)
         if not b:
             return h.send(404, '{"error":"找不到"}') or True
-        h.send_response(200)
-        h.send_header("Content-Type", "image/jpeg")
-        h.send_header("Content-Length", str(len(b)))
-        h.send_header("Cache-Control", "private, max-age=604800, immutable")
-        h.send_header("X-Content-Type-Options", "nosniff")
-        h.end_headers()
-        try:
-            h.wfile.write(b)
-        except (BrokenPipeError, ConnectionResetError, OSError):
-            pass
-        return True
+        return alb_img_out(h, a, b, "image/jpeg", own=own)
     if rest == "/zip":                                 # 全部打包（不壓縮，邊讀邊送；只給壓縮圖的打包大圖）
         dlm = alb_dl(a)
         if not dlm:

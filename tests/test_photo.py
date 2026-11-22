@@ -433,7 +433,7 @@ def get(c, path):
 
 @unittest.skipUnless(shutil.which("ffmpeg"), "沒有 ffmpeg")
 class PhotoAlbum(Server):
-    ENV = {"SENTINEL_ALB_DIR": ROOT_DIR, "SENTINEL_ALB_GEO": "http://127.0.0.1:9/none", "SENTINEL_ALB_WX": "http://127.0.0.1:9/none", "SENTINEL_ALB_WX2": "http://127.0.0.1:9/none"}
+    ENV = {"SENTINEL_ALB_E": "0", "SENTINEL_ALB_DIR": ROOT_DIR, "SENTINEL_ALB_GEO": "http://127.0.0.1:9/none", "SENTINEL_ALB_WX": "http://127.0.0.1:9/none", "SENTINEL_ALB_WX2": "http://127.0.0.1:9/none"}
 
     @classmethod
     def setUpClass(cls):
