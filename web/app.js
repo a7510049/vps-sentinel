@@ -1204,7 +1204,8 @@ function albumModal(node, name){
       if (view === "opts") { o[t.dataset.almo] = t.checked; return; }
       const k = t.dataset.almo, x = await run({action:"edit", id:cur, [k]:t.checked});
       if (!x) t.checked = !t.checked;
-      else toast(k === "talk" ? (t.checked ? "朋友可以按愛心、留言" : "關掉了，之前的留言還留著") : t.checked ? "朋友看得到地點" : "地點藏起來了，下載的照片也拿掉定位");
+      else toast({talk:["朋友可以按愛心、留言", "關掉了，之前的留言還留著"], loc:["朋友看得到地點", "地點藏起來了，下載的照片也拿掉定位"],
+        shy:["離開畫面、截圖時照片會變糊", "照片不會變糊了"], snap:["按截圖鍵就鎖住那支裝置", "按截圖鍵不會鎖住了"]}[k]?.[t.checked ? 0 : 1] || "改好了");
     });
     v.addEventListener("click", async e => {
       if (e.target === v) return done();
