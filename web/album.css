@@ -435,6 +435,7 @@ html::-webkit-scrollbar,body::-webkit-scrollbar{display:none;width:0;height:0}  
 .wall[data-z="2"] .dh::before,.wall[data-z="3"] .dh::before{font-size:var(--fs-2xl);grid-row:auto}
 .wall[data-z="2"] .dh b,.wall[data-z="3"] .dh b{font-size:var(--fs-l)}
 .wall[data-z="3"] .dh span{justify-self:end}
+.wall[data-z="3"] .dh span.num{grid-column:2;grid-row:1}
 .wall[data-z="2"] .bdg .lkt,.wall[data-z="3"] .bdg>span{display:none}
 .wall[data-z="2"] .bdg .vt{right:3px;bottom:3px;height:18px;padding:0 5px}
 
@@ -657,11 +658,13 @@ html::-webkit-scrollbar,body::-webkit-scrollbar{display:none;width:0;height:0}  
 .st b{font-family:var(--serif);font-weight:600;font-size:clamp(26px,6.4vw,44px);line-height:1;letter-spacing:-.01em;background:var(--grad);-webkit-background-clip:text;background-clip:text;color:transparent;padding-bottom:2px}
 .st small{font-size:var(--fs-xs);color:var(--tx3);letter-spacing:.08em;font-weight:600}
 
-/* 章節：地點前面一個小圖釘、右邊幾張 */
-.dh{grid-template-columns:auto 1fr auto}
+/* 章節：地點前面一個小圖釘、右邊幾張（前面不放 01、02 編號，使用者說有日期就夠） */
+.dh::before{content:none;display:none}
+.dh,.wall[data-z="2"] .dh,.wall[data-z="3"] .dh{grid-template-columns:1fr auto}
+.dh b,.dh span{grid-column:1}
 .dh span{display:inline-flex;align-items:center;gap:4px}
 .dh span svg{width:13px;height:13px;color:var(--g2);flex:none}
-.dct{grid-column:3;grid-row:1 / span 2;align-self:end;font-style:normal;font-size:var(--fs-xs);font-weight:700;color:var(--tx2);height:24px;min-width:24px;padding:0 9px;border-radius:var(--r-pill);
+.dct{grid-column:2;grid-row:1 / span 2;align-self:end;font-style:normal;font-size:var(--fs-xs);font-weight:700;color:var(--tx2);height:24px;min-width:24px;padding:0 9px;border-radius:var(--r-pill);
   display:grid;place-items:center;background:color-mix(in oklab,var(--g2) 14%,var(--s2))}
 
 /* 照片：圓角大一點、電腦上指著時浮起來、帶照片顏色的影子 */
