@@ -30,6 +30,7 @@ const P = {
   trash:'<path d="M4 7h16M10 11v6M14 11v6M6 7l1 12a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2l1-12M9 7V4h6v3"/>',
   stk:'<rect x="7" y="7" width="13" height="13" rx="2.5"/><path d="M4 16V6.5A2.5 2.5 0 0 1 6.5 4H16"/>',
   smile:'<circle cx="12" cy="12" r="9"/><path d="M8.5 14.5a4.5 4.5 0 0 0 7 0M9 9.5h.01M15 9.5h.01"/>',
+  moon:'<path d="M20 14.5A8 8 0 1 1 9.5 4a6.5 6.5 0 0 0 10.5 10.5z"/>',
   wsun:'<circle cx="12" cy="12" r="4"/><path d="M12 2.5v2M12 19.5v2M2.5 12h2M19.5 12h2M5.3 5.3l1.4 1.4M17.3 17.3l1.4 1.4M5.3 18.7l1.4-1.4M17.3 6.7l1.4-1.4"/>',
   wpart:'<path d="M8 4.5v1.2M3.8 9H5M4.9 5.9l.9.9M11.1 5.9l-.9.9"/><path d="M5.6 11.2a3.2 3.2 0 1 1 5.6-3"/><path d="M8 20h9.5a3.5 3.5 0 0 0 .4-7 5 5 0 0 0-9.6 1.2A3 3 0 0 0 8 20Z"/>',
   wcld:'<path d="M7 19h10.5a4 4 0 0 0 .5-8 6 6 0 0 0-11.4 1.6A3.3 3.3 0 0 0 7 19Z"/>',
@@ -318,15 +319,15 @@ function wxTag(k){
   const ic = wxIco(w[0]);
   return `<i class="dwx ${ic}" title="${WXN[ic]}">${I(ic)}<span class="num">${w[1]}°<small>${w[2]}°</small></span></i>`;
 }
-/* 每天的標題下面一條 24 小時的時間條：拍照的時間點一個點（夜裡暗、白天亮），看得出那天從幾點拍到幾點 */
-function dayClock(list){                                      // 這天在什麼時候拍：太陽弧線（白天在地平線上、晚上在下面虛線），拍照的時間是弧上的點（跟照片資訊的太陽圖同一套）
-  const hs = list.map(i => PH[i]).filter(p => !p.x.dtf).map(p => pd(p.x.dt)).filter(Boolean).map(d => d.h + d.mi / 60);
-  if (!hs.length) return "";
-  const P = h => { const th = ((h - 6 + 24) % 24) / 12 * Math.PI, day = th <= Math.PI; return [60 - 52 * Math.cos(th), 30 - (day ? 22 : 7) * Math.sin(th)]; };
-  const f = q => `${q[0].toFixed(1)} ${q[1].toFixed(1)}`, a = Math.min(...hs), b = Math.max(...hs);
-  let seg = ""; for (let h = a; h <= b + .001; h += Math.max(.1, (b - a) / 40)) seg += (seg ? "L" : "M") + f(P(Math.min(h, b)));
-  const dots = [...new Set(hs.map(h => Math.round(h * 4) / 4))];
-  return `<svg class="dhr" viewBox="0 0 120 40" aria-hidden="true"><path class="hz" d="M2 30H118"/><path class="dy" d="M8 30A52 22 0 0 1 112 30"/><path class="nt" d="M112 30A52 7 0 0 1 8 30"/>${b - a > .05 ? `<path class="sg" d="${seg}"/>` : ""}${dots.map(h => `<circle cx="${P(h)[0].toFixed(1)}" cy="${P(h)[1].toFixed(1)}" r="2.6"/>`).join("")}</svg>`;
+/* 每天的標題下面一行：這天從幾點拍到幾點（「☀ 早上 7:30 → 🌙 晚上 8:10」，白天太陽、晚上月亮） */
+function dayClock(list){
+  const ps = list.map(i => PH[i]).filter(p => !p.x.dtf && pd(p.x.dt)).sort((x, y) => x.x.dt < y.x.dt ? -1 : 1);
+  if (!ps.length) return "";
+  const one = p => { const d = pd(p.x.dt), s = sunAlt(p), up = s ? s.a > -.83 : d.h >= 6 && d.h < 18; return `<span>${I(up ? "wsun" : "moon")}${ftod(p, d)}</span>`; };
+  const a = ps[0], b = ps[ps.length - 1], same = pd(b.x.dt).h * 60 + pd(b.x.dt).mi - pd(a.x.dt).h * 60 - pd(a.x.dt).mi < 10;
+  let x = one(a), y = one(b); const w = s => s.match(/<\/svg>(\S+) /)[1];
+  if (w(x) === w(y)) y = y.replace(`${w(y)} `, "");          // 同一個時段只寫一次：「早上 10:00 → 10:28」
+  return `<p class="dhr num">${x}${same ? "" : `<i>→</i>${y}`}</p>`;
 }
 function wallRects(){                                         // 現在畫面上每張的位置（動畫中、手指捏著的也算）
   const vis = new Map(), H = innerHeight;

@@ -813,12 +813,10 @@ html,body{touch-action:pan-x pan-y}
 .iset .gin.off .gd{fill:var(--tx3)}
 
 /* 更多圖形：每天的 24 小時時間條、數字卡的小圖、城市在整趟的哪幾天、期限圈、封面國旗 */
-.dhr{grid-column:1;display:block;width:96px;height:32px;margin-top:4px;overflow:visible;fill:none;stroke-linecap:round}
-.dhr .hz{stroke:var(--line);stroke-width:1}
-.dhr .dy{stroke:color-mix(in oklab,var(--tx) 22%,transparent);stroke-width:1.2}
-.dhr .nt{stroke:color-mix(in oklab,var(--tx) 18%,transparent);stroke-width:1.2;stroke-dasharray:2 3}
-.dhr .sg{stroke:var(--g2);stroke-width:3;opacity:.45}
-.dhr circle{fill:var(--g2);stroke:var(--bg);stroke-width:1.2}
+.dhr{grid-column:1;display:flex;align-items:center;gap:6px;margin:4px 0 0;font-size:var(--fs-xs);color:var(--tx2);white-space:nowrap}
+.dhr span{display:inline-flex;align-items:center;gap:4px}
+.dhr svg{width:14px;height:14px;opacity:.8}
+.dhr i{font-style:normal;opacity:.5}
 .wall[data-z="2"] .dhr,.wall[data-z="3"] .dhr{display:none}
 .st .sgb{display:flex;align-items:flex-end;gap:2px;height:18px;margin-top:6px}
 .st .sgb i{flex:1;max-width:8px;border-radius:2px 2px 1px 1px;background:var(--grad);opacity:.75}
@@ -869,10 +867,7 @@ html,body{touch-action:pan-x pan-y}
 .day.cov .dh span{color:rgba(255,255,255,.88)}
 .day.cov .dh span svg{color:#fff}
 .day.cov .dct{background:rgba(255,255,255,.22);color:#fff;align-self:end}
-.day.cov .dhr .hz,.day.cov .dhr .dy{stroke:rgba(255,255,255,.45)}
-.day.cov .dhr .nt{stroke:rgba(255,255,255,.35)}
-.day.cov .dhr .sg{stroke:#fff;opacity:.5}
-.day.cov .dhr circle{fill:#fff;stroke:rgba(0,0,0,.25)}
+.day.cov .dhr{color:rgba(255,255,255,.85)}
 .day.cov .row.feat .ph img{top:-7%;bottom:auto;height:114%}
 @supports (animation-timeline:view()){
   .day.cov .row.feat .ph img{animation:fpar linear both;animation-timeline:view()}
