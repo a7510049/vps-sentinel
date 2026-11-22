@@ -37,6 +37,8 @@ const P = {
   wrain:'<path d="M7 15h10.5a4 4 0 0 0 .5-8 6 6 0 0 0-11.4 1.6A3.3 3.3 0 0 0 7 15Z"/><path d="m9 18-1 2.5M13 18l-1 2.5M17 18l-1 2.5"/>',
   wsnow:'<path d="M7 14h10.5a4 4 0 0 0 .5-8 6 6 0 0 0-11.4 1.6A3.3 3.3 0 0 0 7 14Z"/><path d="M9 18h.01M12 20h.01M15 18h.01M12 17h.01"/>',
   wstorm:'<path d="M7 14h10.5a4 4 0 0 0 .5-8 6 6 0 0 0-11.4 1.6A3.3 3.3 0 0 0 7 14Z"/><path d="m12.5 15-2 3.5h3l-2 3.5"/>',
+  cam:'<path d="M3.5 8.5a2 2 0 0 1 2-2h2.3l1.5-2.2h5.4l1.5 2.2h2.3a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2h-13a2 2 0 0 1-2-2Z"/><circle cx="12" cy="13" r="3.6"/>',
+  lens:'<circle cx="12" cy="12" r="8.5"/><circle cx="12" cy="12" r="4.5"/><path d="M12 3.5v4.5M19.4 16.3l-3.9-2.3M4.6 16.3l3.9-2.3"/>',
   send:'<path d="M4.5 12h13M12.5 6l6 6-6 6"/>', again:'<path d="M4 12a8 8 0 1 0 2.4-5.7L4 8.5M4 4v4.5h4.5"/>'
 };
 const I = n => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${P[n]}</svg>`;
@@ -51,7 +53,9 @@ let ALL = [], WHO = "";                                      // 全部照片；�
 const TM = new Map();                                        // 照片編號 → 格子（換分頁時重用）
 let CITY = "";                                               // 只看哪個城市（點城市卡片）
 const cityKey = p => p.p && p.p.c ? `${p.p.cc || ""}|${p.p.c}` : "";
-const pickW = () => ALL.filter(p => (p.u || "") === WHO && (!CITY || cityKey(p) === CITY));
+let GEAR = "";                                               // 只看哪台相機（c:名稱）或哪顆鏡頭（l:名稱）
+const gearOf = (p, k) => k[0] === "c" ? camName(p.x) === k.slice(2) : lensName(p.x) === k.slice(2);
+const pickW = () => ALL.filter(p => (p.u || "") === WHO && (!CITY || cityKey(p) === CITY) && (!GEAR || gearOf(p, GEAR)));
 
 /* ── 日期：EXIF 的「2026:11:03 14:22:10」是拍照當地的時間，照原樣顯示 ── */
 const WD = "日一二三四五六";
@@ -90,7 +94,7 @@ function lensName(x){
   return l.replace(/^back /i, "後").replace(/^front /i, "前").replace(/triple camera/i, "三鏡頭").replace(/dual wide camera/i, "雙廣角鏡頭")
     .replace(/dual camera/i, "雙鏡頭").replace(/ultra wide camera/i, "超廣角鏡頭").replace(/telephoto camera/i, "望遠鏡頭").replace(/wide camera/i, "廣角鏡頭").replace(/camera/i, "鏡頭");
 }
-const lensKind = f => f < 20 ? "超廣角" : f < 35 ? "廣角" : f < 70 ? "標準" : "望遠";
+const lensKind = f => (FOCB.find(b => f >= b[0] && f < b[1]) || FOCB[4])[2];   // 跟器材統計的焦段分法一樣
 function shutter(et){
   if (!et) return "";
   const v = et[0] / et[1];
@@ -412,6 +416,7 @@ function draw(){
       <button class="cue" aria-label="往下看"><i></i></button></header>
     <div class="bar"><b>${esc(D.name)}<small class="num">${cntTxt()}</small></b>${IOS ? `<span class="chip zb"><button data-zb="-1" aria-label="放大">${I("zin")}</button><button data-zb="1" aria-label="縮小">${I("zout")}</button></span>` : ""}${D.up ? `<button class="chip" data-up aria-label="放照片">${I("up")}</button>` : ""}${D.dl ? `<button class="chip" data-sel aria-label="選取">${I("sel")}</button>` : ""}<button class="chip go" data-ss aria-label="播放">${I("play")}</button></div>
     <nav class="who" hidden></nav><div class="mems"></div><div class="stats"></div><section class="hl" hidden></section><div class="cityf" hidden></div><div class="wwrap"><main class="wall" data-z="${ZL}"></main><aside class="smap" hidden><div class="smv"></div><div class="smc"></div></aside></div>
+    <section class="gear" hidden></section>
     ${D.loc && ALL.some(p => p.g && !p.u) ? `<section class="msec"${WHO ? " hidden" : ""}><div class="mh"><b data-mt>地點</b><span class="num" data-km></span></div><div class="cities"></div><div class="map" data-map></div></section>` : ""}
     <div class="scrub" aria-hidden="true"><div class="stk2"></div><i class="sth"><span class="sbl num"></span></i></div>
     <footer class="foot">${finCol()}<div class="fin">${esc(D.name)}</div>${D.exp ? `<span class="fexp">${expRing()}${left(D.exp)}</span>` : ""}</footer>`;
@@ -432,6 +437,7 @@ function draw(){
   layout();
   mems();
   bigMap();
+  gear();
   smapWatch();
   onScroll();
   deepLink();
@@ -451,15 +457,15 @@ async function whoSet(w, keep){
   if (w === WHO && !keep) return;
   if (WHOBZ) return; WHOBZ = 1;
   if (SEL.on) popBack();
-  const parts = [".mems", ".stats", ".hl", ".cityf", ".wall", ".msec", ".smap"].map(q => $(q)).filter(Boolean);
+  const parts = [".mems", ".stats", ".hl", ".cityf", ".wall", ".gear", ".msec", ".smap"].map(q => $(q)).filter(Boolean);
   if (anim()) await Promise.all(parts.map(x => x.animate([{opacity:1}, {opacity:0, transform:"translateY(6px)"}], {duration:T.fast, easing:EXIT, fill:"forwards"}).finished.catch(() => {})));
-  if (!keep || w !== WHO) CITY = "";
+  if (!keep || w !== WHO) { CITY = ""; GEAR = ""; }
   WHO = w; PH = pickW(); citybar(); stackCalc();
   TILES.forEach(t => t.classList.remove("on"));
   TILES = PH.map((p, i) => { const t = TM.get(p.i); if (t) { t.dataset.i = i; return t; } return tile(p, i); });
   whoBar();
-  smapOn(); sections(); layout(true); mems(); stats(); highlights(); bigMap(); smapWatch();
-  const ms = $(".msec"); if (ms) ms.hidden = !!WHO || !!CITY || !(D.loc && PH.some(p => p.g));
+  smapOn(); sections(); layout(true); mems(); stats(); highlights(); bigMap(); gear(); smapWatch();
+  const ms = $(".msec"); if (ms) ms.hidden = !!WHO || !!CITY || !!GEAR || !(D.loc && PH.some(p => p.g));
   document.querySelectorAll(".hmeta .chip .num, .bar small").forEach(x => { x.textContent = cntTxt(); });
   const nav = $(".who"), top = nav && !nav.hidden ? nav.getBoundingClientRect().top + scrollY - 70 : 0;
   if (nav && scrollY > top) scrollTo({top, behavior:"auto"});
@@ -761,6 +767,8 @@ document.addEventListener("click", e => {
   const ct = e.target.closest("[data-city]");
   if (ct) return citySet(ct.dataset.city);
   if (e.target.closest("[data-cityx]")) return citySet("");
+  if (e.target.closest("[data-gearx]")) return gearSet("");
+  { const gb = e.target.closest(".gear [data-gear]"); if (gb) return gearSet(gb.dataset.gear); }
   const m = e.target.closest(".mk");
   if (m) return openLb(+m.dataset.i, m.querySelector("img") || m);
   const hc = e.target.closest("[data-hl]");
@@ -822,11 +830,35 @@ function citySet(k){
   CITY = k;
   whoSet(WHO, true).then(() => { const w = $(".cityf"); if (w && !w.hidden) scrollTo({top:w.getBoundingClientRect().top + scrollY - 70, behavior:anim() ? "smooth" : "auto"}); });
 }
+function gearSet(k, keep){
+  if (k === GEAR) { if (keep) return; k = ""; }
+  GEAR = k;
+  whoSet(WHO, true).then(() => { const w = $(".cityf"); if (w && !w.hidden) scrollTo({top:w.getBoundingClientRect().top + scrollY - 70, behavior:anim() ? "smooth" : "auto"}); });
+}
+/* 器材：這本用了哪幾台相機、哪幾顆鏡頭、常用的焦段（點了只看那台／那顆拍的） */
+const FOCB = [[0, 20, "超廣角"], [20, 35, "廣角"], [35, 70, "標準"], [70, 135, "中望遠"], [135, 1e9, "望遠"]];
+function gear(){
+  const box = $(".gear"); if (!box) return;
+  const base = ALL.filter(p => (p.u || "") === WHO && (!CITY || cityKey(p) === CITY) && !isVid(p)), cams = {}, lens = {}, fb = FOCB.map(() => 0), fl = {};
+  base.forEach(p => { const c = camName(p.x), l = lensName(p.x), f = p.x.f35 || 0;
+    if (c) cams[c] = (cams[c] || 0) + 1; if (l) lens[l] = (lens[l] || 0) + 1;
+    if (f) { fb[FOCB.findIndex(b => f >= b[0] && f < b[1])]++; fl[f] = (fl[f] || 0) + 1; } });
+  const cs = Object.entries(cams).sort((a, b) => b[1] - a[1]), ls = Object.entries(lens).sort((a, b) => b[1] - a[1]).slice(0, 8);
+  const nf = fb.reduce((a, b) => a + b, 0), top = Object.entries(fl).sort((a, b) => b[1] - a[1])[0], mx = Math.max(1, ...fb);
+  box.hidden = cs.reduce((a, c) => a + c[1], 0) < 3;
+  if (box.hidden) { box.innerHTML = ""; return; }
+  const n0 = cs[0][1];
+  box.innerHTML = `<div class="mh"><b>器材</b><span class="num">${cs.length} 台相機${ls.length ? `・${Object.keys(lens).length} 顆鏡頭` : ""}</span></div>
+    <div class="gcams">${cs.slice(0, 6).map(([c, n]) => `<button class="gcam${GEAR === "c:" + c ? " on" : ""}" data-gear="c:${esc(c)}"><i class="gic">${I("cam")}</i><span class="gt2"><b>${esc(c)}</b><small class="num">${n} 張</small></span><span class="gbr"><i style="width:${(n / n0 * 100).toFixed(1)}%"></i></span></button>`).join("")}</div>
+    ${ls.length > 1 || (ls.length && cs.length > 1) ? `<div class="glens">${ls.map(([l, n]) => `<button class="chip${GEAR === "l:" + l ? " on" : ""}" data-gear="l:${esc(l)}">${I("lens")}<span>${esc(l)}</span><small class="num">${n}</small></button>`).join("")}</div>` : ""}
+    ${nf >= 3 ? `<div class="gfoc"><div class="gfh"><small>常用焦段</small>${top ? `<b class="num">${top[0]} mm</b>` : ""}</div><div class="gfc">${FOCB.map((b, k) => `<div class="${fb[k] === mx ? "top" : ""}"><span><i style="height:${fb[k] ? Math.max(8, fb[k] / mx * 100).toFixed(0) : 0}%"></i></span><b class="num">${fb[k] || ""}</b><small>${b[2]}</small></div>`).join("")}</div></div>` : ""}`;
+}
 function citybar(){
   const b = $(".cityf"); if (!b) return;
   const c = CITY && citiesOf().find(x => x.k === CITY);
-  b.hidden = !c;
-  b.innerHTML = c ? `<span class="chip on">${flagImg(c.cc)}<span>${esc(c.c)}</span><small class="num">${c.ps.length} 張</small></span><button class="chip" data-cityx>${I("x")}<span>全部城市</span></button>` : "";
+  b.hidden = !c && !GEAR;
+  b.innerHTML = (c ? `<span class="chip on">${flagImg(c.cc)}<span>${esc(c.c)}</span><small class="num">${c.ps.length} 張</small></span><button class="chip" data-cityx>${I("x")}<span>全部城市</span></button>` : "")
+    + (GEAR ? `<span class="chip on">${I(GEAR[0] === "c" ? "cam" : "lens")}<span>${esc(GEAR.slice(2))}</span><small class="num">${PH.length} 張</small></span><button class="chip" data-gearx>${I("x")}<span>全部器材</span></button>` : "");
   flagFix(b);
 }
 
@@ -1123,7 +1155,7 @@ function openLb(i, from){
   }
   function infoMap(){
     const p = PH[S.i], pb = $("[data-pal]", inf);
-    if (pb && !p.pal) palette(p).then(() => { if (pb.isConnected && PH[S.i] === p) { pb.innerHTML = palHTML(p); if (anim()) pb.querySelectorAll("i").forEach((x, k) => x.animate([{opacity:0, transform:"scaleX(.4)"}, {opacity:1, transform:"none"}], {duration:T.slow, delay:k * 50, easing:DEC, fill:"backwards"})); } });
+    if (pb && !p.pal) palette(p).then(() => { if (pb.isConnected && PH[S.i] === p) { pb.innerHTML = palHTML(p); const hg = pb.querySelector(".ihist svg"); if (hg && anim()) hg.animate([{opacity:0, transform:"scaleY(.2)"}, {opacity:1, transform:"none"}], {duration:T.slow, easing:DEC}); if (anim()) pb.querySelectorAll(".pbar i").forEach((x, k) => x.animate([{opacity:0, transform:"scaleX(.4)"}, {opacity:1, transform:"none"}], {duration:T.slow, delay:k * 50, easing:DEC, fill:"backwards"})); } });
     const m = $(".imap", inf); if (!m || !p.g) return;
     const z = 15, W2 = m.clientWidth, H2 = m.clientHeight;
     tiles(m, lx(p.g[1], z), ly(p.g[0], z), z, W2, H2);
@@ -1267,6 +1299,8 @@ function openLb(i, from){
     if (e.target.closest("[data-shr]")) return shareOne(PH[S.i]);
   });
   inf.addEventListener("click", e => {
+    const gb = e.target.closest("[data-gear]");                // 點相機、鏡頭：關掉大圖，照片牆只看那台拍的
+    if (gb) { lbBack(S); setTimeout(() => gearSet(gb.dataset.gear, true), anim() ? T.mid + 60 : 0); return; }
     const del = e.target.closest("[data-cdel]");
     if (del) talk(S.i, {del:del.dataset.cdel}).then(ok => { if (ok) { inf.querySelector(".italk").outerHTML = talkHTML(PH[S.i]); social(); } });
   });
@@ -1540,7 +1574,7 @@ async function reload(){
   TILES = PH.map((p, i) => { const t = old.get(p.i); if (t) { old.delete(p.i); t.dataset.i = i; return t; } return TM.get(p.i) || tile(p, i); });
   const gone = [...old.values()].filter(t => was.has(t));
   if (gone.length && anim()) await Promise.all(gone.map(t => t.animate([{opacity:1, transform:"none"}, {opacity:0, transform:"scale(.9)"}], {duration:T.mid, easing:EXIT, fill:"forwards"}).finished.catch(() => {})));
-  sections(); layout(true); mems(); bigMap();
+  sections(); layout(true); mems(); bigMap(); gear();
   TILES.forEach((t, i) => { badge(i); const a = was.get(t); if (!a || !anim() || !t.isConnected) return;
     const r = t.getBoundingClientRect(); if (r.bottom < 0 || r.top > H) return;
     const dx = a.left - r.left, dy = a.top - r.top, sx = a.width / r.width, sy = a.height / r.height;
@@ -2014,6 +2048,13 @@ function palette(p){
         const cs = [...bk.values()].map(o => [o[0] / o[3], o[1] / o[3], o[2] / o[3], o[3]]).sort((a, b) => b[3] * (1 + 2.5 * sat(b)) - a[3] * (1 + 2.5 * sat(a))), out = [];
         cs.forEach(c1 => { const near = out.find(o => Math.hypot(o[0] - c1[0], o[1] - c1[1], o[2] - c1[2]) < 56); if (near) near[3] += c1[3]; else if (out.length < 5 && c1[3] >= 8) out.push(c1.slice()); });
         p.pal = out.sort((a, b) => b[3] - a[3]).map(o => [`rgb(${o.slice(0, 3).map(Math.round).join(",")})`, o[3]]);
+        const W2 = 160, H2 = Math.max(1, Math.round(W2 * im.naturalHeight / Math.max(1, im.naturalWidth))), c2 = document.createElement("canvas");   // 直方圖：亮度＋紅綠藍，64 格
+        c2.width = W2; c2.height = H2;
+        const g2 = c2.getContext("2d", {willReadFrequently:true}); g2.drawImage(im, 0, 0, W2, H2);
+        const q = g2.getImageData(0, 0, W2, H2).data, hs = [0, 1, 2, 3].map(() => new Array(64).fill(0));
+        for (let k = 0; k < q.length; k += 4) { hs[0][q[k] >> 2]++; hs[1][q[k + 1] >> 2]++; hs[2][q[k + 2] >> 2]++; hs[3][Math.min(255, Math.round(.2126 * q[k] + .7152 * q[k + 1] + .0722 * q[k + 2])) >> 2]++; }
+        const tot = W2 * H2;
+        p.hist = {h:hs, lo:hs[3][0] / tot, hi:hs[3][63] / tot};
       } catch (e) { p.pal = []; }
       ok(p.pal);
     };
@@ -2021,11 +2062,18 @@ function palette(p){
     im.src = src(p, "s");
   });
 }
+function histSvg(p){                                         // 亮度是灰色的山，紅綠藍三條線疊在上面（跟相機回放、Lightroom 一樣）
+  const H = p.hist; if (!H) return "";
+  const all = [].concat(...H.h).sort((a, b) => a - b), cap = Math.max(1, all[Math.floor(all.length * .985)]);   // 太尖的那幾格不要把其他壓扁
+  const y = v => (40 - Math.min(1, v / cap) * 38).toFixed(1), pts = a => a.map((v, i) => `${(i * 160 / 63).toFixed(1)},${y(v)}`).join(" ");
+  const tip = H.lo > .02 ? "暗部有一片全黑" : H.hi > .02 ? "亮部有一片過曝" : "";
+  return `<div class="ihist"><svg viewBox="0 0 160 40" preserveAspectRatio="none" aria-hidden="true"><path d="M40 0v40M80 0v40M120 0v40" class="hg"/><polygon points="0,40 ${pts(H.h[3])} 160,40" class="hl0"/>${["hr", "hgr", "hb"].map((c, k) => `<polyline points="${pts(H.h[k])}" class="${c}"/>`).join("")}</svg><div class="ihl"><small>暗</small>${tip ? `<b>${tip}</b>` : ""}<small>亮</small></div></div>`;
+}
 function palHTML(p){
   const pl = p.pal; if (!pl) return `<div class="pbar wait"></div>`;
   if (!pl.length) return "";
   const t = pl.reduce((a, c) => a + c[1], 0);
-  return `<div class="pbar">${pl.map(([c, n]) => `<i style="background:${c};flex:${Math.max(.06, n / t).toFixed(3)}"></i>`).join("")}</div>`;
+  return `${histSvg(p)}<div class="pbar">${pl.map(([c, n]) => `<i style="background:${c};flex:${Math.max(.06, n / t).toFixed(3)}"></i>`).join("")}</div>`;
 }
 function infoHTML(p){
   const x = p.x, d = pd(x.dt), cam = camName(x), lens = lensName(x), ext = (p.n.split(".").pop() || "").toUpperCase().replace("JPG", "JPEG");
@@ -2040,11 +2088,11 @@ function infoHTML(p){
   const fe = f35 || (fl ? Math.round(fl) : 0);
   const cells = [["光圈", x.f ? `ƒ${+x.f.toFixed(2)}` : "", x.f ? gIris(x.f) : ""], ["快門", shutter(x.et).replace(" 秒", " s"), x.et ? gShut(x.et) : ""],
     ["ISO", x.iso || "", x.iso ? gIso(x.iso) : ""], ["焦距", fe ? `${fe} mm` : "", f35 ? gFov(f35) : ""], ["曝光", x.ev != null ? `${x.ev > 0 ? "+" : ""}${+x.ev.toFixed(1)} ev` : "", x.ev != null ? gEv(x.ev) : ""]];
-  h += `<div class="ibox"><div class="icam"><div class="t"><b>${esc(cam || (isVid(p) ? "影片" : "相機資訊"))}</b><span class="tag">${esc(ext)}</span></div>
-      ${lens || f35 ? `<div class="l">${esc([f35 ? `${lensKind(f35)}・等效 ${f35} mm` : "", lens].filter(Boolean).join("　"))}</div>` : ""}
+  h += `<div class="ibox"><div class="icam"><div class="t">${cam && !isVid(p) ? `<button class="igear" data-gear="c:${esc(cam)}"><b>${esc(cam)}</b>${I("r")}</button>` : `<b>${esc(cam || (isVid(p) ? "影片" : "相機資訊"))}</b>`}<span class="tag">${esc(ext)}</span></div>
+      ${lens || f35 ? `<div class="l">${esc(f35 ? `${lensKind(f35)}・等效 ${f35} mm` : "")}${lens ? `${f35 ? "　" : ""}<button class="igear sm" data-gear="l:${esc(lens)}">${esc(lens)}</button>` : ""}</div>` : ""}
       <div class="l2 num">${p.w && p.h ? `<i class="gar" style="aspect-ratio:${p.w} / ${p.h}"></i>` : ""}<span>${isVid(p) ? `影片 ${dur(p.vd)}・` : mp >= .1 ? `${mp >= 10 ? Math.round(mp) : mp.toFixed(1)} MP・` : ""}${p.w} × ${p.h}・${size(p.sz)}</span></div></div>
     ${cells.some(c => c[1]) ? `<div class="iex num">${cells.map(([k, v, g]) => `<div${v ? "" : ` class="no"`}>${g || SV(`<circle cx="16" cy="16" r="12" class="gt"/>`)}<b>${esc(v || "—")}</b><small>${k}</small></div>`).join("")}</div>` : ""}</div>`;
-  h += `<div class="ibox ipal" data-pal aria-label="照片的主要顏色">${palHTML(p)}</div>`;
+  if (!isVid(p)) h += `<div class="ibox ipal" data-pal aria-label="直方圖和主要顏色">${palHTML(p)}</div>`;
   const kv = [];
   if (x.ln) kv.push(["鏡頭", x.lmk && !x.ln.startsWith(x.lmk) ? `${x.lmk} ${x.ln}` : x.ln]);
   if (fl && f35 && Math.round(fl) !== f35) kv.push(["實際焦距", `${+fl.toFixed(2)} mm`]);
