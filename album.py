@@ -10,6 +10,9 @@ ALB_FILE = os.path.join(DATA_DIR, "albums.json")                  # 相簿清單
 ALB_CACHE = os.path.join(DATA_DIR, "album-cache")                 # 小圖、大圖、照片資訊（每個檔案都加密；不備份，重做得出來）
 ALB_PLACES = os.path.join(DATA_DIR, "album-places.json")          # 座標 → 地名（加密，SEAL_FILES）
 ALB_EXT = {".jpg", ".jpeg", ".png", ".webp", ".gif", ".heic", ".heif", ".avif"}
+ALB_EXT2 = {".hif"} | PIC_RAW                                       # 只在雲端硬碟裡看得到的：相機的 HEIF、原始檔（朋友不能上傳）
+ALB_HEIF = {".heic", ".heif", ".hif", ".avif"}
+ALB_MV = 3                                                        # 照片資訊的格式版本（舊的重讀一次：色彩空間、HDR、原始檔）
 ALB_SHOW = {".jpg", ".jpeg", ".png", ".webp", ".gif", ".avif"}    # 做不出小圖時，瀏覽器直接看得了原圖的
 ALB_VID = {".mp4", ".mov", ".m4v", ".webm", ".3gp", ".mkv"}        # 影片（主機轉成 720p 的 H.264 給朋友看）
 ALB_AUD = {".mp3", ".m4a", ".aac", ".ogg", ".opus", ".flac", ".wav"}   # 資料夾裡放一首歌：幻燈片的背景音樂
@@ -326,7 +329,7 @@ def alb_photos_in(p):
     try:
         with os.scandir(p) as it:
             for e in it:
-                if e.name.startswith(".") or os.path.splitext(e.name)[1].lower() not in ALB_EXT | ALB_VID:
+                if e.name.startswith(".") or os.path.splitext(e.name)[1].lower() not in ALB_EXT | ALB_EXT2 | ALB_VID:
                     continue
                 try:
                     if e.is_file(follow_symlinks=False):
@@ -915,7 +918,7 @@ def alb_find(code):
 EXIF_T = {0x010F: "mk", 0x0110: "md", 0x0112: "ori", 0x0131: "sw", 0x0132: "dt0", 0x829A: "et", 0x829D: "f", 0x8822: "ep",
           0x8827: "iso", 0x9003: "dt", 0x9011: "oz", 0x9010: "oz0", 0x9204: "ev", 0x9207: "mm", 0x9209: "fla", 0x920A: "fl",
           0xA405: "f35", 0xA402: "em", 0xA403: "wb", 0xA433: "lmk", 0xA434: "ln", 0xA406: "sc", 0xA002: "pw", 0xA003: "ph"}
-GPS_T = {1: "latr", 2: "lat", 3: "lonr", 4: "lon", 5: "altr", 6: "alt", 0x10: "dirr", 0x11: "dir"}
+GPS_T = {1: "latr", 2: "lat", 3: "lonr", 4: "lon", 5: "altr", 6: "alt", 7: "gts", 0x10: "dirr", 0x11: "dir", 0x1D: "gds"}
 TIFF_SZ = {1: 1, 2: 1, 3: 2, 4: 4, 5: 8, 6: 1, 7: 1, 8: 2, 9: 4, 10: 8, 11: 4, 12: 8}
 
 
@@ -985,6 +988,23 @@ def _rat(v):
     return float(v) if isinstance(v, (int, float)) else None
 
 
+def alb_gps_oz(dt, gds, gts):
+    """當地時間減掉定位的世界標準時間＝時區（取到 15 分鐘；差太多的不算）"""
+    try:
+        if not (isinstance(gds, str) and isinstance(gts, list) and len(gts) == 3):
+            return ""
+        sec = sum((a / b if b else 0) * m for (a, b), m in zip(gts, (3600, 60, 1)))
+        utc = datetime.strptime(gds[:10], "%Y:%m:%d") + timedelta(seconds=sec)
+        loc = datetime.strptime(dt[:19], "%Y:%m:%d %H:%M:%S")
+        d = (loc - utc).total_seconds() / 60
+        q = round(d / 15) * 15
+        if abs(d - q) > 5 or abs(q) > 14 * 60:
+            return ""
+        return f"{'+' if q >= 0 else '-'}{abs(q) // 60:02d}:{abs(q) % 60:02d}"
+    except (ValueError, TypeError, ZeroDivisionError, OverflowError):
+        return ""
+
+
 def alb_exif_tidy(t):
     """EXIF 的原始值換成網頁要的"""
     x = {}
@@ -997,6 +1017,8 @@ def alb_exif_tidy(t):
         oz = t.get("oz") or t.get("oz0")
         if isinstance(oz, str) and re.fullmatch(r"[+-]\d\d:\d\d", oz):
             x["oz"] = oz
+        elif alb_gps_oz(x["dt"], t.get("g:gds"), t.get("g:gts")):   # 沒寫時區：拿定位附帶的世界標準時間算
+            x["oz"] = alb_gps_oz(x["dt"], t.get("g:gds"), t.get("g:gts"))
     et = t.get("et")
     if isinstance(et, tuple) and et[0] and et[1]:
         x["et"] = [et[0], et[1]]
@@ -1194,7 +1216,7 @@ def alb_vmeta(path):
     m = re.search(r"Duration: (\d+):(\d\d):(\d\d(?:\.\d+)?)", info)
     v = re.search(r"Stream #[^\n]*Video: [^\n]*?, (\d{2,5})x(\d{2,5})[ ,\[]", info)
     if not (m and v):
-        return {"w": 4, "h": 3, "x": {}, "g": None, "ori": 1, "gs": [], "vid": 1, "dur": 0, "bad": 1}
+        return {"w": 4, "h": 3, "x": {}, "g": None, "ori": 1, "gs": [], "vid": 1, "dur": 0, "bad": 1, "mv": ALB_MV}
     dur = int(m[1]) * 3600 + int(m[2]) * 60 + float(m[3])
     w, h = int(v[1]), int(v[2])
     r = re.search(r"(?:rotate\s*:\s*|rotation of )(-?\d+)", info)
@@ -1221,7 +1243,10 @@ def alb_vmeta(path):
         lat, lon = float(loc[1]), float(loc[2])
         if -90 <= lat <= 90 and -180 <= lon <= 180 and (lat or lon):
             g = [round(lat, 6), round(lon, 6), round(float(loc[3]), 1) if loc[3] else None, None]
-    return {"w": w, "h": h, "x": x, "g": g, "ori": 1, "gs": [], "vid": 1, "dur": round(dur, 2)}
+    out = {"w": w, "h": h, "x": x, "g": g, "ori": 1, "gs": [], "vid": 1, "dur": round(dur, 2), "mv": ALB_MV}
+    if v and re.search(r"arib-std-b67|smpte2084", v[0]):   # HDR 影片（iPhone 的 HLG／杜比視界、相機的 HLG）
+        out["hdr"] = "hlg" if "arib" in v[0] else "pq"
+    return out
 
 
 def alb_meta(path):
@@ -1262,13 +1287,30 @@ def alb_meta(path):
                 elif b[:4] == b"VP8L":
                     v = int.from_bytes(b[9:13], "little")
                     w, h = (v & 0x3FFF) + 1, ((v >> 14) & 0x3FFF) + 1
-            elif head[4:8] == b"ftyp":
+            elif head[4:8] == b"ftyp" and ext not in PIC_RAW:
                 w, h, exif, rot = alb_heic(f, size)
     except (OSError, struct.error, IndexError, ValueError):
         pass
+    raw = None
+    if ext in PIC_RAW:                                 # 相機原始檔：大小、EXIF 照相機放在裡面的預覽，再補上原始檔本身的
+        raw = alb_raw_meta(path)
+        if raw:
+            w, h, exif = raw["w"], raw["h"], raw["exif"]
     t, spans = alb_tiff(exif[1]) if exif else ({}, [])
+    if raw and raw.get("t"):
+        t = {**t, **{k: v for k, v in raw["t"].items() if v not in (None, "", 0)}}
+        spans = []                                     # 原始檔的定位不在預覽裡：不給下載原圖時本來就不給原始檔
     x, g, ori = alb_exif_tidy(t)
-    if ext in (".heic", ".heif", ".avif"):
+    more = pic_exif_more(exif[1]) if exif else {}
+    hd = pic_apple_stops(more.get("a33"), more.get("a48"))
+    cs, hdr = alb_color_probe(path, ext, more, hd)
+    ms = pic_maker(exif[1], more) if exif else {}
+    if ms:
+        if ms.get("ln") and not x.get("ln"):
+            x["ln"] = ms["ln"]
+        ms.pop("ln", None)
+        x["ms"] = ms
+    if ext in ALB_HEIF:
         if rot in (1, 3):
             w, h = h, w
         ori = 1                                        # HEIC 的轉向寫在 irot，解開時就轉好了
@@ -1276,8 +1318,85 @@ def alb_meta(path):
         w, h = h, w
     if not (w and h):
         w, h = int(t.get("pw") or 0) or 4, int(t.get("ph") or 0) or 3
-    return {"w": w, "h": h, "x": x, "g": g, "ori": ori,
-            "gs": [[exif[0] + a, n] for a, n in spans] if exif else []}
+    out = {"w": w, "h": h, "x": x, "g": g, "ori": ori, "mv": ALB_MV,
+           "gs": [[exif[0] + a, n] for a, n in spans] if exif and not raw else []}
+    if cs:
+        out["cs"] = cs
+    if hdr:
+        out["hdr"] = hdr
+    if hd:
+        out["hd"] = round(hd, 4)
+    if ext in PIC_RAW:
+        out["rw"] = 1
+        if not raw:
+            out["bad"] = 1
+    return out
+
+
+def alb_raw_meta(path):
+    """相機原始檔：裡面那張預覽 JPEG 的大小、EXIF，加上原始檔本身 TIFF 裡的相機資料"""
+    rj = pic_raw_jpeg(path)
+    if not rj:
+        return None
+    try:
+        with open(path, "rb") as f:
+            f.seek(rj[0])
+            pv = f.read(min(rj[1], 1 << 20))
+            f.seek(0)
+            head = f.read(4 << 20)
+    except OSError:
+        return None
+    w = h = 0
+    exif = None
+    for mk, s, e in pic_jpeg_segs(pv):
+        if mk == 0xE1 and pv[s:s + 6] == b"Exif\x00\x00" and exif is None:
+            exif = (rj[0] + s + 6, pv[s + 6:e])
+        elif mk in (0xC0, 0xC1, 0xC2) and e - s >= 5:
+            h, w = struct.unpack(">HH", pv[s + 1:s + 5])
+    t = alb_tiff(head)[0] if head[:2] in (b"II", b"MM") else {}
+    if not (w and h):
+        return None
+    return {"w": w, "h": h, "exif": exif, "t": t}
+
+
+def alb_color_probe(path, ext, more, hd):
+    """建清單時看一下：色彩空間名稱（sRGB 不寫）、HDR 最多亮幾級"""
+    cs = hdr = None
+    try:
+        if ext in (".jpg", ".jpeg"):
+            with open(path, "rb") as f:
+                b = f.read(512 << 10)
+            cs = pic_cs(pic_jpeg_icc(b), more)[1]
+            hdr = pic_jpeg_hdr(path, hd)
+        elif ext in PIC_RAW:
+            cs = pic_cs(None, more)[1]
+        elif ext in ALB_HEIF:
+            H = pic_heif(path)
+            if H and H["pitm"] is not None:
+                icc, nclx = pic_heif_colr(H, H["pitm"])
+                cs = alb_heif_cs(icc, nclx)[1]
+                if nclx and nclx[1] in (16, 18):       # 相機拍的 HLG／PQ：整張本身就是 HDR
+                    hdr = "hlg" if nclx[1] == 18 else "pq"
+                elif hd and pic_heif_aux(H, pic_heif_target(H, H["pitm"]), PIC_APPLE_GM):
+                    hdr = round(hd, 2)
+        elif ext == ".png":
+            cs = pic_cs(pic_png_icc(path), more)[1]
+        elif ext == ".webp":
+            cs = pic_cs(pic_webp_icc(path), more)[1]
+    except (OSError, struct.error, ValueError, IndexError):
+        pass
+    return cs or None, hdr
+
+
+def alb_heif_cs(icc, nclx):
+    """HEIF 的色彩：(ICC, 名稱)"""
+    if icc:
+        return pic_cs(icc, {})
+    if nclx:
+        name = {12: "p3", 11: "p3", 9: "2020"}.get(nclx[0])
+        if name:
+            return pic_icc_make(name), PIC_CSN[name]
+    return None, ""
 
 
 # ── 每本相簿的照片清單（照拍攝時間排，資訊記著，檔案沒變就不重讀） ──
@@ -1302,7 +1421,7 @@ def alb_index(a, scan=True):
     for name, size, mt in files[:ALB_MAX]:
         pid = alb_pid(name)
         o = old.get(pid)
-        if o and o.get("sz") == size and o.get("mt") == mt and o.get("n") == name:
+        if o and o.get("sz") == size and o.get("mt") == mt and o.get("n") == name and o.get("mv") == ALB_MV:
             ph[pid] = o
             continue
         m = alb_meta(os.path.join(p, name))
@@ -1317,6 +1436,22 @@ def alb_index(a, scan=True):
             if m.get("of") != of:
                 m["of"] = of
                 changed = True
+    # 相機原始檔：有同名的 JPEG／HEIF 就收在那張底下（不另外列），那張標「RAW」
+    pics = {}
+    for pid, m in ph.items():
+        if not m.get("vid") and not m.get("rw"):
+            pics.setdefault(os.path.splitext(m["n"])[0].lower(), pid)
+    for pid, m in ph.items():
+        if m.get("rw"):
+            twin = pics.get(os.path.splitext(m["n"])[0].lower())
+            if m.get("twin") != twin:
+                m["twin"] = twin
+                changed = True
+    raws = {m["twin"]: os.path.splitext(m["n"])[1][1:].upper() for m in ph.values() if m.get("twin")}
+    for pid, m in ph.items():
+        if not m.get("rw") and m.get("rwx") != raws.get(pid):
+            m["rwx"] = raws.get(pid)
+            changed = True
     for pid, m in ph.items():
         if os.path.splitext(m["n"])[1].lower() in (".gif", ".png", ".webp") and "anim" not in m:
             m["anim"] = alb_anim(os.path.join(p, m["n"]))
@@ -1339,7 +1474,7 @@ def alb_index(a, scan=True):
         def key(i):
             m = ph[i]
             return (m["x"].get("dt") or time.strftime("%Y:%m:%d %H:%M:%S", time.localtime(m["mt"])), m["n"].lower())
-        show = [i for i in ph if not ph[i].get("of") and not (ph[i].get("vid") and not 0 < ph[i].get("dur", 0) <= ALB_VMAX)]
+        show = [i for i in ph if not ph[i].get("of") and not ph[i].get("twin") and not (ph[i].get("vid") and not 0 < ph[i].get("dur", 0) <= ALB_VMAX)]
         idx = {"ph": ph, "order": sorted(show, key=key), "mu": mu}
         os.makedirs(ALB_CACHE, mode=0o700, exist_ok=True)
         sec_dump(fn, idx)
@@ -1424,7 +1559,7 @@ def alb_music_in(p):
 def alb_ckey(a, pid, m):
     root = alb_root() or ""
     wm = (a.get("wm") or "") if alb_wm_bake(a) else ""
-    return hashlib.sha256(f"{root}/{a['dir']}/{m['n']}|{m['sz']}|{m['mt']}|2048|{wm}".encode()).hexdigest()[:24]
+    return hashlib.sha256(f"{root}/{a['dir']}/{m['n']}|{m['sz']}|{m['mt']}|2048|{wm}{('|t' if m.get('hdr') else '') if m.get('vid') else '|c2'}".encode()).hexdigest()[:24]
 
 
 def alb_cfile(ck, kind):
@@ -1544,7 +1679,7 @@ def alb_ff_info(src):
 
 
 def alb_make(a, pid, m):
-    """做大圖（長邊 2048）、小圖（高 480）、模糊預覽（寬 24）；不留任何 EXIF"""
+    """做大圖（長邊 2048）、小圖（高 480）、模糊預覽（寬 24）；不留任何 EXIF，但照原樣留著色彩描述檔、HDR 增益圖"""
     p = alb_path(a["dir"])
     if not p:
         return False
@@ -1553,10 +1688,42 @@ def alb_make(a, pid, m):
         return True
     src = os.path.join(p, m["n"])
     ext = os.path.splitext(m["n"])[1].lower()
-    rot = ALB_ROT.get(m.get("ori", 1), "") if ext in (".jpg", ".jpeg") else ""
+    jpg = ext in (".jpg", ".jpeg") or ext in PIC_RAW
+    rot = ALB_ROT.get(m.get("ori", 1), "") if jpg else ""
     pre = ["-ss", f"{min(1.0, m.get('dur', 0) / 3):.2f}"] if m.get("vid") else []   # 影片：拿一開始的一格當封面
     out = ["-map_metadata", "-1", "-frames:v", "1", "-f", "image2pipe", "-c:v", "mjpeg", "-pix_fmt", "yuvj420p"]
-    vf, tf = rot + "scale='if(gt(iw,ih),min(2048,iw),-2)':'if(gt(iw,ih),-2,min(2048,ih))':flags=lanczos", None
+    scale = "scale='if(gt(iw,ih),min(2048,iw),-2)':'if(gt(iw,ih),-2,min(2048,ih))':flags=lanczos"
+    vf, tf = rot + scale, None
+    hv = H = rawb = None
+    if ext in ALB_HEIF and not m.get("vid"):           # HEIC：自己拆拼圖交給 ffmpeg 解（ffmpeg 6 打不開 HEIC）
+        H = pic_heif(src)
+        hv = pic_heif_hevc(src, H, H["pitm"]) if H and H["pitm"] is not None else None
+        if hv and hv["vf"]:
+            vf = hv["vf"] + "," + scale
+    elif ext in PIC_RAW:                               # 相機原始檔：用相機放在裡面的全尺寸預覽
+        rj = pic_raw_jpeg(src)
+        if not rj:
+            return False
+        try:
+            with open(src, "rb") as f:
+                f.seek(rj[0])
+                rawb = f.read(rj[1])
+        except OSError:
+            return False
+    hdr_tm = ""
+    if H and hv:
+        icc, nclx = pic_heif_colr(H, H["pitm"])
+        if nclx and nclx[1] in (16, 18) and alb_ff_has("zscale"):   # 相機的 HLG／PQ：先壓成一般亮度的底圖（Display P3）
+            hdr_tm = (f"zscale=t=linear:npl=203:tin={'arib-std-b67' if nclx[1] == 18 else 'smpte2084'}:pin=2020:min=2020_ncl,format=gbrpf32le,"
+                      "zscale=p=smpte432,tonemap=hable:desat=0,zscale=t=iec61966-2-1:m=bt709:r=full,")
+            icc = pic_icc_make("p3")
+        else:
+            icc = alb_heif_cs(icc, nclx)[0]
+        vf = hdr_tm + vf
+    elif rawb:
+        icc = pic_cs(pic_jpeg_icc(rawb), {"csp": 0xFFFF, "iop": "R03"} if m.get("cs") == "Adobe RGB" else {})[0]
+    else:
+        icc = alb_src_icc(src, ext, m)
     if alb_wm_bake(a):                                 # 浮水印：右下角半透明白字
         tf = tempfile.NamedTemporaryFile("w", suffix=".txt", delete=False, encoding="utf-8")  # noqa: SIM115
         tf.write(a["wm"])
@@ -1568,8 +1735,12 @@ def alb_make(a, pid, m):
     try:
         if still:                                      # 會動的 WebP：拿第一格做
             big = alb_run_ff(["-f", "webp_pipe", "-i", "pipe:0", "-vf", vf, *out, "-q:v", "4", "-"], data=still, timeout=180)
+        elif hv:
+            big = alb_run_ff(["-f", "hevc", "-i", "pipe:0", "-vf", vf, *out, "-q:v", "4", "-"], data=hv["bs"], timeout=240)
+        elif rawb:
+            big = alb_run_ff(["-noautorotate", "-f", "mjpeg", "-i", "pipe:0", "-vf", vf, *out, "-q:v", "4", "-"], data=rawb, timeout=180)
         else:
-            big = alb_run_ff((["-noautorotate"] if ext in (".jpg", ".jpeg") else []) + pre + ["-i", "{src}", "-vf", vf, *out, "-q:v", "4", "-"], src=src, timeout=180)
+            big = alb_run_ff((["-noautorotate"] if jpg else []) + pre + ["-i", "{src}", "-vf", vf, *out, "-q:v", "4", "-"], src=src, timeout=180)
     finally:
         if tf:
             try:
@@ -1582,12 +1753,128 @@ def alb_make(a, pid, m):
     tiny = alb_run_ff(["-f", "mjpeg", "-i", "pipe:0", "-vf", "scale=24:-2:flags=area", *out, "-q:v", "6", "-"], data=small or big)
     if not small:
         return False
+    if icc:                                            # 色彩描述檔照原樣放回去（像素沒動，瀏覽器才知道該怎麼顯示）
+        big, small, tiny = pic_icc_put(big, icc), pic_icc_put(small, icc), pic_icc_put(tiny, icc) if tiny else tiny
+    sdr = big
+    if m.get("hdr") and not m.get("vid"):              # HDR：增益圖跟著大圖一起放（HDR 螢幕上亮部照樣亮）
+        try:
+            big = alb_hdr_put(big, src, ext, m, H, hv, rot, hdr_tm) or big
+        except (OSError, ValueError, struct.error, IndexError, ZeroDivisionError):
+            big = sdr
     os.makedirs(ALB_CACHE, mode=0o700, exist_ok=True)
     for kind, b in (("l", big), ("q", tiny or b""), ("s", small)):   # 小圖最後寫：有小圖就代表三個都好了
         if b:
             sec_write(alb_cfile(ck, kind), b)
-    alb_qa_make(a, pid, m, big)
+    alb_qa_make(a, pid, m, sdr)
     return True
+
+
+ALB_FFHAS = {}
+
+
+def alb_ff_has(name):
+    """這個 ffmpeg 有沒有某個濾鏡（zscale 要 libzimg）"""
+    if name not in ALB_FFHAS:
+        ff = alb_ff()
+        ok = False
+        if ff:
+            try:
+                r = subprocess.run([*ff[0], "-hide_banner", "-filters"], capture_output=True, timeout=30)
+                ok = re.search(rb"\s" + name.encode() + rb"\s", r.stdout) is not None
+            except (OSError, subprocess.SubprocessError):
+                ok = False
+        ALB_FFHAS[name] = ok
+    return ALB_FFHAS[name]
+
+
+def alb_src_icc(src, ext, m):
+    """JPEG、PNG、WebP 原檔的色彩描述檔（sRGB 回 None）"""
+    try:
+        if ext in (".jpg", ".jpeg"):
+            with open(src, "rb") as f:
+                b = f.read(512 << 10)
+            return pic_cs(pic_jpeg_icc(b), {"csp": 0xFFFF, "iop": "R03"} if m.get("cs") == "Adobe RGB" else {})[0]
+        if ext == ".png":
+            return pic_cs(pic_png_icc(src), {})[0]
+        if ext == ".webp":
+            return pic_cs(pic_webp_icc(src), {})[0]
+    except OSError:
+        pass
+    return None
+
+
+def alb_jpeg_wh(b):
+    for mk, s, e in pic_jpeg_segs(b):
+        if mk in (0xC0, 0xC1, 0xC2) and e - s >= 5:
+            h, w = struct.unpack(">HH", b[s + 1:s + 5])
+            return w, h
+    return 0, 0
+
+
+def alb_hdr_put(big, src, ext, m, H, hv, rot, hdr_tm):
+    """做 HDR 增益圖（大圖一半的大小），接在大圖後面變成 Ultra HDR JPEG"""
+    bw, bh = alb_jpeg_wh(big)
+    if not (bw and bh):
+        return None
+    gw, gh = max(2, bw // 2 // 2 * 2), max(2, bh // 2 // 2 * 2)
+    gray = ["-frames:v", "1", "-f", "rawvideo", "-pix_fmt", "gray", "-"]
+    lut, g = None, None
+    if hdr_tm:                                         # 相機 HLG／PQ：自己算 HDR 比底圖亮幾倍
+        return alb_hdr_from_hlg(big, hv, gw, gh, hdr_tm)
+    if H and hv:
+        aux = pic_heif_aux(H, pic_heif_target(H, H["pitm"]), PIC_APPLE_GM)
+        st = m.get("hd")
+        if not aux or not st:
+            return None
+        gv = pic_heif_hevc(src, H, aux)
+        if not gv:
+            return None
+        px = alb_run_ff(["-f", "hevc", "-i", "pipe:0", "-vf", (gv["vf"] + "," if gv["vf"] else "") + f"scale={gw}:{gh}:flags=bicubic,format=gray", *gray],
+                        data=gv["bs"], timeout=120, raw=gw * gh)
+        lut, g = pic_apple_lut(st), {"mn": 0.0, "mx": st, "ga": 1.0, "os": 0.0, "oh": 0.0, "cn": 0.0, "cx": st}
+    else:
+        got = pic_jpeg_gm(src, m.get("hd"))
+        if not got:
+            return None
+        gmj, g, apple = got
+        px = alb_run_ff(["-noautorotate", "-f", "mjpeg", "-i", "pipe:0", "-vf", f"{rot}scale={gw}:{gh}:flags=bicubic,format=gray", *gray],
+                        data=gmj, timeout=120, raw=gw * gh)
+        if apple:
+            lut = pic_apple_lut(g["mx"])
+    if not px:
+        return None
+    if lut:
+        px = px.translate(lut)
+    gm = alb_run_ff(["-f", "rawvideo", "-pix_fmt", "gray", "-s", f"{gw}x{gh}", "-i", "pipe:0", "-frames:v", "1", "-f", "image2pipe", "-c:v", "mjpeg",
+                     "-pix_fmt", "yuvj420p", "-q:v", "3", "-"], data=px)
+    return pic_uhdr(big, gm, g) if gm else None
+
+
+def alb_hdr_from_hlg(big, hv, gw, gh, hdr_tm):
+    """HLG／PQ 的相機照片：同一張算 HDR（線性、203 尼特＝1）和底圖（線性）的亮度，比值就是增益圖"""
+    def lum(vf):
+        return alb_run_ff(["-f", "hevc", "-i", "pipe:0", "-vf", vf, "-frames:v", "1", "-f", "rawvideo", "-pix_fmt", "grayf32le", "-"],
+                          data=hv["bs"], timeout=240, raw=gw * gh * 4)
+    base = (hv["vf"] + "," if hv["vf"] else "")
+    tin = "arib-std-b67" if "arib" in hdr_tm else "smpte2084"
+    hdr = lum(base + f"scale={gw}:{gh}:flags=bicubic,zscale=t=linear:npl=203:tin={tin}:pin=2020:min=2020_ncl,format=gbrpf32le,zscale=p=smpte432,"
+              "colorchannelmixer=.2289746:.6917385:.0792869:0:.2289746:.6917385:.0792869:0:.2289746:.6917385:.0792869,format=grayf32le")
+    sdr = lum(base + f"scale={gw}:{gh}:flags=bicubic,{hdr_tm}zscale=t=linear,format=gbrpf32le,"
+              "colorchannelmixer=.2289746:.6917385:.0792869:0:.2289746:.6917385:.0792869:0:.2289746:.6917385:.0792869,format=grayf32le")
+    if not (hdr and sdr):
+        return None
+    n = gw * gh
+    hv_, sv = struct.unpack(f"<{n}f", hdr), struct.unpack(f"<{n}f", sdr)
+    off = 1 / 64
+    lg = [math.log2((max(h, 0) + off) / (max(s, 0) + off)) for h, s in zip(hv_, sv)]
+    so = sorted(lg)
+    mx = max(0.1, min(6.0, so[int(n * 0.999)]))
+    mn = max(-1.0, min(0.0, so[int(n * 0.001)]))
+    px = bytes(max(0, min(255, int((v - mn) / (mx - mn) * 255 + 0.5))) for v in lg)
+    gm = alb_run_ff(["-f", "rawvideo", "-pix_fmt", "gray", "-s", f"{gw}x{gh}", "-i", "pipe:0", "-frames:v", "1", "-f", "image2pipe", "-c:v", "mjpeg",
+                     "-pix_fmt", "yuvj420p", "-q:v", "3", "-"], data=px)
+    g = {"mn": mn, "mx": mx, "ga": 1.0, "os": off, "oh": off, "cn": 0.0, "cx": mx}
+    return pic_uhdr(big, gm, g) if gm else None
 
 
 # ── 智慧挑照片：清不清楚、曝光好不好（給每張打分數），長得像不像（給每張一個指紋） ──
@@ -1599,7 +1886,7 @@ ALB_QA = {}                                       # 快取鍵 → {"s": 分數, 
 def alb_qa_calc(big):
     """回傳 {"s": 0～100 分, "h": 16 碼指紋}；算不出來回 None"""
     n = ALB_QA_N
-    px = alb_run_ff(["-f", "mjpeg", "-i", "pipe:0", "-vf", f"scale={n}:{n}:flags=area,format=gray", "-f", "rawvideo", "-pix_fmt", "gray", "-"], data=big, raw=n * n)
+    px = alb_run_ff(["-f", "mjpeg", "-i", "pipe:0", "-vf", f"scale={n}:{n}:flags=area,format=gray", "-frames:v", "1", "-f", "rawvideo", "-pix_fmt", "gray", "-"], data=big, raw=n * n)
     if not px:
         return None
     rows = [px[y * n:(y + 1) * n] for y in range(n)]
@@ -1731,6 +2018,9 @@ def alb_vmake(a, pid, m, kind):
     if not cmd:
         return False
     vf, tf = "scale='if(gt(iw,ih),min(1280,iw),-2)':'if(gt(iw,ih),-2,min(1280,ih))',pad=ceil(iw/2)*2:ceil(ih/2)*2", None
+    if m.get("hdr") and kind == "v" and alb_ff_has("zscale"):   # HDR 影片：好好壓成一般亮度（不然顏色又淡又灰）
+        vf = ("zscale=t=linear:npl=203,format=gbrpf32le,zscale=p=bt709,tonemap=hable:desat=0,"
+              "zscale=t=bt709:m=bt709:r=tv,format=yuv420p," + vf)
     if alb_wm_bake(a):
         tf = tempfile.NamedTemporaryFile("w", suffix=".txt", delete=False, encoding="utf-8")  # noqa: SIM115
         tf.write(a["wm"])
@@ -2184,6 +2474,12 @@ def alb_manifest(a, th=""):
         it = {"i": pid, "w": m["w"], "h": m["h"], "n": m["n"], "sz": m["sz"], "x": m["x"], "v": ck[:8], "q": q}
         if m.get("bad"):
             it["raw"] = os.path.splitext(m["n"])[1].lower() in ALB_SHOW
+        if m.get("cs"):                                # 色彩空間（sRGB 不寫）、HDR、有沒有相機原始檔
+            it["cs"] = m["cs"]
+        if m.get("hdr"):
+            it["hdr"] = m["hdr"]
+        if m.get("rwx") or m.get("rw"):
+            it["rw"] = m.get("rwx") or os.path.splitext(m["n"])[1][1:].upper()
         if m.get("vid"):                               # 影片：長度、轉好了沒
             it["vd"] = m["dur"]
             it["vr"] = 0 if m.get("vbad") else 1 if alb_vinfo(ck, "v") else -1

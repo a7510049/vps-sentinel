@@ -45,7 +45,7 @@ from collections import deque
 from concurrent.futures import ThreadPoolExecutor
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
-VERSION = "4.54"
+VERSION = "4.55"
 
 # ───────────────────────── 哨兵備份檔（.vsbk）─────────────────────────
 # 哨兵專用的備份格式：外面是自己的檔案格式，裡面用的是成熟、標準的加密方法（不自己發明加密）：
@@ -1458,7 +1458,7 @@ def include(name):
         exec(compile(f.read(), path, "exec"), globals())   # noqa: S102
 
 
-SRC_FILES = ["sentinel.py", "pair.py", "download.py", "backup.py", "guard.py", "fly.py", "notes.py", "adblock.py", "album.py", "web/index.html", "web/style.css", "web/app.js", "web/pin.js", "web/fly.js", "web/font.woff2", "web/album.html", "web/album.css", "web/album.js", "data/airports.tsv", "data/coast.tsv", "data/terrain.bin", "data/actypes.tsv", "data/apmap.tsv"]   # 程式本體（含機場起降）＋網頁三個檔＋機場資料、海岸線、地形、機型分類
+SRC_FILES = ["sentinel.py", "pair.py", "download.py", "backup.py", "guard.py", "fly.py", "notes.py", "adblock.py", "photo.py", "album.py", "web/index.html", "web/style.css", "web/app.js", "web/pin.js", "web/fly.js", "web/font.woff2", "web/album.html", "web/album.css", "web/album.js", "data/airports.tsv", "data/coast.tsv", "data/terrain.bin", "data/actypes.tsv", "data/apmap.tsv"]   # 程式本體（含機場起降）＋網頁三個檔＋機場資料、海岸線、地形、機型分類
 
 
 def build_of(blobs):
@@ -4384,6 +4384,7 @@ def gz_of(data, tag=None):
 
 include("guard.py")
 include("notes.py")
+include("photo.py")
 include("album.py")
 include("adblock.py")
 
