@@ -811,6 +811,20 @@ html,body{touch-action:pan-x pan-y}
 .gin.gb .gf{fill:color-mix(in oklab,var(--g2) 80%,transparent)}
 .gin.gb .gd{fill:var(--g1)}
 .iset .gin.off .gd{fill:var(--tx3)}
+.iset .iaf{cursor:pointer;transition:background var(--t-fast)}
+.iset .iaf .gaf{stroke:var(--tx2);stroke-width:1.6;fill:none}
+.iset .iaf .gafr{fill:none;stroke:var(--tx3);stroke-width:1.2}
+.iset .iaf.miss .gaf{stroke:var(--bad)}
+.iset .iaf.on{background:color-mix(in oklab,var(--g2) 14%,transparent)}
+.iset .iaf.on .gaf{stroke:var(--g2)}
+.iset .iaf.miss b{color:var(--bad)}
+/* 對焦框：相機對焦的位置（四個角的框，跟著照片縮放） */
+.lb .afb{position:absolute;transform:translate(-50%,-50%) scale(1.25);opacity:0;pointer-events:none;transition:opacity var(--t-mid),transform var(--t-mid) var(--ease);
+  --c:#fff;background:linear-gradient(var(--c),var(--c)) 0 0/12px 2px,linear-gradient(var(--c),var(--c)) 0 0/2px 12px,linear-gradient(var(--c),var(--c)) 100% 0/12px 2px,linear-gradient(var(--c),var(--c)) 100% 0/2px 12px,
+  linear-gradient(var(--c),var(--c)) 0 100%/12px 2px,linear-gradient(var(--c),var(--c)) 0 100%/2px 12px,linear-gradient(var(--c),var(--c)) 100% 100%/12px 2px,linear-gradient(var(--c),var(--c)) 100% 100%/2px 12px;
+  background-repeat:no-repeat;filter:drop-shadow(0 0 1.5px rgba(0,0,0,.6));min-width:28px;min-height:28px}
+.lb.afon .afb{opacity:1;transform:translate(-50%,-50%) scale(1)}
+.lb .afb.miss{--c:var(--bad)}
 
 /* 更多圖形：每天的 24 小時時間條、數字卡的小圖、城市在整趟的哪幾天、期限圈、封面國旗 */
 .dhr{grid-column:1;display:flex;align-items:center;gap:6px;margin:4px 0 0;font-size:var(--fs-xs);color:var(--tx2);white-space:nowrap}

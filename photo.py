@@ -333,6 +333,7 @@ PIC_PANA_AF = {1: "自動對焦", 2: "手動對焦", 6: "AF-S", 7: "AF-C", 8: "A
 PIC_PANA_SUB = {1: "人（眼、臉、身體）", 2: "動物", 3: "人（眼、臉）", 4: "動物身體", 5: "動物（眼、身體）", 6: "汽車", 7: "機車",
                 8: "汽車", 9: "機車", 10: "火車", 11: "火車", 12: "飛機", 13: "飛機"}
 PIC_PANA_MF = {1: "黃色濾鏡", 2: "橘色濾鏡", 3: "紅色濾鏡", 4: "綠色濾鏡"}
+PIC_PANA_BK = {1: 3, 2: 3, 3: 5, 4: 5, 5: 7, 6: 7}    # 包圍曝光：幾張
 PIC_PANA_GR = {1: "粒子 弱", 2: "粒子 標準", 3: "粒子 強"}
 PIC_FUJI_FM = {0x000: "PROVIA／標準", 0x120: "ASTIA／柔和", 0x200: "Velvia／鮮豔", 0x400: "Velvia", 0x500: "PRO Neg. Std",
                0x501: "PRO Neg. Hi", 0x600: "經典正片 CLASSIC CHROME", 0x700: "ETERNA／電影", 0x800: "經典負片 CLASSIC Neg.",
@@ -424,6 +425,11 @@ def pic_maker(b, more):
         kv = num(0x44)
         if txt(0x51):
             out["ln"] = txt(0x51)[:80]
+        t = v.get(0x4D)                                # AFPointPosition：對焦點（0～1 的比例），手動對焦不算
+        if num(0x07) != 2 and t and t[0] == 5 and isinstance(t[1], list) and len(t[1]) == 2:
+            out["fp"] = (t[1][0], t[1][1], 1, 1)
+        if num(0x45) in PIC_PANA_BK:                   # BracketSettings：包圍曝光幾張
+            out["bk"] = PIC_PANA_BK[num(0x45)]
     elif name == "fuji":
         out["sl"] = "底片模擬"
         sat = num(0x1003)
@@ -436,12 +442,20 @@ def pic_maker(b, more):
         if num(0x1048) in PIC_FUJI_CC:
             fx.append(PIC_FUJI_CC[num(0x1048)])
         kv = num(0x1005) if num(0x1002) == 0xFF0 else None   # 富士只有白平衡設成「色溫」時才寫
+        t = v.get(0x1031)                              # FocusPixel：對焦點（照片的像素位置）
+        if t and t[0] == 3 and isinstance(t[1], list) and len(t[1]) == 2:
+            out["fp"] = (t[1][0], t[1][1], 0, 0)
+        if num(0x1100) == 1:                           # AutoBracketing
+            out["bk"] = 1
     elif name == "sony":
         cs = txt(0xB020)
         if cs in PIC_SONY_ST:
             out["sl"] = "創意外觀" if cs in ("VV2", "FL", "IN", "SH") else "創意風格"
             out["st"] = PIC_SONY_ST[cs]
         kv = num(0xB021)                               # 0 是自動（沒寫幾 K）
+        t = v.get(0x2027)                              # FocusLocation：寬、高、對焦點 X、Y
+        if t and t[0] == 3 and isinstance(t[1], list) and len(t[1]) == 4 and t[1][0] and t[1][1]:
+            out["fp"] = (t[1][2], t[1][3], t[1][0], t[1][1])
     elif name == "canon":
         t = v.get(0xA0)
         if t and t[0] == 3 and isinstance(t[1], list) and len(t[1]) > 10 and t[1][10] in PIC_CANON_ST:
@@ -463,7 +477,7 @@ def pic_maker(b, more):
         out["fx"] = fx
     if isinstance(kv, int) and 1800 <= kv <= 15000:   # 拍攝時的白平衡色溫（K）
         out["k"] = kv
-    if list(out) == ["sl"]:
+    if list(out) in (["sl"], []):
         return {}
     return out
 

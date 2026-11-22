@@ -196,7 +196,7 @@ def ifd(ents, at, e="<"):
             raw = struct.pack(e + "H", val)
         else:
             raw = struct.pack(e + "I", val)
-        cnt = len(raw) // {3: 2, 4: 4}.get(typ, 1)
+        cnt = len(raw) // {3: 2, 4: 4, 5: 8}.get(typ, 1)
         if len(raw) <= 4:
             head += struct.pack(e + "HHI", tag, typ, cnt) + raw.ljust(4, b"\0")
         else:
@@ -307,6 +307,53 @@ class PhotoUnit(unittest.TestCase):
         pc = b"0200" + b"FLAT".ljust(20, b"\0") + b"FLAT".ljust(20, b"\0")
         nikon = mk_exif("NIKON CORPORATION", lambda at: b"Nikon\0\x02\x10\0\0" + b"II*\0" + struct.pack("<I", 8) + ifd([(0x23, 7, pc)], 8))
         self.assertEqual(maker(nikon), {"sl": "優化校準", "st": "平面"})
+
+    def test_focus_bracket(self):
+        """對焦點：松下（比例）、Sony（像素＋參考大小）、富士（像素）；手動對焦不算；包圍曝光幾張"""
+        def maker(b):
+            return P["pic_maker"](b, P["pic_exif_more"](b))
+        rat = struct.pack("<IIII", 3, 10, 7, 10)
+        pana = mk_exif("Panasonic", lambda at: b"Panasonic\0\0\0" + ifd([(0x07, 3, 7), (0x45, 3, 4), (0x4D, 5, rat), (0x89, 3, 3)], at + 12))
+        m = maker(pana)
+        self.assertEqual((round(m["fp"][0], 2), round(m["fp"][1], 2), m["fp"][2:]), (.3, .7, (1, 1)))
+        self.assertEqual(m["bk"], 5)
+        mf = mk_exif("Panasonic", lambda at: b"Panasonic\0\0\0" + ifd([(0x07, 3, 2), (0x4D, 5, rat), (0x89, 3, 3)], at + 12))
+        self.assertNotIn("fp", maker(mf))
+        sony = mk_exif("SONY", lambda at: b"SONY DSC \0\0\0" + ifd([(0x2027, 3, struct.pack("<HHHH", 6000, 4000, 1500, 1000))], at + 12))
+        self.assertEqual(maker(sony), {"fp": (1500, 1000, 6000, 4000)})
+        fuji = mk_exif("FUJIFILM", lambda at: b"FUJIFILM" + struct.pack("<I", 12) + ifd([(0x1031, 3, struct.pack("<HH", 300, 200)), (0x1100, 3, 1)], 12))
+        self.assertEqual(maker(fuji), {"sl": "底片模擬", "fp": (300, 200, 0, 0), "bk": 1})
+
+    def test_focal_and_afp(self):
+        """等效焦距：用感光元件解析度算、沒有就查型號；對焦點照轉向換成轉正後的位置"""
+        import math
+        import re
+        src = open(os.path.join(ROOT, "album.py"), encoding="utf-8").read()
+        G = {"math": math, "re": re}
+        for n in ast.parse(src).body:
+            if (isinstance(n, ast.FunctionDef) and n.name in ("alb_crop", "alb_afp", "_rat")) or \
+               (isinstance(n, ast.Assign) and getattr(n.targets[0], "id", "") == "ALB_CROP"):
+                exec(compile(ast.Module([n], []), "album.py", "exec"), G)   # noqa: S102
+        crop, afp = G["alb_crop"], G["alb_afp"]
+        # 一吋（13.2×8.8 mm）5472×3648：每公分 4145 點 → 約 2.73 倍
+        t = {"fpx": (41454, 10), "fpy": (41454, 10), "fpu": 3, "pw": 5472, "ph": 3648}
+        self.assertAlmostEqual(crop(t, {}), 2.73, places=1)
+        self.assertEqual(crop({}, {"mk": "Panasonic", "md": "DC-S5M2X"}), 1.0)
+        self.assertEqual(crop({}, {"mk": "Panasonic", "md": "DC-GH6"}), 2.0)
+        self.assertEqual(crop({}, {"mk": "FUJIFILM", "md": "X-T5"}), 1.53)
+        self.assertEqual(crop({}, {"mk": "FUJIFILM", "md": "GFX100S"}), .79)
+        self.assertEqual(crop({}, {"mk": "SONY", "md": "ILCE-7M4"}), 1.0)
+        self.assertEqual(crop({}, {"mk": "SONY", "md": "ILCE-6700"}), 1.53)
+        self.assertEqual(crop({}, {"mk": "Canon", "md": "Canon EOS R7"}), 1.6)
+        self.assertEqual(crop({}, {"mk": "Canon", "md": "Canon EOS R5"}), 1.0)
+        self.assertIsNone(crop({}, {"mk": "Apple", "md": "iPhone 16 Pro"}))
+        self.assertEqual(afp({}, {"fp": (.3, .7, 1, 1)}, 1, 0, 6000, 4000), [.3, .7, .1])
+        self.assertEqual(afp({}, {"fp": (.3, .7, 1, 1)}, 6, 0, 6000, 4000), [.3, .3, .1])   # 轉 90 度：(1−y, x)
+        self.assertEqual(afp({}, {"fp": (.3, .7, 1, 1)}, 1, 3, 6000, 4000), [.3, .3, .1])   # HEIC 的 irot 3＝順時針 90 度
+        self.assertEqual(afp({"pw": 4032, "ph": 3024}, {}, 1, 0, 4032, 3024)is None, True)
+        self.assertEqual(afp({"sa": [2016, 1512, 2217, 1330], "pw": 4032, "ph": 3024}, {}, 1, 0, 4032, 3024), None)   # 中間一大塊：不是對焦點
+        self.assertEqual(afp({"sa": [1008, 756, 400, 300], "pw": 4032, "ph": 3024}, {}, 1, 0, 4032, 3024), [.25, .25, .099])
+        self.assertEqual(afp({}, {"fp": (300, 200, 0, 0)}, 1, 0, 600, 400), [.5, .5, .1])
 
 
     def test_gps_timezone(self):
