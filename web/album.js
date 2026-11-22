@@ -639,11 +639,14 @@ const flagImg = cc => /^[A-Z]{2}$/.test(cc) ? `<img class="flg" alt="" loading="
 function flagFix(root){ root.querySelectorAll("img.flg").forEach(f => f.addEventListener("error", () => f.remove(), {once:true})); }
 function cityCards(cs){
   const box = $(".msec .cities"); if (!box) return;
+  const sig = cs.map(c => `${c.k}${c.ps.length}${c.ps[0].i}`).join();
+  if (box.dataset.sig === sig) return;
+  box.dataset.sig = sig;
   box.hidden = cs.length < 2;
   box.innerHTML = cs.length < 2 ? "" : cs.map(c => {
     const pick = c.ps.filter(p => !isVid(p)).slice(0, 3), ims = (pick.length ? pick : c.ps.slice(0, 1));
-    return `<button class="cty" data-city="${esc(c.k)}"><span class="ctc n${ims.length}">${ims.map(p => `<img alt="" loading="lazy" draggable="false" src="${src(p, "s")}">`).join("")}</span>
-      <span class="ctt"><b>${flagImg(c.cc)}<span>${esc(c.c)}</span><i class="num">${c.ps.length}</i></b><small class="num">${esc(cityDates(c.d0, c.d1))}</small></span></button>`;
+    return `<button class="cty" data-city="${esc(c.k)}"><span class="ctc n${ims.length}">${ims.map(p => `<img alt="" loading="lazy" draggable="false" src="${src(p, "s")}">`).join("")}<i class="num">${I("photo")}${c.ps.length}</i></span>
+      <span class="ctt"><b>${flagImg(c.cc)}<span>${esc(c.c)}</span></b><small class="num">${esc(cityDates(c.d0, c.d1))}</small></span></button>`;
   }).join("");
   flagFix(box);
 }
@@ -669,6 +672,10 @@ function bigMap(){
   const pts = byCity ? cs.map(c => [{g:[c.la, c.lo]}, ALL.indexOf(c.ps[0]), c]) : PH.map((p, i) => [p, i]).filter(([p]) => p.g && !p.broken);
   const W = el.clientWidth, H = el.clientHeight;
   if (!pts.length || !W) return;
+  // 手機上下捲時網址列縮放會觸發 resize：大小、內容都沒變就不重畫（以前整張地圖、城市卡片重新淡入，看起來在閃）
+  const sig = `${W}x${H}|${byCity ? cs.map(c => c.k + c.ps.length).join() : pts.map(([p, i]) => i).join()}|${trip}`;
+  if (el.dataset.sig === sig) return;
+  el.dataset.sig = sig;
   let z = byCity ? 12 : 15;
   for (; z > 2; z--) {
     const xs = pts.map(([p]) => lx(p.g[1], z)), ys = pts.map(([p]) => ly(p.g[0], z));
@@ -686,7 +693,7 @@ function bigMap(){
       let mv = 0;
       ps.forEach((a, i) => ps.forEach((b, j) => {
         if (j <= i) return;
-        const dx = b.x - a.x, dy = b.y - a.y, d = Math.hypot(dx, dy) || .01, need = 84;
+        const dx = b.x - a.x, dy = b.y - a.y, d = Math.hypot(dx, dy) || .01, need = 96;
         if (d >= need) return;
         const f = (need - d) / 2, ux = d > .02 ? dx / d : 1, uy = d > .02 ? dy / d : 0;
         a.x -= ux * f; a.y -= uy * f; b.x += ux * f; b.y += uy * f; mv = 1;

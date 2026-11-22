@@ -723,9 +723,14 @@ html::-webkit-scrollbar,body::-webkit-scrollbar{display:none;width:0;height:0}  
 
 /* 地圖：底圖去掉顏色、蓋一層照片的顏色，比較安靜；城市是一顆照片泡泡＋名字 */
 .map .tl{filter:var(--map-f) grayscale(.85)}
-.map::after{content:"";position:absolute;inset:0;pointer-events:none;background:color-mix(in oklab,var(--g2) 22%,transparent);mix-blend-mode:color;transition:background 1.6s var(--ease)}
+.map::after{content:"";position:absolute;inset:0;pointer-events:none;background:color-mix(in oklab,var(--g2) 12%,transparent)}   /* 不用混色模式：手機捲動時整張地圖要重算，會閃 */
 .mk.cmk{width:58px;height:58px;margin:-29px 0 0 -29px}
 .mk.cmk em{position:absolute;left:50%;top:calc(100% + 6px);translate:-50% 0;white-space:nowrap;font-style:normal;font-size:var(--fs-xs);font-weight:700;padding:3px 9px;border-radius:var(--r-pill);
   background:var(--s1);color:var(--tx);box-shadow:var(--sh-pop);max-width:120px;overflow:hidden;text-overflow:ellipsis}
-.ctt b i{margin-left:auto;flex:none;font-style:normal;font-size:var(--fs-xs);font-weight:700;color:var(--tx2);height:22px;min-width:22px;padding:0 8px;border-radius:var(--r-pill);display:grid;place-items:center;background:color-mix(in oklab,var(--g2) 14%,var(--s2))}
+.ctc{position:relative}
+.ctc i{position:absolute;right:8px;top:8px;display:inline-flex;align-items:center;gap:4px;height:24px;padding:0 9px;border-radius:var(--r-pill);font-style:normal;font-size:var(--fs-xs);font-weight:700;color:#fff;background:rgba(0,0,0,.42);box-shadow:inset 0 0 0 1px rgba(255,255,255,.18)}
+.ctc i svg{width:12px;height:12px}
+.ctc img{transition:transform var(--t-slow) var(--dec)}
+@media (hover:hover){.cty:hover .ctc img{transform:scale(1.04)}}
+.mk.cmk em{-webkit-backdrop-filter:none;backdrop-filter:none;border:1px solid color-mix(in oklab,var(--g2) 30%,transparent)}
 .ctt small{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
