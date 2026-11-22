@@ -1898,6 +1898,8 @@ html.flyon .dash>.view{content-visibility:hidden;contain-intrinsic-size:auto non
 .almlk em svg{width:11px;height:11px;fill:currentColor}
 .almtk .pkrow{align-items:flex-start}
 .almtk .pkrow>img{width:44px;height:44px;border-radius:var(--r-xs);object-fit:cover;flex:none;background:var(--s3)}
+.almtk .almgb{width:44px;height:44px;border-radius:var(--r-xs);flex:none;display:grid;place-items:center;background:var(--pcs);color:var(--p)}
+.almtk .almgb svg{width:22px;height:22px}
 .almtk .pkrow b{display:flex;gap:8px;align-items:baseline}
 .almtk .pkrow b small{font-weight:500}
 .almtk .pkrow>span>small{white-space:normal;overflow-wrap:anywhere;color:var(--tx2)}

@@ -83,7 +83,7 @@ with open(os.path.join(ROOT_DIR, "旅行", "台北", "說明.txt"), "w") as f:
 
 
 class Album(Server):
-    ENV = {"SENTINEL_ALB_DIR": ROOT_DIR, "SENTINEL_ALB_GEO": "http://127.0.0.1:9/none", "SENTINEL_ALB_FF": "none",
+    ENV = {"SENTINEL_ALB_DIR": ROOT_DIR, "SENTINEL_ALB_GEO": "http://127.0.0.1:9/none", "SENTINEL_ALB_WX": "http://127.0.0.1:9/none", "SENTINEL_ALB_WX2": "http://127.0.0.1:9/none", "SENTINEL_ALB_FF": "none",
            "SENTINEL_ALB_TILE": "http://127.0.0.1:9/{z}/{x}/{y}.png"}
 
     @classmethod
@@ -260,17 +260,51 @@ class Album(Server):
         c = json.loads(b)["cm"][0]
         self.assertEqual((c["n"], c["s"], c["me"]), ("小明", "好看 <script>", True))
         self.assertEqual(post({"i": pid, "s": "再一則", "n": "小明"})[0], 429)            # 太快
+        time.sleep(3.1)
+        s, b, _ = post({"i": pid, "s": "同意", "n": "小明", "re": c["id"]})          # 回覆那一則
+        self.assertEqual(json.loads(b)["cm"][-1].get("r"), c["id"])
+        time.sleep(3.1)
+        s, b, _ = post({"i": pid, "s": "再回", "n": "小明", "re": json.loads(b)["cm"][-1]["id"]})   # 回覆回覆：掛在同一串
+        self.assertEqual(json.loads(b)["cm"][-1].get("r"), c["id"])
+        s, b, _ = post({"i": pid, "rx": "😂"})                                         # 其他表情：一支手機一個
+        self.assertEqual((s, json.loads(b)["rx"], json.loads(b)["mr"]), (200, {"😂": 1}, "😂"))
+        s, b, _ = post({"i": pid, "rx": "👍"})                                         # 換一個
+        self.assertEqual((json.loads(b)["rx"], json.loads(b)["mr"]), ({"👍": 1}, "👍"))
+        s, b, _ = post({"i": pid, "rx": "💩"})                                         # 不認得的：當成拿掉
+        self.assertEqual((json.loads(b)["rx"], json.loads(b)["mr"]), ({}, ""))
+        post({"i": pid, "rx": "🥹"})
         s, b, _ = self.req("GET", f"/a/{code}/m", hdr={"Cookie": ck})
         p = json.loads(b)["photos"][0]
-        self.assertEqual((p["lk"], p["me"], len(p["cm"])), (1, True, 1))
+        self.assertEqual((p["lk"], p["me"], len(p["cm"])), (1, True, 3))
+        self.assertEqual((p["rx"], p["mr"], p["lk"]), ({"🥹": 1}, "🥹", 1))
         s, b, _ = self.req("GET", f"/a/{code}/m")                                       # 別支手機：看得到，但不是自己的
         p = json.loads(b)["photos"][0]
         self.assertEqual((p["me"], p["cm"][0]["me"]), (False, False))
         s, t = self.call({"action": "talk", "id": aid})
-        self.assertEqual(([x["s"] for x in t["c"]], t["likes"][0]["n"]), (["好看 <script>"], 1))
+        self.assertEqual(([x["s"] for x in t["c"]], t["likes"][0]["n"]), (["再回", "同意", "好看 <script>"], 1))
         self.assertEqual(next(x for x in self.call({"action": "devs", "id": aid})[1]["devs"] if x.get("nm"))["nm"], "小明")
         s, t = self.call({"action": "talkdel", "id": aid, "i": pid, "cid": c["id"]})
-        self.assertEqual(t["c"], [])
+        self.assertEqual([x["s"] for x in t["c"]], ["再回", "同意"])                  # 回覆留著
+        self.assertEqual(json.loads(self.req("GET", f"/a/{code}/m", hdr={"Cookie": ck})[1])["photos"][0]["lkn"], ["小明"])   # 誰按了愛心
+        self.assertEqual(post({"i": "_gb", "like": True})[0], 400)                    # 留言簿只能留言
+        time.sleep(3.1)
+        s, b, _ = post({"i": "_gb", "s": "謝謝分享", "n": "小明"})
+        self.assertEqual((s, json.loads(b)["cm"][0]["s"]), (200, "謝謝分享"))
+        m = json.loads(self.req("GET", f"/a/{code}/m", hdr={"Cookie": ck})[1])
+        self.assertEqual((m["gb"][0]["s"], m["gb"][0]["me"]), ("謝謝分享", True))
+        self.assertNotIn("d", m["gb"][0])                                              # 不給手機的代號
+        self.assertEqual(json.loads(self.req("GET", f"/a/{code}/m")[1])["gb"][0]["me"], False)
+        s, t = self.call({"action": "talk", "id": aid})
+        self.assertTrue(any(x.get("gb") and x["s"] == "謝謝分享" for x in t["c"]))
+        s, d = self.call({"action": "edit", "id": aid, "intro": "看 www.x.tw"})        # 介紹不能放連結
+        self.assertFalse(d.get("ok", s == 200))
+        s, d = self.call({"action": "edit", "id": aid, "intro": " 第一行\n\n\n\n第二行\u202e "})
+        self.assertEqual(next(x for x in d["list"] if x["id"] == aid)["intro"], "第一行\n\n第二行")
+        self.assertEqual(json.loads(self.req("GET", f"/a/{code}/m", hdr={"Cookie": ck})[1])["intro"], "第一行\n\n第二行")
+        for _ in range(61):                                                            # 看過的手機記滿了：剛打開的這支不能被擠掉
+            h = self.req("GET", f"/a/{code}/m")[2]
+        self.assertEqual(post({"i": "_gb", "s": "最後一支", "n": "阿華"}, h["Set-Cookie"].split(";")[0])[0], 200)
+        self.assertIn("阿華", [x.get("nm") for x in self.call({"action": "devs", "id": aid})[1]["devs"]])
         self.call({"action": "edit", "id": aid, "talk": False})
         self.assertEqual(post({"i": pid, "like": False})[0], 403)
         with open(os.path.join(self.tmp.name, "data", "album-talk.json"), "rb") as f:
@@ -355,7 +389,7 @@ class Album(Server):
 
 @unittest.skipUnless(shutil.which("ffmpeg"), "沒有 ffmpeg")
 class AlbumThumbs(Server):
-    ENV = {"SENTINEL_ALB_DIR": ROOT_DIR + "-t", "SENTINEL_ALB_GEO": "http://127.0.0.1:9/none"}
+    ENV = {"SENTINEL_ALB_DIR": ROOT_DIR + "-t", "SENTINEL_ALB_GEO": "http://127.0.0.1:9/none", "SENTINEL_ALB_WX": "http://127.0.0.1:9/none", "SENTINEL_ALB_WX2": "http://127.0.0.1:9/none"}
 
     @classmethod
     def setUpClass(cls):
@@ -384,12 +418,38 @@ class AlbumThumbs(Server):
         subprocess.run([*ff, *src, "-plays", "0", "-f", "apng", os.path.join(d, "b.png")], check=True)
         subprocess.run([*ff, *src, "-loop", "0", "-c:v", "libwebp", "-f", "webp", os.path.join(d, "c.webp")], check=True)
         subprocess.run([*ff, *src, "-frames:v", "1", os.path.join(d, "d.gif")], check=True)
+        d = os.path.join(ROOT_DIR + "-t", "智慧")
+        os.makedirs(d, exist_ok=True)
+        subprocess.run([*ff, "-f", "lavfi", "-i", "testsrc2=s=1600x1200", "-frames:v", "1", os.path.join(d, "a.jpg")], check=True)
+        subprocess.run([*ff, "-f", "lavfi", "-i", "testsrc2=s=1600x1200", "-frames:v", "1", "-vf", "gblur=sigma=8", os.path.join(d, "b.jpg")], check=True)
+        subprocess.run([*ff, "-f", "lavfi", "-i", "testsrc2=s=1600x1200", "-frames:v", "1", "-vf", "eq=brightness=-0.45", os.path.join(d, "c.jpg")], check=True)
         super().setUpClass()
 
     @classmethod
     def tearDownClass(cls):
         super().tearDownClass()
         shutil.rmtree(ROOT_DIR + "-t", ignore_errors=True)
+
+    def test_smart(self):
+        """主機替每張打分數：清楚、曝光正常的比拍糊、太暗的高；長得像的指紋只差幾格"""
+        c = http.client.HTTPConnection("127.0.0.1", self.port, timeout=60)
+        c.request("POST", "/api/album", body=json.dumps({"action": "add", "dir": "智慧"}), headers={"X-Token": TOKEN})
+        code = next(x for x in json.loads(c.getresponse().read())["list"] if x["dir"] == "智慧")["code"]
+        deadline, ps = time.time() + 40, {}
+        while time.time() < deadline:
+            c.request("GET", f"/a/{code}/m")
+            ps = {p["n"]: p for p in json.loads(c.getresponse().read())["photos"]}
+            if len(ps) == 3 and all("qs" in p for p in ps.values()):
+                break
+            time.sleep(0.5)
+        else:
+            self.fail(f"分數沒有算出來：{ps}")
+        a, b, k = ps["a.jpg"], ps["b.jpg"], ps["c.jpg"]
+        self.assertGreater(a["qs"], b["qs"] + 10)                                     # 拍糊的分數低
+        self.assertGreater(a["qs"], k["qs"] + 10)                                     # 太暗的分數低
+        ham = bin(int(a["dh"], 16) ^ int(b["dh"], 16)).count("1")
+        self.assertLessEqual(ham, 10)                                                  # 同一個畫面：指紋幾乎一樣
+        self.assertTrue(any(f.endswith("-a.json") for f in os.listdir(os.path.join(self.tmp.name, "data", "album-cache"))))
 
     def test_thumbs(self):
         c = http.client.HTTPConnection("127.0.0.1", self.port, timeout=60)

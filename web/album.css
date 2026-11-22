@@ -740,6 +740,15 @@ html::-webkit-scrollbar,body::-webkit-scrollbar{display:none;width:0;height:0}  
 .gx .gt,.gsun .gt,.gin .gt{fill:none;stroke:var(--line);stroke-width:2}
 .gx .gf,.gin .gf{fill:color-mix(in oklab,var(--g2) 78%,transparent)}
 .gx .gd,.gsun .gd,.gin .gd{fill:var(--g2)}
+.gx .gs,.gin .gs{fill:none;stroke:var(--g2);stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
+.gx .gk{fill:none;stroke:var(--s1);stroke-width:1.1}
+.gx g .gs{stroke-width:1.3}
+.gx .gtk{fill:none;stroke:color-mix(in oklab,var(--g2) 18%,transparent);stroke-width:3.4;stroke-linecap:round}
+.gx .gsk{fill:none;stroke:var(--g2);stroke-width:3.4;stroke-linecap:round}
+.gx .gscn{opacity:.28}
+.gx .gw{fill:color-mix(in oklab,var(--g2) 13%,transparent)}
+.gx .gh{fill:color-mix(in oklab,var(--g2) 34%,var(--s1))}
+.iex .no .gx .gs{stroke:var(--tx3)}
 .gx .gl,.gsun .gl,.gin .gl{fill:none;stroke:color-mix(in oklab,var(--tx3) 60%,transparent);stroke-width:1.6;stroke-linecap:round}
 .iex div{padding:14px 2px 12px}
 .iex b{display:block;font-weight:700;font-size:var(--fs-s)}
@@ -897,3 +906,237 @@ html::-webkit-scrollbar,body::-webkit-scrollbar{display:none;width:0;height:0}  
 .smc span svg{width:13px;height:13px;color:var(--g2);flex:none}
 .day.cov .row.feat .bdg .lkt{left:auto;right:12px;top:12px;bottom:auto}
 .day.cov .row.feat .bdg .lvt{left:12px;top:12px}
+
+/* 那天的天氣：日期後面一個小圖＋最高／最低溫 */
+.dwx{display:inline-flex;align-items:center;gap:4px;margin-left:.55em;vertical-align:.12em;font:700 var(--fs-s)/1 var(--font);font-style:normal;letter-spacing:0;color:var(--tx2);white-space:nowrap}
+.dwx svg{width:17px;height:17px;flex:none}
+.dwx small{font-size:var(--fs-xs);font-weight:600;color:var(--tx3);margin-left:3px}
+.dwx.wsun svg{color:#f5a524}
+.dwx.wpart svg{color:#e3a43a}
+.dwx.wcld svg,.dwx.wfog svg{color:var(--tx3)}
+.dwx.wrain svg{color:#4f9cf0}
+.dwx.wsnow svg{color:#8fc6ff}
+.dwx.wstorm svg{color:#a07cff}
+.day.cov .dh .dwx{display:flex;width:max-content;margin:8px 0 2px}
+.day.cov .dh .dwx,.day.cov .dh .dwx small{color:#fff;text-shadow:none}
+.day.cov .dh .dwx svg{color:#fff;filter:drop-shadow(0 1px 6px rgba(0,0,0,.35))}
+.smc b .dwx{font-size:var(--fs-xs)}
+.wall[data-z="2"] .dwx,.wall[data-z="3"] .dwx{display:none}
+
+/* 連拍：一疊只放第一張，右上角寫幾張 */
+.bdg .stk{right:6px;top:6px;pointer-events:auto;cursor:pointer;height:24px;padding:0 8px 0 6px;transition:background var(--t-fast) var(--ease),transform var(--sp-fast)}
+.bdg .stk svg{width:14px;height:14px}
+.bdg .stk.op{background:var(--p);color:var(--on-p)}
+.bdg .stk:active{transform:scale(.9)}
+.wall[data-z="2"] .bdg .stk,.wall[data-z="3"] .bdg .stk{display:none}
+.bdg .lkt .rxe{font-style:normal;font-size:12px;line-height:1;margin-right:-2px}
+.bdg .lkt svg+.rxe{margin-left:-1px}
+
+/* 其他表情 */
+.sb .rxe{font-style:normal;font-size:18px;line-height:1}
+.sb.rxb.on{background:rgba(255,255,255,.22)}
+.rxp{position:fixed;z-index:6;display:flex;gap:4px;padding:6px;border-radius:var(--r-pill);background:rgba(28,29,36,.82);-webkit-backdrop-filter:blur(20px) saturate(1.6);backdrop-filter:blur(20px) saturate(1.6);box-shadow:0 12px 34px -10px rgba(0,0,0,.6),inset 0 1px 0 rgba(255,255,255,.1)}
+.rxp button{width:46px;height:46px;border-radius:50%;font-size:28px;line-height:1;display:grid;place-items:center;transition:transform var(--sp-fast),background var(--t-fast) var(--ease);animation:rxin var(--t-mid) var(--dec) both;animation-delay:calc(var(--i) * 35ms)}
+.rxp button.on{background:rgba(255,255,255,.18)}
+.rxp button:active{transform:scale(1.25)}
+@media (hover:hover){.rxp button:hover{transform:translateY(-4px) scale(1.18)}}
+@keyframes rxin{from{opacity:0;transform:translateY(10px) scale(.6)}to{opacity:1;transform:none}}
+.rxfly{position:fixed;z-index:7;font-size:30px;font-style:normal;pointer-events:none;line-height:1}
+.italk .th .rxe{font-style:normal;font-size:14px;margin-right:2px}
+
+/* 照片的主要顏色 */
+.ipal{padding:14px 16px;display:grid;gap:10px}
+.ipal:empty{display:none}
+.pbar{display:flex;height:40px;border-radius:var(--r-sm);overflow:hidden;gap:2px}
+.pbar i{min-width:10px;transform-origin:left}
+.pbar.wait{background:linear-gradient(90deg,var(--s2),var(--s3),var(--s2));background-size:200% 100%;animation:pw 1.2s linear infinite}
+@keyframes pw{to{background-position:-200% 0}}
+
+/* 電腦滑鼠指著照片：下面淡淡寫拍攝時間、相機 */
+.ph .hv{position:absolute;left:0;right:0;bottom:0;z-index:1;text-align:left;padding:26px 10px 8px;font-size:var(--fs-xs);font-weight:600;color:#fff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+  background:linear-gradient(transparent,rgba(0,0,0,.55));opacity:0;transform:translateY(4px);transition:opacity var(--t-fast) var(--ease),transform var(--t-fast) var(--ease);pointer-events:none}
+@media (hover:hover) and (pointer:fine){.wall:not([data-z="2"]):not([data-z="3"]) .ph:hover .hv{opacity:1;transform:none}
+  .ph:hover .bdg .lkt,.ph:hover .bdg .vt{opacity:0}}
+@media not ((hover:hover) and (pointer:fine)){.ph .hv{display:none}}
+.selm .ph .hv{display:none}
+
+/* 右邊的日期捲軸 */
+.scrub{position:fixed;right:0;top:84px;bottom:28px;width:30px;z-index:var(--z-bar);pointer-events:none;opacity:0;transition:opacity var(--t-mid) var(--ease)}
+.scrub.on{opacity:1}
+.scrub .stk2{position:absolute;right:8px;top:0;bottom:0;width:6px}
+.scrub .stk2 b{position:absolute;left:1px;width:4px;height:4px;border-radius:50%;background:color-mix(in oklab,var(--tx) 35%,transparent)}
+.sth{position:absolute;right:3px;width:12px;height:44px;top:calc(var(--f,0) * (100% - 44px));border-radius:var(--r-pill);background:var(--glass);box-shadow:var(--sh-pop),var(--hl);
+  -webkit-backdrop-filter:blur(14px);backdrop-filter:blur(14px);touch-action:none;cursor:grab;transition:width var(--sp-fast),right var(--sp-fast)}
+.sth::before{content:"";position:absolute;inset:14px 4px;border-radius:var(--r-pill);background:var(--grad,var(--p))}
+.sth::after{content:"";position:absolute;inset:-6px -14px -6px -24px}
+.scrub.on .sth{pointer-events:auto}
+.scrub.drag .sth{width:16px;right:5px;cursor:grabbing}
+.sbl{position:absolute;right:calc(100% + 12px);top:50%;transform:translate(8px,-50%) scale(.9);transform-origin:right center;opacity:0;white-space:nowrap;padding:9px 16px;border-radius:var(--r-pill);
+  background:var(--glass);-webkit-backdrop-filter:blur(18px) saturate(1.6);backdrop-filter:blur(18px) saturate(1.6);box-shadow:var(--sh-pop),var(--hl);font:600 var(--fs-l)/1 var(--serif);color:var(--tx);transition:opacity var(--t-fast) var(--ease),transform var(--sp-fast);pointer-events:none}
+.scrub.drag .sbl:not(:empty){opacity:1;transform:translate(0,-50%)}
+html:has(.lb,.ss,.sy) .scrub{opacity:0;pointer-events:none}
+
+/* 器材：用了哪幾台相機、哪幾顆鏡頭、常用焦段（點了只看那台拍的） */
+.gear{max-width:1600px;margin:clamp(40px,8vw,96px) auto 0;padding:0 var(--pad)}
+.gear[hidden]{display:none}
+.gcams{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:10px;align-content:start}
+.gcam{display:grid;grid-template-columns:auto 1fr;grid-template-rows:auto auto;column-gap:12px;row-gap:8px;align-items:center;padding:14px 16px;border-radius:var(--r-lg);background:var(--s1);box-shadow:var(--sh-card);text-align:left;
+  transition:transform var(--sp-fast),box-shadow var(--t-fast) var(--ease)}
+.gcam:active{transform:scale(.98)}
+.gcam.on{box-shadow:0 0 0 2px var(--g2),var(--sh-card)}
+.gic{grid-row:1 / span 2;width:42px;height:42px;border-radius:var(--r-md);display:grid;place-items:center;background:color-mix(in oklab,var(--g2) 16%,transparent);color:var(--g2)}
+.gic svg{width:22px;height:22px}
+.gt2{display:flex;align-items:baseline;gap:8px;min-width:0}
+.gt2 b{font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.gt2 small{color:var(--tx3);font-size:var(--fs-xs);font-weight:600;flex:none;margin-left:auto}
+.gbr{height:4px;border-radius:var(--r-pill);background:var(--s2);overflow:hidden}
+.gbr i{display:block;height:100%;border-radius:inherit;background:var(--grad,var(--g2))}
+.glens{display:flex;flex-wrap:wrap;gap:8px;margin-top:12px}
+.glens .chip{-webkit-backdrop-filter:none;backdrop-filter:none;background:var(--s1);box-shadow:var(--sh-card)}
+.glens .chip svg{color:var(--g2)}
+.glens .chip small{color:var(--tx3);font-weight:600}
+.glens .chip.on{background:var(--grad);color:var(--on-g)}
+.glens .chip.on svg,.glens .chip.on small{color:var(--on-g)}
+.gfoc{margin-top:12px;padding:14px 16px 12px;border-radius:var(--r-lg);background:var(--s1);box-shadow:var(--sh-card)}
+.gfh{display:flex;align-items:baseline;justify-content:space-between;margin-bottom:10px}
+.gfh small{color:var(--tx3);font-size:var(--fs-xs);font-weight:700;letter-spacing:.06em}
+.gfh b{font-weight:750}
+.gfc{display:grid;grid-template-columns:repeat(5,1fr);gap:10px}
+.gfc div{display:grid;justify-items:center;gap:4px}
+.gfc span{width:100%;max-width:56px;height:56px;display:flex;align-items:flex-end;border-radius:var(--r-xs);background:var(--s2);overflow:hidden}
+.gfc span i{display:block;width:100%;background:color-mix(in oklab,var(--g2) 45%,transparent);border-radius:var(--r-xs) var(--r-xs) 0 0}
+.gfc .top span i{background:var(--grad,var(--g2))}
+.gfc b{font-size:var(--fs-xs);font-weight:700;min-height:1em}
+.gfc small{font-size:10px;color:var(--tx3);font-weight:600;white-space:nowrap}
+
+/* 看大圖：點相機、鏡頭名稱 */
+.igear{display:inline-flex;align-items:center;gap:4px;min-width:0;flex:1;text-align:left}
+.igear b{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.igear svg{width:15px;height:15px;color:var(--tx3);flex:none}
+.igear.sm{display:inline;flex:none;color:var(--p);font-weight:600}
+.icam .t .igear b{flex:none}
+
+/* 直方圖 */
+.ihist{display:grid;gap:4px}
+.ihist svg{width:100%;height:64px;display:block;border-radius:var(--r-sm);background:color-mix(in oklab,var(--tx) 4%,transparent);transform-origin:bottom}
+.ihist .hg{stroke:var(--line);stroke-width:1;vector-effect:non-scaling-stroke}
+.ihist .hl0{fill:color-mix(in oklab,var(--tx) 16%,transparent)}
+.ihist polyline{fill:none;stroke-width:1.4;vector-effect:non-scaling-stroke;stroke-linejoin:round;mix-blend-mode:normal;opacity:.85}
+.ihist .hr{stroke:#ff5a5f}
+.ihist .hgr{stroke:#3ecf6a}
+.ihist .hb{stroke:#4d8dff}
+.ihl{display:flex;justify-content:space-between;align-items:center;font-size:10px;color:var(--tx3);font-weight:600}
+.ihl b{font-size:var(--fs-xs);color:var(--tx2);font-weight:650}
+@media (min-width:900px){
+  .gear{display:grid;grid-template-columns:minmax(0,1fr) minmax(320px,420px);column-gap:16px;align-items:start}
+  .gear .mh{grid-column:1 / -1}
+  .gear .gcams,.gear .glens{grid-column:1}
+  .gear .gfoc{grid-column:2;grid-row:2 / span 2;margin-top:0}
+}
+
+/* 旅程路線：照片、第幾天等線畫到那裡才跳出來；右下角重播 */
+.map.trip .mk{animation-play-state:paused}
+.map.trip.drawn .mk{animation-play-state:running}
+.map.trip:not(.drawn) .dayn{transition:none!important}
+.rplay{position:absolute;right:12px;bottom:28px;z-index:3;width:40px;height:40px;border-radius:50%;display:grid;place-items:center;background:var(--glass);-webkit-backdrop-filter:blur(14px);backdrop-filter:blur(14px);box-shadow:var(--sh-pop);color:var(--tx);
+  opacity:0;transition:opacity var(--t-mid) var(--ease) 2.6s,transform var(--sp-fast)}
+.drawn .rplay{opacity:1}
+.rplay:active{transform:scale(.9)}
+.rplay svg{width:18px;height:18px}
+
+/* 留言回覆：縮排在那一則下面 */
+.cmt.rep{padding-left:42px}
+.cmt+.cmt.rep{box-shadow:none;padding-top:2px}
+.cmt.rep .av{width:24px;height:24px;font-size:var(--fs-xs)}
+.crep{margin-top:2px;font-size:var(--fs-xs);font-weight:650;color:var(--tx3);padding:4px 0}
+.crep:active{color:var(--p)}
+.cre{display:flex;align-items:center;gap:6px;justify-self:start;height:28px;padding:0 4px 0 12px;border-radius:var(--r-pill);background:var(--s2);font-size:var(--fs-xs);font-weight:650;color:var(--tx2)}
+.cre[hidden]{display:none}
+.cre button{width:22px;height:22px;display:grid;place-items:center;border-radius:50%}
+.cre svg{width:13px;height:13px}
+
+/* 看大圖：在這附近拍的其他照片 */
+.inear{padding:12px 16px 14px;border-top:1px solid var(--line)}
+.inh{display:flex;align-items:baseline;justify-content:space-between;margin-bottom:10px}
+.inh b{font-size:var(--fs-s);font-weight:700}
+.inh span{font-size:var(--fs-xs);color:var(--tx3);font-weight:600}
+.inr{display:flex;gap:8px;overflow-x:auto;scrollbar-width:none;margin:0 -16px;padding:0 16px;scroll-snap-type:x proximity}
+.inr::-webkit-scrollbar{display:none}
+.inp{flex:none;width:76px;display:grid;gap:5px;scroll-snap-align:start;transition:transform var(--sp-fast)}
+.inp img{width:76px;height:76px;object-fit:cover;border-radius:var(--r-sm);display:block;background:var(--s2)}
+.inp small{font-size:10px;color:var(--tx3);font-weight:600;text-align:center;white-space:nowrap}
+.inp:active{transform:scale(.95)}
+
+/* 幻燈片的章節卡：換天時先放一張（第幾天、日期、城市、天氣） */
+.ssl.sch .sbg{filter:blur(28px) brightness(.55) saturate(1.3)}
+.sct{position:absolute;inset:0;display:grid;place-content:center;justify-items:center;gap:12px;padding:0 var(--pad);text-align:center;color:#fff}
+.sct>i:not(.dwx){font-style:normal;font-size:var(--fs-s);font-weight:700;letter-spacing:.3em;color:rgba(255,255,255,.75)}
+.sct b{font-family:var(--serif);font-weight:600;font-size:clamp(30px,6vw,64px);letter-spacing:.04em;line-height:1.15;text-shadow:0 4px 30px rgba(0,0,0,.35)}
+.sct>span{display:inline-flex;align-items:center;gap:6px;font-size:var(--fs-l);color:rgba(255,255,255,.88)}
+.sct>span svg{width:17px;height:17px}
+.sct .dwx{margin:4px 0 0;font-size:var(--fs-l);color:#fff}
+.sct .dwx svg{width:22px;height:22px;color:#fff}
+.sct .dwx small{color:rgba(255,255,255,.7);font-size:var(--fs-s)}
+
+/* 每天標題右邊：播放這天 */
+button.dct{display:inline-flex;align-items:center;gap:4px;padding:0 9px 0 7px;cursor:pointer;transition:transform var(--sp-fast),background var(--t-fast) var(--ease)}
+button.dct svg{width:10px;height:10px;fill:currentColor;stroke:none}
+button.dct:active{transform:scale(.92)}
+.day.cov button.dct{pointer-events:auto}
+@media (hover:hover){button.dct:hover{background:var(--grad);color:var(--on-g)}}
+
+/* 地圖泡泡：那裡拍的全部照片 */
+.sh.shp{width:min(640px,100%);text-align:left;padding:18px 16px calc(16px + env(safe-area-inset-bottom));max-height:78svh;display:flex;flex-direction:column}
+.shh{display:flex;align-items:baseline;gap:10px;padding:2px 4px 14px}
+.shh b{font-family:var(--serif);font-size:var(--fs-xl);font-weight:600;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.shh span{font-size:var(--fs-s);color:var(--tx3);flex:none}
+.shg{display:grid;grid-template-columns:repeat(auto-fill,minmax(96px,1fr));gap:4px;overflow-y:auto;border-radius:var(--r-md);overscroll-behavior:contain}
+.shg button{position:relative;aspect-ratio:1;overflow:hidden;border-radius:var(--r-xs);background:var(--s2);animation:up var(--t-mid) var(--dec) both;animation-delay:calc(var(--i) * 25ms)}
+.shg img{width:100%;height:100%;object-fit:cover;display:block}
+.shg i{position:absolute;right:6px;bottom:6px;width:22px;height:22px;border-radius:50%;display:grid;place-items:center;background:rgba(0,0,0,.45);color:#fff}
+.shg i svg{width:10px;height:10px;fill:currentColor;stroke:none}
+.shg button:active{transform:scale(.96)}
+
+/* 相簿介紹（主人寫的一段話，封面下面） */
+.intro{max-width:680px;margin:clamp(28px,5vw,56px) auto 0;padding:0 var(--pad);text-align:center}
+.intro p{font-family:var(--serif);font-size:clamp(16px,2vw,19px);line-height:1.9;letter-spacing:.04em;color:var(--tx2);text-wrap:pretty;animation:intro var(--t-long) var(--dec) both}
+.intro p::before,.intro p::after{content:"";display:block;width:28px;height:1px;margin:0 auto 18px;background:var(--grad);opacity:.7}
+.intro p::after{margin:18px auto 0}
+@keyframes intro{from{opacity:0;transform:translateY(10px)}}
+
+/* 留言簿（結尾給整本留一句話） */
+.gbk{max-width:1100px;margin:clamp(48px,8vw,96px) auto 0;padding:0 var(--pad)}
+.gbl{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:12px}
+.gbc{background:var(--s1);border-radius:var(--r-lg);padding:16px 16px 12px;box-shadow:var(--sh-card);display:flex;flex-direction:column;gap:12px;animation:gbin var(--t-slow) var(--dec) both;animation-delay:calc(var(--i) * 50ms)}
+.gbc p{font-family:var(--serif);font-size:var(--fs-m);line-height:1.7;color:var(--tx);word-break:break-word;margin:0}
+.gbn{display:flex;align-items:center;gap:8px;margin-top:auto;font-size:var(--fs-s);color:var(--tx3)}
+.gbn .av{width:24px;height:24px;border-radius:50%;flex:none;display:grid;place-items:center;font-style:normal;font-weight:700;font-size:var(--fs-xs);background:color-mix(in oklab,var(--seed) 22%,var(--s2));color:var(--p)}
+.gbn b{color:var(--tx2);font-weight:650;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.gbn .cx{margin-left:auto}
+.gbe{display:flex;align-items:center;gap:10px;padding:18px;border-radius:var(--r-lg);background:var(--s1);color:var(--tx3);font-size:var(--fs-m)}
+.gbe svg{width:22px;height:22px;flex:none;color:var(--p)}
+.gbf{max-width:560px;margin:16px auto 0}
+@keyframes gbin{from{opacity:0;transform:translateY(10px) scale(.98)}}
+
+/* 誰按了愛心 */
+.lkw{display:inline-flex;align-items:center;gap:4px;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+
+/* 每天一句話（早上在哪、下午到哪、走了幾公里） */
+.dsum{grid-column:1;font-style:normal;font-family:var(--serif);font-size:var(--fs-m);line-height:1.6;color:var(--tx2);letter-spacing:.02em;margin-top:2px;text-wrap:pretty}
+.day.cov .dsum{color:rgba(255,255,255,.9);text-shadow:0 1px 10px rgba(0,0,0,.4)}
+.wall[data-z="2"] .dsum,.wall[data-z="3"] .dsum{display:none}
+.sct .dsum{color:rgba(255,255,255,.85);font-size:var(--fs-l);max-width:30em;margin-top:4px}
+
+/* 留言輸入框平常收著：只放一顆鈕 */
+.cform.fold{display:none}
+.cadd{margin-top:10px;display:inline-flex;align-items:center;gap:8px;height:40px;padding:0 16px;border-radius:var(--r-pill);background:var(--s2);color:var(--tx2);font:600 var(--fs-m)/1 var(--font);transition:transform var(--sp-fast),background var(--t-fast)}
+.cadd svg{width:17px;height:17px;color:var(--p)}
+.cadd:active{transform:scale(.95)}
+.gbk .cadd{display:flex;margin:16px auto 0}
+.gbk .cadd[hidden],.cadd[hidden]{display:none}
+/* 「回覆」平常藏著：點那則留言（電腦滑鼠指著）才出現 */
+.crep{display:block;max-height:0;opacity:0;overflow:hidden;padding:0;margin-top:0;transition:max-height var(--t-mid) var(--ease),opacity var(--t-fast) var(--ease),padding var(--t-mid) var(--ease)}
+.cmt.on .crep{max-height:28px;opacity:1;padding:4px 0}
+@media (hover:hover){.cmt:hover .crep{max-height:28px;opacity:1;padding:4px 0}}
+.cmt{cursor:default;-webkit-tap-highlight-color:transparent}
+.sb[hidden]{display:none}
