@@ -1710,14 +1710,19 @@ function openLb(i, from){
     const mv = dir && q && q !== p && anim() ? morph(q, p, k0) : null;
     if (tx0 && anim()) {                                         // 換張時只有變了的字淡入換上，其他不動（使用者說不要整塊抖一下）
       const tx1 = leafText(inf);
-      tx1.forEach((v, k) => { if (tx0.get(k) !== v.t && !v.e.closest("[data-mv]")) v.e.animate([{opacity:.15}, {opacity:1}], {duration:T.mid, easing:DEC}); });
+      tx1.forEach((v, k) => { if (v.t && (tx0.get(k) || {}).t !== v.t && !v.e.closest("[data-mv]")) v.e.animate([{opacity:.15}, {opacity:1}], {duration:T.mid, easing:DEC}); });
     }
     [-1, 1].forEach(d => { const q = PH[S.i + d]; if (q && !q.pal && !q.broken) palette(q); });   // 旁邊兩張先算好顏色，換過去不用等
   }
   function leafText(P){                                     // 面板裡每個最底層的字：照位置記下來，換張時比對哪些變了
     const m = new Map(), walk = (e, k) => { const c = [...e.children].filter(x => !(x instanceof SVGElement));
-      if (!c.length || e.matches("b,small,span.tag,.idt,.itm")) m.set(k, {t:e.textContent + (e.querySelector("svg") ? "|" + e.querySelector("svg").innerHTML.length : ""), e}); else c.forEach((x, i) => walk(x, k + "." + i)); };
-    [...P.children].forEach((x, i) => walk(x, String(i))); return m;
+      if (!c.length || e.matches("b,small,span.tag,.idt,.itm")) m.set(k, {t:e.textContent + (e.querySelector("svg") ? "|" + e.querySelector("svg").innerHTML.length : ""), e}); else kids(c).forEach(([x, s]) => walk(x, k + "/" + s)); };
+    /* 照「這格是什麼」記，不照第幾個：前一張多一塊（地圖、風格）或少一行時，後面沒變的格子才不會被當成變了 */
+    const c1 = e => e ? (e.classList[0] || e.tagName) : "";  // 只看第一個 class（ok、on 這類狀態不算）
+    const kids = c => { const n = {}; return c.map(x => { const lb = x.querySelector(":scope>small,:scope>span:first-child"), lt = lb && lb.textContent.trim(),
+      b = x.tagName + (x.dataset.gk ? "#" + x.dataset.gk : lt ? "@" + lt : "." + c1(x) + (x.classList.contains("ibox") ? ">" + (x.classList[1] || c1(x.firstElementChild)) : ""));   // 有標籤的格子只看標籤（「沒有值」「跑焦」換 class 不算換了一格）；一塊一塊照第一個東西分（地圖、相機、風格…）
+      n[b] = (n[b] || 0) + 1; return [x, b + "~" + n[b]]; }); };
+    kids([...P.children]).forEach(([x, s]) => walk(x, s)); return m;
   }
   function panIn(P, dir, keep){                              // 換張時面板裡的內容跟著照片的方向滑進來（一塊一塊、不先變空白）
     if (!anim()) return;
@@ -2942,7 +2947,7 @@ function infoHTML(p){
   if (x.fla != null) st.push([gBolt(x.fla & 1), x.fla & 1 ? "有閃" : "沒閃", "閃光燈"]);
   if (x.wb != null) st.push([gWb(x.wb), x.wb ? "手動" : "自動", "白平衡"]);
   if (x.sc && SC[x.sc]) st.push([gDial("SCN"), SC[x.sc], "場景"]);
-  if (x.afp && !isVid(p)) st.push([gAf(p), p.fm ? "可能跑焦" : p.fs >= 60 ? "清楚" : "看位置", "對焦點", ` class="iaf${AFON ? " on" : ""}${p.fm ? " miss" : ""}" data-af role="button" tabindex="0" aria-pressed="${AFON}"`]);
+  if (x.afp && !isVid(p)) st.push([gAf(p), p.fm ? "可能跑焦" : p.fs >= 60 ? "清楚" : "標出位置", "對焦點", ` class="iaf${AFON ? " on" : ""}${p.fm ? " miss" : ""}" data-af role="button" tabindex="0" aria-pressed="${AFON}"`]);
   { const c = STKOF.get(PH.indexOf(p)); if (c != null && STKB.has(c)) { const ev = STK.get(c).map(i => PH[i].x.ev).sort((a, b) => a - b);
     kv.push(["包圍曝光", `${ev.length} 張・${ev.map(v => `${v > 0 ? "+" : v < 0 ? "−" : "±"}${Math.abs(+v.toFixed(1))}`).join(" / ")} EV`]); } }
   if (p.g && p.g[2] != null) kv.push(["海拔", `${Math.round(p.g[2])} 公尺`, gMtn]);
@@ -2950,7 +2955,10 @@ function infoHTML(p){
   if (p.g) kv.push(["座標", `${p.g[0].toFixed(5)}, ${p.g[1].toFixed(5)}`]);
   if (x.sw) kv.push(["軟體", x.sw]);
   kv.push(["檔名", p.n.split("/").pop()]);
-  if (st.length) h += `<div class="ibox iset${st.length === 5 ? " w3" : ""}" style="--n:${st.length === 5 ? 3 : Math.min(st.length, 4)}">${st.map(([g, v, k, at]) => `<div${at || ""}>${g}<b>${esc(v)}</b><small>${k}</small></div>`).join("")}</div>`;
+  if (st.length) {                                           // 4 格以內一排；5 格以上分兩排、每排撐滿（不留空格）
+    const n = st.length, top = n <= 4 ? n : Math.ceil(n / 2);
+    h += `<div class="ibox iset">${st.map(([g, v, k, at], j) => `<div${at || ""} style="grid-column:span ${12 / (j < top ? top : n - top)}"${j >= top ? " data-r2" : ""}>${g}<b>${esc(v)}</b><small>${k}</small></div>`).join("")}</div>`;
+  }
   h += `<div class="ibox ikv">${kv.filter(r => r[1]).map(([k, v, g]) => `<div><span>${k}</span><b>${g || ""}${esc(v)}</b></div>`).join("")}</div>`;
   if (D.dl) h += `<div class="idl"><a class="pr" href="${src(p, "o")}" download>${I("dl")}${D.dl > 1 ? (isVid(p) ? "下載影片" : "下載原圖") : "下載"}</a></div>`;
   return h;
