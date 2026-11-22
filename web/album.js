@@ -30,6 +30,7 @@ const P = {
   trash:'<path d="M4 7h16M10 11v6M14 11v6M6 7l1 12a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2l1-12M9 7V4h6v3"/>',
   stk:'<rect x="7" y="7" width="13" height="13" rx="2.5"/><path d="M4 16V6.5A2.5 2.5 0 0 1 6.5 4H16"/>',
   smile:'<circle cx="12" cy="12" r="9"/><path d="M8.5 14.5a4.5 4.5 0 0 0 7 0M9 9.5h.01M15 9.5h.01"/>',
+  moon:'<path d="M20 14.5A8 8 0 1 1 9.5 4a6.5 6.5 0 0 0 10.5 10.5z"/>',
   wsun:'<circle cx="12" cy="12" r="4"/><path d="M12 2.5v2M12 19.5v2M2.5 12h2M19.5 12h2M5.3 5.3l1.4 1.4M17.3 17.3l1.4 1.4M5.3 18.7l1.4-1.4M17.3 6.7l1.4-1.4"/>',
   wpart:'<path d="M8 4.5v1.2M3.8 9H5M4.9 5.9l.9.9M11.1 5.9l-.9.9"/><path d="M5.6 11.2a3.2 3.2 0 1 1 5.6-3"/><path d="M8 20h9.5a3.5 3.5 0 0 0 .4-7 5 5 0 0 0-9.6 1.2A3 3 0 0 0 8 20Z"/>',
   wcld:'<path d="M7 19h10.5a4 4 0 0 0 .5-8 6 6 0 0 0-11.4 1.6A3.3 3.3 0 0 0 7 19Z"/>',
@@ -107,8 +108,25 @@ function brandSvg(x){
   const [vx, vy, vw, vh] = b[0].split(" ").map(Number), h = vw / vh > 2 ? 13 : 18;
   return `<i class="brd" aria-hidden="true"><svg viewBox="${b[0]}" width="${(h * vw / vh).toFixed(1)}" height="${h}"><path d="${b[1]}"/></svg></i>`;
 }
+/* 型號換成大家習慣叫的名字：松下 DC-S5M2X → LUMIX S5IIX、Sony ILCE-7M4 → α7 IV、Canon EOS R5…（標誌照舊放公司的） */
+const ROM = ["", "", "II", "III", "IV", "V", "VI", "VII", "VIII"];
+function series(x){
+  const mk = (MKS[(x.mk || "").toLowerCase()] || x.mk || "").toLowerCase(), md = (x.md || "").trim();
+  if (mk.startsWith("panasonic") && /^(DC|DMC)-/i.test(md))
+    return {m:"LUMIX", c:"lumix", n:md.replace(/^(DC|DMC)-/i, "").replace(/M([2-8])(X?)$/i, (a, d, s) => ROM[d] + s)};
+  if (mk.startsWith("sony") && /^(ILCE|ILCA|SLT)-/i.test(md)) {
+    const q = /^(?:ILCE|ILCA|SLT)-(\d+)([A-Z]*?)(?:M(\d))?$/i.exec(md);
+    return {m:"α", c:"alpha", n:q ? `${q[1]}${q[2] || ""}${q[3] ? " " + ROM[q[3]] : ""}` : md.replace(/^(ILCE|ILCA|SLT)-/i, "")};
+  }
+  if (mk.startsWith("sony") && /^DSC-RX/i.test(md)) return {m:"Cyber-shot", c:"cs", n:md.replace(/^DSC-/i, "").replace(/M(\d)$/, (a, d) => " " + ROM[d])};
+  if (mk.startsWith("canon") && /\bEOS\b/i.test(md)) return {m:"EOS", c:"eos", n:md.replace(/^canon\s+/i, "").replace(/^EOS\s*/i, "")};
+  if ((mk.startsWith("om") || mk.startsWith("olympus")) && /^OM-\d/i.test(md)) return {m:"OM SYSTEM", c:"om", n:md};
+  if (mk.startsWith("ricoh") && /^GR\b/i.test(md)) return {m:"GR", c:"gr", n:md.replace(/^GR\s*/i, "") || "GR"};
+  return null;
+}
 function camName(x){
   const mk = x.mk ? (MKS[x.mk.toLowerCase()] || x.mk.replace(/\s+(corporation|corp\.?|co\.,? ?ltd\.?|imaging)$/i, "")) : "";
+  const sr = series(x); if (sr) return `${mk} ${sr.m}${sr.m === "α" ? "" : " "}${sr.n}`.trim();
   const md = x.md || "";
   if (!md) return mk;
   return md.toLowerCase().startsWith(mk.toLowerCase()) || md.toLowerCase().startsWith((x.mk || "").toLowerCase()) ? md.replace(new RegExp("^" + (x.mk || "").replace(/[.*+?^${}()|[\]\\]/g, "\\$&") + "\\s*", "i"), mk + " ").trim() : `${mk} ${md}`.trim();
@@ -301,13 +319,15 @@ function wxTag(k){
   const ic = wxIco(w[0]);
   return `<i class="dwx ${ic}" title="${WXN[ic]}">${I(ic)}<span class="num">${w[1]}°<small>${w[2]}°</small></span></i>`;
 }
-/* 每天的標題下面一條 24 小時的時間條：拍照的時間點一個點（夜裡暗、白天亮），看得出那天從幾點拍到幾點 */
+/* 每天的標題下面一行：這天從幾點拍到幾點（「☀ 早上 7:30 → 🌙 晚上 8:10」，白天太陽、晚上月亮） */
 function dayClock(list){
-  const hs = list.map(i => PH[i]).filter(p => !p.x.dtf).map(p => pd(p.x.dt)).filter(Boolean).map(d => d.h + d.mi / 60);
-  if (!hs.length) return "";
-  const a = Math.min(...hs), b = Math.max(...hs), pc = v => (v / 24 * 100).toFixed(2);
-  const dots = [...new Set(hs.map(h => Math.round(h * 4) / 4))];
-  return `<i class="dhr" aria-hidden="true"><em style="left:${pc(a)}%;width:${(+pc(b) - +pc(a)).toFixed(2)}%"></em>${dots.map(h => `<b style="left:${pc(h)}%"></b>`).join("")}</i>`;
+  const ps = list.map(i => PH[i]).filter(p => !p.x.dtf && pd(p.x.dt)).sort((x, y) => x.x.dt < y.x.dt ? -1 : 1);
+  if (!ps.length) return "";
+  const one = p => { const d = pd(p.x.dt), s = sunAlt(p), up = s ? s.a > -.83 : d.h >= 6 && d.h < 18; return `<span>${I(up ? "wsun" : "moon")}${ftod(p, d)}</span>`; };
+  const a = ps[0], b = ps[ps.length - 1], same = pd(b.x.dt).h * 60 + pd(b.x.dt).mi - pd(a.x.dt).h * 60 - pd(a.x.dt).mi < 10;
+  let x = one(a), y = one(b); const w = s => s.match(/<\/svg>(\S+) /)[1];
+  if (w(x) === w(y)) y = y.replace(`${w(y)} `, "");          // 同一個時段只寫一次：「早上 10:00 → 10:28」
+  return `<p class="dhr num">${x}${same ? "" : `<i>→</i>${y}`}</p>`;
 }
 function wallRects(){                                         // 現在畫面上每張的位置（動畫中、手指捏著的也算）
   const vis = new Map(), H = innerHeight;
@@ -339,6 +359,7 @@ function flyTiles(vis, dur){                                  // 每張從 vis �
   });
 }
 function zoomWall(z, fx, fy, pre){                            // 換大小：每張從現在的位置連續長大／縮小過去，照片不壓扁
+  setTimeout(() => TILES.forEach(t => { if (t && t.isConnected) { const q = t.getBoundingClientRect(); if (q.bottom > -innerHeight * .4 && q.top < innerHeight * 1.4) sharp(t); } }), ZDUR + 120);   // 放大後看得到的那幾格換清楚的
   z = Math.min(3, Math.max(0, z));
   if (z === ZL || !$(".wall")) return false;
   const vis = pre || wallRects(), H = innerHeight;
@@ -859,6 +880,16 @@ const IO = "IntersectionObserver" in window ? new IntersectionObserver(es => {
     t.style.transitionDelay = anim() ? `${Math.min(n++ * 35, 280)}ms` : "0ms"; t.classList.add("in");
     setTimeout(() => { t.style.transitionDelay = ""; }, T.slow + 300); });
 }, {rootMargin:"0px 0px -4% 0px"}) : null;
+/* 格子顯示得比小圖（高 480）大很多時（每天的封面、放大的照片牆、大螢幕）換成大圖（長邊 2048，一樣是壓縮過的）：先在背景載好再換，不會閃 */
+function sharp(el){
+  const hi = el.querySelector("img.hi"), p = PH[+el.dataset.i];
+  if (!hi || !p || p.broken || hi.dataset.sh || !hi.complete || !hi.naturalHeight) return;
+  const dpr = Math.min(3, devicePixelRatio || 1); if (el.clientHeight * dpr < hi.naturalHeight * 1.2) return;
+  hi.dataset.sh = 1; const u = src(p, "l"), im = new Image(); im.decoding = "async";
+  im.onload = () => { (im.decode ? im.decode() : Promise.resolve()).catch(() => {}).then(() => { if (hi.isConnected) hi.src = u; }); };
+  im.onerror = () => { delete hi.dataset.sh; }; im.src = u;
+}
+const SIO = "IntersectionObserver" in window ? new IntersectionObserver(es => es.forEach(e => { if (e.isIntersecting) sharp(e.target); }), {rootMargin:"40% 0px"}) : null;
 function tile(p, i){
   const el = document.createElement("button");
   el.className = p.q ? "ph" : "ph wt"; el.dataset.i = i; el.setAttribute("aria-label", p.n.split("/").pop());   // wt：主機還在做小圖，先跑一道光
@@ -866,9 +897,10 @@ function tile(p, i){
   el.innerHTML = `${p.q ? `<img class="lq" alt="" src="data:image/jpeg;base64,${p.q}">` : ""}<img class="hi" alt="" loading="lazy" decoding="async" draggable="false" src="${src(p, "s")}"><span class="bdg"></span><span class="ck">${I("ck")}</span>${hvTxt(p) ? `<span class="hv">${esc(hvTxt(p))}</span>` : ""}`;
   setTimeout(() => badge(+el.dataset.i));
   const hi = el.querySelector(".hi");
-  hi.addEventListener("load", () => { el.classList.remove("wt"); hi.decoding = "sync";   /* 換大小時照片會被拿下來再放回去：載好的改同步解碼，放回去那一格不會空白 */ hi.classList.add("ok"); setTimeout(() => { const q = el.querySelector(".lq"); if (q) q.remove(); }, T.slow * 2); }, {once:true});
+  hi.addEventListener("load", () => { el.classList.remove("wt"); hi.decoding = "sync";   /* 換大小時照片會被拿下來再放回去：載好的改同步解碼，放回去那一格不會空白 */ hi.classList.add("ok"); setTimeout(() => { const q = el.querySelector(".lq"); if (q) q.remove(); }, T.slow * 2); sharp(el); }, {once:true});
   hi.addEventListener("error", () => { p.broken = 1; el.classList.remove("wt"); hi.remove(); el.insertAdjacentHTML("beforeend", `<span class="nope">${I("off")}</span>`); }, {once:true});
   if (IO) IO.observe(el); else el.classList.add("in");
+  if (SIO) SIO.observe(el);
   return el;
 }
 function hvTxt(p){ const d = pd(p.x.dt); return [d ? `${d.mo}/${d.d} ${ftime(d)}` : "", camName(p.x)].filter(Boolean).join("・"); }   // 電腦滑鼠指著：拍攝時間、相機
@@ -1000,8 +1032,9 @@ function scrubLabel(y){                                      // 那個位置的�
   const sblSet = (sc, tx) => { const l = sc.querySelector(".sbl"), b = l.querySelector("b"), im = l.querySelector(".sbi"), p = SCR.p;
     if (b.textContent !== tx) b.textContent = tx;
     l.classList.toggle("on", !!tx);
-    const u = p && p.q ? `data:image/jpeg;base64,${p.q}` : "";
-    if (im.dataset.u !== u) { im.dataset.u = u; if (u) im.src = u; im.hidden = !u; } };
+    const k = p ? PH.indexOf(p) : -1, th = k >= 0 && TILES[k] ? TILES[k].querySelector("img.hi") : null;   // 用照片牆上那張清楚的小圖（瀏覽器已經有了），還沒有就先墊模糊的
+    const u = !p || p.broken ? "" : th && th.complete && th.naturalWidth ? th.currentSrc : src(p, "s");
+    if (im.dataset.u !== u) { im.dataset.u = u; im.style.backgroundImage = p && p.q ? `url(data:image/jpeg;base64,${p.q})` : ""; if (u) im.src = u; im.hidden = !u; } };
   const at = e => { SCR.y = e.clientY; if (!SCR.raf) SCR.raf = requestAnimationFrame(go); };
   document.addEventListener("pointerdown", e => { const th = e.target.closest(".scrub.on .sth"); if (!th) return;
     e.preventDefault(); SCR.drag = false; SCR.rg = scrubRange(); SCR.drag = true; SCR.rows = null; SCR.y = null; clearTimeout(SCR.t);

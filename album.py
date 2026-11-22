@@ -2667,9 +2667,22 @@ def alb_send_part(h, total, read, ctype, extra=()):
     return True
 
 
+ALB_FONTS = {"/a/seed-rg.woff2": "web/seed-rg.woff2", "/a/seed-bd.woff2": "web/seed-bd.woff2"}   # 相簿用的 LINE Seed TW（SIL OFL，常用字），主機自己給
+ALB_FONTB = {}
+
+
 def alb_http(h, method):
     """/a/十碼 開頭的網址；回傳 True 表示處理好了"""
     path = urllib.parse.urlsplit(h.path).path
+    if path in ALB_FONTS and method == "GET":
+        if path not in ALB_FONTB:
+            try:
+                with open(os.path.join(HERE, ALB_FONTS[path]), "rb") as fh:
+                    ALB_FONTB[path] = fh.read()
+            except OSError:
+                ALB_FONTB[path] = b""
+        b = ALB_FONTB[path]
+        return (h.send(200, b, "font/woff2", cache=30 * 86400) if b else h.send(404, '{"error":"找不到"}')) or True
     if path in ALB_ICONS and method == "GET":
         b, ct = ALB_ICONS[path]
         return h.send(200, b, ct, cache=True) or True
