@@ -1942,28 +1942,36 @@ function smapGo(k, force){
 }
 
 const SV = (b, cls = "") => `<svg class="gx ${cls}" viewBox="0 0 32 32" aria-hidden="true">${b}</svg>`;
-function gIris(f){                       // ƒ1.4 開最大、ƒ22 只剩一個小洞
-  const k = 1 - lg(f, 1.2, 22), r = 3 + 9.5 * k, pts = [];
-  for (let i = 0; i < 6; i++) { const a = Math.PI / 3 * i + .3; pts.push(`${(16 + r * Math.cos(a)).toFixed(1)},${(16 + r * Math.sin(a)).toFixed(1)}`); }
-  return SV(`<circle cx="16" cy="16" r="13" class="gt"/><polygon points="${pts.join(" ")}" class="gf"/>`);
+function gIris(f){                       // 光圈葉片：ƒ1.4 開最大、ƒ22 只剩一個小洞（相機上的光圈符號）
+  const k = 1 - lg(f, 1.2, 22), r = 2.6 + 8.2 * k, R = 13, P = [];
+  for (let i = 0; i < 6; i++) { const a = Math.PI / 3 * i - Math.PI / 2; P.push([16 + r * Math.cos(a), 16 + r * Math.sin(a)]); }
+  const bl = P.map((q, i) => {                                // 每片葉片的邊：從洞口順著邊往外延伸到外圈
+    const n = P[(i + 1) % 6], dx = n[0] - q[0], dy = n[1] - q[1], L = Math.hypot(dx, dy), ux = dx / L, uy = dy / L;
+    const ox = n[0] - 16, oy = n[1] - 16, bb = ox * ux + oy * uy, t = -bb + Math.sqrt(bb * bb - (ox * ox + oy * oy - R * R));
+    return `<path d="M${q[0].toFixed(1)} ${q[1].toFixed(1)}L${(n[0] + ux * t).toFixed(1)} ${(n[1] + uy * t).toFixed(1)}" class="gs"/>`;
+  }).join("");
+  return SV(`<circle cx="16" cy="16" r="${R}" class="gw"/><polygon points="${P.map(q => q.map(v => v.toFixed(1)).join(",")).join(" ")}" class="gh"/>${bl}<circle cx="16" cy="16" r="${R}" class="gs"/>`);
 }
-function gShut(et){                      // 1/8000 一點點、30 秒繞一圈
+function gShut(et){                      // 碼錶：1/8000 只走一點點、30 秒走一圈
   const v = et[0] / et[1], k = Math.max(.04, lg(v, 1 / 8000, 30)), a = k * 2 * Math.PI - Math.PI / 2;
-  const big = k > .5 ? 1 : 0, x = 16 + 12 * Math.cos(a), y = 16 + 12 * Math.sin(a);
-  return SV(`<circle cx="16" cy="16" r="12" class="gt"/><path d="M16 16V4A12 12 0 ${big} 1 ${x.toFixed(1)} ${y.toFixed(1)}Z" class="gf"/>`);
+  const big = k > .5 ? 1 : 0, x = 16 + 10.5 * Math.cos(a), y = 18 + 10.5 * Math.sin(a);
+  return SV(`<path d="M13.5 3.5h5M16 3.5v3.5M24.5 8.5l1.8-1.8" class="gs"/><path d="M16 18V7.5A10.5 10.5 0 ${big} 1 ${x.toFixed(1)} ${y.toFixed(1)}Z" class="gf"/><circle cx="16" cy="18" r="11.5" class="gs"/><circle cx="16" cy="18" r="1.6" class="gd"/>`);
 }
-function gIso(iso){                      // 五格，越高越多格（ISO 越高越多雜訊）
-  const n = Math.max(1, Math.round(1 + lg(iso, 50, 12800) * 4));
-  return SV([0, 1, 2, 3, 4].map(i => `<rect x="${3 + i * 5.6}" y="${22 - i * 4}" width="4" height="${6 + i * 4}" rx="1.5" class="${i < n ? "gf" : "gt"}"/>`).join(""));
+const GRAIN = [[7,9],[20,8],[13,13],[25,15],[9,20],[18,21],[24,23],[11,11],[16,9],[22,18],[8,15],[14,24],[26,10],[19,14],[10,24],[15,17],[23,12],[7,23],[21,25],[12,18],[17,12],[25,20],[9,12],[19,23]];
+function gIso(iso){                      // 感光元件上的雜點：ISO 越高點越多
+  const n = Math.round(3 + lg(iso, 50, 12800) * 21);
+  return SV(`<rect x="4" y="5" width="24" height="22" rx="3.5" class="gw"/>${GRAIN.slice(0, n).map(([x, y]) => `<circle cx="${x}" cy="${y}" r="1.15" class="gd"/>`).join("")}<rect x="4" y="5" width="24" height="22" rx="3.5" class="gs"/><path d="M8 2.5v2.5M13 2.5v2.5M19 2.5v2.5M24 2.5v2.5M8 27v2.5M13 27v2.5M19 27v2.5M24 27v2.5" class="gl"/>`);
 }
-function gFov(f35){                      // 實際看到的角度（等效 35mm 的對角線視角）
-  const h = Math.min(70, Math.atan(21.6 / f35) * 180 / Math.PI), r = 20, a1 = (-90 - h) * Math.PI / 180, a2 = (-90 + h) * Math.PI / 180;
-  const p = a => `${(16 + r * Math.cos(a)).toFixed(1)} ${(28 + r * Math.sin(a)).toFixed(1)}`;
-  return SV(`<path d="M16 28L${p(a1)}A${r} ${r} 0 0 1 ${p(a2)}Z" class="gf"/><circle cx="16" cy="28" r="2.2" class="gd"/>`);
+function gFov(f35){                      // 側面看的相機：廣角是扁扁的餅乾鏡、望遠是長長的鏡頭（照等效焦距）
+  const L = 2.5 + lg(f35, 14, 600) * 10, o = (32 - 13 - L) / 2, X = v => (o + v).toFixed(1);
+  return SV(`<g transform="translate(16 17.5) scale(1.3) translate(-16 -17.5)"><path d="M${X(1)} 12.5a2 2 0 0 1 2-2h2.2l1.4-2.6h3.8l1.4 2.6H${X(13)}V26H${X(3)}a2 2 0 0 1-2-2Z" class="gs"/><circle cx="${X(7)}" cy="18" r="3" class="gs"/>
+    <rect x="${X(13)}" y="12" width="${L.toFixed(1)}" height="13" rx="1.4" class="gf"/>${L > 6 ? `<path d="M${X(13 + L * .4)} 12v13M${X(13 + L * .62)} 12v13" class="gk"/>` : ""}</g>`);
 }
-function gEv(ev){                        // -3 到 +3 的尺，點在哪就偏哪邊
-  const x = 16 + Math.max(-3, Math.min(3, ev)) * 4.2;
-  return SV(`<path d="M3 20h26" class="gl"/>${[-2, -1, 0, 1, 2].map(i => `<path d="M${16 + i * 4.2} ${i ? 17.5 : 15}v${i ? 5 : 10}" class="gl"/>`).join("")}<circle cx="${x.toFixed(1)}" cy="20" r="4" class="gd"/>`);
+function gEv(ev){                        // 相機裡的曝光尺：−3 … 0 … +3，下面的三角形指著這張
+  const v = Math.max(-3, Math.min(3, ev)), X = i => 16 + i * 4.3, x = X(v);
+  const tk = [-3, -2, -1, 0, 1, 2, 3].map(i => `<path d="M${X(i).toFixed(1)} ${i % 3 ? 13 : 9}V19" class="${i ? "gl" : "gs"}"/>`).join("");
+  const bar = Math.abs(v) > .05 ? `<rect x="${Math.min(16, x).toFixed(1)}" y="20.5" width="${Math.abs(x - 16).toFixed(1)}" height="3" rx="1.5" class="gd"/>` : "";
+  return SV(`<path d="M1.5 4.5h4M26.5 4.5h4M28.5 2.5v4" class="gs"/>${tk}${bar}<path d="M${x.toFixed(1)} 24l3.4 5.5h-6.8Z" class="gd"/>`);
 }
 function gSun(d){                        // 拍攝時間在一天的哪裡：太陽沿弧線走，晚上是月亮
   const hr = d.h + d.mi / 60, day = hr >= 6 && hr < 18;
@@ -1973,10 +1981,11 @@ function gSun(d){                        // 拍攝時間在一天的哪裡：太
 const gArrow = deg => `<svg class="gin" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9.5" class="gt"/><path d="M12 5l3.5 9L12 12.5 8.5 14Z" class="gd" transform="rotate(${deg} 12 12)"/></svg>`;
 const EPL = {1:"M", 2:"P", 3:"A", 4:"S", 5:"P", 6:"S", 7:"A", 8:"A"};
 const gDial = t => `<svg class="gin gb" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="10" class="gf"/><text x="12" y="12" dy=".36em" text-anchor="middle" class="gtx${t.length > 1 ? " sm" : ""}">${t}</text></svg>`;
-function gMeter(m){                      // 點測光一個點、中央重點一個圈、評價／多點是格子、平均整片
-  const fr = `<rect x="2.5" y="4.5" width="19" height="15" rx="3" class="gt"/>`;
-  const in_ = m === 3 ? `<circle cx="12" cy="12" r="2" class="gd"/>` : m === 2 ? `<circle cx="12" cy="12" r="4.5" class="gf"/>`
-    : m === 1 ? `<rect x="5" y="7" width="14" height="10" rx="1.5" class="gf"/>` : [0, 1, 2].flatMap(i => [0, 1].map(j => `<rect x="${5.2 + i * 4.8}" y="${7.4 + j * 4.8}" width="3.8" height="3.8" rx=".8" class="${i === 1 ? "gd" : "gf"}"/>`)).join("");
+function gMeter(m){                      // 相機上的測光符號：評價（框＋圈＋點）、中央重點（框＋圈）、點測光（一個點）、局部（小圈）、平均（整片）
+  const fr = `<path d="M3 8V6.5A2 2 0 0 1 5 4.5h2.5M16.5 4.5H19A2 2 0 0 1 21 6.5V8M21 16v1.5a2 2 0 0 1-2 2h-2.5M7.5 19.5H5a2 2 0 0 1-2-2V16" class="gs"/>`;
+  const in_ = m === 3 ? `<circle cx="12" cy="12" r="1.8" class="gd"/>` : m === 6 ? `<circle cx="12" cy="12" r="3.6" class="gf"/>`
+    : m === 2 ? `<circle cx="12" cy="12" r="4.6" class="gs"/>` : m === 1 ? `<rect x="5.5" y="7" width="13" height="10" rx="1.5" class="gf"/>`
+    : `<circle cx="12" cy="12" r="4.6" class="gs"/><circle cx="12" cy="12" r="1.4" class="gd"/>`;
   return `<svg class="gin gb" viewBox="0 0 24 24" aria-hidden="true">${fr}${in_}</svg>`;
 }
 const gWb = man => `<svg class="gin gb" viewBox="0 0 24 24" aria-hidden="true"><rect x="2" y="5" width="20" height="14" rx="4" class="gf"/><text x="12" y="12" dy=".36em" text-anchor="middle" class="gtx sm">${man ? "WB" : "AWB"}</text></svg>`;
