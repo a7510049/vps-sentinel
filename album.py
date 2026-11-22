@@ -2260,6 +2260,36 @@ def alb_city_name(*js):
     return ""
 
 
+ALB_OWNF = {"CN-HK": "HK", "CN-MO": "MO", "US-PR": "PR", "US-GU": "GU", "US-VI": "VI", "US-AS": "AS", "US-MP": "MP",
+            "NL-AW": "AW", "NL-CW": "CW", "NL-SX": "SX", "FR-NC": "NC", "FR-PF": "PF", "FR-RE": "RE", "FR-GP": "GP", "FR-MQ": "MQ",
+            "FR-GF": "GF", "FR-YT": "YT", "FR-PM": "PM", "FR-WF": "WF", "FR-BL": "BL", "FR-MF": "MF"}
+ALB_OWNN = (("香港", "HK"), ("Hong Kong", "HK"), ("澳門", "MO"), ("澳门", "MO"), ("Macau", "MO"), ("Macao", "MO"))
+
+
+def alb_region(cc, ad):
+    """有自己旗子的地方（香港、澳門、波多黎各…）：地圖資料常把它們算在別國底下，改用它們自己的代碼"""
+    for k, v in (ad or {}).items():
+        if str(k).startswith("ISO3166-2") and str(v).upper() in ALB_OWNF:
+            return ALB_OWNF[str(v).upper()]
+    if cc == "CN":
+        txt = " ".join(str((ad or {}).get(k) or "") for k in ("state", "region", "province", "city"))
+        for w, c in ALB_OWNN:
+            if w in txt:
+                return c
+    return cc
+
+
+def alb_cc_fix(pl):
+    """舊的地名記錄：國家寫中國但地址在香港、澳門的，改成它們自己的"""
+    cc = pl.get("cc", "")
+    if cc == "CN":
+        txt = " ".join(str(pl.get(k) or "") for k in ("n", "a", "c"))
+        for w, c in ALB_OWNN:
+            if w in txt:
+                return c
+    return cc
+
+
 def alb_place_fmt(j):
     ad = j.get("address") or {}
     city = ad.get("city") or ad.get("town") or ad.get("village") or ad.get("county") or ""
@@ -2272,7 +2302,11 @@ def alb_place_fmt(j):
     for s in rest:
         if s not in seen:
             seen.append(s)
-    cc = str(ad.get("country_code") or "").upper()[:2]
+    cc0 = str(ad.get("country_code") or "").upper()[:2]
+    cc = alb_region(cc0, ad)
+    if cc != cc0:                                   # 香港、澳門不寫國家那一層
+        seen = [x for x in seen if x != country]
+        top = top if top != country else (state or top)
     return {"n": alb_zh(top, cc)[:40], "a": alb_zh("・".join(seen[:3]), cc)[:60], "c": alb_zh(city or state or country, cc)[:30], "cc": cc, "v": ALB_PLV}
 
 
@@ -2521,7 +2555,7 @@ def alb_manifest(a, th=""):
             it["g"] = m["g"]
             pl = alb_place(m["g"][0], m["g"][1])
             if pl:
-                it["p"] = {"n": pl["n"], "a": pl.get("a", ""), "c": pl.get("c") or pl["n"], "cc": pl.get("cc", "")}
+                it["p"] = {"n": pl["n"], "a": pl.get("a", ""), "c": pl.get("c") or pl["n"], "cc": alb_cc_fix(pl)}
                 if pl.get("v", 0) < ALB_PLV and not pl.get("tmp"):
                     old_pl = True
                 c = pl.get("c") or pl["n"]

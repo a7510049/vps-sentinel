@@ -636,13 +636,13 @@ function stats(){
   const days = new Set(), pl = new Set(), ct = new Set(), cc = new Set();
   PH.forEach(p => { const d = pd(p.x.dt); if (d) days.add(d.k); if (p.p) { pl.add(p.p.n); if (cityKey(p)) ct.add(cityKey(p)); if (p.p.cc) cc.add(p.p.cc); } });
   const many = ct.size > 1;
-  const v = PH.filter(isVid).length, it = [[PH.length - v, "張照片"], [v, "段影片"], [days.size, "天"], [D.loc && cc.size > 1 ? cc.size : 0, "個國家"], [D.loc ? (many ? ct.size : pl.size) : 0, many ? "個城市" : "個地點"]].filter(x => x[0] > 0);
+  const v = PH.filter(isVid).length, it = [[PH.length - v, "張照片"], [v, "段影片"], [days.size, "天"], [D.loc && cc.size > 1 ? cc.size : 0, "個地區"], [D.loc ? (many ? ct.size : pl.size) : 0, many ? "個城市" : "個地點"]].filter(x => x[0] > 0);
   box.hidden = !!WHO || it.length < 2;
   const per = {}; PH.forEach(p => { const d = pd(p.x.dt); if (d) per[d.k] = (per[d.k] || 0) + 1; });
   const ks = Object.keys(per).sort(), mx = Math.max(1, ...Object.values(per));
   const gfx = t => t === "天" && ks.length > 1 && ks.length <= 40   // 每天幾張的小長條
       ? `<span class="sgb" aria-hidden="true">${ks.map(k => `<i style="height:${Math.max(12, per[k] / mx * 100).toFixed(0)}%"></i>`).join("")}</span>`
-    : t === "個國家" ? `<span class="sgf" aria-hidden="true">${[...cc].slice(0, 5).map(flagImg).join("")}</span>`   // 去過的國家疊成一排國旗
+    : t === "個地區" ? `<span class="sgf" aria-hidden="true">${[...cc].slice(0, 5).map(flagImg).join("")}</span>`   // 去過的地區疊成一排旗子
     : t === "段影片" && PH.length > v ? `<span class="sgr" aria-hidden="true"><i style="width:${(v / PH.length * 100).toFixed(1)}%"></i></span>` : "";   // 影片佔多少
   box.innerHTML = it.map(([n, t]) => `<div class="st"><b class="num" data-n="${n}">${n}</b><small>${t}</small>${gfx(t)}</div>`).join("")
     + (D.loc && !WHO ? `<div class="st" data-skm hidden><b class="num" data-n="0">0</b><small>公里</small></div>` : "");
@@ -835,7 +835,7 @@ function heroCycle(first){
   };
   HCT = setTimeout(next, 7000);
 }
-/* 封面的地點膠囊：去過幾國就疊幾面國旗（最多 3 面），沒有國家才放圖釘 */
+/* 封面的地點膠囊：去過幾個地區就疊幾面旗子（最多 3 面），沒有才放圖釘 */
 function heroFlags(){
   const cc = [...new Set(PH.filter(p => p.p && p.p.cc).map(p => p.p.cc))].filter(c => /^[A-Z]{2}$/.test(c)).slice(0, 3);
   return cc.length ? `<span class="hfl">${cc.map(flagImg).join("")}</span>` : "";
