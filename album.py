@@ -794,6 +794,7 @@ def alb_edit(d):
         if "secs" in d and str(d["secs"]).isdigit() and int(d["secs"]) in ALB_TIMES:
             s = int(d["secs"])
             a["exp"] = time.time() + s if s else 0
+            a["es"] = time.time()                          # 這次的期限從什麼時候算（朋友那頁畫剩下多少）
         alb_save(all_)
     if isinstance(d.get("noup"), list):
         try:
@@ -2034,7 +2035,7 @@ def alb_manifest(a, th=""):
     if alb_ready(a, idx) < 1 or any(x.get("vr") == -1 for x in out) or (a["loc"] and (old_pl or any("g" in x and "p" not in x for x in out))):
         alb_kick(a["id"])
     wmo = a.get("wm") if a.get("wm") and not alb_wm_bake(a) else ""
-    return {"ok": True, "name": a["name"], "photos": out, "dl": alb_dl(a), "loc": a["loc"], "exp": a["exp"], "wmo": wmo,
+    return {"ok": True, "name": a["name"], "photos": out, "dl": alb_dl(a), "loc": a["loc"], "exp": a["exp"], "es": a.get("es") or a.get("t0", 0), "wmo": wmo,
             "talk": a.get("talk", True), "mu": bool(idx.get("mu")), "up": alb_up(a),
             "places": [k for k, _ in sorted(places.items(), key=lambda x: -x[1])][:6], "ready": alb_ready(a, idx)}
 

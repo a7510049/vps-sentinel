@@ -196,7 +196,15 @@ function sections(){
   const w = $(".wall"); w.dataset.z = ZL;
   w.innerHTML = GROUPS.map((g, gi) => `<section class="day" data-g="${gi}">${g.k && g.d ? g.m
     ? `<div class="dh" data-k="m${g.k}"><b>${g.d.y}年${g.d.mo}月</b><span class="num">${g.list.length}</span></div>`
-    : `<div class="dh" data-day="${g.k}" data-k="d${g.k}"><b>${fday(g.d, YR)}</b><span>${dayPlaces(g.k) ? `${I("pin")}${esc(dayPlaces(g.k))}` : ""}</span><i class="dct num">${g.list.length}</i></div>` : ""}<div class="rows"></div></section>`).join("");
+    : `<div class="dh" data-day="${g.k}" data-k="d${g.k}"><b>${fday(g.d, YR)}</b><span>${dayPlaces(g.k) ? `${I("pin")}${esc(dayPlaces(g.k))}` : ""}</span><i class="dct num">${g.list.length}</i>${dayClock(g.list)}</div>` : ""}<div class="rows"></div></section>`).join("");
+}
+/* 每天的標題下面一條 24 小時的時間條：拍照的時間點一個點（夜裡暗、白天亮），看得出那天從幾點拍到幾點 */
+function dayClock(list){
+  const hs = list.map(i => PH[i]).filter(p => !p.x.dtf).map(p => pd(p.x.dt)).filter(Boolean).map(d => d.h + d.mi / 60);
+  if (!hs.length) return "";
+  const a = Math.min(...hs), b = Math.max(...hs), pc = v => (v / 24 * 100).toFixed(2);
+  const dots = [...new Set(hs.map(h => Math.round(h * 4) / 4))];
+  return `<i class="dhr" aria-hidden="true"><em style="left:${pc(a)}%;width:${(+pc(b) - +pc(a)).toFixed(2)}%"></em>${dots.map(h => `<b style="left:${pc(h)}%"></b>`).join("")}</i>`;
 }
 function wallRects(){                                         // 現在畫面上每張的位置（動畫中、手指捏著的也算）
   const vis = new Map(), H = innerHeight;
@@ -297,7 +305,13 @@ function stats(){
   const many = ct.size > 1;
   const v = PH.filter(isVid).length, it = [[PH.length - v, "張照片"], [v, "段影片"], [days.size, "天"], [D.loc && cc.size > 1 ? cc.size : 0, "個國家"], [D.loc ? (many ? ct.size : pl.size) : 0, many ? "個城市" : "個地點"]].filter(x => x[0] > 0);
   box.hidden = !!WHO || it.length < 2;
-  box.innerHTML = it.map(([n, t]) => `<div class="st"><b class="num" data-n="${n}">${n}</b><small>${t}</small></div>`).join("")
+  const per = {}; PH.forEach(p => { const d = pd(p.x.dt); if (d) per[d.k] = (per[d.k] || 0) + 1; });
+  const ks = Object.keys(per).sort(), mx = Math.max(1, ...Object.values(per));
+  const gfx = t => t === "天" && ks.length > 1 && ks.length <= 40   // 每天幾張的小長條
+      ? `<span class="sgb" aria-hidden="true">${ks.map(k => `<i style="height:${Math.max(12, per[k] / mx * 100).toFixed(0)}%"></i>`).join("")}</span>`
+    : t === "個國家" ? `<span class="sgf" aria-hidden="true">${[...cc].slice(0, 5).map(flagImg).join("")}</span>`   // 去過的國家疊成一排國旗
+    : t === "段影片" && PH.length > v ? `<span class="sgr" aria-hidden="true"><i style="width:${(v / PH.length * 100).toFixed(1)}%"></i></span>` : "";   // 影片佔多少
+  box.innerHTML = it.map(([n, t]) => `<div class="st"><b class="num" data-n="${n}">${n}</b><small>${t}</small>${gfx(t)}</div>`).join("")
     + (D.loc && !WHO ? `<div class="st" data-skm hidden><b class="num" data-n="0">0</b><small>公里</small></div>` : "");
   if (!anim() || !("IntersectionObserver" in window)) return;
   box.querySelectorAll("b").forEach(b => { b.textContent = "0"; });
@@ -309,6 +323,7 @@ function stats(){
       if (k < 1) requestAnimationFrame(step); };
     requestAnimationFrame(step); }, {threshold:.6});
   STIO.observe(box);
+  flagFix(box);
 }
 /* 結尾：三張照片疊成一疊（跟標誌一樣），點了播放 */
 function finCol(){
@@ -327,17 +342,18 @@ function draw(){
   $("#app").innerHTML = `
     <header class="hero"><div class="cv">${cover.q ? `<img class="lq" alt="" src="data:image/jpeg;base64,${cover.q}">` : ""}<img class="hi" alt="" src="${src(cover, "l")}"></div>
       <div class="hcap">${a ? `<div class="eyebrow num">${esc(frange(a, b))}</div>` : ""}<h1>${esc(D.name)}</h1>
-        <div class="hmeta"><button class="chip go" data-ss>${I("play")}<span>播放</span></button><span class="chip">${I("photo")}<span class="num">${cntTxt()}</span></span>${pl ? `<span class="chip" data-pl>${I("pin")}<span>${esc(pl)}</span></span>` : ""}
+        <div class="hmeta"><button class="chip go" data-ss>${I("play")}<span>播放</span></button><span class="chip">${I("photo")}<span class="num">${cntTxt()}</span></span>${pl ? `<span class="chip" data-pl>${heroFlags() || I("pin")}<span>${esc(pl)}</span></span>` : ""}
         ${D.dl ? `<a class="chip" href="${BASE}/zip" download>${I("dl")}<span>全部下載</span></a><button class="chip" data-sel>${I("sel")}<span>選取</span></button>` : ""}${D.up ? `<button class="chip" data-up>${I("up")}<span>放照片</span></button>` : ""}</div></div>
       <button class="cue" aria-label="往下看"><i></i></button></header>
     <div class="bar"><b>${esc(D.name)}<small class="num">${cntTxt()}</small></b>${IOS ? `<span class="chip zb"><button data-zb="-1" aria-label="放大">${I("zin")}</button><button data-zb="1" aria-label="縮小">${I("zout")}</button></span>` : ""}${D.up ? `<button class="chip" data-up aria-label="放照片">${I("up")}</button>` : ""}${D.dl ? `<button class="chip" data-sel aria-label="選取">${I("sel")}</button>` : ""}<button class="chip go" data-ss aria-label="播放">${I("play")}</button></div>
     <nav class="who" hidden></nav><div class="mems"></div><div class="stats"></div><div class="cityf" hidden></div><main class="wall" data-z="${ZL}"></main>
     ${D.loc && ALL.some(p => p.g && !p.u) ? `<section class="msec"${WHO ? " hidden" : ""}><div class="mh"><b data-mt>地點</b><span class="num" data-km></span></div><div class="cities"></div><div class="map" data-map></div></section>` : ""}
-    <footer class="foot">${finCol()}<div class="fin">${esc(D.name)}</div>${D.exp ? `<span>${I("clock")}${left(D.exp)}</span>` : ""}</footer>`;
+    <footer class="foot">${finCol()}<div class="fin">${esc(D.name)}</div>${D.exp ? `<span class="fexp">${expRing()}${left(D.exp)}</span>` : ""}</footer>`;
   const hi = $(".hero .hi");
   const hok = () => { hi.classList.add("ok"); setTimeout(() => { const q = $(".hero .lq"); if (q) q.remove(); }, T.slow + 100); };   // 糊的底圖拿掉，捲動時不用一直重畫模糊
   hi.complete ? hok() : hi.addEventListener("load", hok, {once:true});
-  heroCycle(cover); zbSync(); tint(cover);
+  heroCycle(cover); zbSync(); tint(cover); flagFix($(".hero"));
+  const hf = $(".hfl"); if (hf) hf.querySelectorAll("img").forEach(f => f.addEventListener("error", () => { if (!hf.querySelector("img")) hf.outerHTML = I("pin"); }));   // 國旗都抓不到就換回圖釘
   if (D.wmo) document.documentElement.style.setProperty("--wm", JSON.stringify(D.wmo));
   document.documentElement.classList.toggle("wmo", !!D.wmo);
   TILES = PH.map((p, i) => tile(p, i));
@@ -444,9 +460,19 @@ function heroCycle(first){
   };
   HCT = setTimeout(next, 7000);
 }
+/* 封面的地點膠囊：去過幾國就疊幾面國旗（最多 3 面），沒有國家才放圖釘 */
+function heroFlags(){
+  const cc = [...new Set(PH.filter(p => p.p && p.p.cc).map(p => p.p.cc))].filter(c => /^[A-Z]{2}$/.test(c)).slice(0, 3);
+  return cc.length ? `<span class="hfl">${cc.map(flagImg).join("")}</span>` : "";
+}
 function cntTxt(){
   const v = PH.filter(isVid).length, n = PH.length - v;
   return [n ? `${n} 張` : "", v ? `${v} 段影片` : ""].filter(Boolean).join("・");
+}
+/* 還剩多少時間：一個圈，剩下的那段亮著 */
+function expRing(){
+  const all = D.exp - (D.es || 0), k = all > 0 ? Math.max(0, Math.min(1, (D.exp - Date.now() / 1000) / all)) : 1, L = 2 * Math.PI * 8;
+  return `<svg class="ring" viewBox="0 0 20 20" aria-hidden="true"><circle cx="10" cy="10" r="8"/><circle class="rk" cx="10" cy="10" r="8" stroke-dasharray="${(L * k).toFixed(2)} ${L.toFixed(2)}"/></svg>`;
 }
 function left(exp){
   const s = exp - Date.now() / 1000;
@@ -643,10 +669,14 @@ function cityCards(cs){
   if (box.dataset.sig === sig) return;
   box.dataset.sig = sig;
   box.hidden = cs.length < 2;
+  const dn = d => d ? Date.UTC(d.y, d.mo - 1, d.d) / 864e5 : null, ns = cs.flatMap(c => [dn(c.d0), dn(c.d1)]).filter(x => x !== null);
+  const s0 = Math.min(...ns), sp = Math.max(...ns) - s0;
+  // 這個城市在整本相簿的哪幾天（一條細線上的一段）
+  const tl = c => sp > 0 && c.d0 ? `<i class="ctl" aria-hidden="true"><em style="left:${((dn(c.d0) - s0) / (sp + 1) * 100).toFixed(1)}%;width:${((dn(c.d1) - dn(c.d0) + 1) / (sp + 1) * 100).toFixed(1)}%"></em></i>` : "";
   box.innerHTML = cs.length < 2 ? "" : cs.map(c => {
     const pick = c.ps.filter(p => !isVid(p)).slice(0, 3), ims = (pick.length ? pick : c.ps.slice(0, 1));
     return `<button class="cty" data-city="${esc(c.k)}"><span class="ctc n${ims.length}">${ims.map(p => `<img alt="" loading="lazy" draggable="false" src="${src(p, "s")}">`).join("")}<i class="num">${I("photo")}${c.ps.length}</i></span>
-      <span class="ctt"><b>${flagImg(c.cc)}<span>${esc(c.c)}</span></b><small class="num">${esc(cityDates(c.d0, c.d1))}</small></span></button>`;
+      <span class="ctt"><b>${flagImg(c.cc)}<span>${esc(c.c)}</span></b><small class="num">${esc(cityDates(c.d0, c.d1))}</small>${tl(c)}</span></button>`;
   }).join("");
   flagFix(box);
 }

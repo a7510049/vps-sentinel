@@ -766,3 +766,27 @@ html::-webkit-scrollbar,body::-webkit-scrollbar{display:none;width:0;height:0}  
 .gin.gb .gf{fill:color-mix(in oklab,var(--g2) 80%,transparent)}
 .gin.gb .gd{fill:var(--g1)}
 .iset .gin.off .gd{fill:var(--tx3)}
+
+/* 更多圖形：每天的 24 小時時間條、數字卡的小圖、城市在整趟的哪幾天、期限圈、封面國旗 */
+.dhr{grid-column:1;position:relative;display:block;width:min(260px,100%);height:6px;margin-top:6px;border-radius:var(--r-pill);
+  background:linear-gradient(90deg,color-mix(in oklab,var(--g3) 26%,var(--s3)),color-mix(in oklab,var(--g1) 30%,var(--s2)) 30%,color-mix(in oklab,var(--g1) 30%,var(--s2)) 70%,color-mix(in oklab,var(--g3) 26%,var(--s3)))}
+.dhr em{position:absolute;top:0;bottom:0;min-width:6px;border-radius:inherit;background:color-mix(in oklab,var(--g2) 34%,transparent)}
+.dhr b{position:absolute;top:50%;width:6px;height:6px;margin:-3px 0 0 -3px;border-radius:50%;background:var(--g2);box-shadow:0 0 0 1.5px var(--bg)}
+.dhr::before,.dhr::after{content:"";position:absolute;top:-3px;bottom:-3px;width:1px;background:var(--line)}
+.dhr::before{left:25%}.dhr::after{left:75%}
+.wall[data-z="2"] .dhr,.wall[data-z="3"] .dhr{display:none}
+.st .sgb{display:flex;align-items:flex-end;gap:2px;height:18px;margin-top:6px}
+.st .sgb i{flex:1;max-width:8px;border-radius:2px 2px 1px 1px;background:var(--grad);opacity:.75}
+.st .sgf{display:flex;margin-top:6px}
+.st .sgf img{width:22px;height:16px;object-fit:cover;border-radius:3px;box-shadow:0 0 0 1.5px var(--s1);margin-right:-6px}
+.st .sgr{display:block;height:5px;margin-top:8px;border-radius:var(--r-pill);background:color-mix(in oklab,var(--g2) 18%,var(--s2));overflow:hidden}
+.st .sgr i{display:block;height:100%;border-radius:inherit;background:var(--grad)}
+.ctl{position:relative;display:block;height:4px;margin-top:5px;border-radius:var(--r-pill);background:color-mix(in oklab,var(--g2) 14%,var(--s2))}
+.ctl em{position:absolute;top:0;bottom:0;min-width:4px;border-radius:inherit;background:var(--grad)}
+.fexp{display:inline-flex;align-items:center;gap:8px}
+.foot .ring{width:18px;height:18px;margin:0;vertical-align:0;rotate:-90deg;flex:none}
+.ring circle{fill:none;stroke:color-mix(in oklab,var(--g2) 20%,var(--s3));stroke-width:3}
+.ring .rk{stroke:var(--g2);stroke-linecap:round}
+.hfl{display:inline-flex;flex:none}
+.hfl img{width:20px;height:14px;object-fit:cover;border-radius:3px;box-shadow:0 0 0 1.5px var(--glass);margin-right:-5px}
+.hfl img:last-child{margin-right:0}
