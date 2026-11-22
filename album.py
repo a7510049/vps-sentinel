@@ -12,6 +12,7 @@ ALB_PLACES = os.path.join(DATA_DIR, "album-places.json")          # 座標 → �
 ALB_EXT = {".jpg", ".jpeg", ".png", ".webp", ".gif", ".heic", ".heif", ".avif"}
 ALB_EXT2 = {".hif"} | PIC_RAW                                       # 只在雲端硬碟裡看得到的：相機的 HEIF、原始檔（朋友不能上傳）
 ALB_HEIF = {".heic", ".heif", ".hif", ".avif"}
+ALB_VV = 2                                                        # 影片轉檔的做法版本：轉不出來的影片換新做法後再試一次
 ALB_MV = 3                                                        # 照片資訊的格式版本（舊的重讀一次：色彩空間、HDR、原始檔）
 ALB_SHOW = {".jpg", ".jpeg", ".png", ".webp", ".gif", ".avif"}    # 做不出小圖時，瀏覽器直接看得了原圖的
 ALB_VID = {".mp4", ".mov", ".m4v", ".webm", ".3gp", ".mkv"}        # 影片（主機轉成 720p 的 H.264 給朋友看）
@@ -2017,10 +2018,21 @@ def alb_vmake(a, pid, m, kind):
     cmd, src = alb_ff_src(os.path.join(p, name))
     if not cmd:
         return False
+    tries = [(1, 1, 0), (0, 1, 0), (0, 0, 1)] if m.get("hdr") and kind == "v" and alb_ff_has("zscale") else [(0, 1, 0), (0, 0, 1)]
+    for hdr, snd, lean in tries:                       # 轉不出來時退一步再試：不壓 HDR、不要聲音、少用幾條執行緒
+        ok, err = alb_vrun(a, ck, p, name, kind, cmd, src, hdr, snd and kind == "v", lean, m.get("dur", 4))
+        if ok:
+            return True
+    log(f"相簿影片轉不出來（{name}：{err[-160:] or '不明原因'}）")
+    return False
+
+
+def alb_vrun(a, ck, p, name, kind, cmd, src, hdr, snd, lean, dur):
+    """真的叫 ffmpeg 轉一次；回 (成功, 錯誤訊息)"""
     vf, tf = "scale='if(gt(iw,ih),min(1280,iw),-2)':'if(gt(iw,ih),-2,min(1280,ih))',pad=ceil(iw/2)*2:ceil(ih/2)*2", None
-    if m.get("hdr") and kind == "v" and alb_ff_has("zscale"):   # HDR 影片：好好壓成一般亮度（不然顏色又淡又灰）
-        vf = ("zscale=t=linear:npl=203,format=gbrpf32le,zscale=p=bt709,tonemap=hable:desat=0,"
-              "zscale=t=bt709:m=bt709:r=tv,format=yuv420p," + vf)
+    if hdr:                                            # HDR 影片：先縮小再好好壓成一般亮度（不然顏色又淡又灰；縮小後算得快很多）
+        vf = ("scale='if(gt(iw,ih),min(1280,iw),-2)':'if(gt(iw,ih),-2,min(1280,ih))',zscale=t=linear:npl=203,format=gbrpf32le,"
+              "zscale=p=bt709,tonemap=hable:desat=0,zscale=t=bt709:m=bt709:r=tv,format=yuv420p,pad=ceil(iw/2)*2:ceil(ih/2)*2")
     if alb_wm_bake(a):
         tf = tempfile.NamedTemporaryFile("w", suffix=".txt", delete=False, encoding="utf-8")  # noqa: SIM115
         tf.write(a["wm"])
@@ -2036,15 +2048,17 @@ def alb_vmake(a, pid, m, kind):
         tdir = tempfile.mkdtemp(prefix="vsalb-")
         alb_ff_give(tdir)
         tmp, src = os.path.join(tdir, "o.mp4"), "fd:"
-    args = ["-i", src, "-map", "0:v:0", *(["-map", "0:a:0?"] if kind == "v" else ["-an"]), "-map_metadata", "-1", "-vf", vf,
-            "-c:v", "libx264", "-preset", "veryfast", "-crf", "27", "-pix_fmt", "yuv420p", "-threads", "2",
-            *(["-c:a", "aac", "-b:a", "96k", "-ac", "2"] if kind == "v" else []), "-movflags", "+faststart", "-f", "mp4", tmp]
+    args = [*(["-threads", "1", "-filter_threads", "1"] if lean else []), "-i", src, "-map", "0:v:0", *(["-map", "0:a:0?"] if snd else ["-an"]),
+            "-map_metadata", "-1", "-vf", vf,
+            "-c:v", "libx264", "-preset", "veryfast", "-crf", "27", "-pix_fmt", "yuv420p", "-threads", "1" if lean else "2",
+            *(["-c:a", "aac", "-b:a", "96k", "-ac", "2"] if snd else []), "-movflags", "+faststart", "-f", "mp4", tmp]
     os.makedirs(ALB_CACHE, mode=0o700, exist_ok=True)
-    ok = False
+    ok, err = False, ""
     try:
         with open(os.devnull if mount else os.path.join(p, name), "rb") as fin:
             r = subprocess.run(["nice", "-n", "17", *cmd, "-v", "error", "-nostdin", "-y", *args], stdin=fin, capture_output=True,
-                               timeout=max(300, m.get("dur", 4) * 6), preexec_fn=None if mount else alb_ff_pre())
+                               timeout=max(300, dur * 6), preexec_fn=None if mount else alb_ff_pre())
+        err = r.stderr.decode("utf-8", "replace").strip().replace("\n", " ")
         if r.returncode == 0:
             if mount:                                  # 容器裡做的：倒出來再刪掉
                 pr = subprocess.Popen(["docker", "exec", "vps-cloud", "cat", tmp], stdout=subprocess.PIPE)  # noqa: S607
@@ -2055,7 +2069,7 @@ def alb_vmake(a, pid, m, kind):
                 with open(tmp, "rb") as f:
                     ok = alb_vstore(ck, kind, f)
     except (OSError, subprocess.SubprocessError, ValueError) as e:
-        log(f"相簿影片轉不出來（{name}：{str(e)[:80]}）")
+        err = str(e)
     finally:
         for x in [tf.name] if tf else []:
             try:
@@ -2069,7 +2083,7 @@ def alb_vmake(a, pid, m, kind):
                 shutil.rmtree(tdir, ignore_errors=True)
         except (OSError, subprocess.SubprocessError):
             pass
-    return ok
+    return ok, err
 
 
 def alb_vstore(ck, kind, f):
@@ -2093,12 +2107,12 @@ def alb_vstore(ck, kind, f):
     return True
 
 
-def alb_mark_bad(a, pid, key="bad"):
+def alb_mark_bad(a, pid, key="bad", val=1):
     fn = os.path.join(ALB_CACHE, f"idx-{a['id']}.json")
     with ALB_LOCK:
         idx = alb_index(a, scan=False)
         if pid in (idx.get("ph") or {}):
-            idx["ph"][pid][key] = 1
+            idx["ph"][pid][key] = val
             sec_dump(fn, idx)
 
 
@@ -2150,8 +2164,8 @@ def alb_worker():
                         break
                     m = idx["ph"][pid]
                     kind = "v" if m.get("vid") else "m" if m.get("lv") else ""
-                    if kind and not m.get("vbad") and not alb_vinfo(alb_ckey(a, pid, m), kind) and not alb_vmake(a, pid, m, kind):
-                        alb_mark_bad(a, pid, "vbad")
+                    if kind and m.get("vbad", 0) < ALB_VV and not alb_vinfo(alb_ckey(a, pid, m), kind) and not alb_vmake(a, pid, m, kind):
+                        alb_mark_bad(a, pid, "vbad", ALB_VV)
         except Exception as e:  # noqa: BLE001  相簿出錯不影響監控
             log(f"相簿小圖做不出來（{str(e)[:120]}）")
         with ALB_LOCK:
@@ -2482,8 +2496,8 @@ def alb_manifest(a, th=""):
             it["rw"] = m.get("rwx") or os.path.splitext(m["n"])[1][1:].upper()
         if m.get("vid"):                               # 影片：長度、轉好了沒
             it["vd"] = m["dur"]
-            it["vr"] = 0 if m.get("vbad") else 1 if alb_vinfo(ck, "v") else -1
-        elif m.get("lv") and not m.get("vbad") and alb_vinfo(ck, "m"):
+            it["vr"] = 0 if m.get("vbad", 0) >= ALB_VV else 1 if alb_vinfo(ck, "v") else -1
+        elif m.get("lv") and m.get("vbad", 0) < ALB_VV and alb_vinfo(ck, "m"):
             it["lv"] = 1                               # 原況照片：會動的那段好了
             if m.get("anim"):
                 it["gf"] = 1                           # 會動的 GIF、PNG：看大圖時自己一直動
@@ -2757,7 +2771,7 @@ def alb_http(h, method):
             ck = alb_ckey(a, pid, meta)
             info = alb_vinfo(ck, vk) if vk else None
             if not info:
-                return h.send(202 if vk and not meta.get("vbad") else 404, json.dumps({"ok": False, "wait": True}), cache=False) or True
+                return h.send(202 if vk and meta.get("vbad", 0) < ALB_VV else 404, json.dumps({"ok": False, "wait": True}), cache=False) or True
             if kind == "o" and not dlm:
                 return h.send(403, '{"error":"不能下載"}') or True
             extra = [("Content-Disposition", "attachment; filename*=UTF-8''" + urllib.parse.quote(os.path.splitext(os.path.basename(meta["n"]))[0] + ".mp4"))] if kind == "o" else []
