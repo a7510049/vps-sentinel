@@ -13,7 +13,8 @@ ALB_EXT = {".jpg", ".jpeg", ".png", ".webp", ".gif", ".heic", ".heif", ".avif"}
 ALB_EXT2 = {".hif"} | PIC_RAW                                       # 只在雲端硬碟裡看得到的：相機的 HEIF、原始檔（朋友不能上傳）
 ALB_HEIF = {".heic", ".heif", ".hif", ".avif"}
 ALB_VV = 2                                                        # 影片轉檔的做法版本：轉不出來的影片換新做法後再試一次
-ALB_MV = 3                                                        # 照片資訊的格式版本（舊的重讀一次：色彩空間、HDR、原始檔）
+ALB_XL = 3840                                                     # 大螢幕看大圖的清晰版：長邊幾點（有人在大螢幕打開才做）
+ALB_MV = 4                                                        # 照片資訊的格式版本（舊的重讀一次：色彩空間、HDR、原始檔）
 ALB_SHOW = {".jpg", ".jpeg", ".png", ".webp", ".gif", ".avif"}    # 做不出小圖時，瀏覽器直接看得了原圖的
 ALB_VID = {".mp4", ".mov", ".m4v", ".webm", ".3gp", ".mkv"}        # 影片（主機轉成 720p 的 H.264 給朋友看）
 ALB_AUD = {".mp3", ".m4a", ".aac", ".ogg", ".opus", ".flac", ".wav"}   # 資料夾裡放一首歌：幻燈片的背景音樂
@@ -918,7 +919,8 @@ def alb_find(code):
 # ── 照片資訊（EXIF、大小、方向）：只讀檔頭，不用解開整張 ──
 EXIF_T = {0x010F: "mk", 0x0110: "md", 0x0112: "ori", 0x0131: "sw", 0x0132: "dt0", 0x829A: "et", 0x829D: "f", 0x8822: "ep",
           0x8827: "iso", 0x9003: "dt", 0x9011: "oz", 0x9010: "oz0", 0x9204: "ev", 0x9207: "mm", 0x9209: "fla", 0x920A: "fl",
-          0xA405: "f35", 0xA402: "em", 0xA403: "wb", 0xA433: "lmk", 0xA434: "ln", 0xA406: "sc", 0xA002: "pw", 0xA003: "ph"}
+          0xA405: "f35", 0xA402: "em", 0xA403: "wb", 0xA433: "lmk", 0xA434: "ln", 0xA406: "sc", 0xA002: "pw", 0xA003: "ph",
+          0x9214: "sa", 0xA20E: "fpx", 0xA20F: "fpy", 0xA210: "fpu"}
 GPS_T = {1: "latr", 2: "lat", 3: "lonr", 4: "lon", 5: "altr", 6: "alt", 7: "gts", 0x10: "dirr", 0x11: "dir", 0x1D: "gds"}
 TIFF_SZ = {1: 1, 2: 1, 3: 2, 4: 4, 5: 8, 6: 1, 7: 1, 8: 2, 9: 4, 10: 8, 11: 4, 12: 8}
 
@@ -1006,6 +1008,66 @@ def alb_gps_oz(dt, gds, gts):
         return ""
 
 
+ALB_CROP = [                                      # 型號 → 換算倍率（相機沒寫感光元件大小時用）
+    (r"PANASONIC.*DC-S\d|LEICA.*(SL|Q|M1\d|M\d{2})|SONY.*(ILCE-[179]|ILCE-1\b|ZV-E1\b)|CANON.*EOS R([13568]|P)?\b|CANON.*5D|CANON.*6D|NIKON.*Z ?[5-9]\b|NIKON.*Z ?F\b|NIKON.*D[78]\d0\b|SIGMA.*FP", 1.0),
+    (r"FUJIFILM.*GFX|HASSELBLAD", 0.79),
+    (r"FUJIFILM.*X|SONY.*(ILCE-[56]\d|NEX|ZV-E10)|NIKON.*Z ?(30|50|FC)|NIKON.*D[357]\d{3}|PENTAX.*K-?\d|RICOH.*GR|LEICA.*(CL|TL)", 1.53),
+    (r"CANON.*(EOS R(7|10|50|100)|EOS M|\d{2,4}D)", 1.6),
+    (r"PANASONIC.*(DC-G|DMC-G|DC-GH|DC-GX|DC-G9)|OLYMPUS|OM DIGITAL|OM SYSTEM|DJI.*(FC|L\d)", 2.0),
+    (r"SONY.*DSC-RX(100|10\b)|CANON.*G\d X|PANASONIC.*(DC-ZS200|DMC-LX10|DC-TZ2\d\d)", 2.7),
+]
+
+
+def alb_crop(t, x):
+    """換算成全片幅的倍率：先用 EXIF 的感光元件解析度算，沒有再查型號；算不出來回 None"""
+    try:
+        u = {2: 25.4, 3: 10.0, 4: 1.0, 5: .001}.get(t.get("fpu") if isinstance(t.get("fpu"), int) else 2)
+        rx, ry = _rat(t.get("fpx")), _rat(t.get("fpy"))
+        pw, ph = int(t.get("pw") or 0), int(t.get("ph") or 0)
+        if u and rx and ry and pw > 200 and ph > 200:
+            d = math.hypot(pw / rx * u, ph / ry * u)
+            cf = 43.27 / d if d else 0
+            if .5 <= cf <= 12:
+                return round(cf, 2)
+    except (TypeError, ValueError, ZeroDivisionError):
+        pass
+    nm = f"{x.get('mk', '')} {x.get('md', '')}".upper()
+    for rx, cf in ALB_CROP:
+        if re.search(rx, nm):
+            return cf
+    return None
+
+
+def alb_afp(t, ms, ori, irot, w, h):
+    """對焦的位置：[x, y, 框的大小]（照片轉正後的比例 0～1）；相機沒記就回 None"""
+    fp = ms.pop("fp", None)
+    pt = None
+    if fp:                                             # 製造商資料：(x, y, 參考寬, 參考高)；比例的參考是 1，0 代表照片本身的大小
+        fx, fy, rw, rh = fp
+        rw, rh = rw or int(t.get("pw") or 0) or w, rh or int(t.get("ph") or 0) or h
+        if rw and rh:
+            pt = [fx / rw, fy / rh, .1]
+    sa = t.get("sa")
+    if not pt and isinstance(sa, list) and len(sa) in (2, 3, 4):   # EXIF 的 SubjectArea（手機、部分相機）
+        rw, rh = int(t.get("pw") or 0) or w, int(t.get("ph") or 0) or h
+        if rw and rh:
+            bw = sa[2] / rw if len(sa) == 4 else sa[2] / min(rw, rh) if len(sa) == 3 else .1
+            bh = sa[3] / rh if len(sa) == 4 else bw
+            if bw <= .45 and bh <= .45:               # 一大塊在中間的不是對焦點
+                pt = [sa[0] / rw, sa[1] / rh, max(.04, min(.3, max(bw, bh) if len(sa) == 4 else bw))]
+    if not pt or not (.005 < pt[0] < .995 and .005 < pt[1] < .995):
+        return None
+    x, y = pt[0], pt[1]
+    r = {1: 8, 2: 3, 3: 6}.get(irot) or ori
+    if r == 6:
+        x, y = 1 - y, x
+    elif r == 8:
+        x, y = y, 1 - x
+    elif r == 3:
+        x, y = 1 - x, 1 - y
+    return [round(x, 4), round(y, 4), round(pt[2], 3)]
+
+
 def alb_exif_tidy(t):
     """EXIF 的原始值換成網頁要的"""
     x = {}
@@ -1033,6 +1095,10 @@ def alb_exif_tidy(t):
             v = v[0] if v else None
         if isinstance(v, int):
             x[k] = v
+    if not x.get("f35") and x.get("fl"):              # 沒寫等效焦距：照感光元件大小換算（手機的 6 mm 不會被當成超廣角）
+        cf = alb_crop(t, x)
+        if cf:
+            x["f35"], x["f35e"] = round(x["fl"] * cf), 1
     g = None
 
     def deg(v, ref):
@@ -1306,6 +1372,11 @@ def alb_meta(path):
     hd = pic_apple_stops(more.get("a33"), more.get("a48"))
     cs, hdr = alb_color_probe(path, ext, more, hd)
     ms = pic_maker(exif[1], more) if exif else {}
+    afp = alb_afp(t, ms, ori, rot if ext in ALB_HEIF else 0, w, h)
+    if afp:
+        x["afp"] = afp
+    if list(ms) == ["sl"]:
+        ms = {}
     if ms:
         if ms.get("ln") and not x.get("ln"):
             x["ln"] = ms["ln"]
@@ -1679,13 +1750,15 @@ def alb_ff_info(src):
     return r.stderr.decode("utf-8", "replace")
 
 
-def alb_make(a, pid, m):
-    """做大圖（長邊 2048）、小圖（高 480）、模糊預覽（寬 24）；不留任何 EXIF，但照原樣留著色彩描述檔、HDR 增益圖"""
+def alb_make(a, pid, m, edge=2048):
+    """做大圖（長邊 2048）、小圖（高 480）、模糊預覽（寬 24）；不留任何 EXIF，但照原樣留著色彩描述檔、HDR 增益圖
+    edge=ALB_XL 時只做大螢幕用的清晰版 x（有人在大螢幕打開才做）"""
     p = alb_path(a["dir"])
     if not p:
         return False
     ck = alb_ckey(a, pid, m)
-    if os.path.exists(alb_cfile(ck, "s")):
+    xl = edge != 2048
+    if os.path.exists(alb_cfile(ck, "x" if xl else "s")):
         return True
     src = os.path.join(p, m["n"])
     ext = os.path.splitext(m["n"])[1].lower()
@@ -1693,7 +1766,7 @@ def alb_make(a, pid, m):
     rot = ALB_ROT.get(m.get("ori", 1), "") if jpg else ""
     pre = ["-ss", f"{min(1.0, m.get('dur', 0) / 3):.2f}"] if m.get("vid") else []   # 影片：拿一開始的一格當封面
     out = ["-map_metadata", "-1", "-frames:v", "1", "-f", "image2pipe", "-c:v", "mjpeg", "-pix_fmt", "yuvj420p"]
-    scale = "scale='if(gt(iw,ih),min(2048,iw),-2)':'if(gt(iw,ih),-2,min(2048,ih))':flags=lanczos"
+    scale = f"scale='if(gt(iw,ih),min({edge},iw),-2)':'if(gt(iw,ih),-2,min({edge},ih))':flags=lanczos"
     vf, tf = rot + scale, None
     hv = H = rawb = None
     if ext in ALB_HEIF and not m.get("vid"):           # HEIC：自己拆拼圖交給 ffmpeg 解（ffmpeg 6 打不開 HEIC）
@@ -1750,6 +1823,17 @@ def alb_make(a, pid, m):
                 pass
     if not big:
         return False
+    if xl:
+        if icc:
+            big = pic_icc_put(big, icc)
+        if m.get("hdr"):
+            try:
+                big = alb_hdr_put(big, src, ext, m, H, hv, rot, hdr_tm) or big
+            except (OSError, ValueError, struct.error, IndexError, ZeroDivisionError):
+                pass
+        os.makedirs(ALB_CACHE, mode=0o700, exist_ok=True)
+        sec_write(alb_cfile(ck, "x"), big)
+        return True
     small = alb_run_ff(["-f", "mjpeg", "-i", "pipe:0", "-vf", "scale=-2:'min(480,ih)':flags=lanczos", *out, "-q:v", "4", "-"], data=big)
     tiny = alb_run_ff(["-f", "mjpeg", "-i", "pipe:0", "-vf", "scale=24:-2:flags=area", *out, "-q:v", "6", "-"], data=small or big)
     if not small:
@@ -1882,10 +1966,11 @@ def alb_hdr_from_hlg(big, hv, gw, gh, hdr_tm):
 ALB_QA_N = 384                                    # 縮成 384×384 的灰階來算
 ALB_QAK = {}                                      # 相簿 → 上次補算分數的時間
 ALB_QA = {}                                       # 快取鍵 → {"s": 分數, "h": 指紋}（讀過的記在記憶體，不用每次解密）
+ALB_QAV = 2                                       # 分數的算法版本：2 起看對焦點（有對焦點的舊分數重算）
 
 
-def alb_qa_calc(big):
-    """回傳 {"s": 0～100 分, "h": 16 碼指紋}；算不出來回 None"""
+def alb_qa_calc(big, afp=None):
+    """回傳 {"s": 0～100 分, "h": 16 碼指紋, "f": 對焦處清楚的程度 0～100（相機有記對焦點才有）}；算不出來回 None"""
     n = ALB_QA_N
     px = alb_run_ff(["-f", "mjpeg", "-i", "pipe:0", "-vf", f"scale={n}:{n}:flags=area,format=gray", "-frames:v", "1", "-f", "rawvideo", "-pix_fmt", "gray", "-"], data=big, raw=n * n)
     if not px:
@@ -1903,6 +1988,20 @@ def alb_qa_calc(big):
             ct[gy + k] += len(seg)
     var = sorted((sq[k] / ct[k] - (sm[k] / ct[k]) ** 2 for k in range(g * g) if ct[k]), reverse=True)
     v = sum(var[:3]) / 3 if len(var) >= 3 else 0
+    fv = None
+    if afp:                                       # 對焦點那一塊（至少 1/16 寬）：對到的地方糊了就是跑焦，背景再清楚也不算
+        rr = max(12, int(n * max(afp[2], .06) / 2))
+        cx, cy = int(afp[0] * n), int(afp[1] * n)
+        a1, a2, cnt = 0.0, 0.0, 0
+        for y in range(max(1, cy - rr), min(n - 1, cy + rr)):
+            r, u, d = rows[y], rows[y - 1], rows[y + 1]
+            for xx in range(max(1, cx - rr), min(n - 1, cx + rr)):
+                lv = 4 * r[xx] - r[xx - 1] - r[xx + 1] - u[xx] - d[xx]
+                a1 += lv
+                a2 += lv * lv
+                cnt += 1
+        if cnt > 100:
+            fv = a2 / cnt - (a1 / cnt) ** 2
     hist = [0] * 256
     for r in rows:
         for c in r:
@@ -1912,6 +2011,10 @@ def alb_qa_calc(big):
     std = (sum(c * (i - mean) ** 2 for i, c in enumerate(hist)) / tot) ** .5
     clip = (sum(hist[:6]) + sum(hist[251:])) / tot   # 全黑、過曝的比例
     sh = min(1, max(0, (math.log10(max(v, 1)) - 2) / 1.6))   # 2048 大圖輕微手震約 1000、拍糊約 100～400、清楚的 3000 以上
+    fs = None if fv is None else min(1, max(0, (math.log10(max(fv, 1)) - 2) / 1.6))
+    miss = fs is not None and fs < .45 and sh - fs > .3   # 別的地方清楚、對焦的地方糊：跑焦（整張都糊是手震，不算）
+    if fs is not None:
+        sh = .7 * fs + .3 * sh
     ex = (1 - min(1, abs(mean - 120) / 105) ** 2) * (1 - min(1, max(0, clip - .02) * 4))
     co = min(1, std / 60)
     bits = 0                                      # 指紋：縮成 9×8 格，每格跟右邊那格比亮暗
@@ -1923,7 +2026,12 @@ def alb_qa_calc(big):
             cells.append(sum(rows[yy][xx] for yy in ys for xx in xs))
         for x in range(8):
             bits = bits << 1 | (cells[x] > cells[x + 1])
-    return {"s": round(100 * (.5 * sh + .3 * ex + .2 * co)), "h": f"{bits:016x}"}
+    out = {"s": round(100 * (.5 * sh + .3 * ex + .2 * co)), "h": f"{bits:016x}", "v": ALB_QAV}
+    if fs is not None:
+        out["f"] = round(100 * fs)
+    if miss:
+        out["fm"] = 1
+    return out
 
 
 def alb_qa_get(ck):
@@ -1945,14 +2053,15 @@ def alb_qa_make(a, pid, m, big=None):
         return
     ck = alb_ckey(a, pid, m)
     fn = os.path.join(ALB_CACHE, f"{ck}-a.json")
-    if os.path.exists(fn):
+    afp = (m.get("x") or {}).get("afp")
+    if os.path.exists(fn) and (not afp or (alb_qa_get(ck) or {}).get("v") == ALB_QAV):
         return
     if big is None:
         try:
             big = sec_read(alb_cfile(ck, "l"))
         except (OSError, ValueError):
             return
-    q = alb_qa_calc(big)
+    q = alb_qa_calc(big, afp)
     if q:
         sec_write(fn, json.dumps(q).encode())
         ALB_QA[ck] = q
@@ -1965,8 +2074,16 @@ def alb_get(a, pid, kind):
     if not m:
         return None, ""
     ck = alb_ckey(a, pid, m)
+    if kind == "x" and (m.get("bad") or m.get("vid") or max(m["w"], m["h"]) < ALB_XL * .7):
+        kind = "l"                                     # 原本就不大：給一般的大圖
     fn = alb_cfile(ck, kind)
-    if not os.path.exists(fn) and not m.get("bad"):
+    if kind == "x" and not os.path.exists(fn):
+        if not os.path.exists(alb_cfile(ck, "s")):
+            return alb_get(a, pid, "l")
+        with ALB_GEN:
+            if not os.path.exists(fn) and not alb_make(a, pid, m, ALB_XL):
+                fn = alb_cfile(ck, "l")
+    elif not os.path.exists(fn) and not m.get("bad"):
         with ALB_GEN:
             if not os.path.exists(fn) and not alb_make(a, pid, m):
                 alb_mark_bad(a, pid)
@@ -2540,6 +2657,10 @@ def alb_manifest(a, th=""):
         qa = None if m.get("vid") else alb_qa_get(ck)
         if qa:                                         # 智慧挑照片：分數、長得像不像的指紋
             it["qs"], it["dh"] = qa["s"], qa["h"]
+            if "f" in qa:
+                it["fs"] = qa["f"]
+            if qa.get("fm"):
+                it["fm"] = 1
         if pid in talk:
             it.update(talk[pid])
         u = upd.get(pid)
@@ -2794,7 +2915,7 @@ def alb_http(h, method):
         except (BrokenPipeError, ConnectionResetError, OSError):
             pass
         return True
-    m = re.fullmatch(r"/i/([0-9a-f]{12})/([slqovma])", rest)
+    m = re.fullmatch(r"/i/([0-9a-f]{12})/([slqovmax])", rest)
     if m:
         pid, kind = m[1], m[2]
         idx = alb_index(a, scan=False)
