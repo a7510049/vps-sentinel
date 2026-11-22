@@ -790,3 +790,18 @@ html::-webkit-scrollbar,body::-webkit-scrollbar{display:none;width:0;height:0}  
 .hfl{display:inline-flex;flex:none}
 .hfl img{width:20px;height:14px;object-fit:cover;border-radius:3px;box-shadow:0 0 0 1.5px var(--glass);margin-right:-5px}
 .hfl img:last-child{margin-right:0}
+
+/* 數字那排不用框框（使用者說四個框框沒質感）：像雜誌一樣一排大數字，中間細線隔開，上下一條漸層細線 */
+.stats,.stats:is(*){display:grid;grid-auto-flow:column;grid-auto-columns:minmax(0,1fr);grid-template-columns:none;gap:0;padding-top:clamp(14px,2.4vw,22px);padding-bottom:clamp(14px,2.4vw,22px);
+  background:linear-gradient(90deg,transparent,color-mix(in oklab,var(--g2) 45%,transparent) 20%,color-mix(in oklab,var(--g3) 45%,transparent) 80%,transparent) top/calc(100% - 2 * var(--pad)) 1px no-repeat,
+    linear-gradient(90deg,transparent,var(--line) 20%,var(--line) 80%,transparent) bottom/calc(100% - 2 * var(--pad)) 1px no-repeat}
+.st{background:none;box-shadow:none;border-radius:0;padding:2px clamp(6px,2vw,22px);justify-items:center;text-align:center;align-content:start;gap:4px}
+.st::after{content:none}
+.st+.st{border-left:1px solid var(--line)}
+.st b{font-size:clamp(28px,7.4vw,52px)}
+.st small{letter-spacing:.12em;white-space:nowrap}
+.st .sgb{width:min(100%,64px);justify-content:center;margin-top:4px}
+.st .sgf,.st .sgr{margin-top:4px}
+.st .sgr{width:min(100%,56px)}
+@media (min-width:900px){.stats,.stats:is(*){grid-template-columns:none;grid-auto-columns:minmax(0,180px);justify-content:start}}
+@media (min-width:900px){.st:first-child{padding-left:0;justify-items:start;text-align:left}.st{justify-items:start;text-align:left;padding-left:clamp(18px,2vw,28px)}.st .sgb{justify-content:flex-start}}
