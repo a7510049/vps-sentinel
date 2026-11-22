@@ -410,9 +410,9 @@ button.chip:active,a.chip:active{transform:scale(.95)}
 .cb p{margin:2px 0 0;overflow-wrap:anywhere;line-height:1.45}
 .cx{width:28px;height:28px;display:grid;place-items:center;color:var(--tx3);flex:none;border-radius:50%}
 .cx svg{width:14px;height:14px}
-.cform{margin-top:8px;display:grid;gap:8px}
+.cform{margin-top:8px;display:grid;grid-template-columns:minmax(0,1fr);gap:8px}   /* 欄寬不跟著輸入框的預設寬度撐開（安卓會超出右邊） */
 .crow{display:flex;gap:8px}
-.cin{flex:1;min-width:0;height:44px;border-radius:var(--r-pill);border:0;background:var(--s2);color:var(--tx);padding:0 16px;font:500 16px/1 var(--font);outline:0;box-shadow:inset 0 0 0 1.5px transparent;transition:box-shadow var(--t-fast) var(--ease)}
+.cin{flex:1;min-width:0;width:100%;box-sizing:border-box;height:44px;border-radius:var(--r-pill);border:0;background:var(--s2);color:var(--tx);padding:0 16px;font:500 16px/1 var(--font);outline:0;box-shadow:inset 0 0 0 1.5px transparent;transition:box-shadow var(--t-fast) var(--ease)}
 .cin:focus{box-shadow:inset 0 0 0 1.5px var(--p)}
 .csend{width:44px;height:44px;border-radius:50%;display:grid;place-items:center;background:var(--p);color:var(--on-p);flex:none;transition:transform var(--sp-fast),opacity var(--t-fast)}
 .csend svg{width:20px;height:20px}
