@@ -1066,3 +1066,33 @@ html:has(.lb,.ss,.sy) .scrub{opacity:0;pointer-events:none}
 .inp img{width:76px;height:76px;object-fit:cover;border-radius:var(--r-sm);display:block;background:var(--s2)}
 .inp small{font-size:10px;color:var(--tx3);font-weight:600;text-align:center;white-space:nowrap}
 .inp:active{transform:scale(.95)}
+
+/* 幻燈片的章節卡：換天時先放一張（第幾天、日期、城市、天氣） */
+.ssl.sch .sbg{filter:blur(28px) brightness(.55) saturate(1.3)}
+.sct{position:absolute;inset:0;display:grid;place-content:center;justify-items:center;gap:12px;padding:0 var(--pad);text-align:center;color:#fff}
+.sct>i:not(.dwx){font-style:normal;font-size:var(--fs-s);font-weight:700;letter-spacing:.3em;color:rgba(255,255,255,.75)}
+.sct b{font-family:var(--serif);font-weight:600;font-size:clamp(30px,6vw,64px);letter-spacing:.04em;line-height:1.15;text-shadow:0 4px 30px rgba(0,0,0,.35)}
+.sct>span{display:inline-flex;align-items:center;gap:6px;font-size:var(--fs-l);color:rgba(255,255,255,.88)}
+.sct>span svg{width:17px;height:17px}
+.sct .dwx{margin:4px 0 0;font-size:var(--fs-l);color:#fff}
+.sct .dwx svg{width:22px;height:22px;color:#fff}
+.sct .dwx small{color:rgba(255,255,255,.7);font-size:var(--fs-s)}
+
+/* 每天標題右邊：播放這天 */
+button.dct{display:inline-flex;align-items:center;gap:4px;padding:0 9px 0 7px;cursor:pointer;transition:transform var(--sp-fast),background var(--t-fast) var(--ease)}
+button.dct svg{width:10px;height:10px;fill:currentColor;stroke:none}
+button.dct:active{transform:scale(.92)}
+.day.cov button.dct{pointer-events:auto}
+@media (hover:hover){button.dct:hover{background:var(--grad);color:var(--on-g)}}
+
+/* 地圖泡泡：那裡拍的全部照片 */
+.sh.shp{width:min(640px,100%);text-align:left;padding:18px 16px calc(16px + env(safe-area-inset-bottom));max-height:78svh;display:flex;flex-direction:column}
+.shh{display:flex;align-items:baseline;gap:10px;padding:2px 4px 14px}
+.shh b{font-family:var(--serif);font-size:var(--fs-xl);font-weight:600;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.shh span{font-size:var(--fs-s);color:var(--tx3);flex:none}
+.shg{display:grid;grid-template-columns:repeat(auto-fill,minmax(96px,1fr));gap:4px;overflow-y:auto;border-radius:var(--r-md);overscroll-behavior:contain}
+.shg button{position:relative;aspect-ratio:1;overflow:hidden;border-radius:var(--r-xs);background:var(--s2);animation:up var(--t-mid) var(--dec) both;animation-delay:calc(var(--i) * 25ms)}
+.shg img{width:100%;height:100%;object-fit:cover;display:block}
+.shg i{position:absolute;right:6px;bottom:6px;width:22px;height:22px;border-radius:50%;display:grid;place-items:center;background:rgba(0,0,0,.45);color:#fff}
+.shg i svg{width:10px;height:10px;fill:currentColor;stroke:none}
+.shg button:active{transform:scale(.96)}

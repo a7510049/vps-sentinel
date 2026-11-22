@@ -253,7 +253,7 @@ function sections(){
   const w = $(".wall"); w.dataset.z = ZL;
   w.innerHTML = GROUPS.map((g, gi) => `<section class="day" data-g="${gi}">${g.k && g.d ? g.m
     ? `<div class="dh" data-k="m${g.k}"><b>${g.d.y}年${g.d.mo}月</b><span class="num">${g.list.length}</span></div>`
-    : `<div class="dh" data-day="${g.k}" data-k="d${g.k}"><b>${fday(g.d, YR)}${wxTag(g.k)}</b><span>${dayPlaces(g.k) ? `${I("pin")}${esc(dayPlaces(g.k))}` : ""}</span><i class="dct num">${g.list.length}</i>${dayClock(g.list)}</div>` : ""}<div class="rows"></div></section>`).join("");
+    : `<div class="dh" data-day="${g.k}" data-k="d${g.k}"><b>${fday(g.d, YR)}${wxTag(g.k)}</b><span>${dayPlaces(g.k) ? `${I("pin")}${esc(dayPlaces(g.k))}` : ""}</span>${g.list.length > 1 ? `<button class="dct num" data-dplay="${g.k}" aria-label="播放這天">${I("play")}${g.list.length}</button>` : `<i class="dct num">${g.list.length}</i>`}${dayClock(g.list)}</div>` : ""}<div class="rows"></div></section>`).join("");
 }
 /* 那天的天氣：主機照拍照的地點、日期查的（世界氣象組織的天氣代碼） */
 function wxIco(c){ return c <= 1 ? "wsun" : c <= 3 ? "wpart" : c <= 48 ? "wfog" : c >= 95 ? "wstorm" : (c >= 71 && c <= 77) || c === 85 || c === 86 ? "wsnow" : c >= 51 ? "wrain" : "wcld"; }
@@ -762,6 +762,7 @@ document.addEventListener("click", e => {
   if (e.target.closest(".cue")) return scrollTo({top:$(".hero").offsetHeight - 8, behavior:anim() ? "smooth" : "auto"});
   { const zb = e.target.closest("[data-zb]"); if (zb) return zoomWall(ZL + +zb.dataset.zb, innerWidth / 2, innerHeight / 2); }
   if (e.target.closest("[data-ss]")) return show(0);
+  { const dp = e.target.closest("[data-dplay]"); if (dp) return SEL.on || show(0, dp.dataset.dplay); }
   const mm = e.target.closest("[data-mem]");
   if (mm) return story(+mm.dataset.mem, mm.querySelector(".mring"));
   const ct = e.target.closest("[data-city]");
@@ -770,6 +771,7 @@ document.addEventListener("click", e => {
   if (e.target.closest("[data-gearx]")) return gearSet("");
   { const gb = e.target.closest(".gear [data-gear]"); if (gb) return gearSet(gb.dataset.gear); }
   const m = e.target.closest(".mk");
+  if (m && m.dataset.cl) return placeSheet(m.dataset.cl.split(",").map(Number));   // 好幾張疊在一起：先列出那裡拍的全部
   if (m) return openLb(+m.dataset.i, m.querySelector("img") || m);
   const hc = e.target.closest("[data-hl]");
   if (hc) return openLb(+hc.dataset.hl, hc.querySelector("img"));
@@ -907,9 +909,9 @@ function bigMap(){
   const cl = [];
   pts.forEach(([p, i], k) => {
     const x = xs[k] - cx + W / 2, y = ys[k] - cy + H / 2, c = cl.find(c => Math.hypot(c.x - x, c.y - y) < 46);
-    if (c) c.n++; else cl.push({x, y, i, n:1});
+    if (c) { c.n++; c.ids.push(i); } else cl.push({x, y, i, n:1, ids:[i]});
   });
-  el.insertAdjacentHTML("beforeend", cl.map((c, k) => `<button class="mk" data-i="${c.i}" style="left:${c.x.toFixed(1)}px;top:${c.y.toFixed(1)}px;animation-delay:${Math.min(k * 40, 600)}ms"><img alt="" loading="lazy" src="${src(PH[c.i], "s")}">${c.n > 1 ? `<i class="num">${c.n}</i>` : ""}</button>`).join(""));
+  el.insertAdjacentHTML("beforeend", cl.map((c, k) => `<button class="mk" data-i="${c.i}"${c.n > 1 ? ` data-cl="${c.ids.join(",")}"` : ""} style="left:${c.x.toFixed(1)}px;top:${c.y.toFixed(1)}px;animation-delay:${Math.min(k * 40, 600)}ms"><img alt="" loading="lazy" src="${src(PH[c.i], "s")}">${c.n > 1 ? `<i class="num">${c.n}</i>` : ""}</button>`).join(""));
   if (trip) route(el, pts.map(([p], k) => ({x:xs[k] - cx + W / 2, y:ys[k] - cy + H / 2, g:p.g, d:pd(p.x.dt)})), W, H);
   else { const kmEl = $("[data-km]"); if (kmEl) kmEl.textContent = `${cl.length} 個地方`; }
 }
@@ -1502,6 +1504,23 @@ function selBar(){
 
 /* ═════════ 朋友一起放照片 ═════════ */
 let SH = null, UPING = 0;
+function placeSheet(ids){                                     // 地圖上一顆泡泡裡的全部照片
+  if (SH) return;
+  const p0 = PH[ids[0]], d0 = pd(p0.x.dt), d1 = pd(PH[ids[ids.length - 1]].x.dt);
+  const bg = document.createElement("div");
+  bg.className = "shbg";
+  bg.innerHTML = `<div class="sh shp"><div class="shh"><b>${esc(p0.p ? p0.p.n : "這裡")}</b><span class="num">${ids.length} 張${d0 && d1 ? `・${esc(frange(d0, d1))}` : ""}</span></div>
+    <div class="shg">${ids.map((k, n) => `<button data-shi="${k}" style="--i:${Math.min(n, 12)}"><img alt="" loading="lazy" draggable="false" src="${src(PH[k], "s")}">${isVid(PH[k]) ? `<i>${I("play")}</i>` : ""}</button>`).join("")}</div></div>`;
+  document.body.appendChild(bg);
+  void bg.offsetWidth; bg.classList.add("on");
+  SH = {close(){ if (SH && SH.bg === bg) SH = null; bg.classList.remove("on"); bg.style.pointerEvents = "none"; setTimeout(() => bg.remove(), T.mid + 50); }, bg};
+  history.pushState({sh:1}, "");
+  bg.addEventListener("click", e => {
+    if (e.target === bg) return popBack();
+    const b = e.target.closest("[data-shi]"); if (!b) return;
+    popBack(); setTimeout(() => openLb(+b.dataset.shi), anim() ? T.mid : 0);
+  });
+}
 function nameSheet(then){                                    // 第一次放照片先問名字（照片上會寫是誰放的）
   const bg = document.createElement("div");
   bg.className = "shbg";
@@ -1621,12 +1640,17 @@ function toast(t){
 }
 
 /* ═════════ 幻燈片：慢慢推近、淡入淡出，資料夾裡有歌就配樂 ═════════ */
-const SSD = 6000, SSF = 1400;
-function show(start){
+const SSD = 6000, SSF = 1400, SSCH = 3000;
+function show(start, day){
   if (SS) return;
-  const list = PH.map((p, i) => i).filter(i => !PH[i].broken && (!isVid(PH[i]) || PH[i].vr === 1));
+  const list = PH.map((p, i) => i).filter(i => !PH[i].broken && (!isVid(PH[i]) || PH[i].vr === 1) && (!day || (pd(PH[i].x.dt) || {}).k === day));
   if (!list.length) return;
-  let at = Math.max(0, list.indexOf(start)), timer = 0, paused = false, hideT = 0, t0 = 0, left = SSD;
+  /* 換天的時候先放一張章節卡：第幾天、日期、城市、天氣（只有一天就不放） */
+  const dk = i => (pd(PH[i].x.dt) || {}).k || "", allDays = [...new Set(PH.map((p, i) => dk(i)).filter(Boolean))].sort();
+  const seq = []; let prev = null;
+  list.forEach(i => { const k = dk(i); if ((allDays.length > 1 || day) && k && k !== prev) seq.push({ch:k, i}); prev = k; seq.push({i}); });
+  const nph = list.length, phAt = k => seq.slice(0, k + 1).filter(x => !x.ch).length;
+  let at = start ? Math.max(0, seq.findIndex(x => !x.ch && x.i === start)) : 0, timer = 0, paused = false, hideT = 0, t0 = 0, left = SSD;
   const el = document.createElement("div");
   el.className = "ss";
   el.innerHTML = `<div class="ssv"></div><div class="ssp"><i></i></div>
@@ -1644,29 +1668,36 @@ function show(start){
     const step = () => { const k = Math.min(1, (performance.now() - st) / 1200); try { a.volume = from + (to - from) * k; } catch (e) {} if (k < 1) requestAnimationFrame(step); else if (done) done(); };
     step();
   }
-  function layer(i){
-    const p = PH[i], d = pd(p.x.dt), L = document.createElement("div");
+  function layer(it){
+    const i = it.i, p = PH[i], d = pd(p.x.dt), L = document.createElement("div");
     L.className = "ssl";
+    if (it.ch) {
+      const n = allDays.indexOf(it.ch) + 1, pl = dayPlaces(it.ch);
+      L.classList.add("sch");
+      L.innerHTML = `<img class="sbg" alt="" src="${src(p, "s")}"><div class="sct">${allDays.length > 1 ? `<i class="num">第 ${n} 天</i>` : ""}<b>${d ? fday(d, YR) : ""}</b>${pl ? `<span>${I("pin")}${esc(pl)}</span>` : ""}${wxTag(it.ch)}</div>`;
+      return L;
+    }
     const where = p.p ? p.p.n : "", when = d ? `${d.y}年${d.mo}月${d.d}日` : "";
     const fill = Math.abs(Math.log((p.w / p.h) / (innerWidth / innerHeight))) < .22;   // 跟螢幕差不多比例就填滿
     L.innerHTML = `<img class="sbg" alt="" src="${src(p, "s")}"><div class="sfg${fill ? " cv" : ""}">${isVid(p) ? `<video muted playsinline preload="auto" src="${src(p, "v")}"></video>`
       : `<img alt="" src="${src(p, "l")}">`}</div>${where || when ? `<div class="scap"><b>${esc(where || when)}</b>${where && when ? `<span class="num">${esc(when)}</span>` : ""}</div>` : ""}`;
     return L;
   }
-  function preload(k){ const i = list[k]; if (i != null && !isVid(PH[i])) { const im = new Image(); im.src = src(PH[i], "l"); } }
+  function preload(k){ const it = seq[k] && seq[k].ch ? seq[k + 1] : seq[k], i = it && it.i; if (i != null && !isVid(PH[i])) { const im = new Image(); im.src = src(PH[i], "l"); } }
   function kb(L, ms){                                        // 慢慢推近，方向每張不同
     const f = L.querySelector(".sfg"); if (!anim()) return;
-    const dirs = [[-1.5, -1], [1.5, 1], [1.5, -1], [-1.5, 1], [0, 0]], [x, y] = dirs[list[at] % dirs.length];
+    const dirs = [[-1.5, -1], [1.5, 1], [1.5, -1], [-1.5, 1], [0, 0]], [x, y] = dirs[seq[at].i % dirs.length];
+    if (!f) { const t = L.querySelector(".sct"); if (t) t.animate([{opacity:0, transform:"translateY(14px)", filter:"blur(6px)"}, {opacity:1, transform:"none", filter:"none"}], {duration:T.slow * 1.6, delay:SSF * .4, easing:DEC, fill:"backwards"}); return; }
     f.animate([{transform:"scale(1.02) translate(0,0)"}, {transform:`scale(1.12) translate(${x}%,${y}%)`}], {duration:ms + SSF, easing:"cubic-bezier(.4,0,.6,1)", fill:"forwards"});
   }
   function go(k, first){
     clearTimeout(timer);
-    if (k >= list.length) return end();
+    if (k >= seq.length) return end();
     at = Math.max(0, k);
-    const old = view.querySelector(".ssl:not(.out)"), L = layer(list[at]);
+    const old = view.querySelector(".ssl:not(.out)"), L = layer(seq[at]);
     view.appendChild(L);
-    const p = PH[list[at]], v = L.querySelector("video");
-    let ms = SSD;
+    const p = PH[seq[at].i], v = L.querySelector("video");
+    let ms = seq[at].ch ? SSCH : SSD;
     if (v) { ms = Math.min(15000, p.vd * 1000); v.play().catch(() => {}); }
     kb(L, v ? 0 : ms);
     const img = L.querySelector(".sfg img");
@@ -1675,7 +1706,7 @@ function show(start){
       if (old) { old.classList.add("out"); setTimeout(() => old.remove(), SSF + 50); }
     };
     if (img && !img.complete) { img.addEventListener("load", reveal, {once:true}); img.addEventListener("error", reveal, {once:true}); } else requestAnimationFrame(reveal);
-    $(".ssc span", el).textContent = `${at + 1} / ${list.length}`;
+    $(".ssc span", el).textContent = `${phAt(at) || 1} / ${nph}`;
     left = ms; t0 = performance.now();
     bar.style.transition = "none"; bar.style.transform = "scaleX(0)"; void bar.offsetWidth;
     bar.style.transition = `transform ${ms}ms linear`; bar.style.transform = "scaleX(1)";
@@ -1985,10 +2016,10 @@ function smapGo(k, force){
   tiles(ly2, cx, cy, z, W, H);
   const cl = [];
   ps.forEach(([p, i], n) => { const x = xs[n] - cx + W / 2, y = ys[n] - cy + H / 2, c = cl.find(c => Math.hypot(c.x - x, c.y - y) < 40);
-    if (c) c.n++; else cl.push({x, y, i, n:1}); });
+    if (c) { c.n++; c.ids.push(i); } else cl.push({x, y, i, n:1, ids:[i]}); });
   const pts = cl.map(c => `${c.x.toFixed(1)},${c.y.toFixed(1)}`).join(" ");
   ly2.insertAdjacentHTML("beforeend", (cl.length > 1 ? `<svg class="smr" viewBox="0 0 ${W} ${H}" aria-hidden="true"><polyline points="${pts}"/></svg>` : "")
-    + cl.map((c, n) => `<button class="mk" data-i="${c.i}" style="left:${c.x.toFixed(1)}px;top:${c.y.toFixed(1)}px;animation-delay:${Math.min(n * 50, 500)}ms"><img alt="" loading="lazy" src="${src(PH[c.i], "s")}">${c.n > 1 ? `<i class="num">${c.n}</i>` : ""}</button>`).join(""));
+    + cl.map((c, n) => `<button class="mk" data-i="${c.i}"${c.n > 1 ? ` data-cl="${c.ids.join(",")}"` : ""} style="left:${c.x.toFixed(1)}px;top:${c.y.toFixed(1)}px;animation-delay:${Math.min(n * 50, 500)}ms"><img alt="" loading="lazy" src="${src(PH[c.i], "s")}">${c.n > 1 ? `<i class="num">${c.n}</i>` : ""}</button>`).join(""));
   const old = [...box.querySelectorAll(".sml")];
   box.appendChild(ly2);
   if (anim()) {
