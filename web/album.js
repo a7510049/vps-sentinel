@@ -1017,8 +1017,9 @@ function scrubLabel(y){                                      // 那個位置的�
   const sblSet = (sc, tx) => { const l = sc.querySelector(".sbl"), b = l.querySelector("b"), im = l.querySelector(".sbi"), p = SCR.p;
     if (b.textContent !== tx) b.textContent = tx;
     l.classList.toggle("on", !!tx);
-    const u = p && p.q ? `data:image/jpeg;base64,${p.q}` : "";
-    if (im.dataset.u !== u) { im.dataset.u = u; if (u) im.src = u; im.hidden = !u; } };
+    const k = p ? PH.indexOf(p) : -1, th = k >= 0 && TILES[k] ? TILES[k].querySelector("img.hi") : null;   // 用照片牆上那張清楚的小圖（瀏覽器已經有了），還沒有就先墊模糊的
+    const u = !p || p.broken ? "" : th && th.complete && th.naturalWidth ? th.currentSrc : src(p, "s");
+    if (im.dataset.u !== u) { im.dataset.u = u; im.style.backgroundImage = p && p.q ? `url(data:image/jpeg;base64,${p.q})` : ""; if (u) im.src = u; im.hidden = !u; } };
   const at = e => { SCR.y = e.clientY; if (!SCR.raf) SCR.raf = requestAnimationFrame(go); };
   document.addEventListener("pointerdown", e => { const th = e.target.closest(".scrub.on .sth"); if (!th) return;
     e.preventDefault(); SCR.drag = false; SCR.rg = scrubRange(); SCR.drag = true; SCR.rows = null; SCR.y = null; clearTimeout(SCR.t);

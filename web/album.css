@@ -1016,7 +1016,7 @@ html.scrubbing .ph,html.scrubbing .ph .hi{transition:none;animation:none}
   background:var(--s1,var(--bg));box-shadow:var(--sh-pop),var(--hl);font:600 var(--fs-l)/1 var(--serif);color:var(--tx);transition:opacity var(--t-fast) var(--ease),transform var(--sp-fast);pointer-events:none}
 .scrub.drag .sbl.on{opacity:1;transform:translate(0,-50%)}
 .sbl{display:flex;align-items:center;gap:10px}
-.sbl .sbi{width:44px;height:44px;margin:-4px 0 -4px -10px;border-radius:var(--r-sm);object-fit:cover}
+.sbl .sbi{width:56px;height:56px;margin:-8px 0 -8px -10px;border-radius:var(--r-sm);object-fit:cover;background:center/cover no-repeat var(--s2)}
 .sbl .sbi[hidden]{display:none}
 html.scrubbing .ph .lq{filter:none;transform:none}
 html.scrubbing .ph .hi{filter:none;transform:none}
