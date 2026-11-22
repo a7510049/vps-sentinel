@@ -2997,7 +2997,7 @@ const dofM = (v, u) => v < 1 ? `${Math.round(v * 100)} ${u ? "cm" : "公分"}` :
 const dofR = (a, b) => b < 1 ? `${Math.round(a * 100)}～${Math.round(b * 100)} cm` : `${dofN(a, b - a < .3 ? 2 : 1)}～${dofN(b, b - a < .3 ? 2 : 1)} m`;
 const gDof = d => {                                          // 一條往前的距離線：清楚的那段亮起來，對焦的地方一條直線（離越遠壓得越扁）
   const R = d.s, X = v => v === Infinity ? 21.5 : 5 + 16.5 * v / (v + R), a = X(d.n), b = X(d.f), c = X(d.s);
-  return `<svg class="gin gb" viewBox="0 0 24 24" aria-hidden="true"><path d="M2 14.5l3-2.5v5Z" class="gd"/><rect x="${a.toFixed(1)}" y="10" width="${Math.max(.8, b - a).toFixed(1)}" height="9" rx="1.5" class="gf"/><path d="M5 18.5H22" class="gs"/><path d="M${c.toFixed(1)} 7.5V20" class="gl"/></svg>`;
+  return `<svg class="gin gb" viewBox="0 0 24 24" aria-hidden="true"><path d="M1.5 13l3.5-3v6Z" class="gd"/><rect x="${a.toFixed(1)}" y="6" width="${Math.max(.8, b - a).toFixed(1)}" height="13" rx="2" class="gf"/><path d="M5 19.5H22.5" class="gs"/><path d="M${c.toFixed(1)} 3V21" class="gl"/></svg>`;
 };
 /* 光線：照光圈、快門、ISO（再扣掉曝光補償）算現場的亮度 LV（ISO 100 的曝光值）；閃光燈打過的不算 */
 function lvOf(p){
@@ -3008,9 +3008,9 @@ function lvOf(p){
 }
 const LVN = [[14.5, "非常亮"], [12.5, "很亮"], [10.5, "明亮"], [8.5, "柔和"], [6.5, "偏暗"], [4.5, "暗"], [1.5, "很暗"], [-99, "極暗"]];
 const lvName = v => LVN.find(r => v >= r[0])[1];
-const gLv = v => {                                           // 一條由暗到亮的尺（−2～16），左邊暗、右邊亮，三角形指在現場的亮度
-  const x = 3 + Math.max(0, Math.min(1, (v + 2) / 18)) * 18;
-  return `<svg class="gin gb" viewBox="0 0 24 24" aria-hidden="true"><circle cx="5" cy="7" r="2.2" class="gs"/><circle cx="19" cy="7" r="2.6" class="gd"/><path d="M19 2.2v1M19 10.8v1M14.2 7h1M22.8 7h1" class="gs"/><rect x="3" y="15.5" width="18" height="3" rx="1.5" class="gf"/><path d="M${x.toFixed(1)} 15l-2-3.4h4Z" class="gd"/></svg>`;
+const gLv = v => {                                           // 一條由暗到亮的尺（−2～16），左邊暗、右邊亮，三角形在尺下面指著現場的亮度（跟曝光尺一樣，不會碰到太陽）
+  const x = 4 + Math.max(0, Math.min(1, (v + 2) / 18)) * 16;
+  return `<svg class="gin gb" viewBox="0 0 24 24" aria-hidden="true"><circle cx="5.5" cy="6.5" r="2.8" class="gs"/><circle cx="17" cy="6.5" r="3" class="gd"/><path d="M17 .8v1.4M17 10.8v1.4M11.3 6.5h1.4M21.3 6.5h1.4" class="gs"/><rect x="2.5" y="14" width="19" height="3.6" rx="1.8" class="gf"/><path d="M${x.toFixed(1)} 18.6l2.2 3.6h-4.4Z" class="gd"/></svg>`;
 };
 /* 可能手震：快門比安全快門（1／等效焦距，有防手震再寬四級）還慢，而且整張都不清楚（只有對焦處糊的是跑焦，不算手震）；手機不算 */
 function shakeOf(p){
@@ -3019,7 +3019,7 @@ function shakeOf(p){
   return t > safe * 1.5 && sh != null && sh < 50 ? Math.round(1 / safe) || 1 : 0;
 }
 const PHONES = /^(apple|google|samsung|xiaomi|redmi|poco|huawei|honor|oneplus|oppo|vivo|realme|motorola|nothing)/i;
-const gShake = `<svg class="gin gb" viewBox="0 0 24 24" aria-hidden="true"><rect x="6" y="8" width="12" height="9" rx="2" class="gf"/><circle cx="12" cy="12.5" r="2.4" class="gs"/><path d="M3 9.5l-1 3 1 3M21 9.5l1 3-1 3" class="gl"/></svg>`;
+const gShake = `<svg class="gin gb" viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="6" width="14" height="12" rx="2.5" class="gf"/><circle cx="12" cy="12" r="3.2" class="gs"/><path d="M2.5 8.5l-1.2 3.5 1.2 3.5M21.5 8.5l1.2 3.5-1.2 3.5" class="gl"/></svg>`;
 /* 過曝／死黑：大圖畫到畫布上，紅、綠、藍任何一個到頂（≥ 253）算過曝，全部 ≤ 3 算死黑；在看的人的設備上算 */
 let ZEB = store.get("vsa-zb") === "1";
 const zbTxt = p => p._zb ? (p._zb[0] < .05 && p._zb[1] < .05 ? "沒有" : `${zbPct(p._zb[0])}／${zbPct(p._zb[1])}`) : "";
