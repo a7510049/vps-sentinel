@@ -208,6 +208,7 @@ async function boot(){
   catch (e) { return gate("off", "連不上，等一下再試"); }
   if (r.status === 401) return askPw();
   if (r.status === 403) { const x = await r.json().catch(() => ({}));
+    if (x.lock) return gate("phone", "這支裝置已被停用", "", "按了截圖，等主人解除");
     return gate("phone", x.ban ? "這支手機不能看這本相簿" : "名額已經滿了", "", x.ban ? "" : "這本相簿只給指定的手機看"); }
   if (!r.ok) return gate("off", "這本相簿已經看不到了", "", "連結已經收回或過期");
   D = await r.json();
@@ -1147,11 +1148,19 @@ addEventListener("focus", () => shy(false));
 addEventListener("pagehide", () => shy(true));
 addEventListener("pageshow", () => shy(false));
 document.addEventListener("visibilitychange", () => shy(document.hidden));
+let SNAPD = 0;
+function snapHit(){                                          // 主人開了「截圖就鎖住」：真的按到截圖鍵就鎖住這支裝置
+  if (!D || !D.snap || SNAPD) return;
+  SNAPD = 1;
+  fetch(BASE + "/snap", {method:"POST", credentials:"same-origin"}).then(r => r.json()).then(j => { if (j.lock) location.reload(); else SNAPD = 0; }).catch(() => { SNAPD = 0; });
+}
+const SNAPK = e => e.key === "PrintScreen" || (e.metaKey && e.shiftKey && /^(Digit[345]|KeyS)$/.test(e.code));
 addEventListener("keydown", e => {                            // PrintScreen、Mac 的 ⌘⇧3／4／5、Windows 的 Win+Shift+S：按下 ⌘／Win＋Shift 就先糊
+  if (SNAPK(e)) snapHit();
   if (e.key === "PrintScreen" || (e.metaKey && e.shiftKey)) return shy(true, 6000);
   if (!["Meta", "Shift", "OS"].includes(e.key) && document.documentElement.classList.contains("shy") && document.hasFocus()) shy(false);
 }, true);
-addEventListener("keyup", e => { if (e.key === "PrintScreen") shy(true, 6000); }, true);
+addEventListener("keyup", e => { if (e.key === "PrintScreen") { snapHit(); shy(true, 6000); } }, true);
 addEventListener("pointerdown", () => { if (document.hasFocus() && !document.hidden) shy(false); }, true);
 ["copy", "cut", "selectstart", "dragstart"].forEach(t => addEventListener(t, e => { if (!(e.target.closest && e.target.closest("input,textarea,[contenteditable]"))) e.preventDefault(); }));   // 整頁不能複製（輸入框照樣能用）   // 不能按右鍵、長按另存
 addEventListener("dragstart", e => { if (e.target.tagName === "IMG") e.preventDefault(); });

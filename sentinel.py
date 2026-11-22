@@ -4209,6 +4209,8 @@ def ev_line(e):
         return "✅ " + t
     if t.startswith("相簿上傳："):
         return "📥 " + t[5:]                           # 朋友在分享的相簿放了照片
+    if t.startswith("相簿截圖："):
+        return "🔒 " + t[5:]                           # 朋友按了截圖鍵、手機被鎖住
     if t.startswith("安全檢查："):
         return "🔐 " + t[5:]                           # 安全設定變差了
     if k == "info" and "登入了主機" in t:

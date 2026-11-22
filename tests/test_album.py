@@ -254,7 +254,18 @@ class Album(Server):
         self.assertEqual((s, json.loads(b).get("ban")), (403, True))
         s, _, h = self.req("GET", f"/a/{code}/m")                                       # 名額空出來給別支
         self.assertEqual(s, 200)
-        self.assertEqual(self.req("GET", f"/a/{code}/t/3/6/3", hdr={"Cookie": h["Set-Cookie"].split(";")[0]})[0], 404)                 # 地圖圖塊連不到
+        ck2 = h["Set-Cookie"].split(";")[0]
+        self.assertEqual(self.req("GET", f"/a/{code}/t/3/6/3", hdr={"Cookie": ck2})[0], 404)                 # 地圖圖塊連不到
+        self.assertFalse(json.loads(self.req("POST", f"/a/{code}/snap", hdr={"Cookie": ck2})[1])["lock"])   # 沒開「截圖就鎖住」：不鎖
+        self.call({"action": "edit", "id": aid, "snap": True})
+        self.assertTrue(json.loads(self.req("POST", f"/a/{code}/snap", hdr={"Cookie": ck2})[1])["lock"])
+        s, b, _ = self.req("GET", f"/a/{code}/m", hdr={"Cookie": ck2})
+        self.assertEqual((s, json.loads(b).get("lock")), (403, True))
+        self.assertEqual(self.req("GET", f"/a/{code}/i/{pid}/s", hdr={"Cookie": ck2})[0], 403)     # 照片也拿不到
+        d = self.call({"action": "devs", "id": aid})[1]["devs"]
+        self.assertTrue(d[0].get("lk"))
+        self.call({"action": "edit", "id": aid, "unlock": d[0]["h"]})                    # 主人解除
+        self.assertEqual(self.req("GET", f"/a/{code}/m", hdr={"Cookie": ck2})[0], 200)
         self.call({"action": "del", "id": aid})
 
 
