@@ -883,9 +883,7 @@ html,body{touch-action:pan-x pan-y}
 
 /* 看大圖：後面透出這張照片的顏色 */
 .lb .bg{overflow:hidden}
-.lb .bg .ambw{position:absolute;inset:0;opacity:.55}
-.lb .bg .amb{position:absolute;inset:-12%;width:124%;height:124%;object-fit:cover;filter:blur(48px) saturate(1.6);opacity:0;transition:opacity var(--t-long) var(--ease)}
-.lb .bg .amb.ok{opacity:1}
+.lb .bg .amb{position:absolute;inset:-12%;width:124%;height:124%;object-fit:cover;filter:blur(48px) saturate(1.6);opacity:0;will-change:opacity;transform:translateZ(0)}
 .lb .bg::after{content:"";position:absolute;inset:0;background:radial-gradient(120% 90% at 50% 45%,rgba(0,0,0,.2),rgba(0,0,0,.7))}
 
 /* 電腦看大圖：下面一排小圖，點了直接跳過去 */
@@ -911,7 +909,7 @@ html,body{touch-action:pan-x pan-y}
 .hla .rb{width:38px;height:38px;border-radius:50%;display:grid;place-items:center;background:var(--s2);color:var(--tx);border:0;cursor:pointer;transition:opacity var(--t-fast) var(--ease),background var(--t-fast) var(--ease)}
 .hla .rb svg{width:18px;height:18px;fill:none;stroke:currentColor;stroke-width:2.2}
 .hla .rb:disabled{opacity:.3;cursor:default}
-@media (pointer:fine){.hla{display:flex}.hla[hidden]{display:none}.hlr{cursor:grab}.hlr.drag{cursor:grabbing;scroll-snap-type:none}.hlr.drag .hlc{pointer-events:none}}
+@media (pointer:fine){.hla{display:flex}.hla[hidden]{display:none}.hlr{cursor:grab;scroll-snap-type:none}.hlr.drag{cursor:grabbing;scroll-snap-type:none}.hlr.drag .hlc{pointer-events:none}}
 .hlr{display:flex;gap:12px;overflow-x:auto;scrollbar-width:none;margin:12px calc(-1 * var(--pad)) 0;padding:6px var(--pad) 20px;scroll-snap-type:x mandatory;scroll-padding:0 var(--pad)}
 .hlr::-webkit-scrollbar{display:none}
 .hlc{position:relative;flex:none;height:clamp(230px,58vw,440px);aspect-ratio:var(--ar);max-width:84vw;border-radius:var(--r-lg);overflow:hidden;scroll-snap-align:start;background:var(--s2);
@@ -1016,7 +1014,12 @@ html,body{touch-action:pan-x pan-y}
 html.scrubbing .ph,html.scrubbing .ph .hi{transition:none;animation:none}
 .sbl{position:absolute;right:calc(100% + 12px);top:50%;transform:translate(8px,-50%) scale(.9);transform-origin:right center;opacity:0;white-space:nowrap;padding:9px 16px;border-radius:var(--r-pill);
   background:var(--s1,var(--bg));box-shadow:var(--sh-pop),var(--hl);font:600 var(--fs-l)/1 var(--serif);color:var(--tx);transition:opacity var(--t-fast) var(--ease),transform var(--sp-fast);pointer-events:none}
-.scrub.drag .sbl:not(:empty){opacity:1;transform:translate(0,-50%)}
+.scrub.drag .sbl.on{opacity:1;transform:translate(0,-50%)}
+.sbl{display:flex;align-items:center;gap:10px}
+.sbl .sbi{width:44px;height:44px;margin:-4px 0 -4px -10px;border-radius:var(--r-sm);object-fit:cover}
+.sbl .sbi[hidden]{display:none}
+html.scrubbing .ph .lq{filter:none;transform:none}
+html.scrubbing .ph .hi{filter:none;transform:none}
 html:has(.lb,.ss,.sy) .scrub{opacity:0;pointer-events:none}
 
 /* 器材：用了哪幾台相機、哪幾顆鏡頭、常用焦段（點了只看那台拍的） */
