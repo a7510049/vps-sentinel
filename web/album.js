@@ -319,12 +319,14 @@ function wxTag(k){
   return `<i class="dwx ${ic}" title="${WXN[ic]}">${I(ic)}<span class="num">${w[1]}°<small>${w[2]}°</small></span></i>`;
 }
 /* 每天的標題下面一條 24 小時的時間條：拍照的時間點一個點（夜裡暗、白天亮），看得出那天從幾點拍到幾點 */
-function dayClock(list){
+function dayClock(list){                                      // 這天在什麼時候拍：太陽弧線（白天在地平線上、晚上在下面虛線），拍照的時間是弧上的點（跟照片資訊的太陽圖同一套）
   const hs = list.map(i => PH[i]).filter(p => !p.x.dtf).map(p => pd(p.x.dt)).filter(Boolean).map(d => d.h + d.mi / 60);
   if (!hs.length) return "";
-  const a = Math.min(...hs), b = Math.max(...hs), pc = v => (v / 24 * 100).toFixed(2);
+  const P = h => { const th = ((h - 6 + 24) % 24) / 12 * Math.PI, day = th <= Math.PI; return [60 - 52 * Math.cos(th), 30 - (day ? 22 : 7) * Math.sin(th)]; };
+  const f = q => `${q[0].toFixed(1)} ${q[1].toFixed(1)}`, a = Math.min(...hs), b = Math.max(...hs);
+  let seg = ""; for (let h = a; h <= b + .001; h += Math.max(.1, (b - a) / 40)) seg += (seg ? "L" : "M") + f(P(Math.min(h, b)));
   const dots = [...new Set(hs.map(h => Math.round(h * 4) / 4))];
-  return `<i class="dhr" aria-hidden="true"><em style="left:${pc(a)}%;width:${(+pc(b) - +pc(a)).toFixed(2)}%"></em>${dots.map(h => `<b style="left:${pc(h)}%"></b>`).join("")}</i>`;
+  return `<svg class="dhr" viewBox="0 0 120 40" aria-hidden="true"><path class="hz" d="M2 30H118"/><path class="dy" d="M8 30A52 22 0 0 1 112 30"/><path class="nt" d="M112 30A52 7 0 0 1 8 30"/>${b - a > .05 ? `<path class="sg" d="${seg}"/>` : ""}${dots.map(h => `<circle cx="${P(h)[0].toFixed(1)}" cy="${P(h)[1].toFixed(1)}" r="2.6"/>`).join("")}</svg>`;
 }
 function wallRects(){                                         // 現在畫面上每張的位置（動畫中、手指捏著的也算）
   const vis = new Map(), H = innerHeight;
@@ -356,6 +358,7 @@ function flyTiles(vis, dur){                                  // 每張從 vis �
   });
 }
 function zoomWall(z, fx, fy, pre){                            // 換大小：每張從現在的位置連續長大／縮小過去，照片不壓扁
+  setTimeout(() => TILES.forEach(t => { if (t && t.isConnected) { const q = t.getBoundingClientRect(); if (q.bottom > -innerHeight * .4 && q.top < innerHeight * 1.4) sharp(t); } }), ZDUR + 120);   // 放大後看得到的那幾格換清楚的
   z = Math.min(3, Math.max(0, z));
   if (z === ZL || !$(".wall")) return false;
   const vis = pre || wallRects(), H = innerHeight;
@@ -876,6 +879,16 @@ const IO = "IntersectionObserver" in window ? new IntersectionObserver(es => {
     t.style.transitionDelay = anim() ? `${Math.min(n++ * 35, 280)}ms` : "0ms"; t.classList.add("in");
     setTimeout(() => { t.style.transitionDelay = ""; }, T.slow + 300); });
 }, {rootMargin:"0px 0px -4% 0px"}) : null;
+/* 格子顯示得比小圖（高 480）大很多時（每天的封面、放大的照片牆、大螢幕）換成大圖（長邊 2048，一樣是壓縮過的）：先在背景載好再換，不會閃 */
+function sharp(el){
+  const hi = el.querySelector("img.hi"), p = PH[+el.dataset.i];
+  if (!hi || !p || p.broken || hi.dataset.sh || !hi.complete || !hi.naturalHeight) return;
+  const dpr = Math.min(3, devicePixelRatio || 1); if (el.clientHeight * dpr < hi.naturalHeight * 1.2) return;
+  hi.dataset.sh = 1; const u = src(p, "l"), im = new Image(); im.decoding = "async";
+  im.onload = () => { (im.decode ? im.decode() : Promise.resolve()).catch(() => {}).then(() => { if (hi.isConnected) hi.src = u; }); };
+  im.onerror = () => { delete hi.dataset.sh; }; im.src = u;
+}
+const SIO = "IntersectionObserver" in window ? new IntersectionObserver(es => es.forEach(e => { if (e.isIntersecting) sharp(e.target); }), {rootMargin:"40% 0px"}) : null;
 function tile(p, i){
   const el = document.createElement("button");
   el.className = p.q ? "ph" : "ph wt"; el.dataset.i = i; el.setAttribute("aria-label", p.n.split("/").pop());   // wt：主機還在做小圖，先跑一道光
@@ -883,9 +896,10 @@ function tile(p, i){
   el.innerHTML = `${p.q ? `<img class="lq" alt="" src="data:image/jpeg;base64,${p.q}">` : ""}<img class="hi" alt="" loading="lazy" decoding="async" draggable="false" src="${src(p, "s")}"><span class="bdg"></span><span class="ck">${I("ck")}</span>${hvTxt(p) ? `<span class="hv">${esc(hvTxt(p))}</span>` : ""}`;
   setTimeout(() => badge(+el.dataset.i));
   const hi = el.querySelector(".hi");
-  hi.addEventListener("load", () => { el.classList.remove("wt"); hi.decoding = "sync";   /* 換大小時照片會被拿下來再放回去：載好的改同步解碼，放回去那一格不會空白 */ hi.classList.add("ok"); setTimeout(() => { const q = el.querySelector(".lq"); if (q) q.remove(); }, T.slow * 2); }, {once:true});
+  hi.addEventListener("load", () => { el.classList.remove("wt"); hi.decoding = "sync";   /* 換大小時照片會被拿下來再放回去：載好的改同步解碼，放回去那一格不會空白 */ hi.classList.add("ok"); setTimeout(() => { const q = el.querySelector(".lq"); if (q) q.remove(); }, T.slow * 2); sharp(el); }, {once:true});
   hi.addEventListener("error", () => { p.broken = 1; el.classList.remove("wt"); hi.remove(); el.insertAdjacentHTML("beforeend", `<span class="nope">${I("off")}</span>`); }, {once:true});
   if (IO) IO.observe(el); else el.classList.add("in");
+  if (SIO) SIO.observe(el);
   return el;
 }
 function hvTxt(p){ const d = pd(p.x.dt); return [d ? `${d.mo}/${d.d} ${ftime(d)}` : "", camName(p.x)].filter(Boolean).join("・"); }   // 電腦滑鼠指著：拍攝時間、相機
