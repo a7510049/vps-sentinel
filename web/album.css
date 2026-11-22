@@ -1139,3 +1139,4 @@ button.dct:active{transform:scale(.92)}
 .cmt.on .crep{max-height:28px;opacity:1;padding:4px 0}
 @media (hover:hover){.cmt:hover .crep{max-height:28px;opacity:1;padding:4px 0}}
 .cmt{cursor:default;-webkit-tap-highlight-color:transparent}
+.sb[hidden]{display:none}

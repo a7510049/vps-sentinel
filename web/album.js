@@ -435,10 +435,10 @@ function draw(){
   $("#app").innerHTML = `
     <header class="hero"><div class="cv">${cover.q ? `<img class="lq" alt="" src="data:image/jpeg;base64,${cover.q}">` : ""}<img class="hi" alt="" src="${src(cover, "l")}"></div>
       <div class="hcap">${a ? `<div class="eyebrow num">${esc(frange(a, b))}</div>` : ""}<h1 style="--n:${[...D.name].length}">${[...D.name].map((c, k) => c === " " ? " " : `<span class="ch" style="--i:${k}">${esc(c)}</span>`).join("")}</h1>
-        <div class="hmeta"><button class="chip go" data-ss>${I("play")}<span>播放</span></button><span class="chip">${I("photo")}<span class="num">${cntTxt()}</span></span>${pl ? `<span class="chip" data-pl>${heroFlags() || I("pin")}<span>${esc(pl)}</span></span>` : ""}
-        ${D.dl ? `<a class="chip" href="${BASE}/zip" download>${I("dl")}<span>全部下載</span></a><button class="chip" data-sel>${I("sel")}<span>選取</span></button>` : ""}${D.up ? `<button class="chip" data-up>${I("up")}<span>放照片</span></button>` : ""}</div></div>
+        <div class="hmeta"><button class="chip go" data-ss>${I("play")}<span>播放</span></button>${pl ? `<span class="chip" data-pl>${heroFlags() || I("pin")}<span>${esc(pl)}</span></span>` : ""}
+        ${D.dl ? `<button class="chip" data-sel>${I("dl")}<span>下載</span></button>` : ""}${D.up ? `<button class="chip" data-up>${I("up")}<span>放照片</span></button>` : ""}</div></div>
       <button class="cue" aria-label="往下看"><i></i></button></header>
-    <div class="bar"><b>${esc(D.name)}<small class="num">${cntTxt()}</small></b>${IOS ? `<span class="chip zb"><button data-zb="-1" aria-label="放大">${I("zin")}</button><button data-zb="1" aria-label="縮小">${I("zout")}</button></span>` : ""}${D.up ? `<button class="chip" data-up aria-label="放照片">${I("up")}</button>` : ""}${D.dl ? `<button class="chip" data-sel aria-label="選取">${I("sel")}</button>` : ""}<button class="chip go" data-ss aria-label="播放">${I("play")}</button></div>
+    <div class="bar"><b>${esc(D.name)}<small class="num">${cntTxt()}</small></b>${IOS ? `<span class="chip zb"><button data-zb="-1" aria-label="放大">${I("zin")}</button><button data-zb="1" aria-label="縮小">${I("zout")}</button></span>` : ""}${D.up ? `<button class="chip" data-up aria-label="放照片">${I("up")}</button>` : ""}${D.dl ? `<button class="chip" data-sel aria-label="下載">${I("dl")}</button>` : ""}<button class="chip go" data-ss aria-label="播放">${I("play")}</button></div>
     ${D.intro ? `<section class="intro"><p>${esc(D.intro).replace(/\n/g, "<br>")}</p></section>` : ""}<nav class="who" hidden></nav><div class="mems"></div><div class="stats"></div><section class="hl" hidden></section><div class="cityf" hidden></div><div class="wwrap"><main class="wall" data-z="${ZL}"></main><aside class="smap" hidden><div class="smv"></div><div class="smc"></div></aside></div>
     <section class="gear" hidden></section>
     ${D.loc && ALL.some(p => p.g && !p.u) ? `<section class="msec"${WHO ? " hidden" : ""}><div class="mh"><b data-mt>地點</b><span class="num" data-km></span></div><div class="cities"></div><div class="map" data-map></div></section>` : ""}
@@ -874,7 +874,7 @@ function gear(){
     if (f) { fb[FOCB.findIndex(b => f >= b[0] && f < b[1])]++; fl[f] = (fl[f] || 0) + 1; } });
   const cs = Object.entries(cams).sort((a, b) => b[1] - a[1]), ls = Object.entries(lens).sort((a, b) => b[1] - a[1]).slice(0, 8);
   const nf = fb.reduce((a, b) => a + b, 0), top = Object.entries(fl).sort((a, b) => b[1] - a[1])[0], mx = Math.max(1, ...fb);
-  box.hidden = cs.reduce((a, c) => a + c[1], 0) < 3;
+  box.hidden = cs.reduce((a, c) => a + c[1], 0) < 3 || (cs.length < 2 && ls.length < 2 && fb.filter(Boolean).length < 2);   // 只有一台相機、一顆鏡頭、一種焦段：沒得選就不列
   if (box.hidden) { box.innerHTML = ""; return; }
   const n0 = cs[0][1];
   box.innerHTML = `<div class="mh"><b>器材</b><span class="num">${cs.length} 台相機${ls.length ? `・${Object.keys(lens).length} 顆鏡頭` : ""}</span></div>
@@ -1005,7 +1005,7 @@ function openLb(i, from){
     <div class="lbt"><button class="rb" data-x aria-label="關閉">${I("x")}</button><span class="cnt num"></span><button class="rb lvb" data-lv aria-label="原況">${I("live")}</button><button class="rb" data-ssi aria-label="從這張開始播放">${I("play")}</button><button class="rb" data-shr aria-label="分享這張">${I("shr")}</button><button class="rb" data-inf aria-label="照片資訊">${I("info")}</button><button class="rb" data-del hidden aria-label="刪掉">${I("trash")}</button>${D.dl ? `<a class="rb" data-dl download aria-label="${D.dl > 1 ? "下載原圖" : "下載"}">${I("dl")}</a>` : ""}</div>
     <button class="rb nav l" aria-label="上一張">${I("l")}</button><button class="rb nav r" aria-label="下一張">${I("r")}</button>
     <div class="lbb"><div class="vbar"><button class="vpp" data-vpp aria-label="播放">${I("play")}</button><span class="vt0 num">0:00</span><div class="vtr" data-vseek><i></i></div><span class="vt1 num"></span><button class="vpp" data-vmu aria-label="聲音">${I("snd")}</button></div>
-      <div class="lbr"><div class="cap"><b></b><span></span></div>${D.talk ? `<button class="sb" data-lk aria-label="愛心（按住選其他表情）">${I("heart")}<span class="num"></span></button><button class="sb rxb" data-rx aria-label="其他表情">${I("smile")}<span class="num"></span></button><button class="sb" data-cm aria-label="留言">${I("chat")}<span class="num"></span></button>` : ""}</div></div><div class="inf"></div>${STRIP ? `<div class="lbs"><div class="lbsr">${PH.map((p, k) => `<button class="lbst" data-go="${k}" aria-label="第 ${k + 1} 張"><img alt="" loading="lazy" draggable="false" src="${src(p, "s")}"></button>`).join("")}</div></div>` : ""}`;
+      <div class="lbr"><div class="cap"><b></b><span></span></div>${D.talk ? `<button class="sb" data-lk aria-label="愛心（按住選其他表情）">${I("heart")}<span class="num"></span></button><button class="sb rxb" data-rx aria-label="其他表情" hidden>${I("smile")}<span class="num"></span></button><button class="sb" data-cm aria-label="留言">${I("chat")}<span class="num"></span></button>` : ""}</div></div><div class="inf"></div>${STRIP ? `<div class="lbs"><div class="lbsr">${PH.map((p, k) => `<button class="lbst" data-go="${k}" aria-label="第 ${k + 1} 張"><img alt="" loading="lazy" draggable="false" src="${src(p, "s")}"></button>`).join("")}</div></div>` : ""}`;
   document.body.appendChild(el);
   document.documentElement.style.overflow = "hidden";
   const stage = $(".stage", el), track = $(".track", el), bg = $(".bg", el), inf = $(".inf", el);
@@ -1084,6 +1084,10 @@ function openLb(i, from){
     const rb = $("[data-rx]", el), rn = Object.values(p.rx || {}).reduce((a, b) => a + b, 0);
     rb.classList.toggle("on", !!p.mr); rb.querySelector("svg, .rxe").outerHTML = p.mr ? `<i class="rxe">${p.mr}</i>` : I("smile");
     rb.querySelector(".num").textContent = rn || "";
+    if (rb.hidden !== !rn) {                                  // 其他表情：有人按過才出現（平常按住愛心選）
+      rb.hidden = !rn;
+      if (rn && anim()) rb.animate([{opacity:0, transform:"scale(.6)"}, {opacity:1, transform:"none"}], {duration:T.mid, easing:DEC});
+    }
     cm.querySelector("span").textContent = (p.cm || []).length || "";
   }
   function chrome(){
@@ -1575,7 +1579,7 @@ function selBar(){
       }
       if (e.target.closest("[data-seldl]") && SEL.s.size) {
         const a = document.createElement("a");
-        a.href = `${BASE}/zip?ids=${[...SEL.s].sort((x, y) => x - y).map(k => PH[k].i).join(",")}`; a.download = "";
+        a.href = SEL.s.size >= PH.length && !ALL.some(p => p.u) ? `${BASE}/zip` : `${BASE}/zip?ids=${[...SEL.s].sort((x, y) => x - y).map(k => PH[k].i).join(",")}`; a.download = "";   // 全選：整本一起打包
         document.body.appendChild(a); a.click(); a.remove();
         toast(`開始下載 ${SEL.s.size} 個`); popBack();
       }
