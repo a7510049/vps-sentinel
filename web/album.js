@@ -1610,38 +1610,85 @@ function story(n, from){
 }
 
 /* 照片資訊（越詳細越好）：時間、地點、相機、鏡頭、光圈、快門、ISO… */
+/* 照片資訊的小圖：光圈開多大、快門多久、ISO 多高、焦距看多寬、曝光補償偏哪邊 */
+const lg = (v, a, b) => Math.max(0, Math.min(1, (Math.log(v) - Math.log(a)) / (Math.log(b) - Math.log(a))));
+const SV = (b, cls = "") => `<svg class="gx ${cls}" viewBox="0 0 32 32" aria-hidden="true">${b}</svg>`;
+function gIris(f){                       // ƒ1.4 開最大、ƒ22 只剩一個小洞
+  const k = 1 - lg(f, 1.2, 22), r = 3 + 9.5 * k, pts = [];
+  for (let i = 0; i < 6; i++) { const a = Math.PI / 3 * i + .3; pts.push(`${(16 + r * Math.cos(a)).toFixed(1)},${(16 + r * Math.sin(a)).toFixed(1)}`); }
+  return SV(`<circle cx="16" cy="16" r="13" class="gt"/><polygon points="${pts.join(" ")}" class="gf"/>`);
+}
+function gShut(et){                      // 1/8000 一點點、30 秒繞一圈
+  const v = et[0] / et[1], k = Math.max(.04, lg(v, 1 / 8000, 30)), a = k * 2 * Math.PI - Math.PI / 2;
+  const big = k > .5 ? 1 : 0, x = 16 + 12 * Math.cos(a), y = 16 + 12 * Math.sin(a);
+  return SV(`<circle cx="16" cy="16" r="12" class="gt"/><path d="M16 16V4A12 12 0 ${big} 1 ${x.toFixed(1)} ${y.toFixed(1)}Z" class="gf"/>`);
+}
+function gIso(iso){                      // 五格，越高越多格（ISO 越高越多雜訊）
+  const n = Math.max(1, Math.round(1 + lg(iso, 50, 12800) * 4));
+  return SV([0, 1, 2, 3, 4].map(i => `<rect x="${3 + i * 5.6}" y="${22 - i * 4}" width="4" height="${6 + i * 4}" rx="1.5" class="${i < n ? "gf" : "gt"}"/>`).join(""));
+}
+function gFov(f35){                      // 實際看到的角度（等效 35mm 的對角線視角）
+  const h = Math.min(70, Math.atan(21.6 / f35) * 180 / Math.PI), r = 20, a1 = (-90 - h) * Math.PI / 180, a2 = (-90 + h) * Math.PI / 180;
+  const p = a => `${(16 + r * Math.cos(a)).toFixed(1)} ${(28 + r * Math.sin(a)).toFixed(1)}`;
+  return SV(`<path d="M16 28L${p(a1)}A${r} ${r} 0 0 1 ${p(a2)}Z" class="gf"/><circle cx="16" cy="28" r="2.2" class="gd"/>`);
+}
+function gEv(ev){                        // -3 到 +3 的尺，點在哪就偏哪邊
+  const x = 16 + Math.max(-3, Math.min(3, ev)) * 4.2;
+  return SV(`<path d="M3 20h26" class="gl"/>${[-2, -1, 0, 1, 2].map(i => `<path d="M${16 + i * 4.2} ${i ? 17.5 : 15}v${i ? 5 : 10}" class="gl"/>`).join("")}<circle cx="${x.toFixed(1)}" cy="20" r="4" class="gd"/>`);
+}
+function gSun(d){                        // 拍攝時間在一天的哪裡：太陽沿弧線走，晚上是月亮
+  const hr = d.h + d.mi / 60, day = hr >= 6 && hr < 18;
+  const a = Math.PI * (1 - (hr - 6) / 12), x = 24 + 18 * Math.cos(a), y = 24 - 18 * Math.sin(a);
+  return `<svg class="gsun${day ? "" : " night"}" viewBox="0 0 48 28" aria-hidden="true"><path d="M6 24A18 18 0 0 1 42 24" class="gl"/><path d="M2 24.5h44" class="gl"/>${day ? `<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="4" class="gd"/>` : `<path d="M27 8a6 6 0 1 0 5 9.5A5 5 0 0 1 27 8Z" class="gd"/>`}</svg>`;
+}
+const gArrow = deg => `<svg class="gin" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9.5" class="gt"/><path d="M12 5l3.5 9L12 12.5 8.5 14Z" class="gd" transform="rotate(${deg} 12 12)"/></svg>`;
+const EPL = {1:"M", 2:"P", 3:"A", 4:"S", 5:"P", 6:"S", 7:"A", 8:"A"};
+const gDial = t => `<svg class="gin gb" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="10" class="gf"/><text x="12" y="12" dy=".36em" text-anchor="middle" class="gtx${t.length > 1 ? " sm" : ""}">${t}</text></svg>`;
+function gMeter(m){                      // 點測光一個點、中央重點一個圈、評價／多點是格子、平均整片
+  const fr = `<rect x="2.5" y="4.5" width="19" height="15" rx="3" class="gt"/>`;
+  const in_ = m === 3 ? `<circle cx="12" cy="12" r="2" class="gd"/>` : m === 2 ? `<circle cx="12" cy="12" r="4.5" class="gf"/>`
+    : m === 1 ? `<rect x="5" y="7" width="14" height="10" rx="1.5" class="gf"/>` : [0, 1, 2].flatMap(i => [0, 1].map(j => `<rect x="${5.2 + i * 4.8}" y="${7.4 + j * 4.8}" width="3.8" height="3.8" rx=".8" class="${i === 1 ? "gd" : "gf"}"/>`)).join("");
+  return `<svg class="gin gb" viewBox="0 0 24 24" aria-hidden="true">${fr}${in_}</svg>`;
+}
+const gWb = man => `<svg class="gin gb" viewBox="0 0 24 24" aria-hidden="true"><rect x="2" y="5" width="20" height="14" rx="4" class="gf"/><text x="12" y="12" dy=".36em" text-anchor="middle" class="gtx sm">${man ? "WB" : "AWB"}</text></svg>`;
+const gMtn = `<svg class="gin" viewBox="0 0 24 24" aria-hidden="true"><path d="M2 19l6.5-10 4 6 2.5-3.5L22 19Z" class="gf"/></svg>`;
+const gBolt = on => `<svg class="gin gb${on ? "" : " off"}" viewBox="0 0 24 24" aria-hidden="true"><path d="M13 2 5 13.5h6L10 22l9-12h-6Z" class="gd"/>${on ? "" : `<path d="M4 4l16 16" class="gl"/>`}</svg>`;
+
 function infoHTML(p){
   const x = p.x, d = pd(x.dt), cam = camName(x), lens = lensName(x), ext = (p.n.split(".").pop() || "").toUpperCase().replace("JPG", "JPEG");
   const mp = p.w * p.h / 1e6, f35 = x.f35 || 0, fl = x.fl || 0;
-  let h = d ? `<div class="idt">${fdate(d)}</div><div class="itm num">${x.dtf ? "檔案時間 " : ""}${ftime(d)}${x.oz ? `・UTC${x.oz.replace(":00", "")}` : ""}</div>` : "";
+  let h = d ? `<div class="ihd"><div><div class="idt">${fdate(d)}</div><div class="itm num">${x.dtf ? "檔案時間 " : ""}${ftime(d)}${x.oz ? `・UTC${x.oz.replace(":00", "")}` : ""}</div></div>${x.dtf || d.h == null ? "" : gSun(d)}</div>` : "";
   h += talkHTML(p);
   if (p.g) {
     const [lat, lon, alt, dir] = p.g, nm = p.p ? p.p.n : "拍攝地點", sub = p.p && p.p.a ? p.p.a : `${lat.toFixed(5)}, ${lon.toFixed(5)}`;
     h += `<div class="ibox"><a class="imap" href="${mapUrl(lat, lon, nm)}" target="_blank" rel="noopener noreferrer" aria-label="在地圖上打開">${dir != null ? `<span class="cone" style="transform:rotate(${dir}deg)"></span>` : ""}<span class="pin"></span><span class="attr">© OpenStreetMap</span></a>
       <a class="ipl" href="${mapUrl(lat, lon, nm)}" target="_blank" rel="noopener noreferrer"><span class="pi">${I("pin")}</span><span><b>${esc(nm)}</b><span>${esc(sub)}</span></span><span class="go">${I("ext")}</span></a></div>`;
   }
-  const cells = [["ISO", x.iso || ""], ["焦距", f35 ? `${f35} mm` : fl ? `${Math.round(fl)} mm` : ""], ["曝光", x.ev != null ? `${x.ev > 0 ? "+" : ""}${+x.ev.toFixed(1)} ev` : ""],
-    ["光圈", x.f ? `ƒ${+x.f.toFixed(2)}` : ""], ["快門", shutter(x.et).replace(" 秒", " s")]];
+  const fe = f35 || (fl ? Math.round(fl) : 0);
+  const cells = [["光圈", x.f ? `ƒ${+x.f.toFixed(2)}` : "", x.f ? gIris(x.f) : ""], ["快門", shutter(x.et).replace(" 秒", " s"), x.et ? gShut(x.et) : ""],
+    ["ISO", x.iso || "", x.iso ? gIso(x.iso) : ""], ["焦距", fe ? `${fe} mm` : "", f35 ? gFov(f35) : ""], ["曝光", x.ev != null ? `${x.ev > 0 ? "+" : ""}${+x.ev.toFixed(1)} ev` : "", x.ev != null ? gEv(x.ev) : ""]];
   h += `<div class="ibox"><div class="icam"><div class="t"><b>${esc(cam || (isVid(p) ? "影片" : "相機資訊"))}</b><span class="tag">${esc(ext)}</span></div>
       ${lens || f35 ? `<div class="l">${esc([f35 ? `${lensKind(f35)}・等效 ${f35} mm` : "", lens].filter(Boolean).join("　"))}</div>` : ""}
-      <div class="l2 num">${isVid(p) ? `影片 ${dur(p.vd)}・` : mp >= .1 ? `${mp >= 10 ? Math.round(mp) : mp.toFixed(1)} MP・` : ""}${p.w} × ${p.h}・${size(p.sz)}</div></div>
-    ${cells.some(c => c[1]) ? `<div class="iex num">${cells.map(([k, v]) => `<div><small>${k}</small>${esc(v || "—")}</div>`).join("")}</div>` : ""}</div>`;
+      <div class="l2 num">${p.w && p.h ? `<i class="gar" style="aspect-ratio:${p.w} / ${p.h}"></i>` : ""}<span>${isVid(p) ? `影片 ${dur(p.vd)}・` : mp >= .1 ? `${mp >= 10 ? Math.round(mp) : mp.toFixed(1)} MP・` : ""}${p.w} × ${p.h}・${size(p.sz)}</span></div></div>
+    ${cells.some(c => c[1]) ? `<div class="iex num">${cells.map(([k, v, g]) => `<div${v ? "" : ` class="no"`}>${g || SV(`<circle cx="16" cy="16" r="12" class="gt"/>`)}<b>${esc(v || "—")}</b><small>${k}</small></div>`).join("")}</div>` : ""}</div>`;
   const kv = [];
   if (x.ln) kv.push(["鏡頭", x.lmk && !x.ln.startsWith(x.lmk) ? `${x.lmk} ${x.ln}` : x.ln]);
   if (fl && f35 && Math.round(fl) !== f35) kv.push(["實際焦距", `${+fl.toFixed(2)} mm`]);
-  if (x.et) kv.push(["快門", shutter(x.et)]);
-  if (x.ep) kv.push(["曝光程式", EP[x.ep] || ""]);
-  if (x.em != null) kv.push(["曝光模式", ["自動曝光", "手動曝光", "自動包圍"][x.em] || ""]);
-  if (x.mm) kv.push(["測光", MM[x.mm] || ""]);
-  if (x.fla != null) kv.push(["閃光燈", x.fla & 1 ? "有閃" : "沒閃"]);
-  if (x.wb != null) kv.push(["白平衡", x.wb ? "手動" : "自動"]);
-  if (x.sc) kv.push(["場景", SC[x.sc] || ""]);
-  if (p.g && p.g[2] != null) kv.push(["海拔", `${Math.round(p.g[2])} 公尺`]);
-  if (p.g && p.g[3] != null) kv.push(["拍攝方向", `${DIR8[Math.round(p.g[3] / 45) % 8]}（${p.g[3]}°）`]);
+  // 拍攝設定：一格一個小圖（模式轉盤、測光方式、閃光燈、白平衡、場景），不再一行一行寫字
+  const st = [];
+  if (x.ep && EP[x.ep]) st.push([gDial(EPL[x.ep] || "P"), EP[x.ep], "模式"]);
+  else if (x.em != null && x.em < 3) st.push([gDial(["A", "M", "B"][x.em]), ["自動曝光", "手動曝光", "自動包圍"][x.em], "模式"]);
+  if (x.mm && MM[x.mm]) st.push([gMeter(x.mm), MM[x.mm], "測光"]);
+  if (x.fla != null) st.push([gBolt(x.fla & 1), x.fla & 1 ? "有閃" : "沒閃", "閃光燈"]);
+  if (x.wb != null) st.push([gWb(x.wb), x.wb ? "手動" : "自動", "白平衡"]);
+  if (x.sc && SC[x.sc]) st.push([gDial("SCN"), SC[x.sc], "場景"]);
+  if (p.g && p.g[2] != null) kv.push(["海拔", `${Math.round(p.g[2])} 公尺`, gMtn]);
+  if (p.g && p.g[3] != null) kv.push(["拍攝方向", `${DIR8[Math.round(p.g[3] / 45) % 8]}（${p.g[3]}°）`, gArrow(p.g[3])]);
   if (p.g) kv.push(["座標", `${p.g[0].toFixed(5)}, ${p.g[1].toFixed(5)}`]);
   if (x.sw) kv.push(["軟體", x.sw]);
   kv.push(["檔名", p.n.split("/").pop()]);
-  h += `<div class="ibox ikv">${kv.filter(r => r[1]).map(([k, v]) => `<div><span>${k}</span><b>${esc(v)}</b></div>`).join("")}</div>`;
+  if (st.length) h += `<div class="ibox iset${st.length === 5 ? " w3" : ""}" style="--n:${st.length === 5 ? 3 : Math.min(st.length, 4)}">${st.map(([g, v, k]) => `<div>${g}<b>${esc(v)}</b><small>${k}</small></div>`).join("")}</div>`;
+  h += `<div class="ibox ikv">${kv.filter(r => r[1]).map(([k, v, g]) => `<div><span>${k}</span><b>${g || ""}${esc(v)}</b></div>`).join("")}</div>`;
   if (D.dl) h += `<div class="idl"><a class="pr" href="${src(p, "o")}" download>${I("dl")}${D.dl > 1 ? (isVid(p) ? "下載影片" : "下載原圖") : "下載"}</a></div>`;
   return h;
 }
