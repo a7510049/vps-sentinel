@@ -37,7 +37,7 @@ async function open(req, code, again){
 
 self.addEventListener("fetch", e => {
   const q = e.request;
-  if (q.method !== "GET" || q.mode === "navigate") return;   // 直接打開圖片網址：照樣是亂碼
+  if (q.method !== "GET" || q.destination !== "image") return;   // 只解開網頁上的 <img>：直接打開網址、「儲存圖片」、下載都照樣是亂碼
   const m = new URL(q.url).pathname.match(/^\/a\/([A-Za-z0-9]{10})\/i\/[0-9a-f]{12}\/[slqxa]$/);
   if (!m) return;
   e.respondWith(open(q, m[1], false));
