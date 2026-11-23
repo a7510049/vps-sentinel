@@ -232,8 +232,8 @@ button.chip:active,a.chip:active{transform:scale(.95)}
 .icam{padding:16px}
 .icam .t{display:flex;align-items:center;gap:8px}
 .icam .t b{font-weight:750;font-size:var(--fs-l);flex:1;min-width:0}
+.icam .tgs{display:flex;gap:4px;flex:none}
 .tag{font-size:var(--fs-xs);font-weight:700;letter-spacing:.04em;padding:3px 8px;border-radius:var(--r-xs);background:var(--s2);color:var(--tx2)}
-.icam .t .tag+.tag{margin-left:-4px}
 .tag.hdr{background:linear-gradient(120deg,#ffd76a,#ff8a5c);color:#3a1c00}
 .isty{display:flex;flex-wrap:wrap;align-items:center;gap:8px 10px;padding:14px 16px}
 .isty>i{width:34px;height:34px;border-radius:50%;flex:none;background:var(--grad);box-shadow:inset 0 0 0 3px color-mix(in oklab,#fff 35%,transparent)}
@@ -800,7 +800,7 @@ html,body{touch-action:pan-x pan-y}
 .gsun{width:58px;height:34px;flex:none;overflow:visible}
 .gsun .gd{filter:drop-shadow(0 0 4px color-mix(in oklab,var(--g2) 70%,transparent))}
 .gsun.night .gd{fill:color-mix(in oklab,var(--g3) 70%,var(--tx2))}
-.icam .l2{display:flex;align-items:center;gap:8px}
+.icam .l2{display:flex;flex-wrap:wrap;align-items:center;gap:6px 8px}
 .gar{display:block;height:16px;max-width:28px;border-radius:3px;border:1.5px solid color-mix(in oklab,var(--g2) 70%,transparent);background:color-mix(in oklab,var(--g2) 14%,transparent);flex:none}
 .ikv b{display:inline-flex;align-items:center;justify-content:flex-end;gap:6px}
 .gin{width:18px;height:18px;flex:none}
@@ -1108,7 +1108,7 @@ html:has(.lb,.ss,.sy) .scrub{opacity:0;pointer-events:none}
 .igear .brd{display:inline-flex;align-items:center;flex:none;margin-right:5px}
 .igear .brd svg{width:auto;height:auto;color:var(--tx);fill:currentColor;stroke:none}
 .igear.sm{display:inline;flex:none;color:var(--p);font-weight:600}
-.icam .t .igear b{flex:none}
+.icam .t .igear b{flex:0 1 auto;min-width:0}
 
 /* 直方圖 */
 .ihist{display:grid;gap:4px}
