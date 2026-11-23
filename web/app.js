@@ -2759,11 +2759,20 @@ function devModel(m){                       // 型號代碼換成看得懂的名
   if (/^moto/i.test(m)) return "Motorola " + m.replace(/^motorola\s*/i, "");
   return m;
 }
+/* iOS 幾：iOS 26 起系統版本固定寫 18_6，Safari 看 Version/ 那個數字；其他 App、瀏覽器只有凍住的 18_6 就不寫（寫了會錯） */
+function iosVer(u){
+  const sv = +((/Version\/(\d+)/.exec(u) || [])[1] || 0), v = /OS (\d+)[_.](\d+)/.exec(u);
+  if (sv >= 26) return String(sv);
+  if (!v) return "";
+  if (+v[1] === 18 && +v[2] >= 6 && sv !== 18) return "";
+  return +v[1] >= 18 ? v[1] : `${v[1]}.${v[2]}`;
+}
 function devName(){
-  const u = navigator.userAgent, os = devOs(), ver = parseInt(DEVH.platformVersion || "", 10);
-  if (os === "ios") { const v = /OS (\d+)_/.exec(u); return (/iPhone/.test(u) ? "iPhone" : "iPad") + (v ? `（iOS ${v[1]}）` : ""); }
+  const u = navigator.userAgent, os = devOs(), pf = (navigator.userAgentData || {}).platform || "";
+  const ver = (os === "mac" && pf === "macOS") || (os === "win" && pf === "Windows") ? parseInt(DEVH.platformVersion || "", 10) : 0;   // 只信系統對得上的版本
+  if (os === "ios") { const v = iosVer(u); return (/iPhone/.test(u) ? "iPhone" : "iPad") + (v ? `（iOS ${v}）` : ""); }
   if (os === "android") return devModel(DEVH.model) || devModel((/Android [\d.]+; ([^;)]+)/.exec(u) || [])[1]) || "Android 手機";
-  if (os === "mac") return ver ? `Mac（macOS ${ver}）` : "Mac";
+  if (os === "mac") return ver >= 11 ? `Mac（macOS ${ver}）` : "Mac";   // 10 是凍住的假數字
   if (os === "win") return ver ? `Windows ${ver >= 13 ? 11 : 10} 電腦` : "Windows 電腦";
   return os === "linux" ? (/CrOS/.test(u) ? "Chromebook" : "Linux 電腦") : "我的裝置";
 }

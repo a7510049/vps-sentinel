@@ -270,18 +270,27 @@ function brwOf(u, ud){                       // 回 [名字, 版本]；Brave、E
   const c = /(?:CriOS|Chrome)\/(\d+)/.exec(u); if (c) return ["Chrome", c[1]];
   return /Safari/.test(u) ? ["Safari", ""] : ["", ""];
 }
+/* iOS 幾：iOS 26 起系統版本固定寫 18_6，Safari 看 Version/ 那個數字；其他 App、瀏覽器只有凍住的 18_6 就不寫（寫了會錯） */
+function iosVer(u){
+  const sv = +((/Version\/(\d+)/.exec(u) || [])[1] || 0), v = /OS (\d+)[_.](\d+)/.exec(u);
+  if (sv >= 26) return String(sv);
+  if (!v) return "";
+  if (+v[1] === 18 && +v[2] >= 6 && sv !== 18) return "";
+  return +v[1] >= 18 ? v[1] : `${v[1]}.${v[2]}`;
+}
 async function devInfo(){
   try {
     const u = navigator.userAgent, ud = navigator.userAgentData, w = Math.min(screen.width, screen.height), h = Math.max(screen.width, screen.height);
     let hi = {}; if (ud && ud.getHighEntropyValues) hi = await ud.getHighEntropyValues(["model", "platformVersion", "fullVersionList"]).catch(() => ({}));
     const ios = /iPhone|iPad|iPod/.test(u) || (/Macintosh/.test(u) && navigator.maxTouchPoints > 1), sv = +((/Version\/(\d+)/.exec(u) || [])[1] || 0);
     let m = "", os = "";
-    if (ios) { const v = (/OS (\d+)[_.](\d+)/.exec(u) || []); os = `iOS ${sv >= 26 ? sv : v[1] ? `${v[1]}.${v[2]}` : ""}`.trim();   // iOS 26 起系統版本固定寫 18，看 Safari 的版本
+    const pf = (ud && ud.platform) || "", pv = parseInt(hi.platformVersion, 10) || 0;
+    if (ios) { os = `iOS ${iosVer(u)}`.trim();
       m = /iPad|Macintosh/.test(u) ? "iPad" : "iPhone"; }   // 好幾種 iPhone 螢幕一樣大，猜不準就不猜（使用者選的）
     else if (/Android/.test(u)) { m = hi.model || ((/Android [\d.]+; ([^;)]+)/.exec(u) || [])[1] || "").replace(/\s*Build\/.*$/, ""); if (m === "K") m = "";
       os = `Android ${parseInt(hi.platformVersion, 10) || (/Android ([\d.]+)/.exec(u) || [])[1] || ""}`.trim(); }
-    else if (/Windows/.test(u)) os = parseInt(hi.platformVersion, 10) >= 13 ? "Windows 11" : "Windows 10";
-    else if (/Macintosh/.test(u)) os = `macOS${parseInt(hi.platformVersion, 10) ? " " + parseInt(hi.platformVersion, 10) : ""}`;
+    else if (/Windows/.test(u)) os = pf === "Windows" && pv ? pv >= 13 ? "Windows 11" : "Windows 10" : "Windows";   // 問不到（Firefox）就不猜 10 還是 11
+    else if (/Macintosh/.test(u)) os = `macOS${pf === "macOS" && pv >= 11 ? " " + pv : ""}`;   // Safari 的系統版本凍在 10.15，不寫
     else if (/CrOS/.test(u)) os = "ChromeOS"; else if (/Linux/.test(u)) os = "Linux";
     const fv = (hi.fullVersionList || []).find(b => /Chrome|Edge|Opera|Samsung/.test(b.brand) && !/Chromium/.test(b.brand));
     const [bn, bv0] = brwOf(u, ud), bv = bn === "Chrome" && fv && /Chrome/.test(fv.brand) ? parseInt(fv.version, 10) : bn === "Safari" ? sv || "" : parseInt(bv0, 10) || "";
