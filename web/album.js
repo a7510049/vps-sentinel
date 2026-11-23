@@ -461,7 +461,9 @@ function wallRects(){                                         // 現在畫面上
 }
 const ZDUR = 520;
 const zEase = t => 1 - Math.pow(1 - t, 3.2);                  // 跟手指放開一樣的減速
-const IOS = /iPhone|iPad|iPod/.test(navigator.userAgent) || (/Macintosh/.test(navigator.userAgent) && navigator.maxTouchPoints > 1);   // iPhone 的捏常被 Safari 搶走，上面多放大小鈕
+const IOS = /iPhone|iPad|iPod/.test(navigator.userAgent) || (/Macintosh/.test(navigator.userAgent) && navigator.maxTouchPoints > 1);
+const ANDR = /Android/i.test(navigator.userAgent);
+let HDRON = !ANDR || (() => { try { return localStorage.getItem("vsa-hdr") === "1"; } catch (e) { return false; } })();   // 安卓切 HDR 整片螢幕會閃：預設關，看大圖自己按 HDR 打開   // iPhone 的捏常被 Safari 搶走，上面多放大小鈕
 function zbSync(){ document.querySelectorAll("[data-zb]").forEach(b => { b.disabled = ZL + +b.dataset.zb < 0 || ZL + +b.dataset.zb > 3; }); }
 function flyTiles(vis, dur){                                  // 每張從 vis 記的位置連續長大／縮小到現在的位置，照片反著縮回來所以不壓扁
   const H = innerHeight, N = 14, fr = Array.from({length:N + 1}, (_, k) => zEase(k / N));
@@ -1697,7 +1699,7 @@ function openLb(i, from){
   const STRIP = matchMedia("(pointer:fine) and (min-width:900px)").matches && PH.length > 1;
   el.className = (STRIP ? "lb strip" : "lb") + (NG ? " ng" : "") + (AFON ? " afon" : "") + (ZEB ? " zbon" : "");
   el.innerHTML = `<div class="bg"></div><div class="stage"><div class="track"></div></div>
-    <div class="lbt"><button class="rb" data-x aria-label="關閉">${I("x")}</button><span class="cnt num"></span><button class="rb lvb" data-lv aria-label="原況">${I("live")}</button><button class="rb" data-ssi aria-label="從這張開始播放">${I("play")}</button><button class="rb" data-shr aria-label="分享這張">${I("shr")}</button><button class="rb" data-cmpb hidden aria-label="跟同一疊的比較">${I("cmp")}</button><button class="rb" data-inf aria-label="照片資訊">${I("info")}</button><button class="rb" data-del hidden aria-label="刪掉">${I("trash")}</button>${D.dl ? `<a class="rb" data-dl download aria-label="${D.dl > 1 ? "下載原圖" : "下載"}">${I("dl")}</a>` : ""}</div>
+    <div class="lbt"><button class="rb" data-x aria-label="關閉">${I("x")}</button><span class="cnt num"></span><button class="rb lvb" data-lv aria-label="原況">${I("live")}</button><button class="rb hdrb" data-hdr aria-pressed="${HDRON}" aria-label="HDR">HDR</button><button class="rb" data-ssi aria-label="從這張開始播放">${I("play")}</button><button class="rb" data-shr aria-label="分享這張">${I("shr")}</button><button class="rb" data-cmpb hidden aria-label="跟同一疊的比較">${I("cmp")}</button><button class="rb" data-inf aria-label="照片資訊">${I("info")}</button><button class="rb" data-del hidden aria-label="刪掉">${I("trash")}</button>${D.dl ? `<a class="rb" data-dl download aria-label="${D.dl > 1 ? "下載原圖" : "下載"}">${I("dl")}</a>` : ""}</div>
     <button class="rb nav l" aria-label="上一張">${I("l")}</button><button class="rb nav r" aria-label="下一張">${I("r")}</button>
     <div class="lbb"><div class="vbar"><button class="vpp" data-vpp aria-label="播放">${I("play")}</button><span class="vt0 num">0:00</span><div class="vtr" data-vseek><i><b></b></i></div><span class="vt1 num"></span><button class="vpp" data-vmu aria-label="聲音">${I("snd")}</button></div>
       <div class="lbr"><div class="cap"><b></b><span></span></div>${D.talk ? `<button class="sb" data-lk aria-label="愛心（按住選其他表情）">${I("heart")}<span class="num"></span></button><button class="sb rxb" data-rx aria-label="其他表情" hidden>${I("smile")}<span class="num"></span></button><button class="sb" data-cm aria-label="留言">${I("chat")}<span class="num"></span></button>` : ""}</div></div><div class="inf"></div>${D.talk ? `<div class="inf cmp"></div>` : ""}${STRIP ? `<div class="lbs"><div class="lbsr">${PH.map((p, k) => `<button class="lbst" data-go="${k}" aria-label="第 ${k + 1} 張"><img alt="" loading="lazy" draggable="false" src="${src(p, "s")}"></button>`).join("")}</div></div>` : ""}`;
@@ -1836,8 +1838,14 @@ function openLb(i, from){
   }
   function hdSoon(){                                          // HDR 只給停好的這一張，打開、換張的動畫跑完才開（安卓每切一次 HDR 螢幕就閃一下）
     clearTimeout(S.hdT); sl.forEach(s => { if (s.firstChild) s.firstChild.classList.remove("hd"); });
-    if (!S.closing) S.hdT = setTimeout(() => { const z = cur(); if (z && !S.closing && LB === S) z.classList.add("hd"); }, T.slow);
+    if (!S.closing && HDRON) S.hdT = setTimeout(() => { const z = cur(); if (z && !S.closing && LB === S && HDRON) z.classList.add("hd"); }, T.slow);
   }
+  function hdrSet(on){
+    HDRON = on; try { localStorage.setItem("vsa-hdr", on ? "1" : ""); } catch (e) {}
+    $("[data-hdr]", el).setAttribute("aria-pressed", on);
+    clearTimeout(S.hdT); sl.forEach(s => { if (s.firstChild) s.firstChild.classList.toggle("hd", on && s === sl[1]); });
+  }
+  S.hdrSet = hdrSet;
   function chrome(){
     hdSoon();
     const p = PH[S.i], d = pd(p.x.dt), moved = S.at !== S.i, dir = S.at == null ? 0 : Math.sign(S.i - S.at), was = PH[S.at];
@@ -1845,6 +1853,7 @@ function openLb(i, from){
     if (moved) stopAll();
     if (moved && p.gf && p.lv) setTimeout(() => { if (LB === S && S.at === S.i && !S.closing) live(); }, anim() ? T.mid : 0);   // 會動的 GIF：自己一直動
     $("[data-lv]", el).classList.toggle("show", !!p.lv && !p.gf);
+    $("[data-hdr]", el).classList.toggle("show", ANDR && !!p.hdr && !isVid(p) && matchMedia("(dynamic-range: high)").matches);
     social(); vSync();
     $(".cnt", el).textContent = `${S.i + 1} / ${PH.length}`;
     const cam = camName(p.x);
@@ -2264,6 +2273,7 @@ function openLb(i, from){
     if (e.target.closest("[data-af]")) return afSet(!AFON);
     if (e.target.closest("[data-zb]")) return zbSet(!ZEB);
     if (e.target.closest("[data-cmpb]")) { const l = STK.get(STKOF.get(S.i)); return cmpOpen(l, S.i, l.find(k => k !== S.i)); }
+    if (e.target.closest("[data-hdr]")) return S.hdrSet(!HDRON);
     if (e.target.closest("[data-lv]")) return live();
     if (e.target.closest("[data-ssi]")) return show(S.i);
     if (e.target.closest("[data-vpp]")) return vToggle();

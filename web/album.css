@@ -373,6 +373,9 @@ img,video,.ph img,.zw img,.mk img,.hero img{-webkit-touch-callout:none;-webkit-u
 
 /* 看大圖：影片、原況、愛心留言 */
 .lvb{display:none}
+.hdrb{display:none;width:auto;padding:0 12px;border-radius:var(--r-pill);font:800 var(--fs-xs)/1 var(--font);letter-spacing:.04em;color:#fff}
+.hdrb.show{display:grid}
+.hdrb[aria-pressed="true"]{background:#fff;color:#000}
 .lvb.show{display:grid}
 .lbb{flex-direction:column;align-items:stretch;gap:10px}
 .lbr{display:flex;align-items:center;gap:8px}
