@@ -1624,7 +1624,7 @@ function openLb(i, from){
   el.innerHTML = `<div class="bg"></div><div class="stage"><div class="track"></div></div>
     <div class="lbt"><button class="rb" data-x aria-label="關閉">${I("x")}</button><span class="cnt num"></span><button class="rb lvb" data-lv aria-label="原況">${I("live")}</button><button class="rb" data-ssi aria-label="從這張開始播放">${I("play")}</button><button class="rb" data-shr aria-label="分享這張">${I("shr")}</button><button class="rb" data-cmpb hidden aria-label="跟同一疊的比較">${I("cmp")}</button><button class="rb" data-inf aria-label="照片資訊">${I("info")}</button><button class="rb" data-del hidden aria-label="刪掉">${I("trash")}</button>${D.dl ? `<a class="rb" data-dl download aria-label="${D.dl > 1 ? "下載原圖" : "下載"}">${I("dl")}</a>` : ""}</div>
     <button class="rb nav l" aria-label="上一張">${I("l")}</button><button class="rb nav r" aria-label="下一張">${I("r")}</button>
-    <div class="lbb"><div class="vbar"><button class="vpp" data-vpp aria-label="播放">${I("play")}</button><span class="vt0 num">0:00</span><div class="vtr" data-vseek><i></i></div><span class="vt1 num"></span><button class="vpp" data-vmu aria-label="聲音">${I("snd")}</button></div>
+    <div class="lbb"><div class="vbar"><button class="vpp" data-vpp aria-label="播放">${I("play")}</button><span class="vt0 num">0:00</span><div class="vtr" data-vseek><i><b></b></i></div><span class="vt1 num"></span><button class="vpp" data-vmu aria-label="聲音">${I("snd")}</button></div>
       <div class="lbr"><div class="cap"><b></b><span></span></div>${D.talk ? `<button class="sb" data-lk aria-label="愛心（按住選其他表情）">${I("heart")}<span class="num"></span></button><button class="sb rxb" data-rx aria-label="其他表情" hidden>${I("smile")}<span class="num"></span></button><button class="sb" data-cm aria-label="留言">${I("chat")}<span class="num"></span></button>` : ""}</div></div><div class="inf"></div>${D.talk ? `<div class="inf cmp"></div>` : ""}${STRIP ? `<div class="lbs"><div class="lbsr">${PH.map((p, k) => `<button class="lbst" data-go="${k}" aria-label="第 ${k + 1} 張"><img alt="" loading="lazy" draggable="false" src="${src(p, "s")}"></button>`).join("")}</div></div>` : ""}`;
   document.body.appendChild(el);
   document.documentElement.style.overflow = "hidden";
@@ -1707,8 +1707,13 @@ function openLb(i, from){
     vb.querySelector("[data-vmu]").innerHTML = I(v && v.muted ? "mute" : "snd");
     const t = v && v.currentTime || 0, T0 = v && isFinite(v.duration) ? v.duration : p.vd;
     vb.querySelector(".vt0").textContent = dur(t); vb.querySelector(".vt1").textContent = dur(T0);
-    vb.querySelector(".vtr i").style.transform = `scaleX(${T0 ? Math.min(1, t / T0) : 0})`;
+    vPos(v, T0);
+    if (pl && !vSync.raf) { const go = () => { const w = vid(); if (!w || w.paused || w.ended || !isVid(PH[S.i])) { vSync.raf = 0; return; } vPos(w, isFinite(w.duration) ? w.duration : PH[S.i].vd); vSync.raf = requestAnimationFrame(go); }; vSync.raf = requestAnimationFrame(go); }
     const big = cur().querySelector(".vbig"); if (big) big.innerHTML = p.vr === 1 ? I("play") : p.vr === 0 ? I("x") : `<i class="spin"></i>`;
+  }
+  function vPos(v, T0){                                     // 進度條每格畫面照播放時間走（等速，不是一秒跳四下）
+    const t = v && v.currentTime || 0, i = $(".vtr b", el);
+    i.style.transform = `translateX(${((T0 ? Math.min(1, t / T0) : 0) - 1) * 100}%)`;
   }
   function vToggle(){
     const v = vid(), p = PH[S.i]; if (!v || !isVid(p)) return;
