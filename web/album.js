@@ -212,9 +212,10 @@ async function boot(){
   if (r.status === 403) { const x = await r.json().catch(() => ({}));
     if (x.lock) return gate("phone", "這台設備已被停用", "", "按了截圖，等主人解除");
     return gate("phone", x.ban ? "這台設備不能看這本相簿" : "名額已經滿了", "", x.ban ? "" : "這本相簿只給指定的設備看"); }
-  if (!r.ok) { if (r.status === 404 || r.status === 410) [NMK, "vsa-seen-" + CODE].forEach(store.del);   // 收回、過期：這台留下的名字、看過的回憶一起清掉
+  if (!r.ok) { if (r.status === 404 || r.status === 410) [NMK, "vsa-seen-" + CODE, "vsa-di-" + CODE].forEach(store.del);   // 收回、過期：這台留下的名字、看過的回憶一起清掉
     return gate("off", "這本相簿已經看不到了", "", "連結已經收回或過期"); }
   D = await r.json();
+  devInfo();
   ALL = D.photos || [];
   if (!ALL.some(p => !p.u) && ALL.length) WHO = ALL[0].u;
   PH = pickW();
@@ -222,6 +223,34 @@ async function boot(){
   if (!PH.length) return gate("photo", "這本相簿還沒有照片", D.up ? `<button type="button" class="btn" data-up>放照片</button>` : "");
   draw();
   if ((D.loc && ALL.some(p => p.g && !p.p)) || ALL.some(p => p.vr === -1)) setTimeout(refresh, 6000);
+}
+/* 跟主機說這台是什麼設備（主人「看過的設備」看得到型號、系統、瀏覽器、螢幕）：
+   瀏覽器的識別字串只寫得出「安卓手機」「iPhone」，安卓的 Chrome、Edge 另外問得到型號；iPhone 照螢幕大小猜是哪一型 */
+const IPH = {"320x568":"iPhone SE（第 1 代）", "375x667":"iPhone SE／6～8", "414x736":"iPhone 6～8 Plus", "375x812":"iPhone X～11 Pro／12～13 mini", "414x896@2":"iPhone XR／11",
+  "414x896@3":"iPhone XS Max／11 Pro Max", "390x844":"iPhone 12～14", "428x926":"iPhone 12～13 Pro Max／14 Plus", "393x852":"iPhone 14 Pro～16",
+  "430x932":"iPhone 14 Pro Max～16 Plus", "402x874":"iPhone 16 Pro～17 Pro", "420x912":"iPhone Air", "440x956":"iPhone 16～17 Pro Max"};
+async function devInfo(){
+  try {
+    const u = navigator.userAgent, ud = navigator.userAgentData, w = Math.min(screen.width, screen.height), h = Math.max(screen.width, screen.height), dp = Math.round(devicePixelRatio || 1);
+    let hi = {}; if (ud && ud.getHighEntropyValues) hi = await ud.getHighEntropyValues(["model", "platformVersion", "fullVersionList"]).catch(() => ({}));
+    const ios = /iPhone|iPad|iPod/.test(u) || (/Macintosh/.test(u) && navigator.maxTouchPoints > 1), sv = +((/Version\/(\d+)/.exec(u) || [])[1] || 0);
+    let m = "", os = "";
+    if (ios) { const v = (/OS (\d+)[_.](\d+)/.exec(u) || []); os = `iOS ${sv >= 26 ? sv : v[1] ? `${v[1]}.${v[2]}` : ""}`.trim();   // iOS 26 起系統版本固定寫 18，看 Safari 的版本
+      m = /iPad|Macintosh/.test(u) ? "iPad" : IPH[`${w}x${h}@${dp}`] || IPH[`${w}x${h}`] || "iPhone"; }
+    else if (/Android/.test(u)) { m = hi.model || ((/Android [\d.]+; ([^;)]+)/.exec(u) || [])[1] || "").replace(/\s*Build\/.*$/, ""); if (m === "K") m = "";
+      os = `Android ${parseInt(hi.platformVersion, 10) || (/Android ([\d.]+)/.exec(u) || [])[1] || ""}`.trim(); }
+    else if (/Windows/.test(u)) os = parseInt(hi.platformVersion, 10) >= 13 ? "Windows 11" : "Windows 10";
+    else if (/Macintosh/.test(u)) os = `macOS${parseInt(hi.platformVersion, 10) ? " " + parseInt(hi.platformVersion, 10) : ""}`;
+    else if (/CrOS/.test(u)) os = "ChromeOS"; else if (/Linux/.test(u)) os = "Linux";
+    const fv = (hi.fullVersionList || []).find(b => /Chrome|Edge|Opera|Samsung/.test(b.brand) && !/Chromium/.test(b.brand));
+    const br = /Line\//.test(u) ? "LINE" : /Instagram/.test(u) ? "Instagram" : /FBAN|FB_IAB/.test(u) ? "Facebook" : /MicroMessenger/.test(u) ? "微信"
+      : /Edg(?:A|iOS)?\/(\d+)/.test(u) ? `Edge ${RegExp.$1}` : /SamsungBrowser\/(\d+)/.test(u) ? `三星瀏覽器 ${RegExp.$1}` : /(?:Firefox|FxiOS)\/(\d+)/.test(u) ? `Firefox ${RegExp.$1}`
+      : /(?:CriOS|Chrome)\/(\d+)/.test(u) ? `Chrome ${fv && /Chrome/.test(fv.brand) ? parseInt(fv.version, 10) : RegExp.$1}` : /Safari/.test(u) && sv ? `Safari ${sv}` : "";
+    const k = JSON.stringify({m, os, br, sc:ios || /Android/.test(u) ? `${w}×${h}` : `${screen.width}×${screen.height}`});   // 手機寫直的、電腦寫橫的
+    if (store.get("vsa-di-" + CODE) === k) return;                 // 一樣就不再送
+    const r = await fetch(BASE + "/di", {method:"POST", credentials:"same-origin", headers:{"Content-Type":"application/json"}, body:k});
+    if (r.ok) store.set("vsa-di-" + CODE, k);
+  } catch (e) {}
 }
 let REF = 0;
 async function refresh(){                                  // 地名在主機背景慢慢查：查到了補上去

@@ -572,6 +572,27 @@ def alb_snap_lock(a, th):
     COL.add_event("warn", f"相簿截圖：{who} 在「{b['name']}」按了截圖，已鎖住")
 
 
+def alb_dev_info(a, th, d):
+    """朋友那頁送來這台的型號、系統、瀏覽器、螢幕（主人「看過的設備」看得到）；只收短字，拿掉控制字元"""
+    if not isinstance(d, dict):
+        return False
+    cl = lambda v, n: re.sub(r"[\x00-\x1f\x7f\u200b-\u200f\u202a-\u202e\u2066-\u2069<>]", "", str(v or ""))[:n].strip()
+    i = {k: cl(d.get(k), n) for k, n in (("m", 48), ("os", 24), ("br", 24), ("sc", 16))}
+    i = {k: v for k, v in i.items() if v}
+    with ALB_LOCK:
+        all_ = alb_all()
+        dv = ((all_.get(a["id"]) or {}).get("devs") or {}).get(th)
+        if not dv:
+            return False
+        if dv.get("i") != i:
+            dv["i"] = i
+            try:
+                alb_save(all_)
+            except OSError:
+                return False
+    return True
+
+
 def alb_up_flush(key):
     with ALB_LOCK:
         e = ALB["upev"].pop(key, None)
@@ -3086,6 +3107,16 @@ def alb_http(h, method):
             n = 0
         code2, out = alb_talk_post(a, alb_dev_hash(tok), h.jbody(h.rfile.read(n) if n else b""))
         return h.send(code2, json.dumps(out, ensure_ascii=False), cache=False) or True
+    if rest == "/di" and method == "POST":             # 這台是什麼設備（型號、系統、瀏覽器、螢幕）
+        tok = alb_dev_tok(h, a)
+        if not (tok and alb_cookie_ok(h, a)):
+            return h.send(403, '{"ok":false}', cache=False) or True
+        try:
+            n = min(int(h.headers.get("Content-Length") or 0), 1024)
+        except ValueError:
+            n = 0
+        ok = alb_dev_info(a, alb_dev_hash(tok), h.jbody(h.rfile.read(n) if n else b""))
+        return h.send(200 if ok else 400, json.dumps({"ok": ok}), cache=False) or True
     if rest == "/snap" and method == "POST":           # 朋友按了截圖鍵：主人開了「截圖就鎖住」就鎖住這支手機
         tok = alb_dev_tok(h, a)
         if not (a.get("snap") and tok and alb_cookie_ok(h, a)):
