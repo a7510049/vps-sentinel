@@ -20,7 +20,7 @@ const P = {
   off:'<path d="M3 3l18 18M10.6 5H18a3 3 0 0 1 3 3v8.4M3 7.8V17a3 3 0 0 0 3 3h11.2"/><path d="m21 16-4-4M14 17l-4-4-7 7"/>',
   clock:'<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>', ext:'<path d="M14 4h6v6M20 4l-9 9M18 14v4a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4"/>',
   zip:'<path d="M12 4v11M7 10l5 5 5-5M5 20h14"/>',
-  play:'<path d="M7 4.8v14.4a1 1 0 0 0 1.5.86l12-7.2a1 1 0 0 0 0-1.72l-12-7.2A1 1 0 0 0 7 4.8Z" fill="currentColor" stroke="none"/>',
+  play:'<path d="M6 4.8v14.4a1 1 0 0 0 1.5.86l12-7.2a1 1 0 0 0 0-1.72l-12-7.2A1 1 0 0 0 6 4.8Z" fill="currentColor" stroke="none"/>',   // 三角形往左一點：看起來置中
   pause:'<rect x="6" y="4.5" width="4" height="15" rx="1.2" fill="currentColor" stroke="none"/><rect x="14" y="4.5" width="4" height="15" rx="1.2" fill="currentColor" stroke="none"/>',
   heart:'<path d="M12 20.5S3.5 15.3 3.5 9.2A4.7 4.7 0 0 1 12 6.6a4.7 4.7 0 0 1 8.5 2.6c0 6.1-8.5 11.3-8.5 11.3Z"/>',
   chat:'<path d="M20 12a8 8 0 0 1-11.7 7.1L4 20l.9-4.1A8 8 0 1 1 20 12Z"/>',
@@ -134,7 +134,25 @@ function camName(x){
   if (!md) return mk;
   return md.toLowerCase().startsWith(mk.toLowerCase()) || md.toLowerCase().startsWith((x.mk || "").toLowerCase()) ? md.replace(new RegExp("^" + (x.mk || "").replace(/[.*+?^${}()|[\]\\]/g, "\\$&") + "\\s*", "i"), mk + " ").trim() : `${mk} ${md}`.trim();
 }
+/* iPhone、iPad 的鏡頭照 Apple 相簿的叫法（主相機、超廣角相機、望遠相機、前置相機），不寫「後三鏡頭 6.765mm f/1.78」 */
+const PHONES = /^(apple|google|samsung|xiaomi|redmi|poco|huawei|honor|oneplus|oppo|vivo|realme|motorola|nothing)/i;
+function appleLens(x){
+  const l = x.ln || "";
+  if (!/^apple/i.test(x.mk || "")) return "";
+  if (!/camera/i.test(l)) return "";
+  if (/front/i.test(l)) return "前置相機";
+  const mm = +(l.match(/([\d.]+)\s*mm/i) || [])[1] || 0, f = +(l.match(/f\/([\d.]+)/i) || [])[1] || 0;
+  if (mm && mm < 3.5) return "超廣角相機";
+  if (f && f <= 1.9) return "主相機";
+  return /triple|dual camera/i.test(l) && f ? "望遠相機" : "主相機";
+}
+/* 安卓手機大多沒記是哪顆鏡頭：照等效焦距猜（中間的多半是放大裁切，不猜） */
+function phoneLens(x){
+  if (!PHONES.test(x.mk || "") || /^apple/i.test(x.mk || "") || !x.f35) return "";
+  return x.f35 <= 18 ? "超廣角" : x.f35 <= 30 ? "主鏡頭" : x.f35 >= 60 ? "望遠" : "";
+}
 function lensName(x){
+  const ap = appleLens(x) || phoneLens(x); if (ap) return ap;
   let l = x.ln || "";
   if (!l) return "";
   if (x.md && l.toLowerCase().startsWith(x.md.toLowerCase())) l = l.slice(x.md.length).trim();
@@ -151,14 +169,16 @@ const EP = ["", "手動", "自動", "光圈優先", "快門優先", "創意", "�
 const MM = {1:"平均測光", 2:"中央重點", 3:"點測光", 4:"多點測光", 5:"評價測光", 6:"局部測光"};
 const SC = ["標準", "風景", "人像", "夜景"];
 const DIR8 = ["北", "東北", "東", "東南", "南", "西南", "西", "西北"];
-const mapUrl = (lat, lon, q) => /iPhone|iPad|Macintosh/.test(navigator.userAgent) ? `https://maps.apple.com/?ll=${lat},${lon}&q=${encodeURIComponent(q || "照片地點")}`
+/* 打開地圖：蘋果的設備開 Apple 地圖；大陸的照片開高德（座標照原本的 WGS84 給，高德自己換算）；其他開 Google 地圖。一般連結，不用金鑰 */
+const mapUrl = (lat, lon, q, cc) => /iPhone|iPad|Macintosh/.test(navigator.userAgent) ? `https://maps.apple.com/?ll=${lat},${lon}&q=${encodeURIComponent(q || "照片地點")}`
+  : cc === "CN" ? `https://uri.amap.com/marker?position=${lon},${lat}&name=${encodeURIComponent(q || "照片地點")}&coordinate=wgs84&callnative=1`
   : `https://www.google.com/maps/search/?api=1&query=${lat},${lon}`;
 
-/* ── 地圖：OpenStreetMap 的圖塊，主機幫忙拿（朋友不用連外面）；高一級的圖塊縮一半放，手機上才清楚 ── */
+/* ── 地圖：OpenStreetMap 的圖塊，主機幫忙拿（朋友不用連外面）；用同一級的圖塊（以前高一級縮一半放，字多一倍擠成一團） ── */
 const lx = (lon, z) => (lon + 180) / 360 * 256 * 2 ** z;
 const ly = (lat, z) => { const s = Math.sin(lat * Math.PI / 180); return (.5 - Math.log((1 + s) / (1 - s)) / (4 * Math.PI)) * 256 * 2 ** z; };
 function tiles(el, cx, cy, z, W, H){
-  const hi = z < 19 ? 2 : 1, Z = z + (hi > 1 ? 1 : 0), n = 2 ** Z, T = 256 / hi;
+  const hi = 1, Z = z, n = 2 ** Z, T = 256;
   const X = cx * hi, Y = cy * hi, w = W * hi, h0 = H * hi;
   let h = "";
   for (let tx = Math.floor((X - w / 2) / 256); tx <= Math.floor((X + w / 2) / 256); tx++)
@@ -226,26 +246,36 @@ async function boot(){
 }
 /* 跟主機說這台是什麼設備（主人「看過的設備」看得到型號、系統、瀏覽器、螢幕）：
    瀏覽器的識別字串只寫得出「安卓手機」「iPhone」，安卓的 Chrome、Edge 另外問得到型號；iPhone 照螢幕大小猜是哪一型 */
-const IPH = {"320x568":"iPhone SE（第 1 代）", "375x667":"iPhone SE／6～8", "414x736":"iPhone 6～8 Plus", "375x812":"iPhone X～11 Pro／12～13 mini", "414x896@2":"iPhone XR／11",
-  "414x896@3":"iPhone XS Max／11 Pro Max", "390x844":"iPhone 12～14", "428x926":"iPhone 12～13 Pro Max／14 Plus", "393x852":"iPhone 14 Pro～16",
-  "430x932":"iPhone 14 Pro Max～16 Plus", "402x874":"iPhone 16 Pro～17 Pro", "420x912":"iPhone Air", "440x956":"iPhone 16～17 Pro Max"};
+/* 瀏覽器：照順序比對（App 裡打開的、各家手機內建的先，Chrome／Safari 最後） */
+const BRW = [[/Line\//, "LINE"], [/Instagram/, "Instagram"], [/FBAN|FB_IAB/, "Facebook"], [/MicroMessenger/, "微信"], [/Barcelona/, "Threads"],
+  [/musical_ly|BytedanceWebview|aweme/i, "抖音／TikTok"], [/Telegram/i, "Telegram"], [/ GSA\/(\d+)/, "Google App"], [/Edg(?:A|iOS)?\/(\d+)/, "Edge"],
+  [/(?:OPR|OPT|OPX)\/(\d+)/, "Opera"], [/Vivaldi\/(\d+)/, "Vivaldi"], [/YaBrowser\/(\d+)/, "Yandex"], [/(?:DuckDuckGo|Ddg)\/(\d+)/, "DuckDuckGo"],
+  [/SamsungBrowser\/(\d+)/, "三星瀏覽器"], [/HuaweiBrowser\/(\d+)/, "華為瀏覽器"], [/MiuiBrowser\/(\d+)/, "小米瀏覽器"], [/HeyTapBrowser\/(\d+)/, "OPPO 瀏覽器"],
+  [/VivoBrowser\/(\d+)/, "vivo 瀏覽器"], [/UCBrowser\/(\d+)/, "UC 瀏覽器"], [/QQBrowser\/(\d+)/, "QQ 瀏覽器"], [/(?:Firefox|FxiOS)\/(\d+)/, "Firefox"]];
+function brwOf(u, ud){                       // 回 [名字, 版本]；Brave、Edge、Opera 的辨識字可能跟 Chrome 一樣，再看 userAgentData
+  for (const [re, n] of BRW) { const m = re.exec(u); if (m) return [n, m[1] || ""]; }
+  const b = ((ud || {}).brands || []).find(x => /Edge|Opera|Brave|Vivaldi/.test(x.brand));
+  if (b) return [b.brand.replace("Microsoft ", ""), b.version || ""];
+  if (navigator.brave) return ["Brave", ""];
+  const c = /(?:CriOS|Chrome)\/(\d+)/.exec(u); if (c) return ["Chrome", c[1]];
+  return /Safari/.test(u) ? ["Safari", ""] : ["", ""];
+}
 async function devInfo(){
   try {
-    const u = navigator.userAgent, ud = navigator.userAgentData, w = Math.min(screen.width, screen.height), h = Math.max(screen.width, screen.height), dp = Math.round(devicePixelRatio || 1);
+    const u = navigator.userAgent, ud = navigator.userAgentData, w = Math.min(screen.width, screen.height), h = Math.max(screen.width, screen.height);
     let hi = {}; if (ud && ud.getHighEntropyValues) hi = await ud.getHighEntropyValues(["model", "platformVersion", "fullVersionList"]).catch(() => ({}));
     const ios = /iPhone|iPad|iPod/.test(u) || (/Macintosh/.test(u) && navigator.maxTouchPoints > 1), sv = +((/Version\/(\d+)/.exec(u) || [])[1] || 0);
     let m = "", os = "";
     if (ios) { const v = (/OS (\d+)[_.](\d+)/.exec(u) || []); os = `iOS ${sv >= 26 ? sv : v[1] ? `${v[1]}.${v[2]}` : ""}`.trim();   // iOS 26 起系統版本固定寫 18，看 Safari 的版本
-      m = /iPad|Macintosh/.test(u) ? "iPad" : IPH[`${w}x${h}@${dp}`] || IPH[`${w}x${h}`] || "iPhone"; }
+      m = /iPad|Macintosh/.test(u) ? "iPad" : "iPhone"; }   // 好幾種 iPhone 螢幕一樣大，猜不準就不猜（使用者選的）
     else if (/Android/.test(u)) { m = hi.model || ((/Android [\d.]+; ([^;)]+)/.exec(u) || [])[1] || "").replace(/\s*Build\/.*$/, ""); if (m === "K") m = "";
       os = `Android ${parseInt(hi.platformVersion, 10) || (/Android ([\d.]+)/.exec(u) || [])[1] || ""}`.trim(); }
     else if (/Windows/.test(u)) os = parseInt(hi.platformVersion, 10) >= 13 ? "Windows 11" : "Windows 10";
     else if (/Macintosh/.test(u)) os = `macOS${parseInt(hi.platformVersion, 10) ? " " + parseInt(hi.platformVersion, 10) : ""}`;
     else if (/CrOS/.test(u)) os = "ChromeOS"; else if (/Linux/.test(u)) os = "Linux";
     const fv = (hi.fullVersionList || []).find(b => /Chrome|Edge|Opera|Samsung/.test(b.brand) && !/Chromium/.test(b.brand));
-    const br = /Line\//.test(u) ? "LINE" : /Instagram/.test(u) ? "Instagram" : /FBAN|FB_IAB/.test(u) ? "Facebook" : /MicroMessenger/.test(u) ? "微信"
-      : /Edg(?:A|iOS)?\/(\d+)/.test(u) ? `Edge ${RegExp.$1}` : /SamsungBrowser\/(\d+)/.test(u) ? `三星瀏覽器 ${RegExp.$1}` : /(?:Firefox|FxiOS)\/(\d+)/.test(u) ? `Firefox ${RegExp.$1}`
-      : /(?:CriOS|Chrome)\/(\d+)/.test(u) ? `Chrome ${fv && /Chrome/.test(fv.brand) ? parseInt(fv.version, 10) : RegExp.$1}` : /Safari/.test(u) && sv ? `Safari ${sv}` : "";
+    const [bn, bv0] = brwOf(u, ud), bv = bn === "Chrome" && fv && /Chrome/.test(fv.brand) ? parseInt(fv.version, 10) : bn === "Safari" ? sv || "" : parseInt(bv0, 10) || "";
+    const br = `${bn} ${bv}`.trim();
     const k = JSON.stringify({m, os, br, sc:ios || /Android/.test(u) ? `${w}×${h}` : `${screen.width}×${screen.height}`});   // 手機寫直的、電腦寫橫的
     if (store.get("vsa-di-" + CODE) === k) return;                 // 一樣就不再送
     const r = await fetch(BASE + "/di", {method:"POST", credentials:"same-origin", headers:{"Content-Type":"application/json"}, body:k});
@@ -1237,6 +1267,8 @@ document.addEventListener("click", e => {
   if (e.target.closest("[data-sqx]")) { SQ = ""; return whoSet(WHO, true); }
   if (e.target.closest("[data-huex]")) return hueSet(0);
   { const gb = e.target.closest(".gear [data-gear]"); if (gb) return gearSet(gb.dataset.gear); }
+  { const mz = e.target.closest("[data-mzf]"); if (mz) { MAPF = mz.dataset.mzf.split("\n"); return bigMap(); } }
+  if (e.target.closest("[data-mzx]")) { MAPF = null; return bigMap(); }
   const m = e.target.closest(".mk");
   if (m && m.dataset.cl) return placeSheet(m.dataset.cl.split(",").map(Number));   // 好幾張疊在一起：先列出那裡拍的全部
   if (m) return openLb(+m.dataset.i, m.querySelector("img") || m);
@@ -1359,17 +1391,19 @@ function citybar(){
 }
 
 /* 地圖：同一趟旅行畫走過的路線；不是的話每個城市一顆（不連線），只有一個城市就標拍照的點 */
+let MAPF = null;                                               // 地圖放大看的那幾個城市（點合在一起的泡泡）
 function bigMap(){
   const el = $("[data-map]"); if (!el || WHO) return;
-  const cs = citiesOf(), trip = isTrip(), byCity = !trip && cs.length > 1;
-  cityCards(cs);
+  const all = citiesOf(), trip = isTrip(), byCity = !trip && all.length > 1;
+  cityCards(all);
+  const cs = byCity && MAPF ? all.filter(c => MAPF.includes(c.k)) : all;   // 點了合在一起的泡泡：地圖只看那幾個城市
   const mt = $("[data-mt]"); if (mt) mt.textContent = trip ? "旅程" : cs.length > 1 ? "去過的城市" : "拍照的地方";
   const pts = byCity ? cs.map(c => [{g:[c.la, c.lo]}, ALL.indexOf(c.ps[0]), c]) : PH.map((p, i) => [p, i]).filter(([p]) => p.g && !p.broken);
   const W = el.clientWidth, H = el.clientHeight;
   if (!el._ro && "ResizeObserver" in window) { el._ro = new ResizeObserver(() => { if (el.dataset.sig && !el.dataset.sig.startsWith(`${el.clientWidth}x${el.clientHeight}|`)) requestAnimationFrame(bigMap); }); el._ro.observe(el); }   // 畫的時候地圖還沒撐開（大螢幕）：變寬後重畫，圖塊才會鋪滿
   if (!pts.length || !W) return;
   // 手機上下捲時網址列縮放會觸發 resize：大小、內容都沒變就不重畫（以前整張地圖、城市卡片重新淡入，看起來在閃）
-  const sig = `${W}x${H}|${byCity ? cs.map(c => c.k + c.ps.length).join() : pts.map(([p, i]) => i).join()}|${trip}`;
+  const sig = `${W}x${H}|${byCity ? cs.map(c => c.k + c.ps.length).join() : pts.map(([p, i]) => i).join()}|${trip}|${MAPF ? MAPF.join() : ""}`;
   if (el.dataset.sig === sig) return;
   el.dataset.sig = sig;
   let z = byCity ? 12 : 15;
@@ -1384,8 +1418,16 @@ function bigMap(){
   el.classList.toggle("bycity", byCity);
   tiles(el, cx, cy, z, W, H);
   if (byCity) {
-    const ps = pts.map((x, k) => ({x:xs[k] - cx + W / 2, y:ys[k] - cy + H / 2}));
-    for (let n = 0; n < 40; n++) {             // 靠太近的城市互相推開，泡泡和名字不疊在一起
+    // 靠太近的城市（香港和深圳、金門和廈門）合成一顆，點了放大到那裡再分開
+    const gs = [];
+    pts.forEach(([, , c], k) => {
+      const x = xs[k] - cx + W / 2, y = ys[k] - cy + H / 2, g = gs.find(g => Math.hypot(g.x - x, g.y - y) < 84);
+      if (!g) return gs.push({x, y, cs:[c], n:c.ps.length});
+      g.cs.push(c); g.n += c.ps.length; g.x = (g.x * (g.cs.length - 1) + x) / g.cs.length; g.y = (g.y * (g.cs.length - 1) + y) / g.cs.length;
+    });
+    gs.forEach(g => g.cs.sort((a, b) => b.ps.length - a.ps.length));
+    const ps = gs;
+    for (let n = 0; n < 40; n++) {             // 剩下靠近的互相推開，泡泡和名字不疊在一起
       let mv = 0;
       ps.forEach((a, i) => ps.forEach((b, j) => {
         if (j <= i) return;
@@ -1397,8 +1439,10 @@ function bigMap(){
       ps.forEach(q => { q.x = Math.max(40, Math.min(W - 40, q.x)); q.y = Math.max(36, Math.min(H - 50, q.y)); });
       if (!mv) break;
     }
-    el.insertAdjacentHTML("beforeend", pts.map(([, , c], k) => `<button class="mk cmk" data-city="${esc(c.k)}" style="left:${ps[k].x.toFixed(1)}px;top:${ps[k].y.toFixed(1)}px;animation-delay:${Math.min(k * 60, 600)}ms"><img alt="" loading="lazy" src="${src(c.ps[0], "s")}"><i class="num">${c.ps.length}</i><em>${esc(c.c)}</em></button>`).join(""));
-    const kmEl = $("[data-km]"); if (kmEl) kmEl.textContent = `${cs.length} 個城市`;
+    el.insertAdjacentHTML("beforeend", gs.map((g, k) => { const c = g.cs[0], many = g.cs.length > 1;
+      return `<button class="mk cmk${many ? " cmg" : ""}" ${many ? `data-mzf="${esc(g.cs.map(c => c.k).join("\n"))}"` : `data-city="${esc(c.k)}"`} style="left:${g.x.toFixed(1)}px;top:${g.y.toFixed(1)}px;animation-delay:${Math.min(k * 60, 600)}ms"><img alt="" loading="lazy" src="${src(c.ps[0], "s")}"><i class="num">${g.n}</i><em>${esc(g.cs.length > 2 ? `${c.c}等 ${g.cs.length} 個城市` : g.cs.map(c => c.c).join("・"))}</em></button>`; }).join("")
+      + (MAPF ? `<button class="mback" data-mzx>${I("x")}<span>全部城市</span></button>` : ""));
+    const kmEl = $("[data-km]"); if (kmEl) kmEl.textContent = `${all.length} 個城市`;
     el.parentNode.querySelectorAll(".tmac").forEach(x => x.remove());
     return;
   }
@@ -3105,7 +3149,6 @@ function shakeOf(p){
   const t = x.et[0] / x.et[1], is = x.ms && x.ms.is && x.ms.is !== "關", safe = 1 / x.f35 * (is ? 16 : 1), sh = p.fs != null ? p.fs : p.qs;
   return t > safe * 1.5 && sh != null && sh < 50 ? Math.round(1 / safe) || 1 : 0;
 }
-const PHONES = /^(apple|google|samsung|xiaomi|redmi|poco|huawei|honor|oneplus|oppo|vivo|realme|motorola|nothing)/i;
 const gShake = `<svg class="gin gb" viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="6" width="14" height="12" rx="2.5" class="gf"/><circle cx="12" cy="12" r="3.2" class="gs"/><path d="M2.5 8.5l-1.2 3.5 1.2 3.5M21.5 8.5l1.2 3.5-1.2 3.5" class="gl"/></svg>`;
 /* 過曝／死黑：大圖畫到畫布上，紅、綠、藍任何一個到頂（≥ 253）算過曝，全部 ≤ 3 算死黑；在看的人的設備上算 */
 let ZEB = store.get("vsa-zb") === "1";
@@ -3267,14 +3310,15 @@ function infoHTML(p){
   let h = d ? `<div class="ihd"><div><div class="idt">${fdate(d)}</div><div class="itm num">${x.dtf ? `檔案時間 ${ftime(d)}` : ftod(p, d)}${x.oz ? `・UTC${x.oz.replace(":00", "")}` : ""}</div></div>${x.dtf || d.h == null ? "" : gSun(d)}</div>` : "";
   if (p.g) {
     const [lat, lon, alt, dir] = p.g, nm = p.p ? p.p.n : "拍攝地點", sub = p.p && p.p.a ? p.p.a : `${lat.toFixed(5)}, ${lon.toFixed(5)}`;
-    h += `<div class="ibox"><a class="imap" href="${mapUrl(lat, lon, nm)}" target="_blank" rel="noopener noreferrer" aria-label="在地圖上打開">${dir != null ? `<span class="cone" style="transform:rotate(${dir}deg)"></span>` : ""}<span class="pin"></span><span class="attr">© OpenStreetMap</span></a>
-      <a class="ipl" href="${mapUrl(lat, lon, nm)}" target="_blank" rel="noopener noreferrer"><span class="pi">${I("pin")}</span><span><b>${esc(nm)}</b><span>${esc(sub)}</span></span><span class="go">${I("ext")}</span></a>${nearHTML(p)}</div>`;
+    h += `<div class="ibox"><a class="imap" href="${mapUrl(lat, lon, nm, p.p && p.p.cc)}" target="_blank" rel="noopener noreferrer" aria-label="在地圖上打開">${dir != null ? `<span class="cone" style="transform:rotate(${dir}deg)"></span>` : ""}<span class="pin"></span><span class="attr">© OpenStreetMap</span></a>
+      <a class="ipl" href="${mapUrl(lat, lon, nm, p.p && p.p.cc)}" target="_blank" rel="noopener noreferrer"><span class="pi">${I("pin")}</span><span><b>${esc(nm)}</b><span>${esc(sub)}</span></span><span class="go">${I("ext")}</span></a>${nearHTML(p)}</div>`;
   }
   const fe = f35 || (fl ? Math.round(fl) : 0);
   const cells = [["光圈", x.f ? `ƒ${+x.f.toFixed(2)}` : "", x.f ? gIris(x.f) : "", "f"], ["快門", shutter(x.et).replace(" 秒", " s"), x.et ? gShut(x.et) : "", "et"],
     ["ISO", x.iso || "", x.iso ? gIso(x.iso) : "", "iso"], ["焦距", fe ? `${fe} mm` : "", f35 ? gFov(f35) : "", "fl"], ["曝光", x.ev != null ? `${x.ev > 0 ? "+" : ""}${+x.ev.toFixed(1)} ev` : "", x.ev != null ? gEv(x.ev) : "", "ev"]];
   h += `<div class="ibox"><div class="icam"><div class="t">${cam && !isVid(p) ? `<button class="igear" data-gear="c:${esc(cam)}">${brandSvg(x)}<b>${esc(brandSvg(x) ? cam.replace(new RegExp("^" + (MKS[(x.mk || "").toLowerCase()] || x.mk || "").replace(/[.*+?^${}()|[\]\\]/g, "\\$&") + "\\s+", "i"), "") : cam)}</b>${I("r")}</button>` : `<b>${esc(cam || (isVid(p) ? "影片" : "相機資訊"))}</b>`}<span class="tag">${esc(ext)}</span>${p.rw && p.rw !== ext ? `<span class="tag">+${esc(p.rw)}</span>` : ""}${p.cs ? `<span class="tag">${esc(p.cs.replace("Display ", ""))}</span>` : ""}${p.hdr && !isVid(p) ? `<span class="tag hdr">HDR</span>` : ""}${isVid(p) && x.vc ? `<span class="tag">${esc(x.vc)}</span>` : ""}${isVid(p) && (x.gm || p.hdr) ? `<span class="tag hdr">${esc(x.gm || (p.hdr === "pq" ? "HDR PQ" : "HLG"))}</span>` : ""}</div>
-      ${lens || f35 ? `<div class="l">${esc(f35 ? `${lensKind(f35)}・等效${x.f35e ? "約" : ""} ${f35} mm` : "")}${lens ? `${f35 ? "　" : ""}<button class="igear sm" data-gear="l:${esc(lens)}">${esc(lens)}</button>` : ""}</div>` : ""}
+      ${appleLens(x) || phoneLens(x) ? `<div class="l"><button class="igear sm" data-gear="l:${esc(lens)}">${esc(lens)}</button>${f35 ? `・${f35} mm` : ""}</div>`
+        : lens || f35 ? `<div class="l">${esc(f35 ? `${lensKind(f35)}・等效${x.f35e ? "約" : ""} ${f35} mm` : "")}${lens ? `${f35 ? "　" : ""}<button class="igear sm" data-gear="l:${esc(lens)}">${esc(lens)}</button>` : ""}</div>` : ""}
       <div class="l2 num">${p.w && p.h ? `<i class="gar" style="aspect-ratio:${p.w} / ${p.h}"></i>` : ""}<span>${isVid(p) ? `影片 ${dur(p.vd)}・${x.fps ? `${+x.fps.toFixed(2)} fps・` : ""}${x.vb ? `${x.vb >= 10 ? Math.round(x.vb) : x.vb} Mbps・` : ""}` : mp >= .1 ? `${mp >= 10 ? Math.round(mp) : mp.toFixed(1)} MP・` : ""}${p.w} × ${p.h}・${size(p.sz)}</span></div></div>
     ${cells.some(c => c[1]) ? `<div class="iex num">${cells.map(([k, v, g, gk]) => `<div data-gk="${gk}"${v ? "" : ` class="no"`}>${g || SV(`<circle cx="16" cy="16" r="12" class="gt"/>`)}<b>${esc(v || "—")}</b><small>${k}</small></div>`).join("")}</div>` : ""}</div>`;
   const ms = x.ms;
