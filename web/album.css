@@ -1437,7 +1437,14 @@ button.dct:active{transform:scale(.92)}
 .gsb .on span{box-shadow:inset 0 0 0 2px var(--p)}
 .gsb .on small{color:var(--p)}
 @media (hover:hover){.gsb>button:not(:disabled):hover span{box-shadow:inset 0 0 0 2px var(--line)}}
-@media (min-width:900px){.gear .gst{grid-column:2;grid-row:2;margin-top:0;align-self:start}.gsb small{font-size:10px}}
+@media (min-width:900px){.gear .gst{grid-column:2;grid-row:2;margin-top:0;align-self:start}.gsb small{font-size:10px}
+  .gear.one .gst{grid-column:1 / -1;grid-row:auto;margin-top:12px;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));column-gap:40px}
+  .gear.one .gsr:nth-child(2){border-top:0}
+  .gear.one .gcams{grid-column:1 / -1}}
+@media (min-width:1400px){   /* 大螢幕：相機一排在上面撐滿，拍攝習慣在下面分兩欄（不會右邊一小塊、左邊空一大片） */
+  .gear .gst{grid-column:1 / -1;grid-row:auto;margin-top:12px;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));column-gap:40px}
+  .gear .gsr:nth-child(2){border-top:0}
+  .gear .gcams{grid-column:1 / -1}}
 
 /* ── 打開相簿的開場：一疊照片攤開、照片顯影、一道光掃過，好了就像光圈打開一樣露出封面（album.js 的 splGo） ── */
 #spl{position:fixed;inset:0;z-index:var(--z-spl);display:grid;place-items:center;overflow:hidden;background:var(--bg);animation:splSafe var(--t-mid) 12s forwards}

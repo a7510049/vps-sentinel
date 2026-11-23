@@ -1278,10 +1278,11 @@ function gearSet(k, keep){
 const HAB = {
   a:{n:"光圈", b:[1.7, 2.4, 3.4, 4.8, 6.7, 9.5], l:["ƒ1.4", "ƒ2", "ƒ2.8", "ƒ4", "ƒ5.6", "ƒ8", "ƒ11+"], v:x => x.f},
   t:{n:"快門", b:[1 / 750, 1 / 350, 1 / 180, 1 / 90, 1 / 45, 1 / 20], l:["1/1000", "1/500", "1/250", "1/125", "1/60", "1/30", "更慢"], v:x => x.et && x.et[1] ? x.et[0] / x.et[1] : 0},
-  i:{n:"ISO", b:[141, 283, 566, 1131, 2263, 4525], l:["100", "200", "400", "800", "1600", "3200", "6400+"], v:x => x.iso}};
+  i:{n:"ISO", b:[141, 283, 566, 1131, 2263, 4525], l:["100", "200", "400", "800", "1600", "3200", "6400+"], v:x => x.iso},
+  f:{n:"焦段", b:[20, 35, 70, 135], l:["超廣角", "廣角", "標準", "中望遠", "望遠"], v:x => x.f35}};   // 焦段跟器材的 FOCB 同一套分法
 function habOf(p, k){ const h = HAB[k], v = h && h.v(p.x); if (!v) return -1; const i = h.b.findIndex(b => v < b); return i < 0 ? h.b.length : i; }
 function habits(base){                                       // 至少 8 張有資料、用到兩段以上才畫
-  return Object.entries(HAB).map(([k, h]) => { const c = h.l.map(() => 0); let n = 0;
+  return Object.entries(HAB).filter(([k]) => k !== "f").map(([k, h]) => { const c = h.l.map(() => 0); let n = 0;
     base.forEach(p => { const i = habOf(p, k); if (i >= 0) { c[i]++; n++; } });
     return n >= 8 && c.filter(Boolean).length >= 2 ? {k, h, c, n} : null; }).filter(Boolean);
 }
@@ -1304,11 +1305,12 @@ function gear(){
   box.innerHTML = `<div class="mh"><b>器材</b><span class="num">${cs.length} 台相機${ls.length ? `・${Object.keys(lens).length} 顆鏡頭` : ""}</span></div>
     <div class="gcams">${cs.slice(0, 6).map(([c, n]) => { const lz = Object.entries(cl[c] || {}).sort((a, b) => b[1] - a[1]).slice(0, 6);
       return `<div class="gbox"><button class="gcam${GEAR === "c:" + c ? " on" : ""}" data-gear="c:${esc(c)}"><i class="gic">${I("cam")}</i><span class="gt2"><b>${esc(c)}</b><small class="num">${n} 張</small></span><span class="gbr"><i style="width:${(n / n0 * 100).toFixed(1)}%"></i></span></button>${lz.length ? `<div class="glz">${lz.map(([l, m]) => `<button class="glr${GEAR === "l:" + l ? " on" : ""}" data-gear="l:${esc(l)}">${I("lens")}<span>${esc(l)}</span><span class="gbr"><i style="width:${(m / n * 100).toFixed(1)}%"></i></span><small class="num">${m}</small></button>`).join("")}</div>` : ""}</div>`; }).join("")}</div>
-    ${gstat(nf >= 3 ? {n:"焦段", l:FOCB.map(b => b[2]), c:fb, t:top ? `${top[0]} mm` : ""} : null, hb)}`;
+    ${gstat(nf >= 3 ? {k:"f", n:"焦段", l:FOCB.map(b => b[2]), c:fb, t:top ? `${top[0]} mm` : ""} : null, hb)}`;
+  box.classList.toggle("one", cs.length < 2);                 // 只有一台相機：相機一條橫的，拍攝習慣在下面撐滿（大螢幕不會右邊一小塊、左邊空一大片）
 }
 /* 拍攝習慣：焦段、光圈、快門、ISO 合成一張，一種一行細長條（使用者說四張大卡太佔版面）；點長條只看那些照片 */
 function gstat(fo, hb){
-  const rows = (fo ? [{k:"", h:fo, c:fo.c}] : []).concat(hb);
+  const rows = (fo ? [{k:fo.k, h:fo, c:fo.c}] : []).concat(hb);
   if (!rows.length) return "";
   return `<div class="gst">${rows.map(({k, h, c}) => { const m = Math.max(1, ...c), tk = c.indexOf(Math.max(...c)), sel = k && GEAR && GEAR[0] === k ? +GEAR.slice(2) : -1;
     const v = sel >= 0 ? `${h.l[sel]}<small class="num">${c[sel]} 張</small>` : (h.t || h.l[tk]);
