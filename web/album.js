@@ -1836,14 +1836,18 @@ function openLb(i, from){
     const th = $(".italk .th", el), h = talkHead(p);           // 資訊裡的「誰按了愛心」跟著換（文字變了才換、淡入）
     if (th && th.dataset.v !== h) { const was = th.dataset.v != null; th.innerHTML = h; th.dataset.v = h; if (was && anim()) [...th.children].slice(1).forEach(x => x.animate([{opacity:0, transform:"translateY(3px)"}, {opacity:1, transform:"none"}], {duration:T.mid, easing:DEC})); }
   }
+  const hdAll = on => sl.forEach(s => { if (s.firstChild) s.firstChild.classList.toggle("hd", on); });
   function hdSoon(){                                          // HDR 只給停好的這一張，打開、換張的動畫跑完才開（安卓每切一次 HDR 螢幕就閃一下）
-    clearTimeout(S.hdT); sl.forEach(s => { if (s.firstChild) s.firstChild.classList.remove("hd"); });
-    if (!S.closing && HDRON) S.hdT = setTimeout(() => { const z = cur(); if (z && !S.closing && LB === S && HDRON) z.classList.add("hd"); }, T.slow);
+    clearTimeout(S.hdT);
+    if (ANDR && HDRON && S.hdOn && !S.closing) return hdAll(true);   // 安卓開著 HDR：換張時一直保持，不讓螢幕退出又進來
+    hdAll(false); S.hdOn = 0;
+    if (!S.closing && HDRON) S.hdT = setTimeout(() => { const z = cur(); if (z && !S.closing && LB === S && HDRON) { if (ANDR) { S.hdOn = 1; hdAll(true); } else z.classList.add("hd"); } }, T.slow);
   }
   function hdrSet(on){
     HDRON = on; try { localStorage.setItem("vsa-hdr", on ? "1" : ""); } catch (e) {}
     $("[data-hdr]", el).setAttribute("aria-pressed", on);
-    clearTimeout(S.hdT); sl.forEach(s => { if (s.firstChild) s.firstChild.classList.toggle("hd", on && s === sl[1]); });
+    clearTimeout(S.hdT); S.hdOn = on ? 1 : 0; hdAll(on);
+    if (on && ANDR) toast("手機切換 HDR 時螢幕會閃一下，不是網頁的問題");
   }
   S.hdrSet = hdrSet;
   function chrome(){
