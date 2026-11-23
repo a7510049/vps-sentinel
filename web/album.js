@@ -1587,8 +1587,8 @@ function openLb(i, from){
     const f = fit(p), need = Math.max(f.w, f.h) * Math.min(3, devicePixelRatio || 1) * (S.z ? S.z.s : 1);
     if (need < 2048 * 1.15) return;
     zw.dataset.xl = S.i; const i0 = S.i, im = new Image(); im.decoding = "async";
-    im.onload = () => { const b = zw.querySelector(".s2"); if (b && zw.dataset.i === String(i0) && im.naturalWidth > b.naturalWidth) b.src = im.src; };
-    im.src = src(p, "x");
+    im.src = src(p, "x");                                     // 先在背景解碼好才換上，換的那一下不卡
+    (im.decode ? im.decode() : new Promise(r => { im.onload = r; })).then(() => { const b = zw.querySelector(".s2"); if (b && zw.dataset.i === String(i0) && im.naturalWidth > b.naturalWidth) b.src = im.src; }).catch(() => {});
   }
   S.fitAll = () => { const zw = cur(); zw.style.transition = `left ${T.mid}ms ${EASE},top ${T.mid}ms ${EASE},width ${T.mid}ms ${EASE},height ${T.mid}ms ${EASE}`;
     setZoom(1, 0, 0); setAll(); setTimeout(() => { zw.style.transition = ""; }, T.mid + 30); };
@@ -2037,14 +2037,26 @@ function openLb(i, from){
     S.z = {s, x:ux - s * ux, y:uy - s * uy}; const want = S.z;
     setZoom(1, 0, 0); S.z = want; clampZoom();
   }
+  /* 滾輪放大：滾輪一格一格的，先記目標大小，每一格畫面往目標靠近一點（連續滾就接著放大），游標下那一點留在原地；
+     觸控板捏（細小的量）直接跟著手指。停下來才把照片推回畫面裡（以前每格直接跳、中途還會被推回去的動畫卡住） */
+  const wz = {g:0, raf:0, cx:0, cy:0};
+  const wzAt = s => { const z = S.z, ux = (wz.cx - z.x) / z.s, uy = (wz.cy - z.y) / z.s;
+    if (s <= 1.001 && wz.g <= 1) return setZoom(1, 0, 0);
+    setZoom(s, wz.cx - s * ux, wz.cy - s * uy); };
+  const wzStep = () => {
+    if (S.busy || !S.z) { wz.raf = 0; return; }               // 換張、關掉時停
+    const d = wz.g - S.z.s;
+    if (Math.abs(d) < .004 * wz.g) { wzAt(wz.g); wz.raf = 0; clearTimeout(S.wt); S.wt = setTimeout(() => { if (!wz.raf && S.z.s > 1) clampZoom(); }, 120); return; }
+    wzAt(S.z.s + d * .24); wz.raf = requestAnimationFrame(wzStep);
+  };
   stage.addEventListener("wheel", e => {
     e.preventDefault();
-    const sr = stage.getBoundingClientRect(), f = L(), k = Math.exp(-e.deltaY * .0025);
-    const s = Math.max(1, Math.min(6, S.z.s * k));
-    const ux = (e.clientX - sr.left - f.l - S.z.x) / S.z.s, uy = (e.clientY - sr.top - f.t - S.z.y) / S.z.s;
-    if (s === 1) return setZoom(1, 0, 0);
-    setZoom(s, e.clientX - sr.left - f.l - s * ux, e.clientY - sr.top - f.t - s * uy);
-    clearTimeout(S.wt); S.wt = setTimeout(clampZoom, 160);
+    const sr = stage.getBoundingClientRect(), f = L(), px = e.deltaMode === 1 ? 40 : 1, dy = e.deltaY * px;
+    cur().getAnimations().forEach(a => a.cancel()); clearTimeout(S.wt);
+    wz.cx = e.clientX - sr.left - f.l; wz.cy = e.clientY - sr.top - f.t;
+    wz.g = Math.max(1, Math.min(6, (wz.raf ? wz.g : S.z.s) * Math.exp(-dy * .0025)));
+    if (!anim() || (Math.abs(dy) < 40 && !wz.raf)) { wzAt(wz.g); S.wt = setTimeout(() => { if (S.z.s > 1) clampZoom(); }, 160); return; }   // 觸控板捏：直接跟著
+    if (!wz.raf) wz.raf = requestAnimationFrame(wzStep);
   }, {passive:false});
 
   {                                                          // 按住愛心：跳出其他表情

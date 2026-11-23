@@ -935,7 +935,7 @@ html,body{touch-action:pan-x pan-y}
 .hla .rb{width:38px;height:38px;border-radius:50%;display:grid;place-items:center;background:var(--s2);color:var(--tx);border:0;cursor:pointer;transition:opacity var(--t-fast) var(--ease),background var(--t-fast) var(--ease)}
 .hla .rb svg{width:18px;height:18px;fill:none;stroke:currentColor;stroke-width:2.2}
 .hla .rb:disabled{opacity:.3;cursor:default}
-@media (pointer:fine){.hla{display:flex}.hla[hidden]{display:none}.hlr{cursor:grab;scroll-snap-type:none}.hlr.drag{cursor:grabbing;scroll-snap-type:none}.hlr.drag .hlc{pointer-events:none}}
+@media (pointer:fine){.hla{display:flex}.hla[hidden]{display:none}.hl .hlr{cursor:grab;scroll-snap-type:none}.hl .hlr.drag{cursor:grabbing;scroll-snap-type:none}.hl .hlr.drag .hlc{pointer-events:none}}
 .hlr{display:flex;gap:12px;overflow-x:auto;scrollbar-width:none;margin:12px calc(-1 * var(--pad)) 0;padding:6px var(--pad) 20px;scroll-snap-type:x mandatory;scroll-padding:0 var(--pad)}
 .hlr::-webkit-scrollbar{display:none}
 .hlc{position:relative;flex:none;height:clamp(230px,58vw,440px);aspect-ratio:var(--ar);max-width:84vw;border-radius:var(--r-lg);overflow:hidden;scroll-snap-align:start;background:var(--s2);
