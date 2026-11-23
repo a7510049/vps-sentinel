@@ -1774,6 +1774,7 @@ function openLb(i, from){
   S.fitAll = () => { const zw = cur(); zw.style.transition = `left ${T.mid}ms ${EASE},top ${T.mid}ms ${EASE},width ${T.mid}ms ${EASE},height ${T.mid}ms ${EASE}`;
     setZoom(1, 0, 0); setAll(); setTimeout(() => { zw.style.transition = ""; }, T.mid + 30); };
   const cur = () => sl[1].firstChild;
+  const ZMAX = 6;
   function setZoom(s, x, y){ if (s > 1.2 && (!S.z || S.z.s <= 1.2)) xlSoon(); S.z = {s, x, y}; cur().style.transform = s === 1 && !x && !y ? "" : `translate(${x}px,${y}px) scale(${s})`; }
   const vid = () => cur().querySelector("video");
   function stopAll(){ el.querySelectorAll("video").forEach(v => { if (!v.paused) v.pause(); v.closest(".zw").classList.remove("playing", "moving"); }); }
@@ -1954,7 +1955,7 @@ function openLb(i, from){
   S.o = t0;                                                  // 從哪裡打開的（關掉時看不到這張的格子就縮回這裡）
   /* iPhone 第一次畫出大圖那一格很久（整層要建好），以前動畫在那段時間就跑完了，看起來一下跳到最大。
      現在先把照片放在格子的位置、等照片解碼好、畫面真的畫出來，下一格才開始長大；格子本身是 HDR 大圖（精選、每天封面）就直接用同一張，不再載一次 */
-  const reveal = () => { if (!S.pre) return; S.pre = 0; el.style.visibility = ""; goneSet(); };
+  const reveal = () => { if (!S.pre) return; S.pre = 0; el.style.visibility = ""; };   // 格子先留著（大圖蓋在同一個位置），開始長大時才空出來，iPhone 不會先看到一塊黑的
   if (anim() && g0) {
     const a0 = toTile(g0, f0), z = cur();
     z.style.transform = a0.t; z.style.clipPath = a0.c; bg.style.opacity = 0;
@@ -1968,15 +1969,15 @@ function openLb(i, from){
     const start = () => { if (started++ || LB !== S || S.closing) return; reveal();
       requestAnimationFrame(() => requestAnimationFrame(() => {   // 露出來那一格畫好了才開始動
         if (LB !== S || S.closing) return;
-        z.style.transform = ""; z.style.clipPath = ""; if (big) big.style.transition = "";
+        z.style.transform = ""; z.style.clipPath = ""; if (big) big.style.transition = ""; goneSet();
         z.animate([{transform:a0.t, clipPath:a0.c}, {transform:"translate(0px,0px) scale(1)", clipPath:NOCLIP}], {duration:T.mid + 60, easing:DEC});
-        bg.style.opacity = 1; bg.animate([{opacity:0}, {opacity:1}], {duration:T.mid, easing:EASE});
+        bg.style.opacity = 1; bg.animate([{opacity:0}, {opacity:1}], {duration:T.mid, easing:EASE, fill:"forwards"});
         el.querySelectorAll(".lbt,.lbb,.nav,.lbs").forEach(x => { x.style.opacity = ""; x.animate([{opacity:0}, {opacity:1}], {duration:T.mid, delay:T.fast, easing:EASE, fill:"backwards"}); });
         setTimeout(() => { S.hold = 0; bigQ(); }, T.mid + 90);
       }));
     };
     Promise.all(wait).then(start); setTimeout(start, 350);      // 解碼太久也不等超過 0.35 秒
-  } else { S.hold = 0; reveal(); bigQ(); bg.style.opacity = 1; }
+  } else { S.hold = 0; reveal(); goneSet(); bigQ(); bg.style.opacity = 1; }
   if (POPSKIP) S.push = 1; else history.pushState({lb:1}, "");   // 上一張的返回還沒處理完：等它處理完再記
 
   function go(d){
@@ -2186,7 +2187,7 @@ function openLb(i, from){
     const sr = stage.getBoundingClientRect(), f = L();
     if (g.type === "pinch" && ptr.size >= 2) {
       const [a, b] = [...ptr.values()], d = Math.hypot(a.x - b.x, a.y - b.y), m = {x:(a.x + b.x) / 2, y:(a.y + b.y) / 2};
-      let s = g.z0.s * d / g.d0; s = s < 1 ? 1 - (1 - s) * .5 : Math.min(s, 6);
+      let s = g.z0.s * d / g.d0; s = s < 1 ? Math.max(.45, 1 - (1 - s) * .8) : s > ZMAX ? ZMAX + (s - ZMAX) * .3 : s;   // 手指縮多少照片就縮多少；比原本小、比最大還大時有一點阻力，放開再彈回去
       const ux = (g.m0.x - sr.left - f.l - g.z0.x) / g.z0.s, uy = (g.m0.y - sr.top - f.t - g.z0.y) / g.z0.s;
       setZoom(s, m.x - sr.left - f.l - s * ux, m.y - sr.top - f.t - s * uy);
       return;
@@ -2219,7 +2220,7 @@ function openLb(i, from){
     if (!g) return;
     if (g.type === "pinch") {
       if (ptr.size === 1) { const [a] = [...ptr.values()]; g = {type:"pan", x0:a.x, y0:a.y, z0:{...S.z}, lx:a.x, ly:a.y, lt:performance.now(), vx:0, vy:0}; return; }
-      if (S.z.s < 1.02) zoomTo(1, 0, 0); else clampZoom();
+      clampZoom();
       g = null; return;
     }
     if (ptr.size) return;
@@ -2255,10 +2256,11 @@ function openLb(i, from){
   function zoomTo(s, x, y){
     const zw = cur(), from = zw.style.transform || "none";
     setZoom(s, x, y);
-    if (anim()) zw.animate([{transform:from}, {transform:zw.style.transform || "none"}], {duration:T.mid, easing:DEC});
+    if (anim()) zw.animate([{transform:from}, {transform:zw.style.transform || "none"}], {duration:T.mid, easing:EASE});
   }
   function clampZoom(){
-    const f = L(), w = W(), h = H(), s = S.z.s;
+    if (S.z.s < 1.02) return zoomTo(1, 0, 0);                  // 縮到比原本小：放開就彈回原本大小（一指先放開、另一指拖完也一樣）
+    const f = L(), w = W(), h = H(), s = Math.min(ZMAX, S.z.s);
     const cl = (v, sz, box, off) => { const span = sz * s; if (span <= box) return (box - span) / 2 - off; return Math.min(-off, Math.max(box - off - span, v)); };
     zoomTo(s, cl(S.z.x, f.w, w, f.l), cl(S.z.y, f.h, h, f.t));
   }

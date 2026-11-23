@@ -937,7 +937,7 @@ html,body{touch-action:pan-x pan-y}
 .ph .hi.ok{transform:none;filter:none;transition:opacity var(--t-slow) var(--ease),transform 1.1s var(--dec),filter 1.1s var(--ease)}
 
 /* 看大圖：後面透出這張照片的顏色 */
-.lb .bg{overflow:hidden}
+.lb .bg{overflow:hidden;isolation:isolate}
 .lb .bg .amb{position:absolute;inset:-12%;width:124%;height:124%;object-fit:cover;filter:blur(48px) saturate(1.6);opacity:0;will-change:opacity;transform:translateZ(0)}
 .lb .bg::after{content:"";position:absolute;inset:0;background:radial-gradient(120% 90% at 50% 45%,rgba(0,0,0,.2),rgba(0,0,0,.7))}
 
