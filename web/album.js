@@ -1538,14 +1538,15 @@ function tmac(el, pts, r, path, len){
   days.forEach((x, j) => { x.c = (days[j + 1] ? days[j + 1].k : n) - x.k; });   // 每天一格：寬度照那天幾張，指針照第幾張走
   const city = x => { const m = new Map(); for (let k = x.k; k < x.k + x.c; k++) { const c = (PH[pts[k].i].p || {}).c; if (c) m.set(c, (m.get(c) || 0) + 1); } return [...m].sort((a, b) => b[1] - a[1]).map(a => a[0])[0] || ""; };
   el.insertAdjacentHTML("afterend", `<div class="tmac"><button class="tmp" aria-label="播放旅程">${I("play")}</button>
-    <div class="tmt" role="slider" tabindex="0" aria-label="旅程時間" aria-valuemin="1" aria-valuemax="${n}"><div class="tmr">${days.map(x => { const dn = x.d && dayNum(x.d.k), c = city(x);
-      return `<div class="tms" style="width:${(x.c / n * 100).toFixed(3)}%;--o:${(x.k / n).toFixed(4)}"><i class="tmf"></i><div class="tmx"><b class="num">${dn ? `<em>第 ${dn} 天・</em>` : ""}${x.d ? `${x.d.mo}/${x.d.d}` : ""}</b>${c ? `<span>${esc(c)}</span>` : ""}</div></div>`; }).join("")}</div>
+    <div class="tmt" role="slider" tabindex="0" aria-label="旅程時間" aria-valuemin="1" aria-valuemax="${n}"><div class="tmr">${days.map(x => { const c = city(x);   // 每格上面同一種寫法：日期＋城市（第幾天寫在下面的泡泡），窄的只留日期
+      return `<div class="tms" style="width:${(x.c / n * 100).toFixed(3)}%;--o:${(x.k / n).toFixed(4)}"><div class="tmx"><b class="num">${x.d ? `${x.d.mo}/${x.d.d}` : ""}</b>${c ? `<span>${esc(c)}</span>` : ""}</div><div class="tmg"><i class="tmf"></i></div></div>`; }).join("")}</div>
     <i class="tmh"></i><div class="tml"><b class="num"></b><span></span></div></div></div>`);
   const box = el.nextElementSibling, bar = box.querySelector(".tmt"), segs = [...box.querySelectorAll(".tms")], hd = box.querySelector(".tmh"), lab = box.querySelector(".tml"), play = box.querySelector(".tmp"), trk = box.querySelector(".tmr");
-  const pos = k => (k + .5 + Math.max(0, k - n + 2) * .5) / n;   // 每張在自己那一小格的中間；最後一張滑到最右邊（沒在看的時候整條是滿的）
+  const pos = k => n > 1 ? k / (n - 1) : 1;                   // 第一張在最左、最後一張在最右；每天第一張剛好落在那天那格裡（k/(n-1) 介於 k/n 和 (k+1)/n）
   function seat(k){                                           // 指針、每格填到哪、說明泡泡（不超出兩頭）
-    const u = pos(k), W = bar.clientWidth, lw = lab.offsetWidth, x = u * W, lx = Math.max(0, Math.min(W - lw, x - lw / 2));
-    hd.style.left = `${(u * 100).toFixed(3)}%`;
+    const u = pos(k), W = bar.clientWidth, lw = lab.offsetWidth, x = trk.offsetLeft + u * trk.clientWidth;   // 兩頭留指針的半徑，不會壓到播放鈕、跑出畫面
+    const lx = Math.max(Math.min(0, x - 18), Math.min(Math.max(W - lw, x - lw + 18), x - lw / 2));       // 泡泡不超出兩頭，但箭頭不擠到圓角上
+    hd.style.left = `${x.toFixed(1)}px`;
     lab.style.transform = `translateX(${lx.toFixed(1)}px)`; lab.style.setProperty("--ax", `${(x - lx).toFixed(1)}px`);
     days.forEach((x, j) => { const f = Math.max(0, Math.min(1, (u * n - x.k) / x.c)); segs[j].style.setProperty("--f", f.toFixed(4)); segs[j].classList.toggle("on", Math.round(k) >= x.k && Math.round(k) < x.k + x.c); });
   }
@@ -1592,7 +1593,7 @@ function tmac(el, pts, r, path, len){
     };
     requestAnimationFrame(step);
   }
-  const kx = e => { const b = bar.getBoundingClientRect(); return (e.clientX - b.left) / b.width * n - .5; };
+  const kx = e => { const b = trk.getBoundingClientRect(); return (e.clientX - b.left) / b.width * (n - 1); };
   bar.addEventListener("pointerdown", e => {
     stop(); bar.setPointerCapture(e.pointerId); box.classList.add("drag");
     const target = kx(e), k0 = at, t0 = performance.now();
