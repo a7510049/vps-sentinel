@@ -907,13 +907,15 @@ html,body{touch-action:pan-x pan-y}
 /* 每天一張大圖開章：這天第一張橫的放整排，日期、地點疊在上面，捲動時照片慢一點（視差） */
 .day.cov{position:relative}
 .day.cov .dh{position:absolute;left:0;right:0;top:0;height:var(--fh);margin:0;padding:clamp(18px,3.2vw,40px);z-index:2;pointer-events:none;align-content:end;
-  border-radius:var(--r-sm);background:linear-gradient(180deg,transparent 40%,rgba(0,0,0,.6));color:#fff}
+  border-radius:var(--r-sm);color:#fff;--a:calc(.5 + var(--cs,.5) * .35);
+  background:linear-gradient(180deg,transparent 12%,rgba(0,0,0,calc(var(--a) * .55)) 45%,rgba(0,0,0,var(--a))),linear-gradient(90deg,rgba(0,0,0,calc(var(--a) * .45)),transparent 72%)}
+.day.cov .dh b,.day.cov .dh span,.day.cov .dh .dsum{animation:none}
 @media (min-width:700px){.day.cov .dh{border-radius:var(--r-md)}}
-.day.cov .dh b{color:#fff;font-size:clamp(24px,3.8vw,44px);text-shadow:0 2px 18px rgba(0,0,0,.35)}
-.day.cov .dh span{color:rgba(255,255,255,.88)}
+.day.cov .dh b{color:#fff;font-size:clamp(24px,3.8vw,44px);text-shadow:0 1px 3px rgba(0,0,0,.35),0 2px 18px rgba(0,0,0,.4)}
+.day.cov .dh span{color:rgba(255,255,255,.92);text-shadow:0 1px 3px rgba(0,0,0,.4)}
 .day.cov .dh span svg{color:#fff}
 .day.cov .dct{background:rgba(255,255,255,.22);color:#fff;align-self:end}
-.day.cov .dhr{color:rgba(255,255,255,.85)}
+.day.cov .dhr{color:rgba(255,255,255,.9);text-shadow:0 1px 3px rgba(0,0,0,.4)}
 .day.cov .row.feat .ph img{top:-7%;bottom:auto;height:114%}
 @supports (animation-timeline:view()){
   .day.cov .row.feat .ph img{animation:fpar linear both;animation-timeline:view()}
@@ -1000,7 +1002,7 @@ html,body{touch-action:pan-x pan-y}
 .dwx.wsnow svg{color:#8fc6ff}
 .dwx.wstorm svg{color:#a07cff}
 .day.cov .dh .dwx{display:flex;width:max-content;margin:8px 0 2px}
-.day.cov .dh .dwx,.day.cov .dh .dwx small{color:#fff;text-shadow:none}
+.day.cov .dh .dwx,.day.cov .dh .dwx small{color:#fff;text-shadow:0 1px 3px rgba(0,0,0,.4)}
 .day.cov .dh .dwx svg{color:#fff;filter:drop-shadow(0 1px 6px rgba(0,0,0,.35))}
 .smc b .dwx{font-size:var(--fs-xs)}
 .wall[data-z="2"] .dwx,.wall[data-z="3"] .dwx{display:none}
@@ -1242,7 +1244,7 @@ button.dct:active{transform:scale(.92)}
 
 /* 每天一句話（早上在哪、下午到哪、走了幾公里） */
 .dsum{grid-column:1;font-style:normal;font-family:var(--serif);font-size:var(--fs-m);line-height:1.6;color:var(--tx2);letter-spacing:.02em;margin-top:2px;text-wrap:pretty}
-.day.cov .dsum{color:rgba(255,255,255,.9);text-shadow:0 1px 10px rgba(0,0,0,.4)}
+.day.cov .dsum{color:rgba(255,255,255,.94);text-shadow:0 1px 3px rgba(0,0,0,.4),0 1px 10px rgba(0,0,0,.4)}
 .wall[data-z="2"] .dsum,.wall[data-z="3"] .dsum{display:none}
 .sct .dsum{color:rgba(255,255,255,.85);font-size:var(--fs-l);max-width:30em;margin-top:4px}
 
@@ -1318,27 +1320,25 @@ button.dct:active{transform:scale(.92)}
 .tmb img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;opacity:0;transition:opacity var(--t-fast) var(--ease)}
 .tmb img.ok{opacity:1}
 .tmac{display:flex;align-items:flex-start;gap:12px;margin-top:12px;animation:memin var(--t-mid) var(--dec) both}
-.tmp{width:44px;height:44px;border-radius:50%;flex:none;display:grid;place-items:center;background:var(--p);color:var(--on-p);transition:transform var(--sp-fast)}
+.tmp{width:44px;height:44px;margin-top:9px;border-radius:50%;flex:none;display:grid;place-items:center;background:var(--p);color:var(--on-p);transition:transform var(--sp-fast)}
 .tmp:active{transform:scale(.92)}
 .tmp svg{width:18px;height:18px}
 /* 每天一格（使用者選的）：寬度照那天幾張，走過的填上漸層，現在這天框起來；說明泡泡在下面跟著指針 */
-.tmt{position:relative;flex:1;min-width:0;padding-bottom:54px;touch-action:none;cursor:pointer;outline:0}
-.tmr{display:flex;height:44px}
-.tms{position:relative;flex:none;min-width:0;border:0 solid transparent;border-width:0 2px;background:var(--s2);background-clip:padding-box;border-radius:var(--r-sm);overflow:hidden;container-type:inline-size;transition:box-shadow var(--t-fast) var(--ease)}
-.tms:first-child{border-left-width:0}.tms:last-child{border-right-width:0}
-.tmf{position:absolute;inset:0;background:var(--grad,var(--p));background-size:var(--bw,100%) 100%;background-position:calc(var(--o,0) * var(--bw,0px) * -1) 0;opacity:.5;clip-path:inset(0 calc((1 - var(--f,1)) * 100%) 0 0)}
-.tms.on{box-shadow:inset 0 0 0 2px var(--p)}
-.tms.on .tmf{opacity:.7}
-.tmx{position:relative;height:100%;display:flex;flex-direction:column;justify-content:center;padding:0 10px;line-height:1.25;white-space:nowrap;overflow:hidden}
-.tmx b{font-size:var(--fs-xs);font-weight:700;color:var(--tx)}
-.tmx b em{font-style:normal}
-.tmx span{font-size:var(--fs-xs);color:var(--tx2);overflow:hidden;text-overflow:ellipsis}
-@container (max-width:110px){.tmx b em{display:none}.tmx{padding:0 6px}}
-@container (max-width:64px){.tmx span{display:none}}
-@container (max-width:30px){.tmx{display:none}}
-.tmh{position:absolute;top:-5px;height:54px;left:100%;width:4px;margin-left:-2px;border-radius:var(--r-pill);background:#fff;box-shadow:var(--sh-pop),0 0 0 2px var(--p);transition:scale var(--sp-fast);pointer-events:none}
-.tmac.drag .tmh,.tmt:focus-visible .tmh{scale:1.15}
-.tml{position:absolute;left:0;top:56px;max-width:100%;padding:6px 12px;border-radius:var(--r-md);background:var(--s3);box-shadow:var(--sh-pop);line-height:1.3;pointer-events:none;white-space:nowrap}
+.tmt{position:relative;flex:1;min-width:0;padding:0 13px 62px;touch-action:none;cursor:pointer;outline:0}
+.tmr{display:flex}
+.tms{position:relative;flex:none;min-width:0;padding:0 2px;container-type:inline-size}
+.tms:first-child{padding-left:0}.tms:last-child{padding-right:0}
+.tmx{display:flex;align-items:baseline;gap:5px;height:20px;padding-left:1px;white-space:nowrap;overflow:hidden;font-size:var(--fs-xs);line-height:20px;color:var(--tx3);transition:color var(--t-fast) var(--ease)}
+.tmx b{font-weight:700;color:var(--tx2);transition:color var(--t-fast) var(--ease)}
+.tmx span{overflow:hidden;text-overflow:ellipsis}
+.tms.on .tmx{color:var(--tx2)}.tms.on .tmx b{color:var(--tx)}
+@container (max-width:76px){.tmx span{display:none}}
+@container (max-width:28px){.tmx{visibility:hidden}}
+.tmg{position:relative;height:6px;margin-top:8px;border-radius:var(--r-pill);background:color-mix(in oklab,var(--tx3) 28%,transparent);overflow:hidden}
+.tmf{position:absolute;inset:0;background:var(--grad,var(--p));background-size:var(--bw,100%) 100%;background-position:calc(var(--o,0) * var(--bw,0px) * -1) 0;clip-path:inset(0 calc((1 - var(--f,1)) * 100%) 0 0)}
+.tmh{position:absolute;z-index:2;top:31px;left:0;width:18px;height:18px;margin:-9px 0 0 -9px;border-radius:50%;background:#fff;box-shadow:var(--sh-pop),0 0 0 3px var(--p);transition:scale var(--sp-fast);pointer-events:none}
+.tmac.drag .tmh,.tmt:focus-visible .tmh{scale:1.2}
+.tml{position:absolute;left:0;top:52px;max-width:100%;padding:6px 12px;border-radius:var(--r-md);background:var(--s3);box-shadow:var(--sh-pop);line-height:1.3;pointer-events:none;white-space:nowrap}
 .tml::before{content:"";position:absolute;top:-5px;left:var(--ax,50%);width:10px;height:10px;margin-left:-5px;rotate:45deg;background:inherit;border-radius:2px}
 .tml:not(:has(b:not(:empty))){opacity:0}
 .tml b{position:relative;display:block;font-size:var(--fs-s);font-weight:700}
