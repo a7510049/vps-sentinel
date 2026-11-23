@@ -484,7 +484,7 @@ function flyTiles(vis, dur){                                  // 每張從 vis �
   });
 }
 function zoomWall(z, fx, fy, pre){                            // 換大小：每張從現在的位置連續長大／縮小過去，照片不壓扁
-  setTimeout(() => TILES.forEach(t => { if (t && t.isConnected) { const q = t.getBoundingClientRect(); if (q.bottom > -innerHeight * .4 && q.top < innerHeight * 1.4) sharp(t); } }), ZDUR + 120);   // 放大後看得到的那幾格換清楚的
+  setTimeout(() => TILES.forEach(t => { if (t && t.isConnected) { const q = t.getBoundingClientRect(); if (q.bottom > -innerHeight * .4 && q.top < innerHeight * 1.4) sharp(t, q.height); } }), ZDUR + 120);   // 放大後看得到的那幾格換清楚的
   z = Math.min(3, Math.max(0, z));
   if (z === ZL || !$(".wall")) return false;
   const vis = pre || wallRects(), H = innerHeight;
@@ -838,6 +838,7 @@ function draw(){
   const hok = () => { hi.classList.add("ok"); rdy(); setTimeout(() => { const q = $(".hero .lq"); if (q) q.remove(); }, T.slow + 100); };   // 糊的底圖拿掉，捲動時不用一直重畫模糊
   hi.complete && hi.naturalWidth ? hok() : (hi.addEventListener("load", hok, {once:true}), hi.addEventListener("error", rdy, {once:true}), setTimeout(rdy, 2500));
   heroCycle(cover); zbSync(); tint(cover); flagFix($(".hero"));
+  awayWatch(hero); awayWatch($(".mems"));
   const hf = $(".hfl"); if (hf) hf.querySelectorAll("img").forEach(f => f.addEventListener("error", () => { if (!hf.querySelector("img")) hf.outerHTML = I("pin"); }));   // 國旗都抓不到就換回圖釘
   if (D.wmo) document.documentElement.style.setProperty("--wm", JSON.stringify(D.wmo));
   document.documentElement.classList.toggle("wmo", !!D.wmo);
@@ -1025,15 +1026,16 @@ const IO = "IntersectionObserver" in window ? new IntersectionObserver(es => {
     setTimeout(() => { t.style.transitionDelay = ""; }, T.slow + 300); });
 }, {rootMargin:"0px 0px -4% 0px"}) : null;
 /* 格子顯示得比小圖（高 480）大很多時（每天的封面、放大的照片牆、大螢幕）換成大圖（長邊 2048，一樣是壓縮過的）：先在背景載好再換，不會閃 */
-function sharp(el){
+function sharp(el, h){
   const hi = el.querySelector("img.hi"), p = PH[+el.dataset.i];
-  if (!hi || !p || p.broken || hi.dataset.sh || !hi.complete || !hi.naturalHeight) return;
-  const dpr = Math.min(3, devicePixelRatio || 1); if (el.clientHeight * dpr < hi.naturalHeight * 1.2) return;
+  if (h) el._h = h; else h = el._h;                         // 格子高度用看得到時量好的（不在這裡讀 clientHeight：快速滑動時每張都逼瀏覽器重排）
+  if (!h || !hi || !p || p.broken || hi.dataset.sh || !hi.complete || !hi.naturalHeight) return;
+  const dpr = Math.min(3, devicePixelRatio || 1); if (h * dpr < hi.naturalHeight * 1.2) return;
   hi.dataset.sh = 1; const u = src(p, "l"), im = new Image(); im.decoding = "async";
   im.onload = () => { (im.decode ? im.decode() : Promise.resolve()).catch(() => {}).then(() => { if (hi.isConnected) hi.src = u; }); };
   im.onerror = () => { delete hi.dataset.sh; }; im.src = u;
 }
-const SIO = "IntersectionObserver" in window ? new IntersectionObserver(es => es.forEach(e => { if (e.isIntersecting) sharp(e.target); }), {rootMargin:"40% 0px"}) : null;
+const SIO = "IntersectionObserver" in window ? new IntersectionObserver(es => es.forEach(e => { if (e.isIntersecting) sharp(e.target, e.boundingClientRect.height); }), {rootMargin:"40% 0px"}) : null;
 function tile(p, i){
   const el = document.createElement("button");
   el.className = p.q ? "ph" : "ph wt"; el.dataset.i = i; el.setAttribute("aria-label", p.n.split("/").pop());   // wt：主機還在做小圖，先跑一道光
@@ -1061,6 +1063,7 @@ function rxBadge(p){                                        // 愛心＋其他�
 let LW = 0;
 function layout(force){
   const wall = $(".wall"); if (!wall) return;
+  SCR.rgc = null;
   const cs = getComputedStyle(document.documentElement), rh = (parseFloat(cs.getPropertyValue("--rh")) || 200) * ZMUL[ZL], gap = ZL >= 2 ? 2 : parseFloat(cs.getPropertyValue("--gap")) || 4;
   const W = wall.querySelector(".rows").clientWidth;
   if (!force && Math.abs(W - LW) < 1) return;
@@ -1119,12 +1122,29 @@ addEventListener("resize", () => { clearTimeout(RZ); RZ = setTimeout(() => { if 
 /* 捲動：封面慢一點往上（視差）、標題淡掉，捲過封面上面浮出一條 */
 let SCQ = 0;
 const CSSPAR = window.CSS && CSS.supports && CSS.supports("animation-timeline:scroll()");
+/* 捲出畫面的區塊（封面、回憶圓圈）加 .away，裡面一直跑的動畫先停 */
+const AWIO = "IntersectionObserver" in window ? new IntersectionObserver(es => es.forEach(e => e.target.classList.toggle("away", !e.isIntersecting)), {rootMargin:"200px 0px"}) : null;
+function awayWatch(el){ if (el && AWIO) AWIO.observe(el); }
+/* 快速滑動（安卓甩一下）：html.fling，新出現的照片只淡入、上面那條不霧化，慢下來 0.2 秒後恢復 */
+const FL = {y:0, t:0, off:0, on:false};
+function flingCheck(y){
+  const now = performance.now(), dt = now - FL.t, v = dt > 0 && dt < 100 ? Math.abs(y - FL.y) / dt : 0;
+  FL.y = y; FL.t = now;
+  if (v > 2.2) {
+    if (!FL.on) { FL.on = true; document.documentElement.classList.add("fling"); }
+    clearTimeout(FL.off);
+    FL.off = setTimeout(() => { FL.on = false; document.documentElement.classList.remove("fling"); }, 200);
+  }
+}
+let HEROH = 0;
+addEventListener("resize", () => { HEROH = 0; SCR.rgc = null; });
 function onScroll(){
   if (SCQ) return;
   SCQ = requestAnimationFrame(() => {
     SCQ = 0;
     const hero = $(".hero"); if (!hero) return;
-    const y = scrollY, H = hero.offsetHeight;
+    const y = scrollY, H = HEROH || (HEROH = hero.offsetHeight);   // 封面高度記著，不每一格逼瀏覽器重排
+    flingCheck(y);
     if (y < H && anim() && !CSSPAR) {
       $(".hero .cv").style.transform = `translate3d(0,${(y * .38).toFixed(1)}px,0)`;
       const c = $(".hcap"); c.style.opacity = Math.max(0, 1 - y / (H * .55)).toFixed(3); c.style.transform = `translate3d(0,${(y * .18).toFixed(1)}px,0)`;
@@ -1138,9 +1158,13 @@ addEventListener("scroll", onScroll, {passive:true});
 const SCR = {t:0, drag:false, rows:null, rg:null, y:null, raf:0};
 function scrubRange(){
   if (SCR.drag && SCR.rg) return SCR.rg;                    // 拖的時候用按下去那時量好的，不每一格重量（會逼瀏覽器重排）
+  const now = performance.now();
+  if (SCR.rgc && now - SCR.rgc.t < 1000) return SCR.rgc.v;  // 捲動時一秒量一次就好（快速滑動時每一格重量會卡）
   const w = $(".wall"); if (!w) return null;
   const a = w.getBoundingClientRect().top + scrollY - 80, b = a + 80 + w.offsetHeight - innerHeight * .6;
-  return b - a > innerHeight * 3 ? [a, b] : null;
+  const v = b - a > innerHeight * 3 ? [a, b] : null;
+  SCR.rgc = {t:now, v};
+  return v;
 }
 function scrubSync(){
   const sc = $(".scrub"); if (!sc || SCR.drag) return;        // 拖的時候位置由手指那邊直接設
