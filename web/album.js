@@ -1278,10 +1278,11 @@ function gearSet(k, keep){
 const HAB = {
   a:{n:"光圈", b:[1.7, 2.4, 3.4, 4.8, 6.7, 9.5], l:["ƒ1.4", "ƒ2", "ƒ2.8", "ƒ4", "ƒ5.6", "ƒ8", "ƒ11+"], v:x => x.f},
   t:{n:"快門", b:[1 / 750, 1 / 350, 1 / 180, 1 / 90, 1 / 45, 1 / 20], l:["1/1000", "1/500", "1/250", "1/125", "1/60", "1/30", "更慢"], v:x => x.et && x.et[1] ? x.et[0] / x.et[1] : 0},
-  i:{n:"ISO", b:[141, 283, 566, 1131, 2263, 4525], l:["100", "200", "400", "800", "1600", "3200", "6400+"], v:x => x.iso}};
+  i:{n:"ISO", b:[141, 283, 566, 1131, 2263, 4525], l:["100", "200", "400", "800", "1600", "3200", "6400+"], v:x => x.iso},
+  f:{n:"焦段", b:[20, 35, 70, 135], l:["超廣角", "廣角", "標準", "中望遠", "望遠"], v:x => x.f35}};   // 焦段跟器材的 FOCB 同一套分法
 function habOf(p, k){ const h = HAB[k], v = h && h.v(p.x); if (!v) return -1; const i = h.b.findIndex(b => v < b); return i < 0 ? h.b.length : i; }
 function habits(base){                                       // 至少 8 張有資料、用到兩段以上才畫
-  return Object.entries(HAB).map(([k, h]) => { const c = h.l.map(() => 0); let n = 0;
+  return Object.entries(HAB).filter(([k]) => k !== "f").map(([k, h]) => { const c = h.l.map(() => 0); let n = 0;
     base.forEach(p => { const i = habOf(p, k); if (i >= 0) { c[i]++; n++; } });
     return n >= 8 && c.filter(Boolean).length >= 2 ? {k, h, c, n} : null; }).filter(Boolean);
 }
@@ -1304,11 +1305,12 @@ function gear(){
   box.innerHTML = `<div class="mh"><b>器材</b><span class="num">${cs.length} 台相機${ls.length ? `・${Object.keys(lens).length} 顆鏡頭` : ""}</span></div>
     <div class="gcams">${cs.slice(0, 6).map(([c, n]) => { const lz = Object.entries(cl[c] || {}).sort((a, b) => b[1] - a[1]).slice(0, 6);
       return `<div class="gbox"><button class="gcam${GEAR === "c:" + c ? " on" : ""}" data-gear="c:${esc(c)}"><i class="gic">${I("cam")}</i><span class="gt2"><b>${esc(c)}</b><small class="num">${n} 張</small></span><span class="gbr"><i style="width:${(n / n0 * 100).toFixed(1)}%"></i></span></button>${lz.length ? `<div class="glz">${lz.map(([l, m]) => `<button class="glr${GEAR === "l:" + l ? " on" : ""}" data-gear="l:${esc(l)}">${I("lens")}<span>${esc(l)}</span><span class="gbr"><i style="width:${(m / n * 100).toFixed(1)}%"></i></span><small class="num">${m}</small></button>`).join("")}</div>` : ""}</div>`; }).join("")}</div>
-    ${gstat(nf >= 3 ? {n:"焦段", l:FOCB.map(b => b[2]), c:fb, t:top ? `${top[0]} mm` : ""} : null, hb)}`;
+    ${gstat(nf >= 3 ? {k:"f", n:"焦段", l:FOCB.map(b => b[2]), c:fb, t:top ? `${top[0]} mm` : ""} : null, hb)}`;
+  box.classList.toggle("one", cs.length < 2);                 // 只有一台相機：相機一條橫的，拍攝習慣在下面撐滿（大螢幕不會右邊一小塊、左邊空一大片）
 }
 /* 拍攝習慣：焦段、光圈、快門、ISO 合成一張，一種一行細長條（使用者說四張大卡太佔版面）；點長條只看那些照片 */
 function gstat(fo, hb){
-  const rows = (fo ? [{k:"", h:fo, c:fo.c}] : []).concat(hb);
+  const rows = (fo ? [{k:fo.k, h:fo, c:fo.c}] : []).concat(hb);
   if (!rows.length) return "";
   return `<div class="gst">${rows.map(({k, h, c}) => { const m = Math.max(1, ...c), tk = c.indexOf(Math.max(...c)), sel = k && GEAR && GEAR[0] === k ? +GEAR.slice(2) : -1;
     const v = sel >= 0 ? `${h.l[sel]}<small class="num">${c[sel]} 張</small>` : (h.t || h.l[tk]);
@@ -1791,6 +1793,7 @@ function openLb(i, from){
     if (!anim()) return end();
     setTimeout(end, T.mid + 200);                              // 安卓返回手勢時動畫有時不會結束：時間到一定收掉
     el.querySelectorAll(".lbt,.lbb,.nav,.inf,.lbs").forEach(x => { x.style.opacity = 0; });
+    sl.forEach(s => { if (s.firstChild !== zw) s.style.visibility = "hidden"; });   // 資訊開著時關掉：畫面變寬，旁邊那張會被排進看得到的地方，先藏起來
     S.info = false; el.classList.remove("info", "cmo");
     const n0 = now === "none" ? "translate(0px,0px) scale(1)" : now;
     if (r) { const a1 = toTile(r, f); zw.animate([{transform:n0, clipPath:NOCLIP}, {transform:a1.t, clipPath:a1.c}], {duration:T.mid, easing:EASE, fill:"forwards"}).onfinish = end; }
@@ -1816,7 +1819,14 @@ function openLb(i, from){
   function infSet(p, dir, q){
     const y = inf.scrollTop, om = inf.querySelector(".imap"), old = om && om._c ? {c:om._c, t:[...om.querySelectorAll(".tl.ok")]} : null;
     const kl = inf.querySelector(".kbar i"), k0 = kl ? kl.style.left : "", tx0 = dir ? leafText(inf) : null;
+    const bk = () => { const n = {}; return [...inf.children].map(e => { const k = (e.classList[0] || e.tagName) + "." + (e.classList[1] || "") + ">" + (e.firstElementChild ? e.firstElementChild.classList[0] || "" : ""); n[k] = (n[k] || 0) + 1; return [k + "~" + n[k], e]; }); };
+    const r0 = dir && anim() ? new Map(bk().map(([k, e]) => [k, e.getBoundingClientRect()])) : null;
     inf.innerHTML = infoHTML(p); inf.scrollTop = y;            // 換張時停在原本看的地方
+    if (r0) bk().forEach(([k, e]) => {                          // 換張時某一塊變高變矮（多一行、少一格）：那塊慢慢伸縮、下面的跟著滑，不會一下子上下跳
+      const a = r0.get(k); if (!a) return void e.animate([{opacity:0}, {opacity:1}], {duration:T.mid, delay:T.fast / 2, easing:DEC, fill:"backwards"}); const b = e.getBoundingClientRect(), dy = a.top - b.top, dh = a.height - b.height;
+      if (Math.abs(dy) > .5) e.animate([{translate:`0 ${dy}px`}, {translate:"0 0"}], {duration:T.mid, easing:DEC});
+      if (Math.abs(dh) > .5) e.animate([{height:a.height + "px", overflow:"hidden"}, {height:b.height + "px", overflow:"hidden"}], {duration:T.mid, easing:DEC});
+    });
     infoMap(old, !!dir);
     const mv = dir && q && q !== p && anim() ? morph(q, p, k0) : null;
     if (tx0 && anim()) {                                         // 換張時只有變了的字淡入換上，其他不動（使用者說不要整塊抖一下）
@@ -1887,8 +1897,9 @@ function openLb(i, from){
   }
   function infoMap(old, swap){
     const p = PH[S.i], pb = $("[data-pal]", inf);
+    pbSnap(inf);
     if (pb && p.pal && swap && anim()) { const hg = pb.querySelector(".ihist svg"); if (hg) hg.animate([{opacity:.3, transform:"scaleY(.4)"}, {opacity:1, transform:"none"}], {duration:T.slow, easing:DEC}); pb.querySelectorAll(".pbar i").forEach((x, k) => x.animate([{opacity:.3, transform:"scaleX(.5)"}, {opacity:1, transform:"none"}], {duration:T.slow, delay:k * 40, easing:DEC, fill:"backwards"})); }   // 換張時直方圖、顏色條照樣長出來
-    if (pb && !p.pal) palette(p).then(() => { if (pb.isConnected && PH[S.i] === p) { pb.innerHTML = palHTML(p); const hg = pb.querySelector(".ihist svg"); if (hg && anim()) hg.animate([{opacity:0, transform:"scaleY(.2)"}, {opacity:1, transform:"none"}], {duration:T.slow, easing:DEC}); if (anim()) pb.querySelectorAll(".pbar i").forEach((x, k) => x.animate([{opacity:0, transform:"scaleX(.4)"}, {opacity:1, transform:"none"}], {duration:T.slow, delay:k * 50, easing:DEC, fill:"backwards"})); } });
+    if (pb && !p.pal) palette(p).then(() => { if (pb.isConnected && PH[S.i] === p) { pb.innerHTML = palHTML(p); pbSnap(pb); const hg = pb.querySelector(".ihist svg"); if (hg && anim()) hg.animate([{opacity:0, transform:"scaleY(.2)"}, {opacity:1, transform:"none"}], {duration:T.slow, easing:DEC}); if (anim()) pb.querySelectorAll(".pbar i").forEach((x, k) => x.animate([{opacity:0, transform:"scaleX(.4)"}, {opacity:1, transform:"none"}], {duration:T.slow, delay:k * 50, easing:DEC, fill:"backwards"})); } });
     const m = $(".imap", inf); if (!m || !p.g) return;
     const z = 15, W2 = m.clientWidth, H2 = m.clientHeight, cx = lx(p.g[1], z), cy = ly(p.g[0], z);
     tiles(m, cx, cy, z, W2, H2); m._c = [cx, cy];
@@ -3016,6 +3027,7 @@ function lvOf(p){
   const v = Math.log2(x.f * x.f / t) - Math.log2(x.iso / 100) + (x.ev || 0);
   return v > -8 && v < 22 ? v : null;
 }
+const AFZ = {"AF-S":"單次對焦", "AF-C":"連續對焦", "AF-F":"彈性對焦"};
 const LVN = [[14.5, "非常亮"], [12.5, "很亮"], [10.5, "明亮"], [8.5, "柔和"], [6.5, "偏暗"], [4.5, "暗"], [1.5, "很暗"], [-99, "極暗"]];
 const lvName = v => LVN.find(r => v >= r[0])[1];
 const gLv = v => {                                           // 一條由暗到亮的尺（−2～16），左邊暗、右邊亮，三角形在尺下面指著現場的亮度（跟曝光尺一樣，不會碰到太陽）
@@ -3148,11 +3160,21 @@ function histSvg(p){                                         // 亮度是灰色�
   const tip = H.lo > .02 ? "暗部有一片全黑" : H.hi > .02 ? "亮部有一片過曝" : "";
   return `<div class="ihist"><svg viewBox="0 0 160 40" preserveAspectRatio="none" aria-hidden="true"><path d="M40 0v40M80 0v40M120 0v40" class="hg"/><polygon points="0,40 ${pts(H.h[3])} 160,40" class="hl0"/>${["hr", "hgr", "hb"].map((c, k) => `<polyline points="${pts(H.h[k])}" class="${c}"/>`).join("")}</svg><div class="ihl"><small>暗</small>${tip ? `<b>${tip}</b>` : ""}<small>亮</small></div></div>`;
 }
+/* 顏色條每一段的寬度對齊螢幕的像素：寬度有小數時，每條縫看起來粗細不一 */
+function pbSnap(root){
+  const r = devicePixelRatio || 1, px = v => Math.round(v * r) / r;
+  root.querySelectorAll(".pbar").forEach(b => {
+    const it = [...b.children], g = parseFloat(getComputedStyle(b).columnGap) || 0, W = b.clientWidth - g * (it.length - 1);
+    if (!(W > 0)) return;
+    const f = it.map(e => +e.dataset.f), t = f.reduce((a, c) => a + c, 0);
+    let acc = 0, at = 0; it.forEach((e, k) => { acc += W * f[k] / t; const w = k === it.length - 1 ? W - at : px(acc) - at; at += w; e.style.flex = `0 0 ${w}px`; });
+  });
+}
 function palHTML(p){
   const pl = p.pal; if (!pl) return `<div class="pbar wait"></div>`;
   if (!pl.length) return "";
   const t = pl.reduce((a, c) => a + c[1], 0);
-  return `${histSvg(p)}<div class="pbar">${pl.map(([c, n]) => `<i style="background:${c};flex:${Math.max(.06, n / t).toFixed(3)}"></i>`).join("")}</div>${gamSvg(p) || (scrNote(p) ? `<div class="iscr">${scrNote(p)}</div>` : "")}`;
+  return `${histSvg(p)}<div class="pbar">${pl.map(([c, n]) => `<i data-f="${Math.max(.06, n / t).toFixed(3)}" style="background:${c};flex:${Math.max(.06, n / t).toFixed(3)}"></i>`).join("")}</div>${gamSvg(p) || (scrNote(p) ? `<div class="iscr">${scrNote(p)}</div>` : "")}`;
 }
 /* 在這附近拍的其他照片（300 公尺內，近的先）：點了直接換過去 */
 function gdist(a, b){ const r = Math.PI / 180, h = Math.sin((b[0] - a[0]) * r / 2) ** 2 + Math.cos(a[0] * r) * Math.cos(b[0] * r) * Math.sin((b[1] - a[1]) * r / 2) ** 2; return 12742000 * Math.asin(Math.min(1, Math.sqrt(h))); }
@@ -3193,7 +3215,7 @@ function infoHTML(p){
   if (x.dtc) { const [sh, , oz0] = x.dtc, m = Math.round(Math.abs(sh) / 60);   // 相機時間照手機調過（主機 alb_clock）
     kv.push(["相機時間", [sh ? `相機${sh > 0 ? "慢" : "快"} ${m >= 60 ? `${Math.floor(m / 60)} 小時${m % 60 ? ` ${m % 60} 分` : ""}` : `${m} 分鐘`}` : "", oz0 && oz0 !== x.oz ? `相機設在 UTC${oz0.replace(":00", "")}` : ""].filter(Boolean).join("・") + "，已照手機調整"]); }
   if (x.fd && !isVid(p)) kv.push(["對焦距離", dofM(x.fd)]);
-  if (ms && (ms.af || ms.sub)) kv.push(["對焦", [ms.af, ms.sub].filter(Boolean).join("・")]);
+  if (ms && (ms.af || ms.sub)) kv.push(["對焦", [AFZ[ms.af] || ms.af, ms.sub].filter(Boolean).join("・")]);   // 舊的資訊存的是 AF-S 這類英文，換成中文
   if (ms && ms.is) kv.push(["防手震", ms.is]);
   // 拍攝設定：一格一個小圖（模式轉盤、測光方式、閃光燈、白平衡、場景），不再一行一行寫字
   const st = [];
