@@ -338,8 +338,8 @@ button.chip:active,a.chip:active{transform:scale(.95)}
 
 /* 照片不能長按另存；主機印不了浮水印時，畫面上蓋一層字 */
 /* HDR 只在大圖停好後亮一次、慢慢變亮（安卓螢幕每進出 HDR 一次就整個閃一下） */
-img,video{dynamic-range-limit:standard}
-.lb .zw.hd .s2.ok{dynamic-range-limit:no-limit}
+html.andr img,html.andr video{dynamic-range-limit:standard}
+html.andr .lb .zw.hd .s2.ok{dynamic-range-limit:no-limit}
 img,video,.ph img,.zw img,.mk img,.hero img{-webkit-touch-callout:none;-webkit-user-select:none;user-select:none;-webkit-user-drag:none}
 .wmo .ph::after,.wmo .zw::after{content:var(--wm);position:absolute;right:4%;bottom:4%;color:rgba(255,255,255,.62);font-weight:700;letter-spacing:.06em;
   text-shadow:0 1px 3px rgba(0,0,0,.45);pointer-events:none;font-size:clamp(10px,3.4cqmin,28px)}
@@ -373,6 +373,9 @@ img,video,.ph img,.zw img,.mk img,.hero img{-webkit-touch-callout:none;-webkit-u
 
 /* 看大圖：影片、原況、愛心留言 */
 .lvb{display:none}
+.hdrb{display:none;width:auto;padding:0 12px;border-radius:var(--r-pill);font:800 var(--fs-xs)/1 var(--font);letter-spacing:.04em;color:#fff}
+.hdrb.show{display:grid}
+.hdrb[aria-pressed="true"]{background:#fff;color:#000}
 .lvb.show{display:grid}
 .lbb{flex-direction:column;align-items:stretch;gap:10px}
 .lbr{display:flex;align-items:center;gap:8px}
@@ -1070,12 +1073,6 @@ html.scrubbing .ph,html.scrubbing .ph .hi{transition:none;animation:none}
 .sbl .sbi[hidden]{display:none}
 html.scrubbing .ph .lq{filter:none;transform:none}
 html.scrubbing .ph .hi{filter:none;transform:none}
-/* 快速滑動（album.js 的 FLING）：安卓上一次幾十張照片同時浮上來、顯影（每張一層濾鏡）會掉幀，
-   這時新出現的照片只淡入；上面那條先換成不透明一點的底色、不霧化（底下照片每一格都在換，霧化要每一格重算），停下來再慢慢霧回來 */
-html.fling .ph,html.fling .ph .hi{transition:opacity var(--t-fast) var(--ease)!important}
-html.fling .ph,html.fling .ph .hi{transform:none}
-html.fling .ph .hi{filter:none}
-html.fling .bar{-webkit-backdrop-filter:none;backdrop-filter:none;background:var(--glass-solid);transition:transform var(--t-mid) var(--ease)}
 .bar{transition:transform var(--t-mid) var(--ease),background-color var(--t-mid) var(--ease)}
 /* 封面、回憶圓圈捲出畫面時，裡面一直跑的動畫先停（字的光、流動的線每一格都要重畫；跟著捲動走的視差 .cv、.hcap 不停） */
 .hero.away :not(.cv,.hcap),.hero.away::before,.hero.away::after,.hero.away :not(.cv,.hcap)::before,.hero.away :not(.cv,.hcap)::after,.mems.away *,.mems.away *::before{animation-play-state:paused!important}
