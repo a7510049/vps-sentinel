@@ -587,6 +587,32 @@ html.dhid .dash>.view{content-visibility:hidden;contain-intrinsic-size:auto none
 .nt{display:flex;gap:10px;align-items:center;min-width:0}
 .nt .nv{font-size:var(--fs-xl);font-weight:500;white-space:nowrap;font-variant-numeric:tabular-nums}
 .nt .nl{font-size:var(--fs-xs);color:var(--tx3)}
+/* 本月流量：每天一根長條 */
+.tdays{display:flex;align-items:flex-end;gap:3px;height:56px;margin-top:14px}
+.tdays i{flex:1;min-width:2px;height:var(--h);border-radius:var(--r-xs) var(--r-xs) 0 0;background:color-mix(in oklab,var(--c-rx) 65%,transparent)}
+.tdays i.td{background:var(--p)}
+.tdays i.fu{height:2px;background:var(--s3)}
+.tdx{display:flex;justify-content:space-between;margin-top:6px;font-size:var(--fs-xs);color:var(--tx3);font-variant-numeric:tabular-nums}
+/* 磁碟讀寫、負載與連線的圖例：數字跟在名字後面 */
+.cch .lg.sp{margin-left:auto}
+.cch .lg b{font-weight:600;color:var(--tx)}
+.cch .lg em{font-style:normal;font-size:var(--fs-xs);color:var(--tx3)}.cch .lg em.warn{color:var(--warn)}
+/* 最吃資源的程式（參考 Cockpit、htop） */
+.prl{display:flex;flex-direction:column}
+.pr{display:grid;grid-template-columns:minmax(0,1fr) minmax(40px,90px) 48px 64px;align-items:center;gap:10px;min-height:34px;font-size:var(--fs-s);border-top:1px solid var(--line)}
+.pr:first-child{border-top:0}
+.pr b{font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.pr>.num{text-align:right;color:var(--tx2)}
+.pbar{height:6px;border-radius:var(--r-pill);background:var(--chip);overflow:hidden}
+.pbar i{display:block;height:100%;width:100%;transform-origin:left;transform:scaleX(var(--k));border-radius:inherit;background:var(--c-cpu);transition:transform var(--t-slow) var(--ease)}
+/* 這台主機的規格 */
+.spl{display:grid;grid-template-columns:auto minmax(0,1fr);gap:0;margin:0;font-size:var(--fs-s)}
+.spl dt,.spl dd{min-height:34px;display:flex;align-items:center;border-top:1px solid var(--line)}
+.spl dt:first-of-type,.spl dd:first-of-type{border-top:0}
+.spl dt{color:var(--tx3);padding-right:16px}
+.spl dd{margin:0;justify-content:flex-end;gap:8px;font-weight:600;text-align:right;min-width:0;overflow:hidden;white-space:nowrap}
+.spl dd small{font-weight:500;color:var(--tx3)}
+.spl .v6.a{max-width:100%}
 /* 本月流量 */
 .trf{display:block;width:100%;text-align:left;transition:border-radius var(--sp),transform var(--sp)}
 .trf.prs{border-radius:var(--r-xl);transform:scale(.98)}
@@ -933,8 +959,42 @@ body:has(.dash.d) .fwrap{max-width:var(--pw)}
 .dash.d .aside{top:18px}
 .dgrid>.hp .hb{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
 .dgrid>.hp .hb>*{grid-column:1/-1}
-.dgrid>.hp .hb>[data-key="cp"],.dgrid>.hp .hb>[data-key="np"]{grid-column:auto}   /* 電腦：處理器／記憶體曲線和網路曲線並排 */
-@media (max-width:1279px){.dgrid>.hp .hb>[data-key="cp"],.dgrid>.hp .hb>[data-key="np"]{grid-column:1/-1}}
+.dgrid>.hp .hb>:is([data-key="cp"],[data-key="np"],[data-key="io"],[data-key="ld"],[data-key="pr"],[data-key="sp"]){grid-column:auto}   /* 電腦：處理器／記憶體曲線和網路曲線並排 */
+@media (max-width:1279px){.dgrid>.hp .hb>:is([data-key="cp"],[data-key="np"],[data-key="io"],[data-key="ld"]){grid-column:1/-1}}
+/* 總覽最上面一排：所有主機加起來（參考 Komari、Proxmox） */
+.sums{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:12px;margin-bottom:var(--gut)}
+.sumc{background:var(--card);border:1px solid var(--line);border-radius:var(--r-lg);box-shadow:var(--cs);padding:14px 16px 12px;display:flex;flex-direction:column;min-width:0}
+.smk{font-size:var(--fs-xs);font-weight:600;color:var(--tx3)}
+.smv{display:flex;align-items:baseline;gap:4px;margin-top:4px;font-size:var(--fs-2xl);font-weight:800;letter-spacing:-.02em;font-variant-numeric:tabular-nums;white-space:nowrap;overflow:hidden}
+.smv small{font-size:var(--fs-s);font-weight:600;color:var(--tx3);margin-right:6px}
+.smv small svg{width:14px;height:14px;vertical-align:-2px}
+.smv b{font-weight:800}
+.smv small.dn{margin:0;color:var(--c-rx)}.smv small.dn svg{width:18px;height:18px}
+.smu{display:inline-flex;align-items:center;gap:3px}.smu svg{width:12px;height:12px;color:var(--c-tx)}
+.sms{font-size:var(--fs-xs);color:var(--tx3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-height:1.4em}
+.sumc>svg,.sumc>.ups{margin-top:auto;padding-top:8px}
+.smg{width:100%;height:36px;display:block;overflow:visible}
+.smg .sl,.rsp .sl{fill:none;stroke:currentColor;stroke-width:1.6;stroke-linejoin:round}
+.smg .sa{fill:currentColor;opacity:.14}.rsp .sa{display:none}
+.smg.rx{color:var(--c-rx)}.smg.tx{color:var(--c-tx)}.smg.cpu,.rsp{color:var(--c-cpu)}
+@media (max-width:1279px){.sums{grid-template-columns:repeat(3,minmax(0,1fr))}.sums>:nth-child(n+4){display:none}}
+/* 上線紀錄：一天一格（參考 Uptime Kuma） */
+.ups{display:flex;gap:2px;height:22px;align-items:stretch}
+.ups i{flex:1;min-width:2px;border-radius:var(--r-xs);background:var(--ok);opacity:.85}
+.ups i.w{background:var(--warn)}.ups i.b{background:var(--bad)}.ups i.na{background:var(--s3);opacity:1}
+.ups.hrs i.ok{background:var(--p);opacity:.55}
+.lbl small{font-size:var(--fs-xs);font-weight:500;color:var(--tx3)}
+.upc,.trk{padding:10px 16px}
+.upr{display:grid;grid-template-columns:minmax(0,64px) minmax(0,1fr) 62px;align-items:center;gap:10px;min-height:32px;font-size:var(--fs-s)}
+.upr b{font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.upr>.num{text-align:right;color:var(--tx2);font-weight:600}
+.upr>.num.w{color:var(--warn)}.upr>.num.b{color:var(--bad)}
+.upr .ups{height:18px}.upr .ups i{border-radius:var(--r-xs)}
+.tkb{height:8px;border-radius:var(--r-pill);background:var(--s3);overflow:hidden}
+.tkb i{display:block;height:100%;width:100%;border-radius:inherit;transform-origin:left;transform:scaleX(var(--k));background:var(--p);transition:transform var(--t-slow) var(--ease)}
+.tkb.lim.w i{background:var(--warn)}.tkb.lim.b i{background:var(--bad)}
+/* 左邊欄每台的處理器小折線 */
+.rsp{width:44px;height:16px;flex:none;opacity:.8}
 @media (max-width:1279px){.dgrid{grid-template-columns:minmax(0,1fr)}.dash.d .aside{position:static}
   .hth,.htr{grid-template-columns:minmax(150px,1.4fr) repeat(3,minmax(90px,1fr)) minmax(70px,.6fr) 44px}
   .hth>:nth-child(5),.htr>:nth-child(5),.hth>:nth-child(7),.htr>:nth-child(7){display:none}}   /* 窄一點的電腦：網路、開機收起來 */

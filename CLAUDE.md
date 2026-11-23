@@ -118,6 +118,7 @@ android/           安卓 App：全螢幕打開主機的網頁（記住網址）
 - 其他主機的狀態（`peer_get`／`PEER_CACHE`）：網頁 `/api/all` 直接拿存著的，超過 2 秒才在背景重問，同一台同時只問一次；連不上的越隔越久（最多 10 秒）才再問；通知那邊（`alert_loop`）用 `all_status(fresh=True)` 等最新的
 - 城市名一律中文（`city_zh`：ipinfo 給的英文城市用 data/airports.tsv 第 8 欄換，查不到就不寫；這台在 `check_geo`、其他台在 `geo_keep`／`peer_get` 換，舊版主機也是中文）
 - 手機一行的主機（`.hcard.mini`）三個數字前面是小圖示不寫字（`mrow` 第三個參數），很窄或大字時（`.minis` 的 @container 310px 以下）數字換到第二排，名字不會被切掉；電腦主機總表有狀況的那列，名字下面放狀況小膠囊（`hostRowD` 的 `.hal`，處理器、記憶體、磁碟格子已經變紅的不放）
+- 電腦總覽補滿（使用者說電腦版空洞，參考 Beszel、Netdata、Uptime Kuma、Komari、Cockpit）：最上面一排所有主機加起來（`sumRow`：在線＋30 天上線率、全部網速、本月總流量、平均處理器、最近 24 小時事件，每格附小折線或一格一格的條）；右邊欄「上線紀錄」每台 30 天一天一格（`upCard`、`.ups`，主要主機每分鐘記一次 `up_tick`，存 state.json 的 `up`，`/api/all` 每台帶 `up30`；哨兵沒在跑的那段算這台不在線）、「本月流量」排行（`trRank`）；左邊欄每台處理器小折線（`spark`、`.rsp`）；主機細節（手機也有）多「磁碟讀寫」「負載與連線」兩張圖（`ioCards`，圖表每筆多 `rd`／`wr`／`ld`／`cn`，欄位在 `HK`，`hist_dict`；負載和連線各照自己的最大值畫，提示框用 `raw`／`f` 寫原本的數字）、本月流量每天一根長條（`tDays`）、最吃資源的程式前 5 名（`proc_scan` 每 10 秒讀 /proc，同名加在一起，`top`；`topCard`）、「這台主機」規格（`specCard`：處理器型號 `cpu_model`、記憶體、核心版本、IP、IPv6、主機商、其他磁碟；取代以前那排小膠囊）；新 class 名稱先查 style.css 有沒有人用（`.sm` 是小圖示、`.prs` 是按下去、`.hb` 是主機內容，撞到會壞）
 - 波浪條捲出畫面就停（`waveIO`＋MutationObserver，`.wv.zz`）
 - 電腦機場看板（`.board` 欄位）：1600 以下拿掉航空公司名稱欄、1440 以下再拿掉轉盤／櫃台欄、雷達 320 寬；機型、登機門、轉盤不切掉（min-width:max-content）
 - 國旗由主機給（`/flag/jp.png`、`flag_img`：第一次用到才抓 flagcdn，存在 `DATA_DIR/flags/`，180 天重抓，不備份；測試用 SENTINEL_FLAG_URL），網頁打開不用等外面的網站；連不上的其他主機照樣有上次的國旗和城市（`PEER_GEO`、`geo_keep`，存在 state.json）
