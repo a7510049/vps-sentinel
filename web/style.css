@@ -1374,7 +1374,7 @@ html.flyon .dash>.view{content-visibility:hidden;contain-intrinsic-size:auto non
 .fsplash{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;pointer-events:none}
 .flyv:not(.splash) .fsplash{pointer-events:none}
 .flyv.splash .fwrap>:not(.ftop){opacity:0}
-.fsp{position:relative;width:150px;aspect-ratio:1;border-radius:50%;border:1.5px solid var(--s3);overflow:hidden;
+.fsp{position:relative;width:150px;aspect-ratio:1;border-radius:50%;border:1.5px solid var(--s3);overflow:hidden;overflow:clip;
   background:radial-gradient(circle,transparent 0 31%,var(--s3) 31.5% 32.5%,transparent 33% 64%,var(--s3) 64.5% 65.5%,transparent 66%),
     linear-gradient(var(--s3),var(--s3)) center/1px 100% no-repeat,linear-gradient(var(--s3),var(--s3)) center/100% 1px no-repeat}   /* 雷達：兩圈＋十字 */
 .fsw{position:absolute;inset:0;border-radius:50%;background:conic-gradient(transparent 0 72%,color-mix(in oklab,var(--p) 34%,transparent));animation:spin calc(var(--t-long) * 2) linear infinite}
@@ -1579,7 +1579,7 @@ html.flyon .dash>.view{content-visibility:hidden;contain-intrinsic-size:auto non
 .frrt{display:flex;align-items:center;gap:12px;margin:10px 0}.frrt>div{display:flex;flex-direction:column}.frrt>div:last-child{align-items:flex-end;margin-left:auto}
 .frrt b{font-size:var(--fs-l)}.frrt small{color:var(--tx2);font-size:var(--fs-s)}.frrt .sub svg{width:18px;height:18px;transform:rotate(45deg)}
 .frkv{display:grid;grid-template-columns:repeat(2,1fr);gap:8px}
-.fph{display:block;position:relative;aspect-ratio:3/2;border-radius:var(--r-lg);overflow:hidden;background:var(--chip)}
+.fph{display:block;position:relative;aspect-ratio:3/2;border-radius:var(--r-lg);overflow:hidden;overflow:clip;background:var(--chip)}
 .fph.wide{aspect-ratio:3/1;border-radius:var(--r-md);margin-bottom:10px}
 .fph img{display:block;width:100%;height:100%;object-fit:cover;transition:opacity var(--t-mid) var(--ease)}
 .fph.old img{opacity:.35}
@@ -1763,7 +1763,7 @@ html.flyon .dash>.view{content-visibility:hidden;contain-intrinsic-size:auto non
 .fgh .ubtn{gap:6px}
 .fgh .ubtn svg.ext{width:14px;height:14px}
 .abd .ubtn svg.ext{width:14px;height:14px;margin-left:4px}
-.fgm{border-radius:var(--r-lg);overflow:hidden;background:var(--chip);aspect-ratio:3/2}
+.fgm{border-radius:var(--r-lg);overflow:hidden;overflow:clip;background:var(--chip);aspect-ratio:3/2}
 .fgm svg{display:block;width:100%;height:100%}
 .fgv{transition:transform var(--t-slow) var(--dec);--fz:1}
 .fgap{fill:var(--s2);stroke:none}
@@ -1891,7 +1891,7 @@ html.flyon .dash>.view{content-visibility:hidden;contain-intrinsic-size:auto non
 .alms{margin-left:auto;color:var(--tx3);font-size:var(--fs-s);font-weight:400;text-align:right;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 /* 相簿卡片：封面照片撐滿、名字疊在下面 */
 .almgrid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
-.almcard{position:relative;aspect-ratio:4/5;border-radius:var(--r-lg);overflow:hidden;background:var(--s3);text-align:left;font:inherit;color:var(--tx);cursor:pointer;
+.almcard{position:relative;aspect-ratio:4/5;border-radius:var(--r-lg);overflow:hidden;overflow:clip;background:var(--s3);text-align:left;font:inherit;color:var(--tx);cursor:pointer;
   box-shadow:var(--sh-1);transition:transform var(--sp-fast),box-shadow var(--t-fast) var(--ease)}
 .almcard:active{transform:scale(.97)}
 @media (hover:hover){.almcard:hover{box-shadow:var(--sh-2)}.almcard:hover .almcv img{transform:scale(1.04)}}
@@ -1912,7 +1912,7 @@ html.flyon .dash>.view{content-visibility:hidden;contain-intrinsic-size:auto non
 .almcard.add svg{width:24px;height:24px}
 .almcard.add b{font-weight:650;font-size:var(--fs-m)}
 /* 一本相簿：上面大封面 */
-.almhero{position:relative;aspect-ratio:16/10;border-radius:var(--r-lg);overflow:hidden;background:var(--s3);box-shadow:var(--sh-1)}
+.almhero{position:relative;aspect-ratio:16/10;border-radius:var(--r-lg);overflow:hidden;overflow:clip;background:var(--s3);box-shadow:var(--sh-1)}
 .almhero .almcap{padding:48px 18px 16px}
 .almhero .almcap b{font-size:var(--fs-xl);font-weight:750}
 .almhero .almcap small{font-size:var(--fs-s)}
@@ -1951,7 +1951,7 @@ html.flyon .dash>.view{content-visibility:hidden;contain-intrinsic-size:auto non
 .almpkh{display:flex;align-items:center;gap:10px;padding:0 4px}
 .almpkh b{flex:1;font-weight:650}
 .almpk{display:grid;grid-template-columns:repeat(auto-fill,minmax(88px,1fr));gap:4px;max-height:min(52vh,460px);overflow-y:auto;border-radius:var(--r-md)}
-.almpk button{position:relative;aspect-ratio:1;overflow:hidden;background:var(--s3);cursor:pointer;border-radius:var(--r-xs)}
+.almpk button{position:relative;aspect-ratio:1;overflow:hidden;overflow:clip;background:var(--s3);cursor:pointer;border-radius:var(--r-xs)}
 .almpk img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;transition:opacity var(--t-fast) var(--ease),transform var(--t-fast) var(--ease)}
 .almpk .lq{filter:blur(8px);transform:scale(1.1)}
 .almpk i{position:absolute;top:6px;right:6px;width:22px;height:22px;border-radius:50%;display:grid;place-items:center;background:var(--p);color:var(--on-p);
