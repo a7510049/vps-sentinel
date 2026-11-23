@@ -1073,12 +1073,6 @@ html.scrubbing .ph,html.scrubbing .ph .hi{transition:none;animation:none}
 .sbl .sbi[hidden]{display:none}
 html.scrubbing .ph .lq{filter:none;transform:none}
 html.scrubbing .ph .hi{filter:none;transform:none}
-/* 快速滑動（album.js 的 FLING）：安卓上一次幾十張照片同時浮上來、顯影（每張一層濾鏡）會掉幀，
-   這時新出現的照片只淡入；上面那條先換成不透明一點的底色、不霧化（底下照片每一格都在換，霧化要每一格重算），停下來再慢慢霧回來 */
-html.fling .ph,html.fling .ph .hi{transition:opacity var(--t-fast) var(--ease)!important}
-html.fling .ph,html.fling .ph .hi{transform:none}
-html.fling .ph .hi{filter:none}
-html.fling .bar{-webkit-backdrop-filter:none;backdrop-filter:none;background:var(--glass-solid);transition:transform var(--t-mid) var(--ease)}
 .bar{transition:transform var(--t-mid) var(--ease),background-color var(--t-mid) var(--ease)}
 /* 封面、回憶圓圈捲出畫面時，裡面一直跑的動畫先停（字的光、流動的線每一格都要重畫；跟著捲動走的視差 .cv、.hcap 不停） */
 .hero.away :not(.cv,.hcap),.hero.away::before,.hero.away::after,.hero.away :not(.cv,.hcap)::before,.hero.away :not(.cv,.hcap)::after,.mems.away *,.mems.away *::before{animation-play-state:paused!important}

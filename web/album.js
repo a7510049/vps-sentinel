@@ -1131,17 +1131,6 @@ const CSSPAR = window.CSS && CSS.supports && CSS.supports("animation-timeline:sc
 /* 捲出畫面的區塊（封面、回憶圓圈）加 .away，裡面一直跑的動畫先停 */
 const AWIO = "IntersectionObserver" in window ? new IntersectionObserver(es => es.forEach(e => e.target.classList.toggle("away", !e.isIntersecting)), {rootMargin:"200px 0px"}) : null;
 function awayWatch(el){ if (el && AWIO) AWIO.observe(el); }
-/* 快速滑動（安卓甩一下）：html.fling，新出現的照片只淡入、上面那條不霧化，慢下來 0.2 秒後恢復 */
-const FL = {y:0, t:0, off:0, on:false};
-function flingCheck(y){
-  const now = performance.now(), dt = now - FL.t, v = dt > 0 && dt < 100 ? Math.abs(y - FL.y) / dt : 0;
-  FL.y = y; FL.t = now;
-  if (v > 2.2) {
-    if (!FL.on) { FL.on = true; document.documentElement.classList.add("fling"); }
-    clearTimeout(FL.off);
-    FL.off = setTimeout(() => { FL.on = false; document.documentElement.classList.remove("fling"); }, 200);
-  }
-}
 let HEROH = 0;
 addEventListener("resize", () => { HEROH = 0; SCR.rgc = null; });
 function onScroll(){
@@ -1150,7 +1139,6 @@ function onScroll(){
     SCQ = 0;
     const hero = $(".hero"); if (!hero) return;
     const y = scrollY, H = HEROH || (HEROH = hero.offsetHeight);   // 封面高度記著，不每一格逼瀏覽器重排
-    flingCheck(y);
     if (y < H && anim() && !CSSPAR) {
       $(".hero .cv").style.transform = `translate3d(0,${(y * .38).toFixed(1)}px,0)`;
       const c = $(".hcap"); c.style.opacity = Math.max(0, 1 - y / (H * .55)).toFixed(3); c.style.transform = `translate3d(0,${(y * .18).toFixed(1)}px,0)`;
