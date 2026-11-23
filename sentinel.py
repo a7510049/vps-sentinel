@@ -45,7 +45,7 @@ from collections import deque
 from concurrent.futures import ThreadPoolExecutor
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
-VERSION = "4.73"
+VERSION = "4.75"
 
 # ───────────────────────── 哨兵備份檔（.vsbk）─────────────────────────
 # 哨兵專用的備份格式：外面是自己的檔案格式，裡面用的是成熟、標準的加密方法（不自己發明加密）：
@@ -1298,6 +1298,112 @@ def iface_bytes():
 def net_bytes():
     vals = iface_bytes().values()
     return sum(v[0] for v in vals), sum(v[1] for v in vals)
+
+
+def disk_devs():
+    """要算讀寫量的磁碟：實體（或虛擬機的）整顆磁碟，不算分割區、loop、加密、RAID 這些疊在上面的（不然會重複算）"""
+    try:
+        names = os.listdir("/sys/block")
+    except OSError:
+        return set()
+    skip = ("loop", "ram", "zram", "dm-", "md", "sr", "fd", "nbd")
+    real = {n for n in names if not n.startswith(skip) and os.path.exists(f"/sys/block/{n}/device")}
+    return real or {n for n in names if not n.startswith(skip)}
+
+
+DISK_DEVS = {"t": 0, "s": set()}
+
+
+def disk_bytes():
+    """整台磁碟累計讀、寫了多少位元組"""
+    if time.time() - DISK_DEVS["t"] > 600:          # 磁碟不常變，10 分鐘重新找一次
+        DISK_DEVS.update(t=time.time(), s=disk_devs())
+    rd = wr = 0
+    for line in read("/proc/diskstats").splitlines():
+        f = line.split()
+        if len(f) > 9 and f[2] in DISK_DEVS["s"]:
+            try:
+                rd += int(f[5]) * 512
+                wr += int(f[9]) * 512
+            except ValueError:
+                pass
+    return rd, wr
+
+
+CPU_MODEL = {}
+
+
+def cpu_model():
+    """處理器型號（例如 AMD EPYC 7763、Neoverse-N1）；查不到就空白"""
+    if "m" not in CPU_MODEL:
+        m = ""
+        for line in read("/proc/cpuinfo").splitlines():
+            k, _, v = line.partition(":")
+            if k.strip() in ("model name", "Model", "cpu model") and v.strip():
+                m = v.strip()
+                break
+        if not m:
+            try:
+                r = subprocess.run(["lscpu"], capture_output=True, text=True, timeout=5, env={**os.environ, "LC_ALL": "C"})
+                m = next((ln.split(":", 1)[1].strip() for ln in r.stdout.splitlines() if ln.startswith("Model name:")), "")
+            except (OSError, subprocess.SubprocessError):
+                pass
+        m = re.sub(r"\((R|TM|tm)\)|\bCPU\b|\bProcessor\b|@.*$|\s+\d+-Core", "", m)
+        CPU_MODEL["m"] = re.sub(r"\s+", " ", m).strip()[:60]
+    return CPU_MODEL["m"]
+
+
+PROC_TOP = {"prev": {}, "t": 0, "top": []}
+CLK_TCK = os.sysconf("SC_CLK_TCK") if hasattr(os, "sysconf") else 100
+PG_SIZE = os.sysconf("SC_PAGE_SIZE") if hasattr(os, "sysconf") else 4096
+
+
+def proc_scan(keep_pid=None):
+    """最吃資源的前 5 個程式（同名的加在一起）：處理器佔整台的 %、記憶體位元組"""
+    now, cur, by = time.time(), {}, {}
+    try:
+        pids = [p for p in os.listdir("/proc") if p.isdigit()]
+    except OSError:
+        return []
+    for pid in pids:
+        try:
+            with open(f"/proc/{pid}/stat", "rb") as fh:
+                s = fh.read().decode("utf-8", "replace")
+        except OSError:
+            continue
+        a, b = s.find("("), s.rfind(")")
+        f = s[b + 2:].split()
+        if a < 0 or len(f) < 22:
+            continue
+        try:
+            ticks, rss = int(f[11]) + int(f[12]), int(f[21]) * PG_SIZE
+        except ValueError:
+            continue
+        name = "哨兵" if int(pid) == os.getpid() else "防回收補量" if keep_pid and int(pid) == keep_pid else s[a + 1:b][:24]
+        if f[0] == "Z" or (not rss and name.startswith("kworker")):
+            continue
+        cur[pid] = ticks
+        prev = PROC_TOP["prev"].get(pid)
+        g = by.setdefault(name, [0.0, 0])
+        g[0] += max(0, ticks - prev) if prev is not None else 0
+        g[1] += rss
+    dt = now - PROC_TOP["t"] if PROC_TOP["t"] else 0
+    PROC_TOP.update(prev=cur, t=now)
+    if dt <= 0:
+        return []
+    cores, total = os.cpu_count() or 1, meminfo()["total"] or 1
+    rows = [{"n": n, "c": round(t / CLK_TCK / dt / cores * 100, 1), "m": m} for n, (t, m) in by.items()]
+    rows.sort(key=lambda r: r["c"] * 2 + r["m"] / total * 100, reverse=True)
+    PROC_TOP["top"] = rows[:5]
+    return PROC_TOP["top"]
+
+
+HK = ("cpu", "mem", "rx", "tx", "rd", "wr", "ld", "cn")   # 圖表每一筆的欄位（前面是時間）
+HKR = (1, 1, 0, 0, 0, 0, 2, 0)                            # 取平均時留幾位小數
+
+
+def hist_dict(src):
+    return {"t": [h[0] for h in src], **{k: [h[i + 1] for h in src] for i, k in enumerate(HK)}}
 
 
 def boot_id():
@@ -3135,6 +3241,7 @@ class Collector:
         self.h7d = deque(maxlen=336)            # 7 天，每 30 分鐘一筆
         self._b5 = self._b30 = None
         self.traffic = {"since": time.time(), "days": {}, "last": None}
+        self.up = {"days": {}, "last": None}     # 每天每台主機在線幾分鐘：{日期: {代號: [在線, 看了]}}
         self.ssh_since = int(time.time() * 1_000_000)   # 從現在開始看 SSH 登入，不補報以前的
         self.saved_boot = None
         self.jobs = {}                          # 背景工作（查更新、IPv6、連結…）
@@ -3162,9 +3269,13 @@ class Collector:
             return
         now = time.time()
         try:
-            self.hist.extend(tuple(x) for x in st.get("hist", []) if now - x[0] < 1800)
-            self.h24.extend(tuple(x) for x in st.get("h24", []) if now - x[0] < 86400)
-            self.h7d.extend(tuple(x) for x in st.get("h7d", []) if now - x[0] < 7 * 86400)
+            pad = lambda x: tuple(x) + (0,) * (len(HK) + 1 - len(x))   # 舊版存的少了磁碟讀寫、負載、連線：補 0
+            self.hist.extend(pad(x) for x in st.get("hist", []) if now - x[0] < 1800)
+            self.h24.extend(pad(x) for x in st.get("h24", []) if now - x[0] < 86400)
+            self.h7d.extend(pad(x) for x in st.get("h7d", []) if now - x[0] < 7 * 86400)
+            up = st.get("up") or {}
+            if isinstance(up.get("days"), dict):
+                self.up = {"days": up["days"], "last": up.get("last")}
             self.events.extend(tuple(x) for x in st.get("events", []))
             tr = st.get("traffic") or {}
             if isinstance(tr.get("days"), dict):
@@ -3191,7 +3302,7 @@ class Collector:
         with SAVE_LOCK:                           # 收集、備份、關機可能同時存檔：一次只存一個
             with self.lock:
                 st = {"v": 1, "saved": time.time(), "boot": boot_id(), "hist": list(self.hist), "h24": list(self.h24), "h7d": list(self.h7d),
-                      "events": list(self.events), "traffic": self.traffic,
+                      "events": list(self.events), "traffic": self.traffic, "up": self.up,
                       "prev_keys": self.prev_keys, "peer_seen": dict(PEER_SEEN), "peer_name": dict(PEER_NAME), "peer_geo": dict(PEER_GEO),
                       "tg_sent": dict(TG_SENT), "tg_msgs": list(TG_MSGS), "tg_queue": list(TG_QUEUE),
                       "backup": {k: BK[k] for k in ("last", "ok_t", "day", "key_t", "names", "tg")}}
@@ -3208,8 +3319,7 @@ class Collector:
     @staticmethod
     def _avg(t, pts):
         n = len(pts)
-        return (int(t), round(sum(p[1] for p in pts) / n, 1), round(sum(p[2] for p in pts) / n, 1),
-                round(sum(p[3] for p in pts) / n), round(sum(p[4] for p in pts) / n))
+        return (int(t), *(round(sum(p[i + 1] for p in pts) / n, HKR[i]) for i in range(len(HK))))
 
     def roll(self, now):
         b5 = int(now // 300)
@@ -3228,6 +3338,33 @@ class Collector:
             if pts:
                 self.h7d.append(self._avg(self._b30 * 1800, pts))
             self._b30 = b30
+
+    # ── 上線紀錄：每分鐘記一次每台主機在不在線（這台以外的，主要主機問得到才算在線） ──
+    def up_tick(self, now):
+        day = date.today().isoformat()
+        last = self.up.get("last")
+        gone = int((now - last) // 60) - 1 if last and 150 < now - last < 86400 * 30 else 0   # 哨兵沒在跑的那段（例如整台關機）：這台算不在線
+        rows = [("", True)] + [(p["name"], bool((peer_get(p) or {}).get("online"))) for p in PEERS]
+        with self.lock:
+            d = self.up["days"].setdefault(day, {})
+            for k, on in rows:
+                v = d.setdefault(k, [0, 0])
+                v[0] += 1 if on else 0
+                v[1] += 1 + (gone if k == "" else 0)
+                v[1] = min(v[1], 1440)
+            for k in sorted(self.up["days"])[:-31]:
+                del self.up["days"][k]
+            self.up["last"] = now
+
+    def up30(self, key):
+        """最近 30 天每天的在線比例（%），沒有紀錄的那天是 None；最後一個是今天"""
+        today = date.today()
+        with self.lock:
+            out = []
+            for i in range(29, -1, -1):
+                v = self.up["days"].get((today - timedelta(days=i)).isoformat(), {}).get(key)
+                out.append(round(v[0] / v[1] * 100, 2) if v and v[1] else None)
+        return out
 
     # ── 流量：依網卡計數器的增加量累加到每天 ──
     def count_traffic(self):
@@ -3307,12 +3444,11 @@ class Collector:
     def history(self, rng):
         with self.lock:
             src = list(self.h24 if rng == "24h" else self.h7d if rng == "7d" else self.hist)
-        return {"t": [h[0] for h in src], "cpu": [h[1] for h in src], "mem": [h[2] for h in src],
-                "rx": [h[3] for h in src], "tx": [h[4] for h in src]}
+        return hist_dict(src)
 
     def loop(self):
         last_cpu, last_keep = cpu_times(), keep_ticks()
-        last_net, last_t = net_bytes(), time.time()
+        last_net, last_t, last_io = net_bytes(), time.time(), (time.time(), *disk_bytes())
         tick, last_err = 0, None
         while True:
             time.sleep(2)
@@ -3335,19 +3471,26 @@ class Collector:
                         self.cpu_high_since = None
                 last_cpu, last_net, last_t = now_cpu, now_net, now_t
                 if tick % 5 == 0:                         # 每 10 秒記一筆歷史、算一次流量
-                    m = meminfo()
+                    m, c, io = meminfo(), tcp_conns(), (time.time(), *disk_bytes())
+                    di = max(io[0] - last_io[0], 0.001)
+                    rd, wr = max(0, (io[1] - last_io[1]) / di), max(0, (io[2] - last_io[2]) / di)
+                    last_io = io
                     with self.lock:
                         self.hist.append((round(now_t), self.cpu_pct, m["pct"],
-                                          round(self.net["rx"]), round(self.net["tx"])))
+                                          round(self.net["rx"]), round(self.net["tx"]),
+                                          round(rd), round(wr), round(os.getloadavg()[0], 2), c))
                         self.roll(now_t)
-                    c = tcp_conns()
-                    with self.lock:
                         self.conn_hist.append(c)
+                    try:
+                        proc_scan(now_keep[0])
+                    except Exception as e:  # noqa: BLE001
+                        log("讀取程式清單失敗：", e)
                     try:
                         self.count_traffic()
                     except Exception as e:  # noqa: BLE001
                         log("流量計算失敗：", e)
-                if tick % 30 == 0 and tick > 0:           # 每 1 分鐘存檔
+                if tick % 30 == 0 and tick > 0:           # 每 1 分鐘記上線、存檔
+                    self.up_tick(now_t)
                     self.save()
 
                 if tick % 15 == 0:        # 每 30 秒：容器與服務；記憶體不夠被系統強制關掉的程式
@@ -3561,8 +3704,7 @@ class Collector:
             "mem": mem, "disks": disks, "net": net,
             "containers": containers, "services": services,
             "updates": updates, "reboot": reboot, "geo": geo, "update": upd, "events": events, "traffic": traffic, "bk_tz": BACKUP_TZ,
-            "hist": {"t": [h[0] for h in hist], "cpu": [h[1] for h in hist], "mem": [h[2] for h in hist],
-                     "rx": [h[3] for h in hist], "tx": [h[4] for h in hist]},
+            "hist": hist_dict(hist), "top": list(PROC_TOP["top"]), "cpum": cpu_model(),
             "problems": problems, "notices": notices, "tg_self": pair_load().get("self_t") or 0, "tlsfp": TLS["fp"], "sec": sec_info(), "notes": bool(note_conf().get("pw")), "adblock": ab_brief(), "albums": alb_count(),
             "tg_off": not (TG_BOT and TG_CHAT) and not watchers(),   # 還沒設定 Telegram：首頁提醒一行
             "level": "bad" if problems else ("warn" if notices else "ok"),
@@ -3766,8 +3908,10 @@ def all_status(fresh=False, since=None):
         for k in [k for k in PEER_CACHE if k not in keep]:
             PEER_CACHE.pop(k, None)
     if fresh:
-        return [COL.snapshot()] + list(PEER_POOL.map(lambda p: peer_get(p, True), peers))
-    return [COL.snapshot()] + [peer_get(p) for p in peers]
+        out = [COL.snapshot()] + list(PEER_POOL.map(lambda p: peer_get(p, True), peers))
+    else:
+        out = [COL.snapshot()] + [peer_get(p) for p in peers]
+    return [{**s, "up30": COL.up30(s.get("node") or "")} if isinstance(s, dict) else s for s in out]
 
 
 # ───────────────────────── 配對暗號（新增主機）、被監看模式（在 pair.py）─────────────────────────

@@ -603,13 +603,14 @@ const subOf = s => s.online ? `<span title="${esc(s.os || "")}・核心版本 ${
 function hostBody(s, ph){
   let h = `<div class="hb" data-key="hb" data-keyed><div class="hhead" data-key="hh">${avatar(s)}<div class="nm"><h2 class="hname">${esc(s.name)}</h2><div class="hsub">${subOf(s)}</div></div>${ph ? "" : `<span class="hacts">${moreBtn(s)}</span>`}</div>`;
   if (!s.online) return h + offBox(s) + `</div>`;
-  h += alerts(s, 1) + tiles(s) + factsRow(s, ph);
+  h += alerts(s, 1) + tiles(s);
   const hs = PREF.show.chart ? histFor(s) : null;
   if (PREF.show.chart) h += `<div class="cc" data-key="cp"><div class="cch"><span class="lg"><i style="background:${COL.cpu}"></i>處理器</span><span class="lg"><i style="background:${COL.mem}"></i>記憶體</span>${rangeSeg()}</div>
     <div class="cbox">${chartOr(hs, cid(s, ph ? "m" : "a"), x => [{data:x.cpu, color:COL.cpu, name:"處理器"}, {data:x.mem, color:COL.mem, name:"記憶體"}], {max:100, grid:1, fmt:v => Math.round(v) + "%", h: ph ? 130 : 150})}</div></div>`;
   if (PREF.show.net) h += `<div class="cc" data-key="np"><div class="nets"><div class="nt">${IC("down")}<div class="nv" title="下載">${rate(s.net.rx)}</div></div><div class="nt">${IC("up")}<div class="nv" title="上傳">${rate(s.net.tx)}</div></div></div>
     ${hs ? `<div class="cbox wide">${chartOr(hs, cid(s, ph ? "n" : "b"), x => [{data:x.rx, color:COL.rx, name:"下載"}, {data:x.tx, color:COL.tx, name:"上傳"}], {grid:1, bin:1, fmt:rate, h: ph ? 96 : 110})}</div>` : ""}</div>`;
-  h += trafficCard(s) + itemsCard(s);
+  if (PREF.show.chart && hs && !hs.err && hs.rd) h += ioCards(s, hs, ph);
+  h += trafficCard(s) + topCard(s) + specCard(s) + itemsCard(s);
   return h + `</div>`;
 }
 /* 負載的半圓儀表：指針從左（輕鬆）轉到右（超載，每核 2 以上） */
@@ -637,22 +638,7 @@ function v6line(s, shown){
 const ORGW = new Set("cloud corporation corp inc ltd llc limited company group network networks technology technologies hosting host server servers data services the".split(" "));
 const sameOrg = (org, name) => { const w = t => (String(t || "").toLowerCase().match(/[a-z]{3,}|[^\x00-\x7f]{2,}/g) || []).filter(x => !ORGW.has(x)), n = new Set(w(name));
   return w(org).some(x => n.has(x)); };
-/* 一排小膠囊：連線數、IP（霧化，點一下顯示）、IPv6、其他磁碟、雲端硬碟 */
 const IPSHOW = {};                    // 哪幾台的 IP 目前是顯示狀態（到期自動再遮起來）
-function factsRow(s, ph){
-  const f = [], k = keyOf(s), shown = IPSHOW[k] > Date.now(), c = s.conns, avg = s.conns_avg;
-  if (PREF.show.info) {
-    const cw = c == null || avg == null ? "" : (c > avg * 2 && c - avg > 20) ? "比平常多很多" : (avg > 10 && c < avg * .3) ? "比平常少很多" : "";
-    if (c != null) f.push(`<span class="fc" title="現在的網路連線數${avg != null ? `（平常約 ${Math.round(avg)} 條）` : ""}">${I("plug")}<b class="num">${Number(c).toLocaleString("zh-TW")}</b>${cw ? `<em class="${cw.includes("多") ? "warn" : ""}">${cw}</em>` : ""}</span>`);
-    const ip = s.geo && s.geo.ip, org = s.geo && s.geo.org;
-    if (ip) f.push(`<span class="fc">IP<b class="ipb ${shown ? "on" : ""}" tabindex="0" role="button" ${shown ? `data-copy="${esc(ip)}" title="點一下複製（15 秒後會自動遮起來）"` : `data-reveal="${esc(k)}" title="點一下顯示"`}>${esc(ip)}</b></span>`);
-    if (s.ipv6) f.push(`<span class="fc" data-xw>${v6line(s, shown)}</span>`);
-    if (org && !sameOrg(org, s.name)) f.push(`<span class="fc">${esc(org)}</span>`);
-    (s.disks || []).slice(1).forEach(d => f.push(`<span class="fc">磁碟 ${esc(d.path)}<b class="num ${tier(d.pct)}">${num(d.pct)}%</b></span>`));
-    if (s.mem.swap_total) f.push(`<span class="fc">虛擬記憶體<b class="num">${num(s.mem.swap_pct)}%</b></span>`);
-  }
-  return f.length ? `<div class="fcs" data-key="fcs">${f.join("")}</div>` : "";
-}
 /* 流量條：波浪是已用，斜線一路畫到預估月底會用到哪，直線是今天走到這個週期的哪裡；右邊是幾天後重置 */
 function tBar(t){
   const rst = `<span class="trs" title="${t.reset_day} 號重置">${I("upd")}<b class="num">${t.days_left}</b> 天</span>`;
@@ -665,7 +651,49 @@ function tBar(t){
 function trafficCard(s){
   const t = s.traffic; if (!t || !PREF.show.traffic) return "";
   return `<button class="cc trf" data-key="tf" data-traffic="${esc(s.node || "")}" data-label="${esc(s.name)}" title="流量設定"><div class="trow">${IC("month")}<span>本月流量</span><span class="tbig">${size(t.used)}${t.limit ? `<small>／ ${size(t.limit)}</small>` : ""}</span></div>
-    ${tBar(t)}</button>`;
+    ${tBar(t)}${tDays(t)}</button>`;
+}
+/* 這個週期每天用了多少：一天一根，今天是主題色，還沒到的日子只留底線 */
+function tDays(t){
+  const d = t.daily || [], n = Math.max(d.length, t.cycle_days || 0);
+  if (d.length < 2 || !n) return "";
+  const v = x => ({out: x.tx, in: x.rx, max: Math.max(x.rx, x.tx)})[t.count] ?? x.rx + x.tx, mx = Math.max(1, ...d.map(v));
+  const bars = Array.from({length: n}, (_, i) => { const x = d[i];
+    return x ? `<i class="${i === d.length - 1 ? "td" : ""}" style="--h:${Math.max(2, v(x) / mx * 100).toFixed(1)}%" title="${esc(x.d)}・${size(v(x))}"></i>` : `<i class="fu"></i>`; }).join("");
+  return `<div class="tdays" data-key="tdays">${bars}</div><div class="tdx" data-key="tdx"><span>${esc(d[0].d)}</span><span>${n - d.length} 天後重置</span></div>`;
+}
+/* 磁碟讀寫、負載與連線：兩張小曲線（負載和連線各自照自己的最大值畫，提示框寫原本的數字） */
+const lastOf = a => a && a.length ? +a[a.length - 1] || 0 : 0;
+function ioCards(s, hs, ph){
+  const H = ph ? 96 : 110, c = s.conns, avg = s.conns_avg;
+  const cw = c == null || avg == null ? "" : (c > avg * 2 && c - avg > 20) ? "比平常多很多" : (avg > 10 && c < avg * .3) ? "比平常少很多" : "";
+  const io = `<div class="cc" data-key="io"><div class="cch"><span class="ct2">磁碟讀寫</span><span class="lg sp"><i style="background:${COL.rx}"></i>讀<b class="num" data-x>${rate(lastOf(hs.rd))}</b></span><span class="lg"><i style="background:${COL.tx}"></i>寫<b class="num" data-x>${rate(lastOf(hs.wr))}</b></span></div>
+    <div class="cbox">${chartOr(hs, cid(s, ph ? "r" : "c"), x => [{data:x.rd, color:COL.rx, name:"讀"}, {data:x.wr, color:COL.tx, name:"寫"}], {grid:1, bin:1, fmt:rate, h:H})}</div></div>`;
+  const sc = (a, m) => (a || []).map(v => (+v || 0) / m * 100);
+  const ld = `<div class="cc" data-key="ld"><div class="cch"><span class="ct2">負載與連線</span><span class="lg sp"><i style="background:${COL.cpu}"></i>負載<b class="num" data-x>${(+s.load[0] || 0).toFixed(2)}</b></span><span class="lg"><i style="background:${COL.mem}"></i>連線<b class="num" data-x>${c == null ? "—" : Number(c).toLocaleString("zh-TW")}</b>${cw ? `<em class="${cw.includes("多") ? "warn" : ""}">${cw}</em>` : ""}</span></div>
+    <div class="cbox">${chartOr(hs, cid(s, ph ? "l" : "d"), x => { const lm = Math.max(s.cores || 1, ...(x.ld || [0])) * 1.15, cm = Math.max(10, ...(x.cn || [0])) * 1.15;
+      return [{data:sc(x.ld, lm), raw:x.ld, f:v => (+v).toFixed(2), color:COL.cpu, name:"負載"}, {data:sc(x.cn, cm), raw:x.cn, f:v => Math.round(v) + " 條", color:COL.mem, name:"連線"}]; }, {max:100, grid:1, h:H})}</div></div>`;
+  return io + ld;
+}
+/* 最吃資源的程式：前 5 名（同名的加在一起），長條是處理器 */
+function topCard(s){
+  const t = s.top; if (!PREF.show.info || !t || !t.length) return "";
+  const mx = Math.max(5, ...t.map(x => x.c));
+  return `<div class="cc tops" data-key="pr"><div class="cch"><span class="ct2">最吃資源的程式</span></div><div class="prl" data-key="prs" data-keyed>${t.map(x =>
+    `<div class="pr" data-key="p:${esc(x.n)}"><b>${esc(x.n)}</b><span class="pbar"><i style="--k:${Math.min(1, x.c / mx).toFixed(3)}"></i></span><span class="num" title="處理器">${x.c < 10 ? (+x.c).toFixed(1) : Math.round(x.c)}%</span><span class="num" title="記憶體">${size(x.m)}</span></div>`).join("")}</div></div>`;
+}
+/* 這台主機的規格：處理器型號、記憶體、核心版本、IP（霧化，點一下顯示）、IPv6、主機商、其他磁碟 */
+function specCard(s){
+  if (!PREF.show.info) return "";
+  const k = keyOf(s), shown = IPSHOW[k] > Date.now(), ip = s.geo && s.geo.ip, org = s.geo && s.geo.org, r = [];
+  r.push(["處理器", `${esc(s.cpum || "")}${s.cpum ? "・" : ""}${s.cores} 核`]);
+  r.push(["記憶體", `${size(s.mem.total)}${s.mem.swap_total ? `<small>虛擬 ${size(s.mem.swap_total)}・${num(s.mem.swap_pct)}%</small>` : ""}`]);
+  if (s.kernel) r.push(["核心版本", esc(s.kernel)]);
+  if (ip) r.push(["IP", `<b class="ipb ${shown ? "on" : ""}" tabindex="0" role="button" ${shown ? `data-copy="${esc(ip)}" title="點一下複製（15 秒後會自動遮起來）"` : `data-reveal="${esc(k)}" title="點一下顯示"`}>${esc(ip)}</b>`]);
+  if (s.ipv6) r.push(["IPv6", `<span data-xw>${v6line(s, shown)}</span>`]);
+  if (org && !sameOrg(org, s.name)) r.push(["主機商", esc(org)]);
+  (s.disks || []).slice(1).forEach(d => r.push([`磁碟 ${esc(d.path)}`, `<b class="num ${tier(d.pct)}">${num(d.pct)}%</b><small>${size(d.used)} / ${size(d.total)}</small>`]));
+  return `<div class="cc spec" data-key="sp"><div class="cch"><span class="ct2">這台主機</span></div><dl class="spl" data-key="spl">${r.map(([a, b]) => `<dt>${a}</dt><dd>${b}</dd>`).join("")}</dl></div>`;
 }
 /* 容器與服務：一個一個小膠囊，有分組（docker compose 專案、系統服務）就加小標題 */
 const boxSummary = items => { const bad = items.filter(x => x.st === "bad").length;
@@ -740,7 +768,7 @@ function renderPhone(list, time){
 /* 電腦：桌面主控台。左邊固定側欄（分頁＋所有主機），右邊是頁面；手機版完全不同一套 */
 let DSEL = store("vs-dsel") || "";
 const deskSel = list => list.find(x => keyOf(x) === DSEL) || list[0];
-const railHost = (s, on) => `<button class="rh${on ? " on" : ""}" data-dsel="${esc(keyOf(s))}" data-key="rh:${esc(keyOf(s))}"><span class="dot ${s.online ? lvOf(s) : "bad"}"></span><b>${esc(s.name)}</b><small class="num">${s.online ? num(s.cpu) + "%" : I("off")}</small></button>`;
+const railHost = (s, on) => `<button class="rh${on ? " on" : ""}" data-dsel="${esc(keyOf(s))}" data-key="rh:${esc(keyOf(s))}"><span class="dot ${s.online ? lvOf(s) : "bad"}"></span><b>${esc(s.name)}</b>${s.online ? spark(s.hist && s.hist.cpu, "rsp") : ""}<small class="num">${s.online ? num(s.cpu) + "%" : I("off")}</small></button>`;
 function renderDesk(list, time){
   const sel = deskSel(list), k = sel && keyOf(sel);
   return `<div class="dash d" data-key="d"><nav class="rail" data-key="rail"><div class="brand">${BRAND}<b>VPS 哨兵</b></div><div class="rnav">${navBtns(true, list)}</div>
@@ -773,14 +801,65 @@ function hostRowD(s, on){
   return `<div class="htr ${lv}${on ? " on" : ""}" data-dsel="${k}" data-key="hr:${k}">${nm}${bar(s.cpu)}${bar(s.mem.pct)}${bar(d0.pct)}
     <span class="hc num hnet">${I("down")}<span>${rate(s.net.rx)}</span>${I("up")}<span>${rate(s.net.tx)}</span></span>${s.traffic && s.traffic.limit ? `<span class="hc htf" title="${size(s.traffic.used)}／${size(s.traffic.limit)}">${wave(s.traffic.pct)}<b class="num ${tier(s.traffic.pct)}">${size(s.traffic.used)}</b></span>` : `<span class="hc htf"><span class="wv0"></span><b class="num nl">${s.traffic ? size(s.traffic.used) : "—"}</b></span>`}<span class="hc num">${up(s.uptime)}</span><span class="hc">${moreBtn(s)}</span></div>`;
 }
+/* 小折線（不畫底、不畫格線）：左邊欄每台的處理器、總覽那排 */
+function spark(a, cls, n = 40, H = 20){
+  a = (a || []).slice(-n).map(v => +v || 0);
+  if (a.length < 2) return `<svg class="${cls}" viewBox="0 0 100 ${H}"></svg>`;
+  const mx = Math.max(...a), mn = Math.min(...a), sp = mx - mn || 1, pts = a.map((v, i) => `${(i / (a.length - 1) * 100).toFixed(1)},${(H - 2 - (v - mn) / sp * (H - 4)).toFixed(1)}`);
+  return `<svg class="${cls}" viewBox="0 0 100 ${H}" preserveAspectRatio="none"><path class="sa" d="M0,${H}L${pts.join("L")}L100,${H}Z"/><path class="sl" d="M${pts.join("L")}" vector-effect="non-scaling-stroke"/></svg>`;
+}
+/* 30 天上線紀錄：一天一格（沒紀錄的灰），99.9% 以上算整天在線 */
+const upLv = v => v == null ? "na" : v >= 99.9 ? "ok" : v >= 99 ? "w" : "b";
+const upDay = i => { const d = new Date(Date.now() - (29 - i) * 864e5); return `${d.getMonth() + 1}/${d.getDate()}`; };
+const upStrip = a => `<span class="ups">${(a || []).map((v, i) => `<i class="${upLv(v)}" title="${upDay(i)}・${v == null ? "沒有紀錄" : (+v).toFixed(v >= 99.9 ? 1 : 2) + "%"}"></i>`).join("")}</span>`;
+const upAvg = a => { const v = (a || []).filter(x => x != null); return v.length ? v.reduce((x, y) => x + y, 0) / v.length : null; };
+const upPct = v => v == null ? "—" : v >= 99.995 ? "100%" : (Math.floor(v * 100) / 100).toFixed(2) + "%";
+/* 加總好幾台的一串數字：照最後對齊（有的主機資料比較短） */
+const sumTail = (arrs, n) => Array.from({length: n}, (_, i) => arrs.reduce((t, a) => t + (+(a || [])[a.length - n + i] || 0), 0));
+/* 總覽最上面一排：所有主機加起來 */
+function sumRow(list){
+  const on = list.filter(s => s.online), N = 40;
+  const ups = Array.from({length: 30}, (_, i) => { const v = list.map(s => (s.up30 || [])[i]).filter(x => x != null); return v.length ? Math.min(...v) : null; });
+  const ua = upAvg(list.flatMap(s => (s.up30 || []).filter(x => x != null)));
+  const rx = on.reduce((t, s) => t + (s.net.rx || 0), 0), tx = on.reduce((t, s) => t + (s.net.tx || 0), 0);
+  const net = sumTail(on.map(s => (s.hist && s.hist.rx || []).map((v, i) => v + (+s.hist.tx[i] || 0))), N);
+  const tr = list.filter(s => s.traffic), used = tr.reduce((t, s) => t + (s.traffic.used || 0), 0), pj = tr.reduce((t, s) => t + (s.traffic.projected || 0), 0);
+  const days = {}; tr.forEach(s => { const t = s.traffic, v = x => ({out: x.tx, in: x.rx, max: Math.max(x.rx, x.tx)})[t.count] ?? x.rx + x.tx; (t.daily || []).forEach(x => days[x.d] = (days[x.d] || 0) + v(x)); });
+  let acc = 0; const cum = Object.values(days).map(v => acc += v);
+  const cpu = on.length ? on.reduce((t, s) => t + s.cpu, 0) / on.length : 0, top = on.slice().sort((a, b) => b.cpu - a.cpu)[0];
+  const cpuh = sumTail(on.map(s => s.hist && s.hist.cpu || []), N).map(v => v / (on.length || 1));
+  const now = Date.now() / 1000, ev = allEvents(list).filter(e => now - e.t < 86400);
+  const hrs = Array.from({length: 24}, (_, i) => { const es = ev.filter(e => Math.floor((now - e.t) / 3600) === 23 - i), k = es.map(e => e.kind);
+    return k.includes("bad") ? "b" : k.includes("warn") ? "w" : es.length ? "ok" : "na"; });
+  const cell = (k, label, v, sub, viz) => `<div class="sumc" data-key="sm:${k}"><span class="smk">${label}</span><span class="smv">${v}</span><span class="sms">${sub}</span>${viz}</div>`;
+  return `<div class="sums" data-key="sums">`
+    + cell("h", "主機", `${num(on.length)}<small>／${list.length} 台在線</small>`, ua == null ? "上線紀錄從今天開始" : `30 天上線率 ${upPct(ua)}`, upStrip(ups))
+    + cell("n", "全部網速", `<small class="dn">${I("down")}</small><b data-x>${rate(rx)}</b>`, `<span class="smu">${I("up")}<span data-x>${rate(tx)}</span></span>`, spark(net, "smg rx", N, 28))
+    + cell("t", "本月總流量", `<b data-x>${size(used)}</b>`, pj ? `月底預估 ${size(pj)}` : `${tr.length} 台加總`, spark(cum, "smg tx", 31, 28))
+    + cell("c", "平均處理器", `${num(cpu)}<small>%</small>`, top && on.length > 1 ? `最高 ${esc(top.name)} ${num(top.cpu)}%` : "", spark(cpuh, "smg cpu", N, 28))
+    + cell("e", "最近 24 小時", `${num(ev.length)}<small>件事</small>`, ev.length ? `最近：${esc(ago(ev[0].t))}` : "", `<span class="ups hrs">${hrs.map((k, i) => `<i class="${k}" title="${23 - i ? `${23 - i} 小時前` : "這一小時"}"></i>`).join("")}</span>`)
+    + `</div>`;
+}
+/* 右邊欄：每台 30 天上線紀錄、本月流量排行 */
+function upCard(list){
+  if (!list.some(s => s.up30)) return "";
+  return `<div class="lbl" data-key="lup">上線紀錄<small>30 天</small></div><div class="cc upc" data-key="upc"><div class="upl" data-key="upl" data-keyed>${list.map(s => { const a = upAvg(s.up30);
+    return `<div class="upr" data-key="u:${esc(keyOf(s))}"><b>${esc(s.name)}</b>${upStrip(s.up30)}<span class="num ${a == null ? "" : upLv(a) === "ok" ? "" : upLv(a)}">${upPct(a)}</span></div>`; }).join("")}</div></div>`;
+}
+function trRank(list){
+  const tr = list.filter(s => s.traffic); if (tr.length < 2) return "";
+  const mx = Math.max(1, ...tr.map(s => s.traffic.used));
+  return `<div class="lbl" data-key="ltr">本月流量</div><div class="cc trk" data-key="trk"><div class="upl" data-key="trl" data-keyed>${tr.slice().sort((a, b) => b.traffic.used - a.traffic.used).map(s => { const t = s.traffic, p = t.limit ? t.pct : t.used / mx * 100;
+    return `<div class="upr" data-key="t:${esc(keyOf(s))}"><b>${esc(s.name)}</b><span class="tkb${t.limit ? " lim " + tier(t.pct) : ""}"><i style="--k:${Math.min(1, Math.max(.02, p / 100)).toFixed(3)}"></i></span><span class="num">${size(t.used)}</span></div>`; }).join("")}</div></div>`;
+}
 function homeDesk(list, time){
   const ev = groupEv(allEvents(list)).slice(0, 8), sel = deskSel(list), g = greet();
   const lvs = list.map(s => s.online ? lvOf(s) : "bad"), lv = LOST || lvs.includes("bad") ? "bad" : lvs.includes("warn") || issuesOf(list).length ? "warn" : "ok";   // 跟標題那句話一致
   const bar = dbar("總覽", `<span class="spill ${lv}" data-x>${I({ok:"ok", warn:"alert", bad:"warn"}[lv])}${esc(headline(list))}</span><span class="dq">${esc(g.hi)}${g.quote ? `・${esc(g.quote)}` : ""}</span><span class="sp"></span>${addHostBtn("ubtn ghost dadd")}`);
   const tab = list.length > 1 ? `<div class="htab" data-key="htab"><div class="hth"><span>主機</span><span>處理器</span><span>記憶體</span><span>磁碟</span><span>網路</span><span>本月流量</span><span>開機</span><span></span></div>
     <div class="htb" data-key="htb" data-keyed>${list.map(s => hostRowD(s, s === sel)).join("")}</div></div>` : "";
-  return `<div class="dhome" data-key="dh">${bar}${tab}<div class="dgrid" data-key="dg"><section class="hp ${sel ? lvOf(sel) : ""}" data-key="${sel ? esc(keyOf(sel)) : "none"}" data-sw>${sel ? hostBody(sel, false) : `<div class="calm">還沒有主機</div>`}</section>
-    <aside class="aside" data-key="as">${g.wx ? `<div class="wxw">${g.wx}</div>` : ""}${tgHint(list)}<div class="lbl">最近發生${ev.length ? `<button data-tab="log">全部紀錄</button>` : ""}</div>${evList(ev, list.length > 1)}</aside></div></div>`;
+  return `<div class="dhome" data-key="dh">${bar}${sumRow(list)}${tab}<div class="dgrid" data-key="dg"><section class="hp ${sel ? lvOf(sel) : ""}" data-key="${sel ? esc(keyOf(sel)) : "none"}" data-sw>${sel ? hostBody(sel, false) : `<div class="calm">還沒有主機</div>`}</section>
+    <aside class="aside" data-key="as">${g.wx ? `<div class="wxw">${g.wx}</div>` : ""}${tgHint(list)}${upCard(list)}${trRank(list)}<div class="lbl" data-key="lev">最近發生${ev.length ? `<button data-tab="log">全部紀錄</button>` : ""}</div>${evList(ev, list.length > 1)}</aside></div></div>`;
 }
 /* 那台主機的整頁（從卡片的位置展開；電腦上左邊的分頁列留著） */
 function detail(s){
@@ -1934,7 +2013,7 @@ function drawTip(x, y){
   const dt = t ? new Date(t * 1000) : null, hm = dt ? dt.toLocaleTimeString("zh-TW", {hour:"2-digit", minute:"2-digit", hour12:false}) : "";
   const when = !dt ? "" : RANGE === "7d" ? `${dt.getMonth()+1}/${dt.getDate()} ${hm}` : hm;
   const [tip, line] = tipEls();
-  tip.innerHTML = `<div class="tt">${when}</div>` + d.ser.map(s => `<div class="tr2"><i style="background:${s.color}"></i>${esc(s.name||"")}<b class="num">${d.fmt(s.data[i] ?? 0)}</b></div>`).join("");
+  tip.innerHTML = `<div class="tt">${when}</div>` + d.ser.map(s => `<div class="tr2"><i style="background:${s.color}"></i>${esc(s.name||"")}<b class="num">${(s.f || d.fmt)((s.raw || s.data)[i] ?? 0)}</b></div>`).join("");
   const lx = r.left + f * r.width;
   line.style.cssText = `left:${lx}px;top:${r.top}px;height:${r.height}px`;
   const w = tip.offsetWidth || 150, left = lx + 14 + w > innerWidth / z - 8 ? lx - 14 - w : lx + 14;
