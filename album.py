@@ -15,7 +15,7 @@ ALB_EXT2 = {".hif"} | PIC_RAW                                       # 只在雲�
 ALB_HEIF = {".heic", ".heif", ".hif", ".avif"}
 ALB_VV = 2                                                        # 影片轉檔的做法版本：轉不出來的影片換新做法後再試一次
 ALB_XL = 3840                                                     # 大螢幕看大圖的清晰版：長邊幾點（有人在大螢幕打開才做）
-ALB_MV = 6                                                        # 照片資訊的格式版本（舊的重讀一次：色彩空間、HDR、原始檔）
+ALB_MV = 7                                                        # 照片資訊的格式版本（舊的重讀一次：色彩空間、HDR、原始檔）
 ALB_SHOW = {".jpg", ".jpeg", ".png", ".webp", ".gif", ".avif"}    # 做不出小圖時，瀏覽器直接看得了原圖的
 ALB_VID = {".mp4", ".mov", ".m4v", ".webm", ".3gp", ".mkv"}        # 影片（主機轉成 720p 的 H.264 給朋友看）
 ALB_AUD = {".mp3", ".m4a", ".aac", ".ogg", ".opus", ".flac", ".wav"}   # 資料夾裡放一首歌：幻燈片的背景音樂
@@ -1024,7 +1024,7 @@ def alb_find(code):
 # ── 照片資訊（EXIF、大小、方向）：只讀檔頭，不用解開整張 ──
 EXIF_T = {0x010F: "mk", 0x0110: "md", 0x0112: "ori", 0x0131: "sw", 0x0132: "dt0", 0x829A: "et", 0x829D: "f", 0x8822: "ep",
           0x8827: "iso", 0x9003: "dt", 0x9011: "oz", 0x9010: "oz0", 0x9204: "ev", 0x9207: "mm", 0x9209: "fla", 0x920A: "fl",
-          0xA405: "f35", 0xA402: "em", 0xA403: "wb", 0xA433: "lmk", 0xA434: "ln", 0xA406: "sc", 0xA002: "pw", 0xA003: "ph",
+          0xA405: "f35", 0xA402: "em", 0xA403: "wb", 0xA432: "lsp", 0xA433: "lmk", 0xA434: "ln", 0xA406: "sc", 0xA002: "pw", 0xA003: "ph",
           0x9214: "sa", 0x9206: "sd", 0xA20E: "fpx", 0xA20F: "fpy", 0xA210: "fpu"}
 GPS_T = {1: "latr", 2: "lat", 3: "lonr", 4: "lon", 5: "altr", 6: "alt", 7: "gts", 0x10: "dirr", 0x11: "dir", 0x1D: "gds"}
 TIFF_SZ = {1: 1, 2: 1, 3: 2, 4: 4, 5: 8, 6: 1, 7: 1, 8: 2, 9: 4, 10: 8, 11: 4, 12: 8}
@@ -1226,6 +1226,11 @@ def alb_exif_tidy(t):
             v = v[0] if v else None
         if isinstance(v, int):
             x[k] = v
+    lsp = t.get("lsp")                                 # LensSpecification：變焦鏡頭的最短、最長焦距（手機寫的是幾顆鏡頭合起來，不算）
+    if isinstance(lsp, list) and len(lsp) == 4 and (x.get("mk") or "").lower().split(" ")[0] not in ALB_PHONE:
+        a, b_ = _rat(lsp[0]), _rat(lsp[1])
+        if a and b_ and 0 < a < b_ < 2000 and b_ / a >= 1.15:
+            x["zr"] = [round(a, 1), round(b_, 1)]
     if not x.get("f35") and x.get("fl"):              # 沒寫等效焦距：照感光元件大小換算（手機的 6 mm 不會被當成超廣角）
         cf = alb_crop(t, x)
         if cf:

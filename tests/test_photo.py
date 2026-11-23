@@ -361,15 +361,17 @@ class PhotoUnit(unittest.TestCase):
         def maker(b):
             return P["pic_maker"](b, P["pic_exif_more"](b))
         fd = struct.pack("<9H", 2, 160, 120, 40, 50, 80, 60, 20, 20)
-        pana = mk_exif("Panasonic", lambda at: b"Panasonic\0\0\0" + ifd([(0x46, 8, struct.pack("<h", -2)), (0x47, 8, struct.pack("<h", 1)), (0x4E, 7, fd), (0x89, 3, 3)], at + 12))
+        pana = mk_exif("Panasonic", lambda at: b"Panasonic\0\0\0" + ifd([(0x46, 8, struct.pack("<h", -2)), (0x47, 8, struct.pack("<h", 1)), (0x4E, 7, fd), (0x89, 3, 3), (0x9F, 3, 1)], at + 12))
         m = maker(pana)
+        self.assertEqual(m["sh"], "e")                          # 電子快門
         self.assertEqual(m["ws"], [2, 1, "ab"])                 # 往琥珀 2、往綠 1
         self.assertEqual(m["fc"], [(160, 132.5, 52.0, 65.0), (80, 65.0, 26.0, 26.0)])   # 記的是眼睛：往下移一點、放大到整張臉
         self.assertEqual(m["fcr"], (320, -1))
-        fuji = mk_exif("FUJIFILM", lambda at: b"FUJIFILM" + struct.pack("<I", 12) + ifd([(0x100A, 9, struct.pack("<ii", 40, -20)),
+        fuji = mk_exif("FUJIFILM", lambda at: b"FUJIFILM" + struct.pack("<I", 12) + ifd([(0x100A, 9, struct.pack("<ii", 40, -20)), (0x1050, 3, 3),
                        (0x4100, 3, 1), (0x4103, 3, struct.pack("<4H", 100, 200, 300, 500))], 12))
         m = maker(fuji)
         self.assertEqual(m["ws"], [2, -1, "rb"])
+        self.assertEqual(m["sh"], "efc")                        # 電子前簾
         self.assertEqual(m["fc"], [(200, 350, 200, 300)])
         pi = struct.pack("<" + "h" * 14, 28, *([0] * 9), 0x83, 0, 3, -2)
         canon = mk_exif("Canon", lambda at: ifd([(0xA0, 3, pi)], at))

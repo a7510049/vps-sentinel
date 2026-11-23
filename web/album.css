@@ -244,6 +244,11 @@ button.chip:active,a.chip:active{transform:scale(.95)}
 .isty .tag{flex:none}
 .icam .l{color:var(--tx2);margin-top:4px;font-size:var(--fs-s)}
 .icam .l2{color:var(--tx3);margin-top:2px;font-size:var(--fs-s)}
+.izr{display:flex;align-items:center;gap:8px;margin-top:8px;max-width:260px;color:var(--tx3)}
+.izr small{font-size:var(--fs-xs);font-weight:650}
+.izr .zt{position:relative;flex:1;height:4px;border-radius:var(--r-pill);background:var(--line)}
+.izr .zf{position:absolute;inset:0 auto 0 0;border-radius:inherit;background:var(--grad)}
+.izr .zk{position:absolute;top:50%;width:10px;height:10px;margin:-5px 0 0 -5px;border-radius:50%;background:var(--tx);box-shadow:0 0 0 2px var(--s1)}
 .iex{display:grid;grid-template-columns:repeat(5,1fr);border-top:1px solid var(--line)}
 .iex div{padding:12px 2px;text-align:center;font-size:var(--fs-s);font-weight:650;white-space:nowrap}
 .iex div+div{box-shadow:-1px 0 0 var(--line)}
@@ -805,7 +810,7 @@ html,body{touch-action:pan-x pan-y}
 .ikv b{display:inline-flex;align-items:center;justify-content:flex-end;gap:6px}
 .gin{width:18px;height:18px;flex:none}
 .gin.off .gd{fill:var(--tx3);opacity:.5}
-.iset{display:grid;grid-template-columns:repeat(12,minmax(0,1fr))}
+.iset{display:grid;grid-template-columns:repeat(60,minmax(0,1fr))}
 .iset div[data-r2]{box-shadow:-1px 0 0 var(--line),0 -1px 0 var(--line)}
 .iset div{padding:14px 6px 12px;text-align:center;box-shadow:-1px 0 0 var(--line)}
 .iset .gin.gb{width:28px;height:28px;display:block;margin:0 auto 6px}

@@ -151,10 +151,20 @@ function phoneLens(x){
   if (!PHONES.test(x.mk || "") || /^apple/i.test(x.mk || "") || !x.f35) return "";
   return x.f35 <= 18 ? "超廣角" : x.f35 <= 30 ? "主鏡頭" : x.f35 >= 60 ? "望遠" : "";
 }
+/* 變焦鏡頭的範圍：主機讀的 LensSpecification，沒有就從鏡頭名稱找「24-105mm」「20-60/F3.5」（不會抓到光圈 F3.5-5.6） */
+function zoomOf(x){
+  if (!x.fl || PHONES.test(x.mk || "")) return null;
+  let r = x.zr;
+  if (!r) { const l = x.ln || "", m = l.match(/(\d+(?:\.\d+)?)\s*-\s*(\d+(?:\.\d+)?)\s*mm/i) || l.match(/(?:^|\s)(\d+(?:\.\d+)?)-(\d+(?:\.\d+)?)(?=\/|\s|$)/);
+    r = m && [+m[1], +m[2]]; }
+  return r && r[0] > 0 && r[1] / r[0] >= 1.15 && r[1] < 2000 && x.fl >= r[0] * .95 && x.fl <= r[1] * 1.05 ? r : null;
+}
+/* 沒有接點的手動鏡頭：相機記不到鏡頭和光圈（Sony 寫「----」） */
+const manLens = x => !!(x.mk && x.et && !x.f && !/[^-\s]/.test(x.ln || "") && !PHONES.test(x.mk));
 function lensName(x){
   const ap = appleLens(x) || phoneLens(x); if (ap) return ap;
   let l = x.ln || "";
-  if (!l) return "";
+  if (!/[^-\s]/.test(l)) return manLens(x) ? "手動鏡頭" : "";
   if (x.md && l.toLowerCase().startsWith(x.md.toLowerCase())) l = l.slice(x.md.length).trim();
   return l.replace(/^back /i, "後").replace(/^front /i, "前").replace(/triple camera/i, "三鏡頭").replace(/dual wide camera/i, "雙廣角鏡頭")
     .replace(/dual camera/i, "雙鏡頭").replace(/ultra wide camera/i, "超廣角鏡頭").replace(/telephoto camera/i, "望遠鏡頭").replace(/wide camera/i, "廣角鏡頭").replace(/camera/i, "鏡頭");
@@ -3177,6 +3187,10 @@ function shakeOf(p){
   const t = x.et[0] / x.et[1], is = x.ms && x.ms.is && x.ms.is !== "關", safe = 1 / x.f35 * (is ? 16 : 1), sh = p.fs != null ? p.fs : p.qs;
   return t > safe * 1.5 && sh != null && sh < 50 ? Math.round(1 / safe) || 1 : 0;
 }
+/* 快門方式：機械是兩片快門簾、電子是感光元件晶片、電子前簾是晶片加一片簾 */
+const SHT = {m: "機械", e: "電子", efc: "電子前簾"};
+const gShT = k => `<svg class="gin gb" viewBox="0 0 24 24" aria-hidden="true">${k === "m" ? `<rect x="4" y="4" width="16" height="16" rx="2.5" class="gf"/><path d="M4 9.5h16M4 14.5h16" class="gl"/><path d="M4 12h16" class="gs"/>`
+  : `<rect x="6.5" y="6.5" width="11" height="11" rx="1.6" class="gf"/><rect x="9.5" y="9.5" width="5" height="5" rx=".8" class="gd"/><path d="M9 3.5v3M12 3.5v3M15 3.5v3M9 17.5v3M12 17.5v3M15 17.5v3M3.5 9h3M3.5 12h3M3.5 15h3M17.5 9h3M17.5 12h3M17.5 15h3" class="gl"/>${k === "efc" ? `<path d="M5 6.5h14" class="gs"/>` : ""}`}</svg>`;
 const gShake = `<svg class="gin gb" viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="6" width="14" height="12" rx="2.5" class="gf"/><circle cx="12" cy="12" r="3.2" class="gs"/><path d="M2.5 8.5l-1.2 3.5 1.2 3.5M21.5 8.5l1.2 3.5-1.2 3.5" class="gl"/></svg>`;
 /* 過曝／死黑：大圖畫到畫布上，紅、綠、藍任何一個到頂（≥ 253）算過曝，全部 ≤ 3 算死黑；在看的人的設備上算 */
 let ZEB = store.get("vsa-zb") === "1";
@@ -3342,11 +3356,13 @@ function infoHTML(p){
       <a class="ipl" href="${mapUrl(lat, lon, nm, p.p && p.p.cc)}" target="_blank" rel="noopener noreferrer"><span class="pi">${I("pin")}</span><span><b>${esc(nm)}</b><span>${esc(sub)}</span></span><span class="go">${I("ext")}</span></a>${nearHTML(p)}</div>`;
   }
   const fe = f35 || (fl ? Math.round(fl) : 0);
-  const cells = [["光圈", x.f ? `ƒ${+x.f.toFixed(2)}` : "", x.f ? gIris(x.f) : "", "f"], ["快門", shutter(x.et).replace(" 秒", " s"), x.et ? gShut(x.et) : "", "et"],
+  const zr = zoomOf(x), zp = zr ? Math.max(0, Math.min(1, Math.log(x.fl / zr[0]) / Math.log(zr[1] / zr[0]))) : 0;   // 變焦環照對數放（跟鏡頭上的刻度一樣，廣角那頭比較寬）
+  const zh = zr ? `<div class="izr num" aria-label="變焦範圍 ${+zr[0]}–${+zr[1]} mm，這張 ${+x.fl.toFixed(1)} mm"><small>${+zr[0]}</small><span class="zt"><i class="zf" style="width:${(zp * 100).toFixed(1)}%"></i><i class="zk" style="left:${(zp * 100).toFixed(1)}%"></i></span><small>${+zr[1]} mm</small></div>` : "";
+  const cells = [["光圈", x.f ? `ƒ${+x.f.toFixed(2)}` : manLens(x) ? "手動" : "", x.f ? gIris(x.f) : "", "f"], ["快門", shutter(x.et).replace(" 秒", " s"), x.et ? gShut(x.et) : "", "et"],
     ["ISO", x.iso || "", x.iso ? gIso(x.iso) : "", "iso"], ["焦距", fe ? `${fe} mm` : "", f35 ? gFov(f35) : "", "fl"], ["曝光", x.ev != null ? `${x.ev > 0 ? "+" : ""}${+x.ev.toFixed(1)} ev` : "", x.ev != null ? gEv(x.ev) : "", "ev"]];
   h += `<div class="ibox"><div class="icam"><div class="t">${cam && !isVid(p) ? `<button class="igear" data-gear="c:${esc(cam)}">${brandSvg(x)}<b>${esc(brandSvg(x) ? cam.replace(new RegExp("^" + (MKS[(x.mk || "").toLowerCase()] || x.mk || "").replace(/[.*+?^${}()|[\]\\]/g, "\\$&") + "\\s+", "i"), "") : cam)}</b>${I("r")}</button>` : `<b>${esc(cam || (isVid(p) ? "影片" : "相機資訊"))}</b>`}</div>
       ${appleLens(x) || phoneLens(x) ? `<div class="l"><button class="igear sm" data-gear="l:${esc(lens)}">${esc(lens)}</button>${f35 ? `・${f35} mm` : ""}</div>`
-        : lens || f35 ? `<div class="l">${esc(f35 ? `${lensKind(f35)}・等效${x.f35e ? "約" : ""} ${f35} mm` : "")}${lens ? `${f35 ? "　" : ""}<button class="igear sm" data-gear="l:${esc(lens)}">${esc(lens)}</button>` : ""}</div>` : ""}
+        : lens || f35 ? `<div class="l">${esc(f35 ? `${lensKind(f35)}・等效${x.f35e ? "約" : ""} ${f35} mm` : "")}${lens ? `${f35 ? "　" : ""}<button class="igear sm" data-gear="l:${esc(lens)}">${esc(lens)}</button>` : ""}</div>` : ""}${zh}
       <div class="l2 num">${p.w && p.h ? `<i class="gar" style="aspect-ratio:${p.w} / ${p.h}"></i>` : ""}<span>${isVid(p) ? `影片 ${dur(p.vd)}・${x.fps ? `${+x.fps.toFixed(2)} fps・` : ""}${x.vb ? `${x.vb >= 10 ? Math.round(x.vb) : x.vb} Mbps・` : ""}` : mp >= .1 ? `${mp >= 10 ? Math.round(mp) : mp.toFixed(1)} MP・` : ""}${p.w} × ${p.h}・${size(p.sz)}</span><span class="tgs"><span class="tag">${esc(ext)}</span>${p.rw && p.rw !== ext ? `<span class="tag">+${esc(p.rw)}</span>` : ""}${p.cs ? `<span class="tag">${esc(p.cs.replace("Display ", ""))}</span>` : ""}${p.hdr && !isVid(p) ? `<span class="tag hdr">HDR</span>` : ""}${isVid(p) && x.vc ? `<span class="tag">${esc(x.vc)}</span>` : ""}${isVid(p) && (x.gm || p.hdr) ? `<span class="tag hdr">${esc(x.gm || (p.hdr === "pq" ? "HDR PQ" : "HLG"))}</span>` : ""}</span></div></div>
     ${cells.some(c => c[1]) ? `<div class="iex num">${cells.map(([k, v, g, gk]) => `<div data-gk="${gk}"${v ? "" : ` class="no"`}>${g || SV(`<circle cx="16" cy="16" r="12" class="gt"/>`)}<b>${esc(v || "—")}</b><small>${k}</small></div>`).join("")}</div>` : ""}</div>`;
   const ms = x.ms;
@@ -3375,6 +3391,7 @@ function infoHTML(p){
   if ((x.afp || x.fcs) && !isVid(p)) st.push([gAf(p), x.afp ? p.fm ? "可能跑焦" : p.fs >= 60 ? "清楚" : "標出位置" : `${x.fcs.length} 張臉`, x.afp ? x.fcs ? `對焦點・${x.fcs.length} 張臉` : "對焦點" : "臉部", ` class="iaf${AFON ? " on" : ""}${p.fm ? " miss" : ""}" data-af role="button" tabindex="0" aria-pressed="${AFON}"`]);
   { const dof = dofOf(p); if (dof) st.push([gDof(dof), dof.t, dof.k, ` data-gk="dof"`]); }
   { const lv = lvOf(p); if (lv != null) st.push([gLv(lv), lvName(lv), `光線 LV ${Math.round(lv)}`, ` data-gk="lv"`]); }
+  if (ms && SHT[ms.sh] && !isVid(p)) st.push([gShT(ms.sh), SHT[ms.sh], "快門方式"]);
   { const sk = shakeOf(p); if (sk) st.push([gShake, "可能手震", `安全快門 1/${sk}`, ` class="warn"`]); }
   { const c = STKOF.get(PH.indexOf(p)); if (c != null && STKB.has(c)) { const ev = STK.get(c).map(i => PH[i].x.ev).sort((a, b) => a - b);
     kv.push(["包圍曝光", `${ev.length} 張・${ev.map(v => `${v > 0 ? "+" : v < 0 ? "−" : "±"}${Math.abs(+v.toFixed(1))}`).join(" / ")} EV`]); } }
@@ -3385,7 +3402,7 @@ function infoHTML(p){
   kv.push(["檔名", p.n.split("/").pop()]);
   if (st.length) {                                           // 4 格以內一排；5 格以上分兩排、每排撐滿（不留空格）
     const n = st.length, top = n <= 4 ? n : Math.ceil(n / 2);
-    h += `<div class="ibox iset">${st.map(([g, v, k, at], j) => `<div${at || ""} style="grid-column:span ${12 / (j < top ? top : n - top)}"${j >= top ? " data-r2" : ""}>${g}<b${v.length > 8 ? ` class="sm"` : ""}>${esc(v)}</b><small>${k}</small></div>`).join("")}</div>`;   // 長的字（景深範圍）縮小一號、不換行：每格一樣高，換張時下面不會跳
+    h += `<div class="ibox iset">${st.map(([g, v, k, at], j) => `<div${at || ""} style="grid-column:span ${60 / (j < top ? top : n - top)}"${j >= top ? " data-r2" : ""}>${g}<b${v.length > 8 ? ` class="sm"` : ""}>${esc(v)}</b><small>${k}</small></div>`).join("")}</div>`;   // 長的字（景深範圍）縮小一號、不換行：每格一樣高，換張時下面不會跳
   }
   h += `<div class="ibox ikv">${kv.filter(r => r[1]).map(([k, v, g]) => `<div><span>${k}</span><b>${g || ""}${esc(v)}</b></div>`).join("")}</div>`;
   if (D.dl) h += `<div class="idl"><a class="pr" href="${src(p, "o")}" download>${I("dl")}${D.dl > 1 ? (isVid(p) ? "下載影片" : "下載原圖") : "下載"}</a></div>`;

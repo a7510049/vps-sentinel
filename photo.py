@@ -352,6 +352,11 @@ PIC_NIKON_ST = {"STANDARD": "標準", "NEUTRAL": "中性", "VIVID": "鮮豔", "M
                 "FLAT MONOCHROME": "平面單色", "DEEP TONE MONOCHROME": "深色調單色"}
 
 
+PIC_PANA_SH = {0: "m", 1: "e", 2: "efc"}               # 快門種類（照 ExifTool）：m 機械、e 電子、efc 電子前簾
+PIC_FUJI_SH = {0: "m", 1: "e", 2: "e", 3: "efc"}
+PIC_NIKON_SH = {0: "m", 16: "e", 48: "efc", 64: "e", 80: "m", 81: "efc", 96: "e"}
+
+
 def pic_maker(b, more):
     """回傳 {"sl": 這家怎麼叫, "st": 風格, "fx": [效果], "lut": LUT, "is": 防手震, "af": 對焦, "sub": 辨識, "ln": 鏡頭}；讀不到的不放"""
     mk = more.get("mkn")
@@ -441,6 +446,8 @@ def pic_maker(b, more):
         t = v.get(0x4D)                                # AFPointPosition：對焦點（0～1 的比例），手動對焦不算
         if num(0x07) != 2 and t and t[0] == 5 and isinstance(t[1], list) and len(t[1]) == 2:
             out["fp"] = (t[1][0], t[1][1], 1, 1)
+        if num(0x9F) in PIC_PANA_SH:                   # ShutterType：機械、電子、電子前簾
+            out["sh"] = PIC_PANA_SH[num(0x9F)]
         if num(0x45) in PIC_PANA_BK:                   # BracketSettings：包圍曝光幾張
             out["bk"] = PIC_PANA_BK[num(0x45)]
         ab, gm = s16(num(0x46)), s16(num(0x47))        # WBShiftAB（正的往藍）、WBShiftGM（正的往綠）
@@ -466,6 +473,8 @@ def pic_maker(b, more):
         t = v.get(0x1031)                              # FocusPixel：對焦點（照片的像素位置）
         if t and t[0] == 3 and isinstance(t[1], list) and len(t[1]) == 2:
             out["fp"] = (t[1][0], t[1][1], 0, 0)
+        if num(0x1050) in PIC_FUJI_SH:                 # ShutterType
+            out["sh"] = PIC_FUJI_SH[num(0x1050)]
         if num(0x1100) == 1:                           # AutoBracketing
             out["bk"] = 1
         t = v.get(0x100A)                              # WhiteBalanceFineTune：紅、藍各偏多少（一格是 20）
@@ -517,6 +526,8 @@ def pic_maker(b, more):
             if pc in PIC_NIKON_ST:
                 out["sl"] = "優化校準"
                 out["st"] = PIC_NIKON_ST[pc]
+        if num(0x34) in PIC_NIKON_SH:                  # ShutterMode
+            out["sh"] = PIC_NIKON_SH[num(0x34)]
         fp = pic_nikon_af(*(raw.get(0xB7) or (b"", "<")))
         if fp:
             out["fp"] = fp
