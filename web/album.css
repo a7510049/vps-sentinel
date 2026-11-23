@@ -907,13 +907,15 @@ html,body{touch-action:pan-x pan-y}
 /* 每天一張大圖開章：這天第一張橫的放整排，日期、地點疊在上面，捲動時照片慢一點（視差） */
 .day.cov{position:relative}
 .day.cov .dh{position:absolute;left:0;right:0;top:0;height:var(--fh);margin:0;padding:clamp(18px,3.2vw,40px);z-index:2;pointer-events:none;align-content:end;
-  border-radius:var(--r-sm);background:linear-gradient(180deg,transparent 40%,rgba(0,0,0,.6));color:#fff}
+  border-radius:var(--r-sm);color:#fff;--a:calc(.5 + var(--cs,.5) * .35);
+  background:linear-gradient(180deg,transparent 12%,rgba(0,0,0,calc(var(--a) * .55)) 45%,rgba(0,0,0,var(--a))),linear-gradient(90deg,rgba(0,0,0,calc(var(--a) * .45)),transparent 72%)}
+.day.cov .dh b,.day.cov .dh span,.day.cov .dh .dsum{animation:none}
 @media (min-width:700px){.day.cov .dh{border-radius:var(--r-md)}}
-.day.cov .dh b{color:#fff;font-size:clamp(24px,3.8vw,44px);text-shadow:0 2px 18px rgba(0,0,0,.35)}
-.day.cov .dh span{color:rgba(255,255,255,.88)}
+.day.cov .dh b{color:#fff;font-size:clamp(24px,3.8vw,44px);text-shadow:0 1px 3px rgba(0,0,0,.35),0 2px 18px rgba(0,0,0,.4)}
+.day.cov .dh span{color:rgba(255,255,255,.92);text-shadow:0 1px 3px rgba(0,0,0,.4)}
 .day.cov .dh span svg{color:#fff}
 .day.cov .dct{background:rgba(255,255,255,.22);color:#fff;align-self:end}
-.day.cov .dhr{color:rgba(255,255,255,.85)}
+.day.cov .dhr{color:rgba(255,255,255,.9);text-shadow:0 1px 3px rgba(0,0,0,.4)}
 .day.cov .row.feat .ph img{top:-7%;bottom:auto;height:114%}
 @supports (animation-timeline:view()){
   .day.cov .row.feat .ph img{animation:fpar linear both;animation-timeline:view()}
@@ -1000,7 +1002,7 @@ html,body{touch-action:pan-x pan-y}
 .dwx.wsnow svg{color:#8fc6ff}
 .dwx.wstorm svg{color:#a07cff}
 .day.cov .dh .dwx{display:flex;width:max-content;margin:8px 0 2px}
-.day.cov .dh .dwx,.day.cov .dh .dwx small{color:#fff;text-shadow:none}
+.day.cov .dh .dwx,.day.cov .dh .dwx small{color:#fff;text-shadow:0 1px 3px rgba(0,0,0,.4)}
 .day.cov .dh .dwx svg{color:#fff;filter:drop-shadow(0 1px 6px rgba(0,0,0,.35))}
 .smc b .dwx{font-size:var(--fs-xs)}
 .wall[data-z="2"] .dwx,.wall[data-z="3"] .dwx{display:none}
@@ -1232,7 +1234,7 @@ button.dct:active{transform:scale(.92)}
 
 /* 每天一句話（早上在哪、下午到哪、走了幾公里） */
 .dsum{grid-column:1;font-style:normal;font-family:var(--serif);font-size:var(--fs-m);line-height:1.6;color:var(--tx2);letter-spacing:.02em;margin-top:2px;text-wrap:pretty}
-.day.cov .dsum{color:rgba(255,255,255,.9);text-shadow:0 1px 10px rgba(0,0,0,.4)}
+.day.cov .dsum{color:rgba(255,255,255,.94);text-shadow:0 1px 3px rgba(0,0,0,.4),0 1px 10px rgba(0,0,0,.4)}
 .wall[data-z="2"] .dsum,.wall[data-z="3"] .dsum{display:none}
 .sct .dsum{color:rgba(255,255,255,.85);font-size:var(--fs-l);max-width:30em;margin-top:4px}
 

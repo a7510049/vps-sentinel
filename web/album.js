@@ -939,6 +939,24 @@ function tintFrom(px){
   const k = Math.min(1, Math.max(.7, (n ? chroma / n : 0) / .06));   // 照片本身灰灰的，顏色收斂一點（但不會變成灰色）
   return [`oklch(.82 ${(.12 * k).toFixed(3)} ${h2})`, `oklch(.64 ${(.16 * k).toFixed(3)} ${h1})`, `oklch(.56 ${(.15 * k).toFixed(3)} ${h3})`];
 }
+/* 每天封面上的字：看照片左下（字在的那塊）有多亮，越亮底下的暗影越深，亮色照片上的字才看得清楚 */
+function covShade(sec, p){
+  if (!p || !p.q || sec.dataset.cs === String(p.i)) return;
+  sec.dataset.cs = p.i;
+  const im = new Image();
+  im.onload = () => {
+    try {
+      const w = 24, h = Math.max(4, Math.round(24 * im.naturalHeight / im.naturalWidth)), c = document.createElement("canvas"); c.width = w; c.height = h;
+      const x = c.getContext("2d", {willReadFrequently:true}); x.drawImage(im, 0, 0, w, h);
+      const px = x.getImageData(0, 0, Math.ceil(w * .7), h).data, rw = Math.ceil(w * .7), L = [];
+      for (let k = 0; k < px.length; k += 4) { if ((k / 4 / rw | 0) < h * .3) continue; L.push((.2126 * px[k] + .7152 * px[k + 1] + .0722 * px[k + 2]) / 255); }
+      L.sort((a, b) => a - b);
+      const v = L.length ? L[Math.floor(L.length * .8)] : .5;   // 用偏亮的那兩成看：一塊白牆就夠讓字看不清
+      sec.style.setProperty("--cs", Math.max(0, Math.min(1, (v - .25) / .55)).toFixed(2));
+    } catch (e) {}
+  };
+  im.src = `data:image/jpeg;base64,${p.q}`;
+}
 let TINT = "";
 function tint(p){
   if (!p || p.broken || TINT === p.i) return;
@@ -1056,6 +1074,7 @@ function layout(force){
     const big = !HUE && ZL === 1 && list.length >= 3 && !STK.has(top) && PH[top].w / PH[top].h >= 1.3 && W >= 320 ? top : -1;   // 這天拍得最好的橫幅放整排，當這天的封面（沒有分數就用第一張）
     const sec = box.parentNode, dh = sec.querySelector(".dh[data-day]");
     sec.classList.toggle("cov", big >= 0 && !!dh);
+    if (big >= 0 && dh) covShade(sec, PH[big]);
     if (big >= 0) { const ar = Math.min(3, PH[big].w / PH[big].h), fh = Math.min(W / ar, innerHeight * .72); sec.style.setProperty("--fh", fh.toFixed(1) + "px"); rows.push([[[big, W / fh]], fh, 1]); }
     const scs = g.d && !g.m ? scenesOf(list) : null;            // 一天分成幾段：每段上面一行「下午 3:40・烏菲茲美術館」
     (scs || [{list}]).forEach((sc, k) => {
