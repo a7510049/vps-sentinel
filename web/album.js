@@ -1938,6 +1938,9 @@ function openLb(i, from){
     sl.forEach(s => { if (s.firstChild !== zw) s.style.visibility = "hidden"; });   // 資訊開著時關掉：畫面變寬，旁邊那張會被排進看得到的地方，先藏起來
     S.info = false; el.classList.remove("info", "cmo");
     const n0 = now === "none" ? "translate(0px,0px) scale(1)" : now;
+    /* HDR 照片：縮回去的同時大圖（HDR）慢慢淡掉、露出底下的一般小圖，亮度慢慢降下來，不會回到照片牆才突然變暗 */
+    const hb = p.hdr && zw.querySelector(".s2.ok"), sm = zw.querySelectorAll("img.s1")[1];
+    if (hb && sm && sm.complete && sm.naturalWidth) hb.animate([{opacity:1}, {opacity:0}], {duration:T.mid, easing:EASE, fill:"forwards"});
     if (r) { const a1 = toTile(r, f); zw.animate([{transform:n0, clipPath:NOCLIP}, {transform:a1.t, clipPath:a1.c}], {duration:T.mid, easing:EASE, fill:"forwards"}).onfinish = end; }
     else zw.animate([{opacity:1}, {opacity:0, transform:`${n0} scale(.92)`}], {duration:T.mid, easing:EXIT, fill:"forwards"}).onfinish = end;
     bg.animate([{opacity:getComputedStyle(bg).opacity}, {opacity:0}], {duration:T.mid, easing:EASE, fill:"forwards"});
