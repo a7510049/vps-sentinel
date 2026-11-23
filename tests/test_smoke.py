@@ -193,6 +193,17 @@ class SmokeTest(Server):
         self.assertEqual(code, 200)
         self.assertIsInstance(json.loads(body), (dict, list))
 
+    def test_api_all_panel_data(self):
+        """電腦總覽要用的：30 天上線紀錄、磁碟讀寫／負載／連線的曲線、處理器型號、吃資源的程式"""
+        me = json.loads(self.request("/api/all", token=TOKEN)[2])[0]
+        self.assertEqual(len(me["up30"]), 30)
+        for k in ("t", "cpu", "mem", "rx", "tx", "rd", "wr", "ld", "cn"):
+            self.assertIn(k, me["hist"])
+        self.assertIsInstance(me["top"], list)
+        self.assertIsInstance(me["cpum"], str)
+        h = json.loads(self.request("/api/history?range=24h", token=TOKEN)[2])
+        self.assertIn("rd", h)
+
     def test_api_history(self):
         for rng in ("1h", "24h", "7d"):
             with self.subTest(range=rng):
@@ -207,6 +218,17 @@ class SmokeTest(Server):
         self.assertEqual(code, 404)
         code, _, _ = self.request("/api/history?node=no-such-host", token=TOKEN)
         self.assertEqual(code, 404)
+
+
+class OldHistoryTest(Server):
+    """舊版存的圖表少了磁碟讀寫、負載、連線：讀進來補 0，畫面照常"""
+    STATE = {"v": 1, "boot": "x", "events": [], "hist": [[int(time.time()) - 60, 5.0, 20.0, 100, 200]],
+             "h24": [[int(time.time()) - 600, 5.0, 20.0, 100, 200]]}
+
+    def test_padded(self):
+        h = json.loads(self.request("/api/history?range=24h", token=TOKEN)[2])
+        self.assertEqual(h["rd"][0], 0)
+        self.assertEqual(h["cpu"][0], 5.0)
 
 
 class RebootAndTokenTest(Server):
