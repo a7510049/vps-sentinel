@@ -118,6 +118,8 @@ button.chip:active,a.chip:active{transform:scale(.95)}
 .map{position:relative;height:clamp(260px,42vw,460px);border-radius:var(--r-xl);overflow:hidden;background:var(--s2);box-shadow:var(--sh-card);isolation:isolate}
 .map .tl{position:absolute;opacity:0;transition:opacity var(--t-slow) var(--ease);filter:var(--map-f);user-select:none;-webkit-user-drag:none}
 .map .tl.ok{opacity:1}
+.tld::before{content:"";position:absolute;inset:0;pointer-events:none;background:linear-gradient(100deg,transparent 30%,color-mix(in oklab,var(--tx) 7%,transparent) 50%,transparent 70%);transform:translateX(-100%);animation:tld 1.4s var(--ease) infinite}
+@keyframes tld{to{transform:translateX(100%)}}
 .mk{position:absolute;width:48px;height:48px;margin:-24px 0 0 -24px;border-radius:50%;border:3px solid #fff;box-shadow:var(--sh-pop);overflow:hidden;background:var(--s3);z-index:1;
   transition:transform var(--sp-fast);animation:pop var(--t-slow) var(--sp-fast) both}
 .mk img{width:100%;height:100%;object-fit:cover}
@@ -407,6 +409,9 @@ img,video,.ph img,.zw img,.mk img,.hero img{-webkit-touch-callout:none;-webkit-u
   -webkit-backdrop-filter:blur(14px);backdrop-filter:blur(14px);color:#fff;box-shadow:inset 0 0 0 1px rgba(255,255,255,.25);transition:opacity var(--t-mid) var(--ease),transform var(--t-mid) var(--ease);pointer-events:none}
 .vbig svg{width:30px;height:30px}
 .zw.playing .vbig{opacity:0;transform:scale(1.2)}
+.zw .vbuf{position:absolute;left:50%;top:50%;margin:-13px 0 0 -13px;z-index:2;opacity:0;pointer-events:none;transition:opacity var(--t-fast) var(--ease)}
+.zw.buf .vbuf{opacity:1;transition-delay:var(--t-mid)}
+.zw:not(.buf) .vbuf{animation-play-state:paused}
 .spin{width:26px;height:26px;border-radius:50%;border:3px solid rgba(255,255,255,.3);border-top-color:#fff;animation:rot .9s linear infinite}
 @keyframes rot{to{transform:rotate(1turn)}}
 
@@ -436,6 +441,8 @@ img,video,.ph img,.zw img,.mk img,.hero img{-webkit-touch-callout:none;-webkit-u
 
 /* 幻燈片：整個畫面、後面是糊掉的同一張、慢慢推近 */
 .ss{position:fixed;inset:0;z-index:var(--z-veil);background:#000;color:#fff;touch-action:none;user-select:none;-webkit-user-select:none;overflow:hidden;cursor:none}
+.ss .ssw{position:absolute;left:50%;top:50%;margin:-13px 0 0 -13px;z-index:3;opacity:0;pointer-events:none;transition:opacity var(--t-fast) var(--ease);animation-play-state:paused}
+.ss.wait .ssw{opacity:1;transition-delay:var(--t-mid);animation-play-state:running}
 .ss:not(.bare){cursor:auto}
 .ssv{position:absolute;inset:0}
 .ssl{position:absolute;inset:0;opacity:0;transition:opacity 1.4s cubic-bezier(.4,0,.2,1)}
@@ -575,6 +582,8 @@ html,body{touch-action:pan-x pan-y}
 .selb .chip{flex:none;-webkit-backdrop-filter:none;backdrop-filter:none;white-space:nowrap;transition:opacity var(--t-fast) var(--ease),transform var(--sp-fast)}
 .selb .chip:active{transform:scale(.95)}
 .selb .chip:disabled{opacity:.4}
+.selb .chip.busy{pointer-events:none}
+.selb .chip .spin{width:16px;height:16px;border-width:2px;border-color:color-mix(in oklab,currentColor 30%,transparent);border-top-color:currentColor}
 .selm .toast{bottom:calc(84px + env(safe-area-inset-bottom))}
 
 /* ── 朋友一起放照片：先問名字、下面一條進度 ── */
@@ -886,7 +895,7 @@ html,body{touch-action:pan-x pan-y}
 .st{background:none;box-shadow:none;border-radius:0;padding:2px clamp(6px,2vw,22px);justify-items:center;text-align:center;align-content:start;gap:4px}
 .st::after{content:none}
 .st+.st{border-left:1px solid var(--line)}
-.st b{font-size:clamp(28px,7.4vw,52px)}
+.st b{font-size:clamp(28px,7.4vw,52px);font-variant-numeric:tabular-nums;white-space:nowrap}
 .st small{letter-spacing:.12em;white-space:nowrap}
 .st .sgb{max-width:100%;justify-content:center;margin-top:4px}
 .st .sgf,.st .sgr{margin-top:4px}
@@ -1527,6 +1536,14 @@ html.splx #spl svg{animation:splOut var(--t-mid) var(--ease) forwards}
 html.splx .hero .cv{transition-duration:var(--t-fast)}
 @keyframes splOut{to{opacity:0;transform:scale(1.14)}}
 @media (prefers-color-scheme:light){:root:not([data-mode="dark"]) #spl svg{filter:drop-shadow(0 14px 24px rgba(30,40,90,.22))}}
+/* 進度線：照片清單、封面、字型到了一格一格往前；光圈：六片葉片邊轉邊移開（只動 transform，交給顯示卡） */
+#spl .spb{position:absolute;left:50%;top:calc(50% + clamp(88px,24vmin,124px) * .62 + 24px);translate:-50% 0;width:clamp(72px,18vmin,104px);height:2px;border-radius:var(--r-pill);overflow:hidden;background:var(--line);opacity:0;animation:spbIn var(--t-mid) var(--ease) .9s forwards}
+#spl .spb i{display:block;height:100%;background:var(--grad);transform:scaleX(0);transform-origin:0 50%;transition:transform var(--t-mid) var(--dec)}
+@keyframes spbIn{to{opacity:1}}
+html.splx #spl .spb{animation:none;opacity:0;transition:opacity var(--t-fast) var(--ease)}
+#spl.open{background:transparent}
+#spl .iris{position:absolute;inset:0;z-index:-1;pointer-events:none}
+#spl .iris i{position:absolute;left:50%;top:50%;transform-origin:0 0;background:var(--bg)}
 
 /* 離開畫面、按截圖快速鍵時照片先糊掉（album.js 的 shy）：一下子蓋上，回來慢慢淡掉 */
 body::after{content:"";position:fixed;inset:0;z-index:var(--z-shy);pointer-events:none;visibility:hidden;opacity:0;

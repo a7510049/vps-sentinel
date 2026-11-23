@@ -3319,6 +3319,9 @@ def alb_http(h, method):
         h.send_response(200)
         h.send_header("Content-Type", "application/zip")
         h.send_header("Content-Disposition", "attachment; filename*=UTF-8''" + urllib.parse.quote(a["name"] + ".zip"))
+        tk = (urllib.parse.parse_qs(urllib.parse.urlsplit(h.path).query).get("t") or [""])[0]
+        if re.fullmatch(r"[a-z0-9]{8}", tk):           # 網頁的「準備中」看到這個記號就知道開始下載了
+            h.send_header("Set-Cookie", f"vsadl={tk}; Path=/a/; Max-Age=120; SameSite=Lax")
         h.send_header("Cache-Control", "no-store")
         h.send_header("Connection", "close")
         h.end_headers()
