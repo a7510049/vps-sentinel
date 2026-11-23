@@ -463,6 +463,7 @@ const ZDUR = 520;
 const zEase = t => 1 - Math.pow(1 - t, 3.2);                  // 跟手指放開一樣的減速
 const IOS = /iPhone|iPad|iPod/.test(navigator.userAgent) || (/Macintosh/.test(navigator.userAgent) && navigator.maxTouchPoints > 1);
 const ANDR = /Android/i.test(navigator.userAgent);
+if (ANDR) document.documentElement.classList.add("andr");   // 限制 HDR 亮度只給安卓（iPhone 照系統自己慢慢變亮）
 let HDRON = !ANDR || (() => { try { return localStorage.getItem("vsa-hdr") === "1"; } catch (e) { return false; } })();   // 安卓切 HDR 整片螢幕會閃：預設關，看大圖自己按 HDR 打開   // iPhone 的捏常被 Safari 搶走，上面多放大小鈕
 function zbSync(){ document.querySelectorAll("[data-zb]").forEach(b => { b.disabled = ZL + +b.dataset.zb < 0 || ZL + +b.dataset.zb > 3; }); }
 function flyTiles(vis, dur){                                  // 每張從 vis 記的位置連續長大／縮小到現在的位置，照片反著縮回來所以不壓扁
