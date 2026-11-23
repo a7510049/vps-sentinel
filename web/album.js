@@ -208,26 +208,46 @@ function tiles(el, cx, cy, z, W, H){
       h += `<img class="tl" alt="" draggable="false" style="left:${(tx * 256 - X + w / 2) / hi}px;top:${(ty * 256 - Y + h0 / 2) / hi}px;width:${T}px;height:${T}px" src="${BASE}/t/${Z}/${x}/${ty}">`;
     }
   el.insertAdjacentHTML("afterbegin", h);
-  el.querySelectorAll(".tl").forEach(t => { if (t.complete && t.naturalWidth) return t.classList.add("ok");
-    t.addEventListener("load", () => t.classList.add("ok"), {once:true}); t.addEventListener("error", () => t.remove(), {once:true}); });
+  let wait = 0;                                               // 圖塊還沒到：底下一道光掃過（.tld），到齊就停
+  const done = () => { if (--wait <= 0) el.classList.remove("tld"); };
+  el.querySelectorAll(".tl:not(.ok)").forEach(t => { if (t.complete && t.naturalWidth) return t.classList.add("ok");
+    wait++; t.addEventListener("load", () => { t.classList.add("ok"); done(); }, {once:true}); t.addEventListener("error", () => { t.remove(); done(); }, {once:true}); });
+  const cs = wait && anim() && getComputedStyle(el);
+  if (cs && cs.position !== "static" && /hidden|clip/.test(cs.overflow)) el.classList.add("tld");
 }
 
-/* ═════════ 開場動畫：一疊照片攤開（album.css 的 #spl），封面好了就像光圈打開一樣露出來 ═════════ */
+/* ═════════ 開場動畫：一疊照片攤開（album.css 的 #spl），封面好了就像光圈打開一樣露出來 ═════════
+   光圈是六片葉片（.iris i）邊轉邊往外移，只動位移、旋轉，交給顯示卡；以前裁切整頁（clip-path），每一格都要重畫整頁，手機會掉格 */
+let SPLQ = [], SPLN = 0;
+const SPLT = 5;                                               // 開場要等的：照片清單、封面、兩個中文字型、主執行緒閒下來
+function splStep(){                                           // 進度線往前一格
+  const b = document.querySelector("#spl .spb i"); SPLN = Math.min(SPLT, SPLN + 1);
+  if (b) b.style.transform = `scaleX(${SPLN / SPLT})`;
+}
+function afterSpl(fn){                                        // 畫面外的東西等開場跑完、閒下來才做，不跟開場動畫搶
+  const go = () => (window.requestIdleCallback ? requestIdleCallback(fn, {timeout:600}) : setTimeout(fn, 60));
+  document.getElementById("spl") ? SPLQ.push(go) : go();
+}
 function splGo(fn){
   const s = document.getElementById("spl");
   if (!s || s.dataset.go) return fn && fn();
   s.dataset.go = 1;
   setTimeout(() => {                                          // 開場那段至少放完（約 1 秒），之後照片好了就開
-    const app = $("#app"); let done = 0;
-    const end = () => { if (done++) return; s.remove(); app.style.removeProperty("position"); app.style.removeProperty("z-index"); };
+    let done = 0;
+    const end = () => { if (done++) return; s.remove(); const q = SPLQ; SPLQ = []; q.forEach(f => f()); };
     fn && fn();
     document.documentElement.classList.add("splx");
-    if (matchMedia("(prefers-reduced-motion: reduce)").matches || !app.animate) return s.animate([{opacity:1}, {opacity:0}], {duration:T.mid, fill:"forwards"}).onfinish = end;
-    const r = app.getBoundingClientRect(), cx = innerWidth / 2 - r.left, cy = innerHeight / 2 - r.top, R = Math.hypot(innerWidth, innerHeight) / 2 / Math.cos(Math.PI / 6) + 4;
-    const poly = (k) => `polygon(${[0, 1, 2, 3, 4, 5].map(j => { const a = (30 + 70 * k + 60 * j) * Math.PI / 180;      // 六片光圈葉片：邊開邊轉
-      return `${(cx + Math.cos(a) * R * k).toFixed(1)}px ${(cy + Math.sin(a) * R * k).toFixed(1)}px`; }).join(",")})`;
-    app.style.position = "relative"; app.style.zIndex = 71;
-    const a = app.animate(Array.from({length:13}, (_, i) => ({clipPath:poly(i / 12)})), {duration:T.long, delay:T.fast * .6, easing:DEC, fill:"backwards"});
+    if (matchMedia("(prefers-reduced-motion: reduce)").matches || !s.animate) return s.animate ? (s.animate([{opacity:1}, {opacity:0}], {duration:T.mid, fill:"forwards"}).onfinish = end) : end();
+    const R = Math.ceil(Math.hypot(innerWidth, innerHeight) / 2) + 4, ir = document.createElement("div");
+    ir.className = "iris"; ir.innerHTML = "<i></i>".repeat(6);
+    let a;
+    [...ir.children].forEach((b, j) => {                      // 每片是半邊的大方塊，六片合起來蓋滿；往外移 R 就整個打開
+      const r0 = 60 * j + 90;
+      b.style.width = 2 * R + "px"; b.style.height = R + "px";
+      a = b.animate([{transform:`rotate(${r0}deg) translate(-50%,-100%)`}, {transform:`rotate(${r0 + 70}deg) translate(-50%,calc(-100% - ${R}px))`}],
+        {duration:T.long, delay:T.fast * .6, easing:DEC, fill:"both"});
+    });
+    s.prepend(ir); s.classList.add("open");
     a.onfinish = end; setTimeout(end, T.long + 800);
   }, Math.max(0, 1050 - performance.now()));
 }
@@ -255,6 +275,7 @@ async function boot(){
   if (!r.ok) { if (r.status === 404 || r.status === 410) [NMK, "vsa-seen-" + CODE, "vsa-di-" + CODE].forEach(store.del);   // 收回、過期：這台留下的名字、看過的回憶一起清掉
     return gate("off", "這本相簿已經看不到了", "", "連結已經收回或過期"); }
   D = await r.json();
+  splStep();
   devInfo();
   ALL = D.photos || [];
   if (!ALL.some(p => !p.u) && ALL.length) WHO = ALL[0].u;
@@ -814,6 +835,17 @@ function stats(){
     requestAnimationFrame(step); }, {threshold:.6});
   STIO.observe(box);
   flagFix(box);
+  stFit();
+}
+/* 數字太長（例如走了 1234 公里）格子放不下時字縮小一點：照最後的數字量，跑數字途中也不會超出畫面 */
+function stFit(){
+  document.querySelectorAll(".stats .st:not([hidden]) b").forEach(b => {
+    const was = b.textContent, cs = getComputedStyle(b.parentNode);
+    b.style.fontSize = ""; b.textContent = b.dataset.n; b.style.width = "max-content";
+    const w = b.offsetWidth, room = b.parentNode.clientWidth - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight);
+    b.style.width = ""; b.textContent = was;
+    if (w > room && room > 0) b.style.fontSize = (parseFloat(getComputedStyle(b).fontSize) * room / w * .96).toFixed(1) + "px";
+  });
 }
 /* 結尾：三張照片疊成一疊（跟標誌一樣），點了播放 */
 function finCol(){
@@ -845,9 +877,14 @@ function draw(){
     ${D.talk ? `<section class="gbk"></section>` : ""}
     <footer class="foot">${finCol()}<div class="fin">${esc(D.name)}</div>${D.exp ? `<span class="fexp">${expRing()}${left(D.exp)}</span>` : ""}</footer>`;
   const hi = $(".hero .hi");
-  const hero = $(".hero"), rdy = () => splGo(() => requestAnimationFrame(() => requestAnimationFrame(() => hero.classList.add("rdy"))));   // 開場：封面照片好了才淡入、片頭字才開始（最多等 2.5 秒）
-  const hok = () => { hi.classList.add("ok"); rdy(); setTimeout(() => { const q = $(".hero .lq"); if (q) q.remove(); }, T.slow + 100); };   // 糊的底圖拿掉，捲動時不用一直重畫模糊
-  hi.complete && hi.naturalWidth ? hok() : (hi.addEventListener("load", hok, {once:true}), hi.addEventListener("error", rdy, {once:true}), setTimeout(rdy, 2500));
+  const hero = $(".hero"), rdy = () => splGo(() => requestAnimationFrame(() => requestAnimationFrame(() => hero.classList.add("rdy"))));   // 開場：封面照片好了才淡入、片頭字才開始
+  const hok = () => { hi.classList.add("ok"); setTimeout(() => { const q = $(".hero .lq"); if (q) q.remove(); }, T.slow + 100); };   // 糊的底圖拿掉，捲動時不用一直重畫模糊
+  /* 等好再開：封面解好、中文字型到了、主執行緒閒下來才打開光圈（字型晚到整頁會重排，開場動畫會掉格）；最多等到打開網頁後 4 秒 */
+  const cov = new Promise(r => { if (hi.complete && hi.naturalWidth) return r(); hi.addEventListener("load", r, {once:true}); hi.addEventListener("error", r, {once:true}); })
+    .then(() => { if (hi.naturalWidth) { hok(); return hi.decode ? hi.decode().catch(() => {}) : 0; } }).then(splStep);
+  const fl = w => (document.fonts && document.fonts.load ? document.fonts.load(`${w} 16px "LINE Seed TW"`, D.name + "0") : Promise.resolve()).catch(() => {}).then(splStep);
+  const idle = () => new Promise(r => window.requestIdleCallback ? requestIdleCallback(r, {timeout:400}) : setTimeout(r, 80)).then(splStep);
+  Promise.race([Promise.all([cov, fl(400), fl(700)]).then(idle), new Promise(r => setTimeout(r, Math.max(1200, 4000 - performance.now())))]).then(rdy);
   heroCycle(cover); zbSync(); tint(cover); flagFix($(".hero"));
   awayWatch(hero); awayWatch($(".mems"));
   const hf = $(".hfl"); if (hf) hf.querySelectorAll("img").forEach(f => f.addEventListener("error", () => { if (!hf.querySelector("img")) hf.outerHTML = I("pin"); }));   // 國旗都抓不到就換回圖釘
@@ -863,9 +900,7 @@ function draw(){
   layout();
   wallWatch();
   mems();
-  bigMap();
-  gear();
-  gbook();
+  bigMap(); afterSpl(() => { gear(); gbook(); stFit(); });           // 要往下捲才看得到的，開場跑完再畫
   smapWatch();
   onScroll();
   deepLink();
@@ -989,7 +1024,10 @@ function tint(p){
       const c = document.createElement("canvas"); c.width = 24; c.height = Math.max(1, Math.round(24 * im.naturalHeight / im.naturalWidth));
       const x = c.getContext("2d", {willReadFrequently:true}); x.drawImage(im, 0, 0, c.width, c.height);
       const [g1, g2, g3] = tintFrom(x.getImageData(0, 0, c.width, c.height).data), st = document.documentElement.style;
+      const now = !!document.getElementById("spl");          // 開場還蓋著：直接換好，不要慢慢變（整頁的漸層每一格都要重算，開場會掉格）
+      if (now) st.transition = "none";
       st.setProperty("--g1", g1); st.setProperty("--g2", g2); st.setProperty("--g3", g3);
+      if (now) { getComputedStyle(document.documentElement).getPropertyValue("--g1"); st.removeProperty("transition"); }
     } catch (e) {}
   };
   im.src = p.q ? `data:image/jpeg;base64,${p.q}` : src(p, "s");
@@ -1132,7 +1170,7 @@ let RZW = innerWidth;
 addEventListener("resize", () => { clearTimeout(RZ); RZ = setTimeout(() => {
   if (LB) LB.fitAll();
   if (innerWidth === RZW) return;                             // 手機網址列收起、跳出來只改高度：照片牆、地圖不用重排（安卓捲動時一直觸發）
-  RZW = innerWidth; if (smapOn()) smapWatch(); layout(); bigMap(); smapGo(SMK, true); }, 120); });
+  RZW = innerWidth; if (smapOn()) smapWatch(); layout(); bigMap(); stFit(); smapGo(SMK, true); }, 120); });
 
 /* 捲動：封面慢一點往上（視差）、標題淡掉，捲過封面上面浮出一條 */
 let SCQ = 0;
@@ -1533,7 +1571,7 @@ function route(el, pts, W, H){
     km += 12742 * Math.asin(Math.min(1, Math.sqrt(h)));
   }
   const sk = $("[data-skm]");
-  if (sk && km >= 1) { sk.hidden = false; const b = sk.querySelector("b"); b.dataset.n = km >= 100 ? Math.round(km) : +km.toFixed(1); if (!STIO) b.textContent = b.dataset.n; }
+  if (sk && km >= 1) { sk.hidden = false; const b = sk.querySelector("b"); b.dataset.n = km >= 100 ? Math.round(km) : +km.toFixed(1); if (!STIO) b.textContent = b.dataset.n; stFit(); }
   const kmEl = $("[data-km]");
   if (kmEl) kmEl.textContent = km >= 1 ? `走了約 ${km >= 100 ? Math.round(km) : +km.toFixed(1)} 公里` : km >= .05 ? `走了約 ${Math.round(km * 1000 / 10) * 10} 公尺` : `${pts.length} 個地點`;
   const r = [];
@@ -1723,7 +1761,7 @@ function openLb(i, from){
     zw.innerHTML = `<img class="s1" alt="" draggable="false" src="${p.q ? `data:image/jpeg;base64,${p.q}` : src(p, "s")}"><img class="s1" alt="" draggable="false" src="${src(p, "s")}"><img class="s2" alt="" draggable="false" decoding="async" data-src="${src(p, "l")}">`
       + (p.x.afp && !isVid(p) && !afFace(p) ? `<i class="afb${p.fm ? " miss" : ""}" style="left:${(p.x.afp[0] * 100).toFixed(2)}%;top:${(p.x.afp[1] * 100).toFixed(2)}%;width:${(p.x.afp[2] * Math.min(p.w, p.h) / p.w * 100).toFixed(2)}%;height:${(p.x.afp[2] * Math.min(p.w, p.h) / p.h * 100).toFixed(2)}%"></i>` : "")
       + (p.x.fcs && !isVid(p) ? p.x.fcs.map((f, k) => `<i class="fcb${afFace(p) === k + 1 ? ` af${p.fm ? " miss" : ""}` : ""}" style="left:${(f[0] * 100).toFixed(2)}%;top:${(f[1] * 100).toFixed(2)}%;width:${(f[2] * 100).toFixed(2)}%;height:${(f[3] * 100).toFixed(2)}%"></i>`).join("") : "")
-      + (isVid(p) ? `<video class="vv" playsinline preload="none" disablepictureinpicture></video><span class="vbig">${p.vr === 1 ? I("play") : p.vr === 0 ? I("x") : `<i class="spin"></i>`}</span>` : p.gf === 2 ? `<img class="awp" alt="" draggable="false" src="${src(p, "a")}">` : p.lv ? `<video class="lvv" muted playsinline preload="none"${p.gf ? " loop" : ""}></video>` : "");
+      + (isVid(p) ? `<video class="vv" playsinline preload="none" disablepictureinpicture></video><i class="spin vbuf"></i><span class="vbig">${p.vr === 1 ? I("play") : p.vr === 0 ? I("x") : `<i class="spin"></i>`}</span>` : p.gf === 2 ? `<img class="awp" alt="" draggable="false" src="${src(p, "a")}">` : p.lv ? `<video class="lvv" muted playsinline preload="none"${p.gf ? " loop" : ""}></video>` : "");
     const aw = zw.querySelector(".awp"); if (aw) aw.complete && aw.naturalWidth ? aw.classList.add("ok") : aw.addEventListener("load", () => aw.classList.add("ok"), {once:true});
     if (!p.q) {                                              // 主機還在做這張：中間轉圈，任何一張圖好了就拿掉
       const w = document.createElement("i"); w.className = "spin lbw"; zw.appendChild(w);
@@ -1811,8 +1849,11 @@ function openLb(i, from){
       v.addEventListener("timeupdate", vSync); v.addEventListener("pause", vSync); v.addEventListener("play", vSync);
       v.addEventListener("ended", () => { v.closest(".zw").classList.remove("playing"); el.classList.remove("bare"); vSync(); });
       v.addEventListener("error", () => toast("這段影片放不出來"), {once:true});
+      const zw = v.closest(".zw"), buf = on => zw.classList.toggle("buf", on);   // 緩衝中：中間轉圈（等一下才出現，短暫的不閃）
+      v.addEventListener("waiting", () => buf(!v.paused));
+      ["playing", "pause", "ended", "error", "emptied"].forEach(k => v.addEventListener(k, () => buf(false)));
     }
-    if (v.paused) { v.closest(".zw").classList.add("playing"); v.play().catch(() => {}); setTimeout(() => { if (!v.paused) el.classList.add("bare"); }, 1200); }
+    if (v.paused) { v.closest(".zw").classList.add("playing"); if (v.readyState < 3) v.closest(".zw").classList.add("buf"); v.play().catch(() => {}); setTimeout(() => { if (!v.paused) el.classList.add("bare"); }, 1200); }
     else v.pause();
     vSync();
   }
@@ -1934,6 +1975,8 @@ function openLb(i, from){
       const cs = getComputedStyle(a); if (cs.overflowX === "visible" && cs.overflowY === "visible") continue;
       const q = a.getBoundingClientRect(); L = Math.max(L, q.left); Tq = Math.max(Tq, q.top); R = Math.min(R, q.right); B = Math.min(B, q.bottom);
     }
+    const bar = $(".bar.on");                                 // 上面那條毛玻璃蓋住格子上半：縮回去時從那條下面切掉，不畫在它上面
+    if (bar && !box.closest(".lb")) Tq = Math.max(Tq, bar.getBoundingClientRect().bottom);
     if (R - L < 2 || B - Tq < 2) return null;
     if (!any && (B <= 0 || Tq >= innerHeight)) return null;
     const rad = parseFloat(getComputedStyle(box).borderTopLeftRadius) || 0, e = 1;
@@ -2249,11 +2292,14 @@ function openLb(i, from){
     setZoom(s, x, y);
     if (anim()) zw.animate([{transform:from}, {transform:zw.style.transform || "none"}], {duration:T.mid, easing:EASE});
   }
+  const zClip = (s, x, y) => {                               // 這個大小時照片該在的位置：比畫面小就置中，比畫面大就不露出旁邊的空白
+    const f = L(), cl = (v, sz, box, off) => { const span = sz * s; if (span <= box) return (box - span) / 2 - off; return Math.min(-off, Math.max(box - off - span, v)); };
+    return [cl(x, f.w, W(), f.l), cl(y, f.h, H(), f.t)];
+  };
   function clampZoom(){
     if (S.z.s < 1.02) return zoomTo(1, 0, 0);                  // 縮到比原本小：放開就彈回原本大小（一指先放開、另一指拖完也一樣）
-    const f = L(), w = W(), h = H(), s = Math.min(ZMAX, S.z.s);
-    const cl = (v, sz, box, off) => { const span = sz * s; if (span <= box) return (box - span) / 2 - off; return Math.min(-off, Math.max(box - off - span, v)); };
-    zoomTo(s, cl(S.z.x, f.w, w, f.l), cl(S.z.y, f.h, h, f.t));
+    const s = Math.min(ZMAX, S.z.s);
+    zoomTo(s, ...zClip(s, S.z.x, S.z.y));
   }
   function dbl(cx, cy){
     if (S.z.s > 1.02) return zoomTo(1, 0, 0);
@@ -2267,7 +2313,12 @@ function openLb(i, from){
   const wz = {g:0, raf:0, cx:0, cy:0};
   const wzAt = s => { const z = S.z, ux = (wz.cx - z.x) / z.s, uy = (wz.cy - z.y) / z.s;
     if (s <= 1.001 && wz.g <= 1) return setZoom(1, 0, 0);
-    setZoom(s, wz.cx - s * ux, wz.cy - s * uy); };
+    let x = wz.cx - s * ux, y = wz.cy - s * uy;
+    if (s < z.s) {                                           // 縮小：一邊縮一邊推回畫面裡，縮回原本大小時剛好回到中間（以前最後一下才跳回去）
+      const [px, py] = zClip(z.s, z.x, z.y), k = Math.abs(px - z.x) + Math.abs(py - z.y) < 1 ? 1 : .3, [cx, cy] = zClip(s, x, y);
+      x += (cx - x) * k; y += (cy - y) * k;
+    }
+    setZoom(s, x, y); };
   const wzStep = () => {
     if (S.busy || !S.z) { wz.raf = 0; return; }               // 換張、關掉時停
     const d = wz.g - S.z.s;
@@ -2562,11 +2613,16 @@ function selBar(){
         TILES.forEach((t, k) => t.classList.toggle("on", SEL.s.has(k)));
         return selBar();
       }
-      if (e.target.closest("[data-seldl]") && SEL.s.size) {
-        const a = document.createElement("a");
-        a.href = SEL.s.size >= PH.length && !ALL.some(p => p.u) ? `${BASE}/zip` : `${BASE}/zip?ids=${[...SEL.s].sort((x, y) => x - y).map(k => PH[k].i).join(",")}`; a.download = "";   // 全選：整本一起打包
+      const db = e.target.closest("[data-seldl]");
+      if (db && SEL.s.size && !db.classList.contains("busy")) {
+        const a = document.createElement("a"), tk = Math.random().toString(36).slice(2, 10).padEnd(8, "0"), n = SEL.s.size;
+        a.href = (n >= PH.length && !ALL.some(p => p.u) ? `${BASE}/zip?` : `${BASE}/zip?ids=${[...SEL.s].sort((x, y) => x - y).map(k => PH[k].i).join(",")}&`) + "t=" + tk; a.download = "";   // 全選：整本一起打包
         document.body.appendChild(a); a.click(); a.remove();
-        toast(`開始下載 ${SEL.s.size} 個`); popBack();
+        /* 準備中：主機開始送檔案時會留一個記號（cookie vsadl），看到了才收起來；最多等 30 秒 */
+        const was = db.innerHTML, t0 = Date.now(); db.classList.add("busy"); db.innerHTML = `<i class="spin"></i><span>準備中</span>`;
+        const chk = () => { if (!document.cookie.includes("vsadl=" + tk) && Date.now() - t0 < 30000) return setTimeout(chk, 250);
+          db.classList.remove("busy"); db.innerHTML = was; toast(`開始下載 ${n} 個`); popBack(); };
+        setTimeout(chk, 250);
       }
     });
     void b.offsetWidth;
@@ -2785,7 +2841,7 @@ function show(start, day){
   let at = start ? Math.max(0, seq.findIndex(x => !x.ch && x.i === start)) : 0, timer = 0, paused = false, hideT = 0, t0 = 0, left = SSD;
   const el = document.createElement("div");
   el.className = "ss";
-  el.innerHTML = `<div class="ssv"></div><div class="ssp"><i></i></div>
+  el.innerHTML = `<div class="ssv"></div><i class="spin ssw"></i><div class="ssp"><i></i></div>
     <div class="ssc"><button class="rb" data-sx aria-label="關閉">${I("x")}</button><span></span>${D.mu ? `<button class="rb" data-smu aria-label="音樂">${I("snd")}</button>` : ""}<button class="rb" data-spp aria-label="暫停">${I("pause")}</button></div>
     <div class="ssn"><button class="rb" data-sp aria-label="上一張">${I("l")}</button><button class="rb" data-sn aria-label="下一張">${I("r")}</button></div>`;
   document.body.appendChild(el);
@@ -2830,26 +2886,33 @@ function show(start, day){
     const p = PH[seq[at].i], v = L.querySelector("video");
     let ms = seq[at].ch ? SSCH : SSD;
     if (v) { ms = Math.min(15000, p.vd * 1000); v.play().catch(() => {}); }
-    kb(L, v ? 0 : ms);
-    const img = L.querySelector(".sfg img");
-    const reveal = () => {
+    const img = L.querySelector(".sfg img"), me = at;
+    $(".ssc span", el).textContent = `${phAt(at) || 1} / ${nph}`;
+    bar.style.transition = "none"; bar.style.transform = "scaleX(0)";
+    const reveal = () => {                                    // 照片載好、解好才換上、才開始算這張的時間（沒好先轉圈）
+      if (me !== at || !L.isConnected || !el.isConnected) return;
+      el.classList.remove("wait");
+      kb(L, v ? 0 : ms);
       L.classList.add("in");
       if (old) { old.classList.add("out"); setTimeout(() => old.remove(), SSF + 50); }
+      left = ms; t0 = performance.now();
+      void bar.offsetWidth; bar.style.transition = `transform ${ms}ms linear`; bar.style.transform = "scaleX(1)";
+      if (paused) pause(true);
+      else timer = setTimeout(() => go(at + 1), ms);
+      preload(at + 1);
     };
-    if (img && !img.complete) { img.addEventListener("load", reveal, {once:true}); img.addEventListener("error", reveal, {once:true}); } else requestAnimationFrame(reveal);
-    $(".ssc span", el).textContent = `${phAt(at) || 1} / ${nph}`;
-    left = ms; t0 = performance.now();
-    bar.style.transition = "none"; bar.style.transform = "scaleX(0)"; void bar.offsetWidth;
-    bar.style.transition = `transform ${ms}ms linear`; bar.style.transform = "scaleX(1)";
-    if (paused) pause(true);
-    else timer = setTimeout(() => go(at + 1), ms);
-    preload(at + 1);
+    if (img && !(img.complete && img.naturalWidth)) {
+      el.classList.add("wait");
+      const ok = () => (img.decode ? img.decode().catch(() => {}) : Promise.resolve()).then(reveal);
+      img.addEventListener("load", ok, {once:true}); img.addEventListener("error", reveal, {once:true});
+    } else requestAnimationFrame(reveal);
   }
   function pause(on){
     paused = on;
     $("[data-spp]", el).innerHTML = I(on ? "play" : "pause");
     const v = view.querySelector(".ssl:not(.out) video");
     view.querySelectorAll(".ssl:not(.out) .sfg").forEach(f => f.getAnimations().forEach(a => on ? a.pause() : a.play()));
+    if (el.classList.contains("wait")) return poke();          // 這張還沒好：好了才開始算時間（會照 paused 決定）
     if (on) {
       clearTimeout(timer); left = Math.max(0, left - (performance.now() - t0));
       const k = getComputedStyle(bar).transform; bar.style.transition = "none"; bar.style.transform = k === "none" ? "scaleX(0)" : k;
