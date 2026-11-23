@@ -1257,7 +1257,7 @@ function albumModal(node, name){
       <div class="almpk">${PK.photos.map(p => `<button type="button" class="${p.hid ? "off" : ""}" data-almp="${p.i}" aria-pressed="${!p.hid}">${p.q ? `<img class="lq" alt="" src="data:image/jpeg;base64,${p.q}">` : ""}<img alt="" loading="lazy" src="${esc(`${PK.base || base()}/a/${PK.code}/i/${p.i}/s?v=${p.v}&own=${encodeURIComponent(PK.own)}`)}"><i>${I("ok")}</i>${p.vd ? `<em class="num">${Math.floor(p.vd / 60)}:${String(Math.round(p.vd % 60)).padStart(2, "0")}</em>` : ""}</button>`).join("")}</div>
       <button type="button" class="ubtn" data-alm="pksave"${n ? "" : " disabled"}>${n ? "存好" : "至少留一張"}</button><button type="button" class="ubtn sm ghost" data-alm="back">${I("back")}返回</button>`; },
     devs: () => `${DV.devs.length || DV.dev ? `<div class="almpkh"><b>${DV.dev ? `限 ${DV.dev} 台・用了 ${DV.devs.length} 台` : `${DV.devs.length} 台設備看過`}</b></div>` : ""}
-      ${DV.devs.length ? `<div class="pklist">${DV.devs.map(d => `<div class="pkrow almdv">${I(/iPhone|Android|手機|SM-|Pixel/.test(d.n) ? "devices" : "home")}<span><b>${esc(d.nm ? `${d.nm}・${d.n}` : d.n)}</b><small>${d.lk ? `${almAgo(d.lk)}按了截圖，鎖住了` : `${almAgo(d.t)}・看了 ${d.c} 次`}</small></span>${d.lk ? `<button type="button" class="ubtn sm" data-almunlk="${esc(d.h)}">解除</button>` : ""}<button type="button" class="ubtn sm ghost bad" data-almkick="${esc(d.h)}">踢掉</button></div>`).join("")}</div>`
+      ${DV.devs.length ? `<div class="pklist">${DV.devs.map(d => `<div class="pkrow almdv">${I(/iPhone|Android|手機|SM-|Pixel/.test(d.n) ? "devices" : "home")}<span><b>${esc(almDv(d)[0])}</b>${almDv(d)[1] ? `<small>${esc(almDv(d)[1])}</small>` : ""}<small>${d.lk ? `${almAgo(d.lk)}按了截圖，鎖住了` : `${almAgo(d.t)}・看了 ${d.c} 次`}</small></span>${d.lk ? `<button type="button" class="ubtn sm" data-almunlk="${esc(d.h)}">解除</button>` : ""}<button type="button" class="ubtn sm ghost bad" data-almkick="${esc(d.h)}">踢掉</button></div>`).join("")}</div>`
         : `<p class="ntx">還沒有人打開</p>`}
       <button type="button" class="ubtn sm ghost" data-alm="back">${I("back")}返回</button>`
   };
@@ -2731,6 +2731,11 @@ function devOs(){
   const u = navigator.userAgent;
   return /iPhone|iPad/.test(u) || (/Mac/.test(u) && navigator.maxTouchPoints > 1) ? "ios" : /Android/.test(u) ? "android"
     : /Mac/.test(u) ? "mac" : /Windows/.test(u) ? "win" : /Linux|CrOS/.test(u) ? "linux" : "";
+}
+/* 相簿「看過的設備」：名字寫型號（朋友那頁送來的 i.m），下面一行系統・瀏覽器・螢幕 */
+function almDv(d){
+  const i = d.i || {}, [n0, b0] = String(d.n || "").split("・"), m = devModel(i.m) || n0 || "裝置";
+  return [d.nm ? `${d.nm}・${m}` : m, [i.os, i.br || b0, i.sc].filter(Boolean).join("・")];
 }
 function devModel(m){                       // 型號代碼換成看得懂的名字（三星 S、Z 系列換成第幾代）
   m = String(m || "").replace(/\s*Build\/.*$/, "").trim();
