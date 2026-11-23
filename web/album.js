@@ -45,9 +45,9 @@ const P = {
   send:'<path d="M4.5 12h13M12.5 6l6 6-6 6"/>', find:'<circle cx="11" cy="11" r="6.5"/><path d="m20 20-4.4-4.4"/>', ng:'<rect x="3.5" y="3.5" width="17" height="17" rx="3"/><rect x="8" y="8" width="8" height="8" rx="1.2"/>', hue:'<circle cx="12" cy="12" r="8.5"/><path d="M12 3.5v17M3.5 12h17M6 6l12 12M18 6 6 18"/>', scr:'<rect x="3" y="4.5" width="18" height="12" rx="2"/><path d="M9 20h6M12 16.5V20"/>', pen:'<path d="M4 20h4L19 9a2.8 2.8 0 0 0-4-4L4 16v4Z"/><path d="m13.5 6.5 4 4"/>', again:'<path d="M4 12a8 8 0 1 0 2.4-5.7L4 8.5M4 4v4.5h4.5"/>', zeb:'<rect x="3.5" y="3.5" width="17" height="17" rx="3"/><path d="M3.5 13 13 3.5M7 20.5 20.5 7M13.5 20.5l7-7"/>', cmp:'<rect x="3" y="5" width="7.5" height="14" rx="1.5"/><rect x="13.5" y="5" width="7.5" height="14" rx="1.5"/><path d="M12 2.5v19"/>'
 };
 const I = n => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${P[n]}</svg>`;
-/* 安卓：HDR 照片沒開 HDR 時一律拿不帶增益圖的大圖（d／y）。Chrome 畫面上一出現增益圖，整頁就重畫、閃一下（就算 dynamic-range-limit 壓著也一樣） */
+/* 安卓完全不用 HDR（使用者決定）：HDR 照片一律拿不帶增益圖的大圖（d／y）。Chrome 畫面上一出現增益圖，整頁就重畫、閃一下 */
 const SDRK = /Android/i.test(navigator.userAgent) ? {l:"d", x:"y"} : {};
-const src = (p, k, hd) => `${BASE}/i/${p.i}/${p.hdr && !hd && SDRK[k] || k}?v=${p.v}`;
+const src = (p, k) => `${BASE}/i/${p.i}/${p.hdr && SDRK[k] || k}?v=${p.v}`;
 const anim = () => !RM.matches;
 const isVid = p => !!p.vd;
 const dur = t => { t = Math.max(0, Math.round(t)); return `${Math.floor(t / 60)}:${String(t % 60).padStart(2, "0")}`; };
@@ -465,8 +465,6 @@ const ZDUR = 520;
 const zEase = t => 1 - Math.pow(1 - t, 3.2);                  // 跟手指放開一樣的減速
 const IOS = /iPhone|iPad|iPod/.test(navigator.userAgent) || (/Macintosh/.test(navigator.userAgent) && navigator.maxTouchPoints > 1);
 const ANDR = /Android/i.test(navigator.userAgent);
-if (ANDR) document.documentElement.classList.add("andr");   // 限制 HDR 亮度只給安卓（iPhone 照系統自己慢慢變亮）
-let HDRON = !ANDR || (() => { try { return localStorage.getItem("vsa-hdr") === "1"; } catch (e) { return false; } })();   // 安卓切 HDR 整片螢幕會閃：預設關，看大圖自己按 HDR 打開   // iPhone 的捏常被 Safari 搶走，上面多放大小鈕
 function zbSync(){ document.querySelectorAll("[data-zb]").forEach(b => { b.disabled = ZL + +b.dataset.zb < 0 || ZL + +b.dataset.zb > 3; }); }
 function flyTiles(vis, dur){                                  // 每張從 vis 記的位置連續長大／縮小到現在的位置，照片反著縮回來所以不壓扁
   const H = innerHeight, N = 14, fr = Array.from({length:N + 1}, (_, k) => zEase(k / N));
@@ -1690,7 +1688,7 @@ function openLb(i, from){
   const STRIP = matchMedia("(pointer:fine) and (min-width:900px)").matches && PH.length > 1;
   el.className = (STRIP ? "lb strip" : "lb") + (NG ? " ng" : "") + (AFON ? " afon" : "") + (ZEB ? " zbon" : "");
   el.innerHTML = `<div class="bg"></div><div class="stage"><div class="track"></div></div>
-    <div class="lbt"><button class="rb" data-x aria-label="關閉">${I("x")}</button><span class="cnt num"></span><button class="rb lvb" data-lv aria-label="原況">${I("live")}</button><button class="rb hdrb" data-hdr aria-pressed="${HDRON}" aria-label="HDR">HDR</button><button class="rb" data-ssi aria-label="從這張開始播放">${I("play")}</button><button class="rb" data-shr aria-label="分享這張">${I("shr")}</button><button class="rb" data-cmpb hidden aria-label="跟同一疊的比較">${I("cmp")}</button><button class="rb" data-inf aria-label="照片資訊">${I("info")}</button><button class="rb" data-del hidden aria-label="刪掉">${I("trash")}</button>${D.dl ? `<a class="rb" data-dl download aria-label="${D.dl > 1 ? "下載原圖" : "下載"}">${I("dl")}</a>` : ""}</div>
+    <div class="lbt"><button class="rb" data-x aria-label="關閉">${I("x")}</button><span class="cnt num"></span><button class="rb lvb" data-lv aria-label="原況">${I("live")}</button><button class="rb" data-ssi aria-label="從這張開始播放">${I("play")}</button><button class="rb" data-shr aria-label="分享這張">${I("shr")}</button><button class="rb" data-cmpb hidden aria-label="跟同一疊的比較">${I("cmp")}</button><button class="rb" data-inf aria-label="照片資訊">${I("info")}</button><button class="rb" data-del hidden aria-label="刪掉">${I("trash")}</button>${D.dl ? `<a class="rb" data-dl download aria-label="${D.dl > 1 ? "下載原圖" : "下載"}">${I("dl")}</a>` : ""}</div>
     <button class="rb nav l" aria-label="上一張">${I("l")}</button><button class="rb nav r" aria-label="下一張">${I("r")}</button>
     <div class="lbb"><div class="vbar"><button class="vpp" data-vpp aria-label="播放">${I("play")}</button><span class="vt0 num">0:00</span><div class="vtr" data-vseek><i><b></b></i></div><span class="vt1 num"></span><button class="vpp" data-vmu aria-label="聲音">${I("snd")}</button></div>
       <div class="lbr"><div class="cap"><b></b><span></span></div>${D.talk ? `<button class="sb" data-lk aria-label="愛心（按住選其他表情）">${I("heart")}<span class="num"></span></button><button class="sb rxb" data-rx aria-label="其他表情" hidden>${I("smile")}<span class="num"></span></button><button class="sb" data-cm aria-label="留言">${I("chat")}<span class="num"></span></button>` : ""}</div></div><div class="inf"></div>${D.talk ? `<div class="inf cmp"></div>` : ""}${STRIP ? `<div class="lbs"><div class="lbsr">${PH.map((p, k) => `<button class="lbst" data-go="${k}" aria-label="第 ${k + 1} 張"><img alt="" loading="lazy" draggable="false" src="${src(p, "s")}"></button>`).join("")}</div></div>` : ""}`;
@@ -1714,7 +1712,7 @@ function openLb(i, from){
     if (zw.dataset.i === String(idx)) return;
     zw.dataset.i = idx;
     if (p.broken) { zw.innerHTML = `<div class="nope">${I("off")}</div>`; return; }
-    zw.innerHTML = `<img class="s1" alt="" draggable="false" src="${p.q ? `data:image/jpeg;base64,${p.q}` : src(p, "s")}"><img class="s1" alt="" draggable="false" src="${src(p, "s")}"><img class="s2" alt="" draggable="false" decoding="async" data-src="${src(p, "l", HDRON)}">`
+    zw.innerHTML = `<img class="s1" alt="" draggable="false" src="${p.q ? `data:image/jpeg;base64,${p.q}` : src(p, "s")}"><img class="s1" alt="" draggable="false" src="${src(p, "s")}"><img class="s2" alt="" draggable="false" decoding="async" data-src="${src(p, "l")}">`
       + (p.x.afp && !isVid(p) && !afFace(p) ? `<i class="afb${p.fm ? " miss" : ""}" style="left:${(p.x.afp[0] * 100).toFixed(2)}%;top:${(p.x.afp[1] * 100).toFixed(2)}%;width:${(p.x.afp[2] * Math.min(p.w, p.h) / p.w * 100).toFixed(2)}%;height:${(p.x.afp[2] * Math.min(p.w, p.h) / p.h * 100).toFixed(2)}%"></i>` : "")
       + (p.x.fcs && !isVid(p) ? p.x.fcs.map((f, k) => `<i class="fcb${afFace(p) === k + 1 ? ` af${p.fm ? " miss" : ""}` : ""}" style="left:${(f[0] * 100).toFixed(2)}%;top:${(f[1] * 100).toFixed(2)}%;width:${(f[2] * 100).toFixed(2)}%;height:${(f[3] * 100).toFixed(2)}%"></i>`).join("") : "")
       + (isVid(p) ? `<video class="vv" playsinline preload="none" disablepictureinpicture></video><span class="vbig">${p.vr === 1 ? I("play") : p.vr === 0 ? I("x") : `<i class="spin"></i>`}</span>` : p.gf === 2 ? `<img class="awp" alt="" draggable="false" src="${src(p, "a")}">` : p.lv ? `<video class="lvv" muted playsinline preload="none"${p.gf ? " loop" : ""}></video>` : "");
@@ -1770,7 +1768,7 @@ function openLb(i, from){
     const f = fit(p), need = Math.max(f.w, f.h) * Math.min(3, devicePixelRatio || 1) * (S.z ? S.z.s : 1);
     if (need < 2048 * 1.15) return;
     zw.dataset.xl = S.i; const i0 = S.i, im = new Image(); im.decoding = "async";
-    im.src = src(p, "x", HDRON);                              // 先在背景解碼好才換上，換的那一下不卡
+    im.src = src(p, "x");                                     // 先在背景解碼好才換上，換的那一下不卡
     (im.decode ? im.decode() : new Promise(r => { im.onload = r; })).then(() => { const b = zw.querySelector(".s2"); if (b && zw.dataset.i === String(i0) && im.naturalWidth > b.naturalWidth) { b.removeAttribute("data-src"); b.src = im.src; (b.decode ? b.decode() : Promise.resolve()).then(() => b.classList.add("ok"), () => {}); } }).catch(() => {});
   }
   S.fitAll = () => { const zw = cur(); zw.style.transition = `left ${T.mid}ms ${EASE},top ${T.mid}ms ${EASE},width ${T.mid}ms ${EASE},height ${T.mid}ms ${EASE}`;
@@ -1842,37 +1840,12 @@ function openLb(i, from){
     const th = $(".italk .th", el), h = talkHead(p);           // 資訊裡的「誰按了愛心」跟著換（文字變了才換、淡入）
     if (th && th.dataset.v !== h) { const was = th.dataset.v != null; th.innerHTML = h; th.dataset.v = h; if (was && anim()) [...th.children].slice(1).forEach(x => x.animate([{opacity:0, transform:"translateY(3px)"}, {opacity:1, transform:"none"}], {duration:T.mid, easing:DEC})); }
   }
-  const hdAll = on => sl.forEach(s => { if (s.firstChild) s.firstChild.classList.toggle("hd", on); });
-  function hdSoon(){                                          // HDR 只給停好的這一張，打開、換張的動畫跑完才開（安卓每切一次 HDR 螢幕就閃一下）
-    clearTimeout(S.hdT);
-    if (ANDR && HDRON && S.hdOn && !S.closing) return hdAll(true);   // 安卓開著 HDR：換張時一直保持，不讓螢幕退出又進來
-    hdAll(false); S.hdOn = 0;
-    if (!S.closing && HDRON) S.hdT = setTimeout(() => { const z = cur(); if (z && !S.closing && LB === S && HDRON) { if (ANDR) { S.hdOn = 1; hdAll(true); } else z.classList.add("hd"); } }, T.slow);
-  }
-  function hdrSet(on){
-    HDRON = on; try { localStorage.setItem("vsa-hdr", on ? "1" : ""); } catch (e) {}
-    $("[data-hdr]", el).setAttribute("aria-pressed", on);
-    clearTimeout(S.hdT); S.hdOn = on ? 1 : 0; hdAll(on);
-    if (ANDR) sl.forEach(s => {                                // 換成帶／不帶增益圖的大圖（在背景解好才換，不會先空一下）
-      const z = s.firstChild, b = z && z.querySelector("img.s2"), i0 = z && z.dataset.i, p = PH[+i0];
-      if (!b || !p || !p.hdr) return;
-      if (b.dataset.src) { b.dataset.src = src(p, "l", on); return; }
-      const u = b.getAttribute("src"); if (!u) return;
-      const nu = src(p, /\/[xy]\?/.test(u) ? "x" : "l", on); if (nu === u) return;
-      const im = new Image(); im.decoding = "async"; im.src = nu;
-      (im.decode ? im.decode() : Promise.resolve()).then(() => { if (b.isConnected && z.dataset.i === i0) b.src = nu; }, () => {});
-    });
-    if (on && ANDR) toast("手機切換 HDR 時螢幕會閃一下，不是網頁的問題");
-  }
-  S.hdrSet = hdrSet;
   function chrome(){
-    hdSoon();
     const p = PH[S.i], d = pd(p.x.dt), moved = S.at !== S.i, dir = S.at == null ? 0 : Math.sign(S.i - S.at), was = PH[S.at];
     S.at = S.i;
     if (moved) stopAll();
     if (moved && p.gf && p.lv) setTimeout(() => { if (LB === S && S.at === S.i && !S.closing) live(); }, anim() ? T.mid : 0);   // 會動的 GIF：自己一直動
     $("[data-lv]", el).classList.toggle("show", !!p.lv && !p.gf);
-    $("[data-hdr]", el).classList.toggle("show", ANDR && !!p.hdr && !isVid(p) && matchMedia("(dynamic-range: high)").matches);
     social(); vSync();
     $(".cnt", el).textContent = `${S.i + 1} / ${PH.length}`;
     const cam = camName(p.x);
@@ -1971,7 +1944,7 @@ function openLb(i, from){
     const a0 = toTile(g0, f0), z = cur();
     z.style.transform = a0.t; z.style.clipPath = a0.c; bg.style.opacity = 0;
     el.querySelectorAll(".lbt,.lbb,.nav,.lbs").forEach(x => { x.style.opacity = 0; });
-    const ti = t0 && (t0.tagName === "IMG" ? t0 : t0.querySelector("img.hi,img")), lu = new URL(src(PH[i], "l", HDRON), location.href).href;
+    const ti = t0 && (t0.tagName === "IMG" ? t0 : t0.querySelector("img.hi,img")), lu = new URL(src(PH[i], "l"), location.href).href;
     const big = z.querySelector("img.s2[data-src]"), sm = z.querySelectorAll("img.s1")[1], wait = [];
     if (big && ti && ti.currentSrc === lu) { big.src = big.dataset.src; big.removeAttribute("data-src"); big.style.transition = "none";
       wait.push((big.decode ? big.decode() : Promise.reject()).then(() => { big.classList.add("ok"); }, () => {})); }
@@ -2016,7 +1989,6 @@ function openLb(i, from){
   function close(){
     if (S.closing) return; S.closing = 1;
     if (S.pre) { S.pre = 0; el.style.visibility = ""; }
-    hdSoon();
     finish();
     /* 縮回哪裡：同一張回到打開的地方；換過張就回到那張自己的格子，格子不在畫面上就先在大圖後面把照片牆捲到那裡（像手機相簿），再縮回去 */
     const p = PH[S.i], tl = tileOf(S.i);
@@ -2319,7 +2291,6 @@ function openLb(i, from){
     if (e.target.closest("[data-af]")) return afSet(!AFON);
     if (e.target.closest("[data-zb]")) return zbSet(!ZEB);
     if (e.target.closest("[data-cmpb]")) { const l = STK.get(STKOF.get(S.i)); return cmpOpen(l, S.i, l.find(k => k !== S.i)); }
-    if (e.target.closest("[data-hdr]")) return S.hdrSet(!HDRON);
     if (e.target.closest("[data-lv]")) return live();
     if (e.target.closest("[data-ssi]")) return show(S.i);
     if (e.target.closest("[data-vpp]")) return vToggle();
