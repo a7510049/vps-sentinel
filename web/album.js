@@ -151,7 +151,9 @@ const EP = ["", "手動", "自動", "光圈優先", "快門優先", "創意", "�
 const MM = {1:"平均測光", 2:"中央重點", 3:"點測光", 4:"多點測光", 5:"評價測光", 6:"局部測光"};
 const SC = ["標準", "風景", "人像", "夜景"];
 const DIR8 = ["北", "東北", "東", "東南", "南", "西南", "西", "西北"];
-const mapUrl = (lat, lon, q) => /iPhone|iPad|Macintosh/.test(navigator.userAgent) ? `https://maps.apple.com/?ll=${lat},${lon}&q=${encodeURIComponent(q || "照片地點")}`
+/* 打開地圖：蘋果的設備開 Apple 地圖；大陸的照片開高德（座標照原本的 WGS84 給，高德自己換算）；其他開 Google 地圖。一般連結，不用金鑰 */
+const mapUrl = (lat, lon, q, cc) => /iPhone|iPad|Macintosh/.test(navigator.userAgent) ? `https://maps.apple.com/?ll=${lat},${lon}&q=${encodeURIComponent(q || "照片地點")}`
+  : cc === "CN" ? `https://uri.amap.com/marker?position=${lon},${lat}&name=${encodeURIComponent(q || "照片地點")}&coordinate=wgs84&callnative=1`
   : `https://www.google.com/maps/search/?api=1&query=${lat},${lon}`;
 
 /* ── 地圖：OpenStreetMap 的圖塊，主機幫忙拿（朋友不用連外面）；高一級的圖塊縮一半放，手機上才清楚 ── */
@@ -3267,8 +3269,8 @@ function infoHTML(p){
   let h = d ? `<div class="ihd"><div><div class="idt">${fdate(d)}</div><div class="itm num">${x.dtf ? `檔案時間 ${ftime(d)}` : ftod(p, d)}${x.oz ? `・UTC${x.oz.replace(":00", "")}` : ""}</div></div>${x.dtf || d.h == null ? "" : gSun(d)}</div>` : "";
   if (p.g) {
     const [lat, lon, alt, dir] = p.g, nm = p.p ? p.p.n : "拍攝地點", sub = p.p && p.p.a ? p.p.a : `${lat.toFixed(5)}, ${lon.toFixed(5)}`;
-    h += `<div class="ibox"><a class="imap" href="${mapUrl(lat, lon, nm)}" target="_blank" rel="noopener noreferrer" aria-label="在地圖上打開">${dir != null ? `<span class="cone" style="transform:rotate(${dir}deg)"></span>` : ""}<span class="pin"></span><span class="attr">© OpenStreetMap</span></a>
-      <a class="ipl" href="${mapUrl(lat, lon, nm)}" target="_blank" rel="noopener noreferrer"><span class="pi">${I("pin")}</span><span><b>${esc(nm)}</b><span>${esc(sub)}</span></span><span class="go">${I("ext")}</span></a>${nearHTML(p)}</div>`;
+    h += `<div class="ibox"><a class="imap" href="${mapUrl(lat, lon, nm, p.p && p.p.cc)}" target="_blank" rel="noopener noreferrer" aria-label="在地圖上打開">${dir != null ? `<span class="cone" style="transform:rotate(${dir}deg)"></span>` : ""}<span class="pin"></span><span class="attr">© OpenStreetMap</span></a>
+      <a class="ipl" href="${mapUrl(lat, lon, nm, p.p && p.p.cc)}" target="_blank" rel="noopener noreferrer"><span class="pi">${I("pin")}</span><span><b>${esc(nm)}</b><span>${esc(sub)}</span></span><span class="go">${I("ext")}</span></a>${nearHTML(p)}</div>`;
   }
   const fe = f35 || (fl ? Math.round(fl) : 0);
   const cells = [["光圈", x.f ? `ƒ${+x.f.toFixed(2)}` : "", x.f ? gIris(x.f) : "", "f"], ["快門", shutter(x.et).replace(" 秒", " s"), x.et ? gShut(x.et) : "", "et"],
