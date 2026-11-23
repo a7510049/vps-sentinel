@@ -19,7 +19,20 @@ function keyOf(code, kid, fresh){
   return p;
 }
 
+/* 解開過的照片在這裡留一份（只在記憶體，關掉就沒了）：同一張再用到（看大圖、換大小、捲回來）直接給，不用再下載、再解開；iPhone 不留的話看大圖會先糊一秒 */
+const MEM = new Map(), MEMMAX = 96 * 1024 * 1024;
+let memSz = 0;
+function memPut(u, buf, type){
+  if (buf.byteLength > 12 * 1024 * 1024) return;
+  if (MEM.has(u)) { memSz -= MEM.get(u).buf.byteLength; MEM.delete(u); }
+  MEM.set(u, {buf, type}); memSz += buf.byteLength;
+  for (const [k, v] of MEM) { if (memSz <= MEMMAX) break; MEM.delete(k); memSz -= v.buf.byteLength; }
+}
+const memRes = h => new Response(h.buf.slice(0), {status:200, headers:{"Content-Type":h.type, "Cache-Control":"no-store"}});
+
 async function open(req, code, again){
+  const hit = MEM.get(req.url);
+  if (hit && !again) { MEM.delete(req.url); MEM.set(req.url, hit); return memRes(hit); }   // 最近用到的放最後，滿了先丟最久沒用的
   const r = await fetch(again ? new Request(req, {cache:"reload"}) : req);
   const kid = r.headers.get("X-Alb-E");
   if (!kid || !r.ok) return r;
@@ -29,7 +42,9 @@ async function open(req, code, again){
       const k = await keyOf(code, kid, fresh);
       if (!k) continue;
       const p = await crypto.subtle.decrypt({name:"AES-GCM", iv:b.slice(0, 12)}, k, b.slice(12));
-      return new Response(p, {status:200, headers:{"Content-Type":r.headers.get("X-Alb-T") || "image/jpeg", "Cache-Control":"no-store"}});
+      const h = {buf:p, type:r.headers.get("X-Alb-T") || "image/jpeg"};
+      memPut(req.url, p, h.type);
+      return memRes(h);
     } catch (e) {}
   }
   return again ? new Response("", {status:502}) : open(req, code, true);   // 存著的是舊鑰匙加密的：重拿一次
