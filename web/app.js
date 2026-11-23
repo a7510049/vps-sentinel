@@ -1257,7 +1257,7 @@ function albumModal(node, name){
       <div class="almpk">${PK.photos.map(p => `<button type="button" class="${p.hid ? "off" : ""}" data-almp="${p.i}" aria-pressed="${!p.hid}">${p.q ? `<img class="lq" alt="" src="data:image/jpeg;base64,${p.q}">` : ""}<img alt="" loading="lazy" src="${esc(`${PK.base || base()}/a/${PK.code}/i/${p.i}/s?v=${p.v}&own=${encodeURIComponent(PK.own)}`)}"><i>${I("ok")}</i>${p.vd ? `<em class="num">${Math.floor(p.vd / 60)}:${String(Math.round(p.vd % 60)).padStart(2, "0")}</em>` : ""}</button>`).join("")}</div>
       <button type="button" class="ubtn" data-alm="pksave"${n ? "" : " disabled"}>${n ? "存好" : "至少留一張"}</button><button type="button" class="ubtn sm ghost" data-alm="back">${I("back")}返回</button>`; },
     devs: () => `${DV.devs.length || DV.dev ? `<div class="almpkh"><b>${DV.dev ? `限 ${DV.dev} 台・用了 ${DV.devs.length} 台` : `${DV.devs.length} 台設備看過`}</b></div>` : ""}
-      ${DV.devs.length ? `<div class="pklist">${DV.devs.map(d => `<div class="pkrow almdv">${I(/iPhone|Android|手機|SM-|Pixel/.test(d.n) ? "devices" : "home")}<span><b>${esc(almDv(d)[0])}</b>${almDv(d)[1] ? `<small>${esc(almDv(d)[1])}</small>` : ""}<small>${d.lk ? `${almAgo(d.lk)}按了截圖，鎖住了` : `${almAgo(d.t)}・看了 ${d.c} 次`}</small></span>${d.lk ? `<button type="button" class="ubtn sm" data-almunlk="${esc(d.h)}">解除</button>` : ""}<button type="button" class="ubtn sm ghost bad" data-almkick="${esc(d.h)}">踢掉</button></div>`).join("")}</div>`
+      ${DV.devs.length ? `<div class="pklist">${DV.devs.map(d => `<div class="pkrow almdv">${almIcon(d)}<span><b>${esc(almDv(d)[0])}</b>${almDv(d)[1] ? `<small>${esc(almDv(d)[1])}</small>` : ""}<small>${d.lk ? `${almAgo(d.lk)}按了截圖，鎖住了` : `${almAgo(d.t)}・看了 ${d.c} 次`}</small></span>${d.lk ? `<button type="button" class="ubtn sm" data-almunlk="${esc(d.h)}">解除</button>` : ""}<button type="button" class="ubtn sm ghost bad" data-almkick="${esc(d.h)}">踢掉</button></div>`).join("")}</div>`
         : `<p class="ntx">還沒有人打開</p>`}
       <button type="button" class="ubtn sm ghost" data-alm="back">${I("back")}返回</button>`
   };
@@ -2737,6 +2737,11 @@ function almDv(d){
   const i = d.i || {}, [n0, b0] = String(d.n || "").split("・"), m = devModel(i.m) || n0 || "裝置";
   return [d.nm ? `${d.nm}・${m}` : m, [i.os, i.br || b0, i.sc].filter(Boolean).join("・")];
 }
+function almIcon(d){                       // 看過的設備照系統放圖示（iPhone、iPad、Mac 蘋果，安卓、Windows 各自的）
+  const i = d.i || {}, o = String(i.os || ""), n = `${i.m || ""} ${d.n || ""}`;
+  const os = /^iOS|iPadOS/.test(o) || /iPhone|iPad/.test(n) ? "ios" : /^macOS/.test(o) || /Mac/.test(n) ? "mac" : /^Android/.test(o) || /Android|SM-|Pixel/.test(n) ? "android" : /^Windows/.test(o) || /Windows/.test(n) ? "win" : "";
+  return devIcon({os, dev:""});
+}
 function devModel(m){                       // 型號代碼換成看得懂的名字（三星 S、Z 系列換成第幾代）
   m = String(m || "").replace(/\s*Build\/.*$/, "").trim();
   if (!m || m === "K") return "";
@@ -2754,11 +2759,20 @@ function devModel(m){                       // 型號代碼換成看得懂的名
   if (/^moto/i.test(m)) return "Motorola " + m.replace(/^motorola\s*/i, "");
   return m;
 }
+/* iOS 幾：iOS 26 起系統版本固定寫 18_6，Safari 看 Version/ 那個數字；其他 App、瀏覽器只有凍住的 18_6 就不寫（寫了會錯） */
+function iosVer(u){
+  const sv = +((/Version\/(\d+)/.exec(u) || [])[1] || 0), v = /OS (\d+)[_.](\d+)/.exec(u);
+  if (sv >= 26) return String(sv);
+  if (!v) return "";
+  if (+v[1] === 18 && +v[2] >= 6 && sv !== 18) return "";
+  return +v[1] >= 18 ? v[1] : `${v[1]}.${v[2]}`;
+}
 function devName(){
-  const u = navigator.userAgent, os = devOs(), ver = parseInt(DEVH.platformVersion || "", 10);
-  if (os === "ios") { const v = /OS (\d+)_/.exec(u); return (/iPhone/.test(u) ? "iPhone" : "iPad") + (v ? `（iOS ${v[1]}）` : ""); }
+  const u = navigator.userAgent, os = devOs(), pf = (navigator.userAgentData || {}).platform || "";
+  const ver = (os === "mac" && pf === "macOS") || (os === "win" && pf === "Windows") ? parseInt(DEVH.platformVersion || "", 10) : 0;   // 只信系統對得上的版本
+  if (os === "ios") { const v = iosVer(u); return (/iPhone/.test(u) ? "iPhone" : "iPad") + (v ? `（iOS ${v}）` : ""); }
   if (os === "android") return devModel(DEVH.model) || devModel((/Android [\d.]+; ([^;)]+)/.exec(u) || [])[1]) || "Android 手機";
-  if (os === "mac") return ver ? `Mac（macOS ${ver}）` : "Mac";
+  if (os === "mac") return ver >= 11 ? `Mac（macOS ${ver}）` : "Mac";   // 10 是凍住的假數字
   if (os === "win") return ver ? `Windows ${ver >= 13 ? 11 : 10} 電腦` : "Windows 電腦";
   return os === "linux" ? (/CrOS/.test(u) ? "Chromebook" : "Linux 電腦") : "我的裝置";
 }

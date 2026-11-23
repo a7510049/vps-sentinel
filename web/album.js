@@ -270,18 +270,27 @@ function brwOf(u, ud){                       // 回 [名字, 版本]；Brave、E
   const c = /(?:CriOS|Chrome)\/(\d+)/.exec(u); if (c) return ["Chrome", c[1]];
   return /Safari/.test(u) ? ["Safari", ""] : ["", ""];
 }
+/* iOS 幾：iOS 26 起系統版本固定寫 18_6，Safari 看 Version/ 那個數字；其他 App、瀏覽器只有凍住的 18_6 就不寫（寫了會錯） */
+function iosVer(u){
+  const sv = +((/Version\/(\d+)/.exec(u) || [])[1] || 0), v = /OS (\d+)[_.](\d+)/.exec(u);
+  if (sv >= 26) return String(sv);
+  if (!v) return "";
+  if (+v[1] === 18 && +v[2] >= 6 && sv !== 18) return "";
+  return +v[1] >= 18 ? v[1] : `${v[1]}.${v[2]}`;
+}
 async function devInfo(){
   try {
     const u = navigator.userAgent, ud = navigator.userAgentData, w = Math.min(screen.width, screen.height), h = Math.max(screen.width, screen.height);
     let hi = {}; if (ud && ud.getHighEntropyValues) hi = await ud.getHighEntropyValues(["model", "platformVersion", "fullVersionList"]).catch(() => ({}));
     const ios = /iPhone|iPad|iPod/.test(u) || (/Macintosh/.test(u) && navigator.maxTouchPoints > 1), sv = +((/Version\/(\d+)/.exec(u) || [])[1] || 0);
     let m = "", os = "";
-    if (ios) { const v = (/OS (\d+)[_.](\d+)/.exec(u) || []); os = `iOS ${sv >= 26 ? sv : v[1] ? `${v[1]}.${v[2]}` : ""}`.trim();   // iOS 26 起系統版本固定寫 18，看 Safari 的版本
+    const pf = (ud && ud.platform) || "", pv = parseInt(hi.platformVersion, 10) || 0;
+    if (ios) { os = `iOS ${iosVer(u)}`.trim();
       m = /iPad|Macintosh/.test(u) ? "iPad" : "iPhone"; }   // 好幾種 iPhone 螢幕一樣大，猜不準就不猜（使用者選的）
     else if (/Android/.test(u)) { m = hi.model || ((/Android [\d.]+; ([^;)]+)/.exec(u) || [])[1] || "").replace(/\s*Build\/.*$/, ""); if (m === "K") m = "";
       os = `Android ${parseInt(hi.platformVersion, 10) || (/Android ([\d.]+)/.exec(u) || [])[1] || ""}`.trim(); }
-    else if (/Windows/.test(u)) os = parseInt(hi.platformVersion, 10) >= 13 ? "Windows 11" : "Windows 10";
-    else if (/Macintosh/.test(u)) os = `macOS${parseInt(hi.platformVersion, 10) ? " " + parseInt(hi.platformVersion, 10) : ""}`;
+    else if (/Windows/.test(u)) os = pf === "Windows" && pv ? pv >= 13 ? "Windows 11" : "Windows 10" : "Windows";   // 問不到（Firefox）就不猜 10 還是 11
+    else if (/Macintosh/.test(u)) os = `macOS${pf === "macOS" && pv >= 11 ? " " + pv : ""}`;   // Safari 的系統版本凍在 10.15，不寫
     else if (/CrOS/.test(u)) os = "ChromeOS"; else if (/Linux/.test(u)) os = "Linux";
     const fv = (hi.fullVersionList || []).find(b => /Chrome|Edge|Opera|Samsung/.test(b.brand) && !/Chromium/.test(b.brand));
     const [bn, bv0] = brwOf(u, ud), bv = bn === "Chrome" && fv && /Chrome/.test(fv.brand) ? parseInt(fv.version, 10) : bn === "Safari" ? sv || "" : parseInt(bv0, 10) || "";
@@ -695,7 +704,7 @@ function srchOpen(){
   document.body.appendChild(bg);
   const inp = bg.querySelector("input"), sqs = bg.querySelector(".sqs"), sqr = bg.querySelector(".sqr"), clr = bg.querySelector(".sqc");
   void bg.offsetWidth; bg.classList.add("on");
-  setTimeout(() => inp.focus(), T.fast);
+  if (matchMedia("(pointer:fine)").matches) setTimeout(() => inp.focus(), T.fast);   // 手機不自己叫出鍵盤，點了輸入框才出來
   SH = {close(){ if (SH && SH.bg === bg) SH = null; bg.classList.remove("on"); bg.style.pointerEvents = "none"; inp.blur(); setTimeout(() => bg.remove(), T.mid + 50); }, bg};
   history.pushState({sh:1}, "");
   let hits = [], shown = "";
@@ -939,6 +948,24 @@ function tintFrom(px){
   const k = Math.min(1, Math.max(.7, (n ? chroma / n : 0) / .06));   // 照片本身灰灰的，顏色收斂一點（但不會變成灰色）
   return [`oklch(.82 ${(.12 * k).toFixed(3)} ${h2})`, `oklch(.64 ${(.16 * k).toFixed(3)} ${h1})`, `oklch(.56 ${(.15 * k).toFixed(3)} ${h3})`];
 }
+/* 每天封面上的字：看照片左下（字在的那塊）有多亮，越亮底下的暗影越深，亮色照片上的字才看得清楚 */
+function covShade(sec, p){
+  if (!p || !p.q || sec.dataset.cs === String(p.i)) return;
+  sec.dataset.cs = p.i;
+  const im = new Image();
+  im.onload = () => {
+    try {
+      const w = 24, h = Math.max(4, Math.round(24 * im.naturalHeight / im.naturalWidth)), c = document.createElement("canvas"); c.width = w; c.height = h;
+      const x = c.getContext("2d", {willReadFrequently:true}); x.drawImage(im, 0, 0, w, h);
+      const px = x.getImageData(0, 0, Math.ceil(w * .7), h).data, rw = Math.ceil(w * .7), L = [];
+      for (let k = 0; k < px.length; k += 4) { if ((k / 4 / rw | 0) < h * .3) continue; L.push((.2126 * px[k] + .7152 * px[k + 1] + .0722 * px[k + 2]) / 255); }
+      L.sort((a, b) => a - b);
+      const v = L.length ? L[Math.floor(L.length * .8)] : .5;   // 用偏亮的那兩成看：一塊白牆就夠讓字看不清
+      sec.style.setProperty("--cs", Math.max(0, Math.min(1, (v - .25) / .55)).toFixed(2));
+    } catch (e) {}
+  };
+  im.src = `data:image/jpeg;base64,${p.q}`;
+}
 let TINT = "";
 function tint(p){
   if (!p || p.broken || TINT === p.i) return;
@@ -1056,6 +1083,7 @@ function layout(force){
     const big = !HUE && ZL === 1 && list.length >= 3 && !STK.has(top) && PH[top].w / PH[top].h >= 1.3 && W >= 320 ? top : -1;   // 這天拍得最好的橫幅放整排，當這天的封面（沒有分數就用第一張）
     const sec = box.parentNode, dh = sec.querySelector(".dh[data-day]");
     sec.classList.toggle("cov", big >= 0 && !!dh);
+    if (big >= 0 && dh) covShade(sec, PH[big]);
     if (big >= 0) { const ar = Math.min(3, PH[big].w / PH[big].h), fh = Math.min(W / ar, innerHeight * .72); sec.style.setProperty("--fh", fh.toFixed(1) + "px"); rows.push([[[big, W / fh]], fh, 1]); }
     const scs = g.d && !g.m ? scenesOf(list) : null;            // 一天分成幾段：每段上面一行「下午 3:40・烏菲茲美術館」
     (scs || [{list}]).forEach((sc, k) => {
@@ -1458,7 +1486,7 @@ function bigMap(){
   }
   const cl = [];
   pts.forEach(([p, i], k) => {
-    const x = xs[k] - cx + W / 2, y = ys[k] - cy + H / 2, c = cl.find(c => Math.hypot(c.x - x, c.y - y) < 46);
+    const x = xs[k] - cx + W / 2, y = ys[k] - cy + H / 2, c = cl.find(c => Math.hypot(c.x - x, c.y - y) < 54);   // 泡泡 48 寬，再近就會疊在一起
     if (c) { c.n++; c.ids.push(i); } else cl.push({x, y, i, n:1, ids:[i]});
   });
   el.insertAdjacentHTML("beforeend", cl.map((c, k) => `<button class="mk" data-i="${c.i}"${c.n > 1 ? ` data-cl="${c.ids.join(",")}"` : ""} style="left:${c.x.toFixed(1)}px;top:${c.y.toFixed(1)}px;animation-delay:${Math.min(k * 40, 600)}ms"><img alt="" loading="lazy" src="${src(PH[c.i], "s")}">${c.n > 1 ? `<i class="num">${c.n}</i>` : ""}</button>`).join(""));
@@ -1488,9 +1516,20 @@ function route(el, pts, W, H){
   }
   const days = [];
   r.forEach(q => { if (q.d && !days.some(x => x.d.k === q.d.k)) days.push(q); });
+  /* 「第 N 天」掛在那天第一張所在的泡泡下面；同一個地方好幾天合成一個「第 1–2 天」，不會疊在一起 */
+  const bub = [...el.querySelectorAll(".mk")].map(m => ({ids:new Set((m.dataset.cl || m.dataset.i).split(",").map(Number)), x:parseFloat(m.style.left), y:parseFloat(m.style.top)}));
+  const dls = [];
+  days.forEach((q, k) => {
+    const n = dayNum(q.d.k) || k + 1, at = bub.find(m => m.ids.has(q.i)) || q;
+    let g = dls.find(g => g.at === at || Math.abs(g.x - at.x) < 74 && Math.abs(g.y - at.y) < 26);
+    if (!g) dls.push(g = {at, x:at.x, y:at.y, ns:[], ts:[]});
+    if (!g.ns.includes(n)) g.ns.push(n); g.ts.push(fday(q.d));
+  });
+  const dtx = ns => { ns = ns.sort((a, b) => a - b); const run = ns.every((n, k) => !k || n === ns[k - 1] + 1);
+    return ns.length === 1 ? `第 ${ns[0]} 天` : run ? `第 ${ns[0]}–${ns[ns.length - 1]} 天` : `第 ${ns.join("、")} 天`; };
   el.insertAdjacentHTML("afterbegin", `<svg class="route" viewBox="0 0 ${W} ${H}" aria-hidden="true"><path class="rt0" d="${d}"/><path class="rt" d="${d}"/>
     <circle class="rdot" r="5"><animateMotion dur="${Math.max(4, Math.min(14, r.length * 1.4))}s" repeatCount="indefinite" begin="indefinite" path="${d}" rotate="auto"/></circle></svg>
-    ${days.length > 1 ? days.map((q, k) => `<span class="dayn num" style="left:${q.x.toFixed(1)}px;top:${q.y.toFixed(1)}px" title="${esc(fday(q.d))}">第 ${dayNum(q.d.k) || k + 1} 天</span>`).join("") : ""}`);
+    ${days.length > 1 ? dls.map(g => `<span class="dayn num" style="left:${g.x.toFixed(1)}px;top:${g.y.toFixed(1)}px" title="${esc(g.ts.join("、"))}">${dtx(g.ns)}</span>`).join("") : ""}`);
   const path = el.querySelector(".rt"), len = path.getTotalLength();
   el.style.setProperty("--len", len.toFixed(0));
   /* 照片、第幾天等線畫到那裡才跳出來（線是 cubic-bezier(.45,0,.2,1) 畫 2.4 秒，反推到那一點的時間） */
@@ -1538,14 +1577,15 @@ function tmac(el, pts, r, path, len){
   days.forEach((x, j) => { x.c = (days[j + 1] ? days[j + 1].k : n) - x.k; });   // 每天一格：寬度照那天幾張，指針照第幾張走
   const city = x => { const m = new Map(); for (let k = x.k; k < x.k + x.c; k++) { const c = (PH[pts[k].i].p || {}).c; if (c) m.set(c, (m.get(c) || 0) + 1); } return [...m].sort((a, b) => b[1] - a[1]).map(a => a[0])[0] || ""; };
   el.insertAdjacentHTML("afterend", `<div class="tmac"><button class="tmp" aria-label="播放旅程">${I("play")}</button>
-    <div class="tmt" role="slider" tabindex="0" aria-label="旅程時間" aria-valuemin="1" aria-valuemax="${n}"><div class="tmr">${days.map(x => { const dn = x.d && dayNum(x.d.k), c = city(x);
-      return `<div class="tms" style="width:${(x.c / n * 100).toFixed(3)}%;--o:${(x.k / n).toFixed(4)}"><i class="tmf"></i><div class="tmx"><b class="num">${dn ? `<em>第 ${dn} 天・</em>` : ""}${x.d ? `${x.d.mo}/${x.d.d}` : ""}</b>${c ? `<span>${esc(c)}</span>` : ""}</div></div>`; }).join("")}</div>
+    <div class="tmt" role="slider" tabindex="0" aria-label="旅程時間" aria-valuemin="1" aria-valuemax="${n}"><div class="tmr">${days.map(x => { const c = city(x);   // 每格上面同一種寫法：日期＋城市（第幾天寫在下面的泡泡），窄的只留日期
+      return `<div class="tms" style="width:${(x.c / n * 100).toFixed(3)}%;--o:${(x.k / n).toFixed(4)}"><div class="tmx"><b class="num">${x.d ? `${x.d.mo}/${x.d.d}` : ""}</b>${c ? `<span>${esc(c)}</span>` : ""}</div><div class="tmg"><i class="tmf"></i></div></div>`; }).join("")}</div>
     <i class="tmh"></i><div class="tml"><b class="num"></b><span></span></div></div></div>`);
   const box = el.nextElementSibling, bar = box.querySelector(".tmt"), segs = [...box.querySelectorAll(".tms")], hd = box.querySelector(".tmh"), lab = box.querySelector(".tml"), play = box.querySelector(".tmp"), trk = box.querySelector(".tmr");
-  const pos = k => (k + .5 + Math.max(0, k - n + 2) * .5) / n;   // 每張在自己那一小格的中間；最後一張滑到最右邊（沒在看的時候整條是滿的）
+  const pos = k => n > 1 ? k / (n - 1) : 1;                   // 第一張在最左、最後一張在最右；每天第一張剛好落在那天那格裡（k/(n-1) 介於 k/n 和 (k+1)/n）
   function seat(k){                                           // 指針、每格填到哪、說明泡泡（不超出兩頭）
-    const u = pos(k), W = bar.clientWidth, lw = lab.offsetWidth, x = u * W, lx = Math.max(0, Math.min(W - lw, x - lw / 2));
-    hd.style.left = `${(u * 100).toFixed(3)}%`;
+    const u = pos(k), W = bar.clientWidth, lw = lab.offsetWidth, x = trk.offsetLeft + u * trk.clientWidth;   // 兩頭留指針的半徑，不會壓到播放鈕、跑出畫面
+    const lx = Math.max(Math.min(0, x - 18), Math.min(Math.max(W - lw, x - lw + 18), x - lw / 2));       // 泡泡不超出兩頭，但箭頭不擠到圓角上
+    hd.style.left = `${x.toFixed(1)}px`;
     lab.style.transform = `translateX(${lx.toFixed(1)}px)`; lab.style.setProperty("--ax", `${(x - lx).toFixed(1)}px`);
     days.forEach((x, j) => { const f = Math.max(0, Math.min(1, (u * n - x.k) / x.c)); segs[j].style.setProperty("--f", f.toFixed(4)); segs[j].classList.toggle("on", Math.round(k) >= x.k && Math.round(k) < x.k + x.c); });
   }
@@ -1592,7 +1632,7 @@ function tmac(el, pts, r, path, len){
     };
     requestAnimationFrame(step);
   }
-  const kx = e => { const b = bar.getBoundingClientRect(); return (e.clientX - b.left) / b.width * n - .5; };
+  const kx = e => { const b = trk.getBoundingClientRect(); return (e.clientX - b.left) / b.width * (n - 1); };
   bar.addEventListener("pointerdown", e => {
     stop(); bar.setPointerCapture(e.pointerId); box.classList.add("drag");
     const target = kx(e), k0 = at, t0 = performance.now();
@@ -1907,6 +1947,9 @@ function openLb(i, from){
     sl.forEach(s => { if (s.firstChild !== zw) s.style.visibility = "hidden"; });   // 資訊開著時關掉：畫面變寬，旁邊那張會被排進看得到的地方，先藏起來
     S.info = false; el.classList.remove("info", "cmo");
     const n0 = now === "none" ? "translate(0px,0px) scale(1)" : now;
+    /* HDR 照片：縮回去的同時大圖（HDR）慢慢淡掉、露出底下的一般小圖，亮度慢慢降下來，不會回到照片牆才突然變暗 */
+    const hb = p.hdr && zw.querySelector(".s2.ok"), sm = zw.querySelectorAll("img.s1")[1];
+    if (hb && sm && sm.complete && sm.naturalWidth) hb.animate([{opacity:1}, {opacity:0}], {duration:T.mid, easing:EASE, fill:"forwards"});
     if (r) { const a1 = toTile(r, f); zw.animate([{transform:n0, clipPath:NOCLIP}, {transform:a1.t, clipPath:a1.c}], {duration:T.mid, easing:EASE, fill:"forwards"}).onfinish = end; }
     else zw.animate([{opacity:1}, {opacity:0, transform:`${n0} scale(.92)`}], {duration:T.mid, easing:EXIT, fill:"forwards"}).onfinish = end;
     bg.animate([{opacity:getComputedStyle(bg).opacity}, {opacity:0}], {duration:T.mid, easing:EASE, fill:"forwards"});
