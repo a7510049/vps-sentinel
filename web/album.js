@@ -790,7 +790,7 @@ function stats(){
   const per = {}; PH.forEach(p => { const d = pd(p.x.dt); if (d) per[d.k] = (per[d.k] || 0) + 1; });
   const ks = Object.keys(per).sort(), mx = Math.max(1, ...Object.values(per));
   const gfx = t => t === "天" && ks.length > 1 && ks.length <= 40   // 每天幾張的小長條
-      ? `<span class="sgb" aria-hidden="true">${ks.map(k => `<i style="height:${Math.max(12, per[k] / mx * 100).toFixed(0)}%"></i>`).join("")}</span>`
+      ? `<span class="sgb" aria-hidden="true">${ks.map(k => `<i style="height:${Math.round(4 + per[k] / mx * 14)}px"></i>`).join("")}</span>`
     : t === "個地區" ? `<span class="sgf" aria-hidden="true">${[...cc].slice(0, 5).map(flagImg).join("")}</span>`   // 去過的地區疊成一排旗子
     : t === "段影片" && PH.length > v ? `<span class="sgr" aria-hidden="true"><i style="width:${(v / PH.length * 100).toFixed(1)}%"></i></span>` : "";   // 影片佔多少
   box.innerHTML = it.map(([n, t]) => `<div class="st"><b class="num" data-n="${n}">${n}</b><small>${t}</small>${gfx(t)}</div>`).join("")
