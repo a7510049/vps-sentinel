@@ -1117,7 +1117,11 @@ function wallWatch(){                                         // 照片牆的寬
   WRO = new ResizeObserver(() => { const rw = $(".wall .rows"), w = rw && rw.clientWidth; if (w && Math.abs(w - LW) >= 1) requestAnimationFrame(() => layout()); });
   WRO.observe($(".wall"));
 }
-addEventListener("resize", () => { clearTimeout(RZ); RZ = setTimeout(() => { if (smapOn()) smapWatch(); layout(); bigMap(); smapGo(SMK, true); if (LB) LB.fitAll(); }, 120); });
+let RZW = innerWidth;
+addEventListener("resize", () => { clearTimeout(RZ); RZ = setTimeout(() => {
+  if (LB) LB.fitAll();
+  if (innerWidth === RZW) return;                             // 手機網址列收起、跳出來只改高度：照片牆、地圖不用重排（安卓捲動時一直觸發）
+  RZW = innerWidth; if (smapOn()) smapWatch(); layout(); bigMap(); smapGo(SMK, true); }, 120); });
 
 /* 捲動：封面慢一點往上（視差）、標題淡掉，捲過封面上面浮出一條 */
 let SCQ = 0;
@@ -1246,8 +1250,10 @@ function scrubLabel(y){                                      // 那個位置的�
   };
   document.addEventListener("touchend", end); document.addEventListener("touchcancel", end);
   /* iPhone 的 Safari 會跟著整頁放大（照片牆、看大圖都是自己縮放），一律擋掉，只讓照片動 */
-  ["gesturestart", "gesturechange", "gestureend"].forEach(t => document.addEventListener(t, e => e.preventDefault(), {passive:false}));
-  document.addEventListener("touchmove", e => { if (e.touches.length > 1) e.preventDefault(); }, {passive:false});
+  if (IOS) {                                                  // 只有 iPhone、iPad 要擋（安卓多掛一個要等程式的手指事件，捲動起步會慢）
+    ["gesturestart", "gesturechange", "gestureend"].forEach(t => document.addEventListener(t, e => e.preventDefault(), {passive:false}));
+    document.addEventListener("touchmove", e => { if (e.touches.length > 1) e.preventDefault(); }, {passive:false});
+  }
   let wt = 0;
   addEventListener("wheel", e => {                           // 觸控板捏、Ctrl＋滾輪
     if (!e.ctrlKey || LB || SS || SY || !$(".wall")) return;
@@ -1265,7 +1271,7 @@ function shy(on, ms){
   if (on && !(D && D.shy !== false)) return;                // 主人在權限裡關掉了
   clearTimeout(SHYT);
   if (on && !document.getElementById("shyc")) document.body.insertAdjacentHTML("beforeend", `<div id="shyc" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M3 3l18 18M10.6 5.1A10.4 10.4 0 0 1 12 5c5 0 8.6 4.2 9.7 6.2a1.6 1.6 0 0 1 0 1.6 17 17 0 0 1-2.6 3.3M6.5 6.6A16.6 16.6 0 0 0 2.3 11.2a1.6 1.6 0 0 0 0 1.6C3.4 14.8 7 19 12 19a9.6 9.6 0 0 0 4.9-1.3M9.9 9.9a3 3 0 0 0 4.2 4.2"/></svg><b>照片先藏起來了</b><small>回到這個畫面就會清楚</small></div>`);
-  document.documentElement.classList.toggle("shy", on);
+  document.documentElement.classList.toggle("shy", on); shyBlock(on);
   if (on && ms) SHYT = setTimeout(() => shy(false), ms);
 }
 addEventListener("blur", () => shy(true));
@@ -1287,7 +1293,8 @@ addEventListener("keydown", e => {                            // PrintScreen、M
 }, true);
 addEventListener("keyup", e => { if (e.key === "PrintScreen") { snapHit(); shy(true, 6000); } }, true);
 addEventListener("pointerdown", () => { if (document.hasFocus() && !document.hidden) shy(false); }, true);
-["wheel", "touchmove"].forEach(t => addEventListener(t, e => { if (document.documentElement.classList.contains("shy")) { e.preventDefault(); e.stopPropagation(); } }, {capture:true, passive:false}));   // 糊著的時候不能捲動
+const SHYB = e => { if (document.documentElement.classList.contains("shy")) { e.preventDefault(); e.stopPropagation(); } };   // 糊著的時候不能捲動（只在糊著時掛上，平常捲動不用等程式）
+function shyBlock(on){ ["wheel", "touchmove"].forEach(t => (on ? addEventListener : removeEventListener)(t, SHYB, {capture:true, passive:false})); }
 ["copy", "cut", "selectstart", "dragstart"].forEach(t => addEventListener(t, e => { if (!(e.target.closest && e.target.closest("input,textarea,[contenteditable]"))) e.preventDefault(); }));   // 整頁不能複製（輸入框照樣能用）   // 不能按右鍵、長按另存
 addEventListener("dragstart", e => { if (e.target.tagName === "IMG") e.preventDefault(); });
 {                                                            // 點照片自己判斷：往下滑關掉大圖後，手機有時不送 click，要等一下才點得開

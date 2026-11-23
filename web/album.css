@@ -32,6 +32,7 @@
 @media (min-width:1200px){:root{--gap:8px; --pad:clamp(32px,2.6vw,56px); --rh:260px; --wmax:2400px}}
 
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html{-webkit-text-size-adjust:100%;text-size-adjust:100%}
 /* 整頁不能選取、複製（輸入框例外）：長按、拖過去不會出現選取框 */
 html{-webkit-user-select:none;user-select:none;-webkit-touch-callout:none}
 input,textarea,[contenteditable]{-webkit-user-select:text;user-select:text;-webkit-touch-callout:default}
@@ -1095,7 +1096,7 @@ html:has(.lb,.ss,.sy) .scrub{opacity:0;pointer-events:none}
 .glr svg{width:18px;height:18px;color:var(--g2)}
 .glr>span:first-of-type{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-weight:600}
 .glr small{color:var(--tx3);font-weight:600;text-align:right}
-.glr:hover{background:var(--s2)}
+@media (hover:hover){.glr:hover{background:var(--s2)}}
 .glr.on{background:color-mix(in oklab,var(--g2) 16%,transparent)}
 @media (max-width:560px){.glr{grid-template-columns:20px minmax(0,1fr) 28px}.glr .gbr{display:none}}
 .gcam{display:grid;grid-template-columns:auto 1fr;grid-template-rows:auto auto;column-gap:12px;row-gap:8px;align-items:center;padding:14px 16px;border-radius:var(--r-lg);background:var(--s1);box-shadow:var(--sh-card);text-align:left;
