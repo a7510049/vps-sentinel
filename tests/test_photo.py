@@ -364,8 +364,8 @@ class PhotoUnit(unittest.TestCase):
         pana = mk_exif("Panasonic", lambda at: b"Panasonic\0\0\0" + ifd([(0x46, 8, struct.pack("<h", -2)), (0x47, 8, struct.pack("<h", 1)), (0x4E, 7, fd), (0x89, 3, 3)], at + 12))
         m = maker(pana)
         self.assertEqual(m["ws"], [2, 1, "ab"])                 # 往琥珀 2、往綠 1
-        self.assertEqual(m["fc"], [(160, 120, 40, 50), (80, 60, 20, 20)])
-        self.assertEqual(m["fcr"], (320, 240))
+        self.assertEqual(m["fc"], [(160, 132.5, 52.0, 65.0), (80, 65.0, 26.0, 26.0)])   # 記的是眼睛：往下移一點、放大到整張臉
+        self.assertEqual(m["fcr"], (320, -1))
         fuji = mk_exif("FUJIFILM", lambda at: b"FUJIFILM" + struct.pack("<I", 12) + ifd([(0x100A, 9, struct.pack("<ii", 40, -20)),
                        (0x4100, 3, 1), (0x4103, 3, struct.pack("<4H", 100, 200, 300, 500))], 12))
         m = maker(fuji)
@@ -384,6 +384,7 @@ class PhotoUnit(unittest.TestCase):
         f = G["alb_faces"]
         self.assertEqual(f({}, {"fc": [(160, 120, 32, 48)], "fcr": (320, 240)}, 1, 0, 6000, 4000), [[.5, .5, .1, .2]])
         self.assertEqual(f({}, {"fc": [(80, 60, 32, 48)], "fcr": (320, 240)}, 6, 0, 6000, 4000), [[.75, .25, .2, .1]])   # 轉 90 度：寬高對調
+        self.assertEqual(f({}, {"fc": [(160, 64, 32, 32)], "fcr": (320, -1)}, 1, 0, 6000, 4000), [[.5, .3, .1, .15]])   # 3:2：320×213
         self.assertIsNone(f({}, {"fc": [(0, 0, 0, 0)], "fcr": (320, 240)}, 1, 0, 6000, 4000))
 
     def test_canon_nikon_af(self):

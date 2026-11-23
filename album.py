@@ -1178,9 +1178,11 @@ def alb_faces(t, ms, ori, irot, w, h):
     fc, ref = ms.pop("fc", None), ms.pop("fcr", None)
     if not fc or not ref:
         return None
-    rw, rh = ref[0] or int(t.get("pw") or 0) or w, ref[1] or int(t.get("ph") or 0) or h
-    if not rw or not rh:
+    pw, ph = int(t.get("pw") or 0) or w, int(t.get("ph") or 0) or h
+    if not pw or not ph:
         return None
+    rw = ref[0] or pw
+    rh = rw * ph / pw if ref[1] == -1 else ref[1] or ph   # -1：高照照片的比例（松下 3:2 是 320×213）
     r = {1: 8, 2: 3, 3: 6}.get(irot) or ori
     out = []
     for f in fc[:5]:

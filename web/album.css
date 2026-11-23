@@ -836,8 +836,10 @@ html,body{touch-action:pan-x pan-y}
   box-shadow:0 0 0 200vmax rgba(0,0,0,.3)}   /* 框外面整張壓暗：照片顏色跟框很像（白牆、天空）時也看得出對焦在哪 */
 .lb.afon .afb{opacity:1;transform:translate(-50%,-50%) scale(1)}
 /* 相機偵測到的臉：細的圓角框，跟對焦框一起開關 */
-.lb .fcb{position:absolute;transform:translate(-50%,-50%) scale(1.15);opacity:0;pointer-events:none;border:clamp(1px,.3cqmin,2px) solid rgba(255,255,255,.85);border-radius:var(--r-md);filter:drop-shadow(0 0 2px rgba(0,0,0,.6));transition:opacity var(--t-mid),transform var(--t-mid) var(--ease)}
+.lb .fcb{position:absolute;transform:translate(-50%,-50%) scale(1.15);opacity:0;pointer-events:none;border:clamp(1px,.3cqmin,2px) solid rgba(255,255,255,.85);border-radius:min(var(--r-md),22%);filter:drop-shadow(0 0 2px rgba(0,0,0,.6));transition:opacity var(--t-mid),transform var(--t-mid) var(--ease)}
 .lb.afon .fcb{opacity:1;transform:translate(-50%,-50%) scale(1)}
+.lb .fcb.af{border-width:clamp(2px,.45cqmin,3px);border-color:#fff;box-shadow:0 0 0 200vmax rgba(0,0,0,.3)}   /* 對焦在這張臉：粗一點、框外壓暗（跟對焦框一樣） */
+.lb .fcb.af.miss{border-color:var(--bad)}
 .lb .afb.miss{--c:var(--bad)}
 
 /* 更多圖形：每天的 24 小時時間條、數字卡的小圖、城市在整趟的哪幾天、期限圈、封面國旗 */

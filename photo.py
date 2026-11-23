@@ -446,10 +446,11 @@ def pic_maker(b, more):
         ab, gm = s16(num(0x46)), s16(num(0x47))        # WBShiftAB（正的往藍）、WBShiftGM（正的往綠）
         if isinstance(ab, int) and isinstance(gm, int) and (ab or gm) and abs(ab) <= 9 and abs(gm) <= 9:
             out["ws"] = [-ab, gm, "ab"]
-        fd = arr(0x4E, e0)                             # FaceDetInfo：幾張臉，每張 X、Y 中心和寬、高（320×240 的畫面）
+        fd = arr(0x4E, e0)                             # FaceDetInfo：幾張臉，每張 X、Y 和寬、高（寬 320、高照照片比例的畫面）
         if fd and 0 < fd[0] <= 5 and len(fd) >= 1 + 4 * fd[0]:
-            out["fc"] = [tuple(fd[1 + 4 * k:5 + 4 * k]) for k in range(fd[0])]
-            out["fcr"] = (320, 240)
+            # 拿使用者 S5IIX 的照片核對過：X、Y 是眼睛（跟對焦點同一點），框比整張臉小一點：往下移一點、放大 1.3 倍才包住額頭到下巴
+            out["fc"] = [(f[0], f[1] + f[3] * .25, f[2] * 1.3, f[3] * 1.3) for f in (fd[1 + 4 * k:5 + 4 * k] for k in range(fd[0]))]
+            out["fcr"] = (320, -1)
     elif name == "fuji":
         out["sl"] = "底片模擬"
         sat = num(0x1003)
