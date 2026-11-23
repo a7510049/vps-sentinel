@@ -3016,6 +3016,7 @@ function lvOf(p){
   const v = Math.log2(x.f * x.f / t) - Math.log2(x.iso / 100) + (x.ev || 0);
   return v > -8 && v < 22 ? v : null;
 }
+const AFZ = {"AF-S":"單次對焦", "AF-C":"連續對焦", "AF-F":"彈性對焦"};
 const LVN = [[14.5, "非常亮"], [12.5, "很亮"], [10.5, "明亮"], [8.5, "柔和"], [6.5, "偏暗"], [4.5, "暗"], [1.5, "很暗"], [-99, "極暗"]];
 const lvName = v => LVN.find(r => v >= r[0])[1];
 const gLv = v => {                                           // 一條由暗到亮的尺（−2～16），左邊暗、右邊亮，三角形在尺下面指著現場的亮度（跟曝光尺一樣，不會碰到太陽）
@@ -3193,7 +3194,7 @@ function infoHTML(p){
   if (x.dtc) { const [sh, , oz0] = x.dtc, m = Math.round(Math.abs(sh) / 60);   // 相機時間照手機調過（主機 alb_clock）
     kv.push(["相機時間", [sh ? `相機${sh > 0 ? "慢" : "快"} ${m >= 60 ? `${Math.floor(m / 60)} 小時${m % 60 ? ` ${m % 60} 分` : ""}` : `${m} 分鐘`}` : "", oz0 && oz0 !== x.oz ? `相機設在 UTC${oz0.replace(":00", "")}` : ""].filter(Boolean).join("・") + "，已照手機調整"]); }
   if (x.fd && !isVid(p)) kv.push(["對焦距離", dofM(x.fd)]);
-  if (ms && (ms.af || ms.sub)) kv.push(["對焦", [ms.af, ms.sub].filter(Boolean).join("・")]);
+  if (ms && (ms.af || ms.sub)) kv.push(["對焦", [AFZ[ms.af] || ms.af, ms.sub].filter(Boolean).join("・")]);   // 舊的資訊存的是 AF-S 這類英文，換成中文
   if (ms && ms.is) kv.push(["防手震", ms.is]);
   // 拍攝設定：一格一個小圖（模式轉盤、測光方式、閃光燈、白平衡、場景），不再一行一行寫字
   const st = [];

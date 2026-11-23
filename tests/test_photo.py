@@ -292,7 +292,7 @@ class PhotoUnit(unittest.TestCase):
         pana = mk_exif("Panasonic", lambda at: b"Panasonic\0\0\0" + ifd([(0x07, 3, 7), (0x1A, 3, 11), (0x51, 2, "LUMIX S 20-60/F3.5-5.6"),
                        (0x44, 3, 5600), (0x89, 3, 15), (0xAC, 3, 3), (0xD2, 3, 3), (0xE9, 3, 12), (0xF1, 2, "Teal Orange"), (0xF3, 1, b"\x50")], at + 12))
         self.assertEqual(maker(pana), {"sl": "相片風格", "st": "L.單色D", "fx": ["紅色濾鏡", "粒子 強"], "lut": "Teal Orange 80%",
-                                       "is": "Dual I.S. 2", "af": "AF-C", "sub": "飛機", "ln": "LUMIX S 20-60/F3.5-5.6", "k": 5600})
+                                       "is": "Dual I.S. 2", "af": "連續對焦", "sub": "飛機", "ln": "LUMIX S 20-60/F3.5-5.6", "k": 5600})
         odd = mk_exif("Panasonic", lambda at: b"Panasonic\0\0\0" + ifd([(0x89, 3, 1), (0xAC, 3, 3)], at + 12))
         self.assertEqual(maker(odd), {})               # 1 是「標準或自訂」分不出來，彩色時濾鏡也不算
         fuji = mk_exif("FUJIFILM", lambda at: b"FUJIFILM" + struct.pack("<I", 12) + ifd([(0x1047, 4, 64), (0x1401, 3, 0x600)], 12))
