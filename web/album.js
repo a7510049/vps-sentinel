@@ -3,6 +3,7 @@
 const T = {fast:200, mid:380, slow:620, long:900};
 const EASE = "cubic-bezier(.2,0,0,1)", DEC = "cubic-bezier(.05,.7,.1,1)", EXIT = "cubic-bezier(.3,0,.8,.15)";
 const CODE = location.pathname.split("/")[2] || "", BASE = `/a/${CODE}`;
+const NMK = "vsa-name-" + CODE;                                  // 名字每本相簿各記各的（使用者要求：開新的相簿要重新填，不帶上一本的名字）
 const $ = (s, r = document) => r.querySelector(s);
 const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;", "<":"&lt;", ">":"&gt;", '"':"&quot;", "'":"&#39;"}[c]));
 const RM = matchMedia("(prefers-reduced-motion: reduce)");
@@ -49,7 +50,8 @@ const anim = () => !RM.matches;
 const isVid = p => !!p.vd;
 const dur = t => { t = Math.max(0, Math.round(t)); return `${Math.floor(t / 60)}:${String(t % 60).padStart(2, "0")}`; };
 const ago = t => { const s = Date.now() / 1000 - t; return s < 60 ? "剛剛" : s < 3600 ? `${Math.floor(s / 60)} 分鐘前` : s < 86400 ? `${Math.floor(s / 3600)} 小時前` : s < 86400 * 30 ? `${Math.floor(s / 86400)} 天前` : new Date(t * 1000).toLocaleDateString("zh-TW"); };
-const store = {get:k => { try { return localStorage.getItem(k) || ""; } catch (e) { return ""; } }, set:(k, v) => { try { localStorage.setItem(k, v); } catch (e) {} }};
+const store = {get:k => { try { return localStorage.getItem(k) || ""; } catch (e) { return ""; } }, set:(k, v) => { try { localStorage.setItem(k, v); } catch (e) {} }, del:k => { try { localStorage.removeItem(k); } catch (e) {} }};
+store.del("vsa-name");                                          // 舊版所有相簿共用一個名字：拿掉
 let D = null, PH = [], TILES = [], SS = null;
 let ALL = [], WHO = "";                                      // 全部照片；現在看的分頁（空字串＝主人的，不然是朋友的資料夾）
 const TM = new Map();                                        // 照片編號 → 格子（換分頁時重用）
@@ -210,7 +212,8 @@ async function boot(){
   if (r.status === 403) { const x = await r.json().catch(() => ({}));
     if (x.lock) return gate("phone", "這台設備已被停用", "", "按了截圖，等主人解除");
     return gate("phone", x.ban ? "這台設備不能看這本相簿" : "名額已經滿了", "", x.ban ? "" : "這本相簿只給指定的設備看"); }
-  if (!r.ok) return gate("off", "這本相簿已經看不到了", "", "連結已經收回或過期");
+  if (!r.ok) { if (r.status === 404 || r.status === 410) [NMK, "vsa-seen-" + CODE].forEach(store.del);   // 收回、過期：這台留下的名字、看過的回憶一起清掉
+    return gate("off", "這本相簿已經看不到了", "", "連結已經收回或過期"); }
   D = await r.json();
   ALL = D.photos || [];
   if (!ALL.some(p => !p.u) && ALL.length) WHO = ALL[0].u;
@@ -1821,11 +1824,25 @@ function openLb(i, from){
   function infFlip(fn, on){
     const bk = () => { const n = {}; return [...inf.children].map(e => { const k = (e.classList[0] || e.tagName) + "." + (e.classList[1] || "") + ">" + (e.firstElementChild ? e.firstElementChild.classList[0] || "" : ""); n[k] = (n[k] || 0) + 1; return [k + "~" + n[k], e]; }); };
     const r0 = on && anim() ? new Map(bk().map(([k, e]) => { const r = e.getBoundingClientRect(); e.getAnimations().forEach(a => a.cancel()); return [k, r]; })) : null;
+    /* 一塊裡面的行（鏡頭、對焦、防手震、海拔…只有某些照片才有）：多出來的淡入、少掉的淡出，其他行滑到新位置 */
+    const rk = e => { const n = {}; return [...e.children].filter(c => !c.classList.contains("gho")).map(c => { const lb = c.querySelector(":scope>span:first-child,:scope>small"), k = c.dataset.gk || (lb ? lb.textContent.trim() : c.classList[0] || c.tagName); n[k] = (n[k] || 0) + 1; return [k + "~" + n[k], c]; }); };
+    const rowBox = e => e.matches(".ikv,.iset") ? e : e.querySelector(":scope>.icam,:scope>.isty") || (e.classList.contains("isty") ? e : null);
+    const ri = r0 ? new Map(bk().map(([k, e]) => { const w = rowBox(e); return [k, w ? {w, r:w.getBoundingClientRect(), c:rk(w).map(([q, c]) => [q, c, c.getBoundingClientRect()])} : null]; })) : null;
     fn();
     if (r0) bk().forEach(([k, e]) => {
       const a = r0.get(k); if (!a) return void e.animate([{opacity:0}, {opacity:1}], {duration:T.mid, delay:T.fast / 2, easing:DEC, fill:"backwards"}); const b = e.getBoundingClientRect(), dy = a.top - b.top, dh = a.height - b.height;
       if (Math.abs(dy) > .5) e.animate([{translate:`0 ${dy}px`}, {translate:"0 0"}], {duration:T.mid, easing:DEC});
-      if (Math.abs(dh) > .5) e.animate([{height:a.height + "px", overflow:"hidden"}, {height:b.height + "px", overflow:"hidden"}], {duration:T.mid, easing:DEC});
+      const o = ri.get(k), w = rowBox(e), now = w ? new Map(rk(w)) : null, gone = !!(o && now && o.c.some(([q]) => !now.has(q)));
+      if (Math.abs(dh) > .5) e.animate([{height:a.height + "px", overflow:"hidden"}, {height:b.height + "px", overflow:"hidden"}], {duration:T.mid, delay:gone ? T.fast / 2 : 0, easing:DEC, fill:"backwards"});
+      if (!o || !w) return;
+      const wr = w.getBoundingClientRect(), was = new Set();
+      o.c.forEach(([q, c0, r]) => { const c = now.get(q); if (c) { was.add(q); const cr = c.getBoundingClientRect(), x = (r.left - o.r.left) - (cr.left - wr.left), y = (r.top - o.r.top) - (cr.top - wr.top);
+          if (Math.abs(x) > .5 || Math.abs(y) > .5) c.animate([{translate:`${x}px ${y}px`}, {translate:"0 0"}], {duration:T.mid, delay:gone ? T.fast / 2 : 0, easing:DEC, fill:"backwards"}); return; }   // 有行要淡出時，其他行等它淡一半再滑過去，字不會疊在一起
+        if (getComputedStyle(w).position === "static") { w.style.position = "relative"; setTimeout(() => { w.style.position = ""; }, T.mid + 40); }
+        const g = c0.cloneNode(true); g.removeAttribute("data-gk"); g.classList.add("gho"); g.setAttribute("aria-hidden", "true");   // 少掉的那行：原地淡出（照片牆的格子不受影響）
+        Object.assign(g.style, {position:"absolute", left:(r.left - o.r.left) + "px", top:(r.top - o.r.top) + "px", width:r.width + "px", height:r.height + "px", margin:0, pointerEvents:"none", gridColumn:"auto"});
+        w.appendChild(g); g.animate([{opacity:1}, {opacity:0}], {duration:T.fast * .6, easing:EXIT, fill:"forwards"}).onfinish = () => g.remove(); });
+      now.forEach((c, q) => { if (!was.has(q)) c.animate([{opacity:0}, {opacity:1}], {duration:T.mid, delay:T.fast / 2, easing:DEC, fill:"backwards"}); });
     });
   }
   function infSet(p, dir, q){
@@ -2113,10 +2130,10 @@ function openLb(i, from){
   cmp.addEventListener("submit", e => {
     e.preventDefault();
     const f = e.target, nm = f.querySelector("[name=n]"), tx = f.querySelector("[name=s]");
-    const name = (nm ? nm.value : store.get("vsa-name")).trim();
+    const name = (nm ? nm.value : store.get(NMK)).trim();
     if (!name) { if (nm) nm.focus(); return toast("先寫你的名字"); }
     if (!tx.value.trim()) return tx.focus();
-    store.set("vsa-name", name);
+    store.set(NMK, name);
     const sb = f.querySelector(".csend"); if (sb.disabled) return;
     sb.disabled = true;
     const re = f.dataset.re || "";
@@ -2212,7 +2229,7 @@ function lkWho(p){                                             // 「小明、�
 const GB = "_gb", GBSEEN = new Set();                           // GBSEEN：看過的留言不再重播進場動畫
 function gbook(){
   const box = $(".gbk"); if (!box) return;
-  const cs = D.gb || [], nm = store.get("vsa-name"), sig = cs.map(c => c.id).join() + "|" + !!nm;
+  const cs = D.gb || [], nm = store.get(NMK), sig = cs.map(c => c.id).join() + "|" + !!nm;
   box.hidden = !!WHO;
   if (box.dataset.sig === sig || (box.dataset.sig && (box.querySelector(".gbf [name=s]") || {}).value)) return;   // 沒有新留言就不重畫；打到一半的字留著
   box.dataset.sig = sig;
@@ -2236,10 +2253,10 @@ async function gbPost(body){
 document.addEventListener("submit", e => {
   const f = e.target.closest(".gbf"); if (!f) return;
   e.preventDefault();
-  const nm = f.querySelector("[name=n]"), tx = f.querySelector("[name=s]"), name = (nm ? nm.value : store.get("vsa-name")).trim();
+  const nm = f.querySelector("[name=n]"), tx = f.querySelector("[name=s]"), name = (nm ? nm.value : store.get(NMK)).trim();
   if (!name) { if (nm) nm.focus(); return toast("先寫你的名字"); }
   if (!tx.value.trim()) return tx.focus();
-  store.set("vsa-name", name);
+  store.set(NMK, name);
   const sb = f.querySelector(".csend"); if (sb.disabled) return;
   sb.disabled = true;
   gbPost({s:tx.value, n:name}).then(ok => {
@@ -2265,7 +2282,7 @@ const talkList = p => (p.cm || []).length ? talkOrder(p.cm).map(cmtHTML).join(""
 /* 留言：自己一個面板（像社群 App），上面誰按了愛心，中間留言，輸入框一直在最下面 */
 function talkHTML(p){
   if (!D.talk) return "";
-  const nm = store.get("vsa-name");
+  const nm = store.get(NMK);
   return `<div class="italk"><div class="th">${talkHead(p)}</div><div class="cml">${talkList(p)}</div>
     <form class="cform"><div class="cre" hidden><span></span><button type="button" data-crex aria-label="不回覆了">${I("x")}</button></div>${nm ? "" : `<input class="cin nm" name="n" maxlength="20" placeholder="你的名字" autocomplete="nickname">`}<div class="crow"><input class="cin" name="s" maxlength="300" placeholder="說點什麼…" autocomplete="off"><button class="csend" aria-label="送出">${I("send")}</button></div></form></div>`;
 }
@@ -2349,7 +2366,7 @@ function nameSheet(then){                                    // 第一次放照�
   bg.innerHTML = `<form class="sh"><div class="ic">${I("up")}</div><h3>你的名字</h3><p>照片上會寫是你放的</p><input class="field" name="n" maxlength="20" autocomplete="nickname" aria-label="你的名字" required><button class="btn">好</button></form>`;
   document.body.appendChild(bg);
   const f = bg.querySelector("form"), inp = f.querySelector("input");
-  inp.value = store.get("vsa-name");
+  inp.value = store.get(NMK);
   void bg.offsetWidth; bg.classList.add("on");
   setTimeout(() => inp.focus(), T.fast);
   SH = {close(){ if (SH && SH.bg === bg) SH = null; bg.classList.remove("on"); bg.style.pointerEvents = "none"; setTimeout(() => bg.remove(), T.mid + 50); }, bg};
@@ -2358,7 +2375,7 @@ function nameSheet(then){                                    // 第一次放照�
   f.addEventListener("submit", e => {
     e.preventDefault();
     const v = inp.value.trim(); if (!v) return inp.focus();
-    store.set("vsa-name", v); popBack(); then();
+    store.set(NMK, v); popBack(); then();
   });
 }
 /* 兩張並排比較（同一疊連拍、包圍曝光）：左右（手機上下）各一張，放大、拖曳兩張一起動；下面一排換要比的那張 */
@@ -2419,7 +2436,7 @@ function cmpOpen(list, a, b){
 }
 function upPick(){
   if (UPING) return toast("還在放上一批");
-  if (!store.get("vsa-name").trim()) return nameSheet(upPick);
+  if (!store.get(NMK).trim()) return nameSheet(upPick);
   const f = document.createElement("input");
   f.type = "file"; f.multiple = true; f.accept = "image/*,video/*"; f.hidden = true;
   f.addEventListener("change", () => { const fs = [...f.files]; f.remove(); if (fs.length) upGo(fs); }, {once:true});
@@ -2440,7 +2457,7 @@ function upShow(b, k, n, pr){
 function upOne(f, prog){
   return new Promise(res => {
     const x = new XMLHttpRequest();
-    x.open("POST", `${BASE}/up?n=${encodeURIComponent(f.name)}&w=${encodeURIComponent(store.get("vsa-name").trim())}`);
+    x.open("POST", `${BASE}/up?n=${encodeURIComponent(f.name)}&w=${encodeURIComponent(store.get(NMK).trim())}`);
     x.withCredentials = true;
     x.upload.onprogress = e => { if (e.lengthComputable) prog(e.loaded / e.total); };
     x.onload = () => { let d = {}; try { d = JSON.parse(x.responseText); } catch (e) {}

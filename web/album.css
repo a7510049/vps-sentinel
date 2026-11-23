@@ -1370,9 +1370,9 @@ button.dct:active{transform:scale(.92)}
   .tmt{flex-basis:calc(100% - 54px)}
   .tml{width:100%;order:3;padding-left:54px;min-height:0}
   .gbk{max-width:var(--wmax)}
-  .gbk .gbf{max-width:720px;margin:16px 0 0}
-  .gbk .cadd{margin:16px 0 0}
-  .gbl{grid-template-columns:repeat(auto-fill,minmax(300px,1fr))}
+  .gbk .gbf{max-width:720px;margin:16px auto 0}   /* 大螢幕：輸入框、留言都置中（使用者要置中，不要靠左） */
+  .gbk .cadd{margin:16px auto 0}
+  .gbl{grid-template-columns:repeat(auto-fit,minmax(300px,360px));justify-content:center}
 }
 
 /* 過曝／死黑：照片上蓋一層斜紋（紅＝過曝、藍＝死黑，跟修圖軟體一樣），斜紋慢慢移動像相機的斑馬紋 */
