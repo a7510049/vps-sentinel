@@ -2740,6 +2740,7 @@ function almDv(d){
 function devModel(m){                       // 型號代碼換成看得懂的名字（三星 S、Z 系列換成第幾代）
   m = String(m || "").replace(/\s*Build\/.*$/, "").trim();
   if (!m || m === "K") return "";
+  if (/^iPhone\b/.test(m)) return "iPhone";                  // 以前照螢幕大小猜的「iPhone 14 Pro Max～16 Plus」不準，一律只寫 iPhone
   let g;
   if ((g = /^SM-S9(\d)(\d)/.exec(m))) return `Samsung Galaxy S${22 + +g[1]}${{6:"+", 7:" Edge", 8:" Ultra"}[g[2]] || ""}`;
   if ((g = /^SM-F9(\d)/.exec(m))) return `Samsung Galaxy Z Fold${+g[1] + 1}`;

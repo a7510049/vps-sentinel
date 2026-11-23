@@ -246,17 +246,14 @@ async function boot(){
 }
 /* 跟主機說這台是什麼設備（主人「看過的設備」看得到型號、系統、瀏覽器、螢幕）：
    瀏覽器的識別字串只寫得出「安卓手機」「iPhone」，安卓的 Chrome、Edge 另外問得到型號；iPhone 照螢幕大小猜是哪一型 */
-const IPH = {"320x568":"iPhone SE（第 1 代）", "375x667":"iPhone SE／6～8", "414x736":"iPhone 6～8 Plus", "375x812":"iPhone X～11 Pro／12～13 mini", "414x896@2":"iPhone XR／11",
-  "414x896@3":"iPhone XS Max／11 Pro Max", "390x844":"iPhone 12～14", "428x926":"iPhone 12～13 Pro Max／14 Plus", "393x852":"iPhone 14 Pro～16",
-  "430x932":"iPhone 14 Pro Max～16 Plus", "402x874":"iPhone 16 Pro～17 Pro", "420x912":"iPhone Air", "440x956":"iPhone 16～17 Pro Max"};
 async function devInfo(){
   try {
-    const u = navigator.userAgent, ud = navigator.userAgentData, w = Math.min(screen.width, screen.height), h = Math.max(screen.width, screen.height), dp = Math.round(devicePixelRatio || 1);
+    const u = navigator.userAgent, ud = navigator.userAgentData, w = Math.min(screen.width, screen.height), h = Math.max(screen.width, screen.height);
     let hi = {}; if (ud && ud.getHighEntropyValues) hi = await ud.getHighEntropyValues(["model", "platformVersion", "fullVersionList"]).catch(() => ({}));
     const ios = /iPhone|iPad|iPod/.test(u) || (/Macintosh/.test(u) && navigator.maxTouchPoints > 1), sv = +((/Version\/(\d+)/.exec(u) || [])[1] || 0);
     let m = "", os = "";
     if (ios) { const v = (/OS (\d+)[_.](\d+)/.exec(u) || []); os = `iOS ${sv >= 26 ? sv : v[1] ? `${v[1]}.${v[2]}` : ""}`.trim();   // iOS 26 起系統版本固定寫 18，看 Safari 的版本
-      m = /iPad|Macintosh/.test(u) ? "iPad" : IPH[`${w}x${h}@${dp}`] || IPH[`${w}x${h}`] || "iPhone"; }
+      m = /iPad|Macintosh/.test(u) ? "iPad" : "iPhone"; }   // 好幾種 iPhone 螢幕一樣大，猜不準就不猜（使用者選的）
     else if (/Android/.test(u)) { m = hi.model || ((/Android [\d.]+; ([^;)]+)/.exec(u) || [])[1] || "").replace(/\s*Build\/.*$/, ""); if (m === "K") m = "";
       os = `Android ${parseInt(hi.platformVersion, 10) || (/Android ([\d.]+)/.exec(u) || [])[1] || ""}`.trim(); }
     else if (/Windows/.test(u)) os = parseInt(hi.platformVersion, 10) >= 13 ? "Windows 11" : "Windows 10";
