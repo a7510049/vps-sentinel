@@ -1816,7 +1816,14 @@ function openLb(i, from){
   function infSet(p, dir, q){
     const y = inf.scrollTop, om = inf.querySelector(".imap"), old = om && om._c ? {c:om._c, t:[...om.querySelectorAll(".tl.ok")]} : null;
     const kl = inf.querySelector(".kbar i"), k0 = kl ? kl.style.left : "", tx0 = dir ? leafText(inf) : null;
+    const bk = () => { const n = {}; return [...inf.children].map(e => { const k = (e.classList[0] || e.tagName) + "." + (e.classList[1] || "") + ">" + (e.firstElementChild ? e.firstElementChild.classList[0] || "" : ""); n[k] = (n[k] || 0) + 1; return [k + "~" + n[k], e]; }); };
+    const r0 = dir && anim() ? new Map(bk().map(([k, e]) => [k, e.getBoundingClientRect()])) : null;
     inf.innerHTML = infoHTML(p); inf.scrollTop = y;            // 換張時停在原本看的地方
+    if (r0) bk().forEach(([k, e]) => {                          // 換張時某一塊變高變矮（多一行、少一格）：那塊慢慢伸縮、下面的跟著滑，不會一下子上下跳
+      const a = r0.get(k); if (!a) return void e.animate([{opacity:0}, {opacity:1}], {duration:T.mid, delay:T.fast / 2, easing:DEC, fill:"backwards"}); const b = e.getBoundingClientRect(), dy = a.top - b.top, dh = a.height - b.height;
+      if (Math.abs(dy) > .5) e.animate([{translate:`0 ${dy}px`}, {translate:"0 0"}], {duration:T.mid, easing:DEC});
+      if (Math.abs(dh) > .5) e.animate([{height:a.height + "px", overflow:"hidden"}, {height:b.height + "px", overflow:"hidden"}], {duration:T.mid, easing:DEC});
+    });
     infoMap(old, !!dir);
     const mv = dir && q && q !== p && anim() ? morph(q, p, k0) : null;
     if (tx0 && anim()) {                                         // 換張時只有變了的字淡入換上，其他不動（使用者說不要整塊抖一下）
@@ -1887,8 +1894,9 @@ function openLb(i, from){
   }
   function infoMap(old, swap){
     const p = PH[S.i], pb = $("[data-pal]", inf);
+    pbSnap(inf);
     if (pb && p.pal && swap && anim()) { const hg = pb.querySelector(".ihist svg"); if (hg) hg.animate([{opacity:.3, transform:"scaleY(.4)"}, {opacity:1, transform:"none"}], {duration:T.slow, easing:DEC}); pb.querySelectorAll(".pbar i").forEach((x, k) => x.animate([{opacity:.3, transform:"scaleX(.5)"}, {opacity:1, transform:"none"}], {duration:T.slow, delay:k * 40, easing:DEC, fill:"backwards"})); }   // 換張時直方圖、顏色條照樣長出來
-    if (pb && !p.pal) palette(p).then(() => { if (pb.isConnected && PH[S.i] === p) { pb.innerHTML = palHTML(p); const hg = pb.querySelector(".ihist svg"); if (hg && anim()) hg.animate([{opacity:0, transform:"scaleY(.2)"}, {opacity:1, transform:"none"}], {duration:T.slow, easing:DEC}); if (anim()) pb.querySelectorAll(".pbar i").forEach((x, k) => x.animate([{opacity:0, transform:"scaleX(.4)"}, {opacity:1, transform:"none"}], {duration:T.slow, delay:k * 50, easing:DEC, fill:"backwards"})); } });
+    if (pb && !p.pal) palette(p).then(() => { if (pb.isConnected && PH[S.i] === p) { pb.innerHTML = palHTML(p); pbSnap(pb); const hg = pb.querySelector(".ihist svg"); if (hg && anim()) hg.animate([{opacity:0, transform:"scaleY(.2)"}, {opacity:1, transform:"none"}], {duration:T.slow, easing:DEC}); if (anim()) pb.querySelectorAll(".pbar i").forEach((x, k) => x.animate([{opacity:0, transform:"scaleX(.4)"}, {opacity:1, transform:"none"}], {duration:T.slow, delay:k * 50, easing:DEC, fill:"backwards"})); } });
     const m = $(".imap", inf); if (!m || !p.g) return;
     const z = 15, W2 = m.clientWidth, H2 = m.clientHeight, cx = lx(p.g[1], z), cy = ly(p.g[0], z);
     tiles(m, cx, cy, z, W2, H2); m._c = [cx, cy];
@@ -3149,11 +3157,21 @@ function histSvg(p){                                         // 亮度是灰色�
   const tip = H.lo > .02 ? "暗部有一片全黑" : H.hi > .02 ? "亮部有一片過曝" : "";
   return `<div class="ihist"><svg viewBox="0 0 160 40" preserveAspectRatio="none" aria-hidden="true"><path d="M40 0v40M80 0v40M120 0v40" class="hg"/><polygon points="0,40 ${pts(H.h[3])} 160,40" class="hl0"/>${["hr", "hgr", "hb"].map((c, k) => `<polyline points="${pts(H.h[k])}" class="${c}"/>`).join("")}</svg><div class="ihl"><small>暗</small>${tip ? `<b>${tip}</b>` : ""}<small>亮</small></div></div>`;
 }
+/* 顏色條每一段的寬度對齊螢幕的像素：寬度有小數時，每條縫看起來粗細不一 */
+function pbSnap(root){
+  const r = devicePixelRatio || 1, px = v => Math.round(v * r) / r;
+  root.querySelectorAll(".pbar").forEach(b => {
+    const it = [...b.children], g = parseFloat(getComputedStyle(b).columnGap) || 0, W = b.clientWidth - g * (it.length - 1);
+    if (!(W > 0)) return;
+    const f = it.map(e => +e.dataset.f), t = f.reduce((a, c) => a + c, 0);
+    let acc = 0, at = 0; it.forEach((e, k) => { acc += W * f[k] / t; const w = k === it.length - 1 ? W - at : px(acc) - at; at += w; e.style.flex = `0 0 ${w}px`; });
+  });
+}
 function palHTML(p){
   const pl = p.pal; if (!pl) return `<div class="pbar wait"></div>`;
   if (!pl.length) return "";
   const t = pl.reduce((a, c) => a + c[1], 0);
-  return `${histSvg(p)}<div class="pbar">${pl.map(([c, n]) => `<i style="background:${c};flex:${Math.max(.06, n / t).toFixed(3)}"></i>`).join("")}</div>${gamSvg(p) || (scrNote(p) ? `<div class="iscr">${scrNote(p)}</div>` : "")}`;
+  return `${histSvg(p)}<div class="pbar">${pl.map(([c, n]) => `<i data-f="${Math.max(.06, n / t).toFixed(3)}" style="background:${c};flex:${Math.max(.06, n / t).toFixed(3)}"></i>`).join("")}</div>${gamSvg(p) || (scrNote(p) ? `<div class="iscr">${scrNote(p)}</div>` : "")}`;
 }
 /* 在這附近拍的其他照片（300 公尺內，近的先）：點了直接換過去 */
 function gdist(a, b){ const r = Math.PI / 180, h = Math.sin((b[0] - a[0]) * r / 2) ** 2 + Math.cos(a[0] * r) * Math.cos(b[0] * r) * Math.sin((b[1] - a[1]) * r / 2) ** 2; return 12742000 * Math.asin(Math.min(1, Math.sqrt(h))); }
