@@ -1791,6 +1791,7 @@ function openLb(i, from){
     if (!anim()) return end();
     setTimeout(end, T.mid + 200);                              // 安卓返回手勢時動畫有時不會結束：時間到一定收掉
     el.querySelectorAll(".lbt,.lbb,.nav,.inf,.lbs").forEach(x => { x.style.opacity = 0; });
+    sl.forEach(s => { if (s.firstChild !== zw) s.style.visibility = "hidden"; });   // 資訊開著時關掉：畫面變寬，旁邊那張會被排進看得到的地方，先藏起來
     S.info = false; el.classList.remove("info", "cmo");
     const n0 = now === "none" ? "translate(0px,0px) scale(1)" : now;
     if (r) { const a1 = toTile(r, f); zw.animate([{transform:n0, clipPath:NOCLIP}, {transform:a1.t, clipPath:a1.c}], {duration:T.mid, easing:EASE, fill:"forwards"}).onfinish = end; }
