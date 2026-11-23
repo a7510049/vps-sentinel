@@ -1761,7 +1761,7 @@ function openLb(i, from){
     track.style.transform = `translateX(${to}px)`;
     S.busy = () => { a.cancel(); S.busy = null;
       if (d > 0) sl = [sl[1], sl[2], sl[0]]; else sl = [sl[2], sl[0], sl[1]];
-      S.i = n; track.style.transform = ""; fill(sl[d > 0 ? 2 : 0], n + d); place(); chrome(); };
+      S.i = n; track.style.transform = ""; fill(sl[d > 0 ? 2 : 0], n + d); place(); chrome(); if (ZEB) zbMake(); };   // 過曝／死黑開著：換到的這張也標出來
     a.onfinish = () => S.busy && S.busy();
   }
   const finish = () => S.busy && S.busy();
