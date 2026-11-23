@@ -1678,6 +1678,10 @@ function tmac(el, pts, r, path, len){
 
 /* ═════════ 看大圖 ═════════ */
 let LB = null;
+// 大圖、幻燈片、限時動態開著時後面不捲：不改 html 的 overflow（安卓一改就把整面照片牆的圖層拆掉重畫，照片會黑一下）
+const SCRK = new Set([" ", "PageUp", "PageDown", "Home", "End", "ArrowUp", "ArrowDown"]);
+addEventListener("wheel", e => { if ((LB || SS || SY) && !e.target.closest(".inf,.cml,.sh")) e.preventDefault(); }, {passive:false, capture:true});
+addEventListener("keydown", e => { if ((LB || SS || SY) && SCRK.has(e.key) && !e.target.closest("input,textarea,.inf,.cml")) e.preventDefault(); }, true);
 const GAPX = 28;
 function openLb(i, from){
   if (LB) { if (LB.closing && LB.kill) LB.kill(); else return; }   // 上一張還在收：直接收完，這次點的照樣打開
@@ -1691,7 +1695,6 @@ function openLb(i, from){
     <div class="lbb"><div class="vbar"><button class="vpp" data-vpp aria-label="播放">${I("play")}</button><span class="vt0 num">0:00</span><div class="vtr" data-vseek><i><b></b></i></div><span class="vt1 num"></span><button class="vpp" data-vmu aria-label="聲音">${I("snd")}</button></div>
       <div class="lbr"><div class="cap"><b></b><span></span></div>${D.talk ? `<button class="sb" data-lk aria-label="愛心（按住選其他表情）">${I("heart")}<span class="num"></span></button><button class="sb rxb" data-rx aria-label="其他表情" hidden>${I("smile")}<span class="num"></span></button><button class="sb" data-cm aria-label="留言">${I("chat")}<span class="num"></span></button>` : ""}</div></div><div class="inf"></div>${D.talk ? `<div class="inf cmp"></div>` : ""}${STRIP ? `<div class="lbs"><div class="lbsr">${PH.map((p, k) => `<button class="lbst" data-go="${k}" aria-label="第 ${k + 1} 張"><img alt="" loading="lazy" draggable="false" src="${src(p, "s")}"></button>`).join("")}</div></div>` : ""}`;
   document.body.appendChild(el);
-  document.documentElement.style.overflow = "hidden";
   const stage = $(".stage", el), track = $(".track", el), bg = $(".bg", el), inf = $(".inf", el), cmp = $(".cmp", el) || document.createElement("div");
   const S = {el, i, z:{s:1, x:0, y:0}, info:false, busy:null, from:from && from.isConnected ? from : null, fi:i};
   LB = S;
@@ -1963,7 +1966,7 @@ function openLb(i, from){
     stopAll();
     let gone = false;
     const end = () => { if (gone) return; gone = true; el.remove();
-      ovl.forEach(x => { x.style.opacity = ""; if (anim()) x.animate([{opacity:0}, {opacity:1}], {duration:T.mid, easing:EASE}); }); TILES.forEach(x => x.classList.remove("gone")); if (S.ob) S.ob.classList.remove("lbo"); document.documentElement.style.overflow = ""; if (LB === S) LB = null; onScroll(); };
+      ovl.forEach(x => { x.style.opacity = ""; if (anim()) x.animate([{opacity:0}, {opacity:1}], {duration:T.mid, easing:EASE}); }); TILES.forEach(x => x.classList.remove("gone")); if (S.ob) S.ob.classList.remove("lbo"); if (LB === S) LB = null; onScroll(); };
     S.kill = end; el.style.pointerEvents = "none";
     if (!anim()) return end();
     setTimeout(end, T.mid + 200);                              // 安卓返回手勢時動畫有時不會結束：時間到一定收掉
@@ -2738,7 +2741,6 @@ function show(start, day){
     <div class="ssc"><button class="rb" data-sx aria-label="關閉">${I("x")}</button><span></span>${D.mu ? `<button class="rb" data-smu aria-label="音樂">${I("snd")}</button>` : ""}<button class="rb" data-spp aria-label="暫停">${I("pause")}</button></div>
     <div class="ssn"><button class="rb" data-sp aria-label="上一張">${I("l")}</button><button class="rb" data-sn aria-label="下一張">${I("r")}</button></div>`;
   document.body.appendChild(el);
-  document.documentElement.style.overflow = "hidden";
   const view = $(".ssv", el), bar = $(".ssp i", el);
   let wake = null;
   try { navigator.wakeLock && navigator.wakeLock.request("screen").then(w => { wake = w; }).catch(() => {}); } catch (e) {}
@@ -2828,7 +2830,7 @@ function show(start, day){
     try { wake && wake.release(); } catch (e) {}
     try { document.fullscreenElement && document.exitFullscreen(); } catch (e) {}
     if (audio) fade(audio, 0, () => audio.pause());
-    const fin = () => { el.remove(); if (!LB) document.documentElement.style.overflow = ""; SS = null; };
+    const fin = () => { el.remove(); SS = null; };
     if (!anim()) return fin();
     el.animate([{opacity:1}, {opacity:0}], {duration:T.mid, easing:EASE, fill:"forwards"}).onfinish = fin;
   }
@@ -2879,7 +2881,6 @@ function story(n, from){
   el.innerHTML = `<div class="syv"></div><div class="syt"><div class="syp"></div><div class="syh"><span class="mring"><img alt=""></span><div><b></b><small class="num"></small></div>
     <button class="rb" data-yx aria-label="關閉">${I("x")}</button></div></div>${D.talk ? `<div class="syb"><button class="sb" data-ylk aria-label="愛心">${I("heart")}<span class="num"></span></button></div>` : ""}`;
   document.body.appendChild(el);
-  document.documentElement.style.overflow = "hidden";
   const view = $(".syv", el), bars = $(".syp", el);
   let g = n, at = 0, timer = 0, left = SYD, t0 = 0, held = false, ms = SYD;
   const S = {el}; SY = S;
@@ -2963,7 +2964,7 @@ function story(n, from){
     if (S.closing) return; S.closing = 1;
     clearTimeout(timer); clearTimeout(waitT); seq++;
     view.querySelectorAll("video").forEach(v => v.pause()); if (pend) pend.pause();
-    const fin = () => { el.remove(); if (!LB && !SS) document.documentElement.style.overflow = ""; SY = null; };
+    const fin = () => { el.remove(); SY = null; };
     if (!anim()) return fin();
     const b = $(`.mem[data-mem="${g}"] .mring`), r = b && b.getBoundingClientRect();
     const cur = getComputedStyle(el).transform, t0 = cur === "none" ? "none" : cur;
