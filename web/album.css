@@ -273,8 +273,11 @@ button.chip:active,a.chip:active{transform:scale(.95)}
 .hero{height:100svh;min-height:520px}
 .hero .cv .hi.ok{animation:kb 26s var(--ease) both}
 @keyframes kb{from{transform:scale(1.08)}to{transform:none}}
-.hero::after{background:radial-gradient(120% 90% at 50% 40%,transparent 45%,rgba(0,0,0,.35) 100%),
-  linear-gradient(180deg,rgba(0,0,0,.32) 0,transparent 22%,transparent 42%,color-mix(in oklab,var(--bg) 62%,transparent) 78%,var(--bg) 100%)}
+/* 底部接到頁面：照片先淡淡壓暗，最後一段照緩和曲線接到底色（多幾個點，不會看得出哪裡開始變暗）；四周壓暗的那層放在下面，最底下一定是頁面底色，沒有接縫 */
+.hero::after{background:linear-gradient(180deg,transparent 40%,color-mix(in oklab,var(--bg) 8%,transparent) 50%,color-mix(in oklab,var(--bg) 22%,transparent) 59%,color-mix(in oklab,var(--bg) 40%,transparent) 67%,
+    color-mix(in oklab,var(--bg) 60%,transparent) 75%,color-mix(in oklab,var(--bg) 78%,transparent) 83%,color-mix(in oklab,var(--bg) 92%,transparent) 91%,var(--bg) 98%),
+  linear-gradient(180deg,rgba(0,0,0,.32) 0,rgba(0,0,0,.14) 11%,transparent 24%),
+  radial-gradient(120% 80% at 50% 36%,transparent 50%,rgba(0,0,0,.3) 100%)}
 .hcap{text-align:center;padding-bottom:calc(clamp(64px,13vh,140px) + env(safe-area-inset-bottom))}
 .eyebrow{display:inline-flex;align-items:center;gap:14px;font-size:var(--fs-xs);font-weight:600;letter-spacing:.16em;color:rgba(255,255,255,.82);margin-bottom:18px;text-shadow:0 1px 12px rgba(0,0,0,.4)}
 .eyebrow::before,.eyebrow::after{content:"";width:clamp(20px,6vw,56px);height:1px;background:currentColor;opacity:.6}
@@ -860,8 +863,8 @@ html,body{touch-action:pan-x pan-y}
 .dhr svg{width:14px;height:14px;opacity:.8}
 .dhr i{font-style:normal;opacity:.5}
 .wall[data-z="2"] .dhr,.wall[data-z="3"] .dhr{display:none}
-.st .sgb{display:flex;align-items:flex-end;gap:2px;height:18px;margin-top:6px}
-.st .sgb i{flex:1;max-width:8px;border-radius:2px 2px 1px 1px;background:var(--grad);opacity:.75}
+.st .sgb{display:flex;align-items:flex-end;gap:3px;height:18px;margin-top:6px}
+.st .sgb i{flex:none;width:6px;border-radius:var(--r-xs) var(--r-xs) 0 0;background:var(--grad);background-size:100% 18px;background-position:bottom}
 .st .sgf{display:flex;margin-top:6px}
 .st .sgf img{width:22px;height:16px;object-fit:cover;border-radius:3px;box-shadow:0 0 0 1.5px var(--s1);margin-right:-6px}
 .st .sgr{display:block;height:5px;margin-top:8px;border-radius:var(--r-pill);background:color-mix(in oklab,var(--g2) 18%,var(--s2));overflow:hidden}
@@ -885,11 +888,11 @@ html,body{touch-action:pan-x pan-y}
 .st+.st{border-left:1px solid var(--line)}
 .st b{font-size:clamp(28px,7.4vw,52px)}
 .st small{letter-spacing:.12em;white-space:nowrap}
-.st .sgb{width:min(100%,64px);justify-content:center;margin-top:4px}
+.st .sgb{max-width:100%;justify-content:center;margin-top:4px}
 .st .sgf,.st .sgr{margin-top:4px}
 .st .sgr{width:min(100%,56px)}
-@media (min-width:900px){.stats,.stats:is(*){grid-template-columns:none;grid-auto-columns:minmax(0,180px);justify-content:start}}
-@media (min-width:900px){.st:first-child{padding-left:0;justify-items:start;text-align:left}.st{justify-items:start;text-align:left;padding-left:clamp(18px,2vw,28px)}.st .sgb{justify-content:flex-start}}
+@media (min-width:900px){.stats,.stats:is(*){grid-template-columns:none;grid-auto-columns:minmax(0,1fr)}}
+
 
 /* ── 參考 Exposure、Pic-Time、Glass、Polarsteps 加的 ── */
 /* 開場片頭：封面從放大慢慢退回來，相簿名稱一個字一個字浮出 */
