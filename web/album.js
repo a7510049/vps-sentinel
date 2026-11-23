@@ -45,7 +45,9 @@ const P = {
   send:'<path d="M4.5 12h13M12.5 6l6 6-6 6"/>', find:'<circle cx="11" cy="11" r="6.5"/><path d="m20 20-4.4-4.4"/>', ng:'<rect x="3.5" y="3.5" width="17" height="17" rx="3"/><rect x="8" y="8" width="8" height="8" rx="1.2"/>', hue:'<circle cx="12" cy="12" r="8.5"/><path d="M12 3.5v17M3.5 12h17M6 6l12 12M18 6 6 18"/>', scr:'<rect x="3" y="4.5" width="18" height="12" rx="2"/><path d="M9 20h6M12 16.5V20"/>', pen:'<path d="M4 20h4L19 9a2.8 2.8 0 0 0-4-4L4 16v4Z"/><path d="m13.5 6.5 4 4"/>', again:'<path d="M4 12a8 8 0 1 0 2.4-5.7L4 8.5M4 4v4.5h4.5"/>', zeb:'<rect x="3.5" y="3.5" width="17" height="17" rx="3"/><path d="M3.5 13 13 3.5M7 20.5 20.5 7M13.5 20.5l7-7"/>', cmp:'<rect x="3" y="5" width="7.5" height="14" rx="1.5"/><rect x="13.5" y="5" width="7.5" height="14" rx="1.5"/><path d="M12 2.5v19"/>'
 };
 const I = n => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${P[n]}</svg>`;
-const src = (p, k) => `${BASE}/i/${p.i}/${k}?v=${p.v}`;
+/* 安卓：HDR 照片沒開 HDR 時一律拿不帶增益圖的大圖（d／y）。Chrome 畫面上一出現增益圖，整頁就重畫、閃一下（就算 dynamic-range-limit 壓著也一樣） */
+const SDRK = /Android/i.test(navigator.userAgent) ? {l:"d", x:"y"} : {};
+const src = (p, k, hd) => `${BASE}/i/${p.i}/${p.hdr && !hd && SDRK[k] || k}?v=${p.v}`;
 const anim = () => !RM.matches;
 const isVid = p => !!p.vd;
 const dur = t => { t = Math.max(0, Math.round(t)); return `${Math.floor(t / 60)}:${String(t % 60).padStart(2, "0")}`; };
@@ -1712,7 +1714,7 @@ function openLb(i, from){
     if (zw.dataset.i === String(idx)) return;
     zw.dataset.i = idx;
     if (p.broken) { zw.innerHTML = `<div class="nope">${I("off")}</div>`; return; }
-    zw.innerHTML = `<img class="s1" alt="" draggable="false" src="${p.q ? `data:image/jpeg;base64,${p.q}` : src(p, "s")}"><img class="s1" alt="" draggable="false" src="${src(p, "s")}"><img class="s2" alt="" draggable="false" decoding="async" data-src="${src(p, "l")}">`
+    zw.innerHTML = `<img class="s1" alt="" draggable="false" src="${p.q ? `data:image/jpeg;base64,${p.q}` : src(p, "s")}"><img class="s1" alt="" draggable="false" src="${src(p, "s")}"><img class="s2" alt="" draggable="false" decoding="async" data-src="${src(p, "l", HDRON)}">`
       + (p.x.afp && !isVid(p) && !afFace(p) ? `<i class="afb${p.fm ? " miss" : ""}" style="left:${(p.x.afp[0] * 100).toFixed(2)}%;top:${(p.x.afp[1] * 100).toFixed(2)}%;width:${(p.x.afp[2] * Math.min(p.w, p.h) / p.w * 100).toFixed(2)}%;height:${(p.x.afp[2] * Math.min(p.w, p.h) / p.h * 100).toFixed(2)}%"></i>` : "")
       + (p.x.fcs && !isVid(p) ? p.x.fcs.map((f, k) => `<i class="fcb${afFace(p) === k + 1 ? ` af${p.fm ? " miss" : ""}` : ""}" style="left:${(f[0] * 100).toFixed(2)}%;top:${(f[1] * 100).toFixed(2)}%;width:${(f[2] * 100).toFixed(2)}%;height:${(f[3] * 100).toFixed(2)}%"></i>`).join("") : "")
       + (isVid(p) ? `<video class="vv" playsinline preload="none" disablepictureinpicture></video><span class="vbig">${p.vr === 1 ? I("play") : p.vr === 0 ? I("x") : `<i class="spin"></i>`}</span>` : p.gf === 2 ? `<img class="awp" alt="" draggable="false" src="${src(p, "a")}">` : p.lv ? `<video class="lvv" muted playsinline preload="none"${p.gf ? " loop" : ""}></video>` : "");
@@ -1768,7 +1770,7 @@ function openLb(i, from){
     const f = fit(p), need = Math.max(f.w, f.h) * Math.min(3, devicePixelRatio || 1) * (S.z ? S.z.s : 1);
     if (need < 2048 * 1.15) return;
     zw.dataset.xl = S.i; const i0 = S.i, im = new Image(); im.decoding = "async";
-    im.src = src(p, "x");                                     // 先在背景解碼好才換上，換的那一下不卡
+    im.src = src(p, "x", HDRON);                              // 先在背景解碼好才換上，換的那一下不卡
     (im.decode ? im.decode() : new Promise(r => { im.onload = r; })).then(() => { const b = zw.querySelector(".s2"); if (b && zw.dataset.i === String(i0) && im.naturalWidth > b.naturalWidth) { b.removeAttribute("data-src"); b.src = im.src; (b.decode ? b.decode() : Promise.resolve()).then(() => b.classList.add("ok"), () => {}); } }).catch(() => {});
   }
   S.fitAll = () => { const zw = cur(); zw.style.transition = `left ${T.mid}ms ${EASE},top ${T.mid}ms ${EASE},width ${T.mid}ms ${EASE},height ${T.mid}ms ${EASE}`;
@@ -1851,6 +1853,15 @@ function openLb(i, from){
     HDRON = on; try { localStorage.setItem("vsa-hdr", on ? "1" : ""); } catch (e) {}
     $("[data-hdr]", el).setAttribute("aria-pressed", on);
     clearTimeout(S.hdT); S.hdOn = on ? 1 : 0; hdAll(on);
+    if (ANDR) sl.forEach(s => {                                // 換成帶／不帶增益圖的大圖（在背景解好才換，不會先空一下）
+      const z = s.firstChild, b = z && z.querySelector("img.s2"), i0 = z && z.dataset.i, p = PH[+i0];
+      if (!b || !p || !p.hdr) return;
+      if (b.dataset.src) { b.dataset.src = src(p, "l", on); return; }
+      const u = b.getAttribute("src"); if (!u) return;
+      const nu = src(p, /\/[xy]\?/.test(u) ? "x" : "l", on); if (nu === u) return;
+      const im = new Image(); im.decoding = "async"; im.src = nu;
+      (im.decode ? im.decode() : Promise.resolve()).then(() => { if (b.isConnected && z.dataset.i === i0) b.src = nu; }, () => {});
+    });
     if (on && ANDR) toast("手機切換 HDR 時螢幕會閃一下，不是網頁的問題");
   }
   S.hdrSet = hdrSet;
@@ -1960,7 +1971,7 @@ function openLb(i, from){
     const a0 = toTile(g0, f0), z = cur();
     z.style.transform = a0.t; z.style.clipPath = a0.c; bg.style.opacity = 0;
     el.querySelectorAll(".lbt,.lbb,.nav,.lbs").forEach(x => { x.style.opacity = 0; });
-    const ti = t0 && (t0.tagName === "IMG" ? t0 : t0.querySelector("img.hi,img")), lu = new URL(src(PH[i], "l"), location.href).href;
+    const ti = t0 && (t0.tagName === "IMG" ? t0 : t0.querySelector("img.hi,img")), lu = new URL(src(PH[i], "l", HDRON), location.href).href;
     const big = z.querySelector("img.s2[data-src]"), sm = z.querySelectorAll("img.s1")[1], wait = [];
     if (big && ti && ti.currentSrc === lu) { big.src = big.dataset.src; big.removeAttribute("data-src"); big.style.transition = "none";
       wait.push((big.decode ? big.decode() : Promise.reject()).then(() => { big.classList.add("ok"); }, () => {})); }
