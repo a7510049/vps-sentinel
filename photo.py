@@ -396,6 +396,17 @@ def pic_maker(b, more):
     def txt(tag):
         t = v.get(tag)
         return t[1].strip() if t and t[0] == 2 and isinstance(t[1], str) else ""
+
+    def arr(tag, e):                                   # 一串 16 位元整數（有的相機標成 undefined，自己拆）
+        t = v.get(tag)
+        if not t:
+            return []
+        if isinstance(t[1], bytes):
+            return list(struct.unpack_from(e + "H" * (len(t[1]) // 2), t[1]))
+        return t[1] if isinstance(t[1], list) else [t[1]] if isinstance(t[1], int) else []
+
+    def s16(n):
+        return n - 65536 if isinstance(n, int) and n > 32767 else n
     out, fx, kv = {}, [], None
     if name == "pana":
         out["sl"] = "相片風格"
@@ -432,6 +443,13 @@ def pic_maker(b, more):
             out["fp"] = (t[1][0], t[1][1], 1, 1)
         if num(0x45) in PIC_PANA_BK:                   # BracketSettings：包圍曝光幾張
             out["bk"] = PIC_PANA_BK[num(0x45)]
+        ab, gm = s16(num(0x46)), s16(num(0x47))        # WBShiftAB（正的往藍）、WBShiftGM（正的往綠）
+        if isinstance(ab, int) and isinstance(gm, int) and (ab or gm) and abs(ab) <= 9 and abs(gm) <= 9:
+            out["ws"] = [-ab, gm, "ab"]
+        fd = arr(0x4E, e0)                             # FaceDetInfo：幾張臉，每張 X、Y 中心和寬、高（320×240 的畫面）
+        if fd and 0 < fd[0] <= 5 and len(fd) >= 1 + 4 * fd[0]:
+            out["fc"] = [tuple(fd[1 + 4 * k:5 + 4 * k]) for k in range(fd[0])]
+            out["fcr"] = (320, 240)
     elif name == "fuji":
         out["sl"] = "底片模擬"
         sat = num(0x1003)
@@ -449,6 +467,17 @@ def pic_maker(b, more):
             out["fp"] = (t[1][0], t[1][1], 0, 0)
         if num(0x1100) == 1:                           # AutoBracketing
             out["bk"] = 1
+        t = v.get(0x100A)                              # WhiteBalanceFineTune：紅、藍各偏多少（一格是 20）
+        if t and t[0] in (8, 9) and isinstance(t[1], list) and len(t[1]) == 2 and any(t[1]):
+            u = 20 if all(n % 20 == 0 for n in t[1]) else 10 if all(n % 10 == 0 for n in t[1]) else 1
+            r_, b_ = t[1][0] // u, t[1][1] // u
+            if abs(r_) <= 9 and abs(b_) <= 9:
+                out["ws"] = [r_, b_, "rb"]
+        n_ = num(0x4100)                               # FacesDetected＋FacePositions：每張臉的左、上、右、下（照片本身的像素）
+        fp_ = arr(0x4103, "<")
+        if n_ and 0 < n_ <= 5 and len(fp_) >= 4 * n_:
+            out["fc"] = [((fp_[4 * k] + fp_[4 * k + 2]) / 2, (fp_[4 * k + 1] + fp_[4 * k + 3]) / 2, fp_[4 * k + 2] - fp_[4 * k], fp_[4 * k + 3] - fp_[4 * k + 1]) for k in range(n_)]
+            out["fcr"] = (0, 0)
     elif name == "sony":
         cs = txt(0xB020)
         if cs in PIC_SONY_ST:
@@ -465,6 +494,10 @@ def pic_maker(b, more):
             out["st"] = PIC_CANON_ST[t[1][10]]
         if t and t[0] == 3 and isinstance(t[1], list) and len(t[1]) > 9:
             kv = t[1][9]
+        if t and t[0] in (3, 8) and isinstance(t[1], list) and len(t[1]) > 13:   # ProcessingInfo 12／13：WBShiftAB（正的往琥珀）、WBShiftGM（正的往綠）
+            ab, gm = s16(t[1][12]), s16(t[1][13])
+            if (ab or gm) and abs(ab) <= 9 and abs(gm) <= 9:
+                out["ws"] = [ab, gm, "ab"]
         if txt(0x95):
             out["ln"] = txt(0x95)[:80]
         t = v.get(0x04)                                # ShotInfo：對焦距離的上下限（公分，655.35 公尺以上是無限遠）

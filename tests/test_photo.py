@@ -196,7 +196,7 @@ def ifd(ents, at, e="<"):
             raw = struct.pack(e + "H", val)
         else:
             raw = struct.pack(e + "I", val)
-        cnt = len(raw) // {3: 2, 4: 4, 5: 8}.get(typ, 1)
+        cnt = len(raw) // {3: 2, 4: 4, 5: 8, 8: 2, 9: 4}.get(typ, 1)
         if len(raw) <= 4:
             head += struct.pack(e + "HHI", tag, typ, cnt) + raw.ljust(4, b"\0")
         else:
@@ -355,6 +355,36 @@ class PhotoUnit(unittest.TestCase):
         self.assertEqual(afp({"sa": [1008, 756, 400, 300], "pw": 4032, "ph": 3024}, {}, 1, 0, 4032, 3024), [.25, .25, .099])
         self.assertEqual(afp({}, {"fp": (300, 200, 0, 0)}, 1, 0, 600, 400), [.5, .5, .1])
 
+
+    def test_wb_shift_faces(self):
+        """白平衡微調（松下 B 是正的要反過來、Canon、富士一格 20）和相機偵測到的臉"""
+        def maker(b):
+            return P["pic_maker"](b, P["pic_exif_more"](b))
+        fd = struct.pack("<9H", 2, 160, 120, 40, 50, 80, 60, 20, 20)
+        pana = mk_exif("Panasonic", lambda at: b"Panasonic\0\0\0" + ifd([(0x46, 8, struct.pack("<h", -2)), (0x47, 8, struct.pack("<h", 1)), (0x4E, 7, fd), (0x89, 3, 3)], at + 12))
+        m = maker(pana)
+        self.assertEqual(m["ws"], [2, 1, "ab"])                 # 往琥珀 2、往綠 1
+        self.assertEqual(m["fc"], [(160, 120, 40, 50), (80, 60, 20, 20)])
+        self.assertEqual(m["fcr"], (320, 240))
+        fuji = mk_exif("FUJIFILM", lambda at: b"FUJIFILM" + struct.pack("<I", 12) + ifd([(0x100A, 9, struct.pack("<ii", 40, -20)),
+                       (0x4100, 3, 1), (0x4103, 3, struct.pack("<4H", 100, 200, 300, 500))], 12))
+        m = maker(fuji)
+        self.assertEqual(m["ws"], [2, -1, "rb"])
+        self.assertEqual(m["fc"], [(200, 350, 200, 300)])
+        pi = struct.pack("<" + "h" * 14, 28, *([0] * 9), 0x83, 0, 3, -2)
+        canon = mk_exif("Canon", lambda at: ifd([(0xA0, 3, pi)], at))
+        self.assertEqual(maker(canon)["ws"], [3, -2, "ab"])
+        zero = mk_exif("Panasonic", lambda at: b"Panasonic\0\0\0" + ifd([(0x46, 8, struct.pack("<h", 0)), (0x47, 8, struct.pack("<h", 0)), (0x89, 3, 3)], at + 12))
+        self.assertNotIn("ws", maker(zero))
+        src = open(os.path.join(ROOT, "album.py"), encoding="utf-8").read()
+        G = {}
+        for n in ast.parse(src).body:
+            if isinstance(n, ast.FunctionDef) and n.name == "alb_faces":
+                exec(compile(ast.Module([n], []), "album.py", "exec"), G)   # noqa: S102
+        f = G["alb_faces"]
+        self.assertEqual(f({}, {"fc": [(160, 120, 32, 48)], "fcr": (320, 240)}, 1, 0, 6000, 4000), [[.5, .5, .1, .2]])
+        self.assertEqual(f({}, {"fc": [(80, 60, 32, 48)], "fcr": (320, 240)}, 6, 0, 6000, 4000), [[.75, .25, .2, .1]])   # 轉 90 度：寬高對調
+        self.assertIsNone(f({}, {"fc": [(0, 0, 0, 0)], "fcr": (320, 240)}, 1, 0, 6000, 4000))
 
     def test_canon_nikon_af(self):
         """Canon AFInfo2（畫面中間是原點、往上是正，對準的點用位元標）、Nikon Z 系列 AFInfo2（左上角原點）"""

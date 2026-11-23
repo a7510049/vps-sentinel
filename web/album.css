@@ -823,9 +823,11 @@ html,body{touch-action:pan-x pan-y}
 .iset .iaf.miss .gaf{stroke:var(--bad)}
 .iset .iaf.on{background:color-mix(in oklab,var(--g2) 14%,transparent)}
 .iset .iaf.on .gaf{stroke:var(--g2)}
+.iset .iaf .gfc{stroke:var(--tx3);stroke-width:1;fill:none}
+.iset .iaf.on .gfc{stroke:var(--tx2)}
 .iset .iaf.miss b{color:var(--bad)}
 /* 對焦框：相機對焦的位置（四個角的框，跟著照片縮放） */
-.lb .zw:has(.afb){overflow:clip}
+.lb .zw:has(.afb,.fcb){overflow:clip}
 .lb .afb{position:absolute;transform:translate(-50%,-50%) scale(1.25);opacity:0;pointer-events:none;transition:opacity var(--t-mid),transform var(--t-mid) var(--ease);
   --c:#fff;--w:clamp(2px,.45cqmin,4px);--l:max(12px,24%);
   background:linear-gradient(var(--c),var(--c)) 0 0/var(--l) var(--w),linear-gradient(var(--c),var(--c)) 0 0/var(--w) var(--l),linear-gradient(var(--c),var(--c)) 100% 0/var(--l) var(--w),linear-gradient(var(--c),var(--c)) 100% 0/var(--w) var(--l),
@@ -833,6 +835,9 @@ html,body{touch-action:pan-x pan-y}
   background-repeat:no-repeat;filter:drop-shadow(0 0 .6px rgba(0,0,0,.9)) drop-shadow(0 0 3px rgba(0,0,0,.55));min-width:28px;min-height:28px;
   box-shadow:0 0 0 200vmax rgba(0,0,0,.3)}   /* 框外面整張壓暗：照片顏色跟框很像（白牆、天空）時也看得出對焦在哪 */
 .lb.afon .afb{opacity:1;transform:translate(-50%,-50%) scale(1)}
+/* 相機偵測到的臉：細的圓角框，跟對焦框一起開關 */
+.lb .fcb{position:absolute;transform:translate(-50%,-50%) scale(1.15);opacity:0;pointer-events:none;border:clamp(1px,.3cqmin,2px) solid rgba(255,255,255,.85);border-radius:var(--r-md);filter:drop-shadow(0 0 2px rgba(0,0,0,.6));transition:opacity var(--t-mid),transform var(--t-mid) var(--ease)}
+.lb.afon .fcb{opacity:1;transform:translate(-50%,-50%) scale(1)}
 .lb .afb.miss{--c:var(--bad)}
 
 /* 更多圖形：每天的 24 小時時間條、數字卡的小圖、城市在整趟的哪幾天、期限圈、封面國旗 */
@@ -1347,6 +1352,17 @@ button.dct:active{transform:scale(.92)}
 .kbar{position:relative;height:8px;border-radius:var(--r-pill);background:linear-gradient(90deg,#ff8a2a,#ffc27a 28%,#fff4e0 52%,#dfe9ff 70%,#9cc0ff)}
 .kbar i{position:absolute;top:50%;width:14px;height:14px;margin:-7px 0 0 -7px;border-radius:50%;background:#fff;box-shadow:var(--sh-pop),0 0 0 2px var(--tx2)}
 .isty>.kel{flex:1 1 100%}
+/* 白平衡微調方格 */
+.wbs{flex:1 1 100%;display:flex;align-items:center;gap:12px}
+.isty>:is(i+div,.kel)~.wbs{margin-top:6px;padding-top:12px;border-top:1px solid var(--line)}
+.wbs svg{width:72px;height:72px;flex:none;overflow:visible}
+.wbs small{display:block;font-size:10px;font-weight:600;color:var(--tx3);letter-spacing:.05em}
+.wbs b{font-size:var(--fs-m);font-weight:750}
+.wbf{fill:var(--s2)}
+.wbg{stroke:var(--line);stroke-width:.6}
+.wbg.z{stroke:var(--tx3);stroke-width:.8;opacity:.6}
+.wbl{font-size:6px;font-weight:700;fill:var(--tx3);text-anchor:middle}
+.wbd{fill:#fff;stroke:var(--p);stroke-width:1.6}
 .isty>i+div{min-width:min(50%,180px)}
 
 /* 中性灰背景：看顏色用（後面不透出照片的顏色、四周不壓暗） */

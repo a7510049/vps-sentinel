@@ -1639,6 +1639,7 @@ function openLb(i, from){
     if (p.broken) { zw.innerHTML = `<div class="nope">${I("off")}</div>`; return; }
     zw.innerHTML = `<img class="s1" alt="" draggable="false" src="${p.q ? `data:image/jpeg;base64,${p.q}` : src(p, "s")}"><img class="s1" alt="" draggable="false" src="${src(p, "s")}"><img class="s2" alt="" draggable="false" src="${src(p, "l")}">`
       + (p.x.afp && !isVid(p) ? `<i class="afb${p.fm ? " miss" : ""}" style="left:${(p.x.afp[0] * 100).toFixed(2)}%;top:${(p.x.afp[1] * 100).toFixed(2)}%;width:${(p.x.afp[2] * Math.min(p.w, p.h) / p.w * 100).toFixed(2)}%;height:${(p.x.afp[2] * Math.min(p.w, p.h) / p.h * 100).toFixed(2)}%"></i>` : "")
+      + (p.x.fcs && !isVid(p) ? p.x.fcs.map(f => `<i class="fcb" style="left:${(f[0] * 100).toFixed(2)}%;top:${(f[1] * 100).toFixed(2)}%;width:${(f[2] * 100).toFixed(2)}%;height:${(f[3] * 100).toFixed(2)}%"></i>`).join("") : "")
       + (isVid(p) ? `<video class="vv" playsinline preload="none" disablepictureinpicture></video><span class="vbig">${p.vr === 1 ? I("play") : p.vr === 0 ? I("x") : `<i class="spin"></i>`}</span>` : p.gf === 2 ? `<img class="awp" alt="" draggable="false" src="${src(p, "a")}">` : p.lv ? `<video class="lvv" muted playsinline preload="none"${p.gf ? " loop" : ""}></video>` : "");
     const aw = zw.querySelector(".awp"); if (aw) aw.complete && aw.naturalWidth ? aw.classList.add("ok") : aw.addEventListener("load", () => aw.classList.add("ok"), {once:true});
     const big = zw.querySelector(".s2");
@@ -2252,7 +2253,7 @@ function openLb(i, from){
     if (e.target.closest && e.target.closest("input,textarea")) return;
     if (e.key === " " && isVid(PH[S.i])) { e.preventDefault(); return vToggle(); }
     if (e.key === "g" || e.key === "G") return ngSet(!NG);
-    if ((e.key === "f" || e.key === "F") && PH[S.i] && PH[S.i].x.afp) return afSet(!AFON);
+    if ((e.key === "f" || e.key === "F") && PH[S.i] && (PH[S.i].x.afp || PH[S.i].x.fcs)) return afSet(!AFON);
     if ((e.key === "z" || e.key === "Z") && PH[S.i] && !isVid(PH[S.i])) return zbSet(!ZEB);
     if ((e.key === "c" || e.key === "C") && !$("[data-cmpb]", el).hidden) return $("[data-cmpb]", el).click();
     if (e.key === "ArrowRight") go(1);
@@ -3122,11 +3123,19 @@ function gMeter(m){                      // 相機上的測光符號：評價（
   return `<svg class="gin gb" viewBox="0 0 24 24" aria-hidden="true">${fr}${in_}</svg>`;
 }
 const gWb = man => `<svg class="gin gb" viewBox="0 0 24 24" aria-hidden="true"><rect x="2" y="5" width="20" height="14" rx="4" class="gf"/><text x="12" y="12" dy=".36em" text-anchor="middle" class="gtx sm">${man ? "WB" : "AWB"}</text></svg>`;
+/* 白平衡微調：相機上那張方格（松下、Canon 是 B↔A、M↕G；富士是紅、藍各偏多少） */
+function wbsHTML(w){
+  const [hx, vy, k] = w, ab = k === "ab", sg = n => n > 0 ? `+${n}` : n < 0 ? `−${-n}` : "0";
+  const txt = ab ? [hx ? `${hx > 0 ? "A" : "B"}${Math.abs(hx)}` : "", vy ? `${vy > 0 ? "G" : "M"}${Math.abs(vy)}` : ""].filter(Boolean).join("・") : `紅 ${sg(hx)}・藍 ${sg(vy)}`;
+  const L = ab ? ["B", "A", "G", "M"] : ["青", "紅", "藍", "黃"], u = 40 / 18, cx = 30 + hx * u, cy = 30 - vy * u;
+  let g = ""; for (let i = -9; i <= 9; i += 3) g += `<path d="M${30 + i * u} 10V50M10 ${30 + i * u}H50" class="wbg${i ? "" : " z"}"/>`;
+  return `<div class="wbs"><svg viewBox="0 0 60 60" aria-hidden="true"><rect x="10" y="10" width="40" height="40" rx="3" class="wbf${ab ? "" : " rb"}"/>${g}<text x="5" y="30" dy=".35em" class="wbl">${L[0]}</text><text x="55" y="30" dy=".35em" class="wbl">${L[1]}</text><text x="30" y="6" dy=".35em" class="wbl">${L[2]}</text><text x="30" y="56" dy=".35em" class="wbl">${L[3]}</text><circle cx="${cx.toFixed(1)}" cy="${cy.toFixed(1)}" r="3.2" class="wbd"/></svg><div><small>白平衡微調</small><b class="num">${txt}</b></div></div>`;
+}
 const gMtn = `<svg class="gin" viewBox="0 0 24 24" aria-hidden="true"><path d="M2 19l6.5-10 4 6 2.5-3.5L22 19Z" class="gf"/></svg>`;
 const gAf = p => {                                           // 對焦點：照片的外框，對焦的位置一個小框（四個角）
   const r = p.w / p.h, W = r >= 1 ? 20 : 20 * r, H = r >= 1 ? 20 / r : 20, x0 = 12 - W / 2, y0 = 12 - H / 2, a = p.x.afp;
-  const cx = x0 + a[0] * W, cy = y0 + a[1] * H, h = 3.2, c = (dx, dy) => `M${(cx + dx * h).toFixed(1)} ${(cy + dy * h - dy * 1.6).toFixed(1)}V${(cy + dy * h).toFixed(1)}H${(cx + dx * h - dx * 1.6).toFixed(1)}`;
-  return `<svg class="gin gb" viewBox="0 0 24 24" aria-hidden="true"><rect x="${x0.toFixed(1)}" y="${y0.toFixed(1)}" width="${W.toFixed(1)}" height="${H.toFixed(1)}" rx="2" class="gafr"/><path d="${c(-1, -1)}${c(1, -1)}${c(-1, 1)}${c(1, 1)}" class="gl gaf"/></svg>`;
+  const fc = p.x.fcs || [], cx = x0 + (a ? a[0] : fc[0][0]) * W, cy = y0 + (a ? a[1] : fc[0][1]) * H, h = 3.2, c = (dx, dy) => `M${(cx + dx * h).toFixed(1)} ${(cy + dy * h - dy * 1.6).toFixed(1)}V${(cy + dy * h).toFixed(1)}H${(cx + dx * h - dx * 1.6).toFixed(1)}`;
+  return `<svg class="gin gb" viewBox="0 0 24 24" aria-hidden="true"><rect x="${x0.toFixed(1)}" y="${y0.toFixed(1)}" width="${W.toFixed(1)}" height="${H.toFixed(1)}" rx="2" class="gafr"/>${fc.map(f => `<rect x="${(x0 + (f[0] - f[2] / 2) * W).toFixed(1)}" y="${(y0 + (f[1] - f[3] / 2) * H).toFixed(1)}" width="${Math.max(1.5, f[2] * W).toFixed(1)}" height="${Math.max(1.5, f[3] * H).toFixed(1)}" rx="1" class="gl gfc"/>`).join("")}${a ? `<path d="${c(-1, -1)}${c(1, -1)}${c(-1, 1)}${c(1, 1)}" class="gl gaf"/>` : ""}</svg>`;
 };
 /* 景深：鏡頭焦距、光圈、感光元件大小（等效焦距換算）算清楚的範圍；相機沒記對焦距離就寫超焦距（對在那裡，一半距離到無限遠都清楚） */
 function dofOf(p){
@@ -3339,10 +3348,10 @@ function infoHTML(p){
       <div class="l2 num">${p.w && p.h ? `<i class="gar" style="aspect-ratio:${p.w} / ${p.h}"></i>` : ""}<span>${isVid(p) ? `影片 ${dur(p.vd)}・${x.fps ? `${+x.fps.toFixed(2)} fps・` : ""}${x.vb ? `${x.vb >= 10 ? Math.round(x.vb) : x.vb} Mbps・` : ""}` : mp >= .1 ? `${mp >= 10 ? Math.round(mp) : mp.toFixed(1)} MP・` : ""}${p.w} × ${p.h}・${size(p.sz)}</span><span class="tgs"><span class="tag">${esc(ext)}</span>${p.rw && p.rw !== ext ? `<span class="tag">+${esc(p.rw)}</span>` : ""}${p.cs ? `<span class="tag">${esc(p.cs.replace("Display ", ""))}</span>` : ""}${p.hdr && !isVid(p) ? `<span class="tag hdr">HDR</span>` : ""}${isVid(p) && x.vc ? `<span class="tag">${esc(x.vc)}</span>` : ""}${isVid(p) && (x.gm || p.hdr) ? `<span class="tag hdr">${esc(x.gm || (p.hdr === "pq" ? "HDR PQ" : "HLG"))}</span>` : ""}</span></div></div>
     ${cells.some(c => c[1]) ? `<div class="iex num">${cells.map(([k, v, g, gk]) => `<div data-gk="${gk}"${v ? "" : ` class="no"`}>${g || SV(`<circle cx="16" cy="16" r="12" class="gt"/>`)}<b>${esc(v || "—")}</b><small>${k}</small></div>`).join("")}</div>` : ""}</div>`;
   const ms = x.ms;
-  if (ms && (ms.st || ms.lut || ms.k)) {
+  if (ms && (ms.st || ms.lut || ms.k || ms.ws)) {
     const mono = /單色|ACROS|黑白|棕褐/.test(ms.st || ""), kp = ms.k ? Math.max(0, Math.min(100, (Math.log(ms.k) - Math.log(2000)) / (Math.log(12000) - Math.log(2000)) * 100)) : 0;
     h += `<div class="ibox isty">${ms.st || ms.lut ? `<i class="${mono ? "mono" : ""}"></i><div><small>${esc(ms.sl || "風格")}</small><b>${esc(ms.st || ms.lut)}</b></div>${[...(ms.fx || []), ...(ms.st && ms.lut ? [`LUT ${ms.lut}`] : [])].map(t => `<span class="tag">${esc(t)}</span>`).join("")}` : ""}
-      ${ms.k ? `<div class="kel"><small>白平衡</small><b class="num">${ms.k} K</b><span class="kbar"><i style="left:${kp.toFixed(1)}%"></i></span></div>` : ""}</div>`;
+      ${ms.k ? `<div class="kel"><small>白平衡</small><b class="num">${ms.k} K</b><span class="kbar"><i style="left:${kp.toFixed(1)}%"></i></span></div>` : ""}${ms.ws ? wbsHTML(ms.ws) : ""}</div>`;
   }
   if (!isVid(p)) h += `<div class="ibox ipal"><div class="ipw" data-pal aria-label="直方圖和主要顏色">${palHTML(p)}</div><button class="ngb" data-ng aria-pressed="${!!NG}">${I("ng")}<span>中性灰背景</span><i class="sw"></i></button><button class="ngb" data-zb aria-pressed="${!!ZEB}">${I("zeb")}<span>過曝／死黑</span><small class="num" data-zbn>${ZEB ? zbTxt(p) : ""}</small><i class="sw"></i></button></div>`;
   const kv = [];
@@ -3361,7 +3370,7 @@ function infoHTML(p){
   if (x.fla != null) st.push([gBolt(x.fla & 1), x.fla & 1 ? "有閃" : "沒閃", "閃光燈"]);
   if (x.wb != null) st.push([gWb(x.wb), x.wb ? "手動" : "自動", "白平衡"]);
   if (x.sc && SC[x.sc]) st.push([gDial("SCN"), SC[x.sc], "場景"]);
-  if (x.afp && !isVid(p)) st.push([gAf(p), p.fm ? "可能跑焦" : p.fs >= 60 ? "清楚" : "標出位置", "對焦點", ` class="iaf${AFON ? " on" : ""}${p.fm ? " miss" : ""}" data-af role="button" tabindex="0" aria-pressed="${AFON}"`]);
+  if ((x.afp || x.fcs) && !isVid(p)) st.push([gAf(p), x.afp ? p.fm ? "可能跑焦" : p.fs >= 60 ? "清楚" : "標出位置" : `${x.fcs.length} 張臉`, x.afp ? x.fcs ? `對焦點・${x.fcs.length} 張臉` : "對焦點" : "臉部", ` class="iaf${AFON ? " on" : ""}${p.fm ? " miss" : ""}" data-af role="button" tabindex="0" aria-pressed="${AFON}"`]);
   { const dof = dofOf(p); if (dof) st.push([gDof(dof), dof.t, dof.k, ` data-gk="dof"`]); }
   { const lv = lvOf(p); if (lv != null) st.push([gLv(lv), lvName(lv), `光線 LV ${Math.round(lv)}`, ` data-gk="lv"`]); }
   { const sk = shakeOf(p); if (sk) st.push([gShake, "可能手震", `安全快門 1/${sk}`, ` class="warn"`]); }

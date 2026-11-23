@@ -15,7 +15,7 @@ ALB_EXT2 = {".hif"} | PIC_RAW                                       # 只在雲�
 ALB_HEIF = {".heic", ".heif", ".hif", ".avif"}
 ALB_VV = 2                                                        # 影片轉檔的做法版本：轉不出來的影片換新做法後再試一次
 ALB_XL = 3840                                                     # 大螢幕看大圖的清晰版：長邊幾點（有人在大螢幕打開才做）
-ALB_MV = 5                                                        # 照片資訊的格式版本（舊的重讀一次：色彩空間、HDR、原始檔）
+ALB_MV = 6                                                        # 照片資訊的格式版本（舊的重讀一次：色彩空間、HDR、原始檔）
 ALB_SHOW = {".jpg", ".jpeg", ".png", ".webp", ".gif", ".avif"}    # 做不出小圖時，瀏覽器直接看得了原圖的
 ALB_VID = {".mp4", ".mov", ".m4v", ".webm", ".3gp", ".mkv"}        # 影片（主機轉成 720p 的 H.264 給朋友看）
 ALB_AUD = {".mp3", ".m4a", ".aac", ".ogg", ".opus", ".flac", ".wav"}   # 資料夾裡放一首歌：幻燈片的背景音樂
@@ -1173,6 +1173,30 @@ def alb_afp(t, ms, ori, irot, w, h):
     return [round(x, 4), round(y, 4), round(pt[2], 3)]
 
 
+def alb_faces(t, ms, ori, irot, w, h):
+    """相機偵測到的臉：[[x, y, 寬, 高], …]（照片轉正後的比例 0～1，x、y 是中心）；沒記就回 None"""
+    fc, ref = ms.pop("fc", None), ms.pop("fcr", None)
+    if not fc or not ref:
+        return None
+    rw, rh = ref[0] or int(t.get("pw") or 0) or w, ref[1] or int(t.get("ph") or 0) or h
+    if not rw or not rh:
+        return None
+    r = {1: 8, 2: 3, 3: 6}.get(irot) or ori
+    out = []
+    for f in fc[:5]:
+        x, y, fw, fh = f[0] / rw, f[1] / rh, f[2] / rw, f[3] / rh
+        if not (0 < x < 1 and 0 < y < 1 and .01 < fw < .9 and .01 < fh < .9):
+            continue
+        if r == 6:
+            x, y, fw, fh = 1 - y, x, fh, fw
+        elif r == 8:
+            x, y, fw, fh = y, 1 - x, fh, fw
+        elif r == 3:
+            x, y = 1 - x, 1 - y
+        out.append([round(x, 4), round(y, 4), round(fw, 4), round(fh, 4)])
+    return out or None
+
+
 def alb_exif_tidy(t):
     """EXIF 的原始值換成網頁要的"""
     x = {}
@@ -1505,6 +1529,9 @@ def alb_meta(path):
     afp = alb_afp(t, ms, ori, rot if ext in ALB_HEIF else 0, w, h)
     if afp:
         x["afp"] = afp
+    fcs = alb_faces(t, ms, ori, rot if ext in ALB_HEIF else 0, w, h)
+    if fcs:
+        x["fcs"] = fcs
     fd = ms.pop("fd", None) or _rat(t.get("sd"))        # 對焦距離（公尺）：製造商資料優先，再看 EXIF 的 SubjectDistance
     if isinstance(fd, (int, float)) and .02 <= fd < 1000:
         x["fd"] = round(fd, 2)
