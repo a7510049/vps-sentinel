@@ -2269,11 +2269,14 @@ function openLb(i, from){
     setZoom(s, x, y);
     if (anim()) zw.animate([{transform:from}, {transform:zw.style.transform || "none"}], {duration:T.mid, easing:EASE});
   }
+  const zClip = (s, x, y) => {                               // 這個大小時照片該在的位置：比畫面小就置中，比畫面大就不露出旁邊的空白
+    const f = L(), cl = (v, sz, box, off) => { const span = sz * s; if (span <= box) return (box - span) / 2 - off; return Math.min(-off, Math.max(box - off - span, v)); };
+    return [cl(x, f.w, W(), f.l), cl(y, f.h, H(), f.t)];
+  };
   function clampZoom(){
     if (S.z.s < 1.02) return zoomTo(1, 0, 0);                  // 縮到比原本小：放開就彈回原本大小（一指先放開、另一指拖完也一樣）
-    const f = L(), w = W(), h = H(), s = Math.min(ZMAX, S.z.s);
-    const cl = (v, sz, box, off) => { const span = sz * s; if (span <= box) return (box - span) / 2 - off; return Math.min(-off, Math.max(box - off - span, v)); };
-    zoomTo(s, cl(S.z.x, f.w, w, f.l), cl(S.z.y, f.h, h, f.t));
+    const s = Math.min(ZMAX, S.z.s);
+    zoomTo(s, ...zClip(s, S.z.x, S.z.y));
   }
   function dbl(cx, cy){
     if (S.z.s > 1.02) return zoomTo(1, 0, 0);
@@ -2287,7 +2290,12 @@ function openLb(i, from){
   const wz = {g:0, raf:0, cx:0, cy:0};
   const wzAt = s => { const z = S.z, ux = (wz.cx - z.x) / z.s, uy = (wz.cy - z.y) / z.s;
     if (s <= 1.001 && wz.g <= 1) return setZoom(1, 0, 0);
-    setZoom(s, wz.cx - s * ux, wz.cy - s * uy); };
+    let x = wz.cx - s * ux, y = wz.cy - s * uy;
+    if (s < z.s) {                                           // 縮小：一邊縮一邊推回畫面裡，縮回原本大小時剛好回到中間（以前最後一下才跳回去）
+      const [px, py] = zClip(z.s, z.x, z.y), k = Math.abs(px - z.x) + Math.abs(py - z.y) < 1 ? 1 : .3, [cx, cy] = zClip(s, x, y);
+      x += (cx - x) * k; y += (cy - y) * k;
+    }
+    setZoom(s, x, y); };
   const wzStep = () => {
     if (S.busy || !S.z) { wz.raf = 0; return; }               // 換張、關掉時停
     const d = wz.g - S.z.s;
