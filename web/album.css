@@ -232,8 +232,8 @@ button.chip:active,a.chip:active{transform:scale(.95)}
 .icam{padding:16px}
 .icam .t{display:flex;align-items:center;gap:8px}
 .icam .t b{font-weight:750;font-size:var(--fs-l);flex:1;min-width:0}
+.icam .tgs{display:flex;gap:4px;flex:none}
 .tag{font-size:var(--fs-xs);font-weight:700;letter-spacing:.04em;padding:3px 8px;border-radius:var(--r-xs);background:var(--s2);color:var(--tx2)}
-.icam .t .tag+.tag{margin-left:-4px}
 .tag.hdr{background:linear-gradient(120deg,#ffd76a,#ff8a5c);color:#3a1c00}
 .isty{display:flex;flex-wrap:wrap;align-items:center;gap:8px 10px;padding:14px 16px}
 .isty>i{width:34px;height:34px;border-radius:50%;flex:none;background:var(--grad);box-shadow:inset 0 0 0 3px color-mix(in oklab,#fff 35%,transparent)}
@@ -244,6 +244,11 @@ button.chip:active,a.chip:active{transform:scale(.95)}
 .isty .tag{flex:none}
 .icam .l{color:var(--tx2);margin-top:4px;font-size:var(--fs-s)}
 .icam .l2{color:var(--tx3);margin-top:2px;font-size:var(--fs-s)}
+.izr{display:flex;align-items:center;gap:8px;margin-top:8px;max-width:260px;color:var(--tx3)}
+.izr small{font-size:var(--fs-xs);font-weight:650}
+.izr .zt{position:relative;flex:1;height:4px;border-radius:var(--r-pill);background:var(--line)}
+.izr .zf{position:absolute;inset:0 auto 0 0;border-radius:inherit;background:var(--grad)}
+.izr .zk{position:absolute;top:50%;width:10px;height:10px;margin:-5px 0 0 -5px;border-radius:50%;background:var(--tx);box-shadow:0 0 0 2px var(--s1)}
 .iex{display:grid;grid-template-columns:repeat(5,1fr);border-top:1px solid var(--line)}
 .iex div{padding:12px 2px;text-align:center;font-size:var(--fs-s);font-weight:650;white-space:nowrap}
 .iex div+div{box-shadow:-1px 0 0 var(--line)}
@@ -800,12 +805,12 @@ html,body{touch-action:pan-x pan-y}
 .gsun{width:58px;height:34px;flex:none;overflow:visible}
 .gsun .gd{filter:drop-shadow(0 0 4px color-mix(in oklab,var(--g2) 70%,transparent))}
 .gsun.night .gd{fill:color-mix(in oklab,var(--g3) 70%,var(--tx2))}
-.icam .l2{display:flex;align-items:center;gap:8px}
+.icam .l2{display:flex;flex-wrap:wrap;align-items:center;gap:6px 8px}
 .gar{display:block;height:16px;max-width:28px;border-radius:3px;border:1.5px solid color-mix(in oklab,var(--g2) 70%,transparent);background:color-mix(in oklab,var(--g2) 14%,transparent);flex:none}
 .ikv b{display:inline-flex;align-items:center;justify-content:flex-end;gap:6px}
 .gin{width:18px;height:18px;flex:none}
 .gin.off .gd{fill:var(--tx3);opacity:.5}
-.iset{display:grid;grid-template-columns:repeat(12,minmax(0,1fr))}
+.iset{display:grid;grid-template-columns:repeat(60,minmax(0,1fr))}
 .iset div[data-r2]{box-shadow:-1px 0 0 var(--line),0 -1px 0 var(--line)}
 .iset div{padding:14px 6px 12px;text-align:center;box-shadow:-1px 0 0 var(--line)}
 .iset .gin.gb{width:28px;height:28px;display:block;margin:0 auto 6px}
@@ -823,9 +828,11 @@ html,body{touch-action:pan-x pan-y}
 .iset .iaf.miss .gaf{stroke:var(--bad)}
 .iset .iaf.on{background:color-mix(in oklab,var(--g2) 14%,transparent)}
 .iset .iaf.on .gaf{stroke:var(--g2)}
+.iset .iaf .gfc{stroke:var(--tx3);stroke-width:1;fill:none}
+.iset .iaf.on .gfc{stroke:var(--tx2)}
 .iset .iaf.miss b{color:var(--bad)}
 /* 對焦框：相機對焦的位置（四個角的框，跟著照片縮放） */
-.lb .zw:has(.afb){overflow:clip}
+.lb .zw:has(.afb,.fcb){overflow:clip}
 .lb .afb{position:absolute;transform:translate(-50%,-50%) scale(1.25);opacity:0;pointer-events:none;transition:opacity var(--t-mid),transform var(--t-mid) var(--ease);
   --c:#fff;--w:clamp(2px,.45cqmin,4px);--l:max(12px,24%);
   background:linear-gradient(var(--c),var(--c)) 0 0/var(--l) var(--w),linear-gradient(var(--c),var(--c)) 0 0/var(--w) var(--l),linear-gradient(var(--c),var(--c)) 100% 0/var(--l) var(--w),linear-gradient(var(--c),var(--c)) 100% 0/var(--w) var(--l),
@@ -833,6 +840,11 @@ html,body{touch-action:pan-x pan-y}
   background-repeat:no-repeat;filter:drop-shadow(0 0 .6px rgba(0,0,0,.9)) drop-shadow(0 0 3px rgba(0,0,0,.55));min-width:28px;min-height:28px;
   box-shadow:0 0 0 200vmax rgba(0,0,0,.3)}   /* 框外面整張壓暗：照片顏色跟框很像（白牆、天空）時也看得出對焦在哪 */
 .lb.afon .afb{opacity:1;transform:translate(-50%,-50%) scale(1)}
+/* 相機偵測到的臉：細的圓角框，跟對焦框一起開關 */
+.lb .fcb{position:absolute;transform:translate(-50%,-50%) scale(1.15);opacity:0;pointer-events:none;border:clamp(1px,.3cqmin,2px) solid rgba(255,255,255,.85);border-radius:min(var(--r-md),22%);filter:drop-shadow(0 0 2px rgba(0,0,0,.6));transition:opacity var(--t-mid),transform var(--t-mid) var(--ease)}
+.lb.afon .fcb{opacity:1;transform:translate(-50%,-50%) scale(1)}
+.lb .fcb.af{border-width:clamp(2px,.45cqmin,3px);border-color:#fff;box-shadow:0 0 0 200vmax rgba(0,0,0,.3)}   /* 對焦在這張臉：粗一點、框外壓暗（跟對焦框一樣） */
+.lb .fcb.af.miss{border-color:var(--bad)}
 .lb .afb.miss{--c:var(--bad)}
 
 /* 更多圖形：每天的 24 小時時間條、數字卡的小圖、城市在整趟的哪幾天、期限圈、封面國旗 */
@@ -1108,7 +1120,7 @@ html:has(.lb,.ss,.sy) .scrub{opacity:0;pointer-events:none}
 .igear .brd{display:inline-flex;align-items:center;flex:none;margin-right:5px}
 .igear .brd svg{width:auto;height:auto;color:var(--tx);fill:currentColor;stroke:none}
 .igear.sm{display:inline;flex:none;color:var(--p);font-weight:600}
-.icam .t .igear b{flex:none}
+.icam .t .igear b{flex:0 1 auto;min-width:0}
 
 /* 直方圖 */
 .ihist{display:grid;gap:4px}
@@ -1295,21 +1307,32 @@ button.dct:active{transform:scale(.92)}
 .map.tm .tmb{opacity:1;scale:1;pointer-events:auto}
 .tmb img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;opacity:0;transition:opacity var(--t-fast) var(--ease)}
 .tmb img.ok{opacity:1}
-.tmac{display:flex;align-items:center;gap:12px;margin-top:12px;animation:memin var(--t-mid) var(--dec) both}
-.tmp{width:42px;height:42px;border-radius:50%;flex:none;display:grid;place-items:center;background:var(--p);color:var(--on-p);transition:transform var(--sp-fast)}
+.tmac{display:flex;align-items:flex-start;gap:12px;margin-top:12px;animation:memin var(--t-mid) var(--dec) both}
+.tmp{width:44px;height:44px;border-radius:50%;flex:none;display:grid;place-items:center;background:var(--p);color:var(--on-p);transition:transform var(--sp-fast)}
 .tmp:active{transform:scale(.92)}
 .tmp svg{width:18px;height:18px}
-.tmt{position:relative;flex:1;min-width:0;height:42px;touch-action:none;cursor:pointer;outline:0}
-.tmr{position:absolute;left:0;right:0;top:50%;height:6px;margin-top:-3px;border-radius:var(--r-pill);background:var(--s3);overflow:hidden}
-.tmf{position:absolute;inset:0;background:var(--grad,var(--p));transform-origin:0 50%;transform:scaleX(1)}
-.tmh{position:absolute;top:50%;left:100%;width:18px;height:18px;margin:-9px 0 0 -9px;border-radius:50%;background:#fff;box-shadow:var(--sh-pop),0 0 0 3px var(--p);transition:scale var(--sp-fast)}
-.tmac.drag .tmh,.tmt:focus-visible .tmh{scale:1.25}
-.tmd{position:absolute;top:calc(50% + 9px);translate:-50% 0;font-size:10px;color:var(--tx3);font-weight:650}
-.tmd::before{content:"";position:absolute;left:50%;top:-10px;width:2px;height:6px;margin-left:-1px;border-radius:1px;background:var(--tx3);opacity:.5}
-.tml{width:clamp(110px,28%,220px);flex:none;line-height:1.3;min-height:2.6em}
-.tml b{display:block;font-size:var(--fs-s);font-weight:700}
-.tml span{display:block;font-size:var(--fs-xs);color:var(--tx3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-@media (max-width:560px){.tmac{flex-wrap:wrap}.tmt{flex-basis:calc(100% - 54px)}.tml{width:100%;order:3;padding-left:54px;min-height:0}}
+/* 每天一格（使用者選的）：寬度照那天幾張，走過的填上漸層，現在這天框起來；說明泡泡在下面跟著指針 */
+.tmt{position:relative;flex:1;min-width:0;padding-bottom:54px;touch-action:none;cursor:pointer;outline:0}
+.tmr{display:flex;height:44px}
+.tms{position:relative;flex:none;min-width:0;border:0 solid transparent;border-width:0 2px;background:var(--s2);background-clip:padding-box;border-radius:var(--r-sm);overflow:hidden;container-type:inline-size;transition:box-shadow var(--t-fast) var(--ease)}
+.tms:first-child{border-left-width:0}.tms:last-child{border-right-width:0}
+.tmf{position:absolute;inset:0;background:var(--grad,var(--p));background-size:var(--bw,100%) 100%;background-position:calc(var(--o,0) * var(--bw,0px) * -1) 0;opacity:.5;clip-path:inset(0 calc((1 - var(--f,1)) * 100%) 0 0)}
+.tms.on{box-shadow:inset 0 0 0 2px var(--p)}
+.tms.on .tmf{opacity:.7}
+.tmx{position:relative;height:100%;display:flex;flex-direction:column;justify-content:center;padding:0 10px;line-height:1.25;white-space:nowrap;overflow:hidden}
+.tmx b{font-size:var(--fs-xs);font-weight:700;color:var(--tx)}
+.tmx b em{font-style:normal}
+.tmx span{font-size:var(--fs-xs);color:var(--tx2);overflow:hidden;text-overflow:ellipsis}
+@container (max-width:110px){.tmx b em{display:none}.tmx{padding:0 6px}}
+@container (max-width:64px){.tmx span{display:none}}
+@container (max-width:30px){.tmx{display:none}}
+.tmh{position:absolute;top:-5px;height:54px;left:100%;width:4px;margin-left:-2px;border-radius:var(--r-pill);background:#fff;box-shadow:var(--sh-pop),0 0 0 2px var(--p);transition:scale var(--sp-fast);pointer-events:none}
+.tmac.drag .tmh,.tmt:focus-visible .tmh{scale:1.15}
+.tml{position:absolute;left:0;top:56px;max-width:100%;padding:6px 12px;border-radius:var(--r-md);background:var(--s3);box-shadow:var(--sh-pop);line-height:1.3;pointer-events:none;white-space:nowrap}
+.tml::before{content:"";position:absolute;top:-5px;left:var(--ax,50%);width:10px;height:10px;margin-left:-5px;rotate:45deg;background:inherit;border-radius:2px}
+.tml:not(:has(b:not(:empty))){opacity:0}
+.tml b{position:relative;display:block;font-size:var(--fs-s);font-weight:700}
+.tml span{position:relative;display:block;font-size:var(--fs-xs);color:var(--tx3);overflow:hidden;text-overflow:ellipsis}
 .map.tm .route .rt0{opacity:.45}
 /* 色域圖、螢幕、白平衡 */
 .igam{display:flex;align-items:center;gap:14px;margin-top:14px;padding-top:14px;border-top:1px solid var(--line)}
@@ -1336,6 +1359,17 @@ button.dct:active{transform:scale(.92)}
 .kbar{position:relative;height:8px;border-radius:var(--r-pill);background:linear-gradient(90deg,#ff8a2a,#ffc27a 28%,#fff4e0 52%,#dfe9ff 70%,#9cc0ff)}
 .kbar i{position:absolute;top:50%;width:14px;height:14px;margin:-7px 0 0 -7px;border-radius:50%;background:#fff;box-shadow:var(--sh-pop),0 0 0 2px var(--tx2)}
 .isty>.kel{flex:1 1 100%}
+/* 白平衡微調方格 */
+.wbs{flex:1 1 100%;display:flex;align-items:center;gap:12px}
+.isty>:is(i+div,.kel)~.wbs{margin-top:6px;padding-top:12px;border-top:1px solid var(--line)}
+.wbs svg{width:72px;height:72px;flex:none;overflow:visible}
+.wbs small{display:block;font-size:10px;font-weight:600;color:var(--tx3);letter-spacing:.05em}
+.wbs b{font-size:var(--fs-m);font-weight:750}
+.wbf{fill:var(--s2)}
+.wbg{stroke:var(--line);stroke-width:.6}
+.wbg.z{stroke:var(--tx3);stroke-width:.8;opacity:.6}
+.wbl{font-size:6px;font-weight:700;fill:var(--tx3);text-anchor:middle}
+.wbd{fill:#fff;stroke:var(--p);stroke-width:1.6}
 .isty>i+div{min-width:min(50%,180px)}
 
 /* 中性灰背景：看顏色用（後面不透出照片的顏色、四周不壓暗） */
@@ -1371,9 +1405,6 @@ button.dct:active{transform:scale(.92)}
   .mrw{justify-content:safe center}
   .cities{grid-auto-flow:row;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));overflow:visible;margin:0 0 14px;padding:4px 0 10px}
   .cities .ctc{height:clamp(118px,11vw,200px)}
-  .tmac{flex-wrap:wrap}
-  .tmt{flex-basis:calc(100% - 54px)}
-  .tml{width:100%;order:3;padding-left:54px;min-height:0}
   .gbk{max-width:var(--wmax)}
   .gbk .gbf{max-width:720px;margin:16px auto 0}   /* 大螢幕：輸入框、留言都置中（使用者要置中，不要靠左） */
   .gbk .cadd{margin:16px auto 0}

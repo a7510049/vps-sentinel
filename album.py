@@ -15,7 +15,7 @@ ALB_EXT2 = {".hif"} | PIC_RAW                                       # 只在雲�
 ALB_HEIF = {".heic", ".heif", ".hif", ".avif"}
 ALB_VV = 2                                                        # 影片轉檔的做法版本：轉不出來的影片換新做法後再試一次
 ALB_XL = 3840                                                     # 大螢幕看大圖的清晰版：長邊幾點（有人在大螢幕打開才做）
-ALB_MV = 5                                                        # 照片資訊的格式版本（舊的重讀一次：色彩空間、HDR、原始檔）
+ALB_MV = 7                                                        # 照片資訊的格式版本（舊的重讀一次：色彩空間、HDR、原始檔）
 ALB_SHOW = {".jpg", ".jpeg", ".png", ".webp", ".gif", ".avif"}    # 做不出小圖時，瀏覽器直接看得了原圖的
 ALB_VID = {".mp4", ".mov", ".m4v", ".webm", ".3gp", ".mkv"}        # 影片（主機轉成 720p 的 H.264 給朋友看）
 ALB_AUD = {".mp3", ".m4a", ".aac", ".ogg", ".opus", ".flac", ".wav"}   # 資料夾裡放一首歌：幻燈片的背景音樂
@@ -1024,7 +1024,7 @@ def alb_find(code):
 # ── 照片資訊（EXIF、大小、方向）：只讀檔頭，不用解開整張 ──
 EXIF_T = {0x010F: "mk", 0x0110: "md", 0x0112: "ori", 0x0131: "sw", 0x0132: "dt0", 0x829A: "et", 0x829D: "f", 0x8822: "ep",
           0x8827: "iso", 0x9003: "dt", 0x9011: "oz", 0x9010: "oz0", 0x9204: "ev", 0x9207: "mm", 0x9209: "fla", 0x920A: "fl",
-          0xA405: "f35", 0xA402: "em", 0xA403: "wb", 0xA433: "lmk", 0xA434: "ln", 0xA406: "sc", 0xA002: "pw", 0xA003: "ph",
+          0xA405: "f35", 0xA402: "em", 0xA403: "wb", 0xA432: "lsp", 0xA433: "lmk", 0xA434: "ln", 0xA406: "sc", 0xA002: "pw", 0xA003: "ph",
           0x9214: "sa", 0x9206: "sd", 0xA20E: "fpx", 0xA20F: "fpy", 0xA210: "fpu"}
 GPS_T = {1: "latr", 2: "lat", 3: "lonr", 4: "lon", 5: "altr", 6: "alt", 7: "gts", 0x10: "dirr", 0x11: "dir", 0x1D: "gds"}
 TIFF_SZ = {1: 1, 2: 1, 3: 2, 4: 4, 5: 8, 6: 1, 7: 1, 8: 2, 9: 4, 10: 8, 11: 4, 12: 8}
@@ -1173,6 +1173,32 @@ def alb_afp(t, ms, ori, irot, w, h):
     return [round(x, 4), round(y, 4), round(pt[2], 3)]
 
 
+def alb_faces(t, ms, ori, irot, w, h):
+    """相機偵測到的臉：[[x, y, 寬, 高], …]（照片轉正後的比例 0～1，x、y 是中心）；沒記就回 None"""
+    fc, ref = ms.pop("fc", None), ms.pop("fcr", None)
+    if not fc or not ref:
+        return None
+    pw, ph = int(t.get("pw") or 0) or w, int(t.get("ph") or 0) or h
+    if not pw or not ph:
+        return None
+    rw = ref[0] or pw
+    rh = rw * ph / pw if ref[1] == -1 else ref[1] or ph   # -1：高照照片的比例（松下 3:2 是 320×213）
+    r = {1: 8, 2: 3, 3: 6}.get(irot) or ori
+    out = []
+    for f in fc[:5]:
+        x, y, fw, fh = f[0] / rw, f[1] / rh, f[2] / rw, f[3] / rh
+        if not (0 < x < 1 and 0 < y < 1 and .01 < fw < .9 and .01 < fh < .9):
+            continue
+        if r == 6:
+            x, y, fw, fh = 1 - y, x, fh, fw
+        elif r == 8:
+            x, y, fw, fh = y, 1 - x, fh, fw
+        elif r == 3:
+            x, y = 1 - x, 1 - y
+        out.append([round(x, 4), round(y, 4), round(fw, 4), round(fh, 4)])
+    return out or None
+
+
 def alb_exif_tidy(t):
     """EXIF 的原始值換成網頁要的"""
     x = {}
@@ -1200,6 +1226,11 @@ def alb_exif_tidy(t):
             v = v[0] if v else None
         if isinstance(v, int):
             x[k] = v
+    lsp = t.get("lsp")                                 # LensSpecification：變焦鏡頭的最短、最長焦距（手機寫的是幾顆鏡頭合起來，不算）
+    if isinstance(lsp, list) and len(lsp) == 4 and (x.get("mk") or "").lower().split(" ")[0] not in ALB_PHONE:
+        a, b_ = _rat(lsp[0]), _rat(lsp[1])
+        if a and b_ and 0 < a < b_ < 2000 and b_ / a >= 1.15:
+            x["zr"] = [round(a, 1), round(b_, 1)]
     if not x.get("f35") and x.get("fl"):              # 沒寫等效焦距：照感光元件大小換算（手機的 6 mm 不會被當成超廣角）
         cf = alb_crop(t, x)
         if cf:
@@ -1505,6 +1536,9 @@ def alb_meta(path):
     afp = alb_afp(t, ms, ori, rot if ext in ALB_HEIF else 0, w, h)
     if afp:
         x["afp"] = afp
+    fcs = alb_faces(t, ms, ori, rot if ext in ALB_HEIF else 0, w, h)
+    if fcs:
+        x["fcs"] = fcs
     fd = ms.pop("fd", None) or _rat(t.get("sd"))        # 對焦距離（公尺）：製造商資料優先，再看 EXIF 的 SubjectDistance
     if isinstance(fd, (int, float)) and .02 <= fd < 1000:
         x["fd"] = round(fd, 2)
