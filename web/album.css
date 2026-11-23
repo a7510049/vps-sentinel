@@ -769,6 +769,11 @@ html,body{touch-action:pan-x pan-y}
 .ctc img{transition:transform var(--t-slow) var(--dec)}
 @media (hover:hover){.cty:hover .ctc img{transform:scale(1.04)}}
 .mk.cmk em{-webkit-backdrop-filter:none;backdrop-filter:none;border:1px solid color-mix(in oklab,var(--g2) 30%,transparent)}
+.mk.cmk em{max-width:150px}
+.mk.cmg::before{content:"";position:absolute;inset:-3px;border-radius:50%;border:3px solid #fff;translate:5px -4px;z-index:-1;background:var(--s3);box-shadow:var(--sh-pop)}
+.mback{position:absolute;left:12px;top:12px;z-index:3;display:inline-flex;align-items:center;gap:6px;height:36px;padding:0 14px 0 10px;border-radius:var(--r-pill);background:var(--s1);color:var(--tx);font-size:var(--fs-s);font-weight:700;box-shadow:var(--sh-pop);animation:pop var(--t-slow) var(--sp-fast) both}
+.mback svg{width:16px;height:16px}
+.mback:active{transform:scale(.94)}
 .ctt small{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 
 /* 照片資訊圖形化：光圈、快門、ISO、焦距、曝光各一個小圖；拍攝時間的太陽弧線；方向、海拔、閃光燈的小圖示 */

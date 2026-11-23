@@ -156,11 +156,11 @@ const mapUrl = (lat, lon, q, cc) => /iPhone|iPad|Macintosh/.test(navigator.userA
   : cc === "CN" ? `https://uri.amap.com/marker?position=${lon},${lat}&name=${encodeURIComponent(q || "照片地點")}&coordinate=wgs84&callnative=1`
   : `https://www.google.com/maps/search/?api=1&query=${lat},${lon}`;
 
-/* ── 地圖：OpenStreetMap 的圖塊，主機幫忙拿（朋友不用連外面）；高一級的圖塊縮一半放，手機上才清楚 ── */
+/* ── 地圖：OpenStreetMap 的圖塊，主機幫忙拿（朋友不用連外面）；用同一級的圖塊（以前高一級縮一半放，字多一倍擠成一團） ── */
 const lx = (lon, z) => (lon + 180) / 360 * 256 * 2 ** z;
 const ly = (lat, z) => { const s = Math.sin(lat * Math.PI / 180); return (.5 - Math.log((1 + s) / (1 - s)) / (4 * Math.PI)) * 256 * 2 ** z; };
 function tiles(el, cx, cy, z, W, H){
-  const hi = z < 19 ? 2 : 1, Z = z + (hi > 1 ? 1 : 0), n = 2 ** Z, T = 256 / hi;
+  const hi = 1, Z = z, n = 2 ** Z, T = 256;
   const X = cx * hi, Y = cy * hi, w = W * hi, h0 = H * hi;
   let h = "";
   for (let tx = Math.floor((X - w / 2) / 256); tx <= Math.floor((X + w / 2) / 256); tx++)
@@ -1239,6 +1239,8 @@ document.addEventListener("click", e => {
   if (e.target.closest("[data-sqx]")) { SQ = ""; return whoSet(WHO, true); }
   if (e.target.closest("[data-huex]")) return hueSet(0);
   { const gb = e.target.closest(".gear [data-gear]"); if (gb) return gearSet(gb.dataset.gear); }
+  { const mz = e.target.closest("[data-mzf]"); if (mz) { MAPF = mz.dataset.mzf.split("\n"); return bigMap(); } }
+  if (e.target.closest("[data-mzx]")) { MAPF = null; return bigMap(); }
   const m = e.target.closest(".mk");
   if (m && m.dataset.cl) return placeSheet(m.dataset.cl.split(",").map(Number));   // 好幾張疊在一起：先列出那裡拍的全部
   if (m) return openLb(+m.dataset.i, m.querySelector("img") || m);
@@ -1361,17 +1363,19 @@ function citybar(){
 }
 
 /* 地圖：同一趟旅行畫走過的路線；不是的話每個城市一顆（不連線），只有一個城市就標拍照的點 */
+let MAPF = null;                                               // 地圖放大看的那幾個城市（點合在一起的泡泡）
 function bigMap(){
   const el = $("[data-map]"); if (!el || WHO) return;
-  const cs = citiesOf(), trip = isTrip(), byCity = !trip && cs.length > 1;
-  cityCards(cs);
+  const all = citiesOf(), trip = isTrip(), byCity = !trip && all.length > 1;
+  cityCards(all);
+  const cs = byCity && MAPF ? all.filter(c => MAPF.includes(c.k)) : all;   // 點了合在一起的泡泡：地圖只看那幾個城市
   const mt = $("[data-mt]"); if (mt) mt.textContent = trip ? "旅程" : cs.length > 1 ? "去過的城市" : "拍照的地方";
   const pts = byCity ? cs.map(c => [{g:[c.la, c.lo]}, ALL.indexOf(c.ps[0]), c]) : PH.map((p, i) => [p, i]).filter(([p]) => p.g && !p.broken);
   const W = el.clientWidth, H = el.clientHeight;
   if (!el._ro && "ResizeObserver" in window) { el._ro = new ResizeObserver(() => { if (el.dataset.sig && !el.dataset.sig.startsWith(`${el.clientWidth}x${el.clientHeight}|`)) requestAnimationFrame(bigMap); }); el._ro.observe(el); }   // 畫的時候地圖還沒撐開（大螢幕）：變寬後重畫，圖塊才會鋪滿
   if (!pts.length || !W) return;
   // 手機上下捲時網址列縮放會觸發 resize：大小、內容都沒變就不重畫（以前整張地圖、城市卡片重新淡入，看起來在閃）
-  const sig = `${W}x${H}|${byCity ? cs.map(c => c.k + c.ps.length).join() : pts.map(([p, i]) => i).join()}|${trip}`;
+  const sig = `${W}x${H}|${byCity ? cs.map(c => c.k + c.ps.length).join() : pts.map(([p, i]) => i).join()}|${trip}|${MAPF ? MAPF.join() : ""}`;
   if (el.dataset.sig === sig) return;
   el.dataset.sig = sig;
   let z = byCity ? 12 : 15;
@@ -1386,8 +1390,16 @@ function bigMap(){
   el.classList.toggle("bycity", byCity);
   tiles(el, cx, cy, z, W, H);
   if (byCity) {
-    const ps = pts.map((x, k) => ({x:xs[k] - cx + W / 2, y:ys[k] - cy + H / 2}));
-    for (let n = 0; n < 40; n++) {             // 靠太近的城市互相推開，泡泡和名字不疊在一起
+    // 靠太近的城市（香港和深圳、金門和廈門）合成一顆，點了放大到那裡再分開
+    const gs = [];
+    pts.forEach(([, , c], k) => {
+      const x = xs[k] - cx + W / 2, y = ys[k] - cy + H / 2, g = gs.find(g => Math.hypot(g.x - x, g.y - y) < 84);
+      if (!g) return gs.push({x, y, cs:[c], n:c.ps.length});
+      g.cs.push(c); g.n += c.ps.length; g.x = (g.x * (g.cs.length - 1) + x) / g.cs.length; g.y = (g.y * (g.cs.length - 1) + y) / g.cs.length;
+    });
+    gs.forEach(g => g.cs.sort((a, b) => b.ps.length - a.ps.length));
+    const ps = gs;
+    for (let n = 0; n < 40; n++) {             // 剩下靠近的互相推開，泡泡和名字不疊在一起
       let mv = 0;
       ps.forEach((a, i) => ps.forEach((b, j) => {
         if (j <= i) return;
@@ -1399,8 +1411,10 @@ function bigMap(){
       ps.forEach(q => { q.x = Math.max(40, Math.min(W - 40, q.x)); q.y = Math.max(36, Math.min(H - 50, q.y)); });
       if (!mv) break;
     }
-    el.insertAdjacentHTML("beforeend", pts.map(([, , c], k) => `<button class="mk cmk" data-city="${esc(c.k)}" style="left:${ps[k].x.toFixed(1)}px;top:${ps[k].y.toFixed(1)}px;animation-delay:${Math.min(k * 60, 600)}ms"><img alt="" loading="lazy" src="${src(c.ps[0], "s")}"><i class="num">${c.ps.length}</i><em>${esc(c.c)}</em></button>`).join(""));
-    const kmEl = $("[data-km]"); if (kmEl) kmEl.textContent = `${cs.length} 個城市`;
+    el.insertAdjacentHTML("beforeend", gs.map((g, k) => { const c = g.cs[0], many = g.cs.length > 1;
+      return `<button class="mk cmk${many ? " cmg" : ""}" ${many ? `data-mzf="${esc(g.cs.map(c => c.k).join("\n"))}"` : `data-city="${esc(c.k)}"`} style="left:${g.x.toFixed(1)}px;top:${g.y.toFixed(1)}px;animation-delay:${Math.min(k * 60, 600)}ms"><img alt="" loading="lazy" src="${src(c.ps[0], "s")}"><i class="num">${g.n}</i><em>${esc(g.cs.length > 2 ? `${c.c}等 ${g.cs.length} 個城市` : g.cs.map(c => c.c).join("・"))}</em></button>`; }).join("")
+      + (MAPF ? `<button class="mback" data-mzx>${I("x")}<span>全部城市</span></button>` : ""));
+    const kmEl = $("[data-km]"); if (kmEl) kmEl.textContent = `${all.length} 個城市`;
     el.parentNode.querySelectorAll(".tmac").forEach(x => x.remove());
     return;
   }
