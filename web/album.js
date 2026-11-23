@@ -1816,17 +1816,21 @@ function openLb(i, from){
     clearTimeout(S.infT); S.infT = setTimeout(() => sl.forEach(s => { s.style.visibility = ""; }), T.mid + 60);
     S.fitAll();
   }
-  function infSet(p, dir, q){
-    const y = inf.scrollTop, om = inf.querySelector(".imap"), old = om && om._c ? {c:om._c, t:[...om.querySelectorAll(".tl.ok")]} : null;
-    const kl = inf.querySelector(".kbar i"), k0 = kl ? kl.style.left : "", tx0 = dir ? leafText(inf) : null;
+  /* 面板裡某一塊變高變矮（換張時多一行、少一格，或顏色、色域算好晚一點才出來）：那塊慢慢伸縮、下面的跟著滑，不會一下子上下跳 */
+  function infFlip(fn, on){
     const bk = () => { const n = {}; return [...inf.children].map(e => { const k = (e.classList[0] || e.tagName) + "." + (e.classList[1] || "") + ">" + (e.firstElementChild ? e.firstElementChild.classList[0] || "" : ""); n[k] = (n[k] || 0) + 1; return [k + "~" + n[k], e]; }); };
-    const r0 = dir && anim() ? new Map(bk().map(([k, e]) => [k, e.getBoundingClientRect()])) : null;
-    inf.innerHTML = infoHTML(p); inf.scrollTop = y;            // 換張時停在原本看的地方
-    if (r0) bk().forEach(([k, e]) => {                          // 換張時某一塊變高變矮（多一行、少一格）：那塊慢慢伸縮、下面的跟著滑，不會一下子上下跳
+    const r0 = on && anim() ? new Map(bk().map(([k, e]) => { const r = e.getBoundingClientRect(); e.getAnimations().forEach(a => a.cancel()); return [k, r]; })) : null;
+    fn();
+    if (r0) bk().forEach(([k, e]) => {
       const a = r0.get(k); if (!a) return void e.animate([{opacity:0}, {opacity:1}], {duration:T.mid, delay:T.fast / 2, easing:DEC, fill:"backwards"}); const b = e.getBoundingClientRect(), dy = a.top - b.top, dh = a.height - b.height;
       if (Math.abs(dy) > .5) e.animate([{translate:`0 ${dy}px`}, {translate:"0 0"}], {duration:T.mid, easing:DEC});
       if (Math.abs(dh) > .5) e.animate([{height:a.height + "px", overflow:"hidden"}, {height:b.height + "px", overflow:"hidden"}], {duration:T.mid, easing:DEC});
     });
+  }
+  function infSet(p, dir, q){
+    const y = inf.scrollTop, om = inf.querySelector(".imap"), old = om && om._c ? {c:om._c, t:[...om.querySelectorAll(".tl.ok")]} : null;
+    const kl = inf.querySelector(".kbar i"), k0 = kl ? kl.style.left : "", tx0 = dir ? leafText(inf) : null;
+    infFlip(() => { inf.innerHTML = infoHTML(p); inf.scrollTop = y; }, dir);   // 換張時停在原本看的地方
     infoMap(old, !!dir);
     const mv = dir && q && q !== p && anim() ? morph(q, p, k0) : null;
     if (tx0 && anim()) {                                         // 換張時只有變了的字淡入換上，其他不動（使用者說不要整塊抖一下）
@@ -1898,8 +1902,8 @@ function openLb(i, from){
   function infoMap(old, swap){
     const p = PH[S.i], pb = $("[data-pal]", inf);
     pbSnap(inf);
-    if (pb && p.pal && swap && anim()) { const hg = pb.querySelector(".ihist svg"); if (hg) hg.animate([{opacity:.3, transform:"scaleY(.4)"}, {opacity:1, transform:"none"}], {duration:T.slow, easing:DEC}); pb.querySelectorAll(".pbar i").forEach((x, k) => x.animate([{opacity:.3, transform:"scaleX(.5)"}, {opacity:1, transform:"none"}], {duration:T.slow, delay:k * 40, easing:DEC, fill:"backwards"})); }   // 換張時直方圖、顏色條照樣長出來
-    if (pb && !p.pal) palette(p).then(() => { if (pb.isConnected && PH[S.i] === p) { pb.innerHTML = palHTML(p); pbSnap(pb); const hg = pb.querySelector(".ihist svg"); if (hg && anim()) hg.animate([{opacity:0, transform:"scaleY(.2)"}, {opacity:1, transform:"none"}], {duration:T.slow, easing:DEC}); if (anim()) pb.querySelectorAll(".pbar i").forEach((x, k) => x.animate([{opacity:0, transform:"scaleX(.4)"}, {opacity:1, transform:"none"}], {duration:T.slow, delay:k * 50, easing:DEC, fill:"backwards"})); } });
+    if (pb && p.pal && swap && anim()) { const hg = pb.querySelector(".ihist svg"); if (hg) hg.animate([{opacity:.3, transform:"scaleY(.4)"}, {opacity:1, transform:"none"}], {duration:T.slow, easing:DEC}); pb.querySelectorAll(".pbar i").forEach((x, k) => x.animate([{opacity:.3, transform:"scaleX(.5)"}, {opacity:1, transform:"none"}], {duration:T.slow, delay:k * 40, easing:DEC, fill:"backwards"})); gamIn(pb); }   // 換張時直方圖、顏色條、色域圖照樣長出來
+    if (pb && !p.pal) palette(p).then(() => { if (pb.isConnected && PH[S.i] === p) { infFlip(() => { pb.innerHTML = palHTML(p); pbSnap(pb); }, 1); gamIn(pb); const hg = pb.querySelector(".ihist svg"); if (hg && anim()) hg.animate([{opacity:0, transform:"scaleY(.2)"}, {opacity:1, transform:"none"}], {duration:T.slow, easing:DEC}); if (anim()) pb.querySelectorAll(".pbar i").forEach((x, k) => x.animate([{opacity:0, transform:"scaleX(.4)"}, {opacity:1, transform:"none"}], {duration:T.slow, delay:k * 50, easing:DEC, fill:"backwards"})); } });
     const m = $(".imap", inf); if (!m || !p.g) return;
     const z = 15, W2 = m.clientWidth, H2 = m.clientHeight, cx = lx(p.g[1], z), cy = ly(p.g[0], z);
     tiles(m, cx, cy, z, W2, H2); m._c = [cx, cy];
@@ -3139,12 +3143,16 @@ function gamut(im){
 const LOCUS = [[.1741, .005], [.1566, .0177], [.144, .0297], [.1241, .0578], [.1096, .0868], [.0913, .1327], [.0687, .2007], [.0454, .295], [.0235, .4127], [.0082, .5384], [.0039, .6548], [.0139, .7502], [.0389, .812], [.0743, .8338], [.1142, .8262], [.1547, .8059], [.2296, .7543], [.3016, .6923], [.3731, .6245], [.4441, .5547], [.5125, .4866], [.5752, .4242], [.627, .3725], [.6658, .334], [.6915, .3083], [.719, .2809], [.7347, .2653]];
 const GX = x => (x * 100).toFixed(2), GY = y => (90 - y * 100).toFixed(2);
 const gTri = pr => pr.map(([x, y]) => `${GX(x)},${GY(y)}`).join(" ");
+function gamIn(pb){                                         // 色域圖的顏色點從白點（D65）往外散開
+  const g = pb.querySelector(".igam .gpts"); if (!g || !anim()) return;
+  g.animate([{opacity:0, transform:"scale(.35)"}, {opacity:1, transform:"none"}], {duration:T.slow, easing:DEC});
+}
 function gamSvg(p){
   const G = p.gam; if (!G || !G.pts.length) return "";
   const pc = Math.round(G.out * 100), tip = pc >= 1 ? `有 ${pc}% 的顏色超出一般螢幕` : G.out > 0 ? "少數顏色超出一般螢幕" : "顏色都在一般螢幕的範圍內";
   return `<div class="igam"><svg viewBox="-2 -2 80 94" aria-hidden="true"><polygon points="${LOCUS.map(([x, y]) => `${GX(x)},${GY(y)}`).join(" ")}" class="glc"/>
     <polygon points="${gTri([[.68, .32], [.265, .69], [.15, .06]])}" class="gp3"/><polygon points="${gTri([[.64, .33], [.3, .6], [.15, .06]])}" class="gsr"/>
-    ${G.pts.map(q => `<circle cx="${GX(q[0])}" cy="${GY(q[1])}" r="${q[5] ? .95 : .7}" fill="color(display-p3 ${(q[2] / 255).toFixed(3)} ${(q[3] / 255).toFixed(3)} ${(q[4] / 255).toFixed(3)})"${q[5] ? ` class="go"` : ""}/>`).join("")}</svg>
+    <g class="gpts" style="transform-origin:${GX(.3127)}px ${GY(.329)}px">${G.pts.map(q => `<circle cx="${GX(q[0])}" cy="${GY(q[1])}" r="${q[5] ? .95 : .7}" fill="color(display-p3 ${(q[2] / 255).toFixed(3)} ${(q[3] / 255).toFixed(3)} ${(q[4] / 255).toFixed(3)})"${q[5] ? ` class="go"` : ""}/>`).join("")}</g></svg>
     <div class="igt"><small>色域</small><b>${tip}</b><span class="gk"><i class="k1"></i>一般螢幕<i class="k2"></i>P3</span>${scrNote(p)}</div></div>`;
 }
 function scrNote(p){                                         // 看的人的螢幕看不看得到：照瀏覽器回報的螢幕能力老實寫
