@@ -277,6 +277,12 @@ class PhotoUnit(unittest.TestCase):
                 self.assertAlmostEqual(parse[k], v, places=3)
         self.assertIn(b"Item:Length=\"%d\"" % n, out[:s])
         self.assertTrue(sec.endswith(b"\x22" * 20 + b"\xff\xd9"))
+        sdr = P["pic_sdr"](out)                        # 安卓沒開 HDR：拿掉增益圖、MPF、hdrgm、ISO 標記，留一般的底圖
+        self.assertFalse(P["pic_mpf_imgs"](sdr))
+        for k in (b"hdrgm", b"MPF\0", b"21496", b"\x22" * 20):
+            self.assertNotIn(k, sdr)
+        self.assertTrue(sdr.startswith(b"\xff\xd8") and sdr.endswith(b"\x11" * 40 + b"\xff\xd9"))
+        self.assertEqual(P["pic_sdr"](base), base)
 
     def test_iso_common_denominator(self):
         """ISO 21496-1 共用分母的寫法（iPhone 用的）也讀得懂"""

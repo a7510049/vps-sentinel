@@ -992,6 +992,28 @@ def pic_uhdr(base, gm, g):
     return out if len(pre) + len(mpf) + len(base) - sos == prim else base
 
 
+def pic_sdr(b):
+    """Ultra HDR JPEG → 只留一般的底圖（拿掉增益圖和它的標記；安卓 Chrome 畫面上一有增益圖整頁就會重畫、閃一下）"""
+    if not b or b[:2] != b"\xff\xd8":
+        return b
+    out, sos = [b"\xff\xd8"], None
+    for mk, s, e in pic_jpeg_segs(b):
+        if mk == 0xDA:
+            sos = s - 4
+            break
+        d = b[s:e]
+        if (mk == 0xE1 and b"hdrgm" in d[:4096]) or (mk == 0xE2 and (d[:4] == b"MPF\0" or d[:len(PIC_ISO)] == PIC_ISO)):
+            continue
+        out.append(b[s - 4:e])
+    if sos is None:
+        return b
+    end = b.find(b"\xff\xd9", sos)                 # 第一張的結尾（壓縮資料裡的 FF 一定接 00 或 RST，不會是 D9）
+    if end < 0:
+        return b
+    out.append(b[sos:end + 2])
+    return b"".join(out)
+
+
 def pic_mpf_imgs(b):
     """JPEG 後面接的其他張（MPF）：[(開始, 長度)]（不含第一張）"""
     for mk, s, e in pic_jpeg_segs(b):

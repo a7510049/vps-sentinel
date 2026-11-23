@@ -3169,7 +3169,7 @@ def alb_http(h, method):
         return h.send(code2, json.dumps(out, ensure_ascii=False), cache=False) or True
     if method != "GET":
         return h.send(404, '{"error":"找不到"}') or True
-    own = bool(re.fullmatch(r"/i/[0-9a-f]{12}/[slqvm]", rest)) and alb_own_ok(h, a)   # 主人挑照片
+    own = bool(re.fullmatch(r"/i/[0-9a-f]{12}/[slqvmd]", rest)) and alb_own_ok(h, a)   # 主人挑照片
     if not own and not alb_cookie_ok(h, a):
         return h.send(401, json.dumps({"ok": False, "pw": True}), cache=False) or True
     if not own:
@@ -3218,7 +3218,7 @@ def alb_http(h, method):
         except (BrokenPipeError, ConnectionResetError, OSError):
             pass
         return True
-    m = re.fullmatch(r"/i/([0-9a-f]{12})/([slqovmax])", rest)
+    m = re.fullmatch(r"/i/([0-9a-f]{12})/([slqovmaxdy])", rest)
     if m:
         pid, kind = m[1], m[2]
         idx = alb_index(a, scan=False)
@@ -3296,10 +3296,11 @@ def alb_http(h, method):
                 except (BrokenPipeError, ConnectionResetError, OSError):
                     pass
             return True
-        b, _ = alb_get(a, pid, kind)
+        sdr = kind in ("d", "y")                       # d／y：大圖 l／清晰版 x 不帶增益圖（安卓沒開 HDR 時用）
+        b, _ = alb_get(a, pid, {"d": "l", "y": "x"}.get(kind, kind))
         if not b:
             return h.send(404, '{"error":"找不到"}') or True
-        return alb_img_out(h, a, b, "image/jpeg", own=own)
+        return alb_img_out(h, a, pic_sdr(b) if sdr else b, "image/jpeg", own=own)
     if rest == "/zip":                                 # 全部打包（不壓縮，邊讀邊送；只給壓縮圖的打包大圖）
         dlm = alb_dl(a)
         if not dlm:
