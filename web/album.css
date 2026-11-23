@@ -15,7 +15,7 @@
   color-scheme:dark;
   --bg:#08090c; --s1:#121318; --s2:#1a1b22; --s3:#24262e; --tx:#f1f2f6; --tx2:#b9bcc8; --tx3:#7f8392; --line:rgba(255,255,255,.08);
   --p:color-mix(in oklab,var(--seed) 55%,#fff); --on-p:#06091a; --bad:#ffb4ab;
-  --glass:rgba(18,19,24,.62); --glass2:rgba(255,255,255,.1); --hl:inset 0 1px 0 rgba(255,255,255,.07);
+  --glass:rgba(18,19,24,.62); --glass-solid:rgba(18,19,24,.94); --glass2:rgba(255,255,255,.1); --hl:inset 0 1px 0 rgba(255,255,255,.07);
   --sh-card:0 18px 48px -22px rgba(0,0,0,.85); --sh-pop:0 10px 30px -8px rgba(0,0,0,.5);
   --map-f:invert(1) hue-rotate(180deg) brightness(.92) contrast(.88) saturate(.55);
 }
@@ -26,7 +26,7 @@
   color-scheme:light;
   --bg:#f6f6f8; --s1:#fff; --s2:#eeeff3; --s3:#e2e4ea; --tx:#15161c; --tx2:#4a4d5c; --tx3:#7a7d8c; --line:rgba(20,24,40,.08);
   --p:color-mix(in oklab,var(--seed) 85%,#000); --on-p:#fff; --bad:#ba1a1a;
-  --glass:rgba(255,255,255,.7); --glass2:rgba(20,24,40,.06); --hl:inset 0 1px 0 rgba(255,255,255,.6);
+  --glass:rgba(255,255,255,.7); --glass-solid:rgba(255,255,255,.95); --glass2:rgba(20,24,40,.06); --hl:inset 0 1px 0 rgba(255,255,255,.6);
   --sh-card:0 1px 2px rgba(30,40,90,.05),0 16px 40px -20px rgba(30,40,90,.28); --sh-pop:0 10px 30px -10px rgba(30,40,90,.3); --map-f:saturate(.7) contrast(.95)}}
 @media (min-width:700px){:root{--gap:6px; --pad:28px; --rh:220px}}
 @media (min-width:1200px){:root{--gap:8px; --pad:clamp(32px,2.6vw,56px); --rh:260px; --wmax:2400px}}
@@ -285,8 +285,8 @@ button.chip:active,a.chip:active{transform:scale(.95)}
 .hero .chip.go svg{color:#111}
 .cue{position:absolute;left:50%;bottom:calc(18px + env(safe-area-inset-bottom));z-index:1;width:44px;height:56px;margin-left:-22px;display:grid;place-items:center;opacity:0;animation:up var(--t-slow) var(--dec) .5s forwards}
 .cue i{position:relative;width:1px;height:38px;background:rgba(255,255,255,.3);overflow:hidden}
-.cue i::after{content:"";position:absolute;left:0;top:-40%;width:1px;height:40%;background:#fff;animation:fall 2.2s var(--ease) infinite}
-@keyframes fall{to{top:100%}}
+.cue i::after{content:"";position:absolute;left:0;top:0;width:1px;height:40%;background:#fff;animation:fall 2.2s var(--ease) infinite}
+@keyframes fall{from{transform:translateY(-100%)}to{transform:translateY(250%)}}   /* 用位移不用 top：不用每一格重新排版 */
 @media (prefers-color-scheme:light){
   .eyebrow{color:var(--tx2);text-shadow:none}
   .hcap h1{color:var(--tx);text-shadow:0 1px 24px color-mix(in oklab,var(--bg) 60%,transparent)}
@@ -1064,6 +1064,15 @@ html.scrubbing .ph,html.scrubbing .ph .hi{transition:none;animation:none}
 .sbl .sbi[hidden]{display:none}
 html.scrubbing .ph .lq{filter:none;transform:none}
 html.scrubbing .ph .hi{filter:none;transform:none}
+/* 快速滑動（album.js 的 FLING）：安卓上一次幾十張照片同時浮上來、顯影（每張一層濾鏡）會掉幀，
+   這時新出現的照片只淡入；上面那條先換成不透明一點的底色、不霧化（底下照片每一格都在換，霧化要每一格重算），停下來再慢慢霧回來 */
+html.fling .ph,html.fling .ph .hi{transition:opacity var(--t-fast) var(--ease)!important}
+html.fling .ph,html.fling .ph .hi{transform:none}
+html.fling .ph .hi{filter:none}
+html.fling .bar{-webkit-backdrop-filter:none;backdrop-filter:none;background:var(--glass-solid);transition:transform var(--t-mid) var(--ease)}
+.bar{transition:transform var(--t-mid) var(--ease),background-color var(--t-mid) var(--ease)}
+/* 封面、回憶圓圈捲出畫面時，裡面一直跑的動畫先停（字的光、流動的線每一格都要重畫；跟著捲動走的視差 .cv、.hcap 不停） */
+.hero.away :not(.cv,.hcap),.hero.away::before,.hero.away::after,.hero.away :not(.cv,.hcap)::before,.hero.away :not(.cv,.hcap)::after,.mems.away *,.mems.away *::before{animation-play-state:paused!important}
 html:has(.lb,.ss,.sy) .scrub{opacity:0;pointer-events:none}
 
 /* 器材：用了哪幾台相機、哪幾顆鏡頭、常用焦段（點了只看那台拍的） */
