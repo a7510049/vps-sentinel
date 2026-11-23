@@ -1712,13 +1712,11 @@ function openLb(i, from){
     if (zw.dataset.i === String(idx)) return;
     zw.dataset.i = idx;
     if (p.broken) { zw.innerHTML = `<div class="nope">${I("off")}</div>`; return; }
-    zw.innerHTML = `<img class="s1" alt="" draggable="false" src="${p.q ? `data:image/jpeg;base64,${p.q}` : src(p, "s")}"><img class="s1" alt="" draggable="false" src="${src(p, "s")}"><img class="s2" alt="" draggable="false" decoding="async" ${S.hold ? "data-src" : "src"}="${src(p, "l")}">`
+    zw.innerHTML = `<img class="s1" alt="" draggable="false" src="${p.q ? `data:image/jpeg;base64,${p.q}` : src(p, "s")}"><img class="s1" alt="" draggable="false" src="${src(p, "s")}"><img class="s2" alt="" draggable="false" decoding="async" data-src="${src(p, "l")}">`
       + (p.x.afp && !isVid(p) && !afFace(p) ? `<i class="afb${p.fm ? " miss" : ""}" style="left:${(p.x.afp[0] * 100).toFixed(2)}%;top:${(p.x.afp[1] * 100).toFixed(2)}%;width:${(p.x.afp[2] * Math.min(p.w, p.h) / p.w * 100).toFixed(2)}%;height:${(p.x.afp[2] * Math.min(p.w, p.h) / p.h * 100).toFixed(2)}%"></i>` : "")
       + (p.x.fcs && !isVid(p) ? p.x.fcs.map((f, k) => `<i class="fcb${afFace(p) === k + 1 ? ` af${p.fm ? " miss" : ""}` : ""}" style="left:${(f[0] * 100).toFixed(2)}%;top:${(f[1] * 100).toFixed(2)}%;width:${(f[2] * 100).toFixed(2)}%;height:${(f[3] * 100).toFixed(2)}%"></i>`).join("") : "")
       + (isVid(p) ? `<video class="vv" playsinline preload="none" disablepictureinpicture></video><span class="vbig">${p.vr === 1 ? I("play") : p.vr === 0 ? I("x") : `<i class="spin"></i>`}</span>` : p.gf === 2 ? `<img class="awp" alt="" draggable="false" src="${src(p, "a")}">` : p.lv ? `<video class="lvv" muted playsinline preload="none"${p.gf ? " loop" : ""}></video>` : "");
     const aw = zw.querySelector(".awp"); if (aw) aw.complete && aw.naturalWidth ? aw.classList.add("ok") : aw.addEventListener("load", () => aw.classList.add("ok"), {once:true});
-    const big = zw.querySelector(".s2");
-    big.complete && big.naturalWidth ? big.classList.add("ok") : big.addEventListener("load", () => big.classList.add("ok"), {once:true});
     if (!p.q) {                                              // 主機還在做這張：中間轉圈，任何一張圖好了就拿掉
       const w = document.createElement("i"); w.className = "spin lbw"; zw.appendChild(w);
       const ok = () => w.classList.add("off");
@@ -1726,7 +1724,23 @@ function openLb(i, from){
     }
   }
   function place(){ sl.forEach((s, k) => { s.style.transform = `translateX(${(k - 1) * (W() + GAPX)}px)`; }); }
-  function setAll(){ fill(sl[0], S.i - 1); fill(sl[1], S.i); fill(sl[2], S.i + 1); place(); chrome(); xlSoon(); if (ZEB) zbMake(); }
+  function setAll(){ fill(sl[0], S.i - 1); fill(sl[1], S.i); fill(sl[2], S.i + 1); place(); chrome(); xlSoon(); if (ZEB) zbMake(); bigQ(); }
+  /* 大圖 l 一張一張載：這張先、再左右兩張；在背景解碼好（decode）才淡入，iPhone 解 HDR 大圖時畫面不會卡住、照片不會突然跳出來 */
+  function bigQ(){
+    clearTimeout(S.bqT); const tk = S.bq = (S.bq || 0) + 1;
+    if (S.hold) return;
+    const order = [sl[1], sl[2], sl[0]].map(s => s.firstChild);
+    const next = () => {
+      if (tk !== S.bq || S.closing || LB !== S) return;
+      const zw = order.shift(); if (!zw) return;
+      const m = zw.querySelector("img.s2[data-src]"); if (!m) return next();
+      m.src = m.dataset.src; m.removeAttribute("data-src");
+      let done = 0; const ok = good => { if (done++) return; if (good && m.isConnected) m.classList.add("ok"); if (tk === S.bq) S.bqT = setTimeout(next, T.fast); };
+      if (m.decode) m.decode().then(() => ok(1), () => { if (m.complete && m.naturalWidth) ok(1); else { m.addEventListener("load", () => ok(1), {once:true}); m.addEventListener("error", () => ok(0), {once:true}); } });
+      else { m.addEventListener("load", () => ok(1), {once:true}); m.addEventListener("error", () => ok(0), {once:true}); }
+    };
+    next();
+  }
   function zbMake(){                                          // 這張的過曝、死黑標示（大圖好了再算一次，比較準）
     const zw = cur(), p = PH[S.i]; if (!zw || !p || isVid(p) || p.broken) return;
     const big = zw.querySelector(".s2"), sm = zw.querySelectorAll(".s1")[1], im = big && big.complete && big.naturalWidth ? big : sm && sm.complete && sm.naturalWidth ? sm : null;
@@ -1755,7 +1769,7 @@ function openLb(i, from){
     if (need < 2048 * 1.15) return;
     zw.dataset.xl = S.i; const i0 = S.i, im = new Image(); im.decoding = "async";
     im.src = src(p, "x");                                     // 先在背景解碼好才換上，換的那一下不卡
-    (im.decode ? im.decode() : new Promise(r => { im.onload = r; })).then(() => { const b = zw.querySelector(".s2"); if (b && zw.dataset.i === String(i0) && im.naturalWidth > b.naturalWidth) b.src = im.src; }).catch(() => {});
+    (im.decode ? im.decode() : new Promise(r => { im.onload = r; })).then(() => { const b = zw.querySelector(".s2"); if (b && zw.dataset.i === String(i0) && im.naturalWidth > b.naturalWidth) { b.removeAttribute("data-src"); b.src = im.src; (b.decode ? b.decode() : Promise.resolve()).then(() => b.classList.add("ok"), () => {}); } }).catch(() => {});
   }
   S.fitAll = () => { const zw = cur(); zw.style.transition = `left ${T.mid}ms ${EASE},top ${T.mid}ms ${EASE},width ${T.mid}ms ${EASE},height ${T.mid}ms ${EASE}`;
     setZoom(1, 0, 0); setAll(); setTimeout(() => { zw.style.transition = ""; }, T.mid + 30); };
@@ -1905,7 +1919,7 @@ function openLb(i, from){
   }
   S.hold = anim();                                           // 長大的動畫跑完才開始載大圖（iPhone 一邊解大圖一邊跑動畫會卡、一打開就跳到最大）
   setAll();
-  if (S.hold) setTimeout(() => { S.hold = 0; el.querySelectorAll("img.s2[data-src]").forEach(m => { m.src = m.dataset.src; m.removeAttribute("data-src"); }); }, T.mid + 90);
+  if (S.hold) setTimeout(() => { S.hold = 0; bigQ(); }, T.mid + 90);
   S.chrome = chrome; S.vToggle = vToggle;
   function toTile(g, f){                                     // 格子的位置：照格子裡那張圖真正的大小、位置（封面那張比格子大、有視差），裁成格子的形狀和圓角（不壓扁）
     const sr = stage.getBoundingClientRect(), ri = g.ri, rc = g.rc, k = Math.max(ri.width / f.w, ri.height / f.h);
@@ -1955,7 +1969,7 @@ function openLb(i, from){
     track.style.transform = `translateX(${to}px)`;
     S.busy = () => { a.cancel(); S.busy = null;
       if (d > 0) sl = [sl[1], sl[2], sl[0]]; else sl = [sl[2], sl[0], sl[1]];
-      S.i = n; track.style.transform = ""; fill(sl[d > 0 ? 2 : 0], n + d); place(); chrome(); if (ZEB) zbMake(); };   // 過曝／死黑開著：換到的這張也標出來
+      S.i = n; track.style.transform = ""; fill(sl[d > 0 ? 2 : 0], n + d); place(); chrome(); if (ZEB) zbMake(); bigQ(); };   // 過曝／死黑開著：換到的這張也標出來
     a.onfinish = () => S.busy && S.busy();
   }
   const finish = () => S.busy && S.busy();
