@@ -856,7 +856,7 @@ function homeDesk(list, time){
   const ev = groupEv(allEvents(list)).slice(0, 8), sel = deskSel(list), g = greet();
   const lvs = list.map(s => s.online ? lvOf(s) : "bad"), lv = LOST || lvs.includes("bad") ? "bad" : lvs.includes("warn") || issuesOf(list).length ? "warn" : "ok";   // 跟標題那句話一致
   const bar = dbar("總覽", `<span class="spill ${lv}" data-x>${I({ok:"ok", warn:"alert", bad:"warn"}[lv])}${esc(headline(list))}</span><span class="dq">${esc(g.hi)}${g.quote ? `・${esc(g.quote)}` : ""}</span><span class="sp"></span>${addHostBtn("ubtn ghost dadd")}`);
-  const tab = list.length > 1 ? `<div class="htab" data-key="htab"><div class="hth"><span>主機</span><span>處理器</span><span>記憶體</span><span>磁碟</span><span>網路</span><span>本月流量</span><span>開機</span><span></span></div>
+  const tab = list.length > 1 ? `<div class="htab" data-key="htab"><div class="hth"><span>主機</span><span>處理器</span><span>記憶體</span><span>磁碟</span><span>網路</span><span${list.some(s => s.traffic && s.traffic.limit) ? "" : ` class="hr"`}>本月流量</span><span>開機</span><span></span></div>
     <div class="htb" data-key="htb" data-keyed>${list.map(s => hostRowD(s, s === sel)).join("")}</div></div>` : "";
   return `<div class="dhome" data-key="dh">${bar}${sumRow(list)}${tab}<div class="dgrid" data-key="dg"><section class="hp ${sel ? lvOf(sel) : ""}" data-key="${sel ? esc(keyOf(sel)) : "none"}" data-sw>${sel ? hostBody(sel, false) : `<div class="calm">還沒有主機</div>`}</section>
     <aside class="aside" data-key="as">${g.wx ? `<div class="wxw">${g.wx}</div>` : ""}${tgHint(list)}${upCard(list)}${trRank(list)}<div class="lbl" data-key="lev">最近發生${ev.length ? `<button data-tab="log">全部紀錄</button>` : ""}</div>${evList(ev, list.length > 1)}</aside></div></div>`;
@@ -934,13 +934,21 @@ function slideSel(change){
     const g = document.createElement("i"); g.className = "slide"; g._leaving = 1; b.prepend(g); b.classList.add("sliding");   // _leaving：重畫時不要把它當成內容
     const dur = T.sp, t0 = performance.now(), lerp = (a, c, p) => a + (c - a) * p;
     g.animate([{opacity:1}, {opacity:1}], {duration:dur, id:"ui"});              // 滑完之前，自動更新先等一下
-    const done = () => { const on2 = selOf(b); if (on2) { on2.style.transition = "none"; b.classList.remove("sliding"); on2.offsetWidth; on2.style.transition = ""; } g.remove(); };   // 換回它自己的底色，同一格畫面，不會閃
+    const pane = b.classList.contains("pane");
+    const lit = c => { if (pane) for (const r of b.children) if (r.classList.contains("li")) {   // 字的顏色跟著底色走：底色蓋到的那一段字是底色上的顏色，其他是平常的顏色（慢慢變的話中間會跟底色一樣、字看不見）
+      const o = Math.min(c.y + c.h, r.offsetTop + r.offsetHeight) - Math.max(c.y, r.offsetTop), l = r.querySelector(":scope>.lab");
+      r.classList.toggle("lit", o > r.offsetHeight / 2);
+      if (l) { const a = c.y - r.offsetTop - l.offsetTop; l.style.setProperty("--la", a.toFixed(1) + "px"); l.style.setProperty("--lb", (a + c.h).toFixed(1) + "px"); }
+    } };
+    const done = () => { const on2 = selOf(b); if (on2) { on2.style.transition = "none"; b.classList.remove("sliding"); on2.offsetWidth; on2.style.transition = ""; } if (pane) for (const r of b.children) { r.classList.remove("lit"); const l = r.querySelector(":scope>.lab"); if (l) l.style.removeProperty("--la"), l.style.removeProperty("--lb"); } g.remove(); };
+    lit(from);   // 換回它自己的底色，同一格畫面，不會閃
     if (Math.abs(to0.w - from.w) < 1 && Math.abs(to0.h - from.h) < 1 && to0.r.every((r, i) => Math.abs(r - from.r[i]) < 1)) {
       // 大小一樣（例如手機上面的分頁列、電腦左邊的圖示）：只移位置，交給顯示卡跑，新的一頁在畫的時候也不會頓
       Object.assign(g.style, {width:to0.w + "px", height:to0.h + "px", borderRadius:to0.r.map(r => r + "px").join(" ")});
       const tr = c => `translate(${c.x}px,${c.y}px)`, a = g.animate([{transform:tr(from)}, {transform:tr(to0)}], {duration:dur, easing:SPRING, fill:"forwards"});
       a.onfinish = () => { if (!g._stop) done(); };
       Object.defineProperty(g, "_now", {get(){ const m = new DOMMatrix(getComputedStyle(g).transform); return {x:m.e, y:m.f, w:to0.w, h:to0.h, r:to0.r}; }});
+      if (pane) { const tk = () => { if (g._stop || !g.isConnected) return; lit(g._now); requestAnimationFrame(tk); }; requestAnimationFrame(tk); }
       return;
     }
     const step = now => {
@@ -948,7 +956,7 @@ function slideSel(change){
       const p = Math.min(1, (now - t0) / dur), e = springAt(p), on2 = selOf(b);
       if (!on2 || !b.isConnected) return g.remove();
       const to = boxIn(b, on2, z), c = {x:lerp(from.x, to.x, e), y:lerp(from.y, to.y, e), w:lerp(from.w, to.w, e), h:lerp(from.h, to.h, e), r:from.r.map((r, i) => Math.max(0, lerp(r, to.r[i], e)))};
-      g._now = c;
+      g._now = c; lit(c);
       Object.assign(g.style, {transform:`translate(${c.x}px,${c.y}px)`, width:c.w + "px", height:c.h + "px", borderRadius:c.r.map(r => r + "px").join(" ")});
       if (p < 1) return requestAnimationFrame(step);
       done();
@@ -982,7 +990,7 @@ function logPage(list){
   if (D) {   // 電腦：篩選放工具列，事件是一張表（時間、主機、事件）
     let tr = "", dd = "";
     for (const e of ev) { const d = dayOf(e.t); if (d !== dd) { dd = d; tr += `<div class="day" data-key="d:${d}">${d}</div>`; } tr += evRowD(e, many); }
-    const tb = ev.length ? `<div class="ltab${many ? "" : " one"}" data-key="ltab:${LOGF}:${hk}" data-sw><div class="lth"><span>時間</span>${many ? "<span>主機</span>" : ""}<span></span><span>事件</span></div><div class="evs" data-key="evs" data-keyed>${tr}</div></div>`
+    const tb = ev.length ? `<div class="ltab${many ? "" : " one"}" data-key="ltab:${LOGF}:${hk}" data-sw><div class="lth"><span>時間</span>${many ? "<span>主機</span>" : ""}<span class="lev">事件</span></div><div class="evs" data-key="evs" data-keyed>${tr}</div></div>`
       : `<div class="calm" data-key="calm" data-sw>目前沒有事件</div>`;
     return `<div class="wide" data-key="log">${dbar("紀錄", fc + `<span class="sp"></span>` + hc)}${tb}</div>`;
   }
@@ -1019,19 +1027,19 @@ function setPage(list){
   const sec = `<div class="lbl" data-key="lsec">通知與登入</div>${secG}` + (skyG ? `<div class="lbl" data-key="lsky">機場起降</div>${skyG}` : "");
   const out = `<div class="sp" data-key="sp"></div><div class="group" data-key="g-out"><button class="li" data-logout><span class="ico info">${I("logout")}</span><span class="lab">登出</span></button>
       <button class="li" data-reset><span class="ico info">${I("reset")}</span><span class="lab">恢復預設值</span></button></div>`;
-  let h = "";
+  let h = "", hpk = "";
   if (on.length) {
     const s = on.find(x => keyOf(x) === TOOLH) || on.find(x => !x.node) || on[0], k = esc(keyOf(s)), node = esc(s.node || "");
-    h += `<div class="lbl" data-key="lh">主機<button data-selfcheck>檢查新版</button></div><div class="selfsum" data-key="selfsum" data-keep data-ld></div>`;
-    if (on.length > 1) h += hpick(on, s, x => x.self_has ? `<span class="dot info"></span>` : "");
+    hpk = on.length > 1 ? hpick(on, s, x => x.self_has ? `<span class="dot info"></span>` : "") : "";
+    h += (D ? "" : `<div class="lbl" data-key="lh">主機<button data-selfcheck>檢查新版</button></div>`) + `<div class="selfsum" data-key="selfsum" data-keep data-ld></div>` + (D ? "" : hpk);   // 電腦：選主機、檢查新版放上面的工具列，右邊第一張卡片跟左邊分類對齊
     h += `<div class="group" data-key="g-h:${k}" data-sw><div class="selfbox" data-key="self" data-n="${node}" data-keep data-ld><div class="selfwait">讀取中…</div></div>${sysRow(s)}${secRow(s)}<button class="li" data-newtok="${node}" data-label="${esc(s.name)}">${IC("key", "")}<span class="lab">換一組新密碼<small>舊密碼會立刻失效</small></span>${CHEV}</button>`
       + (s.keep ? `<label class="li">${IC("keep", "")}<span class="lab">Oracle 防回收${keepLine(s.keep)}</span><input type="checkbox" class="tog" data-keepalive="${node}" aria-label="Oracle 防回收" ${s.keep.on ? "checked" : ""}></label>` : "")
       + (s.node ? "" : go("data-pair", "link", "配對暗號", "pairst")) + `</div>`;
   }
   if (D) {   // 電腦：左邊分類、右邊只放那一類（跟電腦上的設定程式一樣）
     const C = [["sec", "通知與登入", "bell"], ...(skyG ? [["sky", "機場起降", "plane"]] : []), ...(h ? [["host", "主機", "server"]] : []), ["look", "外觀", "palette"]];
-    const c = C.some(x => x[0] === SETC) ? SETC : C[0][0], body = {sec:secG, sky:skyG, host:h.replace(/<div class="lbl" data-key="lh">主機/, '<div class="lbl" data-key="lh">'), look:look.replace(/<div class="lbl"[^>]*>外觀<\/div>/, "")}[c];
-    return `<div class="wide" data-key="set">${dbar("設定")}<div class="sgrid" data-key="sg"><nav class="scat" data-key="sct"><div class="pane group" data-key="scp" data-slide>${C.map(([k, l, ic]) => `<button class="li${c === k ? " on" : ""}" data-setc="${k}" data-key="sc:${k}">${I(ic)}<span class="lab">${l}</span></button>`).join("")}</div>${out}</nav>
+    const c = C.some(x => x[0] === SETC) ? SETC : C[0][0], body = {sec:secG, sky:skyG, host:h, look:look.replace(/<div class="lbl"[^>]*>外觀<\/div>/, "")}[c];
+    return `<div class="wide" data-key="set">${dbar("設定", c === "host" ? `<div class="sbr" data-key="sbr">${hpk}<span class="sp"></span><button class="ubtn ghost dadd" data-selfcheck data-key="selfchk">檢查新版</button></div>` : "")}<div class="sgrid" data-key="sg"><nav class="scat" data-key="sct"><div class="pane group" data-key="scp" data-slide>${C.map(([k, l, ic]) => `<button class="li${c === k ? " on" : ""}" data-setc="${k}" data-key="sc:${k}">${I(ic)}<span class="lab">${l}</span></button>`).join("")}</div>${out}</nav>
       <div class="sbody" data-key="sb:${c}" data-sw>${body}</div></div></div>`;
   }
   return `<div class="narrow" data-key="set"><h1 class="ptitle"><span>設定</span></h1>` + sec + h + look + out + `</div>`;   // 手機：常用的通知、登入放最上面，外觀設好就很少動，放最後

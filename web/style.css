@@ -396,7 +396,7 @@ html.full .dock .tb.on::before{opacity:1;transform:none}
   background:var(--card);font-weight:500;
   transition:border-radius var(--sp-fast),transform var(--sp-fast),background-color var(--t-fast) var(--ease)}
 .addhost svg{width:20px;height:20px}
-.tgh{margin-top:12px}
+.tgh{margin-top:12px}.aside .tgh{margin-top:0}   /* 電腦右邊欄：上緣跟左邊主機卡片同一條線（欄裡已經有間距） */
 .addhost.prs{border-radius:var(--r-md);transform:scale(.97)}
 /* 主機很多時：正常的主機一台一行（名稱、三個數字、箭頭），數字欄每一行對齊 */
 .hosts:empty{display:none}
@@ -731,7 +731,7 @@ button.li.prs,a.li.prs{border-radius:var(--r-lg);transform:scale(.98);background
 .tgrid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
 @media (max-width:599px){.tgrid>:last-child:nth-child(odd){grid-column:1/-1}}   /* 單數個時最後一塊撐滿，不留空 */
 @media (min-width:600px){.tgrid{grid-template-columns:repeat(auto-fit,minmax(200px,1fr))}}
-.tbx{position:relative;display:flex;flex-direction:column;align-items:flex-start;gap:2px;min-height:132px;padding:14px 14px 16px;border-radius:var(--r-lg);background:var(--card);box-shadow:var(--cs);color:var(--tx);text-align:left;text-decoration:none;overflow:hidden}
+.tbx{position:relative;display:flex;flex-direction:column;align-items:flex-start;gap:2px;min-height:132px;padding:14px 16px 16px;border-radius:var(--r-lg);background:var(--card);box-shadow:var(--cs);color:var(--tx);text-align:left;text-decoration:none;overflow:hidden}
 .tbx .ttop{display:flex;justify-content:space-between;align-items:flex-start;width:100%;padding-bottom:12px}
 .tbx .tgo{color:var(--tx3)}
 .tbx .tgo svg{width:18px;height:18px}
@@ -827,7 +827,12 @@ button.li.prs,a.li.prs{border-radius:var(--r-lg);transform:scale(.98);background
   padding:0 18px 32px;margin:0 -18px -32px}   /* 捲動的欄位會切掉卡片的影子：四周多留位置 */
 .pane .li{min-height:52px;padding:10px 16px;gap:10px}
 .pane .li{transition:border-radius var(--sp-fast),transform var(--sp-fast),background-color var(--t-mid) var(--ease),color var(--t-mid) var(--ease)}
-.pane[data-slide].sliding>.li{transition-property:border-radius,transform,color}   /* 底色正在滑：舊的那一列不要留一塊慢慢褪的灰底（上面那條會蓋掉 [data-slide].sliding>*） */
+.pane[data-slide].sliding>.li{transition-property:border-radius,transform;color:var(--tx)}
+.pane[data-slide].sliding>.li{--lc:var(--on-p)}[data-accent="rainbow"] .pane[data-slide].sliding>.li{--lc:var(--on-rbw)}
+.pane[data-slide].sliding>.li.lit{color:var(--lc)}
+.pane[data-slide].sliding>.li>.lab{color:transparent;-webkit-background-clip:text;background-clip:text;
+  background-image:linear-gradient(var(--tx) var(--la,0px),var(--lc) var(--la,0px),var(--lc) var(--lb,0px),var(--tx) var(--lb,0px))}
+.scat .pane .li.lit>svg{color:inherit}   /* 底色正在滑：哪一列被蓋住超過一半，字就換成底色上的顏色（app.js 的 lit） */   /* 底色正在滑：舊的那一列不要留一塊慢慢褪的灰底（上面那條會蓋掉 [data-slide].sliding>*） */
 .pane .li.on{background:var(--p) var(--grad);color:var(--on-p)}
 .lfi{display:grid;place-items:center;flex:none}
 .lfi svg{width:16px;height:16px}
@@ -844,6 +849,7 @@ button.li.prs,a.li.prs{border-radius:var(--r-lg);transform:scale(.98);background
 .dash.d .v-tools .group{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
 .dash.d .v-tools .group>.li{box-shadow:var(--cs);border-radius:var(--r-lg);min-height:84px;padding:16px 20px}
 .dash.d .v-tools .group>.li.col{grid-column:1/-1}
+.dash.d .v-tools .tbx{padding-inline:20px}   /* 格子和下面機場起降那一條的圖示、箭頭對齊 */
 .dash.d .v-tools .group:not(:has(>.col))>.li:last-child:nth-child(odd),.dash.d .v-tools .group:has(>.col:first-child)>.li:last-child:nth-child(even){grid-column:1/-1}   /* 單數個時最後一個撐滿，右邊不留空 */
 .dhome{display:grid;grid-template-columns:minmax(0,1fr) var(--side);grid-template-areas:"hd hd" "main side";column-gap:var(--gut);align-items:start}
 .dhome>.hero{grid-area:hd;height:122px}.dhome>.dmain{grid-area:main}.dhome>.aside{grid-area:side}
@@ -944,6 +950,7 @@ body:has(.dash.d) .fwrap{max-width:var(--pw)}
 .hc .wv0{flex:1}.hc.htf>b.nl{font-weight:500;color:var(--tx2)}   /* 沒上限的：數字一樣靠右，跟有上限的對齊 */
 .hc.hnet{display:grid;grid-template-columns:13px minmax(0,1fr) 13px minmax(0,1fr);column-gap:6px}   /* 下載、上傳各自一欄，每一列的箭頭對齊 */
 .hth>:nth-child(7),.htr>:nth-child(7){padding-left:10px}
+.hth>.hr{text-align:right}   /* 本月流量都沒上限時只有數字（靠右），標題也靠右 */
 .hn .av,.hn .avatar{flex:none}
 .hn>span{display:flex;flex-direction:column;min-width:0}
 .hn b{color:var(--tx);font-weight:700;overflow:hidden;text-overflow:ellipsis}
@@ -1016,7 +1023,8 @@ body:has(.dash.d) .fwrap{max-width:var(--pw)}
 .sbody>.lbl:first-child{margin-top:0}
 .sbody .sw{grid-template-columns:repeat(12,44px);justify-content:start}
 .sbody .lks{max-width:560px}
-.sbody>.lbl[data-key="lh"]{justify-content:flex-end}
+.dbar:has(>.sbr){display:grid;grid-template-columns:220px minmax(0,780px);gap:28px}   /* 主機那一類：選主機那排從右邊那欄的左緣開始，檢查新版跟卡片右緣對齊 */
+.dbar:has(>.sbr){padding:0}.sbr{display:flex;align-items:center;gap:12px;min-width:0}.sbr>.hpick{margin-left:-2px}
 .sbody>.group+.group{margin-top:var(--gut)}
 /* 工具：一格一格，固定寬度不撐滿 */
 .dash.d .tgrid{grid-template-columns:repeat(auto-fit,minmax(230px,1fr))}
@@ -1025,6 +1033,7 @@ body:has(.dash.d) .fwrap{max-width:var(--pw)}
 .ltab{background:var(--card);border:1px solid var(--line);border-radius:var(--r-lg);box-shadow:var(--cs);overflow:hidden}
 .lth,.ltab .ev.lr{display:grid;grid-template-columns:64px 150px 28px minmax(0,1fr);column-gap:14px;align-items:center;padding:0 18px}
 .ltab.one .lth,.ltab.one .ev.lr{grid-template-columns:64px 28px minmax(0,1fr)}
+.lth>.lev{grid-column:span 2}   /* 「事件」從圖示那欄開始寫，跟下面每一列的開頭對齊 */
 .lth{height:36px;font-size:var(--fs-xs);font-weight:600;color:var(--tx3);border-bottom:1px solid var(--line)}
 .ltab .evs{gap:0}
 .ltab .ev.lr{min-height:48px;padding-block:8px;border-radius:0;box-shadow:none;background:none;border-bottom:1px solid var(--line);transition:background-color var(--t-fast) var(--ease)}
@@ -1197,6 +1206,7 @@ textarea.field{height:auto;padding:12px 16px;resize:none}
 .cl2 small{display:block;font-size:var(--fs-s);color:var(--tx3)}
 .chg{margin:6px 0 0;padding-left:16px;font-size:var(--fs-xs);color:var(--tx3);line-height:1.6}
 .group>.selfbox>:last-child{border-bottom-left-radius:var(--r-xs);border-bottom-right-radius:var(--r-xs)}
+.group>.selfbox{box-shadow:none}   /* 包在外面的那層是方的：亮邊、影子交給裡面每一列，不然上緣那條亮線會超出圓角 */
 .selfrow>.cl2.first{margin-top:0}
 
 /* ═════════ 更新進度視窗 ═════════ */
