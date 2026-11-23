@@ -1990,7 +1990,8 @@ function openLb(i, from){
     S.info = false; el.classList.remove("info", "cmo");
     const n0 = now === "none" ? "translate(0px,0px) scale(1)" : now;
     /* HDR 照片：縮回去的同時大圖（HDR）慢慢淡掉、露出底下的一般小圖，亮度慢慢降下來，不會回到照片牆才突然變暗 */
-    const hb = p.hdr && zw.querySelector(".s2.ok"), sm = zw.querySelectorAll("img.s1")[1];
+    const bi = !ANDR && box && box.querySelector("img.hi,.hlc>img"), toHd = !!(bi && bi.currentSrc && bi.currentSrc === new URL(src(p, "l"), location.href).href);   // 縮回去的格子本身就是 HDR 大圖（精選、每天封面）：不先淡掉，不然會先變暗再變亮
+    const hb = p.hdr && !toHd && zw.querySelector(".s2.ok"), sm = zw.querySelectorAll("img.s1")[1];
     if (hb && sm && sm.complete && sm.naturalWidth) hb.animate([{opacity:1}, {opacity:0}], {duration:T.mid, easing:EASE, fill:"forwards"});
     if (r) { const a1 = toTile(r, f); zw.animate([{transform:n0, clipPath:NOCLIP}, {transform:a1.t, clipPath:a1.c}], {duration:T.mid, easing:EASE, fill:"forwards"}).onfinish = end; }
     else zw.animate([{opacity:1}, {opacity:0, transform:`${n0} scale(.92)`}], {duration:T.mid, easing:EXIT, fill:"forwards"}).onfinish = end;
