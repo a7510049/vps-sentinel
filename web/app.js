@@ -2765,7 +2765,7 @@ function devName(){
 /* 登入的裝置清單上的名字：裝置＋瀏覽器（安卓 App 寫 App） */
 function devLabel(){
   const u = navigator.userAgent;
-  const b = typeof VSApp !== "undefined" || /; wv\)/.test(u) ? "App" : /Edg\//.test(u) ? "Edge" : /SamsungBrowser/.test(u) ? "三星瀏覽器" : /Firefox|FxiOS/.test(u) ? "Firefox"
+  const b = typeof VSApp !== "undefined" || /; wv\)/.test(u) ? "App" : /Edg(?:A|iOS)?\//.test(u) || ((navigator.userAgentData || {}).brands || []).some(x => /Edge/.test(x.brand)) ? "Edge" : /SamsungBrowser/.test(u) ? "三星瀏覽器" : /Firefox|FxiOS/.test(u) ? "Firefox"
     : /Chrome|CriOS/.test(u) ? "Chrome" : /Safari/.test(u) ? "Safari" : "";
   return devName() + (b ? "・" + b : "");
 }

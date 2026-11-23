@@ -261,7 +261,7 @@ async function devInfo(){
     else if (/CrOS/.test(u)) os = "ChromeOS"; else if (/Linux/.test(u)) os = "Linux";
     const fv = (hi.fullVersionList || []).find(b => /Chrome|Edge|Opera|Samsung/.test(b.brand) && !/Chromium/.test(b.brand));
     const br = /Line\//.test(u) ? "LINE" : /Instagram/.test(u) ? "Instagram" : /FBAN|FB_IAB/.test(u) ? "Facebook" : /MicroMessenger/.test(u) ? "微信"
-      : /Edg(?:A|iOS)?\/(\d+)/.test(u) ? `Edge ${RegExp.$1}` : /SamsungBrowser\/(\d+)/.test(u) ? `三星瀏覽器 ${RegExp.$1}` : /(?:Firefox|FxiOS)\/(\d+)/.test(u) ? `Firefox ${RegExp.$1}`
+      : /Edg(?:A|iOS)?\/(\d+)/.test(u) ? `Edge ${RegExp.$1}` : ud && (ud.brands || []).some(x => /Edge/.test(x.brand)) ? `Edge ${parseInt((ud.brands.find(x => /Edge/.test(x.brand)) || {}).version, 10) || ""}`.trim() : /SamsungBrowser\/(\d+)/.test(u) ? `三星瀏覽器 ${RegExp.$1}` : /(?:Firefox|FxiOS)\/(\d+)/.test(u) ? `Firefox ${RegExp.$1}`
       : /(?:CriOS|Chrome)\/(\d+)/.test(u) ? `Chrome ${fv && /Chrome/.test(fv.brand) ? parseInt(fv.version, 10) : RegExp.$1}` : /Safari/.test(u) && sv ? `Safari ${sv}` : "";
     const k = JSON.stringify({m, os, br, sc:ios || /Android/.test(u) ? `${w}×${h}` : `${screen.width}×${screen.height}`});   // 手機寫直的、電腦寫橫的
     if (store.get("vsa-di-" + CODE) === k) return;                 // 一樣就不再送

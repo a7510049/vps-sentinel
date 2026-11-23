@@ -225,7 +225,7 @@ def alb_ua_name(ua):
     if not dev:
         dev = "Mac" if "Macintosh" in ua else "Windows 電腦" if "Windows" in ua else "Linux 電腦" if "Linux" in ua else "裝置"
     for k, n in (("Line/", "LINE"), ("Instagram", "Instagram"), ("FBAN", "Facebook"), ("FB_IAB", "Facebook"), ("MicroMessenger", "微信"),
-                 ("EdgA/", "Edge"), ("Edg/", "Edge"), ("SamsungBrowser", "三星瀏覽器"), ("Firefox/", "Firefox"), ("FxiOS", "Firefox"),
+                 ("EdgA/", "Edge"), ("EdgiOS/", "Edge"), ("Edg/", "Edge"), ("SamsungBrowser", "三星瀏覽器"), ("Firefox/", "Firefox"), ("FxiOS", "Firefox"),
                  ("CriOS", "Chrome"), ("Chrome/", "Chrome"), ("Safari/", "Safari")):
         if k in ua:
             return f"{dev}・{n}"[:60]
