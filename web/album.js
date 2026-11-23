@@ -2051,11 +2051,14 @@ function openLb(i, from){
     const box = r && to ? (to.tagName === "IMG" ? to.closest(".ph,.hlc") : to) : null;
     const ovl = box ? [...box.querySelectorAll(".bdg,.hlc>i,.hlc>em"), ...(box.closest(".row.feat") && box.closest(".cov") ? [box.closest(".cov").querySelector(".dh")] : [])].filter(Boolean) : [];
     ovl.forEach(x => { x.style.opacity = 0; });               // 格子上的字（封面的日期、愛心數）先藏著，照片縮回去之後再淡入，不會突然冒出來
+    /* 格子上半被上面的毛玻璃蓋住：縮回去的照片從毛玻璃下緣切掉，毛玻璃後面那塊先把格子露出來（只露被蓋住的那段），不會黑一塊 */
+    const bar = $(".bar.on"), bq = bar && box && box.classList.contains("ph") ? bar.getBoundingClientRect().bottom - box.getBoundingClientRect().top : 0;
+    if (bq > 0) { const bh = box.getBoundingClientRect().height; box.style.clipPath = `inset(0 0 ${Math.max(0, bh - bq).toFixed(1)}px 0)`; box.classList.remove("gone"); }
     const zw = cur(), f = fit(p), now = getComputedStyle(zw).transform;
     stopAll();
     let gone = false;
     const end = () => { if (gone) return; gone = true; el.remove();
-      ovl.forEach(x => { x.style.opacity = ""; if (anim()) x.animate([{opacity:0}, {opacity:1}], {duration:T.mid, easing:EASE}); }); TILES.forEach(x => x.classList.remove("gone")); if (S.ob) S.ob.classList.remove("lbo"); if (LB === S) LB = null; onScroll(); };
+      ovl.forEach(x => { x.style.opacity = ""; if (anim()) x.animate([{opacity:0}, {opacity:1}], {duration:T.mid, easing:EASE}); }); TILES.forEach(x => x.classList.remove("gone")); if (bq > 0) box.style.clipPath = ""; if (S.ob) S.ob.classList.remove("lbo"); if (LB === S) LB = null; onScroll(); };
     S.kill = end; el.style.pointerEvents = "none";
     if (!anim()) return end();
     setTimeout(end, T.mid + 200);                              // 安卓返回手勢時動畫有時不會結束：時間到一定收掉

@@ -1551,3 +1551,11 @@ html.shy #shyc{visibility:visible;opacity:1;scale:1;transition:opacity var(--t-f
 #shyc svg{width:56px;height:56px;padding:14px;margin-bottom:6px;border-radius:50%;background:color-mix(in oklab,var(--bg) 70%,transparent);box-shadow:var(--sh-pop);fill:none;stroke:currentColor;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
 #shyc b{font-size:var(--fs-l)}
 #shyc small{font-size:var(--fs-s);color:var(--tx2)}
+
+/* 圓角裡的進度條、長條：裡面那條在動（位移、縮放）時，有些瀏覽器只照方框切、不照圓角切，顏色會從圓角溢出去；用 clip-path 照圓角切 */
+.ubar,.syp i,.vtr i,#spl .spb,.st .sgr{clip-path:inset(0 round var(--r-pill))}
+.gsb span{clip-path:inset(0 round 4px)}
+.gsb span i{border-radius:inherit}
+.ph.wt{clip-path:inset(0 round var(--r-xs))}
+@media (min-width:700px){.ph.wt{clip-path:inset(0 round var(--r-sm))}}
+.map.tld{clip-path:inset(0 round var(--r-xl))}
