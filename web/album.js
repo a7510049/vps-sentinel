@@ -246,6 +246,20 @@ async function boot(){
 }
 /* 跟主機說這台是什麼設備（主人「看過的設備」看得到型號、系統、瀏覽器、螢幕）：
    瀏覽器的識別字串只寫得出「安卓手機」「iPhone」，安卓的 Chrome、Edge 另外問得到型號；iPhone 照螢幕大小猜是哪一型 */
+/* 瀏覽器：照順序比對（App 裡打開的、各家手機內建的先，Chrome／Safari 最後） */
+const BRW = [[/Line\//, "LINE"], [/Instagram/, "Instagram"], [/FBAN|FB_IAB/, "Facebook"], [/MicroMessenger/, "微信"], [/Barcelona/, "Threads"],
+  [/musical_ly|BytedanceWebview|aweme/i, "抖音／TikTok"], [/Telegram/i, "Telegram"], [/ GSA\/(\d+)/, "Google App"], [/Edg(?:A|iOS)?\/(\d+)/, "Edge"],
+  [/(?:OPR|OPT|OPX)\/(\d+)/, "Opera"], [/Vivaldi\/(\d+)/, "Vivaldi"], [/YaBrowser\/(\d+)/, "Yandex"], [/(?:DuckDuckGo|Ddg)\/(\d+)/, "DuckDuckGo"],
+  [/SamsungBrowser\/(\d+)/, "三星瀏覽器"], [/HuaweiBrowser\/(\d+)/, "華為瀏覽器"], [/MiuiBrowser\/(\d+)/, "小米瀏覽器"], [/HeyTapBrowser\/(\d+)/, "OPPO 瀏覽器"],
+  [/VivoBrowser\/(\d+)/, "vivo 瀏覽器"], [/UCBrowser\/(\d+)/, "UC 瀏覽器"], [/QQBrowser\/(\d+)/, "QQ 瀏覽器"], [/(?:Firefox|FxiOS)\/(\d+)/, "Firefox"]];
+function brwOf(u, ud){                       // 回 [名字, 版本]；Brave、Edge、Opera 的辨識字可能跟 Chrome 一樣，再看 userAgentData
+  for (const [re, n] of BRW) { const m = re.exec(u); if (m) return [n, m[1] || ""]; }
+  const b = ((ud || {}).brands || []).find(x => /Edge|Opera|Brave|Vivaldi/.test(x.brand));
+  if (b) return [b.brand.replace("Microsoft ", ""), b.version || ""];
+  if (navigator.brave) return ["Brave", ""];
+  const c = /(?:CriOS|Chrome)\/(\d+)/.exec(u); if (c) return ["Chrome", c[1]];
+  return /Safari/.test(u) ? ["Safari", ""] : ["", ""];
+}
 async function devInfo(){
   try {
     const u = navigator.userAgent, ud = navigator.userAgentData, w = Math.min(screen.width, screen.height), h = Math.max(screen.width, screen.height);
@@ -260,9 +274,8 @@ async function devInfo(){
     else if (/Macintosh/.test(u)) os = `macOS${parseInt(hi.platformVersion, 10) ? " " + parseInt(hi.platformVersion, 10) : ""}`;
     else if (/CrOS/.test(u)) os = "ChromeOS"; else if (/Linux/.test(u)) os = "Linux";
     const fv = (hi.fullVersionList || []).find(b => /Chrome|Edge|Opera|Samsung/.test(b.brand) && !/Chromium/.test(b.brand));
-    const br = /Line\//.test(u) ? "LINE" : /Instagram/.test(u) ? "Instagram" : /FBAN|FB_IAB/.test(u) ? "Facebook" : /MicroMessenger/.test(u) ? "微信"
-      : /Edg(?:A|iOS)?\/(\d+)/.test(u) ? `Edge ${RegExp.$1}` : ud && (ud.brands || []).some(x => /Edge/.test(x.brand)) ? `Edge ${parseInt((ud.brands.find(x => /Edge/.test(x.brand)) || {}).version, 10) || ""}`.trim() : /SamsungBrowser\/(\d+)/.test(u) ? `三星瀏覽器 ${RegExp.$1}` : /(?:Firefox|FxiOS)\/(\d+)/.test(u) ? `Firefox ${RegExp.$1}`
-      : /(?:CriOS|Chrome)\/(\d+)/.test(u) ? `Chrome ${fv && /Chrome/.test(fv.brand) ? parseInt(fv.version, 10) : RegExp.$1}` : /Safari/.test(u) && sv ? `Safari ${sv}` : "";
+    const [bn, bv0] = brwOf(u, ud), bv = bn === "Chrome" && fv && /Chrome/.test(fv.brand) ? parseInt(fv.version, 10) : bn === "Safari" ? sv || "" : parseInt(bv0, 10) || "";
+    const br = `${bn} ${bv}`.trim();
     const k = JSON.stringify({m, os, br, sc:ios || /Android/.test(u) ? `${w}×${h}` : `${screen.width}×${screen.height}`});   // 手機寫直的、電腦寫橫的
     if (store.get("vsa-di-" + CODE) === k) return;                 // 一樣就不再送
     const r = await fetch(BASE + "/di", {method:"POST", credentials:"same-origin", headers:{"Content-Type":"application/json"}, body:k});

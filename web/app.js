@@ -2762,11 +2762,24 @@ function devName(){
   if (os === "win") return ver ? `Windows ${ver >= 13 ? 11 : 10} 電腦` : "Windows 電腦";
   return os === "linux" ? (/CrOS/.test(u) ? "Chromebook" : "Linux 電腦") : "我的裝置";
 }
+/* 瀏覽器：照順序比對（App 裡打開的、各家手機內建的先，Chrome／Safari 最後） */
+const BRW = [[/Line\//, "LINE"], [/Instagram/, "Instagram"], [/FBAN|FB_IAB/, "Facebook"], [/MicroMessenger/, "微信"], [/Barcelona/, "Threads"],
+  [/musical_ly|BytedanceWebview|aweme/i, "抖音／TikTok"], [/Telegram/i, "Telegram"], [/ GSA\/(\d+)/, "Google App"], [/Edg(?:A|iOS)?\/(\d+)/, "Edge"],
+  [/(?:OPR|OPT|OPX)\/(\d+)/, "Opera"], [/Vivaldi\/(\d+)/, "Vivaldi"], [/YaBrowser\/(\d+)/, "Yandex"], [/(?:DuckDuckGo|Ddg)\/(\d+)/, "DuckDuckGo"],
+  [/SamsungBrowser\/(\d+)/, "三星瀏覽器"], [/HuaweiBrowser\/(\d+)/, "華為瀏覽器"], [/MiuiBrowser\/(\d+)/, "小米瀏覽器"], [/HeyTapBrowser\/(\d+)/, "OPPO 瀏覽器"],
+  [/VivoBrowser\/(\d+)/, "vivo 瀏覽器"], [/UCBrowser\/(\d+)/, "UC 瀏覽器"], [/QQBrowser\/(\d+)/, "QQ 瀏覽器"], [/(?:Firefox|FxiOS)\/(\d+)/, "Firefox"]];
+function brwOf(u, ud){                       // 回 [名字, 版本]；Brave、Edge、Opera 的辨識字可能跟 Chrome 一樣，再看 userAgentData
+  for (const [re, n] of BRW) { const m = re.exec(u); if (m) return [n, m[1] || ""]; }
+  const b = ((ud || {}).brands || []).find(x => /Edge|Opera|Brave|Vivaldi/.test(x.brand));
+  if (b) return [b.brand.replace("Microsoft ", ""), b.version || ""];
+  if (navigator.brave) return ["Brave", ""];
+  const c = /(?:CriOS|Chrome)\/(\d+)/.exec(u); if (c) return ["Chrome", c[1]];
+  return /Safari/.test(u) ? ["Safari", ""] : ["", ""];
+}
 /* 登入的裝置清單上的名字：裝置＋瀏覽器（安卓 App 寫 App） */
 function devLabel(){
   const u = navigator.userAgent;
-  const b = typeof VSApp !== "undefined" || /; wv\)/.test(u) ? "App" : /Edg(?:A|iOS)?\//.test(u) || ((navigator.userAgentData || {}).brands || []).some(x => /Edge/.test(x.brand)) ? "Edge" : /SamsungBrowser/.test(u) ? "三星瀏覽器" : /Firefox|FxiOS/.test(u) ? "Firefox"
-    : /Chrome|CriOS/.test(u) ? "Chrome" : /Safari/.test(u) ? "Safari" : "";
+  const b = typeof VSApp !== "undefined" || /; wv\)/.test(u) && !BRW.some(([re]) => re.test(u)) ? "App" : brwOf(u, navigator.userAgentData)[0];
   return devName() + (b ? "・" + b : "");
 }
 /* 廠商圖示：蘋果、安卓、Windows（舊的登入沒有記系統，照名字猜） */
