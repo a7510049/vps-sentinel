@@ -695,7 +695,7 @@ function srchOpen(){
   document.body.appendChild(bg);
   const inp = bg.querySelector("input"), sqs = bg.querySelector(".sqs"), sqr = bg.querySelector(".sqr"), clr = bg.querySelector(".sqc");
   void bg.offsetWidth; bg.classList.add("on");
-  setTimeout(() => inp.focus(), T.fast);
+  if (matchMedia("(pointer:fine)").matches) setTimeout(() => inp.focus(), T.fast);   // 手機不自己叫出鍵盤，點了輸入框才出來
   SH = {close(){ if (SH && SH.bg === bg) SH = null; bg.classList.remove("on"); bg.style.pointerEvents = "none"; inp.blur(); setTimeout(() => bg.remove(), T.mid + 50); }, bg};
   history.pushState({sh:1}, "");
   let hits = [], shown = "";
@@ -1477,7 +1477,7 @@ function bigMap(){
   }
   const cl = [];
   pts.forEach(([p, i], k) => {
-    const x = xs[k] - cx + W / 2, y = ys[k] - cy + H / 2, c = cl.find(c => Math.hypot(c.x - x, c.y - y) < 46);
+    const x = xs[k] - cx + W / 2, y = ys[k] - cy + H / 2, c = cl.find(c => Math.hypot(c.x - x, c.y - y) < 54);   // 泡泡 48 寬，再近就會疊在一起
     if (c) { c.n++; c.ids.push(i); } else cl.push({x, y, i, n:1, ids:[i]});
   });
   el.insertAdjacentHTML("beforeend", cl.map((c, k) => `<button class="mk" data-i="${c.i}"${c.n > 1 ? ` data-cl="${c.ids.join(",")}"` : ""} style="left:${c.x.toFixed(1)}px;top:${c.y.toFixed(1)}px;animation-delay:${Math.min(k * 40, 600)}ms"><img alt="" loading="lazy" src="${src(PH[c.i], "s")}">${c.n > 1 ? `<i class="num">${c.n}</i>` : ""}</button>`).join(""));
@@ -1507,9 +1507,20 @@ function route(el, pts, W, H){
   }
   const days = [];
   r.forEach(q => { if (q.d && !days.some(x => x.d.k === q.d.k)) days.push(q); });
+  /* 「第 N 天」掛在那天第一張所在的泡泡下面；同一個地方好幾天合成一個「第 1–2 天」，不會疊在一起 */
+  const bub = [...el.querySelectorAll(".mk")].map(m => ({ids:new Set((m.dataset.cl || m.dataset.i).split(",").map(Number)), x:parseFloat(m.style.left), y:parseFloat(m.style.top)}));
+  const dls = [];
+  days.forEach((q, k) => {
+    const n = dayNum(q.d.k) || k + 1, at = bub.find(m => m.ids.has(q.i)) || q;
+    let g = dls.find(g => g.at === at || Math.abs(g.x - at.x) < 74 && Math.abs(g.y - at.y) < 26);
+    if (!g) dls.push(g = {at, x:at.x, y:at.y, ns:[], ts:[]});
+    if (!g.ns.includes(n)) g.ns.push(n); g.ts.push(fday(q.d));
+  });
+  const dtx = ns => { ns = ns.sort((a, b) => a - b); const run = ns.every((n, k) => !k || n === ns[k - 1] + 1);
+    return ns.length === 1 ? `第 ${ns[0]} 天` : run ? `第 ${ns[0]}–${ns[ns.length - 1]} 天` : `第 ${ns.join("、")} 天`; };
   el.insertAdjacentHTML("afterbegin", `<svg class="route" viewBox="0 0 ${W} ${H}" aria-hidden="true"><path class="rt0" d="${d}"/><path class="rt" d="${d}"/>
     <circle class="rdot" r="5"><animateMotion dur="${Math.max(4, Math.min(14, r.length * 1.4))}s" repeatCount="indefinite" begin="indefinite" path="${d}" rotate="auto"/></circle></svg>
-    ${days.length > 1 ? days.map((q, k) => `<span class="dayn num" style="left:${q.x.toFixed(1)}px;top:${q.y.toFixed(1)}px" title="${esc(fday(q.d))}">第 ${dayNum(q.d.k) || k + 1} 天</span>`).join("") : ""}`);
+    ${days.length > 1 ? dls.map(g => `<span class="dayn num" style="left:${g.x.toFixed(1)}px;top:${g.y.toFixed(1)}px" title="${esc(g.ts.join("、"))}">${dtx(g.ns)}</span>`).join("") : ""}`);
   const path = el.querySelector(".rt"), len = path.getTotalLength();
   el.style.setProperty("--len", len.toFixed(0));
   /* 照片、第幾天等線畫到那裡才跳出來（線是 cubic-bezier(.45,0,.2,1) 畫 2.4 秒，反推到那一點的時間） */
