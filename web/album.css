@@ -166,7 +166,7 @@ button.chip:active,a.chip:active{transform:scale(.95)}
 .slide{position:absolute;inset:0}
 .zw{position:absolute;left:0;top:0;transform-origin:0 0;will-change:transform}
 .zw img{position:absolute;inset:0;width:100%;height:100%;object-fit:contain;-webkit-user-drag:none}
-.zw .s2{opacity:0;transition:opacity var(--t-mid) var(--ease),dynamic-range-limit var(--t-slow) var(--ease)}
+.zw .s2{opacity:0;transition:opacity var(--t-mid) var(--ease)}
 .zw .s2.ok{opacity:1}
 .zw .nope{position:absolute;inset:0;display:grid;place-items:center;color:rgba(255,255,255,.5);text-align:center;font-size:var(--fs-m)}
 .lbt,.lbb{position:absolute;left:0;right:0;display:flex;align-items:center;gap:10px;padding:0 14px;transition:opacity var(--t-mid) var(--ease),transform var(--t-mid) var(--ease);z-index:2}
@@ -342,9 +342,6 @@ button.chip:active,a.chip:active{transform:scale(.95)}
 #app>.hero.sk{height:100svh;min-height:520px}
 
 /* 照片不能長按另存；主機印不了浮水印時，畫面上蓋一層字 */
-/* HDR 只在大圖停好後亮一次、慢慢變亮（安卓螢幕每進出 HDR 一次就整個閃一下） */
-html.andr img,html.andr video{dynamic-range-limit:standard}
-html.andr .lb .zw.hd .s2.ok{dynamic-range-limit:no-limit}
 img,video,.ph img,.zw img,.mk img,.hero img{-webkit-touch-callout:none;-webkit-user-select:none;user-select:none;-webkit-user-drag:none}
 .wmo .ph::after,.wmo .zw::after{content:var(--wm);position:absolute;right:4%;bottom:4%;color:rgba(255,255,255,.62);font-weight:700;letter-spacing:.06em;
   text-shadow:0 1px 3px rgba(0,0,0,.45);pointer-events:none;font-size:clamp(10px,3.4cqmin,28px)}
@@ -378,9 +375,6 @@ img,video,.ph img,.zw img,.mk img,.hero img{-webkit-touch-callout:none;-webkit-u
 
 /* 看大圖：影片、原況、愛心留言 */
 .lvb{display:none}
-.hdrb{display:none;width:auto;padding:0 12px;border-radius:var(--r-pill);font:800 var(--fs-xs)/1 var(--font);letter-spacing:.04em;color:#fff}
-.hdrb.show{display:grid}
-.hdrb[aria-pressed="true"]{background:#fff;color:#000}
 .lvb.show{display:grid}
 .lbb{flex-direction:column;align-items:stretch;gap:10px}
 .lbr{display:flex;align-items:center;gap:8px}
