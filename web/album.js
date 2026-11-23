@@ -1522,12 +1522,30 @@ function tmac(el, pts, r, path, len){
   const tot = cum[cum.length - 1] || 1, fr = pts.map(q => cum[q.ri] / tot);
   const ord = new Map(pts.map((q, k) => [q.i, k])), mks = [...el.querySelectorAll(".mk")].map(m => [m, Math.min(...(m.dataset.cl ? m.dataset.cl.split(",") : [m.dataset.i]).map(i => ord.get(+i) ?? 1e9))]);
   const days = [];
-  pts.forEach((q, k) => { if (q.d && (!days.length || days[days.length - 1].d.k !== q.d.k)) days.push({d:q.d, k}); });
+  pts.forEach((q, k) => { const d = PH[q.i].x.dtf ? null : pd(PH[q.i].x.dt); if (d && (!days.length || days[days.length - 1].d.k !== d.k)) days.push({d, k}); });   // 照這張自己的日期（路線合併點時 q.d 會被改成後面那天）
   el.insertAdjacentHTML("beforeend", `<button class="tmb" aria-label="看這張"><img alt="" draggable="false"><img alt="" draggable="false"></button>`);
+  if (!days.length || days[0].k) days.unshift({d:null, k:0});
+  days.forEach((x, j) => { x.c = (days[j + 1] ? days[j + 1].k : n) - x.k; });   // 每天一格：寬度照那天幾張，指針照第幾張走
+  const city = x => { const m = new Map(); for (let k = x.k; k < x.k + x.c; k++) { const c = (PH[pts[k].i].p || {}).c; if (c) m.set(c, (m.get(c) || 0) + 1); } return [...m].sort((a, b) => b[1] - a[1]).map(a => a[0])[0] || ""; };
   el.insertAdjacentHTML("afterend", `<div class="tmac"><button class="tmp" aria-label="播放旅程">${I("play")}</button>
-    <div class="tmt" role="slider" tabindex="0" aria-label="旅程時間" aria-valuemin="1" aria-valuemax="${n}"><div class="tmr"><i class="tmf"></i></div>${days.length > 1 ? days.map((x, j) => `<span class="tmd num" style="left:${(x.k / (n - 1) * 100).toFixed(2)}%">${j + 1}</span>`).join("") : ""}<i class="tmh"></i></div>
-    <div class="tml"><b class="num"></b><span></span></div></div>`);
-  const box = el.nextElementSibling, bar = box.querySelector(".tmt"), fill = box.querySelector(".tmf"), hd = box.querySelector(".tmh"), lab = box.querySelector(".tml"), play = box.querySelector(".tmp");
+    <div class="tmt" role="slider" tabindex="0" aria-label="旅程時間" aria-valuemin="1" aria-valuemax="${n}"><div class="tmr">${days.map(x => { const dn = x.d && dayNum(x.d.k), c = city(x);
+      return `<div class="tms" style="width:${(x.c / n * 100).toFixed(3)}%;--o:${(x.k / n).toFixed(4)}"><i class="tmf"></i><div class="tmx"><b class="num">${dn ? `<em>第 ${dn} 天・</em>` : ""}${x.d ? `${x.d.mo}/${x.d.d}` : ""}</b>${c ? `<span>${esc(c)}</span>` : ""}</div></div>`; }).join("")}</div>
+    <i class="tmh"></i><div class="tml"><b class="num"></b><span></span></div></div></div>`);
+  const box = el.nextElementSibling, bar = box.querySelector(".tmt"), segs = [...box.querySelectorAll(".tms")], hd = box.querySelector(".tmh"), lab = box.querySelector(".tml"), play = box.querySelector(".tmp"), trk = box.querySelector(".tmr");
+  const pos = k => (k + .5 + Math.max(0, k - n + 2) * .5) / n;   // 每張在自己那一小格的中間；最後一張滑到最右邊（沒在看的時候整條是滿的）
+  function seat(k){                                           // 指針、每格填到哪、說明泡泡（不超出兩頭）
+    const u = pos(k), W = bar.clientWidth, lw = lab.offsetWidth, x = u * W, lx = Math.max(0, Math.min(W - lw, x - lw / 2));
+    hd.style.left = `${(u * 100).toFixed(3)}%`;
+    lab.style.transform = `translateX(${lx.toFixed(1)}px)`; lab.style.setProperty("--ax", `${(x - lx).toFixed(1)}px`);
+    days.forEach((x, j) => { const f = Math.max(0, Math.min(1, (u * n - x.k) / x.c)); segs[j].style.setProperty("--f", f.toFixed(4)); segs[j].classList.toggle("on", Math.round(k) >= x.k && Math.round(k) < x.k + x.c); });
+  }
+  function label(idx){
+    const p = PH[pts[idx].i], d = p.x.dtf ? null : pd(p.x.dt);
+    lab.querySelector("b").textContent = d ? `${dayNum(d.k) ? `第 ${dayNum(d.k)} 天・` : ""}${ftod(p, d)}` : "";
+    lab.querySelector("span").textContent = p.p ? p.p.n : "";
+  }
+  const fitW = () => trk.style.setProperty("--bw", `${trk.clientWidth}px`);
+  fitW(); if (window.ResizeObserver) new ResizeObserver(() => { fitW(); seat(at); }).observe(bar);
   const bub = el.querySelector(".tmb"), ims = bub.querySelectorAll("img");
   let at = n - 1, shown = -1, run = 0, flip = 0;
   function set(k, from){
@@ -1537,7 +1555,6 @@ function tmac(el, pts, r, path, len){
     path.style.strokeDashoffset = (len * (1 - f)).toFixed(1);
     const pt = path.getPointAtLength(len * f);
     bub.style.transform = `translate(${pt.x.toFixed(1)}px,${pt.y.toFixed(1)}px)`;
-    fill.style.transform = `scaleX(${n > 1 ? at / (n - 1) : 1})`; hd.style.left = `${(n > 1 ? at / (n - 1) * 100 : 100).toFixed(2)}%`;
     bar.setAttribute("aria-valuenow", idx + 1);
     if (idx !== shown) {
       shown = idx; flip ^= 1;
@@ -1546,11 +1563,10 @@ function tmac(el, pts, r, path, len){
       const on = () => { nx.classList.add("ok"); od.classList.remove("ok"); };
       nx.complete && nx.naturalWidth ? on() : nx.onload = on;
       mks.forEach(([m, o]) => m.classList.toggle("fut", o > idx));
-      const d = p.x.dtf ? null : pd(p.x.dt);
-      lab.querySelector("b").textContent = d ? `${dayNum(d.k) ? `第 ${dayNum(d.k)} 天・` : ""}${ftod(p, d)}` : "";
-      lab.querySelector("span").textContent = p.p ? p.p.n : "";
+      label(idx);
       if (from !== "play" && anim()) lab.animate([{opacity:.4}, {opacity:1}], {duration:T.fast, easing:DEC});
     }
+    seat(at);
   }
   function stop(){ run = 0; play.innerHTML = I("play"); play.setAttribute("aria-label", "播放旅程"); box.classList.remove("run"); }
   function go(){                                              // 自己走一遍：一張大約 0.35 秒，最短 6 秒、最長 24 秒
@@ -1566,7 +1582,7 @@ function tmac(el, pts, r, path, len){
     };
     requestAnimationFrame(step);
   }
-  const kx = e => { const b = bar.getBoundingClientRect(); return (e.clientX - b.left) / b.width * (n - 1); };
+  const kx = e => { const b = bar.getBoundingClientRect(); return (e.clientX - b.left) / b.width * n - .5; };
   bar.addEventListener("pointerdown", e => {
     stop(); bar.setPointerCapture(e.pointerId); box.classList.add("drag");
     const target = kx(e), k0 = at, t0 = performance.now();
@@ -1582,7 +1598,8 @@ function tmac(el, pts, r, path, len){
   bar.addEventListener("keydown", e => { const d = {ArrowRight:1, ArrowUp:1, ArrowLeft:-1, ArrowDown:-1}[e.key]; if (d) { e.preventDefault(); stop(); set(Math.round(at) + d); } });
   play.addEventListener("click", go);
   bub.addEventListener("click", () => openLb(pts[Math.round(at)].i, bub.querySelector("img.ok") || bub));
-  el.tmReset = () => { stop(); el.classList.remove("tm"); path.style.strokeDashoffset = ""; mks.forEach(([m]) => m.classList.remove("fut")); shown = -1; at = n - 1; fill.style.transform = ""; hd.style.left = ""; lab.querySelector("b").textContent = ""; lab.querySelector("span").textContent = ""; };
+  el.tmReset = () => { stop(); el.classList.remove("tm"); path.style.strokeDashoffset = ""; mks.forEach(([m]) => m.classList.remove("fut")); shown = -1; at = n - 1; label(at); seat(at); };
+  label(at); seat(at);
 }
 
 /* ═════════ 看大圖 ═════════ */
