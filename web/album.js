@@ -1334,6 +1334,7 @@ function bigMap(){
   const mt = $("[data-mt]"); if (mt) mt.textContent = trip ? "旅程" : cs.length > 1 ? "去過的城市" : "拍照的地方";
   const pts = byCity ? cs.map(c => [{g:[c.la, c.lo]}, ALL.indexOf(c.ps[0]), c]) : PH.map((p, i) => [p, i]).filter(([p]) => p.g && !p.broken);
   const W = el.clientWidth, H = el.clientHeight;
+  if (!el._ro && "ResizeObserver" in window) { el._ro = new ResizeObserver(() => { if (el.dataset.sig && !el.dataset.sig.startsWith(`${el.clientWidth}x${el.clientHeight}|`)) requestAnimationFrame(bigMap); }); el._ro.observe(el); }   // 畫的時候地圖還沒撐開（大螢幕）：變寬後重畫，圖塊才會鋪滿
   if (!pts.length || !W) return;
   // 手機上下捲時網址列縮放會觸發 resize：大小、內容都沒變就不重畫（以前整張地圖、城市卡片重新淡入，看起來在閃）
   const sig = `${W}x${H}|${byCity ? cs.map(c => c.k + c.ps.length).join() : pts.map(([p, i]) => i).join()}|${trip}`;
@@ -1830,6 +1831,7 @@ function openLb(i, from){
   function infSet(p, dir, q){
     const y = inf.scrollTop, om = inf.querySelector(".imap"), old = om && om._c ? {c:om._c, t:[...om.querySelectorAll(".tl.ok")]} : null;
     const kl = inf.querySelector(".kbar i"), k0 = kl ? kl.style.left : "", tx0 = dir ? leafText(inf) : null;
+    S.pb0 = dir ? [...inf.querySelectorAll(".pbar i")].map(i => [i.getBoundingClientRect().width, getComputedStyle(i).backgroundColor]) : null;
     infFlip(() => { inf.innerHTML = infoHTML(p); inf.scrollTop = y; }, dir);   // 換張時停在原本看的地方
     infoMap(old, !!dir);
     const mv = dir && q && q !== p && anim() ? morph(q, p, k0) : null;
@@ -1902,7 +1904,7 @@ function openLb(i, from){
   function infoMap(old, swap){
     const p = PH[S.i], pb = $("[data-pal]", inf);
     pbSnap(inf);
-    if (pb && p.pal && swap && anim()) { const hg = pb.querySelector(".ihist svg"); if (hg) hg.animate([{opacity:.3, transform:"scaleY(.4)"}, {opacity:1, transform:"none"}], {duration:T.slow, easing:DEC}); pb.querySelectorAll(".pbar i").forEach((x, k) => x.animate([{opacity:.3, transform:"scaleX(.5)"}, {opacity:1, transform:"none"}], {duration:T.slow, delay:k * 40, easing:DEC, fill:"backwards"})); gamIn(pb); }   // 換張時直方圖、顏色條、色域圖照樣長出來
+    if (pb && p.pal && swap && anim()) { const hg = pb.querySelector(".ihist svg"); if (hg) hg.animate([{opacity:.3, transform:"scaleY(.4)"}, {opacity:1, transform:"none"}], {duration:T.slow, easing:DEC}); pbMorph(pb, S.pb0); gamIn(pb); }   // 換張時直方圖、色域圖照樣長出來，顏色條每一段從上一張的寬度、顏色滑過去
     if (pb && !p.pal) palette(p).then(() => { if (pb.isConnected && PH[S.i] === p) { infFlip(() => { pb.innerHTML = palHTML(p); pbSnap(pb); }, 1); gamIn(pb); const hg = pb.querySelector(".ihist svg"); if (hg && anim()) hg.animate([{opacity:0, transform:"scaleY(.2)"}, {opacity:1, transform:"none"}], {duration:T.slow, easing:DEC}); if (anim()) pb.querySelectorAll(".pbar i").forEach((x, k) => x.animate([{opacity:0, transform:"scaleX(.4)"}, {opacity:1, transform:"none"}], {duration:T.slow, delay:k * 50, easing:DEC, fill:"backwards"})); } });
     const m = $(".imap", inf); if (!m || !p.g) return;
     const z = 15, W2 = m.clientWidth, H2 = m.clientHeight, cx = lx(p.g[1], z), cy = ly(p.g[0], z);
@@ -3178,6 +3180,12 @@ function pbSnap(root){
     let acc = 0, at = 0; it.forEach((e, k) => { acc += W * f[k] / t; const w = k === it.length - 1 ? W - at : px(acc) - at; at += w; e.style.flex = `0 0 ${w}px`; });
   });
 }
+function pbMorph(root, old){                                  // 顏色條：新的每一段從上一張同一個位置的寬度、顏色變過去（多出來的從 0 長出來）
+  const it = [...root.querySelectorAll(".pbar i")]; if (!it.length) return;
+  if (!old || !old.length) return it.forEach((x, k) => x.animate([{opacity:0}, {opacity:1}], {duration:T.slow, delay:k * 40, easing:DEC, fill:"backwards"}));
+  it.forEach((x, k) => { const o = old[k], w = x.style.flexBasis || x.getBoundingClientRect().width + "px";
+    x.animate([{flexBasis:(o ? o[0] : 0) + "px", backgroundColor:o ? o[1] : getComputedStyle(x).backgroundColor, minWidth:0}, {flexBasis:w, backgroundColor:getComputedStyle(x).backgroundColor, minWidth:0}], {duration:T.slow, easing:DEC}); });
+}
 function palHTML(p){
   const pl = p.pal; if (!pl) return `<div class="pbar wait"></div>`;
   if (!pl.length) return "";
@@ -3246,7 +3254,7 @@ function infoHTML(p){
   kv.push(["檔名", p.n.split("/").pop()]);
   if (st.length) {                                           // 4 格以內一排；5 格以上分兩排、每排撐滿（不留空格）
     const n = st.length, top = n <= 4 ? n : Math.ceil(n / 2);
-    h += `<div class="ibox iset">${st.map(([g, v, k, at], j) => `<div${at || ""} style="grid-column:span ${12 / (j < top ? top : n - top)}"${j >= top ? " data-r2" : ""}>${g}<b>${esc(v)}</b><small>${k}</small></div>`).join("")}</div>`;
+    h += `<div class="ibox iset">${st.map(([g, v, k, at], j) => `<div${at || ""} style="grid-column:span ${12 / (j < top ? top : n - top)}"${j >= top ? " data-r2" : ""}>${g}<b${v.length > 8 ? ` class="sm"` : ""}>${esc(v)}</b><small>${k}</small></div>`).join("")}</div>`;   // 長的字（景深範圍）縮小一號、不換行：每格一樣高，換張時下面不會跳
   }
   h += `<div class="ibox ikv">${kv.filter(r => r[1]).map(([k, v, g]) => `<div><span>${k}</span><b>${g || ""}${esc(v)}</b></div>`).join("")}</div>`;
   if (D.dl) h += `<div class="idl"><a class="pr" href="${src(p, "o")}" download>${I("dl")}${D.dl > 1 ? (isVid(p) ? "下載影片" : "下載原圖") : "下載"}</a></div>`;
