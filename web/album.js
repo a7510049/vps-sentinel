@@ -1566,7 +1566,7 @@ function openLb(i, from){
     const big = zw.querySelector(".s2"), sm = zw.querySelectorAll(".s1")[1], im = big && big.complete && big.naturalWidth ? big : sm && sm.complete && sm.naturalWidth ? sm : null;
     const key = `${S.i}:${im ? im.currentSrc : ""}`;
     if (!im) { if (big) big.addEventListener("load", () => { if (ZEB && cur() === zw) zbMake(); }, {once:true}); return; }
-    if (zw.dataset.zb === key) return;
+    if (zw.dataset.zb === key) { const n = inf.querySelector("[data-zbn]"); if (n) n.textContent = zbTxt(p); return; }   // 算過了：關掉再打開時把數字寫回來
     zw.dataset.zb = key;
     let r; try { r = zbCalc(p, im); } catch (e) { return; }
     zw.querySelectorAll(".zb").forEach(x => x.remove());
@@ -1578,6 +1578,7 @@ function openLb(i, from){
     ZEB = on; store.set("vsa-zb", on ? "1" : ""); el.classList.toggle("zbon", on);
     el.querySelectorAll("[data-zb]").forEach(b => b.setAttribute("aria-pressed", on));
     if (on) zbMake();
+    else { const n = inf.querySelector("[data-zbn]"); if (n) n.textContent = ""; }   // 關掉：數字一起拿掉，換下一張也不寫
   }
   /* 大螢幕（或放大看）：大圖 2048 不夠清楚時，停在這張一下才跟主機要長邊 3840 的清晰版，好了再換上（滑過去的那幾張不做） */
   function xlSoon(){ clearTimeout(S.xlT); S.xlT = setTimeout(xlGo, 450); }
@@ -3253,7 +3254,7 @@ function infoHTML(p){
     h += `<div class="ibox isty">${ms.st || ms.lut ? `<i class="${mono ? "mono" : ""}"></i><div><small>${esc(ms.sl || "風格")}</small><b>${esc(ms.st || ms.lut)}</b></div>${[...(ms.fx || []), ...(ms.st && ms.lut ? [`LUT ${ms.lut}`] : [])].map(t => `<span class="tag">${esc(t)}</span>`).join("")}` : ""}
       ${ms.k ? `<div class="kel"><small>白平衡</small><b class="num">${ms.k} K</b><span class="kbar"><i style="left:${kp.toFixed(1)}%"></i></span></div>` : ""}</div>`;
   }
-  if (!isVid(p)) h += `<div class="ibox ipal"><div class="ipw" data-pal aria-label="直方圖和主要顏色">${palHTML(p)}</div><button class="ngb" data-ng aria-pressed="${!!NG}">${I("ng")}<span>中性灰背景</span><i class="sw"></i></button><button class="ngb" data-zb aria-pressed="${!!ZEB}">${I("zeb")}<span>過曝／死黑</span><small class="num" data-zbn>${zbTxt(p)}</small><i class="sw"></i></button></div>`;
+  if (!isVid(p)) h += `<div class="ibox ipal"><div class="ipw" data-pal aria-label="直方圖和主要顏色">${palHTML(p)}</div><button class="ngb" data-ng aria-pressed="${!!NG}">${I("ng")}<span>中性灰背景</span><i class="sw"></i></button><button class="ngb" data-zb aria-pressed="${!!ZEB}">${I("zeb")}<span>過曝／死黑</span><small class="num" data-zbn>${ZEB ? zbTxt(p) : ""}</small><i class="sw"></i></button></div>`;
   const kv = [];
   if (x.ln) kv.push(["鏡頭", x.lmk && !x.ln.startsWith(x.lmk) ? `${x.lmk} ${x.ln}` : x.ln]);
   if (fl && f35 && Math.round(fl) !== f35) kv.push(["實際焦距", `${+fl.toFixed(2)} mm`]);
