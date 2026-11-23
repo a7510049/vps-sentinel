@@ -135,19 +135,26 @@ function camName(x){
   return md.toLowerCase().startsWith(mk.toLowerCase()) || md.toLowerCase().startsWith((x.mk || "").toLowerCase()) ? md.replace(new RegExp("^" + (x.mk || "").replace(/[.*+?^${}()|[\]\\]/g, "\\$&") + "\\s*", "i"), mk + " ").trim() : `${mk} ${md}`.trim();
 }
 /* iPhone、iPad 的鏡頭照 Apple 相簿的叫法（主相機、超廣角相機、望遠相機、前置相機），不寫「後三鏡頭 6.765mm f/1.78」 */
+const PHONES = /^(apple|google|samsung|xiaomi|redmi|poco|huawei|honor|oneplus|oppo|vivo|realme|motorola|nothing)/i;
 function appleLens(x){
   const l = x.ln || "";
-  if (!/^apple/i.test(x.mk || "") || !/camera/i.test(l)) return "";
+  if (!/^apple/i.test(x.mk || "")) return "";
+  if (!/camera/i.test(l)) return "";
   if (/front/i.test(l)) return "前置相機";
   const mm = +(l.match(/([\d.]+)\s*mm/i) || [])[1] || 0, f = +(l.match(/f\/([\d.]+)/i) || [])[1] || 0;
   if (mm && mm < 3.5) return "超廣角相機";
   if (f && f <= 1.9) return "主相機";
   return /triple|dual camera/i.test(l) && f ? "望遠相機" : "主相機";
 }
+/* 安卓手機大多沒記是哪顆鏡頭：照等效焦距猜（中間的多半是放大裁切，不猜） */
+function phoneLens(x){
+  if (!PHONES.test(x.mk || "") || /^apple/i.test(x.mk || "") || !x.f35) return "";
+  return x.f35 <= 18 ? "超廣角" : x.f35 <= 30 ? "主鏡頭" : x.f35 >= 60 ? "望遠" : "";
+}
 function lensName(x){
+  const ap = appleLens(x) || phoneLens(x); if (ap) return ap;
   let l = x.ln || "";
   if (!l) return "";
-  const ap = appleLens(x); if (ap) return ap;
   if (x.md && l.toLowerCase().startsWith(x.md.toLowerCase())) l = l.slice(x.md.length).trim();
   return l.replace(/^back /i, "後").replace(/^front /i, "前").replace(/triple camera/i, "三鏡頭").replace(/dual wide camera/i, "雙廣角鏡頭")
     .replace(/dual camera/i, "雙鏡頭").replace(/ultra wide camera/i, "超廣角鏡頭").replace(/telephoto camera/i, "望遠鏡頭").replace(/wide camera/i, "廣角鏡頭").replace(/camera/i, "鏡頭");
@@ -3132,7 +3139,6 @@ function shakeOf(p){
   const t = x.et[0] / x.et[1], is = x.ms && x.ms.is && x.ms.is !== "關", safe = 1 / x.f35 * (is ? 16 : 1), sh = p.fs != null ? p.fs : p.qs;
   return t > safe * 1.5 && sh != null && sh < 50 ? Math.round(1 / safe) || 1 : 0;
 }
-const PHONES = /^(apple|google|samsung|xiaomi|redmi|poco|huawei|honor|oneplus|oppo|vivo|realme|motorola|nothing)/i;
 const gShake = `<svg class="gin gb" viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="6" width="14" height="12" rx="2.5" class="gf"/><circle cx="12" cy="12" r="3.2" class="gs"/><path d="M2.5 8.5l-1.2 3.5 1.2 3.5M21.5 8.5l1.2 3.5-1.2 3.5" class="gl"/></svg>`;
 /* 過曝／死黑：大圖畫到畫布上，紅、綠、藍任何一個到頂（≥ 253）算過曝，全部 ≤ 3 算死黑；在看的人的設備上算 */
 let ZEB = store.get("vsa-zb") === "1";
@@ -3301,7 +3307,7 @@ function infoHTML(p){
   const cells = [["光圈", x.f ? `ƒ${+x.f.toFixed(2)}` : "", x.f ? gIris(x.f) : "", "f"], ["快門", shutter(x.et).replace(" 秒", " s"), x.et ? gShut(x.et) : "", "et"],
     ["ISO", x.iso || "", x.iso ? gIso(x.iso) : "", "iso"], ["焦距", fe ? `${fe} mm` : "", f35 ? gFov(f35) : "", "fl"], ["曝光", x.ev != null ? `${x.ev > 0 ? "+" : ""}${+x.ev.toFixed(1)} ev` : "", x.ev != null ? gEv(x.ev) : "", "ev"]];
   h += `<div class="ibox"><div class="icam"><div class="t">${cam && !isVid(p) ? `<button class="igear" data-gear="c:${esc(cam)}">${brandSvg(x)}<b>${esc(brandSvg(x) ? cam.replace(new RegExp("^" + (MKS[(x.mk || "").toLowerCase()] || x.mk || "").replace(/[.*+?^${}()|[\]\\]/g, "\\$&") + "\\s+", "i"), "") : cam)}</b>${I("r")}</button>` : `<b>${esc(cam || (isVid(p) ? "影片" : "相機資訊"))}</b>`}<span class="tag">${esc(ext)}</span>${p.rw && p.rw !== ext ? `<span class="tag">+${esc(p.rw)}</span>` : ""}${p.cs ? `<span class="tag">${esc(p.cs.replace("Display ", ""))}</span>` : ""}${p.hdr && !isVid(p) ? `<span class="tag hdr">HDR</span>` : ""}${isVid(p) && x.vc ? `<span class="tag">${esc(x.vc)}</span>` : ""}${isVid(p) && (x.gm || p.hdr) ? `<span class="tag hdr">${esc(x.gm || (p.hdr === "pq" ? "HDR PQ" : "HLG"))}</span>` : ""}</div>
-      ${appleLens(x) ? `<div class="l"><button class="igear sm" data-gear="l:${esc(lens)}">${esc(lens)}</button>${f35 ? `・${f35} mm` : ""}</div>`
+      ${appleLens(x) || phoneLens(x) ? `<div class="l"><button class="igear sm" data-gear="l:${esc(lens)}">${esc(lens)}</button>${f35 ? `・${f35} mm` : ""}</div>`
         : lens || f35 ? `<div class="l">${esc(f35 ? `${lensKind(f35)}・等效${x.f35e ? "約" : ""} ${f35} mm` : "")}${lens ? `${f35 ? "　" : ""}<button class="igear sm" data-gear="l:${esc(lens)}">${esc(lens)}</button>` : ""}</div>` : ""}
       <div class="l2 num">${p.w && p.h ? `<i class="gar" style="aspect-ratio:${p.w} / ${p.h}"></i>` : ""}<span>${isVid(p) ? `影片 ${dur(p.vd)}・${x.fps ? `${+x.fps.toFixed(2)} fps・` : ""}${x.vb ? `${x.vb >= 10 ? Math.round(x.vb) : x.vb} Mbps・` : ""}` : mp >= .1 ? `${mp >= 10 ? Math.round(mp) : mp.toFixed(1)} MP・` : ""}${p.w} × ${p.h}・${size(p.sz)}</span></div></div>
     ${cells.some(c => c[1]) ? `<div class="iex num">${cells.map(([k, v, g, gk]) => `<div data-gk="${gk}"${v ? "" : ` class="no"`}>${g || SV(`<circle cx="16" cy="16" r="12" class="gt"/>`)}<b>${esc(v || "—")}</b><small>${k}</small></div>`).join("")}</div>` : ""}</div>`;
