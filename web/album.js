@@ -1874,9 +1874,7 @@ function openLb(i, from){
     $(".nav.l", el).disabled = S.i === 0; $(".nav.r", el).disabled = S.i === PH.length - 1;
     if (S.info === "info" && (moved || !inf.firstChild)) infSet(p, moved ? dir : 0, moved ? was : null);
     if (S.info === "cm" && moved) cmSet(p, dir);                     // 同一張不重畫：安卓跳出鍵盤會改畫面大小，重畫會把正在打字的留言收掉
-    const fromOb = S.ob && S.i === S.fi;
-    TILES.forEach((t, k) => t.classList.toggle("gone", k === S.i && !fromOb));
-    if (S.ob) S.ob.classList.toggle("lbo", fromOb);
+    goneSet();
     if (moved) { amb(p); stripAt(); }
   }
   function afSet(on){                                       // 對焦框：在照片上標出相機對焦的位置
@@ -1917,9 +1915,15 @@ function openLb(i, from){
     S.i = n; setAll();
     if (anim()) sl[1].animate([{opacity:0, transform:"scale(.97)"}, {opacity:1, transform:"none"}], {duration:T.mid, easing:DEC});
   }
+  function goneSet(){                                        // 照片牆上這張的格子空著（大圖蓋在上面）；還沒露出來前格子照常顯示
+    const fromOb = S.ob && S.i === S.fi, on = !S.pre;
+    TILES.forEach((t, k) => t.classList.toggle("gone", on && k === S.i && !fromOb));
+    if (S.ob) S.ob.classList.toggle("lbo", on && fromOb);
+  }
   S.hold = anim();                                           // 長大的動畫跑完才開始載大圖（iPhone 一邊解大圖一邊跑動畫會卡、一打開就跳到最大）
+  S.pre = anim();
+  if (S.pre) el.style.visibility = "hidden";
   setAll();
-  if (S.hold) setTimeout(() => { S.hold = 0; bigQ(); }, T.mid + 90);
   S.chrome = chrome; S.vToggle = vToggle;
   function toTile(g, f){                                     // 格子的位置：照格子裡那張圖真正的大小、位置（封面那張比格子大、有視差），裁成格子的形狀和圓角（不壓扁）
     const sr = stage.getBoundingClientRect(), ri = g.ri, rc = g.rc, k = Math.max(ri.width / f.w, ri.height / f.h);
@@ -1948,13 +1952,31 @@ function openLb(i, from){
   /* 從格子裡的那張長大 */
   const t0 = S.from || tileOf(i), g0 = tgt(t0, 1), f0 = fit(PH[i]);
   S.o = t0;                                                  // 從哪裡打開的（關掉時看不到這張的格子就縮回這裡）
+  /* iPhone 第一次畫出大圖那一格很久（整層要建好），以前動畫在那段時間就跑完了，看起來一下跳到最大。
+     現在先把照片放在格子的位置、等照片解碼好、畫面真的畫出來，下一格才開始長大；格子本身是 HDR 大圖（精選、每天封面）就直接用同一張，不再載一次 */
+  const reveal = () => { if (!S.pre) return; S.pre = 0; el.style.visibility = ""; goneSet(); };
   if (anim() && g0) {
-    const a0 = toTile(g0, f0);
-    cur().animate([{transform:a0.t, clipPath:a0.c}, {transform:"translate(0px,0px) scale(1)", clipPath:NOCLIP}], {duration:T.mid + 60, easing:DEC});
-    bg.animate([{opacity:0}, {opacity:1}], {duration:T.mid, easing:EASE, fill:"forwards"});
-    el.querySelectorAll(".lbt,.lbb,.nav,.lbs").forEach(x => x.animate([{opacity:0}, {opacity:1}], {duration:T.mid, delay:T.fast, easing:EASE, fill:"backwards"}));
-  } else bg.style.opacity = 1;
-  bg.style.opacity = 1;
+    const a0 = toTile(g0, f0), z = cur();
+    z.style.transform = a0.t; z.style.clipPath = a0.c; bg.style.opacity = 0;
+    el.querySelectorAll(".lbt,.lbb,.nav,.lbs").forEach(x => { x.style.opacity = 0; });
+    const ti = t0 && (t0.tagName === "IMG" ? t0 : t0.querySelector("img.hi,img")), lu = new URL(src(PH[i], "l"), location.href).href;
+    const big = z.querySelector("img.s2[data-src]"), sm = z.querySelectorAll("img.s1")[1], wait = [];
+    if (big && ti && ti.currentSrc === lu) { big.src = big.dataset.src; big.removeAttribute("data-src"); big.style.transition = "none";
+      wait.push((big.decode ? big.decode() : Promise.reject()).then(() => { big.classList.add("ok"); }, () => {})); }
+    if (sm && sm.decode) wait.push(sm.decode().catch(() => {}));
+    let started = 0;
+    const start = () => { if (started++ || LB !== S || S.closing) return; reveal();
+      requestAnimationFrame(() => requestAnimationFrame(() => {   // 露出來那一格畫好了才開始動
+        if (LB !== S || S.closing) return;
+        z.style.transform = ""; z.style.clipPath = ""; if (big) big.style.transition = "";
+        z.animate([{transform:a0.t, clipPath:a0.c}, {transform:"translate(0px,0px) scale(1)", clipPath:NOCLIP}], {duration:T.mid + 60, easing:DEC});
+        bg.style.opacity = 1; bg.animate([{opacity:0}, {opacity:1}], {duration:T.mid, easing:EASE});
+        el.querySelectorAll(".lbt,.lbb,.nav,.lbs").forEach(x => { x.style.opacity = ""; x.animate([{opacity:0}, {opacity:1}], {duration:T.mid, delay:T.fast, easing:EASE, fill:"backwards"}); });
+        setTimeout(() => { S.hold = 0; bigQ(); }, T.mid + 90);
+      }));
+    };
+    Promise.all(wait).then(start); setTimeout(start, 350);      // 解碼太久也不等超過 0.35 秒
+  } else { S.hold = 0; reveal(); bigQ(); bg.style.opacity = 1; }
   if (POPSKIP) S.push = 1; else history.pushState({lb:1}, "");   // 上一張的返回還沒處理完：等它處理完再記
 
   function go(d){
@@ -1981,6 +2003,7 @@ function openLb(i, from){
   }
   function close(){
     if (S.closing) return; S.closing = 1;
+    if (S.pre) { S.pre = 0; el.style.visibility = ""; }
     hdSoon();
     finish();
     /* 縮回哪裡：同一張回到打開的地方；換過張就回到那張自己的格子，格子不在畫面上就先在大圖後面把照片牆捲到那裡（像手機相簿），再縮回去 */
