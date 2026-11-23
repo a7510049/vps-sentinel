@@ -1712,7 +1712,7 @@ function openLb(i, from){
     if (zw.dataset.i === String(idx)) return;
     zw.dataset.i = idx;
     if (p.broken) { zw.innerHTML = `<div class="nope">${I("off")}</div>`; return; }
-    zw.innerHTML = `<img class="s1" alt="" draggable="false" src="${p.q ? `data:image/jpeg;base64,${p.q}` : src(p, "s")}"><img class="s1" alt="" draggable="false" src="${src(p, "s")}"><img class="s2" alt="" draggable="false" src="${src(p, "l")}">`
+    zw.innerHTML = `<img class="s1" alt="" draggable="false" src="${p.q ? `data:image/jpeg;base64,${p.q}` : src(p, "s")}"><img class="s1" alt="" draggable="false" src="${src(p, "s")}"><img class="s2" alt="" draggable="false" decoding="async" ${S.hold ? "data-src" : "src"}="${src(p, "l")}">`
       + (p.x.afp && !isVid(p) && !afFace(p) ? `<i class="afb${p.fm ? " miss" : ""}" style="left:${(p.x.afp[0] * 100).toFixed(2)}%;top:${(p.x.afp[1] * 100).toFixed(2)}%;width:${(p.x.afp[2] * Math.min(p.w, p.h) / p.w * 100).toFixed(2)}%;height:${(p.x.afp[2] * Math.min(p.w, p.h) / p.h * 100).toFixed(2)}%"></i>` : "")
       + (p.x.fcs && !isVid(p) ? p.x.fcs.map((f, k) => `<i class="fcb${afFace(p) === k + 1 ? ` af${p.fm ? " miss" : ""}` : ""}" style="left:${(f[0] * 100).toFixed(2)}%;top:${(f[1] * 100).toFixed(2)}%;width:${(f[2] * 100).toFixed(2)}%;height:${(f[3] * 100).toFixed(2)}%"></i>`).join("") : "")
       + (isVid(p) ? `<video class="vv" playsinline preload="none" disablepictureinpicture></video><span class="vbig">${p.vr === 1 ? I("play") : p.vr === 0 ? I("x") : `<i class="spin"></i>`}</span>` : p.gf === 2 ? `<img class="awp" alt="" draggable="false" src="${src(p, "a")}">` : p.lv ? `<video class="lvv" muted playsinline preload="none"${p.gf ? " loop" : ""}></video>` : "");
@@ -1903,7 +1903,9 @@ function openLb(i, from){
     S.i = n; setAll();
     if (anim()) sl[1].animate([{opacity:0, transform:"scale(.97)"}, {opacity:1, transform:"none"}], {duration:T.mid, easing:DEC});
   }
+  S.hold = anim();                                           // 長大的動畫跑完才開始載大圖（iPhone 一邊解大圖一邊跑動畫會卡、一打開就跳到最大）
   setAll();
+  if (S.hold) setTimeout(() => { S.hold = 0; el.querySelectorAll("img.s2[data-src]").forEach(m => { m.src = m.dataset.src; m.removeAttribute("data-src"); }); }, T.mid + 90);
   S.chrome = chrome; S.vToggle = vToggle;
   function toTile(g, f){                                     // 格子的位置：照格子裡那張圖真正的大小、位置（封面那張比格子大、有視差），裁成格子的形狀和圓角（不壓扁）
     const sr = stage.getBoundingClientRect(), ri = g.ri, rc = g.rc, k = Math.max(ri.width / f.w, ri.height / f.h);
