@@ -1138,7 +1138,7 @@ html:has(.lb,.ss,.sy) .scrub{opacity:0;pointer-events:none}
 .igear{display:inline-flex;align-items:center;gap:4px;min-width:0;flex:1;text-align:left}
 .igear b{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .igear svg{width:15px;height:15px;color:var(--tx3);flex:none}
-.igear .brd{display:inline-flex;align-items:center;flex:none;margin-right:5px}
+.igear .brd{display:inline-flex;align-items:center;flex:none;margin-right:5px;position:relative;top:-.05em}   /* 置中到英文大寫字母的中間（字的方框中間偏低一點，以前標誌看起來往下歪） */
 .igear .brd svg{width:auto;height:auto;color:var(--tx);fill:currentColor;stroke:none}
 .igear.sm{display:inline;flex:none;color:var(--p);font-weight:600}
 .icam .t .igear b{flex:0 1 auto;min-width:0}
