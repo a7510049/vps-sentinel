@@ -2117,6 +2117,7 @@ function openLb(i, from){
     if (bq > 0) { const bh = box.getBoundingClientRect().height; box.style.clipPath = `inset(0 0 ${Math.max(0, bh - bq).toFixed(1)}px 0)`; box.classList.remove("gone"); }
     const zw = cur(), f = fit(p), now = getComputedStyle(zw).transform;
     stopAll();
+    zw.querySelectorAll(".vbig,.vbuf").forEach(x => { x.style.opacity = 0; });   // 影片中間的播放鈕跟著照片縮回去時淡掉（不然縮完才突然不見）
     let gone = false;
     const end = () => { if (gone) return; gone = true; el.remove();
       ovl.forEach(x => { x.style.opacity = ""; if (anim()) x.animate([{opacity:0}, {opacity:1}], {duration:T.mid, easing:EASE}); }); TILES.forEach(x => x.classList.remove("gone")); if (bq > 0) box.style.clipPath = ""; if (S.ob) S.ob.classList.remove("lbo"); if (LB === S) LB = null; onScroll(); };
