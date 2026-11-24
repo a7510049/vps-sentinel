@@ -54,7 +54,10 @@ svg{display:block}
 .hero .cv{transition:opacity var(--t-long) var(--ease)}
 .hero:not(.rdy) .cv{opacity:0}
 .hero:not(.rdy){background:linear-gradient(100deg,var(--s1) 30%,var(--s2) 50%,var(--s1) 70%);background-size:300% 100%;animation:shim 1.4s linear infinite}
-.hero:not(.rdy) .hcap,.hero:not(.rdy) .hcap *,.hero:not(.rdy) .cue,.hero:not(.rdy) .cv .hi{animation-play-state:paused}
+.hero:not(.rdy) .hcap,.hero:not(.rdy) .hcap *,.hero:not(.rdy) .hcap h1::before,.hero:not(.rdy) .hcap h1::after,.hero:not(.rdy) .cue,.hero:not(.rdy) .cv .hi{animation-play-state:paused}
+/* 封面下緣的霧、極光：封面照片淡入時一起慢慢出來（以前開場一打開就整片在那裡） */
+.hero::before,.hero::after{transition:opacity var(--t-long) var(--ease)}
+.hero:not(.rdy)::before,.hero:not(.rdy)::after{opacity:0}
 .hero::after{content:"";position:absolute;inset:0;background:linear-gradient(180deg,rgba(0,0,0,.28) 0,transparent 26%,transparent 46%,color-mix(in oklab,var(--bg) 70%,transparent) 82%,var(--bg) 100%);pointer-events:none}
 .hcap{position:absolute;left:0;right:0;bottom:0;z-index:1;padding:0 var(--pad) clamp(28px,6vh,64px);max-width:var(--wmax);margin:0 auto;will-change:transform,opacity}
 .eyebrow{font-size:var(--fs-s);font-weight:600;letter-spacing:.04em;color:var(--tx2);margin-bottom:10px;opacity:0;animation:up var(--t-slow) var(--dec) .1s forwards}
@@ -228,11 +231,17 @@ button.chip:active,a.chip:active{transform:scale(.95)}
     background-size:6px 6px,6px 6px,34px 5px;background-position:calc(50% - 17px) 11.5px,calc(50% + 17px) 11.5px,50% 12px;background-repeat:no-repeat;background-origin:border-box}
   .inf::before{display:none}
 }
-/* 手機的照片資訊先開一半（相機、地圖那張摘要），往上捲才整個拉高（學 iOS／Google）；留言面板照舊 */
+/* 手機的照片資訊：照片和資訊同一頁往上捲（學 iPhone 相簿）。.infs 是整個畫面的捲動頁，上面空一段（::before）讓照片露出來，資訊接在下面；
+   只有一個捲動的地方，iOS 不會跟下拉重整、拉面板搶手勢；.infs 本身不接手指（照片那段照樣左右滑），資訊那塊才接；電腦上 .infs 不存在（display:contents） */
+.infs{display:contents}
 @media (max-width:899px){
-  .inf:not(.cmp){height:92%}
-  .lb.info:not(.cmo):not(.full) .inf:not(.cmp){transform:translateY(32.6%);overflow-y:hidden}
-}   /* 安卓：裡面的開關一動，捲動框的圓角就切不住（變成方角、露出後面），改用 clip-path 切 */
+  .infs{display:block;position:absolute;left:0;right:0;bottom:0;top:calc(env(safe-area-inset-top) + 60px);z-index:3;overflow-y:auto;overscroll-behavior:contain;-webkit-overflow-scrolling:touch;
+    pointer-events:none;visibility:hidden;scrollbar-width:none;transition:visibility 0s linear var(--t-mid)}
+  .infs::-webkit-scrollbar{display:none}
+  .infs::before{content:"";display:block;height:100%}
+  .lb.info:not(.cmo) .infs{visibility:visible;transition:none}
+  .infs>.inf{position:relative;left:auto;right:auto;bottom:auto;height:auto;min-height:62vh;min-height:62dvh;overflow:visible;overscroll-behavior:auto;touch-action:auto;pointer-events:auto}
+}
 .inf::before{content:"";display:block;width:40px;height:5px;border-radius:var(--r-pill);background:var(--s3);margin:0 auto 12px}
 .lb.info:not(.cmo) .inf:not(.cmp),.lb.cmo .cmp{transform:none}
 /* 留言面板：上面誰按了愛心，中間留言自己捲，輸入框一直在最下面 */
@@ -949,6 +958,8 @@ html,body{touch-action:pan-x pan-y}
   opacity:0;animation:hglo var(--t-long) var(--dec) .5s forwards,hbre 6s ease-in-out 1.4s infinite alternate}
 @keyframes hglo{from{opacity:0;scale:.6}to{opacity:.9;scale:1}}
 @keyframes hbre{from{opacity:.9;scale:1}to{opacity:.55;scale:1.14}}
+/* 字的陰影很糊（30px）：每個字外面留一圈空間（padding 加回負的 margin，排版不變），iPhone 把在動的字單獨畫時陰影才不會被切成一個方框 */
+.hcap h1 .ch{padding:.4em .3em;margin:-.4em -.3em}
 .hcap h1 .ch{--hs:0 2px 30px rgba(0,0,0,.35);animation:chin 1.1s var(--dec) calc(.4s + var(--i) * .08s) forwards,chw 7s var(--ease) calc(2.6s + var(--i) * .07s) infinite}
 @keyframes chw{0%,16%,100%{transform:none;text-shadow:var(--hs)}7%{transform:translateY(-.12em) scale(1.04);text-shadow:var(--hs),0 0 .3em rgba(255,255,255,.75),0 0 .7em color-mix(in oklab,var(--g1) 95%,transparent),0 0 1.4em color-mix(in oklab,var(--g3) 85%,transparent)}}
 .hcap h1::after{background-size:200% 100%;background-image:linear-gradient(90deg,var(--g1),var(--g2),var(--g3),var(--g2),var(--g1));animation:grow var(--t-long) var(--dec) 1.1s both,hbar 4s linear 2s infinite}

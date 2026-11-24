@@ -1860,18 +1860,32 @@ function openLb(i, from){
       <div class="lbm" role="menu"><button role="menuitem" data-ssi>${I("play")}<span>從這張開始播放</span></button><button role="menuitem" data-cmpb hidden>${I("cmp")}<span>跟同一疊的比較</span></button>${D.dl ? `<a role="menuitem" data-dl download>${I("dl")}<span>${D.dl > 1 ? "下載原圖" : "下載"}</span></a>` : ""}<button role="menuitem" class="bad" data-del hidden>${I("trash")}<span>刪掉</span></button></div></div>
     <button class="rb nav l" aria-label="上一張">${I("l")}</button><button class="rb nav r" aria-label="下一張">${I("r")}</button>
     <div class="lbb"><div class="vbar"><button class="vpp" data-vpp aria-label="播放">${I("play")}</button><span class="vt0 num">0:00</span><div class="vtr" data-vseek><i><b></b></i></div><span class="vt1 num"></span><button class="vpp" data-vmu aria-label="聲音">${I("snd")}</button></div>
-      <div class="lbr"><div class="cap"><b></b><span></span></div><div class="tbar"><button class="sb" data-shr aria-label="分享這張">${I("shr")}</button>${D.talk ? `<button class="sb" data-lk aria-label="愛心（按住選其他表情）">${I("heart")}<span class="num"></span></button><button class="sb rxb" data-rx aria-label="其他表情" hidden>${I("smile")}<span class="num"></span></button><button class="sb" data-cm aria-label="留言">${I("chat")}<span class="num"></span></button>` : ""}<button class="sb" data-inf aria-label="照片資訊">${I("info")}</button></div></div></div><div class="inf"></div>${D.talk ? `<div class="inf cmp"></div>` : ""}${STRIP ? `<div class="lbs"><div class="lbsr">${PH.map((p, k) => `<button class="lbst" data-go="${k}" aria-label="第 ${k + 1} 張"><img alt="" loading="lazy" draggable="false" src="${src(p, "s")}"></button>`).join("")}</div></div>` : ""}`;
+      <div class="lbr"><div class="cap"><b></b><span></span></div><div class="tbar"><button class="sb" data-shr aria-label="分享這張">${I("shr")}</button>${D.talk ? `<button class="sb" data-lk aria-label="愛心（按住選其他表情）">${I("heart")}<span class="num"></span></button><button class="sb rxb" data-rx aria-label="其他表情" hidden>${I("smile")}<span class="num"></span></button><button class="sb" data-cm aria-label="留言">${I("chat")}<span class="num"></span></button>` : ""}<button class="sb" data-inf aria-label="照片資訊">${I("info")}</button></div></div></div><div class="infs"><div class="inf"></div></div>${D.talk ? `<div class="inf cmp"></div>` : ""}${STRIP ? `<div class="lbs"><div class="lbsr">${PH.map((p, k) => `<button class="lbst" data-go="${k}" aria-label="第 ${k + 1} 張"><img alt="" loading="lazy" draggable="false" src="${src(p, "s")}"></button>`).join("")}</div></div>` : ""}`;
   if (anim()) el.querySelectorAll(".lbt,.lbb,.nav,.lbs").forEach(x => { x.style.opacity = 0; });   // 上下兩排按鈕先藏好再放上畫面（以前放上去後才藏，會先閃一下）
   document.body.appendChild(el);
-  const stage = $(".stage", el), track = $(".track", el), bg = $(".bg", el), inf = $(".inf", el), cmp = $(".cmp", el) || document.createElement("div");
+  const stage = $(".stage", el), track = $(".track", el), bg = $(".bg", el), inf = $(".inf", el), infs = $(".infs", el), cmp = $(".cmp", el) || document.createElement("div");
   const S = {el, i, z:{s:1, x:0, y:0}, info:false, busy:null, from:from && from.isConnected ? from : null, fi:i};
   LB = S;
   { const b = S.from && S.from.tagName === "IMG" ? S.from.closest(".hlc,.inp") : null; if (b && !b.closest(".lb")) S.ob = b; }   // 從精選卡片打開：看這張時空著的是那張卡片，照片牆的格子照常顯示
   const W = () => stage.clientWidth, H = () => stage.clientHeight;
   const mk = () => { const s = document.createElement("div"); s.className = "slide"; s.innerHTML = `<div class="zw"></div>`; track.appendChild(s); return s; };
   let sl = [mk(), mk(), mk()];                               // 上一張、這張、下一張
+  /* 照片放的位置：置中撐滿；會被上面的日期、下面的地點和工具列蓋到時（多半是直的照片），縮小一點放在兩者中間（使用者選的）；
+     點一下藏起按鈕（bare）就撐回整個畫面；開著資訊、影片照舊 */
+  function room(){                                          // 上面留到 × 鈕下面，下面固定留地點一行＋說明兩行的高度（不照這張的字數），左右換張時照片大小才不會差幾點；用排版位置算（上下那兩排進場時在滑動）
+    const lbt = $(".lbt", el), lbb = $(".lbb", el), tb = $(".lbt [data-x]", el), bar = $(".tbar", el), cb = $(".lbb .cap b", el), cs = $(".lbb .cap span", el);
+    if (!lbt || !lbb || !tb || !bar || !H()) return null;
+    const off = (e, top) => { let y = 0; while (e && e !== top) { y += e.offsetTop; e = e.offsetParent; } return y; };
+    const col = getComputedStyle(bar.parentNode).flexDirection === "column";
+    const capH = col && cb && cs ? (parseFloat(getComputedStyle(cb).fontSize) + 2 * parseFloat(getComputedStyle(cs).fontSize)) * 1.3 + 10 : 0;
+    const t0 = stage.offsetTop, b0 = el.clientHeight - t0 - H();
+    return {t:Math.max(0, lbt.offsetTop + off(tb, lbt) + tb.offsetHeight + 8 - t0), b:Math.max(0, lbb.offsetHeight - off(bar, lbb) + capH + 8 - b0)}; }
   function fit(p){ const w = W(), h = H(), k = Math.min(w / p.w, h / p.h);
-    const fw = p.w * k, fh = p.h * k; return {l:(w - fw) / 2, t:(h - fh) / 2, w:fw, h:fh}; }
+    let fw = p.w * k, fh = p.h * k, t = (h - fh) / 2;
+    const r = !S.info && !isVid(p) && !el.classList.contains("bare") && room();
+    if (r && (t < r.t || t + fh > h - r.b) && h - r.t - r.b > h * .55) { const k2 = Math.min(w / p.w, (h - r.t - r.b) / p.h); fw = p.w * k2; fh = p.h * k2; t = r.t + (h - r.t - r.b - fh) / 2; }
+    return {l:(w - fw) / 2, t, w:fw, h:fh}; }
+  const box0 = () => { const z = cur(); return {l:z.offsetLeft, t:z.offsetTop, w:z.offsetWidth, h:z.offsetHeight}; };   // 這張現在真正的位置（手勢、關掉用這個，不重算）
   function fill(s, idx){
     s.dataset.i = idx;
     const zw = s.firstChild, p = PH[idx];
@@ -1952,6 +1966,11 @@ function openLb(i, from){
     zw.animate([{transformOrigin:"0 0", transform:`translate(${(r0.left - r1.left).toFixed(1)}px,${(r0.top - r1.top).toFixed(1)}px) scale(${k.toFixed(4)})`}, {transformOrigin:"0 0", transform:"none"}], {duration:T.mid, easing:EASE, id:"fit"});
   };
   const cur = () => sl[1].firstChild;
+  /* 手機的照片資訊：整個畫面是一個捲動頁（.infs），上面空一段讓照片露出來，資訊接在下面（學 iPhone 相簿）；
+     停在「照片在上、資訊在下」那個位置（REST），往上捲資訊蓋過照片，往下捲到底就收起來；只有一個捲動的地方，iOS 不會跟下拉重整、拉面板搶手勢 */
+  const PHONE = () => matchMedia("(max-width:899px)").matches;
+  const isc = () => PHONE() ? infs : inf;                    // 照片資訊真正在捲的是哪一個
+  const REST = () => Math.max(0, inf.offsetTop - (el.clientHeight * .38 - infs.getBoundingClientRect().top + el.getBoundingClientRect().top));
   const ZMAX = 6;
   function setZoom(s, x, y){ if (s > 1.2 && (!S.z || S.z.s <= 1.2)) xlSoon(); S.z = {s, x, y}; cur().style.transform = s === 1 && !x && !y ? "" : `translate(${x}px,${y}px) scale(${s})`; }
   const vid = () => cur().querySelector("video");
@@ -2216,7 +2235,7 @@ function openLb(i, from){
     /* 格子上半被上面的毛玻璃蓋住：縮回去的照片從毛玻璃下緣切掉，毛玻璃後面那塊先把格子露出來（只露被蓋住的那段），不會黑一塊 */
     const bar = $(".bar.on"), bq = bar && box && box.classList.contains("ph") ? bar.getBoundingClientRect().bottom - box.getBoundingClientRect().top : 0;
     if (bq > 0) { const bh = box.getBoundingClientRect().height; box.style.clipPath = `inset(0 0 ${Math.max(0, bh - bq).toFixed(1)}px 0)`; box.classList.remove("gone"); }
-    const zw = cur(), f = fit(p), now = getComputedStyle(zw).transform;
+    const zw = cur(), f = box0(), now = getComputedStyle(zw).transform;
     stopAll();
     zw.querySelectorAll(".vbig,.vbuf").forEach(x => { x.style.opacity = 0; });   // 影片中間的播放鈕跟著照片縮回去時淡掉（不然縮完才突然不見）
     let gone = false;
@@ -2228,7 +2247,8 @@ function openLb(i, from){
     el.querySelectorAll(".lbt,.lbb,.nav,.inf,.lbs").forEach(x => { x.style.opacity = 0; });
     sl.forEach(s => { if (s.firstChild !== zw) s.style.visibility = "hidden"; });   // 資訊開著時關掉：畫面變寬，旁邊那張會被排進看得到的地方，先藏起來
     S.info = false; el.classList.remove("info", "cmo");
-    const n0 = now === "none" ? "translate(0px,0px) scale(1)" : now;
+    const sty = parseFloat((stage.style.translate || "0 0").split(" ")[1]) || 0; stage.style.translate = "";   // 手機資訊往上捲時照片被推上去的那段：接在縮回去的起點，不跳
+    const n0 = `translate(0px,${sty.toFixed(1)}px) ` + (now === "none" ? "translate(0px,0px) scale(1)" : now);
     /* HDR 照片：縮回去的同時大圖（HDR）慢慢淡掉、露出底下的一般小圖，亮度慢慢降下來，不會回到照片牆才突然變暗 */
     const bi = !ANDR && box && box.querySelector("img.hi,.hlc>img"), toHd = !!(bi && bi.currentSrc && bi.currentSrc === new URL(src(p, "l"), location.href).href);   // 縮回去的格子本身就是 HDR 大圖（精選、每天封面）：不先淡掉，不然會先變暗再變亮
     const hb = p.hdr && !toHd && zw.querySelector(".s2.ok"), sm = zw.querySelectorAll("img.s1")[1];
@@ -2245,10 +2265,10 @@ function openLb(i, from){
     if (was === kind) return;
     const r0 = cur().getBoundingClientRect();                  // 開關前照片在螢幕上的位置（含放大），等一下從這裡縮放過去
     S.info = kind || false; el.classList.toggle("info", !!kind); el.classList.toggle("cmo", kind === "cm");
+    if (kind !== "info") stage.style.translate = "";
     $("[data-inf]", el).classList.toggle("on", kind === "info");
     const cb = $("[data-cm]", el); if (cb) cb.classList.toggle("on", kind === "cm");
-    if (kind === "info") { infSet(PH[S.i]); inf.scrollTop = 0; }
-    if (kind !== "info") el.classList.remove("full");          // 下次打開又是先開一半
+    if (kind === "info") { infSet(PH[S.i]); inf.scrollTop = 0; if (PHONE()) { infs.scrollTop = REST(); stage.style.translate = ""; } }
     if (kind === "cm") cmSet(PH[S.i]);
     if (!!was === !!kind) return;                              // 資訊換留言：畫面大小不變，照片不動
     [sl[0], sl[2]].forEach(s => { s.style.visibility = "hidden"; });   // 電腦上畫面變窄時，旁邊那張會被排到看得到的地方：換位置的這段先藏起來
@@ -2281,10 +2301,10 @@ function openLb(i, from){
     });
   }
   function infSet(p, dir, q){
-    const y = inf.scrollTop, om = inf.querySelector(".imap"), old = om && om._c ? {c:om._c, t:[...om.querySelectorAll(".tl.ok")]} : null;
+    const y = isc().scrollTop, om = inf.querySelector(".imap"), old = om && om._c ? {c:om._c, t:[...om.querySelectorAll(".tl.ok")]} : null;
     const kl = inf.querySelector(".kbar i"), k0 = kl ? kl.style.left : "", tx0 = dir ? leafText(inf) : null, zk = inf.querySelector(".izr .zk"), z0 = zk ? zk.style.left : "";
     S.pb0 = dir ? [...inf.querySelectorAll(".pbar i")].map(i => [i.getBoundingClientRect().width, getComputedStyle(i).backgroundColor]) : null;
-    infFlip(() => { inf.innerHTML = infoHTML(p); inf.scrollTop = y; }, dir);   // 換張時停在原本看的地方
+    infFlip(() => { inf.innerHTML = infoHTML(p); isc().scrollTop = y; }, dir);   // 換張時停在原本看的地方
     infoMap(old, !!dir);
     const mv = dir && q && q !== p && anim() ? morph(q, p, k0, z0) : null;
     if (tx0 && anim()) {                                         // 換張時只有變了的字淡入換上，其他不動（使用者說不要整塊抖一下）
@@ -2375,7 +2395,7 @@ function openLb(i, from){
   /* 手勢：左右滑換照片、兩指／點兩下放大、往下滑關掉、往上滑看資訊 */
   const ptr = new Map();
   let g = null, lastTap = 0, tapT = 0;
-  const L = () => { const f = fit(PH[S.i]); return f; };
+  const L = box0;
   stage.addEventListener("pointerdown", e => {
     if (S.closing) return;
     stage.setPointerCapture(e.pointerId);
@@ -2452,7 +2472,7 @@ function openLb(i, from){
       const now = performance.now();
       if (now - lastTap < 300) { clearTimeout(tapT); lastTap = 0; return S.z.s > 1.02 || !D.talk || PH[S.i].broken ? dbl(e.clientX, e.clientY) : heartAt(e.clientX, e.clientY); }
       lastTap = now;
-      tapT = setTimeout(() => { if (S.info) setInfo(false); else if (isVid(PH[S.i]) && vid()) { vToggle(); if (vid().paused) el.classList.remove("bare"); } else el.classList.toggle("bare"); }, 300);
+      tapT = setTimeout(() => { if (S.info) setInfo(false); else if (isVid(PH[S.i]) && vid()) { vToggle(); if (vid().paused) el.classList.remove("bare"); } else { el.classList.toggle("bare"); if (S.z.s < 1.02) S.fitAll(); } }, 300);
     }
   };
   stage.addEventListener("pointerup", up);
@@ -2566,34 +2586,36 @@ function openLb(i, from){
     if (n) { l.scrollTo({top:l.scrollHeight, behavior:anim() ? "smooth" : "auto"}); if (anim()) n.animate([{opacity:0, transform:"translateY(8px)"}, {opacity:1, transform:"none"}], {duration:T.mid, easing:DEC}); }
     else if (anim() && !l.querySelector(".cmt")) l.firstChild.animate([{opacity:0}, {opacity:1}], {duration:T.mid, easing:EASE});
   }
-  /* 手機上資訊先開一半：往上捲就整個拉高 */
-  const PHONE = () => matchMedia("(max-width:899px)").matches;
-  const half = P => P === inf && S.info === "info" && !el.classList.contains("full") && PHONE();
-  inf.addEventListener("scroll", () => { if (half(inf) && inf.scrollTop > 2) el.classList.add("full"); }, {passive:true});
-  inf.addEventListener("wheel", e => { if (half(inf) && e.deltaY > 0) el.classList.add("full"); }, {passive:true});
-  /* 面板往下拉就關（捲到最上面時才算；整個拉高時先回到一半）；開一半時裡面不捲，手指往上推是把面板拉高（學 iOS，以前一邊捲一邊跳成整個，會卡一下） */
-  [[inf, () => inf], [cmp, () => cmp.querySelector(".cml") || cmp]].forEach(([P, sc]) => {
+  /* 手機照片資訊（同一頁往上捲）：照片跟著資訊一起往上捲；往下捲過停的位置、手放開又停下來時，捲到停的位置以下四分之一就收起來，不然彈回去 */
+  { let raf = 0, idle = 0, touch = false;
+    const push = () => { raf = 0; if (S.info !== "info" || !PHONE() || S.closing) return; const d = infs.scrollTop - REST(); stage.style.translate = d > 0 ? `0 ${(-d).toFixed(1)}px` : ""; };   // 同一頁：照片跟著資訊一起往上捲
+    const settle = () => { if (touch || S.info !== "info" || !PHONE() || S.closing) return; const r = REST(), st = infs.scrollTop;
+      if (st < r * .75) { stage.style.translate = ""; setInfo(false); } else if (st < r - 1) infs.scrollTo({top:r, behavior:anim() ? "smooth" : "auto"}); };
+    infs.addEventListener("scroll", () => { if (!raf) raf = requestAnimationFrame(push); clearTimeout(idle); idle = setTimeout(settle, 140); }, {passive:true});
+    infs.addEventListener("touchstart", () => { touch = true; clearTimeout(idle); }, {passive:true});
+    const off = () => { touch = false; clearTimeout(idle); idle = setTimeout(settle, 140); };
+    infs.addEventListener("touchend", off, {passive:true}); infs.addEventListener("touchcancel", off, {passive:true}); }
+  /* 留言面板往下拉就關（捲到最上面時才算） */
+  [[cmp, () => cmp.querySelector(".cml") || cmp]].forEach(([P, sc]) => {
     let d0 = null;
     P.addEventListener("touchstart", e => { if (e.touches.length === 1 && e.target !== document.activeElement) d0 = {y:e.touches[0].clientY, t:performance.now(), top:sc().scrollTop <= 0 || !e.target.closest(".cml,.inf:not(.cmp)"), dy:0, on:false}; }, {passive:true});
     P.addEventListener("touchmove", e => {
       if (!d0 || !PHONE()) return;
       const dy = e.touches[0].clientY - d0.y;
       if (!d0.on) {
-        if (half(P) && Math.abs(dy) > 6) { d0.on = true; d0.half = true; d0.b = P.offsetHeight * .326; }
-        else if (d0.top && (sc().scrollTop <= 0 || !e.target.closest(".cml,.inf:not(.cmp)")) && dy > 6) { d0.on = true; d0.b = 0; }
+        if (d0.top && (sc().scrollTop <= 0 || !e.target.closest(".cml,.inf:not(.cmp)")) && dy > 6) { d0.on = true; d0.b = 0; }
         else return;
         d0.y0 = e.touches[0].clientY; P.style.transition = "none";
       }
       const m = e.touches[0].clientY - d0.y0;                 // 不擋瀏覽器自己的捲動（passive）
-      d0.dy = d0.half ? (m < -d0.b ? -d0.b - Math.sqrt(-d0.b - m) * 3 : m) : Math.max(0, m);   // 拉過頂有一點阻力
+      d0.dy = Math.max(0, m);
       P.style.transform = `translateY(${(d0.b + d0.dy).toFixed(1)}px)`;
     }, {passive:true});
     const done = () => {
       if (!d0) return; const q = d0; d0 = null; if (!q.on) return;
       const v = q.dy / Math.max(1, performance.now() - q.t);
-      if (q.half && (q.dy < -q.b * .2 || v < -.4)) { P.style.transition = ""; el.classList.add("full"); P.style.transform = ""; return; }   // 往上推：撐滿（CSS 從手指的位置接著滑上去）
       P.style.transition = ""; P.style.transform = "";
-      if (q.dy > P.clientHeight * .22 || v > .6) { if (P === inf && el.classList.contains("full")) el.classList.remove("full"); else setInfo(false); }
+      if (q.dy > P.clientHeight * .22 || v > .6) setInfo(false);
       else if (anim()) P.animate([{transform:`translateY(${(q.b + q.dy).toFixed(1)}px)`}, {transform:`translateY(${q.b}px)`}], {duration:T.mid, easing:DEC});
     };
     P.addEventListener("touchend", done); P.addEventListener("touchcancel", done);
