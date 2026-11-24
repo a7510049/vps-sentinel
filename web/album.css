@@ -54,7 +54,7 @@ svg{display:block}
 .hero .cv{transition:opacity var(--t-long) var(--ease)}
 .hero:not(.rdy) .cv{opacity:0}
 .hero:not(.rdy){background:linear-gradient(100deg,var(--s1) 30%,var(--s2) 50%,var(--s1) 70%);background-size:300% 100%;animation:shim 1.4s linear infinite}
-.hero:not(.rdy) .hcap,.hero:not(.rdy) .hcap *,.hero:not(.rdy) .hcap h1::before,.hero:not(.rdy) .hcap h1::after,.hero:not(.rdy) .cue,.hero:not(.rdy) .cv .hi{animation-play-state:paused}
+.hero:not(.rdy) .hcap,.hero:not(.rdy) .hcap *,.hero:not(.rdy) .hcap .hglo,.hero:not(.rdy) .hcap h1::after,.hero:not(.rdy) .cue,.hero:not(.rdy) .cv .hi{animation-play-state:paused}
 /* 封面下緣的霧、極光：封面照片淡入時一起慢慢出來（以前開場一打開就整片在那裡） */
 .hero::before,.hero::after{transition:opacity var(--t-long) var(--ease)}
 .hero:not(.rdy)::before,.hero:not(.rdy)::after{opacity:0}
@@ -967,12 +967,14 @@ html,body{touch-action:pan-x pan-y}
 @keyframes chin{from{transform:translateY(.45em) scale(.94)}to{transform:none}}
 @keyframes chfa{from{opacity:0}to{opacity:1}}
 /* 大標題：後面一團照片顏色的光慢慢呼吸，字每隔幾秒有一道光從左到右掠過（字微微浮起、發光） */
-.hcap h1{position:relative;isolation:isolate}
-.hcap h1::before{content:"";position:absolute;left:50%;top:50%;width:min(130%,900px);height:260%;translate:-50% -56%;z-index:-1;pointer-events:none;border-radius:50%;
+/* 後面那團光是 h1 旁邊自己一個元素（.hglo），不放在 h1 裡面當 z-index:-1 的 ::before：iPhone 上字在動的時候，h1 裡面墊在後面的東西整個畫不出來，字動完光才突然冒出來（5.11 錄影） */
+.htw{position:relative}
+.hcap h1{position:relative;z-index:1}
+.hglo{position:absolute;left:50%;top:50%;width:min(130%,900px);height:260%;translate:-50% -56%;z-index:0;pointer-events:none;border-radius:50%;
   background:radial-gradient(closest-side,color-mix(in oklab,var(--g2) 46%,transparent),color-mix(in oklab,var(--g3) 22%,transparent) 55%,transparent);
   opacity:0}
 /* 開場的動畫等 .rdy 加上去才掛上（不用先暫停再放開：iPhone 上暫停過的動畫常常不會接著跑，等別的東西變了才一下子跳到最後，後面那團光就突然出現） */
-.hero.rdy .hcap h1::before{animation:hglo 1.4s ease-out .5s forwards,hbre 6s ease-in-out 1.9s infinite alternate}
+.hero.rdy .hglo{animation:hglo 1.4s ease-out .5s forwards,hbre 6s ease-in-out 1.9s infinite alternate}
 @keyframes hglo{from{opacity:0;scale:.6}to{opacity:.9;scale:1}}
 @keyframes hbre{from{opacity:.9;scale:1}to{opacity:.55;scale:1.14}}
 /* 字的陰影很糊（30px），掠過時的光暈更大（1.4em）：每個字外面留一圈夠大的空間（padding 加回負的 margin，排版不變），iPhone 把在動的字單獨畫時光暈才不會被切成一個方框 */
@@ -982,7 +984,7 @@ html,body{touch-action:pan-x pan-y}
 .hcap h1::after{background-size:200% 100%;background-image:linear-gradient(90deg,var(--g1),var(--g2),var(--g3),var(--g2),var(--g1));opacity:0}
 .hero.rdy .hcap h1::after{animation:grow var(--t-long) var(--dec) 1.1s both,hbar 4s linear 2s infinite}
 @keyframes hbar{to{background-position:-200% 0}}
-@media (prefers-color-scheme:light){:root:not([data-mode="dark"]) .hcap h1 .ch{--hs:0 1px 24px color-mix(in oklab,var(--bg) 60%,transparent)}:root:not([data-mode="dark"]) .hcap h1::before{mix-blend-mode:multiply}}
+@media (prefers-color-scheme:light){:root:not([data-mode="dark"]) .hcap h1 .ch{--hs:0 1px 24px color-mix(in oklab,var(--bg) 60%,transparent)}}
 .hmeta{animation-delay:1.2s}
 @keyframes kb{0%{transform:scale(1.3)}14%{transform:scale(1.07)}100%{transform:none}}
 
