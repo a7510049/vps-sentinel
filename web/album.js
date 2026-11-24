@@ -2248,7 +2248,7 @@ function openLb(i, from){
       const tx1 = leafText(inf);
       tx1.forEach((v, k) => { if (v.t && (tx0.get(k) || {}).t !== v.t && !v.e.closest("[data-mv]")) v.e.animate([{opacity:.15}, {opacity:1}], {duration:T.mid, easing:DEC}); });
     }
-    [-1, 1].forEach(d => { const q = PH[S.i + d]; if (q && !q.pal && !q.broken) palette(q); });   // 旁邊兩張先算好顏色，換過去不用等
+    clearTimeout(S.palT); S.palT = setTimeout(() => (window.requestIdleCallback || (f => setTimeout(f, 1)))(() => [-1, 1].forEach(d => { const q = PH[S.i + d]; if (q && !q.pal && !q.broken) palette(q); })), T.slow);   // 旁邊兩張先算好顏色，換過去不用等（面板滑出來、手指開始捲之後閒下來才算）
   }
   function leafText(P){                                     // 面板裡每個最底層的字：照位置記下來，換張時比對哪些變了
     const m = new Map(), walk = (e, k) => { const c = [...e.children].filter(x => !(x instanceof SVGElement));
@@ -2527,10 +2527,9 @@ function openLb(i, from){
       if (!d0 || matchMedia("(min-width:900px)").matches) return;
       const dy = e.touches[0].clientY - d0.y;
       if (!d0.on) { if (d0.top && (sc().scrollTop <= 0 || !e.target.closest(".cml,.inf:not(.cmp)")) && dy > 6) { d0.on = true; d0.y0 = e.touches[0].clientY; P.style.transition = "none"; } else return; }
-      e.preventDefault();
-      d0.dy = Math.max(0, e.touches[0].clientY - d0.y0);
+      d0.dy = Math.max(0, e.touches[0].clientY - d0.y0);     // 不擋瀏覽器自己的捲動（passive）：捲到最上面往下拉本來就不會捲，畫面忙的時候往上滑也不會被卡住
       P.style.transform = `translateY(${d0.dy}px)`;
-    }, {passive:false});
+    }, {passive:true});
     const done = () => {
       if (!d0) return; const q = d0; d0 = null; if (!q.on) return;
       P.style.transition = ""; P.style.transform = "";
