@@ -15,7 +15,7 @@ ALB_EXT2 = {".hif"} | PIC_RAW                                       # 只在雲�
 ALB_HEIF = {".heic", ".heif", ".hif", ".avif"}
 ALB_VV = 2                                                        # 影片轉檔的做法版本：轉不出來的影片換新做法後再試一次
 ALB_XL = 3840                                                     # 大螢幕看大圖的清晰版：長邊幾點（有人在大螢幕打開才做）
-ALB_MV = 7                                                        # 照片資訊的格式版本（舊的重讀一次：色彩空間、HDR、原始檔）
+ALB_MV = 8                                                        # 照片資訊的格式版本（舊的重讀一次：色彩空間、HDR、原始檔）
 ALB_SHOW = {".jpg", ".jpeg", ".png", ".webp", ".gif", ".avif"}    # 做不出小圖時，瀏覽器直接看得了原圖的
 ALB_VID = {".mp4", ".mov", ".m4v", ".webm", ".3gp", ".mkv"}        # 影片（主機轉成 720p 的 H.264 給朋友看）
 ALB_AUD = {".mp3", ".m4a", ".aac", ".ogg", ".opus", ".flac", ".wav"}   # 資料夾裡放一首歌：幻燈片的背景音樂
@@ -1025,7 +1025,7 @@ def alb_find(code):
 EXIF_T = {0x010F: "mk", 0x0110: "md", 0x0112: "ori", 0x0131: "sw", 0x0132: "dt0", 0x829A: "et", 0x829D: "f", 0x8822: "ep",
           0x8827: "iso", 0x9003: "dt", 0x9011: "oz", 0x9010: "oz0", 0x9204: "ev", 0x9207: "mm", 0x9209: "fla", 0x920A: "fl",
           0xA405: "f35", 0xA402: "em", 0xA403: "wb", 0xA432: "lsp", 0xA433: "lmk", 0xA434: "ln", 0xA406: "sc", 0xA002: "pw", 0xA003: "ph",
-          0x9214: "sa", 0x9206: "sd", 0xA20E: "fpx", 0xA20F: "fpy", 0xA210: "fpu"}
+          0x9214: "sa", 0x9206: "sd", 0xA20E: "fpx", 0xA20F: "fpy", 0xA210: "fpu", 0x9286: "uc"}
 GPS_T = {1: "latr", 2: "lat", 3: "lonr", 4: "lon", 5: "altr", 6: "alt", 7: "gts", 0x10: "dirr", 0x11: "dir", 0x1D: "gds"}
 TIFF_SZ = {1: 1, 2: 1, 3: 2, 4: 4, 5: 8, 6: 1, 7: 1, 8: 2, 9: 4, 10: 8, 11: 4, 12: 8}
 
@@ -1205,6 +1205,9 @@ def alb_exif_tidy(t):
     for k in ("mk", "md", "sw", "lmk", "ln"):
         if isinstance(t.get(k), str) and t[k]:
             x[k] = t[k][:80]
+    uc = t.get("uc")                                   # iPhone 的螢幕截圖：使用者註解寫「Screenshot」
+    if isinstance(uc, list) and b"screenshot" in bytes(v & 255 for v in uc[:64] if isinstance(v, int)).lower():
+        x["ss"] = 1
     dt = t.get("dt") or t.get("dt0")
     if isinstance(dt, str) and re.match(r"\d{4}:\d\d:\d\d \d\d:\d\d", dt):
         x["dt"] = dt[:19]
@@ -2815,6 +2818,18 @@ def alb_page(h=None, code=""):
     return page.replace("<!--@og-->\n", og).replace("/*@album.css*/", css).replace("/*@album.js*/", js)
 
 
+# 截圖的檔名：安卓、小米／華為、Windows、Mac、iPhone 存出來的（大小寫不分）
+ALB_SSN = re.compile(r"^(screenshot|screen ?shot|screen capture|scr_|螢幕擷取畫面|螢幕快照|螢幕截圖|屏幕截图|屏幕快照|截圖|截图|截屏|スクリーンショット)", re.I)
+
+
+def alb_other(m):
+    """不是相機拍的：截圖，或沒有相機型號也沒有拍攝時間（網路圖片、聊天軟體存下來的）"""
+    if m.get("vid"):
+        return False
+    x = m.get("x") or {}
+    return bool(x.get("ss") or ALB_SSN.match(os.path.basename(m["n"])) or not (x.get("mk") or x.get("md") or x.get("dt")))
+
+
 def alb_manifest(a, th=""):
     idx = alb_index(a)
     talk = alb_talk_of(a, th) if a.get("talk", True) else {}
@@ -2865,8 +2880,10 @@ def alb_manifest(a, th=""):
             it["ub"] = u["n"]
             if th and u.get("by") == th:
                 it["um"] = 1
-        if not it["x"].get("dt"):
-            it["x"] = {**it["x"], "dt": time.strftime("%Y:%m:%d %H:%M:%S", time.localtime(m["mt"])), "dtf": 1}
+        if alb_other(m):                               # 截圖、網路圖片：收在最後的「其他圖片」，不算進每天、統計、回憶
+            it["o"] = 1
+        if not it["x"].get("dt") or it.get("o"):
+            it["x"] = {**it["x"], "dt": it["x"].get("dt") or time.strftime("%Y:%m:%d %H:%M:%S", time.localtime(m["mt"])), "dtf": 1}
         if a["loc"] and m.get("g") and not alb_up_who(m["n"]):   # 朋友放的照片不給別人看到他的定位
             it["g"] = m["g"]
             pl = alb_place(m["g"][0], m["g"][1])
@@ -2878,6 +2895,7 @@ def alb_manifest(a, th=""):
                 places[c] = places.get(c, 0) + 1
         out.append(it)
     out = alb_clock(out)
+    out.sort(key=lambda it: it.get("o", 0))           # 其他圖片排在最後（其他照原本的順序）
     wx, wx_miss = {}, False
     if a["loc"]:
         for day, g in alb_wx_days(a, idx).items():
@@ -2970,7 +2988,7 @@ def alb_clock(out):
             it["x"] = nx
             moved = True
     if moved:
-        out.sort(key=lambda it: (it["x"].get("dt") or "", it["n"].lower()))
+        out.sort(key=lambda it: (it.get("o", 0), it["x"].get("dt") or "", it["n"].lower()))
     return out
 
 
