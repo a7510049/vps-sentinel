@@ -961,8 +961,10 @@ html,body{touch-action:pan-x pan-y}
 /* ── 參考 Exposure、Pic-Time、Glass、Polarsteps 加的 ── */
 /* 開場片頭：封面從放大慢慢退回來，相簿名稱一個字一個字浮出 */
 .hcap h1{opacity:1;animation:none}
-.hcap h1 .ch{display:inline-block;opacity:0;animation:chin 1.1s var(--dec) calc(.4s + var(--i) * .08s) forwards}
-@keyframes chin{from{opacity:0;transform:translateY(.4em);filter:blur(10px)}to{opacity:1;transform:none;filter:none}}
+/* 相簿名稱一個字一個字浮出：透明度用前後都慢的曲線（以前跟著 --dec，第一成時間就到七成，iPhone 上看起來是直接跳出來） */
+.hcap h1 .ch{display:inline-block;opacity:0;animation:chin 1.4s ease-out calc(.4s + var(--i) * .1s) forwards,chfa 1.2s ease-in-out calc(.4s + var(--i) * .1s) forwards}
+@keyframes chin{from{transform:translateY(.4em);filter:blur(10px)}to{transform:none;filter:none}}
+@keyframes chfa{from{opacity:0}to{opacity:1}}
 /* 大標題：後面一團照片顏色的光慢慢呼吸，字每隔幾秒有一道光從左到右掠過（字微微浮起、發光） */
 .hcap h1{position:relative;isolation:isolate}
 .hcap h1::before{content:"";position:absolute;left:50%;top:50%;width:min(130%,900px);height:260%;translate:-50% -56%;z-index:-1;pointer-events:none;border-radius:50%;
@@ -972,7 +974,7 @@ html,body{touch-action:pan-x pan-y}
 @keyframes hbre{from{opacity:.9;scale:1}to{opacity:.55;scale:1.14}}
 /* 字的陰影很糊（30px）：每個字外面留一圈空間（padding 加回負的 margin，排版不變），iPhone 把在動的字單獨畫時陰影才不會被切成一個方框 */
 .hcap h1 .ch{padding:.4em .3em;margin:-.4em -.3em}
-.hcap h1 .ch{--hs:0 2px 30px rgba(0,0,0,.35);animation:chin 1.1s var(--dec) calc(.4s + var(--i) * .08s) forwards,chw 7s var(--ease) calc(2.6s + var(--i) * .07s) infinite}
+.hcap h1 .ch{--hs:0 2px 30px rgba(0,0,0,.35);animation:chin 1.4s ease-out calc(.4s + var(--i) * .1s) forwards,chfa 1.2s ease-in-out calc(.4s + var(--i) * .1s) forwards,chw 7s var(--ease) calc(2.6s + var(--i) * .07s) infinite}
 @keyframes chw{0%,16%,100%{transform:none;text-shadow:var(--hs)}7%{transform:translateY(-.12em) scale(1.04);text-shadow:var(--hs),0 0 .3em rgba(255,255,255,.75),0 0 .7em color-mix(in oklab,var(--g1) 95%,transparent),0 0 1.4em color-mix(in oklab,var(--g3) 85%,transparent)}}
 .hcap h1::after{background-size:200% 100%;background-image:linear-gradient(90deg,var(--g1),var(--g2),var(--g3),var(--g2),var(--g1));animation:grow var(--t-long) var(--dec) 1.1s both,hbar 4s linear 2s infinite}
 @keyframes hbar{to{background-position:-200% 0}}
