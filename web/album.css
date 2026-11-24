@@ -872,6 +872,7 @@ html,body{touch-action:pan-x pan-y}
 .st .sgb{display:flex;align-items:flex-end;gap:3px;height:18px;margin-top:6px}
 .st .sgb button{position:relative;flex:none;width:6px;padding:0;border-radius:var(--r-xs) var(--r-xs) 0 0;background:var(--grad);background-size:100% 18px;background-position:bottom;opacity:.55;cursor:pointer;transition:opacity var(--t-fast) var(--ease)}
 .st .sgb button::before{content:"";position:absolute;inset:-12px -2px -10px}   /* 長條很細：按的範圍放大一點 */
+.st .sgb>i{flex:none;width:6px;border-radius:var(--r-xs) var(--r-xs) 0 0;background:var(--line)}
 .st .sgb button.on,.st .sgb:not(:has(.on)) button{opacity:1}
 .st .sgd{display:block;margin-top:4px;font-size:var(--fs-xs);color:var(--tx3);white-space:nowrap}
 .st .sgf{display:flex;margin-top:6px}

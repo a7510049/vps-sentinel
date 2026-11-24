@@ -850,8 +850,16 @@ function stats(){
   const per = {}; PS.forEach(p => { const d = pd(p.x.dt); if (d) per[d.k] = (per[d.k] || 0) + 1; });
   const ks = Object.keys(per).sort(), mx = Math.max(1, ...Object.values(per));
   const md = k => `${+k.slice(4, 6)}/${+k.slice(6, 8)}`, vt = PS.filter(isVid).reduce((a, p) => a + (p.vd || 0), 0);
-  const gfx = t => t === "天" && ks.length > 1 && ks.length <= 40   // 每天幾張的小長條：兩頭寫起訖日期，指著或點一根寫那天幾張、點了跳到那天
-      ? `<span class="sgb">${ks.map(k => `<button data-sday="${k}" data-n="${per[k]}" aria-label="${md(k)} ${per[k]} 張" style="height:${Math.round(4 + per[k] / mx * 14)}px"></button>`).join("")}</span><span class="sgd num" data-sgd="${md(ks[0])}–${md(ks[ks.length - 1])}">${md(ks[0])}–${md(ks[ks.length - 1])}</span>`
+  /* 每天幾張的小長條：最多 10 根，天數多時一根代表連續幾天（照日曆分段，中間沒拍的那段留一根很矮的） */
+  const kd = k => Date.UTC(+k.slice(0, 4), +k.slice(4, 6) - 1, +k.slice(6, 8)) / 864e5, d0 = ks.length ? kd(ks[0]) : 0, span = ks.length ? kd(ks[ks.length - 1]) - d0 + 1 : 0;
+  const sz = ks.length <= 10 ? 0 : Math.ceil(span / 10), bins = [];
+  ks.forEach(k => { const j = sz ? Math.floor((kd(k) - d0) / sz) : bins.length; (bins[j] = bins[j] || {ks:[], n:0}).ks.push(k); bins[j].n += per[k]; });
+  const bx = Math.max(1, ...bins.filter(Boolean).map(b => b.n));
+  const bar = (b, j) => { if (!b) return `<i style="height:2px"></i>`;   // 這幾天沒拍
+    const t = b.ks.length > 1 ? `${md(b.ks[0])}–${md(b.ks[b.ks.length - 1])}・${b.n} 張` : `${md(b.ks[0])}・${b.n} 張`;
+    return `<button data-sday="${b.ks[0]}" data-t="${t}" aria-label="${t}" style="height:${Math.round(4 + b.n / bx * 14)}px"></button>`; };
+  const gfx = t => t === "天" && ks.length > 1   // 兩頭寫起訖日期，指著或點一根寫那幾天幾張、點了跳過去
+      ? `<span class="sgb">${Array.from({length:sz ? Math.ceil(span / sz) : bins.length}, (_, j) => bar(bins[j], j)).join("")}</span><span class="sgd num" data-sgd="${md(ks[0])}–${md(ks[ks.length - 1])}">${md(ks[0])}–${md(ks[ks.length - 1])}</span>`
     : t === "個地區" ? `<span class="sgf" aria-hidden="true">${[...cc].slice(0, 5).map(flagImg).join("")}</span>`   // 去過的地區疊成一排旗子
     : t === "段影片" && vt >= 1 ? `<span class="sgd num">共 ${((t, h, m) => h ? `${h} 小時${m ? ` ${m} 分` : ""}` : m ? `${m} 分${t % 60 ? ` ${t % 60} 秒` : ""}` : `${t} 秒`)(Math.round(vt), Math.floor(vt / 3600), Math.floor(vt % 3600 / 60))}</span>` : "";   // 影片加起來多長
   box.innerHTML = it.map(([n, t]) => `<div class="st"><b class="num" data-n="${n}">${n}</b><small>${t}</small>${gfx(t)}</div>`).join("")
@@ -873,7 +881,7 @@ function stats(){
 function sdayTip(b){
   const box = b && b.closest(".st"), d = box && box.querySelector("[data-sgd]"); if (!d) return;
   box.querySelectorAll("[data-sday]").forEach(x => x.classList.toggle("on", x === b));
-  d.textContent = b && b.dataset.sday ? `${+b.dataset.sday.slice(4, 6)}/${+b.dataset.sday.slice(6, 8)}・${b.dataset.n} 張` : d.dataset.sgd;
+  d.textContent = b && b.dataset.t ? b.dataset.t : d.dataset.sgd;
 }
 function sdayOff(box){ const d = box.querySelector("[data-sgd]"); if (!d) return; box.querySelectorAll("[data-sday].on").forEach(x => x.classList.remove("on")); d.textContent = d.dataset.sgd; }
 function sdayGo(b){                                           // 手機：第一下寫那天幾張，同一根再點一下才跳過去
