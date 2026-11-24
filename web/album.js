@@ -236,6 +236,7 @@ const SPLT = 5;                                               // 開場要等的
 function splStep(){                                           // 進度線往前一格
   const b = document.querySelector("#spl .spb i"); SPLN = Math.min(SPLT, SPLN + 1);
   if (b) b.style.transform = `scaleX(${SPLN / SPLT})`;
+  const s = document.getElementById("spl"); if (s) s.style.setProperty("--spk", (.25 + .75 * SPLN / SPLT).toFixed(2));   // 後面的光跟著進度亮起來
 }
 function afterSpl(fn){                                        // 畫面外的東西等開場跑完、閒下來才做，不跟開場動畫搶
   const go = () => (window.requestIdleCallback ? requestIdleCallback(fn, {timeout:600}) : setTimeout(fn, 60));
@@ -1940,8 +1941,16 @@ function openLb(i, from){
     im.src = src(p, "x");                                     // 先在背景解碼好才換上，換的那一下不卡
     (im.decode ? im.decode() : new Promise(r => { im.onload = r; })).then(() => { const b = zw.querySelector(".s2"); if (b && zw.dataset.i === String(i0) && im.naturalWidth > b.naturalWidth) { b.removeAttribute("data-src"); b.src = im.src; (b.decode ? b.decode() : Promise.resolve()).then(() => b.classList.add("ok"), () => {}); } }).catch(() => {});
   }
-  S.fitAll = () => { const zw = cur(); zw.style.transition = `left ${T.mid}ms ${EASE},top ${T.mid}ms ${EASE},width ${T.mid}ms ${EASE},height ${T.mid}ms ${EASE}`;
-    setZoom(1, 0, 0); setAll(); setTimeout(() => { zw.style.transition = ""; }, T.mid + 30); };
+  /* 畫面大小變了（開關資訊、轉向）：照片從原本在螢幕上的位置、大小直接縮放過去（只動 transform）；
+     以前是改 left/top/width/height 慢慢變，但外框（stage）是一下子變大的，照片會先跳到上面再彈回來 */
+  S.fitAll = r0 => { const zw = cur(); if (!r0) r0 = zw.getBoundingClientRect();
+    zw.getAnimations().forEach(a => { if (a.id === "fit") a.cancel(); });
+    setZoom(1, 0, 0); setAll();
+    const r1 = zw.getBoundingClientRect();
+    if (!anim() || !r1.width || !r0.width || (Math.abs(r0.left - r1.left) < .5 && Math.abs(r0.top - r1.top) < .5 && Math.abs(r0.width - r1.width) < .5)) return;
+    const k = r0.width / r1.width;
+    zw.animate([{transformOrigin:"0 0", transform:`translate(${(r0.left - r1.left).toFixed(1)}px,${(r0.top - r1.top).toFixed(1)}px) scale(${k.toFixed(4)})`}, {transformOrigin:"0 0", transform:"none"}], {duration:T.mid, easing:EASE, id:"fit"});
+  };
   const cur = () => sl[1].firstChild;
   const ZMAX = 6;
   function setZoom(s, x, y){ if (s > 1.2 && (!S.z || S.z.s <= 1.2)) xlSoon(); S.z = {s, x, y}; cur().style.transform = s === 1 && !x && !y ? "" : `translate(${x}px,${y}px) scale(${s})`; }
@@ -2042,7 +2051,15 @@ function openLb(i, from){
     $("[data-lv]", el).classList.toggle("show", !!p.lv && !p.gf);
     social(); vSync();
     const tb = $(".ttl b", el), ts = $(".ttl small", el), t1 = p.o ? "其他圖片" : d ? `${YR ? d.y + "年" : ""}${d.mo}月${d.d}日 星期${WD[d.wd]}` : "", t2 = p.o || !d ? "" : p.x.dtf ? "檔案時間" : ftod(p, d);   // 上面中間：日期、時間（學 iOS／Google，取代張數）
-    if (tb.textContent !== t1 || ts.textContent !== t2) { tb.textContent = t1; ts.textContent = t2; if (moved && was && anim()) $(".ttl", el).animate([{opacity:.2}, {opacity:1}], {duration:T.mid, easing:DEC}); }
+    [[tb, t1, 1], [ts, t2, 2]].forEach(([e, t, row]) => {       // 日期、時間：變了的那行舊字往滑走的方向淡出、新字從另一邊滑進來（沒變的那行不動）
+      if (e.textContent === t) return;
+      const go = moved && was && dir && anim(), w = e.parentNode;
+      w.querySelectorAll(`.tgh[data-r="${row}"]`).forEach(g => g.remove());
+      if (go && e.textContent) { const g = e.cloneNode(true); g.classList.add("tgh"); g.dataset.r = row; g.setAttribute("aria-hidden", "true"); g.style.gridArea = `${row}/1`; w.appendChild(g);
+        g.animate([{opacity:1, translate:"0 0"}, {opacity:0, translate:`${-dir * 18}px 0`}], {duration:T.fast, easing:EXIT, fill:"forwards"}).onfinish = () => g.remove(); }
+      e.textContent = t; e.style.gridArea = `${row}/1`;
+      if (go && t) e.animate([{opacity:0, translate:`${dir * 18}px 0`}, {opacity:1, translate:"0 0"}], {duration:T.mid, delay:T.fast * .4, easing:DEC, fill:"backwards"});
+    });
     const cam = camName(p.x);
     $(".cap b", el).textContent = p.o ? "" : p.p ? p.p.n : "";   // 下面只寫地點（日期已經在上面）
     capSet($(".cap span", el), capLine(p), cam);
@@ -2226,6 +2243,7 @@ function openLb(i, from){
     kind = on ? kind || "info" : "";
     const was = S.info;
     if (was === kind) return;
+    const r0 = cur().getBoundingClientRect();                  // 開關前照片在螢幕上的位置（含放大），等一下從這裡縮放過去
     S.info = kind || false; el.classList.toggle("info", !!kind); el.classList.toggle("cmo", kind === "cm");
     $("[data-inf]", el).classList.toggle("on", kind === "info");
     const cb = $("[data-cm]", el); if (cb) cb.classList.toggle("on", kind === "cm");
@@ -2235,7 +2253,7 @@ function openLb(i, from){
     if (!!was === !!kind) return;                              // 資訊換留言：畫面大小不變，照片不動
     [sl[0], sl[2]].forEach(s => { s.style.visibility = "hidden"; });   // 電腦上畫面變窄時，旁邊那張會被排到看得到的地方：換位置的這段先藏起來
     clearTimeout(S.infT); S.infT = setTimeout(() => sl.forEach(s => { s.style.visibility = ""; }), T.mid + 60);
-    S.fitAll();
+    S.fitAll(r0);
   }
   /* 面板裡某一塊變高變矮（換張時多一行、少一格，或顏色、色域算好晚一點才出來）：那塊慢慢伸縮、下面的跟著滑，不會一下子上下跳 */
   function infFlip(fn, on){
@@ -2264,11 +2282,11 @@ function openLb(i, from){
   }
   function infSet(p, dir, q){
     const y = inf.scrollTop, om = inf.querySelector(".imap"), old = om && om._c ? {c:om._c, t:[...om.querySelectorAll(".tl.ok")]} : null;
-    const kl = inf.querySelector(".kbar i"), k0 = kl ? kl.style.left : "", tx0 = dir ? leafText(inf) : null;
+    const kl = inf.querySelector(".kbar i"), k0 = kl ? kl.style.left : "", tx0 = dir ? leafText(inf) : null, zk = inf.querySelector(".izr .zk"), z0 = zk ? zk.style.left : "";
     S.pb0 = dir ? [...inf.querySelectorAll(".pbar i")].map(i => [i.getBoundingClientRect().width, getComputedStyle(i).backgroundColor]) : null;
     infFlip(() => { inf.innerHTML = infoHTML(p); inf.scrollTop = y; }, dir);   // 換張時停在原本看的地方
     infoMap(old, !!dir);
-    const mv = dir && q && q !== p && anim() ? morph(q, p, k0) : null;
+    const mv = dir && q && q !== p && anim() ? morph(q, p, k0, z0) : null;
     if (tx0 && anim()) {                                         // 換張時只有變了的字淡入換上，其他不動（使用者說不要整塊抖一下）
       const tx1 = leafText(inf);
       tx1.forEach((v, k) => { if (v.t && (tx0.get(k) || {}).t !== v.t && !v.e.closest("[data-mv]")) v.e.animate([{opacity:.15}, {opacity:1}], {duration:T.mid, easing:DEC}); });
@@ -2289,7 +2307,7 @@ function openLb(i, from){
     if (!anim()) return;
     [...P.children].slice(0, 8).filter(c => !(keep && keep.has(c))).forEach((c, k) => c.animate([{opacity:.25, transform:`translateX(${dir * 22}px)`}, {opacity:1, transform:"none"}], {duration:T.mid, delay:k * 40, easing:DEC, fill:"backwards"}));
   }
-  function morph(q, p, k0){                                  // 換張時光圈、快門、ISO、焦距、曝光、拍攝時間、色溫從上一張的數值轉到這一張（葉片收放、指針轉、數字跟著跳）
+  function morph(q, p, k0, z0){                                  // 換張時光圈、快門、ISO、焦距、曝光、拍攝時間、色溫從上一張的數值轉到這一張（葉片收放、指針轉、數字跟著跳）
     const a = q.x || {}, b = p.x || {}, keep = new Set(), done = new Set(), jobs = [];
     const box = c => c.closest(".ibox");
     const add = (cell, v0, v1, svg, txt, log) => {
@@ -2323,6 +2341,8 @@ function openLb(i, from){
     }
     const kl = inf.querySelector(".kbar i");
     if (kl && k0 && k0 !== kl.style.left) kl.animate([{left:k0}, {left:kl.style.left}], {duration:T.slow, easing:DEC});
+    const zk = inf.querySelector(".izr .zk"), zf = inf.querySelector(".izr .zf");   // 變焦範圍：圓點、填色從上一張的焦距滑過去
+    if (zk && zf && z0 && z0 !== zk.style.left) { const o = {duration:T.slow, easing:DEC}; zk.animate([{left:z0}, {left:zk.style.left}], o); zf.animate([{width:z0}, {width:zf.style.width}], o); keep.add(box(zk)); }
     if (!jobs.length) return keep;
     const t0 = performance.now(), run = now => {
       if (LB !== S || !inf.isConnected || PH[S.i] !== p) return;
