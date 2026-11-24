@@ -975,7 +975,7 @@ function draw(){
   const pl = (D.places || []).slice(0, 3).join("・");
   $("#app").innerHTML = `
     <header class="hero"><div class="cv">${cover.q ? `<img class="lq" alt="" src="data:image/jpeg;base64,${cover.q}">` : ""}<img class="hi" alt="" src="${src(cover, "l")}"></div>
-      <div class="hcap">${a ? `<div class="eyebrow num">${esc(frange(a, b))}</div>` : ""}<h1 style="--n:${[...D.name].length}">${[...D.name].map((c, k) => c === " " ? " " : `<span class="ch" style="--i:${k}">${esc(c)}</span>`).join("")}</h1>
+      <div class="hcap">${a ? `<div class="eyebrow num">${esc(frange(a, b))}</div>` : ""}<div class="htw"><i class="hglo" aria-hidden="true"></i><h1 style="--n:${[...D.name].length}">${[...D.name].map((c, k) => c === " " ? " " : `<span class="ch" style="--i:${k}">${esc(c)}</span>`).join("")}</h1></div>
         <div class="hmeta"><button class="chip go" data-ss>${I("play")}<span>播放</span></button>${FIND ? `<button class="chip" data-find aria-label="搜尋">${I("find")}<span>搜尋</span></button>` : ""}${pl ? `<span class="chip" data-pl>${heroFlags() || I("pin")}<span>${esc(pl)}</span></span>` : ""}
         ${D.dl ? `<button class="chip" data-sel>${I("dl")}<span>下載</span></button>` : ""}${D.up ? `<button class="chip" data-up>${I("up")}<span>放照片</span></button>` : ""}</div></div>
       <button class="cue" aria-label="往下看"><i></i></button></header>
@@ -2354,7 +2354,7 @@ function openLb(i, from){
       if (P0.some((v, k) => Math.abs(v - P1[k]) > .05)) { const sv = dc.querySelector("svg");
         jobs.push(t => { const n = document.createRange().createContextualFragment(gDof(d1, P0.map((v, k) => v + (P1[k] - v) * t))).firstChild; sv.replaceChildren(...n.childNodes); });
         keep.add(box(dc)); } }
-    const da = pd(a.dt), db = pd(b.dt), sn = inf.querySelector(".ihd .gsun");
+    const da = pd(a.dt), db = pd(b.dt), sn = inf.querySelector(".icam .gsun");
     if (da && db && da.h != null && db.h != null && sn && !a.dtf && !b.dtf) {
       const h0 = da.h + da.mi / 60, h1 = db.h + db.mi / 60;
       if (h0 !== h1) jobs.push(t => { const h = h0 + (h1 - h0) * t, n = document.createRange().createContextualFragment(gSun({h:Math.floor(h), mi:(h % 1) * 60})).firstChild; sn.replaceChildren(...n.childNodes); sn.setAttribute("class", n.getAttribute("class")); });
@@ -2484,8 +2484,9 @@ function openLb(i, from){
     setZoom(s, x, y);
     if (anim()) zw.animate([{transform:from}, {transform:zw.style.transform || "none"}], {duration:T.mid, easing:EASE});
   }
-  const zClip = (s, x, y) => {                               // 這個大小時照片該在的位置：比畫面小就置中，比畫面大就不露出旁邊的空白
-    const f = L(), cl = (v, sz, box, off) => { const span = sz * s; if (span <= box) return (box - span) / 2 - off; return Math.min(-off, Math.max(box - off - span, v)); };
+  /* 這個大小時照片該在的位置：比畫面小就以原本的中心為準（直的照片原本讓出上下的字，不在整個畫面正中間；以前照畫面置中，縮回原本大小最後一下會跳），比畫面大就不露出旁邊的空白 */
+  const zClip = (s, x, y) => {
+    const f = L(), cl = (v, sz, box, off) => { const span = sz * s; if (span <= box) return Math.min(box - off - span, Math.max(-off, sz * (1 - s) / 2)); return Math.min(-off, Math.max(box - off - span, v)); };
     return [cl(x, f.w, W(), f.l), cl(y, f.h, H(), f.t)];
   };
   function clampZoom(){
@@ -3752,7 +3753,7 @@ function infoHTML(p){
   const x = p.x, d = pd(x.dt), cam = camName(x), lens = lensName(x), ext = (p.n.split(".").pop() || "").toUpperCase().replace("JPG", "JPEG");
   const mp = p.w * p.h / 1e6, f35 = x.f35 || 0, fl = x.fl || 0;
   let hm = "", h = "";   // 照片資訊的順序（學 iOS／Google）：相機那張摘要先、再來地圖、拍攝時間（手機上先開一半時看得到前兩塊）
-  const hd = d && !p.o && !x.dtf && d.h != null ? `<div class="ihd"><div><div class="itm num">太陽位置${x.oz ? `・UTC${x.oz.replace(":00", "")}` : ""}</div></div>${gSun(d)}</div>` : "";      // 日期時間已經寫在最上面，這裡不重寫
+  const hd = d && !p.o && !x.dtf && d.h != null ? gSun(d) : "";   // 太陽位置只放圖、在相機名稱那一排右邊（使用者說字太多；以前自己一排「太陽位置・UTC+08」，在卡片外面）      // 日期時間已經寫在最上面，這裡不重寫
   if (p.g) {
     const [lat, lon, alt, dir] = p.g, nm = p.p ? p.p.n : "拍攝地點", sub = p.p && p.p.a ? p.p.a : `${lat.toFixed(5)}, ${lon.toFixed(5)}`;
     hm += `<div class="ibox"><a class="imap" href="${mapUrl(lat, lon, nm, p.p && p.p.cc)}"${mapTgt(p.p && p.p.cc)} aria-label="在地圖上打開">${dir != null ? `<span class="cone" style="transform:rotate(${dir}deg)"></span>` : ""}<span class="pin"></span><span class="attr">© OpenStreetMap</span></a>
@@ -3763,12 +3764,12 @@ function infoHTML(p){
   const zh = zr ? `<div class="izr num" aria-label="變焦範圍 ${+zr[0]}–${+zr[1]} mm，這張 ${+x.fl.toFixed(1)} mm"><small>${+zr[0]}</small><span class="zt"><i class="zf" style="width:${(zp * 100).toFixed(1)}%"></i><i class="zk" style="left:${(zp * 100).toFixed(1)}%"></i></span><small>${+zr[1]} mm</small></div>` : "";
   const cells = [["光圈", x.f ? `ƒ${+x.f.toFixed(2)}` : manLens(x) ? "手動" : "", x.f ? gIris(x.f) : "", "f"], ["快門", shutter(x.et).replace(" 秒", " s"), x.et ? gShut(x.et) : "", "et"],
     ["ISO", x.iso || "", x.iso ? gIso(x.iso) : "", "iso"], ["焦距", fe ? `${fe} mm` : "", f35 ? gFov(f35) : "", "fl"], ["曝光", x.ev != null ? `${x.ev > 0 ? "+" : ""}${+x.ev.toFixed(1)} ev` : "", x.ev != null ? gEv(x.ev) : "", "ev"]];
-  h += `<div class="ibox"><div class="icam"><div class="t">${cam && !isVid(p) ? `<button class="igear" data-gear="c:${esc(cam)}">${brandSvg(x)}<b>${esc(brandSvg(x) ? cam.replace(new RegExp("^" + (MKS[(x.mk || "").toLowerCase()] || x.mk || "").replace(/[.*+?^${}()|[\]\\]/g, "\\$&") + "[\\s_]+", "i"), "") : cam)}</b>${I("r")}</button>` : `<b>${esc(cam || (isVid(p) ? "影片" : "相機資訊"))}</b>`}</div>
+  h += `<div class="ibox"><div class="icam"><div class="t">${cam && !isVid(p) ? `<button class="igear" data-gear="c:${esc(cam)}">${brandSvg(x)}<b>${esc(brandSvg(x) ? cam.replace(new RegExp("^" + (MKS[(x.mk || "").toLowerCase()] || x.mk || "").replace(/[.*+?^${}()|[\]\\]/g, "\\$&") + "[\\s_]+", "i"), "") : cam)}</b>${I("r")}</button>` : `<b>${esc(cam || (isVid(p) ? "影片" : "相機資訊"))}</b>`}${hd}</div>
       ${appleLens(x) || phoneLens(x) ? `<div class="l"><button class="igear sm" data-gear="l:${esc(lens)}">${esc(lens)}</button>${f35 ? `・${f35} mm` : ""}</div>`
         : lens || f35 ? `<div class="l">${esc(f35 ? `${lensKind(f35)}・等效${x.f35e ? "約" : ""} ${f35} mm` : "")}${lens ? `${f35 ? "　" : ""}<button class="igear sm" data-gear="l:${esc(lens)}">${esc(lens)}</button>` : ""}</div>` : ""}${zh}
       <div class="l2 num">${p.w && p.h ? `<i class="gar" style="aspect-ratio:${p.w} / ${p.h}"></i>` : ""}<span>${isVid(p) ? `影片 ${dur(p.vd)}・${x.fps ? `${+x.fps.toFixed(2)} fps・` : ""}${x.vb ? `${x.vb >= 10 ? Math.round(x.vb) : x.vb} Mbps・` : ""}` : mp >= .1 ? `${mp >= 10 ? Math.round(mp) : mp.toFixed(1)} MP・` : ""}${p.w} × ${p.h}・${size(p.sz)}</span><span class="tgs"><span class="tag">${esc(ext)}</span>${p.rw && p.rw !== ext ? `<span class="tag">+${esc(p.rw)}</span>` : ""}${p.cs ? `<span class="tag">${esc(p.cs.replace("Display ", ""))}</span>` : ""}${p.hdr && !isVid(p) ? `<span class="tag hdr">HDR</span>` : ""}${isVid(p) && x.vc ? `<span class="tag">${esc(x.vc)}</span>` : ""}${isVid(p) && (x.gm || p.hdr) ? `<span class="tag hdr">${esc(x.gm || (p.hdr === "pq" ? "HDR PQ" : "HLG"))}</span>` : ""}</span></div></div>
     ${cells.some(c => c[1]) ? `<div class="iex num">${cells.map(([k, v, g, gk]) => `<div data-gk="${gk}"${v ? "" : ` class="no"`}>${g || SV(`<circle cx="16" cy="16" r="12" class="gt"/>`)}<b>${esc(v || "—")}</b><small>${k}</small></div>`).join("")}</div>` : ""}</div>`;
-  h += hm + hd;
+  h += hm;
   const ms = x.ms;
   if (ms && (ms.st || ms.lut || ms.k || ms.ws)) {
     const mono = /單色|ACROS|黑白|棕褐/.test(ms.st || ""), kp = ms.k ? Math.max(0, Math.min(100, (Math.log(ms.k) - Math.log(2000)) / (Math.log(12000) - Math.log(2000)) * 100)) : 0;
