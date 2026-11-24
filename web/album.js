@@ -88,7 +88,8 @@ const size = n => n >= 1e9 ? (n / 1e9).toFixed(1) + " GB" : n >= 1e6 ? (n / 1e6)
 /* ── 相機資訊 ── */
 const MKS = {apple:"Apple", sony:"Sony", "nikon corporation":"Nikon", nikon:"Nikon", canon:"Canon", fujifilm:"Fujifilm", samsung:"Samsung", google:"Google",
   "olympus imaging corp.":"Olympus", "olympus corporation":"Olympus", "om digital solutions":"OM System", panasonic:"Panasonic", leica:"Leica", "leica camera ag":"Leica",
-  xiaomi:"Xiaomi", huawei:"Huawei", oneplus:"OnePlus", oppo:"OPPO", dji:"DJI", hasselblad:"Hasselblad", ricoh:"Ricoh", "pentax corporation":"Pentax", vivo:"vivo", gopro:"GoPro"};
+  xiaomi:"Xiaomi", huawei:"Huawei", oneplus:"OnePlus", oppo:"OPPO", dji:"DJI", hasselblad:"Hasselblad", ricoh:"Ricoh", "pentax corporation":"Pentax", vivo:"vivo", gopro:"GoPro",
+  "arashi vision":"Insta360", lge:"LG", "lg electronics":"LG", "hmd global":"Nokia", "eastman kodak company":"Kodak", asus:"ASUS", meizu:"Meizu", lenovo:"Lenovo"};
 /* 相機、手機品牌的標誌（Simple Icons，CC0）：照片資訊的相機名稱前面放一個；表上沒有的不放 */
 const BRAND = {
   "apple":["2.22 0 19.55 24","M12.152 6.896c-.948 0-2.415-1.078-3.96-1.04-2.04.027-3.91 1.183-4.961 3.014-2.117 3.675-.546 9.103 1.519 12.09 1.013 1.454 2.208 3.09 3.792 3.039 1.52-.065 2.09-.987 3.935-.987 1.831 0 2.35.987 3.96.948 1.637-.026 2.676-1.48 3.676-2.948 1.156-1.688 1.636-3.325 1.662-3.415-.039-.013-3.182-1.221-3.22-4.857-.026-3.04 2.48-4.494 2.597-4.559-1.429-2.09-3.623-2.324-4.39-2.376-2-.156-3.675 1.09-4.61 1.09zM15.53 3.83c.843-1.012 1.4-2.427 1.245-3.83-1.207.052-2.662.805-3.532 1.818-.78.896-1.454 2.338-1.273 3.714 1.338.104 2.715-.688 3.559-1.701"],
@@ -107,7 +108,13 @@ const BRAND = {
   "vivo":["0 8.85 24 6.29","M19.604 14.101c-1.159 0-1.262-.95-1.262-1.24 0-.29.103-1.242 1.262-1.242h2.062c1.16 0 1.263.951 1.263 1.242 0 .29-.104 1.24-1.263 1.24m-2.062-3.527c-2.142 0-2.333 1.752-2.333 2.287 0 .535.19 2.286 2.333 2.286h2.062c2.143 0 2.334-1.751 2.334-2.286 0-.535-.19-2.287-2.334-2.287m-5.477.107c-.286 0-.345.05-.456.213-.11.164-2.022 3.082-2.022 3.082-.06.09-.126.126-.206.126-.08 0-.145-.036-.206-.126 0 0-1.912-2.918-2.022-3.082-.11-.164-.17-.213-.456-.213h-.668c-.154 0-.224.12-.127.267l2.283 3.467c.354.521.614.732 1.196.732s.842-.21 1.196-.732l2.284-3.467c.096-.146.026-.267-.128-.267m-8.876.284c0-.203.08-.284.283-.284h.505c.203 0 .283.08.283.283v3.9c0 .202-.08.283-.283.283h-.505c-.203 0-.283-.08-.283-.283zm-1.769-.285c-.287 0-.346.05-.456.213-.11.164-2.022 3.082-2.022 3.082-.061.09-.126.126-.206.126-.08 0-.145-.036-.206-.126 0 0-1.912-2.918-2.023-3.082-.11-.164-.169-.213-.455-.213H.175c-.171 0-.224.12-.127.267l2.283 3.467c.355.521.615.732 1.197.732.582 0 .842-.21 1.196-.732l2.283-3.467c.097-.146.044-.267-.127-.267m1.055-.893c-.165-.164-.165-.295 0-.46l.351-.351c.165-.165.296-.165.46 0l.352.351c.165.165.165.296 0 .46l-.352.352c-.164.165-.295.165-.46 0z"],
   "honor":["0 9.69 24 4.62","M2.601 9.753v1.823H.807V9.753H0v4.498h.807v-1.874h1.794v1.874h.807V9.753h-.807Zm18.671.801h.898c.369 0 .667.297.667.662a.665.665 0 0 1-.667.663h-.898v-1.325Zm-.806-.801v4.498h.806v-2.002l1.68 2.002H24l-1.376-1.64a1.462 1.462 0 0 0-.444-2.858h-1.716.002Zm-7.63-.014v2.807l-1.959-2.807h-.644v4.498h.807v-2.82l1.968 2.82h.633V9.739h-.805Zm-7.532 2.26c0-.832.68-1.506 1.517-1.506A1.51 1.51 0 0 1 8.337 12c0 .832-.679 1.506-1.516 1.506-.403 0-.789-.159-1.073-.441A1.504 1.504 0 0 1 5.304 12v-.001ZM4.497 12c0 .933.566 1.774 1.434 2.132.869.357 1.868.16 2.533-.5.664-.66.863-1.653.503-2.515a2.324 2.324 0 0 0-2.146-1.425 2.316 2.316 0 0 0-2.323 2.307L4.497 12Zm11.04-.001a1.513 1.513 0 0 1 1.518-1.506c.838 0 1.516.675 1.516 1.507a1.513 1.513 0 0 1-1.518 1.506c-.402 0-.788-.159-1.072-.441a1.5 1.5 0 0 1-.444-1.066ZM14.73 12c0 .933.566 1.774 1.434 2.132.868.357 1.868.16 2.532-.5.665-.66.864-1.653.504-2.515a2.325 2.325 0 0 0-2.147-1.425 2.316 2.316 0 0 0-2.323 2.307V12Z"],
   "insta360":["0.24 0 23.53 24","M15.402 11.19c-.701.7-1.838.7-2.54 0a1.796 1.796 0 1 1 2.539 0m.998-3.614a6.17 6.17 0 0 0-4.39-1.818 6.17 6.17 0 0 0-4.392 1.818 6.217 6.217 0 0 0 0 8.782 6.169 6.169 0 0 0 4.39 1.819 6.169 6.169 0 0 0 4.392-1.82 6.217 6.217 0 0 0 0-8.78m1.554 10.33a8.353 8.353 0 0 1-5.945 2.462 8.353 8.353 0 0 1-5.944-2.46c-3.277-3.277-3.277-8.607 0-11.883a8.353 8.353 0 0 1 5.944-2.46 8.35 8.35 0 0 1 5.944 2.46c3.278 3.276 3.278 8.606 0 11.882m4.51-11.293a20.81 20.81 0 0 1-.137-.292 2.779 2.779 0 0 1 .485-3.007c.018-.014.08-.08.117-.118a.412.412 0 0 0 .053-.069.66.66 0 0 0-.097-.81.296.296 0 0 0-.026-.02 1.113 1.113 0 0 0-.18-.11l-.068-.034A19.08 19.08 0 0 0 9.71.443l-.016.022a11.708 11.708 0 0 0-6.012 3.218c-3.75 3.75-4.44 9.403-2.065 13.852.023.043.107.195.123.233a2.778 2.778 0 0 1-.556 2.919 4.39 4.39 0 0 0-.072.08.66.66 0 0 0 0 .934c.06.056.127.105.198.146l.01.006a19.08 19.08 0 0 0 13 1.677v.002a11.708 11.708 0 0 0 5.997-3.216c3.709-3.708 4.423-9.277 2.144-13.702"],
-  "motorola":["0 0 24 24","M12 0C5.373 0 0 5.373 0 12s5.373 12 12 12 12-5.373 12-12C24.002 5.375 18.632.002 12.007 0H12zm7.327 18.065s-.581-2.627-1.528-4.197c-.514-.857-1.308-1.553-2.368-1.532-.745 0-1.399.423-2.2 1.553-.469.77-.882 1.573-1.235 2.403 0 0-.29-.675-.63-1.343a8.038 8.038 0 0 0-.605-1.049c-.804-1.13-1.455-1.539-2.2-1.553-1.049-.021-1.854.675-2.364 1.528-.948 1.574-1.528 4.197-1.528 4.197h-.864l4.606-15.12 3.56 11.804.024.021.024-.021 3.56-11.804 4.61 15.113h-.862z"]};
+  "motorola":["0 0 24 24","M12 0C5.373 0 0 5.373 0 12s5.373 12 12 12 12-5.373 12-12C24.002 5.375 18.632.002 12.007 0H12zm7.327 18.065s-.581-2.627-1.528-4.197c-.514-.857-1.308-1.553-2.368-1.532-.745 0-1.399.423-2.2 1.553-.469.77-.882 1.573-1.235 2.403 0 0-.29-.675-.63-1.343a8.038 8.038 0 0 0-.605-1.049c-.804-1.13-1.455-1.539-2.2-1.553-1.049-.021-1.854.675-2.364 1.528-.948 1.574-1.528 4.197-1.528 4.197h-.864l4.606-15.12 3.56 11.804.024.021.024-.021 3.56-11.804 4.61 15.113h-.862z"],
+  "asus":["0 9.52 24 4.96","M23.904 10.788V9.522h-4.656c-.972 0-1.41.6-1.482 1.182v.018-1.2h-1.368v1.266h1.362zm-6.144.456l-1.368-.078v1.458c0 .456-.228.594-1.02.594H14.28c-.654 0-.93-.186-.93-.594v-1.596l-1.386-.102v1.812h-.03c-.078-.528-.276-1.14-1.596-1.23L6 11.22c0 .666.474 1.062 1.218 1.14l3.024.306c.24.018.414.09.414.288 0 .216-.18.24-.456.24H5.946V11.22l-1.386-.09v3.348h5.646c1.26 0 1.662-.654 1.722-1.2h.03c.156.864.912 1.2 2.19 1.2h1.41c1.494 0 2.202-.456 2.202-1.524zm4.398.258l-4.338-.258c0 .666.438 1.11 1.182 1.17l3.09.24c.24.018.384.078.384.276 0 .186-.168.258-.516.258h-4.212v1.29h4.302c1.356 0 1.95-.474 1.95-1.554 0-.972-.534-1.338-1.842-1.422zm-10.194-1.98h1.386v1.266h-1.386zM3.798 11.07l-1.506-.15L0 14.478h1.686zm7.914-1.548h-4.23c-.984 0-1.416.612-1.518 1.2v-1.2H3.618c-.33 0-.486.102-.642.33l-.648.936h9.384Z"],
+  "lg":["0 6.71 24 10.58","M14.522 14.078h3.27v1.33h-4.847v-6.83h1.577v5.5zm6.74-1.274h1.284v1.195c-.236.09-.698.18-1.137.18-1.42 0-1.893-.721-1.893-2.186 0-1.398.45-2.221 1.869-2.221.791 0 1.24.248 1.612.722l.982-.903c-.6-.855-1.646-1.114-2.629-1.114-2.208 0-3.368 1.205-3.368 3.504 0 2.288 1.047 3.528 3.358 3.528 1.06 0 2.096-.27 2.66-.665V11.53h-2.739v1.274zM5.291 6.709a5.29 5.29 0 1 1 0 10.582 5.291 5.291 0 1 1 0-10.582m3.16 8.457a4.445 4.445 0 0 0 1.31-3.161v-.242l-.22.001H6.596v.494h2.662l-.001.015a3.985 3.985 0 0 1-3.965 3.708 3.95 3.95 0 0 1-2.811-1.165 3.952 3.952 0 0 1-1.164-2.811c0-1.061.414-2.059 1.164-2.81a3.951 3.951 0 0 1 2.81-1.164l.252.003v-.495l-.251-.003a4.475 4.475 0 0 0-4.47 4.469c0 1.194.465 2.316 1.309 3.161a4.444 4.444 0 0 0 3.16 1.31 4.444 4.444 0 0 0 3.162-1.31m-2.91-1.297V9.644H5.04v4.72h1.556v-.495H5.543zm-1.265-3.552a.676.676 0 1 0-.675.674.676.676 0 0 0 .675-.674"],
+  "nokia":["0 9.18 24 5.65","M16.59 9.348v5.304h.796V9.348Zm-8.497-.09c-1.55 0-2.752 1.127-2.752 2.742 0 1.687 1.202 2.742 2.752 2.742 1.55 0 2.754-1.055 2.751-2.742a2.72 2.72 0 0 0-2.751-2.742ZM10.05 12c0 1.195-.876 1.987-1.957 1.987-1.082 0-1.958-.792-1.958-1.987 0-1.174.876-1.987 1.958-1.987 1.08 0 1.957.813 1.957 1.987zM0 9.176v5.476h.812v-3.619l4.218 3.79v-1.135zM11.442 12l2.952 2.652h1.184L12.622 12l2.956-2.652h-1.184ZM24 14.652h-.875l-.64-1.175h-2.898l-.64 1.175h-.875l1.06-1.958h2.937l-1.465-2.72.432-.798Z"],
+  "meizu":["0 5.18 24 13.64","M20.045 18.818h3.546A.41.41 0 0 0 24 18.41v-3.545a.41.41 0 0 0-.41-.41h-3.545a.41.41 0 0 0-.409.41v3.545c0 .226.184.41.41.41zM13.8 12.11a.095.095 0 0 1-.163-.068V5.591a.41.41 0 0 0-.409-.41H10.59a.545.545 0 0 0-.385.16L.16 15.387a.545.545 0 0 0-.16.385v2.638c0 .226.183.41.41.41h2.637a.547.547 0 0 0 .385-.16l6.769-6.769a.096.096 0 0 1 .163.068v6.451c0 .226.183.41.409.41h2.638a.547.547 0 0 0 .385-.16L23.84 8.613A.545.545 0 0 0 24 8.23V5.59a.41.41 0 0 0-.41-.41h-2.637a.546.546 0 0 0-.386.16z"],
+  "lenovo":["0 8 24 8.01","M21.044 12.288c0 .5-.343.867-.815.867-.464 0-.827-.38-.827-.867 0-.51.343-.868.815-.868.464 0 .827.381.827.868zm-14.305-.92a.787.787 0 0 0-.651.307.991.991 0 0 0-.172.738l1.479-.614a.708.708 0 0 0-.656-.43zm6.963.052c-.472 0-.816.358-.816.868 0 .486.364.867.828.867.472 0 .815-.368.815-.867 0-.487-.363-.868-.827-.868zM24 7.997v8.006H0V7.997h24zM5.01 13.05H3.088V9.825H2.23v4.003h2.78v-.777zm1.137-.094l2.163-.897a1.667 1.667 0 0 0-.37-.86c-.284-.33-.704-.505-1.216-.505-.931 0-1.633.686-1.633 1.593 0 .93.704 1.593 1.726 1.593.572 0 1.158-.272 1.432-.589l-.535-.411c-.357.264-.56.326-.885.326-.292 0-.52-.09-.682-.25zm5.57-1.039c0-.709-.507-1.223-1.252-1.223a1.28 1.28 0 0 0-1.005.494v-.442h-.846v3.081h.846v-1.753c0-.316.245-.651.698-.651.35 0 .712.243.712.651v1.753h.847v-1.91zm3.647.37c0-.904-.725-1.593-1.65-1.593-.933 0-1.663.7-1.663 1.593 0 .903.726 1.592 1.651 1.592.932 0 1.662-.7 1.662-1.592zm2.066 1.54l1.268-3.081h-.967l-.765 2.099-.765-2.1h-.966l1.268 3.081h.927zm4.449-1.54c0-.904-.725-1.593-1.65-1.593-.932 0-1.662.7-1.662 1.593 0 .903.725 1.592 1.65 1.592.932 0 1.662-.7 1.662-1.592z"],
+  "kodak":["0 1.56 24 20.88","M20.496 9.076a.735.735 0 0 0 .84-.844c0-.51-.255-.771-.84-.771s-.835.263-.835.77a.733.733 0 0 0 .835.845zm.128 2.126h-.82v1.538h.82c.448 0 .634-.307.634-.81 0-.494-.186-.728-.634-.728zM2.406 12.848a1.448 1.448 0 0 1-.346-.753 1.058 1.058 0 0 1 .173-.603l6.739-9.138a.447.447 0 0 0 .077-.282.51.51 0 0 0-.52-.51H1.54A1.56 1.56 0 0 0 0 3.106v17.805a1.53 1.53 0 0 0 1.536 1.526h6.993a.513.513 0 0 0 .52-.505v-.005a.63.63 0 0 0-.096-.32l-6.547-8.759zM20.03 16.01h.928l-.464-1.154-.464 1.154zm2.468-14.446h-6.782a2.223 2.223 0 0 0-1.522.716L2.905 11.887c-.1.106-.1.271 0 .377l11.59 9.74c.346.279.776.432 1.22.434h6.763A1.517 1.517 0 0 0 24 20.926V3.11a1.542 1.542 0 0 0-1.502-1.546zM19.25 3.306h.643v1.166l1.157-1.166h.896l-1.295 1.272 1.345 1.268h-.918l-1.184-1.162v1.162h-.644v-2.54zm1.332 3.621c.945 0 1.47.437 1.47 1.299 0 .846-.51 1.367-1.47 1.367s-1.47-.521-1.47-1.367c0-.863.527-1.299 1.472-1.299h-.002zm1.392 5c0 .824-.367 1.317-1.272 1.317h-1.447v-2.565h1.447c.905 0 1.272.425 1.272 1.248zm-.896 8.703-1.184-1.163v1.163h-.643v-2.54h.643v1.166l1.158-1.166h.855l-1.252 1.272L22 20.63h-.922zm.325-3.692-.18-.449h-1.286l-.176.449h-.685l1.1-2.586h.848l1.096 2.586h-.717z"]};
 function brandSvg(x){
   const mk = (x.mk || "").toLowerCase(), n = (MKS[mk] || x.mk || "").toLowerCase().split(" ")[0], b = BRAND[n]; if (!b) return "";
   const [vx, vy, vw, vh] = b[0].split(" ").map(Number), h = vw / vh > 2 ? 11 : 16;   // 字形標誌跟大寫字母一樣高、圖形標誌略高一點
@@ -445,23 +452,25 @@ function groupsOf(z){
     PH.forEach((p, i) => { const c = (p._hk || [COLS.length + 2])[0]; if (!by.has(c)) by.set(c, {k:"c" + c, c, list:[]}); by.get(c).list.push(i); });
     return [...by.values()];
   }
-  const days = [...new Set(PH.map(p => (pd(p.x.dt) || {}).k).filter(Boolean))];
+  const oth = PH.map((p, i) => p.o ? i : -1).filter(i => i >= 0), own = oth.length && oth.length < PH.length;   // 截圖、網路圖片：最後另外一段
+  const tail = gs => own ? [...gs, {k:"o", o:1, list:oth}] : gs, real = (p, i) => !own || !p.o;
+  const days = [...new Set(PH.filter(real).map(p => (pd(p.x.dt) || {}).k).filter(Boolean))];
   if (z === 3) {                                             // 按月份
     const by = {};
-    PH.forEach((p, i) => { const d = pd(p.x.dt), k = d ? `${d.y}${String(d.mo).padStart(2, "0")}` : "0"; (by[k] = by[k] || {k, d, m:1, list:[]}).list.push(i); });
-    return Object.values(by);
+    PH.forEach((p, i) => { if (!real(p)) return; const d = pd(p.x.dt), k = d ? `${d.y}${String(d.mo).padStart(2, "0")}` : "0"; (by[k] = by[k] || {k, d, m:1, list:[]}).list.push(i); });
+    return tail(Object.values(by));
   }
-  if (days.length > 1 && PH.length >= 6) {
+  if (days.length > 1 && PH.length - oth.length >= 6) {
     const by = {};
-    PH.forEach((p, i) => { const d = pd(p.x.dt), k = d ? d.k : "0"; (by[k] = by[k] || {k, d, list:[]}).list.push(i); });
-    return Object.values(by);
+    PH.forEach((p, i) => { if (!real(p)) return; const d = pd(p.x.dt), k = d ? d.k : "0"; (by[k] = by[k] || {k, d, list:[]}).list.push(i); });
+    return tail(Object.values(by));
   }
-  return [{k:"", list:PH.map((_, i) => i)}];
+  return tail([{k:"", list:PH.map((_, i) => i).filter(i => real(PH[i]))}]);
 }
 function sections(){
   GROUPS = groupsOf(ZL);
   const w = $(".wall"); w.dataset.z = ZL;
-  w.innerHTML = GROUPS.map((g, gi) => `<section class="day" data-g="${gi}">${g.c != null ? `<div class="dh hue" data-k="${g.k}"><b>${hueDot(g.c)}${HUEN(g.c)}</b><i class="dct num">${g.list.length}</i></div>` : g.k && g.d ? g.m
+  w.innerHTML = GROUPS.map((g, gi) => `<section class="day" data-g="${gi}">${g.c != null ? `<div class="dh hue" data-k="${g.k}"><b>${hueDot(g.c)}${HUEN(g.c)}</b><i class="dct num">${g.list.length}</i></div>` : g.o ? `<div class="dh oth" data-k="o"><b>其他圖片</b><span>截圖、沒有拍攝資訊的</span><i class="dct num">${g.list.length}</i></div>` : g.k && g.d ? g.m
     ? `<div class="dh" data-k="m${g.k}"><b>${g.d.y}年${g.d.mo}月</b><span class="num">${g.list.length}</span></div>`
     : `<div class="dh" data-day="${g.k}" data-k="d${g.k}"><b>${fday(g.d, YR)}${wxTag(g.k)}</b>${((pl, sm) => `<span>${pl ? `${I("pin")}${esc(sm ? pl.split("・")[0] : pl)}` : ""}</span>${sm ? `<i class="dsum">${esc(sm)}</i>` : ""}`)(dayPlaces(g.k), daySum(g.k))}${g.list.length > 1 ? `<button class="dct num" data-dplay="${g.k}" aria-label="播放這天">${I("play")}${g.list.length}</button>` : `<i class="dct num">${g.list.length}</i>`}${dayClock(g.list)}</div>` : ""}<div class="rows"></div></section>`).join("");
 }
@@ -615,6 +624,7 @@ function ftod(p, d){
 function dayWx(d){ const w = d && D.wx && D.wx[d.k]; return w ? `${WXN[wxIco(w[0])]} ${w[2]}～${w[1]}°` : ""; }
 /* 看大圖下面那一句：「傍晚 6:12・黃金時刻・晴 12～18°・L.單色D」（一段一段給，放不下的從後面拿掉） */
 function capLine(p){
+  if (p.o) return [`${p.w} × ${p.h}`, (p.n.split(".").pop() || "").toUpperCase().replace("JPG", "JPEG"), p.ub ? `${p.ub} 放的` : ""].filter(Boolean);   // 截圖、網路圖片：只寫大小、格式
   const d = p.x.dtf ? null : pd(p.x.dt), md = (GROUPS.length > 1 && GROUPS[0].d) || YR;
   return [d ? `${md ? `${d.mo}月${d.d}日 ` : ""}${ftod(p, d)}` : "", lightOf(p), d ? dayWx(d) : "", p.x.ms && p.x.ms.st, p.ub ? `${p.ub} 放的` : ""].filter(Boolean);
 }
@@ -798,7 +808,7 @@ const SEEN = new Set(store.get("vsa-seen-" + CODE).split(",").filter(Boolean));
 function memsOf(){
   const ok = i => !PH[i].broken && (!isVid(PH[i]) || PH[i].vr === 1);
   const by = {}, order = [];
-  PH.forEach((p, i) => { const d = pd(p.x.dt); if (!d) return; if (!by[d.k]) { by[d.k] = {k:d.k, d, list:[]}; order.push(d.k); } by[d.k].list.push(i); });
+  PH.forEach((p, i) => { const d = !p.o && pd(p.x.dt); if (!d) return; if (!by[d.k]) { by[d.k] = {k:d.k, d, list:[]}; order.push(d.k); } by[d.k].list.push(i); });
   let gs = order.sort().map(k => by[k]);
   const dn = d => Date.UTC(d.y, d.mo - 1, d.d) / 864e5;
   if (gs.length > 1 && gs.every(g => dayNum(g.k)) && dn(gs[gs.length - 1].d) - dn(gs[0].d) <= 30 && gs.every((g, j) => !j || dayNum(g.k) > dayNum(gs[j - 1].k)))   // 一趟旅行：第幾天
@@ -832,17 +842,17 @@ function mems(){
 let STIO = null;
 function stats(){
   const box = $(".stats"); if (!box) return;
-  const days = new Set(), pl = new Set(), ct = new Set(), cc = new Set();
-  PH.forEach(p => { const d = pd(p.x.dt); if (d) days.add(d.k); if (p.p) { pl.add(p.p.n); if (cityKey(p)) ct.add(cityKey(p)); if (p.p.cc) cc.add(p.p.cc); } });
+  const days = new Set(), pl = new Set(), ct = new Set(), cc = new Set(), PS = PH.filter(p => !p.o);   // 截圖、網路圖片不算
+  PS.forEach(p => { const d = pd(p.x.dt); if (d) days.add(d.k); if (p.p) { pl.add(p.p.n); if (cityKey(p)) ct.add(cityKey(p)); if (p.p.cc) cc.add(p.p.cc); } });
   const many = ct.size > 1;
-  const v = PH.filter(isVid).length, it = [[PH.length - v, "張照片"], [v, "段影片"], [days.size, "天"], [D.loc && cc.size > 1 ? cc.size : 0, "個地區"], [D.loc ? (many ? ct.size : pl.size) : 0, many ? "個城市" : "個地點"]].filter(x => x[0] > 0);
+  const v = PS.filter(isVid).length, it = [[PS.length - v, "張照片"], [v, "段影片"], [days.size, "天"], [D.loc && cc.size > 1 ? cc.size : 0, "個地區"], [D.loc ? (many ? ct.size : pl.size) : 0, many ? "個城市" : "個地點"]].filter(x => x[0] > 0);
   box.hidden = !!WHO || it.length < 2;
-  const per = {}; PH.forEach(p => { const d = pd(p.x.dt); if (d) per[d.k] = (per[d.k] || 0) + 1; });
+  const per = {}; PS.forEach(p => { const d = pd(p.x.dt); if (d) per[d.k] = (per[d.k] || 0) + 1; });
   const ks = Object.keys(per).sort(), mx = Math.max(1, ...Object.values(per));
   const gfx = t => t === "天" && ks.length > 1 && ks.length <= 40   // 每天幾張的小長條
       ? `<span class="sgb" aria-hidden="true">${ks.map(k => `<i style="height:${Math.round(4 + per[k] / mx * 14)}px"></i>`).join("")}</span>`
     : t === "個地區" ? `<span class="sgf" aria-hidden="true">${[...cc].slice(0, 5).map(flagImg).join("")}</span>`   // 去過的地區疊成一排旗子
-    : t === "段影片" && PH.length > v ? `<span class="sgr" aria-hidden="true"><i style="width:${(v / PH.length * 100).toFixed(1)}%"></i></span>` : "";   // 影片佔多少
+    : t === "段影片" && PS.length > v ? `<span class="sgr" aria-hidden="true"><i style="width:${(v / PS.length * 100).toFixed(1)}%"></i></span>` : "";   // 影片佔多少
   box.innerHTML = it.map(([n, t]) => `<div class="st"><b class="num" data-n="${n}">${n}</b><small>${t}</small>${gfx(t)}</div>`).join("")
     + (D.loc && !WHO ? `<div class="st" data-skm hidden><b class="num" data-n="0">0</b><small>公里</small></div>` : "");
   if (!anim() || !("IntersectionObserver" in window)) return;
@@ -870,7 +880,7 @@ function stFit(){
 }
 /* 結尾：三張照片疊成一疊（跟標誌一樣），點了播放 */
 function finCol(){
-  const ok = PH.filter(p => !p.broken && !p.raw && !isVid(p));
+  const ok = PH.filter(p => !p.broken && !p.raw && !isVid(p) && !p.o);
   if (ok.length < 3) return "";
   const liked = ok.slice().sort((a, b) => (b.lk || 0) - (a.lk || 0));
   const pick = liked[0].lk ? [liked[0], liked[1], liked[2]] : [ok[0], ok[Math.floor(ok.length / 2)], ok[ok.length - 1]];
@@ -879,7 +889,7 @@ function finCol(){
 function draw(){
   const ds = PH.map(p => pd(p.x.dt)).filter(Boolean), real = PH.filter(p => !p.x.dtf).map(p => pd(p.x.dt)).filter(Boolean);
   const rd = real.length ? real : ds, a = rd[0], b = rd[rd.length - 1];
-  const cover = PH.find(p => p.w > p.h * 1.15 && !p.raw) || PH[0];
+  const cover = PH.find(p => p.w > p.h * 1.15 && !p.raw && !p.o) || PH.find(p => !p.o) || PH[0];
   YR = a && b && a.y !== b.y;
   DAYN = null; COLQ = null;
   const FIND = ALL.filter(p => !p.u).length >= 12;                // 照片夠多才放搜尋
@@ -1055,7 +1065,7 @@ function tint(p){
 }
 function heroCycle(first){
   clearTimeout(HCT);
-  const pool = PH.filter(p => !p.broken && !p.raw && !isVid(p));
+  const pool = PH.filter(p => !p.broken && !p.raw && !isVid(p) && !p.o);
   if (pool.length < 2 || !anim()) return;
   let last = first;
   const next = () => {
@@ -1153,7 +1163,7 @@ function layout(force){
       return;
     }
     const wide = list.filter(i => !STK.has(i) && !isVid(PH[i]) && PH[i].w / PH[i].h >= 1.3), top = wide.length && PH[wide[0]].qs != null ? best(wide) : list[0];
-    const big = !HUE && ZL === 1 && list.length >= 3 && !STK.has(top) && PH[top].w / PH[top].h >= 1.3 && W >= 320 ? top : -1;   // 這天拍得最好的橫幅放整排，當這天的封面（沒有分數就用第一張）
+    const big = !HUE && !g.o && ZL === 1 && list.length >= 3 && !STK.has(top) && PH[top].w / PH[top].h >= 1.3 && W >= 320 ? top : -1;   // 這天拍得最好的橫幅放整排，當這天的封面（沒有分數就用第一張）
     const sec = box.parentNode, dh = sec.querySelector(".dh[data-day]");
     sec.classList.toggle("cov", big >= 0 && !!dh);
     if (big >= 0 && dh) covShade(sec, PH[big]);
@@ -1260,6 +1270,7 @@ function scrubLabel(y){                                      // 那個位置的�
   const p = best && PH[best[1]], d = p && pd(p.x.dt);
   SCR.p = p;
   if (HUE) return p && p._hk ? HUEN(p._hk[0]) : "";
+  if (p && p.o && GROUPS.some(g => g.o)) return "其他圖片";
   return d ? ZL === 3 ? `${d.y}年${d.mo}月` : `${YR ? d.y + "年" : ""}${d.mo}月${d.d}日` : "";
 }
 {
@@ -1923,7 +1934,7 @@ function openLb(i, from){
     social(); vSync();
     $(".cnt", el).textContent = `${S.i + 1} / ${PH.length}`;
     const cam = camName(p.x);
-    $(".cap b", el).textContent = p.p ? p.p.n : d ? fdate(d) : p.n;
+    $(".cap b", el).textContent = p.o ? "其他圖片" : p.p ? p.p.n : d ? fdate(d) : p.n;
     capSet($(".cap span", el), capLine(p), cam);
     if (moved && S.at0 && anim()) $(".cap", el).animate([{opacity:.25, transform:"translateY(3px)"}, {opacity:1, transform:"none"}], {duration:T.mid, easing:DEC});
     const del = $("[data-del]", el); del.hidden = !p.um; if (moved) del.classList.remove("arm");
@@ -2858,7 +2869,7 @@ function toast(t){
 const SSD = 6000, SSF = 1400, SSCH = 3000;
 function show(start, day){
   if (SS) return;
-  const list = PH.map((p, i) => i).filter(i => !PH[i].broken && (!isVid(PH[i]) || PH[i].vr === 1) && (!day || (pd(PH[i].x.dt) || {}).k === day));
+  const list = PH.map((p, i) => i).filter(i => !PH[i].broken && (!PH[i].o || PH.every(p => p.o)) && (!isVid(PH[i]) || PH[i].vr === 1) && (!day || (pd(PH[i].x.dt) || {}).k === day));
   if (!list.length) return;
   /* 換天的時候先放一張章節卡：第幾天、日期、城市、天氣（只有一天就不放） */
   const dk = i => (pd(PH[i].x.dt) || {}).k || "", allDays = [...new Set(PH.map((p, i) => dk(i)).filter(Boolean))].sort();
@@ -3166,7 +3177,7 @@ const lg = (v, a, b) => Math.max(0, Math.min(1, (Math.log(v) - Math.log(a)) / (M
 /* ── 精選：最多愛心的幾張（還沒人按愛心就平均挑幾張橫的），封面下面左右滑 ── */
 function highlights(){
   const box = $(".hl"); if (!box) return;
-  const ok = PH.map((p, i) => [p, i]).filter(([p]) => !p.broken && !p.raw);
+  const ok = PH.map((p, i) => [p, i]).filter(([p]) => !p.broken && !p.raw && !p.o);
   let pick = ok.filter(([p]) => p.lk > 0).sort((a, b) => b[0].lk - a[0].lk).slice(0, 8);
   const liked = pick.length >= 3;
   if (!liked && ok.length >= 10 && ok.some(([p]) => p.qs != null)) {   // 沒什麼人按愛心：挑拍得最好的（一疊只算一張、一天最多兩張）
@@ -3560,7 +3571,7 @@ let AFON = store.get("vsa-af") === "1";                         // 看大圖時�
 function infoHTML(p){
   const x = p.x, d = pd(x.dt), cam = camName(x), lens = lensName(x), ext = (p.n.split(".").pop() || "").toUpperCase().replace("JPG", "JPEG");
   const mp = p.w * p.h / 1e6, f35 = x.f35 || 0, fl = x.fl || 0;
-  let h = d ? `<div class="ihd"><div><div class="idt">${fdate(d)}</div><div class="itm num">${x.dtf ? `檔案時間 ${ftime(d)}` : ftod(p, d)}${x.oz ? `・UTC${x.oz.replace(":00", "")}` : ""}</div></div>${x.dtf || d.h == null ? "" : gSun(d)}</div>` : "";
+  let h = d && !p.o ? `<div class="ihd"><div><div class="idt">${fdate(d)}</div><div class="itm num">${x.dtf ? `檔案時間 ${ftime(d)}` : ftod(p, d)}${x.oz ? `・UTC${x.oz.replace(":00", "")}` : ""}</div></div>${x.dtf || d.h == null ? "" : gSun(d)}</div>` : "";
   if (p.g) {
     const [lat, lon, alt, dir] = p.g, nm = p.p ? p.p.n : "拍攝地點", sub = p.p && p.p.a ? p.p.a : `${lat.toFixed(5)}, ${lon.toFixed(5)}`;
     h += `<div class="ibox"><a class="imap" href="${mapUrl(lat, lon, nm, p.p && p.p.cc)}"${mapTgt(p.p && p.p.cc)} aria-label="在地圖上打開">${dir != null ? `<span class="cone" style="transform:rotate(${dir}deg)"></span>` : ""}<span class="pin"></span><span class="attr">© OpenStreetMap</span></a>
