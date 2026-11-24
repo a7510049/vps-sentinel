@@ -2591,9 +2591,11 @@ function openLb(i, from){
     const push = () => { raf = 0; if (S.info !== "info" || !PHONE() || S.closing) return; const d = infs.scrollTop - REST(); stage.style.translate = d > 0 ? `0 ${(-d).toFixed(1)}px` : ""; };   // 同一頁：照片跟著資訊一起往上捲
     const settle = () => { if (touch || S.info !== "info" || !PHONE() || S.closing) return; const r = REST(), st = infs.scrollTop;
       if (st < r * .75) { stage.style.translate = ""; setInfo(false); } else if (st < r - 1) infs.scrollTo({top:r, behavior:anim() ? "smooth" : "auto"}); };
-    infs.addEventListener("scroll", () => { if (!raf) raf = requestAnimationFrame(push); clearTimeout(idle); idle = setTimeout(settle, 140); }, {passive:true});
+    /* 手放開後還在往下滑（iPhone 的慣性捲動）、已經過了收起的線：馬上收、照片同時回位，不等捲動停下來（以前資訊先滑走，照片過一下子才回去） */
+    const early = () => { if (!touch && S.info === "info" && PHONE() && !S.closing && infs.scrollTop < REST() * .75) { clearTimeout(idle); settle(); return true; } };
+    infs.addEventListener("scroll", () => { if (!raf) raf = requestAnimationFrame(push); if (early()) return; clearTimeout(idle); idle = setTimeout(settle, 140); }, {passive:true});
     infs.addEventListener("touchstart", () => { touch = true; clearTimeout(idle); }, {passive:true});
-    const off = () => { touch = false; clearTimeout(idle); idle = setTimeout(settle, 140); };
+    const off = () => { touch = false; clearTimeout(idle); if (!early()) idle = setTimeout(settle, 140); };
     infs.addEventListener("touchend", off, {passive:true}); infs.addEventListener("touchcancel", off, {passive:true});
     /* 照片露出來那段（.infs 自己，不是資訊）：左右滑換張、點一下收起來；上下滑就是捲這一頁 */
     let tp = null;
