@@ -1060,14 +1060,15 @@ html,body{touch-action:pan-x pan-y}
 /* 右邊的日期捲軸 */
 .scrub{position:fixed;right:0;top:84px;bottom:28px;width:30px;z-index:var(--z-bar);pointer-events:none;opacity:0;transition:opacity var(--t-mid) var(--ease)}
 .scrub.on{opacity:1}
-.scrub .stk2{position:absolute;right:8px;top:0;bottom:0;width:6px}
+.scrub .stk2{position:absolute;right:8px;top:0;bottom:0;width:6px;opacity:0;transition:opacity var(--t-mid) var(--ease)}
+.scrub.drag .stk2{opacity:1}   /* 每個月的小點只在拖的時候出現 */
 .scrub .stk2 b{position:absolute;left:1px;width:4px;height:4px;border-radius:50%;background:color-mix(in oklab,var(--tx) 35%,transparent)}
-.sth{position:absolute;right:3px;width:12px;height:44px;top:0;transform:translateY(calc(var(--f,0) * (var(--th,600px) - 44px)));will-change:transform;border-radius:var(--r-pill);background:var(--s1,var(--bg));box-shadow:var(--sh-pop),var(--hl);
+.sth{position:absolute;right:4px;width:8px;height:44px;top:0;transform:translateY(calc(var(--f,0) * (var(--th,600px) - 44px)));will-change:transform;border-radius:var(--r-pill);background:var(--s1,var(--bg));box-shadow:var(--sh-pop),var(--hl);
   touch-action:none;cursor:grab;transition:width var(--sp-fast),right var(--sp-fast)}
-.sth::before{content:"";position:absolute;inset:14px 4px;border-radius:var(--r-pill);background:var(--grad,var(--p))}
+.sth::before{content:"";position:absolute;inset:14px 3px;border-radius:var(--r-pill);background:var(--grad,var(--p))}
 .sth::after{content:"";position:absolute;inset:-6px -14px -6px -24px}
 .scrub.on .sth{pointer-events:auto}
-.scrub.drag .sth{width:16px;right:5px;cursor:grabbing}
+.scrub.drag .sth{width:14px;right:4px;cursor:grabbing}
 /* 捲軸不用毛玻璃（拖的時候底下的照片每一格都在換，手機重算模糊很吃力，切換時還會閃）；拖的時候新出現的照片直接出現，不跑顯影動畫 */
 html.scrubbing .ph,html.scrubbing .ph .hi{transition:none;animation:none}
 .sbl{position:absolute;right:calc(100% + 12px);top:50%;transform:translate(8px,-50%) scale(.9);transform-origin:right center;opacity:0;white-space:nowrap;padding:9px 16px;border-radius:var(--r-pill);

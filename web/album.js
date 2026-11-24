@@ -1210,6 +1210,7 @@ function onScroll(){
 addEventListener("scroll", onScroll, {passive:true});
 /* 右邊的日期捲軸：照片很多時，捲動就浮出來，按住拖可以直接跳到某個月、某一天 */
 const SCR = {t:0, drag:false, rows:null, rg:null, y:null, raf:0};
+const SCR_FAST = 2.5;                                          // 每毫秒捲超過幾 px 才算「甩」，日期捲軸才出現
 function scrubRange(){
   if (SCR.drag && SCR.rg) return SCR.rg;                    // 拖的時候用按下去那時量好的，不每一格重量（會逼瀏覽器重排）
   const now = performance.now();
@@ -1224,6 +1225,9 @@ function scrubSync(){
   const sc = $(".scrub"); if (!sc || SCR.drag) return;        // 拖的時候位置由手指那邊直接設
   const rg = scrubRange(), on = !!rg && !LB && !SS && !SY && scrollY > rg[0] - innerHeight * .5 && scrollY < rg[1] + innerHeight * .5;
   if (!on) { if (!SCR.drag) sc.classList.remove("on"); return; }
+  const now = performance.now(), dy = Math.abs(scrollY - (SCR.ly ?? scrollY)), dt = now - (SCR.lt || 0);
+  SCR.ly = scrollY; SCR.lt = now;
+  if (!sc.classList.contains("on") && !(dt > 0 && dt < 200 && dy / dt > SCR_FAST)) return;   // 慢慢看照片時不出現，用力甩才浮出來
   const f = Math.max(0, Math.min(1, (scrollY - rg[0]) / (rg[1] - rg[0])));
   sc.style.setProperty("--f", f.toFixed(4));
   if (!sc.classList.contains("on")) { sc.style.setProperty("--th", sc.clientHeight + "px"); scrubMarks(sc, rg); }
