@@ -1551,14 +1551,14 @@ button.dct:active{transform:scale(.92)}
 @keyframes splSafe{to{opacity:0;visibility:hidden}}
 #spl>svg{grid-area:1/1}
 #spl svg{width:clamp(88px,24vmin,124px);height:auto;overflow:visible;filter:drop-shadow(0 18px 28px rgba(0,0,0,.32)) drop-shadow(0 0 22px rgba(255,120,150,.38))}
-#spl::before{content:"";position:absolute;left:50%;top:50%;translate:-50% -50%;width:min(120vmin,760px);aspect-ratio:1;pointer-events:none;opacity:0;
+/* 標誌後面的三色光：跟著載入進度慢慢亮起來（--spk，0～1），不是一開始就整團出現；光圈打開時跟葉片同時開始，往外散開、淡掉（像光從光圈透出去，交接給封面） */
+#spl::before{content:"";position:absolute;left:50%;top:50%;translate:-50% -50%;width:min(120vmin,760px);aspect-ratio:1;pointer-events:none;
   background:radial-gradient(30% 30% at 38% 42%,rgba(255,143,163,.55),transparent),radial-gradient(28% 28% at 64% 40%,rgba(255,180,120,.45),transparent),radial-gradient(32% 32% at 50% 62%,rgba(124,108,240,.55),transparent);
-  animation:splG 1.2s var(--dec) .1s forwards,splR 10s linear infinite,splP 3.2s ease-in-out 1.3s infinite alternate}
-@keyframes splG{from{opacity:0;scale:.35}to{opacity:1;scale:1}}
+  opacity:calc(var(--spk,0) * .9);scale:calc(.3 + var(--spk,0) * .7);transition:opacity var(--t-slow) var(--dec),scale var(--t-slow) var(--dec);
+  animation:splR 10s linear infinite,splP 3.2s ease-in-out 1.3s infinite alternate}
 @keyframes splR{to{rotate:360deg}}
-@keyframes splP{to{scale:1.12;opacity:.7}}
-html.splx #spl::before{animation:splGx var(--t-long) var(--dec) forwards}
-@keyframes splGx{from{opacity:1;scale:1}to{opacity:0;scale:2.4}}
+@keyframes splP{to{transform:scale(1.12)}}
+html.splx #spl::before{opacity:0;scale:2.4;transition:opacity var(--t-slow) var(--ease) calc(var(--t-fast) * .6),scale var(--t-long) var(--dec) calc(var(--t-fast) * .6)}
 #spl .c1,#spl .c2,#spl .c3,#spl .mt,#spl .gl{transform-box:view-box}
 #spl .c1{transform-origin:50px 56px;animation:splIn var(--t-slow) var(--dec) both}
 @keyframes splIn{from{opacity:0;transform:translateY(10px) scale(.72)}}
