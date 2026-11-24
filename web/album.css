@@ -232,15 +232,16 @@ button.chip:active,a.chip:active{transform:scale(.95)}
   .inf::before{display:none}
 }
 /* 手機的照片資訊：照片和資訊同一頁往上捲（學 iPhone 相簿）。.infs 是整個畫面的捲動頁，上面空一段（::before）讓照片露出來，資訊接在下面；
-   只有一個捲動的地方，iOS 不會跟下拉重整、拉面板搶手勢；.infs 本身不接手指（照片那段照樣左右滑），資訊那塊才接；電腦上 .infs 不存在（display:contents） */
+   只有一個捲動的地方，iOS 不會跟下拉重整、拉面板搶手勢；照片那段也是這一頁（往上滑一樣捲資訊，左右滑換張、點一下收起來由 album.js 處理）；
+   .infs 不能用 pointer-events:none 讓手指穿過去：iPhone 的 Safari 這樣整頁就捲不動（5.06 犯過）；電腦上 .infs 不存在（display:contents） */
 .infs{display:contents}
 @media (max-width:899px){
-  .infs{display:block;position:absolute;left:0;right:0;bottom:0;top:calc(env(safe-area-inset-top) + 60px);z-index:3;overflow-y:auto;overscroll-behavior:contain;-webkit-overflow-scrolling:touch;
-    pointer-events:none;visibility:hidden;scrollbar-width:none;transition:visibility 0s linear var(--t-mid)}
+  .infs{display:block;position:absolute;left:0;right:0;bottom:0;top:calc(env(safe-area-inset-top) + 60px);z-index:3;overflow-y:auto;overscroll-behavior:contain;-webkit-overflow-scrolling:touch;touch-action:pan-y;
+    visibility:hidden;scrollbar-width:none;transition:visibility 0s linear var(--t-mid)}
   .infs::-webkit-scrollbar{display:none}
   .infs::before{content:"";display:block;height:100%}
   .lb.info:not(.cmo) .infs{visibility:visible;transition:none}
-  .infs>.inf{position:relative;left:auto;right:auto;bottom:auto;height:auto;min-height:62vh;min-height:62dvh;overflow:visible;overscroll-behavior:auto;touch-action:auto;pointer-events:auto}
+  .infs>.inf{position:relative;left:auto;right:auto;bottom:auto;height:auto;min-height:62vh;min-height:62dvh;overflow:visible;overscroll-behavior:auto;touch-action:auto}
 }
 .inf::before{content:"";display:block;width:40px;height:5px;border-radius:var(--r-pill);background:var(--s3);margin:0 auto 12px}
 .lb.info:not(.cmo) .inf:not(.cmp),.lb.cmo .cmp{transform:none}
