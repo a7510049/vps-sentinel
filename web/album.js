@@ -2363,6 +2363,8 @@ function openLb(i, from){
     if (kl && k0 && k0 !== kl.style.left) kl.animate([{left:k0}, {left:kl.style.left}], {duration:T.slow, easing:DEC});
     const zk = inf.querySelector(".izr .zk"), zf = inf.querySelector(".izr .zf");   // 變焦範圍：圓點、填色從上一張的焦距滑過去
     if (zk && zf && z0 && z0 !== zk.style.left) { const o = {duration:T.slow, easing:DEC}; zk.animate([{left:z0}, {left:zk.style.left}], o); zf.animate([{width:z0}, {width:zf.style.width}], o); keep.add(box(zk)); }
+    const ga = inf.querySelector(".gar"), gw = (w, h) => Math.min(28, 16 * w / h);   // 照片橫豎的小框：從上一張的比例慢慢變過來
+    if (ga && q.w && q.h && p.w && p.h && Math.abs(gw(q.w, q.h) - gw(p.w, p.h)) > .3) ga.animate([{width:`${gw(q.w, q.h)}px`}, {width:`${gw(p.w, p.h)}px`}], {duration:T.slow, easing:DEC});
     if (!jobs.length) return keep;
     const t0 = performance.now(), run = now => {
       if (LB !== S || !inf.isConnected || PH[S.i] !== p) return;
@@ -2588,7 +2590,7 @@ function openLb(i, from){
   }
   /* 手機照片資訊（同一頁往上捲）：照片跟著資訊一起往上捲；往下捲過停的位置、手放開又停下來時，捲到停的位置以下四分之一就收起來，不然彈回去 */
   { let raf = 0, idle = 0, touch = false;
-    const push = () => { raf = 0; if (S.info !== "info" || !PHONE() || S.closing) return; const d = infs.scrollTop - REST(); stage.style.translate = d > 0 ? `0 ${(-d).toFixed(1)}px` : ""; };   // 同一頁：照片跟著資訊一起往上捲
+    const push = () => { raf = 0; infs.classList.toggle("end", infs.scrollTop >= infs.scrollHeight - infs.clientHeight - 2); if (S.info !== "info" || !PHONE() || S.closing) return; const d = infs.scrollTop - REST(); stage.style.translate = d > 0 ? `0 ${(-d).toFixed(1)}px` : ""; };   // 同一頁：照片跟著資訊一起往上捲
     const settle = () => { if (touch || S.info !== "info" || !PHONE() || S.closing) return; const r = REST(), st = infs.scrollTop;
       if (st < r * .75) { stage.style.translate = ""; setInfo(false); } else if (st < r - 1) infs.scrollTo({top:r, behavior:anim() ? "smooth" : "auto"}); };
     /* 手放開後還在往下滑（iPhone 的慣性捲動）、已經過了收起的線：馬上收、照片同時回位，不等捲動停下來（以前資訊先滑走，照片過一下子才回去） */

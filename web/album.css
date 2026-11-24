@@ -241,6 +241,8 @@ button.chip:active,a.chip:active{transform:scale(.95)}
   .infs::-webkit-scrollbar{display:none}
   .infs::before{content:"";display:block;height:100%}
   .lb.info:not(.cmo) .infs{visibility:visible;transition:none}
+  /* 捲到底時 iPhone 還會往上回彈一段：捲動頁本身下半截先墊同色底，回彈露出來的不是後面的照片（回彈本身照留） */
+  .infs.end{background:linear-gradient(transparent 55%,var(--bg) 55%)}
   .infs>.inf{position:relative;left:auto;right:auto;bottom:auto;height:auto;min-height:62vh;min-height:62dvh;overflow:visible;overscroll-behavior:auto;touch-action:auto}
 }
 .inf::before{content:"";display:block;width:40px;height:5px;border-radius:var(--r-pill);background:var(--s3);margin:0 auto 12px}
