@@ -179,6 +179,8 @@ button.chip:active,a.chip:active{transform:scale(.95)}
 .lbb::before{background:linear-gradient(transparent,rgba(0,0,0,.55))}
 .lb.ng .lbt::before,.lb.ng .lbb::before{opacity:0}
 .lb.bare .lbt{opacity:0;transform:translateY(-12px);pointer-events:none}
+.lbt .rb{transition:opacity var(--t-mid) var(--ease),transform var(--sp-fast),background var(--t-fast) var(--ease)}
+.lb.up.info .lbt .rb{opacity:0;transform:scale(.8);pointer-events:none}
 .lb.bare .lbb{opacity:0;transform:translateY(12px);pointer-events:none}
 /* 上面中間：日期、時間兩行（學 iOS／Google，取代張數） */
 .lbt .ttl{flex:1;min-width:0;display:grid;justify-items:center;line-height:1.25;text-align:center}
