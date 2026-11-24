@@ -3440,7 +3440,7 @@ function gSun(d){                        // 拍攝時間在一天的哪裡：太
   const a = Math.PI * (1 - (hr - 6) / 12), x = 24 + 18 * Math.cos(a), y = 24 - 18 * Math.sin(a);
   return `<svg class="gsun${day ? "" : " night"}" viewBox="0 0 48 28" aria-hidden="true"><path d="M6 24A18 18 0 0 1 42 24" class="gl"/><path d="M2 24.5h44" class="gl"/>${day ? `<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="4" class="gd"/>` : `<path d="M27 8a6 6 0 1 0 5 9.5A5 5 0 0 1 27 8Z" class="gd"/>`}</svg>`;
 }
-const gArrow = deg => `<svg class="gin" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9.5" class="gt"/><path d="M12 5l3.5 9L12 12.5 8.5 14Z" class="gd" transform="rotate(${deg} 12 12)"/></svg>`;
+const gArrow = deg => `<svg class="gin" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9.5" class="gt"/><path d="M12 4.5l4.5 13L12 14.5l-4.5 3Z" class="gd" transform="rotate(${deg} 12 12)"/></svg>`;
 const EPL = {1:"M", 2:"P", 3:"A", 4:"S", 5:"P", 6:"S", 7:"A", 8:"A"};
 const gDial = t => `<svg class="gin gb" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="10" class="gf"/><text x="12" y="12" dy=".36em" text-anchor="middle" class="gtx${t.length > 1 ? " sm" : ""}">${t}</text></svg>`;
 function gMeter(m){                      // 相機上的測光符號：評價（框＋圈＋點）、中央重點（框＋圈）、點測光（一個點）、局部（小圈）、平均（整片）

@@ -244,6 +244,7 @@ button.chip:active,a.chip:active{transform:scale(.95)}
 .cme svg{width:28px;height:28px}
 @media (min-width:900px){.cmp .cform{margin:0 -22px;padding:12px 22px 20px}}
 .lb.info .stage{bottom:calc(62% + var(--r-xl))}
+@media (max-width:899px){.lb.info .stage{top:calc(env(safe-area-inset-top) + 64px);bottom:calc(62% + 12px)}}   /* 手機開資訊：照片縮在上面那排按鈕、日期下面，不被蓋住 */
 @media (min-width:900px){
   .inf{left:auto;top:0;height:auto;width:380px;border-radius:0;transform:translateX(102%);padding:calc(env(safe-area-inset-top) + 24px) 22px 28px;box-shadow:-10px 0 40px rgba(0,0,0,.3)}
   .inf::before{display:none}
