@@ -9,6 +9,7 @@ const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;", "<":"&l
 const RM = matchMedia("(prefers-reduced-motion: reduce)");
 const DARK = matchMedia("(prefers-color-scheme: dark)");
 const P = {
+  more:'<circle cx="5" cy="12" r="1.4" fill="currentColor"/><circle cx="12" cy="12" r="1.4" fill="currentColor"/><circle cx="19" cy="12" r="1.4" fill="currentColor"/>',
   flt:'<path d="M4 6h16M7 12h10M10 18h4"/>',
   zin:'<circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5M8 11h6M11 8v6"/>', zout:'<circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5M8 11h6"/>',
   x:'<path d="M18 6 6 18M6 6l12 12"/>', shr:'<circle cx="18" cy="5" r="2.5"/><circle cx="6" cy="12" r="2.5"/><circle cx="18" cy="19" r="2.5"/><path d="m8.2 10.8 7.6-4.4M8.2 13.2l7.6 4.4"/>',
@@ -42,7 +43,7 @@ const P = {
   wstorm:'<path d="M7 14h10.5a4 4 0 0 0 .5-8 6 6 0 0 0-11.4 1.6A3.3 3.3 0 0 0 7 14Z"/><path d="m12.5 15-2 3.5h3l-2 3.5"/>',
   cam:'<path d="M3.5 8.5a2 2 0 0 1 2-2h2.3l1.5-2.2h5.4l1.5 2.2h2.3a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2h-13a2 2 0 0 1-2-2Z"/><circle cx="12" cy="13" r="3.6"/>',
   dial:'<circle cx="12" cy="12" r="8.5"/><path d="M12 12l4.5-4.5M12 3.5v2M20.5 12h-2M12 20.5v-2M3.5 12h2"/>',
-  lens:'<circle cx="12" cy="12" r="8.5"/><circle cx="12" cy="12" r="4.5"/><path d="M12 3.5v4.5M19.4 16.3l-3.9-2.3M4.6 16.3l3.9-2.3"/>',
+  lens:'<circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5.5"/><circle cx="12" cy="12" r="2" fill="currentColor" stroke="none"/><path d="M8.6 10.2a4 4 0 0 1 1.6-1.7"/>',     // 鏡頭正面：外框、兩層玻璃、一道反光（使用者選的，以前的像光圈）
   send:'<path d="M4.5 12h13M12.5 6l6 6-6 6"/>', find:'<circle cx="11" cy="11" r="6.5"/><path d="m20 20-4.4-4.4"/>', ng:'<rect x="3.5" y="3.5" width="17" height="17" rx="3"/><rect x="8" y="8" width="8" height="8" rx="1.2"/>', hue:'<circle cx="12" cy="12" r="8.5"/><path d="M12 3.5v17M3.5 12h17M6 6l12 12M18 6 6 18"/>', scr:'<rect x="3" y="4.5" width="18" height="12" rx="2"/><path d="M9 20h6M12 16.5V20"/>', pen:'<path d="M4 20h4L19 9a2.8 2.8 0 0 0-4-4L4 16v4Z"/><path d="m13.5 6.5 4 4"/>', again:'<path d="M4 12a8 8 0 1 0 2.4-5.7L4 8.5M4 4v4.5h4.5"/>', zeb:'<rect x="3.5" y="3.5" width="17" height="17" rx="3"/><path d="M3.5 13 13 3.5M7 20.5 20.5 7M13.5 20.5l7-7"/>', cmp:'<rect x="3" y="5" width="7.5" height="14" rx="1.5"/><rect x="13.5" y="5" width="7.5" height="14" rx="1.5"/><path d="M12 2.5v19"/>'
 };
 const I = n => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${P[n]}</svg>`;
@@ -79,7 +80,6 @@ function pd(s){
   const [y, mo, d, h, mi] = m.slice(1).map(Number);
   return {y, mo, d, h, mi, wd: new Date(Date.UTC(y, mo - 1, d)).getUTCDay(), k: m[1] + m[2] + m[3]};
 }
-const fdate = d => `${d.y}年${d.mo}月${d.d}日 星期${WD[d.wd]}`;
 const fday = (d, yr) => `${yr ? d.y + "年" : ""}${d.mo}月${d.d}日 週${WD[d.wd]}`;
 const ftime = d => `${d.h < 12 ? "上午" : "下午"} ${d.h % 12 || 12}:${String(d.mi).padStart(2, "0")}`;
 function frange(a, b){
@@ -554,17 +554,10 @@ function zoomWall(z, fx, fy, pre){                            // 換大小：每
   const slide = (e, d) => e.animate(fr.map(f => ({transform:`translateY(${(d * (1 - f)).toFixed(2)}px)`})), {duration:ZDUR, easing:"linear"});
   document.querySelectorAll(".dh,.scn").forEach(h => {
     const y0 = h0.get(h.dataset.k), y1 = h.getBoundingClientRect().top;
-    const t = h.classList.contains("dh") && h.parentElement.classList.contains("cov") && h.parentElement.querySelector(".row.feat .ph"), r0 = t && vis.get(TILES.indexOf(t));
-    const r1 = r0 && t.getBoundingClientRect();
-    if (r0 && r1.bottom > -60 && r1.top < innerHeight + 60) {  // 每天封面的暗影跟著封面照片一起長大縮小，不會先撐開變一圈黑框
-      const d = h.getBoundingClientRect();
-      h.animate(fr.map(f => {
-        const x = r0.left + (r1.left - r0.left) * f, y = r0.top + (r1.top - r0.top) * f, ww = r0.width + (r1.width - r0.width) * f, hh = r0.height + (r1.height - r0.height) * f;
-        return {transform:`translate(${(x - r1.left).toFixed(2)}px,${(y - r1.top).toFixed(2)}px)`, width:`${(d.width + ww - r1.width).toFixed(2)}px`, height:`${(d.height + hh - r1.height).toFixed(2)}px`};
-      }), {duration:ZDUR, easing:"linear"});
-    } else if (t) {                                            // 封面照片是新長出來的就跟著淡入，不在畫面上就不動
+    const t = h.classList.contains("dh") && h.parentElement.classList.contains("cov") && h.parentElement.querySelector(".row.feat .ph");
+    if (t) {                                                   // 每天封面的字和暗影：照片縮放的時候先藏著，照片停好了才淡入（使用者說跟著長大還是會看到黑框）
       const q = t.getBoundingClientRect();
-      if (q.bottom > -60 && q.top < innerHeight + 60) h.animate([{opacity:0}, {opacity:1}], {duration:ZDUR * .8, easing:DEC});
+      if (q.bottom > -60 && q.top < innerHeight + 60) h.animate([{opacity:0}, {opacity:1}], {duration:T.mid, delay:ZDUR, easing:EASE, fill:"backwards"});
     } else if (y0 != null) slide(h, y0 - y1);                  // 同一天的標題滑過去
     else h.animate([{opacity:0, transform:"translateY(6px)"}, {opacity:1, transform:"none"}], {duration:ZDUR, delay:ZDUR * .3, easing:DEC, fill:"backwards"});
   });
@@ -628,11 +621,11 @@ function ftod(p, d){
   return `${w} ${d.h % 12 || 12}:${String(d.mi).padStart(2, "0")}`;
 }
 function dayWx(d){ const w = d && D.wx && D.wx[d.k]; return w ? `${WXN[wxIco(w[0])]} ${w[2]}～${w[1]}°` : ""; }
-/* 看大圖下面那一句：「傍晚 6:12・黃金時刻・晴 12～18°・L.單色D」（一段一段給，放不下的從後面拿掉） */
+/* 看大圖下面那一句：「黃金時刻・晴 12～18°・L.單色D」（日期時間在上面；一段一段給，放不下的從後面拿掉） */
 function capLine(p){
   if (p.o) return [`${p.w} × ${p.h}`, (p.n.split(".").pop() || "").toUpperCase().replace("JPG", "JPEG"), p.ub ? `${p.ub} 放的` : ""].filter(Boolean);   // 截圖、網路圖片：只寫大小、格式
-  const d = p.x.dtf ? null : pd(p.x.dt), md = (GROUPS.length > 1 && GROUPS[0].d) || YR;
-  return [d ? `${md ? `${d.mo}月${d.d}日 ` : ""}${ftod(p, d)}` : "", lightOf(p), d ? dayWx(d) : "", p.x.ms && p.x.ms.st, p.ub ? `${p.ub} 放的` : ""].filter(Boolean);
+  const d = p.x.dtf ? null : pd(p.x.dt);
+  return [lightOf(p), d ? dayWx(d) : "", p.x.ms && p.x.ms.st, p.ub ? `${p.ub} 放的` : ""].filter(Boolean);
 }
 
 /* 第一行時間、光線、天氣、風格，放不下就從最後一段拿掉（不在字中間切、不留一個點在行尾）；第二行固定是相機，每台設備排法一樣 */
@@ -1856,10 +1849,11 @@ function openLb(i, from){
   const STRIP = matchMedia("(pointer:fine) and (min-width:900px)").matches && PH.length > 1;
   el.className = (STRIP ? "lb strip" : "lb") + (NG ? " ng" : "") + (AFON ? " afon" : "") + (ZEB ? " zbon" : "");
   el.innerHTML = `<div class="bg"></div><div class="stage"><div class="track"></div></div>
-    <div class="lbt"><button class="rb" data-x aria-label="關閉">${I("x")}</button><span class="cnt num"></span><button class="rb lvb" data-lv aria-label="原況">${I("live")}</button><button class="rb" data-ssi aria-label="從這張開始播放">${I("play")}</button><button class="rb" data-shr aria-label="分享這張">${I("shr")}</button><button class="rb" data-cmpb hidden aria-label="跟同一疊的比較">${I("cmp")}</button><button class="rb" data-inf aria-label="照片資訊">${I("info")}</button><button class="rb" data-del hidden aria-label="刪掉">${I("trash")}</button>${D.dl ? `<a class="rb" data-dl download aria-label="${D.dl > 1 ? "下載原圖" : "下載"}">${I("dl")}</a>` : ""}</div>
+    <div class="lbt"><button class="rb" data-x aria-label="關閉">${I("x")}</button><div class="ttl"><b></b><small class="num"></small></div><button class="rb lvb" data-lv aria-label="原況">${I("live")}</button><button class="rb" data-more aria-label="更多" aria-expanded="false">${I("more")}</button>
+      <div class="lbm" role="menu"><button role="menuitem" data-ssi>${I("play")}<span>從這張開始播放</span></button><button role="menuitem" data-cmpb hidden>${I("cmp")}<span>跟同一疊的比較</span></button>${D.dl ? `<a role="menuitem" data-dl download>${I("dl")}<span>${D.dl > 1 ? "下載原圖" : "下載"}</span></a>` : ""}<button role="menuitem" class="bad" data-del hidden>${I("trash")}<span>刪掉</span></button></div></div>
     <button class="rb nav l" aria-label="上一張">${I("l")}</button><button class="rb nav r" aria-label="下一張">${I("r")}</button>
     <div class="lbb"><div class="vbar"><button class="vpp" data-vpp aria-label="播放">${I("play")}</button><span class="vt0 num">0:00</span><div class="vtr" data-vseek><i><b></b></i></div><span class="vt1 num"></span><button class="vpp" data-vmu aria-label="聲音">${I("snd")}</button></div>
-      <div class="lbr"><div class="cap"><b></b><span></span></div>${D.talk ? `<button class="sb" data-lk aria-label="愛心（按住選其他表情）">${I("heart")}<span class="num"></span></button><button class="sb rxb" data-rx aria-label="其他表情" hidden>${I("smile")}<span class="num"></span></button><button class="sb" data-cm aria-label="留言">${I("chat")}<span class="num"></span></button>` : ""}</div></div><div class="inf"></div>${D.talk ? `<div class="inf cmp"></div>` : ""}${STRIP ? `<div class="lbs"><div class="lbsr">${PH.map((p, k) => `<button class="lbst" data-go="${k}" aria-label="第 ${k + 1} 張"><img alt="" loading="lazy" draggable="false" src="${src(p, "s")}"></button>`).join("")}</div></div>` : ""}`;
+      <div class="lbr"><div class="cap"><b></b><span></span></div><div class="tbar"><button class="sb" data-shr aria-label="分享這張">${I("shr")}</button>${D.talk ? `<button class="sb" data-lk aria-label="愛心（按住選其他表情）">${I("heart")}<span class="num"></span></button><button class="sb rxb" data-rx aria-label="其他表情" hidden>${I("smile")}<span class="num"></span></button><button class="sb" data-cm aria-label="留言">${I("chat")}<span class="num"></span></button>` : ""}<button class="sb" data-inf aria-label="照片資訊">${I("info")}</button></div></div></div><div class="inf"></div>${D.talk ? `<div class="inf cmp"></div>` : ""}${STRIP ? `<div class="lbs"><div class="lbsr">${PH.map((p, k) => `<button class="lbst" data-go="${k}" aria-label="第 ${k + 1} 張"><img alt="" loading="lazy" draggable="false" src="${src(p, "s")}"></button>`).join("")}</div></div>` : ""}`;
   if (anim()) el.querySelectorAll(".lbt,.lbb,.nav,.lbs").forEach(x => { x.style.opacity = 0; });   // 上下兩排按鈕先藏好再放上畫面（以前放上去後才藏，會先閃一下）
   document.body.appendChild(el);
   const stage = $(".stage", el), track = $(".track", el), bg = $(".bg", el), inf = $(".inf", el), cmp = $(".cmp", el) || document.createElement("div");
@@ -2012,6 +2006,12 @@ function openLb(i, from){
     const th = $(".italk .th", el), h = talkHead(p);           // 資訊裡的「誰按了愛心」跟著換（文字變了才換、淡入）
     if (th && th.dataset.v !== h) { const was = th.dataset.v != null; th.innerHTML = h; th.dataset.v = h; if (was && anim()) [...th.children].slice(1).forEach(x => x.animate([{opacity:0, transform:"translateY(3px)"}, {opacity:1, transform:"none"}], {duration:T.mid, easing:DEC})); }
   }
+  function lbMenu(on){                                       // 右上角「⋯」：不常用的放這裡（從這張播放、比較、下載、刪掉）
+    if (el.classList.contains("mo") === on) return;
+    el.classList.toggle("mo", on); $("[data-more]", el).setAttribute("aria-expanded", on);
+    const m = $(".lbm", el);
+    if (anim()) m.animate(on ? [{opacity:0, transform:"translateY(-6px) scale(.96)"}, {opacity:1, transform:"none"}] : [{opacity:1, transform:"none"}, {opacity:0, transform:"translateY(-6px) scale(.96)"}], {duration:on ? T.mid : T.fast, easing:on ? EASE : EXIT});
+  }
   function chrome(){
     const p = PH[S.i], d = pd(p.x.dt), moved = S.at !== S.i, dir = S.at == null ? 0 : Math.sign(S.i - S.at), was = PH[S.at];
     S.at = S.i;
@@ -2019,9 +2019,10 @@ function openLb(i, from){
     if (moved && p.gf && p.lv) setTimeout(() => { if (LB === S && S.at === S.i && !S.closing) live(); }, anim() ? T.mid : 0);   // 會動的 GIF：自己一直動
     $("[data-lv]", el).classList.toggle("show", !!p.lv && !p.gf);
     social(); vSync();
-    $(".cnt", el).textContent = `${S.i + 1} / ${PH.length}`;
+    const tb = $(".ttl b", el), ts = $(".ttl small", el), t1 = p.o ? "其他圖片" : d ? `${YR ? d.y + "年" : ""}${d.mo}月${d.d}日 星期${WD[d.wd]}` : "", t2 = p.o || !d ? "" : p.x.dtf ? "檔案時間" : ftod(p, d);   // 上面中間：日期、時間（學 iOS／Google，取代張數）
+    if (tb.textContent !== t1 || ts.textContent !== t2) { tb.textContent = t1; ts.textContent = t2; if (moved && was && anim()) $(".ttl", el).animate([{opacity:.2}, {opacity:1}], {duration:T.mid, easing:DEC}); }
     const cam = camName(p.x);
-    $(".cap b", el).textContent = p.o ? "其他圖片" : p.p ? p.p.n : d ? fdate(d) : p.n;
+    $(".cap b", el).textContent = p.o ? "" : p.p ? p.p.n : "";   // 下面只寫地點（日期已經在上面）
     capSet($(".cap span", el), capLine(p), cam);
     if (moved && S.at0 && anim()) $(".cap", el).animate([{opacity:.25, transform:"translateY(3px)"}, {opacity:1, transform:"none"}], {duration:T.mid, easing:DEC});
     const del = $("[data-del]", el); del.hidden = !p.um; if (moved) del.classList.remove("arm");
@@ -2207,6 +2208,7 @@ function openLb(i, from){
     $("[data-inf]", el).classList.toggle("on", kind === "info");
     const cb = $("[data-cm]", el); if (cb) cb.classList.toggle("on", kind === "cm");
     if (kind === "info") { infSet(PH[S.i]); inf.scrollTop = 0; }
+    if (kind !== "info") el.classList.remove("full");          // 下次打開又是先開一半
     if (kind === "cm") cmSet(PH[S.i]);
     if (!!was === !!kind) return;                              // 資訊換留言：畫面大小不變，照片不動
     [sl[0], sl[2]].forEach(s => { s.style.visibility = "hidden"; });   // 電腦上畫面變窄時，旁邊那張會被排到看得到的地方：換位置的這段先藏起來
@@ -2467,6 +2469,8 @@ function openLb(i, from){
     ["pointerup", "pointercancel", "pointerleave"].forEach(t => el.addEventListener(t, () => clearTimeout(ht)));
   }
   el.addEventListener("click", e => {
+    if (e.target.closest("[data-more]")) return lbMenu(!el.classList.contains("mo"));
+    if (el.classList.contains("mo") && !(e.target.closest("[data-del]") && !$("[data-del]", el).classList.contains("arm"))) lbMenu(false);   // 點選單外面或選了一項：選單收起來（刪掉要按兩下，第一下不收）
     if (e.target.closest("[data-x]")) return lbBack(S);
     { const b = e.target.closest("[data-del]");                // 自己放的才能刪：按兩下才刪
       if (b) { clearTimeout(S.dT); if (!b.classList.contains("arm")) { b.classList.add("arm"); toast("再按一次刪掉"); S.dT = setTimeout(() => b.classList.remove("arm"), 3000); return; }
@@ -2520,7 +2524,11 @@ function openLb(i, from){
     if (n) { l.scrollTo({top:l.scrollHeight, behavior:anim() ? "smooth" : "auto"}); if (anim()) n.animate([{opacity:0, transform:"translateY(8px)"}, {opacity:1, transform:"none"}], {duration:T.mid, easing:DEC}); }
     else if (anim() && !l.querySelector(".cmt")) l.firstChild.animate([{opacity:0}, {opacity:1}], {duration:T.mid, easing:EASE});
   }
-  /* 面板往下拉就關（捲到最上面時才算） */
+  /* 手機上資訊先開一半：往上捲就整個拉高 */
+  const PHONE = () => matchMedia("(max-width:899px)").matches;
+  inf.addEventListener("scroll", () => { if (S.info === "info" && inf.scrollTop > 2 && !el.classList.contains("full") && PHONE()) el.classList.add("full"); }, {passive:true});
+  /* 面板往下拉就關（捲到最上面時才算；整個拉高時先回到一半） */
+  const base = P => P === inf && !el.classList.contains("full") && PHONE() ? "32.6%" : "0px";   // 一半的時候面板本來就往下移了一段
   [[inf, () => inf], [cmp, () => cmp.querySelector(".cml") || cmp]].forEach(([P, sc]) => {
     let d0 = null;
     P.addEventListener("touchstart", e => { if (e.touches.length === 1 && e.target !== document.activeElement) d0 = {y:e.touches[0].clientY, t:performance.now(), top:sc().scrollTop <= 0 || !e.target.closest(".cml,.inf:not(.cmp)"), dy:0, on:false}; }, {passive:true});
@@ -2529,14 +2537,14 @@ function openLb(i, from){
       const dy = e.touches[0].clientY - d0.y;
       if (!d0.on) { if (d0.top && (sc().scrollTop <= 0 || !e.target.closest(".cml,.inf:not(.cmp)")) && dy > 6) { d0.on = true; d0.y0 = e.touches[0].clientY; P.style.transition = "none"; } else return; }
       d0.dy = Math.max(0, e.touches[0].clientY - d0.y0);     // 不擋瀏覽器自己的捲動（passive）：捲到最上面往下拉本來就不會捲，畫面忙的時候往上滑也不會被卡住
-      P.style.transform = `translateY(${d0.dy}px)`;
+      P.style.transform = `translateY(calc(${base(P)} + ${d0.dy}px))`;
     }, {passive:true});
     const done = () => {
       if (!d0) return; const q = d0; d0 = null; if (!q.on) return;
       P.style.transition = ""; P.style.transform = "";
       const v = q.dy / Math.max(1, performance.now() - q.t);
-      if (q.dy > P.clientHeight * .22 || v > .6) setInfo(false);
-      else if (anim()) P.animate([{transform:`translateY(${q.dy}px)`}, {transform:"none"}], {duration:T.mid, easing:DEC});
+      if (q.dy > P.clientHeight * .22 || v > .6) { if (P === inf && el.classList.contains("full")) el.classList.remove("full"); else setInfo(false); }
+      else if (anim()) P.animate([{transform:`translateY(calc(${base(P)} + ${q.dy}px))`}, {transform:`translateY(${base(P)})`}], {duration:T.mid, easing:DEC});
     };
     P.addEventListener("touchend", done); P.addEventListener("touchcancel", done);
   });
@@ -2567,7 +2575,7 @@ function openLb(i, from){
     if ((e.key === "c" || e.key === "C") && !$("[data-cmpb]", el).hidden) return $("[data-cmpb]", el).click();
     if (e.key === "ArrowRight") go(1);
     else if (e.key === "ArrowLeft") go(-1);
-    else if (e.key === "Escape") S.info ? setInfo(false) : lbBack(S);
+    else if (e.key === "Escape") el.classList.contains("mo") ? lbMenu(false) : S.info ? setInfo(false) : lbBack(S);
     else if (e.key === "i") setInfo(S.info !== "info");
   };
 }
@@ -3658,10 +3666,11 @@ let AFON = store.get("vsa-af") === "1";                         // 看大圖時�
 function infoHTML(p){
   const x = p.x, d = pd(x.dt), cam = camName(x), lens = lensName(x), ext = (p.n.split(".").pop() || "").toUpperCase().replace("JPG", "JPEG");
   const mp = p.w * p.h / 1e6, f35 = x.f35 || 0, fl = x.fl || 0;
-  let h = d && !p.o ? `<div class="ihd"><div><div class="idt">${fdate(d)}</div><div class="itm num">${x.dtf ? `檔案時間 ${ftime(d)}` : ftod(p, d)}${x.oz ? `・UTC${x.oz.replace(":00", "")}` : ""}</div></div>${x.dtf || d.h == null ? "" : gSun(d)}</div>` : "";
+  let hm = "", h = "";   // 照片資訊的順序（學 iOS／Google）：相機那張摘要先、再來地圖、拍攝時間（手機上先開一半時看得到前兩塊）
+  const hd = d && !p.o && !x.dtf && d.h != null ? `<div class="ihd"><div><div class="itm num">太陽位置${x.oz ? `・UTC${x.oz.replace(":00", "")}` : ""}</div></div>${gSun(d)}</div>` : "";      // 日期時間已經寫在最上面，這裡不重寫
   if (p.g) {
     const [lat, lon, alt, dir] = p.g, nm = p.p ? p.p.n : "拍攝地點", sub = p.p && p.p.a ? p.p.a : `${lat.toFixed(5)}, ${lon.toFixed(5)}`;
-    h += `<div class="ibox"><a class="imap" href="${mapUrl(lat, lon, nm, p.p && p.p.cc)}"${mapTgt(p.p && p.p.cc)} aria-label="在地圖上打開">${dir != null ? `<span class="cone" style="transform:rotate(${dir}deg)"></span>` : ""}<span class="pin"></span><span class="attr">© OpenStreetMap</span></a>
+    hm += `<div class="ibox"><a class="imap" href="${mapUrl(lat, lon, nm, p.p && p.p.cc)}"${mapTgt(p.p && p.p.cc)} aria-label="在地圖上打開">${dir != null ? `<span class="cone" style="transform:rotate(${dir}deg)"></span>` : ""}<span class="pin"></span><span class="attr">© OpenStreetMap</span></a>
       <a class="ipl" href="${mapUrl(lat, lon, nm, p.p && p.p.cc)}"${mapTgt(p.p && p.p.cc)}><span class="pi">${I("pin")}</span><span><b>${esc(nm)}</b><span>${esc(sub)}</span></span><span class="go">${I("ext")}</span></a>${nearHTML(p)}</div>`;
   }
   const fe = f35 || (fl ? Math.round(fl) : 0);
@@ -3674,6 +3683,7 @@ function infoHTML(p){
         : lens || f35 ? `<div class="l">${esc(f35 ? `${lensKind(f35)}・等效${x.f35e ? "約" : ""} ${f35} mm` : "")}${lens ? `${f35 ? "　" : ""}<button class="igear sm" data-gear="l:${esc(lens)}">${esc(lens)}</button>` : ""}</div>` : ""}${zh}
       <div class="l2 num">${p.w && p.h ? `<i class="gar" style="aspect-ratio:${p.w} / ${p.h}"></i>` : ""}<span>${isVid(p) ? `影片 ${dur(p.vd)}・${x.fps ? `${+x.fps.toFixed(2)} fps・` : ""}${x.vb ? `${x.vb >= 10 ? Math.round(x.vb) : x.vb} Mbps・` : ""}` : mp >= .1 ? `${mp >= 10 ? Math.round(mp) : mp.toFixed(1)} MP・` : ""}${p.w} × ${p.h}・${size(p.sz)}</span><span class="tgs"><span class="tag">${esc(ext)}</span>${p.rw && p.rw !== ext ? `<span class="tag">+${esc(p.rw)}</span>` : ""}${p.cs ? `<span class="tag">${esc(p.cs.replace("Display ", ""))}</span>` : ""}${p.hdr && !isVid(p) ? `<span class="tag hdr">HDR</span>` : ""}${isVid(p) && x.vc ? `<span class="tag">${esc(x.vc)}</span>` : ""}${isVid(p) && (x.gm || p.hdr) ? `<span class="tag hdr">${esc(x.gm || (p.hdr === "pq" ? "HDR PQ" : "HLG"))}</span>` : ""}</span></div></div>
     ${cells.some(c => c[1]) ? `<div class="iex num">${cells.map(([k, v, g, gk]) => `<div data-gk="${gk}"${v ? "" : ` class="no"`}>${g || SV(`<circle cx="16" cy="16" r="12" class="gt"/>`)}<b>${esc(v || "—")}</b><small>${k}</small></div>`).join("")}</div>` : ""}</div>`;
+  h += hm + hd;
   const ms = x.ms;
   if (ms && (ms.st || ms.lut || ms.k || ms.ws)) {
     const mono = /單色|ACROS|黑白|棕褐/.test(ms.st || ""), kp = ms.k ? Math.max(0, Math.min(100, (Math.log(ms.k) - Math.log(2000)) / (Math.log(12000) - Math.log(2000)) * 100)) : 0;

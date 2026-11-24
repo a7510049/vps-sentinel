@@ -177,7 +177,29 @@ button.chip:active,a.chip:active{transform:scale(.95)}
 .lb.ng .lbt::before,.lb.ng .lbb::before{opacity:0}
 .lb.bare .lbt{opacity:0;transform:translateY(-12px);pointer-events:none}
 .lb.bare .lbb{opacity:0;transform:translateY(12px);pointer-events:none}
-.lbt .cnt{flex:1;text-align:center;font-weight:600;font-size:var(--fs-m);color:rgba(255,255,255,.85)}
+/* 上面中間：日期、時間兩行（學 iOS／Google，取代張數） */
+.lbt .ttl{flex:1;min-width:0;display:grid;justify-items:center;line-height:1.25;text-align:center}
+.lbt .ttl b{max-width:100%;font-size:var(--fs-m);font-weight:650;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.lbt .ttl small{max-width:100%;font-size:var(--fs-xs);color:rgba(255,255,255,.72);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.lbt .ttl small:empty{display:none}
+/* 右上角「⋯」的選單：不常用的放這裡 */
+.lbm{position:absolute;top:calc(100% - 22px);right:14px;min-width:210px;padding:6px;border-radius:var(--r-lg);background:rgba(30,30,34,.82);-webkit-backdrop-filter:blur(24px) saturate(1.4);backdrop-filter:blur(24px) saturate(1.4);
+  box-shadow:0 12px 40px rgba(0,0,0,.4),inset 0 0 0 1px rgba(255,255,255,.1);transform-origin:top right;opacity:0;visibility:hidden;pointer-events:none;transition:visibility 0s var(--t-fast)}
+.lb.mo .lbm{opacity:1;visibility:visible;pointer-events:auto;transition:none}
+.lbm>*{display:grid;grid-template-columns:20px 1fr;align-items:center;gap:12px;width:100%;min-height:44px;padding:0 12px;border-radius:var(--r-md);color:#fff;font-size:var(--fs-m);text-align:left;text-decoration:none}
+.lbm>[hidden]{display:none}
+.lbm svg{width:20px;height:20px}
+.lbm .bad{color:#ff7b7b}
+.lbm .bad.arm{background:rgba(255,80,80,.22)}
+@media (hover:hover){.lbm>*:hover{background:rgba(255,255,255,.1)}}
+.lbm>*:active{background:rgba(255,255,255,.14)}
+/* 下面一顆玻璃膠囊：分享、愛心、留言、資訊（大拇指按得到） */
+.tbar{display:flex;align-items:center;gap:2px;padding:4px;flex:none;border-radius:var(--r-pill);background:rgba(255,255,255,.12);-webkit-backdrop-filter:blur(16px);backdrop-filter:blur(16px);box-shadow:inset 0 0 0 1px rgba(255,255,255,.12)}
+.tbar .sb{background:none;-webkit-backdrop-filter:none;backdrop-filter:none;min-width:44px;justify-content:center;padding:0 10px}
+.tbar .sb[data-inf].on{background:#fff;color:#000}
+.tbar .sb[data-inf].on svg{fill:none;stroke:currentColor}
+.lbb .cap b:empty{display:none}
+@media (max-width:599px){.lbr{flex-direction:column;align-items:stretch;gap:10px}.lbr .tbar{align-self:center}}
 .lbb .cap{flex:1;min-width:0;line-height:1.3}
 .lbb .cap b{display:block;font-size:var(--fs-m);font-weight:650;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .lbb .cap span{display:block;font-size:var(--fs-s);color:rgba(255,255,255,.7)}
@@ -198,7 +220,12 @@ button.chip:active,a.chip:active{transform:scale(.95)}
 /* 照片資訊：手機從下面滑上來，電腦在右邊 */
 .inf{position:absolute;left:0;right:0;bottom:0;height:62%;z-index:3;background:var(--bg);color:var(--tx);border-radius:var(--r-xl) var(--r-xl) 0 0;box-shadow:0 -10px 40px rgba(0,0,0,.35);
   transform:translateY(102%);transition:transform var(--t-mid) var(--ease);overflow-y:auto;overscroll-behavior:none;touch-action:pan-y;padding:10px 18px calc(24px + env(safe-area-inset-bottom))}
-@media (max-width:899px){.inf{box-shadow:none;clip-path:inset(0 round var(--r-xl) var(--r-xl) 0 0)}}   /* 安卓：裡面的開關一動，捲動框的圓角就切不住（變成方角、露出後面），改用 clip-path 切 */
+@media (max-width:899px){.inf{box-shadow:none;clip-path:inset(0 round var(--r-xl) var(--r-xl) 0 0)}}
+/* 手機的照片資訊先開一半（相機、地圖那張摘要），往上捲才整個拉高（學 iOS／Google）；留言面板照舊 */
+@media (max-width:899px){
+  .inf:not(.cmp){height:92%}
+  .lb.info:not(.cmo):not(.full) .inf:not(.cmp){transform:translateY(32.6%)}
+}   /* 安卓：裡面的開關一動，捲動框的圓角就切不住（變成方角、露出後面），改用 clip-path 切 */
 .inf::before{content:"";display:block;width:40px;height:5px;border-radius:var(--r-pill);background:var(--s3);margin:0 auto 12px}
 .lb.info:not(.cmo) .inf:not(.cmp),.lb.cmo .cmp{transform:none}
 /* 留言面板：上面誰按了愛心，中間留言自己捲，輸入框一直在最下面 */
@@ -870,7 +897,7 @@ html,body{touch-action:pan-x pan-y}
 .dhr i{font-style:normal;opacity:.5}
 .wall[data-z="2"] .dhr,.wall[data-z="3"] .dhr{display:none}
 .st .sgb{display:flex;align-items:flex-end;gap:3px;height:18px;margin-top:6px}
-.st .sgb button{position:relative;flex:none;width:6px;padding:0;border-radius:var(--r-xs) var(--r-xs) 0 0;background:var(--grad);background-size:100% 18px;background-position:bottom;opacity:.55;cursor:pointer;transition:opacity var(--t-fast) var(--ease)}
+.st .sgb button{position:relative;flex:none;width:6px;padding:0;border-radius:var(--r-xs) var(--r-xs) 0 0;background:var(--grad);background-size:100% 18px;background-position:bottom;opacity:.55;cursor:pointer;transition:opacity var(--t-fast) var(--ease);will-change:opacity}   /* 一直放在自己那層：淡入淡出開始、結束時才不會差半格、看起來歪一下 */
 .st .sgb button::before{content:"";position:absolute;inset:-12px -2px -10px}   /* 長條很細：按的範圍放大一點 */
 .st .sgb>i{flex:none;width:6px;border-radius:var(--r-xs) var(--r-xs) 0 0;background:var(--line)}
 .st .sgb button.on,.st .sgb:not(:has(.on)) button{opacity:1}
@@ -1101,7 +1128,7 @@ html:has(.lb,.ss,.sy) .scrub{opacity:0;pointer-events:none}
 .glz::before{content:"";position:absolute;left:36px;top:0;bottom:22px;width:2px;border-radius:var(--r-pill);background:var(--s2)}
 .glr{display:grid;grid-template-columns:20px minmax(0,1fr) minmax(48px,120px) 32px;align-items:center;gap:10px;padding:8px 10px 8px 46px;border-radius:var(--r-md);text-align:left;font-size:var(--fs-s);position:relative;transition:background var(--t-fast) var(--ease)}
 .glr::before{content:"";position:absolute;left:26px;top:50%;width:14px;height:2px;border-radius:var(--r-pill);background:var(--s2)}
-.glr svg{width:18px;height:18px;color:var(--g2)}
+.glr svg{width:20px;height:20px;stroke-width:2.4;color:var(--g2)}   /* 20 寬、線 2 像素整：不糊 */
 .glr>span:first-of-type{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-weight:600}
 .glr small{color:var(--tx3);font-weight:600;text-align:right}
 @media (hover:hover){.glr:hover{background:var(--s2)}}
@@ -1475,7 +1502,7 @@ button.dct:active{transform:scale(.92)}
 .cmpk img{width:100%;height:100%;object-fit:cover;display:block;pointer-events:none}
 .cmpk.in{opacity:1;box-shadow:inset 0 0 0 2px rgba(255,255,255,.7)}
 .cmpk.act{box-shadow:inset 0 0 0 2px var(--p)}
-@media (max-width:440px){.lbt{gap:6px;padding-left:10px;padding-right:10px}.lbt .cnt{white-space:nowrap;font-size:var(--fs-s)}}
+@media (max-width:440px){.lbt{gap:6px;padding-left:10px;padding-right:10px}}
 
 /* 拍攝習慣：一張卡、一種一行（左邊名稱＋最常用，右邊細長條，長條下面小字） */
 .gst{margin-top:12px;padding:6px 16px;border-radius:var(--r-lg);background:var(--s1);box-shadow:var(--sh-card)}
