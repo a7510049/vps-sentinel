@@ -295,6 +295,7 @@ button.chip:active,a.chip:active{transform:scale(.95)}
 @keyframes ring{0%{transform:scale(.4);opacity:.5}100%{transform:scale(1.6);opacity:0}}
 .icam{padding:16px}
 .icam .t{display:flex;align-items:center;gap:8px}
+.icam .t .gsun{margin-left:auto;width:48px;height:28px}
 .icam .t b{font-weight:750;font-size:var(--fs-l);flex:1;min-width:0}
 .icam .tgs{display:flex;flex-wrap:wrap;gap:4px;flex:1 0 100%}   /* 格式標籤固定自己一排（使用者選的：以前有 HDR 時會被擠到第二排、時有時無） */
 .tag{font-size:var(--fs-xs);font-weight:700;letter-spacing:.04em;padding:3px 8px;border-radius:var(--r-xs);background:var(--s2);color:var(--tx2)}
