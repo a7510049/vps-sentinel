@@ -2594,7 +2594,15 @@ function openLb(i, from){
     infs.addEventListener("scroll", () => { if (!raf) raf = requestAnimationFrame(push); clearTimeout(idle); idle = setTimeout(settle, 140); }, {passive:true});
     infs.addEventListener("touchstart", () => { touch = true; clearTimeout(idle); }, {passive:true});
     const off = () => { touch = false; clearTimeout(idle); idle = setTimeout(settle, 140); };
-    infs.addEventListener("touchend", off, {passive:true}); infs.addEventListener("touchcancel", off, {passive:true}); }
+    infs.addEventListener("touchend", off, {passive:true}); infs.addEventListener("touchcancel", off, {passive:true});
+    /* 照片露出來那段（.infs 自己，不是資訊）：左右滑換張、點一下收起來；上下滑就是捲這一頁 */
+    let tp = null;
+    infs.addEventListener("pointerdown", e => { tp = e.target === infs ? {x:e.clientX, y:e.clientY, t:performance.now()} : null; });
+    infs.addEventListener("pointercancel", () => { tp = null; });
+    infs.addEventListener("pointerup", e => { const q = tp; tp = null; if (!q || S.closing) return;
+      const dx = e.clientX - q.x, dy = e.clientY - q.y;
+      if (Math.abs(dx) > 40 && Math.abs(dx) > Math.abs(dy) * 1.5) { const d = dx < 0 ? 1 : -1; if (PH[S.i + d]) go(d); }
+      else if (Math.hypot(dx, dy) < 10 && performance.now() - q.t < 350) setInfo(false); }); }
   /* 留言面板往下拉就關（捲到最上面時才算） */
   [[cmp, () => cmp.querySelector(".cml") || cmp]].forEach(([P, sc]) => {
     let d0 = null;
