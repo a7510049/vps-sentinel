@@ -495,7 +495,7 @@ const zEase = t => 1 - Math.pow(1 - t, 3.2);                  // 跟手指放開
 const IOS = /iPhone|iPad|iPod/.test(navigator.userAgent) || (/Macintosh/.test(navigator.userAgent) && navigator.maxTouchPoints > 1);
 const ANDR = /Android/i.test(navigator.userAgent);
 function zbSync(){ document.querySelectorAll("[data-zb]").forEach(b => { b.disabled = ZL + +b.dataset.zb < 0 || ZL + +b.dataset.zb > 3; }); }
-function flyTiles(vis, dur){                                  // 每張從 vis 記的位置連續長大／縮小到現在的位置，照片反著縮回來所以不壓扁
+function flyTiles(vis, dur){                                  // 每張從 vis 記的位置連續長大／縮小到現在的位置，照片反著縮回來所以不壓扁（以左上角為準縮放，第一格才剛好在原本的位置）
   const H = innerHeight, N = 14, fr = Array.from({length:N + 1}, (_, k) => zEase(k / N));
   TILES.forEach((t, i) => {
     if (!t.isConnected) return;
@@ -507,8 +507,8 @@ function flyTiles(vis, dur){                                  // 每張從 vis �
     fr.forEach(e => {
       const x = r0.left + (r1.left - r0.left) * e, y = r0.top + (r1.top - r0.top) * e, ww = r0.width + (r1.width - r0.width) * e, hh = r0.height + (r1.height - r0.height) * e;
       const sx = ww / r1.width, sy = hh / r1.height, c = Math.max(sx, sy);
-      tk.push({transform:`translate(${(x - r1.left).toFixed(2)}px,${(y - r1.top).toFixed(2)}px) scale(${sx.toFixed(4)},${sy.toFixed(4)})`});
-      ik.push({transform:`translate(${((ww - r1.width * c) / 2 / sx).toFixed(2)}px,${((hh - r1.height * c) / 2 / sy).toFixed(2)}px) scale(${(c / sx).toFixed(4)},${(c / sy).toFixed(4)})`});
+      tk.push({transformOrigin:"0 0", transform:`translate(${(x - r1.left).toFixed(2)}px,${(y - r1.top).toFixed(2)}px) scale(${sx.toFixed(4)},${sy.toFixed(4)})`});
+      ik.push({transformOrigin:"0 0", transform:`translate(${((ww - r1.width * c) / 2 / sx).toFixed(2)}px,${((hh - r1.height * c) / 2 / sy).toFixed(2)}px) scale(${(c / sx).toFixed(4)},${(c / sy).toFixed(4)})`});
     });
     t.animate(tk, {duration:dur, easing:"linear"});
     t.querySelectorAll("img").forEach(im => im.animate(ik, {duration:dur, easing:"linear"}));
@@ -535,13 +535,26 @@ function zoomWall(z, fx, fy, pre){                            // 換大小：每
   sections(); layout(true);
   if (a0) { const r1 = TILES[anc].getBoundingClientRect(); scrollBy(0, (r1.top + r1.height / 2) - (a0.top + a0.height / 2)); }
   if (!anim()) return true;
-  flyTiles(vis, ZDUR);
+  const fr = Array.from({length:15}, (_, k) => zEase(k / 14));          // 跟照片同一條曲線，標題、地圖才跟得上照片
+  const slide = (e, d) => e.animate(fr.map(f => ({transform:`translateY(${(d * (1 - f)).toFixed(2)}px)`})), {duration:ZDUR, easing:"linear"});
   document.querySelectorAll(".dh,.scn").forEach(h => {
     const y0 = h0.get(h.dataset.k), y1 = h.getBoundingClientRect().top;
-    if (y0 != null) h.animate([{transform:`translateY(${y0 - y1}px)`}, {transform:"none"}], {duration:ZDUR, easing:DEC});   // 同一天的標題滑過去
+    const t = h.classList.contains("dh") && h.parentElement.classList.contains("cov") && h.parentElement.querySelector(".row.feat .ph"), r0 = t && vis.get(TILES.indexOf(t));
+    const r1 = r0 && t.getBoundingClientRect();
+    if (r0 && r1.bottom > -60 && r1.top < innerHeight + 60) {  // 每天封面的暗影跟著封面照片一起長大縮小，不會先撐開變一圈黑框
+      const d = h.getBoundingClientRect();
+      h.animate(fr.map(f => {
+        const x = r0.left + (r1.left - r0.left) * f, y = r0.top + (r1.top - r0.top) * f, ww = r0.width + (r1.width - r0.width) * f, hh = r0.height + (r1.height - r0.height) * f;
+        return {transform:`translate(${(x - r1.left).toFixed(2)}px,${(y - r1.top).toFixed(2)}px)`, width:`${(d.width + ww - r1.width).toFixed(2)}px`, height:`${(d.height + hh - r1.height).toFixed(2)}px`};
+      }), {duration:ZDUR, easing:"linear"});
+    } else if (t) {                                            // 封面照片是新長出來的就跟著淡入，不在畫面上就不動
+      const q = t.getBoundingClientRect();
+      if (q.bottom > -60 && q.top < innerHeight + 60) h.animate([{opacity:0}, {opacity:1}], {duration:ZDUR * .8, easing:DEC});
+    } else if (y0 != null) slide(h, y0 - y1);                  // 同一天的標題滑過去
     else h.animate([{opacity:0, transform:"translateY(6px)"}, {opacity:1, transform:"none"}], {duration:ZDUR, delay:ZDUR * .3, easing:DEC, fill:"backwards"});
   });
-  OUT.forEach((e, k) => { const d = o0[k] - e.getBoundingClientRect().top; if (Math.abs(d) > 1) e.animate([{transform:`translateY(${d}px)`}, {transform:"none"}], {duration:ZDUR, easing:DEC}); });
+  OUT.forEach((e, k) => { const d = o0[k] - e.getBoundingClientRect().top; if (Math.abs(d) > 1) slide(e, d); });
+  flyTiles(vis, ZDUR);                                         // 最後才讓照片動（上面量照片現在的位置不能算到動畫）
   return true;
 }
 /* 這天一句話：早上在哪、下午到哪、走了幾公里（照拍照的時間和地點自動寫） */
