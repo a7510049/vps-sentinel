@@ -478,7 +478,7 @@ function sections(){
   const w = $(".wall"); w.dataset.z = ZL;
   w.innerHTML = GROUPS.map((g, gi) => `<section class="day" data-g="${gi}">${g.c != null ? `<div class="dh hue" data-k="${g.k}"><b>${hueDot(g.c)}${HUEN(g.c)}</b><i class="dct num">${g.list.length}</i></div>` : g.o ? `<div class="dh oth" data-k="o"><b>其他圖片</b><span>截圖、沒有拍攝資訊的</span><i class="dct num">${g.list.length}</i></div>` : g.k && g.d ? g.m
     ? `<div class="dh" data-k="m${g.k}"><b>${g.d.y}年${g.d.mo}月</b><span class="num">${g.list.length}</span></div>`
-    : `<div class="dh" data-day="${g.k}" data-k="d${g.k}"><b>${fday(g.d, YR)}${wxTag(g.k)}</b>${((pl, sm) => `<span>${pl ? `${I("pin")}${esc(sm ? pl.split("・")[0] : pl)}` : ""}</span>${sm ? `<i class="dsum">${esc(sm)}</i>` : ""}`)(dayPlaces(g.k), daySum(g.k))}${g.list.length > 1 ? `<button class="dct num" data-dplay="${g.k}" aria-label="播放這天">${I("play")}${g.list.length}</button>` : `<i class="dct num">${g.list.length}</i>`}${dayClock(g.list)}</div>` : ""}<div class="rows"></div></section>`).join("");
+    : `<div class="dh" data-day="${g.k}" data-k="d${g.k}"><b>${fday(g.d, YR)}${wxTag(g.k)}</b>${((pl, sm) => `<span>${pl ? `${I("pin")}${esc(sm ? pl.split("・")[0] : pl)}` : ""}</span>${sm ? `<i class="dsum">${sumWrap(sm)}</i>` : ""}`)(dayPlaces(g.k), daySum(g.k))}${g.list.length > 1 ? `<button class="dct num" data-dplay="${g.k}" aria-label="播放這天">${I("play")}${g.list.length}</button>` : `<i class="dct num">${g.list.length}</i>`}${dayClock(g.list)}</div>` : ""}<div class="rows"></div></section>`).join("");
 }
 const HUEN = c => c < COLS.length ? COLS[c][0] + "色" : ["淡色", "黑白", "其他"][c - COLS.length];
 const hueDot = c => c < COLS.length ? `<i class="cdot" style="background:${COLS[c][2]}"></i>` : `<i class="cdot ${["mu", "bw", "mu"][c - COLS.length]}"></i>`;
@@ -566,6 +566,7 @@ function zoomWall(z, fx, fy, pre){                            // 換大小：每
   return true;
 }
 /* 這天一句話：早上在哪、下午到哪、走了幾公里（照拍照的時間和地點自動寫） */
+const sumWrap = s => s.split("，").map(t => `<em>${esc(t)}</em>`).join("，");   // 一句話要換行時只斷在逗號，不會把「4.2 公里」拆開
 function daySum(k){
   const ps = PH.filter(p => !p.x.dtf && p.p && (pd(p.x.dt) || {}).k === k);
   if (ps.length < 3) return "";
@@ -3439,7 +3440,7 @@ function gSun(d){                        // 拍攝時間在一天的哪裡：太
   const a = Math.PI * (1 - (hr - 6) / 12), x = 24 + 18 * Math.cos(a), y = 24 - 18 * Math.sin(a);
   return `<svg class="gsun${day ? "" : " night"}" viewBox="0 0 48 28" aria-hidden="true"><path d="M6 24A18 18 0 0 1 42 24" class="gl"/><path d="M2 24.5h44" class="gl"/>${day ? `<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="4" class="gd"/>` : `<path d="M27 8a6 6 0 1 0 5 9.5A5 5 0 0 1 27 8Z" class="gd"/>`}</svg>`;
 }
-const gArrow = deg => `<svg class="gin" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9.5" class="gt"/><path d="M12 5l3.5 9L12 12.5 8.5 14Z" class="gd" transform="rotate(${deg} 12 12)"/></svg>`;
+const gArrow = deg => `<svg class="gin" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9.5" class="gt"/><path d="M12 4.5l4.5 13L12 14.5l-4.5 3Z" class="gd" transform="rotate(${deg} 12 12)"/></svg>`;
 const EPL = {1:"M", 2:"P", 3:"A", 4:"S", 5:"P", 6:"S", 7:"A", 8:"A"};
 const gDial = t => `<svg class="gin gb" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="10" class="gf"/><text x="12" y="12" dy=".36em" text-anchor="middle" class="gtx${t.length > 1 ? " sm" : ""}">${t}</text></svg>`;
 function gMeter(m){                      // 相機上的測光符號：評價（框＋圈＋點）、中央重點（框＋圈）、點測光（一個點）、局部（小圈）、平均（整片）
