@@ -2605,7 +2605,8 @@ function like(i, btn, after){
   p.me = on; p.lk = Math.max(0, (p.lk || 0) + (on ? 1 : -1)); after(); badge(i);
   if (on && anim()) {
     btn.querySelector("svg").animate([{transform:"scale(1)"}, {transform:"scale(1.45)", offset:.35}, {transform:"scale(.9)", offset:.7}, {transform:"scale(1)"}], {duration:T.slow, easing:EASE});
-    btn.insertAdjacentHTML("beforeend", `<i class="burst"></i>`); setTimeout(() => { const b = btn.querySelector(".burst"); if (b) b.remove(); }, T.slow + 100);
+    const sv = btn.querySelector("svg"), bq = btn.getBoundingClientRect(), sq = sv.getBoundingClientRect();   // 圈圈的中心對準愛心（按鈕有沒有數字都一樣）
+    btn.insertAdjacentHTML("beforeend", `<i class="burst" style="left:${(sq.left + sq.width / 2 - bq.left - btn.clientLeft).toFixed(1)}px;top:${(sq.top + sq.height / 2 - bq.top - btn.clientTop).toFixed(1)}px"></i>`); setTimeout(() => { const b = btn.querySelector(".burst"); if (b) b.remove(); }, T.slow + 100);
   }
   talk(i, {like:on}).then(ok => { if (!ok) { p.me = !on; p.lk = Math.max(0, p.lk + (on ? -1 : 1)); } after(); });
 }

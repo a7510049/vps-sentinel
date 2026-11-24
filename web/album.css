@@ -422,7 +422,7 @@ img,video,.ph img,.zw img,.mk img,.hero img{-webkit-touch-callout:none;-webkit-u
 .sb:active{transform:scale(.92)}
 .sb.on svg{fill:#ff4d6a;stroke:#ff4d6a}
 .sb[data-cm].on svg{fill:currentColor;stroke:currentColor}
-.burst{position:absolute;left:12px;top:50%;width:20px;height:20px;margin-top:-10px;border-radius:50%;box-shadow:0 0 0 2px #ff4d6a;pointer-events:none;animation:burst var(--t-slow) var(--dec) forwards}
+.burst{position:absolute;left:50%;top:50%;width:20px;height:20px;margin:-10px 0 0 -10px;border-radius:50%;box-shadow:0 0 0 2px #ff4d6a;pointer-events:none;animation:burst var(--t-slow) var(--dec) forwards}
 @keyframes burst{from{transform:scale(.6);opacity:1}to{transform:scale(2.4);opacity:0}}
 .vbar{display:none;align-items:center;gap:10px}
 .lb.isv .vbar{display:flex}
