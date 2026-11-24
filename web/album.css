@@ -247,6 +247,8 @@ button.chip:active,a.chip:active{transform:scale(.95)}
   .lbt::after{content:"";position:absolute;left:0;right:0;top:0;bottom:24px;z-index:-1;pointer-events:none;background:var(--bg);border-bottom:1px solid var(--line);opacity:0;transition:opacity var(--t-mid) var(--ease)}
   .lbt .ttl b,.lbt .ttl small{transition:color var(--t-mid) var(--ease)}
   .lb.up.info .lbt::after{opacity:1}
+  /* 資訊、留言打開時下面那排（地點、分享、資訊鈕）淡掉：以前只是被資訊蓋住，iPhone 快速滑動、回彈露出縫時會跑出來 */
+  .lb.info .lbb{opacity:0;pointer-events:none}
   .lb.up.info .lbt::before{opacity:0}
   .lb.up.info .lbt .ttl b{color:var(--tx)}
   .lb.up.info .lbt .ttl small{color:var(--tx2)}
