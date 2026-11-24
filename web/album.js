@@ -1860,6 +1860,7 @@ function openLb(i, from){
     <button class="rb nav l" aria-label="上一張">${I("l")}</button><button class="rb nav r" aria-label="下一張">${I("r")}</button>
     <div class="lbb"><div class="vbar"><button class="vpp" data-vpp aria-label="播放">${I("play")}</button><span class="vt0 num">0:00</span><div class="vtr" data-vseek><i><b></b></i></div><span class="vt1 num"></span><button class="vpp" data-vmu aria-label="聲音">${I("snd")}</button></div>
       <div class="lbr"><div class="cap"><b></b><span></span></div>${D.talk ? `<button class="sb" data-lk aria-label="愛心（按住選其他表情）">${I("heart")}<span class="num"></span></button><button class="sb rxb" data-rx aria-label="其他表情" hidden>${I("smile")}<span class="num"></span></button><button class="sb" data-cm aria-label="留言">${I("chat")}<span class="num"></span></button>` : ""}</div></div><div class="inf"></div>${D.talk ? `<div class="inf cmp"></div>` : ""}${STRIP ? `<div class="lbs"><div class="lbsr">${PH.map((p, k) => `<button class="lbst" data-go="${k}" aria-label="第 ${k + 1} 張"><img alt="" loading="lazy" draggable="false" src="${src(p, "s")}"></button>`).join("")}</div></div>` : ""}`;
+  if (anim()) el.querySelectorAll(".lbt,.lbb,.nav,.lbs").forEach(x => { x.style.opacity = 0; });   // 上下兩排按鈕先藏好再放上畫面（以前放上去後才藏，會先閃一下）
   document.body.appendChild(el);
   const stage = $(".stage", el), track = $(".track", el), bg = $(".bg", el), inf = $(".inf", el), cmp = $(".cmp", el) || document.createElement("div");
   const S = {el, i, z:{s:1, x:0, y:0}, info:false, busy:null, from:from && from.isConnected ? from : null, fi:i};
@@ -2133,7 +2134,7 @@ function openLb(i, from){
       }));
     };
     Promise.all(wait).then(start); setTimeout(start, 350);      // 解碼太久也不等超過 0.35 秒
-  } else { S.hold = 0; reveal(); goneSet(); bigQ(); bg.style.opacity = 1; }
+  } else { S.hold = 0; reveal(); goneSet(); bigQ(); bg.style.opacity = 1; el.querySelectorAll(".lbt,.lbb,.nav,.lbs").forEach(x => { x.style.opacity = ""; }); }
   if (POPSKIP) S.push = 1; else history.pushState({lb:1}, "");   // 上一張的返回還沒處理完：等它處理完再記
 
   function go(d){
