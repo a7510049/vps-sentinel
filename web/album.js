@@ -849,10 +849,11 @@ function stats(){
   box.hidden = !!WHO || it.length < 2;
   const per = {}; PS.forEach(p => { const d = pd(p.x.dt); if (d) per[d.k] = (per[d.k] || 0) + 1; });
   const ks = Object.keys(per).sort(), mx = Math.max(1, ...Object.values(per));
-  const gfx = t => t === "天" && ks.length > 1 && ks.length <= 40   // 每天幾張的小長條
-      ? `<span class="sgb" aria-hidden="true">${ks.map(k => `<i style="height:${Math.round(4 + per[k] / mx * 14)}px"></i>`).join("")}</span>`
+  const md = k => `${+k.slice(4, 6)}/${+k.slice(6, 8)}`, vt = PS.filter(isVid).reduce((a, p) => a + (p.vd || 0), 0);
+  const gfx = t => t === "天" && ks.length > 1 && ks.length <= 40   // 每天幾張的小長條：兩頭寫起訖日期，指著或點一根寫那天幾張、點了跳到那天
+      ? `<span class="sgb">${ks.map(k => `<button data-sday="${k}" data-n="${per[k]}" aria-label="${md(k)} ${per[k]} 張" style="height:${Math.round(4 + per[k] / mx * 14)}px"></button>`).join("")}</span><span class="sgd num" data-sgd="${md(ks[0])}–${md(ks[ks.length - 1])}">${md(ks[0])}–${md(ks[ks.length - 1])}</span>`
     : t === "個地區" ? `<span class="sgf" aria-hidden="true">${[...cc].slice(0, 5).map(flagImg).join("")}</span>`   // 去過的地區疊成一排旗子
-    : t === "段影片" && PS.length > v ? `<span class="sgr" aria-hidden="true"><i style="width:${(v / PS.length * 100).toFixed(1)}%"></i></span>` : "";   // 影片佔多少
+    : t === "段影片" && vt >= 1 ? `<span class="sgd num">共 ${((t, h, m) => h ? `${h} 小時${m ? ` ${m} 分` : ""}` : m ? `${m} 分${t % 60 ? ` ${t % 60} 秒` : ""}` : `${t} 秒`)(Math.round(vt), Math.floor(vt / 3600), Math.floor(vt % 3600 / 60))}</span>` : "";   // 影片加起來多長
   box.innerHTML = it.map(([n, t]) => `<div class="st"><b class="num" data-n="${n}">${n}</b><small>${t}</small>${gfx(t)}</div>`).join("")
     + (D.loc && !WHO ? `<div class="st" data-skm hidden><b class="num" data-n="0">0</b><small>公里</small></div>` : "");
   if (!anim() || !("IntersectionObserver" in window)) return;
@@ -868,6 +869,22 @@ function stats(){
   flagFix(box);
   stFit();
 }
+/* 數字那排「天」的長條：指著（電腦）或點一下（手機）寫那天幾張，再點捲到那天 */
+function sdayTip(b){
+  const box = b && b.closest(".st"), d = box && box.querySelector("[data-sgd]"); if (!d) return;
+  box.querySelectorAll("[data-sday]").forEach(x => x.classList.toggle("on", x === b));
+  d.textContent = b && b.dataset.sday ? `${+b.dataset.sday.slice(4, 6)}/${+b.dataset.sday.slice(6, 8)}・${b.dataset.n} 張` : d.dataset.sgd;
+}
+function sdayOff(box){ const d = box.querySelector("[data-sgd]"); if (!d) return; box.querySelectorAll("[data-sday].on").forEach(x => x.classList.remove("on")); d.textContent = d.dataset.sgd; }
+function sdayGo(b){                                           // 手機：第一下寫那天幾張，同一根再點一下才跳過去
+  const tip = !b.classList.contains("on") && !matchMedia("(hover:hover)").matches;
+  sdayTip(b); clearTimeout(sdayGo.t); sdayGo.t = setTimeout(() => sdayOff(b.closest(".st")), tip ? 3500 : 2400);
+  if (tip) return;
+  const k = b.dataset.sday, i = PH.findIndex(p => !p.o && (pd(p.x.dt) || {}).k === k), h = $(`.dh[data-day="${k}"]`) || (i >= 0 && tileOf(i));
+  if (h) scrollTo({top:h.getBoundingClientRect().top + scrollY - ($(".bar") ? $(".bar").offsetHeight : 0) - 12, behavior:anim() ? "smooth" : "auto"});
+}
+addEventListener("pointerover", e => { if (e.pointerType !== "mouse") return; const b = e.target.closest && e.target.closest("[data-sday]"); if (b) { clearTimeout(sdayGo.t); sdayTip(b); } });
+addEventListener("pointerout", e => { if (e.pointerType !== "mouse") return; const b = e.target.closest && e.target.closest("[data-sday]"); if (b && !(e.relatedTarget && e.relatedTarget.closest && e.relatedTarget.closest("[data-sday]"))) sdayOff(b.closest(".st")); });
 /* 數字太長（例如走了 1234 公里）格子放不下時字縮小一點：照最後的數字量，跑數字途中也不會超出畫面 */
 function stFit(){
   document.querySelectorAll(".stats .st:not([hidden]) b").forEach(b => {
@@ -1396,6 +1413,7 @@ document.addEventListener("click", e => {
   if (e.target.closest("[data-sel]")) return selOn();
   if (SEL.on && e.target.closest("[data-ss],[data-mem]")) return;
   if (e.target.closest(".cue")) return scrollTo({top:$(".hero").offsetHeight - 8, behavior:anim() ? "smooth" : "auto"});
+  { const sd = e.target.closest("[data-sday]"); if (sd) return sdayGo(sd); }
   { const zb = e.target.closest("[data-zb]"); if (zb) return zoomWall(ZL + +zb.dataset.zb, innerWidth / 2, innerHeight / 2); }
   if (e.target.closest("[data-ss]")) return show(0);
   { const dp = e.target.closest("[data-dplay]"); if (dp) return SEL.on || show(0, dp.dataset.dplay); }

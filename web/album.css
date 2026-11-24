@@ -870,11 +870,12 @@ html,body{touch-action:pan-x pan-y}
 .dhr i{font-style:normal;opacity:.5}
 .wall[data-z="2"] .dhr,.wall[data-z="3"] .dhr{display:none}
 .st .sgb{display:flex;align-items:flex-end;gap:3px;height:18px;margin-top:6px}
-.st .sgb i{flex:none;width:6px;border-radius:var(--r-xs) var(--r-xs) 0 0;background:var(--grad);background-size:100% 18px;background-position:bottom}
+.st .sgb button{position:relative;flex:none;width:6px;padding:0;border-radius:var(--r-xs) var(--r-xs) 0 0;background:var(--grad);background-size:100% 18px;background-position:bottom;opacity:.55;cursor:pointer;transition:opacity var(--t-fast) var(--ease)}
+.st .sgb button::before{content:"";position:absolute;inset:-12px -2px -10px}   /* 長條很細：按的範圍放大一點 */
+.st .sgb button.on,.st .sgb:not(:has(.on)) button{opacity:1}
+.st .sgd{display:block;margin-top:4px;font-size:var(--fs-xs);color:var(--tx3);white-space:nowrap}
 .st .sgf{display:flex;margin-top:6px}
 .st .sgf img{width:22px;height:16px;object-fit:cover;border-radius:3px;box-shadow:0 0 0 1.5px var(--s1);margin-right:-6px}
-.st .sgr{display:block;height:5px;margin-top:8px;border-radius:var(--r-pill);background:color-mix(in oklab,var(--g2) 18%,var(--s2));overflow:hidden}
-.st .sgr i{display:block;height:100%;border-radius:inherit;background:var(--grad)}
 .ctl{position:relative;display:block;height:4px;margin-top:5px;border-radius:var(--r-pill);background:color-mix(in oklab,var(--g2) 14%,var(--s2))}
 .ctl em{position:absolute;top:0;bottom:0;min-width:4px;border-radius:inherit;background:var(--grad)}
 .fexp{display:inline-flex;align-items:center;gap:8px}
@@ -895,8 +896,7 @@ html,body{touch-action:pan-x pan-y}
 .st b{font-size:clamp(28px,7.4vw,52px);font-variant-numeric:tabular-nums;white-space:nowrap}
 .st small{letter-spacing:.12em;white-space:nowrap}
 .st .sgb{max-width:100%;justify-content:center;margin-top:4px}
-.st .sgf,.st .sgr{margin-top:4px}
-.st .sgr{width:min(100%,56px)}
+.st .sgf{margin-top:4px}
 @media (min-width:900px){.stats,.stats:is(*){grid-template-columns:none;grid-auto-columns:minmax(0,1fr)}}
 
 
@@ -1558,7 +1558,7 @@ html.shy #shyc{visibility:visible;opacity:1;scale:1;transition:opacity var(--t-f
 #shyc small{font-size:var(--fs-s);color:var(--tx2)}
 
 /* 圓角裡的進度條、長條：裡面那條在動（位移、縮放）時，有些瀏覽器只照方框切、不照圓角切，顏色會從圓角溢出去；用 clip-path 照圓角切 */
-.ubar,.syp i,.vtr i,#spl .spb,.st .sgr{clip-path:inset(0 round var(--r-pill))}
+.ubar,.syp i,.vtr i,#spl .spb{clip-path:inset(0 round var(--r-pill))}
 .gsb span{clip-path:inset(0 round 4px)}
 .gsb span i{border-radius:inherit}
 .ph.wt{clip-path:inset(0 round var(--r-xs))}
