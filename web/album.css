@@ -220,7 +220,13 @@ button.chip:active,a.chip:active{transform:scale(.95)}
 /* 照片資訊：手機從下面滑上來，電腦在右邊 */
 .inf{position:absolute;left:0;right:0;bottom:0;height:62%;z-index:3;background:var(--bg);color:var(--tx);border-radius:var(--r-xl) var(--r-xl) 0 0;box-shadow:0 -10px 40px rgba(0,0,0,.35);
   transform:translateY(102%);transition:transform var(--t-mid) var(--ease);overflow-y:auto;overscroll-behavior:none;touch-action:pan-y;padding:10px 18px calc(24px + env(safe-area-inset-bottom))}
-@media (max-width:899px){.inf{box-shadow:none;clip-path:inset(0 round var(--r-xl) var(--r-xl) 0 0)}}
+/* 手機：上面的圓角那段做成邊框，裡面捲動的內容永遠到不了圓角（安卓捲動時圓角常常切不住，clip-path 也時好時壞）；拉桿畫在邊框上 */
+@media (max-width:899px){
+  .inf{box-shadow:none;border-top:var(--r-xl) solid var(--bg);padding-top:0;
+    background-image:radial-gradient(circle,var(--s3) 2.5px,transparent 3px),radial-gradient(circle,var(--s3) 2.5px,transparent 3px),linear-gradient(var(--s3),var(--s3));
+    background-size:6px 6px,6px 6px,34px 5px;background-position:calc(50% - 17px) 11.5px,calc(50% + 17px) 11.5px,50% 12px;background-repeat:no-repeat;background-origin:border-box}
+  .inf::before{display:none}
+}
 /* 手機的照片資訊先開一半（相機、地圖那張摘要），往上捲才整個拉高（學 iOS／Google）；留言面板照舊 */
 @media (max-width:899px){
   .inf:not(.cmp){height:92%}
