@@ -180,7 +180,9 @@ button.chip:active,a.chip:active{transform:scale(.95)}
 .lbt .cnt{flex:1;text-align:center;font-weight:600;font-size:var(--fs-m);color:rgba(255,255,255,.85)}
 .lbb .cap{flex:1;min-width:0;line-height:1.3}
 .lbb .cap b{display:block;font-size:var(--fs-m);font-weight:650;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.lbb .cap span{display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;font-size:var(--fs-s);color:rgba(255,255,255,.7);overflow:hidden}
+.lbb .cap span{display:block;font-size:var(--fs-s);color:rgba(255,255,255,.7)}
+.lbb .cap span em{display:block;font-style:normal;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.lbb .cap span em[hidden]{display:none}
 .rb{width:44px;height:44px;border-radius:50%;display:grid;place-items:center;background:rgba(255,255,255,.12);-webkit-backdrop-filter:blur(16px);backdrop-filter:blur(16px);flex:none;
   transition:transform var(--sp-fast),background var(--t-fast) var(--ease)}
 .rb svg{width:22px;height:22px}

@@ -613,12 +613,20 @@ function ftod(p, d){
   return `${w} ${d.h % 12 || 12}:${String(d.mi).padStart(2, "0")}`;
 }
 function dayWx(d){ const w = d && D.wx && D.wx[d.k]; return w ? `${WXN[wxIco(w[0])]} ${w[2]}～${w[1]}°` : ""; }
-/* 看大圖下面那一句：「傍晚 6:12・黃金時刻・晴 12～18°・L.單色D」 */
+/* 看大圖下面那一句：「傍晚 6:12・黃金時刻・晴 12～18°・L.單色D」（一段一段給，放不下的從後面拿掉） */
 function capLine(p){
   const d = p.x.dtf ? null : pd(p.x.dt), md = (GROUPS.length > 1 && GROUPS[0].d) || YR;
-  return [d ? `${md ? `${d.mo}月${d.d}日 ` : ""}${ftod(p, d)}` : "", lightOf(p), d ? dayWx(d) : "", p.x.ms && p.x.ms.st, p.ub ? `${p.ub} 放的` : ""].filter(Boolean).join("・") || camName(p.x);
+  return [d ? `${md ? `${d.mo}月${d.d}日 ` : ""}${ftod(p, d)}` : "", lightOf(p), d ? dayWx(d) : "", p.x.ms && p.x.ms.st, p.ub ? `${p.ub} 放的` : ""].filter(Boolean);
 }
 
+/* 第一行時間、光線、天氣、風格，放不下就從最後一段拿掉（不在字中間切、不留一個點在行尾）；第二行固定是相機，每台設備排法一樣 */
+function capSet(el, parts, cam){
+  el.innerHTML = `<em class="c1"></em><em class="c2"></em>`;
+  const c1 = el.firstChild, c2 = el.lastChild, ps = parts.slice();
+  c1.textContent = ps.join("・"); c2.textContent = cam || "";
+  while (ps.length > 1 && c1.scrollWidth > c1.clientWidth + 1) { ps.pop(); c1.textContent = ps.join("・"); }
+  c1.hidden = !ps.length; c2.hidden = !cam;
+}
 /* 一天自動分場景：隔一小時以上、或換了地方（1.5 公里外、隔 15 分鐘以上）就是下一段；太小段的併進前一段 */
 function scenesOf(list){
   if (list.length < 8) return null;
@@ -1916,8 +1924,7 @@ function openLb(i, from){
     $(".cnt", el).textContent = `${S.i + 1} / ${PH.length}`;
     const cam = camName(p.x);
     $(".cap b", el).textContent = p.p ? p.p.n : d ? fdate(d) : p.n;
-    const cl = capLine(p);
-    $(".cap span", el).textContent = cam && !cl.includes(cam) ? `${cl}${cl ? "・" : ""}${cam}` : cl;
+    capSet($(".cap span", el), capLine(p), cam);
     if (moved && S.at0 && anim()) $(".cap", el).animate([{opacity:.25, transform:"translateY(3px)"}, {opacity:1, transform:"none"}], {duration:T.mid, easing:DEC});
     const del = $("[data-del]", el); del.hidden = !p.um; if (moved) del.classList.remove("arm");
     { const c = STKOF.get(S.i), l = c != null && STK.get(c); $("[data-cmpb]", el).hidden = !(l && l.length > 1 && l.every(k => !isVid(PH[k]))); }   // 在一疊裡的才能比較
