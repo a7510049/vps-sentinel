@@ -1487,11 +1487,12 @@ button.dct:active{transform:scale(.92)}
 .gsb span{width:100%;height:26px;display:flex;align-items:flex-end;border-radius:4px;background:var(--s2);overflow:hidden;transition:box-shadow var(--t-fast) var(--ease)}
 .gsb span i{display:block;width:100%;background:color-mix(in oklab,var(--g2) 45%,transparent);border-radius:3px 3px 0 0}
 .gsb .top span i{background:var(--grad,var(--g2))}
-.gsb small{font-size:9px;color:var(--tx3);font-weight:600;white-space:nowrap;max-width:100%;overflow:hidden;letter-spacing:-.02em}
+.gsb>*{container-type:inline-size}
+.gsb small{font-size:min(9px,27cqi);color:var(--tx3);font-weight:600;white-space:nowrap;max-width:100%;overflow:hidden;letter-spacing:-.02em}   /* 格子太窄（手機）時字跟著縮，「6400+」「1/1000」不會被切掉 */
 .gsb .on span{box-shadow:inset 0 0 0 2px var(--p)}
 .gsb .on small{color:var(--p)}
 @media (hover:hover){.gsb>button:not(:disabled):hover span{box-shadow:inset 0 0 0 2px var(--line)}}
-@media (min-width:900px){.gear .gst{grid-column:2;grid-row:2;margin-top:0;align-self:start}.gsb small{font-size:10px}
+@media (min-width:900px){.gear .gst{grid-column:2;grid-row:2;margin-top:0;align-self:start}.gsb small{font-size:min(10px,27cqi)}
   .gear.one .gst{grid-column:1 / -1;grid-row:auto;margin-top:12px;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));column-gap:40px}
   .gear.one .gsr:nth-child(2){border-top:0}
   .gear.one .gcams{grid-column:1 / -1}}
