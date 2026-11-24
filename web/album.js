@@ -2484,8 +2484,9 @@ function openLb(i, from){
     setZoom(s, x, y);
     if (anim()) zw.animate([{transform:from}, {transform:zw.style.transform || "none"}], {duration:T.mid, easing:EASE});
   }
-  const zClip = (s, x, y) => {                               // 這個大小時照片該在的位置：比畫面小就置中，比畫面大就不露出旁邊的空白
-    const f = L(), cl = (v, sz, box, off) => { const span = sz * s; if (span <= box) return (box - span) / 2 - off; return Math.min(-off, Math.max(box - off - span, v)); };
+  /* 這個大小時照片該在的位置：比畫面小就以原本的中心為準（直的照片原本讓出上下的字，不在整個畫面正中間；以前照畫面置中，縮回原本大小最後一下會跳），比畫面大就不露出旁邊的空白 */
+  const zClip = (s, x, y) => {
+    const f = L(), cl = (v, sz, box, off) => { const span = sz * s; if (span <= box) return Math.min(box - off - span, Math.max(-off, sz * (1 - s) / 2)); return Math.min(-off, Math.max(box - off - span, v)); };
     return [cl(x, f.w, W(), f.l), cl(y, f.h, H(), f.t)];
   };
   function clampZoom(){
