@@ -929,9 +929,13 @@ function barDate(){
 function sdayTip(b){
   const box = b && b.closest(".st"), d = box && box.querySelector("[data-sgd]"); if (!d) return;
   box.querySelectorAll("[data-sday]").forEach(x => x.classList.toggle("on", x === b));
-  d.textContent = b && b.dataset.t ? b.dataset.t : d.dataset.sgd;
+  d.textContent = b && b.dataset.t ? b.dataset.t : d.dataset.sgd; sgdFit(d);
 }
-function sdayOff(box){ const d = box.querySelector("[data-sgd]"); if (!d) return; box.querySelectorAll("[data-sday].on").forEach(x => x.classList.remove("on")); d.textContent = d.dataset.sgd; }
+function sgdFit(d){                                          // 「6/9・32 張」比格子寬時字縮小，一定一行、不超出格子
+  d.style.fontSize = "";
+  if (d.scrollWidth > d.clientWidth + 1) d.style.fontSize = (parseFloat(getComputedStyle(d).fontSize) * d.clientWidth / d.scrollWidth * .97).toFixed(1) + "px";
+}
+function sdayOff(box){ const d = box.querySelector("[data-sgd]"); if (!d) return; box.querySelectorAll("[data-sday].on").forEach(x => x.classList.remove("on")); d.textContent = d.dataset.sgd; sgdFit(d); }
 function sdayGo(b){                                           // 手機：第一下寫那天幾張，同一根再點一下才跳過去
   const tip = !b.classList.contains("on") && !matchMedia("(hover:hover)").matches;
   sdayTip(b); clearTimeout(sdayGo.t); sdayGo.t = setTimeout(() => sdayOff(b.closest(".st")), tip ? 3500 : 2400);
@@ -943,6 +947,7 @@ addEventListener("pointerover", e => { if (e.pointerType !== "mouse") return; co
 addEventListener("pointerout", e => { if (e.pointerType !== "mouse") return; const b = e.target.closest && e.target.closest("[data-sday]"); if (b && !(e.relatedTarget && e.relatedTarget.closest && e.relatedTarget.closest("[data-sday]"))) sdayOff(b.closest(".st")); });
 /* 數字太長（例如走了 1234 公里）格子放不下時字縮小一點：照最後的數字量，跑數字途中也不會超出畫面 */
 function stFit(){
+  document.querySelectorAll(".stats [data-sgd]").forEach(sgdFit);
   document.querySelectorAll(".stats .st:not([hidden]) b").forEach(b => {
     const was = b.textContent, cs = getComputedStyle(b.parentNode);
     b.style.fontSize = ""; b.textContent = b.dataset.n; b.style.width = "max-content";
@@ -1988,8 +1993,23 @@ function openLb(i, from){
     el.appendChild(h); setTimeout(() => h.remove(), T.slow * 2);
     if (!p.me) like(S.i, $("[data-lk]", el), social);
   }
+  function tbarFlip(){                                        // 下面那條工具列：數字、表情鈕出現消失時框框寬度慢慢變，按鈕滑過去（不一下子跳大跳小）
+    const tb = $(".tbar", el); if (!tb || !anim() || !tb.offsetWidth) return () => {};
+    const kids = [...tb.children], sig = () => kids.map(k => k.hidden ? "-" : k.textContent + (k.querySelector(".rxe") || {}).textContent).join("|");
+    const v0 = sig(), r0 = tb.getBoundingClientRect(), x0 = kids.map(k => k.hidden ? null : k.getBoundingClientRect().left);   // 先量現在畫面上的樣子（可能還在上一次的動畫中間）
+    return () => {
+      if (sig() === v0) return;                                // 內容沒變（例如送出後主機回來再更新一次）就不重來
+      tb.getAnimations().forEach(a => a.id === "tf" && a.cancel()); kids.forEach(k => k.getAnimations().forEach(a => a.id === "tf" && a.cancel()));
+      const r1 = tb.getBoundingClientRect(); if (Math.abs(r1.width - r0.width) < .5 && Math.abs(r1.left - r0.left) < .5) return;
+      const o = {duration:T.mid, easing:EASE};
+      const x1 = kids.map(k => k.hidden ? null : k.getBoundingClientRect().left);   // 全部先量好再開始動（框框一動，裡面的位置就不準了）
+      tb.animate([{width:`${r0.width}px`}, {width:`${r1.width}px`}], {...o, id:"tf"});
+      kids.forEach((k, i) => { if (x1[i] == null || x0[i] == null) return; const d = (x0[i] - x1[i]) - (r0.left - r1.left); if (Math.abs(d) > .5) k.animate([{translate:`${d}px 0`}, {translate:"0 0"}], {...o, id:"tf"}); });
+    };
+  }
   function social(){
     const p = PH[S.i], lk = $("[data-lk]", el), cm = $("[data-cm]", el); if (!lk) return;
+    const fl = tbarFlip();
     lk.classList.toggle("on", !!p.me); lk.querySelector("span").textContent = p.lk || "";
     const rb = $("[data-rx]", el), rn = Object.values(p.rx || {}).reduce((a, b) => a + b, 0);
     if (rn || rb.hidden) {                                     // 正要收起來的那顆不換圖示、數字（以前收的同時先換成笑臉、數字消失，看起來閃一下）
@@ -2001,9 +2021,10 @@ function openLb(i, from){
     if (rb.hidden !== !rn && !(rb.out && !rn)) {              // 其他表情：有人按過才出現（平常按住愛心選），拿掉時縮小淡出
       if (rb.out) { rb.out.cancel(); rb.out = null; }
       if (rn || !anim()) { rb.hidden = !rn; if (rn && anim()) rb.animate([{opacity:0, transform:"scale(.6)"}, {opacity:1, transform:"none"}], {duration:T.mid, easing:DEC}); }
-      else { rb.out = rb.animate([{opacity:1}, {opacity:0, transform:"scale(.6)"}], {duration:T.fast, easing:EXIT, fill:"forwards"}); rb.out.finished.then(() => { rb.hidden = true; rb.out.cancel(); rb.out = null; }, () => {}); }
+      else { rb.out = rb.animate([{opacity:1}, {opacity:0, transform:"scale(.6)"}], {duration:T.fast, easing:EXIT, fill:"forwards"}); rb.out.finished.then(() => { const f = tbarFlip(); rb.hidden = true; rb.out.cancel(); rb.out = null; f(); }, () => {}); }
     } else if (rn && rb.out) { rb.out.cancel(); rb.out = null; }
     cm.querySelector("span").textContent = (p.cm || []).length || "";
+    fl();
     const th = $(".italk .th", el), h = talkHead(p);           // 資訊裡的「誰按了愛心」跟著換（文字變了才換、淡入）
     if (th && th.dataset.v !== h) { const was = th.dataset.v != null; th.innerHTML = h; th.dataset.v = h; if (was && anim()) [...th.children].slice(1).forEach(x => x.animate([{opacity:0, transform:"translateY(3px)"}, {opacity:1, transform:"none"}], {duration:T.mid, easing:DEC})); }
   }
@@ -2527,25 +2548,33 @@ function openLb(i, from){
   }
   /* 手機上資訊先開一半：往上捲就整個拉高 */
   const PHONE = () => matchMedia("(max-width:899px)").matches;
-  inf.addEventListener("scroll", () => { if (S.info === "info" && inf.scrollTop > 2 && !el.classList.contains("full") && PHONE()) el.classList.add("full"); }, {passive:true});
-  /* 面板往下拉就關（捲到最上面時才算；整個拉高時先回到一半） */
-  const base = P => P === inf && !el.classList.contains("full") && PHONE() ? "32.6%" : "0px";   // 一半的時候面板本來就往下移了一段
+  const half = P => P === inf && S.info === "info" && !el.classList.contains("full") && PHONE();
+  inf.addEventListener("scroll", () => { if (half(inf) && inf.scrollTop > 2) el.classList.add("full"); }, {passive:true});
+  inf.addEventListener("wheel", e => { if (half(inf) && e.deltaY > 0) el.classList.add("full"); }, {passive:true});
+  /* 面板往下拉就關（捲到最上面時才算；整個拉高時先回到一半）；開一半時裡面不捲，手指往上推是把面板拉高（學 iOS，以前一邊捲一邊跳成整個，會卡一下） */
   [[inf, () => inf], [cmp, () => cmp.querySelector(".cml") || cmp]].forEach(([P, sc]) => {
     let d0 = null;
     P.addEventListener("touchstart", e => { if (e.touches.length === 1 && e.target !== document.activeElement) d0 = {y:e.touches[0].clientY, t:performance.now(), top:sc().scrollTop <= 0 || !e.target.closest(".cml,.inf:not(.cmp)"), dy:0, on:false}; }, {passive:true});
     P.addEventListener("touchmove", e => {
-      if (!d0 || matchMedia("(min-width:900px)").matches) return;
+      if (!d0 || !PHONE()) return;
       const dy = e.touches[0].clientY - d0.y;
-      if (!d0.on) { if (d0.top && (sc().scrollTop <= 0 || !e.target.closest(".cml,.inf:not(.cmp)")) && dy > 6) { d0.on = true; d0.y0 = e.touches[0].clientY; P.style.transition = "none"; } else return; }
-      d0.dy = Math.max(0, e.touches[0].clientY - d0.y0);     // 不擋瀏覽器自己的捲動（passive）：捲到最上面往下拉本來就不會捲，畫面忙的時候往上滑也不會被卡住
-      P.style.transform = `translateY(calc(${base(P)} + ${d0.dy}px))`;
+      if (!d0.on) {
+        if (half(P) && Math.abs(dy) > 6) { d0.on = true; d0.half = true; d0.b = P.offsetHeight * .326; }
+        else if (d0.top && (sc().scrollTop <= 0 || !e.target.closest(".cml,.inf:not(.cmp)")) && dy > 6) { d0.on = true; d0.b = 0; }
+        else return;
+        d0.y0 = e.touches[0].clientY; P.style.transition = "none";
+      }
+      const m = e.touches[0].clientY - d0.y0;                 // 不擋瀏覽器自己的捲動（passive）
+      d0.dy = d0.half ? (m < -d0.b ? -d0.b - Math.sqrt(-d0.b - m) * 3 : m) : Math.max(0, m);   // 拉過頂有一點阻力
+      P.style.transform = `translateY(${(d0.b + d0.dy).toFixed(1)}px)`;
     }, {passive:true});
     const done = () => {
       if (!d0) return; const q = d0; d0 = null; if (!q.on) return;
-      P.style.transition = ""; P.style.transform = "";
       const v = q.dy / Math.max(1, performance.now() - q.t);
+      if (q.half && (q.dy < -q.b * .2 || v < -.4)) { P.style.transition = ""; el.classList.add("full"); P.style.transform = ""; return; }   // 往上推：撐滿（CSS 從手指的位置接著滑上去）
+      P.style.transition = ""; P.style.transform = "";
       if (q.dy > P.clientHeight * .22 || v > .6) { if (P === inf && el.classList.contains("full")) el.classList.remove("full"); else setInfo(false); }
-      else if (anim()) P.animate([{transform:`translateY(calc(${base(P)} + ${q.dy}px))`}, {transform:`translateY(${base(P)})`}], {duration:T.mid, easing:DEC});
+      else if (anim()) P.animate([{transform:`translateY(${(q.b + q.dy).toFixed(1)}px)`}, {transform:`translateY(${q.b}px)`}], {duration:T.mid, easing:DEC});
     };
     P.addEventListener("touchend", done); P.addEventListener("touchcancel", done);
   });
@@ -2605,7 +2634,8 @@ function like(i, btn, after){
   p.me = on; p.lk = Math.max(0, (p.lk || 0) + (on ? 1 : -1)); after(); badge(i);
   if (on && anim()) {
     btn.querySelector("svg").animate([{transform:"scale(1)"}, {transform:"scale(1.45)", offset:.35}, {transform:"scale(.9)", offset:.7}, {transform:"scale(1)"}], {duration:T.slow, easing:EASE});
-    btn.insertAdjacentHTML("beforeend", `<i class="burst"></i>`); setTimeout(() => { const b = btn.querySelector(".burst"); if (b) b.remove(); }, T.slow + 100);
+    const sv = btn.querySelector("svg"), bq = btn.getBoundingClientRect(), sq = sv.getBoundingClientRect();   // 圈圈的中心對準愛心（按鈕有沒有數字都一樣）
+    btn.insertAdjacentHTML("beforeend", `<i class="burst" style="left:${(sq.left + sq.width / 2 - bq.left - btn.clientLeft).toFixed(1)}px;top:${(sq.top + sq.height / 2 - bq.top - btn.clientTop).toFixed(1)}px"></i>`); setTimeout(() => { const b = btn.querySelector(".burst"); if (b) b.remove(); }, T.slow + 100);
   }
   talk(i, {like:on}).then(ok => { if (!ok) { p.me = !on; p.lk = Math.max(0, p.lk + (on ? -1 : 1)); } after(); });
 }

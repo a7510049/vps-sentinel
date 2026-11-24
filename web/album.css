@@ -194,7 +194,8 @@ button.chip:active,a.chip:active{transform:scale(.95)}
 @media (hover:hover){.lbm>*:hover{background:rgba(255,255,255,.1)}}
 .lbm>*:active{background:rgba(255,255,255,.14)}
 /* 下面一顆玻璃膠囊：分享、愛心、留言、資訊（大拇指按得到） */
-.tbar{display:flex;align-items:center;gap:2px;padding:4px;flex:none;border-radius:var(--r-pill);background:rgba(255,255,255,.12);-webkit-backdrop-filter:blur(16px);backdrop-filter:blur(16px);box-shadow:inset 0 0 0 1px rgba(255,255,255,.12)}
+.tbar{display:flex;align-items:center;gap:2px;padding:4px;box-sizing:border-box;flex:none;border-radius:var(--r-pill);background:rgba(255,255,255,.12);-webkit-backdrop-filter:blur(16px);backdrop-filter:blur(16px);box-shadow:inset 0 0 0 1px rgba(255,255,255,.12)}
+.tbar>*{flex:none}
 .tbar .sb{background:none;-webkit-backdrop-filter:none;backdrop-filter:none;min-width:44px;justify-content:center;padding:0 10px}
 .tbar .sb[data-inf].on{background:#fff;color:#000}
 .tbar .sb[data-inf].on svg{fill:none;stroke:currentColor}
@@ -230,7 +231,7 @@ button.chip:active,a.chip:active{transform:scale(.95)}
 /* 手機的照片資訊先開一半（相機、地圖那張摘要），往上捲才整個拉高（學 iOS／Google）；留言面板照舊 */
 @media (max-width:899px){
   .inf:not(.cmp){height:92%}
-  .lb.info:not(.cmo):not(.full) .inf:not(.cmp){transform:translateY(32.6%)}
+  .lb.info:not(.cmo):not(.full) .inf:not(.cmp){transform:translateY(32.6%);overflow-y:hidden}
 }   /* 安卓：裡面的開關一動，捲動框的圓角就切不住（變成方角、露出後面），改用 clip-path 切 */
 .inf::before{content:"";display:block;width:40px;height:5px;border-radius:var(--r-pill);background:var(--s3);margin:0 auto 12px}
 .lb.info:not(.cmo) .inf:not(.cmp),.lb.cmo .cmp{transform:none}
@@ -422,7 +423,7 @@ img,video,.ph img,.zw img,.mk img,.hero img{-webkit-touch-callout:none;-webkit-u
 .sb:active{transform:scale(.92)}
 .sb.on svg{fill:#ff4d6a;stroke:#ff4d6a}
 .sb[data-cm].on svg{fill:currentColor;stroke:currentColor}
-.burst{position:absolute;left:12px;top:50%;width:20px;height:20px;margin-top:-10px;border-radius:50%;box-shadow:0 0 0 2px #ff4d6a;pointer-events:none;animation:burst var(--t-slow) var(--dec) forwards}
+.burst{position:absolute;left:50%;top:50%;width:20px;height:20px;margin:-10px 0 0 -10px;border-radius:50%;box-shadow:0 0 0 2px #ff4d6a;pointer-events:none;animation:burst var(--t-slow) var(--dec) forwards}
 @keyframes burst{from{transform:scale(.6);opacity:1}to{transform:scale(2.4);opacity:0}}
 .vbar{display:none;align-items:center;gap:10px}
 .lb.isv .vbar{display:flex}
@@ -909,6 +910,7 @@ html,body{touch-action:pan-x pan-y}
 .st .sgb>i{flex:none;width:6px;border-radius:var(--r-xs) var(--r-xs) 0 0;background:var(--line)}
 .st .sgb button.on,.st .sgb:not(:has(.on)) button{opacity:1}
 .st .sgd{display:block;margin-top:4px;font-size:var(--fs-xs);color:var(--tx3);white-space:nowrap}
+.stats>.st{min-width:0}   /* 格子比字窄時不會被撐寬（以前「天」那格整格往右歪） */
 .st .sgf{display:flex;margin-top:6px}
 .st .sgf img{width:22px;height:16px;object-fit:cover;border-radius:3px;box-shadow:0 0 0 1.5px var(--s1);margin-right:-6px}
 .ctl{position:relative;display:block;height:4px;margin-top:5px;border-radius:var(--r-pill);background:color-mix(in oklab,var(--g2) 14%,var(--s2))}
