@@ -2246,7 +2246,7 @@ function openLb(i, from){
     setTimeout(end, T.mid + 200);                              // 安卓返回手勢時動畫有時不會結束：時間到一定收掉
     el.querySelectorAll(".lbt,.lbb,.nav,.inf,.lbs").forEach(x => { x.style.opacity = 0; });
     sl.forEach(s => { if (s.firstChild !== zw) s.style.visibility = "hidden"; });   // 資訊開著時關掉：畫面變寬，旁邊那張會被排進看得到的地方，先藏起來
-    S.info = false; el.classList.remove("info", "cmo");
+    S.info = false; el.classList.remove("info", "cmo", "up");
     const sty = parseFloat((stage.style.translate || "0 0").split(" ")[1]) || 0; stage.style.translate = "";   // 手機資訊往上捲時照片被推上去的那段：接在縮回去的起點，不跳
     const n0 = `translate(0px,${sty.toFixed(1)}px) ` + (now === "none" ? "translate(0px,0px) scale(1)" : now);
     /* HDR 照片：縮回去的同時大圖（HDR）慢慢淡掉、露出底下的一般小圖，亮度慢慢降下來，不會回到照片牆才突然變暗 */
@@ -2590,7 +2590,7 @@ function openLb(i, from){
   }
   /* 手機照片資訊（同一頁往上捲）：照片跟著資訊一起往上捲；往下捲過停的位置、手放開又停下來時，捲到停的位置以下四分之一就收起來，不然彈回去 */
   { let raf = 0, idle = 0, touch = false;
-    const push = () => { raf = 0; infs.classList.toggle("end", infs.scrollTop >= infs.scrollHeight - infs.clientHeight - 2); if (S.info !== "info" || !PHONE() || S.closing) return; const d = infs.scrollTop - REST(); stage.style.translate = d > 0 ? `0 ${(-d).toFixed(1)}px` : ""; };   // 同一頁：照片跟著資訊一起往上捲
+    const push = () => { raf = 0; infs.classList.toggle("end", infs.scrollTop >= infs.scrollHeight - infs.clientHeight - 2); if (S.info !== "info" || !PHONE() || S.closing) return; const d = infs.scrollTop - REST(); stage.style.translate = d > 0 ? `0 ${(-d).toFixed(1)}px` : ""; el.classList.toggle("up", d > infs.clientHeight * .25); };   // 資訊拉到快滿版：上面的 × 和 ⋯ 收起來（往下捲回去再出現）   // 同一頁：照片跟著資訊一起往上捲
     const settle = () => { if (touch || S.info !== "info" || !PHONE() || S.closing) return; const r = REST(), st = infs.scrollTop;
       if (st < r * .75) { stage.style.translate = ""; setInfo(false); } else if (st < r - 1) infs.scrollTo({top:r, behavior:anim() ? "smooth" : "auto"}); };
     /* 手放開後還在往下滑（iPhone 的慣性捲動）、已經過了收起的線：馬上收、照片同時回位，不等捲動停下來（以前資訊先滑走，照片過一下子才回去） */

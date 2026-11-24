@@ -179,6 +179,8 @@ button.chip:active,a.chip:active{transform:scale(.95)}
 .lbb::before{background:linear-gradient(transparent,rgba(0,0,0,.55))}
 .lb.ng .lbt::before,.lb.ng .lbb::before{opacity:0}
 .lb.bare .lbt{opacity:0;transform:translateY(-12px);pointer-events:none}
+.lbt .rb{transition:opacity var(--t-mid) var(--ease),transform var(--sp-fast),background var(--t-fast) var(--ease)}
+.lb.up.info .lbt .rb{opacity:0;transform:scale(.8);pointer-events:none}
 .lb.bare .lbb{opacity:0;transform:translateY(12px);pointer-events:none}
 /* 上面中間：日期、時間兩行（學 iOS／Google，取代張數） */
 .lbt .ttl{flex:1;min-width:0;display:grid;justify-items:center;line-height:1.25;text-align:center}
@@ -241,6 +243,13 @@ button.chip:active,a.chip:active{transform:scale(.95)}
   .infs::-webkit-scrollbar{display:none}
   .infs::before{content:"";display:block;height:100%}
   .lb.info:not(.cmo) .infs{visibility:visible;transition:none}
+  /* 資訊拉到快滿版：上面的日期時間變成資訊欄的標題列（同底色、細線），內容從它底下捲過去 */
+  .lbt::after{content:"";position:absolute;left:0;right:0;top:0;bottom:24px;z-index:-1;pointer-events:none;background:var(--bg);border-bottom:1px solid var(--line);opacity:0;transition:opacity var(--t-mid) var(--ease)}
+  .lbt .ttl b,.lbt .ttl small{transition:color var(--t-mid) var(--ease)}
+  .lb.up.info .lbt::after{opacity:1}
+  .lb.up.info .lbt::before{opacity:0}
+  .lb.up.info .lbt .ttl b{color:var(--tx)}
+  .lb.up.info .lbt .ttl small{color:var(--tx2)}
   /* 捲到底時 iPhone 還會往上回彈一段：捲動頁本身下半截先墊同色底，回彈露出來的不是後面的照片（回彈本身照留） */
   .infs.end{background:linear-gradient(transparent 55%,var(--bg) 55%)}
   .infs>.inf{position:relative;left:auto;right:auto;bottom:auto;height:auto;min-height:62vh;min-height:62dvh;overflow:visible;overscroll-behavior:auto;touch-action:auto}
