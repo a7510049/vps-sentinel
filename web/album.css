@@ -265,7 +265,7 @@ button.chip:active,a.chip:active{transform:scale(.95)}
 .icam{padding:16px}
 .icam .t{display:flex;align-items:center;gap:8px}
 .icam .t b{font-weight:750;font-size:var(--fs-l);flex:1;min-width:0}
-.icam .tgs{display:flex;gap:4px;flex:none}
+.icam .tgs{display:flex;flex-wrap:wrap;gap:4px;flex:1 0 100%}   /* 格式標籤固定自己一排（使用者選的：以前有 HDR 時會被擠到第二排、時有時無） */
 .tag{font-size:var(--fs-xs);font-weight:700;letter-spacing:.04em;padding:3px 8px;border-radius:var(--r-xs);background:var(--s2);color:var(--tx2)}
 .tag.hdr{background:linear-gradient(120deg,#ffd76a,#ff8a5c);color:#3a1c00}
 .isty{display:flex;flex-wrap:wrap;align-items:center;gap:8px 10px;padding:14px 16px}
@@ -1285,6 +1285,10 @@ button.dct:active{transform:scale(.92)}
 .dsum{grid-column:1;font-style:normal;font-family:var(--serif);font-size:var(--fs-m);line-height:1.6;color:var(--tx2);letter-spacing:.02em;margin-top:2px;text-wrap:pretty}
 .day.cov .dsum{color:rgba(255,255,255,.94);text-shadow:0 1px 3px rgba(0,0,0,.4),0 1px 10px rgba(0,0,0,.4)}
 .wall[data-z="2"] .dsum,.wall[data-z="3"] .dsum{display:none}
+.dsum em{font-style:normal;white-space:nowrap}
+.hmeta [data-pl]{order:-1}                                     /* 地點固定自己一排在上面，按鈕一排在下面（以前照字數有時 2＋2、有時 3＋1） */
+.hmeta:has([data-pl])::before{content:"";flex-basis:100%;order:0}
+@media (max-width:399px){.hmeta{gap:8px 6px}.hmeta .chip{padding:0 11px;gap:5px}}   /* 窄手機：四顆按鈕（有「放照片」時）也排得下一排 */
 .sct .dsum{color:rgba(255,255,255,.85);font-size:var(--fs-l);max-width:30em;margin-top:4px}
 
 /* 留言輸入框平常收著：只放一顆鈕 */

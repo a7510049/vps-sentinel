@@ -478,7 +478,7 @@ function sections(){
   const w = $(".wall"); w.dataset.z = ZL;
   w.innerHTML = GROUPS.map((g, gi) => `<section class="day" data-g="${gi}">${g.c != null ? `<div class="dh hue" data-k="${g.k}"><b>${hueDot(g.c)}${HUEN(g.c)}</b><i class="dct num">${g.list.length}</i></div>` : g.o ? `<div class="dh oth" data-k="o"><b>其他圖片</b><span>截圖、沒有拍攝資訊的</span><i class="dct num">${g.list.length}</i></div>` : g.k && g.d ? g.m
     ? `<div class="dh" data-k="m${g.k}"><b>${g.d.y}年${g.d.mo}月</b><span class="num">${g.list.length}</span></div>`
-    : `<div class="dh" data-day="${g.k}" data-k="d${g.k}"><b>${fday(g.d, YR)}${wxTag(g.k)}</b>${((pl, sm) => `<span>${pl ? `${I("pin")}${esc(sm ? pl.split("・")[0] : pl)}` : ""}</span>${sm ? `<i class="dsum">${esc(sm)}</i>` : ""}`)(dayPlaces(g.k), daySum(g.k))}${g.list.length > 1 ? `<button class="dct num" data-dplay="${g.k}" aria-label="播放這天">${I("play")}${g.list.length}</button>` : `<i class="dct num">${g.list.length}</i>`}${dayClock(g.list)}</div>` : ""}<div class="rows"></div></section>`).join("");
+    : `<div class="dh" data-day="${g.k}" data-k="d${g.k}"><b>${fday(g.d, YR)}${wxTag(g.k)}</b>${((pl, sm) => `<span>${pl ? `${I("pin")}${esc(sm ? pl.split("・")[0] : pl)}` : ""}</span>${sm ? `<i class="dsum">${sumWrap(sm)}</i>` : ""}`)(dayPlaces(g.k), daySum(g.k))}${g.list.length > 1 ? `<button class="dct num" data-dplay="${g.k}" aria-label="播放這天">${I("play")}${g.list.length}</button>` : `<i class="dct num">${g.list.length}</i>`}${dayClock(g.list)}</div>` : ""}<div class="rows"></div></section>`).join("");
 }
 const HUEN = c => c < COLS.length ? COLS[c][0] + "色" : ["淡色", "黑白", "其他"][c - COLS.length];
 const hueDot = c => c < COLS.length ? `<i class="cdot" style="background:${COLS[c][2]}"></i>` : `<i class="cdot ${["mu", "bw", "mu"][c - COLS.length]}"></i>`;
@@ -566,6 +566,7 @@ function zoomWall(z, fx, fy, pre){                            // 換大小：每
   return true;
 }
 /* 這天一句話：早上在哪、下午到哪、走了幾公里（照拍照的時間和地點自動寫） */
+const sumWrap = s => s.split("，").map(t => `<em>${esc(t)}</em>`).join("，");   // 一句話要換行時只斷在逗號，不會把「4.2 公里」拆開
 function daySum(k){
   const ps = PH.filter(p => !p.x.dtf && p.p && (pd(p.x.dt) || {}).k === k);
   if (ps.length < 3) return "";
