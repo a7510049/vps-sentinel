@@ -9,6 +9,7 @@ const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;", "<":"&l
 const RM = matchMedia("(prefers-reduced-motion: reduce)");
 const DARK = matchMedia("(prefers-color-scheme: dark)");
 const P = {
+  flt:'<path d="M4 6h16M7 12h10M10 18h4"/>',
   zin:'<circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5M8 11h6M11 8v6"/>', zout:'<circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5M8 11h6"/>',
   x:'<path d="M18 6 6 18M6 6l12 12"/>', shr:'<circle cx="18" cy="5" r="2.5"/><circle cx="6" cy="12" r="2.5"/><circle cx="18" cy="19" r="2.5"/><path d="m8.2 10.8 7.6-4.4M8.2 13.2l7.6 4.4"/>',
   star:'<path d="m12 3.5 2.6 5.3 5.9.9-4.3 4.1 1 5.8-5.2-2.7-5.2 2.7 1-5.8-4.3-4.1 5.9-.9z"/>', info:'<circle cx="12" cy="12" r="9"/><path d="M12 16v-4M12 8h.01"/>',
@@ -61,8 +62,13 @@ let CITY = "";                                               // 只看哪個城�
 const cityKey = p => p.p && p.p.c ? `${p.p.cc || ""}|${p.p.c}` : "";
 let GEAR = "";                                               // 只看哪台相機（c:名稱）或哪顆鏡頭（l:名稱）
 const gearOf = (p, k) => k[0] === "c" ? camName(p.x) === k.slice(2) : k[0] === "l" ? lensName(p.x) === k.slice(2) : !isVid(p) && habOf(p, k[0]) === +k.slice(2);
-const pickW = () => { const t = SQ ? sqTerms(SQ) : null, l = ALL.filter(p => (p.u || "") === WHO && (!CITY || cityKey(p) === CITY) && (!GEAR || gearOf(p, GEAR)) && (!t || sqHit(p, t)));
+const pickW = () => { const t = SQ ? sqTerms(SQ) : null, l = ALL.filter(p => (p.u || "") === WHO && (!CITY || cityKey(p) === CITY) && (!GEAR || gearOf(p, GEAR)) && (!KIND || kindOf(p) === KIND) && (!t || sqHit(p, t)));
   return HUE ? l.map((p, k) => [p, p._hk || [COLS.length + 2, 0, 0], k]).sort((a, b) => a[1][0] - b[1][0] || a[1][1] - b[1][1] || a[1][2] - b[1][2] || a[2] - b[2]).map(x => x[0]) : l; };
+/* 種類篩選（學 OPPO）：全部／照片／影片／原況照片／其他圖片，只列這本有的 */
+let KIND = "";
+const kindOf = p => isVid(p) ? "v" : p.o ? "o" : p.lv ? "l" : "p";
+const KINDS = [["p", "照片", "photo"], ["v", "影片", "play"], ["l", "原況照片", "live"], ["o", "其他圖片", "scr"]];
+const kindsHere = () => { const n = {}; ALL.forEach(p => { if ((p.u || "") === WHO) n[kindOf(p)] = (n[kindOf(p)] || 0) + 1; }); return KINDS.filter(k => n[k[0]]).map(k => [...k, n[k[0]]]); };
 let HUE = 0;                                                  // 照顏色排：紅、橘、黃…一路排成彩虹
 
 /* ── 日期：EXIF 的「2026:11:03 14:22:10」是拍照當地的時間，照原樣顯示 ── */
@@ -877,6 +883,54 @@ function stats(){
   flagFix(box);
   stFit();
 }
+/* 種類篩選的按鈕（上面那條）：這本只有一種就不放；選了某一種按鈕亮著 */
+function kindBtn(){
+  const b = $("[data-kind]"); if (!b) return;
+  b.hidden = kindsHere().length < 2 && !KIND; b.classList.toggle("on", !!KIND);
+}
+function kmenu(btn){
+  if (kmenuOff()) return;
+  const ks = kindsHere(), all = ks.reduce((a, k) => a + k[3], 0), m = document.createElement("div"), r = btn.getBoundingClientRect();
+  m.className = "kmenu"; m.setAttribute("role", "menu");
+  m.innerHTML = [["", "全部", "stk", all], ...ks].map(([k, n, ic, c]) => `<button role="menuitemradio" aria-checked="${KIND === k}" data-kpick="${k}">${I(ic)}<span>${n}</span><small class="num">${c}</small>${KIND === k ? I("ck") : "<i></i>"}</button>`).join("");
+  m.style.top = `${Math.round(r.bottom + 8)}px`; m.style.right = `${Math.round(innerWidth - r.right)}px`;
+  document.body.appendChild(m);
+  if (anim()) m.animate([{opacity:0, transform:"translateY(-6px) scale(.96)"}, {opacity:1, transform:"none"}], {duration:T.mid, easing:EASE});
+  setTimeout(() => addEventListener("pointerdown", kmenu.out = e => { if (!e.target.closest(".kmenu,[data-kind]")) kmenuOff(); }), 0);
+  addEventListener("scroll", kmenuOff, {passive:true, once:true});
+}
+function kmenuOff(){
+  const m = $(".kmenu"); if (!m || m.dataset.bye) return false;
+  m.dataset.bye = 1; removeEventListener("pointerdown", kmenu.out); removeEventListener("scroll", kmenuOff);
+  if (!anim()) { m.remove(); return true; }
+  m.animate([{opacity:1}, {opacity:0, transform:"translateY(-6px) scale(.96)"}], {duration:T.fast, easing:EXIT, fill:"forwards"}).finished.then(() => m.remove(), () => m.remove());
+  return true;
+}
+function kindSet(k){
+  if (k === KIND) return;
+  KIND = k;
+  whoSet(WHO, true).then(() => { const w = $(".cityf"); if (w && !w.hidden) scrollTo({top:w.getBoundingClientRect().top + scrollY - 70, behavior:anim() ? "smooth" : "auto"}); });
+}
+/* 上面那條：捲到照片牆時寫現在畫面上看到的是哪幾天（「6月8日至10日」），不在照片牆就寫張數 */
+function barDate(){
+  const s = $(".bar small"), bar = $(".bar"); if (!s || !bar) return;
+  let t = cntTxt();
+  if (!HUE && bar.classList.contains("on")) {
+    const top = bar.getBoundingClientRect().bottom + 8, xs = innerWidth / 2;
+    const at = y => { const e = document.elementFromPoint(xs, y), c = e && e.closest && (e.closest(".wall .ph") || e.closest(".wall .row,.wall .day")), ph = c && (c.matches(".ph") ? c : c.querySelector(".ph")); return ph ? PH[+ph.dataset.i] : null; };   // 點到照片中間的縫、標題：用那一排／那天第一張
+    const a = at(top + 4), b = at(innerHeight - 24) || at(innerHeight * .7);
+    const da = a && !a.o && pd(a.x.dt), db = b && !b.o && pd(b.x.dt);
+    if (a && a.o && (!b || b.o)) t = "其他圖片";
+    else if (da || db) {
+      const x = da || db, y2 = db || da, [p, q] = x.k <= y2.k ? [x, y2] : [y2, x];
+      const f = d => `${YR ? d.y + "年" : ""}${d.mo}月${d.d}日`;
+      t = p.k === q.k ? f(p) : p.y === q.y && p.mo === q.mo ? `${f(p)}至${q.d}日` : `${f(p)}至${YR && p.y !== q.y ? q.y + "年" : ""}${q.mo}月${q.d}日`;
+    }
+  }
+  if (s.textContent === t) return;
+  s.textContent = t;
+  if (anim()) s.animate([{opacity:0, transform:"translateY(3px)"}, {opacity:1, transform:"none"}], {duration:T.fast, easing:EASE});
+}
 /* 數字那排「天」的長條：指著（電腦）或點一下（手機）寫那天幾張，再點捲到那天 */
 function sdayTip(b){
   const box = b && b.closest(".st"), d = box && box.querySelector("[data-sgd]"); if (!d) return;
@@ -925,7 +979,7 @@ function draw(){
         <div class="hmeta"><button class="chip go" data-ss>${I("play")}<span>播放</span></button>${FIND ? `<button class="chip" data-find aria-label="搜尋">${I("find")}<span>搜尋</span></button>` : ""}${pl ? `<span class="chip" data-pl>${heroFlags() || I("pin")}<span>${esc(pl)}</span></span>` : ""}
         ${D.dl ? `<button class="chip" data-sel>${I("dl")}<span>下載</span></button>` : ""}${D.up ? `<button class="chip" data-up>${I("up")}<span>放照片</span></button>` : ""}</div></div>
       <button class="cue" aria-label="往下看"><i></i></button></header>
-    <div class="bar"><b>${esc(D.name)}<small class="num">${cntTxt()}</small></b>${IOS ? `<span class="chip zb"><button data-zb="-1" aria-label="放大">${I("zin")}</button><button data-zb="1" aria-label="縮小">${I("zout")}</button></span>` : ""}${FIND ? `<button class="chip" data-find aria-label="搜尋">${I("find")}</button>` : ""}${D.up ? `<button class="chip" data-up aria-label="放照片">${I("up")}</button>` : ""}${D.dl ? `<button class="chip" data-sel aria-label="下載">${I("dl")}</button>` : ""}<button class="chip go" data-ss aria-label="播放">${I("play")}</button></div>
+    <div class="bar"><b>${esc(D.name)}<small class="num">${cntTxt()}</small></b>${IOS ? `<span class="chip zb"><button data-zb="-1" aria-label="放大">${I("zin")}</button><button data-zb="1" aria-label="縮小">${I("zout")}</button></span>` : ""}<button class="chip" data-kind aria-label="種類" hidden>${I("flt")}</button>${FIND ? `<button class="chip" data-find aria-label="搜尋">${I("find")}</button>` : ""}${D.up ? `<button class="chip" data-up aria-label="放照片">${I("up")}</button>` : ""}${D.dl ? `<button class="chip" data-sel aria-label="下載">${I("dl")}</button>` : ""}<button class="chip go" data-ss aria-label="播放">${I("play")}</button></div>
     ${D.intro ? `<section class="intro"><p>${esc(D.intro).replace(/\n/g, "<br>")}</p></section>` : ""}<nav class="who" hidden></nav><div class="mems"></div><div class="stats"></div><section class="hl" hidden></section><div class="cityf" hidden></div><div class="wwrap"><main class="wall" data-z="${ZL}"></main><aside class="smap" hidden><div class="smv"></div><div class="smc"></div></aside></div>
     <section class="gear" hidden></section>
     ${D.loc && ALL.some(p => p.g && !p.u) ? `<section class="msec"${WHO ? " hidden" : ""}><div class="mh"><b data-mt>地點</b><span class="num" data-km></span></div><div class="cities"></div><div class="map" data-map></div></section>` : ""}
@@ -1007,7 +1061,7 @@ async function whoSet(w, keep){
   if (SEL.on) popBack();
   const parts = [".mems", ".stats", ".hl", ".cityf", ".wall", ".gear", ".msec", ".smap", ".gbk"].map(q => $(q)).filter(Boolean);
   if (anim()) await Promise.all(parts.map(x => x.animate([{opacity:1}, {opacity:0, transform:"translateY(6px)"}], {duration:T.fast, easing:EXIT, fill:"forwards"}).finished.catch(() => {})));
-  if (!keep || w !== WHO) { CITY = ""; GEAR = ""; SQ = ""; HUE = 0; }
+  if (!keep || w !== WHO) { CITY = ""; GEAR = ""; SQ = ""; HUE = 0; KIND = ""; }
   WHO = w; PH = pickW(); citybar(); stackCalc();
   TILES.forEach(t => t.classList.remove("on"));
   TILES = PH.map((p, i) => { const t = TM.get(p.i); if (t) { t.dataset.i = i; return t; } return tile(p, i); });
@@ -1248,6 +1302,7 @@ function onScroll(){
     }
     $(".bar").classList.toggle("on", y > H - 90);
     scrubSync();
+    clearTimeout(barDate.t); barDate.t = setTimeout(barDate, 120);
   });
 }
 addEventListener("scroll", onScroll, {passive:true});
@@ -1422,6 +1477,9 @@ document.addEventListener("click", e => {
   if (SEL.on && e.target.closest("[data-ss],[data-mem]")) return;
   if (e.target.closest(".cue")) return scrollTo({top:$(".hero").offsetHeight - 8, behavior:anim() ? "smooth" : "auto"});
   { const sd = e.target.closest("[data-sday]"); if (sd) return sdayGo(sd); }
+  { const km = e.target.closest("[data-kpick]"); if (km) { kmenuOff(); return kindSet(km.dataset.kpick); } }
+  if (e.target.closest("[data-kind]")) return kmenu(e.target.closest("[data-kind]"));
+  if (e.target.closest("[data-kindx]")) return kindSet("");
   { const zb = e.target.closest("[data-zb]"); if (zb) return zoomWall(ZL + +zb.dataset.zb, innerWidth / 2, innerHeight / 2); }
   if (e.target.closest("[data-ss]")) return show(0);
   { const dp = e.target.closest("[data-dplay]"); if (dp) return SEL.on || show(0, dp.dataset.dplay); }
@@ -1552,9 +1610,11 @@ function gstat(fo, hb){
 function citybar(){
   const b = $(".cityf"); if (!b) return;
   const c = CITY && citiesOf().find(x => x.k === CITY);
-  b.hidden = !c && !GEAR && !SQ && !HUE;
+  b.hidden = !c && !GEAR && !SQ && !HUE && !KIND;
+  kindBtn();
   b.innerHTML = (HUE ? `<span class="chip on">${I("hue")}<span>照顏色排</span></span><button class="chip" data-huex>${I("x")}<span>照日期排</span></button>` : "") + (SQ ? `<button class="chip on" data-find>${I("find")}<span>${esc(SQ)}</span><small class="num">${PH.length} 張</small></button><button class="chip" data-sqx>${I("x")}<span>全部照片</span></button>` : "") + (c ? `<span class="chip on">${flagImg(c.cc)}<span>${esc(c.c)}</span><small class="num">${c.ps.length} 張</small></span><button class="chip" data-cityx>${I("x")}<span>全部城市</span></button>` : "")
-    + (GEAR ? `<span class="chip on">${I(GEAR[0] === "c" ? "cam" : GEAR[0] === "l" ? "lens" : "dial")}<span>${esc("cl".includes(GEAR[0]) ? GEAR.slice(2) : habLabel(GEAR))}</span><small class="num">${PH.length} 張</small></span><button class="chip" data-gearx>${I("x")}<span>全部器材</span></button>` : "");
+    + (GEAR ? `<span class="chip on">${I(GEAR[0] === "c" ? "cam" : GEAR[0] === "l" ? "lens" : "dial")}<span>${esc("cl".includes(GEAR[0]) ? GEAR.slice(2) : habLabel(GEAR))}</span><small class="num">${PH.length} 張</small></span><button class="chip" data-gearx>${I("x")}<span>全部器材</span></button>` : "")
+    + (KIND ? ((k) => `<span class="chip on">${I(k[2])}<span>${k[1]}</span><small class="num">${PH.length}</small></span><button class="chip" data-kindx>${I("x")}<span>全部種類</span></button>`)(KINDS.find(k => k[0] === KIND)) : "");
   flagFix(b);
 }
 

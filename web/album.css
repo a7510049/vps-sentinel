@@ -1565,3 +1565,14 @@ html.shy #shyc{visibility:visible;opacity:1;scale:1;transition:opacity var(--t-f
 .ph.wt{clip-path:inset(0 round var(--r-xs))}
 @media (min-width:700px){.ph.wt{clip-path:inset(0 round var(--r-sm))}}
 .map.tld{clip-path:inset(0 round var(--r-xl))}
+
+/* 種類篩選的選單（上面那條的篩選鈕） */
+.kmenu{position:fixed;z-index:calc(var(--z-bar) + 1);min-width:190px;padding:6px;border-radius:var(--r-lg);background:var(--s1);color:var(--tx);box-shadow:var(--sh-pop);transform-origin:top right}
+.kmenu button{display:grid;grid-template-columns:20px 1fr auto 18px;align-items:center;gap:10px;width:100%;min-height:42px;padding:0 10px;border-radius:var(--r-md);text-align:left;font-size:var(--fs-m);color:var(--tx)}
+.kmenu button svg{width:18px;height:18px;color:var(--tx2)}
+.kmenu button small{color:var(--tx3);font-size:var(--fs-s)}
+.kmenu button>i{width:18px}
+.kmenu button[aria-checked="true"]{color:var(--g2);font-weight:650}
+.kmenu button[aria-checked="true"] svg{color:var(--g2)}
+@media (hover:hover){.kmenu button:hover{background:var(--s2)}}
+.bar [data-kind].on{background:var(--g2);color:#fff}
