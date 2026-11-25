@@ -286,7 +286,7 @@ img.flag{width:28px;height:21px;object-fit:cover;border-radius:var(--r-xs);flex:
 .dash.m{position:relative;max-width:760px;margin:0 auto;padding:10px 18px calc(env(safe-area-inset-bottom) + 28px);overflow-x:clip}
 .full .dash.m{padding-top:0;padding-bottom:calc(env(safe-area-inset-bottom) + 102px)}
 /* 換分頁由 JS through() 針對最底層卡片直接淡入淡出（不在父容器 .view 上改 opacity，避免毛玻璃切換時先變不透明再變透明） */
-.dash.m .view:is([data-dir="1"],[data-dir="-1"]) :is(.hcard,.tbx,.tile){animation:none}
+.dash.m .view:is([data-dir="1"],[data-dir="-1"]) :is(.hcard,.tbx,.tile),.no-intro :is(.hcard,.sumc,.tbx,.tile){animation:none}
 /* 這個網頁連不上主機超過 15 秒（html.lost）：畫面上的數字都是舊的，整塊變淡 */
 .view>:not(.hbanner,.dhome,.mtop),.dhome>:not(.dbar,.dhero),.det .dscroll>:not(.dtop){transition:filter var(--t-slow) var(--ease)}
 html.lost :is(.view>:not(.hbanner,.dhome,.mtop),.det .dscroll>:not(.dtop)){filter:opacity(.55) saturate(.45)}

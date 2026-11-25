@@ -1855,7 +1855,7 @@ function animTargets(root){
   walk(root);
   return out;
 }
-/* 換分頁：電腦版直接淡入淡出各毛玻璃卡片與區塊；手機版整頁並排滑動（兩頁永不重疊、不破圖，並接續手指橫滑位移） */
+/* 換分頁：電腦版先讓舊頁各卡片淡出移除、再讓新頁各毛玻璃卡片直接淡入（零重疊、不建 Backdrop Root、邊框不閃） */
 let SWIPEX = 0;
 function through(a, b){
   const par = a.offsetParent;
@@ -1867,47 +1867,62 @@ function through(a, b){
   const r = a.getBoundingClientRect(), R = par.getBoundingClientRect(), sy = Math.max(0, scrollY) / z;
   const top = (r.top - R.top) / z - par.clientTop, h = Math.max(0, Math.min(r.height / z, sy + innerHeight / z - top));
   a.replaceWith(b);
-  if (!slide) skipIntro(b, true);
-  a._leaving = 1;
-  Object.assign(a.style, {position:"absolute", left:(r.left - R.left) / z - par.clientLeft - tfX + "px", top:(top - sy) + "px", width:r.width / z + "px",
-    height:h + "px", overflow:"hidden", margin:"0", pointerEvents:"none", animation:"none", clipPath:slide && sy > 0 ? `inset(${sy}px 0 0 0)` : ""});
-  b.after(a); still(a);
   if (slide) {
+    a._leaving = 1;
+    Object.assign(a.style, {position:"absolute", left:(r.left - R.left) / z - par.clientLeft - tfX + "px", top:(top - sy) + "px", width:r.width / z + "px",
+      height:h + "px", overflow:"hidden", margin:"0", pointerEvents:"none", animation:"none", clipPath:sy > 0 ? `inset(${sy}px 0 0 0)` : ""});
+    b.after(a); still(a);
     const stride = r.width / z + 32, dur = Math.round(T.mid * Math.max(.55, 1 - Math.abs(curX) / stride));
     const opt = {duration:dur, easing:EASE, id:"ui"};
     a.animate([{transform:`translateX(${curX}px)`}, {transform:`translateX(${-TABDIR * stride}px)`}], {...opt, fill:"forwards"}).onfinish = () => a.remove();
     b.animate([{transform:`translateX(${curX + TABDIR * stride}px)`}, {transform:"none"}], opt);
-  } else {
-    const outEls = animTargets(a), outOpt = {duration:Math.round(T.fast * .6), easing:EXIT, fill:"forwards", id:"ui"};
-    if (outEls.length) outEls.map(el => el.animate([{opacity:1}, {opacity:0}], outOpt))[0].onfinish = () => a.remove();
-    else a.remove();
-    const inOpt = {duration:T.mid, delay:Math.round(T.fast * .45), easing:DEC, fill:"backwards", id:"ui"};
-    animTargets(b).forEach(el => el.animate([{opacity:0, transform:"translateY(6px)"}, {opacity:1, transform:"none"}], inOpt));
+    return;
   }
+  b.classList.add("no-intro");
+  const enter = () => {
+    a.remove();
+    if (!b.isConnected) return;
+    b.style.visibility = "";
+    const inOpt = {duration:Math.round(T.mid * .75), easing:DEC, id:"ui"};
+    animTargets(b).forEach(el => el.animate([{opacity:0, transform:"translateY(5px)"}, {opacity:1, transform:"none"}], inOpt));
+  };
+  if (a.style.visibility === "hidden") return enter();
+  b.style.visibility = "hidden";
+  a._leaving = 1;
+  Object.assign(a.style, {position:"absolute", left:(r.left - R.left) / z - par.clientLeft + "px", top:(top - sy) + "px", width:r.width / z + "px",
+    height:h + "px", overflow:"hidden", margin:"0", pointerEvents:"none", animation:"none"});
+  b.after(a); still(a);
+  const outEls = animTargets(a), outOpt = {duration:Math.round(T.fast * .55), easing:EXIT, fill:"forwards", id:"ui"};
+  if (outEls.length) outEls.map(el => el.animate([{opacity:1}, {opacity:0}], outOpt))[0].onfinish = enter;
+  else enter();
 }
-/* 切換內容區塊（data-sw：總覽 ↔ 單台主機、換主機、換設定分類）：直接對子卡片淡出再淡入，全程保留毛玻璃不閃爍 */
+/* 切換內容區塊（data-sw：總覽 ↔ 單台主機、換主機、換設定分類）：先淡出移除舊內容再淡入新毛玻璃卡片，零重疊不閃邊框 */
 function swapIn(a, b){
   if (!canAnim() || !a.isConnected) return a.replaceWith(b);
   const h0 = a.offsetHeight, par = a.offsetParent, x = a.offsetLeft, y = a.offsetTop, w = a.offsetWidth;
   const k0 = a.dataset.key || "", k1 = b.dataset.key || "";
   const into = k0 === "dh:all" && k1.startsWith("dh:h:"), back = k0.startsWith("dh:h:") && k1 === "dh:all", sb = k1.startsWith("sb:"), gh = k1.startsWith("g-h:");
-  a.replaceWith(b); skipIntro(b, true);
-  if (par) {
-    a._leaving = 1;
-    Object.assign(a.style, {position:"absolute", left:x + "px", top:y + "px", width:w + "px", height:h0 + "px", margin:"0", pointerEvents:"none", overflow:"hidden", zIndex:1});
-    b.after(a); still(a);
-    const outTf = into ? "translateY(-6px)" : back ? "translateY(6px)" : (sb || gh) ? "none" : "translateY(-4px)";
-    const outEls = animTargets(a), outOpt = {duration:Math.round(T.fast * .6), easing:EXIT, fill:"forwards", id:"ui"};
-    if (outEls.length) outEls.map(el => el.animate([{opacity:1, transform:"none"}, {opacity:0, transform:outTf}], outOpt))[0].onfinish = () => a.remove();
-    else a.remove();
-  }
-  const inTf = into ? "translateY(12px)" : back ? "translateY(-8px)" : gh ? "none" : sb ? "translateY(4px)" : "translateY(8px)";
-  const inOpt = {duration:(sb || gh) ? T.fast : T.mid, delay:Math.round(T.fast * .35), easing:DEC, fill:"backwards", id:"ui"};
-  animTargets(b).forEach(el => el.animate([{opacity:0, transform:inTf}, {opacity:1, transform:"none"}], inOpt));
-  if (sb) return;
-  const hEnd = b.offsetHeight;
-  if (Math.abs(hEnd - h0) < 2) return;
-  b.animate([{height:h0 + "px", overflow:"hidden"}, {height:hEnd + "px", overflow:"hidden"}], {duration:T.mid, easing:EASE, id:"ui"});
+  b.classList.add("no-intro");
+  a.replaceWith(b);
+  const hEnd = sb ? h0 : b.offsetHeight;
+  const enter = () => {
+    a.remove();
+    if (!b.isConnected) return;
+    b.style.visibility = "";
+    const inTf = into ? "translateY(10px)" : back ? "translateY(-6px)" : gh ? "none" : sb ? "translateY(4px)" : "translateY(6px)";
+    const inOpt = {duration:(sb || gh) ? T.fast : Math.round(T.mid * .8), easing:DEC, id:"ui"};
+    animTargets(b).forEach(el => el.animate([{opacity:0, transform:inTf}, {opacity:1, transform:"none"}], inOpt));
+  };
+  if (!sb && Math.abs(hEnd - h0) >= 2) b.animate([{height:h0 + "px", overflow:"hidden"}, {height:hEnd + "px", overflow:"hidden"}], {duration:T.mid, easing:EASE, id:"ui"});
+  if (!par || a.style.visibility === "hidden") return enter();
+  b.style.visibility = "hidden";
+  a._leaving = 1;
+  Object.assign(a.style, {position:"absolute", left:x + "px", top:y + "px", width:w + "px", height:h0 + "px", margin:"0", pointerEvents:"none", overflow:"hidden", zIndex:1});
+  b.after(a); still(a);
+  const outTf = into ? "translateY(-5px)" : back ? "translateY(5px)" : (sb || gh) ? "none" : "translateY(-4px)";
+  const outEls = animTargets(a), outOpt = {duration:Math.round(T.fast * .55), easing:EXIT, fill:"forwards", id:"ui"};
+  if (outEls.length) outEls.map(el => el.animate([{opacity:1, transform:"none"}, {opacity:0, transform:outTf}], outOpt))[0].onfinish = enter;
+  else enter();
 }
 function morph(a, b){
   if (a.nodeType === 1 && b.nodeType === 1 && a.matches("main.view") && b.matches("main.view") && a.getAttribute("data-key") !== b.getAttribute("data-key")) return through(a, b);
