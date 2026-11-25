@@ -1,4 +1,4 @@
-# VPS 哨兵：給 Claude 的專案說明
+# 哨站 Outpost：給 Claude 的專案說明
 
 ## 跟使用者溝通
 

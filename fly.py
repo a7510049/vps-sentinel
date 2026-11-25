@@ -1,4 +1,4 @@
-"""VPS 哨兵：機場起降（看板、雷達、官網航班表、分享）
+"""哨站：機場起降（看板、雷達、官網航班表、分享）
 
 這個檔案不是獨立的程式：sentinel.py 啟動時把它載入到自己裡面（`include("fly.py")`），
 跟 sentinel.py 共用同一組變數和函式（DATA_DIR、log、http 工具…），sentinel.py 也直接用這裡的函式。

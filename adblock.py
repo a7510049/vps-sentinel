@@ -1,4 +1,4 @@
-"""VPS 哨兵：擋廣告 DNS（AdGuard Home，`ab_` 開頭）。
+"""哨站：擋廣告 DNS（AdGuard Home，`ab_` 開頭）。
 手機把 DNS 設成這台主機，廣告、追蹤的網址查不到就載不出來。只開加密的 DNS：
   ‧ iPhone：DNS-over-HTTPS（https://網域:埠/dns-query，由 Caddy 轉給本機的 AdGuard Home）
   ‧ Android：私人 DNS（DNS-over-TLS，853 埠，用 Caddy 申請好的憑證）
@@ -174,7 +174,7 @@ def ab_download():
 
 def ab_unit():
     txt = f"""[Unit]
-Description=VPS 哨兵：擋廣告 DNS（AdGuard Home）
+Description=哨站：擋廣告 DNS（AdGuard Home）
 After=network-online.target caddy.service
 Wants=network-online.target
 

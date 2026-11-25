@@ -1,4 +1,4 @@
-"""VPS 哨兵：每日備份、網頁還原。sentinel.py 用 include("backup.py") 載入到自己裡面，兩邊共用同一組變數（不是獨立模組）"""
+"""哨站：每日備份、網頁還原。sentinel.py 用 include("backup.py") 載入到自己裡面，兩邊共用同一組變數（不是獨立模組）"""
 
 # ───────────────────────── 每日備份 ─────────────────────────
 # 每天清晨把這台主機上重要的設定打包（3x-ui、n8n、哨兵自己、Caddy／nginx、憑證…），加密成哨兵備份檔（.vsbk）。
@@ -331,13 +331,13 @@ def _sqlite_copy(src, dst):
         s.close()
 
 
-BK_README = """VPS 哨兵的備份：{name}（{when}）
+BK_README = """哨站的備份：{name}（{when}）
 
 內容：{items}
 
 還原方法（會自動放回檔案、把服務重新啟動）：
   sudo python3 ~/vps-sentinel/sentinel.py --restore 備份檔.vsbk
-詳細說明在哨兵網頁的「設定 → 備份 → 還原」。
+詳細說明在哨站網頁的「設定 → 備份 → 還原」。
 """
 
 
@@ -849,7 +849,7 @@ def rsw_store(stream, length):
                 left -= len(chunk)
         if head != VSBK_MAGIC:
             os.remove(tmp)
-            return False, "這不是哨兵的備份檔（檔名是 .vsbk 的那個）"
+            return False, "這不是哨站的備份檔（檔名是 .vsbk 的那個）"
         os.replace(tmp, RSW_FILE)
     except OSError as e:
         try:

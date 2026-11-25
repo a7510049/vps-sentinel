@@ -222,7 +222,7 @@ private fun Setup(last: String, go: (String) -> Unit) {
         Column(Modifier.widthIn(max = 420.dp).padding(24.dp), horizontalAlignment = Alignment.CenterHorizontally) {
             Logo()
             Spacer(Modifier.height(16.dp))
-            Text("VPS 哨兵", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.SemiBold)
+            Text("哨站", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.SemiBold)
             Spacer(Modifier.height(28.dp))
             OutlinedTextField(u, { u = it }, Modifier.fillMaxWidth(), label = { Text("主機網址") }, placeholder = { Text("https://網域:9443") },
                 singleLine = true, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri, imeAction = ImeAction.Go),

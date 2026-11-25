@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# VPS 哨兵：雲端硬碟（FileBrowser Quantum）
+# 哨站：雲端硬碟（FileBrowser Quantum）
 #
 # 用法：
 #   sudo bash cloud.sh 50          安裝雲端硬碟，最多可以放 50 GB（之後再執行一次就能改大小）
@@ -34,7 +34,7 @@ KEY=/etc/vps-cloud.key   # 加密鑰匙（不見了檔案就打不開：每日�
 MAP=vps-cloud            # 解鎖後的磁碟：/dev/mapper/vps-cloud
 UNLOCK_UNIT=/etc/systemd/system/vps-cloud-unlock.service
 
-[ -f "$CONF" ] || { echo "❌ 請先安裝 VPS 哨兵（bash install.sh）"; exit 1; }
+[ -f "$CONF" ] || { echo "❌ 請先安裝哨站（bash install.sh）"; exit 1; }
 set_conf() { if grep -q "^$1=" "$CONF"; then sed -i "s|^$1=.*|$1=$2|" "$CONF"; else echo "$1=$2" >> "$CONF"; fi; }
 get_conf() { grep -E "^$1=" "$CONF" | head -1 | cut -d= -f2- || true; }
 
@@ -63,7 +63,7 @@ luks_grow() {  # 空間檔變大之後：解鎖的磁碟跟著變大
 write_units() {   # 開機時先解鎖、再掛上
     cat > "$UNLOCK_UNIT" <<EOF
 [Unit]
-Description=VPS 哨兵雲端硬碟解鎖
+Description=哨站雲端硬碟解鎖
 After=local-fs.target
 Before=srv-cloud.mount
 
@@ -78,7 +78,7 @@ WantedBy=multi-user.target
 EOF
     cat > "$MOUNT_UNIT" <<EOF
 [Unit]
-Description=VPS 哨兵雲端硬碟空間
+Description=哨站雲端硬碟空間
 Requires=vps-cloud-unlock.service
 After=vps-cloud-unlock.service
 
@@ -371,7 +371,7 @@ if [ -n "$DOMAIN" ] && [ -f /etc/caddy/sites/vps-sentinel.caddy ]; then
     SITE="$(grep -m1 '{$' "$SITE_FILE" | sed 's/ *{$//')"
     PORT_NOW="$(get_conf PORT)"
     cat > "$SITE_FILE" <<EOF
-# VPS 哨兵（由安裝腳本產生）
+# 哨站（由安裝腳本產生）
 $SITE {
 	tls {
 		protocols tls1.3

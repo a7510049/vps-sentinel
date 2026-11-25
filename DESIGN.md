@@ -1,4 +1,4 @@
-# VPS 哨兵：美術設計規範
+# 哨站：美術設計規範
 
 網頁的長相都照這份規範。所有數值都寫在 `web/style.css` 最前面的 `:root`，元件只能用這些變數，不能另外寫死。
 `python3 tools/style_check.py` 會自動檢查大部分規則（每次推上 GitHub 也會跑）。

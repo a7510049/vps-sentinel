@@ -1,4 +1,4 @@
-"""VPS 哨兵：遠端下載、影片網站下載。sentinel.py 用 include("download.py") 載入到自己裡面，兩邊共用同一組變數（不是獨立模組）"""
+"""哨站：遠端下載、影片網站下載。sentinel.py 用 include("download.py") 載入到自己裡面，兩邊共用同一組變數（不是獨立模組）"""
 
 # ───────────────────────── 遠端下載 ─────────────────────────
 # 網頁上貼一個下載連結，這台主機直接下載到雲端硬碟的「下載」資料夾；好了會記在事件紀錄（也就會傳到 Telegram）。
@@ -141,7 +141,7 @@ def dl_open(url, start=0, end=None, ua=None, stop=None):
         path = urllib.parse.quote(u.path or "/", safe="/%:@!$&'()*+,;=-._~")
         if u.query:
             path += "?" + urllib.parse.quote(u.query, safe="/%:@!$&'()*+,;=-._~?")
-        head = {"User-Agent": ua or f"Mozilla/5.0 (VPS Sentinel {VERSION})", "Accept": "*/*", "Accept-Encoding": "identity"}
+        head = {"User-Agent": ua or f"Mozilla/5.0 (Outpost {VERSION})", "Accept": "*/*", "Accept-Encoding": "identity"}
         if u.username:
             head["Authorization"] = "Basic " + base64.b64encode(
                 f"{urllib.parse.unquote(u.username)}:{urllib.parse.unquote(u.password or '')}".encode()).decode()

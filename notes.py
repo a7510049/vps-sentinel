@@ -1,4 +1,4 @@
-"""VPS 哨兵：加密筆記（Joplin 同步，`note_` 開頭）。
+"""哨站：加密筆記（Joplin 同步，`note_` 開頭）。
 網址 /notes/ 是一個很小的 WebDAV（只有 Joplin 用得到的那幾個動作），筆記在手機上先加密好才傳上來，主機只存亂碼。
 sentinel.py 用 include("notes.py") 載入到自己裡面，兩邊共用同一組變數（不是獨立模組）"""
 from email.utils import formatdate
