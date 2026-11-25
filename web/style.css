@@ -1,101 +1,119 @@
-/* ═════════ 共用規則（Google Material 3＋Workspace 風格；完整說明見 DESIGN.md） ═════════ */
+/* ═════════ 共用規則（Apple Liquid Glass 極簡風格；完整說明見 DESIGN.md） ═════════ */
 /* 英數字型由主機自己給（Plus Jakarta Sans，SIL OFL），不用等 Google */
 @font-face{font-family:"Plus Jakarta Sans";font-style:normal;font-weight:200 800;font-display:swap;src:url(/font.woff2) format("woff2");unicode-range:U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD}
 :root{
-  --font:"Plus Jakarta Sans",-apple-system,BlinkMacSystemFont,"PingFang TC","Noto Sans TC","Microsoft JhengHei",sans-serif;
-  --r-xs:6px; --r-sm:12px; --r-md:16px; --r-lg:24px; --r-xl:28px; --r-2xl:36px; --r-pill:999px; --r-full:24px;   /* 圓角：連在一起的清單中間／小元件／卡片裡的小框／卡片／大卡片／按下變形／膠囊／會變形的小按鈕 */
-  --fs-xs:12px; --fs-s:13px; --fs-m:14px; --fs-l:16px; --fs-xl:19px; --fs-2xl:22px; --fs-3xl:28px; --fs-4xl:34px;   /* 字級：貼近 Google Material 3 比例 */
+  --font:-apple-system,BlinkMacSystemFont,"SF Pro Display","SF Pro Text","Plus Jakarta Sans","PingFang TC","Noto Sans TC","Microsoft JhengHei",sans-serif;
+  --r-xs:6px; --r-sm:12px; --r-md:14px; --r-lg:20px; --r-xl:26px; --r-2xl:32px; --r-pill:999px; --r-full:24px;   /* 同心圓角比例 */
+  --fs-xs:12px; --fs-s:13px; --fs-m:14px; --fs-l:16px; --fs-xl:19px; --fs-2xl:22px; --fs-3xl:28px; --fs-4xl:32px;
   --fs-input:16px;                                       /* 手機輸入框最小字級：小於這個 iPhone 一點輸入框就會自己放大畫面 */
-  --t-fast:.18s; --t-mid:.32s; --t-slow:.48s; --t-long:.72s;   /* 動畫時間：Google Material 3 Expressive 流暢節奏 */
-  --ease:cubic-bezier(.2,0,0,1); --dec:cubic-bezier(.05,.7,.1,1); --exit:cubic-bezier(.3,0,.8,.15);   /* 曲線：Google Material 3 Standard／Emphasized Decelerate／Accelerate */
-  /* 物理彈簧（Material 3 Expressive：高阻尼自然落點，滑順有手感不亂晃；新瀏覽器在 @supports 換成精算的 linear() 彈簧） */
-  --sp-fast:.29s cubic-bezier(.34,1.25,.64,1); --sp:.42s cubic-bezier(.25,1.08,.55,1); --sp-slow:.58s cubic-bezier(.22,1.04,.52,1);
-  --z-bar:5; --z-det:20; --z-fade:45; --z-veil:50; --z-toast:60; --z-menu:70;   /* 疊放順序：分頁列／主機頁／淡出／視窗／通知／選單 */
+  --t-fast:.18s; --t-mid:.34s; --t-slow:.52s; --t-long:.72s;
+  --ease:cubic-bezier(.22,1,.36,1); --dec:cubic-bezier(.05,.7,.1,1); --exit:cubic-bezier(.3,0,.8,.15);
+  /* 高阻尼物理彈簧（新瀏覽器在 @supports 換成精算的 linear() 彈簧） */
+  --sp-fast:.32s cubic-bezier(.32,1.18,.6,1); --sp:.44s cubic-bezier(.24,1.08,.52,1); --sp-slow:.6s cubic-bezier(.2,1.04,.5,1);
+  --z-bar:5; --z-det:20; --z-fade:45; --z-veil:50; --z-toast:60; --z-menu:70;
   --zoom:1;
-  --sh-1:0 1px 2px rgba(0,0,0,.08),0 1px 3px 1px rgba(0,0,0,.05);    /* 陰影：微浮（Material 3 高度 1） */
-  --sh-2:0 1px 2px rgba(0,0,0,.12),0 2px 6px 2px rgba(0,0,0,.08);    /* 選單、提示框（高度 2） */
-  --sh-3:0 4px 12px 3px rgba(0,0,0,.1),0 1px 3px rgba(0,0,0,.14);    /* 視窗（高度 3） */
+  --blur-card:blur(20px) saturate(160%);
+  --blur-float:blur(28px) saturate(185%);
+  --blur-modal:blur(36px) saturate(190%);
+  --sh-1:0 4px 16px -6px rgba(0,0,0,.12),0 1px 3px rgba(0,0,0,.06);
+  --sh-2:0 12px 32px -12px rgba(0,0,0,.22),0 2px 8px rgba(0,0,0,.08);
+  --sh-3:0 22px 56px -16px rgba(0,0,0,.32),0 4px 14px rgba(0,0,0,.12);
 }
 @supports (transition-timing-function:linear(0,1)){:root{
-  --sp-fast:.29s linear(0,.015 2.4%,.0848 6%,.2136 10.4%,.3818 15.4%,.5611 20.8%,.7257 26.6%,.8582 32.8%,.9514 39.2%,1.0072 46%,1.0329 53%,1.0383 60.3%,1.0325 67.8%,1.0226 75.6%,1.013 83.5%,1.0057 91.7%,1);
-  --sp:.42s linear(0,.0169 2.4%,.0936 6%,.2299 10.4%,.4006 15.4%,.5751 20.8%,.729 26.6%,.8486 32.8%,.931 39.2%,.9806 46%,1.0055 53%,1.0144 60.3%,1.0145 67.8%,1.0111 75.6%,1.007 83.5%,1.0037 91.7%,1);
-  --sp-slow:.58s linear(0,.0169 2.4%,.0928 6%,.2265 10.4%,.3926 15.4%,.5614 20.8%,.7104 26.6%,.8272 32.8%,.9095 39.2%,.9614 46%,.9901 53%,1.0033 60.3%,1.0075 67.8%,1.0072 75.6%,1.0053 83.5%,1.0033 91.7%,1)}}
+  --sp-fast:.32s linear(0,.016 2.4%,.092 6%,.23 10.4%,.405 15.4%,.586 20.8%,.748 26.6%,.874 32.8%,.96 39.2%,1.008 46%,1.028 53%,1.031 60.3%,1.024 67.8%,1.015 75.6%,1.007 83.5%,1.002 91.7%,1);
+  --sp:.44s linear(0,.017 2.4%,.094 6%,.23 10.4%,.401 15.4%,.575 20.8%,.729 26.6%,.849 32.8%,.931 39.2%,.981 46%,1.006 53%,1.014 60.3%,1.015 67.8%,1.011 75.6%,1.007 83.5%,1.004 91.7%,1);
+  --sp-slow:.6s linear(0,.0169 2.4%,.0928 6%,.2265 10.4%,.3926 15.4%,.5614 20.8%,.7104 26.6%,.8272 32.8%,.9095 39.2%,.9614 46%,.9901 53%,1.0033 60.3%,1.0075 67.8%,1.0072 75.6%,1.0053 83.5%,1.0033 91.7%,1)}}
 
-/* ═════════ 顏色：Google Material You 動態配色（全部從主題色 --seed 算出，純色分層不用漸層） ═════════ */
-@property --seed{syntax:"<color>";inherits:true;initial-value:#1a73e8}
-/* 色相一圈 11 個（Google 招牌色調），加上彩虹 */
-[data-accent="red"]{--seed:#d93025;--gh:-30}
-[data-accent="orange"]{--seed:#e8710a;--gh:-35}
-[data-accent="amber"]{--seed:#f9ab00;--gh:-35}
-[data-accent="lime"]{--seed:#7cb342;--gh:45}
-[data-accent="green"]{--seed:#1e8e3e;--gh:45}
-[data-accent="teal"]{--seed:#00897b;--gh:45}
-[data-accent="cyan"]{--seed:#0097a7;--gh:45}
-[data-accent="blue"]{--seed:#1a73e8;--gh:45}
-[data-accent="indigo"]{--seed:#3f51b5;--gh:45}
-[data-accent="purple"]{--seed:#6750a4;--gh:45}
-[data-accent="pink"]{--seed:#d81b60;--gh:-45}
-[data-accent="rainbow"]{--seed:#6750a4;--gh:45}
-/* 彩虹主題：選到的分頁、選項、開關、首頁狀態圖形換成彩虹（配色風格一樣有效）；--pride 是色票上的彩虹旗 */
+/* ═════════ 顏色：動態主題色 × Apple Liquid Glass 分層材質 ═════════ */
+@property --seed{syntax:"<color>";inherits:true;initial-value:#007aff}
+[data-accent="red"]{--seed:#e11d48;--gh:-30}
+[data-accent="orange"]{--seed:#ea580c;--gh:-35}
+[data-accent="amber"]{--seed:#d97706;--gh:-35}
+[data-accent="lime"]{--seed:#65a30d;--gh:45}
+[data-accent="green"]{--seed:#16a34a;--gh:45}
+[data-accent="teal"]{--seed:#0d9488;--gh:45}
+[data-accent="cyan"]{--seed:#0284c7;--gh:45}
+[data-accent="blue"]{--seed:#007aff;--gh:45}
+[data-accent="indigo"]{--seed:#4f6ef7;--gh:45}
+[data-accent="purple"]{--seed:#7c3aed;--gh:45}
+[data-accent="pink"]{--seed:#db2777;--gh:-45}
+[data-accent="rainbow"]{--seed:#4f6ef7;--gh:45}
 :root{--pride:linear-gradient(#e40303 0 17%,#ff8c00 0 33%,#ffed00 0 50%,#008026 0 67%,#004dff 0 83%,#750787 0)}
 [data-accent="rainbow"]{--rbl:.8; --on-rbw:color-mix(in oklab,var(--seed) 22%,#000);
   --rbw:linear-gradient(90deg,oklch(var(--rbl) calc(.13 * var(--vc)) 25),oklch(var(--rbl) calc(.13 * var(--vc)) 65),oklch(var(--rbl) calc(.13 * var(--vc)) 100),
     oklch(var(--rbl) calc(.13 * var(--vc)) 150),oklch(var(--rbl) calc(.13 * var(--vc)) 245),oklch(var(--rbl) calc(.13 * var(--vc)) 310))}
 [data-mode="light"][data-accent="rainbow"]{--rbl:.83}
-/* 配色風格（Pixel 的「色彩風格」）：--vs 底色染多少主題色、--vc 選中色塊多濃、--mute 主色混多少灰 */
 :root{--vs:1; --vc:1; --mute:0%}
-[data-tone="vivid"]{--vs:2.2; --vc:1.4}
+[data-tone="vivid"]{--vs:2.1; --vc:1.35}
 [data-tone="calm"]{--vs:.15; --vc:.55; --mute:55%}
 @property --vs{syntax:"<number>";inherits:true;initial-value:1}
 @property --vc{syntax:"<number>";inherits:true;initial-value:1}
 @property --mute{syntax:"<percentage>";inherits:true;initial-value:0%}
 :root{transition:--seed var(--t-slow) var(--ease),--vs var(--t-slow) var(--ease),--vc var(--t-slow) var(--ease),--mute var(--t-slow) var(--ease)}
-/* 第三配角色（Material You Tertiary）：從主題色轉 52 度，跟主色自然協調 */
 :root{--tseed:var(--seed)}
-@supports (color:oklch(from red l c h)){:root{--tseed:oklch(from var(--seed) l c calc(h + 52))}}
+@supports (color:oklch(from red l c h)){:root{--tseed:oklch(from var(--seed) l c calc(h + 48))}}
 
-/* 第二個選擇器：主題色的色票用自己的 --seed 重算一次，預覽就是選了之後的樣子 */
 [data-mode="dark"],[data-mode="dark"] .sw [data-accent]{
   color-scheme:dark;
-  --bg:color-mix(in oklab,var(--seed) calc(3.5% * var(--vs)),#131314);
-  --s1:color-mix(in oklab,var(--seed) calc(5% * var(--vs)),#1e1f20);
-  --s2:color-mix(in oklab,var(--seed) calc(6.5% * var(--vs)),#26282b);
-  --s3:color-mix(in oklab,var(--seed) calc(8% * var(--vs)),#2f3136);
-  --s4:color-mix(in oklab,var(--seed) calc(9.5% * var(--vs)),#3c3f45);
-  --tx:#e3e3e3; --tx2:#c4c7c5; --tx3:#8e918f; --line:color-mix(in oklab,var(--seed) calc(8% * var(--vs)),#33363b); --scrim:rgba(0,0,0,.55);
-  --p:color-mix(in oklab,color-mix(in oklab,var(--seed) 46%,#fff),#c4c7c5 var(--mute)); --on-p:color-mix(in oklab,var(--seed) 62%,#000);
-  --pc:color-mix(in oklab,var(--seed) calc(34% * var(--vc)),#131314); --on-pc:color-mix(in oklab,var(--seed) 16%,#fff);
-  --sc:color-mix(in oklab,var(--seed) calc(15% * var(--vc)),#26282b); --on-sc:color-mix(in oklab,var(--seed) 10%,#e3e3e3);
-  --tc-bg:color-mix(in oklab,var(--tseed) calc(28% * var(--vc)),#131314); --on-tc:color-mix(in oklab,var(--tseed) 18%,#fff);
-  --ok:#6dd58c; --on-ok:#072711; --okc:#0f5223; --on-okc:#c4eed0;
-  --warn:#ffb870; --on-warn:#321800; --warnc:#5b3300; --on-warnc:#ffddb3;
-  --bad:#f2b8b5; --on-bad:#410e0b; --badc:#8c1d18; --on-badc:#f9dedc;
-  --inv:#e3e3e3; --on-inv:#1f1f1f; --inv-ok:#146c2e; --inv-bad:#b3261e;
-  --sh-card:none;
+  --bg:color-mix(in oklab,var(--seed) calc(2.5% * var(--vs)),#0c0e12);
+  --s1:color-mix(in oklab,var(--seed) calc(4% * var(--vs)),#181c24);
+  --s2:color-mix(in oklab,var(--seed) calc(5.5% * var(--vs)),#212630);
+  --s3:color-mix(in oklab,var(--seed) calc(7% * var(--vs)),#2b313e);
+  --s4:color-mix(in oklab,var(--seed) calc(8.5% * var(--vs)),#38404f);
+  --tx:#f3f4f6; --tx2:#b4bcc8; --tx3:#838d9e; --line:rgba(255,255,255,.085); --scrim:rgba(0,0,0,.56);
+  --p:color-mix(in oklab,color-mix(in oklab,var(--seed) 68%,#fff),#b4bcc8 var(--mute)); --on-p:#fff;
+  --pc:color-mix(in oklab,var(--seed) calc(24% * var(--vc)),rgba(28,32,40,.92)); --on-pc:color-mix(in oklab,var(--seed) 16%,#fff);
+  --sc:rgba(255,255,255,.07); --on-sc:#d1d5db;
+  --tc-bg:color-mix(in oklab,var(--tseed) calc(22% * var(--vc)),rgba(28,32,40,.92)); --on-tc:color-mix(in oklab,var(--tseed) 18%,#fff);
+  --ok:#4ade80; --on-ok:#052e16; --okc:rgba(74,222,128,.15); --on-okc:#86efac;
+  --warn:#fbbf24; --on-warn:#321800; --warnc:rgba(251,191,36,.16); --on-warnc:#fde68a;
+  --bad:#f87171; --on-bad:#450a0a; --badc:rgba(248,113,113,.16); --on-badc:#fecaca;
+  --inv:#f3f4f6; --on-inv:#111827; --inv-ok:#16a34a; --inv-bad:#dc2626;
+  --glass:color-mix(in oklab,var(--s1) 66%,transparent);
+  --glass-card:color-mix(in oklab,var(--s1) 70%,transparent);
+  --glass-modal:color-mix(in oklab,var(--s1) 82%,transparent);
+  --glass-sub:rgba(255,255,255,.06);
+  --glass-b:rgba(255,255,255,.13);
+  --hl:inset 0 1px 0 rgba(255,255,255,.13),inset 0 -1px 0 rgba(0,0,0,.22);
+  --pill-bg:rgba(255,255,255,.14);
+  --pill-sh:0 2px 12px -2px rgba(0,0,0,.42),inset 0 1px 0 rgba(255,255,255,.18);
+  --sh-card:0 8px 28px -12px rgba(0,0,0,.45),0 1px 2px rgba(0,0,0,.25),var(--hl);
+  --sh-float:0 18px 48px -16px rgba(0,0,0,.62),0 2px 10px rgba(0,0,0,.35),var(--hl);
   --sh-seg:none;
-  --c-cpu:#8ab4f8; --c-mem:#c58af9; --c-rx:#4db6ac; --c-tx:#ff8bcb;
+  --orb-op:.22;
+  --c-cpu:#38bdf8; --c-mem:#60a5fa; --c-rx:#2dd4bf; --c-tx:#fbbf24;
 }
 [data-mode="light"],[data-mode="light"] .sw [data-accent]{
   color-scheme:light;
-  --bg:color-mix(in oklab,var(--seed) calc(4.5% * var(--vs)),#f3f5f8);
+  --bg:color-mix(in oklab,var(--seed) calc(3.5% * var(--vs)),#eef2f7);
   --s1:color-mix(in oklab,var(--seed) calc(.6% * var(--vs)),#fff);
-  --s2:color-mix(in oklab,var(--seed) calc(5.5% * var(--vs)),#edf0f5);
-  --s3:color-mix(in oklab,var(--seed) calc(7.5% * var(--vs)),#e4e8ef);
-  --s4:color-mix(in oklab,var(--seed) calc(9% * var(--vs)),#d6dbe4);
-  --tx:#1f1f1f; --tx2:#444746; --tx3:#5f6368; --line:color-mix(in oklab,var(--seed) calc(6% * var(--vs)),#dce1e8); --scrim:rgba(0,0,0,.32);
-  --p:color-mix(in oklab,color-mix(in oklab,var(--seed) 88%,#000),#444746 var(--mute)); --on-p:#fff;
-  --pc:color-mix(in oklab,var(--seed) calc(19% * var(--vc)),#fff); --on-pc:color-mix(in oklab,var(--seed) 66%,#000);
-  --sc:color-mix(in oklab,var(--seed) calc(9% * var(--vc)),#eef2f6); --on-sc:color-mix(in oklab,var(--seed) 28%,#1f1f1f);
-  --tc-bg:color-mix(in oklab,var(--tseed) calc(17% * var(--vc)),#fff); --on-tc:color-mix(in oklab,var(--tseed) 64%,#000);
-  --ok:#146c2e; --on-ok:#fff; --okc:#c4eed0; --on-okc:#072711;
-  --warn:#a05600; --on-warn:#fff; --warnc:#ffddb3; --on-warnc:#321800;
-  --bad:#b3261e; --on-bad:#fff; --badc:#f9dedc; --on-badc:#410e0b;
-  --inv:#303134; --on-inv:#f1f3f4; --inv-ok:#6dd58c; --inv-bad:#f2b8b5;
-  --sh-card:none;
+  --s2:color-mix(in oklab,var(--seed) calc(4.5% * var(--vs)),#e8edf4);
+  --s3:color-mix(in oklab,var(--seed) calc(6.5% * var(--vs)),#dde3ec);
+  --s4:color-mix(in oklab,var(--seed) calc(8% * var(--vs)),#ced6e2);
+  --tx:#111827; --tx2:#4b5563; --tx3:#6b7280; --line:rgba(15,23,42,.08); --scrim:rgba(15,23,42,.26);
+  --p:color-mix(in oklab,color-mix(in oklab,var(--seed) 92%,#000),#4b5563 var(--mute)); --on-p:#fff;
+  --pc:color-mix(in oklab,var(--seed) calc(15% * var(--vc)),#fff); --on-pc:color-mix(in oklab,var(--seed) 74%,#000);
+  --sc:rgba(15,23,42,.05); --on-sc:#374151;
+  --tc-bg:color-mix(in oklab,var(--tseed) calc(15% * var(--vc)),#fff); --on-tc:color-mix(in oklab,var(--tseed) 70%,#000);
+  --ok:#15803d; --on-ok:#fff; --okc:rgba(22,163,74,.13); --on-okc:#166534;
+  --warn:#b45309; --on-warn:#fff; --warnc:rgba(217,119,6,.14); --on-warnc:#92400e;
+  --bad:#dc2626; --on-bad:#fff; --badc:rgba(220,38,38,.13); --on-badc:#991b1b;
+  --inv:#1f2937; --on-inv:#f9fafb; --inv-ok:#4ade80; --inv-bad:#f87171;
+  --glass:rgba(255,255,255,.62);
+  --glass-card:rgba(255,255,255,.68);
+  --glass-modal:rgba(255,255,255,.84);
+  --glass-sub:rgba(15,23,42,.045);
+  --glass-b:rgba(255,255,255,.78);
+  --hl:inset 0 1px 0 rgba(255,255,255,.92),inset 0 -1px 0 rgba(15,23,42,.03);
+  --pill-bg:rgba(255,255,255,.9);
+  --pill-sh:0 2px 10px -2px rgba(15,23,42,.12),inset 0 1px 0 rgba(255,255,255,.95);
+  --sh-card:0 4px 20px -8px rgba(15,23,42,.08),0 1px 2px rgba(15,23,42,.04),var(--hl);
+  --sh-float:0 12px 36px -14px rgba(15,23,42,.15),0 2px 8px -2px rgba(15,23,42,.06),var(--hl);
   --sh-seg:none;
-  --c-cpu:#1a73e8; --c-mem:#8430ce; --c-rx:#00897b; --c-tx:#e52592;
+  --orb-op:.28;
+  --c-cpu:#007aff; --c-mem:#0ea5e9; --c-rx:#0d9488; --c-tx:#f59e0b;
 }
-:root{--card:var(--s1); --chip:var(--s2); --cs:var(--sh-card); --cseg:var(--sh-seg); --grad:none}
+:root{--card:var(--glass-card); --chip:var(--glass-sub); --cs:var(--sh-card); --cseg:var(--sh-seg); --grad:none}
 :root{--me:oklch(.72 .15 250); --alt0:oklch(.8 .1 195); --alt1:oklch(.7 .14 240); --alt2:oklch(.64 .17 280); --alt3:oklch(.62 .19 320)}   /* 雷達尾跡的顏色：高度（低 → 高） */
 /* 塔台螢幕：雷達、進場排隊條是深色螢幕，底色和飛機跟著主題色（深淺模式都一樣）；抵達是主題色、出發白色、機坪沙色、路過灰色 */
 :root{--tw-bg:oklch(.2 .014 230); --tw-bg2:oklch(.23 .016 230); --tw-land:oklch(.255 .016 230); --tw-line:oklch(.46 .03 230); --tw-arr:oklch(.82 .09 230); --tw-dep:oklch(.94 .01 230); --tw-gnd:oklch(.84 .06 85); --tw-ov:oklch(.6 .015 230);
@@ -108,11 +126,23 @@
   --alt0:var(--tw-a0); --alt1:var(--tw-a1); --alt2:var(--tw-a2); --alt3:var(--tw-a3)}
 [data-mode="light"]{--me:oklch(.6 .17 250); --alt0:oklch(.72 .11 195); --alt1:oklch(.6 .15 240); --alt2:oklch(.52 .18 280); --alt3:oklch(.5 .2 320)}
 
-/* ═════════ 圓形圖示：統一照 Google Material You 主題色系（主色／柔和配角色／中性色），只有警告與異常才用橘紅 ═════════ */
-.ico{width:40px;height:40px;border-radius:50%;display:grid;place-items:center;flex:none}
-.ico svg{width:20px;height:20px}
-.ico.sm{width:30px;height:30px}.ico.sm svg{width:16px;height:16px}
-.ico.big{width:56px;height:56px}.ico.big svg{width:26px;height:26px}
+/* ═════════ 柔和背景環境光（讓毛玻璃有真實光影折射層次；異常時微轉暖色） ═════════ */
+.amb{position:fixed;inset:0;z-index:0;pointer-events:none;overflow:hidden}
+.amb i{position:absolute;border-radius:50%;filter:blur(88px);opacity:var(--orb-op);transition:background var(--t-long) var(--ease),opacity var(--t-slow) var(--ease);will-change:transform}
+.amb i:first-child{width:560px;height:560px;top:-190px;left:-120px;background:radial-gradient(circle,var(--seed),transparent 72%);animation:amb1 22s ease-in-out infinite alternate}
+.amb i:last-child{width:500px;height:500px;bottom:-170px;right:-100px;background:radial-gradient(circle,var(--tseed),transparent 72%);animation:amb2 26s ease-in-out infinite alternate}
+[data-alert="warn"] .amb i:first-child,[data-alert="bad"] .amb i:first-child{background:radial-gradient(circle,var(--warn),transparent 72%)}
+[data-alert="bad"] .amb i:last-child{background:radial-gradient(circle,var(--bad),transparent 72%)}
+@keyframes amb1{to{transform:translate(46px,32px) scale(1.07)}}
+@keyframes amb2{to{transform:translate(-40px,-26px) scale(1.05)}}
+[data-motion="off"] .amb i{animation:none!important}
+@media (prefers-reduced-motion:reduce){.amb i{animation:none!important}}
+
+/* ═════════ 圖示氣泡：保留原本專屬圖案與主題色角色（圓角方形蘋果氣泡） ═════════ */
+.ico{width:38px;height:38px;border-radius:var(--r-sm);display:grid;place-items:center;flex:none;box-shadow:var(--hl)}
+.ico svg{width:19px;height:19px}
+.ico.sm{width:30px;height:30px;border-radius:var(--r-sm)}.ico.sm svg{width:15px;height:15px}
+.ico.big{width:56px;height:56px;border-radius:var(--r-lg)}.ico.big svg{width:26px;height:26px}
 .ico.cpu{background:var(--pc);color:var(--on-pc)}
 .ico.mem{background:var(--tc-bg);color:var(--on-tc)}
 .ico.disk{background:var(--sc);color:var(--on-sc)}
@@ -143,13 +173,13 @@
 .ico.note{background:var(--sc);color:var(--on-sc)}
 .ico.dnsf{background:var(--tc-bg);color:var(--on-tc)}
 .ico.album{background:var(--tc-bg);color:var(--on-tc)}
-.ico.theme{background:var(--pc);color:var(--on-pc)}                  /* 哨兵本身的動作（更新、編輯）：主題色 */
-.ico.warn{background:var(--warnc);color:var(--on-warnc)}            /* 要小心的動作（重新開機、換密碼） */
-.ico.bad{background:var(--badc);color:var(--on-badc)}               /* 刪除、移除、解除配對 */
+.ico.theme{background:var(--pc);color:var(--on-pc)}
+.ico.warn{background:var(--warnc);color:var(--on-warnc)}
+.ico.bad{background:var(--badc);color:var(--on-badc)}
 
 /* ═════════ 基本 ═════════ */
 *{box-sizing:border-box;margin:0;-webkit-tap-highlight-color:transparent;scrollbar-width:none}
-*::-webkit-scrollbar{display:none}                                     /* 不顯示拉條，照樣能捲 */
+*::-webkit-scrollbar{display:none}
 html{background:var(--bg);color:var(--tx);touch-action:manipulation;accent-color:var(--p);caret-color:var(--p);overflow-x:clip;
   transition:background-color var(--t-mid) var(--ease),color var(--t-mid) var(--ease)}
 html.lock{overflow:hidden}
@@ -163,7 +193,7 @@ b,strong{font-weight:500}
 .num{font-variant-numeric:tabular-nums}
 .grow{flex:1}
 .sub{color:var(--tx3);font-size:var(--fs-s)}
-.wrap{position:relative;overflow-x:clip}
+.wrap{position:relative;z-index:1;overflow-x:clip}
 @keyframes spin{to{transform:rotate(360deg)}}
 @keyframes fadeIn{from{opacity:0}}
 @keyframes fadeOut{to{opacity:0}}
@@ -171,46 +201,43 @@ b,strong{font-weight:500}
 @keyframes pop{from{opacity:0;transform:scale(.82)}}
 @keyframes through{from{opacity:0;transform:translateY(6px)}}
 
-/* 按下去的水波紋（Google Material 3 State Ripple） */
-:is(.li,.ubtn,.iconbtn,.icbtn,.hmenu button,.rb,.rh,.backbtn,.seg button,.rng button,.fchip,.addhost,.trf,.chats button,.tbx){position:relative}
+/* 按下去的水波紋（僅卡片與按鈕，導覽列與分段切換保持靜止不晃） */
+:is(.li,.ubtn,.iconbtn,.icbtn,.hmenu button,.rh,.backbtn,.addhost,.trf,.chats button,.tbx){position:relative}
 .rip{position:absolute;inset:0;border-radius:inherit;overflow:hidden;pointer-events:none}
-.rip i{position:absolute;border-radius:50%;background:currentColor;opacity:.13}
-/* 選到的底色（單選的一排、開關鈕）：按鈕裡一層 ::before 原地淡入彈出撐開、淡出縮回（連按不閃爍）
-   Google Material 3：單選與篩選膠囊用柔和主題色底（--pc）配深色字（--on-pc），安靜耐看 */
-:is(.fchip,.seg button,.rng button,.chats button,.frzm .icbtn){isolation:isolate;--tsel:calc(var(--t-mid) / 5) steps(1)}
-:is(.fchip,.seg button,.rng button,.chats button,.frzm .icbtn)::before{content:"";position:absolute;inset:0;z-index:-1;border-radius:inherit;pointer-events:none;
-  background:var(--pc);opacity:0;transform:scale(.84);transition:opacity var(--t-fast) var(--ease),transform var(--sp-fast)}
-:is(.fchip,.seg button,.rng button,.chats button,.frzm .icbtn).on::before{opacity:1;transform:none}
-/* 滑鼠指著（只有電腦）：沒選到的底色深一點點；選到的不變 */
-@media (hover:hover){.fchip:not(.on,.hsel.set,:disabled):hover{background-color:color-mix(in oklab,var(--card) 93%,var(--tx))}}
-@media (hover:hover){:is(.seg button,.rng button,.chats button):not(.on,:disabled):hover{background-color:color-mix(in oklab,var(--chip) 93%,var(--tx))}}
+.rip i{position:absolute;border-radius:50%;background:currentColor;opacity:.12}
+/* 選到的底色（單選的一排、開關鈕）：按鈕裡一層 ::before 原地淡入／淡出，或由 [data-slide] 玻璃氣泡接手滑動 */
+:is(.seg button,.rng button,.chats button,.frzm .icbtn){position:relative;isolation:isolate;--tsel:calc(var(--t-mid) / 5) steps(1)}
+:is(.seg button,.rng button,.chats button,.frzm .icbtn)::before{content:"";position:absolute;inset:0;z-index:-1;border-radius:inherit;pointer-events:none;
+  background:var(--pc);opacity:0;transform:scale(.88);transition:opacity var(--t-fast) var(--ease),transform var(--sp-fast)}
+:is(.seg button,.rng button,.chats button,.frzm .icbtn).on::before{opacity:1;transform:none}
+/* 滑鼠指著（只有電腦）：沒選到的底色微亮；選到的不變 */
+@media (hover:hover){:is(.seg button,.rng button,.chats button):not(.on,:disabled):hover{background-color:color-mix(in oklab,var(--chip) 90%,var(--tx))}}
 @media (hover:hover){.frchips button:not(.on,:disabled):hover{background-color:color-mix(in oklab,var(--s2) 93%,var(--tx))}}
-/* 按下瞬間快速收緊、放開時由各自元件的彈簧曲線自然回彈（單選按鈕維持字色 --tsel 一步切換，不拖泥帶水） */
-:is(.hcard,.li,.ubtn,.iconbtn,.icbtn,.hmenu button,.addhost,.trf,.sw button,.fapc,.tbx,.rb,.rh,.backbtn).prs{transition-duration:var(--t-fast);transition-timing-function:var(--ease)}
-:is(.seg button,.rng button,.fchip,.chats button).prs{transition:transform var(--t-fast) var(--ease),border-radius var(--t-fast) var(--ease),background-color var(--t-fast) var(--ease),box-shadow var(--t-fast) var(--ease),color var(--tsel)}
+/* 按下瞬間快速收緊、放開時由各自元件的彈簧曲線自然回彈 */
+:is(.hcard,.li,.ubtn,.iconbtn,.icbtn,.hmenu button,.addhost,.trf,.sw button,.fapc,.tbx,.rh,.backbtn,.side-icbtn).prs{transition-duration:var(--t-fast);transition-timing-function:var(--ease)}
 
 /* 小圖示按鈕 */
 .iconbtn{width:40px;height:40px;border-radius:50%;display:inline-grid;place-items:center;color:var(--tx2);flex:none;position:relative;text-decoration:none;
   transition:transform var(--sp-fast),background-color var(--t-fast) var(--ease)}
 .iconbtn svg{width:20px;height:20px}
 @media (hover:hover){.iconbtn:hover{background:color-mix(in srgb,var(--tx) 8%,transparent)}}
-.iconbtn.prs{transform:scale(.91);background:color-mix(in srgb,var(--tx) 12%,transparent)}
-.icbtn{width:44px;height:44px;border-radius:50%;background:var(--card);display:grid;place-items:center;flex:none;
-  transition:transform var(--sp-fast),border-radius var(--sp-fast),background-color var(--t-fast) var(--ease)}
+.iconbtn.prs{transform:scale(.92);background:color-mix(in srgb,var(--tx) 12%,transparent)}
+.icbtn{width:44px;height:44px;border-radius:50%;background:var(--card);border:1px solid var(--line);box-shadow:var(--cs);display:grid;place-items:center;flex:none;
+  transition:transform var(--sp-fast),background-color var(--t-fast) var(--ease)}
 .icbtn svg{width:21px;height:21px}
-.icbtn.prs{transform:scale(.92);border-radius:var(--r-md)}
+.icbtn.prs{transform:scale(.93)}
 .hasnew::after{content:"";position:absolute;top:6px;right:6px;width:8px;height:8px;border-radius:50%;background:var(--p);box-shadow:0 0 0 2px var(--bg)}
 
-/* 按鈕：Google Material 3 Expressive 膠囊實心主色（按下微收＋圓角微變形、放開彈簧回彈） */
-.ubtn{--h:40px;height:var(--h);padding:0 22px;border-radius:calc(var(--h) / 2);background:var(--p);color:var(--on-p);font-weight:500;font-size:var(--fs-m);
-  display:inline-flex;align-items:center;justify-content:center;gap:8px;white-space:nowrap;text-decoration:none;
-  transition:transform var(--sp-fast),border-radius var(--sp-fast),background-color var(--t-fast) var(--ease),box-shadow var(--t-fast) var(--ease),opacity var(--t-mid) var(--ease)}
-@media (hover:hover){.ubtn:not([disabled]):hover{box-shadow:var(--sh-1);background:color-mix(in oklab,var(--p) 92%,var(--on-p))}}
-.ubtn svg{width:18px;height:18px;flex:none}
-.ubtn.prs{transform:scale(.96);border-radius:var(--r-md)}
+/* 按鈕：Apple Liquid Glass 膠囊按鈕（不換行、清楚分層） */
+.ubtn{--h:40px;height:var(--h);padding:0 20px;border-radius:var(--r-pill);background:var(--p);color:var(--on-p);font-weight:500;font-size:var(--fs-m);
+  display:inline-flex;align-items:center;justify-content:center;gap:7px;white-space:nowrap;flex:none;text-decoration:none;
+  transition:transform var(--sp-fast),background-color var(--t-fast) var(--ease),box-shadow var(--t-fast) var(--ease),opacity var(--t-mid) var(--ease)}
+@media (hover:hover){.ubtn:not([disabled]):hover{box-shadow:var(--sh-1);background:color-mix(in oklab,var(--p) 90%,var(--on-p))}}
+.ubtn svg{width:17px;height:17px;flex:none}
+.ubtn.prs{transform:scale(.96)}
 .ubtn[disabled]{opacity:.45;cursor:default}
-.ubtn.ghost{background:var(--s2);color:var(--tx)}
-@media (hover:hover){.ubtn.ghost:not([disabled]):hover{box-shadow:none;background:var(--s3)}}
+.ubtn.ghost{background:var(--glass-sub);color:var(--tx);border:1px solid var(--line);box-shadow:var(--hl)}
+@media (hover:hover){.ubtn.ghost:not([disabled]):hover{box-shadow:var(--pill-sh);background:var(--pill-bg)}}
 .ubtn.warn{background:var(--warn);color:var(--on-warn)}
 @media (hover:hover){.ubtn.warn:not([disabled]):hover{background:color-mix(in oklab,var(--warn) 92%,var(--on-warn))}}
 .ubtn.bad{background:var(--bad);color:var(--on-bad)}
@@ -254,17 +281,17 @@ img.flag{width:28px;height:21px;object-fit:cover;border-radius:var(--r-xs);flex:
 /* ═════════ 整體版面與過場 ═════════ */
 .booting #app{opacity:0}
 #app{transition:opacity var(--t-mid) var(--ease)}
-.dash.m{position:relative;max-width:760px;margin:0 auto;padding:0 16px calc(env(safe-area-inset-bottom) + 28px);overflow-x:clip}
-.full .dash.m{padding-bottom:calc(env(safe-area-inset-bottom) + 88px)}
+.dash.m{position:relative;max-width:760px;margin:0 auto;padding:10px 18px calc(env(safe-area-inset-bottom) + 28px);overflow-x:clip}
+.full .dash.m{padding-top:0;padding-bottom:calc(env(safe-area-inset-bottom) + 102px)}
 .view{animation:through var(--t-mid) var(--dec) backwards}
 /* 手機換分頁改由 JS through() 同步整頁並排滑動（不重疊疊影），停用預設 CSS 進場與卡片浮入避免衝突 */
 .dash.m .view:is([data-dir="1"],[data-dir="-1"]){animation:none}
 .dash.m .view:is([data-dir="1"],[data-dir="-1"]) :is(.hcard,.tbx,.tile){animation:none}
 /* 這個網頁連不上主機超過 15 秒（html.lost）：畫面上的數字都是舊的，整塊變淡 */
-.view>:not(.hbanner,.dhome,.mtop),.dhome>:not(.dbar),.det .dscroll>:not(.dtop){transition:filter var(--t-slow) var(--ease)}
+.view>:not(.hbanner,.dhome,.mtop),.dhome>:not(.dbar,.dhero),.det .dscroll>:not(.dtop){transition:filter var(--t-slow) var(--ease)}
 html.lost :is(.view>:not(.hbanner,.dhome,.mtop),.det .dscroll>:not(.dtop)){filter:opacity(.55) saturate(.45)}
-.ptitle{font-size:var(--fs-3xl);font-weight:500;letter-spacing:-.015em;line-height:1.25;padding:16px 4px 12px;color:var(--tx)}
-.full .ptitle{padding:calc(env(safe-area-inset-top) + 20px) 4px 16px}
+.ptitle{font-size:var(--fs-3xl);font-weight:600;letter-spacing:-.02em;line-height:1.25;padding:18px 4px 12px;color:var(--tx)}
+.full .ptitle{padding:calc(env(safe-area-inset-top) + 22px) 4px 14px}
 .ptitle>span:first-child,.hname{width:fit-content;max-width:100%}
 .lbl{display:flex;align-items:center;justify-content:space-between;gap:8px;font-size:var(--fs-s);font-weight:500;color:var(--tx2);margin:22px 4px 10px}
 .lbl:first-child{margin-top:0}
@@ -276,60 +303,50 @@ html.lost :is(.view>:not(.hbanner,.dhome,.mtop),.det .dscroll>:not(.dtop)){filte
 .lbl:not(.form .lbl) button[disabled]{opacity:.45;cursor:default}
 .empty{color:var(--tx3);padding:28px 8px;text-align:center}
 
-/* ═════════ 手機上方標題列（瀏覽器裡排在頂部分頁列下跟著捲走；主畫面／App 模式貼頂） ═════════ */
-.mtop{display:flex;align-items:center;gap:8px;min-height:44px;margin:4px -4px 4px;padding:0 0 0 4px}
-.full .mtop{position:sticky;top:0;z-index:var(--z-bar);min-height:calc(56px + env(safe-area-inset-top));
-  margin:0 -16px 8px;padding:env(safe-area-inset-top) 12px 0 18px;background:var(--bg)}
-.mbrand{display:flex;align-items:center;gap:10px;font-size:var(--fs-l);font-weight:500;color:var(--tx)}
-.mbrand svg{width:28px;height:28px}
+/* ═════════ 手機上方標題列（寬敞留白，新增主機膠囊靠右不換行） ═════════ */
+.mtop{display:flex;align-items:center;gap:8px;min-height:46px;margin:8px 0 14px;padding:0 2px}
+.full .mtop{position:sticky;top:0;z-index:var(--z-bar);min-height:calc(58px + env(safe-area-inset-top));
+  margin:0 -18px 12px;padding:calc(env(safe-area-inset-top) + 4px) 16px 4px 18px;background:var(--bg)}
+.mbrand{display:flex;align-items:center;gap:9px;font-size:var(--fs-l);font-weight:600;letter-spacing:-.015em;color:var(--tx);min-width:0}
+.mbrand svg{width:28px;height:28px;flex:none}
+.mtop .madd{height:34px;padding:0 13px;font-size:var(--fs-s);gap:5px;white-space:nowrap;flex:none}
+.mtop .madd svg{width:15px;height:15px}
 .mtime{display:inline-flex;align-items:center;gap:6px;font-size:var(--fs-xs);color:var(--tx3);font-variant-numeric:tabular-nums}
 
-/* ═════════ 手機分頁列 ═════════
-   從主畫面、App 打開（html.full，沒有網址列）：底部 Google Material 3 導覽列
-   手機瀏覽器裡（html:not(.full)）：頁面頂部整排標籤列，底下一條主色指示線滑動，往下捲藏、往上捲出現（避開 iOS 底部網址列） */
-.dock{position:fixed;left:0;right:0;bottom:0;z-index:var(--z-bar);display:grid;grid-template-columns:repeat(4,1fr);align-items:center;
-  padding:8px 8px calc(env(safe-area-inset-bottom) + 8px);background:var(--s1);border-top:1px solid var(--line);
+/* ═════════ 手機分頁列（Apple Liquid Glass 懸浮膠囊） ═════════
+   主畫面／App 模式（html.full）：底部懸浮毛玻璃膠囊
+   手機瀏覽器（html:not(.full)）：頂部懸浮毛玻璃膠囊（往下捲收起，避開 iOS 底部網址列）
+   圖示與文字完全穩固不回彈，僅半透明液態玻璃氣泡平順滑動 */
+.dock{position:fixed;left:16px;right:16px;bottom:calc(env(safe-area-inset-bottom) + 12px);max-width:440px;margin:0 auto;z-index:var(--z-bar);
+  display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:2px;align-items:center;padding:5px;border-radius:var(--r-pill);
+  background:var(--glass);border:1px solid var(--glass-b);box-shadow:var(--sh-float);
   transition:transform var(--t-mid) var(--dec),opacity var(--t-fast) var(--ease)}
-.full.lock .dock{transform:translateY(110%);opacity:0;pointer-events:none;transition:transform var(--t-fast) var(--exit),opacity var(--t-fast) var(--ease)}
-@media (max-width:1023px){.full .toasts{bottom:calc(env(safe-area-inset-bottom) + 82px)}}
-.tb{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;min-height:52px;color:var(--tx2);position:relative;
+.full.lock .dock{transform:translateY(140%);opacity:0;pointer-events:none;transition:transform var(--t-fast) var(--exit),opacity var(--t-fast) var(--ease)}
+@media (max-width:1023px){.full .toasts{bottom:calc(env(safe-area-inset-bottom) + 86px)}}
+.tb{position:relative;z-index:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;height:48px;border-radius:var(--r-pill);color:var(--tx2);
   transition:color var(--t-fast) var(--ease)}
-.tbi{position:relative;width:64px;height:32px;border-radius:var(--r-pill);display:grid;place-items:center;isolation:isolate;
-  transition:color var(--t-fast) var(--ease),transform var(--sp-fast)}
-.tbi::before{content:"";position:absolute;inset:0;z-index:-1;border-radius:inherit;background:var(--pc);opacity:0;transform:scaleX(.42);
-  transition:opacity var(--t-fast) var(--ease),transform var(--sp-fast)}
-.tb svg{width:22px;height:22px;flex:none}
-.tb .t{font-size:var(--fs-xs);font-weight:500;line-height:1.15;white-space:nowrap;transition:transform var(--sp-fast)}
-.tb.prs .tbi{transform:scale(.92)}
+.tb::before{content:"";position:absolute;inset:0;z-index:-1;border-radius:inherit;pointer-events:none;
+  background:var(--pill-bg);box-shadow:var(--pill-sh);opacity:0;transition:opacity var(--t-fast) var(--ease)}
+.tbi{display:grid;place-items:center;flex:none;transition:color var(--t-fast) var(--ease)}
+.tb svg{width:20px;height:20px;flex:none}
+.tb .t{font-size:var(--fs-xs);font-weight:500;line-height:1.15;white-space:nowrap}
 .tb.on{color:var(--tx)}
 .tb.on .t{font-weight:600}
-.tb.on .tbi{color:var(--on-pc)}
-.tb.on .tbi::before{opacity:1;transform:none}
-[data-accent="rainbow"].full .tb.on .tbi::before{background-image:var(--rbw)}
-[data-accent="rainbow"].full .tb.on .tbi{color:var(--on-rbw)}
-.tb.hasnew::after{top:4px;right:calc(50% - 22px)}
-html.full .dock>.slide{display:none}
-html:not(.full) .dock{position:sticky;top:0;left:auto;right:auto;bottom:auto;margin:0 -16px;padding:env(safe-area-inset-top) 8px 0;
-  background:var(--s1);border-top:0;border-bottom:1px solid var(--line)}
-html:not(.full) .dock.hid{transform:translateY(-100%);transition:transform var(--t-fast) var(--exit)}
-html:not(.full) .dock .tb{flex-direction:row;gap:6px;min-height:48px;height:48px;padding:0;color:var(--tx2)}
-html:not(.full) .dock .tb.prs :is(.tbi,.t){transform:scale(.94)}
-html:not(.full) .dock .tbi{width:auto;height:auto;border-radius:0}
-html:not(.full) .dock .tbi::before{display:none}
-html:not(.full) .dock .tb svg{width:19px;height:19px}
+.tb.on .tbi{color:var(--p)}
+.tb.on::before{opacity:1}
+.tb.hasnew::after{top:5px;right:calc(50% - 18px)}
+.dock>.slide{z-index:0;border-radius:var(--r-pill);background:var(--pill-bg);box-shadow:var(--pill-sh)}
+html:not(.full) .dock{position:sticky;top:calc(env(safe-area-inset-top) + 10px);left:auto;right:auto;bottom:auto;max-width:none;margin:4px 0 12px;padding:4px}
+html:not(.full) .dock.hid{transform:translateY(calc(-100% - 22px));opacity:0;pointer-events:none;transition:transform var(--t-fast) var(--exit),opacity var(--t-fast) var(--ease)}
+html:not(.full) .dock .tb{flex-direction:row;gap:5px;height:38px;padding:0 4px}
+html:not(.full) .dock .tb svg{width:17px;height:17px}
 html:not(.full) .dock .tb .t{font-size:var(--fs-s);line-height:1.2}
-html:not(.full) .dock .tb.on,html:not(.full) .dock .tb.on .tbi{color:var(--p)}
-html:not(.full) .dock .tb::before,html:not(.full) .dock>.slide::before{content:"";position:absolute;left:50%;bottom:0;width:36px;height:3px;margin-left:-18px;border-radius:var(--r-pill) var(--r-pill) 0 0;background:var(--p);opacity:0;transition:opacity var(--t-fast) var(--ease)}
-html:not(.full) .dock .tb.on::before,html:not(.full) .dock>.slide::before{opacity:1}
-html:not(.full) .dock.sliding .tb.on::before{opacity:0;transition:none}
-html:not(.full) .dock.slid .tb.on::before{transition:none}
-html:not(.full) .dock>.slide{background:none;background-image:none}
-html:not(.full) .dock .tb.hasnew::after{top:10px;right:calc(50% - 28px)}
-[data-accent="rainbow"]:not(.full) .dock>.slide{background-image:none}
-[data-accent="rainbow"]:not(.full) .dock .tb::before,[data-accent="rainbow"]:not(.full) .dock>.slide::before{background-image:var(--rbw)}
+html:not(.full) .dock .tb.hasnew::after{top:7px;right:calc(50% - 26px)}
+[data-accent="rainbow"] .dock .tb.on::before,[data-accent="rainbow"] .dock>.slide{background-image:var(--rbw);box-shadow:var(--pill-sh)}
+[data-accent="rainbow"] .dock .tb.on,[data-accent="rainbow"] .dock .tb.on .tbi{color:var(--on-rbw)}
 
-/* ═════════ 手機首頁狀態橫幅（安靜的 Google Home／Pixel 風格，不再旋轉貼紙） ═════════ */
-.hbanner{display:flex;align-items:center;gap:14px;padding:16px 18px;border-radius:var(--r-xl);background:var(--s1);border:1px solid var(--line);margin:2px 0 4px}
+/* ═════════ 手機首頁狀態橫幅（毛玻璃卡片） ═════════ */
+.hbanner{display:flex;align-items:center;gap:14px;padding:16px 18px;border-radius:var(--r-xl);background:var(--card);border:1px solid var(--glass-b);box-shadow:var(--cs);margin:2px 0 6px}
 .hbanner.warn{border-color:color-mix(in oklab,var(--warn) 42%,var(--line))}
 .hbanner.bad{border-color:color-mix(in oklab,var(--bad) 45%,var(--line))}
 .hbi{width:42px;height:42px;border-radius:50%;display:grid;place-items:center;flex:none;background:var(--okc);color:var(--on-okc)}
@@ -337,25 +354,25 @@ html:not(.full) .dock .tb.hasnew::after{top:10px;right:calc(50% - 28px)}
 .hbi.bad{background:var(--badc);color:var(--on-badc)}
 .hbi svg{width:22px;height:22px}
 .hbt{flex:1;min-width:0}
-.headline{font-size:var(--fs-xl);font-weight:500;line-height:1.3;letter-spacing:-.01em;color:var(--tx);overflow-wrap:anywhere}
+.headline{font-size:var(--fs-xl);font-weight:600;line-height:1.3;letter-spacing:-.015em;color:var(--tx);overflow-wrap:anywhere}
 .quote{color:var(--tx3);font-size:var(--fs-s);margin-top:2px}
 .quote:empty{display:none}
 /* 天氣小塊 */
 .wxw{min-width:0;flex:none;display:flex;justify-content:flex-end}
 .wxw:empty{display:none}
-.wx{display:flex;align-items:center;gap:8px;padding:6px 12px;border-radius:var(--r-pill);background:var(--s2);min-width:0;max-width:100%}
+.wx{display:flex;align-items:center;gap:8px;padding:6px 12px;border-radius:var(--r-pill);background:var(--glass-sub);border:1px solid var(--line);min-width:0;max-width:100%}
 .wx .wi{font-size:var(--fs-xl);line-height:1;flex:none}
 .wx div{min-width:0;color:var(--tx2);font-size:var(--fs-xs)}
 .wx b{font-size:var(--fs-m);font-weight:600;color:var(--tx);margin-right:4px}
 .wx small{display:none}
 
-/* ═════════ 首頁的主機卡片（流暢微波浪進場＋按壓彈簧微形變） ═════════ */
+/* ═════════ 首頁的主機卡片（Apple Liquid Glass 卡片＋按壓微回饋） ═════════ */
 .hosts{display:grid;grid-template-columns:minmax(0,1fr);gap:10px}
 @media (min-width:700px){.dash.m :is(.hosts,.minis){grid-template-columns:repeat(2,minmax(0,1fr))}}
-.hcard{display:block;width:100%;background:var(--s1);border:1px solid var(--line);border-radius:var(--r-xl);padding:18px 18px 16px;cursor:pointer;position:relative;
-  transition:transform var(--sp-fast),border-radius var(--sp-fast),background-color var(--t-fast) var(--ease),border-color var(--t-fast) var(--ease);
+.hcard{display:block;width:100%;background:var(--card);border:1px solid var(--line);box-shadow:var(--cs);border-radius:var(--r-xl);padding:18px 18px 16px;cursor:pointer;position:relative;
+  transition:transform var(--sp-fast),background-color var(--t-fast) var(--ease),border-color var(--t-fast) var(--ease);
   animation:rise var(--t-mid) var(--dec) backwards}
-.hcard.prs{transform:scale(.975);border-radius:var(--r-2xl);background:var(--s2)}
+.hcard.prs{transform:scale(.98);background:var(--s2)}
 /* 卡片群組進場：輕盈短間隔（28ms）如水波滑入，封頂 5 格不拖泥帶水；自動更新因 data-key 保留節點不會重播 */
 :is(.hosts,.minis,.sums,.tgrid,.tiles)>:nth-child(2){animation-delay:28ms}
 :is(.hosts,.minis,.sums,.tgrid,.tiles)>:nth-child(3){animation-delay:56ms}
@@ -512,26 +529,38 @@ html.dhid .dash>.view{content-visibility:hidden;contain-intrinsic-size:auto none
 @keyframes barOn{from{opacity:0}to{opacity:1}}
 @keyframes ttlOn{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:none}}
 
-/* ═════════ 一台主機的內容（手機整頁、電腦欄位共用） ═════════ */
-.hb{display:flex;flex-direction:column;gap:10px}
+/* ═════════ 一台主機的內容（手機三段液態切換、電腦一次完整展開） ═════════ */
+.hb{display:flex;flex-direction:column;gap:12px}
 .hb>*{flex-shrink:0}
 .hhead{display:flex;align-items:center;gap:12px;padding:4px 4px 6px}
 .hhead .nm{min-width:0;flex:1}
-.hname{font-size:var(--fs-4xl);font-weight:600;letter-spacing:-.015em;line-height:1.2;color:var(--tx);overflow-wrap:anywhere}
+.hname{font-size:var(--fs-4xl);font-weight:600;letter-spacing:-.02em;line-height:1.2;color:var(--tx);overflow-wrap:anywhere}
 .hhead img.flag{width:36px;height:27px}
 .hp .hhead img.flag{width:30px;height:22px}
 .hacts{display:flex;align-items:center;flex:none}
+/* 手機主機詳情三段液態玻璃切換（概覽／效能趨勢／系統資訊）：圖示文字穩固，僅玻璃氣泡滑動 */
+.dseg{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:2px;padding:4px;border-radius:var(--r-pill);
+  background:var(--glass-sub);border:1px solid var(--line);box-shadow:var(--hl);margin:2px 0 4px}
+.dsb{position:relative;z-index:1;display:inline-flex;align-items:center;justify-content:center;gap:6px;height:38px;padding:0 8px;border-radius:var(--r-pill);
+  color:var(--tx2);font-size:var(--fs-s);font-weight:500;white-space:nowrap;transition:color var(--t-fast) var(--ease)}
+.dsb svg{width:16px;height:16px;flex:none;transition:color var(--t-fast) var(--ease)}
+.dsb::before{content:"";position:absolute;inset:0;z-index:-1;border-radius:inherit;pointer-events:none;
+  background:var(--pill-bg);box-shadow:var(--pill-sh);opacity:0;transition:opacity var(--t-fast) var(--ease)}
+.dsb.on{color:var(--tx);font-weight:600}
+.dsb.on svg{color:var(--p)}
+.dsb.on::before{opacity:1}
+.dsegb{display:flex;flex-direction:column;gap:12px}
 /* 四格數字 */
 .tiles{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
-.tile{background:var(--card);border-radius:var(--r-lg);padding:16px 16px 14px;box-shadow:var(--cs);display:flex;flex-direction:column;gap:6px;min-width:0;
+.tile{background:var(--card);border:1px solid var(--line);border-radius:var(--r-lg);padding:16px 16px 14px;box-shadow:var(--cs);display:flex;flex-direction:column;gap:6px;min-width:0;
   transition:background-color var(--t-slow) var(--ease),color var(--t-slow) var(--ease);animation:rise var(--t-mid) var(--dec) backwards}
 .tile .th{display:flex;align-items:center;gap:8px;font-size:var(--fs-s);color:var(--tx2);white-space:nowrap}
 .tile .tv{font-size:var(--fs-3xl);font-weight:600;letter-spacing:-.02em;line-height:1.08;white-space:nowrap;font-variant-numeric:tabular-nums}
 .tile .tv small{font-size:var(--fs-l);margin-left:1px;color:var(--tx2)}
 .tile .ts{font-size:var(--fs-xs);color:var(--tx3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 /* 有狀況的格子：清脆語意細框＋極淡底色，數字和波浪條換成狀態色（深色模式也不會濁） */
-.tile.w{background:color-mix(in oklab,var(--warnc) 16%,var(--card));box-shadow:inset 0 0 0 1px color-mix(in oklab,var(--warn) 42%,transparent);color:var(--warn)}
-.tile.b{background:color-mix(in oklab,var(--badc) 16%,var(--card));box-shadow:inset 0 0 0 1px color-mix(in oklab,var(--bad) 42%,transparent);color:var(--bad)}
+.tile.w{background:color-mix(in oklab,var(--warnc) 16%,var(--card));border-color:color-mix(in oklab,var(--warn) 44%,var(--line));color:var(--warn)}
+.tile.b{background:color-mix(in oklab,var(--badc) 16%,var(--card));border-color:color-mix(in oklab,var(--bad) 48%,var(--line));color:var(--bad)}
 .tile.w .th,.tile.b .th{color:var(--tx2)}.tile.w .ts,.tile.b .ts{color:var(--tx3)}
 .tile.w .tv small,.tile.b .tv small{color:inherit;opacity:.85}
 .tile.w .wv,.tile.b .wv{color:currentColor}
@@ -551,17 +580,17 @@ html.dhid .dash>.view{content-visibility:hidden;contain-intrinsic-size:auto none
 .fcs{display:flex;flex-wrap:wrap;gap:6px}
 .dash.m .fcs{display:grid;grid-template-columns:repeat(2,minmax(0,1fr))}   /* 手機：兩個一排、一樣寬，不會有一個單獨掉到下一行 */
 .dash.m .fcs>.fc:last-child:nth-child(odd){grid-column:1/-1}
-.fc{display:inline-flex;align-items:center;gap:6px;height:34px;padding:0 14px;border-radius:var(--r-pill);background:var(--card);box-shadow:var(--cs);font-size:var(--fs-s);color:var(--tx2);
+.fc{display:inline-flex;align-items:center;gap:6px;height:34px;padding:0 14px;border-radius:var(--r-pill);background:var(--card);border:1px solid var(--line);box-shadow:var(--cs);font-size:var(--fs-s);color:var(--tx2);
   white-space:nowrap;max-width:100%;overflow:hidden}
 .fc b{color:var(--tx);font-weight:500}.fc b.w{color:var(--warn)}.fc b.b{color:var(--bad)}
 .fc em{font-style:normal;color:var(--tx3)}.fc em.warn{color:var(--warn)}
-.ipb{cursor:pointer;filter:blur(6px);user-select:none;transition:filter var(--t-mid) var(--ease)}
+.ipb{display:inline-block;cursor:pointer;filter:blur(6px);user-select:none;transition:filter var(--t-mid) var(--ease)}
 .ipb.on{filter:none;user-select:text}
 .v6{display:inline-flex;align-items:center;gap:6px}
 .v6.warn{color:var(--warn)}
 .v6.a{display:block;max-width:240px;overflow:hidden;text-overflow:ellipsis;cursor:pointer;color:var(--tx);font-variant-numeric:tabular-nums}
 /* 卡片（曲線、網路、流量、容器、連結） */
-.cc{background:var(--card);border-radius:var(--r-lg);padding:16px;min-width:0;box-shadow:var(--cs)}
+.cc{background:var(--card);border:1px solid var(--line);border-radius:var(--r-lg);padding:16px;min-width:0;box-shadow:var(--cs)}
 .cch{display:flex;align-items:center;gap:6px 12px;flex-wrap:wrap;margin-bottom:10px;min-height:32px}
 .cch .ct2{font-size:var(--fs-m);font-weight:500;display:flex;align-items:center;gap:10px}
 .lg{display:inline-flex;align-items:center;gap:6px;font-size:var(--fs-s);color:var(--tx2);white-space:nowrap}
@@ -572,7 +601,7 @@ html.dhid .dash>.view{content-visibility:hidden;contain-intrinsic-size:auto none
 .yax span{position:absolute;right:0;transform:translateY(-50%);font-size:var(--fs-xs);color:var(--tx3);white-space:nowrap;font-variant-numeric:tabular-nums}
 .cbox:has(.yax) .chart{width:calc(100% - 66px)}   /* 同一台的兩張圖右邊刻度一樣寬：曲線結尾對齊 */
 .wait{display:grid;place-items:center;color:var(--tx3);font-size:var(--fs-s)}
-/* 曲線的時間範圍：連在一起的 Material 3 分段小按鈕 */
+/* 曲線的時間範圍：連在一起的分段小按鈕 */
 .rng{display:inline-flex;gap:2px;margin-left:auto;flex:none}
 .rctl{display:inline-flex;gap:8px;margin-left:auto;flex:none}.rctl .rng{margin-left:0}   /* 雷達下面：路線開關和遠近放在一起 */
 .rng button{height:30px;padding:0 11px;font-size:var(--fs-xs);font-weight:500;background:var(--chip);color:var(--tx2);border-radius:var(--r-xs);white-space:nowrap;
@@ -595,20 +624,21 @@ html.dhid .dash>.view{content-visibility:hidden;contain-intrinsic-size:auto none
 .cch .lg.sp{margin-left:auto}
 .cch .lg b{font-weight:600;color:var(--tx)}
 .cch .lg em{font-style:normal;font-size:var(--fs-xs);color:var(--tx3)}.cch .lg em.warn{color:var(--warn)}
-/* 最吃資源的程式（參考 Cockpit、htop） */
+/* 最吃資源的程式（固定欄寬對齊，長程式名優雅截斷不推擠） */
 .prl{display:flex;flex-direction:column}
-.pr{display:grid;grid-template-columns:minmax(0,1fr) minmax(40px,90px) 48px 64px;align-items:center;gap:10px;min-height:34px;font-size:var(--fs-s);border-top:1px solid var(--line)}
+.pr{display:grid;grid-template-columns:minmax(0,1fr) minmax(44px,84px) 46px 60px;align-items:center;gap:10px;min-height:36px;font-size:var(--fs-s);border-top:1px solid var(--line)}
 .pr:first-child{border-top:0}
-.pr b{font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.pr>.num{text-align:right;color:var(--tx2)}
+.pr b{min-width:0;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.pr>.num{text-align:right;color:var(--tx2);white-space:nowrap}
 .pbar{height:6px;border-radius:var(--r-pill);background:var(--chip);overflow:hidden}
 .pbar i{display:block;height:100%;width:100%;transform-origin:left;transform:scaleX(var(--k));border-radius:inherit;background:var(--c-cpu);transition:transform var(--t-slow) var(--ease)}
-/* 這台主機的規格 */
+/* 這台主機的規格（IP 霧化邊緣自然擴散，不裁成方框） */
 .spl{display:grid;grid-template-columns:auto minmax(0,1fr);gap:0;margin:0;font-size:var(--fs-s)}
-.spl dt,.spl dd{min-height:34px;display:flex;align-items:center;border-top:1px solid var(--line)}
+.spl dt,.spl dd{min-height:36px;display:flex;align-items:center;border-top:1px solid var(--line)}
 .spl dt:first-of-type,.spl dd:first-of-type{border-top:0}
-.spl dt{color:var(--tx3);padding-right:16px}
+.spl dt{color:var(--tx3);padding-right:16px;white-space:nowrap}
 .spl dd{margin:0;justify-content:flex-end;gap:8px;font-weight:600;text-align:right;min-width:0;overflow:hidden;white-space:nowrap}
+.spl dd:has(.ipb){overflow:visible}
 .spl dd small{font-weight:500;color:var(--tx3)}
 .spl .v6.a{max-width:100%}
 /* 本月流量 */
@@ -673,39 +703,46 @@ button.li.prs,a.li.prs{border-radius:var(--r-lg);transform:scale(.98);background
 .li.danger .lab{color:var(--bad)}
 .li .val{font-size:var(--fs-s);color:var(--tx3);text-align:right;white-space:nowrap}
 .foot-note{text-align:center;color:var(--tx3);font-size:var(--fs-s);margin:16px 0 0}
-/* 篩選小按鈕（Google Material 3 Filter Chip：未選淡底細框、選中柔和主題色膠囊） */
-.fchips{display:flex;gap:8px;margin:0 4px 16px;flex-wrap:wrap}
-.fchip{height:36px;padding:0 16px;border-radius:var(--r-sm);background:var(--card);color:var(--tx2);font-size:var(--fs-m);font-weight:500;
-  transition:border-radius var(--sp),background-color var(--t-fast) var(--ease),box-shadow var(--t-fast) var(--ease),color var(--tsel),transform var(--sp-fast)}
-.fchip.on{color:var(--on-pc);font-weight:600;border-radius:var(--r-full)}   /* 單選：選到的一律柔和主題色膠囊（底色是 ::before） */
-.fchip.prs{transform:scale(.95)}
-.fchips .fchip{display:inline-flex;align-items:center}
-/* 工具、設定：選主機（很多台時換行，全部看得到） */
-.hpick{display:flex;flex-wrap:wrap;gap:8px;margin:0 4px 16px}
-.hpick .fchip{flex:none;display:inline-flex;align-items:center;gap:8px;white-space:nowrap}
+/* 篩選與選主機膠囊（Apple Liquid Glass 滑動氣泡條；獨立膠囊維持毛玻璃圓角） */
+.fchip{height:34px;padding:0 14px;border-radius:var(--r-pill);background:var(--card);border:1px solid var(--line);color:var(--tx2);font-size:var(--fs-s);font-weight:500;white-space:nowrap;
+  transition:background-color var(--t-fast) var(--ease),box-shadow var(--t-fast) var(--ease),color var(--t-fast) var(--ease)}
+.fchip.on{background:var(--pc);border-color:transparent;color:var(--on-pc);font-weight:600}
+@media (hover:hover){.fchip:not(.on,.hsel.set,:disabled):hover{color:var(--tx)}}
+.fchips,.hpick{display:inline-flex;flex-wrap:nowrap;gap:2px;margin:0 0 16px;padding:4px;border-radius:var(--r-pill);
+  background:var(--glass-sub);border:1px solid var(--line);box-shadow:var(--hl);max-width:100%}
+.hpick{overflow-x:auto;scrollbar-width:none}
+:is(.fchips,.hpick) .fchip{position:relative;z-index:1;flex:none;display:inline-flex;align-items:center;gap:6px;border:0;background:transparent;box-shadow:none}
+:is(.fchips,.hpick) .fchip::before{content:"";position:absolute;inset:0;z-index:-1;border-radius:inherit;pointer-events:none;
+  background:var(--pill-bg);box-shadow:var(--pill-sh);opacity:0;transition:opacity var(--t-fast) var(--ease)}
+:is(.fchips,.hpick) .fchip.on{background:transparent;color:var(--tx);font-weight:600}
+:is(.fchips,.hpick) .fchip.on::before{opacity:1}
+@media (max-width:1023px){
+  .v-log .fchips{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));width:100%}
+  .v-log .fchips .fchip{justify-content:center;padding:0 8px}
+  .hpick{display:flex;width:100%}
+  .hpick .fchip{flex:1 0 auto;justify-content:center}
+}
 .fchip.on .dot.info{background:var(--p)}
 .hpick .dot,.pane .dot{animation:pop var(--sp-fast) backwards}
-/* 單選的一排／一列（設定分類、手機頂部分頁底線）：選取底色從舊的滑到新的（slideSel） */
+/* 單選液態玻璃滑動氣泡（slideSel）：僅毛玻璃氣泡平滑滑動，圖示與文字保持穩固不晃 */
 :where([data-slide]){position:relative;isolation:isolate}   /* :where：分頁列本來的 fixed／sticky 優先 */
-[data-slide]>.slide{position:absolute;left:0;top:0;background:var(--pc);pointer-events:none}
-.pane[data-slide]>.slide{z-index:1}
+[data-slide]>.slide{position:absolute;left:0;top:0;z-index:0;border-radius:var(--r-pill);background:var(--pill-bg);box-shadow:var(--pill-sh);pointer-events:none}
+[data-slide].sliding>.on::before{opacity:0;transition:none}
+[data-slide].slid>.on::before{transition:none}
+.pane[data-slide]>.slide{z-index:1;background:var(--pill-bg);box-shadow:var(--pill-sh)}
 [data-slide].sliding>*{transition-property:color,box-shadow,transform,padding}
-[data-slide].sliding>.on{background:transparent}
-.dock>.slide{background:var(--pc)}
-.dock.sliding>.on{background-image:none}
-.pane[data-slide].sliding>.on{background:transparent}
+[data-slide].sliding>.on{background:transparent;box-shadow:none}
 .pane[data-slide].sliding>.li>*{position:relative;z-index:2}
 
 /* ═════════ 設定的控制項 ═════════ */
-/* 連在一起的選項：Google Material 3 Segmented Button，選到的柔和主題色膠囊 */
+/* 連在一起的選項：分段切換 */
 .seg{display:flex;gap:3px;flex-wrap:wrap}
 .seg button{flex:1;height:40px;padding:0 12px;background:var(--chip);border-radius:var(--r-xs);font-size:var(--fs-s);font-weight:500;color:var(--tx2);white-space:nowrap;
   display:flex;align-items:center;justify-content:center;gap:6px;
-  transition:border-radius var(--sp),background-color var(--t-fast) var(--ease),color var(--tsel),transform var(--sp-fast)}
+  transition:border-radius var(--sp),background-color var(--t-fast) var(--ease),color var(--tsel)}
 .seg button:first-child{border-radius:var(--r-full) var(--r-xs) var(--r-xs) var(--r-full)}
 .seg button:last-child{border-radius:var(--r-xs) var(--r-full) var(--r-full) var(--r-xs)}
 .seg button.on{color:var(--on-pc);font-weight:600;border-radius:var(--r-full)}
-.seg button.prs{transform:scale(.94)}
 /* 外觀的選項：小預覽圖＋底下小字；選到的預覽圖外圈主題色、右上角打勾 */
 .lks{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
 .lkb{display:flex;flex-direction:column;align-items:center;gap:6px;padding:0;background:none;color:var(--tx3);font-size:var(--fs-xs)}
@@ -729,8 +766,8 @@ button.li.prs,a.li.prs{border-radius:var(--r-lg);transform:scale(.98);background
 .tgrid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
 @media (max-width:599px){.tgrid>:last-child:nth-child(odd){grid-column:1/-1}}   /* 單數個時最後一塊撐滿，不留空 */
 @media (min-width:600px){.tgrid{grid-template-columns:repeat(2,minmax(0,1fr))}}
-.tbx{position:relative;display:flex;flex-direction:column;align-items:stretch;gap:10px;min-height:148px;padding:16px;border-radius:var(--r-lg);background:var(--card);box-shadow:var(--cs);color:var(--tx);text-align:left;text-decoration:none;overflow:hidden;
-  transition:transform var(--sp-fast),border-radius var(--sp-fast),background-color var(--t-fast) var(--ease),box-shadow var(--t-fast) var(--ease),border-color var(--t-fast) var(--ease);
+.tbx{position:relative;display:flex;flex-direction:column;align-items:stretch;gap:10px;min-height:148px;padding:16px;border-radius:var(--r-lg);background:var(--card);border:1px solid var(--line);box-shadow:var(--cs);color:var(--tx);text-align:left;text-decoration:none;overflow:hidden;
+  transition:transform var(--sp-fast),background-color var(--t-fast) var(--ease),box-shadow var(--t-fast) var(--ease),border-color var(--t-fast) var(--ease);
   animation:rise var(--t-mid) var(--dec) backwards}
 .tbx .ttop{display:flex;justify-content:space-between;align-items:center;gap:8px;width:100%}
 .tbx .trgt{display:inline-flex;align-items:center;gap:6px;min-width:0;margin-left:auto}
@@ -787,54 +824,87 @@ button.li.prs,a.li.prs{border-radius:var(--r-lg);transform:scale(.98);background
 .tog:checked::before{left:36px;opacity:1;transform:translate(-50%,-50%)}
 .tog:active::after{width:28px;height:28px}
 /* 彩虹主題：選到的東西換成彩虹底、深色字（滑動中的那一格交給 .slide） */
-[data-accent="rainbow"] :is(.fchip,.seg button,.rng button,.chats button,.frzm .icbtn,.dash.d .rb,.dash.d .rh)::before{background-image:var(--rbw)}
-[data-accent="rainbow"] :is(.fchip.on,.seg button.on,.rng button.on,.chats button.on,.frzm .icbtn.on,.dash.d .rb.on,.dash.d .rh.on){color:var(--on-rbw)}
-[data-accent="rainbow"] :is([data-slide]:not(.dock)>.slide,.pane .li.on,.bkhosts .ubtn.on,
+[data-accent="rainbow"] :is(.fchip,.seg button,.rng button,.chats button,.frzm .icbtn,.dsb,.dash.d .rb,.dash.d .rh)::before{background-image:var(--rbw)}
+[data-accent="rainbow"] :is(.fchip.on,.seg button.on,.rng button.on,.chats button.on,.frzm .icbtn.on,.dsb.on,.dsb.on svg,.dash.d .rb.on,.dash.d .rb.on .ri,.dash.d .rh.on){color:var(--on-rbw)}
+[data-accent="rainbow"] :is([data-slide]>.slide,.pane .li.on,.bkhosts .ubtn.on,
   .tog:checked,.remember input:checked,.sp-blob){background-image:var(--rbw);color:var(--on-rbw)}
 [data-accent="rainbow"] [data-slide].sliding>.on{background-image:none}
-[data-accent="rainbow"] .rb.on .ri::before{background-image:var(--rbw)}
-[data-accent="rainbow"] .rb.on .ri{color:var(--on-rbw)}
-[data-accent="rainbow"] .blob:not(.warn,.bad) .bg{color:var(--on-rbw)}
 [data-accent="rainbow"] .tog{background-image:var(--rbw)}
 [data-accent="rainbow"] .tog:checked::after{background:#fff}
 [data-accent="rainbow"] .tog:checked::before{background:var(--on-rbw)}
 
-/* ═════════ 電腦版共用骨架 ═════════ */
-.dash.d{display:grid;grid-template-columns:96px minmax(0,1fr);min-height:100vh}
-.dash.d,body:has(.dash.d) .flyv{--pw:1520px;--side:340px;--gut:28px}
-.rail{position:sticky;top:0;height:calc(100vh / var(--zoom));display:flex;flex-direction:column;align-items:center;gap:14px;padding:22px 0}
-.rail .brand svg{width:44px;height:44px}
-.rail .brand{margin-bottom:18px}
-.rb{display:flex;flex-direction:column;align-items:center;gap:4px;color:var(--tx2);font-size:var(--fs-xs);font-weight:500;position:relative;width:80px;transition:color var(--t-mid) var(--ease)}
-.rb .ri{width:56px;height:32px;border-radius:var(--r-pill);display:grid;place-items:center;transition:color var(--t-mid) var(--ease),transform var(--sp-fast)}
-.rb .ri::before,.rb .ri::after{content:"";position:absolute;inset:0;border-radius:inherit;opacity:0;transform:scaleX(.5);transition:opacity var(--t-mid) var(--ease),transform var(--sp)}
-.rb .ri::before{background:var(--pc)}
-.rb .ri::after{background:color-mix(in srgb,var(--tx) 8%,transparent)}
-.rb .ri svg{position:relative}
-.rb svg{width:22px;height:22px}
-.rb.on{color:var(--tx)}
-.rb.on .ri{color:var(--on-pc)}
-.rb.on .ri::before{opacity:1;transform:none}
-@media (hover:hover){.rb:not(.on):hover .ri::after{opacity:1;transform:none}}
-.rb.prs .ri{transform:scale(.9)}
-.rb.hasnew::after{top:-2px;right:16px}
-.rail .rfoot{margin-top:auto;display:flex;flex-direction:column;align-items:center;gap:6px}
-.dash.d .view{padding:30px 32px 48px 8px;min-width:0}
+/* ═════════ 電腦版：Apple Liquid Glass 懸浮側欄 ＋ 開放通透主畫布 ═════════ */
+.dash.d{display:grid;grid-template-columns:272px minmax(0,1fr);min-height:100vh;--pw:1080px;--side:320px;--gut:20px}
+body:has(.dash.d) .flyv{--pw:1280px;--gut:20px}
+.dash.d .det,body:has(.dash.d) .flyv{left:272px;top:0;--gx:272px}
+
+/* 左側懸浮毛玻璃側欄（同心圓角：外框 26px、內縮 12px → 內部元件 14px） */
+.dash.d .rail{position:sticky;top:14px;height:calc(100vh / var(--zoom) - 28px);margin:14px 0 14px 14px;padding:16px 12px 12px;
+  border-radius:var(--r-xl);display:flex;flex-direction:column;align-items:stretch;gap:2px;
+  background:var(--glass);border:1px solid var(--glass-b);box-shadow:var(--sh-float);overflow-y:auto}
+.rail .brand{display:flex;align-items:center;gap:10px;padding:6px 10px 16px;border-radius:var(--r-md);color:var(--tx);text-align:left;flex:none}
+.rail .brand svg{width:30px;height:30px;flex:none}
+.rail .brand .bname{font-size:var(--fs-xl);font-weight:600;letter-spacing:-.02em}
+.rail .brand .bsub{margin-left:auto;font-size:var(--fs-xs);color:var(--tx3);font-weight:500;letter-spacing:.02em}
+.rnav{display:flex;flex-direction:column;gap:2px;flex:none}
+.rnav>.slide,.rhosts>.slide{border-radius:var(--r-md)}
+.dash.d .rb{position:relative;z-index:1;display:flex;flex-direction:row;align-items:center;gap:11px;width:100%;height:40px;padding:0 14px;
+  border-radius:var(--r-md);font-size:var(--fs-m);font-weight:500;color:var(--tx2);
+  transition:background-color var(--t-fast) var(--ease),color var(--t-fast) var(--ease)}
+.dash.d .rb::before,.rh::before{content:"";position:absolute;inset:0;z-index:-1;border-radius:inherit;pointer-events:none;
+  background:var(--pill-bg);box-shadow:var(--pill-sh);opacity:0;transition:opacity var(--t-fast) var(--ease)}
+.dash.d .rb .ri{display:grid;place-items:center;flex:none;transition:color var(--t-fast) var(--ease)}
+.dash.d .rb svg{width:19px;height:19px}
+.dash.d .rb.on{color:var(--tx);font-weight:600}
+.dash.d .rb.on::before,.rh.on::before{opacity:1}
+.dash.d .rb.on .ri{color:var(--p)}
+@media (hover:hover){.dash.d .rb:not(.on):hover{background:var(--glass-sub);color:var(--tx)}}
+.dash.d .rb.hasnew::after{top:50%;right:14px;margin-top:-4px}
+.rsec{display:flex;justify-content:space-between;align-items:center;padding:18px 14px 6px;font-size:var(--fs-xs);font-weight:600;color:var(--tx3);flex:none}
+.rhosts{display:flex;flex-direction:column;gap:2px;min-height:0;overflow-y:auto}
+.rh{position:relative;z-index:1;display:flex;align-items:center;gap:10px;height:38px;padding:0 14px;border-radius:var(--r-md);color:var(--tx2);font-size:var(--fs-s);text-align:left;
+  transition:transform var(--sp-fast),background-color var(--t-fast) var(--ease),color var(--t-fast) var(--ease)}
+.rh.prs,.backbtn.prs{transform:scale(.98)}
+.rh b{flex:1;min-width:0;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--tx)}
+.rh small{color:var(--tx3);font-size:var(--fs-xs);font-variant-numeric:tabular-nums}
+.rh small svg{width:14px;height:14px;color:var(--bad);display:block}
+.rh.on{color:var(--tx);font-weight:600}
+.rh.on b{color:var(--tx);font-weight:600}
+@media (hover:hover){.rh:not(.on):hover{background:var(--glass-sub);color:var(--tx)}}
+
+/* 側欄底部（方案 1：無硬分隔線，同心圓角毛玻璃內嵌區塊 — 天氣＋即時連線／重整／深淺色切換） */
+.rfoot-box{margin-top:auto;padding-top:12px;display:flex;flex-direction:column;gap:6px;flex:none}
+.side-wx{display:flex;align-items:center;gap:7px;padding:8px 12px;border-radius:var(--r-md);background:var(--glass-sub);border:1px solid var(--line);
+  font-size:var(--fs-xs);color:var(--tx2);min-width:0}
+.side-wx .wi{font-size:var(--fs-l);line-height:1;flex:none}
+.side-wx b{font-size:var(--fs-m);font-weight:600;color:var(--tx)}
+.side-wx small{margin-left:auto;color:var(--tx3);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.side-util{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:6px 6px 6px 12px;border-radius:var(--r-md);
+  background:var(--glass-sub);border:1px solid var(--line)}
+.rtime{display:inline-flex;align-items:center;gap:7px;font-size:var(--fs-xs);color:var(--tx3);font-variant-numeric:tabular-nums;min-width:0}
+.side-acts{display:inline-flex;align-items:center;gap:4px;flex:none}
+.side-icbtn{width:30px;height:30px;border-radius:var(--r-sm);display:grid;place-items:center;color:var(--tx2);
+  transition:background-color var(--t-fast) var(--ease),color var(--t-fast) var(--ease),transform var(--sp-fast)}
+.side-icbtn svg{width:16px;height:16px}
+@media (hover:hover){.side-icbtn:hover{background:var(--pill-bg);color:var(--tx);box-shadow:var(--pill-sh)}}
+.side-icbtn.prs{transform:scale(.92)}
+
+/* 右側開放通透主畫布（取消雙重白紙殼，直接讓毛玻璃卡片浮於環境光上） */
+.dash.d .view{padding:26px 32px 48px 18px;min-width:0}
 .dash.d .view>*{max-width:var(--pw);margin-inline:auto}
-.dash.d .ptitle{display:flex;align-items:center;height:122px;padding:6px 4px 26px}
 .dash.d .narrow{max-width:760px}
 .split{display:grid;grid-template-columns:240px minmax(0,1fr);gap:24px;align-items:start}
 .split.rside{grid-template-columns:minmax(0,1fr) var(--side);gap:var(--gut)}
 .smain{min-width:0}
-.split>.pane,.side{position:sticky;top:24px;max-height:calc(100vh / var(--zoom) - 48px);overflow-y:auto;padding:0 18px 32px;margin:0 -18px -32px}
-.pane .li{min-height:48px;padding:10px 16px;gap:10px;transition:border-radius var(--sp-fast),transform var(--sp-fast),background-color var(--t-mid) var(--ease),color var(--t-mid) var(--ease)}
-.pane[data-slide].sliding>.li{transition-property:border-radius,transform;color:var(--tx2);--lc:var(--on-pc)}
+.split>.pane,.side{position:sticky;top:26px;max-height:calc(100vh / var(--zoom) - 52px);overflow-y:auto;padding:0 18px 32px;margin:0 -18px -32px}
+.pane .li{min-height:46px;padding:10px 16px;gap:10px;transition:border-radius var(--sp-fast),transform var(--sp-fast),background-color var(--t-mid) var(--ease),color var(--t-mid) var(--ease)}
+.pane[data-slide].sliding>.li{transition-property:border-radius,transform;color:var(--tx2);--lc:var(--tx)}
 [data-accent="rainbow"] .pane[data-slide].sliding>.li{--lc:var(--on-rbw)}
 .pane[data-slide].sliding>.li.lit{color:var(--lc)}
 .pane[data-slide].sliding>.li>.lab{color:transparent;-webkit-background-clip:text;background-clip:text;
   background-image:linear-gradient(var(--tx2) var(--la,0px),var(--lc) var(--la,0px),var(--lc) var(--lb,0px),var(--tx2) var(--lb,0px))}
 .scat .pane .li.lit>svg{color:inherit}
-.pane .li.on{background:var(--pc);color:var(--on-pc)}
+.pane .li.on{background:var(--pill-bg);box-shadow:var(--pill-sh);color:var(--tx)}
 .lfi{display:grid;place-items:center;flex:none}
 .lfi svg{width:16px;height:16px}
 .lfi.bad{color:var(--bad)}.lfi.other{color:var(--ok)}
@@ -842,146 +912,45 @@ button.li.prs,a.li.prs{border-radius:var(--r-lg);transform:scale(.98);background
 .lfn{display:inline-grid;place-items:center;min-width:22px;height:20px;padding:0 6px;border-radius:var(--r-pill);background:color-mix(in srgb,currentColor 11%,transparent);font-size:var(--fs-xs);font-weight:600;font-variant-numeric:tabular-nums}
 .fchip.lfc{display:inline-flex;align-items:center;gap:6px}
 .fchip.lfc .lfn{margin-left:2px}
-@media (max-width:1023px){.lfc[data-logf=bad] .lfl,.lfc[data-logf=other] .lfl{display:none}}   /* 手機：有狀況、恢復只放圖示＋筆數，三顆擠得下一排 */
+@media (max-width:1023px){.lfc[data-logf=bad] .lfl,.lfc[data-logf=other] .lfl{display:none}}   /* 手機：有狀況、恢復只放圖示＋筆數，三顆均分一排 */
 .pane .li .val{color:inherit;opacity:.75}
 .scols{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:24px;align-items:start}
 .scol{min-width:0}
-/* 工具：常用連結三欄均分、機場起降單獨一條；大方塊和下面清單對齊 */
-.dash.d .v-tools .group{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}
-.dash.d .v-tools .group.fly1{grid-template-columns:1fr}
-.dash.d .v-tools .group>.li{border:1px solid var(--line);border-radius:var(--r-lg);min-height:74px;padding:14px 18px}
-.dash.d .v-tools .group>.li.col{grid-column:1/-1}
-.dash.d .v-tools .tbx{padding:18px 20px;border:1px solid var(--line)}
-@media (hover:hover){.dash.d .v-tools .tbx:hover,.dash.d .v-tools .group>.li:hover{box-shadow:var(--sh-1);border-color:color-mix(in oklab,var(--p) 35%,var(--line))}}
-.dhome{display:grid;grid-template-columns:minmax(0,1fr) var(--side);grid-template-areas:"hd hd" "main side";column-gap:var(--gut);align-items:start}
-.cols{display:grid;grid-template-columns:repeat(var(--n),minmax(0,1fr));gap:16px;align-items:start}
-.hp{--card:var(--s2);--chip:var(--s3);--cs:none;--cseg:none;background:var(--s1);border-radius:var(--r-xl);padding:20px;container-type:inline-size}
-.hp .hname{font-size:var(--fs-2xl);font-weight:500;letter-spacing:-.01em;color:var(--tx)}
-.hp .hsub{font-size:var(--fs-s);margin-top:2px}
-.hup{display:inline-flex;align-items:center;gap:3px;white-space:nowrap;vertical-align:-2px}.hup svg{width:13px;height:13px;flex:none}
-.fc>svg{width:16px;height:16px;flex:none;color:var(--tx3)}
-.hp .hhead{padding:0 0 6px}
-@container (min-width:560px){.tiles{grid-template-columns:repeat(4,minmax(0,1fr))}}
-.aside{position:sticky;top:24px;display:flex;flex-direction:column;gap:12px}
-.cols .addhost{grid-column:1/-1;height:52px}
-.hosts.wall{grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:12px}
-.wall .hcard{display:flex;flex-direction:column}
-.wall .hcard>.mrows{margin-top:auto;padding-top:16px}
-.wall .hcard>.offline{flex:1;display:grid;grid-template-columns:auto 1fr;align-content:center;align-items:start}
-.minis .addhost{height:50px}
-@media (min-width:1000px){.dash.d .minis{grid-template-columns:repeat(2,minmax(0,1fr))}}
-.dash.d .minis .mrows{grid-template-columns:repeat(3,72px)}
-@media (hover:hover){.hcard:not(.prs):hover{background:color-mix(in oklab,var(--s1) 96%,var(--tx))}}
-body:has(.dash.d) .fscroll{padding:24px 28px 48px 16px}
-body:has(.dash.d) .fwrap{max-width:var(--pw)}
-.dash.d .dscroll{padding:24px 28px 48px 16px}
-.dash.d .dscroll>*{max-width:var(--pw);margin-inline:auto}
-.dash.d .dscroll{--bar:58px}
-.dash.d .dscroll>.dtop{max-width:none;top:-24px;margin:-24px -28px 0 -16px;padding:24px calc(28px + max(0px,(100% - var(--pw)) / 2)) 10px calc(16px + max(0px,(100% - var(--pw)) / 2))}
-@media (min-width:700px){.dscroll .tiles{grid-template-columns:repeat(4,minmax(0,1fr))}}
-
-/* ═════════ 電腦版：正統 Google Workspace／Gmail／Cloud 主控台骨架 ═════════
-   上方 64px 全域頂部列（.gtop）＋ 左側無縫融入底色側欄（.rail）＋ 右側大圓角純白主畫布（.gsheet） */
-.dash.d{display:grid;grid-template-columns:248px minmax(0,1fr);grid-template-rows:64px minmax(0,1fr);grid-template-areas:"top top" "rail view";
-  min-height:100vh;--r-lg:16px;--r-xl:24px;--r-md:12px;--pw:1480px;--side:320px;--gut:20px}
-.dash.d .det,body:has(.dash.d) .flyv{left:248px;top:64px;--gx:248px}
-/* 全域頂部橫列（Gmail／Google Drive Top App Bar） */
-.gtop{grid-area:top;position:sticky;top:0;z-index:var(--z-bar);height:64px;display:flex;align-items:center;gap:16px;
-  padding:0 20px 0 18px;background:var(--bg)}
-.gtop .brand{width:230px;flex:none;display:flex;align-items:center;gap:11px;padding:6px 10px;border-radius:var(--r-pill);
-  font-size:var(--fs-xl);font-weight:500;letter-spacing:-.015em;color:var(--tx);transition:background-color var(--t-fast) var(--ease)}
-@media (hover:hover){.gtop .brand:hover{background:color-mix(in srgb,var(--tx) 5%,transparent)}}
-.gtop .brand svg{width:30px;height:30px;flex:none}
-.gmid{flex:1;min-width:0;display:flex;align-items:center;gap:10px}
-.gstat{display:inline-flex;align-items:center;gap:8px;height:40px;padding:0 16px;border-radius:var(--r-pill);
-  background:var(--s1);border:1px solid var(--line);font-size:var(--fs-m);font-weight:500;color:var(--tx);
-  max-width:460px;overflow:hidden;transition:background-color var(--t-fast) var(--ease),border-color var(--t-fast) var(--ease)}
-.gstat>span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.gstat svg{width:17px;height:17px;flex:none;color:var(--ok)}
-.gstat.warn{background:color-mix(in oklab,var(--warnc) 45%,var(--s1));border-color:color-mix(in oklab,var(--warn) 38%,var(--line));color:var(--on-warnc)}
-.gstat.warn svg{color:var(--warn)}
-.gstat.bad{background:color-mix(in oklab,var(--badc) 45%,var(--s1));border-color:color-mix(in oklab,var(--bad) 42%,var(--line));color:var(--on-badc)}
-.gstat.bad svg{color:var(--bad)}
-@media (hover:hover){.gstat:hover{border-color:color-mix(in oklab,var(--p) 35%,var(--line))}}
-.gwx{flex:none}
-.gwx .wx{height:40px;padding:0 14px;background:var(--s1);border:1px solid var(--line)}
-.gacts{display:flex;align-items:center;gap:8px;flex:none}
-.rtime{display:inline-flex;align-items:center;gap:7px;padding:0 6px;font-size:var(--fs-xs);color:var(--tx3);font-variant-numeric:tabular-nums}
-.gacts .dadd{height:38px;padding:0 16px;display:inline-flex;align-items:center;gap:6px;flex:none;background:var(--pc);color:var(--on-pc);border:0;font-weight:500}
-@media (hover:hover){.gacts .dadd:not([disabled]):hover{background:color-mix(in oklab,var(--pc) 88%,var(--p));box-shadow:var(--sh-1)}}
-.gacts .dadd svg{width:17px;height:17px}
-/* 左側導覽欄（無硬線，純粹貼在畫布底色上） */
-.dash.d .rail{grid-area:rail;position:sticky;top:64px;height:calc(100vh / var(--zoom) - 64px);align-items:stretch;gap:2px;
-  padding:8px 12px 18px 14px;background:var(--bg);border-right:0;overflow-y:auto}
-.rnav{display:flex;flex-direction:column;gap:2px}
-.dash.d .rb{flex-direction:row;width:auto;gap:12px;height:40px;padding:0 16px;border-radius:var(--r-pill);font-size:var(--fs-m);font-weight:500;color:var(--tx2);isolation:isolate;
-  transition:transform var(--sp-fast),background-color var(--t-fast) var(--ease),color var(--t-fast) var(--ease)}
-.dash.d .rb::before,.rh::before{content:"";position:absolute;inset:0;z-index:-1;border-radius:inherit;pointer-events:none;
-  background:var(--pc);opacity:0;transform:scale(.9);transition:opacity var(--t-fast) var(--ease),transform var(--sp-fast)}
-.dash.d .rb .ri{width:auto;height:auto;display:grid;border-radius:0}
-.dash.d .rb .ri::before,.dash.d .rb .ri::after{display:none}
-.dash.d .rb svg{width:19px;height:19px}
-.dash.d .rb.on{color:var(--on-pc);font-weight:600}
-.dash.d .rb.on::before,.rh.on::before{opacity:1;transform:none}
-.dash.d .rb.on .ri{color:inherit}
-.dash.d .rb.prs,.rh.prs,.backbtn.prs{transform:scale(.975)}
-@media (hover:hover){.dash.d .rb:not(.on):hover{background:color-mix(in srgb,var(--tx) 6%,transparent);color:var(--tx)}}
-.dash.d .rb.hasnew::after{top:50%;right:14px;margin-top:-4px}
-.rsec{display:flex;justify-content:space-between;align-items:center;padding:20px 16px 6px;font-size:var(--fs-xs);font-weight:500;color:var(--tx3)}
-.rhosts{display:flex;flex-direction:column;gap:2px}
-.rh{display:flex;align-items:center;gap:10px;height:38px;padding:0 16px;border-radius:var(--r-pill);color:var(--tx2);font-size:var(--fs-s);text-align:left;isolation:isolate;
-  transition:transform var(--sp-fast),background-color var(--t-fast) var(--ease),color var(--t-fast) var(--ease)}
-.rh b{flex:1;min-width:0;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--tx)}
-.rh small{color:var(--tx3);font-size:var(--fs-xs);font-variant-numeric:tabular-nums}
-.rh small svg{width:14px;height:14px;color:var(--bad);display:block}
-.rh.on{color:var(--on-pc)}
-.rh.on b,.rh.on small{color:inherit;font-weight:600}
-@media (hover:hover){.rh:not(.on):hover{background:color-mix(in srgb,var(--tx) 6%,transparent)}}
-/* 右側主畫布：Gmail／Google Drive 招牌的大圓角白底主紙面（.gsheet） */
-.dash.d .view{grid-area:view;padding:4px 18px 20px 6px;min-width:0}
-.dash.d .view>*{max-width:none;margin-inline:0}
-.gsheet{background:var(--s1);border:1px solid var(--line);border-radius:var(--r-xl);padding:24px 28px 32px;
-  min-height:calc(100vh / var(--zoom) - 88px);max-width:var(--pw);margin-inline:auto}
 /* 頁內標題列 */
-.dbar,.dash.d .ptitle{display:flex;align-items:center;gap:12px;height:auto;min-height:40px;padding:0;margin-bottom:20px}
-.dbar .dbt,.dash.d .ptitle{font-size:var(--fs-2xl);font-weight:500;letter-spacing:-.015em;margin:0;color:var(--tx)}
+.dbar,.dash.d .ptitle{display:flex;align-items:center;gap:14px;height:auto;min-height:42px;padding:0;margin-bottom:20px}
+.dbar .dbt,.dash.d .ptitle{font-size:var(--fs-3xl);font-weight:600;letter-spacing:-.025em;margin:0;color:var(--tx)}
 .dbar .sp{flex:1}
-.dbar .dadd{height:36px;padding:0 16px;display:inline-flex;align-items:center;gap:6px;flex:none;background:var(--s2);color:var(--p);border:1px solid var(--line);font-weight:500}
-@media (hover:hover){.dbar .dadd:not([disabled]):hover{background:color-mix(in oklab,var(--pc) 45%,var(--s1))}}
-/* 單台主機專頁的麵包屑返回列（Google Cloud 風格） */
-.dcrumb{display:flex;align-items:center;gap:8px;margin:-4px 0 18px;font-size:var(--fs-s);color:var(--tx3)}
-.backbtn{display:inline-flex;align-items:center;gap:6px;height:34px;padding:0 12px 0 8px;border-radius:var(--r-pill);color:var(--tx2);font-weight:500;
-  transition:transform var(--sp-fast),background-color var(--t-fast) var(--ease),color var(--t-fast) var(--ease)}
-.backbtn svg{width:17px;height:17px}
-@media (hover:hover){.backbtn:hover{background:color-mix(in srgb,var(--tx) 6%,transparent);color:var(--tx)}}
-.csep{color:var(--tx3);opacity:.6}
-.cname{color:var(--tx);font-weight:500}
-/* 總覽最上面一排：4 格重點摘要（淡底色塊，在白底主畫布上清爽分層） */
+.dbar .fchips,.dbar .hpick{margin:0;min-width:0}
+/* 總覽標題與狀態徽章 */
 .dash.d .dhome{display:block}
-.sums{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:14px;margin-bottom:24px}
-.sumc{background:var(--s2);border-radius:var(--r-lg);padding:16px 18px 14px;display:flex;flex-direction:column;min-width:0;animation:rise var(--t-mid) var(--dec) backwards}
-.smk{font-size:var(--fs-xs);font-weight:500;color:var(--tx3)}
-.smv{display:flex;align-items:baseline;gap:4px;margin-top:6px;font-size:var(--fs-2xl);font-weight:500;letter-spacing:-.015em;font-variant-numeric:tabular-nums;white-space:nowrap;overflow:hidden}
+.dhero{display:flex;align-items:flex-end;justify-content:space-between;gap:16px;margin-bottom:22px}
+.dhero-t{min-width:0;display:flex;flex-direction:column;gap:6px}
+.dhero .dbt{font-size:var(--fs-3xl);font-weight:600;letter-spacing:-.025em;line-height:1.18;color:var(--tx)}
+.dhero-sub{display:flex;align-items:center;gap:10px;flex-wrap:wrap;font-size:var(--fs-s);color:var(--tx3)}
+.hbadge{display:inline-flex;align-items:center;gap:5px;height:24px;padding:0 10px 0 8px;border-radius:var(--r-pill);font-size:var(--fs-xs);font-weight:600;background:var(--okc);color:var(--on-okc)}
+.hbadge svg{width:13px;height:13px;flex:none}
+.hbadge.warn{background:var(--warnc);color:var(--on-warnc)}
+.hbadge.bad{background:var(--badc);color:var(--on-badc)}
+.dhero .dadd{height:38px;padding:0 16px;flex:none;border-radius:var(--r-pill)}
+/* 總覽精簡 3 格毛玻璃摘要卡片 */
+.sums{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px;margin-bottom:24px}
+.sumc{background:var(--card);border:1px solid var(--line);box-shadow:var(--cs);border-radius:var(--r-lg);padding:16px 18px;display:flex;flex-direction:column;min-width:0;animation:rise var(--t-mid) var(--dec) backwards}
+.smk{display:flex;align-items:center;gap:8px;font-size:var(--fs-xs);font-weight:500;color:var(--tx2)}
+.smv{display:flex;align-items:baseline;gap:4px;margin-top:10px;font-size:var(--fs-2xl);font-weight:600;letter-spacing:-.02em;font-variant-numeric:tabular-nums;white-space:nowrap;overflow:hidden}
 .smv small{font-size:var(--fs-s);font-weight:500;color:var(--tx3);margin-right:4px}
 .smv small svg{width:14px;height:14px;vertical-align:-2px}
-.smv b{font-weight:500}
+.smv b{font-weight:600}
 .smv small.dn{margin:0;color:var(--c-rx)}.smv small.dn svg{width:18px;height:18px}
 .smu{display:inline-flex;align-items:center;gap:3px}.smu svg{width:12px;height:12px;color:var(--c-tx)}
-.sms{font-size:var(--fs-xs);color:var(--tx3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-height:1.4em;margin-top:2px}
-.sumc>svg,.sumc>.ups{margin-top:auto;padding-top:10px}
-.smg{width:100%;height:34px;display:block;overflow:visible}
-.smg .sl{fill:none;stroke:currentColor;stroke-width:1.7;stroke-linejoin:round}
-.smg .sa{fill:currentColor;opacity:.12}
-.smg.rx{color:var(--c-rx)}.smg.tx{color:var(--c-tx)}.smg.cpu{color:var(--c-cpu)}
-@media (max-width:1279px){.sums{grid-template-columns:repeat(2,minmax(0,1fr))}}
-/* 主機清單表格（點擊任一列進那台專頁） */
-.htab{background:var(--s1);border:1px solid var(--line);border-radius:var(--r-lg);margin-bottom:24px;overflow:hidden}
+.sms{font-size:var(--fs-xs);color:var(--tx3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-height:1.4em;margin-top:4px}
+/* 主機清單表格（毛玻璃表面，點選任一列進入專頁） */
+.htab{background:var(--card);border:1px solid var(--line);box-shadow:var(--cs);border-radius:var(--r-lg);margin-bottom:24px;overflow:hidden}
 .hth,.htr{display:grid;grid-template-columns:minmax(180px,1.5fr) repeat(3,minmax(108px,1fr)) minmax(170px,1.3fr) minmax(120px,.9fr) minmax(78px,.6fr) 44px;align-items:center;column-gap:16px;padding:0 12px 0 18px}
-.hth{height:40px;font-size:var(--fs-xs);font-weight:500;color:var(--tx3);background:color-mix(in oklab,var(--s2) 55%,var(--s1));border-bottom:1px solid var(--line)}
+.hth{height:40px;font-size:var(--fs-xs);font-weight:500;color:var(--tx3);background:var(--glass-sub);border-bottom:1px solid var(--line)}
 .htb{display:flex;flex-direction:column}
 .htr{min-height:60px;border-bottom:1px solid var(--line);cursor:pointer;transition:background-color var(--t-fast) var(--ease)}
 .htr:last-child{border-bottom:0}
-@media (hover:hover){.htr:hover{background:color-mix(in srgb,var(--tx) 3.5%,transparent)}}
+@media (hover:hover){.htr:hover{background:var(--glass-sub)}}
 .htr.warn{box-shadow:inset 3px 0 0 var(--warn)}.htr.bad,.htr.off{box-shadow:inset 3px 0 0 var(--bad)}
 .hc{display:flex;align-items:center;gap:10px;min-width:0;font-size:var(--fs-s);color:var(--tx2);white-space:nowrap}
 .hc .wv{flex:1;min-width:44px}
@@ -1004,92 +973,94 @@ body:has(.dash.d) .fwrap{max-width:var(--pw)}
 .hal .alert svg{width:12px;height:12px}
 .hal>i{font-style:normal;color:var(--tx3);flex:none}
 .hoff{grid-column:2 / -2;color:var(--bad);gap:6px}.hoff svg{width:16px;height:16px}
-/* 總覽下半部兩欄：左＝上線紀錄＋本月流量；右＝最近發生 */
-.dover{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:24px;align-items:start}
-.dcol{min-width:0}
-.dcol>.lbl:first-child{margin-top:0}
-.dcol .cc,.dcol .calm{border:1px solid var(--line);background:var(--s1)}
-.dcol .evs{gap:0;background:var(--s1);border:1px solid var(--line);border-radius:var(--r-lg);overflow:hidden}
-.dcol .evs>.ev{border-radius:0;background:none;border-bottom:1px solid var(--line)}
-.dcol .evs>.ev:last-child{border-bottom:0}
-.dcol .tgh{margin:0 0 18px;gap:0;border:1px solid var(--line);border-radius:var(--r-lg);overflow:hidden}
-.dcol .tgh>.li{border-radius:0}
-/* 單台主機專頁（直接住在 .gsheet 裡，不再多包一層框） */
-.dash.d .dhost .hp{background:none;border:0;border-radius:0;padding:0;--card:var(--s2);--chip:var(--s3)}
+/* 總覽近期事件與提醒 */
+.dhome>.evs{gap:0;background:var(--card);border:1px solid var(--line);box-shadow:var(--cs);border-radius:var(--r-lg);overflow:hidden}
+.dhome>.evs>.ev{border-radius:0;background:none;box-shadow:none;border-bottom:1px solid var(--line)}
+.dhome>.evs>.ev:last-child{border-bottom:0}
+.dhome>.tgh{margin:0 0 20px;gap:0;background:var(--card);border:1px solid var(--line);box-shadow:var(--cs);border-radius:var(--r-lg);overflow:hidden}
+.dhome>.tgh>.li{border-radius:0;background:none;box-shadow:none}
+.lbl small{font-size:var(--fs-xs);font-weight:400;color:var(--tx3)}
+/* 單台主機專頁：電腦寬螢幕一次全部展開，雙欄對齊 */
+.dcrumb{display:flex;align-items:center;gap:8px;margin:-4px 0 16px;font-size:var(--fs-s);color:var(--tx3)}
+.backbtn{display:inline-flex;align-items:center;gap:6px;height:34px;padding:0 12px 0 8px;border-radius:var(--r-pill);color:var(--tx2);font-weight:500;
+  transition:transform var(--sp-fast),background-color var(--t-fast) var(--ease),color var(--t-fast) var(--ease)}
+.backbtn svg{width:17px;height:17px}
+@media (hover:hover){.backbtn:hover{background:var(--glass-sub);color:var(--tx)}}
+.csep{color:var(--tx3);opacity:.6}
+.cname{color:var(--tx);font-weight:500}
+.hp{container-type:inline-size}
+.hp .hname{font-size:var(--fs-3xl);font-weight:600;letter-spacing:-.02em;color:var(--tx)}
+.hp .hsub{font-size:var(--fs-s);margin-top:2px;color:var(--tx3)}
+.hup{display:inline-flex;align-items:center;gap:3px;white-space:nowrap;vertical-align:-2px}.hup svg{width:13px;height:13px;flex:none}
+.fc>svg{width:16px;height:16px;flex:none;color:var(--tx3)}
+.hp .hhead{padding:0 0 8px}
+@container (min-width:560px){.tiles{grid-template-columns:repeat(4,minmax(0,1fr))}}
+.dash.d .dhost .hp{background:none;border:0;border-radius:0;padding:0}
 .dash.d .dhost .hp .hb{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}
 .dash.d .dhost .hp .hb>*{grid-column:1/-1}
 .dash.d .dhost .hp .hb>:is([data-key="cp"],[data-key="np"],[data-key="io"],[data-key="ld"],[data-key="pr"],[data-key="sp"]){grid-column:auto}
-.dash.d .dhost .hp .cc,.dash.d .dhost .hp .tile{background:var(--s1);border:1px solid var(--line)}
-.dash.d .dhost .hp .tile.w{background:color-mix(in oklab,var(--warnc) 16%,var(--s1));border-color:color-mix(in oklab,var(--warn) 44%,var(--line));box-shadow:none}
-.dash.d .dhost .hp .tile.b{background:color-mix(in oklab,var(--badc) 16%,var(--s1));border-color:color-mix(in oklab,var(--bad) 48%,var(--line));box-shadow:none}
-@media (max-width:1279px){.dover{grid-template-columns:minmax(0,1fr)}
+@media (max-width:1279px){
   .dash.d .dhost .hp .hb>:is([data-key="cp"],[data-key="np"],[data-key="io"],[data-key="ld"]){grid-column:1/-1}
   .hth,.htr{grid-template-columns:minmax(150px,1.4fr) repeat(3,minmax(90px,1fr)) minmax(70px,.6fr) 44px}
   .hth>:nth-child(5),.htr>:nth-child(5),.hth>:nth-child(7),.htr>:nth-child(7){display:none}}
-/* 上線紀錄：一天一格 */
-.ups{display:flex;gap:2px;height:20px;align-items:stretch}
-.ups i{flex:1;min-width:2px;border-radius:var(--r-xs);background:var(--ok);opacity:.85}
-.ups i.w{background:var(--warn)}.ups i.b{background:var(--bad)}.ups i.na{background:var(--s3);opacity:1}
-.lbl small{font-size:var(--fs-xs);font-weight:400;color:var(--tx3)}
-.upc,.trk{padding:12px 18px}
-.upr{display:grid;grid-template-columns:minmax(0,72px) minmax(0,1fr) 64px;align-items:center;gap:12px;min-height:34px;font-size:var(--fs-s)}
-.upr b{font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.upr>.num{text-align:right;color:var(--tx2);font-weight:500}
-.upr>.num.w{color:var(--warn)}.upr>.num.b{color:var(--bad)}
-.upr .ups{height:16px}.upr .ups i{border-radius:var(--r-xs)}
-.tkb{height:6px;border-radius:var(--r-pill);background:var(--s3);overflow:hidden}
-.tkb i{display:block;height:100%;width:100%;border-radius:inherit;transform-origin:left;transform:scaleX(var(--k));background:var(--p);transition:transform var(--t-slow) var(--dec)}
-.tkb.lim.w i{background:var(--warn)}.tkb.lim.b i{background:var(--bad)}
-/* 工具列裡的篩選、選主機：Google Material 3 外框篩選膠囊，選中變柔和主題色無外框 */
-.dbar .fchips,.dbar .hpick{margin:0;flex-wrap:nowrap;min-width:0}
-.dbar .hpick{overflow-x:auto;scrollbar-width:none;padding:2px}
-.dbar .fchip{height:34px;border-radius:var(--r-sm);box-shadow:inset 0 0 0 1px var(--line)}
-.dbar .fchip.on,.dbar .fchip.set{box-shadow:none;border-radius:var(--r-full)}
-/* 設定：Google 帳戶風格（左邊透明膠囊分類，右邊細框整張白卡） */
+@media (hover:hover){.hcard:not(.prs):hover{border-color:color-mix(in oklab,var(--p) 35%,var(--line))}}
+body:has(.dash.d) .fscroll{padding:24px 32px 48px 18px}
+body:has(.dash.d) .fwrap{max-width:var(--pw)}
+.dash.d .dscroll{padding:24px 32px 48px 18px}
+.dash.d .dscroll>*{max-width:var(--pw);margin-inline:auto}
+.dash.d .dscroll{--bar:58px}
+.dash.d .dscroll>.dtop{max-width:none;top:-24px;margin:-24px -32px 0 -18px;padding:24px calc(32px + max(0px,(100% - var(--pw)) / 2)) 10px calc(18px + max(0px,(100% - var(--pw)) / 2))}
+@media (min-width:700px){.dscroll .tiles{grid-template-columns:repeat(4,minmax(0,1fr))}}
+/* 工具：電腦版三欄均分（2 或 4 個工具時改兩欄，每排平衡不留大洞） */
+.dash.d .v-tools .group{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}
+.dash.d .v-tools .group.fly1{grid-template-columns:1fr}
+.dash.d .v-tools .group>.li{border:1px solid var(--line);border-radius:var(--r-lg);min-height:74px;padding:14px 18px}
+.dash.d .v-tools .group>.li.col{grid-column:1/-1}
+.dash.d .v-tools .tbx{padding:18px 20px;border:1px solid var(--line)}
+@media (hover:hover){.dash.d .v-tools .tbx:hover,.dash.d .v-tools .group>.li:hover{box-shadow:var(--sh-1);border-color:color-mix(in oklab,var(--p) 35%,var(--line))}}
+.dash.d .tgrid{grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}
+.dash.d .tgrid[data-n="1"]{grid-template-columns:1fr}
+.dash.d .tgrid[data-n="2"],.dash.d .tgrid[data-n="4"]{grid-template-columns:repeat(2,minmax(0,1fr))}
+.dash.d .v-tools .lbl{margin-top:26px}
+/* 設定：左側透明液態分類，右側毛玻璃整張卡片 */
 .sgrid{display:grid;grid-template-columns:220px minmax(0,780px);gap:28px;align-items:start}
-.scat{position:sticky;top:84px;display:flex;flex-direction:column;gap:10px}
+.scat{position:sticky;top:26px;display:flex;flex-direction:column;gap:10px}
 .scat .pane{gap:2px}
-.scat .pane .li{min-height:42px;padding:0 16px;gap:12px;font-weight:500;font-size:var(--fs-m);background:transparent;border-radius:var(--r-pill);color:var(--tx2)}
-.scat .pane .li:first-child,.scat .pane .li:last-child{border-radius:var(--r-pill)}
-.scat .pane .li.on{background:var(--pc);color:var(--on-pc);font-weight:600}
-@media (hover:hover){.scat .pane .li:not(.on):hover{background:color-mix(in srgb,var(--tx) 6%,transparent);color:var(--tx)}}
+.scat .pane .li{min-height:42px;padding:0 14px;gap:12px;font-weight:500;font-size:var(--fs-m);background:transparent;box-shadow:none;border-radius:var(--r-md);color:var(--tx2)}
+.scat .pane .li:first-child,.scat .pane .li:last-child{border-radius:var(--r-md)}
+.scat .pane .li.on{background:var(--pill-bg);box-shadow:var(--pill-sh);color:var(--tx);font-weight:600}
+@media (hover:hover){.scat .pane .li:not(.on):hover{background:var(--glass-sub);color:var(--tx)}}
 .scat .pane .li>svg{width:19px;height:19px;flex:none;color:var(--tx2)}
-.scat .pane .li.on>svg{color:inherit}
+.scat .pane .li.on>svg{color:var(--p)}
 .scat .sp{display:none}
 .scat .group:not(.pane){gap:2px;padding-top:10px;border-top:1px solid var(--line)}
-.scat .group:not(.pane) .li{min-height:40px;padding:0 16px;gap:12px;font-size:var(--fs-m);background:transparent;border-radius:var(--r-pill);color:var(--tx2)}
-.scat .group:not(.pane) .li:first-child,.scat .group:not(.pane) .li:last-child{border-radius:var(--r-pill)}
-@media (hover:hover){.scat .group:not(.pane) .li:hover{background:color-mix(in srgb,var(--tx) 6%,transparent);color:var(--tx)}}
-.scat .group .li .ico{width:auto;height:auto;background:none;color:var(--tx2)}
+.scat .group:not(.pane) .li{min-height:40px;padding:0 14px;gap:12px;font-size:var(--fs-m);background:transparent;box-shadow:none;border-radius:var(--r-md);color:var(--tx2)}
+.scat .group:not(.pane) .li:first-child,.scat .group:not(.pane) .li:last-child{border-radius:var(--r-md)}
+@media (hover:hover){.scat .group:not(.pane) .li:hover{background:var(--glass-sub);color:var(--tx)}}
+.scat .group .li .ico{width:auto;height:auto;background:none;box-shadow:none;color:var(--tx2)}
 .scat .group .li .ico svg{width:19px;height:19px}
 .scat .group .li small{display:none}
 .sbody>.lbl:first-child{margin-top:0}
 .sbody .sw{grid-template-columns:repeat(12,44px);justify-content:start}
 .sbody .lks{max-width:560px}
 .dbar:has(>.sbr){display:grid;grid-template-columns:220px minmax(0,780px);gap:28px}
-.dbar:has(>.sbr){padding:0}.sbr{display:flex;align-items:center;gap:12px;min-width:0}.sbr>.hpick{margin-left:-2px}
+.dbar:has(>.sbr){padding:0}.sbr{display:flex;align-items:center;gap:12px;min-width:0}
 .sbody>.group+.group{margin-top:var(--gut)}
-/* 電腦設定右欄：整張白底細框卡片＋細線分隔，像 Google 帳戶設定 */
-.dash.d .sbody .group{gap:0;background:var(--s1);border:1px solid var(--line);border-radius:var(--r-lg);overflow:hidden}
-.dash.d .sbody .group>.li,.dash.d .sbody .selfrow,.dash.d .sbody .selfwait{border-radius:0;background:none;border-bottom:1px solid var(--line)}
+.dash.d .sbody .group{gap:0;background:var(--card);border:1px solid var(--line);box-shadow:var(--cs);border-radius:var(--r-lg);overflow:hidden}
+.dash.d .sbody .group>.li,.dash.d .sbody .selfrow,.dash.d .sbody .selfwait{border-radius:0;background:none;box-shadow:none;border-bottom:1px solid var(--line)}
 .dash.d .sbody .group>:last-child,.dash.d .sbody .group>.selfbox:last-child>:last-child{border-bottom:0}
 .dash.d .sbody .selfbox{gap:0}
 .dash.d .sbody .selfsum{border:1px solid var(--line)}
-/* 工具：電腦版三欄均分（2 或 4 個工具時改兩欄，每排平衡不留大洞） */
-.dash.d .tgrid{grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}
-.dash.d .tgrid[data-n="1"]{grid-template-columns:1fr}
-.dash.d .tgrid[data-n="2"],.dash.d .tgrid[data-n="4"]{grid-template-columns:repeat(2,minmax(0,1fr))}
-.dash.d .v-tools .lbl{margin-top:26px}
-/* 紀錄：一張表（時間、主機、事件），日期是表裡的分段 */
-.ltab{background:var(--s1);border:1px solid var(--line);border-radius:var(--r-lg);overflow:hidden}
+/* 紀錄：毛玻璃事件表 */
+.ltab{background:var(--card);border:1px solid var(--line);box-shadow:var(--cs);border-radius:var(--r-lg);overflow:hidden}
 .lth,.ltab .ev.lr{display:grid;grid-template-columns:64px 150px 28px minmax(0,1fr);column-gap:14px;align-items:center;padding:0 18px}
 .ltab.one .lth,.ltab.one .ev.lr{grid-template-columns:64px 28px minmax(0,1fr)}
 .lth>.lev{grid-column:span 2}
-.lth{height:40px;font-size:var(--fs-xs);font-weight:500;color:var(--tx3);background:color-mix(in oklab,var(--s2) 55%,var(--s1));border-bottom:1px solid var(--line)}
+.lth{height:40px;font-size:var(--fs-xs);font-weight:500;color:var(--tx3);background:var(--glass-sub);border-bottom:1px solid var(--line)}
 .ltab .evs{gap:0}
 .ltab .ev.lr{min-height:48px;padding-block:8px;border-radius:0;box-shadow:none;background:none;border-bottom:1px solid var(--line);transition:background-color var(--t-fast) var(--ease)}
 .ltab .ev.lr:last-child{border-bottom:0}
-@media (hover:hover){.ltab .ev.lr:hover{background:color-mix(in srgb,var(--tx) 3.5%,transparent)}}
+@media (hover:hover){.ltab .ev.lr:hover{background:var(--glass-sub)}}
 .ltab .evi{width:28px;height:28px}
 .ltab .evi svg{width:15px;height:15px}
 .ltab .lt{font-size:var(--fs-s);color:var(--tx3)}
@@ -1097,7 +1068,7 @@ body:has(.dash.d) .fwrap{max-width:var(--pw)}
 .ltab .lh .eh{margin:0}
 .ltab .ev .ehs{grid-column:auto}
 .ev .lx{margin-left:8px;font-size:var(--fs-xs);color:var(--tx3)}
-.ltab .day{margin:0;padding:10px 18px 6px;font-size:var(--fs-xs);background:color-mix(in oklab,var(--s2) 35%,var(--s1));border-bottom:1px solid var(--line)}
+.ltab .day{margin:0;padding:10px 18px 6px;font-size:var(--fs-xs);background:var(--glass-sub);border-bottom:1px solid var(--line)}
 
 
 /* ═════════ 對話框 ═════════ */
@@ -1107,7 +1078,7 @@ body:has(.dash.d) .fwrap{max-width:var(--pw)}
 .veil.closing{pointer-events:none}
 .veil.closing::before{animation:fadeOut var(--t-fast) var(--ease) forwards}   /* 要在 360ms 移除前跑完 */
 .dialog{width:100%;max-width:380px;max-height:calc((100dvh - 40px) / var(--zoom));overflow-y:auto;overscroll-behavior:contain;touch-action:pan-y;
-  background:var(--s1);border:1px solid var(--line);box-shadow:var(--sh-3);border-radius:var(--r-xl);padding:24px;text-align:center;animation:dlgin var(--sp) backwards;
+  background:var(--glass-modal);border:1px solid var(--glass-b);box-shadow:var(--sh-float);border-radius:var(--r-xl);padding:24px;text-align:center;animation:dlgin var(--sp) backwards;
   --card:var(--s2);--chip:var(--s2);--cs:none;--cseg:none}
 .closing .dialog{animation:dlgout var(--t-fast) var(--exit) forwards}
 @keyframes dlgin{from{opacity:0;transform:scale(.92) translateY(8px)}}
@@ -1362,8 +1333,8 @@ textarea.field{height:auto;padding:12px 16px;resize:none}
 .selfwait{display:flex;align-items:center;min-height:66px;padding:12px 16px;background:var(--card);box-shadow:var(--cs);color:var(--tx3);border-radius:var(--r-lg)}
 
 /* ═════════ 選單 ═════════ */
-.lmenu{position:fixed;z-index:var(--z-menu);min-width:210px;max-width:290px;padding:4px;gap:2px;border-radius:var(--r-md);display:flex;flex-direction:column;
-  background:var(--s1);border:1px solid var(--line);box-shadow:var(--sh-2)}
+.lmenu{position:fixed;z-index:var(--z-menu);min-width:210px;max-width:290px;padding:5px;gap:2px;border-radius:var(--r-lg);display:flex;flex-direction:column;
+  background:var(--glass-modal);border:1px solid var(--glass-b);box-shadow:var(--sh-float)}
 .hmenu button{display:flex;align-items:center;gap:12px;min-height:46px;padding:8px 12px;border-radius:var(--r-sm);color:var(--tx);text-decoration:none;font-size:var(--fs-m);text-align:left;
   transition:background-color var(--t-fast) var(--ease)}
 @media (hover:hover){.hmenu button:hover{background:color-mix(in srgb,var(--tx) 8%,transparent)}}
@@ -1385,15 +1356,15 @@ textarea.field{height:auto;padding:12px 16px;resize:none}
   display:flex;flex-direction:column;align-items:center;gap:8px;pointer-events:none;width:max-content;max-width:calc(100vw - 32px)}
 @media (min-width:1024px){.toasts{bottom:28px}}
 @media (max-width:599px){.toasts{left:16px;right:16px;width:auto;max-width:none;transform:none;align-items:stretch}}
-.toast{border-radius:var(--r-xs);padding:14px 18px 14px 16px;font-size:var(--fs-m);display:flex;align-items:center;gap:10px;
+.toast{border-radius:var(--r-pill);padding:12px 18px 12px 16px;font-size:var(--fs-m);display:flex;align-items:center;gap:10px;
   background:var(--inv);color:var(--on-inv);box-shadow:var(--sh-2);animation:toastin var(--sp) backwards}
 .toast.out{animation:toastOut var(--t-mid) var(--exit) forwards}
 .toast svg{width:20px;height:20px;flex:none}
 .toast.ok svg{color:var(--inv-ok)}.toast.bad svg{color:var(--inv-bad)}
 @keyframes toastin{from{opacity:0;transform:translateY(20px) scale(.9)}}
 @keyframes toastOut{to{opacity:0;transform:translateY(10px) scale(.95)}}
-#ctip{position:fixed;z-index:var(--z-toast);pointer-events:none;min-width:140px;padding:10px 12px;border-radius:var(--r-sm);font-size:var(--fs-s);
-  background:var(--s1);border:1px solid var(--line);box-shadow:var(--sh-2);opacity:0;transition:opacity var(--t-fast) var(--ease)}
+#ctip{position:fixed;z-index:var(--z-toast);pointer-events:none;min-width:140px;padding:10px 12px;border-radius:var(--r-md);font-size:var(--fs-s);
+  background:var(--glass-modal);border:1px solid var(--glass-b);box-shadow:var(--sh-float);opacity:0;transition:opacity var(--t-fast) var(--ease)}
 #ctip .tt{color:var(--tx3);font-size:var(--fs-xs);margin-bottom:4px}
 #ctip .tr2{display:flex;align-items:center;gap:8px;line-height:1.7}
 #ctip .tr2 i{width:8px;height:8px;border-radius:50%;flex:none}
@@ -1401,11 +1372,11 @@ textarea.field{height:auto;padding:12px 16px;resize:none}
 #cline{position:fixed;z-index:calc(var(--z-toast) - 1);width:0;border-left:1px dashed var(--tx3);pointer-events:none;opacity:0;transition:opacity var(--t-fast) var(--ease)}
 #ctip.show,#cline.show{opacity:1}
 
-/* ═════════ 登入、從備份還原（Google 登入卡片風格） ═════════ */
-.login{width:calc(100% - 32px);max-width:400px;margin:13vh auto 0;text-align:center;background:var(--s1);border:1px solid var(--line);border-radius:var(--r-xl);padding:36px 28px 28px;
+/* ═════════ 登入、從備份還原（Apple Liquid Glass 置中卡片） ═════════ */
+.login{width:calc(100% - 32px);max-width:400px;margin:13vh auto 0;text-align:center;background:var(--card);border:1px solid var(--glass-b);box-shadow:var(--sh-float);border-radius:var(--r-xl);padding:36px 28px 28px;
   animation:through var(--t-mid) var(--dec) backwards}
 .login .logo{display:block;width:64px;height:64px;margin:0 auto 16px}
-.login h1{font-size:var(--fs-3xl);font-weight:500;letter-spacing:-.01em}
+.login h1{font-size:var(--fs-3xl);font-weight:600;letter-spacing:-.02em}
 .login p{color:var(--tx3);margin-top:4px}
 .login .field{margin:22px 0 12px}
 .remember{display:flex;align-items:center;justify-content:center;gap:10px;color:var(--tx2);cursor:pointer;margin-bottom:8px;user-select:none}
@@ -1892,16 +1863,16 @@ html.flyon .dash>.view{content-visibility:hidden;contain-intrinsic-size:auto non
 .fapc.on .fon{opacity:1;transform:none}
 .fon{color:var(--p)}.fon svg{width:20px;height:20px}
 
-/* ═════════ 浮動層次（Google Material 3：視窗與選單保持清楚不糊，捲動貼頂的分頁列與標題列才帶微微透色） ═════════ */
-:root{--blur:blur(16px)}
-[data-mode="dark"]{--glass:color-mix(in oklab,var(--s1) 88%,transparent)}
-[data-mode="light"]{--glass:color-mix(in oklab,var(--s1) 92%,transparent)}
+/* ═════════ Apple Liquid Glass 漸進毛玻璃層次（降級或減少透明度偏好時自動退回高對比純色基底） ═════════ */
 @supports ((backdrop-filter:blur(1px)) or (-webkit-backdrop-filter:blur(1px))){@media not (prefers-reduced-transparency:reduce){
-  html:not(.full) .dock{background:var(--glass);-webkit-backdrop-filter:var(--blur);backdrop-filter:var(--blur)}
-  .full .dock{background:var(--glass);-webkit-backdrop-filter:var(--blur);backdrop-filter:var(--blur)}
-  .dtop::before{background:var(--glass);-webkit-backdrop-filter:var(--blur);backdrop-filter:var(--blur)}
-  .fmini{background:var(--glass);-webkit-backdrop-filter:var(--blur);backdrop-filter:var(--blur)}
+  .rail,.dock,.dtop::before,.fmini{-webkit-backdrop-filter:var(--blur-float);backdrop-filter:var(--blur-float)}
+  .dtop::before,.fmini{background:var(--glass)}
+  .hcard,.hbanner,.sumc,.htab,.ltab,.cc,.tile,.tbx,.dhome>.evs,.dhome>.tgh,.dash.d .sbody .group,.login{-webkit-backdrop-filter:var(--blur-card);backdrop-filter:var(--blur-card)}
+  .dialog,.lmenu,#ctip{-webkit-backdrop-filter:var(--blur-modal);backdrop-filter:var(--blur-modal)}
 }}
+@media (prefers-reduced-transparency:reduce){
+  :root{--glass:var(--s1);--glass-card:var(--s1);--glass-modal:var(--s1)}
+}
 /* PIN 碼數字鍵盤（web/pin.js）：每次打開數字位置都打亂；圓點顯示打了幾碼 */
 .ppad{display:flex;flex-direction:column;align-items:center;gap:22px;margin:14px auto 0;transition:opacity var(--t-fast) var(--ease)}
 .ppad.ppbad{animation:shake var(--t-mid) var(--ease)}.ppad.ppwait{opacity:.55;pointer-events:none}
