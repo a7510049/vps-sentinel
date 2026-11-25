@@ -171,8 +171,6 @@ b,strong{font-weight:500}
 @keyframes rise{from{opacity:0;transform:translateY(10px)}}
 @keyframes pop{from{opacity:0;transform:scale(.82)}}
 @keyframes through{from{opacity:0;transform:translateY(6px)}}
-@keyframes slideR{from{opacity:0;transform:translateX(24px)}}
-@keyframes slideL{from{opacity:0;transform:translateX(-24px)}}
 
 /* 按下去的水波紋（Google Material 3 State Ripple） */
 :is(.li,.ubtn,.iconbtn,.icbtn,.hmenu button,.rb,.rh,.backbtn,.seg button,.rng button,.fchip,.addhost,.trf,.chats button,.tbx){position:relative}
@@ -260,9 +258,8 @@ img.flag{width:28px;height:21px;object-fit:cover;border-radius:var(--r-xs);flex:
 .dash.m{position:relative;max-width:760px;margin:0 auto;padding:0 16px calc(env(safe-area-inset-bottom) + 28px);overflow-x:clip}
 .full .dash.m{padding-bottom:calc(env(safe-area-inset-bottom) + 88px)}
 .view{animation:through var(--t-mid) var(--dec) backwards}
-.dash.m .view[data-dir="1"]{animation:slideR var(--t-mid) var(--dec) backwards}
-.dash.m .view[data-dir="-1"]{animation:slideL var(--t-mid) var(--dec) backwards}
-/* 手機橫向滑換分頁時：整頁一起平滑滑入，裡面的卡片不再疊第二層上下浮入，避免斜向抖動與重複淡入 */
+/* 手機換分頁改由 JS through() 同步整頁並排滑動（不重疊疊影），停用預設 CSS 進場與卡片浮入避免衝突 */
+.dash.m .view:is([data-dir="1"],[data-dir="-1"]){animation:none}
 .dash.m .view:is([data-dir="1"],[data-dir="-1"]) :is(.hcard,.tbx,.tile){animation:none}
 /* 這個網頁連不上主機超過 15 秒（html.lost）：畫面上的數字都是舊的，整塊變淡 */
 .view>:not(.hbanner,.dhome,.mtop),.dhome>:not(.dbar),.det .dscroll>:not(.dtop){transition:filter var(--t-slow) var(--ease)}
