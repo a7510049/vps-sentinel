@@ -250,14 +250,16 @@ img.flag{width:28px;height:21px;object-fit:cover;border-radius:var(--r-xs);flex:
 /* ═════════ 整體版面與過場 ═════════ */
 .booting #app{opacity:0}
 #app{transition:opacity var(--t-mid) var(--ease)}
-.dash.m{max-width:760px;margin:0 auto;padding:0 16px calc(env(safe-area-inset-bottom) + 88px)}
+.dash.m{max-width:760px;margin:0 auto;padding:0 16px calc(env(safe-area-inset-bottom) + 28px)}
+.full .dash.m{padding-bottom:calc(env(safe-area-inset-bottom) + 88px)}
 .view{animation:through var(--t-mid) var(--dec) backwards}
 .dash.m .view[data-dir="1"]{animation:slideR var(--t-mid) var(--dec) backwards}
 .dash.m .view[data-dir="-1"]{animation:slideL var(--t-mid) var(--dec) backwards}
 /* 這個網頁連不上主機超過 15 秒（html.lost）：畫面上的數字都是舊的，整塊變淡 */
 .view>:not(.hbanner,.dhome),.dhome>:not(.dbar),.det .dscroll>:not(.dtop){transition:filter var(--t-slow) var(--ease)}
 html.lost :is(.view>:not(.hbanner,.dhome),.det .dscroll>:not(.dtop)){filter:opacity(.55) saturate(.45)}
-.ptitle{font-size:var(--fs-3xl);font-weight:500;letter-spacing:-.015em;line-height:1.25;padding:calc(env(safe-area-inset-top) + 20px) 4px 16px;color:var(--tx)}
+.ptitle{font-size:var(--fs-3xl);font-weight:500;letter-spacing:-.015em;line-height:1.25;padding:16px 4px 12px;color:var(--tx)}
+.full .ptitle{padding:calc(env(safe-area-inset-top) + 20px) 4px 16px}
 .ptitle>span:first-child,.hname{width:fit-content;max-width:100%}
 .lbl{display:flex;align-items:center;justify-content:space-between;gap:8px;font-size:var(--fs-s);font-weight:500;color:var(--tx2);margin:22px 4px 10px}
 .lbl:first-child{margin-top:0}
@@ -269,19 +271,22 @@ html.lost :is(.view>:not(.hbanner,.dhome),.det .dscroll>:not(.dtop)){filter:opac
 .lbl:not(.form .lbl) button[disabled]{opacity:.45;cursor:default}
 .empty{color:var(--tx3);padding:28px 8px;text-align:center}
 
-/* ═════════ 手機上方標題列（Material 3 Top App Bar） ═════════ */
-.mtop{position:sticky;top:0;z-index:var(--z-bar);display:flex;align-items:center;gap:8px;min-height:calc(56px + env(safe-area-inset-top));
+/* ═════════ 手機上方標題列（瀏覽器裡排在頂部分頁列下跟著捲走；主畫面／App 模式貼頂） ═════════ */
+.mtop{display:flex;align-items:center;gap:8px;min-height:44px;margin:4px -4px 4px;padding:0 0 0 4px}
+.full .mtop{position:sticky;top:0;z-index:var(--z-bar);min-height:calc(56px + env(safe-area-inset-top));
   margin:0 -16px 8px;padding:env(safe-area-inset-top) 12px 0 18px;background:var(--bg)}
 .mbrand{display:flex;align-items:center;gap:10px;font-size:var(--fs-l);font-weight:500;color:var(--tx)}
 .mbrand svg{width:28px;height:28px}
 .mtime{display:inline-flex;align-items:center;gap:6px;font-size:var(--fs-xs);color:var(--tx3);font-variant-numeric:tabular-nums}
 
-/* ═════════ 手機底部導覽列：正宗 Google Material 3 Navigation Bar（瀏覽器與 App 一致） ═════════ */
+/* ═════════ 手機分頁列 ═════════
+   從主畫面、App 打開（html.full，沒有網址列）：底部 Google Material 3 導覽列
+   手機瀏覽器裡（html:not(.full)）：頁面頂部整排標籤列，底下一條主色指示線滑動，往下捲藏、往上捲出現（避開 iOS 底部網址列） */
 .dock{position:fixed;left:0;right:0;bottom:0;z-index:var(--z-bar);display:grid;grid-template-columns:repeat(4,1fr);align-items:center;
   padding:8px 8px calc(env(safe-area-inset-bottom) + 8px);background:var(--s1);border-top:1px solid var(--line);
   transition:transform var(--t-mid) var(--dec),opacity var(--t-fast) var(--ease)}
 .lock .dock{transform:translateY(110%);opacity:0;pointer-events:none}
-@media (max-width:1023px){.toasts{bottom:calc(env(safe-area-inset-bottom) + 82px)}}
+@media (max-width:1023px){.full .toasts{bottom:calc(env(safe-area-inset-bottom) + 82px)}}
 .tb{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;min-height:52px;color:var(--tx2);position:relative;
   transition:color var(--t-fast) var(--ease)}
 .tbi{position:relative;width:64px;height:32px;border-radius:var(--r-pill);display:grid;place-items:center;isolation:isolate;
@@ -294,9 +299,27 @@ html.lost :is(.view>:not(.hbanner,.dhome),.det .dscroll>:not(.dtop)){filter:opac
 .tb.on .t{font-weight:600}
 .tb.on .tbi{color:var(--on-pc)}
 .tb.on .tbi::before{opacity:1;transform:none}
-[data-accent="rainbow"] .tb.on .tbi::before{background-image:var(--rbw)}
-[data-accent="rainbow"] .tb.on .tbi{color:var(--on-rbw)}
+[data-accent="rainbow"].full .tb.on .tbi::before{background-image:var(--rbw)}
+[data-accent="rainbow"].full .tb.on .tbi{color:var(--on-rbw)}
 .tb.hasnew::after{top:4px;right:calc(50% - 22px)}
+html.full .dock>.slide{display:none}
+html:not(.full) .dock{position:sticky;top:0;left:auto;right:auto;bottom:auto;margin:0 -16px;padding:env(safe-area-inset-top) 8px 0;
+  background:var(--s1);border-top:0;border-bottom:1px solid var(--line)}
+html:not(.full) .dock.hid{transform:translateY(-100%)}
+html:not(.full).lock .dock{transform:translateY(-100%);opacity:0;pointer-events:none}
+html:not(.full) .dock .tb{flex-direction:row;gap:6px;min-height:48px;height:48px;padding:0;color:var(--tx2)}
+html:not(.full) .dock .tbi{width:auto;height:auto;border-radius:0}
+html:not(.full) .dock .tbi::before{display:none}
+html:not(.full) .dock .tb svg{width:19px;height:19px}
+html:not(.full) .dock .tb .t{font-size:var(--fs-s);line-height:1.2}
+html:not(.full) .dock .tb.on,html:not(.full) .dock .tb.on .tbi{color:var(--p)}
+html:not(.full) .dock .tb::before,html:not(.full) .dock>.slide::before{content:"";position:absolute;left:50%;bottom:0;width:36px;height:3px;margin-left:-18px;border-radius:var(--r-pill) var(--r-pill) 0 0;background:var(--p);opacity:0;transition:opacity var(--t-fast) var(--ease)}
+html:not(.full) .dock .tb.on::before,html:not(.full) .dock>.slide::before{opacity:1}
+html:not(.full) .dock.sliding .tb.on::before{opacity:0}
+html:not(.full) .dock>.slide{background:none;background-image:none}
+html:not(.full) .dock .tb.hasnew::after{top:10px;right:calc(50% - 28px)}
+[data-accent="rainbow"]:not(.full) .dock>.slide{background-image:none}
+[data-accent="rainbow"]:not(.full) .dock .tb::before,[data-accent="rainbow"]:not(.full) .dock>.slide::before{background-image:var(--rbw)}
 
 /* ═════════ 手機首頁狀態橫幅（安靜的 Google Home／Pixel 風格，不再旋轉貼紙） ═════════ */
 .hbanner{display:flex;align-items:center;gap:14px;padding:16px 18px;border-radius:var(--r-xl);background:var(--s1);border:1px solid var(--line);margin:2px 0 4px}
@@ -733,7 +756,7 @@ button.li.prs,a.li.prs{border-radius:var(--r-lg);transform:scale(.98);background
 /* 彩虹主題：選到的東西換成彩虹底、深色字（滑動中的那一格交給 .slide） */
 [data-accent="rainbow"] :is(.fchip,.seg button,.rng button,.chats button,.frzm .icbtn)::before{background-image:var(--rbw)}
 [data-accent="rainbow"] :is(.fchip.on,.seg button.on,.rng button.on,.chats button.on,.frzm .icbtn.on){color:var(--on-rbw)}
-[data-accent="rainbow"] :is([data-slide]>.slide,.pane .li.on,.bkhosts .ubtn.on,
+[data-accent="rainbow"] :is([data-slide]:not(.dock)>.slide,.pane .li.on,.bkhosts .ubtn.on,
   .tog:checked,.remember input:checked,.sp-blob,.dash.d .rb.on,.dash.d .rh.on){background-image:var(--rbw);color:var(--on-rbw)}
 [data-accent="rainbow"] [data-slide].sliding>.on{background-image:none}
 [data-accent="rainbow"] .rb.on .ri::before{background-image:var(--rbw)}

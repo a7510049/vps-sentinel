@@ -754,13 +754,13 @@ function page(list, time){
   return TAB === "tools" ? toolsPage(list) : TAB === "log" ? logPage(list) : TAB === "set" ? setPage(list)
     : DESK.matches ? homeDesk(list, time) : homePhone(list, time);
 }
-/* 手機：上方乾淨標題列＋下方標準 Google 底部導覽列；點主機卡片展開成整頁 */
+/* 手機：瀏覽器裡分頁列在頂部（往下捲藏，避開 iOS 底部網址列），主畫面／App 模式為底部導覽列；點主機卡片展開成整頁 */
 function renderPhone(list, time){
   const s = DET && list.find(x => keyOf(x) === DET);
   const top = TAB === "home"
     ? `<header class="mtop" data-key="mtop"><div class="mbrand">${BRAND}<b>VPS 哨兵</b></div><span class="grow"></span><span class="mtime"><span class="live${LOST ? " off" : ""}"></span><span data-x>${LOST ? "重連中" : time}</span></span><button class="iconbtn" data-refresh title="重新整理">${I("upd")}</button></header>`
     : "";
-  return `<div class="dash m" data-key="m">${top}<main class="view v-${TAB}" data-key="v:${TAB}" data-dir="${TABDIR}">${page(list, time)}</main><nav class="dock" data-key="dock">${navBtns(false, list)}</nav>${s ? detail(s) : ""}</div>`;
+  return `<div class="dash m" data-key="m"><nav class="dock" data-key="dock" data-slide>${navBtns(false, list)}</nav>${top}<main class="view v-${TAB}" data-key="v:${TAB}" data-dir="${TABDIR}">${page(list, time)}</main>${s ? detail(s) : ""}</div>`;
 }
 /* 電腦：Google Workspace／Cloud 風格主控台 — 上方全域頂部列、左側無縫導覽欄、右側大圓角純白主畫布（總覽與單台主機清楚分層不重複） */
 let DSEL = sstore("vs-dsel") || "";
@@ -921,7 +921,7 @@ function springAt(t){
   return 1;
 }
 function slideSel(change){
-  const z = ZM(), was = canAnim() ? [...document.querySelectorAll(".pane[data-slide]")].map(b => {
+  const z = ZM(), was = canAnim() ? [...document.querySelectorAll(".pane[data-slide],html:not(.full) .dock[data-slide]")].map(b => {
     const g = b.querySelector(":scope>.slide"), on = selOf(b);
     return [b.dataset.key, g ? g._now : on && boxIn(b, on, z)];
   }) : [];
@@ -2060,8 +2060,9 @@ function setTab(k){
   TABDIR = Math.sign(ks.indexOf(k) - ks.indexOf(TAB));
   if (k === "home" && DESK.matches && LIST.length > 1) { DSEL = ""; sstore("vs-dsel", ""); }
   TAB = k; sstore("vs-tab", k);
+  const hd = document.querySelector(".dock.hid"); if (hd) hd.classList.remove("hid");
   scrollTo(0, 0);
-  render(LIST);
+  slideSel(() => render(LIST));
 }
 let TABID = 0;
 /* 工具、設定頁上「讀取中…」的狀態：換到那一頁時讀一次（之後自動更新不會蓋掉） */
@@ -4099,6 +4100,19 @@ async function refreshNow(btn){
     pg.innerHTML = drawable(I(ok ? "chk" : "bang")); drawIn(pg.firstChild, T.fast);
     await st; await sleep(T.long);
     if (g === gen) hideUp();
+  }, {passive:true});
+})();
+/* 瀏覽器裡的手機頂部分頁列：往下捲藏起來、往上捲就出現（避開 iOS 底部網址列） */
+(function(){
+  let y = scrollY, acc = 0;
+  addEventListener("scroll", () => {
+    const d = document.querySelector(".dock"), now = scrollY, dy = now - y; y = now;
+    if (!d || DESK.matches || document.documentElement.classList.contains("full")) return;
+    acc = Math.sign(dy) === Math.sign(acc) ? acc + dy : dy;
+    const hid = d.classList.contains("hid");
+    if (now < d.offsetHeight) { if (hid) d.classList.remove("hid"); }
+    else if (acc > 24 && !hid) d.classList.add("hid");
+    else if (acc < -12 && hid) d.classList.remove("hid");
   }, {passive:true});
 })();
 /* 手機：畫面中間左右滑，換到隔壁的分頁（最左、最右邊緣留給瀏覽器的上一頁；圖表、會左右捲的那排、輸入框不算） */
