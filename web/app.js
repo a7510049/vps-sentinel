@@ -939,7 +939,7 @@ function slideSel(change){
       r.classList.toggle("lit", o > r.offsetHeight / 2);
       if (l) { const a = c.y - r.offsetTop - l.offsetTop; l.style.setProperty("--la", a.toFixed(1) + "px"); l.style.setProperty("--lb", (a + c.h).toFixed(1) + "px"); }
     } };
-    const done = () => { const on2 = selOf(b); if (on2) { on2.style.transition = "none"; b.classList.remove("sliding"); on2.offsetWidth; on2.style.transition = ""; } if (pane) for (const r of b.children) { r.classList.remove("lit"); const l = r.querySelector(":scope>.lab"); if (l) l.style.removeProperty("--la"), l.style.removeProperty("--lb"); } g.remove(); };
+    const done = () => { const on2 = selOf(b); b.classList.add("slid"); if (on2) on2.style.transition = "none"; b.classList.remove("sliding"); g.remove(); b.offsetWidth; if (on2) on2.style.transition = ""; b.classList.remove("slid"); if (pane) for (const r of b.children) { r.classList.remove("lit"); const l = r.querySelector(":scope>.lab"); if (l) l.style.removeProperty("--la"), l.style.removeProperty("--lb"); } };
     lit(from);   // 換回它自己的底色，同一格畫面，不會閃
     if (Math.abs(to0.w - from.w) < 1 && Math.abs(to0.h - from.h) < 1 && to0.r.every((r, i) => Math.abs(r - from.r[i]) < 1)) {
       // 大小一樣（例如手機上面的分頁列、電腦左邊的圖示）：只移位置，交給顯示卡跑，新的一頁在畫的時候也不會頓
@@ -1730,17 +1730,18 @@ function flipWidth(el, change){
 }
 /* 拿出來又放回去的元素：瀏覽器會把裡面的進場動畫從頭重播（卡片會突然不見），全部停在結尾 */
 const still = (el, keep) => el.getAnimations({subtree:true}).forEach(n => { if (n === keep) return; if (!n.animationName) n.cancel(); else if (isFinite(n.effect.getComputedTiming().endTime)) n.finish(); });
-/* 換分頁：Google Material 3 Fade Through（電腦）與 Shared X-Axis 方向滑動（手機），全程無回彈抖動 */
+/* 換分頁：Google Material 3 Fade Through（電腦）與 Shared X-Axis 方向滑動（手機），保留捲動畫面順暢滑走不跳回頂端也不撐高頁面 */
 function through(a, b){
   const par = a.offsetParent;
   if (!canAnim() || !par) return a.replaceWith(b);
-  const z = ZM(), r = a.getBoundingClientRect(), R = par.getBoundingClientRect();
+  const z = ZM(), r = a.getBoundingClientRect(), R = par.getBoundingClientRect(), sy = Math.max(0, scrollY) / z;
+  const top = (r.top - R.top) / z - par.clientTop, h = Math.max(0, Math.min(r.height / z, sy + innerHeight / z - top));
   const slide = !DESK.matches && TABDIR;
   if (!slide) b.style.animationDelay = Math.round(T.fast * .3) + "ms";
   a.replaceWith(b);
   a._leaving = 1;
-  Object.assign(a.style, {position:"absolute", left:(r.left - R.left) / z - par.clientLeft + "px", top:(r.top - R.top) / z - par.clientTop + "px", width:r.width / z + "px",
-    height:Math.min(r.height / z, innerHeight / z * 2) + "px", overflow:"hidden", margin:"0", pointerEvents:"none", animation:"none"});
+  Object.assign(a.style, {position:"absolute", left:(r.left - R.left) / z - par.clientLeft + "px", top:(top - sy) + "px", width:r.width / z + "px",
+    height:h + "px", overflow:"hidden", margin:"0", pointerEvents:"none", animation:"none", clipPath:sy > 0 ? `inset(${sy}px 0 0 0)` : ""});
   b.after(a); still(a);
   if (slide) {
     a.animate([{opacity:1, transform:"none"}, {opacity:0, transform:`translateX(${-TABDIR * 24}px)`}], {duration:T.fast, easing:EXIT, fill:"forwards", id:"ui"}).onfinish = () => a.remove();
@@ -1748,7 +1749,7 @@ function through(a, b){
     a.animate([{opacity:1}, {opacity:0}], {duration:Math.round(T.fast * .6), easing:EXIT, fill:"forwards", id:"ui"}).onfinish = () => a.remove();
   }
 }
-/* 切換內容區塊（data-sw：總覽 ↔ 單台主機、換主機、換設定分類）：平順減速過場＋高度銜接，不整頁縮放抖動 */
+/* 切換內容區塊（data-sw：總覽 ↔ 單台主機、換主機、換設定分類）：平順減速過場＋高度銜接，不整頁縮放抖動、不每格強迫重排 */
 function swapIn(a, b){
   if (!canAnim() || !a.isConnected) return a.replaceWith(b);
   const h0 = a.offsetHeight, par = a.offsetParent, x = a.offsetLeft, y = a.offsetTop, w = a.offsetWidth;
@@ -1766,18 +1767,7 @@ function swapIn(a, b){
   b.animate([{opacity:0, transform:inTf}, {opacity:1, transform:"none"}], {duration:T.mid, easing:DEC, fill:"backwards", id:"ui"});
   const hEnd = b.offsetHeight;
   if (Math.abs(hEnd - h0) < 2) return;
-  const own = [b.style.height, b.style.overflow];
-  b.style.height = h0 + "px"; b.style.overflow = "hidden";
-  const t0 = performance.now(), dur = T.mid;
-  const step = now => {
-    if (!b.isConnected) return;
-    const p = Math.min(1, (now - t0) / dur), e = 1 - Math.pow(1 - p, 4);
-    if (p >= 1) { [b.style.height, b.style.overflow] = own; return; }
-    b.style.height = own[0]; const h1 = b.offsetHeight;
-    b.style.height = h0 + (h1 - h0) * e + "px";
-    requestAnimationFrame(step);
-  };
-  requestAnimationFrame(step);
+  b.animate([{height:h0 + "px", overflow:"hidden"}, {height:hEnd + "px", overflow:"hidden"}], {duration:T.mid, easing:DEC, id:"ui"});
 }
 function morph(a, b){
   if (a.nodeType === 1 && b.nodeType === 1 && a.matches("main.view") && b.matches("main.view") && a.getAttribute("data-key") !== b.getAttribute("data-key")) return through(a, b);
@@ -1899,15 +1889,23 @@ function gridFlip(a, {sx, z, port, first, order}, keep, fresh, leaving){
       .finished.catch(() => {}).then(() => { el.style.zIndex = ""; });
   });
 }
+const LIVECLS = ["prs", "hid", "sliding", "slid", "stuck"];   // 捲動收起、按壓、滑動中的即時狀態：定時更新時保留，不中斷特效
 function patch(a, b){
   if (a.hasAttribute("data-keep")) return;     /* 由程式自己控制的元素（例如滑動光圈），不要被重畫蓋掉 */
   const attrs = () => {
+    const keep = LIVECLS.filter(c => a.classList.contains(c));
     for (const at of [...a.attributes]) if (!b.hasAttribute(at.name)) a.removeAttribute(at.name);
     for (const at of [...b.attributes]) if (a.getAttribute(at.name)!==at.value){
       if (at.name==="data-v") tween(a, parseFloat(a.getAttribute("data-v"))||0, parseFloat(at.value)||0, +b.getAttribute("data-d")||0);
       if (at.name==="d" && a.tagName==="path" && (b.hasAttribute("data-tf") ? slidePath(a, b.getAttribute("data-tf"), at.value) : morphPath(a, a.getAttribute("d"), at.value))) continue;
+      if (at.name==="class" && keep.length) {
+        const val = keep.reduce((s, c) => s.split(/\s+/).includes(c) ? s : s + " " + c, at.value);
+        if (a.getAttribute("class") !== val) a.setAttribute("class", val);
+        continue;
+      }
       a.setAttribute(at.name, at.value);
     }
+    if (keep.length && !b.hasAttribute("class")) a.classList.add(...keep);
   };
   if (a.hasAttribute("data-keyed")) return keyedPatch(a, b, attrs);
   attrs();
@@ -2042,7 +2040,7 @@ function sizeShift(fn){
   const z1 = {s:.92, m:1, l:1.1}[PREF.size] || 1;
   h.style.setProperty("--zr", (z1 / z0).toFixed(4)); h.classList.add("vtsize");
   const id = h._vts = (h._vts || 0) + 1;           // 連點兩下：前一次被中斷時，不能把這一次要用的縮放設定拿掉，不然設定面板會閃
-  document.startViewTransition(fn).finished.finally(() => { if (h._vts === id) h.classList.remove("vtsize"); });
+  document.startViewTransition(fn).finished.catch(() => {}).finally(() => { if (h._vts === id) h.classList.remove("vtsize"); });
 }
 function toast(msg, type="ok"){
   const t = document.createElement("div"); t.className = `toast ${type}`;
@@ -2070,8 +2068,8 @@ function setTab(k){
   if (k === "home" && DESK.matches && LIST.length > 1) { DSEL = ""; sstore("vs-dsel", ""); }
   TAB = k; sstore("vs-tab", k);
   const hd = document.querySelector(".dock.hid"); if (hd) hd.classList.remove("hid");
-  scrollTo(0, 0);
   slideSel(() => render(LIST));
+  scrollTo(0, 0);
 }
 let TABID = 0;
 /* 工具、設定頁上「讀取中…」的狀態：換到那一頁時讀一次（之後自動更新不會蓋掉） */
@@ -2094,7 +2092,7 @@ function openDet(k){
   history.pushState({det: k}, "");
   closeMenu(); document.documentElement.classList.add("lock");
   render(LIST);
-  clearTimeout(DETH); DETH = setTimeout(() => { if (DET && !DETX) document.documentElement.classList.add("dhid"); }, T.sps + 80);   // 展開完才藏
+  clearTimeout(DETH); DETH = setTimeout(() => { if (DET && !DETX) document.documentElement.classList.add("dhid"); }, T.slow + 60);   // 展開完才藏
 }
 let DETH;
 const showBack = () => { clearTimeout(DETH); document.documentElement.classList.remove("dhid"); };
@@ -3892,7 +3890,7 @@ function preloadFlags(list){
 /* 背景讀到的資料（24 小時／7 天的曲線）：等畫面空下來再換上去 */
 async function whenIdle(){ await settle(); if (LIST.length) render(LIST); }
 /* 等介面動畫（收起、展開、移位）播完再更新畫面，最多等 0.9 秒，避免兩邊搶著動 */
-const UIIN = new Set(["through", "rise", "pop", "expand", "collapse"]);   // 換分頁、換主機時整頁、整塊進出場的 CSS 動畫
+const UIIN = new Set(["through", "slideR", "slideL", "detIn", "detBody", "rise", "pop", "expand", "collapse"]);   // 換分頁、換主機、展開整頁時的 CSS 動畫
 function uiBusy(){ return document.getAnimations().some(a => (a.id === "ui" || UIIN.has(a.animationName)) && a.playState === "running"); }
 /* 手指還在畫面上、或頁面還在滑：新資料先等一下，滑停了才換上去，捲動時不會卡一下 */
 let SCRT = 0, TOUCH = 0;
@@ -4124,12 +4122,14 @@ async function refreshNow(btn){
     if (g === gen) hideUp();
   }, {passive:true});
 })();
-/* 瀏覽器裡的手機頂部分頁列：往下捲藏起來、往上捲就出現（避開 iOS 底部網址列） */
+/* 瀏覽器裡的手機頂部分頁列：往下捲藏起來、往上捲就出現（避開 iOS 底部網址列與上下回彈誤觸） */
 (function(){
   let y = scrollY, acc = 0;
   addEventListener("scroll", () => {
     const d = document.querySelector(".dock"), now = scrollY, dy = now - y; y = now;
-    if (!d || DESK.matches || document.documentElement.classList.contains("full")) return;
+    if (!d || DESK.matches || DET || document.documentElement.classList.contains("full") || document.documentElement.classList.contains("lock") || document.querySelector("#layer .veil")) return;
+    if (now <= 0) { acc = 0; if (d.classList.contains("hid")) d.classList.remove("hid"); return; }
+    if (now + innerHeight >= document.documentElement.scrollHeight - 8) return;   // 捲到底部彈性回彈時不亂跳出分頁列
     acc = Math.sign(dy) === Math.sign(acc) ? acc + dy : dy;
     const hid = d.classList.contains("hid");
     if (now < d.offsetHeight) { if (hid) d.classList.remove("hid"); }
@@ -4137,12 +4137,19 @@ async function refreshNow(btn){
     else if (acc < -12 && hid) d.classList.remove("hid");
   }, {passive:true});
 })();
+/* 主機整頁標題列捲動貼頂備援（給不支援 animation-timeline:view() 的 iOS Safari／Firefox） */
+if (!CSS.supports("(animation-timeline:view()) and (timeline-scope:--a)")) {
+  document.addEventListener("scroll", e => {
+    const s = e.target; if (!(s instanceof Element) || !s.classList.contains("dscroll")) return;
+    const top = s.querySelector(".dtop"); if (top) top.classList.toggle("stuck", s.scrollTop > 56);
+  }, {passive:true, capture:true});
+}
 /* 手機：畫面中間左右滑，換到隔壁的分頁（最左、最右邊緣留給瀏覽器的上一頁；圖表、會左右捲的那排、輸入框不算） */
 (function(){
   let x0 = null, y0 = 0, t0 = 0;
   addEventListener("touchstart", e => {
     x0 = null;
-    if (DESK.matches || DET || $("#fly") || e.touches.length > 1 || document.querySelector("#layer .veil") || !LIST.length) return;
+    if (DESK.matches || DET || $("#fly") || window._menu || e.touches.length > 1 || document.querySelector("#layer .veil") || !LIST.length) return;
     const t = e.touches[0];
     if (t.clientX < 28 || t.clientX > innerWidth - 28) return;
     if (e.target.closest("input,textarea,select,canvas,.cbox,.dock,[data-noswipe],.fhrs,.fterm")) return;
@@ -4152,13 +4159,13 @@ async function refreshNow(btn){
   addEventListener("touchend", e => {
     if (x0 === null) return;
     const t = e.changedTouches[0], dx = t.clientX - x0, dy = t.clientY - y0; x0 = null;
-    if (Math.abs(dx) < 70 || Math.abs(dx) < Math.abs(dy) * 2 || performance.now() - t0 > 700) return;   // 要明顯的橫滑，捲動時斜斜的不算
+    if (Math.abs(dx) < 60 || Math.abs(dx) < Math.abs(dy) * 1.8 || performance.now() - t0 > 700) return;   // 要明顯的橫滑，捲動時斜斜的不算
     const ks = TABS.map(([k]) => k), i = ks.indexOf(TAB) + (dx < 0 ? 1 : -1);
     if (i >= 0 && i < ks.length) setTab(ks[i]);
   }, {passive:true});
   addEventListener("touchcancel", () => { x0 = null; }, {passive:true});
 })();
-/* 按下去的水波紋與彈簧按壓回饋（Material 3 State Ripple＋微形變；按鈕與卡片皆流暢回饋） */
+/* 按下去的水波紋與彈簧按壓回饋（Material 3 State Ripple＋微形變；捲動或橫滑超過 8px 立刻取消不誤觸） */
 (function(){
   const SEL = ".hcard,.tb,.li:not(div),.fapc,.ubtn,.iconbtn,.icbtn,.hmenu button,.seg button,.rng button,.fchip,.addhost,.trf,.chats button,.sw button,.rb,.rh,.backbtn,.tbx";
   const PRESS_DESK = ".ubtn,.iconbtn,.icbtn,.fchip,.seg button,.rng button,.rb,.rh,.backbtn,.tbx,.addhost,.fapc";
@@ -4166,15 +4173,15 @@ async function refreshNow(btn){
     if (e.button || !canAnim()) return;
     const el = e.target.closest(SEL);
     if (!el || el.disabled) return;
-    const touch = e.pointerType !== "mouse", wantPrs = touch || el.matches(PRESS_DESK);
-    let box = null, up = false, t0 = 0;
+    const touch = e.pointerType !== "mouse", wantPrs = touch || el.matches(PRESS_DESK), pid = e.pointerId, x0 = e.clientX, y0 = e.clientY;
+    let box = null, done = false, t0 = 0;
     const press = () => { if (wantPrs) el.classList.add("prs"); t0 = performance.now(); };
     const release = now => { if (wantPrs) setTimeout(() => el.classList.remove("prs"), now ? 0 : Math.max(0, 120 - (performance.now() - t0))); };
     const start = () => {
       press();
-      if (el.closest(".sw") || el.classList.contains("tb")) return;   // 圓形色塊與底部導覽列不疊大水波紋
+      if (el.closest(".sw") || el.classList.contains("tb")) return;   // 圓形色塊與分頁列不疊大水波紋
       const r = el.getBoundingClientRect(), w = el.offsetWidth, h = el.offsetHeight;
-      const x = (e.clientX - r.left) * w / (r.width || 1), y = (e.clientY - r.top) * h / (r.height || 1);
+      const x = (x0 - r.left) * w / (r.width || 1), y = (y0 - r.top) * h / (r.height || 1);
       const R = Math.hypot(Math.max(x, w - x), Math.max(y, h - y));
       box = document.createElement("span"); box.className = "rip"; box._leaving = 1;
       const dot = document.createElement("i"); dot.style.cssText = `left:${x - R}px;top:${y - R}px;width:${2 * R}px;height:${2 * R}px`;
@@ -4182,20 +4189,31 @@ async function refreshNow(btn){
       dot.animate([{transform:"scale(.18)"}, {transform:"scale(1)"}], {duration:T.slow, easing:EASE, fill:"forwards"});
     };
     const fade = () => box && box.animate([{opacity:1}, {opacity:0}], {duration:T.mid, delay:T.fast / 2, easing:EASE, fill:"forwards"}).finished.then(() => box.remove(), () => box.remove());
-    const t = !touch ? (start(), 0) : setTimeout(() => { if (!up) start(); }, 70);
+    const t = !touch ? (start(), 0) : setTimeout(() => { if (!done) start(); }, 70);
+    const cleanup = () => { removeEventListener("pointerup", end); removeEventListener("pointercancel", end); removeEventListener("pointermove", move); };
+    const cancel = () => { if (done) return; done = true; clearTimeout(t); cleanup(); release(true); fade(); };
+    const move = ev => { if (ev.pointerId === pid && Math.hypot(ev.clientX - x0, ev.clientY - y0) > 8) cancel(); };
     const end = ev => {
-      up = true; removeEventListener("pointerup", end); removeEventListener("pointercancel", end);
+      if (ev.pointerId !== pid || done) return;
+      done = true; cleanup();
       if (ev.type === "pointercancel") { clearTimeout(t); release(true); if (!box) return; }
       else { if (!t0) { clearTimeout(t); start(); } release(false); }
       fade();
     };
     addEventListener("pointerup", end); addEventListener("pointercancel", end);
+    if (touch) addEventListener("pointermove", move, {passive:true});
   }, {passive:true});
 })();
-/* 手機：從下面滑上來的面板，從頂端往下拉就關掉 */
+/* 手機：從下面滑上來的面板，從頂端往下拉就關掉（拉動時攔截原生下拉更新，中斷時彈回原位不卡半路） */
 (function(){
   const SHEET = matchMedia("(max-width:599px)");
   let d = null;
+  const snap = () => {
+    if (!d) return; const {dl, dy, on} = d; d = null;
+    if (!on) return;
+    dl.style.transform = "";
+    if (canAnim() && dy > 0) dl.animate([{transform:`translateY(${dy}px)`}, {transform:"none"}], {duration:T.spf, easing:SPRING_F});
+  };
   addEventListener("touchstart", e => {
     const dl = e.target.closest("#layer .veil .dialog"), v = dl && dl.parentNode;
     if (!SHEET.matches || !dl || dl.scrollTop > 0 || !dl.querySelector(".form") || v.classList.contains("closing") || e.target.closest("input,textarea,select")) return;
@@ -4206,8 +4224,8 @@ async function refreshNow(btn){
     d.dy = (e.touches[0].clientY - d.y0) / ZM();
     if (!d.on && (d.dy < 0 || d.dl.scrollTop > 0)) { d = null; return; }      // 往上滑：是要捲動內容
     if (d.dy > 6) d.on = true;
-    if (d.on) d.dl.style.transform = `translateY(${Math.max(0, d.dy)}px)`;
-  }, {passive:true});
+    if (d.on) { if (e.cancelable) e.preventDefault(); d.dl.style.transform = `translateY(${Math.max(0, d.dy)}px)`; }
+  }, {passive:false});
   addEventListener("touchend", () => {
     if (!d) return; const {dl, v, dy, t0, on} = d; d = null;
     if (!on) return;
@@ -4215,6 +4233,7 @@ async function refreshNow(btn){
     dl.style.transform = "";
     if (canAnim()) dl.animate([{transform:`translateY(${dy}px)`}, {transform:"none"}], {duration:T.spf, easing:SPRING_F});
   }, {passive:true});
+  addEventListener("touchcancel", snap, {passive:true});
 })();
 document.addEventListener("visibilitychange",()=>{ if(!document.hidden && LIST.length && getTok()) tick(); });   // 登入、還原畫面不要重畫（打到一半的密碼、選好的檔案會不見）
 SHARE ? flyLib().then(() => shareBoot(), () => setTimeout(() => location.reload(), 3000)) : tick();

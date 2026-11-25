@@ -188,8 +188,9 @@ b,strong{font-weight:500}
 @media (hover:hover){.fchip:not(.on,.hsel.set,:disabled):hover{background-color:color-mix(in oklab,var(--card) 93%,var(--tx))}}
 @media (hover:hover){:is(.seg button,.rng button,.chats button):not(.on,:disabled):hover{background-color:color-mix(in oklab,var(--chip) 93%,var(--tx))}}
 @media (hover:hover){.frchips button:not(.on,:disabled):hover{background-color:color-mix(in oklab,var(--s2) 93%,var(--tx))}}
-/* 按下瞬間快速收緊、放開時由各自元件的彈簧曲線自然回彈 */
-:is(.hcard,.li,.ubtn,.iconbtn,.icbtn,.hmenu button,.seg button,.rng button,.fchip,.addhost,.trf,.chats button,.sw button,.fapc,.tbx,.rb,.rh,.backbtn).prs{transition-duration:var(--t-fast);transition-timing-function:var(--ease)}
+/* 按下瞬間快速收緊、放開時由各自元件的彈簧曲線自然回彈（單選按鈕維持字色 --tsel 一步切換，不拖泥帶水） */
+:is(.hcard,.li,.ubtn,.iconbtn,.icbtn,.hmenu button,.addhost,.trf,.sw button,.fapc,.tbx,.rb,.rh,.backbtn).prs{transition-duration:var(--t-fast);transition-timing-function:var(--ease)}
+:is(.seg button,.rng button,.fchip,.chats button).prs{transition:transform var(--t-fast) var(--ease),border-radius var(--t-fast) var(--ease),background-color var(--t-fast) var(--ease),box-shadow var(--t-fast) var(--ease),color var(--tsel)}
 
 /* 小圖示按鈕 */
 .iconbtn{width:40px;height:40px;border-radius:50%;display:inline-grid;place-items:center;color:var(--tx2);flex:none;position:relative;text-decoration:none;
@@ -256,11 +257,13 @@ img.flag{width:28px;height:21px;object-fit:cover;border-radius:var(--r-xs);flex:
 /* ═════════ 整體版面與過場 ═════════ */
 .booting #app{opacity:0}
 #app{transition:opacity var(--t-mid) var(--ease)}
-.dash.m{max-width:760px;margin:0 auto;padding:0 16px calc(env(safe-area-inset-bottom) + 28px);overflow-x:clip}
+.dash.m{position:relative;max-width:760px;margin:0 auto;padding:0 16px calc(env(safe-area-inset-bottom) + 28px);overflow-x:clip}
 .full .dash.m{padding-bottom:calc(env(safe-area-inset-bottom) + 88px)}
 .view{animation:through var(--t-mid) var(--dec) backwards}
 .dash.m .view[data-dir="1"]{animation:slideR var(--t-mid) var(--dec) backwards}
 .dash.m .view[data-dir="-1"]{animation:slideL var(--t-mid) var(--dec) backwards}
+/* 手機橫向滑換分頁時：整頁一起平滑滑入，裡面的卡片不再疊第二層上下浮入，避免斜向抖動與重複淡入 */
+.dash.m .view:is([data-dir="1"],[data-dir="-1"]) :is(.hcard,.tbx,.tile){animation:none}
 /* 這個網頁連不上主機超過 15 秒（html.lost）：畫面上的數字都是舊的，整塊變淡 */
 .view>:not(.hbanner,.dhome,.mtop),.dhome>:not(.dbar),.det .dscroll>:not(.dtop){transition:filter var(--t-slow) var(--ease)}
 html.lost :is(.view>:not(.hbanner,.dhome,.mtop),.det .dscroll>:not(.dtop)){filter:opacity(.55) saturate(.45)}
@@ -290,17 +293,18 @@ html.lost :is(.view>:not(.hbanner,.dhome,.mtop),.det .dscroll>:not(.dtop)){filte
    手機瀏覽器裡（html:not(.full)）：頁面頂部整排標籤列，底下一條主色指示線滑動，往下捲藏、往上捲出現（避開 iOS 底部網址列） */
 .dock{position:fixed;left:0;right:0;bottom:0;z-index:var(--z-bar);display:grid;grid-template-columns:repeat(4,1fr);align-items:center;
   padding:8px 8px calc(env(safe-area-inset-bottom) + 8px);background:var(--s1);border-top:1px solid var(--line);
-  transition:transform var(--sp),opacity var(--t-mid) var(--ease)}
-.lock .dock{transform:translateY(110%);opacity:0;pointer-events:none}
+  transition:transform var(--t-mid) var(--dec),opacity var(--t-fast) var(--ease)}
+.full.lock .dock{transform:translateY(110%);opacity:0;pointer-events:none;transition:transform var(--t-fast) var(--exit),opacity var(--t-fast) var(--ease)}
 @media (max-width:1023px){.full .toasts{bottom:calc(env(safe-area-inset-bottom) + 82px)}}
 .tb{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;min-height:52px;color:var(--tx2);position:relative;
   transition:color var(--t-fast) var(--ease)}
 .tbi{position:relative;width:64px;height:32px;border-radius:var(--r-pill);display:grid;place-items:center;isolation:isolate;
-  transition:color var(--t-fast) var(--ease)}
+  transition:color var(--t-fast) var(--ease),transform var(--sp-fast)}
 .tbi::before{content:"";position:absolute;inset:0;z-index:-1;border-radius:inherit;background:var(--pc);opacity:0;transform:scaleX(.42);
   transition:opacity var(--t-fast) var(--ease),transform var(--sp-fast)}
 .tb svg{width:22px;height:22px;flex:none}
-.tb .t{font-size:var(--fs-xs);font-weight:500;line-height:1.15;white-space:nowrap}
+.tb .t{font-size:var(--fs-xs);font-weight:500;line-height:1.15;white-space:nowrap;transition:transform var(--sp-fast)}
+.tb.prs .tbi{transform:scale(.92)}
 .tb.on{color:var(--tx)}
 .tb.on .t{font-weight:600}
 .tb.on .tbi{color:var(--on-pc)}
@@ -311,9 +315,9 @@ html.lost :is(.view>:not(.hbanner,.dhome,.mtop),.det .dscroll>:not(.dtop)){filte
 html.full .dock>.slide{display:none}
 html:not(.full) .dock{position:sticky;top:0;left:auto;right:auto;bottom:auto;margin:0 -16px;padding:env(safe-area-inset-top) 8px 0;
   background:var(--s1);border-top:0;border-bottom:1px solid var(--line)}
-html:not(.full) .dock.hid{transform:translateY(-100%)}
-html:not(.full).lock .dock{transform:translateY(-100%);opacity:0;pointer-events:none}
+html:not(.full) .dock.hid{transform:translateY(-100%);transition:transform var(--t-fast) var(--exit)}
 html:not(.full) .dock .tb{flex-direction:row;gap:6px;min-height:48px;height:48px;padding:0;color:var(--tx2)}
+html:not(.full) .dock .tb.prs :is(.tbi,.t){transform:scale(.94)}
 html:not(.full) .dock .tbi{width:auto;height:auto;border-radius:0}
 html:not(.full) .dock .tbi::before{display:none}
 html:not(.full) .dock .tb svg{width:19px;height:19px}
@@ -321,7 +325,8 @@ html:not(.full) .dock .tb .t{font-size:var(--fs-s);line-height:1.2}
 html:not(.full) .dock .tb.on,html:not(.full) .dock .tb.on .tbi{color:var(--p)}
 html:not(.full) .dock .tb::before,html:not(.full) .dock>.slide::before{content:"";position:absolute;left:50%;bottom:0;width:36px;height:3px;margin-left:-18px;border-radius:var(--r-pill) var(--r-pill) 0 0;background:var(--p);opacity:0;transition:opacity var(--t-fast) var(--ease)}
 html:not(.full) .dock .tb.on::before,html:not(.full) .dock>.slide::before{opacity:1}
-html:not(.full) .dock.sliding .tb.on::before{opacity:0}
+html:not(.full) .dock.sliding .tb.on::before{opacity:0;transition:none}
+html:not(.full) .dock.slid .tb.on::before{transition:none}
 html:not(.full) .dock>.slide{background:none;background-image:none}
 html:not(.full) .dock .tb.hasnew::after{top:10px;right:calc(50% - 28px)}
 [data-accent="rainbow"]:not(.full) .dock>.slide{background-image:none}
@@ -477,9 +482,10 @@ html:not(.full) .dock .tb.hasnew::after{top:10px;right:calc(50% - 28px)}
 .day:first-child{margin-top:0}
 .calm{color:var(--tx3);padding:22px 16px;background:var(--card);box-shadow:var(--cs);border-radius:var(--r-lg);text-align:center}
 
-/* ═════════ 主機整頁（手機）：從卡片的位置以物理彈簧長大成整頁（Material 3 Container Transform） ═════════ */
-.det{position:fixed;inset:0;z-index:var(--z-det);background-color:var(--bg);--gz:var(--zoom);animation:detIn var(--sp-slow) backwards}
-.det .dscroll{animation:detBody var(--sp) backwards}
+/* ═════════ 主機整頁（手機）：從卡片的位置平順展開成整頁（Material 3 Container Transform） ═════════ */
+.det{position:fixed;inset:0;z-index:var(--z-det);background-color:var(--bg);--gz:var(--zoom);contain:layout style paint;animation:detIn var(--t-slow) var(--dec) backwards}
+.det .dscroll{animation:detBody var(--t-mid) var(--dec) backwards}
+.det .tile{animation:none}
 /* 整頁完全蓋住之後，後面那一頁先不畫（動畫、更新都停下來，捲動只要顧整頁）；收起時立刻回來 */
 html.dhid .dash>.view{content-visibility:hidden;contain-intrinsic-size:auto none}
 .det.closing{animation:collapse var(--t-mid) var(--exit) forwards;pointer-events:none}
@@ -493,15 +499,19 @@ html.dhid .dash>.view{content-visibility:hidden;contain-intrinsic-size:auto none
 .dscroll>*{max-width:760px;margin-left:auto;margin-right:auto}
 .dscroll>.dtop{position:sticky;top:calc(-10px - env(safe-area-inset-top));z-index:1;max-width:none;display:flex;align-items:center;gap:12px;
   margin:calc(-10px - env(safe-area-inset-top)) -16px 0;padding:calc(env(safe-area-inset-top) + 16px) 16px 8px}
-.dtt{flex:1;min-width:0;font-size:var(--fs-xl);font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;opacity:0}
-/* 往上捲：大標題鑽進標題列的同時，標題列換上色塊、小標題浮上來（跟著手指走，由顯示卡處理，不佔主程式） */
-.dtop::before{content:"";position:absolute;top:0;bottom:0;left:-100vw;right:-100vw;z-index:-1;background:var(--s1);border-bottom:1px solid var(--line);opacity:1;pointer-events:none}
+.dtt{flex:1;min-width:0;font-size:var(--fs-xl);font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;opacity:0;transform:translateY(8px);
+  transition:opacity var(--t-fast) var(--ease),transform var(--t-fast) var(--ease)}
+/* 往上捲：大標題鑽進標題列的同時，標題列換上色塊、小標題浮上來（支援的瀏覽器交給捲動時間軸，Safari 等不支援時改由 .stuck 淡入） */
+.dtop::before{content:"";position:absolute;top:0;bottom:0;left:-100vw;right:-100vw;z-index:-1;background:var(--s1);border-bottom:1px solid var(--line);opacity:0;pointer-events:none;
+  transition:opacity var(--t-fast) var(--ease)}
+.dtop.stuck::before{opacity:1}
+.dtop.stuck .dtt{opacity:1;transform:none}
 .dscroll{overflow-x:hidden}
 @supports (animation-timeline:view()) and (timeline-scope:--a){
   .dscroll{--bar:62px;timeline-scope:--hn}
   .det .hname{view-timeline:--hn block;view-timeline-inset:var(--bar) 0}
-  .dtop::before{animation:barOn linear both;animation-timeline:--hn;animation-range:exit 0% exit 70%}
-  .dtt{animation:ttlOn linear both;animation-timeline:--hn;animation-range:exit 25% exit 100%}
+  .dtop::before{transition:none;animation:barOn linear both;animation-timeline:--hn;animation-range:exit 0% exit 70%}
+  .dtt{transition:none;animation:ttlOn linear both;animation-timeline:--hn;animation-range:exit 25% exit 100%}
 }
 @keyframes barOn{from{opacity:0}to{opacity:1}}
 @keyframes ttlOn{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:none}}
@@ -1082,22 +1092,22 @@ body:has(.dash.d) .fwrap{max-width:var(--pw)}
 
 
 /* ═════════ 對話框 ═════════ */
-.veil{position:fixed;inset:0;z-index:var(--z-veil);display:flex;align-items:center;justify-content:center;padding:20px}
+.veil{position:fixed;inset:0;z-index:var(--z-veil);display:flex;align-items:center;justify-content:center;padding:20px;touch-action:none}
 /* 只有後面那層暗色淡入淡出；視窗本身不跟著變透明（面板關掉時是整片滑下去，不是化開） */
 .veil::before{content:"";position:absolute;inset:0;z-index:-1;background:var(--scrim);animation:fadeIn var(--t-mid) var(--ease) backwards}
 .veil.closing{pointer-events:none}
 .veil.closing::before{animation:fadeOut var(--t-fast) var(--ease) forwards}   /* 要在 360ms 移除前跑完 */
-.dialog{width:100%;max-width:380px;max-height:calc((100dvh - 40px) / var(--zoom));overflow-y:auto;overscroll-behavior:contain;
+.dialog{width:100%;max-width:380px;max-height:calc((100dvh - 40px) / var(--zoom));overflow-y:auto;overscroll-behavior:contain;touch-action:pan-y;
   background:var(--s1);border:1px solid var(--line);box-shadow:var(--sh-3);border-radius:var(--r-xl);padding:24px;text-align:center;animation:dlgin var(--sp) backwards;
   --card:var(--s2);--chip:var(--s2);--cs:none;--cseg:none}
 .closing .dialog{animation:dlgout var(--t-fast) var(--exit) forwards}
 @keyframes dlgin{from{opacity:0;transform:scale(.92) translateY(8px)}}
-/* 手機：要填東西的視窗從下面滑上來（上面有拉桿，往下拉就關掉） */
+/* 手機：要填東西的視窗從下面滑上來（上面有拉桿，往下拉就關掉；減速滑入避免彈簧過衝在底邊露縫） */
 @media (max-width:599px){
   .dialog .btns>.ubtn:only-child{flex:1}
   .veil:has(.form){align-items:flex-end;padding:48px 0 0}
   .veil:has(.form) .dialog{max-width:none;max-height:calc((100dvh - 48px) / var(--zoom));border-radius:var(--r-xl) var(--r-xl) 0 0;border-bottom:0;
-    padding:30px 20px calc(env(safe-area-inset-bottom) + 20px);animation:sheetIn var(--sp) backwards;touch-action:pan-y}
+    padding:30px 20px calc(env(safe-area-inset-bottom) + 20px);animation:sheetIn var(--t-mid) var(--dec) backwards;touch-action:pan-y}
   .veil:has(.form) .dialog::before{content:"";position:absolute;top:10px;left:50%;width:32px;height:4px;margin-left:-16px;border-radius:var(--r-pill);background:var(--tx3);opacity:.5}
   .veil:has(.form) .dialog{position:relative}
   .veil.closing:has(.form) .dialog{animation:sheetOut calc(var(--t-fast) * 1.5) var(--exit) forwards}
@@ -1467,7 +1477,7 @@ html.flyon .dash>.view{content-visibility:hidden;contain-intrinsic-size:auto non
 .fhb{flex:1 1 0;min-width:0;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;gap:4px;padding:0;background:none;color:var(--tx3)}
 .fhb i{width:100%;max-width:32px;height:calc(4px + var(--h,0) * 48px);border-radius:var(--r-xs);background:color-mix(in oklab,var(--p) 35%,var(--s3));transition:height var(--t-mid) var(--ease),background-color var(--t-fast) var(--ease)}
 .fhb.past i{background:var(--s3)}
-.fhb:not(:disabled):hover i{background:color-mix(in oklab,var(--p) 60%,var(--s3))}
+@media (hover:hover){.fhb:not(:disabled):hover i{background:color-mix(in oklab,var(--p) 60%,var(--s3))}}
 .fhb i{position:relative;isolation:isolate}
 .fhb i::before{content:"";position:absolute;inset:0;border-radius:inherit;background:var(--p);opacity:0;transition:opacity var(--t-mid) var(--ease)}   /* 選到的時段：主色淡入 */
 .fhb.on i::before{opacity:1}
