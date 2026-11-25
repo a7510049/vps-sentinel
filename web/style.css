@@ -6,16 +6,20 @@
   --r-xs:6px; --r-sm:12px; --r-md:16px; --r-lg:24px; --r-xl:28px; --r-2xl:36px; --r-pill:999px; --r-full:24px;   /* 圓角：連在一起的清單中間／小元件／卡片裡的小框／卡片／大卡片／按下變形／膠囊／會變形的小按鈕 */
   --fs-xs:12px; --fs-s:13px; --fs-m:14px; --fs-l:16px; --fs-xl:19px; --fs-2xl:22px; --fs-3xl:28px; --fs-4xl:34px;   /* 字級：貼近 Google Material 3 比例 */
   --fs-input:16px;                                       /* 手機輸入框最小字級：小於這個 iPhone 一點輸入框就會自己放大畫面 */
-  --t-fast:.15s; --t-mid:.24s; --t-slow:.36s; --t-long:.5s;   /* 動畫時間：正統 Google Material 3 俐落節奏 */
+  --t-fast:.18s; --t-mid:.32s; --t-slow:.48s; --t-long:.72s;   /* 動畫時間：Google Material 3 Expressive 流暢節奏 */
   --ease:cubic-bezier(.2,0,0,1); --dec:cubic-bezier(.05,.7,.1,1); --exit:cubic-bezier(.3,0,.8,.15);   /* 曲線：Google Material 3 Standard／Emphasized Decelerate／Accelerate */
-  /* 克制版動態曲線（取消過度回彈，貼近 Google 實機手感） */
-  --sp-fast:.22s cubic-bezier(.2,0,0,1); --sp:.26s cubic-bezier(.05,.7,.1,1); --sp-slow:.36s cubic-bezier(.05,.7,.1,1);
+  /* 物理彈簧（Material 3 Expressive：高阻尼自然落點，滑順有手感不亂晃；新瀏覽器在 @supports 換成精算的 linear() 彈簧） */
+  --sp-fast:.29s cubic-bezier(.34,1.25,.64,1); --sp:.42s cubic-bezier(.25,1.08,.55,1); --sp-slow:.58s cubic-bezier(.22,1.04,.52,1);
   --z-bar:5; --z-det:20; --z-ptr:30; --z-fade:45; --z-veil:50; --z-toast:60; --z-menu:70;   /* 疊放順序：分頁列／主機頁／下拉更新／淡出／視窗／通知／選單 */
   --zoom:1;
   --sh-1:0 1px 2px rgba(0,0,0,.08),0 1px 3px 1px rgba(0,0,0,.05);    /* 陰影：微浮（Material 3 高度 1） */
   --sh-2:0 1px 2px rgba(0,0,0,.12),0 2px 6px 2px rgba(0,0,0,.08);    /* 選單、提示框（高度 2） */
   --sh-3:0 4px 12px 3px rgba(0,0,0,.1),0 1px 3px rgba(0,0,0,.14);    /* 視窗（高度 3） */
 }
+@supports (transition-timing-function:linear(0,1)){:root{
+  --sp-fast:.29s linear(0,.015 2.4%,.0848 6%,.2136 10.4%,.3818 15.4%,.5611 20.8%,.7257 26.6%,.8582 32.8%,.9514 39.2%,1.0072 46%,1.0329 53%,1.0383 60.3%,1.0325 67.8%,1.0226 75.6%,1.013 83.5%,1.0057 91.7%,1);
+  --sp:.42s linear(0,.0169 2.4%,.0936 6%,.2299 10.4%,.4006 15.4%,.5751 20.8%,.729 26.6%,.8486 32.8%,.931 39.2%,.9806 46%,1.0055 53%,1.0144 60.3%,1.0145 67.8%,1.0111 75.6%,1.007 83.5%,1.0037 91.7%,1);
+  --sp-slow:.58s linear(0,.0169 2.4%,.0928 6%,.2265 10.4%,.3926 15.4%,.5614 20.8%,.7104 26.6%,.8272 32.8%,.9095 39.2%,.9614 46%,.9901 53%,1.0033 60.3%,1.0075 67.8%,1.0072 75.6%,1.0053 83.5%,1.0033 91.7%,1)}}
 
 /* ═════════ 顏色：Google Material You 動態配色（全部從主題色 --seed 算出，純色分層不用漸層） ═════════ */
 @property --seed{syntax:"<color>";inherits:true;initial-value:#1a73e8}
@@ -164,48 +168,48 @@ b,strong{font-weight:500}
 @keyframes spin{to{transform:rotate(360deg)}}
 @keyframes fadeIn{from{opacity:0}}
 @keyframes fadeOut{to{opacity:0}}
-@keyframes rise{from{opacity:0;transform:translateY(8px)}}
-@keyframes pop{from{opacity:0;transform:scale(.88)}}
-@keyframes through{from{opacity:0}}
-@keyframes slideR{from{opacity:0;transform:translateX(18px)}}
-@keyframes slideL{from{opacity:0;transform:translateX(-18px)}}
+@keyframes rise{from{opacity:0;transform:translateY(12px) scale(.985)}}
+@keyframes pop{from{opacity:0;transform:scale(.82)}}
+@keyframes through{from{opacity:0;transform:scale(.985) translateY(6px)}}
+@keyframes slideR{from{opacity:0;transform:translateX(32px)}}
+@keyframes slideL{from{opacity:0;transform:translateX(-32px)}}
 
-/* 按下去的水波紋（Google Material State Ripple）：細緻克制不喧賓奪主 */
-:is(.li,.ubtn,.iconbtn,.icbtn,.hmenu button,.rb,.rh,.backbtn,.seg button,.rng button,.fchip,.addhost,.trf,.chats button){position:relative}
+/* 按下去的水波紋（Google Material 3 State Ripple） */
+:is(.li,.ubtn,.iconbtn,.icbtn,.hmenu button,.rb,.rh,.backbtn,.seg button,.rng button,.fchip,.addhost,.trf,.chats button,.tbx){position:relative}
 .rip{position:absolute;inset:0;border-radius:inherit;overflow:hidden;pointer-events:none}
-.rip i{position:absolute;border-radius:50%;background:currentColor;opacity:.08}
-/* 選到的底色（單選的一排、開關鈕）：按鈕裡一層 ::before 原地淡入撐開、淡出縮回（連按不閃爍）
+.rip i{position:absolute;border-radius:50%;background:currentColor;opacity:.13}
+/* 選到的底色（單選的一排、開關鈕）：按鈕裡一層 ::before 原地淡入彈出撐開、淡出縮回（連按不閃爍）
    Google Material 3：單選與篩選膠囊用柔和主題色底（--pc）配深色字（--on-pc），安靜耐看 */
 :is(.fchip,.seg button,.rng button,.chats button,.frzm .icbtn){isolation:isolate;--tsel:calc(var(--t-mid) / 5) steps(1)}
 :is(.fchip,.seg button,.rng button,.chats button,.frzm .icbtn)::before{content:"";position:absolute;inset:0;z-index:-1;border-radius:inherit;pointer-events:none;
-  background:var(--pc);opacity:0;transform:scale(.9);transition:opacity var(--t-fast) var(--ease),transform var(--t-mid) var(--dec)}
+  background:var(--pc);opacity:0;transform:scale(.84);transition:opacity var(--t-fast) var(--ease),transform var(--sp-fast)}
 :is(.fchip,.seg button,.rng button,.chats button,.frzm .icbtn).on::before{opacity:1;transform:none}
 /* 滑鼠指著（只有電腦）：沒選到的底色深一點點；選到的不變 */
 @media (hover:hover){.fchip:not(.on,.hsel.set,:disabled):hover{background-color:color-mix(in oklab,var(--card) 93%,var(--tx))}}
 @media (hover:hover){:is(.seg button,.rng button,.chats button):not(.on,:disabled):hover{background-color:color-mix(in oklab,var(--chip) 93%,var(--tx))}}
 @media (hover:hover){.frchips button:not(.on,:disabled):hover{background-color:color-mix(in oklab,var(--s2) 93%,var(--tx))}}
-/* 手機觸控按下（.prs，僅觸控裝置套用，電腦滑鼠不縮放變形） */
-:is(.hcard,.li,.ubtn,.iconbtn,.icbtn,.hmenu button,.seg button,.rng button,.fchip,.addhost,.trf,.chats button,.sw button,.fapc).prs{transition-duration:var(--t-fast);transition-timing-function:var(--ease)}
+/* 按下瞬間快速收緊、放開時由各自元件的彈簧曲線自然回彈 */
+:is(.hcard,.li,.ubtn,.iconbtn,.icbtn,.hmenu button,.seg button,.rng button,.fchip,.addhost,.trf,.chats button,.sw button,.fapc,.tbx,.rb,.rh,.backbtn).prs{transition-duration:var(--t-fast);transition-timing-function:var(--ease)}
 
 /* 小圖示按鈕 */
 .iconbtn{width:40px;height:40px;border-radius:50%;display:inline-grid;place-items:center;color:var(--tx2);flex:none;position:relative;text-decoration:none;
-  transition:transform var(--t-fast) var(--ease),background-color var(--t-fast) var(--ease)}
+  transition:transform var(--sp-fast),background-color var(--t-fast) var(--ease)}
 .iconbtn svg{width:20px;height:20px}
 @media (hover:hover){.iconbtn:hover{background:color-mix(in srgb,var(--tx) 8%,transparent)}}
-.iconbtn.prs{transform:scale(.94);background:color-mix(in srgb,var(--tx) 10%,transparent)}
+.iconbtn.prs{transform:scale(.91);background:color-mix(in srgb,var(--tx) 12%,transparent)}
 .icbtn{width:44px;height:44px;border-radius:50%;background:var(--card);display:grid;place-items:center;flex:none;
-  transition:transform var(--t-fast) var(--ease),background-color var(--t-fast) var(--ease)}
+  transition:transform var(--sp-fast),border-radius var(--sp-fast),background-color var(--t-fast) var(--ease)}
 .icbtn svg{width:21px;height:21px}
-.icbtn.prs{transform:scale(.94)}
+.icbtn.prs{transform:scale(.92);border-radius:var(--r-md)}
 .hasnew::after{content:"";position:absolute;top:6px;right:6px;width:8px;height:8px;border-radius:50%;background:var(--p);box-shadow:0 0 0 2px var(--bg)}
 
-/* 按鈕：Google Material 3 膠囊實心主色（純色無漸層） */
+/* 按鈕：Google Material 3 Expressive 膠囊實心主色（按下微收＋圓角微變形、放開彈簧回彈） */
 .ubtn{--h:40px;height:var(--h);padding:0 22px;border-radius:calc(var(--h) / 2);background:var(--p);color:var(--on-p);font-weight:500;font-size:var(--fs-m);
   display:inline-flex;align-items:center;justify-content:center;gap:8px;white-space:nowrap;text-decoration:none;
-  transition:transform var(--t-fast) var(--ease),background-color var(--t-fast) var(--ease),box-shadow var(--t-fast) var(--ease),opacity var(--t-mid) var(--ease)}
+  transition:transform var(--sp-fast),border-radius var(--sp-fast),background-color var(--t-fast) var(--ease),box-shadow var(--t-fast) var(--ease),opacity var(--t-mid) var(--ease)}
 @media (hover:hover){.ubtn:not([disabled]):hover{box-shadow:var(--sh-1);background:color-mix(in oklab,var(--p) 92%,var(--on-p))}}
 .ubtn svg{width:18px;height:18px;flex:none}
-.ubtn.prs{transform:scale(.97)}
+.ubtn.prs{transform:scale(.96);border-radius:var(--r-md)}
 .ubtn[disabled]{opacity:.45;cursor:default}
 .ubtn.ghost{background:var(--s2);color:var(--tx)}
 @media (hover:hover){.ubtn.ghost:not([disabled]):hover{box-shadow:none;background:var(--s3)}}
@@ -220,11 +224,13 @@ b,strong{font-weight:500}
 .linkish:disabled{color:var(--tx3)}
 .linkbtn{color:var(--bad);font-weight:500;font-size:var(--fs-s);margin-top:14px;padding:6px 10px}
 
-/* 狀態圓點（安靜不閃爍） */
+/* 狀態圓點（即時連線點帶輕柔呼吸光圈） */
 .dot{width:8px;height:8px;border-radius:50%;flex:none;background:var(--tx3)}
 .dot.ok{background:var(--ok)}.dot.warn{background:var(--warn)}.dot.bad{background:var(--bad)}.dot.info{background:var(--p)}.dot.off{background:var(--s4)}
 .ld{width:8px;height:8px;border-radius:50%;flex:none;background:var(--tx3);display:inline-block}.ld.ok{background:var(--ok)}.ld.bad{background:var(--bad)}
 .live{width:7px;height:7px;border-radius:50%;background:var(--ok);position:relative;flex:none}
+.live:not(.off)::after{content:"";position:absolute;inset:0;border-radius:50%;background:var(--ok);opacity:.45;animation:live 2.8s ease-out infinite}
+@keyframes live{to{transform:scale(2.6);opacity:0}}
 .live.off{background:var(--warn)}
 
 /* 國旗 */
@@ -234,17 +240,17 @@ img.flag{width:28px;height:21px;object-fit:cover;border-radius:var(--r-xs);flex:
 .avatar .letter{width:36px;height:36px;border-radius:50%;display:grid;place-items:center;background:var(--pc);color:var(--on-pc);font-weight:600;font-size:var(--fs-m)}
 .fw{display:grid;place-items:center;line-height:0}
 
-/* ═════════ Google Material 3 圓角直條進度條（靜止不蠕動，只在數值變動時平順滑動） ═════════ */
+/* ═════════ Google Material 3 圓角直條進度條（靜止不蠕動，數值變動時以物理彈簧平順滑動） ═════════ */
 .wv{--v:0%;--k:0;flex:1;min-width:0;min-height:6px;height:6px;display:block;position:relative;border-radius:var(--r-pill);background:var(--s3);overflow:hidden;color:var(--p)}
 .wv.w{color:var(--warn)}.wv.b{color:var(--bad)}
 .wv>i{display:block;position:absolute;inset:0;border-radius:var(--r-pill);background:currentColor;transform-origin:left;
-  transform:scaleX(var(--k));transition:transform var(--t-slow) var(--dec),background-color var(--t-mid) var(--ease)}
+  transform:scaleX(var(--k));transition:transform var(--sp-slow),background-color var(--t-mid) var(--ease)}
 /* Material 3 結尾小圓點（未滿 100% 時讓軌道終點更明確） */
 .wv::after{content:"";position:absolute;right:1px;top:1px;width:4px;height:4px;border-radius:50%;background:color-mix(in oklab,currentColor 38%,transparent)}
 .tile .wv{flex:none;width:100%;margin:4px 0 2px}
 /* 一般進度條（下載清單用） */
 .track{height:6px;background:var(--s3);border-radius:var(--r-pill);overflow:hidden;width:100%}
-.fill{height:100%;border-radius:var(--r-pill);background:var(--p);min-width:4px;transition:width var(--t-slow) var(--dec)}
+.fill{height:100%;border-radius:var(--r-pill);background:var(--p);min-width:4px;transition:width var(--sp-slow)}
 .fill.w{background:var(--warn)}.fill.b{background:var(--bad)}
 
 /* ═════════ 整體版面與過場 ═════════ */
@@ -252,9 +258,9 @@ img.flag{width:28px;height:21px;object-fit:cover;border-radius:var(--r-xs);flex:
 #app{transition:opacity var(--t-mid) var(--ease)}
 .dash.m{max-width:760px;margin:0 auto;padding:0 16px calc(env(safe-area-inset-bottom) + 28px)}
 .full .dash.m{padding-bottom:calc(env(safe-area-inset-bottom) + 88px)}
-.view{animation:through var(--t-mid) var(--dec) backwards}
-.dash.m .view[data-dir="1"]{animation:slideR var(--t-mid) var(--dec) backwards}
-.dash.m .view[data-dir="-1"]{animation:slideL var(--t-mid) var(--dec) backwards}
+.view{animation:through var(--sp) backwards}
+.dash.m .view[data-dir="1"]{animation:slideR var(--sp) backwards}
+.dash.m .view[data-dir="-1"]{animation:slideL var(--sp) backwards}
 /* 這個網頁連不上主機超過 15 秒（html.lost）：畫面上的數字都是舊的，整塊變淡 */
 .view>:not(.hbanner,.dhome),.dhome>:not(.dbar),.det .dscroll>:not(.dtop){transition:filter var(--t-slow) var(--ease)}
 html.lost :is(.view>:not(.hbanner,.dhome),.det .dscroll>:not(.dtop)){filter:opacity(.55) saturate(.45)}
@@ -284,15 +290,15 @@ html.lost :is(.view>:not(.hbanner,.dhome),.det .dscroll>:not(.dtop)){filter:opac
    手機瀏覽器裡（html:not(.full)）：頁面頂部整排標籤列，底下一條主色指示線滑動，往下捲藏、往上捲出現（避開 iOS 底部網址列） */
 .dock{position:fixed;left:0;right:0;bottom:0;z-index:var(--z-bar);display:grid;grid-template-columns:repeat(4,1fr);align-items:center;
   padding:8px 8px calc(env(safe-area-inset-bottom) + 8px);background:var(--s1);border-top:1px solid var(--line);
-  transition:transform var(--t-mid) var(--dec),opacity var(--t-fast) var(--ease)}
+  transition:transform var(--sp),opacity var(--t-mid) var(--ease)}
 .lock .dock{transform:translateY(110%);opacity:0;pointer-events:none}
 @media (max-width:1023px){.full .toasts{bottom:calc(env(safe-area-inset-bottom) + 82px)}}
 .tb{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;min-height:52px;color:var(--tx2);position:relative;
   transition:color var(--t-fast) var(--ease)}
 .tbi{position:relative;width:64px;height:32px;border-radius:var(--r-pill);display:grid;place-items:center;isolation:isolate;
   transition:color var(--t-fast) var(--ease)}
-.tbi::before{content:"";position:absolute;inset:0;z-index:-1;border-radius:inherit;background:var(--pc);opacity:0;transform:scaleX(.45);
-  transition:opacity var(--t-fast) var(--ease),transform var(--t-mid) var(--dec)}
+.tbi::before{content:"";position:absolute;inset:0;z-index:-1;border-radius:inherit;background:var(--pc);opacity:0;transform:scaleX(.42);
+  transition:opacity var(--t-fast) var(--ease),transform var(--sp-fast)}
 .tb svg{width:22px;height:22px;flex:none}
 .tb .t{font-size:var(--fs-xs);font-weight:500;line-height:1.15;white-space:nowrap}
 .tb.on{color:var(--tx)}
@@ -342,12 +348,19 @@ html:not(.full) .dock .tb.hasnew::after{top:10px;right:calc(50% - 28px)}
 .wx b{font-size:var(--fs-m);font-weight:600;color:var(--tx);margin-right:4px}
 .wx small{display:none}
 
-/* ═════════ 首頁的主機卡片（扁平少層次、零骨牌彈跳進場） ═════════ */
+/* ═════════ 首頁的主機卡片（流暢微波浪進場＋按壓彈簧微形變） ═════════ */
 .hosts{display:grid;grid-template-columns:minmax(0,1fr);gap:10px}
 @media (min-width:700px){.dash.m :is(.hosts,.minis){grid-template-columns:repeat(2,minmax(0,1fr))}}
 .hcard{display:block;width:100%;background:var(--s1);border:1px solid var(--line);border-radius:var(--r-xl);padding:18px 18px 16px;cursor:pointer;position:relative;
-  transition:transform var(--t-fast) var(--ease),background-color var(--t-fast) var(--ease),border-color var(--t-fast) var(--ease)}
-.hcard.prs{transform:scale(.985);background:var(--s2)}
+  transition:transform var(--sp-fast),border-radius var(--sp-fast),background-color var(--t-fast) var(--ease),border-color var(--t-fast) var(--ease);
+  animation:rise var(--sp) backwards}
+.hcard.prs{transform:scale(.975);border-radius:var(--r-2xl);background:var(--s2)}
+/* 卡片群組進場：輕盈短間隔（28ms）如水波滑入，封頂 5 格不拖泥帶水；自動更新因 data-key 保留節點不會重播 */
+:is(.hosts,.minis,.sums,.tgrid,.tiles)>:nth-child(2){animation-delay:28ms}
+:is(.hosts,.minis,.sums,.tgrid,.tiles)>:nth-child(3){animation-delay:56ms}
+:is(.hosts,.minis,.sums,.tgrid,.tiles)>:nth-child(4){animation-delay:84ms}
+:is(.hosts,.minis,.sums,.tgrid,.tiles)>:nth-child(5){animation-delay:112ms}
+:is(.hosts,.minis,.sums,.tgrid,.tiles)>:nth-child(n+6){animation-delay:140ms}
 /* 出狀況：清脆語意細框 */
 :is(.hcard,.hp).warn{border-color:color-mix(in oklab,var(--warn) 48%,var(--line))}
 :is(.hcard,.hp).bad{border-color:color-mix(in oklab,var(--bad) 52%,var(--line))}
@@ -375,10 +388,10 @@ html:not(.full) .dock .tb.hasnew::after{top:10px;right:calc(50% - 28px)}
 .hcard .alerts{margin:12px 0 0}
 .addhost{display:flex;align-items:center;justify-content:center;gap:8px;width:100%;height:50px;border-radius:var(--r-xl);color:var(--p);
   background:var(--s1);border:1px solid var(--line);font-weight:500;
-  transition:transform var(--t-fast) var(--ease),background-color var(--t-fast) var(--ease)}
+  transition:transform var(--sp-fast),border-radius var(--sp-fast),background-color var(--t-fast) var(--ease)}
 .addhost svg{width:19px;height:19px}
 .tgh{margin-top:12px}.aside .tgh{margin-top:0}
-.addhost.prs{transform:scale(.98);background:var(--s2)}
+.addhost.prs{transform:scale(.97);border-radius:var(--r-md);background:var(--s2)}
 /* 主機很多時：正常的主機一台一行（名稱、三個數字、箭頭），數字欄每一行對齊 */
 .hosts:empty{display:none}
 .hosts:not(:empty)+.minis{margin-top:10px}
@@ -386,7 +399,7 @@ html:not(.full) .dock .tb.hasnew::after{top:10px;right:calc(50% - 28px)}
 .minis .addhost{grid-column:1/-1}
 .minis .hcard+.addhost{margin-top:2px}
 .hcard.mini{display:flex;align-items:center;gap:12px;padding:12px 12px 12px 16px;border-radius:var(--r-lg)}
-.hcard.mini.prs{transform:scale(.985)}
+.hcard.mini.prs{transform:scale(.98);border-radius:var(--r-xl)}
 .mini .ct{flex:1;min-width:0;gap:10px}
 .mini .cn{font-size:var(--fs-l);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;overflow-wrap:normal}
 .mini .cp{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
@@ -464,15 +477,17 @@ html:not(.full) .dock .tb.hasnew::after{top:10px;right:calc(50% - 28px)}
 .day:first-child{margin-top:0}
 .calm{color:var(--tx3);padding:22px 16px;background:var(--card);box-shadow:var(--cs);border-radius:var(--r-lg);text-align:center}
 
-/* ═════════ 主機整頁（手機）：從卡片的位置長出來 ═════════ */
-.det{position:fixed;inset:0;z-index:var(--z-det);background-color:var(--bg);--gz:var(--zoom);animation:detIn var(--t-slow) var(--dec) backwards}
+/* ═════════ 主機整頁（手機）：從卡片的位置以物理彈簧長大成整頁（Material 3 Container Transform） ═════════ */
+.det{position:fixed;inset:0;z-index:var(--z-det);background-color:var(--bg);--gz:var(--zoom);animation:detIn var(--sp-slow) backwards}
+.det .dscroll{animation:detBody var(--sp) backwards}
 /* 整頁完全蓋住之後，後面那一頁先不畫（動畫、更新都停下來，捲動只要顧整頁）；收起時立刻回來 */
 html.dhid .dash>.view{content-visibility:hidden;contain-intrinsic-size:auto none}
 .det.closing{animation:collapse var(--t-mid) var(--exit) forwards;pointer-events:none}
 @keyframes expand{from{clip-path:inset(var(--ct) var(--cr) var(--cb) var(--cl) round var(--r-xl))}to{clip-path:inset(0 0 0 0 round 0)}}
 /* 主機整頁：一邊從卡片長大、一邊蓋上去（卡片的內容慢慢被換掉，中間不會有一塊空的） */
 @keyframes detIn{from{clip-path:inset(var(--ct) var(--cr) var(--cb) var(--cl) round var(--r-xl));opacity:0}35%{opacity:1}to{clip-path:inset(0 0 0 0 round 0);opacity:1}}
-@keyframes collapse{from{clip-path:inset(0 0 0 0 round 0)}70%{opacity:1}to{clip-path:inset(var(--ct) var(--cr) var(--cb) var(--cl) round var(--r-xl));opacity:0}}
+@keyframes detBody{from{opacity:0;transform:translateY(14px)}}
+@keyframes collapse{from{clip-path:inset(0 0 0 0 round 0)}72%{opacity:1}to{clip-path:inset(var(--ct) var(--cr) var(--cb) var(--cl) round var(--r-xl));opacity:0}}
 .dscroll{position:absolute;inset:0;overflow-y:auto;overscroll-behavior:contain;
   padding:calc(env(safe-area-inset-top) + 10px) 16px calc(env(safe-area-inset-bottom) + 40px)}
 .dscroll>*{max-width:760px;margin-left:auto;margin-right:auto}
@@ -503,7 +518,7 @@ html.dhid .dash>.view{content-visibility:hidden;contain-intrinsic-size:auto none
 /* 四格數字 */
 .tiles{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
 .tile{background:var(--card);border-radius:var(--r-lg);padding:16px 16px 14px;box-shadow:var(--cs);display:flex;flex-direction:column;gap:6px;min-width:0;
-  transition:background-color var(--t-slow) var(--ease),color var(--t-slow) var(--ease)}
+  transition:background-color var(--t-slow) var(--ease),color var(--t-slow) var(--ease);animation:rise var(--sp) backwards}
 .tile .th{display:flex;align-items:center;gap:8px;font-size:var(--fs-s);color:var(--tx2);white-space:nowrap}
 .tile .tv{font-size:var(--fs-3xl);font-weight:600;letter-spacing:-.02em;line-height:1.08;white-space:nowrap;font-variant-numeric:tabular-nums}
 .tile .tv small{font-size:var(--fs-l);margin-left:1px;color:var(--tx2)}
@@ -521,10 +536,10 @@ html.dhid .dash>.view{content-visibility:hidden;contain-intrinsic-size:auto none
 .lgg{width:52px;height:30px;flex:none;overflow:visible}
 .lgg path{fill:none;stroke-linecap:round}
 .lgb{stroke:var(--s4);stroke-width:6}
-.lgv{stroke:var(--p);stroke-width:6;transition:stroke-dasharray var(--t-slow) var(--ease)}
+.lgv{stroke:var(--p);stroke-width:6;transition:stroke-dasharray var(--sp-slow)}
 .tile.w .lgv,.tile.b .lgv{stroke:currentColor}.tile.w .lgn,.tile.b .lgn{stroke:currentColor;fill:currentColor}   /* 弧線只上色不填滿（以前整個半圓被塗滿、看不到指針） */
 .tile.w .lgb,.tile.b .lgb{stroke:color-mix(in srgb,currentColor 25%,transparent)}
-.lgn{transform-origin:32px 32px;transition:transform var(--t-slow) var(--ease);stroke:var(--tx);fill:var(--tx)}
+.lgn{transform-origin:32px 32px;transition:transform var(--sp-slow);stroke:var(--tx);fill:var(--tx)}
 .lgn path{stroke-width:3}
 /* 小資訊膠囊：連線數、IP、IPv6… */
 .fcs{display:flex;flex-wrap:wrap;gap:6px}
@@ -709,7 +724,8 @@ button.li.prs,a.li.prs{border-radius:var(--r-lg);transform:scale(.98);background
 @media (max-width:599px){.tgrid>:last-child:nth-child(odd){grid-column:1/-1}}   /* 單數個時最後一塊撐滿，不留空 */
 @media (min-width:600px){.tgrid{grid-template-columns:repeat(auto-fit,minmax(200px,1fr))}}
 .tbx{position:relative;display:flex;flex-direction:column;align-items:flex-start;gap:2px;min-height:132px;padding:16px;border-radius:var(--r-lg);background:var(--card);box-shadow:var(--cs);color:var(--tx);text-align:left;text-decoration:none;overflow:hidden;
-  transition:transform var(--t-fast) var(--ease),background-color var(--t-fast) var(--ease),box-shadow var(--t-fast) var(--ease),border-color var(--t-fast) var(--ease)}
+  transition:transform var(--sp-fast),border-radius var(--sp-fast),background-color var(--t-fast) var(--ease),box-shadow var(--t-fast) var(--ease),border-color var(--t-fast) var(--ease);
+  animation:rise var(--sp) backwards}
 .tbx .ttop{display:flex;justify-content:space-between;align-items:flex-start;width:100%;padding-bottom:12px}
 .tbx .tgo{color:var(--tx3)}
 .tbx .tgo svg{width:18px;height:18px}
@@ -724,7 +740,7 @@ button.li.prs,a.li.prs{border-radius:var(--r-lg);transform:scale(.98);background
 .bkdots i.ok{background:var(--ok)}
 .bkdots i.bad{background:var(--bad)}
 @media (hover:hover){.tbx:hover{background:color-mix(in oklab,var(--card) 96%,var(--tx))}}
-.tbx:active{transform:scale(.98)}
+.tbx.prs{transform:scale(.97);border-radius:var(--r-xl);background:var(--s2)}
 .lkz.s{font-size:var(--fs-s)} .lkz.m{font-size:var(--fs-xl)} .lkz.l{font-size:var(--fs-3xl)}
 .li .seg{flex:none}
 .li.col .seg{width:100%}
@@ -754,10 +770,10 @@ button.li.prs,a.li.prs{border-radius:var(--r-lg);transform:scale(.98);background
 .tog:checked::before{left:36px;opacity:1;transform:translate(-50%,-50%)}
 .tog:active::after{width:28px;height:28px}
 /* 彩虹主題：選到的東西換成彩虹底、深色字（滑動中的那一格交給 .slide） */
-[data-accent="rainbow"] :is(.fchip,.seg button,.rng button,.chats button,.frzm .icbtn)::before{background-image:var(--rbw)}
-[data-accent="rainbow"] :is(.fchip.on,.seg button.on,.rng button.on,.chats button.on,.frzm .icbtn.on){color:var(--on-rbw)}
+[data-accent="rainbow"] :is(.fchip,.seg button,.rng button,.chats button,.frzm .icbtn,.dash.d .rb,.dash.d .rh)::before{background-image:var(--rbw)}
+[data-accent="rainbow"] :is(.fchip.on,.seg button.on,.rng button.on,.chats button.on,.frzm .icbtn.on,.dash.d .rb.on,.dash.d .rh.on){color:var(--on-rbw)}
 [data-accent="rainbow"] :is([data-slide]:not(.dock)>.slide,.pane .li.on,.bkhosts .ubtn.on,
-  .tog:checked,.remember input:checked,.sp-blob,.dash.d .rb.on,.dash.d .rh.on){background-image:var(--rbw);color:var(--on-rbw)}
+  .tog:checked,.remember input:checked,.sp-blob){background-image:var(--rbw);color:var(--on-rbw)}
 [data-accent="rainbow"] [data-slide].sliding>.on{background-image:none}
 [data-accent="rainbow"] .rb.on .ri::before{background-image:var(--rbw)}
 [data-accent="rainbow"] .rb.on .ri{color:var(--on-rbw)}
@@ -881,23 +897,27 @@ body:has(.dash.d) .fwrap{max-width:var(--pw)}
 .dash.d .rail{grid-area:rail;position:sticky;top:64px;height:calc(100vh / var(--zoom) - 64px);align-items:stretch;gap:2px;
   padding:8px 12px 18px 14px;background:var(--bg);border-right:0;overflow-y:auto}
 .rnav{display:flex;flex-direction:column;gap:2px}
-.dash.d .rb{flex-direction:row;width:auto;gap:12px;height:40px;padding:0 16px;border-radius:var(--r-pill);font-size:var(--fs-m);font-weight:500;color:var(--tx2);
-  transition:background-color var(--t-fast) var(--ease),color var(--t-fast) var(--ease)}
+.dash.d .rb{flex-direction:row;width:auto;gap:12px;height:40px;padding:0 16px;border-radius:var(--r-pill);font-size:var(--fs-m);font-weight:500;color:var(--tx2);isolation:isolate;
+  transition:transform var(--sp-fast),background-color var(--t-fast) var(--ease),color var(--t-fast) var(--ease)}
+.dash.d .rb::before,.rh::before{content:"";position:absolute;inset:0;z-index:-1;border-radius:inherit;pointer-events:none;
+  background:var(--pc);opacity:0;transform:scale(.9);transition:opacity var(--t-fast) var(--ease),transform var(--sp-fast)}
 .dash.d .rb .ri{width:auto;height:auto;display:grid;border-radius:0}
 .dash.d .rb .ri::before,.dash.d .rb .ri::after{display:none}
 .dash.d .rb svg{width:19px;height:19px}
-.dash.d .rb.on{background:var(--pc);color:var(--on-pc);font-weight:600}
+.dash.d .rb.on{color:var(--on-pc);font-weight:600}
+.dash.d .rb.on::before,.rh.on::before{opacity:1;transform:none}
 .dash.d .rb.on .ri{color:inherit}
+.dash.d .rb.prs,.rh.prs,.backbtn.prs{transform:scale(.975)}
 @media (hover:hover){.dash.d .rb:not(.on):hover{background:color-mix(in srgb,var(--tx) 6%,transparent);color:var(--tx)}}
 .dash.d .rb.hasnew::after{top:50%;right:14px;margin-top:-4px}
 .rsec{display:flex;justify-content:space-between;align-items:center;padding:20px 16px 6px;font-size:var(--fs-xs);font-weight:500;color:var(--tx3)}
 .rhosts{display:flex;flex-direction:column;gap:2px}
-.rh{display:flex;align-items:center;gap:10px;height:38px;padding:0 16px;border-radius:var(--r-pill);color:var(--tx2);font-size:var(--fs-s);text-align:left;
-  transition:background-color var(--t-fast) var(--ease),color var(--t-fast) var(--ease)}
+.rh{display:flex;align-items:center;gap:10px;height:38px;padding:0 16px;border-radius:var(--r-pill);color:var(--tx2);font-size:var(--fs-s);text-align:left;isolation:isolate;
+  transition:transform var(--sp-fast),background-color var(--t-fast) var(--ease),color var(--t-fast) var(--ease)}
 .rh b{flex:1;min-width:0;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--tx)}
 .rh small{color:var(--tx3);font-size:var(--fs-xs);font-variant-numeric:tabular-nums}
 .rh small svg{width:14px;height:14px;color:var(--bad);display:block}
-.rh.on{background:var(--pc);color:var(--on-pc)}
+.rh.on{color:var(--on-pc)}
 .rh.on b,.rh.on small{color:inherit;font-weight:600}
 @media (hover:hover){.rh:not(.on):hover{background:color-mix(in srgb,var(--tx) 6%,transparent)}}
 /* 右側主畫布：Gmail／Google Drive 招牌的大圓角白底主紙面（.gsheet） */
@@ -914,7 +934,7 @@ body:has(.dash.d) .fwrap{max-width:var(--pw)}
 /* 單台主機專頁的麵包屑返回列（Google Cloud 風格） */
 .dcrumb{display:flex;align-items:center;gap:8px;margin:-4px 0 18px;font-size:var(--fs-s);color:var(--tx3)}
 .backbtn{display:inline-flex;align-items:center;gap:6px;height:34px;padding:0 12px 0 8px;border-radius:var(--r-pill);color:var(--tx2);font-weight:500;
-  transition:background-color var(--t-fast) var(--ease),color var(--t-fast) var(--ease)}
+  transition:transform var(--sp-fast),background-color var(--t-fast) var(--ease),color var(--t-fast) var(--ease)}
 .backbtn svg{width:17px;height:17px}
 @media (hover:hover){.backbtn:hover{background:color-mix(in srgb,var(--tx) 6%,transparent);color:var(--tx)}}
 .csep{color:var(--tx3);opacity:.6}
@@ -922,7 +942,7 @@ body:has(.dash.d) .fwrap{max-width:var(--pw)}
 /* 總覽最上面一排：4 格重點摘要（淡底色塊，在白底主畫布上清爽分層） */
 .dash.d .dhome{display:block}
 .sums{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:14px;margin-bottom:24px}
-.sumc{background:var(--s2);border-radius:var(--r-lg);padding:16px 18px 14px;display:flex;flex-direction:column;min-width:0}
+.sumc{background:var(--s2);border-radius:var(--r-lg);padding:16px 18px 14px;display:flex;flex-direction:column;min-width:0;animation:rise var(--sp) backwards}
 .smk{font-size:var(--fs-xs);font-weight:500;color:var(--tx3)}
 .smv{display:flex;align-items:baseline;gap:4px;margin-top:6px;font-size:var(--fs-2xl);font-weight:500;letter-spacing:-.015em;font-variant-numeric:tabular-nums;white-space:nowrap;overflow:hidden}
 .smv small{font-size:var(--fs-s);font-weight:500;color:var(--tx3);margin-right:4px}
@@ -1071,13 +1091,13 @@ body:has(.dash.d) .fwrap{max-width:var(--pw)}
   background:var(--s1);border:1px solid var(--line);box-shadow:var(--sh-3);border-radius:var(--r-xl);padding:24px;text-align:center;animation:dlgin var(--sp) backwards;
   --card:var(--s2);--chip:var(--s2);--cs:none;--cseg:none}
 .closing .dialog{animation:dlgout var(--t-fast) var(--exit) forwards}
-@keyframes dlgin{from{opacity:0;transform:scale(.9)}}
+@keyframes dlgin{from{opacity:0;transform:scale(.92) translateY(8px)}}
 /* 手機：要填東西的視窗從下面滑上來（上面有拉桿，往下拉就關掉） */
 @media (max-width:599px){
   .dialog .btns>.ubtn:only-child{flex:1}
   .veil:has(.form){align-items:flex-end;padding:48px 0 0}
   .veil:has(.form) .dialog{max-width:none;max-height:calc((100dvh - 48px) / var(--zoom));border-radius:var(--r-xl) var(--r-xl) 0 0;border-bottom:0;
-    padding:30px 20px calc(env(safe-area-inset-bottom) + 20px);animation:sheetIn var(--t-slow) var(--dec) backwards;touch-action:pan-y}
+    padding:30px 20px calc(env(safe-area-inset-bottom) + 20px);animation:sheetIn var(--sp) backwards;touch-action:pan-y}
   .veil:has(.form) .dialog::before{content:"";position:absolute;top:10px;left:50%;width:32px;height:4px;margin-left:-16px;border-radius:var(--r-pill);background:var(--tx3);opacity:.5}
   .veil:has(.form) .dialog{position:relative}
   .veil.closing:has(.form) .dialog{animation:sheetOut calc(var(--t-fast) * 1.5) var(--exit) forwards}
