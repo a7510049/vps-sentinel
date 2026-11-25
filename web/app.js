@@ -1659,14 +1659,14 @@ function tween(el, from, to, d){
   };
   el._raf = requestAnimationFrame(stepf);
 }
-/* 共用動畫規則（正統 Google Material 3 俐落節奏，跟 CSS 的 --t-*、--ease 一致） */
-const T = {fast:150, mid:240, slow:360, long:500, spf:240, sp:280, sps:380};
+/* 共用動畫規則（Google Material 3 Expressive 物理彈簧與流暢節奏，跟 CSS 的 --t-*、--sp* 一致） */
+const T = {fast:180, mid:320, slow:480, long:720, spf:290, sp:420, sps:580};
 /* 文字大小是用 zoom 放大縮小的：量到的位置是螢幕上的，要除回去才能拿來定位 */
 const ZM = () => parseFloat(getComputedStyle(document.body).zoom) || 1;
 const EASE = "cubic-bezier(.2,0,0,1)", EXIT = "cubic-bezier(.3,0,.8,.15)", LIN = CSS.supports("transition-timing-function", "linear(0,1)");
-/* 克制版 Google 曲線（高阻尼幾乎零彈跳，不再橡皮糖亂晃）：時間用 T.spf／T.sp／T.sps */
-const SPRING_F = "cubic-bezier(.2,0,0,1)",
-      SPRING = "cubic-bezier(.05,.7,.1,1)";
+/* 物理彈簧（Material 3 Expressive 勁度與阻尼精算，滑順自然落點）：時間用 T.spf／T.sp／T.sps */
+const SPRING_F = LIN ? "linear(0,.015 2.4%,.0848 6%,.2136 10.4%,.3818 15.4%,.5611 20.8%,.7257 26.6%,.8582 32.8%,.9514 39.2%,1.0072 46%,1.0329 53%,1.0383 60.3%,1.0325 67.8%,1.0226 75.6%,1.013 83.5%,1.0057 91.7%,1)" : "cubic-bezier(.34,1.25,.64,1)",
+      SPRING = LIN ? "linear(0,.0169 2.4%,.0936 6%,.2299 10.4%,.4006 15.4%,.5751 20.8%,.729 26.6%,.8486 32.8%,.931 39.2%,.9806 46%,1.0055 53%,1.0144 60.3%,1.0145 67.8%,1.0111 75.6%,1.007 83.5%,1.0037 91.7%,1)" : "cubic-bezier(.25,1.08,.55,1)";
 const RMQ = matchMedia("(prefers-reduced-motion: reduce)"), canAnim = () => PREF.motion && !RMQ.matches;   // 同一個查詢留著用（每次新建很慢，動畫前都會問）
 /* 讓元素平順地離開：先淡出、收起高度，再移除 */
 const BLOCK = ".alert,.alerts,.ev,.day,.calm,.empty,.foot,.offline,.fcs,.cc,.grp,.lbl,.group,.tiles,.mrows,.cfoot";
@@ -1675,7 +1675,7 @@ function flipSiblings(parent, change){
   const z = ZM(), kids = [...parent.children].filter(c => !c._leaving), r0 = kids.map(c => c.getBoundingClientRect());
   change();
   kids.forEach((c, i) => { if (!c.isConnected) return; const r = c.getBoundingClientRect(), dx = (r0[i].left - r.left) / z, dy = (r0[i].top - r.top) / z;
-    if (Math.abs(dx) > 1 || Math.abs(dy) > 1) c.animate([{transform:`translate(${dx}px,${dy}px)`}, {transform:"none"}], {duration:T.mid, easing:EASE, id:"ui"}); });
+    if (Math.abs(dx) > 1 || Math.abs(dy) > 1) c.animate([{transform:`translate(${dx}px,${dy}px)`}, {transform:"none"}], {duration:T.sp, easing:SPRING, id:"ui"}); });
 }
 const gapOf = el => parseFloat(getComputedStyle(el).rowGap) || 0;
 /* 前後有沒有「真正留著」的鄰居，決定要收哪一邊的間距 */
@@ -1728,11 +1728,11 @@ function leave(n){
 /* 按鈕內容換掉時，寬度平滑變化 */
 function flipWidth(el, change){
   const w0 = el.offsetWidth; change(); const w1 = el.offsetWidth;
-  if (canAnim() && Math.abs(w1 - w0) > 1) el.animate([{width:w0+"px"}, {width:w1+"px"}], {duration:T.mid, easing:EASE});
+  if (canAnim() && Math.abs(w1 - w0) > 1) el.animate([{width:w0+"px"}, {width:w1+"px"}], {duration:T.spf, easing:SPRING_F});
 }
 /* 拿出來又放回去的元素：瀏覽器會把裡面的進場動畫從頭重播（卡片會突然不見），全部停在結尾 */
 const still = (el, keep) => el.getAnimations({subtree:true}).forEach(n => { if (n === keep) return; if (!n.animationName) n.cancel(); else if (isFinite(n.effect.getComputedTiming().endTime)) n.finish(); });
-/* 換分頁：Google Material Fade Through（電腦）與 Shared X-Axis 方向性過場（手機） */
+/* 換分頁：Google Material 3 Fade Through（電腦）與 Shared X-Axis 方向滑動（手機） */
 function through(a, b){
   const par = a.offsetParent;
   if (!canAnim() || !par) return a.replaceWith(b);
@@ -1742,24 +1742,32 @@ function through(a, b){
   Object.assign(a.style, {position:"absolute", left:(r.left - R.left) / z - par.clientLeft + "px", top:(r.top - R.top) / z - par.clientTop + "px", width:r.width / z + "px",
     height:Math.min(r.height / z, innerHeight / z * 2) + "px", overflow:"hidden", margin:"0", pointerEvents:"none", animation:"none"});
   b.after(a); still(a);
-  const outTf = !DESK.matches && TABDIR ? `translateX(${-TABDIR * 16}px)` : "none";
-  a.animate([{opacity:1, transform:"none"}, {opacity:0, transform:outTf}], {duration:Math.round(T.fast * .6), easing:EXIT, fill:"forwards", id:"ui"}).onfinish = () => a.remove();
+  if (!DESK.matches && TABDIR) {
+    a.animate([{opacity:1, transform:"none"}, {opacity:0, transform:`translateX(${-TABDIR * 28}px)`}], {duration:T.fast, easing:EXIT, fill:"forwards", id:"ui"}).onfinish = () => a.remove();
+  } else {
+    a.animate([{opacity:1, transform:"none"}, {opacity:0, transform:"scale(.988)"}], {duration:Math.round(T.fast * .65), easing:EXIT, fill:"forwards", id:"ui"}).onfinish = () => a.remove();
+    b.style.animationDelay = Math.round(T.fast * .35) + "ms";
+  }
 }
-/* 切換內容區塊（data-sw：總覽 ↔ 單台主機、換主機、換設定分類）：Google 俐落淡換，不彈跳也不縮放 */
+/* 切換內容區塊（data-sw：總覽 ↔ 單台主機景深過場、換主機、換設定分類）：滑順彈簧過場＋高度銜接 */
 function swapIn(a, b){
   if (!canAnim() || !a.isConnected) return a.replaceWith(b);
   const h0 = a.offsetHeight, par = a.offsetParent, x = a.offsetLeft, y = a.offsetTop, w = a.offsetWidth;
+  const k0 = a.dataset.key || "", k1 = b.dataset.key || "";
+  const into = k0 === "dh:all" && k1.startsWith("dh:h:"), back = k0.startsWith("dh:h:") && k1 === "dh:all";
   a.replaceWith(b); skipIntro(b, true);
   if (par) {
     a._leaving = 1;
     Object.assign(a.style, {position:"absolute", left:x + "px", top:y + "px", width:w + "px", height:h0 + "px", margin:"0", pointerEvents:"none", overflow:"hidden", zIndex:1});
     b.after(a); still(a);
-    a.animate([{opacity:1}, {opacity:0}], {duration:Math.round(T.fast * .6), easing:EXIT, fill:"forwards", id:"ui"}).onfinish = () => a.remove();
+    const outTf = into ? "scale(1.012)" : back ? "scale(.985)" : "translateY(-4px)";
+    a.animate([{opacity:1, transform:"none"}, {opacity:0, transform:outTf}], {duration:Math.round(T.fast * .7), easing:EXIT, fill:"forwards", id:"ui"}).onfinish = () => a.remove();
   }
-  b.animate([{opacity:0, transform:"translateY(4px)"}, {opacity:1, transform:"none"}], {duration:T.mid, easing:EASE, fill:"backwards", id:"ui"});
+  const inTf = into ? "scale(.978) translateY(10px)" : back ? "scale(1.014) translateY(-6px)" : "translateY(10px)";
+  b.animate([{opacity:0, transform:inTf}, {opacity:1, transform:"none"}], {duration:T.sp, easing:SPRING, fill:"backwards", id:"ui"});
   const own = [b.style.height, b.style.overflow];
   b.style.height = h0 + "px"; b.style.overflow = "hidden";
-  const t0 = performance.now(), dur = T.mid;
+  const t0 = performance.now(), dur = T.sp;
   const step = now => {
     if (!b.isConnected) return;
     const p = Math.min(1, (now - t0) / dur), e = 1 - Math.pow(1 - p, 4);
@@ -2085,7 +2093,7 @@ function openDet(k){
   history.pushState({det: k}, "");
   closeMenu(); document.documentElement.classList.add("lock");
   render(LIST);
-  clearTimeout(DETH); DETH = setTimeout(() => { if (DET && !DETX) document.documentElement.classList.add("dhid"); }, T.slow + 80);   // 展開完才藏
+  clearTimeout(DETH); DETH = setTimeout(() => { if (DET && !DETX) document.documentElement.classList.add("dhid"); }, T.sps + 80);   // 展開完才藏
 }
 let DETH;
 const showBack = () => { clearTimeout(DETH); document.documentElement.classList.remove("dhid"); };
@@ -2214,7 +2222,7 @@ function moreMenu(btn, s){
     + (s.node ? it("data-rmhost", "trash", "移除主機", "bad") : "");
   document.body.appendChild(m);
   placeMenu(m, btn, r => r.left - 6);           // 從 ⋯ 往右下展開，不會蓋住主機名稱
-  if (canAnim()) m.animate([{opacity:0, transform:"scale(.96) translateY(-4px)"}, {opacity:1, transform:"none"}], {duration:T.fast, easing:EASE});
+  if (canAnim()) m.animate([{opacity:0, transform:"scale(.86,.68)"}, {opacity:1, transform:"none"}], {duration:T.spf, easing:SPRING_F});
   window._menu = m; histMark(m);
   setTimeout(() => m.addEventListener("click", () => closeMenu()), 0);
 }
@@ -2226,14 +2234,14 @@ function logHostMenu(btn){
   m.innerHTML = it("", "全部主機") + LIST.map(x => it(keyOf(x), esc(x.name))).join("");
   document.body.appendChild(m);
   placeMenu(m, btn, r => r.right - m.offsetWidth);
-  if (canAnim()) m.animate([{opacity:0, transform:"scale(.96) translateY(-4px)"}, {opacity:1, transform:"none"}], {duration:T.fast, easing:EASE});
+  if (canAnim()) m.animate([{opacity:0, transform:"scale(.86,.68)"}, {opacity:1, transform:"none"}], {duration:T.spf, easing:SPRING_F});
   window._menu = m; histMark(m);
   setTimeout(() => m.addEventListener("click", () => closeMenu()), 0);
 }
 function closeMenu(){
   const m = window._menu; if (!m) return; window._menu = null;
   if (!canAnim()) { m.remove(); return histDrop(m); }
-  m.animate([{opacity:1}, {opacity:0, transform:"scale(.98)"}], {duration:Math.round(T.fast * .7), easing:EXIT, fill:"forwards"}).finished.then(() => { m.remove(); histDrop(m); });
+  m.animate([{opacity:1, transform:"none"}, {opacity:0, transform:"scale(.94,.86)"}], {duration:Math.round(T.fast * .7), easing:EXIT, fill:"forwards"}).finished.then(() => { m.remove(); histDrop(m); });
 }
 addEventListener("scroll", e => { if (!(window._menu && e.target instanceof Node && window._menu.contains(e.target))) closeMenu(); }, {passive:true, capture:true});   // 選單自己裡面捲動不關
 addEventListener("keydown", e => { if (e.key === "Escape") closeMenu(); });
@@ -3828,7 +3836,7 @@ async function pageClick(e){
   const ds = t.closest("[data-dsel]");
   if (ds && !t.closest("[data-more]")) {
     DSEL = ds.dataset.dsel; sstore("vs-dsel", DSEL);
-    if (TAB !== "home") { TAB = "home"; sstore("vs-tab", "home"); }
+    if (TAB !== "home") { TABDIR = 0; TAB = "home"; sstore("vs-tab", "home"); }
     scrollTo(0, 0); return render(LIST);
   }
   const op = t.closest("[data-open]");
@@ -4136,17 +4144,18 @@ async function refreshNow(btn){
   }, {passive:true});
   addEventListener("touchcancel", () => { x0 = null; }, {passive:true});
 })();
-/* 按下去的水波紋（Material Ripple）：電腦只用淡雅水波紋不縮放變形；手機才帶輕微觸控回饋 */
+/* 按下去的水波紋與彈簧按壓回饋（Material 3 State Ripple＋微形變；按鈕與卡片皆流暢回饋） */
 (function(){
-  const SEL = ".hcard,.tb,.li:not(div),.fapc,.ubtn,.iconbtn,.icbtn,.hmenu button,.seg button,.rng button,.fchip,.addhost,.trf,.chats button,.sw button,.rb,.rh,.backbtn";
+  const SEL = ".hcard,.tb,.li:not(div),.fapc,.ubtn,.iconbtn,.icbtn,.hmenu button,.seg button,.rng button,.fchip,.addhost,.trf,.chats button,.sw button,.rb,.rh,.backbtn,.tbx";
+  const PRESS_DESK = ".ubtn,.iconbtn,.icbtn,.fchip,.seg button,.rng button,.rb,.rh,.backbtn,.tbx,.addhost,.fapc";
   addEventListener("pointerdown", e => {
     if (e.button || !canAnim()) return;
     const el = e.target.closest(SEL);
     if (!el || el.disabled) return;
-    const touch = e.pointerType !== "mouse";
+    const touch = e.pointerType !== "mouse", wantPrs = touch || el.matches(PRESS_DESK);
     let box = null, up = false, t0 = 0;
-    const press = () => { if (touch) el.classList.add("prs"); t0 = performance.now(); };
-    const release = now => { if (touch) setTimeout(() => el.classList.remove("prs"), now ? 0 : Math.max(0, 120 - (performance.now() - t0))); };
+    const press = () => { if (wantPrs) el.classList.add("prs"); t0 = performance.now(); };
+    const release = now => { if (wantPrs) setTimeout(() => el.classList.remove("prs"), now ? 0 : Math.max(0, 120 - (performance.now() - t0))); };
     const start = () => {
       press();
       if (el.closest(".sw") || el.classList.contains("tb")) return;   // 圓形色塊與底部導覽列不疊大水波紋
@@ -4156,7 +4165,7 @@ async function refreshNow(btn){
       box = document.createElement("span"); box.className = "rip"; box._leaving = 1;
       const dot = document.createElement("i"); dot.style.cssText = `left:${x - R}px;top:${y - R}px;width:${2 * R}px;height:${2 * R}px`;
       box.appendChild(dot); el.appendChild(box);
-      dot.animate([{transform:"scale(.2)"}, {transform:"scale(1)"}], {duration:T.slow, easing:EASE, fill:"forwards"});
+      dot.animate([{transform:"scale(.18)"}, {transform:"scale(1)"}], {duration:T.slow, easing:EASE, fill:"forwards"});
     };
     const fade = () => box && box.animate([{opacity:1}, {opacity:0}], {duration:T.mid, delay:T.fast / 2, easing:EASE, fill:"forwards"}).finished.then(() => box.remove(), () => box.remove());
     const t = !touch ? (start(), 0) : setTimeout(() => { if (!up) start(); }, 70);
