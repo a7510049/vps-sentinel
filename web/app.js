@@ -121,7 +121,7 @@ function applyPrefs(){
   const h = document.documentElement, dark = PREF.theme === "dark" || (PREF.theme === "auto" && DARKQ.matches);
   h.dataset.mode = dark ? "dark" : "light"; h.dataset.accent = PREF.accent; h.dataset.tone = PREF.tone; h.dataset.motion = PREF.motion ? "on" : "off";
   h.style.setProperty("--zoom", {s:.92, m:1, l:1.1}[PREF.size] || 1);
-  document.querySelector('meta[name="theme-color"]').content = dark ? "#121317" : "#fbfbfe";
+  document.querySelector('meta[name="theme-color"]').content = dark ? "#131314" : "#f0f4f9";
 }
 DARKQ.addEventListener("change", applyPrefs);
 applyPrefs();
@@ -429,10 +429,10 @@ function chart(id, series, o={}){
   const yax = o.grid && o.fmt ? `<div class="yax">${[.25,.5,.75].map(f=>`<span style="top:${f*100}%">${o.fmt(max*(1-f))}</span>`).join("")}</div>` : "";
   let g = "";
   if (o.grid) for (const f of [.25,.5,.75]) g += `<line class="gl" x1="0" x2="${W}" y1="${(H*f).toFixed(1)}" y2="${(H*f).toFixed(1)}"/>`;
-  const defs = series.map((s,i)=>`<linearGradient id="${id}${i}" x1="0" y1="0" x2="0" y2="1"><stop offset="0" style="stop-color:${s.color};stop-opacity:${o.fade??.3}"/><stop offset="1" style="stop-color:${s.color};stop-opacity:0"/></linearGradient>`).join("");
+  const defs = series.map((s,i)=>`<linearGradient id="${id}${i}" x1="0" y1="0" x2="0" y2="1"><stop offset="0" style="stop-color:${s.color};stop-opacity:${o.fade??.16}"/><stop offset="1" style="stop-color:${s.color};stop-opacity:0"/></linearGradient>`).join("");
   const sl = tf ? ` data-tf="${tf}"` : "";
   const body = series.map((s,i)=>{ const p = pathOf(s.data, W, H, max, xs); if (!p) return "";
-    return `<path d="${p.area}"${sl} fill="url(#${id}${i})"/><path d="${p.line}"${sl} fill="none" style="stroke:${s.color}" stroke-width="${o.sw||2.4}" vector-effect="non-scaling-stroke" stroke-linecap="round" stroke-linejoin="miter"/>`; }).join("");
+    return `<path d="${p.area}"${sl} fill="url(#${id}${i})"/><path d="${p.line}"${sl} fill="none" style="stroke:${s.color}" stroke-width="${o.sw||2.1}" vector-effect="non-scaling-stroke" stroke-linecap="round" stroke-linejoin="round"/>`; }).join("");
   return `<svg class="chart" ${o.t?`data-cid="${id}"`:""} viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" style="height:${H}px"><defs>${defs}</defs>${g}${body}</svg>${yax}`;
 }
 let RANGE = ["30m","24h","7d"].includes(store("vps-range")) ? store("vps-range") : "30m";
@@ -475,21 +475,17 @@ const ICO = {cpu:["cpu","cpu"], mem:["mem","mem"], disk:["disk","disk"], load:["
 const IC = (k, cls="sm") => `<span class="ico ${cls} ${ICO[k][0]}">${I(ICO[k][1])}</span>`;
 
 /* ═════════ 共用的小元件 ═════════ */
-/* 標誌：主題色的圓角方塊＋白色盾牌 */
-const LOGOSVG = id => `<svg viewBox="0 0 512 512" aria-hidden="true"><defs><linearGradient id="lb${id}" x1="0" y1="0" x2="0" y2="1"><stop offset="0" style="stop-color:color-mix(in srgb,var(--seed) 70%,#fff)"/><stop offset="1" style="stop-color:color-mix(in srgb,var(--seed) 82%,#000)"/></linearGradient><mask id="lm${id}"><rect width="512" height="512" fill="#fff"/><path d="M204 258l36 36 72-76" fill="none" stroke="#000" stroke-width="30" stroke-linecap="round" stroke-linejoin="round"/></mask></defs><rect width="512" height="512" rx="128" fill="url(#lb${id})"/><path d="M256 108 371 150c9 3 15 12 15 22v72c0 84-52 140-122 168-5 2-11 2-16 0-70-28-122-84-122-168v-72c0-10 6-19 15-22Z" fill="#fff" mask="url(#lm${id})" transform="translate(256 262) scale(.88) translate(-256 -258)"/></svg>`;
+/* 標誌：Google 純色圓角方塊＋簡潔盾牌 */
+const LOGOSVG = id => `<svg viewBox="0 0 512 512" aria-hidden="true"><defs><mask id="lm${id}"><rect width="512" height="512" fill="#fff"/><path d="M204 258l36 36 72-76" fill="none" stroke="#000" stroke-width="30" stroke-linecap="round" stroke-linejoin="round"/></mask></defs><rect width="512" height="512" rx="136" style="fill:var(--p)"/><path d="M256 108 371 150c9 3 15 12 15 22v72c0 84-52 140-122 168-5 2-11 2-16 0-70-28-122-84-122-168v-72c0-10 6-19 15-22Z" style="fill:var(--on-p)" mask="url(#lm${id})" transform="translate(256 262) scale(.86) translate(-256 -258)"/></svg>`;
 const BRAND = LOGOSVG("br");
 const CHEV = I("chev").replace("<svg", '<svg class="chev"'), EXT = I("ext").replace("<svg", '<svg class="ext"');
-/* 波浪進度條：波浪那段會慢慢往前流，數字變了寬度用彈簧變過去 */
-const WAVE = (() => { let d = "M0 6"; for (let x = 0; x < 480; x += 12) d += ` Q${x + 6} ${x % 24 ? 12 : 0} ${x + 12} 6`;
-  return `<svg viewBox="0 0 480 12" aria-hidden="true"><path d="${d}"/></svg>`; })();
-const wave = (pct, t = tier(pct)) => `<div class="wv ${t}" style="--v:${Math.max(0, Math.min(100, +pct || 0)).toFixed(1)}%"><div class="wf"><div class="wq">${WAVE}</div></div><i class="wr"><i></i></i></div>`;
-/* 首頁的狀態圖形：正常是圓潤的餅乾形、注意是尖一點的太陽形、異常是更尖的星形；點數一樣，換狀態時會平順變形 */
+/* 進度條：Google Material 3 圓角直條（靜止不蠕動，數值變了平順滑動） */
+const wave = (pct, t = tier(pct)) => { const p = Math.max(0, Math.min(100, +pct || 0)); return `<div class="wv ${t}" style="--v:${p.toFixed(1)}%;--k:${Math.max(.02, p / 100).toFixed(3)}"><i></i></div>`; };
+/* 下拉重新整理用的 Material 3 幾何形狀（只在真的正在更新時轉動） */
 const blobSh = (k, a) => `polygon(${Array.from({length:96}, (_, i) => { const t = i / 96 * 2 * Math.PI, r = 50 * (1 - a * (1 - Math.cos(k * t)) / 2);
   return `${(50 + r * Math.sin(t)).toFixed(2)}% ${(50 - r * Math.cos(t)).toFixed(2)}%`; }).join(",")})`;
-const BLOB = {ok: blobSh(9, .1), warn: blobSh(12, .2), bad: blobSh(6, .32)};
 /* 圖示的線條加上 pathLength，才能做「一筆畫出來」的動畫 */
 const drawable = svg => svg.replace(/<(path|circle)/g, '<$1 pathLength="1"');
-const blobBtn = lv => `<button class="blob ${lv}" data-key="blob" data-refresh title="重新整理"><span class="bs"><span class="bf" style="clip-path:${BLOB[lv]}"></span></span><span class="bg" data-key="g:${lv}">${drawable(I({ok:"ok", warn:"alert", bad:"warn"}[lv]))}</span></button>`;
 const disk0 = s => (s.disks || []).find(x => x.path === "/") || (s.disks || [])[0] || {pct:0, used:0, total:0};
 const LOADW = lr => lr < .7 ? ["輕鬆", ""] : lr < 1 ? ["有點忙", "w"] : lr < 2 ? ["忙碌", "w"] : ["超載", "b"];
 const WORD = {bad:"異常", warn:"注意", ok:"恢復", info:"通知"};
@@ -521,11 +517,9 @@ function headline(list){
   return `${hosts.size} 台主機要留意`;
 }
 function hero(list, time){
-  const lv = list.some(s => lvOf(s) === "bad") ? "bad" : list.some(s => lvOf(s) === "warn") ? "warn" : "ok", g = greet();
-  const txt = `<div class="hello meta">${LOST ? `<span class="live off"></span>連不上主機，重試中…` : `<span class="live"></span>${g.hi}・${time} 更新`}</div><h1 class="headline" data-x>${esc(headline(list))}</h1><p class="quote">${esc(g.quote)}</p>`;
-  return DESK.matches
-    ? `<section class="hero" data-key="hero"><div class="hrow">${blobBtn(lv)}<div class="htx">${txt}</div></div></section>`
-    : `<section class="hero" data-key="hero"><div class="hrow">${blobBtn(lv)}<div class="wxw">${g.wx}</div></div>${txt}</section>`;
+  const lv = LOST || list.some(s => lvOf(s) === "bad") ? "bad" : list.some(s => lvOf(s) === "warn") || issuesOf(list).length ? "warn" : "ok", g = greet();
+  const sub = LOST ? "連不上主機，重試中…" : [g.hi, g.quote].filter(Boolean).join("・");
+  return `<section class="hbanner ${lv}" data-key="hero"><span class="hbi ${lv}">${I({ok:"ok", warn:"alert", bad:"warn"}[lv])}</span><div class="hbt"><h1 class="headline" data-x>${esc(headline(list))}</h1>${sub ? `<p class="quote">${esc(sub)}</p>` : ""}</div>${g.wx ? `<div class="wxw">${g.wx}</div>` : ""}</section>`;
 }
 
 /* ═════════ 事件 ═════════ */
@@ -749,34 +743,41 @@ async function trafficModal(node, label){
 
 /* ═════════ 分頁：首頁、工具、紀錄、設定 ═════════ */
 const TABS = [["home", "首頁", "home"], ["tools", "工具", "tools"], ["log", "紀錄", "log"], ["set", "設定", "gear"]];
+let TABDIR = 0;                                // 手機換分頁的方向（-1 往左、+1 往右、0 原地淡換）
 function navBtns(rail, list){
-  const nw = list.some(s => s.self_has);
+  const nw = list.some(s => s.self_has), hasHost = rail && list.length > 1 && DSEL && list.some(x => keyOf(x) === DSEL);
   return TABS.map(([k, l, ic]) => rail
-    ? `<button class="rb${TAB === k ? " on" : ""}${k === "set" && nw ? " hasnew" : ""}" data-tab="${k}"><span class="ri">${I(ic)}</span><span class="rl">${k === "home" ? "總覽" : l}</span></button>`
-    : `<button class="tb${TAB === k ? " on" : ""}${k === "set" && nw ? " hasnew" : ""}" data-tab="${k}" title="${l}">${I(ic)}<span class="t">${l}</span></button>`).join("");
+    ? `<button class="rb${TAB === k && (k !== "home" || !hasHost) ? " on" : ""}${k === "set" && nw ? " hasnew" : ""}" data-tab="${k}"><span class="ri">${I(ic)}</span><span class="rl">${k === "home" ? "總覽" : l}</span></button>`
+    : `<button class="tb${TAB === k ? " on" : ""}${k === "set" && nw ? " hasnew" : ""}" data-tab="${k}" title="${l}"><span class="tbi">${I(ic)}</span><span class="t">${l}</span></button>`).join("");
 }
 function page(list, time){
   return TAB === "tools" ? toolsPage(list) : TAB === "log" ? logPage(list) : TAB === "set" ? setPage(list)
     : DESK.matches ? homeDesk(list, time) : homePhone(list, time);
 }
-/* 手機：首頁是每台一張卡片，點了從卡片長出那台的整頁 */
+/* 手機：上方乾淨標題列＋下方標準 Google 底部導覽列；點主機卡片展開成整頁 */
 function renderPhone(list, time){
   const s = DET && list.find(x => keyOf(x) === DET);
-  return `<div class="dash m" data-key="m"><nav class="dock" data-key="dock" data-slide>${navBtns(false, list)}</nav><main class="view v-${TAB}" data-key="v:${TAB}">${page(list, time)}</main>${s ? detail(s) : ""}</div>`;
+  const top = TAB === "home"
+    ? `<header class="mtop" data-key="mtop"><div class="mbrand">${BRAND}<b>VPS 哨兵</b></div><span class="grow"></span><span class="mtime"><span class="live${LOST ? " off" : ""}"></span><span data-x>${LOST ? "重連中" : time}</span></span><button class="iconbtn" data-refresh title="重新整理">${I("upd")}</button></header>`
+    : "";
+  return `<div class="dash m" data-key="m">${top}<main class="view v-${TAB}" data-key="v:${TAB}" data-dir="${TABDIR}">${page(list, time)}</main><nav class="dock" data-key="dock">${navBtns(false, list)}</nav>${s ? detail(s) : ""}</div>`;
 }
-/* 電腦：左邊直排分頁；首頁每台主機一欄並排（主機多就是小卡片），右邊是天氣和最近發生的事 */
-/* 電腦：桌面主控台。左邊固定側欄（分頁＋所有主機），右邊是頁面；手機版完全不同一套 */
-let DSEL = store("vs-dsel") || "";
-const deskSel = list => list.find(x => keyOf(x) === DSEL) || list[0];
-const railHost = (s, on) => `<button class="rh${on ? " on" : ""}" data-dsel="${esc(keyOf(s))}" data-key="rh:${esc(keyOf(s))}"><span class="dot ${s.online ? lvOf(s) : "bad"}"></span><b>${esc(s.name)}</b>${s.online ? spark(s.hist && s.hist.cpu, "rsp") : ""}<small class="num">${s.online ? num(s.cpu) + "%" : I("off")}</small></button>`;
+/* 電腦：Google Workspace／Cloud 風格主控台 — 上方全域頂部列、左側無縫導覽欄、右側大圓角純白主畫布（總覽與單台主機清楚分層不重複） */
+let DSEL = sstore("vs-dsel") || "";
+const deskSel = list => list.length <= 1 ? list[0] : (DSEL ? list.find(x => keyOf(x) === DSEL) || null : null);
+const railHost = (s, on) => `<button class="rh${on ? " on" : ""}" data-dsel="${esc(keyOf(s))}" data-key="rh:${esc(keyOf(s))}"><span class="dot ${s.online ? lvOf(s) : "bad"}"></span><b>${esc(s.name)}</b><small class="num">${s.online ? num(s.cpu) + "%" : I("off")}</small></button>`;
 function renderDesk(list, time){
-  const sel = deskSel(list), k = sel && keyOf(sel);
-  return `<div class="dash d" data-key="d"><nav class="rail" data-key="rail"><div class="brand">${BRAND}<b>VPS 哨兵</b></div><div class="rnav">${navBtns(true, list)}</div>
-    ${list.length > 1 ? `<div class="rsec">主機<small class="num">${list.length}</small></div><div class="rhosts" data-key="rhs" data-keyed>${list.map(s => railHost(s, TAB === "home" && keyOf(s) === k)).join("")}</div>` : ""}
-    <div class="rfoot"><span class="rtime"><span class="live${LOST ? " off" : ""}"></span><span data-x>${LOST ? "重新連線中" : time}</span></span><button class="iconbtn" data-refresh title="重新整理">${I("upd")}</button></div></nav>
-    <main class="view v-${TAB}" data-key="v:${TAB}">${page(list, time)}</main></div>`;
+  const sel = deskSel(list), k = sel && keyOf(sel), g = greet();
+  const lvs = list.map(s => s.online ? lvOf(s) : "bad"), lv = LOST || lvs.includes("bad") ? "bad" : lvs.includes("warn") || issuesOf(list).length ? "warn" : "ok";
+  const top = `<header class="gtop" data-key="gtop"><button class="brand" data-dhome title="回到總覽">${BRAND}<b>VPS 哨兵</b></button>`
+    + `<div class="gmid"><button class="gstat ${lv}" data-dhome data-x>${I({ok:"ok", warn:"alert", bad:"warn"}[lv])}<span>${esc(headline(list))}</span></button>${g.wx ? `<div class="gwx">${g.wx}</div>` : ""}</div>`
+    + `<div class="gacts"><span class="rtime"><span class="live${LOST ? " off" : ""}"></span><span data-x>${LOST ? "重連中" : time}</span></span><button class="iconbtn" data-refresh title="重新整理">${I("upd")}</button>${addHostBtn("ubtn ghost dadd")}</div></header>`;
+  const rail = `<nav class="rail" data-key="rail"><div class="rnav">${navBtns(true, list)}</div>`
+    + (list.length > 1 ? `<div class="rsec">主機<small class="num">${list.length}</small></div><div class="rhosts" data-key="rhs" data-keyed>${list.map(s => railHost(s, TAB === "home" && keyOf(s) === k)).join("")}</div>` : "")
+    + `</nav>`;
+  return `<div class="dash d" data-key="d">${top}${rail}<main class="view v-${TAB}" data-key="v:${TAB}"><div class="gsheet" data-key="gs:${TAB}">${page(list, time)}</div></main></div>`;
 }
-/* 電腦每一頁上面同一條工具列：頁面名稱，後面接各頁自己的東西 */
+/* 電腦每一頁上面同一條標題列：頁面名稱，後面接各頁自己的篩選或操作 */
 const dbar = (title, rest = "") => `<div class="dbar" data-key="dbar"><h1 class="dbt">${title}</h1>${rest}</div>`;
 /* 這台還沒設定 Telegram：主機下面提醒一行，點了直接設定 */
 const tgHint = list => list.some(x => !x.node && x.tg_off) ? `<div class="group tgh" data-key="tgh"><button class="li" data-tg>${IC("bell", "")}<span class="lab">Telegram 通知<small>還沒設定，出事不會通知你</small></span>${CHEV}</button></div>` : "";
@@ -785,10 +786,10 @@ function homePhone(list, time){
   return hero(list, time) + `<div class="lbl" data-key="lh">主機</div>${hostLists(list, "")}${tgHint(list)}
     <div class="lbl" data-key="le">最近發生${ev.length ? `<button data-tab="log">全部紀錄</button>` : ""}</div>${evList(ev, list.length > 1)}`;
 }
-/* 電腦版不再並排大卡片：主機一律放在總表，點一列看那台 */
+/* 電腦版主機一律從總覽清單或側欄點入專頁 */
 const deskCols = () => 1;
 const cardMode = () => !DESK.matches;
-/* 主機總表的一列：名稱、三條用量、網路、流量、開機、⋯；連不上的整列寫原因 */
+/* 主機總表的一列：名稱、三條進度條、網路、流量、開機、⋯；點一列進那台專頁 */
 function hostRowD(s, on){
   const k = esc(keyOf(s)), lv = s.online ? lvOf(s) : "bad", bar = p => `<span class="hc">${wave(p)}<b class="num ${tier(p)}">${num(p)}%</b></span>`;
   /* 有狀況的：名字下面直接放那件事的小膠囊（處理器、記憶體、磁碟那格已經變紅的不再放），不用點進去才知道 */
@@ -801,7 +802,7 @@ function hostRowD(s, on){
   return `<div class="htr ${lv}${on ? " on" : ""}" data-dsel="${k}" data-key="hr:${k}">${nm}${bar(s.cpu)}${bar(s.mem.pct)}${bar(d0.pct)}
     <span class="hc num hnet">${I("down")}<span>${rate(s.net.rx)}</span>${I("up")}<span>${rate(s.net.tx)}</span></span>${s.traffic && s.traffic.limit ? `<span class="hc htf" title="${size(s.traffic.used)}／${size(s.traffic.limit)}">${wave(s.traffic.pct)}<b class="num ${tier(s.traffic.pct)}">${size(s.traffic.used)}</b></span>` : `<span class="hc htf"><span class="wv0"></span><b class="num nl">${s.traffic ? size(s.traffic.used) : "—"}</b></span>`}<span class="hc num">${up(s.uptime)}</span><span class="hc">${moreBtn(s)}</span></div>`;
 }
-/* 小折線（不畫底、不畫格線）：左邊欄每台的處理器、總覽那排 */
+/* 小折線（不畫底、不畫格線）：總覽摘要卡 */
 function spark(a, cls, n = 40, H = 20){
   a = (a || []).slice(-n).map(v => +v || 0);
   if (a.length < 2) return `<svg class="${cls}" viewBox="0 0 100 ${H}"></svg>`;
@@ -816,7 +817,7 @@ const upAvg = a => { const v = (a || []).filter(x => x != null); return v.length
 const upPct = v => v == null ? "—" : v >= 99.995 ? "100%" : (Math.floor(v * 100) / 100).toFixed(2) + "%";
 /* 加總好幾台的一串數字：照最後對齊（有的主機資料比較短） */
 const sumTail = (arrs, n) => Array.from({length: n}, (_, i) => arrs.reduce((t, a) => t + (+(a || [])[a.length - n + i] || 0), 0));
-/* 總覽最上面一排：所有主機加起來 */
+/* 總覽最上面一排：4 格重點摘要（更寬敞、不擠） */
 function sumRow(list){
   const on = list.filter(s => s.online), N = 40;
   const ups = Array.from({length: 30}, (_, i) => { const v = list.map(s => (s.up30 || [])[i]).filter(x => x != null); return v.length ? Math.min(...v) : null; });
@@ -828,19 +829,15 @@ function sumRow(list){
   let acc = 0; const cum = Object.values(days).map(v => acc += v);
   const cpu = on.length ? on.reduce((t, s) => t + s.cpu, 0) / on.length : 0, top = on.slice().sort((a, b) => b.cpu - a.cpu)[0];
   const cpuh = sumTail(on.map(s => s.hist && s.hist.cpu || []), N).map(v => v / (on.length || 1));
-  const now = Date.now() / 1000, ev = allEvents(list).filter(e => now - e.t < 86400);
-  const hrs = Array.from({length: 24}, (_, i) => { const es = ev.filter(e => Math.floor((now - e.t) / 3600) === 23 - i), k = es.map(e => e.kind);
-    return k.includes("bad") ? "b" : k.includes("warn") ? "w" : es.length ? "ok" : "na"; });
   const cell = (k, label, v, sub, viz) => `<div class="sumc" data-key="sm:${k}"><span class="smk">${label}</span><span class="smv">${v}</span><span class="sms">${sub}</span>${viz}</div>`;
   return `<div class="sums" data-key="sums">`
-    + cell("h", "主機", `${num(on.length)}<small>／${list.length} 台在線</small>`, ua == null ? "上線紀錄從今天開始" : `30 天上線率 ${upPct(ua)}`, upStrip(ups))
-    + cell("n", "全部網速", `<small class="dn">${I("down")}</small><b data-x>${rate(rx)}</b>`, `<span class="smu">${I("up")}<span data-x>${rate(tx)}</span></span>`, spark(net, "smg rx", N, 28))
-    + cell("t", "本月總流量", `<b data-x>${size(used)}</b>`, pj ? `月底預估 ${size(pj)}` : `${tr.length} 台加總`, spark(cum, "smg tx", 31, 28))
-    + cell("c", "平均處理器", `${num(cpu)}<small>%</small>`, top && on.length > 1 ? `最高 ${esc(top.name)} ${num(top.cpu)}%` : "", spark(cpuh, "smg cpu", N, 28))
-    + cell("e", "最近 24 小時", `${num(ev.length)}<small>件事</small>`, ev.length ? `最近：${esc(ago(ev[0].t))}` : "", `<span class="ups hrs">${hrs.map((k, i) => `<i class="${k}" title="${23 - i ? `${23 - i} 小時前` : "這一小時"}"></i>`).join("")}</span>`)
+    + cell("h", "在線主機", `${num(on.length)}<small>／${list.length} 台</small>`, ua == null ? "上線紀錄從今天開始" : `30 天上線率 ${upPct(ua)}`, upStrip(ups))
+    + cell("n", "即時總網速", `<small class="dn">${I("down")}</small><b data-x>${rate(rx)}</b>`, `<span class="smu">${I("up")}<span data-x>${rate(tx)}</span></span>`, spark(net, "smg rx", N, 26))
+    + cell("t", "本月總流量", `<b data-x>${size(used)}</b>`, pj ? `月底預估 ${size(pj)}` : `${tr.length} 台加總`, spark(cum, "smg tx", 31, 26))
+    + cell("c", "平均處理器", `${num(cpu)}<small>%</small>`, top && on.length > 1 ? `最高 ${esc(top.name)} ${num(top.cpu)}%` : "", spark(cpuh, "smg cpu", N, 26))
     + `</div>`;
 }
-/* 右邊欄：每台 30 天上線紀錄、本月流量排行 */
+/* 上線紀錄、本月流量排行 */
 function upCard(list){
   if (!list.some(s => s.up30)) return "";
   return `<div class="lbl" data-key="lup">上線紀錄<small>30 天</small></div><div class="cc upc" data-key="upc"><div class="upl" data-key="upl" data-keyed>${list.map(s => { const a = upAvg(s.up30);
@@ -853,13 +850,17 @@ function trRank(list){
     return `<div class="upr" data-key="t:${esc(keyOf(s))}"><b>${esc(s.name)}</b><span class="tkb${t.limit ? " lim " + tier(t.pct) : ""}"><i style="--k:${Math.min(1, Math.max(.02, p / 100)).toFixed(3)}"></i></span><span class="num">${size(t.used)}</span></div>`; }).join("")}</div></div>`;
 }
 function homeDesk(list, time){
-  const ev = groupEv(allEvents(list)).slice(0, 8), sel = deskSel(list), g = greet();
-  const lvs = list.map(s => s.online ? lvOf(s) : "bad"), lv = LOST || lvs.includes("bad") ? "bad" : lvs.includes("warn") || issuesOf(list).length ? "warn" : "ok";   // 跟標題那句話一致
-  const bar = dbar("總覽", `<span class="spill ${lv}" data-x>${I({ok:"ok", warn:"alert", bad:"warn"}[lv])}${esc(headline(list))}</span><span class="dq">${esc(g.hi)}${g.quote ? `・${esc(g.quote)}` : ""}</span><span class="sp"></span>${addHostBtn("ubtn ghost dadd")}`);
-  const tab = list.length > 1 ? `<div class="htab" data-key="htab"><div class="hth"><span>主機</span><span>處理器</span><span>記憶體</span><span>磁碟</span><span>網路</span><span${list.some(s => s.traffic && s.traffic.limit) ? "" : ` class="hr"`}>本月流量</span><span>開機</span><span></span></div>
-    <div class="htb" data-key="htb" data-keyed>${list.map(s => hostRowD(s, s === sel)).join("")}</div></div>` : "";
-  return `<div class="dhome" data-key="dh">${bar}${sumRow(list)}${tab}<div class="dgrid" data-key="dg"><section class="hp ${sel ? lvOf(sel) : ""}" data-key="${sel ? esc(keyOf(sel)) : "none"}" data-sw>${sel ? hostBody(sel, false) : `<div class="calm">還沒有主機</div>`}</section>
-    <aside class="aside" data-key="as">${g.wx ? `<div class="wxw">${g.wx}</div>` : ""}${tgHint(list)}${upCard(list)}${trRank(list)}<div class="lbl" data-key="lev">最近發生${ev.length ? `<button data-tab="log">全部紀錄</button>` : ""}</div>${evList(ev, list.length > 1)}</aside></div></div>`;
+  const sel = deskSel(list);
+  if (sel) {
+    const crumb = list.length > 1
+      ? `<div class="dcrumb" data-key="dcrumb"><button class="backbtn" data-dhome>${I("back")}<span>總覽</span></button><span class="csep">/</span><span class="cname">${esc(sel.name)}</span></div>`
+      : "";
+    return `<div class="dhome dhost" data-key="dh:h:${esc(keyOf(sel))}" data-sw>${crumb}<section class="hp ${lvOf(sel)}" data-key="hp:${esc(keyOf(sel))}">${hostBody(sel, false)}</section></div>`;
+  }
+  const ev = groupEv(allEvents(list)).slice(0, 6);
+  const tab = `<div class="lbl" data-key="lht">主機清單<small>點一下看詳細資訊</small></div><div class="htab" data-key="htab"><div class="hth"><span>主機</span><span>處理器</span><span>記憶體</span><span>磁碟</span><span>網路</span><span${list.some(s => s.traffic && s.traffic.limit) ? "" : ` class="hr"`}>本月流量</span><span>開機</span><span></span></div>
+    <div class="htb" data-key="htb" data-keyed>${list.map(s => hostRowD(s, false)).join("")}</div></div>`;
+  return `<div class="dhome" data-key="dh:all" data-sw>${dbar("總覽")}${sumRow(list)}${tab}<div class="dover" data-key="dover"><div class="dcol">${upCard(list)}${trRank(list)}</div><div class="dcol">${tgHint(list)}<div class="lbl" data-key="lev">最近發生${ev.length ? `<button data-tab="log">全部紀錄</button>` : ""}</div>${evList(ev, list.length > 1)}</div></div></div>`;
 }
 /* 那台主機的整頁（從卡片的位置展開；電腦上左邊的分頁列留著） */
 function detail(s){
@@ -920,7 +921,7 @@ function springAt(t){
   return 1;
 }
 function slideSel(change){
-  const z = ZM(), was = canAnim() ? [...document.querySelectorAll(".pane[data-slide],.dock[data-slide]")].map(b => {
+  const z = ZM(), was = canAnim() ? [...document.querySelectorAll(".pane[data-slide]")].map(b => {
     const g = b.querySelector(":scope>.slide"), on = selOf(b);
     return [b.dataset.key, g ? g._now : on && boxIn(b, on, z)];
   }) : [];
@@ -1594,12 +1595,6 @@ const NUM = /-?\d+(?:\.\d+)?/g;
 /* 不在畫面上的曲線就不做變形動畫，直接換成新的（手機上兩台主機的曲線常常有一半在畫面外） */
 const SEEN = new WeakMap();
 const seenIO = window.IntersectionObserver ? new IntersectionObserver(es => es.forEach(e => SEEN.set(e.target, e.isIntersecting))) : null;
-/* 波浪條捲出畫面就停（主機多時首頁幾十條，看不到的不用一直動，手機比較省電）；新長出來的自動加進來、拿掉的不再看 */
-const waveIO = window.IntersectionObserver ? new IntersectionObserver(es => es.forEach(e => e.target.classList.toggle("zz", !e.isIntersecting)), {rootMargin:"60px"}) : null;
-if (waveIO) new MutationObserver(ms => { for (const m of ms) {
-  for (const n of m.addedNodes) if (n.nodeType === 1) { if (n.classList.contains("wv")) waveIO.observe(n); else n.querySelectorAll(".wv").forEach(w => waveIO.observe(w)); }
-  for (const n of m.removedNodes) if (n.nodeType === 1) { if (n.classList.contains("wv")) waveIO.unobserve(n); else n.querySelectorAll(".wv").forEach(w => waveIO.unobserve(w)); }
-} }).observe(document.documentElement, {childList:true, subtree:true});
 /* 主機整頁打開時，後面那一頁看不到：不用動畫，直接換成新的值 */
 const behind = el => !!DET && !el.closest(".det");
 function onScreen(el){
@@ -1664,14 +1659,14 @@ function tween(el, from, to, d){
   };
   el._raf = requestAnimationFrame(stepf);
 }
-/* 共用動畫規則（跟 CSS 的 --t-*、--ease 一致） */
-const T = {fast:200, mid:380, slow:620, long:900, spf:330, sp:380, sps:530};
+/* 共用動畫規則（正統 Google Material 3 俐落節奏，跟 CSS 的 --t-*、--ease 一致） */
+const T = {fast:150, mid:240, slow:360, long:500, spf:240, sp:280, sps:380};
 /* 文字大小是用 zoom 放大縮小的：量到的位置是螢幕上的，要除回去才能拿來定位 */
 const ZM = () => parseFloat(getComputedStyle(document.body).zoom) || 1;
 const EASE = "cubic-bezier(.2,0,0,1)", EXIT = "cubic-bezier(.3,0,.8,.15)", LIN = CSS.supports("transition-timing-function", "linear(0,1)");
-/* 彈簧（Material 3 Expressive 官方數值，跟 CSS 的 --sp-fast／--sp／--sp-slow 一樣）：時間用 T.spf／T.sp／T.sps */
-const SPRING_F = LIN ? "linear(0,.022 2%,.088 5%,.221 8%,.658 18%,.821 22%,.94 26%,1.024 31%,1.075 36%,1.093 41%,1.069 51%,1.006 68%,.991 84%,1)" : "cubic-bezier(.34,1.4,.64,1)",
-      SPRING = LIN ? "linear(0,.022 3%,.093 7%,.259 12%,.554 22%,.713 28%,.83 35%,.917 42%,.976 50%,1.009 61%,1.011 83%,1)" : "cubic-bezier(.3,1.1,.55,1)";
+/* 克制版 Google 曲線（高阻尼幾乎零彈跳，不再橡皮糖亂晃）：時間用 T.spf／T.sp／T.sps */
+const SPRING_F = "cubic-bezier(.2,0,0,1)",
+      SPRING = "cubic-bezier(.05,.7,.1,1)";
 const RMQ = matchMedia("(prefers-reduced-motion: reduce)"), canAnim = () => PREF.motion && !RMQ.matches;   // 同一個查詢留著用（每次新建很慢，動畫前都會問）
 /* 讓元素平順地離開：先淡出、收起高度，再移除 */
 const BLOCK = ".alert,.alerts,.ev,.day,.calm,.empty,.foot,.offline,.fcs,.cc,.grp,.lbl,.group,.tiles,.mrows,.cfoot";
@@ -1680,7 +1675,7 @@ function flipSiblings(parent, change){
   const z = ZM(), kids = [...parent.children].filter(c => !c._leaving), r0 = kids.map(c => c.getBoundingClientRect());
   change();
   kids.forEach((c, i) => { if (!c.isConnected) return; const r = c.getBoundingClientRect(), dx = (r0[i].left - r.left) / z, dy = (r0[i].top - r.top) / z;
-    if (Math.abs(dx) > 1 || Math.abs(dy) > 1) c.animate([{transform:`translate(${dx}px,${dy}px)`}, {transform:"none"}], {duration:T.spf, easing:SPRING_F, id:"ui"}); });
+    if (Math.abs(dx) > 1 || Math.abs(dy) > 1) c.animate([{transform:`translate(${dx}px,${dy}px)`}, {transform:"none"}], {duration:T.mid, easing:EASE, id:"ui"}); });
 }
 const gapOf = el => parseFloat(getComputedStyle(el).rowGap) || 0;
 /* 前後有沒有「真正留著」的鄰居，決定要收哪一邊的間距 */
@@ -1737,29 +1732,20 @@ function flipWidth(el, change){
 }
 /* 拿出來又放回去的元素：瀏覽器會把裡面的進場動畫從頭重播（卡片會突然不見），全部停在結尾 */
 const still = (el, keep) => el.getAnimations({subtree:true}).forEach(n => { if (n === keep) return; if (!n.animationName) n.cancel(); else if (isFinite(n.effect.getComputedTiming().endTime)) n.finish(); });
-/* 換分頁：舊的那頁留在原地很快淡出（不佔位置），新的那頁接著淡入（CSS 的 through） */
+/* 換分頁：Google Material Fade Through（電腦）與 Shared X-Axis 方向性過場（手機） */
 function through(a, b){
   const par = a.offsetParent;
   if (!canAnim() || !par) return a.replaceWith(b);
-  if (a._fading && a._fading.playState === "finished") return a.replaceWith(b);   // 按分頁時舊的那頁已經淡完：直接拿掉（不用再量位置、停它的動畫，新的那頁早一點出來）
   const z = ZM(), r = a.getBoundingClientRect(), R = par.getBoundingClientRect();
   a.replaceWith(b);
   a._leaving = 1;
   Object.assign(a.style, {position:"absolute", left:(r.left - R.left) / z - par.clientLeft + "px", top:(r.top - R.top) / z - par.clientTop + "px", width:r.width / z + "px",
     height:Math.min(r.height / z, innerHeight / z * 2) + "px", overflow:"hidden", margin:"0", pointerEvents:"none", animation:"none"});
-  const f = a._fading;
-  b.after(a); still(a, f);
-  if (f) {                                       // 按分頁時已經先開始淡出：接著淡完就好，新的那頁等它淡完再出來
-    const left = Math.max(0, T.fast / 2 - (f.currentTime || 0));
-    f.finished.catch(() => {}).then(() => a.remove());
-    b.style.animationDelay = left + "ms";
-    return;
-  }
-  a.animate([{opacity:1}, {opacity:0}], {duration:T.fast / 2, easing:EXIT, fill:"forwards", id:"ui"}).onfinish = () => a.remove();
-  b.style.animationDelay = T.fast / 2 + "ms";
+  b.after(a); still(a);
+  const outTf = !DESK.matches && TABDIR ? `translateX(${-TABDIR * 16}px)` : "none";
+  a.animate([{opacity:1, transform:"none"}, {opacity:0, transform:outTf}], {duration:Math.round(T.fast * .6), easing:EXIT, fill:"forwards", id:"ui"}).onfinish = () => a.remove();
 }
-/* 換成另一台主機的內容（data-sw）：舊的留在原地很快淡出，新的同時淡入浮上來；
-   高度每一格都跟著新內容實際的高度走（裡面讀到狀態又長高也一起跟上，不會最後才跳一下） */
+/* 切換內容區塊（data-sw：總覽 ↔ 單台主機、換主機、換設定分類）：Google 俐落淡換，不彈跳也不縮放 */
 function swapIn(a, b){
   if (!canAnim() || !a.isConnected) return a.replaceWith(b);
   const h0 = a.offsetHeight, par = a.offsetParent, x = a.offsetLeft, y = a.offsetTop, w = a.offsetWidth;
@@ -1768,17 +1754,17 @@ function swapIn(a, b){
     a._leaving = 1;
     Object.assign(a.style, {position:"absolute", left:x + "px", top:y + "px", width:w + "px", height:h0 + "px", margin:"0", pointerEvents:"none", overflow:"hidden", zIndex:1});
     b.after(a); still(a);
-    a.animate([{opacity:1}, {opacity:0}], {duration:T.fast / 2, easing:EXIT, fill:"forwards", id:"ui"}).onfinish = () => a.remove();
+    a.animate([{opacity:1}, {opacity:0}], {duration:Math.round(T.fast * .6), easing:EXIT, fill:"forwards", id:"ui"}).onfinish = () => a.remove();
   }
-  b.animate([{opacity:0, transform:"translateY(8px) scale(.985)"}, {opacity:1, transform:"none"}], {duration:T.mid, easing:EASE, fill:"backwards", id:"ui"});   // 跟舊的淡出同時開始（以前等舊的淡完才淡入，中間有一下兩邊都看不到，像閃一下）
-  const own = [b.style.height, b.style.overflow];         // 自己本來就有的高度（例如曲線圖「讀取中」那格）要留著
+  b.animate([{opacity:0, transform:"translateY(4px)"}, {opacity:1, transform:"none"}], {duration:T.mid, easing:EASE, fill:"backwards", id:"ui"});
+  const own = [b.style.height, b.style.overflow];
   b.style.height = h0 + "px"; b.style.overflow = "hidden";
   const t0 = performance.now(), dur = T.mid;
   const step = now => {
     if (!b.isConnected) return;
     const p = Math.min(1, (now - t0) / dur), e = 1 - Math.pow(1 - p, 4);
     if (p >= 1) { [b.style.height, b.style.overflow] = own; return; }
-    b.style.height = own[0]; const h1 = b.offsetHeight;      // 新內容現在真正的高度
+    b.style.height = own[0]; const h1 = b.offsetHeight;
     b.style.height = h0 + (h1 - h0) * e + "px";
     requestAnimationFrame(step);
   };
@@ -2060,25 +2046,22 @@ function toast(msg, type="ok"){
 let TAB = ["home", "tools", "log", "set"].includes(sstore("vs-tab")) ? sstore("vs-tab") : "home";
 function setTab(k){
   closeMenu(); hideTip();
-  if (DET) {                                     // 電腦上開著主機整頁時按分頁列：同一頁就收起來，別頁直接換過去
+  if (DET) {                                     // 手機開著主機整頁時按分頁列：同一頁就收起來，別頁直接換過去
     if (TAB === k) return closeDet();
     DET = ""; DETX = false; showBack(); document.documentElement.classList.remove("lock");
     if (history.state && history.state.det) history.replaceState(null, "");
   }
-  if (TAB === k) { if (scrollY > 0) scrollTo({top:0, behavior: canAnim() ? "smooth" : "auto"}); return; }
+  if (TAB === k) {
+    if (k === "home" && DESK.matches && DSEL && LIST.length > 1) { DSEL = ""; sstore("vs-dsel", ""); scrollTo(0, 0); return render(LIST); }
+    if (scrollY > 0) scrollTo({top:0, behavior: canAnim() ? "smooth" : "auto"});
+    return;
+  }
+  const ks = TABS.map(x => x[0]);
+  TABDIR = Math.sign(ks.indexOf(k) - ks.indexOf(TAB));
+  if (k === "home" && DESK.matches && LIST.length > 1) { DSEL = ""; sstore("vs-dsel", ""); }
   TAB = k; sstore("vs-tab", k);
   scrollTo(0, 0);
-  const v = view();
-  if (!canAnim() || !v) return slideSel(() => render(LIST));
-  // 按下去只做便宜的事（分頁底色開始滑、舊的那頁淡出），淡完才畫新的那頁：主機多也不會先頓一下才動，淡出也不會被拖慢
-  slideSel(() => document.querySelectorAll(".dock [data-tab], .rail [data-tab]").forEach(b => b.classList.toggle("on", b.dataset.tab === k)));
-  if (!v._fading) v._fading = v.animate([{opacity:1}, {opacity:0}], {duration:T.fast / 2, easing:EXIT, fill:"forwards", id:"ui"});
-  const id = ++TABID;
-  v._fading.finished.catch(() => {}).then(() => {
-    if (id !== TABID || TAB !== k) return;
-    render(LIST);
-    if (v.isConnected && !v._leaving && v._fading) { v._fading.cancel(); v._fading = null; v.animate([{opacity:0}, {opacity:1}], {duration:T.mid, easing:EASE, id:"ui"}); }   // 很快又按回原本那頁：同一頁留著，淡出要拿掉（不然整頁一直是透明的）
-  });
+  render(LIST);
 }
 let TABID = 0;
 /* 工具、設定頁上「讀取中…」的狀態：換到那一頁時讀一次（之後自動更新不會蓋掉） */
@@ -2230,7 +2213,7 @@ function moreMenu(btn, s){
     + (s.node ? it("data-rmhost", "trash", "移除主機", "bad") : "");
   document.body.appendChild(m);
   placeMenu(m, btn, r => r.left - 6);           // 從 ⋯ 往右下展開，不會蓋住主機名稱
-  if (canAnim()) m.animate([{opacity:0, transform:"scale(.85,.4)"}, {opacity:1, transform:"none"}], {duration:T.spf, easing:SPRING_F});   // 從 ⋯ 的位置往外長出來
+  if (canAnim()) m.animate([{opacity:0, transform:"scale(.96) translateY(-4px)"}, {opacity:1, transform:"none"}], {duration:T.fast, easing:EASE});
   window._menu = m; histMark(m);
   setTimeout(() => m.addEventListener("click", () => closeMenu()), 0);
 }
@@ -2242,14 +2225,14 @@ function logHostMenu(btn){
   m.innerHTML = it("", "全部主機") + LIST.map(x => it(keyOf(x), esc(x.name))).join("");
   document.body.appendChild(m);
   placeMenu(m, btn, r => r.right - m.offsetWidth);
-  if (canAnim()) m.animate([{opacity:0, transform:"scale(.85,.4)"}, {opacity:1, transform:"none"}], {duration:T.spf, easing:SPRING_F});
+  if (canAnim()) m.animate([{opacity:0, transform:"scale(.96) translateY(-4px)"}, {opacity:1, transform:"none"}], {duration:T.fast, easing:EASE});
   window._menu = m; histMark(m);
   setTimeout(() => m.addEventListener("click", () => closeMenu()), 0);
 }
 function closeMenu(){
   const m = window._menu; if (!m) return; window._menu = null;
   if (!canAnim()) { m.remove(); return histDrop(m); }
-  m.animate([{opacity:1}, {opacity:0, transform:"scale(.95,.8)"}], {duration:T.fast, easing:EXIT, fill:"forwards"}).finished.then(() => { m.remove(); histDrop(m); });
+  m.animate([{opacity:1}, {opacity:0, transform:"scale(.98)"}], {duration:Math.round(T.fast * .7), easing:EXIT, fill:"forwards"}).finished.then(() => { m.remove(); histDrop(m); });
 }
 addEventListener("scroll", e => { if (!(window._menu && e.target instanceof Node && window._menu.contains(e.target))) closeMenu(); }, {passive:true, capture:true});   // 選單自己裡面捲動不關
 addEventListener("keydown", e => { if (e.key === "Escape") closeMenu(); });
@@ -3836,8 +3819,17 @@ async function pageClick(e){
     smooth(() => { applyPrefs(); if (LIST.length) render(LIST); });
     restart(); return toast("已恢復預設值");
   }
+  if (t.closest("[data-dhome]")) {
+    DSEL = ""; sstore("vs-dsel", "");
+    if (TAB !== "home") return setTab("home");
+    scrollTo(0, 0); return render(LIST);
+  }
   const ds = t.closest("[data-dsel]");
-  if (ds && !t.closest("[data-more]")) { DSEL = ds.dataset.dsel; store("vs-dsel", DSEL); if (TAB !== "home") return setTab("home"); return render(LIST); }
+  if (ds && !t.closest("[data-more]")) {
+    DSEL = ds.dataset.dsel; sstore("vs-dsel", DSEL);
+    if (TAB !== "home") { TAB = "home"; sstore("vs-tab", "home"); }
+    scrollTo(0, 0); return render(LIST);
+  }
   const op = t.closest("[data-open]");
   if (op) return openDet(op.dataset.open);
 }
@@ -4109,19 +4101,6 @@ async function refreshNow(btn){
     if (g === gen) hideUp();
   }, {passive:true});
 })();
-/* 瀏覽器裡的手機分頁列：往下捲藏起來、往上捲就出現 */
-(function(){
-  let y = scrollY, acc = 0;
-  addEventListener("scroll", () => {
-    const d = document.querySelector(".dock"), now = scrollY, dy = now - y; y = now;
-    if (!d || DESK.matches || document.documentElement.classList.contains("full")) return;
-    acc = Math.sign(dy) === Math.sign(acc) ? acc + dy : dy;
-    const hid = d.classList.contains("hid");
-    if (now < d.offsetHeight) { if (hid) d.classList.remove("hid"); }
-    else if (acc > 24 && !hid) d.classList.add("hid");
-    else if (acc < -12 && hid) d.classList.remove("hid");
-  }, {passive:true});
-})();
 /* 手機：畫面中間左右滑，換到隔壁的分頁（最左、最右邊緣留給瀏覽器的上一頁；圖表、會左右捲的那排、輸入框不算） */
 (function(){
   let x0 = null, y0 = 0, t0 = 0;
@@ -4143,33 +4122,33 @@ async function refreshNow(btn){
   }, {passive:true});
   addEventListener("touchcancel", () => { x0 = null; }, {passive:true});
 })();
-/* 按下去的水波紋：手指一碰就從那個點擴散；手機上等一下下，確定不是要捲動才出現 */
+/* 按下去的水波紋（Material Ripple）：電腦只用淡雅水波紋不縮放變形；手機才帶輕微觸控回饋 */
 (function(){
-  const SEL = ".hcard,.tb,.li:not(div),.fapc,.ubtn,.iconbtn,.icbtn,.hmenu button,.seg button,.rng button,.fchip,.addhost,.trf,.chats button,.blob,.sw button";
+  const SEL = ".hcard,.tb,.li:not(div),.fapc,.ubtn,.iconbtn,.icbtn,.hmenu button,.seg button,.rng button,.fchip,.addhost,.trf,.chats button,.sw button,.rb,.rh,.backbtn";
   addEventListener("pointerdown", e => {
     if (e.button || !canAnim()) return;
-    const rb = e.target.closest(".rb"), el = rb ? rb.querySelector(".ri") : e.target.closest(SEL);
+    const el = e.target.closest(SEL);
     if (!el || el.disabled) return;
+    const touch = e.pointerType !== "mouse";
     let box = null, up = false, t0 = 0;
-    const pr = rb || el;                          // 按下去的樣子（縮一點）至少留 0.16 秒，輕點也看得到
-    const press = () => { pr.classList.add("prs"); t0 = performance.now(); };
-    const release = now => setTimeout(() => pr.classList.remove("prs"), now ? 0 : Math.max(0, 160 - (performance.now() - t0)));
+    const press = () => { if (touch) el.classList.add("prs"); t0 = performance.now(); };
+    const release = now => { if (touch) setTimeout(() => el.classList.remove("prs"), now ? 0 : Math.max(0, 120 - (performance.now() - t0))); };
     const start = () => {
       press();
-      if (el.classList.contains("blob") || el.closest(".sw")) return;   // 圓形色塊不放水波紋
-      const r = el.getBoundingClientRect(), w = el.offsetWidth, h = el.offsetHeight;   // 按下去會縮一點：換回原本的大小來算
+      if (el.closest(".sw") || el.classList.contains("tb")) return;   // 圓形色塊與底部導覽列不疊大水波紋
+      const r = el.getBoundingClientRect(), w = el.offsetWidth, h = el.offsetHeight;
       const x = (e.clientX - r.left) * w / (r.width || 1), y = (e.clientY - r.top) * h / (r.height || 1);
       const R = Math.hypot(Math.max(x, w - x), Math.max(y, h - y));
-      box = document.createElement("span"); box.className = "rip"; box._leaving = 1;   // 畫面更新時不要把它當成內容
+      box = document.createElement("span"); box.className = "rip"; box._leaving = 1;
       const dot = document.createElement("i"); dot.style.cssText = `left:${x - R}px;top:${y - R}px;width:${2 * R}px;height:${2 * R}px`;
       box.appendChild(dot); el.appendChild(box);
-      dot.animate([{transform:"scale(.15)"}, {transform:"scale(1)"}], {duration:T.slow, easing:EASE, fill:"forwards"});
+      dot.animate([{transform:"scale(.2)"}, {transform:"scale(1)"}], {duration:T.slow, easing:EASE, fill:"forwards"});
     };
     const fade = () => box && box.animate([{opacity:1}, {opacity:0}], {duration:T.mid, delay:T.fast / 2, easing:EASE, fill:"forwards"}).finished.then(() => box.remove(), () => box.remove());
-    const t = e.pointerType === "mouse" ? (start(), 0) : setTimeout(() => { if (!up) start(); }, 70);
+    const t = !touch ? (start(), 0) : setTimeout(() => { if (!up) start(); }, 70);
     const end = ev => {
       up = true; removeEventListener("pointerup", end); removeEventListener("pointercancel", end);
-      if (ev.type === "pointercancel") { clearTimeout(t); release(true); if (!box) return; }   // 其實是在捲動：不出現
+      if (ev.type === "pointercancel") { clearTimeout(t); release(true); if (!box) return; }
       else { if (!t0) { clearTimeout(t); start(); } release(false); }
       fade();
     };
