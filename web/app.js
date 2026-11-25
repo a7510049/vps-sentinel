@@ -1730,26 +1730,33 @@ function flipWidth(el, change){
 }
 /* 拿出來又放回去的元素：瀏覽器會把裡面的進場動畫從頭重播（卡片會突然不見），全部停在結尾 */
 const still = (el, keep) => el.getAnimations({subtree:true}).forEach(n => { if (n === keep) return; if (!n.animationName) n.cancel(); else if (isFinite(n.effect.getComputedTiming().endTime)) n.finish(); });
-/* 換分頁：Google Material 3 Fade Through（電腦）與 Shared X-Axis 方向滑動（手機），保留捲動畫面順暢滑走不跳回頂端也不撐高頁面 */
+/* 換分頁：電腦版 Material 3 Fade Through；手機版整頁並排滑動（兩頁永不重疊、不破圖，並接續手指橫滑位移） */
+let SWIPEX = 0;
 function through(a, b){
   const par = a.offsetParent;
   if (!canAnim() || !par) return a.replaceWith(b);
-  const z = ZM(), r = a.getBoundingClientRect(), R = par.getBoundingClientRect(), sy = Math.max(0, scrollY) / z;
+  const z = ZM(), slide = !DESK.matches && TABDIR;
+  const tf = slide ? getComputedStyle(a).transform : "none", tfX = tf && tf !== "none" ? new DOMMatrix(tf).e : 0;
+  const curX = slide ? (SWIPEX || tfX) : 0;
+  par.querySelectorAll(":scope>.view").forEach(v => { if (v._leaving) v.remove(); });
+  const r = a.getBoundingClientRect(), R = par.getBoundingClientRect(), sy = Math.max(0, scrollY) / z;
   const top = (r.top - R.top) / z - par.clientTop, h = Math.max(0, Math.min(r.height / z, sy + innerHeight / z - top));
-  const slide = !DESK.matches && TABDIR;
-  if (!slide) b.style.animationDelay = Math.round(T.fast * .3) + "ms";
+  if (!slide) b.style.animationDelay = Math.round(T.fast * .55) + "ms";
   a.replaceWith(b);
   a._leaving = 1;
-  Object.assign(a.style, {position:"absolute", left:(r.left - R.left) / z - par.clientLeft + "px", top:(top - sy) + "px", width:r.width / z + "px",
+  Object.assign(a.style, {position:"absolute", left:(r.left - R.left) / z - par.clientLeft - tfX + "px", top:(top - sy) + "px", width:r.width / z + "px",
     height:h + "px", overflow:"hidden", margin:"0", pointerEvents:"none", animation:"none", clipPath:sy > 0 ? `inset(${sy}px 0 0 0)` : ""});
   b.after(a); still(a);
   if (slide) {
-    a.animate([{opacity:1, transform:"none"}, {opacity:0, transform:`translateX(${-TABDIR * 24}px)`}], {duration:T.fast, easing:EXIT, fill:"forwards", id:"ui"}).onfinish = () => a.remove();
+    const stride = r.width / z + 32, dur = Math.round(T.mid * Math.max(.55, 1 - Math.abs(curX) / stride));
+    const opt = {duration:dur, easing:EASE, id:"ui"};
+    a.animate([{transform:`translateX(${curX}px)`}, {transform:`translateX(${-TABDIR * stride}px)`}], {...opt, fill:"forwards"}).onfinish = () => a.remove();
+    b.animate([{transform:`translateX(${curX + TABDIR * stride}px)`}, {transform:"none"}], opt);
   } else {
     a.animate([{opacity:1}, {opacity:0}], {duration:Math.round(T.fast * .6), easing:EXIT, fill:"forwards", id:"ui"}).onfinish = () => a.remove();
   }
 }
-/* 切換內容區塊（data-sw：總覽 ↔ 單台主機、換主機、換設定分類）：平順減速過場＋高度銜接，不整頁縮放抖動、不每格強迫重排 */
+/* 切換內容區塊（data-sw：總覽 ↔ 單台主機、換主機、換設定分類）：先淡出再淡入不疊字、高度平順銜接 */
 function swapIn(a, b){
   if (!canAnim() || !a.isConnected) return a.replaceWith(b);
   const h0 = a.offsetHeight, par = a.offsetParent, x = a.offsetLeft, y = a.offsetTop, w = a.offsetWidth;
@@ -1761,10 +1768,10 @@ function swapIn(a, b){
     Object.assign(a.style, {position:"absolute", left:x + "px", top:y + "px", width:w + "px", height:h0 + "px", margin:"0", pointerEvents:"none", overflow:"hidden", zIndex:1});
     b.after(a); still(a);
     const outTf = into ? "translateY(-6px)" : back ? "translateY(6px)" : "translateY(-4px)";
-    a.animate([{opacity:1, transform:"none"}, {opacity:0, transform:outTf}], {duration:Math.round(T.fast * .65), easing:EXIT, fill:"forwards", id:"ui"}).onfinish = () => a.remove();
+    a.animate([{opacity:1, transform:"none"}, {opacity:0, transform:outTf}], {duration:Math.round(T.fast * .6), easing:EXIT, fill:"forwards", id:"ui"}).onfinish = () => a.remove();
   }
   const inTf = into ? "translateY(12px)" : back ? "translateY(-8px)" : "translateY(8px)";
-  b.animate([{opacity:0, transform:inTf}, {opacity:1, transform:"none"}], {duration:T.mid, easing:DEC, fill:"backwards", id:"ui"});
+  b.animate([{opacity:0, transform:inTf}, {opacity:1, transform:"none"}], {duration:T.mid, delay:Math.round(T.fast * .45), easing:DEC, fill:"backwards", id:"ui"});
   const hEnd = b.offsetHeight;
   if (Math.abs(hEnd - h0) < 2) return;
   b.animate([{height:h0 + "px", overflow:"hidden"}, {height:hEnd + "px", overflow:"hidden"}], {duration:T.mid, easing:DEC, id:"ui"});
@@ -4144,26 +4151,53 @@ if (!CSS.supports("(animation-timeline:view()) and (timeline-scope:--a)")) {
     const top = s.querySelector(".dtop"); if (top) top.classList.toggle("stuck", s.scrollTop > 56);
   }, {passive:true, capture:true});
 }
-/* 手機：畫面中間左右滑，換到隔壁的分頁（最左、最右邊緣留給瀏覽器的上一頁；圖表、會左右捲的那排、輸入框不算） */
+/* 手機：畫面中間左右滑，整頁跟手滑動並無縫接續換分頁（最左、最右邊緣留給瀏覽器的上一頁；圖表、會左右捲的那排、輸入框不算） */
 (function(){
-  let x0 = null, y0 = 0, t0 = 0;
+  let x0 = null, y0 = 0, t0 = 0, dx = 0, lock = 0, v = null;
+  const reset = anim => {
+    const el = v, cur = dx; x0 = null; dx = 0; lock = 0; v = null;
+    if (!el) return;
+    el.style.transform = "";
+    if (anim && canAnim() && Math.abs(cur) > 1) el.animate([{transform:`translateX(${cur}px)`}, {transform:"none"}], {duration:T.spf, easing:SPRING_F});
+  };
   addEventListener("touchstart", e => {
-    x0 = null;
+    reset(false);
     if (DESK.matches || DET || $("#fly") || window._menu || e.touches.length > 1 || document.querySelector("#layer .veil") || !LIST.length) return;
     const t = e.touches[0];
     if (t.clientX < 28 || t.clientX > innerWidth - 28) return;
     if (e.target.closest("input,textarea,select,canvas,.cbox,.dock,[data-noswipe],.fhrs,.fterm")) return;
     for (let el = e.target; el && el !== document.body; el = el.parentElement) if (el.scrollWidth > el.clientWidth + 2 && /auto|scroll/.test(getComputedStyle(el).overflowX)) return;
-    x0 = t.clientX; y0 = t.clientY; t0 = performance.now();
+    x0 = t.clientX; y0 = t.clientY; t0 = performance.now(); v = view();
   }, {passive:true});
+  addEventListener("touchmove", e => {
+    if (x0 === null || !v || e.touches.length > 1) return;
+    const t = e.touches[0], mx = (t.clientX - x0) / ZM(), my = (t.clientY - y0) / ZM();
+    if (!lock) {
+      if (Math.hypot(mx, my) < 10) return;
+      if (Math.abs(mx) > Math.abs(my) * 1.4) lock = 1;
+      else { x0 = null; v = null; lock = -1; return; }
+    }
+    if (e.cancelable) e.preventDefault();
+    const ks = TABS.map(([k]) => k), idx = ks.indexOf(TAB);
+    const edge = (mx > 0 && idx === 0) || (mx < 0 && idx === ks.length - 1);
+    dx = edge ? mx * .18 : Math.sign(mx) * (88 * (1 - Math.exp(-Math.abs(mx) / 130)));
+    v.style.transform = `translateX(${dx}px)`;
+  }, {passive:false});
   addEventListener("touchend", e => {
     if (x0 === null) return;
-    const t = e.changedTouches[0], dx = t.clientX - x0, dy = t.clientY - y0; x0 = null;
-    if (Math.abs(dx) < 60 || Math.abs(dx) < Math.abs(dy) * 1.8 || performance.now() - t0 > 700) return;   // 要明顯的橫滑，捲動時斜斜的不算
-    const ks = TABS.map(([k]) => k), i = ks.indexOf(TAB) + (dx < 0 ? 1 : -1);
-    if (i >= 0 && i < ks.length) setTab(ks[i]);
+    const t = e.changedTouches[0], rawDx = (t.clientX - x0) / ZM(), rawDy = (t.clientY - y0) / ZM();
+    const dt = Math.max(1, performance.now() - t0), vel = Math.abs(rawDx) / dt;
+    const ks = TABS.map(([k]) => k), dir = rawDx < 0 ? 1 : -1, next = ks.indexOf(TAB) + dir;
+    const go = next >= 0 && next < ks.length && (lock === 1 ? (Math.abs(rawDx) > 56 || (Math.abs(rawDx) > 24 && vel > .45)) : (Math.abs(rawDx) >= 60 && Math.abs(rawDx) >= Math.abs(rawDy) * 1.8 && dt < 700));
+    if (go) {
+      SWIPEX = dx;
+      if (v) v.style.transform = "";
+      x0 = null; dx = 0; lock = 0; v = null;
+      setTab(ks[next]);
+      SWIPEX = 0;
+    } else reset(true);
   }, {passive:true});
-  addEventListener("touchcancel", () => { x0 = null; }, {passive:true});
+  addEventListener("touchcancel", () => reset(true), {passive:true});
 })();
 /* 按下去的水波紋與彈簧按壓回饋（Material 3 State Ripple＋微形變；捲動或橫滑超過 8px 立刻取消不誤觸） */
 (function(){
