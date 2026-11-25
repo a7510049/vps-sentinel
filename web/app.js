@@ -1044,7 +1044,7 @@ function setPage(list){
     const s = on.find(x => keyOf(x) === TOOLH) || on.find(x => !x.node) || on[0], k = esc(keyOf(s)), node = esc(s.node || "");
     hpk = on.length > 1 ? hpick(on, s, x => x.self_has ? `<span class="dot info"></span>` : "") : "";
     h += (D ? "" : `<div class="lbl" data-key="lh">主機<button data-selfcheck>檢查新版</button></div>`) + `<div class="selfsum" data-key="selfsum" data-keep data-ld></div>` + (D ? "" : hpk);   // 電腦：選主機、檢查新版放上面的工具列，右邊第一張卡片跟左邊分類對齊
-    h += `<div class="group" data-key="g-h:${k}" data-sw><div class="selfbox" data-key="self" data-n="${node}" data-keep data-ld><div class="selfwait">讀取中…</div></div>${sysRow(s)}${secRow(s)}<button class="li" data-newtok="${node}" data-label="${esc(s.name)}">${IC("key", "")}<span class="lab">換一組新密碼<small>舊密碼會立刻失效</small></span>${CHEV}</button>`
+    h += `<div class="group" data-key="g-h:${k}" data-sw><div class="selfbox" data-key="self" data-n="${node}" data-keep data-ld>${selfRowHtml(s)}</div>${sysRow(s)}${secRow(s)}<button class="li" data-newtok="${node}" data-label="${esc(s.name)}">${IC("key", "")}<span class="lab">換一組新密碼<small>舊密碼會立刻失效</small></span>${CHEV}</button>`
       + (s.keep ? `<label class="li">${IC("keep", "")}<span class="lab">Oracle 防回收${keepLine(s.keep)}</span><input type="checkbox" class="tog" data-keepalive="${node}" aria-label="Oracle 防回收" ${s.keep.on ? "checked" : ""}></label>` : "")
       + (s.node ? "" : go("data-pair", "link", "配對暗號", "pairst")) + `</div>`;
   }
@@ -1872,21 +1872,21 @@ function swapIn(a, b){
   if (!canAnim() || !a.isConnected) return a.replaceWith(b);
   const h0 = a.offsetHeight, par = a.offsetParent, x = a.offsetLeft, y = a.offsetTop, w = a.offsetWidth;
   const k0 = a.dataset.key || "", k1 = b.dataset.key || "";
-  const into = k0 === "dh:all" && k1.startsWith("dh:h:"), back = k0.startsWith("dh:h:") && k1 === "dh:all", sb = k1.startsWith("sb:");
+  const into = k0 === "dh:all" && k1.startsWith("dh:h:"), back = k0.startsWith("dh:h:") && k1 === "dh:all", sb = k1.startsWith("sb:"), gh = k1.startsWith("g-h:");
   a.replaceWith(b); skipIntro(b, true);
   if (par) {
     a._leaving = 1;
     Object.assign(a.style, {position:"absolute", left:x + "px", top:y + "px", width:w + "px", height:h0 + "px", margin:"0", pointerEvents:"none", overflow:"hidden", zIndex:1});
     b.after(a); still(a);
-    const outTf = into ? "translateY(-6px)" : back ? "translateY(6px)" : sb ? "none" : "translateY(-4px)";
+    const outTf = into ? "translateY(-6px)" : back ? "translateY(6px)" : (sb || gh) ? "none" : "translateY(-4px)";
     a.animate([{opacity:1, transform:"none"}, {opacity:0, transform:outTf}], {duration:Math.round(T.fast * .6), easing:EXIT, fill:"forwards", id:"ui"}).onfinish = () => a.remove();
   }
-  const inTf = into ? "translateY(12px)" : back ? "translateY(-8px)" : sb ? "translateY(4px)" : "translateY(8px)";
-  b.animate([{opacity:0, transform:inTf}, {opacity:1, transform:"none"}], {duration:sb ? T.fast : T.mid, delay:Math.round(T.fast * .35), easing:DEC, fill:"backwards", id:"ui"});
+  const inTf = into ? "translateY(12px)" : back ? "translateY(-8px)" : gh ? "none" : sb ? "translateY(4px)" : "translateY(8px)";
+  b.animate([{opacity:0, transform:inTf}, {opacity:1, transform:"none"}], {duration:(sb || gh) ? T.fast : T.mid, delay:Math.round(T.fast * .35), easing:DEC, fill:"backwards", id:"ui"});
   if (sb) return;
   const hEnd = b.offsetHeight;
   if (Math.abs(hEnd - h0) < 2) return;
-  b.animate([{height:h0 + "px", overflow:"hidden"}, {height:hEnd + "px", overflow:"hidden"}], {duration:T.mid, easing:DEC, id:"ui"});
+  b.animate([{height:h0 + "px", overflow:"hidden"}, {height:hEnd + "px", overflow:"hidden"}], {duration:T.mid, easing:EASE, id:"ui"});
 }
 function morph(a, b){
   if (a.nodeType === 1 && b.nodeType === 1 && a.matches("main.view") && b.matches("main.view") && a.getAttribute("data-key") !== b.getAttribute("data-key")) return through(a, b);
@@ -2422,13 +2422,9 @@ function reveal(el, on){
 }
 /* 視窗裡的提示字：新的字淡入，從沒有字變成有字時慢慢撐開 */
 function sayTo(msg, t){ t ? swapHTML(msg, `<span>${esc(t)}</span>`) : msg.textContent = ""; }
-function selfPaint(root){
-  const box = root.querySelector(".selfbox"), sum = root.querySelector(".selfsum"); if (!box) return;
-  const hosts = LIST.filter(x => x.online && SELFST[keyOf(x)]);
-  const pend = hosts.reduce((n, h) => { const d = SELFST[keyOf(h)]; return n + (d.has && !d.running ? 1 : 0) + (d.cloud && d.cloud.has && !d.cloud.running ? 1 : 0); }, 0);
-  if (sum) swapHTML(sum, pend > 1 ? `<span>${pend} 項有新版</span><button class="ubtn sm" data-selfup="*">全部更新</button>` : "");
-  const h = LIST.find(x => (x.node || "") === box.dataset.n), d = h && SELFST[keyOf(h)];
-  if (!d) return;
+function selfRowHtml(h){
+  const d = h && SELFST[keyOf(h)];
+  if (!d) return `<div class="selfwait">讀取中…</div>`;
   const node = esc(h.node || "");
   const st = d.running ? `<span class="spin"></span>更新中…` : SELFCHK ? `<span class="spin"></span>檢查中…` : d.old || d.supported === false ? `<span class="warn">${esc(d.err)}</span>`
     : d.has ? `<span class="new">有新版可以更新</span>` : d.err ? esc(d.err) : "";
@@ -2440,7 +2436,16 @@ function selfPaint(root){
     ${c.has && !c.running ? `<button class="ubtn sm" data-cloudup="${node}">更新</button>` : ""}</div>` : "";
   const srow = `<div class="cl2 first"><span class="ico theme">${I("upd")}</span><span>哨站<small title="${esc(d.build || "")}">${st ? (d.version ? `<span class="vbs"><span class="vbd">${esc(d.version)}</span></span> ` : "") + st : d.version ? VOK(esc(d.version)) : ""}</small>${ch}</span>
     ${d.has && !d.running ? `<button class="ubtn sm" data-selfup="${node}">更新</button>` : ""}</div>`;
-  swapHTML(box, `<div class="selfrow">${srow}${crow}</div>`);
+  return `<div class="selfrow">${srow}${crow}</div>`;
+}
+function selfPaint(root){
+  const box = root.querySelector(".selfbox"), sum = root.querySelector(".selfsum"); if (!box) return;
+  const hosts = LIST.filter(x => x.online && SELFST[keyOf(x)]);
+  const pend = hosts.reduce((n, h) => { const d = SELFST[keyOf(h)]; return n + (d.has && !d.running ? 1 : 0) + (d.cloud && d.cloud.has && !d.cloud.running ? 1 : 0); }, 0);
+  if (sum) swapHTML(sum, pend > 1 ? `<span>${pend} 項有新版</span><button class="ubtn sm" data-selfup="*">全部更新</button>` : "");
+  const h = LIST.find(x => (x.node || "") === box.dataset.n);
+  if (!h || !SELFST[keyOf(h)]) return;
+  swapHTML(box, selfRowHtml(h));
 }
 /* jobs：[{node, kind:"self"|"cloud"}]；不給就是「全部更新」 */
 async function selfUpdate(root, jobs){

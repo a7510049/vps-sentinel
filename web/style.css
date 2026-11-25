@@ -718,7 +718,7 @@ button.li.prs,a.li.prs{border-radius:var(--r-lg);transform:scale(.98);background
 :is(.fchips,.hpick) .fchip{position:relative;z-index:1;flex:none;display:inline-flex;align-items:center;gap:6px;border:0;background:transparent;box-shadow:none}
 :is(.fchips,.hpick) .fchip::before{content:"";position:absolute;inset:0;z-index:-1;border-radius:inherit;pointer-events:none;
   background:var(--pill-bg);box-shadow:var(--pill-sh);opacity:0;transition:opacity var(--t-fast) var(--ease)}
-:is(.fchips,.hpick) .fchip.on{background:transparent;color:var(--tx);font-weight:600}
+:is(.fchips,.hpick) .fchip.on{background:transparent;color:var(--tx)}
 :is(.fchips,.hpick) .fchip.on::before{opacity:1}
 @media (max-width:1023px){
   .v-log .fchips{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));width:100%}
@@ -746,7 +746,7 @@ button.li.prs,a.li.prs{border-radius:var(--r-lg);transform:scale(.98);background
 .seg button:last-child{border-radius:var(--r-xs) var(--r-full) var(--r-full) var(--r-xs)}
 .seg button.on{color:var(--on-pc);font-weight:600;border-radius:var(--r-full)}
 /* 外觀的選項：小預覽圖＋底下小字；選到的預覽圖外圈主題色、右上角打勾 */
-.lks{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
+.lks{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;width:100%}
 .lkb{display:flex;flex-direction:column;align-items:center;gap:6px;padding:0;background:none;color:var(--tx3);font-size:var(--fs-xs)}
 .lkb small{font-size:var(--fs-xs);font-weight:500}
 .lkb.on small{color:var(--p);font-weight:600}
@@ -801,9 +801,9 @@ button.li.prs,a.li.prs{border-radius:var(--r-lg);transform:scale(.98);background
 .li .seg{flex:none}
 .li.col .seg{width:100%}
 /* 主題色 */
-/* 色票像 Pixel：上半主色、右下選中色塊、左下主題色本身；選中時變圓角方塊，中間出現勾勾 */
-.sw{display:grid;grid-template-columns:repeat(6,44px);justify-content:space-between;gap:12px 8px}
-.sw button{width:44px;height:44px;border-radius:50%;position:relative;display:grid;place-items:center;overflow:hidden;
+/* 色票像 Pixel：上半主色、右下選中色塊、左下主題色本身；選中時變圓角方塊，中間出現勾勾；隨畫面寬度與字級自動換行不超出框框 */
+.sw{display:grid;grid-template-columns:repeat(auto-fill,minmax(38px,44px));justify-content:start;gap:10px;width:100%}
+.sw button{width:100%;max-width:44px;aspect-ratio:1;height:auto;border-radius:50%;position:relative;display:grid;place-items:center;overflow:hidden;
   background:conic-gradient(from -90deg,var(--p) 0 50%,var(--pc) 0 75%,var(--seed) 0);
   transition:border-radius var(--sp),transform var(--sp-fast)}
 .sw button svg{width:24px;height:24px;padding:4px;border-radius:50%;background:var(--p);color:var(--on-p);opacity:0;transform:scale(.3);
@@ -1039,8 +1039,9 @@ body:has(.dash.d) .fwrap{max-width:var(--pw)}
 .scat .group .li .ico{width:auto;height:auto;background:none;box-shadow:none;color:var(--tx2)}
 .scat .group .li .ico svg{width:19px;height:19px}
 .scat .group .li small{display:none}
+.sbody{position:relative;min-width:0}
 .sbody>.lbl:first-child{margin-top:0}
-.sbody .sw{grid-template-columns:repeat(12,44px);justify-content:start}
+.sbody .sw{grid-template-columns:repeat(auto-fill,minmax(38px,44px));justify-content:start}
 .sbody .lks{max-width:560px}
 .dbar:has(>.sbr){display:grid;grid-template-columns:220px minmax(0,780px);gap:28px}
 .dbar:has(>.sbr){padding:0}.sbr{display:flex;align-items:center;gap:12px;min-width:0}
