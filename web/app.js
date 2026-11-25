@@ -1024,12 +1024,13 @@ let SETC = store("vs-setc") || "";
 function setPage(list){
   const on = list.filter(s => s.online).sort((a, b) => ORDER.indexOf(keyOf(a)) - ORDER.indexOf(keyOf(b))), self = on.some(s => !s.node);
   const go = (attr, ic, l, st) => `<button class="li" ${attr}>${IC(ic, "")}<span class="lab">${l}<small class="${st}" data-keep data-ld>讀取中…</small></span><span class="stb" data-keep hidden></span>${CHEV}</button>`;
+  const accMap = Object.fromEntries([...ACCENTS, ["rainbow", "彩色"]]);
   const sw = ACCENTS.map(([v, l]) => `<button class="${PREF.accent === v ? "on" : ""}" data-pref="accent" data-val="${v}" data-accent="${v}" title="${l}" aria-label="${l}">${I("check")}</button>`).join("")
-    + `<button class="rbsw${PREF.accent === "rainbow" ? " on" : ""}" data-pref="accent" data-val="rainbow" title="彩虹" aria-label="彩虹">${I("check")}</button>`;
+    + `<button class="rbsw${PREF.accent === "rainbow" ? " on" : ""}" data-pref="accent" data-val="rainbow" title="彩色" aria-label="彩色">${I("check")}</button>`;
   const D = DESK.matches;   // 電腦：左邊主機和通知，右邊欄是這台裝置的外觀
   const look = `<div class="lbl" data-key="llook">外觀</div><div class="group" data-key="g-look">
       <div class="li col"><span class="lab">主題</span>${lkPick("theme", [["auto", "自動"], ["light", "淺色"], ["dark", "深色"]], v => v === "auto" ? `<span class="lkh">${lkMini("light")}${lkMini("dark")}</span>` : lkMini(v))}</div>
-      <div class="li col"><span class="lab">主題色</span><div class="sw">${sw}</div></div>
+      <div class="li col"><span class="lab sw-head"><span>主題色</span><span class="sw-val"><i></i>${esc(accMap[PREF.accent] || "藍")}</span></span><div class="sww"><div class="sw">${sw}</div></div></div>
       <div class="li col"><span class="lab">配色風格</span>${lkPick("tone", [["soft", "柔和"], ["vivid", "鮮明"], ["calm", "素雅"]], v => lkMini(document.documentElement.dataset.mode || "light", v))}</div>
       <div class="li col"><span class="lab">文字大小</span>${lkPick("size", [["s", "小"], ["m", "中"], ["l", "大"]], v => `<i class="lkz ${v}">字</i>`)}</div>
       <label class="li"><span class="lab">動畫</span>${tog("motion", "動畫")}</label>

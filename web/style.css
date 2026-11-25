@@ -26,19 +26,19 @@
 
 /* ═════════ 顏色：動態主題色 × Apple Liquid Glass 分層材質 ═════════ */
 @property --seed{syntax:"<color>";inherits:true;initial-value:#007aff}
-[data-accent="red"]{--seed:#e11d48;--gh:-30}
-[data-accent="orange"]{--seed:#ea580c;--gh:-35}
-[data-accent="amber"]{--seed:#d97706;--gh:-35}
-[data-accent="lime"]{--seed:#65a30d;--gh:45}
-[data-accent="green"]{--seed:#16a34a;--gh:45}
-[data-accent="teal"]{--seed:#0d9488;--gh:45}
-[data-accent="cyan"]{--seed:#0284c7;--gh:45}
+[data-accent="red"]{--seed:#ff3b30;--gh:-30}
+[data-accent="orange"]{--seed:#ff9500;--gh:-35}
+[data-accent="amber"]{--seed:#e5a000;--gh:-35}
+[data-accent="lime"]{--seed:#7bc62d;--gh:45}
+[data-accent="green"]{--seed:#34c759;--gh:45}
+[data-accent="teal"]{--seed:#0fb5ae;--gh:45}
+[data-accent="cyan"]{--seed:#32ade6;--gh:45}
 [data-accent="blue"]{--seed:#007aff;--gh:45}
-[data-accent="indigo"]{--seed:#4f6ef7;--gh:45}
-[data-accent="purple"]{--seed:#7c3aed;--gh:45}
-[data-accent="pink"]{--seed:#db2777;--gh:-45}
-[data-accent="rainbow"]{--seed:#4f6ef7;--gh:45}
-:root{--pride:linear-gradient(#e40303 0 17%,#ff8c00 0 33%,#ffed00 0 50%,#008026 0 67%,#004dff 0 83%,#750787 0)}
+[data-accent="indigo"]{--seed:#5856d6;--gh:45}
+[data-accent="purple"]{--seed:#af52de;--gh:45}
+[data-accent="pink"]{--seed:#ff2d55;--gh:-45}
+[data-accent="rainbow"]{--seed:#5856d6;--gh:45}
+:root{--pride:conic-gradient(from 180deg,#ff3b30,#ff9500,#ffcc00,#34c759,#32ade6,#007aff,#5856d6,#af52de,#ff2d55,#ff3b30)}
 [data-accent="rainbow"]{--rbl:.8; --on-rbw:color-mix(in oklab,var(--seed) 22%,#000);
   --rbw:linear-gradient(90deg,oklch(var(--rbl) calc(.13 * var(--vc)) 25),oklch(var(--rbl) calc(.13 * var(--vc)) 65),oklch(var(--rbl) calc(.13 * var(--vc)) 100),
     oklch(var(--rbl) calc(.13 * var(--vc)) 150),oklch(var(--rbl) calc(.13 * var(--vc)) 245),oklch(var(--rbl) calc(.13 * var(--vc)) 310))}
@@ -798,18 +798,28 @@ button.li.prs,a.li.prs{border-radius:var(--r-lg);transform:scale(.98);background
 .lkz.s{font-size:var(--fs-s)} .lkz.m{font-size:var(--fs-xl)} .lkz.l{font-size:var(--fs-3xl)}
 .li .seg{flex:none}
 .li.col .seg{width:100%}
-/* 主題色 */
-/* 色票像 Pixel：上半主色、右下選中色塊、左下主題色本身；選中時變圓角方塊，中間出現勾勾；隨畫面寬度與字級自動換行不超出框框 */
-.sw{display:grid;grid-template-columns:repeat(auto-fill,minmax(38px,44px));justify-content:start;gap:10px;width:100%}
-.sw button{width:100%;max-width:44px;aspect-ratio:1;height:auto;border-radius:50%;position:relative;display:grid;place-items:center;overflow:hidden;
-  background:conic-gradient(from -90deg,var(--p) 0 50%,var(--pc) 0 75%,var(--seed) 0);
-  transition:border-radius var(--sp),transform var(--sp-fast)}
-.sw button svg{width:24px;height:24px;padding:4px;border-radius:50%;background:var(--p);color:var(--on-p);opacity:0;transform:scale(.3);
+/* 主題色（Apple Liquid Glass 琉璃色球＋雙環選中光圈；12／6／4 欄對稱置中永不歪斜溢出） */
+.sw-head{display:flex;align-items:center;justify-content:space-between;gap:8px;width:100%}
+.sw-val{display:inline-flex;align-items:center;gap:6px;font-size:var(--fs-xs);font-weight:500;color:var(--tx2);padding:3px 10px 3px 8px;border-radius:var(--r-pill);background:var(--glass-sub);border:1px solid var(--line)}
+.sw-val i{width:8px;height:8px;border-radius:50%;background:var(--seed);box-shadow:0 0 0 2px color-mix(in oklab,var(--seed) 24%,transparent);flex:none}
+[data-accent="rainbow"] .sw-val i{background:var(--pride);box-shadow:0 0 0 2px color-mix(in oklab,var(--p) 24%,transparent)}
+.sww{width:100%;container-type:inline-size}
+.sw{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));place-items:center;gap:14px 6px;padding:14px 10px;width:100%;
+  border-radius:var(--r-md);background:var(--glass-sub);border:1px solid var(--line);box-shadow:var(--hl)}
+@container (min-width:560px){.sw{grid-template-columns:repeat(12,minmax(0,1fr));gap:10px 4px;padding:14px 12px}}
+@container (max-width:287px){.sw{grid-template-columns:repeat(4,minmax(0,1fr));gap:14px 8px;padding:14px 10px}}
+.sw button{width:34px;max-width:100%;aspect-ratio:1;border-radius:50%;position:relative;display:grid;place-items:center;overflow:hidden;
+  background:radial-gradient(circle at 32% 28%,rgba(255,255,255,.46),transparent 56%),linear-gradient(180deg,color-mix(in oklab,var(--seed) 82%,#fff),var(--seed) 58%,color-mix(in oklab,var(--seed) 82%,#000));
+  box-shadow:inset 0 1px 1px rgba(255,255,255,.44),inset 0 -1px 2px rgba(0,0,0,.22),0 2px 8px -2px color-mix(in oklab,var(--seed) 55%,transparent);
+  transition:transform var(--sp-fast),box-shadow var(--t-fast) var(--ease)}
+@media (hover:hover){.sw button:hover{transform:scale(1.1)}}
+.sw button svg{width:16px;height:16px;stroke-width:3.2;color:#fff;filter:drop-shadow(0 1px 2.5px rgba(0,0,0,.42));opacity:0;transform:scale(.4);
   transition:opacity var(--t-fast) var(--ease),transform var(--sp-fast)}
-.sw button.on{border-radius:var(--r-md)}
+.sw button.on{box-shadow:0 0 0 2px var(--s1),0 0 0 4px var(--seed),inset 0 1px 1px rgba(255,255,255,.48),0 4px 12px -2px color-mix(in oklab,var(--seed) 65%,transparent)}
 .sw button.on svg{opacity:1;transform:none}
-.sw button.prs{transform:scale(.88)}
-.sw .rbsw{background:var(--pride)}
+.sw button.prs{transform:scale(.9)}
+.sw .rbsw{background:radial-gradient(circle at 32% 28%,rgba(255,255,255,.42),transparent 56%),var(--pride)}
+.sw .rbsw.on{box-shadow:0 0 0 2px var(--s1),0 0 0 4px var(--p),inset 0 1px 1px rgba(255,255,255,.48)}
 /* 開關：正宗 Google Material 3 Switch（純主色、打開時圓點變大並出現勾勾） */
 .tog{appearance:none;-webkit-appearance:none;width:52px;height:32px;border-radius:var(--r-pill);background:var(--p);box-shadow:inset 0 0 0 2px var(--tx3),inset 0 0 0 26px var(--s3);
   position:relative;flex:none;cursor:pointer;margin:0;transition:background-color var(--t-mid) var(--ease),box-shadow var(--t-mid) var(--ease)}
@@ -1039,8 +1049,6 @@ body:has(.dash.d) .fwrap{max-width:var(--pw)}
 .scat .group .li small{display:none}
 .sbody{position:relative;min-width:0}
 .sbody>.lbl:first-child{margin-top:0}
-.sbody .sw{grid-template-columns:repeat(auto-fill,minmax(38px,44px));justify-content:start}
-.sbody .lks{max-width:560px}
 .dbar:has(>.sbr){display:grid;grid-template-columns:220px minmax(0,780px);gap:28px}
 .dbar:has(>.sbr){padding:0}.sbr{display:flex;align-items:center;gap:12px;min-width:0}
 .sbody>.group+.group{margin-top:var(--gut)}
