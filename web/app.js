@@ -757,10 +757,7 @@ function page(list, time){
 /* 手機：瀏覽器裡分頁列在頂部（往下捲藏，避開 iOS 底部網址列），主畫面／App 模式為底部導覽列；點主機卡片展開成整頁 */
 function renderPhone(list, time){
   const s = DET && list.find(x => keyOf(x) === DET);
-  const top = TAB === "home"
-    ? `<header class="mtop" data-key="mtop"><div class="mbrand">${BRAND}<b>VPS 哨兵</b></div><span class="grow"></span><span class="mtime"><span class="live${LOST ? " off" : ""}"></span><span data-x>${LOST ? "重連中" : time}</span></span><button class="iconbtn" data-refresh title="重新整理">${I("upd")}</button></header>`
-    : "";
-  return `<div class="dash m" data-key="m"><nav class="dock" data-key="dock" data-slide>${navBtns(false, list)}</nav>${top}<main class="view v-${TAB}" data-key="v:${TAB}" data-dir="${TABDIR}">${page(list, time)}</main>${s ? detail(s) : ""}</div>`;
+  return `<div class="dash m" data-key="m"><nav class="dock" data-key="dock" data-slide>${navBtns(false, list)}</nav><main class="view v-${TAB}" data-key="v:${TAB}" data-dir="${TABDIR}">${page(list, time)}</main>${s ? detail(s) : ""}</div>`;
 }
 /* 電腦：Google Workspace／Cloud 風格主控台 — 上方全域頂部列、左側無縫導覽欄、右側大圓角純白主畫布（總覽與單台主機清楚分層不重複） */
 let DSEL = sstore("vs-dsel") || "";
@@ -783,7 +780,8 @@ const dbar = (title, rest = "") => `<div class="dbar" data-key="dbar"><h1 class=
 const tgHint = list => list.some(x => !x.node && x.tg_off) ? `<div class="group tgh" data-key="tgh"><button class="li" data-tg>${IC("bell", "")}<span class="lab">Telegram 通知<small>還沒設定，出事不會通知你</small></span>${CHEV}</button></div>` : "";
 function homePhone(list, time){
   const ev = groupEv(allEvents(list)).slice(0, 3);
-  return hero(list, time) + `<div class="lbl" data-key="lh">主機</div>${hostLists(list, "")}${tgHint(list)}
+  const top = `<header class="mtop" data-key="mtop"><div class="mbrand">${BRAND}<b>VPS 哨兵</b></div><span class="grow"></span><span class="mtime"><span class="live${LOST ? " off" : ""}"></span><span data-x>${LOST ? "重連中" : time}</span></span><button class="iconbtn" data-refresh title="重新整理">${I("upd")}</button></header>`;
+  return top + hero(list, time) + `<div class="lbl" data-key="lh">主機</div>${hostLists(list, "")}${tgHint(list)}
     <div class="lbl" data-key="le">最近發生${ev.length ? `<button data-tab="log">全部紀錄</button>` : ""}</div>${evList(ev, list.length > 1)}`;
 }
 /* 電腦版主機一律從總覽清單或側欄點入專頁 */
@@ -1663,7 +1661,7 @@ function tween(el, from, to, d){
 const T = {fast:180, mid:320, slow:480, long:720, spf:290, sp:420, sps:580};
 /* 文字大小是用 zoom 放大縮小的：量到的位置是螢幕上的，要除回去才能拿來定位 */
 const ZM = () => parseFloat(getComputedStyle(document.body).zoom) || 1;
-const EASE = "cubic-bezier(.2,0,0,1)", EXIT = "cubic-bezier(.3,0,.8,.15)", LIN = CSS.supports("transition-timing-function", "linear(0,1)");
+const EASE = "cubic-bezier(.2,0,0,1)", DEC = "cubic-bezier(.05,.7,.1,1)", EXIT = "cubic-bezier(.3,0,.8,.15)", LIN = CSS.supports("transition-timing-function", "linear(0,1)");
 /* 物理彈簧（Material 3 Expressive 勁度與阻尼精算，滑順自然落點）：時間用 T.spf／T.sp／T.sps */
 const SPRING_F = LIN ? "linear(0,.015 2.4%,.0848 6%,.2136 10.4%,.3818 15.4%,.5611 20.8%,.7257 26.6%,.8582 32.8%,.9514 39.2%,1.0072 46%,1.0329 53%,1.0383 60.3%,1.0325 67.8%,1.0226 75.6%,1.013 83.5%,1.0057 91.7%,1)" : "cubic-bezier(.34,1.25,.64,1)",
       SPRING = LIN ? "linear(0,.0169 2.4%,.0936 6%,.2299 10.4%,.4006 15.4%,.5751 20.8%,.729 26.6%,.8486 32.8%,.931 39.2%,.9806 46%,1.0055 53%,1.0144 60.3%,1.0145 67.8%,1.0111 75.6%,1.007 83.5%,1.0037 91.7%,1)" : "cubic-bezier(.25,1.08,.55,1)";
@@ -1732,24 +1730,25 @@ function flipWidth(el, change){
 }
 /* 拿出來又放回去的元素：瀏覽器會把裡面的進場動畫從頭重播（卡片會突然不見），全部停在結尾 */
 const still = (el, keep) => el.getAnimations({subtree:true}).forEach(n => { if (n === keep) return; if (!n.animationName) n.cancel(); else if (isFinite(n.effect.getComputedTiming().endTime)) n.finish(); });
-/* 換分頁：Google Material 3 Fade Through（電腦）與 Shared X-Axis 方向滑動（手機） */
+/* 換分頁：Google Material 3 Fade Through（電腦）與 Shared X-Axis 方向滑動（手機），全程無回彈抖動 */
 function through(a, b){
   const par = a.offsetParent;
   if (!canAnim() || !par) return a.replaceWith(b);
   const z = ZM(), r = a.getBoundingClientRect(), R = par.getBoundingClientRect();
+  const slide = !DESK.matches && TABDIR;
+  if (!slide) b.style.animationDelay = Math.round(T.fast * .3) + "ms";
   a.replaceWith(b);
   a._leaving = 1;
   Object.assign(a.style, {position:"absolute", left:(r.left - R.left) / z - par.clientLeft + "px", top:(r.top - R.top) / z - par.clientTop + "px", width:r.width / z + "px",
     height:Math.min(r.height / z, innerHeight / z * 2) + "px", overflow:"hidden", margin:"0", pointerEvents:"none", animation:"none"});
   b.after(a); still(a);
-  if (!DESK.matches && TABDIR) {
-    a.animate([{opacity:1, transform:"none"}, {opacity:0, transform:`translateX(${-TABDIR * 28}px)`}], {duration:T.fast, easing:EXIT, fill:"forwards", id:"ui"}).onfinish = () => a.remove();
+  if (slide) {
+    a.animate([{opacity:1, transform:"none"}, {opacity:0, transform:`translateX(${-TABDIR * 24}px)`}], {duration:T.fast, easing:EXIT, fill:"forwards", id:"ui"}).onfinish = () => a.remove();
   } else {
-    a.animate([{opacity:1, transform:"none"}, {opacity:0, transform:"scale(.988)"}], {duration:Math.round(T.fast * .65), easing:EXIT, fill:"forwards", id:"ui"}).onfinish = () => a.remove();
-    b.style.animationDelay = Math.round(T.fast * .35) + "ms";
+    a.animate([{opacity:1}, {opacity:0}], {duration:Math.round(T.fast * .6), easing:EXIT, fill:"forwards", id:"ui"}).onfinish = () => a.remove();
   }
 }
-/* 切換內容區塊（data-sw：總覽 ↔ 單台主機景深過場、換主機、換設定分類）：滑順彈簧過場＋高度銜接 */
+/* 切換內容區塊（data-sw：總覽 ↔ 單台主機、換主機、換設定分類）：平順減速過場＋高度銜接，不整頁縮放抖動 */
 function swapIn(a, b){
   if (!canAnim() || !a.isConnected) return a.replaceWith(b);
   const h0 = a.offsetHeight, par = a.offsetParent, x = a.offsetLeft, y = a.offsetTop, w = a.offsetWidth;
@@ -1760,14 +1759,16 @@ function swapIn(a, b){
     a._leaving = 1;
     Object.assign(a.style, {position:"absolute", left:x + "px", top:y + "px", width:w + "px", height:h0 + "px", margin:"0", pointerEvents:"none", overflow:"hidden", zIndex:1});
     b.after(a); still(a);
-    const outTf = into ? "scale(1.012)" : back ? "scale(.985)" : "translateY(-4px)";
-    a.animate([{opacity:1, transform:"none"}, {opacity:0, transform:outTf}], {duration:Math.round(T.fast * .7), easing:EXIT, fill:"forwards", id:"ui"}).onfinish = () => a.remove();
+    const outTf = into ? "translateY(-6px)" : back ? "translateY(6px)" : "translateY(-4px)";
+    a.animate([{opacity:1, transform:"none"}, {opacity:0, transform:outTf}], {duration:Math.round(T.fast * .65), easing:EXIT, fill:"forwards", id:"ui"}).onfinish = () => a.remove();
   }
-  const inTf = into ? "scale(.978) translateY(10px)" : back ? "scale(1.014) translateY(-6px)" : "translateY(10px)";
-  b.animate([{opacity:0, transform:inTf}, {opacity:1, transform:"none"}], {duration:T.sp, easing:SPRING, fill:"backwards", id:"ui"});
+  const inTf = into ? "translateY(12px)" : back ? "translateY(-8px)" : "translateY(8px)";
+  b.animate([{opacity:0, transform:inTf}, {opacity:1, transform:"none"}], {duration:T.mid, easing:DEC, fill:"backwards", id:"ui"});
+  const hEnd = b.offsetHeight;
+  if (Math.abs(hEnd - h0) < 2) return;
   const own = [b.style.height, b.style.overflow];
   b.style.height = h0 + "px"; b.style.overflow = "hidden";
-  const t0 = performance.now(), dur = T.sp;
+  const t0 = performance.now(), dur = T.mid;
   const step = now => {
     if (!b.isConnected) return;
     const p = Math.min(1, (now - t0) / dur), e = 1 - Math.pow(1 - p, 4);
@@ -2373,6 +2374,8 @@ const upwSay = (list) => { const bad = list.filter(x => !x[1]), good = list.filt
   return [good.length ? (good.length > 1 ? `${good.length} 個項目都更新好了 ✨` : good[0][0]) : "", ...bad.map(x => x[0])].filter(Boolean).join("；"); };
 function upwReload(msg){
   if (window._reloading) return; window._reloading = true;
+  clearTimeout(UPW.timer); clearTimeout(timer);
+  UPW.jobs = UPW.jobs.filter(j => !(!j.node && j.kind === "self"));
   if (!UPW.jobs.length && !UPW.wait.length) { msg = upwSay([...UPW.held, [msg, true]]); UPW.held = []; }
   else UPW.held.push([msg, true]);
   if (UPV) { UPW.rows.filter(r => r.k.startsWith("|") && r.kind === "self").forEach(r => upvSet(r, "done"));   // 視窗開著：先畫「好了」，整頁淡出再重新載入
@@ -2500,7 +2503,10 @@ function upvPaint(){
     const el = list.querySelector(`[data-k="${CSS.escape(r.k)}"]`); if (!el) return;
     el.className = "upj s-" + r.st;
     txt(el.querySelector(".upn"), UPLB[r.st] || "");
-    const w = el.querySelector(".wv"); w.style.setProperty("--v", upvPct(r).toFixed(1) + "%"); w.classList.toggle("b", r.st === "fail");
+    const p = upvPct(r), w = el.querySelector(".wv");
+    w.style.setProperty("--v", p.toFixed(1) + "%");
+    w.style.setProperty("--k", (r.st === "wait" ? 0 : Math.max(.02, Math.min(1, p / 100))).toFixed(3));
+    w.classList.toggle("b", r.st === "fail");
     const bad = r.st === "fail", at = UPST.indexOf(bad ? r.prev : r.st);      // 失敗：停在出事的那一步，那一步標紅
     el.querySelectorAll(".upsteps span").forEach(s => { const i = UPST.indexOf(s.dataset.s);
       s.classList.toggle("on", at >= 0 && (i < at || r.st === "done")); s.classList.toggle("cur", i === at && !bad && r.st !== "done"); s.classList.toggle("x", i === at && bad); });
@@ -3978,8 +3984,16 @@ async function tick(){
       fetch("/api/backup", {method:"POST", headers:{"X-Token":getTok(), "Content-Type":"application/json"}, body:JSON.stringify({action:"tz", tz})}).catch(() => {});
     }
     if (me && me.build) {
-      if (!window._build) window._build = me.build;
-      else if (me.build !== window._build) upwReload(`哨兵已更新到 ${me.version} ✨`);   // 這台的哨兵剛更新好：重新載入換上新畫面
+      if (!window._build) {
+        window._build = me.build;
+        const stale = UPW.jobs.filter(j => !j.node && j.kind === "self" && j.from && j.from !== me.build);
+        if (stale.length) {
+          UPW.jobs = UPW.jobs.filter(j => !stale.includes(j));
+          UPW.rows.filter(r => r.k === "|self").forEach(r => { r.st = "done"; });
+          if (!UPW.jobs.length && !UPW.wait.length) { UPW.show = false; UPW.rows = []; }
+          upwSave();
+        }
+      } else if (me.build !== window._build) upwReload(`哨兵已更新到 ${me.version} ✨`);   // 這台的哨兵剛更新好：重新載入換上新畫面
     }
     if (!BOOTED) {
       splashMsg("準備畫面…");

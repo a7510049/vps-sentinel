@@ -150,11 +150,11 @@
 /* ═════════ 基本 ═════════ */
 *{box-sizing:border-box;margin:0;-webkit-tap-highlight-color:transparent;scrollbar-width:none}
 *::-webkit-scrollbar{display:none}                                     /* 不顯示拉條，照樣能捲 */
-html{background:var(--bg);color:var(--tx);touch-action:manipulation;accent-color:var(--p);caret-color:var(--p);
+html{background:var(--bg);color:var(--tx);touch-action:manipulation;accent-color:var(--p);caret-color:var(--p);overflow-x:clip;
   transition:background-color var(--t-mid) var(--ease),color var(--t-mid) var(--ease)}
 html.lock{overflow:hidden}
 html.inapp{overscroll-behavior-y:contain}   /* App 裡用自己的下拉重新整理；瀏覽器照它自己的彈性 */
-body{font:400 var(--fs-m)/1.5 var(--font);zoom:var(--zoom);min-height:100vh;-webkit-font-smoothing:antialiased;overflow-x:hidden}
+body{font:400 var(--fs-m)/1.5 var(--font);zoom:var(--zoom);min-height:100vh;-webkit-font-smoothing:antialiased;overflow-x:hidden;overflow-x:clip}
 [hidden]{display:none!important}
 ::selection{background:color-mix(in srgb,var(--p) 28%,transparent)}
 button{font:inherit;color:inherit;border:0;background:none;padding:0;cursor:pointer;text-align:inherit}
@@ -164,15 +164,15 @@ b,strong{font-weight:500}
 .num{font-variant-numeric:tabular-nums}
 .grow{flex:1}
 .sub{color:var(--tx3);font-size:var(--fs-s)}
-.wrap{position:relative}
+.wrap{position:relative;overflow-x:clip}
 @keyframes spin{to{transform:rotate(360deg)}}
 @keyframes fadeIn{from{opacity:0}}
 @keyframes fadeOut{to{opacity:0}}
-@keyframes rise{from{opacity:0;transform:translateY(12px) scale(.985)}}
+@keyframes rise{from{opacity:0;transform:translateY(10px)}}
 @keyframes pop{from{opacity:0;transform:scale(.82)}}
-@keyframes through{from{opacity:0;transform:scale(.985) translateY(6px)}}
-@keyframes slideR{from{opacity:0;transform:translateX(32px)}}
-@keyframes slideL{from{opacity:0;transform:translateX(-32px)}}
+@keyframes through{from{opacity:0;transform:translateY(6px)}}
+@keyframes slideR{from{opacity:0;transform:translateX(24px)}}
+@keyframes slideL{from{opacity:0;transform:translateX(-24px)}}
 
 /* 按下去的水波紋（Google Material 3 State Ripple） */
 :is(.li,.ubtn,.iconbtn,.icbtn,.hmenu button,.rb,.rh,.backbtn,.seg button,.rng button,.fchip,.addhost,.trf,.chats button,.tbx){position:relative}
@@ -256,14 +256,14 @@ img.flag{width:28px;height:21px;object-fit:cover;border-radius:var(--r-xs);flex:
 /* ═════════ 整體版面與過場 ═════════ */
 .booting #app{opacity:0}
 #app{transition:opacity var(--t-mid) var(--ease)}
-.dash.m{max-width:760px;margin:0 auto;padding:0 16px calc(env(safe-area-inset-bottom) + 28px)}
+.dash.m{max-width:760px;margin:0 auto;padding:0 16px calc(env(safe-area-inset-bottom) + 28px);overflow-x:clip}
 .full .dash.m{padding-bottom:calc(env(safe-area-inset-bottom) + 88px)}
-.view{animation:through var(--sp) backwards}
-.dash.m .view[data-dir="1"]{animation:slideR var(--sp) backwards}
-.dash.m .view[data-dir="-1"]{animation:slideL var(--sp) backwards}
+.view{animation:through var(--t-mid) var(--dec) backwards}
+.dash.m .view[data-dir="1"]{animation:slideR var(--t-mid) var(--dec) backwards}
+.dash.m .view[data-dir="-1"]{animation:slideL var(--t-mid) var(--dec) backwards}
 /* 這個網頁連不上主機超過 15 秒（html.lost）：畫面上的數字都是舊的，整塊變淡 */
-.view>:not(.hbanner,.dhome),.dhome>:not(.dbar),.det .dscroll>:not(.dtop){transition:filter var(--t-slow) var(--ease)}
-html.lost :is(.view>:not(.hbanner,.dhome),.det .dscroll>:not(.dtop)){filter:opacity(.55) saturate(.45)}
+.view>:not(.hbanner,.dhome,.mtop),.dhome>:not(.dbar),.det .dscroll>:not(.dtop){transition:filter var(--t-slow) var(--ease)}
+html.lost :is(.view>:not(.hbanner,.dhome,.mtop),.det .dscroll>:not(.dtop)){filter:opacity(.55) saturate(.45)}
 .ptitle{font-size:var(--fs-3xl);font-weight:500;letter-spacing:-.015em;line-height:1.25;padding:16px 4px 12px;color:var(--tx)}
 .full .ptitle{padding:calc(env(safe-area-inset-top) + 20px) 4px 16px}
 .ptitle>span:first-child,.hname{width:fit-content;max-width:100%}
@@ -353,7 +353,7 @@ html:not(.full) .dock .tb.hasnew::after{top:10px;right:calc(50% - 28px)}
 @media (min-width:700px){.dash.m :is(.hosts,.minis){grid-template-columns:repeat(2,minmax(0,1fr))}}
 .hcard{display:block;width:100%;background:var(--s1);border:1px solid var(--line);border-radius:var(--r-xl);padding:18px 18px 16px;cursor:pointer;position:relative;
   transition:transform var(--sp-fast),border-radius var(--sp-fast),background-color var(--t-fast) var(--ease),border-color var(--t-fast) var(--ease);
-  animation:rise var(--sp) backwards}
+  animation:rise var(--t-mid) var(--dec) backwards}
 .hcard.prs{transform:scale(.975);border-radius:var(--r-2xl);background:var(--s2)}
 /* 卡片群組進場：輕盈短間隔（28ms）如水波滑入，封頂 5 格不拖泥帶水；自動更新因 data-key 保留節點不會重播 */
 :is(.hosts,.minis,.sums,.tgrid,.tiles)>:nth-child(2){animation-delay:28ms}
@@ -518,7 +518,7 @@ html.dhid .dash>.view{content-visibility:hidden;contain-intrinsic-size:auto none
 /* 四格數字 */
 .tiles{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
 .tile{background:var(--card);border-radius:var(--r-lg);padding:16px 16px 14px;box-shadow:var(--cs);display:flex;flex-direction:column;gap:6px;min-width:0;
-  transition:background-color var(--t-slow) var(--ease),color var(--t-slow) var(--ease);animation:rise var(--sp) backwards}
+  transition:background-color var(--t-slow) var(--ease),color var(--t-slow) var(--ease);animation:rise var(--t-mid) var(--dec) backwards}
 .tile .th{display:flex;align-items:center;gap:8px;font-size:var(--fs-s);color:var(--tx2);white-space:nowrap}
 .tile .tv{font-size:var(--fs-3xl);font-weight:600;letter-spacing:-.02em;line-height:1.08;white-space:nowrap;font-variant-numeric:tabular-nums}
 .tile .tv small{font-size:var(--fs-l);margin-left:1px;color:var(--tx2)}
@@ -725,7 +725,7 @@ button.li.prs,a.li.prs{border-radius:var(--r-lg);transform:scale(.98);background
 @media (min-width:600px){.tgrid{grid-template-columns:repeat(auto-fit,minmax(200px,1fr))}}
 .tbx{position:relative;display:flex;flex-direction:column;align-items:flex-start;gap:2px;min-height:132px;padding:16px;border-radius:var(--r-lg);background:var(--card);box-shadow:var(--cs);color:var(--tx);text-align:left;text-decoration:none;overflow:hidden;
   transition:transform var(--sp-fast),border-radius var(--sp-fast),background-color var(--t-fast) var(--ease),box-shadow var(--t-fast) var(--ease),border-color var(--t-fast) var(--ease);
-  animation:rise var(--sp) backwards}
+  animation:rise var(--t-mid) var(--dec) backwards}
 .tbx .ttop{display:flex;justify-content:space-between;align-items:flex-start;width:100%;padding-bottom:12px}
 .tbx .tgo{color:var(--tx3)}
 .tbx .tgo svg{width:18px;height:18px}
@@ -942,7 +942,7 @@ body:has(.dash.d) .fwrap{max-width:var(--pw)}
 /* 總覽最上面一排：4 格重點摘要（淡底色塊，在白底主畫布上清爽分層） */
 .dash.d .dhome{display:block}
 .sums{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:14px;margin-bottom:24px}
-.sumc{background:var(--s2);border-radius:var(--r-lg);padding:16px 18px 14px;display:flex;flex-direction:column;min-width:0;animation:rise var(--sp) backwards}
+.sumc{background:var(--s2);border-radius:var(--r-lg);padding:16px 18px 14px;display:flex;flex-direction:column;min-width:0;animation:rise var(--t-mid) var(--dec) backwards}
 .smk{font-size:var(--fs-xs);font-weight:500;color:var(--tx3)}
 .smv{display:flex;align-items:baseline;gap:4px;margin-top:6px;font-size:var(--fs-2xl);font-weight:500;letter-spacing:-.015em;font-variant-numeric:tabular-nums;white-space:nowrap;overflow:hidden}
 .smv small{font-size:var(--fs-s);font-weight:500;color:var(--tx3);margin-right:4px}
@@ -1270,12 +1270,11 @@ textarea.field{height:auto;padding:12px 16px;resize:none}
 .upj.s-done .upn{color:var(--ok)}.upj.s-fail .upn{color:var(--bad)}.upj.s-wait .upn,.upj.s-skip .upn{color:var(--tx3)}
 .upj .wv{flex:none;width:100%;transition:color var(--t-mid) var(--ease)}
 .upj.s-done .wv{color:var(--ok)}.upj.s-wait .wv,.upj.s-skip .wv{color:var(--tx3)}
-.upj .wf svg{transition:scale var(--t-slow) var(--ease),opacity var(--t-slow) var(--ease)}
-.upj .wq::after{content:"";position:absolute;left:0;right:calc(100% - var(--vw));top:4px;height:4px;border-radius:var(--r-pill);background:currentColor;opacity:0;transition:opacity var(--t-slow) var(--ease)}
-.upj:is(.s-done,.s-fail,.s-wait,.s-skip) .wf svg{scale:1 .1;opacity:0}   /* 沒在動的時候波浪攤平成一條直線 */
-.upj:is(.s-done,.s-fail,.s-wait,.s-skip) .wq::after{opacity:1}
-.upj:is(.s-done,.s-fail) .wv{--vw:100%}   /* 走完了：直線走到底，兩頭都是圓的（平常右邊留的空隙是給灰色軌道的） */
-.upj .wr{transition:opacity var(--t-slow) var(--ease),transform var(--sp-slow)}.upj:is(.s-done,.s-fail) .wr{opacity:0}
+.upj:is(.s-done,.s-fail) .wv{--k:1}
+.upj:is(.s-done,.s-fail) .wv::after{opacity:0}
+.upj:not(.s-done,.s-fail,.s-wait,.s-skip) .wv::before{content:"";position:absolute;inset:0;width:45%;border-radius:var(--r-pill);pointer-events:none;z-index:1;
+  background:linear-gradient(90deg,transparent,color-mix(in oklab,var(--on-p) 45%,transparent),transparent);animation:upshine 1.4s var(--ease) infinite}
+@keyframes upshine{from{transform:translateX(-110%)}to{transform:translateX(260%)}}
 .upsteps{display:flex;justify-content:space-between;gap:6px;font-size:var(--fs-xs);color:var(--tx3)}
 .upsteps span{display:flex;align-items:center;gap:5px;transition:color var(--t-mid) var(--ease)}
 .upsteps span::before{content:"";width:6px;height:6px;border-radius:var(--r-pill);background:var(--s4);transition:background-color var(--t-mid) var(--ease)}
