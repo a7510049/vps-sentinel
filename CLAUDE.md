@@ -1,4 +1,4 @@
-# VPS 哨兵：給 Claude 的專案說明
+# 哨站 Outpost：給 Claude 的專案說明
 
 ## 跟使用者溝通
 
@@ -50,10 +50,7 @@ tools/fly_db_audit.py 用真實飛機訊號核對航空公司表、機型表，�
 tools/fly_perf.py     量機場起降會不會拖慢監控（GitHub Actions 手動執行 fly-perf，ARM 主機；2026-11-13 量的：整個程式處理器 1%、監控定時工作最多晚 7 毫秒，不用搬成獨立程式）
 tools/fly_audit.py    機場起降：用真實資料把四個機場跑一遍、列出不合理的地方（這台連不到，到 GitHub Actions 手動執行 fly-audit）
 tests/             基本功能測試（只用 Python 內建模組）
-android/           安卓 App：全螢幕打開主機的網頁（記住網址），畫面全部來自網頁，主力是網頁
 ```
-
-**安卓 App**：這台開發機連不到 Google 的套件庫，只能靠 GitHub 自動建置（`.github/workflows/android.yml`）：推上去就會做安裝檔、放到 `android` 下載頁，再用模擬手機截圖＋錄影，打包放到 `android-shots`（用 `curl -L https://github.com/a7510049/vps-sentinel/releases/download/android-shots/shots.zip` 拿回來看）。模擬手機沒有顯示卡，錄影只有每秒幾格，不能拿來判斷動畫順不順。操作步驟在 `android/tools/shots.sh`（用真的 sentinel.py 當主機）。使用者說過 App 只是方便安裝，不要另外做一套原生畫面。簽章檔 `android/app/sentinel.jks` 固定不換，換了手機上就不能直接更新。
 
 **新增程式或網頁檔案時要一起改三個地方**（後端檔案不用改 `load_page()`，改 `include()`；也要加進 check.yml 的 py_compile）：
 1. `sentinel.py` 的 `SRC_FILES`（版本指紋）

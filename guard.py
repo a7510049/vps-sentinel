@@ -1,4 +1,4 @@
-"""VPS 哨兵：安全檢查（`sec_` 開頭）、SSH 上鎖（`ssh_`）、錯太多次封鎖（`guard_`）、自動安全更新（`autoupd_`）。
+"""哨站：安全檢查（`sec_` 開頭）、SSH 上鎖（`ssh_`）、錯太多次封鎖（`guard_`）、自動安全更新（`autoupd_`）。
 sentinel.py 用 include("guard.py") 載入到自己裡面，兩邊共用同一組變數（不是獨立模組）"""
 import pwd
 
@@ -194,7 +194,7 @@ def ssh_apply(set_=None, drop=()):
             os.makedirs(os.path.dirname(SSH_DROP), exist_ok=True)
             if d:
                 with open(SSH_DROP, "w", encoding="utf-8") as f:
-                    f.write("# VPS 哨兵「安全檢查」寫的（網頁上可以改回來）\n" + "".join(f"{k} {v}\n" for k, v in d.values()))
+                    f.write("# 哨站「安全檢查」寫的（網頁上可以改回來）\n" + "".join(f"{k} {v}\n" for k, v in d.values()))
                 os.chmod(SSH_DROP, 0o644)
             elif os.path.exists(SSH_DROP):
                 os.remove(SSH_DROP)

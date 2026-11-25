@@ -1,4 +1,4 @@
-"""VPS 哨兵：配對暗號（新增主機）、被監看模式。sentinel.py 用 include("pair.py") 載入到自己裡面，兩邊共用同一組變數（不是獨立模組）"""
+"""哨站：配對暗號（新增主機）、被監看模式。sentinel.py 用 include("pair.py") 載入到自己裡面，兩邊共用同一組變數（不是獨立模組）"""
 
 # ───────────────────────── 配對暗號（新增主機） ─────────────────────────
 # 新主機產生一組「配對暗號」＝ 它的網址 ＋ 一次性的隨機密鑰（128 位元），24 小時內有效、用一次就失效。
@@ -212,7 +212,7 @@ def peer_add(code):
         except ValueError:
             return False, peer_error(e, url)
     except (ValueError, TypeError, AttributeError):
-        return False, f"這個網址不是 VPS 哨兵（{url}）"
+        return False, f"這個網址不是哨站（{url}）"
     except Exception as e:  # noqa: BLE001
         return False, peer_error(e, url)
     key = pair_key(secret, n1, n2)
