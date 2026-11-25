@@ -38,7 +38,6 @@ DESIGN.md          美術設計規範
 README.md          GitHub 首頁的介紹（功能改了要跟著改）；docs/ 放介紹用的截圖
 install.sh         安裝／更新哨兵（複製到 /opt/vps-sentinel-lite、設定檔、Caddy、systemd）
 cloud.sh           雲端硬碟（FileBrowser Quantum）安裝、調整容量、檢查、更新、移除
-cleanup-old.sh     清除舊版 Home Assistant 版本
 data/airports.tsv  全世界的機場（機場起降用；改了也要在 SRC_FILES、install.sh）
 data/coast.tsv     台灣附近的海岸線（Natural Earth，雷達底圖；同上）
 data/actypes.tsv   國際民航組織的機型分類（ICAO Doc 8643：種類、引擎、尾流等級；雷達畫哪種形狀、算不算私人飛機；tools/actypes.py 產生；同上）
