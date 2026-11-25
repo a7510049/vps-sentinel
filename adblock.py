@@ -610,7 +610,8 @@ def ab_brief():
     if not ab_domain() and not c.get("on"):
         return None
     s = AB["stats"] if c.get("on") else None
-    return {"on": bool(c.get("on")), "pct": s["pct"] if s else None, "job": bool(AB["job"])}
+    err = bool(c.get("on") and (AB["down"] >= 2 or AB["pub"] or AB["ext"]))
+    return {"on": bool(c.get("on")), "pct": s["pct"] if s else None, "job": bool(AB["job"]), "err": err}
 
 
 def ab_info():

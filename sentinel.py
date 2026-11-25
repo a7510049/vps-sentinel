@@ -45,7 +45,7 @@ from collections import deque
 from concurrent.futures import ThreadPoolExecutor
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
-VERSION = "5.19"
+VERSION = "5.20"
 
 # ───────────────────────── 哨兵備份檔（.vsbk）─────────────────────────
 # 哨兵專用的備份格式：外面是自己的檔案格式，裡面用的是成熟、標準的加密方法（不自己發明加密）：
@@ -3705,7 +3705,7 @@ class Collector:
             "containers": containers, "services": services,
             "updates": updates, "reboot": reboot, "geo": geo, "update": upd, "events": events, "traffic": traffic, "bk_tz": BACKUP_TZ,
             "hist": hist_dict(hist), "top": list(PROC_TOP["top"]), "cpum": cpu_model(),
-            "problems": problems, "notices": notices, "tg_self": pair_load().get("self_t") or 0, "tlsfp": TLS["fp"], "sec": sec_info(), "notes": bool(note_conf().get("pw")), "adblock": ab_brief(), "albums": alb_count(),
+            "problems": problems, "notices": notices, "tg_self": pair_load().get("self_t") or 0, "tlsfp": TLS["fp"], "sec": sec_info(), "notes": bool(note_conf().get("pw")), "adblock": ab_brief(), "albums": alb_count(), "albums_pend": alb_pending(), "dl": dl_brief(),
             "tg_off": not (TG_BOT and TG_CHAT) and not watchers(),   # 還沒設定 Telegram：首頁提醒一行
             "level": "bad" if problems else ("warn" if notices else "ok"),
         }

@@ -108,6 +108,7 @@ const P = {
 };
 P.server = '<rect x="3" y="4" width="18" height="7" rx="2"/><rect x="3" y="13" width="18" height="7" rx="2"/><path d="M7 7.5h.01M7 16.5h.01"/>';
 P.palette = '<path d="M12 3a9 9 0 1 0 0 18c1.1 0 2-.9 2-2 0-.5-.2-1-.5-1.3-.3-.4-.5-.8-.5-1.3 0-1.1.9-2 2-2h2.4A4.6 4.6 0 0 0 22 9.8C22 6 17.5 3 12 3z"/><circle cx="7.5" cy="10.5" r="1"/><circle cx="10.5" cy="7" r="1"/><circle cx="15.5" cy="7.5" r="1"/>';
+P.copy = '<rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>';
 const I = n => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${P[n]}</svg>`;
 
 /* ═════════ 個人設定（存在這台裝置） ═════════ */
@@ -867,35 +868,69 @@ function detail(s){
     <div class="dtop"><button class="icbtn" data-back title="返回">${I("back")}</button><span class="dtt">${esc(s.name)}</span><span class="hacts">${moreBtn(s).replace("iconbtn", "icbtn")}</span></div>
     ${hostBody(s, true)}</div></div>`;
 }
-/* 工具：雲端硬碟、遠端下載、每日備份、常用連結；好幾台時上面一排主機名稱（可以左右滑）選一台，只顯示那台的 */
+/* 工具：雲端硬碟、遠端下載、每日備份、加密筆記、擋廣告 DNS、相簿分享、常用連結、機場起降 */
 let TOOLH = store("vs-toolh"), ORDER = [];
+const tBadge = (text, cls = "") => text ? `<span class="tbadge${cls ? " " + cls : ""}" data-x>${text}</span>` : "";
+function dlTileState(s){
+  const d = s.dl || {};
+  const run = (d.run || 0) + (d.wait || 0), bad = d.bad || 0;
+  if (run) return {b: tBadge(`進行中 ${run}`, "act"), sub: bad ? `另有 ${bad} 筆失敗` : "正在存到雲端硬碟", foot: "點進查看進度與佇列"};
+  if (bad) return {b: tBadge(`失敗 ${bad}`, "bad"), sub: "有下載沒成功", foot: "點進重試或清除"};
+  return {b: tBadge("待命"), sub: "檔案直連・影音網站", foot: "存到雲端硬碟「下載」"};
+}
 function toolsPage(list){
   const on = list.filter(s => s.online).sort((a, b) => ORDER.indexOf(keyOf(a)) - ORDER.indexOf(keyOf(b)));
   const D = DESK.matches;
   let h = `<div class="${D ? "wide" : "narrow"}" data-key="tools"><h1 class="ptitle"><span>工具</span></h1>`;
-  const fly = `<div class="group fly1" data-key="g-fly"><button class="li" data-key="fly" data-fly>${IC("fly", "")}<span class="lab">機場起降${FLYS.name ? `<small>${esc(FLYS.name)}</small>` : ""}</span>${CHEV}</button></div>`;
-  const flyT = `<button class="tbx" data-key="fly" data-fly><span class="ttop">${IC("fly", "")}<span class="tgo nx">${CHEV}</span></span><b>機場起降</b>${FLYS.name ? `<small>${esc(FLYS.name)}</small>` : ""}</button>`;
-  if (!on.length) return D ? `<div class="wide" data-key="tools">${dbar("工具")}<div class="calm">連不上任何主機</div><div class="tgrid" data-key="g-tf">${flyT}</div></div>`
-    : h + `<div class="calm">連不上任何主機</div></div>`;
+  const flySub = FLYS.name ? `${esc(FLYS.name)}・即時看板與塔台雷達` : "即時航班看板與塔台雷達";
+  const fly = `<div class="group fly1" data-key="g-fly"><button class="li" data-key="fly" data-fly>${IC("fly", "")}<span class="lab">機場起降<small>${flySub}</small></span>${CHEV}</button></div>`;
+  const flyT = `<button class="tbx" data-key="fly" data-fly><span class="ttop">${IC("fly", "")}<span class="tgo nx">${CHEV}</span></span><span class="tmeta"><b>機場起降</b><small class="tdesc">${flySub}</small></span></button>`;
+  if (!on.length) return D ? `<div class="wide" data-key="tools">${dbar("工具")}<div class="calm">連不上任何主機</div><div class="tgrid" data-key="g-tf" data-n="1">${flyT}</div></div>`
+    : h + fly + `<div class="calm">連不上任何主機</div></div>`;
   const s = on.find(x => keyOf(x) === TOOLH) || on.find(x => !x.node) || on[0], k = esc(keyOf(s)), node = esc(s.node || ""), name = esc(s.name);
   const dot = x => lvOf(x) === "ok" ? "" : `<span class="dot ${lvOf(x)}"></span>`;
   const pick = on.length > 1 ? hpick(on, s, dot) : "";
   const lh = `<div class="lbl" data-key="lth">主機</div>`;
-  if (D) return `<div class="wide" data-key="tools">${dbar("工具", pick)}${toolsBody(s, k, node, name)}<div class="lbl" data-key="ltf">不分主機</div>${fly}</div>`;   // 電腦：選主機放工具列，下面一格一格（格子撐滿一排）；機場起降跟手機一樣是一整條
+  if (D) return `<div class="wide" data-key="tools">${dbar("工具", pick)}${toolsBody(s, k, node, name)}<div class="lbl" data-key="ltf">不分主機</div>${fly}</div>`;   // 電腦：選主機放工具列，下面 3 欄平衡方塊；機場起降放在不分主機區
   return h + fly + lh + pick + toolsBody(s, k, node, name) + `</div>`;
 }
 function toolsBody(s, k, node, name){
   const c = s.cloud && safeUrl(cloudHref(s.cloud)) ? s.cloud : null;
-  let h = `<div data-key="tb:${k}" data-sw><div class="tgrid" data-key="g-t:${k}">`;   // 兩欄大方塊：圖示、名字，下面直接畫狀態（用量波浪條、備份最近 7 天）
-  if (c) h += `<a class="tbx" data-key="cl" href="${esc(cloudHref(c))}"${ssoAttr(s)} target="_blank" rel="noopener noreferrer"><span class="ttop">${IC("cloud", "")}<span class="tgo">${EXT}</span></span>
-      <b>雲端硬碟</b><small>${c.total ? `${size(c.used)} / ${size(c.total)}` : ""}</small>${c.total ? wave(c.pct) : ""}</a>
-    <button class="tbx" data-key="dl" data-dl="${node}" data-name="${name}"><span class="ttop">${IC("dl", "")}<span class="tgo nx">${CHEV}</span></span><b>遠端下載</b><small>存到雲端硬碟</small></button>`;
-  h += `<button class="tbx" data-key="bk" data-bk="${node}" data-label="${name}"><span class="ttop">${IC("archive", "")}<span class="tgo nx">${CHEV}</span></span>
-      <b>每日備份</b><small class="bkst" data-n="${node}" data-keep data-ld>讀取中…</small><span class="bkdots" data-n="${node}" data-keep>${"<i></i>".repeat(7)}</span></button>
-    <button class="tbx" data-key="nt" data-notes="${node}" data-name="${name}"><span class="ttop">${IC("note", "")}<span class="tgo nx">${CHEV}</span></span><b>加密筆記</b><small data-x>${s.notes ? "已打開" : "還沒打開"}</small></button>${abTile(s, node, name)}${c ? `
-    <button class="tbx" data-key="alm" data-album="${node}" data-name="${name}"><span class="ttop">${IC("album", "")}<span class="tgo nx">${CHEV}</span></span><b>相簿分享</b><small data-x>${s.albums ? `${s.albums} 本分享中` : "還沒分享"}</small></button>` : ""}</div>`;
+  const tiles = [];
+  if (c) {
+    const pct = c.total ? Math.round(c.pct) : null;
+    const ccls = pct == null ? "" : pct >= 90 ? "bad" : pct >= 75 ? "warn" : "ok";
+    tiles.push(`<a class="tbx" data-key="cl" href="${esc(cloudHref(c))}"${ssoAttr(s)} target="_blank" rel="noopener noreferrer">
+      <span class="ttop">${IC("cloud", "")}<span class="trgt">${pct != null ? tBadge(`${pct}%`, ccls) : ""}<span class="tgo">${EXT}</span></span></span>
+      <span class="tmeta"><b>雲端硬碟</b><small class="tdesc" data-x>${c.total ? `${size(c.used)} / ${size(c.total)}` : "加密儲存空間"}</small></span>
+      <span class="tfoot">${c.total ? wave(c.pct) : `<span class="thint">驗證後直接開啟</span>`}</span></a>`);
+    const dl = dlTileState(s);
+    tiles.push(`<button class="tbx" data-key="dl" data-dl="${node}" data-name="${name}">
+      <span class="ttop">${IC("dl", "")}<span class="trgt">${dl.b}<span class="tgo nx">${CHEV}</span></span></span>
+      <span class="tmeta"><b>遠端下載</b><small class="tdesc" data-x>${dl.sub}</small></span>
+      <span class="tfoot"><span class="thint">${dl.foot}</span></span></button>`);
+  }
+  tiles.push(`<button class="tbx" data-key="bk" data-bk="${node}" data-label="${name}">
+    <span class="ttop">${IC("archive", "")}<span class="trgt"><span class="tbadge bkbdg" data-n="${node}" data-keep></span><span class="tgo nx">${CHEV}</span></span></span>
+    <span class="tmeta"><b>每日備份</b><small class="tdesc bkst" data-n="${node}" data-keep data-ld>讀取中…</small></span>
+    <span class="tfoot"><span class="bkdots" data-n="${node}" data-keep>${"<i></i>".repeat(7)}</span><span class="thint">近 7 天</span></span></button>`);
+  tiles.push(`<button class="tbx" data-key="nt" data-notes="${node}" data-name="${name}">
+    <span class="ttop">${IC("note", "")}<span class="trgt">${tBadge(s.notes ? "已開啟" : "未開啟", s.notes ? "ok" : "")}<span class="tgo nx">${CHEV}</span></span></span>
+    <span class="tmeta"><b>加密筆記</b><small class="tdesc">Joplin 端對端加密同步</small></span>
+    <span class="tfoot"><span class="thint">${s.notes ? "查看連線資訊與密碼" : "點進快速開啟"}</span></span></button>`);
+  const ab = abTile(s, node, name);
+  if (ab) tiles.push(ab);
+  if (c) {
+    const pend = s.albums_pend || 0, n = s.albums || 0;
+    const abdg = pend ? tBadge(`待確認 ${pend}`, "act") : n ? tBadge(`${n} 本分享中`, "ok") : tBadge("還沒分享");
+    tiles.push(`<button class="tbx" data-key="alm" data-album="${node}" data-name="${name}">
+      <span class="ttop">${IC("album", "")}<span class="trgt">${abdg}<span class="tgo nx">${CHEV}</span></span></span>
+      <span class="tmeta"><b>相簿分享</b><small class="tdesc">${pend ? `朋友放了 ${pend} 張等你確認` : "加密照片牆與影片分享"}</small></span>
+      <span class="tfoot"><span class="thint">${n ? "管理連結、權限與留言" : "挑個資料夾立即分享"}</span></span></button>`);
+  }
+  let h = `<div data-key="tb:${k}" data-sw><div class="tgrid" data-key="g-t:${k}" data-n="${tiles.length}">${tiles.join("")}</div>`;
   const L = linksOf(s).filter(x => !x.fixed);
-  if (L.length) h += `<div class="lbl" data-key="ll">常用連結</div><div class="group" data-key="g-lk:${k}">${L.map(x => linkRow(x, esc(linkSt(x)))).join("")}</div>`;
+  if (L.length) h += `<div class="lbl" data-key="ll">常用連結<button type="button" data-rename="${node}" data-name="${name}">編輯連結</button></div><div class="group lgrid" data-key="g-lk:${k}">${L.map(x => linkRow(x, esc(linkSt(x)))).join("")}</div>`;
   return h + `</div>`;
 }
 /* 一排主機名稱選一台（工具、設定共用，選了哪台兩邊都記得）；dot：名稱前面的小圓點 */
@@ -1121,24 +1156,37 @@ function secModal(k){
 /* 加密筆記：Joplin 用 WebDAV 同步到這台（筆記在手機上先加密，主機只存亂碼） */
 function notesModal(node, name){
   const q = node ? `?node=${encodeURIComponent(node)}` : "";
-  let D = null, pw = "", busy = false;
+  let D = null, pw = "", ek = "", busy = false;
   const v = document.createElement("div"); v.className = "veil";
-  v.innerHTML = `<div class="dialog pkd ntd">${IC("note", "big")}<h3>加密筆記</h3><p>${esc(name)}</p><div class="form"><div class="ntb">讀取中…</div><div class="msg"></div></div></div>`;
+  v.innerHTML = `<div class="dialog tdlg ntd"><div class="thead">${IC("note", "")}<div class="thead-t"><h3>加密筆記</h3><p>${esc(name)}</p></div><span class="tbadge ntbdg"></span></div>
+    <div class="form"><div class="ntb"><div class="abjob"><span class="spin"></span><span>讀取中…</span></div></div><div class="msg"></div></div></div>`;
   $("#layer").appendChild(v);
-  const body = v.querySelector(".ntb"), msg = v.querySelector(".msg");
+  const body = v.querySelector(".ntb"), msg = v.querySelector(".msg"), bdg = v.querySelector(".ntbdg");
   const url = () => (D.base || location.origin.replace(/^http:/, "https:")) + D.path;   // 只收 https
-  const row = (k, val, x = "", more = "") => `<div class="codebox ntr"><span class="ntk">${k}</span><code${x}>${esc(val)}</code>${more}<button type="button" class="ubtn sm ghost" data-ntcp="${k}">複製</button></div>`;
-  let ek = "";   // Joplin 的加密密碼（主機產生、加密存著；跟密碼一起，確認是你才給）
-  const st = () => D.files ? `${D.files} 個檔案・${size(D.size)}${D.last ? `・${ago(D.last)}同步過` : ""}` : "還沒同步過";
-  const draw = () => swapHTML(body, !D.on
-    ? `<p class="ntx">用 Joplin App 同步，筆記在手機上先加密，主機只存亂碼。</p><button type="button" class="ubtn" data-nt="on">打開</button>`
-    : `<div class="pcode">${row("網址", url())}${row("帳號", D.user)}${row("密碼", pw || "•".repeat(24), pw ? "" : ' class="ipb" data-ntshow role="button" tabindex="0"')}${row("加密", ek || "•".repeat(27), ek ? "" : ' class="ipb" data-ntshow role="button" tabindex="0"')}</div>
-      <div class="lbl">在 Joplin 設定</div>
-      <ol class="ntsteps"><li>加密 → 啟用加密，填「加密」那組（先做這步）</li><li>同步 → 選 WebDAV，填網址、帳號、密碼</li>${D.self_signed ? "<li>同步的進階選項 → 勾「忽略 TLS 憑證錯誤」</li>" : ""}</ol>
-
-      <div class="ntst">${I("note")}<span>${st()}</span></div>
-      <div class="dlnew"><button type="button" class="ubtn sm ghost" data-nt="new">換密碼</button><button type="button" class="ubtn sm ghost" data-nt="off">關掉</button></div>
-      <button type="button" class="ubtn sm ghost bad ntwipe" data-nt="wipe">${I("trash")}清除所有筆記</button>`);
+  const row = (k, label, val, secret = false) => `<div class="ntrow"><span class="ntk">${label}</span><code${secret ? ' class="ipb" data-ntshow role="button" tabindex="0" title="點一下顯示"' : ""}>${esc(val)}</code><button type="button" class="ubtn sm ghost copybtn" data-ntcp="${k}">${I("copy")}複製</button></div>`;
+  const draw = () => {
+    bdg.textContent = D.on ? "已開啟" : "未開啟";
+    bdg.className = "tbadge ntbdg" + (D.on ? " ok" : "");
+    const locked = !pw || !ek;
+    swapHTML(body, !D.on
+      ? `<div class="tcard ntonb"><p class="ntx">在手機和電腦用 Joplin App 同步筆記，內容先在你的裝置端對端加密，主機只存亂碼。</p>
+          <ul class="ntpts"><li>${I("lock")}<span>端對端加密，主機無法讀取內容</span></li><li>${I("archive")}<span>會自動納入每日備份</span></li><li>${I("devices")}<span>支援 iOS、Android、Mac、Windows</span></li></ul></div>
+        <button type="button" class="ubtn" data-nt="on">開啟加密筆記</button>`
+      : `<div class="ntstats">
+          <div><b class="num">${D.files || 0}</b><small>檔案數</small></div>
+          <div><b class="num">${D.files ? size(D.size) : "0 B"}</b><small>佔用空間</small></div>
+          <div><b>${D.last ? ago(D.last) : "尚未"}</b><small>最近同步</small></div>
+        </div>
+        <div class="tcard">
+          <div class="tcardh"><span>WebDAV 連線資訊</span>${locked ? `<button type="button" class="linkish" data-ntshow>顯示密碼</button>` : ""}</div>
+          <div class="ntlist">${row("網址", "網址", url())}${row("帳號", "帳號", D.user)}${row("密碼", "同步密碼", pw || "•".repeat(20), !pw)}${row("加密", "加密密碼", ek || "•".repeat(20), !ek)}</div>
+        </div>
+        <div class="tcard">
+          <div class="tcardh"><span>在 Joplin App 設定</span></div>
+          <ol class="ntsteps"><li><span><b>啟用加密</b>：到「加密」填入上面的「加密密碼」（先做這步）</span></li><li><span><b>設定同步</b>：到「同步」選 WebDAV，填入網址、帳號、同步密碼</span></li>${D.self_signed ? "<li><span><b>略過憑證</b>：同步進階選項勾選「忽略 TLS 憑證錯誤」</span></li>" : ""}</ol>
+        </div>
+        <div class="tfootbar"><button type="button" class="ubtn sm ghost" data-nt="new">換同步密碼</button><button type="button" class="ubtn sm ghost" data-nt="off">暫停同步</button><button type="button" class="ubtn sm ghost bad ntwipe" data-nt="wipe">${I("trash")}清除全部</button></div>`);
+  };
   const call = async b => {
     const r = await api("/api/notes" + q, {method:"POST", headers:{"X-Token":getTok(), "Content-Type":"application/json"}, body:JSON.stringify(b)});
     const x = await r.json().catch(() => ({}));
@@ -1172,7 +1220,7 @@ function notesModal(node, name){
       const b = t.closest("[data-nt]"); if (!b) return;
       const act = b.dataset.nt;
       if (act === "new" && !await modal({icon:"key", cls:"warn", title:"換一組密碼？", text:"舊密碼會立刻失效，每台 Joplin 都要重填。", ok:"換密碼"})) return;
-      if (act === "off" && !await modal({icon:"note", cls:"warn", title:"關掉加密筆記？", text:"Joplin 會連不上，筆記還留在主機上。", ok:"關掉"})) return;
+      if (act === "off" && !await modal({icon:"note", cls:"warn", title:"暫停加密筆記？", text:"Joplin 會連不上，筆記還留在主機上。", ok:"暫停"})) return;
       if (act === "wipe" && !await modal({icon:"trash", cls:"bad", title:"清除所有筆記？", text:"主機上的筆記全部刪掉、密碼都換新，救不回來；手機上的不動。", ok:"清除"})) return;
       const x = await run({action: act});
       if (x && act !== "on") toast(x.message || "好了");
@@ -1190,12 +1238,13 @@ const almLeft = a => !a.exp ? "不會過期" : (s => s > 172800 ? `${Math.round(
 const almAgo = t => { const s = Date.now() / 1000 - t; return s < 120 ? "剛剛" : s < 3600 ? `${Math.round(s / 60)} 分鐘前` : s < 86400 ? `${Math.round(s / 3600)} 小時前` : `${Math.round(s / 86400)} 天前`; };
 function albumModal(node, name){
   const q = node ? `?node=${encodeURIComponent(node)}` : "";
-  let D = null, view = "list", cur = null, dir = "", F = null, busy = false, PK = null, DV = null, TK = null, pwEdit = false;
+  let D = null, view = "list", cur = null, dir = "", F = null, busy = false, PK = null, DV = null, TK = null, tab = "basic";
   const o = {secs:604800, loc:true, dl:2, dev:0, talk:true, shy:true, snap:false, up:0, uq:1};
   const v = document.createElement("div"); v.className = "veil";
-  v.innerHTML = `<div class="dialog pkd almd">${IC("album", "big")}<h3>相簿分享</h3><p>${esc(name)}</p><div class="form"><div class="almb">讀取中…</div><div class="msg"></div></div></div>`;
+  v.innerHTML = `<div class="dialog tdlg wide almd"><div class="thead almhead">${IC("album", "")}<div class="thead-t"><h3>相簿分享</h3><p>${esc(name)}</p></div></div>
+    <div class="form"><div class="almb"><div class="abjob"><span class="spin"></span><span>讀取中…</span></div></div><div class="msg"></div></div></div>`;
   $("#layer").appendChild(v);
-  const body = v.querySelector(".almb"), msg = v.querySelector(".msg");
+  const head = v.querySelector(".almhead"), body = v.querySelector(".almb"), msg = v.querySelector(".msg");
   const base = () => (D && D.base) || location.origin;
   const link = a => `${base()}/a/${a.code}`;
   const call = async b => {
@@ -1213,67 +1262,93 @@ function albumModal(node, name){
   };
   const tg = (k, on, l, ic) => `<label class="almrw">${I(ic)}<span>${l}</span><input type="checkbox" class="tog" data-almo="${k}" aria-label="${l}"${on ? " checked" : ""}></label>`;
   const sg = (k, list, val) => `<div class="seg" data-alms="${k}">${list.map(([s, l]) => `<button type="button" class="${val === s ? "on" : ""}" data-v="${s}">${l}</button>`).join("")}</div>`;
-  const srow = (ic, l, k, list, val, side = "") => `<div class="almrw col"><div class="almrh">${I(ic)}<span>${l}</span><small class="alms" data-side="${k}">${side}</small></div>${sg(k, list, val)}</div>`;
+  const srow = (ic, l, k, list, val, side = "", extra = "") => `<div class="almrw col"${extra}><div class="almrh">${I(ic)}<span>${l}</span><small class="alms" data-side="${k}">${side}</small></div>${sg(k, list, val)}</div>`;
   const cover = a => a.cv ? `<img alt="" src="${esc(a.cv)}">` : `<i class="almph">${I("album")}</i>`;
   const meta = a => `${[a.n - (a.nv || 0) ? `${a.n - (a.nv || 0)} 張` : "", a.nv ? `${a.nv} 段影片` : ""].filter(Boolean).join("・")}${a.all > a.n ? `（共 ${a.all}）` : ""}・${almLeft(a)}`;
   const dlSide = d => ["朋友只能看", "長邊 2048 的 JPEG", "跟雲端硬碟裡一樣"][d];
   const upSide = u => ["", "你確認了才出現", "朋友放了馬上出現"][u] || "";
-  const pane = {
-    list: () => `<div class="almgrid">${D.list.map(a => `<button type="button" class="almcard" data-almid="${esc(a.id)}"><span class="almcv">${cover(a)}</span>
-        <span class="almcap"><b>${esc(a.name)}</b><small>${meta(a)}</small></span>${a.pw || a.dev || a.npend ? `<span class="almbdg${a.npend ? " pend" : ""}">${a.npend ? `${I("upl")}<em>${a.npend}</em>` : ""}${a.pw ? I("lock") : ""}${a.dev ? `<em>${a.ndev}／${a.dev}</em>` : ""}</span>` : ""}</button>`).join("")}
-        <button type="button" class="almcard add" data-alm="new"><span>${I("plus")}</span><b>${D.list.length ? "新增相簿" : "選一個資料夾"}</b></button></div>`,
-    pick: () => `<div class="almcrumb"><button type="button" data-almdir="">雲端硬碟</button>${dir ? dir.split("/").map((p, i, a) => `<span>/</span><button type="button" data-almdir="${esc(a.slice(0, i + 1).join("/"))}">${esc(p)}</button>`).join("") : ""}</div>
-      <div class="pklist almdirs">${F.subs.length ? F.subs.map(x => `<button type="button" class="pkrow" data-almdir="${esc((dir ? dir + "/" : "") + x.name)}">${I("folder")}<span><b>${esc(x.name)}</b><small>${x.n ? `${x.n} 張照片` : "沒有照片"}</small></span>${CHEV}</button>`).join("")
-        : `<div class="pkrow"><span><small>沒有其他資料夾</small></span></div>`}</div>
-      <button type="button" class="ubtn" data-alm="use"${F.n ? "" : " disabled"}>${F.n ? `用這個資料夾（${F.n} 張）` : "這裡沒有照片"}</button>
-      <button type="button" class="ubtn sm ghost" data-alm="list">${I("back")}返回</button>`,
-    opts: () => `<label>名稱<input class="field" data-almk="name" maxlength="40" value="${esc(dir.split("/").pop() || "相簿")}"></label>
-      <div class="almsec"><h4>誰能看</h4>${srow("clock", "能看多久", "secs", ALMT, o.secs)}${srow("devices", "幾台設備", "dev", ALMD, o.dev)}
-        <div class="almrw col"><div class="almrh">${I("lock")}<span>密碼</span></div><input class="field" data-almk="pw" type="password" maxlength="64" autocomplete="new-password" placeholder="不設"></div></div>
-      <div class="almsec"><h4>能做什麼</h4>${srow("dl", "下載", "dl", ALMDL, o.dl, dlSide(o.dl))}${srow("upl", "朋友放照片", "up", ALMUP, o.up, upSide(o.up))}${srow("disk", "朋友最多放", "uq", ALMUQ, o.uq, "一個人最多四分之一")}${tg("loc", o.loc, "顯示地點和地圖", "mpin")}${tg("talk", o.talk, "朋友可以按愛心、留言", "chat")}${tg("shy", o.shy, "離開畫面、截圖時照片變糊", "shield")}${tg("snap", o.snap, "按截圖鍵就鎖住那台設備", "lock")}</div>
-      <button type="button" class="ubtn" data-alm="make">做好連結</button><button type="button" class="ubtn sm ghost" data-alm="pick">${I("back")}換資料夾</button>`,
-    one: () => { const a = D.list.find(x => x.id === cur); if (!a) return pane.list();
-      return `<div class="almhero"><span class="almcv">${cover(a)}</span><span class="almcap"><b>${esc(a.name)}</b><small>${meta(a)}</small></span></div>
-      <div class="codebox"><code>${esc(link(a))}</code><button type="button" class="ubtn sm ghost" data-alm="copy">${navigator.share && matchMedia("(pointer:coarse)").matches ? "分享" : "複製"}</button></div>
-      <div class="almacts"><a href="${esc(link(a))}" target="_blank" rel="noopener noreferrer">${EXT}<span>打開看看</span></a>
-        ${a.nup ? `<button type="button" class="almnew${a.npend ? " hot" : ""}" data-alm="pend">${I("upl")}<span>朋友放的</span><small>${a.npend ? `${a.npend} 個等你確認` : `${a.nup} 個`}</small></button>` : ""}
-        <button type="button" data-alm="photos">${I("album")}<span>挑照片</span><small>${a.n}／${a.all - (a.npend || 0)}</small></button>
-        <button type="button" data-alm="devs">${I("devices")}<span>看過的設備</span><small>${a.nlock ? `${I("lock")}${a.nlock}・` : ""}${a.ndev}${a.dev ? `／${a.dev}` : ""}</small></button>
-        <button type="button" data-alm="talk">${I("chat")}<span>留言</span><small>${a.ncm}${a.nlk ? `・♥ ${a.nlk}` : ""}</small></button></div>
-      <div class="almsec"><h4>介紹</h4><div class="almrw col"><textarea class="field" data-almk="intro" rows="3" maxlength="300" placeholder="寫幾句話，放在封面下面">${esc(a.intro || "")}</textarea>
-        <div class="almin"><button type="button" class="ubtn sm" data-alm="intro">存好</button></div></div></div>
-      <div class="almsec"><h4>誰能看</h4>${srow("clock", "能看多久", "secs", ALMT, -1, almLeft(a))}${srow("devices", "幾台設備", "dev", ALMD, a.dev, a.dev ? `${a.ndev} 台在看` : "")}
-        <div class="almrw col"><div class="almrh">${I("lock")}<span>密碼</span><small class="alms">${a.pw ? "已設定" : "沒有"}</small></div>
-          <div class="almin"><input class="field" data-almk="pw" type="password" maxlength="64" autocomplete="new-password" placeholder="${a.pw ? "輸入新的就換掉" : "不設"}"><button type="button" class="ubtn sm" data-alm="pw">${a.pw ? "換" : "設定"}</button>${a.pw ? `<button type="button" class="ubtn sm ghost" data-alm="nopw">拿掉</button>` : ""}</div></div></div>
-      <div class="almsec"><h4>能做什麼</h4>${srow("dl", "下載", "dl", ALMDL, a.dl, dlSide(a.dl))}${srow("upl", "朋友放照片", "up", ALMUP, a.up || 0, upSide(a.up || 0))}${srow("disk", "朋友最多放", "uq", ALMUQ, a.uq || 1, `已放 ${almGB(a.uused || 0)}`)}${tg("loc", a.loc, "顯示地點和地圖", "mpin")}${tg("talk", a.talk, "朋友可以按愛心、留言", "chat")}${tg("shy", a.shy !== false, "離開畫面、截圖時照片變糊", "shield")}${tg("snap", a.snap, "按截圖鍵就鎖住那台設備", "lock")}
+  const curA = () => D && D.list.find(x => x.id === cur);
+  const paintHead = () => {
+    const a = curA();
+    if (view === "list") {
+      const n = D && D.list ? D.list.length : 0;
+      head.innerHTML = `${IC("album", "")}<div class="thead-t"><h3>相簿分享</h3><p>${esc(name)}${D ? `・${n ? `${n} 本分享中` : "還沒分享"}` : ""}</p></div>${D && D.cloud ? `<button type="button" class="ubtn sm" data-alm="new">${I("plus")}新增</button>` : ""}`;
+      return;
+    }
+    const cfg = {
+      pick: ["list", "選擇資料夾", "步驟 1／2・從雲端硬碟挑選"],
+      opts: ["pick", "建立相簿設定", "步驟 2／2・設定誰能看與權限"],
+      one: ["list", a ? a.name : "相簿設定", a ? meta(a) : name],
+      photos: ["back", "挑照片", a ? a.name : ""],
+      pend: ["back", "朋友放的照片", a ? a.name : ""],
+      devs: ["back", "看過的設備", a ? a.name : ""],
+      talk: ["back", "留言與愛心", a ? a.name : ""],
+    }[view] || ["list", "相簿分享", name];
+    head.innerHTML = `<button type="button" class="iconbtn almback" data-alm="${cfg[0]}" title="返回">${I("back")}</button><div class="thead-t"><h3>${esc(cfg[1])}</h3><p>${esc(cfg[2])}</p></div>`;
+  };
+  const oneTabBody = a => tab === "basic"
+    ? `<div class="almsec"><h4>名稱與介紹</h4>
+        <div class="almrw col"><div class="almrh">${I("edit")}<span>相簿名稱</span></div><input class="field" data-almk="name" maxlength="40" value="${esc(a.name)}"></div>
+        <div class="almrw col"><div class="almrh">${I("quote")}<span>封面介紹</span><small class="alms">選填・最多 300 字</small></div><textarea class="field" data-almk="intro" rows="2" maxlength="300" placeholder="寫幾句話，放在封面下面">${esc(a.intro || "")}</textarea>
+          <div class="almin end"><button type="button" class="ubtn sm" data-alm="meta">儲存文字</button></div></div></div>
+      <div class="almsec"><h4>誰能看</h4>${srow("clock", "能看多久", "secs", ALMT, -1, almLeft(a))}${srow("devices", "幾台設備", "dev", ALMD, a.dev, a.dev ? `${a.ndev} 台在看` : "不限")}
+        <div class="almrw col"><div class="almrh">${I("lock")}<span>存取密碼</span><small class="alms">${a.pw ? "已設定" : "沒有"}</small></div>
+          <div class="almin"><input class="field" data-almk="pw" type="password" maxlength="64" autocomplete="new-password" placeholder="${a.pw ? "輸入新密碼更換" : "不設密碼"}"><button type="button" class="ubtn sm" data-alm="pw">${a.pw ? "更換" : "設定"}</button>${a.pw ? `<button type="button" class="ubtn sm ghost" data-alm="nopw">拿掉</button>` : ""}</div></div></div>`
+    : `<div class="almsec"><h4>下載與協作</h4>${srow("dl", "允許下載", "dl", ALMDL, a.dl, dlSide(a.dl))}${srow("upl", "朋友放照片", "up", ALMUP, a.up || 0, upSide(a.up || 0))}${srow("disk", "朋友最多放", "uq", ALMUQ, a.uq || 1, `已放 ${almGB(a.uused || 0)}`, a.up ? ' data-almuq' : ' data-almuq hidden')}${tg("talk", a.talk, "朋友可以按愛心、留言", "chat")}</div>
+      <div class="almsec"><h4>隱私與呈現</h4>${tg("loc", a.loc, "顯示拍攝地點和地圖", "mpin")}${tg("shy", a.shy !== false, "離開畫面、截圖時照片變糊", "shield")}${tg("snap", a.snap, "按截圖鍵就鎖住那台設備", "lock")}
         <div class="almrw">${I("music")}<span>幻燈片配樂</span><small class="alms">${a.mu ? esc(a.mu) : "放一首歌進資料夾就有"}</small></div>
         <div class="almrw col"><div class="almrh">${I("edit")}<span>浮水印</span><small class="alms">${a.wm ? (a.wmok ? "印在照片上" : "只蓋在畫面上") : "沒有"}</small></div>
-          <div class="almin"><input class="field" data-almk="wm" maxlength="24" value="${esc(a.wm)}" placeholder="例如 © 你的名字"><button type="button" class="ubtn sm" data-alm="wm">${a.wm ? "換" : "加上"}</button>${a.wm ? `<button type="button" class="ubtn sm ghost" data-alm="nowm">拿掉</button>` : ""}</div></div></div>
-      <button type="button" class="ubtn sm ghost bad ntwipe" data-alm="del">${I("trash")}收回連結</button>
-      <button type="button" class="ubtn sm ghost" data-alm="list">${I("back")}全部相簿</button>`; },
+          <div class="almin"><input class="field" data-almk="wm" maxlength="24" value="${esc(a.wm)}" placeholder="例如 © 你的名字"><button type="button" class="ubtn sm" data-alm="wm">${a.wm ? "更換" : "加上"}</button>${a.wm ? `<button type="button" class="ubtn sm ghost" data-alm="nowm">拿掉</button>` : ""}</div></div></div>`;
+  const pane = {
+    list: () => D.list.length
+      ? `<div class="almgrid">${D.list.map(a => `<div class="almcard" data-almid="${esc(a.id)}" role="button" tabindex="0"><span class="almcv">${cover(a)}</span>
+          <button type="button" class="almcpy" data-almcp="${esc(a.id)}" title="複製連結" aria-label="複製連結">${I("copy")}</button>
+          <span class="almcap"><b>${esc(a.name)}</b><small>${meta(a)}</small></span>${a.pw || a.dev || a.npend ? `<span class="almbdg${a.npend ? " pend" : ""}">${a.npend ? `${I("upl")}<em>${a.npend}</em>` : ""}${a.pw ? I("lock") : ""}${a.dev ? `<em>${a.ndev}／${a.dev}</em>` : ""}</span>` : ""}</div>`).join("")}</div>`
+      : `<div class="tcard dlempty">${I("album")}<b>還沒有分享任何相簿</b><small>選一個雲端硬碟資料夾，馬上變成專屬加密照片牆</small><button type="button" class="ubtn" data-alm="new">${I("plus")}選資料夾開始</button></div>`,
+    pick: () => `<div class="almcrumb"><button type="button" data-almdir="">雲端硬碟</button>${dir ? dir.split("/").map((p, i, a) => `<span>/</span><button type="button" data-almdir="${esc(a.slice(0, i + 1).join("/"))}">${esc(p)}</button>`).join("") : ""}</div>
+      <div class="pklist almdirs">${F.subs.length ? F.subs.map(x => `<button type="button" class="pkrow" data-almdir="${esc((dir ? dir + "/" : "") + x.name)}">${I("folder")}<span><b>${esc(x.name)}</b><small>${x.n ? `${x.n} 張照片` : "沒有照片"}</small></span>${CHEV}</button>`).join("")
+        : `<div class="pkrow"><span><small>沒有其他子資料夾</small></span></div>`}</div>
+      <button type="button" class="ubtn" data-alm="use"${F.n ? "" : " disabled"}>${F.n ? `用這個資料夾（${F.n} 張）` : "這個資料夾裡沒有照片"}</button>`,
+    opts: () => `<div class="almsec"><h4>相簿資訊</h4><div class="almrw col"><div class="almrh">${I("edit")}<span>相簿名稱</span></div><input class="field" data-almk="name" maxlength="40" value="${esc(dir.split("/").pop() || "相簿")}"></div></div>
+      <div class="almsec"><h4>誰能看</h4>${srow("clock", "能看多久", "secs", ALMT, o.secs)}${srow("devices", "幾台設備", "dev", ALMD, o.dev)}
+        <div class="almrw col"><div class="almrh">${I("lock")}<span>存取密碼</span></div><input class="field" data-almk="pw" type="password" maxlength="64" autocomplete="new-password" placeholder="留空表示不設密碼"></div></div>
+      <div class="almsec"><h4>能做什麼</h4>${srow("dl", "允許下載", "dl", ALMDL, o.dl, dlSide(o.dl))}${srow("upl", "朋友放照片", "up", ALMUP, o.up, upSide(o.up))}${srow("disk", "朋友最多放", "uq", ALMUQ, o.uq, "一個人最多四分之一", o.up ? ' data-almuq' : ' data-almuq hidden')}${tg("loc", o.loc, "顯示拍攝地點和地圖", "mpin")}${tg("talk", o.talk, "朋友可以按愛心、留言", "chat")}${tg("shy", o.shy, "離開畫面、截圖時照片變糊", "shield")}${tg("snap", o.snap, "按截圖鍵就鎖住那台設備", "lock")}</div>
+      <button type="button" class="ubtn" data-alm="make">建立分享連結</button>`,
+    one: () => { const a = curA(); if (!a) return pane.list();
+      const shareTxt = navigator.share && matchMedia("(pointer:coarse)").matches ? "分享" : "複製";
+      return `<div class="almhero2"><span class="almcv">${cover(a)}</span><div class="almhinfo">
+          <div class="codebox almurl"><code>${esc(link(a))}</code><button type="button" class="ubtn sm copybtn" data-alm="copy">${I("copy")}${shareTxt}</button></div>
+          <div class="almchips">${a.pw ? `<span>${I("lock")}有密碼</span>` : ""}${a.dev ? `<span>${I("devices")}限 ${a.dev} 台</span>` : ""}${a.wm ? `<span>${I("edit")}浮水印</span>` : ""}<span>${I("dl")}${["不可下載", "壓縮圖", "原圖"][a.dl]}</span></div>
+        </div></div>
+      ${a.nup ? `<button type="button" class="almnew${a.npend ? " hot" : ""}" data-alm="pend">${I("upl")}<span>朋友放的照片</span><small>${a.npend ? `${a.npend} 個等你確認` : `共 ${a.nup} 個`}</small>${CHEV}</button>` : ""}
+      <div class="almacts"><a href="${esc(link(a))}" target="_blank" rel="noopener noreferrer">${EXT}<span>打開看看</span><small>預覽相簿</small></a>
+        <button type="button" data-alm="photos">${I("album")}<span>挑照片</span><small class="num">${a.n}／${a.all - (a.npend || 0)}</small></button>
+        <button type="button" data-alm="devs">${I("devices")}<span>看過的設備</span><small class="num">${a.nlock ? `${I("lock")}${a.nlock}・` : ""}${a.ndev}${a.dev ? `／${a.dev}` : ""}</small></button>
+        <button type="button" data-alm="talk">${I("chat")}<span>留言</span><small class="num">${a.ncm}${a.nlk ? `・♥ ${a.nlk}` : ""}</small></button></div>
+      <div class="seg almtab"><button type="button" class="${tab === "basic" ? "on" : ""}" data-almtab="basic">基本與權限</button><button type="button" class="${tab === "more" ? "on" : ""}" data-almtab="more">互動與保護</button></div>
+      <div class="almtbody">${oneTabBody(a)}</div>
+      <div class="tfootbar almfoot"><button type="button" class="ubtn sm ghost bad ntwipe" data-alm="del">${I("trash")}收回分享連結</button></div>`; },
     photos: () => { const n = PK.photos.filter(p => !p.hid).length;
-      return `<div class="almpkh"><b>分享 <span class="num">${n}</span>／${PK.photos.length} 張</b><button type="button" class="ubtn sm ghost" data-alm="pkall">${n === PK.photos.length ? "全部不選" : "全選"}</button></div>
+      return `<div class="almpkh"><b>已選 <span class="num">${n}</span>／${PK.photos.length} 張</b><button type="button" class="ubtn sm ghost" data-alm="pkall">${n === PK.photos.length ? "全部不選" : "全選"}</button></div>
       <div class="almpk">${PK.photos.map(p => `<button type="button" class="${p.hid ? "off" : ""}" data-almp="${p.i}" aria-pressed="${!p.hid}">${p.q ? `<img class="lq" alt="" src="data:image/jpeg;base64,${p.q}">` : ""}<img alt="" loading="lazy" src="${esc(`${PK.base || base()}/a/${PK.code}/i/${p.i}/s?v=${p.v}&own=${encodeURIComponent(PK.own)}`)}"><i>${I("ok")}</i>${p.vd ? `<em class="num">${Math.floor(p.vd / 60)}:${String(Math.round(p.vd % 60)).padStart(2, "0")}</em>` : ""}</button>`).join("")}</div>
-      <button type="button" class="ubtn" data-alm="pksave"${n ? "" : " disabled"}>${n ? "存好" : "至少留一張"}</button><button type="button" class="ubtn sm ghost" data-alm="back">${I("back")}返回</button>`; },
-    devs: () => `${DV.devs.length || DV.dev ? `<div class="almpkh"><b>${DV.dev ? `限 ${DV.dev} 台・用了 ${DV.devs.length} 台` : `${DV.devs.length} 台設備看過`}</b></div>` : ""}
+      <button type="button" class="ubtn" data-alm="pksave"${n ? "" : " disabled"}>${n ? "儲存挑選結果" : "至少留一張"}</button>`; },
+    devs: () => `${DV.devs.length || DV.dev ? `<div class="almpkh"><b>${DV.dev ? `限 ${DV.dev} 台・已用 ${DV.devs.length} 台` : `${DV.devs.length} 台設備看過`}</b></div>` : ""}
       ${DV.devs.length ? `<div class="pklist">${DV.devs.map(d => `<div class="pkrow almdv">${almIcon(d)}<span><b>${esc(almDv(d)[0])}</b>${almDv(d)[1] ? `<small>${esc(almDv(d)[1])}</small>` : ""}<small>${d.lk ? `${almAgo(d.lk)}按了截圖，鎖住了` : `${almAgo(d.t)}・看了 ${d.c} 次`}</small></span>${d.lk ? `<button type="button" class="ubtn sm" data-almunlk="${esc(d.h)}">解除</button>` : ""}<button type="button" class="ubtn sm ghost bad" data-almkick="${esc(d.h)}">踢掉</button></div>`).join("")}</div>`
-        : `<p class="ntx">還沒有人打開</p>`}
-      <button type="button" class="ubtn sm ghost" data-alm="back">${I("back")}返回</button>`
+        : `<div class="tcard dlempty">${I("devices")}<b>還沒有人打開</b><small>把連結傳給朋友後，看過的設備會列在這裡</small></div>`}`
   };
   const pkImg = p => `${p.q ? `<img class="lq" alt="" src="data:image/jpeg;base64,${p.q}">` : ""}<img alt="" loading="lazy" src="${esc(`${PK.base || base()}/a/${PK.code}/i/${p.i}/s?v=${p.v}&own=${encodeURIComponent(PK.own)}`)}"><i>${I("ok")}</i>`;
   pane.pend = () => { const L = PK.pend, n = L.filter(p => p.sel).length, np = L.filter(p => p.sel && p.pend).length, who = [...new Set(L.map(p => p.u))];
-    return `<div class="almpkh"><b>選了 <span class="num">${n}</span>／${L.length}</b><button type="button" class="ubtn sm ghost" data-alm="pdall">${n === L.length ? "全部不選" : "全選"}</button></div>
+    return `<div class="almpkh"><b>已選 <span class="num">${n}</span>／${L.length}</b><button type="button" class="ubtn sm ghost" data-alm="pdall">${n === L.length ? "全部不選" : "全選"}</button></div>
       <div class="almups">${who.map(w => { const G = L.filter(p => p.u === w), k = G.filter(p => p.sel).length;
         return `<div class="almwho"><div class="almpkh"><b>${esc(w)}<small class="num">${G.length}</small></b><button type="button" class="ubtn sm ghost" data-almw="${esc(w)}">${k === G.length ? "不選" : "選這個人全部"}</button></div>
         <div class="almpk">${G.map(p => `<button type="button" class="${p.sel ? "" : "off"}" data-almq="${p.i}" aria-pressed="${!!p.sel}">${pkImg(p)}${p.pend ? `<em class="ub">等你確認</em>` : ""}</button>`).join("")}</div></div>`; }).join("")}</div>
-      <div class="almin almq">${L.some(p => p.pend) ? `<button type="button" class="ubtn" data-alm="okup"${np ? "" : " disabled"}>放上去</button>` : ""}<button type="button" class="ubtn ghost bad" data-alm="noup"${n ? "" : " disabled"}>${I("trash")}刪掉</button></div>
-      <button type="button" class="ubtn sm ghost" data-alm="back">${I("back")}返回</button>`; };
+      <div class="almin almq">${L.some(p => p.pend) ? `<button type="button" class="ubtn" data-alm="okup"${np ? "" : " disabled"}>放上去</button>` : ""}<button type="button" class="ubtn ghost bad" data-alm="noup"${n ? "" : " disabled"}>${I("trash")}刪掉</button></div>`; };
   pane.talk = () => { const im = (i, ver) => esc(`${TK.base || base()}/a/${TK.code}/i/${i}/s?v=${ver}&own=${encodeURIComponent(TK.own)}`);
     return `${TK.likes.length ? `<div class="almpkh"><b>最多愛心</b></div><div class="almlk">${TK.likes.map(l => `<span><img alt="" loading="lazy" src="${im(l.i, l.v)}"><em class="num">${I("heart")}${l.n}</em></span>`).join("")}</div>` : ""}
       <div class="almpkh"><b>${TK.c.length ? `${TK.c.length} 則留言` : "還沒有人留言"}</b></div>
-      ${TK.c.length ? `<div class="pklist almtk">${TK.c.map(c => `<div class="pkrow">${c.gb ? `<span class="almgb">${I("chat")}</span>` : `<img alt="" loading="lazy" src="${im(c.i, c.v)}">`}<span><b>${esc(c.n)}<small>${almAgo(c.t)}</small></b><small>${esc(c.s)}</small></span><button type="button" class="ubtn sm ghost bad" data-almtk="${esc(c.i)}|${esc(c.id)}" aria-label="刪掉">${I("trash")}</button></div>`).join("")}</div>` : ""}
-      <button type="button" class="ubtn sm ghost" data-alm="back">${I("back")}返回</button>`; };
-  const draw = () => swapHTML(body, pane[view]());
+      ${TK.c.length ? `<div class="pklist almtk">${TK.c.map(c => `<div class="pkrow">${c.gb ? `<span class="almgb">${I("chat")}</span>` : `<img alt="" loading="lazy" src="${im(c.i, c.v)}">`}<span><b>${esc(c.n)}<small>${almAgo(c.t)}</small></b><small>${esc(c.s)}</small></span><button type="button" class="ubtn sm ghost bad" data-almtk="${esc(c.i)}|${esc(c.id)}" aria-label="刪掉">${I("trash")}</button></div>`).join("")}</div>`
+        : `<div class="tcard dlempty">${I("chat")}<b>還沒有人留言</b><small>朋友在相簿按讚或留一句話會出現在這裡</small></div>`}`; };
+  const draw = () => { paintHead(); swapHTML(body, pane[view]()); };
   const share = async a => {
     const url = link(a);
     if (navigator.share && matchMedia("(pointer:coarse)").matches) { try { await navigator.share({title:a.name, url}); } catch (e) { /* 取消分享 */ } return; }
@@ -1281,7 +1356,7 @@ function albumModal(node, name){
   };
   const goDir = async d => { const x = await run({action:"folders", dir:d}); if (x) { F = x; dir = x.dir; view = "pick"; draw(); } };
   const side = (k, t) => { const s = v.querySelector(`[data-side="${k}"]`); if (s) s.textContent = t; };
-  run({action:"list"}).then(x => { if (!x) return; if (!x.cloud) { swapHTML(body, `<p class="ntx">這台沒有雲端硬碟</p>`); return; } draw(); });
+  run({action:"list"}).then(x => { if (!x) return; if (!x.cloud) { paintHead(); swapHTML(body, `<p class="ntx">這台沒有雲端硬碟</p>`); return; } draw(); });
   return new Promise(res => {
     const done = () => { if (v._d) return; v._d = 1; v.classList.add("closing"); setTimeout(() => { v.remove(); res(); }, 360); };
     v._esc = done;
@@ -1296,30 +1371,41 @@ function albumModal(node, name){
     v.addEventListener("click", async e => {
       if (e.target === v) return done();
       const t = e.target;
+      const tb = t.closest("[data-almtab]");
+      if (tb) {
+        if (tb.dataset.almtab === tab) return;
+        tab = tb.dataset.almtab;
+        v.querySelectorAll("[data-almtab]").forEach(x => x.classList.toggle("on", x === tb));
+        const a = curA(), box = v.querySelector(".almtbody");
+        if (a && box) swapHTML(box, oneTabBody(a));
+        return;
+      }
       const sb = t.closest("[data-alms] button");
       if (sb) {
         const k = sb.parentNode.dataset.alms, val = +sb.dataset.v;
         sb.parentNode.querySelectorAll("button").forEach(x => x.classList.toggle("on", x === sb));
         if (k === "dl") side("dl", dlSide(val));
-        if (k === "up") side("up", upSide(val));
+        if (k === "up") { side("up", upSide(val)); const uq = v.querySelector("[data-almuq]"); if (uq) reveal(uq, val > 0); }
         if (view === "opts") { o[k] = val; return; }
         const x = await run({action:"edit", id:cur, [k]:val}); if (!x) return;
-        const a = D.list.find(y => y.id === cur);
-        if (k === "secs") { toast(val ? `從現在起 ${sb.textContent}` : "不會過期了"); if (a) side("secs", almLeft(a)); }
-        if (k === "dev") { toast(val ? `只給 ${val} 台設備看` : "幾台設備都能看"); if (a) side("dev", val ? `${a.ndev} 台在看` : ""); }
+        const a = curA();
+        if (k === "secs") { toast(val ? `從現在起 ${sb.textContent}` : "不會過期了"); if (a) { side("secs", almLeft(a)); paintHead(); } }
+        if (k === "dev") { toast(val ? `只給 ${val} 台設備看` : "幾台設備都能看"); if (a) side("dev", val ? `${a.ndev} 台在看` : "不限"); }
         if (k === "dl") toast(["朋友不能下載了", "只能下載壓縮圖", "可以下載原圖"][val]);
         if (k === "up") { toast(["朋友不能放照片了", "朋友放的要你確認", "朋友放的馬上出現"][val]); if (a && val === 2 && a.npend) draw(); }
         if (k === "uq") toast(`朋友最多放 ${val} GB`);
         return;
       }
+      const cpy = t.closest("[data-almcp]");
+      if (cpy) { const a = D && D.list.find(x => x.id === cpy.dataset.almcp); if (a) share(a); return; }
       const row = t.closest("[data-almid]");
-      if (row) { cur = row.dataset.almid; view = "one"; pwEdit = false; return draw(); }
+      if (row) { cur = row.dataset.almid; view = "one"; tab = "basic"; return draw(); }
       const dd = t.closest("[data-almdir]");
       if (dd) return goDir(dd.dataset.almdir);
       const pp = t.closest("[data-almp]");
       if (pp) { const p = PK.photos.find(x => x.i === pp.dataset.almp); p.hid = !p.hid; pp.classList.toggle("off", p.hid); pp.setAttribute("aria-pressed", String(!p.hid));
         const n = PK.photos.filter(x => !x.hid).length, h = v.querySelector(".almpkh .num"); if (h) h.textContent = n;
-        const sv = v.querySelector('[data-alm="pksave"]'); if (sv) { sv.disabled = !n; sv.textContent = n ? "存好" : "至少留一張"; }
+        const sv = v.querySelector('[data-alm="pksave"]'); if (sv) { sv.disabled = !n; sv.textContent = n ? "儲存挑選結果" : "至少留一張"; }
         const al = v.querySelector('[data-alm="pkall"]'); if (al) al.textContent = n === PK.photos.length ? "全部不選" : "全選";
         return; }
       const pq = t.closest("[data-almq]");
@@ -1355,7 +1441,7 @@ function albumModal(node, name){
         return;
       }
       const b = t.closest("[data-alm]"); if (!b) return;
-      const act = b.dataset.alm, a = D && D.list.find(x => x.id === cur);
+      const act = b.dataset.alm, a = curA();
       if (act === "list") { view = "list"; return draw(); }
       if (act === "back") { if (view === "talk" || view === "devs" || view === "pend") await run({action:"list"}); view = "one"; return draw(); }
       if (act === "new" || act === "pick") return goDir(act === "pick" ? dir.split("/").slice(0, -1).join("/") : "");
@@ -1365,8 +1451,8 @@ function albumModal(node, name){
         if (pw && pw.length < 4) return sayTo(msg, "密碼要 4 個字以上");
         const x = await run({action:"add", dir, name:nm, pw, secs:o.secs, loc:o.loc, dl:o.dl, dev:o.dev, talk:o.talk, shy:o.shy, snap:o.snap, up:o.up, uq:o.uq});
         if (!x) return;
-        cur = x.id; view = "one"; draw();
-        const na = D.list.find(y => y.id === cur); if (na) share(na);
+        cur = x.id; view = "one"; tab = "basic"; draw();
+        const na = curA(); if (na) share(na);
         return;
       }
       if (!a) return;
@@ -1393,9 +1479,10 @@ function albumModal(node, name){
         if (await run({action:"edit", id:cur, pw})) { toast(pw ? "密碼換好了，舊的立刻失效" : "拿掉密碼了"); draw(); }
         return;
       }
-      if (act === "intro") {
-        const intro = v.querySelector('[data-almk="intro"]').value.trim();
-        if (await run({action:"edit", id:cur, intro})) toast(intro ? "介紹存好了" : "拿掉介紹了");
+      if (act === "meta") {
+        const nm = v.querySelector('[data-almk="name"]').value.trim(), intro = v.querySelector('[data-almk="intro"]').value.trim();
+        if (!nm) return sayTo(msg, "相簿名稱不能留空");
+        if (await run({action:"edit", id:cur, name:nm, intro})) { toast("已儲存"); paintHead(); }
         return;
       }
       if (act === "wm" || act === "nowm") {
@@ -1412,8 +1499,15 @@ function albumModal(node, name){
   });
 }
 /* 擋廣告 DNS（AdGuard Home）：手機的 DNS 設成這台，只開加密的 DoH／DoT */
-const abSt = a => a.job ? "設定中…" : a.on ? (a.pct != null ? `擋掉 ${a.pct}%` : "已打開") : "還沒打開";
-const abTile = (s, node, name) => s.adblock ? `<button class="tbx" data-key="ab" data-ab="${node}" data-name="${name}"><span class="ttop">${IC("dnsf", "")}<span class="tgo nx">${CHEV}</span></span><b>AdGuard Home</b><small data-x>${abSt(s.adblock)}</small></button>` : "";
+const abSt = a => a.job ? ["設定中", "act"] : a.err ? ["有狀況", "bad"] : a.on ? [a.pct != null ? `擋掉 ${a.pct}%` : "運作中", "ok"] : ["未開啟", ""];
+const abTile = (s, node, name) => {
+  if (!s.adblock) return "";
+  const a = s.adblock, [bt, bc] = abSt(a);
+  return `<button class="tbx" data-key="ab" data-ab="${node}" data-name="${name}">
+    <span class="ttop">${IC("dnsf", "")}<span class="trgt">${tBadge(bt, bc)}<span class="tgo nx">${CHEV}</span></span></span>
+    <span class="tmeta"><b>AdGuard Home</b><small class="tdesc" data-x>${a.err ? "點進檢查連線與防火牆" : a.on ? "加密 DNS 擋廣告" : "啟用專屬擋廣告 DNS"}</small></span>
+    <span class="tfoot">${a.on && a.pct != null ? wave(a.pct) : `<span class="thint">${a.on ? "DoT / DoH 加密連線" : "點進一鍵安裝設定"}</span>`}</span></button>`;
+};
 /* AdGuard Home 自己的管理頁：跟雲端硬碟一樣先驗證是你，再用一次性登入票進去（不用記它的帳號密碼） */
 async function openAgh(node, name){
   const has = await pkCall("/api/passkey-login", {action:"has"}).catch(() => ({}));
@@ -1481,38 +1575,66 @@ const qrSvg = t => { const M = qrMat(t); if (!M) return ""; const n = M.length; 
 function abModal(node, name){
   const q = node ? `?node=${encodeURIComponent(node)}` : "";
   const ios = /iPhone|iPad/.test(navigator.userAgent) || navigator.maxTouchPoints > 1 && /Macintosh/.test(navigator.userAgent);
-  let D = null, busy = false, os = ios || /Macintosh/.test(navigator.userAgent) ? "ios" : "and", tm = 0, last = "", lt = "top", qrk = "";
+  let D = null, busy = false, os = ios || /Macintosh/.test(navigator.userAgent) ? "ios" : "and", tm = 0, last = "", mt = "stat", lt = "top", qrk = "";
   const v = document.createElement("div"); v.className = "veil";
-  v.innerHTML = `<div class="dialog pkd ntd abd">${IC("dnsf", "big")}<h3>AdGuard Home</h3><p>${esc(name)}</p><div class="form"><div class="ntb">讀取中…</div><div class="msg"></div></div></div>`;
+  v.innerHTML = `<div class="dialog tdlg ntd abd"><div class="thead">${IC("dnsf", "")}<div class="thead-t"><h3>AdGuard Home</h3><p>${esc(name)}</p></div><span class="tbadge abbdg"></span></div>
+    <div class="form"><div class="ntb"><div class="abjob"><span class="spin"></span><span>讀取中…</span></div></div><div class="msg"></div></div></div>`;
   $("#layer").appendChild(v);
-  const body = v.querySelector(".ntb"), msg = v.querySelector(".msg");
+  const body = v.querySelector(".ntb"), msg = v.querySelector(".msg"), bdg = v.querySelector(".abbdg");
   const num = n => n >= 1e6 ? (n / 1e6).toFixed(1) + "M" : n >= 1e4 ? Math.round(n / 1e3) + "K" : String(n);
-  const stats = x => {
-    if (!x) return `<div class="ntst">${I("clock")}<span>統計讀取中</span></div>`;
-    const mx = Math.max(1, ...x.hrs);
-    return `<div class="abn"><div><b>${num(x.q)}</b><small>查詢</small></div><div><b>${num(x.b)}</b><small>擋掉</small></div><div><b>${x.pct}%</b><small>比例</small></div></div>
-      ${x.hrs.length ? `<div class="abh" title="最近 24 小時擋掉的次數">${x.hrs.map(n => `<i style="--h:${Math.max(4, Math.round(n * 100 / mx))}%"></i>`).join("")}</div>` : ""}
-      ${x.top.length || (x.recent || []).length ? `<div class="seg abtab"><button type="button" class="${lt === "top" ? "on" : ""}" data-ablt="top">最常擋的</button><button type="button" class="${lt === "new" ? "on" : ""}" data-ablt="new">最近擋的</button></div><div class="abls">${abls(x)}</div>` : ""}`;
-  };
-  const abls = x => { const r = lt === "top" ? x.top.map(([d, n]) => alRow(d, n)) : (x.recent || []).map(([d, t]) => alRow(d, null, ago(t)));
-    return r.length ? `<div class="abtop">${r.join("")}</div>` : `<div class="ntst">${I("info")}<span>還沒有</span></div>`; };
-  /* 擋錯了一鍵放行（放行過的再按一次恢復擋） */
   const alRow = (d, n, t) => { const ok = (D.allow || []).includes(d);
-    return `<div><span>${esc(d)}</span>${n == null ? "" : `<b>${num(n)}</b>`}${t ? `<small>${t}</small>` : ""}<button type="button" class="ubtn sm ghost" data-abal="${esc(d)}" data-on="${ok ? 0 : 1}">${ok ? "恢復擋" : "放行"}</button></div>`; };
-  const alList = () => { const top = ((D.stats || {}).top || []).map(([d]) => d), r = (D.allow || []).filter(d => !top.includes(d));
-    return r.length ? `<div class="lbl">已放行</div><div class="abtop">${r.map(d => alRow(d)).join("")}</div>` : ""; };
+    return `<div${ok ? ' class="alok"' : ""}><span>${esc(d)}</span>${n == null ? "" : `<b>${num(n)}</b>`}${t ? `<small>${t}</small>` : ""}<button type="button" class="ubtn sm ghost" data-abal="${esc(d)}" data-on="${ok ? 0 : 1}">${ok ? "恢復擋" : "放行"}</button></div>`; };
+  const abls = x => {
+    if (lt === "allow") {
+      const al = D.allow || [];
+      return `<div class="abadd"><input class="field" data-abdom type="text" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="手動輸入要放行的網域（例如 shop.example.tw）"><button type="button" class="ubtn sm" data-abadd>放行</button></div>
+        ${al.length ? `<div class="abtop">${al.map(d => alRow(d)).join("")}</div>` : `<div class="ntst">${I("info")}<span>目前沒有手動放行的網域</span></div>`}`;
+    }
+    const r = lt === "top" ? (x.top || []).map(([d, n]) => alRow(d, n)) : (x.recent || []).map(([d, t]) => alRow(d, null, ago(t)));
+    return r.length ? `<div class="abtop">${r.join("")}</div>` : `<div class="ntst">${I("info")}<span>目前沒有紀錄</span></div>`;
+  };
+  const stats = x => {
+    if (!x) return `<div class="tcard abjob"><span class="spin"></span><span>統計讀取中…</span></div>`;
+    const mx = Math.max(1, ...(x.hrs || [0])), aln = (D.allow || []).length;
+    const hrs = x.hrs || [];
+    const bars = hrs.length ? `<div class="tcard"><div class="tcardh"><span>最近 24 小時攔截</span><small class="num">最高 ${num(mx)}／時</small></div>
+      <div class="abh">${hrs.map((n, i) => { const back = hrs.length - 1 - i; const lbl = back ? `${back} 小時前` : "這一小時";
+        return `<i style="--h:${Math.max(5, Math.round(n * 100 / mx))}%" title="${lbl}：攔截 ${n} 次"></i>`; }).join("")}</div>
+      <div class="abhaxis"><span>24 小時前</span><span>12 小時前</span><span>現在</span></div></div>` : "";
+    return `<div class="abn"><div><b class="num">${num(x.q)}</b><small>總查詢</small></div><div><b class="num">${num(x.b)}</b><small>已擋掉</small></div><div><b class="num">${x.pct}%</b><small>攔截率</small></div></div>
+      ${bars}
+      <div class="seg abtab"><button type="button" class="${lt === "top" ? "on" : ""}" data-ablt="top">最常擋的</button><button type="button" class="${lt === "new" ? "on" : ""}" data-ablt="new">最近擋的</button><button type="button" class="${lt === "allow" ? "on" : ""}" data-ablt="allow">已放行${aln ? ` (${aln})` : ""}</button></div>
+      <div class="abls">${abls(x)}</div>`;
+  };
   const steps = () => os === "ios" ? (ios
-    ? `<button type="button" class="ubtn" data-abp>${I("dl")}安裝描述檔</button><ol class="ntsteps"><li>允許下載</li><li>設定 → 已下載描述檔 → 安裝</li></ol>`
-    : qrk ? `<div class="abqr">${qrSvg(location.origin + "/dns.mobileconfig?k=" + encodeURIComponent(qrk))}</div><ol class="ntsteps"><li>用 iPhone 相機掃，允許下載</li><li>設定 → 已下載描述檔 → 安裝</li></ol>`
-    : `<button type="button" class="ubtn" data-abqr>${I("qr")}用 iPhone 掃 QR 碼</button>`)
-    : `<div class="codebox ntr"><code>${esc(D.dot)}</code><button type="button" class="ubtn sm ghost" data-abcp>複製</button></div>
-      <ol class="ntsteps"><li>設定 → 網路和網際網路 → 私人 DNS</li><li>選「私人 DNS 供應商主機名稱」，貼上</li></ol>`;
-  const view = () => D.job ? `<div class="abjob"><span class="spin"></span><span>${esc(D.job)}…</span></div>`
-    : !D.on ? `<p class="ntx">手機的廣告、追蹤網址直接擋掉，只走加密連線。</p>${D.cert ? "" : `<p class="ntx">還沒有網域的憑證</p>`}<button type="button" class="ubtn" data-ab="on"${D.cert ? "" : " disabled"}>打開</button>`
-    : `${D.down ? `<div class="ntst bad">${I("warn")}<span>停了，正在重新啟動</span></div>` : D.pub ? `<div class="ntst bad">${I("warn")}<span>手機連不上：${esc(D.pub)}</span></div>` : D.ext ? `<div class="ntst bad">${I("warn")}<span>從${esc(D.ext_by)}連不到：到主機商的防火牆打開 TCP ${D.port}</span></div>` : ""}${stats(D.stats)}${alList()}
-      <div class="lbl">手機設定</div><div class="seg abos"><button type="button" class="${os === "ios" ? "on" : ""}" data-abos="ios">iPhone</button><button type="button" class="${os === "and" ? "on" : ""}" data-abos="and">Android</button></div>
-      <div class="abst">${steps()}</div>${D.ext === "" || D.ext ? "" : `<div class="ntst">${I("info")}<span>連不上的話，到主機商的防火牆打開 TCP ${D.port}</span></div>`}
-      <div class="dlnew"><button type="button" class="ubtn sm ghost" data-abweb>管理頁${EXT}</button><button type="button" class="ubtn sm ghost" data-ab="off">關掉</button></div>`;
+    ? `<button type="button" class="ubtn" data-abp>${I("dl")}安裝加密 DNS 描述檔</button><ol class="ntsteps"><li><span>點「允許」下載描述檔</span></li><li><span>打開「設定」→「已下載描述檔」→ 安裝</span></li></ol>`
+    : qrk ? `<div class="abqr">${qrSvg(location.origin + "/dns.mobileconfig?k=" + encodeURIComponent(qrk))}</div><ol class="ntsteps"><li><span>用 iPhone 相機掃描上方 QR 碼並允許下載</span></li><li><span>打開「設定」→「已下載描述檔」→ 安裝</span></li></ol>`
+    : `<button type="button" class="ubtn" data-abqr>${I("qr")}產生 iPhone 掃描用 QR 碼</button><ol class="ntsteps"><li><span>點擊按鈕產生一次性描述檔 QR 碼</span></li><li><span>用 iPhone 相機掃描後到「設定」安裝</span></li></ol>`)
+    : `<div class="codebox ntr"><span class="ntk">主機</span><code>${esc(D.dot)}</code><button type="button" class="ubtn sm ghost copybtn" data-abcp>${I("copy")}複製</button></div>
+      <ol class="ntsteps"><li><span>打開「設定」→「網路和網際網路」→「私人 DNS」</span></li><li><span>選擇「私人 DNS 供應商主機名稱」並貼上主機名稱</span></li></ol>`;
+  const setupTab = () => `<div class="tcard">
+      <div class="tcardh"><span>連線裝置設定</span><span class="abconn ${D.down || D.pub || D.ext ? "bad" : D.ext === "" ? "ok" : ""}">${I(D.down || D.pub || D.ext ? "warn" : "ok")}${D.down || D.pub || D.ext ? "連線受阻" : D.ext === "" ? `TCP ${D.port} 正常` : `TCP ${D.port}`}</span></div>
+      <div class="seg abos"><button type="button" class="${os === "ios" ? "on" : ""}" data-abos="ios">iPhone / iPad</button><button type="button" class="${os === "and" ? "on" : ""}" data-abos="and">Android</button></div>
+      <div class="abst">${steps()}</div>
+      ${D.ext === "" || D.ext ? "" : `<div class="ntst">${I("info")}<span>若手機連不上，請到主機商防火牆打開 TCP ${D.port}</span></div>`}
+    </div>`;
+  const view = () => {
+    const err = D.on && (D.down || D.pub || D.ext);
+    bdg.textContent = D.job ? "設定中" : err ? "有狀況" : D.on ? "運作中" : "未開啟";
+    bdg.className = "tbadge abbdg" + (D.job ? " act" : err ? " bad" : D.on ? " ok" : "");
+    if (D.job) return `<div class="tcard abjob"><span class="spin"></span><span>${esc(D.job)}…</span></div>`;
+    if (!D.on) return `<div class="tcard ntonb"><p class="ntx">幫手機直接攔截廣告、惡意與追蹤網址，只開加密 DNS（DoT／DoH），不對外開一般 DNS。</p>
+      <ul class="ntpts"><li>${I("shield")}<span>自動套用中文與惡意網址過濾清單</span></li><li>${I("lock")}<span>國際與大陸網域分流，不繞路</span></li><li>${I("devices")}<span>支援 iPhone 描述檔與 Android 私人 DNS</span></li></ul></div>
+      ${D.cert ? "" : `<div class="ntst bad">${I("warn")}<span>這台還沒有網域的 TLS 憑證，無法開啟</span></div>`}
+      <button type="button" class="ubtn" data-ab="on"${D.cert ? "" : " disabled"}>開啟 AdGuard Home</button>`;
+    const alert = D.down ? `<div class="bkerr">${I("warn")}<span>服務停了，正在自動重新啟動</span></div>`
+      : D.pub ? `<div class="bkerr">${I("warn")}<span>手機連不上：${esc(D.pub)}</span></div>`
+      : D.ext ? `<div class="bkerr">${I("warn")}<span>從「${esc(D.ext_by)}」連不到：請到主機商防火牆打開 TCP ${D.port}</span></div>` : "";
+    return `${alert}
+      <div class="seg abmain"><button type="button" class="${mt === "stat" ? "on" : ""}" data-abmt="stat">總覽與紀錄</button><button type="button" class="${mt === "setup" ? "on" : ""}" data-abmt="setup">手機設定</button></div>
+      <div class="abbody">${mt === "stat" ? stats(D.stats) : setupTab()}</div>
+      <div class="tfootbar"><button type="button" class="ubtn sm ghost" data-abweb>打開管理頁${EXT}</button><button type="button" class="ubtn sm ghost bad ntwipe" data-ab="off">關閉服務</button></div>`;
+  };
   const draw = () => { const h = view(); if (h !== last) { last = h; swapHTML(body, h); } };
   const call = async b => {
     const r = await api("/api/adblock" + q, {method:"POST", headers:{"X-Token":getTok(), "Content-Type":"application/json"}, body:JSON.stringify(b)});
@@ -1527,24 +1649,35 @@ function abModal(node, name){
     catch (e) { sayTo(msg, e.message); return null; }
     finally { busy = false; clearTimeout(tm); if (D && !v._d) tm = setTimeout(() => run({action:"info"}), D.job ? 1500 : 30000); }
   };
+  const addDom = async () => {
+    const inp = v.querySelector("[data-abdom]"); if (!inp) return;
+    const dom = inp.value.trim(); if (!dom) return inp.focus();
+    const x = await run({action:"allow", domain:dom});
+    if (x) { if (x.message) toast(x.message); }
+  };
   run({action:"info"});
   return new Promise(res => {
     const done = () => { if (v._d) return; v._d = 1; clearTimeout(tm); v.classList.add("closing"); setTimeout(() => { v.remove(); res(); }, 360); };
     v._esc = done;
+    v.addEventListener("keydown", e => { if (e.key === "Enter" && e.target.matches("[data-abdom]")) { e.preventDefault(); addDom(); } });
     v.addEventListener("click", async e => {
       if (e.target === v) return done();
       const t = e.target;
+      const m = t.closest("[data-abmt]");
+      if (m) { if (m.dataset.abmt === mt) return; mt = m.dataset.abmt; v.querySelectorAll("[data-abmt]").forEach(x => x.classList.toggle("on", x === m));
+        last = view(); swapHTML(v.querySelector(".abbody"), mt === "stat" ? stats(D.stats) : setupTab()); return; }
       const o = t.closest("[data-abos]");
       if (o) { os = o.dataset.abos; v.querySelectorAll("[data-abos]").forEach(x => x.classList.toggle("on", x === o)); last = view(); swapHTML(v.querySelector(".abst"), steps()); return; }
       if (t.closest("[data-abcp]")) {
-        try { await navigator.clipboard.writeText(D.dot); toast("已複製"); }
+        try { await navigator.clipboard.writeText(D.dot); toast("已複製主機名稱"); }
         catch (_) { const r = document.createRange(); r.selectNodeContents(v.querySelector(".abst code")); getSelection().removeAllRanges(); getSelection().addRange(r); }
         return;
       }
       if (t.closest("[data-abweb]")) return openAgh(node, name);
+      if (t.closest("[data-abadd]")) return addDom();
       const lb = t.closest("[data-ablt]");
       if (lb) { if (lb.dataset.ablt === lt) return; lt = lb.dataset.ablt; v.querySelectorAll("[data-ablt]").forEach(x => x.classList.toggle("on", x === lb));
-        last = view(); swapHTML(v.querySelector(".abls"), abls(D.stats)); return; }
+        last = view(); swapHTML(v.querySelector(".abls"), abls(D.stats || {})); return; }
       const pq = t.closest("[data-abp],[data-abqr]");
       if (pq) {
         try {
@@ -1553,7 +1686,7 @@ function abModal(node, name){
           if (!r.ok || !x.k) throw new Error(x.message || "失敗了，請再試一次");
           if (pq.dataset.abqr == null) { location.href = "/dns.mobileconfig?k=" + encodeURIComponent(x.k); return; }
           qrk = x.k; last = view(); swapHTML(v.querySelector(".abst"), steps());
-          setTimeout(() => { if (qrk === x.k) { qrk = ""; if (!v._d && os === "ios") { last = view(); swapHTML(v.querySelector(".abst"), steps()); } } }, 540000);
+          setTimeout(() => { if (qrk === x.k) { qrk = ""; if (!v._d && mt === "setup" && os === "ios") { last = view(); swapHTML(v.querySelector(".abst"), steps()); } } }, 540000);
         } catch (x) { sayTo(msg, x.message); }
         return;
       }
@@ -1561,9 +1694,9 @@ function abModal(node, name){
       if (al) { const x = await run({action: al.dataset.on === "1" ? "allow" : "unallow", domain: al.dataset.abal}); if (x && x.message) toast(x.message); return; }
       const b = t.closest("[data-ab]"); if (!b) return;
       const act = b.dataset.ab;
-      if (act === "off" && !await modal({icon:"noad", cls:"warn", title:"關掉 AdGuard Home？", text:"設好的手機會查不到網址，要先改回來。", ok:"關掉"})) return;
+      if (act === "off" && !await modal({icon:"noad", cls:"warn", title:"關閉 AdGuard Home？", text:"設好的手機會查不到網址，要先改回來。", ok:"關閉"})) return;
       const x = await run({action: act});
-      if (x && act === "off") toast("已關掉");
+      if (x && act === "off") toast("已關閉");
     });
   });
 }
@@ -3174,31 +3307,44 @@ const dlKind = n => { const e = ((String(n).split(/[?#]/)[0].match(/\.([a-z0-9]{
     : /^(jpe?g|png|gif|webp|heic|avif|bmp)$/.test(e) ? "image" : /^(zip|rar|7z|gz|tgz|xz|bz2|tar|iso|dmg|apk|deb)$/.test(e) ? "zip" : /^(pdf|docx?|xlsx?|pptx?|txt|epub|csv)$/.test(e) ? "doc" : "file"; };
 function dlModal(node, name){
   const v = document.createElement("div"); v.className = "veil";
-  v.innerHTML = `<div class="dialog dld">${IC("dl","big")}<h3>遠端下載</h3>
-    <p>存到「${esc(name)}」雲端硬碟的「下載」資料夾</p>
-    <div class="form"><div class="dlnew"><input class="field" data-k="url" type="text" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="貼上連結或分享文字"><button class="ubtn" data-go>下載</button></div>
-      <div class="msg"></div><div class="dllist"></div><small class="dlroom"></small>
-      <div class="dlyt" hidden><small><a href="#" data-yt>網站登入資料</a><span></span></small>
+  v.innerHTML = `<div class="dialog tdlg dld"><div class="thead">${IC("dl", "")}<div class="thead-t"><h3>遠端下載</h3><p>${esc(name)}・存到雲端硬碟「下載」</p></div><span class="tbadge dlroom"></span></div>
+    <div class="form"><div class="dlnew"><input class="field" data-k="url" type="text" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="貼上檔案網址或影音分享文字"><button class="ubtn" data-go>下載</button></div>
+      <div class="msg"></div>
+      <div class="dlbar" hidden><span class="dlsum"></span><button type="button" class="linkish" data-dlclean hidden>清除已完成</button></div>
+      <div class="dllist"></div>
+      <div class="tcard dlempty" hidden>${I("dl")}<b>目前沒有下載任務</b><small>貼上檔案直連，或 YouTube、B 站、小紅書、抖音分享文字就能開始</small></div>
+      <div class="tcard dlyt" hidden><button type="button" class="dlyth" data-yt>${I("key")}<span class="dlytl"><b>影音網站登入資料</b><small class="dlyts"></small></span>${CHEV}</button>
         <div class="dlck" hidden><textarea class="field pfield" rows="3" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="貼上 cookies.txt 的內容"></textarea>
-          <small>被擋時才會用；建議用備用帳號；不同網站分開貼</small>
+          <small>被網站擋住時才會用到；建議使用備用帳號；不同網站可分開貼上</small>
           <div class="dlnew"><button type="button" class="ubtn sm ghost" data-ckdel>清除</button><button type="button" class="ubtn sm" data-cksave>儲存</button></div></div></div></div>
     </div>`;
   $("#layer").appendChild(v);
   const inp = v.querySelector("input"), msg = v.querySelector(".msg"), go = v.querySelector("[data-go]"), list = v.querySelector(".dllist"), room = v.querySelector(".dlroom");
+  const bar = v.querySelector(".dlbar"), sum = v.querySelector(".dlsum"), clean = v.querySelector("[data-dlclean]"), empty = v.querySelector(".dlempty");
   const call = body => pkCall("/api/download" + (node ? "?node=" + encodeURIComponent(node) : ""), body, 1).catch(err => ({message:err.message}));
   const say = (t, bad) => { msg.className = "msg" + (bad ? " bad" : ""); sayTo(msg, t); };
   const left = s => s < 60 ? `${Math.max(1, Math.round(s))} 秒` : s < 3600 ? `${Math.round(s / 60)} 分鐘` : `${(s / 3600).toFixed(1)} 小時`;
-  const stOf = j => j.st === "wait" ? j.err || "排隊中" : j.st === "ok" ? `下載好了・${size(j.total)}` : j.st === "bad" ? j.err || "沒有成功"
+  const stOf = j => j.st === "wait" ? j.err || "排隊中" : j.st === "ok" ? `下載完成・${size(j.total)}` : j.st === "bad" ? j.err || "沒有成功"
     : j.total ? `${Math.floor(j.done / j.total * 100)}%${j.bps ? `・${rate(j.bps)}・剩 ${left((j.total - j.done) / j.bps)}` : `・共 ${size(j.total)}`}`
     : `${size(j.done)}${j.bps ? `・${rate(j.bps)}` : ""}`;
-  let timer = 0, busy = false;
+  let timer = 0, busy = false, lastList = [];
   const draw = d => {
     if (!d || !Array.isArray(d.list)) return;
+    lastList = d.list;
     if (!d.cloud) { inp.disabled = go.disabled = true; say("這台沒有雲端硬碟", 1); }
-    room.textContent = d.cloud ? `還能放 ${size(d.room)}` : "";
+    room.textContent = d.cloud ? `可用 ${size(d.room)}` : "";
     const yt = d.yt || {}, ys = v.querySelector(".dlyt");
     reveal(ys, !!yt.tool);
-    ys.querySelector("span").textContent = `：${yt.cookies ? "已設定" : "還沒設定"}${yt.warp ? "・WARP 已開" : ""}`;
+    ys.querySelector(".dlyts").textContent = `${yt.cookies ? "已設定" : "未設定"}${yt.warp ? "・WARP 已開" : ""}`;
+    const nRun = d.list.filter(j => j.st === "run" || j.st === "wait").length;
+    const nOk = d.list.filter(j => j.st === "ok").length;
+    const nBad = d.list.filter(j => j.st === "bad").length;
+    bar.hidden = !d.list.length;
+    empty.hidden = !d.cloud || !!d.list.length;
+    if (d.list.length) {
+      sum.textContent = [nRun ? `進行中 ${nRun}` : "", nOk ? `已完成 ${nOk}` : "", nBad ? `失敗 ${nBad}` : ""].filter(Boolean).join("・");
+      clean.hidden = !nOk;
+    }
     const seen = new Set();
     d.list.forEach((j, i) => {
       seen.add(j.id);
@@ -3219,9 +3365,10 @@ function dlModal(node, name){
       r.querySelector("b").title = j.url || "";
       set(r.querySelector("small"), stOf(j));
       r.className = "dlrow " + j.st;
-      const tr = r.querySelector(".track"), run = j.st === "run" || j.st === "wait";
+      const tr = r.querySelector(".track"), run = j.st === "run" || j.st === "wait", indet = run && (j.st === "wait" || !j.total);
+      tr.classList.toggle("indet", indet);
       reveal(tr, run);
-      if (run) r.querySelector(".fill").style.width = (j.total ? Math.max(1, j.done / j.total * 100) : 0) + "%";
+      if (run) r.querySelector(".fill").style.width = indet ? "35%" : Math.max(2, j.done / j.total * 100) + "%";
       const rb = r.querySelector("[data-retry]");
       if (rb.hidden !== (j.st !== "bad")) { rb.hidden = j.st !== "bad"; if (!rb.hidden && canAnim()) rb.animate([{opacity:0, transform:"scale(.6)"}, {opacity:1, transform:"none"}], {duration:T.spf, easing:SPRING_F}); }
       r.querySelector("[data-del]").title = run ? "取消下載" : "從清單拿掉（檔案不會刪）";
@@ -3231,39 +3378,58 @@ function dlModal(node, name){
     if (!v._d) timer = setTimeout(load, d.list.some(j => j.st === "run" || j.st === "wait") ? 1000 : 5000);
   };
   const load = async () => { const d = await call({action:"list"}); if (!v._d) { if (d.list) draw(d); else { say(d.message || d.error || "讀取失敗", 1); timer = setTimeout(load, 5000); } } };
-  const done = () => { if (v._d) return; v._d = 1; clearTimeout(timer); v.classList.add("closing"); setTimeout(() => v.remove(), 360); };
-  v._esc = done;
-  const add = async () => {
-    const url = inp.value.trim();
-    if (!url) return inp.focus();
-    busy = true; go.disabled = true; say("");
-    const d = await call({action:"add", url});
-    busy = false; go.disabled = false;
-    if (d.ok) { inp.value = ""; } else say(d.message || "沒有成功", 1);
-    draw(d);
-  };
-  inp.addEventListener("keydown", e => { if (e.key === "Enter" && !busy) { e.preventDefault(); add(); } });
-  v.addEventListener("click", async e => {
-    if (e.target === v || e.target.closest("[data-r]")) return done();
-    if (e.target.closest("[data-go]") && !busy) return add();
-    if (e.target.closest("[data-yt]")) { e.preventDefault(); const ck = v.querySelector(".dlck"), on = ck.hidden || ck._hiding; reveal(ck, on); if (on) ck.querySelector("textarea").focus({preventScroll:true}); return; }
-    const cs = e.target.closest("[data-cksave],[data-ckdel]");
-    if (cs) {
-      const ta = v.querySelector(".dlck textarea"), text = cs.matches("[data-ckdel]") ? "" : ta.value.trim();
-      if (!text && cs.matches("[data-cksave]")) return ta.focus();
-      const d = await call({action:"cookies", text});
-      say(d.message || "沒有成功", !d.ok);
-      if (d.ok) { ta.value = ""; reveal(v.querySelector(".dlck"), false); }
-      return draw(d);
-    }
-    const row = e.target.closest(".dlrow"), del = e.target.closest("[data-del]"), re = e.target.closest("[data-retry]");
-    if (!row || !(del || re)) return;
-    const d = await call({action: re ? "retry" : "stop", id: row.dataset.id});
-    if (!d.ok) say(d.message || "沒有成功", 1);
-    draw(d);
+  return new Promise(res => {
+    const done = () => { if (v._d) return; v._d = 1; clearTimeout(timer); v.classList.add("closing"); setTimeout(() => { v.remove(); res(); }, 360); };
+    v._esc = done;
+    const add = async () => {
+      const url = inp.value.trim();
+      if (!url) return inp.focus();
+      busy = true; go.disabled = true; say("");
+      const d = await call({action:"add", url});
+      busy = false; go.disabled = false;
+      if (d.ok) { inp.value = ""; } else say(d.message || "沒有成功", 1);
+      draw(d);
+    };
+    inp.addEventListener("keydown", e => { if (e.key === "Enter" && !busy) { e.preventDefault(); add(); } });
+    v.addEventListener("click", async e => {
+      if (e.target === v || e.target.closest("[data-r]")) return done();
+      if (e.target.closest("[data-go]") && !busy) return add();
+      if (e.target.closest("[data-dlclean]") && !busy) {
+        const oks = lastList.filter(j => j.st === "ok"); if (!oks.length) return;
+        busy = true; clean.disabled = true;
+        let last = null;
+        for (const j of oks) last = await call({action:"stop", id:j.id});
+        busy = false; clean.disabled = false;
+        if (last && last.list) draw(last);
+        toast("已清除完成的紀錄");
+        return;
+      }
+      if (e.target.closest("[data-yt]")) {
+        e.preventDefault();
+        const ck = v.querySelector(".dlck"), on = ck.hidden || ck._hiding;
+        v.querySelector(".dlyt").classList.toggle("open", on);
+        reveal(ck, on);
+        if (on) ck.querySelector("textarea").focus({preventScroll:true});
+        return;
+      }
+      const cs = e.target.closest("[data-cksave],[data-ckdel]");
+      if (cs) {
+        const ta = v.querySelector(".dlck textarea"), text = cs.matches("[data-ckdel]") ? "" : ta.value.trim();
+        if (!text && cs.matches("[data-cksave]")) return ta.focus();
+        const d = await call({action:"cookies", text});
+        say(d.message || "沒有成功", !d.ok);
+        if (d.ok) { ta.value = ""; v.querySelector(".dlyt").classList.remove("open"); reveal(v.querySelector(".dlck"), false); }
+        return draw(d);
+      }
+      const row = e.target.closest(".dlrow"), del = e.target.closest("[data-del]"), re = e.target.closest("[data-retry]");
+      if (!row || !(del || re)) return;
+      const d = await call({action: re ? "retry" : "stop", id: row.dataset.id});
+      if (!d.ok) say(d.message || "沒有成功", 1);
+      draw(d);
+    });
+    load();
+    if (!matchMedia("(hover:none)").matches) setTimeout(() => inp.focus(), 60);   // 手機不自動跳出鍵盤
   });
-  load();
-  if (!matchMedia("(hover:none)").matches) setTimeout(() => inp.focus(), 60);   // 手機不自動跳出鍵盤
 }
 async function addHostModal(){
   const v = document.createElement("div"); v.className = "veil";
@@ -3334,8 +3500,21 @@ function bkLine(d){
 }
 async function bkStatus(root){
   await Promise.all([...root.querySelectorAll(".bkst")].map(async el => {
-    try { const d = await bkGet(el.dataset.n), [t, c] = bkLine(d); txt(el, el.closest(".tbx") ? t.replace(/^上次備份：/, "").replace(/（.*）$/, "") : t); el.className = "bkst " + c; bkDots(el.parentNode.querySelector(".bkdots"), d); }
-    catch(e) { txt(el, e.message); el.className = "bkst"; }
+    const box = el.closest(".tbx") || el.parentNode;
+    const bdg = box && box.querySelector(".bkbdg");
+    try {
+      const d = await bkGet(el.dataset.n), [t, c] = bkLine(d);
+      txt(el, el.closest(".tbx") ? t.replace(/^上次備份：/, "").replace(/（.*）$/, "") : t);
+      el.className = (el.closest(".tbx") ? "tdesc " : "") + "bkst " + c;
+      if (bdg) {
+        const [bt, bc] = !d.on ? ["已關閉", ""] : d.running ? ["備份中", "act"] : d.last && !d.last.ok ? ["有問題", "bad"] : ["自動", "ok"];
+        txt(bdg, bt); bdg.className = "tbadge bkbdg" + (bc ? " " + bc : "");
+      }
+      bkDots(box.querySelector(".bkdots"), d);
+    } catch(e) {
+      txt(el, e.message); el.className = (el.closest(".tbx") ? "tdesc " : "") + "bkst";
+      if (bdg) { txt(bdg, ""); bdg.className = "tbadge bkbdg"; }
+    }
   }));
 }
 /* 最近 7 天每天一個點：有備份綠色、最後一次失敗紅色、沒有灰色（最右邊是今天） */
@@ -3349,44 +3528,71 @@ function bkDots(box, d){
     i.title = new Date(Date.now() - (6 - n) * 864e5).toLocaleDateString("zh-TW", {month:"numeric", day:"numeric"});
   });
 }
-function bkRows(d){
-  const L = d.last, row = (ok, t, sub) => `<li class="${ok === null ? "" : ok ? "ok" : "bad"}">${ok === null ? "" : I(ok ? "ok" : "warn")}<span>${t}${sub ? `<small>${esc(sub)}</small>` : ""}</span></li>`;
-  let h = "";
+function bkCalHTML(d){
+  const me = (d.copies || []).find(c => c.me), ts = (me && me.ts) || [], L = d.last, day = t => new Date(t * 1000).toDateString();
+  const has = new Set(ts.map(day)), bad = L && !L.ok ? day(L.t) : "";
+  return `<div class="bkcal">${Array.from({length:7}, (_, n) => {
+    const dt = new Date(Date.now() - (6 - n) * 864e5), k = dt.toDateString();
+    const c = k === bad && !has.has(k) ? "bad" : has.has(k) ? "ok" : "";
+    const lb = n === 6 ? "今天" : `${dt.getMonth() + 1}/${dt.getDate()}`;
+    return `<div class="bkday ${c}"><i></i><small class="num">${lb}</small></div>`;
+  }).join("")}</div>`;
+}
+function bkSummaryHTML(d){
+  const L = d.last;
+  let h = `<div class="tcardh"><span>最近一次備份</span><small class="num">${L ? `${esc(when(L.t))}${L.size ? `・${bkSize(L.size)}` : ""}` : d.on ? "還沒備份過" : "已關閉"}</small></div>`;
+  h += bkCalHTML(d);
   if (L) {
-    h += row(null, `<b>上次備份</b>${esc(when(L.t))}${L.size ? `・${bkSize(L.size)}` : ""}`);
-    if (L.msg) h += row(false, esc(L.msg));
-    const to = L.to || [];                         // 存到哪裡：一排小圖示（這台、Telegram、其他主機），成功打勾、失敗打叉；失敗的另外一行寫原因
-    if (to.length) h += `<li class="bkto">${to.map(x => { const tg = /Telegram/.test(x.where), nm = (/「(.+?)」/.exec(x.where) || [])[1];
-      return `<span class="${x.ok ? "ok" : "bad"}" title="${esc(x.where)}">${I(tg ? "bell" : nm ? "net" : "disk")}<em>${esc(tg ? "Telegram" : nm || "這台")}</em><i>${I(x.ok ? "ok" : "x")}</i></span>`; }).join("")}</li>`;
-    h += to.filter(x => !x.ok).map(x => row(false, `${esc(x.where)}沒有成功`, x.msg)).join("");
-    if (L.items && L.items.length) h += row(null, `<b>備份內容</b>${esc(L.items.join("、"))}`);
-    if (L.big && L.big.length) h += row(null, `<b>太大沒備份</b>${esc(L.big.map(p => p.split("/").pop()).join("、"))}`);
-  } else h += row(null, d.on ? "還沒備份過" : "每日備份已關閉");
-  if (!d.tg) h += row(null, `<small>開啟 Telegram 通知會多存一份</small>`);
+    if (L.msg) h += `<div class="bkerr">${I("warn")}<span>${esc(L.msg)}</span></div>`;
+    const to = L.to || [];
+    if (to.length) h += `<div class="bkto">${to.map(x => { const tg = /Telegram/.test(x.where), nm = (/「(.+?)」/.exec(x.where) || [])[1];
+      return `<span class="${x.ok ? "ok" : "bad"}" title="${esc(x.where)}">${I(tg ? "bell" : nm ? "net" : "disk")}<em>${esc(tg ? "Telegram" : nm || "這台")}</em><i>${I(x.ok ? "ok" : "x")}</i></span>`; }).join("")}</div>`;
+    to.filter(x => !x.ok).forEach(x => { h += `<div class="bkerr">${I("warn")}<span><b>${esc(x.where)}沒有成功</b>${x.msg ? `<small>${esc(x.msg)}</small>` : ""}</span></div>`; });
+    if (L.items && L.items.length) h += `<div class="bktags">${L.items.map(x => `<span>${esc(x)}</span>`).join("")}</div>`;
+    if (L.big && L.big.length) h += `<div class="ntst">${I("info")}<span>太大略過：${esc(L.big.map(p => p.split("/").pop()).join("、"))}</span></div>`;
+  }
+  if (!d.tg) h += `<div class="ntst">${I("info")}<span>開啟 Telegram 通知會自動多備份一份</span></div>`;
   return h;
 }
 /* 這台存著哪些主機的備份（每台主機都存著每一台的） */
-const bkCopies = d => (d.copies || []).map(c => `<li>${I("archive")}<span><b>${esc(c.name)}${c.me ? "（這台）" : ""}</b>${+c.count || 0} 份<small>最新：${esc(when(c.t))}・${bkSize(c.size)}</small></span></li>`).join("");   // 沒有就整段不放（上面已經寫「還沒備份過」）
+const bkCopies = d => (d.copies || []).map(c => `<div class="bkcp">${I("archive")}<span class="bkcpi"><b>${esc(c.name)}${c.me ? "（這台）" : ""}</b><small>最新：${esc(when(c.t))}・${bkSize(c.size)}</small></span><span class="tbadge num">${+c.count || 0} 份</span></div>`).join("");
 async function bkModal(node, label){
   let d = await bkGet(node).catch(e => ({err:e.message}));
   if (d.err) return toast(d.err, "bad");
+  let tab = "stat";
   const v = document.createElement("div"); v.className = "veil";
-  const multi = LIST.length > 1;
-  v.innerHTML = `<div class="dialog bkdlg">${IC("archive","big")}<h3>每日備份${multi ? `：${esc(label)}` : ""}</h3>
+  const bdgOf = x => !x.on ? ["已關閉", ""] : x.running ? ["備份中", "act"] : x.last && !x.last.ok ? ["有問題", "bad"] : ["自動備份", "ok"];
+  const [bt, bc] = bdgOf(d);
+  const copiesHtml = bkCopies(d);
+  v.innerHTML = `<div class="dialog tdlg bkdlg">
+    <div class="thead">${IC("archive", "")}<div class="thead-t"><h3>每日備份</h3><p>${esc(label)}</p></div><span class="tbadge bkmst${bc ? " " + bc : ""}">${bt}</span></div>
     <div class="form">
-      <ul class="bkrows">${bkRows(d)}</ul>
-      <div class="lbl">${bkCopies(d) ? `${d.where === "雲端硬碟" ? "這台的雲端硬碟裡有" : "這台主機上有"}${d.where === "雲端硬碟" ? `<small>「${esc(d.folder)}」資料夾</small>` : ""}<ul class="bkrows bkcopies">${bkCopies(d)}</ul>` : ""}
-        <button class="linkish bkchg" data-restore>怎麼還原？</button></div>
-      <div class="lbl">解開密碼（所有主機共用）<b class="bkkey" tabindex="0" role="button" title="點一下顯示">${esc(d.key)}</b>
-        <small>沒有它誰都打不開，請另外記好</small>
-        <button class="linkish bkchg" data-chg>改成自己的密碼</button>
-        <span class="bknew" hidden><input class="field" type="password" maxlength="128" autocomplete="new-password" placeholder="至少 8 個字"><button class="ubtn sm" data-setkey>儲存</button></span></div>
-      <label class="bkon" title="每天 ${+d.hour || 0} 點自動備份"><span class="bkat">${I("clock")}<b class="num">${String(+d.hour || 0).padStart(2, "0")}:00</b></span><input type="checkbox" class="tog" ${d.on ? "checked" : ""}></label>
-      <div class="msg"></div></div>
-    <div class="btns three"><button class="ubtn ghost" data-dl>下載</button><button class="ubtn" data-run>立即備份</button></div></div>`;
+      <div class="seg bktab"><button type="button" class="on" data-bktab="stat">備份狀態</button><button type="button" data-bktab="set">份數與設定</button></div>
+      <div class="bkpane" data-bkpane="stat">
+        <div class="tcard bksum">${bkSummaryHTML(d)}</div>
+        <div class="tcard bksch">
+          <label class="bkon"><span class="bkat">${I("clock")}<span><b>每日自動備份</b><small>每天 <span class="num">${String(+d.hour || 0).padStart(2, "0")}:00</span> 自動執行</small></span></span><input type="checkbox" class="tog" ${d.on ? "checked" : ""}></label>
+        </div>
+      </div>
+      <div class="bkpane" data-bkpane="set" hidden>
+        <div class="tcard">
+          <div class="tcardh"><span>${d.where === "雲端硬碟" ? `雲端硬碟「${esc(d.folder)}」` : "本機已存份數"}</span><button type="button" class="linkish" data-restore>怎麼還原？</button></div>
+          <div class="bkcopies">${copiesHtml || `<div class="ntst">${I("info")}<span>目前還沒有已存的備份檔</span></div>`}</div>
+        </div>
+        <div class="tcard bkkeyblk">
+          <div class="tcardh"><span>解開密碼（所有主機共用）</span><button type="button" class="linkish" data-chg>更換密碼</button></div>
+          <div class="codebox bkkeybox"><code class="bkkey" tabindex="0" role="button" title="點一下顯示">${esc(d.key)}</code><button type="button" class="ubtn sm ghost" data-bkshow>顯示</button><button type="button" class="ubtn sm ghost copybtn" data-bkcp>${I("copy")}複製</button></div>
+          <small>還原備份時必須輸入這組密碼，請另外妥善保存</small>
+          <span class="bknew" hidden><input class="field" type="password" maxlength="128" autocomplete="new-password" placeholder="輸入新密碼（至少 8 個字）"><button type="button" class="ubtn sm" data-setkey>儲存</button><button type="button" class="ubtn sm ghost" data-chgno>取消</button></span>
+        </div>
+      </div>
+      <div class="msg"></div>
+      <div class="tfootbar"><button type="button" class="ubtn ghost" data-dl>${I("dl")}下載最新</button><button type="button" class="ubtn" data-run>立即備份</button></div>
+    </div></div>`;
   $("#layer").appendChild(v);
-  const msg = v.querySelector(".msg"), rows = v.querySelector(".bkrows"), runb = v.querySelector("[data-run]");
+  const msg = v.querySelector(".msg"), sumBox = v.querySelector(".bksum"), runb = v.querySelector("[data-run]"), mst = v.querySelector(".bkmst");
   const say = (t, c = "") => { msg.className = "msg " + c; sayTo(msg, t); };
+  const syncBdg = () => { const [t, c] = bdgOf(d); mst.textContent = t; mst.className = "tbadge bkmst" + (c ? " " + c : ""); };
   const post = async (body, here) => {           // here：送給目前開著的這台（換密碼由它負責通知其他台）
     const r = await api("/api/backup" + (here ? "" : bkQ(node)), {method:"POST", headers:{"X-Token":getTok(), "Content-Type":"application/json"}, body:JSON.stringify(body)});
     const x = await r.json().catch(() => ({}));
@@ -3394,31 +3600,40 @@ async function bkModal(node, label){
     return x;
   };
   const busy = (b, t) => { b.disabled = !!t; b.innerHTML = t ? `<span class="spin"></span>${t}` : b._t; };
-  v.querySelectorAll(".btns button").forEach(b => b._t = b.innerHTML);
+  v.querySelectorAll(".tfootbar button").forEach(b => b._t = b.innerHTML);
   return new Promise(res => {
     let live = true;
     const done = () => { if (v._d) return; v._d = 1; live = false; v.classList.add("closing"); setTimeout(() => { v.remove(); res(); }, 360); };
     v._esc = done;
     const watch = async () => {                    // 備份中：每 1.5 秒看一次，好了就更新上面的清單
-      busy(runb, "備份中…");
+      d.running = true; syncBdg(); busy(runb, "備份中…");
       while (live) {
         await new Promise(r => setTimeout(r, 1500));
         try { d = await bkGet(node); } catch(e) { continue; }
         if (!d.running) break;
       }
       if (!live) return;
-      busy(runb); swapHTML(rows, bkRows(d)); { const bc = v.querySelector(".bkcopies"); if (bc) swapHTML(bc, bkCopies(d)); }
+      busy(runb); syncBdg(); swapHTML(sumBox, bkSummaryHTML(d));
+      { const bc = v.querySelector(".bkcopies"); if (bc) swapHTML(bc, bkCopies(d) || `<div class="ntst">${I("info")}<span>目前還沒有已存的備份檔</span></div>`); }
       d.last && d.last.ok ? say("備份好了", "ok") : say("有地方沒備份成功，看上面的說明", "bad");
     };
     if (d.running) watch();
     v.addEventListener("change", async e => {
       const t = e.target; if (!t.classList.contains("tog")) return;
-      try { const x = await post({action:"set", on:t.checked}); d.on = t.checked; toast(x.message); }
+      try { const x = await post({action:"set", on:t.checked}); d.on = t.checked; syncBdg(); toast(x.message); }
       catch(err) { t.checked = !t.checked; say(err.message, "bad"); }
     });
     v.addEventListener("click", async e => {
       if (e.target === v || e.target.closest("[data-r]")) return done();
-      if (e.target.closest("[data-restore]")) {     // 還原說明蓋在上面時，先把這個視窗藏起來（玻璃疊在一起會看到底下的字）
+      const bt2 = e.target.closest("[data-bktab]");
+      if (bt2) {
+        if (bt2.dataset.bktab === tab) return;
+        tab = bt2.dataset.bktab;
+        v.querySelectorAll("[data-bktab]").forEach(x => x.classList.toggle("on", x === bt2));
+        v.querySelectorAll("[data-bkpane]").forEach(x => { x.hidden = x.dataset.bkpane !== tab; });
+        return;
+      }
+      if (e.target.closest("[data-restore]")) {     // 還原說明蓋在上面時，先把這個視窗藏起來
         const box = v.querySelector(".dialog"); box.style.visibility = "hidden";
         await bkRestore(); box.style.visibility = "";
         return;
@@ -3426,6 +3641,10 @@ async function bkModal(node, label){
       if (e.target.closest("[data-chg]")) {
         const box = v.querySelector(".bknew"); reveal(box, true); reveal(e.target.closest("[data-chg]"), false);
         return box.querySelector("input").focus();
+      }
+      if (e.target.closest("[data-chgno]")) {
+        reveal(v.querySelector(".bknew"), false); reveal(v.querySelector("[data-chg]"), true);
+        return;
       }
       const sk = e.target.closest("[data-setkey]");
       if (sk && !sk.disabled) {
@@ -3435,16 +3654,21 @@ async function bkModal(node, label){
         busy(sk, "儲存中…");
         try {
           const x = await post({action:"key", key, sync:true}, true); d.key = key;
-          const kb = v.querySelector(".bkkey"); kb.textContent = key; kb.classList.add("on");
+          const kb = v.querySelector(".bkkey"), sb = v.querySelector("[data-bkshow]");
+          kb.textContent = key; kb.classList.add("on"); if (sb) sb.textContent = "隱藏";
           inp.value = ""; reveal(v.querySelector(".bknew"), false); reveal(v.querySelector("[data-chg]"), true); say(x.message, "ok");
         } catch(err) { say(err.message, "bad"); }
         busy(sk);
         return;
       }
-      const k = e.target.closest(".bkkey");
-      if (k) {
-        if (!k.classList.contains("on")) return k.classList.add("on");
-        try { await navigator.clipboard.writeText(d.key); toast("已複製解開密碼"); } catch(err) { /* 不能複製就讓使用者自己選取 */ }
+      if (e.target.closest("[data-bkshow]") || e.target.closest(".bkkey")) {
+        const kb = v.querySelector(".bkkey"), sb = v.querySelector("[data-bkshow]");
+        const on = kb.classList.toggle("on");
+        if (sb) sb.textContent = on ? "隱藏" : "顯示";
+        return;
+      }
+      if (e.target.closest("[data-bkcp]")) {
+        try { await navigator.clipboard.writeText(d.key); toast("已複製解開密碼"); } catch(err) { toast("複製不了，請先點顯示再手動選取", "bad"); }
         return;
       }
       if (e.target.closest("[data-run]") && !runb.disabled) {
@@ -3478,16 +3702,17 @@ async function bkRestore(){
   const here = "sudo python3 ~/vps-sentinel/sentinel.py --restore";
   const hosts = d.copies || [];
   const v = document.createElement("div"); v.className = "veil";
-  v.innerHTML = `<div class="dialog bkdlg">${IC("archive","big")}<h3>還原備份</h3>
-    <p>原本的檔案會先另存一份</p>
+  v.innerHTML = `<div class="dialog tdlg bkdlg">
+    <div class="thead">${IC("archive", "")}<div class="thead-t"><h3>還原備份</h3><p>還原前原本的檔案會先自動另存一份</p></div></div>
     <div class="form">
-      <div class="lbl">讓主機回到前幾天的樣子<small>在那台執行這行（點一下複製）</small>
-        <code class="bkcmd" tabindex="0" role="button" data-cmd="${esc(here)}">${esc(here)}</code></div>
-      ${hosts.length ? `<div class="lbl">整台搬到新主機（原本那台壞掉時）<small>網域先指向新主機，選一台，把指令貼到新主機執行（24 小時內有效）</small>
-        <div class="bkhosts">${hosts.map(h => `<button class="ubtn ghost sm" data-link="${esc(h.name)}">${esc(h.name)}</button>`).join("")}</div>
-        <code class="bkcmd" tabindex="0" role="button" data-cmd="" hidden></code></div>` : ""}
-      <div class="msg"></div></div>
-    </div>`;
+      <div class="tcard"><div class="tcardh"><span>原地還原到前幾天</span></div>
+        <small>在原本那台主機的終端機執行：</small>
+        <div class="codebox bkcmdbox"><code class="bkcmd">${esc(here)}</code><button type="button" class="ubtn sm ghost copybtn" data-bkcmd="${esc(here)}">${I("copy")}複製</button></div></div>
+      ${hosts.length ? `<div class="tcard"><div class="tcardh"><span>整台搬遷到新主機</span></div>
+        <small>網域先指向新主機，選一台產生 24 小時內有效的搬遷指令：</small>
+        <div class="bkhosts">${hosts.map(h => `<button type="button" class="fchip" data-link="${esc(h.name)}">${esc(h.name)}</button>`).join("")}</div>
+        <div class="codebox bkcmdbox" data-newcmd hidden><code class="bkcmd"></code><button type="button" class="ubtn sm ghost copybtn" data-bkcmd="">${I("copy")}複製</button></div></div>` : ""}
+      <div class="msg"></div></div></div>`;
   $("#layer").appendChild(v);
   const msg = v.querySelector(".msg");
   const say = (t, c = "") => { msg.className = "msg " + c; sayTo(msg, t); };
@@ -3496,9 +3721,9 @@ async function bkRestore(){
     v._esc = done;
     v.addEventListener("click", async e => {
       if (e.target === v || e.target.closest("[data-r]")) return done();
-      const c = e.target.closest(".bkcmd");
-      if (c) {
-        try { await navigator.clipboard.writeText(c.dataset.cmd); toast("已複製指令"); } catch(err) { /* 不能複製就讓使用者自己選取 */ }
+      const cp = e.target.closest("[data-bkcmd]");
+      if (cp && cp.dataset.bkcmd) {
+        try { await navigator.clipboard.writeText(cp.dataset.bkcmd); toast("已複製指令"); } catch(err) { /* 不能複製就讓使用者自己選取 */ }
         return;
       }
       const b = e.target.closest("[data-link]");
@@ -3511,10 +3736,10 @@ async function bkRestore(){
         if (!r.ok) throw new Error(x.message || "產生失敗，請再試一次");
         const url = `${location.origin}/api/backup-dl?${x.q}`;
         const cmd = `sudo apt-get install -y -qq git; git clone ${BK_REPO} ~/vps-sentinel; sudo python3 ~/vps-sentinel/sentinel.py --restore '${url}'`;
-        const box = v.querySelector(".bkhosts + .bkcmd");
-        box.dataset.cmd = cmd; txt(box, cmd); reveal(box, true);
+        const box = v.querySelector("[data-newcmd]");
+        txt(box.querySelector("code"), cmd); box.querySelector("[data-bkcmd]").dataset.bkcmd = cmd; reveal(box, true);
         v.querySelectorAll("[data-link]").forEach(x => x.classList.toggle("on", x === b));
-        say(`這是「${b.dataset.link}」的還原指令，點一下複製`, "ok");
+        say(`已產生「${b.dataset.link}」的搬遷指令（24 小時內有效）`, "ok");
       } catch(err) { say(err.message, "bad"); }
       b.disabled = false;
     });
@@ -3751,7 +3976,7 @@ async function pageClick(e){
     moreMenu(mo, s); if (window._menu) window._menu._by = mo; return; }
   if (window._menu && !t.closest(".lmenu")) closeMenu();
   const dl = t.closest("[data-dl]");
-  if (dl) return dlModal(dl.dataset.dl, dl.dataset.name);
+  if (dl) return dlModal(dl.dataset.dl, dl.dataset.name).then(() => tick());
   const ab = t.closest("[data-ab]");
   if (ab && !ab.closest(".veil")) return abModal(ab.dataset.ab, ab.dataset.name).then(() => tick());
   const alm = t.closest("[data-album]");

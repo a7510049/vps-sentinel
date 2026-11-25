@@ -209,6 +209,14 @@ def alb_count():
         return 0
 
 
+def alb_pending():
+    """給 /api/status：所有相簿裡等著確認的朋友上傳數"""
+    try:
+        return sum(len(a.get("pend") or ()) for a in alb_all().values())
+    except Exception:  # noqa: BLE001
+        return 0
+
+
 def alb_dl(a):
     """下載：0 不給、1 只給壓縮圖、2 給原圖（舊版存的是 True／False）"""
     v = a.get("dl", 2)
