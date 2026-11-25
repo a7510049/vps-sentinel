@@ -729,8 +729,8 @@ button.li.prs,a.li.prs{border-radius:var(--r-lg);transform:scale(.98);background
 /* 單選液態玻璃滑動氣泡（slideSel）：僅毛玻璃氣泡平滑滑動，圖示與文字保持穩固不晃 */
 :where([data-slide]){position:relative;isolation:isolate}   /* :where：分頁列本來的 fixed／sticky 優先 */
 [data-slide]>.slide{position:absolute;left:0;top:0;z-index:0;border-radius:var(--r-pill);background:var(--pill-bg);box-shadow:var(--pill-sh);pointer-events:none}
-[data-slide].sliding>.on::before{opacity:0;transition:none}
-[data-slide].slid>.on::before{transition:none}
+[data-slide].sliding>*::before{opacity:0;transition:none}
+[data-slide].slid>*::before{transition:none}
 [data-slide].sliding>*{transition-property:color,box-shadow,transform,padding}
 [data-slide].sliding>.on{background:transparent;box-shadow:none}
 

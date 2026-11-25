@@ -1044,9 +1044,9 @@ function setPage(list){
     const s = on.find(x => keyOf(x) === TOOLH) || on.find(x => !x.node) || on[0], k = esc(keyOf(s)), node = esc(s.node || "");
     hpk = on.length > 1 ? hpick(on, s, x => x.self_has ? `<span class="dot info"></span>` : "") : "";
     h += (D ? "" : `<div class="lbl" data-key="lh">主機<button data-selfcheck>檢查新版</button></div>`) + `<div class="selfsum" data-key="selfsum" data-keep data-ld></div>` + (D ? "" : hpk);   // 電腦：選主機、檢查新版放上面的工具列，右邊第一張卡片跟左邊分類對齊
-    h += `<div class="group" data-key="g-h:${k}" data-sw><div class="selfbox" data-key="self" data-n="${node}" data-keep data-ld>${selfRowHtml(s)}</div>${sysRow(s)}${secRow(s)}<button class="li" data-newtok="${node}" data-label="${esc(s.name)}">${IC("key", "")}<span class="lab">換一組新密碼<small>舊密碼會立刻失效</small></span>${CHEV}</button>`
-      + (s.keep ? `<label class="li">${IC("keep", "")}<span class="lab">Oracle 防回收${keepLine(s.keep)}</span><input type="checkbox" class="tog" data-keepalive="${node}" aria-label="Oracle 防回收" ${s.keep.on ? "checked" : ""}></label>` : "")
-      + (s.node ? "" : go("data-pair", "link", "配對暗號", "pairst")) + `</div>`;
+    h += `<div class="group" data-key="g-h" data-keyed><div class="selfbox" data-key="self" data-n="${node}"${SELFST[keyOf(s)] ? "" : " data-ld"}>${selfRowHtml(s)}</div>${sysRow(s)}${secRow(s)}<button class="li" data-key="pw" data-newtok="${node}" data-label="${esc(s.name)}">${IC("key", "")}<span class="lab">換一組新密碼<small>舊密碼會立刻失效</small></span>${CHEV}</button>`
+      + (s.keep ? `<label class="li" data-key="keep">${IC("keep", "")}<span class="lab">Oracle 防回收${keepLine(s.keep)}</span><input type="checkbox" class="tog" data-keepalive="${node}" aria-label="Oracle 防回收" ${s.keep.on ? "checked" : ""}></label>` : "")
+      + (s.node ? "" : go(`data-key="pair" data-pair`, "link", "配對暗號", "pairst")) + `</div>`;
   }
   if (D) {   // 電腦：左邊分類、右邊只放那一類（跟電腦上的設定程式一樣）
     const C = [["sec", "通知與登入", "bell"], ...(skyG ? [["sky", "機場起降", "plane"]] : []), ...(h ? [["host", "主機", "server"]] : []), ["look", "外觀", "palette"]];
@@ -1063,7 +1063,7 @@ const SECI = [["seal", "lock", "密碼和資料", "兩層加密", "還沒加密"
 const SECO = [["sshpw", "key", "SSH 只能用金鑰登入", "關掉密碼登入"], ["sshroot", "user", "root 不能用密碼登入", "只能用金鑰"],
   ["guard", "ban", "錯太多次封鎖", "10 分鐘錯 5 次封 1 小時"], ["autoupd", "layers", "自動安裝安全更新", "不會自己重新開機"]];
 const secBad = s => [...SECI, ...SECO].filter(([k]) => s.sec && s.sec[k] === false).length;
-const secRow = s => !s.sec ? "" : `<button class="li" data-secchk="${esc(keyOf(s))}">${IC("safe", "")}<span class="lab">安全檢查${secBad(s) ? `<small class="warn">${secBad(s)} 項要注意</small>` : ""}</span>${secBad(s) ? "" : `<span class="stb" data-v="✓">${I("check")}</span>`}${CHEV}</button>`;
+const secRow = s => !s.sec ? "" : `<button class="li" data-key="sec" data-secchk="${esc(keyOf(s))}">${IC("safe", "")}<span class="lab">安全檢查${secBad(s) ? `<small class="warn">${secBad(s)} 項要注意</small>` : ""}</span>${secBad(s) ? "" : `<span class="stb" data-v="✓">${I("check")}</span>`}${CHEV}</button>`;
 function secModal(k){
   const s = LIST.find(x => keyOf(x) === k); if (!s || !s.sec) return;
   const node = s.node || "", q = node ? `?node=${encodeURIComponent(node)}` : "";
