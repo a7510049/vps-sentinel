@@ -285,9 +285,7 @@ img.flag{width:28px;height:21px;object-fit:cover;border-radius:var(--r-xs);flex:
 #app{transition:opacity var(--t-mid) var(--ease)}
 .dash.m{position:relative;max-width:760px;margin:0 auto;padding:10px 18px calc(env(safe-area-inset-bottom) + 28px);overflow-x:clip}
 .full .dash.m{padding-top:0;padding-bottom:calc(env(safe-area-inset-bottom) + 102px)}
-.view{animation:through var(--t-mid) var(--dec) backwards}
-/* 手機換分頁改由 JS through() 同步整頁並排滑動（不重疊疊影），停用預設 CSS 進場與卡片浮入避免衝突 */
-.dash.m .view:is([data-dir="1"],[data-dir="-1"]){animation:none}
+/* 換分頁由 JS through() 針對最底層卡片直接淡入淡出（不在父容器 .view 上改 opacity，避免毛玻璃切換時先變不透明再變透明） */
 .dash.m .view:is([data-dir="1"],[data-dir="-1"]) :is(.hcard,.tbx,.tile){animation:none}
 /* 這個網頁連不上主機超過 15 秒（html.lost）：畫面上的數字都是舊的，整塊變淡 */
 .view>:not(.hbanner,.dhome,.mtop),.dhome>:not(.dbar,.dhero),.det .dscroll>:not(.dtop){transition:filter var(--t-slow) var(--ease)}
@@ -1867,12 +1865,12 @@ html.flyon .dash>.view{content-visibility:hidden;contain-intrinsic-size:auto non
 @supports ((backdrop-filter:blur(1px)) or (-webkit-backdrop-filter:blur(1px))){
   .rail,.dock,.full .mtop,.dtop::before,.fmini{-webkit-backdrop-filter:var(--blur-float);backdrop-filter:var(--blur-float)}
   .dtop::before,.fmini{background:var(--glass)}
-  .hcard,.hbanner,.sumc,.htab,.ltab,.cc,.tile,.tbx,.dhome>.evs,.dhome>.tgh,.dash.d .sbody .group,.dash.m .evs>.ev,.dash.m .group>.li,.dash.m .selfrow,.dash.m .selfsum,.dash.m .selfwait,.calm,.foot,.dseg,.fchips,.hpick,.icbtn,.fc,.login{-webkit-backdrop-filter:var(--blur-card);backdrop-filter:var(--blur-card)}
+  .hcard,.hbanner,.sumc,.htab,.ltab,.cc,.tile,.tbx,.dhome>.evs,.dhome>.tgh,.dash.d .sbody .group,.dash.d .v-tools .group>.li,.dash.m .evs>.ev,.dash.m .group>.li,.dash.m .selfrow,.dash.m .selfsum,.dash.m .selfwait,.calm,.foot,.dseg,.fchips,.hpick,.icbtn,.fc,.login{-webkit-backdrop-filter:var(--blur-card);backdrop-filter:var(--blur-card)}
   .dialog,.lmenu,#ctip{-webkit-backdrop-filter:var(--blur-modal);backdrop-filter:var(--blur-modal)}
 }
 @media (prefers-reduced-transparency:reduce){
   [data-mode]{--glass:var(--s1);--glass-card:var(--s1);--glass-modal:var(--s1)}
-  .rail,.dock,.full .mtop,.dtop::before,.fmini,.hcard,.hbanner,.sumc,.htab,.ltab,.cc,.tile,.tbx,.dhome>.evs,.dhome>.tgh,.dash.d .sbody .group,.dash.m .evs>.ev,.dash.m .group>.li,.dash.m .selfrow,.dash.m .selfsum,.dash.m .selfwait,.calm,.foot,.dseg,.fchips,.hpick,.icbtn,.fc,.login,.dialog,.lmenu,#ctip{-webkit-backdrop-filter:none;backdrop-filter:none}
+  .rail,.dock,.full .mtop,.dtop::before,.fmini,.hcard,.hbanner,.sumc,.htab,.ltab,.cc,.tile,.tbx,.dhome>.evs,.dhome>.tgh,.dash.d .sbody .group,.dash.d .v-tools .group>.li,.dash.m .evs>.ev,.dash.m .group>.li,.dash.m .selfrow,.dash.m .selfsum,.dash.m .selfwait,.calm,.foot,.dseg,.fchips,.hpick,.icbtn,.fc,.login,.dialog,.lmenu,#ctip{-webkit-backdrop-filter:none;backdrop-filter:none}
 }
 /* PIN 碼數字鍵盤（web/pin.js）：每次打開數字位置都打亂；圓點顯示打了幾碼 */
 .ppad{display:flex;flex-direction:column;align-items:center;gap:22px;margin:14px auto 0;transition:opacity var(--t-fast) var(--ease)}

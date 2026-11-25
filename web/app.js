@@ -1841,7 +1841,21 @@ function flipWidth(el, change){
 }
 /* 拿出來又放回去的元素：瀏覽器會把裡面的進場動畫從頭重播（卡片會突然不見），全部停在結尾 */
 const still = (el, keep) => el.getAnimations({subtree:true}).forEach(n => { if (n === keep) return; if (!n.animationName) n.cancel(); else if (isFinite(n.effect.getComputedTiming().endTime)) n.finish(); });
-/* 換分頁：電腦版 Material 3 Fade Through；手機版整頁並排滑動（兩頁永不重疊、不破圖，並接續手指橫滑位移） */
+/* 尋找不包住其他毛玻璃的「最底層動畫目標」：
+   W3C 規範裡，父層只要 opacity < 1 或 clip-path 就會建立新的 Backdrop Root，導致裡面的毛玻璃卡片在動畫期間先變不透明、動畫結束才突然變透明；
+   直接對毛玻璃卡片本身與一般文字區塊做淡入淡出，就能讓毛玻璃全程維持真實透光不閃爍 */
+const GLASS_SEL = ".hcard,.hbanner,.sumc,.htab,.ltab,.cc,.tile,.tbx,.dhome>.evs,.dhome>.tgh,.dash.d .sbody .group,.dash.d .v-tools .group>.li,.dash.m .evs>.ev,.dash.m .group>.li,.dash.m .selfrow,.dash.m .selfsum,.dash.m .selfwait,.calm,.foot,.dseg,.fchips,.hpick,.icbtn,.fc";
+function animTargets(root){
+  const out = [];
+  const walk = el => {
+    if (!el || el.nodeType !== 1) return;
+    if (el.matches(GLASS_SEL) || !el.querySelector(GLASS_SEL)) out.push(el);
+    else for (const c of el.children) walk(c);
+  };
+  walk(root);
+  return out;
+}
+/* 換分頁：電腦版直接淡入淡出各毛玻璃卡片與區塊；手機版整頁並排滑動（兩頁永不重疊、不破圖，並接續手指橫滑位移） */
 let SWIPEX = 0;
 function through(a, b){
   const par = a.offsetParent;
@@ -1852,11 +1866,11 @@ function through(a, b){
   par.querySelectorAll(":scope>.view").forEach(v => { if (v._leaving) v.remove(); });
   const r = a.getBoundingClientRect(), R = par.getBoundingClientRect(), sy = Math.max(0, scrollY) / z;
   const top = (r.top - R.top) / z - par.clientTop, h = Math.max(0, Math.min(r.height / z, sy + innerHeight / z - top));
-  if (!slide) b.style.animationDelay = Math.round(T.fast * .55) + "ms";
   a.replaceWith(b);
+  if (!slide) skipIntro(b, true);
   a._leaving = 1;
   Object.assign(a.style, {position:"absolute", left:(r.left - R.left) / z - par.clientLeft - tfX + "px", top:(top - sy) + "px", width:r.width / z + "px",
-    height:h + "px", overflow:"hidden", margin:"0", pointerEvents:"none", animation:"none", clipPath:sy > 0 ? `inset(${sy}px 0 0 0)` : ""});
+    height:h + "px", overflow:"hidden", margin:"0", pointerEvents:"none", animation:"none", clipPath:slide && sy > 0 ? `inset(${sy}px 0 0 0)` : ""});
   b.after(a); still(a);
   if (slide) {
     const stride = r.width / z + 32, dur = Math.round(T.mid * Math.max(.55, 1 - Math.abs(curX) / stride));
@@ -1864,10 +1878,14 @@ function through(a, b){
     a.animate([{transform:`translateX(${curX}px)`}, {transform:`translateX(${-TABDIR * stride}px)`}], {...opt, fill:"forwards"}).onfinish = () => a.remove();
     b.animate([{transform:`translateX(${curX + TABDIR * stride}px)`}, {transform:"none"}], opt);
   } else {
-    a.animate([{opacity:1}, {opacity:0}], {duration:Math.round(T.fast * .6), easing:EXIT, fill:"forwards", id:"ui"}).onfinish = () => a.remove();
+    const outEls = animTargets(a), outOpt = {duration:Math.round(T.fast * .6), easing:EXIT, fill:"forwards", id:"ui"};
+    if (outEls.length) outEls.map(el => el.animate([{opacity:1}, {opacity:0}], outOpt))[0].onfinish = () => a.remove();
+    else a.remove();
+    const inOpt = {duration:T.mid, delay:Math.round(T.fast * .45), easing:DEC, fill:"backwards", id:"ui"};
+    animTargets(b).forEach(el => el.animate([{opacity:0, transform:"translateY(6px)"}, {opacity:1, transform:"none"}], inOpt));
   }
 }
-/* 切換內容區塊（data-sw：總覽 ↔ 單台主機、換主機、換設定分類）：先淡出再淡入不疊字、高度平順銜接 */
+/* 切換內容區塊（data-sw：總覽 ↔ 單台主機、換主機、換設定分類）：直接對子卡片淡出再淡入，全程保留毛玻璃不閃爍 */
 function swapIn(a, b){
   if (!canAnim() || !a.isConnected) return a.replaceWith(b);
   const h0 = a.offsetHeight, par = a.offsetParent, x = a.offsetLeft, y = a.offsetTop, w = a.offsetWidth;
@@ -1879,10 +1897,13 @@ function swapIn(a, b){
     Object.assign(a.style, {position:"absolute", left:x + "px", top:y + "px", width:w + "px", height:h0 + "px", margin:"0", pointerEvents:"none", overflow:"hidden", zIndex:1});
     b.after(a); still(a);
     const outTf = into ? "translateY(-6px)" : back ? "translateY(6px)" : (sb || gh) ? "none" : "translateY(-4px)";
-    a.animate([{opacity:1, transform:"none"}, {opacity:0, transform:outTf}], {duration:Math.round(T.fast * .6), easing:EXIT, fill:"forwards", id:"ui"}).onfinish = () => a.remove();
+    const outEls = animTargets(a), outOpt = {duration:Math.round(T.fast * .6), easing:EXIT, fill:"forwards", id:"ui"};
+    if (outEls.length) outEls.map(el => el.animate([{opacity:1, transform:"none"}, {opacity:0, transform:outTf}], outOpt))[0].onfinish = () => a.remove();
+    else a.remove();
   }
   const inTf = into ? "translateY(12px)" : back ? "translateY(-8px)" : gh ? "none" : sb ? "translateY(4px)" : "translateY(8px)";
-  b.animate([{opacity:0, transform:inTf}, {opacity:1, transform:"none"}], {duration:(sb || gh) ? T.fast : T.mid, delay:Math.round(T.fast * .35), easing:DEC, fill:"backwards", id:"ui"});
+  const inOpt = {duration:(sb || gh) ? T.fast : T.mid, delay:Math.round(T.fast * .35), easing:DEC, fill:"backwards", id:"ui"};
+  animTargets(b).forEach(el => el.animate([{opacity:0, transform:inTf}, {opacity:1, transform:"none"}], inOpt));
   if (sb) return;
   const hEnd = b.offsetHeight;
   if (Math.abs(hEnd - h0) < 2) return;
