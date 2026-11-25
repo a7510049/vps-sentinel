@@ -739,6 +739,14 @@ def dl_status():
             "yt": {"tool": bool(yt_bin()), "cookies": os.path.isfile(YT_COOKIES), "warp": bool(yt_proxy())}}
 
 
+def dl_brief():
+    """給 /api/status：下載中、排隊、失敗各幾筆"""
+    with DL_LOCK:
+        return {"run": sum(j["st"] == "run" for j in DL),
+                "wait": sum(j["st"] == "wait" for j in DL),
+                "bad": sum(j["st"] == "bad" for j in DL)}
+
+
 def dl_pick(text):
     """從分享文字（抖音、小紅書、B 站複製出來會帶標題）裡挑出網址"""
     m = re.search(r"(?i)https?://[!#-&(-;=?-~]+", str(text or ""))
