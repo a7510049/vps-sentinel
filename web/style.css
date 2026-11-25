@@ -79,7 +79,7 @@
   --pill-sh:0 4px 14px -2px rgba(0,0,0,.44),inset 0 1px 0 rgba(255,255,255,.26);
   --sh-card:0 10px 32px -12px rgba(0,0,0,.52),0 1px 2px rgba(0,0,0,.28),var(--hl);
   --sh-float:0 20px 52px -16px rgba(0,0,0,.68),0 2px 10px rgba(0,0,0,.38),var(--hl);
-  --sh-seg:none;
+  --sh-seg:var(--sh-card);
   --orb-op:.42;
   --c-cpu:#38bdf8; --c-mem:#60a5fa; --c-rx:#2dd4bf; --c-tx:#fbbf24;
 }
@@ -109,7 +109,7 @@
   --pill-sh:0 3px 12px -2px rgba(15,23,42,.14),inset 0 1px 0 rgba(255,255,255,1);
   --sh-card:0 6px 24px -8px rgba(15,23,42,.10),0 1px 2px rgba(15,23,42,.04),var(--hl);
   --sh-float:0 16px 40px -14px rgba(15,23,42,.18),0 2px 8px -2px rgba(15,23,42,.06),var(--hl);
-  --sh-seg:none;
+  --sh-seg:var(--sh-card);
   --orb-op:.48;
   --c-cpu:#007aff; --c-mem:#0ea5e9; --c-rx:#0d9488; --c-tx:#f59e0b;
 }
@@ -467,7 +467,7 @@ html:not(.full) .dock .tb.hasnew::after{top:7px;right:calc(50% - 26px)}
 /* 事件 */
 .evs{display:flex;flex-direction:column;gap:3px}
 .evs>*{flex-shrink:0}
-.ev{display:flex;gap:14px;align-items:flex-start;padding:14px 16px;background:var(--card);box-shadow:var(--cs);border-radius:var(--r-xs);text-align:left;width:100%}
+.ev{display:flex;gap:14px;align-items:flex-start;padding:14px 16px;background:var(--card);border:1px solid var(--line);box-shadow:var(--cs);border-radius:var(--r-xs);text-align:left;width:100%}
 .evs>.ev:first-child,.evs>.day+.ev{border-top-left-radius:var(--r-lg);border-top-right-radius:var(--r-lg)}
 .evs>.ev:last-child,.evs>.ev:has(+.day){border-bottom-left-radius:var(--r-lg);border-bottom-right-radius:var(--r-lg)}
 .evi{flex:none;display:grid;place-items:center;width:32px;height:32px;border-radius:var(--r-pill);background:var(--pc);color:var(--on-pc)}
@@ -495,7 +495,7 @@ html:not(.full) .dock .tb.hasnew::after{top:7px;right:calc(50% - 26px)}
 .ev .ehs>div>div{padding-top:4px;color:var(--tx2);font-size:var(--fs-s)}
 .day{font-size:var(--fs-s);font-weight:600;color:var(--tx2);margin:22px 8px 10px}   /* 跟 .lbl 一樣的小標題 */
 .day:first-child{margin-top:0}
-.calm{color:var(--tx3);padding:22px 16px;background:var(--card);box-shadow:var(--cs);border-radius:var(--r-lg);text-align:center}
+.calm{color:var(--tx3);padding:22px 16px;background:var(--card);border:1px solid var(--line);box-shadow:var(--cs);border-radius:var(--r-lg);text-align:center}
 
 /* ═════════ 主機整頁（手機）：從卡片的位置平順展開成整頁（Material 3 Container Transform） ═════════ */
 .det{position:fixed;inset:0;z-index:var(--z-det);background-color:var(--bg);
@@ -681,13 +681,13 @@ html.dhid .dash>.view{content-visibility:hidden;contain-intrinsic-size:auto none
 .bxn.ok{background:color-mix(in oklab,var(--ok) 16%,transparent);color:var(--ok)}
 .bxn.ok svg{width:14px;height:14px;stroke-width:2.6}
 /* 底下：系統更新 */
-.foot{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;padding:16px;background:var(--card);box-shadow:var(--cs);border-radius:var(--r-lg)}
+.foot{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;padding:16px;background:var(--card);border:1px solid var(--line);box-shadow:var(--cs);border-radius:var(--r-lg)}
 .foot .sub{line-height:1.6}
 
-/* ═════════ 列表（工具、設定、連結）：手機為 Pixel 分段卡片，電腦為 Google 細框卡片 ═════════ */
+/* ═════════ 列表（工具、設定、連結）：手機為分段毛玻璃卡片，電腦為整張毛玻璃卡片 ═════════ */
 .group{display:flex;flex-direction:column;gap:3px}
 .group>*{flex-shrink:0}
-.li{display:flex;align-items:center;gap:14px;width:100%;background:var(--card);box-shadow:var(--cs);padding:12px 16px;min-height:66px;border-radius:var(--r-xs);text-align:left;text-decoration:none;
+.li{display:flex;align-items:center;gap:14px;width:100%;background:var(--card);border:1px solid var(--line);box-shadow:var(--cs);padding:12px 16px;min-height:66px;border-radius:var(--r-xs);text-align:left;text-decoration:none;
   transition:border-radius var(--sp-fast),transform var(--sp-fast),background-color var(--t-fast) var(--ease)}
 .group>.li:first-child{border-top-left-radius:var(--r-lg);border-top-right-radius:var(--r-lg)}
 .group>.li:last-child{border-bottom-left-radius:var(--r-lg);border-bottom-right-radius:var(--r-lg)}
@@ -974,10 +974,10 @@ body:has(.dash.d) .flyv{--pw:1280px;--gut:20px}
 .hoff{grid-column:2 / -2;color:var(--bad);gap:6px}.hoff svg{width:16px;height:16px}
 /* 總覽近期事件與提醒 */
 .dhome>.evs{gap:0;background:var(--card);border:1px solid var(--line);box-shadow:var(--cs);border-radius:var(--r-lg);overflow:hidden}
-.dhome>.evs>.ev{border-radius:0;background:none;box-shadow:none;border-bottom:1px solid var(--line)}
+.dhome>.evs>.ev{border:0;border-radius:0;background:none;box-shadow:none;border-bottom:1px solid var(--line)}
 .dhome>.evs>.ev:last-child{border-bottom:0}
 .dhome>.tgh{margin:0 0 20px;gap:0;background:var(--card);border:1px solid var(--line);box-shadow:var(--cs);border-radius:var(--r-lg);overflow:hidden}
-.dhome>.tgh>.li{border-radius:0;background:none;box-shadow:none}
+.dhome>.tgh>.li{border:0;border-radius:0;background:none;box-shadow:none}
 .lbl small{font-size:var(--fs-xs);font-weight:400;color:var(--tx3)}
 /* 單台主機專頁：電腦寬螢幕一次全部展開，雙欄對齊 */
 .dcrumb{display:flex;align-items:center;gap:8px;margin:-4px 0 16px;font-size:var(--fs-s);color:var(--tx3)}
@@ -1025,7 +1025,7 @@ body:has(.dash.d) .fwrap{max-width:var(--pw)}
 .sgrid{position:relative;display:grid;grid-template-columns:220px minmax(0,780px);gap:28px;align-items:start}
 .scat{position:sticky;top:26px;display:flex;flex-direction:column;gap:10px}
 .scat .pane{gap:2px}
-.scat .pane .li{min-height:42px;padding:0 14px;gap:12px;font-weight:500;font-size:var(--fs-m);background:transparent;box-shadow:none;border-radius:var(--r-md);color:var(--tx2)}
+.scat .pane .li{min-height:42px;padding:0 14px;gap:12px;font-weight:500;font-size:var(--fs-m);background:transparent;border:0;box-shadow:none;border-radius:var(--r-md);color:var(--tx2)}
 .scat .pane .li:first-child,.scat .pane .li:last-child{border-radius:var(--r-md)}
 .scat .pane .li.on{background:transparent;box-shadow:none;color:var(--tx)}
 @media (hover:hover){.scat .pane .li:not(.on):hover{background:var(--glass-sub);color:var(--tx)}}
@@ -1033,7 +1033,7 @@ body:has(.dash.d) .fwrap{max-width:var(--pw)}
 .scat .pane .li.on>svg{color:var(--p)}
 .scat .sp{display:none}
 .scat .group:not(.pane){gap:2px;padding-top:10px;border-top:1px solid var(--line)}
-.scat .group:not(.pane) .li{min-height:40px;padding:0 14px;gap:12px;font-size:var(--fs-m);background:transparent;box-shadow:none;border-radius:var(--r-md);color:var(--tx2)}
+.scat .group:not(.pane) .li{min-height:40px;padding:0 14px;gap:12px;font-size:var(--fs-m);background:transparent;border:0;box-shadow:none;border-radius:var(--r-md);color:var(--tx2)}
 .scat .group:not(.pane) .li:first-child,.scat .group:not(.pane) .li:last-child{border-radius:var(--r-md)}
 @media (hover:hover){.scat .group:not(.pane) .li:hover{background:var(--glass-sub);color:var(--tx)}}
 .scat .group .li .ico{width:auto;height:auto;background:none;box-shadow:none;color:var(--tx2)}
@@ -1046,7 +1046,7 @@ body:has(.dash.d) .fwrap{max-width:var(--pw)}
 .dbar:has(>.sbr){padding:0}.sbr{display:flex;align-items:center;gap:12px;min-width:0}
 .sbody>.group+.group{margin-top:var(--gut)}
 .dash.d .sbody .group{gap:0;background:var(--card);border:1px solid var(--line);box-shadow:var(--cs);border-radius:var(--r-lg);overflow:hidden}
-.dash.d .sbody .group>.li,.dash.d .sbody .selfrow,.dash.d .sbody .selfwait{border-radius:0;background:none;box-shadow:none;border-bottom:1px solid var(--line)}
+.dash.d .sbody .group>.li,.dash.d .sbody .selfrow,.dash.d .sbody .selfwait{border:0;border-radius:0;background:none;box-shadow:none;border-bottom:1px solid var(--line)}
 .dash.d .sbody .group>:last-child,.dash.d .sbody .group>.selfbox:last-child>:last-child{border-bottom:0}
 .dash.d .sbody .selfbox{gap:0}
 .dash.d .sbody .selfsum{border:1px solid var(--line)}
@@ -1057,7 +1057,7 @@ body:has(.dash.d) .fwrap{max-width:var(--pw)}
 .lth>.lev{grid-column:span 2}
 .lth{height:40px;font-size:var(--fs-xs);font-weight:500;color:var(--tx3);background:var(--glass-sub);border-bottom:1px solid var(--line)}
 .ltab .evs{gap:0}
-.ltab .ev.lr{min-height:48px;padding-block:8px;border-radius:0;box-shadow:none;background:none;border-bottom:1px solid var(--line);transition:background-color var(--t-fast) var(--ease)}
+.ltab .ev.lr{min-height:48px;padding-block:8px;border:0;border-radius:0;box-shadow:none;background:none;border-bottom:1px solid var(--line);transition:background-color var(--t-fast) var(--ease)}
 .ltab .ev.lr:last-child{border-bottom:0}
 @media (hover:hover){.ltab .ev.lr:hover{background:var(--glass-sub)}}
 .ltab .evi{width:28px;height:28px}
@@ -1266,7 +1266,7 @@ textarea.field{height:auto;padding:12px 16px;resize:none}
 .bkat small{font-size:var(--fs-xs);color:var(--tx3)}
 /* 軟體更新（設定裡） */
 .selfbox{display:flex;flex-direction:column;gap:3px}
-.selfrow{display:flex;flex-direction:column;justify-content:center;min-height:66px;padding:12px 16px;background:var(--card);box-shadow:var(--cs);border-radius:var(--r-xs)}
+.selfrow{display:flex;flex-direction:column;justify-content:center;min-height:66px;padding:12px 16px;background:var(--card);border:1px solid var(--line);box-shadow:var(--cs);border-radius:var(--r-xs)}
 .selfbox>:first-child{border-top-left-radius:var(--r-lg);border-top-right-radius:var(--r-lg)}
 .selfbox>:last-child{border-bottom-left-radius:var(--r-lg);border-bottom-right-radius:var(--r-lg)}
 .selfrow .hn{display:block;font-size:var(--fs-l);font-weight:500}
@@ -1327,9 +1327,9 @@ textarea.field{height:auto;padding:12px 16px;resize:none}
 .upm{font-size:var(--fs-s);color:var(--bad);line-height:1.5}
 .upj.s-skip .upm{color:var(--tx3)}
 .selfsum:empty{display:none}
-.selfsum{display:flex;align-items:center;gap:12px;margin:0 0 16px;padding:12px 12px 12px 16px;background:var(--card);box-shadow:var(--cs);border-radius:var(--r-lg);font-size:var(--fs-m)}
+.selfsum{display:flex;align-items:center;gap:12px;margin:0 0 16px;padding:12px 12px 12px 16px;background:var(--card);border:1px solid var(--line);box-shadow:var(--cs);border-radius:var(--r-lg);font-size:var(--fs-m)}
 .selfsum>span{flex:1;min-width:0;color:var(--p);font-weight:500}
-.selfwait{display:flex;align-items:center;min-height:66px;padding:12px 16px;background:var(--card);box-shadow:var(--cs);color:var(--tx3);border-radius:var(--r-lg)}
+.selfwait{display:flex;align-items:center;min-height:66px;padding:12px 16px;background:var(--card);border:1px solid var(--line);box-shadow:var(--cs);color:var(--tx3);border-radius:var(--r-lg)}
 
 /* ═════════ 選單 ═════════ */
 .lmenu{position:fixed;z-index:var(--z-menu);min-width:210px;max-width:290px;padding:5px;gap:2px;border-radius:var(--r-lg);display:flex;flex-direction:column;
@@ -1866,12 +1866,12 @@ html.flyon .dash>.view{content-visibility:hidden;contain-intrinsic-size:auto non
 @supports ((backdrop-filter:blur(1px)) or (-webkit-backdrop-filter:blur(1px))){
   .rail,.dock,.full .mtop,.dtop::before,.fmini{-webkit-backdrop-filter:var(--blur-float);backdrop-filter:var(--blur-float)}
   .dtop::before,.fmini{background:var(--glass)}
-  .hcard,.hbanner,.sumc,.htab,.ltab,.cc,.tile,.tbx,.dhome>.evs,.dhome>.tgh,.dash.d .sbody .group,.dash.m .evs>.ev,.dash.m .group>.li,.calm,.foot,.dseg,.fchips,.hpick,.icbtn,.fc,.login{-webkit-backdrop-filter:var(--blur-card);backdrop-filter:var(--blur-card)}
+  .hcard,.hbanner,.sumc,.htab,.ltab,.cc,.tile,.tbx,.dhome>.evs,.dhome>.tgh,.dash.d .sbody .group,.dash.m .evs>.ev,.dash.m .group>.li,.dash.m .selfrow,.dash.m .selfsum,.dash.m .selfwait,.calm,.foot,.dseg,.fchips,.hpick,.icbtn,.fc,.login{-webkit-backdrop-filter:var(--blur-card);backdrop-filter:var(--blur-card)}
   .dialog,.lmenu,#ctip{-webkit-backdrop-filter:var(--blur-modal);backdrop-filter:var(--blur-modal)}
 }
 @media (prefers-reduced-transparency:reduce){
   [data-mode]{--glass:var(--s1);--glass-card:var(--s1);--glass-modal:var(--s1)}
-  .rail,.dock,.full .mtop,.dtop::before,.fmini,.hcard,.hbanner,.sumc,.htab,.ltab,.cc,.tile,.tbx,.dhome>.evs,.dhome>.tgh,.dash.d .sbody .group,.dash.m .evs>.ev,.dash.m .group>.li,.calm,.foot,.dseg,.fchips,.hpick,.icbtn,.fc,.login,.dialog,.lmenu,#ctip{-webkit-backdrop-filter:none;backdrop-filter:none}
+  .rail,.dock,.full .mtop,.dtop::before,.fmini,.hcard,.hbanner,.sumc,.htab,.ltab,.cc,.tile,.tbx,.dhome>.evs,.dhome>.tgh,.dash.d .sbody .group,.dash.m .evs>.ev,.dash.m .group>.li,.dash.m .selfrow,.dash.m .selfsum,.dash.m .selfwait,.calm,.foot,.dseg,.fchips,.hpick,.icbtn,.fc,.login,.dialog,.lmenu,#ctip{-webkit-backdrop-filter:none;backdrop-filter:none}
 }
 /* PIN 碼數字鍵盤（web/pin.js）：每次打開數字位置都打亂；圓點顯示打了幾碼 */
 .ppad{display:flex;flex-direction:column;align-items:center;gap:22px;margin:14px auto 0;transition:opacity var(--t-fast) var(--ease)}
