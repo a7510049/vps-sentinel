@@ -51,7 +51,7 @@ for m in re.finditer(r'"cubic-bezier\([^)]*\)"', js):
     if "const EASE" not in line and "SPRING" not in line:
         report("app.js", jline0, js, m.start(), f"曲線請用 EASE／EXIT，彈簧用 SPRING_F／SPRING：{m.group(0)}")
 
-# 方塊圖示的顏色只能用 style.css 裡定義好的 .ico.樣式（規則見 CLAUDE.md「圖示顏色」）
+# 圓形圖示的顏色只能用 style.css 裡定義好的 .ico.樣式，且一律用主題色系（Material You 動態配色）或狀態色變數
 tiles = set(re.findall(r"\.ico\.([a-z]+)\{background", css))
 used = [(m.start(), c) for m in re.finditer(r'\b[a-z]+:\["([a-z]+)","[a-z]+"\]', js) for c in [m.group(1)]]
 used += [(m.start(), m.group(1)) for m in re.finditer(r'class="ico big ([a-z]+)"', js)]
@@ -59,29 +59,15 @@ used += [(m.start(), m.group(1)) for m in re.finditer(r'modal\(\{icon:"[a-z]+", 
 for idx, c in used:
     if c not in tiles:
         report("app.js", jline0, js, idx, f"方塊圖示沒有「{c}」這個顏色，請用：{'、'.join(sorted(tiles))}")
-# 每個概念要有自己的色調：ICO 裡不能兩個概念共用一個顏色，style.css 裡也不能兩個 .ico 樣式長得一樣
-seen = {}
-for m in re.finditer(r'\b([a-z]+):\["([a-z]+)","[a-z]+"\]', js):
-    if m.group(2) in seen:
-        report("app.js", jline0, js, m.start(), f"「{m.group(1)}」跟「{seen[m.group(2)]}」用了同一個顏色，請給它自己的色調")
-    seen.setdefault(m.group(2), m.group(1))
 glyph = {}
-for m in re.finditer(r'\b([a-z]+):\["[a-z]+","([a-z]+)"\]', js):   # 圖案也不能兩個概念共用
+for m in re.finditer(r'\b([a-z]+):\["[a-z]+","([a-z]+)"\]', js):   # 圖案不能兩個概念共用
     if m.group(2) in glyph:
         report("app.js", jline0, js, m.start(), f"「{m.group(1)}」跟「{glyph[m.group(2)]}」用了同一個圖案，請畫一個自己的")
     glyph.setdefault(m.group(2), m.group(1))
-hues = []
-for m in re.finditer(r"\.ico\.([a-z]+)\{background:oklch\(var\(--tl\) (var\(--tc\)|calc\(var\(--tc\) \* [.0-9]+\)) ([0-9]+)\)", body_css):
-    h = int(m.group(3))
-    for n, c, h2 in hues:                                      # 一樣鮮豔、色相差不到 10 度，看起來就是同一個顏色
-        if c == m.group(2) and min(abs(h - h2), 360 - abs(h - h2)) < 10:
-            report("style.css", line0, body_css, m.start(), f".ico.{m.group(1)} 跟 .ico.{n} 顏色太像（色相差不到 10 度）")
-    hues.append((m.group(1), m.group(2), h))
-bgs = {}
-for m in re.finditer(r"\.ico\.([a-z]+)\{background:([^}]+)\}", body_css):
-    if m.group(2) in bgs:
-        report("style.css", line0, body_css, m.start(), f".ico.{m.group(1)} 跟 .ico.{bgs[m.group(2)]} 顏色一樣")
-    bgs.setdefault(m.group(2), m.group(1))
+ICO_ROLES = {"var(--pc)", "var(--sc)", "var(--tc-bg)", "var(--warnc)", "var(--badc)"}
+for m in re.finditer(r"\.ico\.([a-z]+)\{background:([^;]+);", body_css):
+    if m.group(2).strip() not in ICO_ROLES:
+        report("style.css", line0, body_css, m.start(), f".ico.{m.group(1)} 請用主題色系或狀態色變數（{'／'.join(sorted(ICO_ROLES))}）：{m.group(2)}")
 
 # 顏色只能寫在顏色變數（--名稱:）和方塊圖示（.ico.名稱）裡，其他地方一律用變數；白色、黑色不算
 HEX = re.compile(r"#(?![fF]{3}\b|[fF]{6}\b|000\b|000000\b)[0-9a-fA-F]{3,8}\b")
