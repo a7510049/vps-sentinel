@@ -145,7 +145,7 @@ Oracle、AWS、GCP 等雲端主機，請到主機商的控制台開放以下 TCP
 ### 📱 加入手機主畫面
 
 - **iPhone**：在瀏覽器開啟網址 →「分享」→「加入主畫面」。
-- **Android**：安裝 [Android App](https://github.com/a7510049/vps-sentinel/releases/tag/android)（下載 `vps-sentinel.apk`），首次開啟時輸入主機網址即可；新版可直接覆蓋安裝。
+- **Android**：在 Chrome 開啟網址 → 右上角選單 →「加到主畫面」。
 
 ---
 

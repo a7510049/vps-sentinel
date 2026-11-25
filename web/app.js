@@ -2,8 +2,8 @@ const $ = s => document.querySelector(s);
 const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
 function store(k, v){ try { if (v === undefined) return localStorage.getItem(k) || ""; v ? localStorage.setItem(k, v) : localStorage.removeItem(k); } catch(e){ return ""; } }
 const KEY = "vps-sentinel-token";
-/* 從主畫面、安卓 App 打開（沒有網址列）：手機分頁列浮在下面；瀏覽器裡放上面（style.css 的 .full） */
-if (navigator.standalone || matchMedia("(display-mode: standalone)").matches || typeof VSApp !== "undefined" || /; wv\)/.test(navigator.userAgent))
+/* 從主畫面打開（沒有網址列）：手機分頁列浮在下面；瀏覽器裡放上面（style.css 的 .full） */
+if (navigator.standalone || matchMedia("(display-mode: standalone)").matches)
   document.documentElement.classList.add("full");
 /* 登入狀態：勾「30 天內不用再登入」存在這台裝置 30 天；沒勾的話關掉瀏覽器（或 App）就要重新登入 */
 const DAY30 = 30 * 86400000;
@@ -2793,10 +2793,9 @@ function brwOf(u, ud){                       // 回 [名字, 版本]；Brave、E
   const c = /(?:CriOS|Chrome)\/(\d+)/.exec(u); if (c) return ["Chrome", c[1]];
   return /Safari/.test(u) ? ["Safari", ""] : ["", ""];
 }
-/* 登入的裝置清單上的名字：裝置＋瀏覽器（安卓 App 寫 App） */
+/* 登入的裝置清單上的名字：裝置＋瀏覽器 */
 function devLabel(){
-  const u = navigator.userAgent;
-  const b = typeof VSApp !== "undefined" || /; wv\)/.test(u) && !BRW.some(([re]) => re.test(u)) ? "App" : brwOf(u, navigator.userAgentData)[0];
+  const b = brwOf(navigator.userAgent, navigator.userAgentData)[0];
   return devName() + (b ? "・" + b : "");
 }
 /* 廠商圖示：蘋果、安卓、Windows（舊的登入沒有記系統，照名字猜） */
@@ -4081,54 +4080,6 @@ async function refreshNow(btn){
   try { const [ok] = await Promise.all([tick(), sleep(T.long)]); return ok; }
   finally { REFRESHING = false; stop(); }   // 出錯也一定要停下來，不然之後都不能再重新整理
 }
-/* 安卓 App 裡：下拉重新整理。圓形跟著手指長大、旋轉，拉夠了彈一下變形；放開就變成載入中的形狀，好了畫出勾勾再收起來
-   一般瀏覽器（Safari、Chrome…）本身就會下拉重新整理，兩個一起會打架，所以只在 App 裡用（App 會放 VSApp 進來，網頁殼的 UA 也有「; wv)」） */
-(function(){
-  if (typeof VSApp === "undefined" && !/; wv\)/.test(navigator.userAgent)) return;
-  document.documentElement.classList.add("inapp");
-  const ptr = $("#ptr"), RND = blobSh(9, 0), CK = blobSh(9, .14);
-  ptr.innerHTML = `<span class="pl" style="clip-path:${RND}"></span><span class="pg"></span>`;
-  const pl = ptr.querySelector(".pl"), pg = ptr.querySelector(".pg");
-  let y0 = null, d = 0, armed = false, rot = 0, gen = 0;   // gen：每拉一次加一，舊的那次收尾時不會動到新的這次
-  const show = y => { ptr.style.transform = `translateY(${y}px)`; ptr.style.opacity = String(Math.max(0, Math.min(1, (y + 70) / 50))); };
-  const shape = (p, r) => { rot = r; pl.style.transform = `rotate(${r}deg) scale(${.3 + .7 * p})`; };
-  const hideUp = () => { ptr.classList.add("back"); show(-70); shape(0, rot); };
-  addEventListener("touchstart", e => {
-    if (DESK.matches || DET || $("#fly") || scrollY > 0 || REFRESHING || document.querySelector("#layer .veil") || !LIST.length) return;   // 機場起降打開時：往下滑是在捲看板
-    y0 = e.touches[0].clientY; d = 0; armed = false; gen++;
-    ptr.getAnimations({subtree: true}).forEach(a => a.cancel());
-    ptr.classList.remove("back", "armed", "bad"); pl.style.clipPath = RND; pg.innerHTML = "";
-  }, {passive:true});
-  addEventListener("touchmove", e => {
-    if (y0 === null) return;
-    d = Math.max(0, e.touches[0].clientY - y0);
-    if (scrollY > 0) { y0 = null; return hideUp(); }       // 變成往下捲：收起來，不要卡在半空中
-    const pull = Math.min(110, d * .5), was = armed;
-    armed = pull >= 64;
-    if (armed !== was) {
-      ptr.classList.toggle("armed", armed); pl.style.clipPath = armed ? CK : RND;
-      if (armed && canAnim()) ptr.animate([{scale: 1}, {scale: 1.14}, {scale: 1}], {duration: T.mid, easing: EASE});
-    }
-    show(pull - 70); shape(Math.min(1, pull / 64), pull * 2.4);
-  }, {passive:true});
-  /* 手指被系統搶走（touchcancel）也要收起來，不然圖示會停在拉到一半的地方 */
-  addEventListener("touchcancel", () => { if (y0 === null) return; y0 = null; hideUp(); }, {passive:true});
-  addEventListener("touchend", async e => {
-    if (y0 === null || e.touches.length) return; y0 = null;
-    if (!armed) return hideUp();
-    const g = gen;
-    ptr.classList.add("back"); show(10); shape(1, rot);
-    const stop = loader(pl, rot);
-    let ok = false;
-    try { ok = await refreshNow(); } catch(err) {}
-    if (g !== gen) return;
-    ptr.classList.toggle("bad", !ok);
-    const st = stop(RND);
-    pg.innerHTML = drawable(I(ok ? "chk" : "bang")); drawIn(pg.firstChild, T.fast);
-    await st; await sleep(T.long);
-    if (g === gen) hideUp();
-  }, {passive:true});
-})();
 /* 瀏覽器裡的手機頂部分頁列：往下捲藏起來、往上捲就出現（避開 iOS 底部網址列與上下回彈誤觸） */
 (function(){
   let y = scrollY, acc = 0;

@@ -4687,8 +4687,7 @@ class Handler(BaseHTTPRequestHandler):
             except ValueError:
                 local = False
             host = (self.headers.get("Host") or "").strip()
-            app = "; wv)" in (self.headers.get("User-Agent") or "")   # 安卓 App 不收自己簽的憑證：照舊用 http
-            if not local and not app and re.fullmatch(r"[A-Za-z0-9.\-]+(:\d+)?|\[[0-9A-Fa-f:.]+\](:\d+)?", host):
+            if not local and re.fullmatch(r"[A-Za-z0-9.\-]+(:\d+)?|\[[0-9A-Fa-f:.]+\](:\d+)?", host):
                 self.send_response(301)
                 self.send_header("Location", f"https://{host}{self.path}")
                 self.send_header("Content-Length", "0")
