@@ -2185,10 +2185,12 @@ document.addEventListener("pointermove", e => {
 }, {passive:true});
 addEventListener("scroll", () => { if (TIPX) hideTip(); }, {passive:true});
 document.addEventListener("pointerleave", hideTip);
-/* 整頁平順切換（深淺模式）：支援的瀏覽器會淡入淡出，不支援就直接換 */
+/* 整頁平順切換（深淺模式、配色風格）：截圖瞬間先凍住元件過渡，避免新畫面拍到半透明／舊顏色而閃一下 */
 function smooth(fn){
   if (!canAnim() || !document.startViewTransition) return fn();
-  document.startViewTransition(fn);
+  const h = document.documentElement, id = h._vtm = (h._vtm || 0) + 1;
+  h.classList.add("vtswap");
+  document.startViewTransition(fn).finished.catch(() => {}).finally(() => { if (h._vtm === id) h.classList.remove("vtswap"); });
 }
 /* 切換文字大小：整頁重新排版只做一次（排版期間畫面先停在舊的樣子），
    然後舊畫面一邊放大（或縮小）一邊淡出、新畫面從另一個大小接過來淡入，看起來像整頁平順地縮放 */
@@ -2274,7 +2276,11 @@ document.addEventListener("keydown", e => {
 function changed(k){
   const run = () => { applyPrefs(); if (LIST.length) render(LIST); };
   if (k === "size") sizeShift(run);              // 文字大小：整頁平順地放大／縮小過去
-  else if (k === "theme") smooth(run);            // 深淺模式：整頁淡入淡出
+  else if (k === "theme") {                      // 深淺模式：只有真的換了深淺才整頁淡入淡出（避免同色切「自動」也閃一下）
+    const next = (PREF.theme === "dark" || (PREF.theme === "auto" && DARKQ.matches)) ? "dark" : "light";
+    if (document.documentElement.dataset.mode !== next) smooth(run); else run();
+  }
+  else if (k === "tone") smooth(run);            // 配色風格：整頁平順淡入淡出，避免毛玻璃逐幀重繪閃爍
   else run();
   if (k === "refresh") restart();
   if (k === "show.weather") { if (PREF.show.weather) store(WXK, JSON.stringify({...wxMem(), deny: 0})); wxRun(); }

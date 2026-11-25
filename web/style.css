@@ -43,13 +43,10 @@
   --rbw:linear-gradient(90deg,oklch(var(--rbl) calc(.13 * var(--vc)) 25),oklch(var(--rbl) calc(.13 * var(--vc)) 65),oklch(var(--rbl) calc(.13 * var(--vc)) 100),
     oklch(var(--rbl) calc(.13 * var(--vc)) 150),oklch(var(--rbl) calc(.13 * var(--vc)) 245),oklch(var(--rbl) calc(.13 * var(--vc)) 310))}
 [data-mode="light"][data-accent="rainbow"]{--rbl:.83}
-:root{--vs:1; --vc:1; --mute:0%}
-[data-tone="vivid"]{--vs:2.1; --vc:1.35}
+:root,[data-tone="soft"]{--vs:1; --vc:1; --mute:0%}
+[data-tone="vivid"]{--vs:2.1; --vc:1.35; --mute:0%}
 [data-tone="calm"]{--vs:.15; --vc:.55; --mute:55%}
-@property --vs{syntax:"<number>";inherits:true;initial-value:1}
-@property --vc{syntax:"<number>";inherits:true;initial-value:1}
-@property --mute{syntax:"<percentage>";inherits:true;initial-value:0%}
-:root{transition:--seed var(--t-slow) var(--ease),--vs var(--t-slow) var(--ease),--vc var(--t-slow) var(--ease),--mute var(--t-slow) var(--ease)}
+:root{transition:--seed var(--t-slow) var(--ease)}
 :root{--tseed:var(--seed)}
 @supports (color:oklch(from red l c h)){:root{--tseed:oklch(from var(--seed) l c calc(h + 48))}}
 
@@ -182,8 +179,7 @@
 /* ═════════ 基本 ═════════ */
 *{box-sizing:border-box;margin:0;-webkit-tap-highlight-color:transparent;scrollbar-width:none}
 *::-webkit-scrollbar{display:none}
-html{background:var(--bg);color:var(--tx);touch-action:manipulation;accent-color:var(--p);caret-color:var(--p);overflow-x:clip;
-  transition:background-color var(--t-mid) var(--ease),color var(--t-mid) var(--ease)}
+html{background:var(--bg);color:var(--tx);touch-action:manipulation;accent-color:var(--p);caret-color:var(--p);overflow-x:clip}
 html.lock{overflow:hidden}
 body{font:400 var(--fs-m)/1.5 var(--font);zoom:var(--zoom);min-height:100vh;-webkit-font-smoothing:antialiased;overflow-x:hidden;overflow-x:clip}
 [hidden]{display:none!important}
@@ -1421,8 +1417,13 @@ textarea.field{height:auto;padding:12px 16px;resize:none}
 .sp-msg{color:var(--tx3);min-height:22px}
 .sp-msg span{display:inline-block;animation:fadeIn var(--t-mid) var(--ease) backwards}
 
-/* ═════════ 整頁切換（主題、文字大小） ═════════ */
-::view-transition-old(root),::view-transition-new(root){animation-duration:var(--t-mid);animation-timing-function:var(--ease)}
+/* ═════════ 整頁切換（主題、配色風格、文字大小） ═════════ */
+.vtswap,.vtsize,.vtswap *,.vtsize *,.vtswap *::before,.vtsize *::before,.vtswap *::after,.vtsize *::after{transition:none!important}
+.vtswap .amb i,.vtsize .amb i{animation-play-state:paused!important}
+::view-transition-image-pair(root){isolation:auto}
+::view-transition-old(root),::view-transition-new(root){animation-duration:var(--t-mid);animation-timing-function:var(--ease);mix-blend-mode:normal}
+::view-transition-old(root){animation:none;z-index:1}
+::view-transition-new(root){animation:fadeIn var(--t-mid) var(--ease) both;z-index:2}
 .vtsize::view-transition-old(root){animation:vtZoomOut var(--t-slow) var(--ease) both;transform-origin:50% 30%}
 .vtsize::view-transition-new(root){animation:vtZoomIn var(--t-slow) var(--ease) both;transform-origin:50% 30%}
 @keyframes vtZoomOut{to{opacity:0;transform:scale(var(--zr))}}
