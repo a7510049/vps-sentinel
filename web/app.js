@@ -766,7 +766,7 @@ const railHost = (s, on) => `<button class="rh${on ? " on" : ""}" data-dsel="${e
 function renderDesk(list, time){
   const sel = deskSel(list), k = sel && keyOf(sel), g = greet();
   const lvs = list.map(s => s.online ? lvOf(s) : "bad"), lv = LOST || lvs.includes("bad") ? "bad" : lvs.includes("warn") || issuesOf(list).length ? "warn" : "ok";
-  const top = `<header class="gtop" data-key="gtop"><button class="brand" data-dhome title="回到總覽">${BRAND}<b>VPS 哨兵</b></button>`
+  const top = `<header class="gtop" data-key="gtop"><button class="brand" data-dhome title="回到總覽">${BRAND}<b>哨站</b></button>`
     + `<div class="gmid"><button class="gstat ${lv}" data-dhome data-x>${I({ok:"ok", warn:"alert", bad:"warn"}[lv])}<span>${esc(headline(list))}</span></button>${g.wx ? `<div class="gwx">${g.wx}</div>` : ""}</div>`
     + `<div class="gacts"><span class="rtime"><span class="live${LOST ? " off" : ""}"></span><span data-x>${LOST ? "重連中" : time}</span></span><button class="iconbtn" data-refresh title="重新整理">${I("upd")}</button>${addHostBtn("ubtn ghost dadd")}</div></header>`;
   const rail = `<nav class="rail" data-key="rail"><div class="rnav">${navBtns(true, list)}</div>`
@@ -780,7 +780,7 @@ const dbar = (title, rest = "") => `<div class="dbar" data-key="dbar"><h1 class=
 const tgHint = list => list.some(x => !x.node && x.tg_off) ? `<div class="group tgh" data-key="tgh"><button class="li" data-tg>${IC("bell", "")}<span class="lab">Telegram 通知<small>還沒設定，出事不會通知你</small></span>${CHEV}</button></div>` : "";
 function homePhone(list, time){
   const ev = groupEv(allEvents(list)).slice(0, 3);
-  const top = `<header class="mtop" data-key="mtop"><div class="mbrand">${BRAND}<b>VPS 哨兵</b></div><span class="grow"></span><span class="mtime"><span class="live${LOST ? " off" : ""}"></span><span data-x>${LOST ? "重連中" : time}</span></span><button class="iconbtn" data-refresh title="重新整理">${I("upd")}</button></header>`;
+  const top = `<header class="mtop" data-key="mtop"><div class="mbrand">${BRAND}<b>哨站</b></div><span class="grow"></span><span class="mtime"><span class="live${LOST ? " off" : ""}"></span><span data-x>${LOST ? "重連中" : time}</span></span><button class="iconbtn" data-refresh title="重新整理">${I("upd")}</button></header>`;
   return top + hero(list, time) + `<div class="lbl" data-key="lh">主機</div>${hostLists(list, "")}${tgHint(list)}
     <div class="lbl" data-key="le">最近發生${ev.length ? `<button data-tab="log">全部紀錄</button>` : ""}</div>${evList(ev, list.length > 1)}`;
 }
@@ -2324,7 +2324,7 @@ function selfPaint(root){
   const est = c && c.enc && c.enc.on ? ` <span class="vlk" title="已加密">${I("lock")}</span>` : "";   // 整顆加密：小鎖頭
   const crow = c ? `<div class="cl2">${IC("cloud", "")}<span>雲端硬碟<small>${cst === "ok" ? (c.version ? VOK(esc(c.version)) : VOK("最新")) : (c.version ? `<span class="vbs"><span class="vbd">${esc(c.version)}</span></span> ` : "") + cst}${est}</small></span>
     ${c.has && !c.running ? `<button class="ubtn sm" data-cloudup="${node}">更新</button>` : ""}</div>` : "";
-  const srow = `<div class="cl2 first"><span class="ico theme">${I("upd")}</span><span>哨兵<small title="${esc(d.build || "")}">${st ? (d.version ? `<span class="vbs"><span class="vbd">${esc(d.version)}</span></span> ` : "") + st : d.version ? VOK(esc(d.version)) : ""}</small>${ch}</span>
+  const srow = `<div class="cl2 first"><span class="ico theme">${I("upd")}</span><span>哨站<small title="${esc(d.build || "")}">${st ? (d.version ? `<span class="vbs"><span class="vbd">${esc(d.version)}</span></span> ` : "") + st : d.version ? VOK(esc(d.version)) : ""}</small>${ch}</span>
     ${d.has && !d.running ? `<button class="ubtn sm" data-selfup="${node}">更新</button>` : ""}</div>`;
   swapHTML(box, `<div class="selfrow">${srow}${crow}</div>`);
 }
@@ -2391,7 +2391,7 @@ function upwReload(msg){
   }
   upwSave();
   if (msg) sstore("vs-upmsg", msg);
-  toast("哨兵已更新到新版，重新載入中…");
+  toast("哨站已更新到新版，重新載入中…");
   setTimeout(() => location.reload(), 1400);
 }
 function upwRun(){
@@ -2420,18 +2420,18 @@ async function upwStep(){
         done.push([j, c.err && !v ? `「${j.name}」的雲端硬碟更新失敗：${c.err}` : v && v !== j.from ? `「${j.name}」的雲端硬碟已更新到 ${v} ✨` : `「${j.name}」的雲端硬碟更新完成 ✨`, !(c.err && !v)]);
       } else if (j.from && d.build && d.build !== j.from) {
         if (!node) { mine = d.version; done.push([j, "", true]); continue; }   // 這台：等一下換上新畫面
-        done.push([j, `「${j.name}」的哨兵已更新到 ${d.version} ✨`, true]);
+        done.push([j, `「${j.name}」的哨站已更新到 ${d.version} ✨`, true]);
       } else if (!d.running && age > 15000) {
         const bad = d.last && d.last.ok === false;
-        done.push([j, bad ? `「${j.name}」的哨兵${d.last.rolled ? "新版打不開，已換回原本的版本" : "更新失敗，已保留原本的版本"}` : `「${j.name}」的哨兵${j.from ? "已經是最新版" : "更新完成"} ✨`, !bad,
+        done.push([j, bad ? `「${j.name}」的哨站${d.last.rolled ? "新版打不開，已換回原本的版本" : "更新失敗，已保留原本的版本"}` : `「${j.name}」的哨站${j.from ? "已經是最新版" : "更新完成"} ✨`, !bad,
           bad ? (d.last.rolled ? "新版打不開，已換回原本的版本" : "沒更新成功，還是原本的版本") : ""]);
       }
     }
   }));
   if (window._reloading) return;
-  const mark = () => done.forEach(([j, m, ok, why]) => upvSet(j, ok ? "done" : "fail", ok ? "" : why || m.replace(/^「[^」]*」(的哨兵|的雲端硬碟)?/, "")));
-  if (mine) { mark(); UPW.jobs = UPW.jobs.filter(j => !done.some(x => x[0] === j)); UPW.held.push(...done.filter(x => x[1]).map(x => [x[1], x[2]])); return upwReload(`哨兵已更新到 ${mine} ✨`); }
-  for (const j of UPW.jobs) if (Date.now() - j.t0 > 15 * 60000 && !done.some(x => x[0] === j)) done.push([j, `「${j.name}」${j.kind === "cloud" ? "的雲端硬碟" : "的哨兵"}更新太久沒回應，請到主機上看看`, false]);
+  const mark = () => done.forEach(([j, m, ok, why]) => upvSet(j, ok ? "done" : "fail", ok ? "" : why || m.replace(/^「[^」]*」(的哨站|的雲端硬碟)?/, "")));
+  if (mine) { mark(); UPW.jobs = UPW.jobs.filter(j => !done.some(x => x[0] === j)); UPW.held.push(...done.filter(x => x[1]).map(x => [x[1], x[2]])); return upwReload(`哨站已更新到 ${mine} ✨`); }
+  for (const j of UPW.jobs) if (Date.now() - j.t0 > 15 * 60000 && !done.some(x => x[0] === j)) done.push([j, `「${j.name}」${j.kind === "cloud" ? "的雲端硬碟" : "的哨站"}更新太久沒回應，請到主機上看看`, false]);
   if (done.length) {
     UPW.jobs = UPW.jobs.filter(j => !done.some(x => x[0] === j)); mark();
     UPW.held.push(...done.map(x => [x[1], x[2]]));
@@ -2502,7 +2502,7 @@ function upvPaint(){
   txt(btn, live ? "在背景更新" : "好"); btn.disabled = !!window._reloading;
   const keys = rows.map(r => r.k).join(",");
   if (list.dataset.keys !== keys) { list.dataset.keys = keys;
-    swapHTML(list, rows.map(r => `<div class="upj" data-k="${esc(r.k)}"><div class="upt"><b>${esc(r.name)}</b><small>${r.kind === "cloud" ? "雲端硬碟" : "哨兵"}</small><span class="upn"></span></div>
+    swapHTML(list, rows.map(r => `<div class="upj" data-k="${esc(r.k)}"><div class="upt"><b>${esc(r.name)}</b><small>${r.kind === "cloud" ? "雲端硬碟" : "哨站"}</small><span class="upn"></span></div>
       ${wave(0, "")}${r.kind === "self" ? `<div class="upsteps">${UPSTEP.map(([k, l]) => `<span data-s="${k}">${l}</span>`).join("")}</div>` : ""}<div class="upm" hidden></div></div>`).join("")); }
   rows.forEach(r => {
     const el = list.querySelector(`[data-k="${CSS.escape(r.k)}"]`); if (!el) return;
@@ -2723,7 +2723,7 @@ async function pkCall(path, body, auth){
   return d;
 }
 const pkErr = e => e && e.name === "InvalidStateError" ? `這${isPhone() ? "支手機" : "台裝置"}已經登記過了`
-  : e && e.name === "NotAllowedError" ? "已取消，或等太久了" : e && e.name === "SecurityError" ? "網址不符，請用平常的網域網址打開哨兵"
+  : e && e.name === "NotAllowedError" ? "已取消，或等太久了" : e && e.name === "SecurityError" ? "網址不符，請用平常的網域網址打開哨站"
   : e && (e.name === "NotSupportedError" || e.name === "ConstraintError") ? `這${isPhone() ? "支手機" : "台裝置"}不支援手機金鑰，可以改用 PIN 碼`
   : e instanceof DOMException ? "沒有完成，請再試一次"                // 瀏覽器其他的錯誤訊息都是英文，不直接顯示
   : (e && e.message) || "失敗了，請再試一次";
@@ -2817,8 +2817,8 @@ async function pkRegister(name){
   const b = await pkCall("/api/passkey", {action:"begin"}, 1);
   if (!b.ok) throw new Error(b.message || "沒辦法開始登記");
   const c = await navigator.credentials.create({publicKey:{
-    challenge:ub(b.challenge), rp:{id:b.rp, name:"VPS 哨兵"},
-    user:{id:ub(b.user), name:`VPS 哨兵（${b.name}）`, displayName:`VPS 哨兵（${b.name}）`},
+    challenge:ub(b.challenge), rp:{id:b.rp, name:"哨站"},
+    user:{id:ub(b.user), name:`哨站（${b.name}）`, displayName:`哨站（${b.name}）`},
     pubKeyCredParams:[{type:"public-key", alg:-7}, {type:"public-key", alg:-257}], timeout:120000, attestation:"none",
     authenticatorSelection:{residentKey:"required", requireResidentKey:true, userVerification:"required"},
     excludeCredentials:(b.exclude || []).map(id => ({type:"public-key", id:ub(id)}))}});
@@ -2874,7 +2874,7 @@ async function pkModal(){
       if (busy) return;
       const del = e.target.closest("[data-del]");
       if (del) {
-        if (!await modal({icon:"finger", cls:"bad", title:`刪掉「${del.dataset.name}」？`, text:"刪掉之後，它就不能再用指紋或臉部辨識登入哨兵。", ok:"刪除"})) return;
+        if (!await modal({icon:"finger", cls:"bad", title:`刪掉「${del.dataset.name}」？`, text:"刪掉之後，它就不能再用指紋或臉部辨識登入哨站。", ok:"刪除"})) return;
         busy = true;
         const d = await pkCall("/api/passkey", {action:"delete", id:del.dataset.del}, 1).catch(err => ({message:err.message}));
         busy = false;
@@ -3525,7 +3525,7 @@ async function bkRestore(){
 /* ═════════ 登入 ═════════ */
 const LOGO = LOGOSVG("lg").replace("<svg", '<svg class="logo"');
 function login(msg){
-  $("#app").innerHTML = `<div class="login ${msg?"shake":""}">${LOGO}<h1>VPS 哨兵</h1>
+  $("#app").innerHTML = `<div class="login ${msg?"shake":""}">${LOGO}<h1>哨站</h1>
     <input id="tok" class="field" type="password" placeholder="存取密碼" autocomplete="current-password">
     <label class="remember"><input type="checkbox" id="rem" ${REM ? "checked" : ""}><span>30 天內不用再登入</span></label>
     <div class="err">${msg||""}</div><button class="ubtn" data-login>進入</button>${PIN_ON ? pinBtn : ""}${PK_OK && store("vps-pk") ? pkBtn : ""}</div>`;
@@ -3639,7 +3639,7 @@ function rswLog(pg){
 function rswRunning(body, pg){
   const after = pg && pg.after;
   const note = RSW.down > 40 && after ? `還原後網址換成 <a href="${esc(after)}">${esc(after)}</a>，請改用這個網址登入`
-             : RSW.down ? "哨兵正在重新啟動，等一下就好…" : "請不要關掉這個頁面";
+             : RSW.down ? "哨站正在重新啟動，等一下就好…" : "請不要關掉這個頁面";
   body.innerHTML = `<div class="rswnow"><span class="spin"></span>還原中${pg && pg.name ? `：${esc(pg.name)}` : ""}</div>
     <ul class="bkrows rswlog">${rswLog(pg) || "<li>準備中…</li>"}</ul><small class="rswtip">${note}</small>`;
   clearTimeout(RSW.poll); RSW.poll = setTimeout(rswShow, 1500);
@@ -3998,7 +3998,7 @@ async function tick(){
           if (!UPW.jobs.length && !UPW.wait.length) { UPW.show = false; UPW.rows = []; }
           upwSave();
         }
-      } else if (me.build !== window._build) upwReload(`哨兵已更新到 ${me.version} ✨`);   // 這台的哨兵剛更新好：重新載入換上新畫面
+      } else if (me.build !== window._build) upwReload(`哨站已更新到 ${me.version} ✨`);   // 這台的哨兵剛更新好：重新載入換上新畫面
     }
     if (!BOOTED) {
       splashMsg("準備畫面…");

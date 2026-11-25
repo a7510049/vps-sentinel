@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# VPS 哨兵：安裝／更新
+# 哨站：安裝／更新
 #
 # 用法：
 #   sudo bash install.sh                   第一次安裝會問你：全新安裝，還是從備份還原；之後執行就是更新
@@ -59,13 +59,13 @@ RSW_DIR=/var/lib/vps-sentinel-restore
 VER="$(grep -m1 -E '^VERSION = ' "$HERE/sentinel.py" | cut -d'"' -f2)"
 
 printf '\n  %s━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━%s\n' "$C" "$N"
-printf '    %s🛡  VPS 哨兵%s  %s%s v%s%s\n' "$B" "$N" "$( [ -f "$CONF" ] && echo 更新 || echo 安裝 )" "$D" "$VER" "$N"
+printf '    %s🛡  哨站%s  %s%s v%s%s\n' "$B" "$N" "$( [ -f "$CONF" ] && echo 更新 || echo 安裝 )" "$D" "$VER" "$N"
 printf '  %s━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━%s\n' "$C" "$N"
 
 # 第一次安裝：問要全新安裝還是從備份還原、要不要設網域（不是在終端機裡執行就不問）
 if [ ! -f "$CONF" ] && [ -t 0 ]; then
   if [ -z "$MODE" ]; then
-    printf '\n  這台還沒裝過哨兵，要怎麼裝？\n'
+    printf '\n  這台還沒裝過哨站，要怎麼裝？\n'
     printf '    %s1%s  全新安裝\n' "$B" "$N"
     printf '    %s2%s  從備份還原 %s（裝好後在網頁上傳備份檔）%s\n' "$B" "$N" "$D" "$N"
     read -rp "  請輸入 1 或 2（直接按 Enter＝1）：" ans
@@ -171,7 +171,7 @@ if [ -f "$CONF" ]; then ok "沿用原本的設定（$CONF）"; NEWCONF=""; else 
 if [ ! -f "$CONF" ]; then
   TOKEN="$(python3 -c 'import secrets;print(secrets.token_urlsafe(18))')"
   cat > "$CONF" <<EOF
-# ── VPS 哨兵 設定檔 ── 改完執行：sudo systemctl restart vps-sentinel-lite
+# ── 哨站 設定檔 ── 改完執行：sudo systemctl restart vps-sentinel-lite
 
 # 顯示名稱（空白就用主機名稱）
 NAME=$(hostname)
@@ -277,7 +277,7 @@ if [ -n "$DOMAIN" ]; then
   install -d /etc/caddy/sites/vps-sentinel.d
   [ -f /etc/caddy/sites/vps-sentinel.d/00-keep.caddy ] || echo "# 附加功能（例如雲端硬碟）的設定放這個資料夾" > /etc/caddy/sites/vps-sentinel.d/00-keep.caddy
   cat > /etc/caddy/sites/vps-sentinel.caddy <<EOF
-# VPS 哨兵（由安裝腳本產生）：只用 TLS 1.3；瀏覽器記住一年內只用 https 連
+# 哨站（由安裝腳本產生）：只用 TLS 1.3；瀏覽器記住一年內只用 https 連
 $SITE {
 	tls {
 		protocols tls1.3
@@ -329,13 +329,13 @@ EOF
     rm -f /etc/nginx/conf.d/vps-sentinel-acme.conf /etc/nginx/sites-enabled/vps-sentinel-acme.conf
     if nginx -T 2>/dev/null | grep -E '^[[:space:]]*server_name' | grep -qw -- "$DOMAIN"; then
       warn "nginx 裡已經有別的設定在用 $DOMAIN，可能會搶走憑證驗證。"
-      echo "    如果最後憑證申請失敗，建議另外開一個子網域給哨兵用（例如 mon.$DOMAIN）"
+      echo "    如果最後憑證申請失敗，建議另外開一個子網域給哨站用（例如 mon.$DOMAIN）"
     fi
     LISTEN6=""
     nginx -T 2>/dev/null | grep -qE 'listen[[:space:]]+\[::\]:80' && LISTEN6="	listen [::]:80;"
     if [ "$HTTPS_PORT" = 443 ]; then REDIR="https://\$host\$request_uri"; else REDIR="https://\$host:$HTTPS_PORT\$request_uri"; fi
     cat > "$NGX_FILE" <<EOF
-# VPS 哨兵（由安裝腳本產生）：把憑證驗證轉交給 Caddy
+# 哨站（由安裝腳本產生）：把憑證驗證轉交給 Caddy
 server {
 	listen 80;
 $LISTEN6
@@ -407,7 +407,7 @@ ok "已開放連接埠：$OPEN_PORTS"
 step "啟動哨兵"
 cat > "$UNIT" <<'EOF'
 [Unit]
-Description=VPS 哨兵
+Description=哨站
 After=network-online.target docker.service
 Wants=network-online.target
 
@@ -508,13 +508,13 @@ fi
 
 printf '\n  %s━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━%s\n' "$G" "$N"
 if [ -n "$RCODE" ]; then
-  printf '  %s✅ 哨兵裝好了，接下來在網頁上還原%s\n\n' "$B" "$N"
+  printf '  %s✅ 哨站裝好了，接下來在網頁上還原%s\n\n' "$B" "$N"
   printf '  1. 用電腦或手機打開這個網址：\n     %s%s?restore=%s%s\n\n' "$B$C" "$BASE" "$RCODE" "$N"
   printf '  2. 選擇備份檔（.vsbk，分段的全部一起選）、輸入解開密碼，按「開始還原」\n\n'
   printf '  %s還原代碼：%s（24 小時內有效）%s\n' "$D" "$RCODE" "$N"
   printf '  %s備份檔可以從 Telegram，或另一台主機雲端硬碟裡的「哨兵備份」資料夾下載%s\n' "$D" "$N"
 else
-  printf '  %s✅ VPS 哨兵%s好了%s\n\n' "$B" "$( [ -n "$NEWCONF" ] && echo 裝 || echo 更新 )" "$N"
+  printf '  %s✅ 哨站%s好了%s\n\n' "$B" "$( [ -n "$NEWCONF" ] && echo 裝 || echo 更新 )" "$N"
   TPIN=""
   [ -n "$NEWCONF" ] && TPIN="$(SENTINEL_CONF="$CONF" python3 "$DIR/sentinel.py" --first-pin 2>/dev/null || true)"
   if [ -n "$TPIN" ]; then                       # 第一次安裝：網址不帶密碼，用隨機的臨時 PIN 碼登入，登入後一定要換掉
