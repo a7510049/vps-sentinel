@@ -12,9 +12,9 @@
   --sp-fast:.32s cubic-bezier(.32,1.18,.6,1); --sp:.44s cubic-bezier(.24,1.08,.52,1); --sp-slow:.6s cubic-bezier(.2,1.04,.5,1);
   --z-bar:5; --z-det:20; --z-fade:45; --z-veil:50; --z-toast:60; --z-menu:70;
   --zoom:1;
-  --blur-card:blur(20px) saturate(160%);
-  --blur-float:blur(28px) saturate(185%);
-  --blur-modal:blur(36px) saturate(190%);
+  --blur-card:blur(22px) saturate(185%);
+  --blur-float:blur(30px) saturate(210%);
+  --blur-modal:blur(36px) saturate(210%);
   --sh-1:0 4px 16px -6px rgba(0,0,0,.12),0 1px 3px rgba(0,0,0,.06);
   --sh-2:0 12px 32px -12px rgba(0,0,0,.22),0 2px 8px rgba(0,0,0,.08);
   --sh-3:0 22px 56px -16px rgba(0,0,0,.32),0 4px 14px rgba(0,0,0,.12);
@@ -69,18 +69,18 @@
   --warn:#fbbf24; --on-warn:#321800; --warnc:rgba(251,191,36,.16); --on-warnc:#fde68a;
   --bad:#f87171; --on-bad:#450a0a; --badc:rgba(248,113,113,.16); --on-badc:#fecaca;
   --inv:#f3f4f6; --on-inv:#111827; --inv-ok:#16a34a; --inv-bad:#dc2626;
-  --glass:color-mix(in oklab,var(--s1) 66%,transparent);
-  --glass-card:color-mix(in oklab,var(--s1) 70%,transparent);
-  --glass-modal:color-mix(in oklab,var(--s1) 82%,transparent);
-  --glass-sub:rgba(255,255,255,.06);
-  --glass-b:rgba(255,255,255,.13);
-  --hl:inset 0 1px 0 rgba(255,255,255,.13),inset 0 -1px 0 rgba(0,0,0,.22);
-  --pill-bg:rgba(255,255,255,.14);
-  --pill-sh:0 2px 12px -2px rgba(0,0,0,.42),inset 0 1px 0 rgba(255,255,255,.18);
-  --sh-card:0 8px 28px -12px rgba(0,0,0,.45),0 1px 2px rgba(0,0,0,.25),var(--hl);
-  --sh-float:0 18px 48px -16px rgba(0,0,0,.62),0 2px 10px rgba(0,0,0,.35),var(--hl);
+  --glass:color-mix(in oklab,var(--s1) 48%,transparent);
+  --glass-card:color-mix(in oklab,var(--s1) 46%,transparent);
+  --glass-modal:color-mix(in oklab,var(--s1) 62%,transparent);
+  --glass-sub:rgba(255,255,255,.07);
+  --glass-b:rgba(255,255,255,.18);
+  --hl:inset 0 1px 0 rgba(255,255,255,.22),inset 0 -1px 0 rgba(0,0,0,.28);
+  --pill-bg:rgba(255,255,255,.15);
+  --pill-sh:0 4px 14px -2px rgba(0,0,0,.44),inset 0 1px 0 rgba(255,255,255,.26);
+  --sh-card:0 10px 32px -12px rgba(0,0,0,.52),0 1px 2px rgba(0,0,0,.28),var(--hl);
+  --sh-float:0 20px 52px -16px rgba(0,0,0,.68),0 2px 10px rgba(0,0,0,.38),var(--hl);
   --sh-seg:none;
-  --orb-op:.22;
+  --orb-op:.42;
   --c-cpu:#38bdf8; --c-mem:#60a5fa; --c-rx:#2dd4bf; --c-tx:#fbbf24;
 }
 [data-mode="light"],[data-mode="light"] .sw [data-accent]{
@@ -99,18 +99,18 @@
   --warn:#b45309; --on-warn:#fff; --warnc:rgba(217,119,6,.14); --on-warnc:#92400e;
   --bad:#dc2626; --on-bad:#fff; --badc:rgba(220,38,38,.13); --on-badc:#991b1b;
   --inv:#1f2937; --on-inv:#f9fafb; --inv-ok:#4ade80; --inv-bad:#f87171;
-  --glass:rgba(255,255,255,.62);
-  --glass-card:rgba(255,255,255,.68);
-  --glass-modal:rgba(255,255,255,.84);
-  --glass-sub:rgba(15,23,42,.045);
-  --glass-b:rgba(255,255,255,.78);
-  --hl:inset 0 1px 0 rgba(255,255,255,.92),inset 0 -1px 0 rgba(15,23,42,.03);
-  --pill-bg:rgba(255,255,255,.9);
-  --pill-sh:0 2px 10px -2px rgba(15,23,42,.12),inset 0 1px 0 rgba(255,255,255,.95);
-  --sh-card:0 4px 20px -8px rgba(15,23,42,.08),0 1px 2px rgba(15,23,42,.04),var(--hl);
-  --sh-float:0 12px 36px -14px rgba(15,23,42,.15),0 2px 8px -2px rgba(15,23,42,.06),var(--hl);
+  --glass:rgba(255,255,255,.46);
+  --glass-card:rgba(255,255,255,.52);
+  --glass-modal:rgba(255,255,255,.68);
+  --glass-sub:rgba(15,23,42,.05);
+  --glass-b:rgba(255,255,255,.86);
+  --hl:inset 0 1px 0 rgba(255,255,255,.98),inset 0 -1px 0 rgba(15,23,42,.04);
+  --pill-bg:rgba(255,255,255,.88);
+  --pill-sh:0 3px 12px -2px rgba(15,23,42,.14),inset 0 1px 0 rgba(255,255,255,1);
+  --sh-card:0 6px 24px -8px rgba(15,23,42,.10),0 1px 2px rgba(15,23,42,.04),var(--hl);
+  --sh-float:0 16px 40px -14px rgba(15,23,42,.18),0 2px 8px -2px rgba(15,23,42,.06),var(--hl);
   --sh-seg:none;
-  --orb-op:.28;
+  --orb-op:.48;
   --c-cpu:#007aff; --c-mem:#0ea5e9; --c-rx:#0d9488; --c-tx:#f59e0b;
 }
 :root{--card:var(--glass-card); --chip:var(--glass-sub); --cs:var(--sh-card); --cseg:var(--sh-seg); --grad:none}
@@ -126,15 +126,17 @@
   --alt0:var(--tw-a0); --alt1:var(--tw-a1); --alt2:var(--tw-a2); --alt3:var(--tw-a3)}
 [data-mode="light"]{--me:oklch(.6 .17 250); --alt0:oklch(.72 .11 195); --alt1:oklch(.6 .15 240); --alt2:oklch(.52 .18 280); --alt3:oklch(.5 .2 320)}
 
-/* ═════════ 柔和背景環境光（讓毛玻璃有真實光影折射層次；異常時微轉暖色） ═════════ */
+/* ═════════ 柔和背景環境光（三點式漸層光影，讓側欄、卡片與懸浮分頁列呈現真實毛玻璃折射） ═════════ */
 .amb{position:fixed;inset:0;z-index:0;pointer-events:none;overflow:hidden}
-.amb i{position:absolute;border-radius:50%;filter:blur(88px);opacity:var(--orb-op);transition:background var(--t-long) var(--ease),opacity var(--t-slow) var(--ease);will-change:transform}
-.amb i:first-child{width:560px;height:560px;top:-190px;left:-120px;background:radial-gradient(circle,var(--seed),transparent 72%);animation:amb1 22s ease-in-out infinite alternate}
-.amb i:last-child{width:500px;height:500px;bottom:-170px;right:-100px;background:radial-gradient(circle,var(--tseed),transparent 72%);animation:amb2 26s ease-in-out infinite alternate}
-[data-alert="warn"] .amb i:first-child,[data-alert="bad"] .amb i:first-child{background:radial-gradient(circle,var(--warn),transparent 72%)}
-[data-alert="bad"] .amb i:last-child{background:radial-gradient(circle,var(--bad),transparent 72%)}
-@keyframes amb1{to{transform:translate(46px,32px) scale(1.07)}}
-@keyframes amb2{to{transform:translate(-40px,-26px) scale(1.05)}}
+.amb i{position:absolute;border-radius:50%;filter:blur(72px);opacity:var(--orb-op);transition:background var(--t-long) var(--ease),opacity var(--t-slow) var(--ease);will-change:transform}
+.amb i:nth-child(1){width:54vmax;height:54vmax;top:-16vmax;left:-10vmax;background:radial-gradient(circle,var(--seed) 0%,transparent 68%);animation:amb1 22s ease-in-out infinite alternate}
+.amb i:nth-child(2){width:48vmax;height:48vmax;top:18vh;right:-12vmax;background:radial-gradient(circle,var(--tseed) 0%,transparent 68%);animation:amb2 26s ease-in-out infinite alternate}
+.amb i:nth-child(3){width:44vmax;height:44vmax;bottom:-18vmax;left:22vw;background:radial-gradient(circle,color-mix(in oklab,var(--seed) 65%,var(--tseed)) 0%,transparent 70%);opacity:calc(var(--orb-op) * .72);animation:amb3 30s ease-in-out infinite alternate}
+[data-alert="warn"] .amb i:nth-child(1),[data-alert="bad"] .amb i:nth-child(1){background:radial-gradient(circle,var(--warn) 0%,transparent 68%)}
+[data-alert="bad"] .amb i:nth-child(2){background:radial-gradient(circle,var(--bad) 0%,transparent 68%)}
+@keyframes amb1{to{transform:translate(5vw,4vh) scale(1.08)}}
+@keyframes amb2{to{transform:translate(-5vw,-3vh) scale(1.06)}}
+@keyframes amb3{to{transform:translate(4vw,-4vh) scale(1.05)}}
 [data-motion="off"] .amb i{animation:none!important}
 @media (prefers-reduced-motion:reduce){.amb i{animation:none!important}}
 
@@ -306,7 +308,7 @@ html.lost :is(.view>:not(.hbanner,.dhome,.mtop),.det .dscroll>:not(.dtop)){filte
 /* ═════════ 手機上方標題列（寬敞留白，新增主機膠囊靠右不換行） ═════════ */
 .mtop{display:flex;align-items:center;gap:8px;min-height:46px;margin:8px 0 14px;padding:0 2px}
 .full .mtop{position:sticky;top:0;z-index:var(--z-bar);min-height:calc(58px + env(safe-area-inset-top));
-  margin:0 -18px 12px;padding:calc(env(safe-area-inset-top) + 4px) 16px 4px 18px;background:var(--bg)}
+  margin:0 -18px 12px;padding:calc(env(safe-area-inset-top) + 4px) 16px 4px 18px;background:var(--glass);border-bottom:1px solid var(--line)}
 .mbrand{display:flex;align-items:center;gap:9px;font-size:var(--fs-l);font-weight:600;letter-spacing:-.015em;color:var(--tx);min-width:0}
 .mbrand svg{width:28px;height:28px;flex:none}
 .mtop .madd{height:34px;padding:0 13px;font-size:var(--fs-s);gap:5px;white-space:nowrap;flex:none}
@@ -496,7 +498,9 @@ html:not(.full) .dock .tb.hasnew::after{top:7px;right:calc(50% - 26px)}
 .calm{color:var(--tx3);padding:22px 16px;background:var(--card);box-shadow:var(--cs);border-radius:var(--r-lg);text-align:center}
 
 /* ═════════ 主機整頁（手機）：從卡片的位置平順展開成整頁（Material 3 Container Transform） ═════════ */
-.det{position:fixed;inset:0;z-index:var(--z-det);background-color:var(--bg);--gz:var(--zoom);contain:layout style paint;animation:detIn var(--t-slow) var(--dec) backwards}
+.det{position:fixed;inset:0;z-index:var(--z-det);background-color:var(--bg);
+  background-image:radial-gradient(circle at 12% 8%,color-mix(in oklab,var(--seed) 20%,transparent),transparent 50%),radial-gradient(circle at 88% 84%,color-mix(in oklab,var(--tseed) 18%,transparent),transparent 52%);
+  --gz:var(--zoom);contain:layout style paint;animation:detIn var(--t-slow) var(--dec) backwards}
 .det .dscroll{animation:detBody var(--t-mid) var(--dec) backwards}
 .det .tile{animation:none}
 /* 整頁完全蓋住之後，後面那一頁先不畫（動畫、更新都停下來，捲動只要顧整頁）；收起時立刻回來 */
@@ -729,10 +733,8 @@ button.li.prs,a.li.prs{border-radius:var(--r-lg);transform:scale(.98);background
 [data-slide]>.slide{position:absolute;left:0;top:0;z-index:0;border-radius:var(--r-pill);background:var(--pill-bg);box-shadow:var(--pill-sh);pointer-events:none}
 [data-slide].sliding>.on::before{opacity:0;transition:none}
 [data-slide].slid>.on::before{transition:none}
-.pane[data-slide]>.slide{z-index:1;background:var(--pill-bg);box-shadow:var(--pill-sh)}
 [data-slide].sliding>*{transition-property:color,box-shadow,transform,padding}
 [data-slide].sliding>.on{background:transparent;box-shadow:none}
-.pane[data-slide].sliding>.li>*{position:relative;z-index:2}
 
 /* ═════════ 設定的控制項 ═════════ */
 /* 連在一起的選項：分段切換 */
@@ -824,9 +826,9 @@ button.li.prs,a.li.prs{border-radius:var(--r-lg);transform:scale(.98);background
 .tog:checked::before{left:36px;opacity:1;transform:translate(-50%,-50%)}
 .tog:active::after{width:28px;height:28px}
 /* 彩虹主題：選到的東西換成彩虹底、深色字（滑動中的那一格交給 .slide） */
-[data-accent="rainbow"] :is(.fchip,.seg button,.rng button,.chats button,.frzm .icbtn,.dsb,.dash.d .rb,.dash.d .rh)::before{background-image:var(--rbw)}
-[data-accent="rainbow"] :is(.fchip.on,.seg button.on,.rng button.on,.chats button.on,.frzm .icbtn.on,.dsb.on,.dsb.on svg,.dash.d .rb.on,.dash.d .rb.on .ri,.dash.d .rh.on){color:var(--on-rbw)}
-[data-accent="rainbow"] :is([data-slide]>.slide,.pane .li.on,.bkhosts .ubtn.on,
+[data-accent="rainbow"] :is(.fchip,.seg button,.rng button,.chats button,.frzm .icbtn,.dsb,.pane .li,.dash.d .rb,.dash.d .rh)::before{background-image:var(--rbw)}
+[data-accent="rainbow"] :is(.fchip.on,.seg button.on,.rng button.on,.chats button.on,.frzm .icbtn.on,.dsb.on,.dsb.on svg,.pane .li.on,.pane .li.on>svg,.dash.d .rb.on,.dash.d .rb.on .ri,.dash.d .rh.on){color:var(--on-rbw)}
+[data-accent="rainbow"] :is([data-slide]>.slide,.bkhosts .ubtn.on,
   .tog:checked,.remember input:checked,.sp-blob){background-image:var(--rbw);color:var(--on-rbw)}
 [data-accent="rainbow"] [data-slide].sliding>.on{background-image:none}
 [data-accent="rainbow"] .tog{background-image:var(--rbw)}
@@ -897,14 +899,11 @@ body:has(.dash.d) .flyv{--pw:1280px;--gut:20px}
 .split.rside{grid-template-columns:minmax(0,1fr) var(--side);gap:var(--gut)}
 .smain{min-width:0}
 .split>.pane,.side{position:sticky;top:26px;max-height:calc(100vh / var(--zoom) - 52px);overflow-y:auto;padding:0 18px 32px;margin:0 -18px -32px}
-.pane .li{min-height:46px;padding:10px 16px;gap:10px;transition:border-radius var(--sp-fast),transform var(--sp-fast),background-color var(--t-mid) var(--ease),color var(--t-mid) var(--ease)}
-.pane[data-slide].sliding>.li{transition-property:border-radius,transform;color:var(--tx2);--lc:var(--tx)}
-[data-accent="rainbow"] .pane[data-slide].sliding>.li{--lc:var(--on-rbw)}
-.pane[data-slide].sliding>.li.lit{color:var(--lc)}
-.pane[data-slide].sliding>.li>.lab{color:transparent;-webkit-background-clip:text;background-clip:text;
-  background-image:linear-gradient(var(--tx2) var(--la,0px),var(--lc) var(--la,0px),var(--lc) var(--lb,0px),var(--tx2) var(--lb,0px))}
-.scat .pane .li.lit>svg{color:inherit}
-.pane .li.on{background:var(--pill-bg);box-shadow:var(--pill-sh);color:var(--tx)}
+.pane>.slide{border-radius:var(--r-md)}
+.pane .li{position:relative;z-index:1;min-height:44px;padding:10px 14px;gap:10px;background:transparent;box-shadow:none;transition:background-color var(--t-fast) var(--ease),color var(--t-fast) var(--ease)}
+.pane .li::before{content:"";position:absolute;inset:0;z-index:-1;border-radius:inherit;pointer-events:none;background:var(--pill-bg);box-shadow:var(--pill-sh);opacity:0;transition:opacity var(--t-fast) var(--ease)}
+.pane .li.on{background:transparent;color:var(--tx)}
+.pane .li.on::before{opacity:1}
 .lfi{display:grid;place-items:center;flex:none}
 .lfi svg{width:16px;height:16px}
 .lfi.bad{color:var(--bad)}.lfi.other{color:var(--ok)}
@@ -916,8 +915,8 @@ body:has(.dash.d) .flyv{--pw:1280px;--gut:20px}
 .pane .li .val{color:inherit;opacity:.75}
 .scols{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:24px;align-items:start}
 .scol{min-width:0}
-/* 頁內標題列 */
-.dbar,.dash.d .ptitle{display:flex;align-items:center;gap:14px;height:auto;min-height:42px;padding:0;margin-bottom:20px}
+/* 頁內標題列（固定 46px 最小高度，切換分類出現篩選條時不跳動） */
+.dbar,.dash.d .ptitle{display:flex;align-items:center;gap:14px;height:auto;min-height:46px;padding:0;margin-bottom:20px}
 .dbar .dbt,.dash.d .ptitle{font-size:var(--fs-3xl);font-weight:600;letter-spacing:-.025em;margin:0;color:var(--tx)}
 .dbar .sp{flex:1}
 .dbar .fchips,.dbar .hpick{margin:0;min-width:0}
@@ -1023,14 +1022,14 @@ body:has(.dash.d) .fwrap{max-width:var(--pw)}
 .dash.d .tgrid[data-n="2"],.dash.d .tgrid[data-n="4"]{grid-template-columns:repeat(2,minmax(0,1fr))}
 .dash.d .v-tools .lbl{margin-top:26px}
 /* 設定：左側透明液態分類，右側毛玻璃整張卡片 */
-.sgrid{display:grid;grid-template-columns:220px minmax(0,780px);gap:28px;align-items:start}
+.sgrid{position:relative;display:grid;grid-template-columns:220px minmax(0,780px);gap:28px;align-items:start}
 .scat{position:sticky;top:26px;display:flex;flex-direction:column;gap:10px}
 .scat .pane{gap:2px}
 .scat .pane .li{min-height:42px;padding:0 14px;gap:12px;font-weight:500;font-size:var(--fs-m);background:transparent;box-shadow:none;border-radius:var(--r-md);color:var(--tx2)}
 .scat .pane .li:first-child,.scat .pane .li:last-child{border-radius:var(--r-md)}
-.scat .pane .li.on{background:var(--pill-bg);box-shadow:var(--pill-sh);color:var(--tx);font-weight:600}
+.scat .pane .li.on{background:transparent;box-shadow:none;color:var(--tx)}
 @media (hover:hover){.scat .pane .li:not(.on):hover{background:var(--glass-sub);color:var(--tx)}}
-.scat .pane .li>svg{width:19px;height:19px;flex:none;color:var(--tx2)}
+.scat .pane .li>svg{width:19px;height:19px;flex:none;color:var(--tx2);transition:color var(--t-fast) var(--ease)}
 .scat .pane .li.on>svg{color:var(--p)}
 .scat .sp{display:none}
 .scat .group:not(.pane){gap:2px;padding-top:10px;border-top:1px solid var(--line)}
@@ -1863,15 +1862,16 @@ html.flyon .dash>.view{content-visibility:hidden;contain-intrinsic-size:auto non
 .fapc.on .fon{opacity:1;transform:none}
 .fon{color:var(--p)}.fon svg{width:20px;height:20px}
 
-/* ═════════ Apple Liquid Glass 漸進毛玻璃層次（降級或減少透明度偏好時自動退回高對比純色基底） ═════════ */
-@supports ((backdrop-filter:blur(1px)) or (-webkit-backdrop-filter:blur(1px))){@media not (prefers-reduced-transparency:reduce){
-  .rail,.dock,.dtop::before,.fmini{-webkit-backdrop-filter:var(--blur-float);backdrop-filter:var(--blur-float)}
+/* ═════════ Apple Liquid Glass 漸進毛玻璃層次（直接套用標準 backdrop-filter；減少透明度偏好時才退回純色） ═════════ */
+@supports ((backdrop-filter:blur(1px)) or (-webkit-backdrop-filter:blur(1px))){
+  .rail,.dock,.full .mtop,.dtop::before,.fmini{-webkit-backdrop-filter:var(--blur-float);backdrop-filter:var(--blur-float)}
   .dtop::before,.fmini{background:var(--glass)}
-  .hcard,.hbanner,.sumc,.htab,.ltab,.cc,.tile,.tbx,.dhome>.evs,.dhome>.tgh,.dash.d .sbody .group,.login{-webkit-backdrop-filter:var(--blur-card);backdrop-filter:var(--blur-card)}
+  .hcard,.hbanner,.sumc,.htab,.ltab,.cc,.tile,.tbx,.dhome>.evs,.dhome>.tgh,.dash.d .sbody .group,.dash.m .evs>.ev,.dash.m .group>.li,.calm,.foot,.dseg,.fchips,.hpick,.icbtn,.fc,.login{-webkit-backdrop-filter:var(--blur-card);backdrop-filter:var(--blur-card)}
   .dialog,.lmenu,#ctip{-webkit-backdrop-filter:var(--blur-modal);backdrop-filter:var(--blur-modal)}
-}}
+}
 @media (prefers-reduced-transparency:reduce){
-  :root{--glass:var(--s1);--glass-card:var(--s1);--glass-modal:var(--s1)}
+  [data-mode]{--glass:var(--s1);--glass-card:var(--s1);--glass-modal:var(--s1)}
+  .rail,.dock,.full .mtop,.dtop::before,.fmini,.hcard,.hbanner,.sumc,.htab,.ltab,.cc,.tile,.tbx,.dhome>.evs,.dhome>.tgh,.dash.d .sbody .group,.dash.m .evs>.ev,.dash.m .group>.li,.calm,.foot,.dseg,.fchips,.hpick,.icbtn,.fc,.login,.dialog,.lmenu,#ctip{-webkit-backdrop-filter:none;backdrop-filter:none}
 }
 /* PIN 碼數字鍵盤（web/pin.js）：每次打開數字位置都打亂；圓點顯示打了幾碼 */
 .ppad{display:flex;flex-direction:column;align-items:center;gap:22px;margin:14px auto 0;transition:opacity var(--t-fast) var(--ease)}

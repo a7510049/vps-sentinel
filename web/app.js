@@ -954,21 +954,13 @@ function slideSel(change){
     const g = document.createElement("i"); g.className = "slide"; g._leaving = 1; b.prepend(g); b.classList.add("sliding");   // _leaving：重畫時不要把它當成內容
     const dur = T.sp, t0 = performance.now(), lerp = (a, c, p) => a + (c - a) * p;
     g.animate([{opacity:1}, {opacity:1}], {duration:dur, id:"ui"});              // 滑完之前，自動更新先等一下
-    const pane = b.classList.contains("pane");
-    const lit = c => { if (pane) for (const r of b.children) if (r.classList.contains("li")) {   // 字的顏色跟著底色走：底色蓋到的那一段字是底色上的顏色，其他是平常的顏色（慢慢變的話中間會跟底色一樣、字看不見）
-      const o = Math.min(c.y + c.h, r.offsetTop + r.offsetHeight) - Math.max(c.y, r.offsetTop), l = r.querySelector(":scope>.lab");
-      r.classList.toggle("lit", o > r.offsetHeight / 2);
-      if (l) { const a = c.y - r.offsetTop - l.offsetTop; l.style.setProperty("--la", a.toFixed(1) + "px"); l.style.setProperty("--lb", (a + c.h).toFixed(1) + "px"); }
-    } };
-    const done = () => { const on2 = selOf(b); b.classList.add("slid"); if (on2) on2.style.transition = "none"; b.classList.remove("sliding"); g.remove(); b.offsetWidth; if (on2) on2.style.transition = ""; b.classList.remove("slid"); if (pane) for (const r of b.children) { r.classList.remove("lit"); const l = r.querySelector(":scope>.lab"); if (l) l.style.removeProperty("--la"), l.style.removeProperty("--lb"); } };
-    lit(from);   // 換回它自己的底色，同一格畫面，不會閃
+    const done = () => { const on2 = selOf(b); b.classList.add("slid"); if (on2) on2.style.transition = "none"; b.classList.remove("sliding"); g.remove(); b.offsetWidth; if (on2) on2.style.transition = ""; b.classList.remove("slid"); };
     if (Math.abs(to0.w - from.w) < 1 && Math.abs(to0.h - from.h) < 1 && to0.r.every((r, i) => Math.abs(r - from.r[i]) < 1)) {
-      // 大小一樣（例如手機上面的分頁列、電腦左邊的圖示）：只移位置，交給顯示卡跑，新的一頁在畫的時候也不會頓
+      // 大小一樣（例如分頁列、側欄、設定分類）：只移位置交給顯示卡跑，完全不抖動
       Object.assign(g.style, {width:to0.w + "px", height:to0.h + "px", borderRadius:to0.r.map(r => r + "px").join(" ")});
       const tr = c => `translate(${c.x}px,${c.y}px)`, a = g.animate([{transform:tr(from)}, {transform:tr(to0)}], {duration:dur, easing:SPRING, fill:"forwards"});
       a.onfinish = () => { if (!g._stop) done(); };
       Object.defineProperty(g, "_now", {get(){ const m = new DOMMatrix(getComputedStyle(g).transform); return {x:m.e, y:m.f, w:to0.w, h:to0.h, r:to0.r}; }});
-      if (pane) { const tk = () => { if (g._stop || !g.isConnected) return; lit(g._now); requestAnimationFrame(tk); }; requestAnimationFrame(tk); }
       return;
     }
     const step = now => {
@@ -976,7 +968,7 @@ function slideSel(change){
       const p = Math.min(1, (now - t0) / dur), e = springAt(p), on2 = selOf(b);
       if (!on2 || !b.isConnected) return g.remove();
       const to = boxIn(b, on2, z), c = {x:lerp(from.x, to.x, e), y:lerp(from.y, to.y, e), w:lerp(from.w, to.w, e), h:lerp(from.h, to.h, e), r:from.r.map((r, i) => Math.max(0, lerp(r, to.r[i], e)))};
-      g._now = c; lit(c);
+      g._now = c;
       Object.assign(g.style, {transform:`translate(${c.x}px,${c.y}px)`, width:c.w + "px", height:c.h + "px", borderRadius:c.r.map(r => r + "px").join(" ")});
       if (p < 1) return requestAnimationFrame(step);
       done();
@@ -1880,17 +1872,18 @@ function swapIn(a, b){
   if (!canAnim() || !a.isConnected) return a.replaceWith(b);
   const h0 = a.offsetHeight, par = a.offsetParent, x = a.offsetLeft, y = a.offsetTop, w = a.offsetWidth;
   const k0 = a.dataset.key || "", k1 = b.dataset.key || "";
-  const into = k0 === "dh:all" && k1.startsWith("dh:h:"), back = k0.startsWith("dh:h:") && k1 === "dh:all";
+  const into = k0 === "dh:all" && k1.startsWith("dh:h:"), back = k0.startsWith("dh:h:") && k1 === "dh:all", sb = k1.startsWith("sb:");
   a.replaceWith(b); skipIntro(b, true);
   if (par) {
     a._leaving = 1;
     Object.assign(a.style, {position:"absolute", left:x + "px", top:y + "px", width:w + "px", height:h0 + "px", margin:"0", pointerEvents:"none", overflow:"hidden", zIndex:1});
     b.after(a); still(a);
-    const outTf = into ? "translateY(-6px)" : back ? "translateY(6px)" : "translateY(-4px)";
+    const outTf = into ? "translateY(-6px)" : back ? "translateY(6px)" : sb ? "none" : "translateY(-4px)";
     a.animate([{opacity:1, transform:"none"}, {opacity:0, transform:outTf}], {duration:Math.round(T.fast * .6), easing:EXIT, fill:"forwards", id:"ui"}).onfinish = () => a.remove();
   }
-  const inTf = into ? "translateY(12px)" : back ? "translateY(-8px)" : "translateY(8px)";
-  b.animate([{opacity:0, transform:inTf}, {opacity:1, transform:"none"}], {duration:T.mid, delay:Math.round(T.fast * .45), easing:DEC, fill:"backwards", id:"ui"});
+  const inTf = into ? "translateY(12px)" : back ? "translateY(-8px)" : sb ? "translateY(4px)" : "translateY(8px)";
+  b.animate([{opacity:0, transform:inTf}, {opacity:1, transform:"none"}], {duration:sb ? T.fast : T.mid, delay:Math.round(T.fast * .35), easing:DEC, fill:"backwards", id:"ui"});
+  if (sb) return;
   const hEnd = b.offsetHeight;
   if (Math.abs(hEnd - h0) < 2) return;
   b.animate([{height:h0 + "px", overflow:"hidden"}, {height:hEnd + "px", overflow:"hidden"}], {duration:T.mid, easing:DEC, id:"ui"});
@@ -4376,7 +4369,7 @@ if (!CSS.supports("(animation-timeline:view()) and (timeline-scope:--a)")) {
   addEventListener("pointerdown", e => {
     if (e.button || !canAnim()) return;
     const el = e.target.closest(SEL);
-    if (!el || el.disabled) return;
+    if (!el || el.disabled || el.closest(".pane")) return;
     const touch = e.pointerType !== "mouse", wantPrs = touch || el.matches(PRESS_DESK), pid = e.pointerId, x0 = e.clientX, y0 = e.clientY;
     let box = null, done = false, t0 = 0;
     const press = () => { if (wantPrs) el.classList.add("prs"); t0 = performance.now(); };
