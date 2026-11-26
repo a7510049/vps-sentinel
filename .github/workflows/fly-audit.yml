@@ -1,6 +1,8 @@
 # 機場起降：用真實資料把四個機場跑一遍，列出看起來不對的地方（開發用，手動執行）
 name: fly-audit
 on: workflow_dispatch
+permissions:
+  contents: read
 jobs:
   audit:
     runs-on: ubuntu-latest

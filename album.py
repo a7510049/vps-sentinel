@@ -565,23 +565,25 @@ def alb_up_note(a, th, who, pend):
 
 
 def alb_snap_lock(a, th):
-    """鎖住按了截圖鍵的手機，記一筆（會傳 Telegram）；已經鎖住的不重記"""
+    """鎖住按了截圖鍵的手機，記一筆（會傳 Telegram）；已經鎖住或未登記的裝置不重記、不擠掉既有名單"""
     with ALB_LOCK:
         all_ = alb_all()
         b = all_.get(a["id"])
-        if not b or th in (b.get("lock") or {}):
-            return
+        devs = (b or {}).get("devs") or {}
+        if not b or th not in devs or th in (b.get("ban") or []) or th in (b.get("lock") or {}):
+            return False
         lk = b.setdefault("lock", {})
         lk[th] = time.time()
         while len(lk) > 200:
             lk.pop(min(lk, key=lk.get))
-        nm = ((b.get("devs") or {}).get(th) or {})
+        nm = devs.get(th) or {}
         who = nm.get("nm") or nm.get("n") or "一支手機"
         try:
             alb_save(all_)
         except OSError:
-            return
+            return False
     COL.add_event("warn", f"相簿截圖：{who} 在「{b['name']}」按了截圖，已鎖住")
+    return True
 
 
 def alb_dev_info(a, th, d):
@@ -783,11 +785,10 @@ def alb_up_del(h, a):
     tok = alb_dev_tok(h, a)
     if not (alb_cookie_ok(h, a) and ok and tok):
         return 403, {"ok": False, "message": "重新打開相簿再試"}
-    try:
-        n = min(int(h.headers.get("Content-Length") or 0), 1024)
-    except ValueError:
-        n = 0
-    pid = str(h.jbody(h.rfile.read(n) if n else b"").get("del") or "")
+    raw = h.read_body(1024)
+    if raw is None:
+        return 400, {"ok": False, "message": "請求格式不對"}
+    pid = str(h.jbody(raw).get("del") or "")
     th = alb_dev_hash(tok)
     with ALB_LOCK:
         all_ = alb_all()
@@ -1043,17 +1044,22 @@ def alb_tiff(b):
     if len(b) < 8 or b[:2] not in (b"II", b"MM"):
         return {}, []
     e = "<" if b[:2] == b"II" else ">"
-    out, spans = {}, []
+    out, spans, vis, left = {}, [], set(), [2048]
 
     def ifd(off, names, gps=False, depth=0):
-        if depth > 3 or not 8 <= off < len(b) - 2:
+        if depth > 3 or left[0] <= 0 or (off, gps) in vis or not 8 <= off < len(b) - 2:
             return
+        vis.add((off, gps))
         n = struct.unpack_from(e + "H", b, off)[0]
         if n > 512 or off + 2 + n * 12 > len(b):
             return
         if gps:
             spans.append((off, 2 + n * 12))
+        did_exif = did_gps = False
         for i in range(n):
+            if left[0] <= 0:
+                return
+            left[0] -= 1
             p = off + 2 + i * 12
             tag, typ, cnt = struct.unpack_from(e + "HHI", b, p)
             sz = TIFF_SZ.get(typ, 0) * cnt
@@ -1065,10 +1071,14 @@ def alb_tiff(b):
             if gps and sz > 4:
                 spans.append((vo, sz))
             if tag == 0x8769 and not gps:
-                ifd(struct.unpack_from(e + "I", b, vo)[0], EXIF_T, False, depth + 1)
+                if not did_exif and vo + 4 <= len(b):
+                    did_exif = True
+                    ifd(struct.unpack_from(e + "I", b, vo)[0], EXIF_T, False, depth + 1)
                 continue
             if tag == 0x8825 and not gps:
-                ifd(struct.unpack_from(e + "I", b, vo)[0], GPS_T, True, depth + 1)
+                if not did_gps and vo + 4 <= len(b):
+                    did_gps = True
+                    ifd(struct.unpack_from(e + "I", b, vo)[0], GPS_T, True, depth + 1)
                 continue
             k = names.get(tag)
             if not k:
@@ -1357,18 +1367,27 @@ def alb_heic(f, size):
             nonlocal p
             if not n:
                 return 0
+            if p + n > len(b):
+                raise IndexError("iloc eof")
             r = int.from_bytes(b[p:p + n], "big")
             p += n
             return r
         try:
+            tot_ext = 0
             for _ in range(min(cnt, 4096)):
+                if p >= len(b):
+                    break
                 iid = num(2 if v < 2 else 4)
                 if v in (1, 2):
                     num(2)
                 num(2)
                 base = num(bsz)
+                ec = num(2)
+                if (osz == 0 and lsz == 0 and ec > 1) or tot_ext + ec > 4096:
+                    break
+                tot_ext += ec
                 ext = []
-                for _ in range(num(2)):
+                for _ in range(ec):
                     if v in (1, 2) and isz:
                         num(isz)
                     ext.append((base + num(osz), num(lsz)))
@@ -2363,9 +2382,13 @@ def alb_vrun(a, ck, p, name, kind, cmd, src, hdr, snd, lean, dur):
         vf += (f",drawtext=fontfile='{alb_font(a['wm'])}':textfile='{tf.name}':fontcolor=white@0.6:fontsize='min(w,h)*0.042'"
                ":x='w-tw-min(w,h)*0.035':y='h-th-min(w,h)*0.035':shadowcolor=black@0.35:shadowx=2:shadowy=2")
     mount = alb_ff()[1]
-    tdir = None
+    tdir = cdir = None
     if mount:
-        tmp = f"/tmp/vsalb-{ck}-{kind}.mp4"
+        r0 = subprocess.run(["docker", "exec", "-u", "1000", "vps-cloud", "mktemp", "-d", "/tmp/vsalb-XXXXXX"], capture_output=True, text=True, timeout=15)  # noqa: S607
+        cdir = r0.stdout.strip() if r0.returncode == 0 else ""
+        if not cdir.startswith("/tmp/vsalb-"):
+            return False, "無法建立暫存目錄"
+        tmp = cdir + "/o.mp4"
     else:                                              # 一般帳號寫得進去的暫存資料夾（只有它和 root 看得到）
         tdir = tempfile.mkdtemp(prefix="vsalb-")
         alb_ff_give(tdir)
@@ -2384,7 +2407,7 @@ def alb_vrun(a, ck, p, name, kind, cmd, src, hdr, snd, lean, dur):
         err = r.stderr.decode("utf-8", "replace").strip().replace("\n", " ")
         if r.returncode == 0:
             if mount:                                  # 容器裡做的：倒出來再刪掉
-                pr = subprocess.Popen(["docker", "exec", "vps-cloud", "cat", tmp], stdout=subprocess.PIPE)  # noqa: S607
+                pr = subprocess.Popen(["docker", "exec", "-u", "1000", "vps-cloud", "cat", tmp], stdout=subprocess.PIPE)  # noqa: S607
                 ok = alb_vstore(ck, kind, pr.stdout)
                 pr.wait(timeout=60)
                 ok = ok and pr.returncode == 0
@@ -2400,9 +2423,9 @@ def alb_vrun(a, ck, p, name, kind, cmd, src, hdr, snd, lean, dur):
             except OSError:
                 pass
         try:
-            if mount:
-                subprocess.run(["docker", "exec", "vps-cloud", "rm", "-f", tmp], capture_output=True, timeout=30)  # noqa: S607
-            else:
+            if mount and cdir:
+                subprocess.run(["docker", "exec", "-u", "1000", "vps-cloud", "rm", "-rf", cdir], capture_output=True, timeout=30)  # noqa: S607
+            elif tdir:
                 shutil.rmtree(tdir, ignore_errors=True)
         except (OSError, subprocess.SubprocessError):
             pass
@@ -2476,8 +2499,12 @@ def alb_worker():
                     if os.path.exists(alb_cfile(alb_ckey(a, pid, m), "s")):
                         alb_qa_make(a, pid, m)
                 if a.get("loc"):
+                    hid = alb_hid(a)
                     for pid in idx.get("order", []):
-                        g = idx["ph"][pid].get("g")
+                        m = idx["ph"][pid]
+                        if pid in hid or alb_up_who(m["n"]):
+                            continue
+                        g = m.get("g")
                         if g:
                             alb_place(g[0], g[1], wait=True)
                     for day, g in alb_wx_days(a, idx).items():
@@ -2500,7 +2527,7 @@ def alb_worker():
 
 
 def alb_gc():
-    """清掉已經沒有相簿用到的小圖；朋友放到一半斷線留下的暫存檔（一天以上）"""
+    """清掉已經沒有相簿用到的小圖；朋友放到一半斷線留下的暫存檔（一天以上）；超出上限的地圖圖塊"""
     keep = set()
     for a in alb_all().values():
         p = alb_path(a["dir"])
@@ -2519,6 +2546,31 @@ def alb_gc():
             m = re.fullmatch(r"\.?([0-9a-f]{24})-(?:[slq]\.jpg|a\.json|[vm](?:-\d+\.bin|\.json|\.mp4))", fn)
             if m and m[1] not in keep:
                 os.remove(os.path.join(ALB_CACHE, fn))
+    except OSError:
+        pass
+    try:
+        tiles, tot, now = [], 0, time.time()
+        for root, _, fns in os.walk(ALB_TILE_DIR):
+            for fn in fns:
+                fp = os.path.join(root, fn)
+                try:
+                    st = os.stat(fp)
+                except OSError:
+                    continue
+                if now - st.st_mtime > ALB_TILE_DAYS * 86400:
+                    os.remove(fp)
+                else:
+                    tot += st.st_size
+                    tiles.append((st.st_mtime, st.st_size, fp))
+        if tot > (128 << 20):
+            for _, sz, fp in sorted(tiles):
+                try:
+                    os.remove(fp)
+                except OSError:
+                    pass
+                tot -= sz
+                if tot <= (96 << 20):
+                    break
     except OSError:
         pass
 
@@ -2760,6 +2812,32 @@ ALB_TILE_DAYS = 30
 ALB_TILE_GATE = threading.BoundedSemaphore(4)
 
 
+def alb_tile_ok(a, z, x, y):
+    """確認請求的地圖圖塊落在相簿實際拍攝地點附近（z<=4 總覽圖塊放行），避免遭濫用抓全球圖塊撐爆硬碟"""
+    if z <= 4:
+        return True
+    idx = alb_index(a, scan=False)
+    hid = alb_hid(a)
+    n = 1 << z
+    for pid in idx.get("order", []):
+        if pid in hid:
+            continue
+        m = idx["ph"].get(pid) or {}
+        if alb_up_who(m.get("n", "")):
+            continue
+        g = m.get("g")
+        if not g:
+            continue
+        lat, lon = max(-85.0, min(85.0, float(g[0]))), float(g[1])
+        tx = int((lon + 180.0) / 360.0 * n) % n
+        rl = math.radians(lat)
+        ty = int((1.0 - math.log(math.tan(rl) + 1.0 / math.cos(rl)) / math.pi) / 2.0 * n)
+        dx = min((x - tx) % n, (tx - x) % n)
+        if dx <= 6 and abs(y - ty) <= 6:
+            return True
+    return False
+
+
 def alb_tile(z, x, y):
     """OpenStreetMap 的一格地圖（照它的規定：寫清楚是哪個程式、存起來重複用）"""
     if not (0 <= z <= 19 and x < 2 ** z and y < 2 ** z):
@@ -2780,8 +2858,9 @@ def alb_tile(z, x, y):
                 b = r.read(2 << 20)
         if not b.startswith(b"\x89PNG"):
             raise ValueError("not png")
-        os.makedirs(os.path.dirname(fn), mode=0o700, exist_ok=True)
-        tmp = fn + ".tmp"
+        tdir = os.path.dirname(fn)
+        os.makedirs(tdir, mode=0o700, exist_ok=True)
+        tmp = f"{fn}.{secrets.token_hex(4)}.tmp"
         with open(tmp, "wb") as f:
             f.write(b)
         os.replace(tmp, fn)
@@ -3134,11 +3213,10 @@ def alb_http(h, method):
         if len(tries) >= ALB_PW_TRY[0]:
             left = int(ALB_PW_TRY[1] - (now - tries[0])) // 60 + 1
             return h.send(429, json.dumps({"ok": False, "message": f"錯太多次，{left} 分鐘後再試"}, ensure_ascii=False)) or True
-        try:
-            n = min(int(h.headers.get("Content-Length") or 0), 1024)
-        except ValueError:
-            n = 0
-        pw = h.jbody(h.rfile.read(n) if n else b"").get("pw")
+        raw = h.read_body(1024)
+        if raw is None:
+            return h.send(400, '{"ok":false,"message":"請求格式不對"}') or True
+        pw = h.jbody(raw).get("pw")
         if not alb_pw_ok(a, pw):
             with ALB_LOCK:
                 ALB_FAILS.setdefault(key, []).append(now)
@@ -3165,28 +3243,26 @@ def alb_http(h, method):
         tok = alb_dev_tok(h, a)
         if not (alb_cookie_ok(h, a) and ok and tok):
             return h.send(403, json.dumps({"ok": False, "message": "重新打開相簿再試"}, ensure_ascii=False)) or True
-        try:
-            n = min(int(h.headers.get("Content-Length") or 0), 4096)
-        except ValueError:
-            n = 0
-        code2, out = alb_talk_post(a, alb_dev_hash(tok), h.jbody(h.rfile.read(n) if n else b""))
+        raw = h.read_body(4096)
+        if raw is None:
+            return h.send(400, '{"ok":false,"message":"請求格式不對"}') or True
+        code2, out = alb_talk_post(a, alb_dev_hash(tok), h.jbody(raw))
         return h.send(code2, json.dumps(out, ensure_ascii=False), cache=False) or True
     if rest == "/di" and method == "POST":             # 這台是什麼設備（型號、系統、瀏覽器、螢幕）
         tok = alb_dev_tok(h, a)
         if not (tok and alb_cookie_ok(h, a)):
             return h.send(403, '{"ok":false}', cache=False) or True
-        try:
-            n = min(int(h.headers.get("Content-Length") or 0), 1024)
-        except ValueError:
-            n = 0
-        ok = alb_dev_info(a, alb_dev_hash(tok), h.jbody(h.rfile.read(n) if n else b""))
+        raw = h.read_body(1024)
+        if raw is None:
+            return h.send(400, '{"ok":false}', cache=False) or True
+        ok = alb_dev_info(a, alb_dev_hash(tok), h.jbody(raw))
         return h.send(200 if ok else 400, json.dumps({"ok": ok}), cache=False) or True
     if rest == "/snap" and method == "POST":           # 朋友按了截圖鍵：主人開了「截圖就鎖住」就鎖住這支手機
         tok = alb_dev_tok(h, a)
         if not (a.get("snap") and tok and alb_cookie_ok(h, a)):
             return h.send(200, '{"ok":true,"lock":false}', cache=False) or True
-        alb_snap_lock(a, alb_dev_hash(tok))
-        return h.send(200, '{"ok":true,"lock":true}', cache=False) or True
+        locked = alb_snap_lock(a, alb_dev_hash(tok))
+        return h.send(200 if locked else 403, json.dumps({"ok": locked, "lock": locked}), cache=False) or True
     if rest == "/up" and method == "POST":             # 朋友上傳照片、影片；或刪掉自己放的
         if (h.headers.get("Content-Type") or "").startswith("application/json"):
             code2, out = alb_up_del(h, a)
@@ -3228,9 +3304,10 @@ def alb_http(h, method):
         return alb_send_part(h, st.st_size, lambda s0, e0: alb_file_read(src, s0, e0), ct)
     m = re.fullmatch(r"/t/(\d{1,2})/(\d{1,6})/(\d{1,6})", rest)
     if m:                                              # 地圖底圖：主機幫忙拿 OpenStreetMap 的圖塊（朋友不用連外面、不用金鑰）
-        if not a["loc"]:
+        z, x, y = int(m[1]), int(m[2]), int(m[3])
+        if not a["loc"] or not alb_tile_ok(a, z, x, y):
             return h.send(404, '{"error":"找不到"}') or True
-        b = alb_tile(int(m[1]), int(m[2]), int(m[3]))
+        b = alb_tile(z, x, y)
         if not b:
             return h.send(404, '{"error":"找不到"}') or True
         h.send_response(200)
@@ -3251,9 +3328,9 @@ def alb_http(h, method):
         meta = (idx.get("ph") or {}).get(pid)
         if not meta or (pid in alb_hid(a) and not own):
             return h.send(404, '{"error":"找不到"}') or True
-        if kind == "a":                                # 會動的 WebP：原本的動畫（拿掉 EXIF、XMP）
+        if kind == "a":                                # 會動的 WebP：原本的動畫（拿掉 EXIF、XMP；有浮水印時不給無浮水印原檔）
             p = alb_path(a["dir"])
-            if meta.get("anim") != 2 or not p or meta.get("sz", 0) > 64 << 20:
+            if meta.get("anim") != 2 or alb_wm_bake(a) or not p or meta.get("sz", 0) > 64 << 20:
                 return h.send(404, '{"error":"找不到"}') or True
             try:
                 b = alb_webp_clean(os.path.join(p, meta["n"]))
@@ -3291,10 +3368,13 @@ def alb_http(h, method):
                 return h.send(404, '{"error":"找不到"}') or True
             with f:
                 ext = os.path.splitext(meta["n"])[1].lower()
+                strip_loc = not a["loc"] or bool(alb_up_who(meta["n"]))
                 if kind != "o" and ALB_E and not own and st.st_size <= 64 << 20 and ext in ALB_SHOW:   # 做不出小圖、直接看原圖：一樣加密
                     buf = io.BytesIO()
                     try:
-                        if (a["loc"] and not alb_up_who(meta["n"])) or not meta.get("gs"):
+                        if strip_loc and ext == ".webp" and st.st_size <= 64 << 20:
+                            buf.write(alb_webp_clean(src))
+                        elif not strip_loc or not meta.get("gs"):
                             shutil.copyfileobj(f, buf, 1 << 20)
                         else:
                             alb_strip_gps(f, meta["gs"], buf, st.st_size)
@@ -3305,9 +3385,10 @@ def alb_http(h, method):
                 ct = {".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".png": "image/png", ".webp": "image/webp", ".gif": "image/gif",
                       ".heic": "image/heic", ".heif": "image/heif", ".avif": "image/avif", ".mp4": "video/mp4", ".m4v": "video/mp4",
                       ".mov": "video/quicktime", ".webm": "video/webm"}.get(ext, "application/octet-stream")
+                clean_webp = alb_webp_clean(src) if strip_loc and ext == ".webp" and st.st_size <= 64 << 20 else None
                 h.send_response(200)
                 h.send_header("Content-Type", ct)
-                h.send_header("Content-Length", str(st.st_size))
+                h.send_header("Content-Length", str(len(clean_webp) if clean_webp is not None else st.st_size))
                 h.send_header("Cache-Control", "private, max-age=3600")
                 h.send_header("X-Content-Type-Options", "nosniff")
                 h.send_header("Content-Security-Policy", "sandbox")
@@ -3315,7 +3396,9 @@ def alb_http(h, method):
                     h.send_header("Content-Disposition", "attachment; filename*=UTF-8''" + urllib.parse.quote(os.path.basename(meta["n"])))
                 h.end_headers()
                 try:
-                    if (a["loc"] and not alb_up_who(meta["n"])) or not meta.get("gs"):   # 朋友放的一律拿掉定位
+                    if clean_webp is not None:
+                        h.wfile.write(clean_webp)
+                    elif not strip_loc or not meta.get("gs"):   # 朋友放的一律拿掉定位
                         shutil.copyfileobj(f, h.wfile, 1 << 20)
                     else:
                         alb_strip_gps(f, meta["gs"], h.wfile, st.st_size)
@@ -3358,7 +3441,7 @@ def alb_http(h, method):
                     meta = idx["ph"][pid]
                     if pid in hid or (pick is not None and pid not in pick) or (dlm < 2 and meta.get("bad")):
                         continue
-                    if meta.get("vid") and (dlm == 1 or not a["loc"]):   # 影片：壓縮過、沒有定位的那份
+                    if meta.get("vid") and (dlm == 1 or not a["loc"] or alb_up_who(meta["n"])):   # 影片：壓縮過、沒有定位的那份
                         ck = alb_ckey(a, pid, meta)
                         info = alb_vinfo(ck, "v")
                         if info:
@@ -3374,8 +3457,12 @@ def alb_http(h, method):
                     src = os.path.join(p, meta["n"])
                     try:
                         zi = zipfile.ZipInfo(meta["n"], time.localtime(meta["mt"])[:6])
+                        strip_loc = not a["loc"] or bool(alb_up_who(meta["n"]))
+                        ext = os.path.splitext(meta["n"])[1].lower()
                         with open(src, "rb") as f, z.open(zi, "w", force_zip64=True) as w:
-                            if (a["loc"] and not alb_up_who(meta["n"])) or not meta.get("gs"):   # 朋友放的一律拿掉定位
+                            if strip_loc and ext == ".webp" and meta.get("sz", 0) <= 64 << 20:
+                                w.write(alb_webp_clean(src))
+                            elif not strip_loc or not meta.get("gs"):   # 朋友放的一律拿掉定位
                                 shutil.copyfileobj(f, w, 1 << 20)
                             else:
                                 alb_strip_gps(f, meta["gs"], w, meta["sz"])

@@ -89,6 +89,78 @@ class HardeningTest(unittest.TestCase):
         self.assertFalse(S.rsw_code_ok("ABCD-EFGH", "203.0.113.9"))      # 亂試的那個地方：對的代碼也先不收
         self.assertTrue(S.rsw_code_ok("abcd-efgh", "198.51.100.1"))      # 你這邊：照樣能用
 
+    def test_restore_blocks_exact_path_and_escaping_symlinks(self):
+        buf = io.BytesIO()
+        with tarfile.open(fileobj=buf, mode="w") as t:
+            for name, link in (("etc/x", "/root/target"), ("etc/x", None), ("etc/esc", "../../etc/passwd"), ("etc/ok", None)):
+                info = tarfile.TarInfo(name)
+                if link:
+                    info.type, info.linkname = tarfile.SYMTYPE, link
+                t.addfile(info, io.BytesIO(b"data") if not link else None)
+        buf.seek(0)
+        with tarfile.open(fileobj=buf) as t:
+            ms = S.rs_members(t)
+        self.assertEqual([(m.name, m.issym()) for m in ms], [("etc/x", True), ("etc/ok", False)])
+
+    def test_png_icc_zlib_bomb_capped(self):
+        import struct
+        import zlib
+        zdata = zlib.compress(b"\x00" * (4 << 20), 9)
+        chunk = b"p\x00\x00" + zdata
+        png = b"\x89PNG\r\n\x1a\n" + struct.pack(">I4s", len(chunk), b"iCCP") + chunk + b"\x00\x00\x00\x00"
+        with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as f:
+            f.write(png)
+            p = f.name
+        try:
+            self.assertIsNone(S.pic_png_icc(p))
+        finally:
+            os.remove(p)
+
+    def test_tiff_ifd_cycle_bounded(self):
+        import struct
+        # Self-referencing ExifIFD pointer (tag 0x8769 -> offset 8)
+        entry = struct.pack("<HHII", 0x8769, 4, 1, 8)
+        tiff = b"II" + struct.pack("<HIH", 42, 8, 16) + entry * 16 + struct.pack("<I", 0)
+        out, spans = S.alb_tiff(tiff)
+        self.assertIsInstance(out, dict)
+        self.assertIsInstance(spans, list)
+        self.assertLessEqual(len(list(S.pic_tiff_walk(tiff))), 2048)
+
+    def test_read_body_rejects_negative_content_length(self):
+        h = object.__new__(S.Handler)
+        h.headers = {"Content-Length": "-1"}
+        h.rfile = io.BytesIO(b"abc")
+        h.close_connection = False
+        self.assertIsNone(h.read_body(4096))
+        self.assertTrue(h.close_connection)
+
+    def test_note_body_rejects_negative_chunk(self):
+        class FakeH:
+            headers = {"Transfer-Encoding": "chunked"}
+            rfile = io.BytesIO(b"-10\r\n0\r\n\r\n")
+        self.assertFalse(S.note_body(FakeH(), io.BytesIO(), 1024))
+
+    def test_ab_probe_fail_closed_and_nat64_blocked(self):
+        self.assertEqual(S.ab_probe_ips("nonexistent.invalid"), ("", []))
+        self.assertFalse(S._ab_ip_global("64:ff9b::127.0.0.1"))
+        self.assertFalse(S._ab_ip_global("127.0.0.1"))
+
+    def test_fly_share_unlimited_does_not_bloat_store(self):
+        tmp = tempfile.mkdtemp()
+        old_f, old_c = S.SHARE_FILE, dict(S.SHARE_CACHE)
+        S.SHARE_FILE = os.path.join(tmp, "fly-share.json")
+        S.SHARE_CACHE.update(mt=None, d={})
+        try:
+            code, _ = S.share_new(3600, 0)
+            toks = [S.share_claim(code, "")[0] for _ in range(10)]
+            self.assertTrue(all(toks))
+            self.assertTrue(S.share_ok(code + ":" + toks[0]))
+            d = S.share_load()
+            self.assertEqual(len(next(iter(d.values()))["dev"]), 0)
+        finally:
+            S.SHARE_FILE = old_f
+            S.SHARE_CACHE.update(old_c)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -214,8 +214,12 @@ def pic_png_icc(path):
         if typ == b"iCCP":
             d = b[p + 8:p + 8 + ln]
             z = d.find(b"\0")
+            if z < 0 or z + 2 >= len(d):
+                return None
             try:
-                return _pz.decompress(d[z + 2:])
+                dec = _pz.decompressobj()
+                out = dec.decompress(d[z + 2:], (2 << 20) + 1)
+                return out if len(out) <= (2 << 20) and not dec.unconsumed_tail else None
             except (_pz.error, ValueError):
                 return None
         if typ in (b"IDAT", b"IEND"):
@@ -242,22 +246,29 @@ def pic_webp_icc(path):
 
 
 # ── TIFF（EXIF）的每一格：給相機專屬資訊、色彩空間、Apple 的 HDR 數值用 ──
-def pic_tiff_walk(b, base=0, e=None, off=None, depth=0, kind="0"):
+def pic_tiff_walk(b, base=0, e=None, off=None, depth=0, kind="0", _vis=None, _bud=None):
     """走過 TIFF 的 IFD：產生 (哪一層, 標籤, 型別, 個數, 值在 b 的位置)；e 是位元組順序"""
     if e is None:
         if len(b) < base + 8 or b[base:base + 2] not in (b"II", b"MM"):
             return
         e = "<" if b[base:base + 2] == b"II" else ">"
         off = struct.unpack_from(e + "I", b, base + 4)[0]
+    if _vis is None:
+        _vis, _bud = set(), [2048]
     seen = 0
-    while off and depth < 6 and seen < 4:
+    while off and depth < 6 and seen < 4 and _bud[0] > 0:
         p0 = base + off
-        if not 0 <= p0 < len(b) - 2:
+        if (p0, kind) in _vis or not 0 <= p0 < len(b) - 2:
             return
+        _vis.add((p0, kind))
         n = struct.unpack_from(e + "H", b, p0)[0]
         if n > 1024 or p0 + 2 + n * 12 > len(b):
             return
+        sub_done = set()
         for i in range(n):
+            if _bud[0] <= 0:
+                return
+            _bud[0] -= 1
             p = p0 + 2 + i * 12
             tag, typ, cnt = struct.unpack_from(e + "HHI", b, p)
             sz = TIFF_SZ.get(typ, 0) * cnt
@@ -266,11 +277,13 @@ def pic_tiff_walk(b, base=0, e=None, off=None, depth=0, kind="0"):
                 continue
             yield kind, tag, typ, cnt, vo, e
             sub = {0x8769: "x", 0x8825: "g", 0xA005: "i"}.get(tag)
-            if sub and typ in (4, 13):
-                yield from pic_tiff_walk(b, base, e, struct.unpack_from(e + "I", b, vo)[0], depth + 1, sub)
-            elif tag == 0x014A and kind == "0":    # SubIFDs（相機原始檔的大圖在這裡）
+            if sub and typ in (4, 13) and sub not in sub_done:
+                sub_done.add(sub)
+                yield from pic_tiff_walk(b, base, e, struct.unpack_from(e + "I", b, vo)[0], depth + 1, sub, _vis, _bud)
+            elif tag == 0x014A and kind == "0" and "s" not in sub_done:    # SubIFDs（相機原始檔的大圖在這裡）
+                sub_done.add("s")
                 for j in range(min(cnt, 8)):
-                    yield from pic_tiff_walk(b, base, e, struct.unpack_from(e + "I", b, vo + 4 * j)[0], depth + 1, "s")
+                    yield from pic_tiff_walk(b, base, e, struct.unpack_from(e + "I", b, vo + 4 * j)[0], depth + 1, "s", _vis, _bud)
         if kind != "0":
             return
         p = p0 + 2 + n * 12
@@ -653,16 +666,25 @@ def pic_heif_meta(mb):
 
             def num(k):
                 nonlocal p
+                if k and p + k > e:
+                    raise IndexError("iloc eof")
                 r = int.from_bytes(mb[p:p + k], "big") if k else 0
                 p += k
                 return r
+            tot_ext = 0
             for _ in range(min(cnt, 8192)):
+                if p >= e:
+                    break
                 iid = num(2 if v < 2 else 4)
                 cm = num(2) & 15 if v in (1, 2) else 0
                 num(2)
                 base = num(bsz)
+                ec = num(2)
+                if (osz == 0 and lsz == 0 and ec > 1) or tot_ext + ec > 4096:
+                    break
+                tot_ext += ec
                 ext = []
-                for _ in range(num(2)):
+                for _ in range(ec):
                     if v in (1, 2) and isz:
                         num(isz)
                     ext.append((base + num(osz), num(lsz)))
@@ -764,6 +786,7 @@ def pic_heif_hevc(path, H, iid):
     it = H["it"].get(iid)
     if not it:
         return None
+    max_px = globals().get("ALB_UP_PX", 100_000_000)
     try:
         with open(path, "rb") as f:
             if it["t"] == "hvc1":
@@ -771,24 +794,32 @@ def pic_heif_hevc(path, H, iid):
                 isp = pic_heif_prop(H, iid, "ispe")
                 ow, oh = struct.unpack_from(">II", isp, 4) if isp else (0, 0)
             elif it["t"] == "grid":
-                g = pic_heif_data(f, H, iid)
+                g = pic_heif_data(f, H, iid, cap=64)
                 if len(g) < 8:
                     return None
                 big = g[1] & 1
                 rows, cols = g[2] + 1, g[3] + 1
+                if rows * cols > 1024:
+                    return None
                 ow, oh = struct.unpack_from(">II" if big else ">HH", g, 4)
+                if not (ow > 0 and oh > 0 and ow * oh <= max_px):
+                    return None
                 tiles = H["ref"].get("dimg", {}).get(iid) or []
                 if len(tiles) != rows * cols or any(H["it"].get(t, {}).get("t") != "hvc1" for t in tiles):
                     return None
             else:
                 return None
-            bs = []
+            bs, tot_b = [], 0
             for t in tiles:
                 ps, nl = pic_hvcc_ps(pic_heif_prop(H, t, "hvcC"))
-                d = pic_heif_data(f, H, t)
+                d = pic_heif_data(f, H, t, cap=(64 << 20) - tot_b)
                 if not ps or not d:
                     return None
-                bs.append(ps + pic_annexb(d, nl))
+                chunk = ps + pic_annexb(d, nl)
+                tot_b += len(chunk)
+                if tot_b > (64 << 20):
+                    return None
+                bs.append(chunk)
     except OSError:
         return None
     vf = []

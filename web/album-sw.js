@@ -50,10 +50,20 @@ async function open(req, code, again){
   return again ? new Response("", {status:502}) : open(req, code, true);   // 存著的是舊鑰匙加密的：重拿一次
 }
 
+self.addEventListener("message", e => {
+  const d = e.data;
+  if (!d || d.type !== "clear" || typeof d.code !== "string") return;
+  const pref = `${self.location.origin}/a/${d.code}/`;
+  for (const [k, v] of MEM) { if (k.startsWith(pref)) { MEM.delete(k); memSz -= v.buf.byteLength; } }
+  for (const k of [...KEYS.keys()]) { if (k.startsWith(d.code + "|")) KEYS.delete(k); }
+});
+
 self.addEventListener("fetch", e => {
   const q = e.request;
   if (q.method !== "GET" || q.destination !== "image") return;   // 只解開網頁上的 <img>：直接打開網址、「儲存圖片」、下載都照樣是亂碼
-  const m = new URL(q.url).pathname.match(/^\/a\/([A-Za-z0-9]{10})\/i\/[0-9a-f]{12}\/[slqxady]$/);
+  const u = new URL(q.url);
+  if (u.origin !== self.location.origin) return;
+  const m = u.pathname.match(/^\/a\/([A-Za-z0-9]{10})\/i\/[0-9a-f]{12}\/[slqxady]$/);
   if (!m) return;
   e.respondWith(open(q, m[1], false));
 });

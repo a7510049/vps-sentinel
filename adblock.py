@@ -400,40 +400,67 @@ def ab_pub_check():
     return ab_dot_probe(dom) if dom else ""
 
 
-def ab_probe_ok(host):
-    """別台叫我幫忙測的網域：要是正常網域、而且指到公開的位址（不能拿來掃內部網路）"""
+def _ab_ip_global(ip_s):
+    try:
+        ip = ipaddress.ip_address(ip_s.split("%")[0])
+    except ValueError:
+        return False
+    if ip.version == 6 and ip.ipv4_mapped:
+        ip = ip.ipv4_mapped
+    if ip.version == 6 and (ip in ipaddress.ip_network("64:ff9b::/96") or ip in ipaddress.ip_network("64:ff9b:1::/48")):
+        return False
+    return bool(ip.is_global and not ip.is_multicast)
+
+
+def ab_probe_ips(host):
+    """查網域並確認所有解析位址皆為公網 IP（防止 DNS Rebinding 與內網掃描）"""
     host = str(host or "").strip().lower().rstrip(".")
     if not AB_DOMRE.fullmatch(host) or "." not in host:
-        return ""
+        return "", []
     try:
-        ips = {a[4][0] for a in socket.getaddrinfo(host, AB_DOT, proto=socket.IPPROTO_TCP)}
+        ips = sorted({a[4][0].split("%")[0] for a in socket.getaddrinfo(host, AB_DOT, proto=socket.IPPROTO_TCP)})
     except OSError:
-        return host                                 # 查不到網域：照樣去試，會回「連不上」
-    if not AB_FAKE and any(not ipaddress.ip_address(i.split("%")[0]).is_global for i in ips):
-        return ""
-    return host
+        return "", []
+    if not ips:
+        return "", []
+    if not AB_FAKE and any(not _ab_ip_global(i) for i in ips):
+        return "", []
+    return host, ips
 
 
-def ab_dot_probe(dom):
+def ab_probe_ok(host):
+    """別台叫我幫忙測的網域：要是正常網域、而且指到公開的位址（不能拿來掃內部網路）"""
+    h, _ = ab_probe_ips(host)
+    return h
+
+
+def ab_dot_probe(dom, ips=None):
     """用 853（DNS-over-TLS）問 dom 一次；回傳空字串是通的，不然是哪裡壞"""
+    if ips is None:
+        dom, ips = ab_probe_ips(dom)
+        if not dom or not ips:
+            return f"{AB_DOT} 埠連不上（找不到合法公網位址）"
     q = b"\x00\x01\x01\x00\x00\x01\x00\x00\x00\x00\x00\x00" + b"\x07example\x03com\x00\x00\x01\x00\x01"
-    try:
-        with socket.create_connection((dom, AB_DOT), timeout=10) as raw, \
-                ssl.create_default_context().wrap_socket(raw, server_hostname=dom) as t:
-            t.sendall(len(q).to_bytes(2, "big") + q)
-            b = b""
-            while len(b) < 14:
-                x = t.recv(4096)
-                if not x:
-                    break
-                b += x
-        if len(b) < 14:
-            return "AdGuard Home 沒有回答"
-        return "" if b[5] & 15 == 0 else "AdGuard Home 查不到網址（上游 DNS 連不上）"
-    except ssl.SSLError:
-        return "憑證不對"
-    except (OSError, ValueError) as e:
-        return f"{AB_DOT} 埠連不上（{str(getattr(e, 'strerror', '') or e)[:40]}）"
+    last_err = None
+    for ip in ips:
+        try:
+            with socket.create_connection((ip, AB_DOT), timeout=10) as raw, \
+                    ssl.create_default_context().wrap_socket(raw, server_hostname=dom) as t:
+                t.sendall(len(q).to_bytes(2, "big") + q)
+                b = b""
+                while len(b) < 14:
+                    x = t.recv(4096)
+                    if not x:
+                        break
+                    b += x
+            if len(b) < 14:
+                return "AdGuard Home 沒有回答"
+            return "" if b[5] & 15 == 0 else "AdGuard Home 查不到網址（上游 DNS 連不上）"
+        except ssl.SSLError:
+            return "憑證不對"
+        except (OSError, ValueError) as e:
+            last_err = e
+    return f"{AB_DOT} 埠連不上（{str(getattr(last_err, 'strerror', '') or last_err)[:40]}）"
 
 
 def ab_ext_check():
@@ -679,15 +706,19 @@ def ab_profile(url, name):
         "PayloadDisplayName": title, "PayloadIdentifier": f"com.vps-sentinel.dns.{pid}", "PayloadRemovalDisallowed": False,
         "PayloadType": "Configuration", "PayloadUUID": pid, "PayloadVersion": 1})
     now = time.time()
-    for k in [k for k, v in AB_TOK.items() if v[0] < now]:
-        AB_TOK.pop(k, None)
     k = secrets.token_urlsafe(16)
-    AB_TOK[k] = (now + 600, body)
+    with AB_LOCK:
+        for old in [x for x, v in AB_TOK.items() if v[0] < now]:
+            AB_TOK.pop(old, None)
+        while len(AB_TOK) >= 64:
+            AB_TOK.pop(next(iter(AB_TOK)))
+        AB_TOK[k] = (now + 600, body)
     return k
 
 
 def ab_profile_get(k):
-    v = AB_TOK.pop(k, None) if isinstance(k, str) else None
+    with AB_LOCK:
+        v = AB_TOK.pop(k, None) if isinstance(k, str) else None
     return v[1] if v and v[0] > time.time() else None
 
 
@@ -768,15 +799,13 @@ def ab_proxy(h):
     if u.path == AB_PATH + "-sso":                  # 從哨兵點進來：一次性登入票（表單送的）換這個瀏覽器的通行證
         ok = False
         if h.command == "POST":
-            try:
-                n = min(int(h.headers.get("Content-Length") or 0), 4096)
-                ok = ab_ticket_use(urllib.parse.parse_qs(h.rfile.read(n).decode("utf-8", "replace")).get("t", [""])[0])
-            except (ValueError, OSError):
-                ok = False
+            raw = h.read_body(4096)
+            if raw is not None:
+                ok = ab_ticket_use(urllib.parse.parse_qs(raw.decode("utf-8", "replace")).get("t", [""])[0])
         h.send_response(303)
         if ok:
             secure = "; Secure" if h.https() else ""
-            h.send_header("Set-Cookie", f"vs_agh={ab_cookie_value()}; Path={AB_PATH}/; HttpOnly; SameSite=Lax{secure}")
+            h.send_header("Set-Cookie", f"vs_agh={ab_cookie_value()}; Path={AB_PATH}/; HttpOnly; SameSite=Strict{secure}")
         h.send_header("Location", AB_PATH + "/" if ok or ab_authed(h) else "/")
         h.send_header("Cache-Control", "no-store")
         h.send_header("Content-Length", "0")
@@ -790,6 +819,16 @@ def ab_proxy(h):
             h.end_headers()
             return None
         return h.send(401, '{"error":"請先登入"}')
+    if h.command not in ("GET", "HEAD", "OPTIONS"):
+        sfs = (h.headers.get("Sec-Fetch-Site") or "").lower()
+        orig = (h.headers.get("Origin") or "").strip()
+        host = (h.headers.get("Host") or "").strip().lower()
+        if sfs and sfs not in ("same-origin", "none"):
+            return h.send(403, '{"error":"來源不符"}')
+        if orig:
+            ou = urllib.parse.urlsplit(orig)
+            if (ou.netloc or "").lower() != host:
+                return h.send(403, '{"error":"來源不符"}')
     if u.path == AB_PATH:
         h.send_response(301)
         h.send_header("Location", AB_PATH + "/")
@@ -798,9 +837,10 @@ def ab_proxy(h):
         return None
     path = h.path[len(AB_PATH):] or "/"
     body = None
-    n = int(h.headers.get("Content-Length") or 0)
-    if n:
-        body = h.rfile.read(min(n, 8 << 20))
+    if h.headers.get("Content-Length") is not None:
+        body = h.read_body(8 << 20)
+        if body is None:
+            return h.send(400, '{"error":"請求大小不合法"}')
     for again in (False, True):
         hd = {k: v for k, v in h.headers.items() if k.lower() not in h.HOP and k.lower() not in ("host", "cookie", "authorization", "content-length", "accept-encoding")}
         own = [c.strip() for c in (h.headers.get("Cookie") or "").split(";") if c.strip() and not c.strip().startswith(("vs_", "agh_session"))]

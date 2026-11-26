@@ -35,7 +35,29 @@ MAP=vps-cloud            # 解鎖後的磁碟：/dev/mapper/vps-cloud
 UNLOCK_UNIT=/etc/systemd/system/vps-cloud-unlock.service
 
 [ -f "$CONF" ] || { echo "❌ 請先安裝哨站（bash install.sh）"; exit 1; }
-set_conf() { if grep -q "^$1=" "$CONF"; then sed -i "s|^$1=.*|$1=$2|" "$CONF"; else echo "$1=$2" >> "$CONF"; fi; }
+set_conf() {
+  python3 - "$CONF" "$1" "$2" <<'PY'
+import os, re, sys
+p, k, v = sys.argv[1:4]
+v = re.sub(r"[\r\n]", "", v)
+try:
+    with open(p, encoding="utf-8") as f:
+        txt = f.read()
+except OSError:
+    txt = ""
+line = f"{k}={v}"
+if re.search(rf"(?m)^{re.escape(k)}=.*$", txt):
+    txt = re.sub(rf"(?m)^{re.escape(k)}=.*$", lambda _: line, txt, count=1)
+else:
+    txt = txt.rstrip("\n") + "\n" + line + "\n"
+tmp = p + ".tmp"
+fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+with os.fdopen(fd, "w", encoding="utf-8") as f:
+    f.write(txt)
+os.chmod(tmp, 0o600)
+os.replace(tmp, p)
+PY
+}
 get_conf() { grep -E "^$1=" "$CONF" | head -1 | cut -d= -f2- || true; }
 
 # ── 整顆加密 ──

@@ -182,40 +182,92 @@ def bk_own(path):
         os.chmod(path, 0o600)
 
 
+def bk_open_dir(folder):
+    """安全開啟備份資料夾（拒絕捷徑，避免 root 誤操作系統目錄）"""
+    return os.open(folder, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
+
+
 def bk_list(folder):
+    if os.path.islink(folder):
+        return []
     try:
-        fs = [os.path.join(folder, f) for f in os.listdir(folder) if f.endswith(".vsbk")]
+        dfd = bk_open_dir(folder)
     except OSError:
         return []
-
-    def mt(f):
-        try:
-            return os.lstat(f).st_mtime
-        except OSError:                            # 剛好被刪掉
-            return 0
-    return sorted((f for f in fs if not os.path.islink(f)), key=mt)
+    out = []
+    try:
+        for fn in os.listdir(dfd):
+            if not fn.endswith(".vsbk"):
+                continue
+            try:
+                st = os.lstat(fn, dir_fd=dfd)
+            except OSError:
+                continue
+            if stat.S_ISREG(st.st_mode):
+                out.append((st.st_mtime, os.path.join(folder, fn)))
+    finally:
+        os.close(dfd)
+    out.sort(key=lambda x: x[0])
+    return [p for _, p in out]
 
 
 def bk_prune(folder):
-    for f in bk_list(folder)[:-BACKUP_KEEP]:
-        try:
-            os.remove(f)
-        except OSError:
-            pass
+    old = bk_list(folder)[:-BACKUP_KEEP]
+    if not old:
+        return
+    try:
+        dfd = bk_open_dir(folder)
+    except OSError:
+        return
+    try:
+        for f in old:
+            try:
+                os.unlink(os.path.basename(f), dir_fd=dfd)
+            except OSError:
+                pass
+    finally:
+        os.close(dfd)
 
 
 def bk_cleanup_legacy():
-    """1.30 版的備份沒有加密（只有 Telegram 上那份有），換成新格式後把它們刪掉"""
-    pats = [os.path.join(BK_LOCAL_DIR, "*.tar.gz"), os.path.join(DATA_DIR, "peer-backups", "*", "*.tar.gz"),
-            os.path.join(CLOUD_DIR, BK_CLOUD_SUB, "*", "*.tar.gz")]
-    for f in (f for p in pats for f in glob.glob(p)):
+    """1.30 版的備份沒有加密（只有 Telegram 上那份有），換成新格式後把它們刪掉（不跟隨捷徑）"""
+    def clean_dir(d):
+        if os.path.islink(d):
+            return
         try:
-            os.remove(f)
+            dfd = bk_open_dir(d)
+        except OSError:
+            return
+        try:
+            for fn in os.listdir(dfd):
+                if fn.endswith(".tar.gz"):
+                    try:
+                        if not stat.S_ISLNK(os.lstat(fn, dir_fd=dfd).st_mode):
+                            os.unlink(fn, dir_fd=dfd)
+                    except OSError:
+                        pass
+        finally:
+            os.close(dfd)
+    clean_dir(BK_LOCAL_DIR)
+    for base in (os.path.join(DATA_DIR, "peer-backups"), os.path.join(CLOUD_DIR, BK_CLOUD_SUB)):
+        if os.path.islink(base):
+            continue
+        try:
+            for e in os.scandir(base):
+                if e.is_dir(follow_symlinks=False):
+                    clean_dir(e.path)
         except OSError:
             pass
-    for d in glob.glob(os.path.join(DATA_DIR, "peer-backups", "*")) + [os.path.join(DATA_DIR, "peer-backups")]:
+    pb = os.path.join(DATA_DIR, "peer-backups")
+    if not os.path.islink(pb):
         try:
-            os.rmdir(d)
+            for e in os.scandir(pb):
+                if e.is_dir(follow_symlinks=False):
+                    try:
+                        os.rmdir(e.path)
+                    except OSError:
+                        pass
+            os.rmdir(pb)
         except OSError:
             pass
 
@@ -432,20 +484,39 @@ def bk_verify(path, td):
 def make_backup():
     """打包並加密一份這台的備份，回傳 (檔案路徑, 包含哪些東西, 跳過的大檔)"""
     folder = bk_dir(NAME, bk_learn_name("", NAME))
-    path = os.path.join(folder, bk_fname(NAME, time.time(), folder))
-    tmp = os.path.join(folder, f".{secrets.token_hex(6)}.part")   # 猜不到的名字：雲端硬碟裡沒辦法先放好捷徑等著被寫
-    try:
-        with tempfile.TemporaryDirectory() as td:
-            os.chmod(td, 0o700)
-            tgz = os.path.join(td, "backup.tar.gz")
-            labels, big = _bk_tar(tgz, td)
-            vsbk_encrypt(tgz, tmp, bk_key())
-            bk_verify(tmp, td)
-        bk_own(tmp)
-        os.replace(tmp, path)
-    finally:
-        if os.path.exists(tmp):
-            os.remove(tmp)
+    dest_name = bk_fname(NAME, time.time(), folder)
+    path = os.path.join(folder, dest_name)
+    part_name = f".{secrets.token_hex(6)}.part"
+    with tempfile.TemporaryDirectory() as td:
+        os.chmod(td, 0o700)
+        tgz = os.path.join(td, "backup.tar.gz")
+        enc = os.path.join(td, "backup.vsbk")          # 加密與驗算都在 root 專屬暫存資料夾完成，不在 uid 1000 目錄裡建暫存檔
+        labels, big = _bk_tar(tgz, td)
+        vsbk_encrypt(tgz, enc, bk_key())
+        bk_verify(enc, td)
+        dfd = bk_open_dir(folder)
+        try:
+            fd = os.open(part_name, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600, dir_fd=dfd)
+            try:
+                with os.fdopen(fd, "wb") as out, open(enc, "rb") as src:
+                    shutil.copyfileobj(src, out, 1 << 20)
+                    out.flush()
+                    if bk_cloud():
+                        try:
+                            os.fchown(out.fileno(), 1000, 1000)
+                        except OSError:
+                            pass
+                    else:
+                        os.fchmod(out.fileno(), 0o600)
+                os.replace(part_name, dest_name, src_dir_fd=dfd, dst_dir_fd=dfd)
+            except BaseException:
+                try:
+                    os.unlink(part_name, dir_fd=dfd)
+                except OSError:
+                    pass
+                raise
+        finally:
+            os.close(dfd)
     bk_prune(folder)
     return path, labels, big
 
@@ -572,24 +643,40 @@ def bk_store(src, fname, stream, length, aliases=()):
     where = bk_where()
     if shutil.disk_usage(folder).free < length + 50 * 1024 * 1024:
         return False, f"{where}的空間不夠", None
-    dest = os.path.join(folder, fname if not os.path.exists(os.path.join(folder, fname)) else bk_fname(src, time.time(), folder))
-    tmp = os.path.join(folder, f".{secrets.token_hex(6)}.part")
+    dest_name = fname if not os.path.exists(os.path.join(folder, fname)) else bk_fname(src, time.time(), folder)
+    dest = os.path.join(folder, dest_name)
+    part_name = f".{secrets.token_hex(6)}.part"
     try:
-        left = length
-        with os.fdopen(os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600), "wb") as f:
-            while left > 0:
-                chunk = stream.read(min(left, 1 << 20))
-                if not chunk:
-                    raise OSError("傳到一半斷掉了")
-                f.write(chunk)
-                left -= len(chunk)
-        bk_own(tmp)
-        os.replace(tmp, dest)
-    except OSError as e:
+        dfd = bk_open_dir(folder)
         try:
-            os.remove(tmp)
-        except OSError:
-            pass
+            left = length
+            fd = os.open(part_name, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600, dir_fd=dfd)
+            try:
+                with os.fdopen(fd, "wb") as f:
+                    while left > 0:
+                        chunk = stream.read(min(left, 1 << 20))
+                        if not chunk:
+                            raise OSError("傳到一半斷掉了")
+                        f.write(chunk)
+                        left -= len(chunk)
+                    f.flush()
+                    if bk_cloud():
+                        try:
+                            os.fchown(f.fileno(), 1000, 1000)
+                        except OSError:
+                            pass
+                    else:
+                        os.fchmod(f.fileno(), 0o600)
+                os.replace(part_name, dest_name, src_dir_fd=dfd, dst_dir_fd=dfd)
+            except BaseException:
+                try:
+                    os.unlink(part_name, dir_fd=dfd)
+                except OSError:
+                    pass
+                raise
+        finally:
+            os.close(dfd)
+    except OSError as e:
         return False, f"存檔失敗：{e}", None
     bk_prune(folder)
     return True, where, dest
@@ -837,9 +924,11 @@ def rsw_store(stream, length):
         return False, "現在沒有在等待還原"
     if not 40 < length <= BK_UPLOAD_MAX:
         return False, "檔案大小不對"
-    tmp, left, head = RSW_FILE + ".part", length, b""
+    if shutil.disk_usage(RSW_DIR).free < length + 50 * 1024 * 1024:
+        return False, "主機剩餘空間不夠"
+    tmp, left, head = f"{RSW_FILE}.{secrets.token_hex(4)}.part", length, b""
     try:
-        with open(os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600), "wb") as f:
+        with open(os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600), "wb") as f:
             while left > 0:
                 chunk = stream.read(min(left, 1 << 20))
                 if not chunk:
@@ -903,6 +992,10 @@ def _rsw_start(pw):
         subprocess.Popen(cmd, env={**os.environ, **env}, stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
                          stderr=subprocess.DEVNULL, start_new_session=True)
     except OSError as e:
+        try:
+            os.remove(pwf)
+        except OSError:
+            pass
         st.update(stage="wait")                   # 沒開始成功：回到等待，可以再按一次
         rsw_save(st)
         return False, f"沒辦法開始還原：{e}"

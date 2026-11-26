@@ -79,11 +79,34 @@ if [ ! -f "$CONF" ] && [ -t 0 ]; then
     DOMAIN="$(echo "$DOMAIN" | tr -d '[:space:]')"
   fi
 fi
+if [ -n "$DOMAIN" ] && ! [[ "$DOMAIN" =~ ^[A-Za-z0-9]([A-Za-z0-9-]{0,61}[A-Za-z0-9])?(\.[A-Za-z0-9]([A-Za-z0-9-]{0,61}[A-Za-z0-9])?)+$ ]]; then
+  die "網域格式不對：$DOMAIN" "請輸入像 mon.example.com 這樣的網域（不要含 http:// 或路徑）"
+fi
 [ -n "$DOMAIN" ] && TOTAL=$((TOTAL + 1))
 [ -f /opt/vps-cloud/data/config.yaml ] && [ -f "$HERE/cloud.sh" ] && TOTAL=$((TOTAL + 1))
 
-set_conf() {   # set_conf 名稱 值
-  if grep -q "^$1=" "$CONF"; then sed -i "s|^$1=.*|$1=$2|" "$CONF"; else echo "$1=$2" >> "$CONF"; fi
+set_conf() {   # set_conf 名稱 值（原子寫入且維持 0600，避免 sed 特殊字元注入）
+  python3 - "$CONF" "$1" "$2" <<'PY'
+import os, re, sys
+p, k, v = sys.argv[1:4]
+v = re.sub(r"[\r\n]", "", v)
+try:
+    with open(p, encoding="utf-8") as f:
+        txt = f.read()
+except OSError:
+    txt = ""
+line = f"{k}={v}"
+if re.search(rf"(?m)^{re.escape(k)}=.*$", txt):
+    txt = re.sub(rf"(?m)^{re.escape(k)}=.*$", lambda _: line, txt, count=1)
+else:
+    txt = txt.rstrip("\n") + "\n" + line + "\n"
+tmp = p + ".tmp"
+fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+with os.fdopen(fd, "w", encoding="utf-8") as f:
+    f.write(txt)
+os.chmod(tmp, 0o600)
+os.replace(tmp, p)
+PY
 }
 
 # 安裝 Caddy：依序嘗試 ①官方來源 ②Ubuntu 內建 ③直接從 GitHub 下載
@@ -170,7 +193,9 @@ step "設定檔"
 if [ -f "$CONF" ]; then ok "沿用原本的設定（$CONF）"; NEWCONF=""; else NEWCONF=1; fi
 if [ ! -f "$CONF" ]; then
   TOKEN="$(python3 -c 'import secrets;print(secrets.token_urlsafe(18))')"
-  cat > "$CONF" <<EOF
+  (
+    umask 077
+    cat > "$CONF" <<EOF
 # ── 哨站 設定檔 ── 改完執行：sudo systemctl restart vps-sentinel-lite
 
 # 顯示名稱（空白就用主機名稱）
@@ -212,6 +237,7 @@ ALERT_CPU_MINUTES=5
 ALERT_MEM=90
 ALERT_DISK=90
 EOF
+  )
   chmod 600 "$CONF"
   ok "建立新的設定檔（$CONF）"
 fi
@@ -521,8 +547,11 @@ else
     printf '  用手機打開這個網址：\n     %s%s%s\n\n' "$B$C" "$BASE" "$N"
     printf '  第一次登入的 PIN 碼：%s%s%s（登入後要換一組）\n' "$B$C" "$TPIN" "$N"
     printf '  %s忘了 PIN 碼：sudo python3 %s/sentinel.py --new-pin%s\n\n' "$D" "$DIR" "$N"
-  else
+  elif [ -n "$NEWCONF" ] && [ -n "$TOKEN" ]; then
     printf '  用手機打開這個網址（第一次會自動記住密碼）：\n     %s%s#t=%s%s\n\n' "$B$C" "$BASE" "$TOKEN" "$N"
+  else
+    printf '  網址：%s%s%s\n' "$B$C" "$BASE" "$N"
+    printf '  %s（已略過密碼輸出，避免寫入更新紀錄；忘了 PIN 碼可執行 sudo python3 %s/sentinel.py --new-pin）%s\n\n' "$D" "$DIR" "$N"
   fi
   printf '  %s設定檔：%s（改完執行 sudo systemctl restart vps-sentinel-lite）%s\n' "$D" "$CONF" "$N"
   if [ -n "$NEWCONF" ] && PCODE="$(SENTINEL_CONF="$CONF" python3 "$DIR/sentinel.py" --pair-code "${BASE%/}" 2>/dev/null)"; then

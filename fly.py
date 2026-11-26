@@ -585,13 +585,16 @@ KHH_ARR = {1: "準時", 2: "已到", 3: "延誤", 4: "轉降", 5: "取消", 6: "
 KHH_DEP = {1: "準時", 2: "報到", 3: "登機", 4: "已飛", 5: "延誤", 6: "延誤", 7: "取消", 8: "提早"}
 
 
-def fly_get(url, data=None, ua="Mozilla/5.0 (vps-sentinel)", timeout=10):
+def fly_get(url, data=None, ua="Mozilla/5.0 (vps-sentinel)", timeout=10, max_bytes=16 << 20):
     hd = {"User-Agent": ua}
     if data is not None:
         data = json.dumps(data).encode()
         hd["Content-Type"] = "application/json"
     with urllib.request.urlopen(urllib.request.Request(url, data=data, headers=hd), timeout=timeout) as r:
-        return r.read()
+        b = r.read(max_bytes + 1)
+        if len(b) > max_bytes:
+            raise ValueError("response too large")
+        return b
 
 
 # 飛機照片：planespotters.net 的公開介面（不用註冊；要寫攝影者、連回照片頁）；照註冊號查，主機記 14 天（查不到的也記，3 天後再查）
@@ -2298,18 +2301,33 @@ def share_fix(v):
     return v
 
 
+SHARE_CACHE = {"mt": None, "d": {}}
+
+
 def share_load():
     try:
-        d = sec_load(SHARE_FILE)
-    except (OSError, ValueError):
-        d = {}
+        mt = os.stat(SHARE_FILE).st_mtime_ns
+    except OSError:
+        mt = 0
+    if mt != SHARE_CACHE["mt"]:
+        try:
+            raw = sec_load(SHARE_FILE)
+        except (OSError, ValueError):
+            raw = {}
+        SHARE_CACHE.update(mt=mt, d={k: share_fix(v) for k, v in raw.items() if isinstance(v, dict)} if isinstance(raw, dict) else {})
     now = time.time()
-    return {k: share_fix(v) for k, v in d.items() if isinstance(v, dict) and v.get("exp", 0) > now} if isinstance(d, dict) else {}
+    return {k: {**v, "dev": list(v["dev"])} for k, v in SHARE_CACHE["d"].items() if v.get("exp", 0) > now}
 
 
 def share_save(d):
     os.makedirs(DATA_DIR, exist_ok=True)
     sec_dump(SHARE_FILE, d)
+    SHARE_CACHE.update(mt=None)
+
+
+def _share_free_tok(h):
+    """不限裝置數（max=0）的無狀態簽章通行碼：不寫入 fly-share.json，避免無上限膨脹"""
+    return "u_" + _sign("fly-dev:" + h)
 
 
 def share_new(secs=None, devs=1, ap="", name=""):
@@ -2359,9 +2377,11 @@ def share_claim(code, dev):
         e = d.get(h)
         if not e:
             return None, "連結已經失效", ""
+        if not e["max"]:
+            return _share_free_tok(h), int(e["exp"] - time.time()), e["ap"]
         if dev and any(hmac.compare_digest(hashlib.sha256(str(dev).encode()).hexdigest(), x) for x in e["dev"]):
             return dev, int(e["exp"] - time.time()), e["ap"]
-        if e["max"] and len(e["dev"]) >= e["max"]:
+        if len(e["dev"]) >= e["max"]:
             return None, "這個連結已經在別的手機打開過" if e["max"] == 1 else f"這個連結已經有 {e['max']} 支手機打開過", ""
         dev = secrets.token_urlsafe(16)
         e["dev"].append(hashlib.sha256(dev.encode()).hexdigest())
@@ -2374,6 +2394,11 @@ def share_ok(given):
     code, _, dev = str(given or "").partition(":")
     if not code.startswith("fs_") or not dev:
         return None
-    e = share_load().get(hashlib.sha256(code.encode()).hexdigest())
+    h = hashlib.sha256(code.encode()).hexdigest()
+    e = share_load().get(h)
+    if not e:
+        return None
+    if not e["max"] and hmac.compare_digest(dev, _share_free_tok(h)):
+        return e
     hd = hashlib.sha256(dev.encode()).hexdigest()
-    return e if e and any(hmac.compare_digest(hd, x) for x in e["dev"]) else None
+    return e if any(hmac.compare_digest(hd, x) for x in e["dev"]) else None

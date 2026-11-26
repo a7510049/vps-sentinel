@@ -174,9 +174,14 @@ def note_auth(h, c):
     if raw:
         with NOTE_LOCK:
             NOTE_FAILS.setdefault(ip, []).append(now)
-            if len(NOTE_FAILS) > 5000:            # 很多來源一直亂試：只留最近的
-                for k in list(NOTE_FAILS)[:2500]:
-                    NOTE_FAILS.pop(k, None)
+            if len(NOTE_FAILS) > 5000:            # 很多來源一直亂試：先清過期，再只清未封鎖的（不擠掉封鎖中 IP）
+                for k in list(NOTE_FAILS):
+                    NOTE_FAILS[k] = [t for t in NOTE_FAILS[k] if now - t < 600]
+                    if not NOTE_FAILS[k]:
+                        NOTE_FAILS.pop(k, None)
+                if len(NOTE_FAILS) > 5000:
+                    for k in [x for x, v in NOTE_FAILS.items() if len(v) < 10][:2500]:
+                        NOTE_FAILS.pop(k, None)
         time.sleep(1)
     return 401, "要帳號密碼"
 
@@ -237,11 +242,10 @@ def note_body(h, dst, room):
     chunked = left is None and "chunked" in (h.headers.get("Transfer-Encoding") or "").lower()
     got = 0
     if left is not None:
-        try:
-            left = int(left)
-        except ValueError:
+        if not re.fullmatch(r"\d+", left.strip()):
             return False
-        if left < 0 or left > room:
+        left = int(left.strip())
+        if left > room:
             return False
         while left > 0:
             buf = h.rfile.read(min(left, 1 << 20))
@@ -253,14 +257,15 @@ def note_body(h, dst, room):
     if not chunked:
         return True                                   # 沒有內容：空檔案
     while True:
-        try:
-            n = int(h.rfile.readline(64).split(b";")[0].strip() or b"0", 16)
-        except ValueError:
+        tok = h.rfile.readline(64).split(b";")[0].strip()
+        if not re.fullmatch(rb"[0-9a-fA-F]{1,16}", tok):
             return False
+        n = int(tok, 16)
         if n == 0:
-            while h.rfile.readline(1024).strip():
-                pass
-            return True
+            for _ in range(32):
+                if not h.rfile.readline(1024).strip():
+                    return True
+            return False
         got += n
         if got > room:
             return False
@@ -271,6 +276,27 @@ def note_body(h, dst, room):
             dst.write(buf)
             n -= len(buf)
         h.rfile.readline(8)
+
+
+def _note_size(p):
+    """計算檔案或資料夾大小（不跟隨捷徑）"""
+    if os.path.islink(p):
+        return 0
+    if os.path.isfile(p):
+        try:
+            return os.lstat(p).st_size
+        except OSError:
+            return 0
+    tot = 0
+    for r, _, fns in os.walk(p, followlinks=False):
+        for fn in fns:
+            fp = os.path.join(r, fn)
+            if not os.path.islink(fp):
+                try:
+                    tot += os.lstat(fp).st_size
+                except OSError:
+                    pass
+    return tot
 
 
 def note_room(d):
@@ -395,7 +421,8 @@ def note_dav(h):
         existed = os.path.exists(full)
         tmp = f"{full}.{secrets.token_hex(4)}.note-tmp"
         try:
-            with open(tmp, "wb") as f:
+            fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600)
+            with os.fdopen(fd, "wb") as f:
                 ok = note_body(h, f, note_room(root))
             if not ok:
                 os.remove(tmp)
@@ -437,8 +464,13 @@ def note_dav(h):
             return note_reply(h, 400, "目的地不對")
         if not os.path.lexists(full):
             return note_reply(h, 404, "找不到")
+        rsrc, rdst = os.path.realpath(full), os.path.realpath(dst)
+        if rsrc == rdst or rdst.startswith(rsrc + os.sep):
+            return note_reply(h, 403, "目的地不能與來源相同或在來源底下")
         if not os.path.isdir(os.path.dirname(dst)):
             return note_reply(h, 409, "上一層資料夾不在")
+        if m == "COPY" and _note_size(full) > note_room(root):
+            return note_reply(h, 507, "空間不夠")
         existed = os.path.lexists(dst)
         if existed and (h.headers.get("Overwrite") or "T").strip().upper() == "F":
             return note_reply(h, 412, "已經有了")

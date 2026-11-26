@@ -21,6 +21,7 @@ import html
 import json
 import math
 import os
+import posixpath
 import re
 import secrets
 import string
@@ -45,7 +46,7 @@ from collections import deque
 from concurrent.futures import ThreadPoolExecutor
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
-VERSION = "5.37"
+VERSION = "5.38"
 
 # ───────────────────────── 哨兵備份檔（.vsbk）─────────────────────────
 # 哨兵專用的備份格式：外面是自己的檔案格式，裡面用的是成熟、標準的加密方法（不自己發明加密）：
@@ -345,17 +346,29 @@ def rs_download(url, td):
 
 def rs_members(tar):
     """檢查備份裡的每個檔案：只接受一般檔案、資料夾、捷徑，而且不能跑到別的地方去
-    （也不能放在備份裡另一個捷徑「底下」：不然會順著捷徑寫到別的地方，例如 etc/x → /root 再放 etc/x/檔案）"""
-    out, links = [], set()
+    （也不能放在備份裡另一個捷徑「底下」或與捷徑同路徑：不然會順著捷徑寫到別的地方，例如 etc/x → /root 再放 etc/x/檔案）"""
+    out, links, seen = [], set(), set()
     for m in tar.getmembers():
         parts = m.name.split("/")
         if m.name.startswith("/") or ".." in parts or not (m.isfile() or m.isdir() or m.issym()):
             continue
         norm = os.path.normpath(m.name).split("/")
-        if any("/".join(norm[:i]) in links for i in range(1, len(norm))):
+        if norm == ["."]:
+            continue
+        full = "/".join(norm)
+        if any("/".join(norm[:i]) in links for i in range(1, len(norm) + 1)):
             continue
         if m.issym():
-            links.add("/".join(norm))
+            if not m.linkname:
+                continue
+            if not m.linkname.startswith("/"):
+                tgt = posixpath.normpath(posixpath.join(posixpath.dirname(full), m.linkname))
+                if tgt == ".." or tgt.startswith("../"):
+                    continue
+            links.add(full)
+        elif full in seen:
+            continue
+        seen.add(full)
         if m.name == RS_MANIFEST or (len(parts) == 1 and m.name.endswith(".txt")):
             continue                                    # 還原說明、還原資料：不用放到主機上
         out.append(m)
@@ -790,12 +803,20 @@ def sec_write(path, data, plain=False):
         data = data.encode("utf-8")
     if not plain:
         data = seal_bytes(data, b"file:" + os.path.basename(path).encode())
-    tmp = path + ".tmp"
-    fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
-    with os.fdopen(fd, "wb") as f:
-        f.write(data)
-    os.chmod(tmp, 0o600)
-    os.replace(tmp, path)
+    tmp = f"{path}.{os.getpid()}.{os.urandom(4).hex()}.tmp"
+    flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL | getattr(os, "O_NOFOLLOW", 0)
+    fd = os.open(tmp, flags, 0o600)
+    try:
+        with os.fdopen(fd, "wb") as f:
+            f.write(data)
+        os.chmod(tmp, 0o600)
+        os.replace(tmp, path)
+    except OSError:
+        try:
+            os.unlink(tmp)
+        except OSError:
+            pass
+        raise
 
 
 def sec_dump(path, obj, **kw):
@@ -1672,16 +1693,20 @@ def git(d, *args, timeout=30):
 
 def src_dir():
     """找安裝來源資料夾（git clone 下來的那個）"""
-    for d in [C.get("SRC_DIR", ""), "/root/vps-sentinel", *glob.glob("/home/*/vps-sentinel")]:
-        # 會用 root 身分執行裡面的 install.sh：只認 root 或資料夾所在家目錄的主人建立的，別的使用者放的不算
+    conf_d = C.get("SRC_DIR", "")
+    for idx, d in enumerate([conf_d, "/root/vps-sentinel"]):
+        if not d:
+            continue
+        # 設定檔（root 0600）明確記的 SRC_DIR 保留相容 ~/vps-sentinel（仍拒絕對外可寫或捷徑）；未設定時只認 root 擁有的 /root/vps-sentinel
         try:
-            own = os.stat(d).st_uid if d else -1
-            home = os.stat(os.path.dirname(d)).st_uid if d.startswith("/home/") else 0
+            st = os.lstat(d)
         except OSError:
             continue
-        if own not in (0, home):
+        if stat.S_ISLNK(st.st_mode) or not stat.S_ISDIR(st.st_mode) or (st.st_mode & 0o002):
             continue
-        if d and os.path.isdir(os.path.join(d, ".git")) and os.path.isfile(os.path.join(d, "install.sh")):
+        if idx > 0 and os.geteuid() == 0 and (st.st_uid != 0 or (st.st_mode & 0o022)):
+            continue
+        if os.path.isdir(os.path.join(d, ".git")) and os.path.isfile(os.path.join(d, "install.sh")):
             return d
     return ""
 
@@ -4687,9 +4712,14 @@ class Handler(BaseHTTPRequestHandler):
             except ValueError:
                 local = False
             host = (self.headers.get("Host") or "").strip()
-            if not local and re.fullmatch(r"[A-Za-z0-9.\-]+(:\d+)?|\[[0-9A-Fa-f:.]+\](:\d+)?", host):
+            dom = (C.get("DOMAIN") or "").strip().lower()
+            host_ok = re.fullmatch(r"[A-Za-z0-9.\-]+(:\d+)?|\[[0-9A-Fa-f:.]+\](:\d+)?", host)
+            if dom and host_ok and pk_rp(host) != dom:
+                host_ok = None
+            safe_path = self.path if self.path.startswith("/") and not self.path.startswith("//") else "/"
+            if not local and host_ok:
                 self.send_response(301)
-                self.send_header("Location", f"https://{host}{self.path}")
+                self.send_header("Location", f"https://{host}{safe_path}")
                 self.send_header("Content-Length", "0")
                 self.send_header("Connection", "close")
                 self.end_headers()
@@ -4698,7 +4728,24 @@ class Handler(BaseHTTPRequestHandler):
         return True
 
     def https(self):
-        return isinstance(self.connection, ssl.SSLSocket) or (self.headers.get("X-Forwarded-Proto") or "").lower() == "https"
+        if isinstance(self.connection, ssl.SSLSocket):
+            return True
+        if self.client_address[0] in ("127.0.0.1", "::1", "::ffff:127.0.0.1"):
+            return (self.headers.get("X-Forwarded-Proto") or "").lower() == "https"
+        return False
+
+    def read_body(self, limit):
+        """安全讀取請求內文：拒絕負值或非數字 Content-Length，避免 rfile.read(-1) 無上限吃光記憶體"""
+        raw = (self.headers.get("Content-Length") or "0").strip()
+        if not re.fullmatch(r"\d+", raw):
+            self.close_connection = True
+            return None
+        n = min(int(raw), limit)
+        try:
+            return self.rfile.read(n) if n else b""
+        except OSError:
+            self.close_connection = True
+            return None
 
     def send(self, code, body, ctype="application/json; charset=utf-8", cache=False, csp="", etag=False, extra=()):
         data = body if isinstance(body, bytes) else body.encode("utf-8")
@@ -4728,6 +4775,8 @@ class Handler(BaseHTTPRequestHandler):
         self.send_header("X-Frame-Options", "DENY")              # 不讓別的網站把哨兵嵌進去騙你點按鈕
         self.send_header("Content-Security-Policy", "frame-ancestors 'none'" + csp)
         self.send_header("Referrer-Policy", "no-referrer")       # 點外部連結時不帶出哨兵的網址
+        if isinstance(self.connection, ssl.SSLSocket):
+            self.send_header("Strict-Transport-Security", "max-age=31536000")
         for k, v in extra:
             self.send_header(k, v)
         self.end_headers()
@@ -4814,11 +4863,8 @@ class Handler(BaseHTTPRequestHandler):
         if u.path == "/cloud-sso":                     # 從哨兵點進來：一次性登入票（表單送的，不在網址上）換一張 30 天的通行證
             ok = False
             if self.command == "POST":
-                try:
-                    n = min(int(self.headers.get("Content-Length") or 0), 4096)
-                    t = urllib.parse.parse_qs(self.rfile.read(n).decode("utf-8", "replace")).get("t", [""])[0]
-                except (ValueError, OSError):
-                    t = ""
+                raw = self.read_body(4096)
+                t = urllib.parse.parse_qs(raw.decode("utf-8", "replace")).get("t", [""])[0] if raw is not None else ""
                 ok = cloud_ticket_use(t)
             go = ok or self.cloud_authed()             # 票用過了，但已經有通行證：一樣直接進去
             self.send_response(303)
@@ -4829,8 +4875,17 @@ class Handler(BaseHTTPRequestHandler):
             self.send_header("Content-Length", "0")
             self.end_headers()
             return
+        raw_p = urllib.parse.unquote(u.path)
+        norm_p = posixpath.normpath(raw_p)
+        if (".." in raw_p.split("/") or "//" in u.path or "\\" in raw_p
+                or re.search(r"%2[ef]|%5c", u.path, re.I)
+                or not (norm_p == "/cloud" or norm_p.startswith("/cloud/"))):
+            self.close_connection = True
+            return self.send(400, '{"error":"路徑不合法"}')
+        if u.path.endswith("/") and not norm_p.endswith("/"):
+            norm_p += "/"
         authed = self.cloud_authed()
-        public = u.path.startswith(("/cloud/public/", "/cloud/static/", "/cloud/health"))
+        public = norm_p.startswith(("/cloud/public/", "/cloud/static/", "/cloud/health"))
         if not authed and not public and self.command == "GET" and "text/html" in (self.headers.get("Accept") or ""):
             self.send_response(302)                     # 還沒登入哨兵：先到哨兵登入，登入後自動回來
             self.send_header("Location", "/?go=cloud")
@@ -4840,6 +4895,10 @@ class Handler(BaseHTTPRequestHandler):
         self.close_connection = True
         if not authed and not public and self.command not in ("GET", "HEAD", "OPTIONS"):
             return self.send(401, '{"error":"請先登入"}')    # 還沒登入就想上傳、修改：內容不收，直接擋掉
+        length = self.headers.get("Content-Length")
+        if length is not None and not re.fullmatch(r"\d+", length.strip()):
+            return self.send(400, '{"error":"請求大小不合法"}')
+        spool = None
         try:
             conn = http.client.HTTPConnection("127.0.0.1", CLOUD_PORT, timeout=3600)
             conn.putrequest(self.command, self.path, skip_host=True, skip_accept_encoding=True)
@@ -4847,31 +4906,37 @@ class Handler(BaseHTTPRequestHandler):
                 if k.lower() not in self.HOP and k.lower() not in ("content-length", CLOUD_USER_HEADER.lower(),
                                                                    "x-forwarded-for", "x-forwarded-proto"):
                     conn.putheader(k, v)
-            conn.putheader("X-Forwarded-For", self.headers.get("X-Forwarded-For") or self.client_address[0])
+            conn.putheader("X-Forwarded-For", self.client_ip())
             conn.putheader("X-Forwarded-Proto", "https" if self.https() else "http")
             if authed:
                 conn.putheader(CLOUD_USER_HEADER, CLOUD_OWNER)
-            length = self.headers.get("Content-Length")
-            spool = None
             if length is None and "chunked" in (self.headers.get("Transfer-Encoding") or "").lower():
                 spool = tempfile.SpooledTemporaryFile(max_size=8 << 20)   # 分段上傳：先收齊（大的放暫存檔）再轉
+                tot = 0
                 while True:
-                    n = int(self.rfile.readline().split(b";")[0].strip() or b"0", 16)
+                    tok = self.rfile.readline(64).split(b";")[0].strip()
+                    if not re.fullmatch(rb"[0-9a-fA-F]{1,16}", tok):
+                        raise OSError("分段格式不對")
+                    n = int(tok, 16)
                     if n == 0:
-                        while self.rfile.readline().strip():
-                            pass
+                        for _ in range(32):
+                            if not self.rfile.readline(1024).strip():
+                                break
                         break
+                    tot += n
+                    if tot > (2 << 30):
+                        raise OSError("檔案太大")
                     while n > 0:                       # 一次最多讀 1 MB，對方說一段很大也不會一口氣吃掉記憶體
                         buf = self.rfile.read(min(n, 1 << 20))
                         if not buf:
                             raise OSError("傳到一半斷掉了")
                         spool.write(buf)
                         n -= len(buf)
-                    self.rfile.readline()
+                    self.rfile.readline(4)
                 length = str(spool.tell())
                 spool.seek(0)
             if length is not None:
-                conn.putheader("Content-Length", length)
+                conn.putheader("Content-Length", length.strip())
             conn.endheaders()
             src = spool or self.rfile
             if length is not None:                     # 上傳的檔案邊收邊轉，不會整個放進記憶體
@@ -4886,11 +4951,14 @@ class Handler(BaseHTTPRequestHandler):
         except Exception:  # noqa: BLE001
             return self.send(502, "<meta charset=utf-8><p style='font:16px sans-serif;padding:24px'>雲端硬碟目前打不開，請稍後再試，或在主機上執行 <b>bash cloud.sh 檢查</b></p>",
                              "text/html; charset=utf-8")
+        finally:
+            if spool is not None:
+                spool.close()
         self.send_response(r.status, r.reason)
         for k, v in r.getheaders():
             if k.lower() not in self.HOP:
                 self.send_header(k, v)
-        if re.match(r"/cloud/(public/)?api/", self.path):   # 雲端硬碟裡的檔案（可能是網路上下載來的網頁）直接打開時不能跑程式，不然讀得到哨兵的登入
+        if re.match(r"/cloud/(?:public/)?(?:api|raw)/", norm_p):   # 雲端硬碟裡的檔案（可能是網路上下載來的網頁）直接打開時不能跑程式，不然讀得到哨兵的登入
             self.send_header("Content-Security-Policy", "sandbox")
             self.send_header("X-Content-Type-Options", "nosniff")
         self.end_headers()
@@ -5152,8 +5220,9 @@ class Handler(BaseHTTPRequestHandler):
                 time.sleep(1)
                 return self.send(401, '{"error":"密碼錯誤"}')
             q = urllib.parse.parse_qs(urllib.parse.urlsplit(self.path).query, keep_blank_values=True)
-            if sh and sh["ap"]:                       # 只分享一個機場：其他機場一律換成這個
-                for k in ("ap", "geo", "trk"):
+            if sh and sh["ap"]:                       # 只分享一個機場：不管網址有沒有帶 ap，其他機場一律換成這個
+                q["ap"] = [sh["ap"]]
+                for k in ("geo", "trk"):
                     if k in q:
                         q[k] = [sh["ap"]]
             return self.send(200, json.dumps(fly_api(q), ensure_ascii=False))
@@ -5236,28 +5305,24 @@ class Handler(BaseHTTPRequestHandler):
             if not (self.authed() or self.restore_code_ok()):
                 return self.restore_denied("代碼不對，請看安裝完成時終端機上顯示的還原代碼")
             if u.path == "/api/restore-upload":
-                try:
-                    length = int(self.headers.get("Content-Length") or 0)
-                except ValueError:
-                    length = 0
-                ok, msg = rsw_store(self.rfile, length)
+                raw_len = (self.headers.get("Content-Length") or "0").strip()
+                length = int(raw_len) if re.fullmatch(r"\d+", raw_len) else -1
+                ok, msg = (False, "大小不對") if length < 0 else rsw_store(self.rfile, length)
                 if not ok:
                     self.close_connection = True       # 沒讀完的內容不要留在連線裡
             else:
-                try:
-                    n = int(self.headers.get("Content-Length") or 0)
-                except ValueError:
-                    n = 0
-                ok, msg = rsw_start(self.jbody(self.rfile.read(min(n, 4096))).get("pw"))
+                raw = self.read_body(4096)
+                if raw is None:
+                    return self.send(400, '{"ok":false,"message":"請求大小不合法"}')
+                ok, msg = rsw_start(self.jbody(raw).get("pw"))
             return self.send(200 if ok else 400, json.dumps({"ok": ok, "message": msg}, ensure_ascii=False))
         if u.path.startswith("/api/fly") and watchers():   # 被監看的主機不提供機場起降
             return self.send(404, '{"error":"找不到"}')
         if u.path == "/api/fly-claim":               # 朋友打開分享連結（不用登入）
-            try:
-                n = int(self.headers.get("Content-Length") or 0)
-            except ValueError:
-                n = 0
-            b = self.jbody(self.rfile.read(min(n, 4096)))
+            raw = self.read_body(4096)
+            if raw is None:
+                return self.send(400, '{"ok":false,"error":"請求大小不合法"}')
+            b = self.jbody(raw)
             dev, left, ap = share_claim(b.get("code"), b.get("dev"))
             if not dev:
                 time.sleep(1)
@@ -5267,11 +5332,10 @@ class Handler(BaseHTTPRequestHandler):
             if not self.authed():
                 time.sleep(1)
                 return self.send(401, '{"error":"密碼錯誤"}')
-            try:
-                n = int(self.headers.get("Content-Length") or 0)
-            except ValueError:
-                n = 0
-            b = self.jbody(self.rfile.read(min(n, 4096))) if n else {}
+            raw = self.read_body(4096)
+            if raw is None:
+                return self.send(400, '{"ok":false,"error":"請求大小不合法"}')
+            b = self.jbody(raw) if raw else {}
             if b.get("op") == "list":
                 return self.send(200, json.dumps({"ok": True, "list": share_list()}, ensure_ascii=False))
             if b.get("op") == "del":
@@ -5283,22 +5347,20 @@ class Handler(BaseHTTPRequestHandler):
                 time.sleep(1)
                 return self.send(401, '{"error":"密碼錯誤"}')
             q = urllib.parse.parse_qs(u.query)
-            try:
-                length = int(self.headers.get("Content-Length") or 0)
-            except ValueError:
-                length = 0
+            raw_len = (self.headers.get("Content-Length") or "0").strip()
+            length = int(raw_len) if re.fullmatch(r"\d+", raw_len) else -1
             was = (q.get("was") or [""])[0][:40]
-            ok, msg, _ = bk_store((q.get("from") or ["其他主機"])[0][:40], (q.get("file") or [""])[0], self.rfile, length,
-                                  aliases=(was,) if was else ())
+            ok, msg, _ = ((False, "大小不對", None) if length < 0 else
+                          bk_store((q.get("from") or ["其他主機"])[0][:40], (q.get("file") or [""])[0], self.rfile, length,
+                                   aliases=(was,) if was else ()))
             if not ok:
                 self.close_connection = True       # 沒收完的資料不要留在連線上
             return self.send(200 if ok else 400, json.dumps({"ok": ok, "message": msg}, ensure_ascii=False))
-        try:
-            size = min(int(self.headers.get("Content-Length") or 0),
-                       16384 if u.path.startswith("/api/passkey") or u.path in ("/api/cloud-open", "/api/adguard-open") else 400000 if u.path == "/api/download" else 4096)
-            body = self.rfile.read(size) if size else b""
-        except (ValueError, OSError):
-            body = b""
+        limit = (16384 if u.path.startswith("/api/passkey") or u.path in ("/api/cloud-open", "/api/adguard-open")
+                 else 400000 if u.path == "/api/download" else 4096)
+        body = self.read_body(limit)
+        if body is None:
+            return self.send(400, '{"ok":false,"error":"請求大小不合法"}')
         if u.path == "/api/passkey-login":           # 還沒登入：用手機金鑰換到存取密碼
             return self.passkey_login(body)
         if u.path == "/api/pin-login":               # 還沒登入：用 PIN 碼換到這台裝置自己的登入鑰匙
@@ -5532,12 +5594,15 @@ class Handler(BaseHTTPRequestHandler):
             if self.sess:
                 return self.send(403, '{"ok":false}')
             try:
-                h = ab_probe_ok(str(json.loads(body or b"{}").get("host") or ""))
+                raw_h = str(json.loads(body or b"{}").get("host") or "").strip().lower().rstrip(".")
             except (ValueError, AttributeError):
-                h = ""
-            if not h:
+                raw_h = ""
+            if not AB_DOMRE.fullmatch(raw_h) or "." not in raw_h:
                 return self.send(400, '{"ok":false}')
-            return self.send(200, json.dumps({"ok": True, "err": ab_dot_probe(h)}, ensure_ascii=False))
+            h, ips = ab_probe_ips(raw_h)
+            if not h or not ips:
+                return self.send(200, json.dumps({"ok": True, "err": f"{AB_DOT} 埠連不上（找不到合法公網位址）"}, ensure_ascii=False))
+            return self.send(200, json.dumps({"ok": True, "err": ab_dot_probe(h, ips)}, ensure_ascii=False))
         if u.path == "/api/cloud-ticket":           # 主要主機驗證過了，來拿這台雲端硬碟的登入票（只給主機之間的鑰匙）
             if self.sess or not CLOUD_URL:
                 return self.send(403 if self.sess else 404, '{"ok":false}')
