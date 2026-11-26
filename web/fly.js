@@ -126,9 +126,10 @@ function flyObs(f){
 function flyStuck(f){
   const t = f.querySelector(".ftabs"), sc = f.querySelector(".fscroll");
   if (!t || !sc || !window.IntersectionObserver) return;
-  new IntersectionObserver(([e]) => { const away = !e.isIntersecting && e.boundingClientRect.top < e.rootBounds.top;
+  f._so = new IntersectionObserver(([e]) => { const away = !e.isIntersecting && e.boundingClientRect.top < e.rootBounds.top;
     f.classList.toggle("tabsaway", away); f.querySelector(".fmini").tabIndex = away ? 0 : -1; if (!away && window._menu && window._menu._fmini) closeMenu(); },
-    {root: sc, rootMargin: "0px 100% 0px 100%"}).observe(t);
+    {root: sc, rootMargin: "0px 100% 0px 100%"});
+  f._so.observe(t);
 }
 const flyNum = (f, k) => { const e = f.querySelector(`.ftabs [data-k="n-${k}"]`); return e ? e.dataset.n ?? e.textContent : ""; };   // 分頁上的班數（翻牌翻到一半也拿到新的）
 function flyMini(f){
@@ -234,33 +235,34 @@ function flySplashOn(f){
 }
 /* 資料到了：載入畫面淡掉，上面到下面一塊一塊浮上來（至少讓飛機飛一段，不會一閃就不見） */
 function flySplashOff(f){
-  if (!f.classList.contains("splash") || f._spOff) return;
+  if (!f || !f.classList.contains("splash") || f._spOff) return;
   f._spOff = 1;
   f._spT = setTimeout(() => {
+    if (!f.isConnected || f._bye) return;
     const sp = f.querySelector(".fsplash");
-    sp.animate([{opacity:1}, {opacity:0, transform:"scale(1.04)"}], {duration:T.mid, easing:EXIT, fill:"forwards"}).finished.then(() => sp.remove(), () => sp.remove());
+    if (sp) sp.animate([{opacity:1}, {opacity:0, transform:"scale(1.04)"}], {duration:T.mid, easing:EXIT, fill:"forwards"}).finished.then(() => sp.remove(), () => sp.remove());
     f.classList.remove("splash");
     flyRise(f, T.fast * .5);
   }, Math.max(T.mid, T.long * 2 - (performance.now() - f._sp0)));   // 資料到了也多等一下：看板先在後面排好、長好
 }
-/* 打開、換機場資料到了：上面到下面一塊一塊浮上來。電腦上看板和雷達是同一張卡片（.fleft 拆開排），兩邊一起浮，不會一邊先出來 */
+/* 打開、換機場資料到了：直接對各張毛玻璃卡片做進場動畫（不對 .fleft／.fmain 外層設 opacity，避免手機端毛玻璃閃一下） */
 function flyRise(f, d0){
-  if (!canAnim()) return;
+  if (!f || !canAnim()) return;
   const wide = getComputedStyle(f.querySelector(".fleft")).display === "contents", gs = [];
   [...f.querySelectorAll(".fwrap>:not(.ftop):not(.fmain), .fmain>*")].forEach(e => {
-    if (e.classList.contains("fleft") && wide) [...e.children].forEach(c => c.classList.contains("board") ? gs.push([c, f.querySelector(".radar")]) : gs.push([c]));
+    if (e.classList.contains("fleft")) [...e.children].forEach(c => wide && c.classList.contains("board") ? gs.push([c, f.querySelector(".radar")]) : gs.push([c]));
     else if (!(wide && e.classList.contains("radar"))) gs.push([e]);
   });
   gs.filter(g => g.some(e => !e.hidden)).forEach((g, i) => g.forEach(e => e.animate([{opacity:0, transform:"translateY(16px)"}, {opacity:1, transform:"none"}], {duration:T.slow, delay:d0 + i * T.fast * .35, easing:EASE, fill:"backwards"})));
 }
 /* 換機場：看板、雷達先淡掉，換成小飛機的載入畫面（翻出新機場代碼），資料在後面準備好才一塊一塊浮上來 */
 function flySplashSwap(f){
-  if (!canAnim()) return;
+  if (!f || !f.isConnected || !canAnim()) return;
   clearTimeout(f._spT); f._spOff = 0; f._sp0 = performance.now();
   const set = () => { flapSet(f.querySelector(".fspc .sf"), FLYS.ap); txt(f.querySelector(".fspn"), FLYS.name || ""); };
   if (f.classList.contains("splash")) return set();         // 載入畫面還在：只換代碼
   f.querySelectorAll(".fsplash").forEach(e => e.remove());
-  const els = [...f.querySelectorAll(".fwrap>:not(.ftop)")];
+  const els = [...f.querySelectorAll(".fwrap>:not(.ftop):not(.fmain), .fleft>*, .fmain>.radar")];
   els.forEach(e => e.getAnimations().forEach(a => a.cancel()));
   els.forEach(e => e.animate([{opacity:1}, {opacity:0}], {duration:T.fast, easing:EXIT, fill:"forwards", id:"fsw"}));
   f.insertAdjacentHTML("beforeend", flySplash());
@@ -268,6 +270,7 @@ function flySplashSwap(f){
   f.classList.add("splash");
   sp.animate([{opacity:0, transform:"scale(.96)"}, {opacity:1, transform:"none"}], {duration:T.mid, delay:T.fast * .5, easing:EASE, fill:"backwards"});
   setTimeout(() => {                                          // 淡完：捲回最上面，拿掉淡出（splash 本身會藏著）
+    if (!f.isConnected) return;
     els.forEach(e => e.getAnimations().forEach(a => { if (a.id === "fsw") a.cancel(); }));
     const sc = f.querySelector(".fscroll"); if (sc) sc.scrollTop = 0;
     if (f.classList.contains("splash")) set();
@@ -452,7 +455,7 @@ function radarView(cv, full){
     R.kick();
   };
   const idle = () => { cv.parentNode.classList.toggle("off", !!(R.inv || R.hid)); if (!R.inv && !R.hid) R.kick(); };   // 看不到的時候掃描光也停下來（一直轉很耗電）
-  if (!full && window.IntersectionObserver) new IntersectionObserver(es => { R.inv = !es[es.length - 1].isIntersecting; idle(); }).observe(cv);
+  if (!full && window.IntersectionObserver) { R._io = new IntersectionObserver(es => { R.inv = !es[es.length - 1].isIntersecting; idle(); }); R._io.observe(cv); }
   R.hide = on => { R.hid = on; if (!on) R.qt = 0; idle(); };                   // 整頁雷達蓋在上面：小雷達先不畫
   R.fit = r => Math.min(R.W, R.H) / 2 * (full ? .92 : 61 / 62) / r;   // 半徑 r 公里剛好放進畫面
   /* 視角：中心（公里）和比例（每公里幾點）；anim 時慢慢移過去 */
@@ -536,7 +539,7 @@ function radarView(cv, full){
     return best && best.p;
   };
   R.kick = () => { if (!R.raf && !R.off) { clearTimeout(R.tm); R.tm = 0; R.raf = requestAnimationFrame(R.frame); } };
-  R.stop = () => { cancelAnimationFrame(R.raf); clearTimeout(R.tm); R.raf = R.tm = 0; R.off = true; };
+  R.stop = () => { cancelAnimationFrame(R.raf); clearTimeout(R.tm); R.raf = R.tm = 0; R.off = true; if (R._io) { R._io.disconnect(); R._io = null; } };
   R.frame = t => {
     R.raf = 0;
     if (R.off || !cv.isConnected) return;
@@ -1426,7 +1429,7 @@ function flyRows(f, d, list, n, byHr, tz, anim){
     FLYF.forEach((k, j) => flapSet(r.querySelector(`.fk.${k} .sf`), k === "st" ? flyRight(v.st, FLYW.st) : v[k], i * T.fast * .35 + j * T.fast * .2, off));
     FLYX.forEach(k => put(r.querySelector(k === "pl" ? ".plt" : `.fk.${k}`), v[k]));
     const fl = r.querySelector(".flg");
-    if ((fl.dataset.c || "") !== v.cc) { fl.dataset.c = v.cc; fl.classList.remove("ok"); v.cc ? fl.src = `/api/fly-logo?k=@${v.cc}` : fl.removeAttribute("src"); fl.hidden = !v.cc; }
+    if ((fl.dataset.c || "") !== v.cc) { fl.dataset.c = v.cc; fl.classList.remove("ok"); fl.style.visibility = ""; v.cc ? fl.src = `/api/fly-logo?k=@${v.cc}` : fl.removeAttribute("src"); fl.hidden = !v.cc; }
     flyLogoSet(r.querySelector(".fk.fal .alg"), p ? flyAl(p.fn) : "");
     const [tag, tk] = flyTags(p, v), tc = "ftag" + (tag ? " on" + (tk ? " " + tk : "") : ""), te = r.querySelector(".ftag");
     if (te.textContent !== tag || te.className !== tc) { const was = te.textContent; te.textContent = tag; te.className = tc;
@@ -1581,7 +1584,7 @@ async function flyLoad(anim){
     if (SHARE && r.status === 401) return shareGone("連結已經失效");
     let d = await r.json();
     if (d.ok && d.v && !flyUnslim(d, pv)) {                  // 接不回來（不該發生）：整張重拿
-      FLYSLIM = {}; d = await (await api("/api/flights?ap=" + encodeURIComponent(ap), {headers:flyHdr()})).json(); flyUnslim(d, null);
+      FLYSLIM = {}; d = await (await api("/api/flights?ap=" + encodeURIComponent(ap), {headers:flyHdr()})).json(); if (d.ok && d.v) flyUnslim(d, null);
     }
     await FLYHOLD;
     if (!same()) return;
@@ -1616,8 +1619,8 @@ function flyOpen(btn){
   if ($("#fly")) return;
   closeMenu();
   document.body.insertAdjacentHTML("beforeend", flyShell());
-  const f = $("#fly"), z = ZM(), r = btn && btn.getBoundingClientRect(), x = $(".dash.d") ? 96 : 0;   // 電腦：從分頁列右邊開始
-  if (r) f.style.cssText = `--ct:${r.top / z}px;--cb:${(innerHeight - r.bottom) / z}px;--cl:${Math.max(0, r.left / z - x)}px;--cr:${(innerWidth - r.right) / z}px`;
+  const f = $("#fly"), z = ZM(), r = btn && btn.getBoundingClientRect();
+  if (r) f.style.cssText = `--ct:${r.top / z}px;--cb:${(innerHeight - r.bottom) / z}px;--cl:${Math.max(0, r.left / z)}px;--cr:${(innerWidth - r.right) / z}px`;
   if (!canAnim()) f.style.animation = "none";
   flyStuck(f);
   if (!SHARE) history.pushState({fly:1}, "");          // 分享連結只有這一頁，不能返回
@@ -1636,14 +1639,17 @@ function flyOpen(btn){
     const r = e.currentTarget.getBoundingClientRect(), z = ZM(), p = f._rv.hit((e.clientX - r.left) / z, (e.clientY - r.top) / z);
     fradOpen(); if (p) fradPick(p.id);
   });
-  if (window.ResizeObserver) new ResizeObserver(() => f._rv.resize()).observe(f.querySelector(".rbox"));   // 雷達變大變小：畫布跟著重設
+  if (window.ResizeObserver) { f._ro = new ResizeObserver(() => f._rv.resize()); f._ro.observe(f.querySelector(".rbox")); }   // 雷達變大變小：畫布跟著重設
 }
 function flyClose(){ if (!$("#fly") || SHARE) return; if (history.state && history.state.fly) history.back(); else flyShut(); }
 function flyShut(){
   const f = $("#fly"); if (!f || f._bye) return; f._bye = 1;
-  clearTimeout(FLYT); FLYSEL = FLYHOV = ""; FLYHR = ""; FLYPLC = null;   // 關掉再打開：地點回到全部
+  clearTimeout(FLYT); clearTimeout(FLYLATER); clearTimeout(FLYDT); clearTimeout(f._spT);
+  FLYSW++; FLYSEL = FLYHOV = ""; FLYHR = ""; FLYPLC = null;   // 關掉再打開：地點回到全部
   if (FRAD) fradShut();
   if (f._rv) f._rv.stop();
+  [f._ro, f._so, f._io].forEach(o => o && o.disconnect());
+  f._ro = f._so = f._io = null;
   document.documentElement.classList.remove("flyon");
   const end = () => { f.remove(); if (!DET) document.documentElement.classList.remove("lock"); };
   if (!canAnim()) return end();
@@ -1829,7 +1835,7 @@ document.addEventListener("keydown", e => {
   if (e.key === "Escape" && !document.querySelector("#layer .veil")) FRAD ? fradClose() : flyClose();
   if ((e.key === "Enter" || e.key === " ") && e.target.matches && e.target.matches("#fly .fr, #fly .fhead[data-fpick]")) { e.preventDefault(); e.target.click(); }
 });
-setInterval(() => { const c = document.querySelector("#fly .fclock .sf"); if (c && FLYD && FLYD.ap) flapSet(c, flyHM(Date.now(), FLYD.ap.tz)); }, 5000);
+setInterval(() => { const c = document.querySelector("#fly .fclock .sf"); if (c && FLYD && FLYD.ap && FLYD.ap.tz) flapSet(c, flyHM(Date.now(), FLYD.ap.tz)); }, 5000);
 
 /* ═════════ 整頁雷達：點小雷達長大成整頁，可以縮放、拖曳、點飛機看細節 ═════════ */
 let FRAD = null, FRADF = "";                                // 開著的整頁雷達；篩選（空的是全部）
@@ -1849,18 +1855,19 @@ function fradOpen(){
   if (!canAnim()) v.style.animation = "none";
   history.pushState({fly:1, frad:1}, "");
   const cv = v.querySelector("canvas"), rv = radarView(cv, true);
-  FRAD = {v, rv, sel:""}; rv.rwd = f._rv.rwd; rv.onseq = fradList;
+  FRAD = {v, rv, sel:"", ro:null}; rv.rwd = f._rv.rwd; rv.onseq = fradList;
   const top = () => { const b = v.querySelector(".frbar").getBoundingClientRect(), m = cv.getBoundingClientRect(), z = ZM(); rv.top = (b.bottom - m.top) / z + 4; };
   rv.resize(); top(); rv.view(0, 0, rv.fit(flyR() * .95));           // 一開始跟小雷達看到的範圍差不多，看起來就像它長大
   if (f._geo) { rv.setGeo(FLYGEO[f._geo]); rv.setTrk(FLYTRK[f._geo] && FLYTRK[f._geo].d); }
   fradData();
-  if (window.ResizeObserver) new ResizeObserver(() => { if (FRAD && FRAD.rv === rv) { rv.resize(); top(); } }).observe(cv);
+  if (window.ResizeObserver) { FRAD.ro = new ResizeObserver(() => { if (FRAD && FRAD.rv === rv) { rv.resize(); top(); } }); FRAD.ro.observe(cv); }
   fradGest(rv, cv);
   setTimeout(() => { if (FRAD && FRAD.rv === rv) { f._rv.hide(true); f.classList.add("under"); } }, canAnim() ? T.slow + 80 : 0);   // 後面的看板也先藏起來   // 長大完：後面的小雷達被蓋住了，先不畫
 }
 function fradClose(){ if (!FRAD) return; if (history.state && history.state.frad) history.back(); else fradShut(); }
 function fradShut(){
   const F = FRAD; if (!F) return; FRAD = null;
+  if (F.ro) { F.ro.disconnect(); F.ro = null; }
   const f = $("#fly"), b = f && f.querySelector(".rbox"), v = F.v, end = () => { F.rv.stop(); v.remove(); };
   if (f) f.classList.remove("under");                        // 縮回去之前：後面的看板整個重畫
   if (f && f._rv) f._rv.hide(false);                        // 縮回去之前小雷達先畫好
@@ -2178,7 +2185,11 @@ async function flyShare(){
         if (!d.ok) throw new Error(d.error || "做不出連結");
         const url = location.origin + "/s/" + d.code.slice(3);
         if (navigator.share && matchMedia("(pointer:coarse)").matches) { try { await navigator.share({title:"機場起降", url}); } catch(err) { /* 取消分享 */ } }
-        else { await navigator.clipboard.writeText(url); toast("已複製連結"); }
+        else {
+          if (navigator.clipboard && navigator.clipboard.writeText) await navigator.clipboard.writeText(url);
+          else { const ta = document.createElement("textarea"); ta.value = url; ta.style.cssText = "position:fixed;opacity:0"; document.body.appendChild(ta); ta.select(); const ok = document.execCommand("copy"); ta.remove(); if (!ok) throw new Error("複製不了"); }
+          toast("已複製連結");
+        }
         shCall({op:"list"}).then(x => x.ok && v.isConnected && draw(x.list || []), () => {});
       } catch(err) { toast(err.message || "複製不了", "bad"); }
       busy = false; go.disabled = false;
@@ -2205,9 +2216,9 @@ function shareLeft(){
   SHARET = setTimeout(shareLeft, 15000);
 }
 function shareGone(msg){
-  clearTimeout(SHARET); clearTimeout(FLYT);
-  const f = $("#fly"); if (f) { if (f._rv) f._rv.stop(); f.remove(); }
-  if (FRAD) { FRAD.rv.stop(); FRAD.v.remove(); FRAD = null; }
+  clearTimeout(SHARET); clearTimeout(FLYT); clearTimeout(FLYLATER); clearTimeout(FLYDT);
+  const f = $("#fly"); if (f) { clearTimeout(f._spT); if (f._rv) f._rv.stop(); [f._ro, f._so, f._io].forEach(o => o && o.disconnect()); f.remove(); }
+  if (FRAD) { if (FRAD.ro) FRAD.ro.disconnect(); FRAD.rv.stop(); FRAD.v.remove(); FRAD = null; }
   document.documentElement.classList.remove("lock", "flyon");
   $("#app").innerHTML = `<div class="sgone"><span class="ico fly">${I("plane")}</span><b>${esc(msg)}</b><span class="sub">請朋友再分享一次</span></div>`;
   endSplash();
