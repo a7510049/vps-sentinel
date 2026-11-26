@@ -140,8 +140,32 @@ install_caddy() {
          | sed -E 's#.*/tag/v##')"
   [[ "$ver" =~ ^[0-9][0-9.]*$ ]] || return 1
   tmp="$(mktemp -d)"
-  curl -fsSL "https://github.com/caddyserver/caddy/releases/download/v${ver}/caddy_${ver}_linux_${arch}.tar.gz" \
-    | tar -xz -C "$tmp" caddy || { rm -rf "$tmp"; return 1; }
+  local tgz="caddy_${ver}_linux_${arch}.tar.gz"
+  if ! curl -fsSL -o "$tmp/$tgz" "https://github.com/caddyserver/caddy/releases/download/v${ver}/${tgz}" \
+     || ! curl -fsSL -o "$tmp/checksums.txt" "https://github.com/caddyserver/caddy/releases/download/v${ver}/caddy_${ver}_checksums.txt"; then
+    rm -rf "$tmp"; return 1
+  fi
+  if ! python3 - "$tmp/$tgz" "$tmp/checksums.txt" "$tgz" <<'PY'; then
+import hashlib, hmac, os, re, sys
+path, cfile, name = sys.argv[1:4]
+want = ""
+with open(cfile, encoding="utf-8", errors="replace") as f:
+    for line in f:
+        parts = line.strip().split()
+        if len(parts) >= 2 and os.path.basename(parts[-1].lstrip("*./")) == name:
+            want = parts[0].lower()
+            break
+if not re.fullmatch(r"[0-9a-f]{64}|[0-9a-f]{128}", want):
+    sys.exit(1)
+h = hashlib.sha512() if len(want) == 128 else hashlib.sha256()
+with open(path, "rb") as f:
+    for b in iter(lambda: f.read(1 << 20), b""):
+        h.update(b)
+sys.exit(0 if hmac.compare_digest(h.hexdigest().lower(), want) else 1)
+PY
+    rm -rf "$tmp"; return 1
+  fi
+  tar -xz -C "$tmp" -f "$tmp/$tgz" caddy || { rm -rf "$tmp"; return 1; }
   install -m 755 "$tmp/caddy" /usr/bin/caddy
   rm -rf "$tmp"
   id caddy >/dev/null 2>&1 || useradd --system --home /var/lib/caddy --create-home --shell /usr/sbin/nologin caddy

@@ -212,10 +212,12 @@ class BackupTest(unittest.TestCase):
         self.assertTrue(os.path.exists(os.path.join(self.a[2], "data", "backups", HB, f"{HB} 2026-10-13 15.22.vsbk")))
         self.assertTrue(os.path.exists(os.path.join(self.a[2], "data", "backups", HA, f"{HA} 2026-10-13 15.22.vsbk")))
 
-        # 兩台都有兩台的備份，而且是同一組解開密碼
-        key = st["key"]
+        # 兩台都有兩台的備份，而且是同一組解開密碼（GET 不直接給密碼，要走 show_key）
+        self.assertNotIn("key", st)
+        key = self.call(a, "/api/backup", {"action": "show_key"})[1]["key"]
         _, bst, _ = self.call(b, "/api/backup")
-        self.assertEqual(bst["key"], key)
+        self.assertNotIn("key", bst)
+        self.assertEqual(self.call(b, "/api/backup", {"action": "show_key"})[1]["key"], key)
         self.assertEqual(sorted(os.listdir(os.path.join(self.b[2], "data", "backups"))), sorted([HA, HB]))
         for host in (self.a, self.b):
             for who in (HA, HB):
@@ -243,19 +245,14 @@ class BackupTest(unittest.TestCase):
         self.assertIsNone(self.decrypt(bytes(bad), key)[0])
         self.assertIsNone(self.decrypt(b"hello" * 20, key)[0])
 
-        # Telegram：A 自己一份，B 沒設定 Telegram，A 幫它傳一份；都是加密的哨兵備份檔
+        # Telegram：預設不附解密密碼（避免密文與密碼共存同一管道）；A 自己一份，B 沒設定 Telegram，A 幫它傳一份
         self.assertEqual(sorted(re.sub(r" \d{4}-.*", "", x[0]) for x in DOCS), sorted([HA, HB]))
         for fn, data, cap, _ in DOCS:
             who = HA if fn.startswith(HA) else HB
             self.assertRegex(fn, FNAME.format(re.escape(who)))
             self.assertIn(f"<b>{who}</b>", cap)                                   # 說明文字跟檔名用同一個名稱
-            pw = re.search(r"解開密碼：<tg-spoiler>([a-z2-9-]+)</tg-spoiler>", cap).group(1)   # 私人對話：附上打碼的「這份自己的」密碼
-            self.assertNotEqual(pw, key)
-            self.check_tar(self.decrypt(data, pw)[0])                              # 這份自己的密碼打得開
-            self.check_tar(self.decrypt(data, key)[0])                             # 總密碼也打得開
-        pws = [re.search(r"<tg-spoiler>(.+)</tg-spoiler>", x[2]).group(1) for x in DOCS]
-        self.assertEqual(len(set(pws)), len(pws))                                   # 每份的密碼都不一樣
-        self.assertIsNone(self.decrypt(DOCS[0][1], pws[1])[0])                     # 別份的密碼打不開這份
+            self.assertNotIn("<tg-spoiler>", cap)                                 # 預設不附密碼
+            self.check_tar(self.decrypt(data, key)[0])
         first = [x[3] for x in DOCS]
         self.assertEqual(DELETED, [])
 
@@ -268,12 +265,13 @@ class BackupTest(unittest.TestCase):
         self.assertTrue(urllib.parse.unquote(h["X-Backup-Name"]).startswith(HB + " "))
         self.check_tar(self.decrypt(data, key)[0])
 
-        # 改成自己的密碼：兩台一起改，之後的備份用新密碼（B 會重新打包，不拿舊密碼做的那份）
+        # 開啟「Telegram 附帶解開密碼」並改成自己的密碼：兩台一起改，之後的備份用新密碼且附上各自的打碼密碼
+        self.assertEqual(self.call(a, "/api/backup", {"action": "tg_pw", "on": True})[0], 200)
         code, d, _ = self.call(a, "/api/backup", {"action": "key", "key": " 太短 ", "sync": True})
         self.assertEqual(code, 400)
         code, d, _ = self.call(a, "/api/backup", {"action": "key", "key": "我的新密碼 2026!", "sync": True})
         self.assertEqual(code, 200, d)
-        self.assertEqual(self.call(b, "/api/backup")[1]["key"], "我的新密碼 2026!")
+        self.assertEqual(self.call(b, "/api/backup", {"action": "show_key"})[1]["key"], "我的新密碼 2026!")
         st = self.run_backup()
         self.assertTrue(st["last"]["ok"], st["last"])
         for who in (HA, HB):
@@ -282,11 +280,18 @@ class BackupTest(unittest.TestCase):
         with open([f for f in self.files(self.a, HA) if not is_old(f)][0], "rb") as f:   # 以前的備份還是用舊密碼開
             self.check_tar(self.decrypt(f.read(), key)[0])
 
-        # Telegram 裡每台只留最新一份：新的傳成功後，前一份被刪掉；新的說明附的是新密碼
+        # Telegram 裡每台只留最新一份：新的傳成功後，前一份被刪掉；開啟附帶密碼時每份各自一組打碼密碼
         self.assertEqual(sorted(DELETED), sorted(first))
-        for fn, data, cap, _ in DOCS[len(first):]:
-            self.check_tar(self.decrypt(data, re.search(r"<tg-spoiler>(.+)</tg-spoiler>", cap).group(1))[0])
+        second = DOCS[len(first):]
+        pws = []
+        for fn, data, cap, _ in second:
+            pw = re.search(r"解開密碼：<tg-spoiler>([a-z2-9-]+)</tg-spoiler>", cap).group(1)
+            self.assertNotEqual(pw, "我的新密碼 2026!")
+            pws.append(pw)
+            self.check_tar(self.decrypt(data, pw)[0])
             self.check_tar(self.decrypt(data, "我的新密碼 2026!")[0])
+        self.assertEqual(len(set(pws)), len(pws))                                   # 每份的密碼都不一樣
+        self.assertIsNone(self.decrypt(second[0][1], pws[1])[0])                    # 別份的密碼打不開這份
 
         # 設定開關會寫進設定檔
         code, d, _ = self.call(a, "/api/backup", {"action": "set", "on": False})

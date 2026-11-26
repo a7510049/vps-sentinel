@@ -102,10 +102,10 @@ def pair_keys():
     return [k for k in pair_load().get("keys", []) if isinstance(k, dict)]
 
 
-def pair_key_ok(given):
-    """其他主機用配對鑰匙連進來"""
+def pair_key_find(given):
+    """其他主機用配對鑰匙連進來：驗證成功回傳該主機紀錄，否則 None"""
     if not given.startswith("vsk_"):
-        return False
+        return None
     h = hashlib.sha256(given.encode()).hexdigest()
     for k in pair_keys():
         if hmac.compare_digest(h, str(k.get("hash", ""))):
@@ -115,8 +115,13 @@ def pair_key_ok(given):
                     st = dict(pair_load())
                     st["keys"] = [dict(x, seen=int(time.time())) if x.get("id") == k.get("id") else x for x in pair_keys()]
                     pair_save(st)
-            return True
-    return False
+            return k
+    return None
+
+
+def pair_key_ok(given):
+    """其他主機用配對鑰匙連進來"""
+    return bool(pair_key_find(given))
 
 
 def pair_status():

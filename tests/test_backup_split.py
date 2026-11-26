@@ -69,9 +69,11 @@ class SplitTest(unittest.TestCase):
     def test_split(self):
         DOCS.clear()
         DELETED.clear()
+        self.assertEqual(self.call(self.h[1], "/api/backup", {"action": "tg_pw", "on": True})[0], 200)
         st = self.run_backup()
         self.assertTrue(st["last"]["ok"], st["last"])
-        key = st["key"]
+        self.assertNotIn("key", st)
+        key = self.call(self.h[1], "/api/backup", {"action": "show_key"})[1]["key"]
         whole = glob.glob(os.path.join(self.h[2], "data", "backups", NAME, "*.vsbk"))[-1]
         size = os.path.getsize(whole)
         n = -(-size // PART)

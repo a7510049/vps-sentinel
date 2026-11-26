@@ -9,21 +9,24 @@ if (navigator.standalone || matchMedia("(display-mode: standalone)").matches)
 const DAY30 = 30 * 86400000;
 function sstore(k, v){ try { if (v === undefined) return sessionStorage.getItem(k) || ""; v ? sessionStorage.setItem(k, v) : sessionStorage.removeItem(k); } catch(e){ return ""; } }
 function getTok(){
+  if (window._tok) return window._tok;
   const t = store(KEY);
   if (t) {
     const exp = +store(KEY + "-exp");
     if (!exp) store(KEY + "-exp", String(Date.now() + DAY30));      // 舊版存的：從現在開始算 30 天
-    else if (exp < Date.now()) { store(KEY, ""); store(KEY + "-exp", ""); return sstore(KEY) || ""; }
-    return t;
+    else if (exp < Date.now()) { store(KEY, ""); store(KEY + "-exp", ""); return sstore(KEY) === "1" ? "cookie" : sstore(KEY) || ""; }
+    return t === "1" ? "cookie" : t;
   }
-  return sstore(KEY) || window._tok || "";
+  const s = sstore(KEY);
+  return s === "1" ? "cookie" : s || "";
 }
 function setTok(t, remember){
   if (remember === undefined) remember = !!store(KEY) || !sstore(KEY);   // 換密碼時：維持原本的記住方式和期限
   else store(KEY + "-exp", remember && t ? String(Date.now() + DAY30) : "");
-  store(KEY, remember ? t : ""); sstore(KEY, remember ? "" : t);
+  const mark = t ? (t === "cookie" || /^vss_/.test(t) ? "1" : "") : "";  // 真實登入鑰匙改由主機 HttpOnly Cookie 保存，瀏覽器儲存區只留登入旗標
+  store(KEY, remember ? mark : ""); sstore(KEY, remember ? "" : mark);
   if (!t) store(KEY + "-exp", "");
-  window._tok = t;
+  window._tok = t && !mark ? t : "";
 }
 /* 連不上主機時（例如主機正在重新啟動），瀏覽器給的錯誤是英文，換成看得懂的中文 */
 /* 換密碼、關 PIN 碼這類動作：主機回「要先確認是你」時，先問 PIN 碼／手機金鑰／密碼，再帶著答案送一次 */
@@ -35,7 +38,7 @@ const api = async (path, opt) => {
   return d.recheck && await recheckAsk(a => go({...opt, headers:{...opt.headers, "X-Recheck": b64j(a)}})) || r;
 };
 const b64j = o => btoa(unescape(encodeURIComponent(JSON.stringify(o)))).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
-if (window._t0) { setTok(window._t0, true); window._t0 = ""; }   // 網址上的密碼已經在 index.html 最前面拿掉了
+if (window._t0) { window._t0_keep = true; setTok(window._t0, true); window._t0 = ""; }   // 網址上的密碼已經在 index.html 最前面拿掉了
 
 /* ═════════ 圖示 ═════════ */
 const P = {
@@ -3770,7 +3773,7 @@ function bkSummaryHTML(d){
 const bkCopies = d => (d.copies || []).map(c => `<div class="bkcp">${I("archive")}<span class="bkcpi"><b>${esc(c.name)}${c.me ? "（這台）" : ""}</b><small>最新：${esc(when(c.t))}・${bkSize(c.size)}</small></span><span class="tbadge num">${+c.count || 0} 份</span></div>`).join("");
 function bkModal(node, label){
   const ck = "bk:" + (node || "");
-  let d = TOOLCACHE[ck] ? {...TOOLCACHE[ck]} : null, tab = "stat", watching = false;
+  let d = TOOLCACHE[ck] ? {...TOOLCACHE[ck]} : null, tab = "stat", watching = false, bkKeyVal = "";
   const v = document.createElement("div"); v.className = "veil";
   const bdgOf = x => !x ? ["", ""] : !x.on ? ["已關閉", ""] : x.running ? ["備份中", "act"] : x.last && !x.last.ok ? ["有問題", "bad"] : ["自動備份", "ok"];
   const [bt, bc] = bdgOf(d);
@@ -3790,10 +3793,11 @@ function bkModal(node, label){
         </div>
         <div class="tcard bkkeyblk">
           <div class="tcardh"><span>解開密碼（所有主機共用）</span><button type="button" class="linkish" data-chg>更換密碼</button></div>
-          <div class="codebox bkkeybox"><code class="bkkey" tabindex="0" role="button" title="點一下顯示">${esc(x.key)}</code><button type="button" class="ubtn sm ghost" data-bkshow>顯示</button><button type="button" class="ubtn sm ghost copybtn" data-bkcp>${I("copy")}複製</button></div>
+          <div class="codebox bkkeybox"><code class="bkkey" tabindex="0" role="button" title="點一下顯示">${esc(bkKeyVal || "••••••••••••••••••••")}</code><button type="button" class="ubtn sm ghost" data-bkshow>顯示</button><button type="button" class="ubtn sm ghost copybtn" data-bkcp>${I("copy")}複製</button></div>
           <small>還原備份時必須輸入這組密碼，請另外妥善保存</small>
           <span class="bknew" hidden><input class="field" type="password" maxlength="128" autocomplete="new-password" placeholder="輸入新密碼（至少 8 個字）"><button type="button" class="ubtn sm" data-setkey>儲存</button><button type="button" class="ubtn sm ghost" data-chgno>取消</button></span>
         </div>
+        ${x.tg ? `<div class="tcard bksch"><label class="bkon"><span class="bkat">${I("bell")}<span><b>Telegram 附帶解開密碼</b><small>開啟會在私人對話附上這份的打碼密碼</small></span></span><input type="checkbox" class="tog" data-bktgpw ${x.tg_pw ? "checked" : ""}></label></div>` : ""}
       </div>
       </div>`;
   v.innerHTML = `<div class="dialog tdlg bkdlg">
@@ -3828,10 +3832,10 @@ function bkModal(node, label){
     if (sumBox && sh !== lastSum) { lastSum = sh; sumBox.innerHTML = sh; }
     const ch = cpHtml(d), cpBox = v.querySelector(".bkcopies");
     if (cpBox && ch !== lastCp) { lastCp = ch; cpBox.innerHTML = ch; }
-    const tog = v.querySelector(".bksch .tog"); if (tog) tog.checked = !!d.on;
+    const tog = v.querySelector(".bksch .tog:not([data-bktgpw])"); if (tog) tog.checked = !!d.on;
+    const tgp = v.querySelector("[data-bktgpw]"); if (tgp) tgp.checked = !!d.tg_pw;
     const hr = v.querySelector(".bkhr"); if (hr) txt(hr, `${String(+d.hour || 0).padStart(2, "0")}:00`);
     const wh = v.querySelector(".bkwh"); if (wh) txt(wh, d.where === "雲端硬碟" ? `雲端硬碟「${d.folder}」` : "本機已存份數");
-    const kb = v.querySelector(".bkkey"); if (kb && kb.textContent !== d.key) kb.textContent = d.key;
   };
   return new Promise(res => {
     let live = true;
@@ -3861,6 +3865,11 @@ function bkModal(node, label){
     });
     v.addEventListener("change", async e => {
       const t = e.target; if (!t.classList.contains("tog") || !d) return;
+      if (t.hasAttribute("data-bktgpw")) {
+        try { const x = await post({action:"tg_pw", on:t.checked}, true); d.tg_pw = t.checked; TOOLCACHE[ck] = d; toast(x.message); }
+        catch(err) { t.checked = !t.checked; say(err.message, "bad"); }
+        return;
+      }
       try { const x = await post({action:"set", on:t.checked}); d.on = t.checked; TOOLCACHE[ck] = d; syncBdg(); toast(x.message); }
       catch(err) { t.checked = !t.checked; say(err.message, "bad"); }
     });
@@ -3896,7 +3905,7 @@ function bkModal(node, label){
         if (!await modal({icon:"key", cls:"warn", title:"換成新的解開密碼？", text:"所有主機一起換。舊備份仍要用舊密碼，請留著。", ok:"換"})) return;
         busy(sk, "儲存中…");
         try {
-          const x = await post({action:"key", key, sync:true}, true); d.key = key; TOOLCACHE[ck] = d;
+          const x = await post({action:"key", key, sync:true}, true); bkKeyVal = key;
           const kb = v.querySelector(".bkkey"), sb = v.querySelector("[data-bkshow]");
           kb.textContent = key; kb.classList.add("on"); if (sb) sb.textContent = "隱藏";
           inp.value = ""; reveal(v.querySelector(".bknew"), false); reveal(v.querySelector("[data-chg]"), true); say(x.message, "ok");
@@ -3904,14 +3913,26 @@ function bkModal(node, label){
         busy(sk);
         return;
       }
+      const loadKey = async () => {
+        if (bkKeyVal) return bkKeyVal;
+        const x = await post({action:"show_key"}, true);
+        bkKeyVal = x.key || "";
+        return bkKeyVal;
+      };
       if (e.target.closest("[data-bkshow]") || e.target.closest(".bkkey")) {
         const kb = v.querySelector(".bkkey"), sb = v.querySelector("[data-bkshow]");
-        const on = kb.classList.toggle("on");
-        if (sb) sb.textContent = on ? "隱藏" : "顯示";
+        if (kb.classList.contains("on")) { kb.classList.remove("on"); if (sb) sb.textContent = "顯示"; return; }
+        try {
+          const k = await loadKey(); if (!live || !k) return;
+          kb.textContent = k; kb.classList.add("on"); if (sb) sb.textContent = "隱藏";
+        } catch(err) { say(err.message, "bad"); }
         return;
       }
       if (e.target.closest("[data-bkcp]")) {
-        try { await navigator.clipboard.writeText(d.key); toast("已複製解開密碼"); } catch(err) { toast("複製不了，請先點顯示再手動選取", "bad"); }
+        try {
+          const k = await loadKey(); if (!live || !k) return;
+          await navigator.clipboard.writeText(k); toast("已複製解開密碼");
+        } catch(err) { toast(err.message || "複製不了，請先點顯示再手動選取", "bad"); }
         return;
       }
       if (e.target.closest("[data-run]") && !runb.disabled) {
@@ -4422,16 +4443,25 @@ function histJoin(list){
   for (const k in HIST) if (!seen.has(k)) delete HIST[k];
 }
 let TICKID = 0;
-/* 舊版存著的存取密碼、安裝時給的一鍵登入網址：換成這台裝置自己的登入鑰匙，瀏覽器裡就不再留著密碼 */
+/* 舊版存著的存取密碼、舊版 localStorage 登入鑰匙、或一鍵登入網址：一律換成主機 HttpOnly Cookie，瀏覽器儲存區不再留鑰匙 */
 async function upgradeTok(){
   let r;
+  const cur = getTok(), keep = !!(window._t0_keep || store(KEY));
+  window._t0_keep = false;
+  if (/^vss_/.test(cur)) {
+    try { r = await fetch("/api/session-cookie", {method:"POST", headers:{"X-Token":cur, "Content-Type":"application/json"}, cache:"no-store", body:"{}"}); }
+    catch(e) { return true; }
+    if (r.status === 401) { setTok(""); endSplash(); login("請重新登入"); return false; }
+    if (r.ok) setTok("cookie", keep);
+    return true;
+  }
   await DEVP;
   try { r = await fetch("/api/login", {method:"POST", headers:{"Content-Type":"application/json"}, cache:"no-store",
-    body:JSON.stringify({pw:getTok(), keep:!!store(KEY), dev:devLabel(), os:devOs()})}); }
+    body:JSON.stringify({pw:cur, keep, dev:devLabel(), os:devOs()})}); }
   catch(e) { return true; }                                     // 連不上：照舊用，等一下 tick 自己會處理
   if (r.status === 401) { setTok(""); endSplash(); login("密碼不對，再試一次"); return false; }
   const d = await r.json().catch(() => ({}));
-  if (d.ok && d.token) setTok(d.token);
+  if (d.ok && d.token) setTok("cookie", keep);
   return true;
 }
 async function tick(){
@@ -4441,13 +4471,13 @@ async function tick(){
   if (rq) { RSW.code = rq.trim().toUpperCase(); sessionStorage.setItem("vs-rsw", RSW.code); history.replaceState(null, "", location.pathname); }
   if (RSW.code) return restoreScreen();
   if (!getTok()) { endSplash(); return login(); }
-  if (!/^vss_/.test(getTok()) && !await upgradeTok()) return;
+  if (getTok() !== "cookie" && !await upgradeTok()) return;
   if (document.hidden && LIST.length) return true;   // 已經切到背景：不抓也不畫，回來時馬上更新
   try {
     if (!BOOTED) splashMsg("讀取主機狀態…");
     const since = Object.fromEntries(Object.entries(HIST).map(([k, h]) => [k, h.t[h.t.length - 1]]).filter(x => x[1]));
     const r = await fetch("/api/all" + (Object.keys(since).length ? "?since=" + encodeURIComponent(JSON.stringify(since)) : ""), {headers:{"X-Token":getTok()}, cache:"no-store", signal: AbortSignal.timeout ? AbortSignal.timeout(20000) : undefined});   // 網路卡住最多等 20 秒，不會一直轉
-    if (r.status === 401) { const was = getTok(); setTok(""); LIST = []; for (const k in HIST) delete HIST[k]; endSplash(); return login(/^vss_/.test(was) ? "請重新登入" : "密碼不對，再試一次"); }
+    if (r.status === 401) { const was = getTok(); setTok(""); LIST = []; for (const k in HIST) delete HIST[k]; endSplash(); return login(was === "cookie" || /^vss_/.test(was) ? "請重新登入" : "密碼不對，再試一次"); }
     if (r.status === 403 && (await r.clone().json().catch(() => ({}))).mustpin) {   // 還在用臨時 PIN 碼：先換掉
       endSplash(); if (window._mustPin) return true;
       window._mustPin = 1; await pinModal(true); window._mustPin = 0; return tick();

@@ -46,7 +46,7 @@ from collections import deque
 from concurrent.futures import ThreadPoolExecutor
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
-VERSION = "5.38"
+VERSION = "5.39"
 
 # ───────────────────────── 哨兵備份檔（.vsbk）─────────────────────────
 # 哨兵專用的備份格式：外面是自己的檔案格式，裡面用的是成熟、標準的加密方法（不自己發明加密）：
@@ -538,7 +538,7 @@ def rs_run(rs, tgz):
         # 4. 放回檔案（保留原本的擁有者和權限）
         rs.say("④ 放回檔案")
         kw = {"filter": "fully_trusted"} if hasattr(tarfile, "fully_trusted_filter") else {}
-        tar.extractall(rs.root, members=members, numeric_owner=True, **kw)   # 上面已經一個一個檢查過
+        tar.extractall(rs.root, members=members, numeric_owner=True, **kw)  # noqa: S202 上面已經由 rs_members 逐一驗證路徑與捷徑
         rs.say(f"   放回 {sum(1 for m in members if not m.isdir())} 個檔案")
 
     # 5. 讓服務回到原本的樣子
@@ -1118,6 +1118,7 @@ def _num(v, default):
 
 # 每日備份（說明在下面「每日備份」那一段）
 BACKUP_ON = C.get("BACKUP", "on").lower() not in ("off", "0", "no")
+BACKUP_TG_PW = C.get("BACKUP_TG_PW", "off").lower() in ("on", "1", "yes", "true")   # Telegram 備份預設不附解密密碼（避免密文與密碼在同一管道）
 BACKUP_HOUR = int(min(23, max(0, _num(C.get("BACKUP_HOUR"), 4))))
 BACKUP_KEEP = 7                                   # 每個地方都只留最近 7 份
 BACKUP_KEY = C.get("BACKUP_KEY", "")              # 備份檔的解開密碼（所有主機共用；第一次備份時自動產生）
@@ -1590,7 +1591,7 @@ SRC_FILES = ["sentinel.py", "pair.py", "download.py", "backup.py", "guard.py", "
 
 def build_of(blobs):
     """把所有檔案內容合起來算一個指紋，用來判斷是不是最新版"""
-    h = hashlib.sha1()
+    h = hashlib.sha1(usedforsecurity=False)
     for b in blobs:
         h.update(b)
     return h.hexdigest()[:7]
@@ -1904,7 +1905,7 @@ def check_link(url):
     t0 = time.time()
     try:
         req = urllib.request.Request(url, headers={"User-Agent": "vps-sentinel"})
-        with urllib.request.urlopen(req, timeout=8, context=ssl._create_unverified_context()) as r:
+        with urllib.request.urlopen(req, timeout=8, context=ssl._create_unverified_context()) as r:  # noqa: S323 使用者自訂連結可能採自簽憑證，僅探測存活狀態
             code = r.status
     except urllib.error.HTTPError as e:
         code = e.code
@@ -2317,13 +2318,13 @@ def pk_rp(host):
     return h
 
 
-def _pk_client(cdj, kind):
-    """檢查瀏覽器送來的 clientDataJSON：題目要對、沒過期、網址的主機名稱要對；回傳主機名稱（一次性在驗證成功後由 pk_use 擋）"""
+def _pk_client(cdj, kind, expected_host=""):
+    """檢查瀏覽器送來的 clientDataJSON：題目要對、沒過期、網址與來源要對；回傳主機名稱（一次性在驗證成功後由 pk_use 擋）"""
     try:
         cd = json.loads(cdj)
     except ValueError:
         return None, "資料格式不對"
-    if not isinstance(cd, dict) or cd.get("type") != kind:
+    if not isinstance(cd, dict) or cd.get("type") != kind or cd.get("crossOrigin") is True:
         return None, "資料格式不對"
     if not pk_challenge_ok(str(cd.get("challenge") or ""), kind):
         return None, "等太久了，請再試一次"
@@ -2331,6 +2332,16 @@ def _pk_client(cdj, kind):
     host = (o.hostname or "").lower()
     if not host or not (o.scheme == "https" or host == "localhost"):
         return None, "要用 https 網址才能使用手機金鑰"
+    if expected_host:
+        eh = str(expected_host).strip().lower()
+        if host != pk_rp(eh):
+            return None, "網址不符"
+        if ":" in eh and not eh.endswith("]"):
+            ep = eh.rsplit(":", 1)[1]
+            if ep.isdigit():
+                op = o.port or (443 if o.scheme == "https" else 80)
+                if op != int(ep):
+                    return None, "網址不符"
     return host, ""
 
 
@@ -2353,10 +2364,10 @@ def pk_register_begin(host):
                   "exclude": [k["id"] for k in keys if k.get("rp") == rp]}
 
 
-def pk_register_finish(d):
+def pk_register_finish(d, host=""):
     try:
         cdj, att = unb64u(d.get("clientDataJSON")), unb64u(d.get("attestationObject"))
-        rp, err = _pk_client(cdj, "webauthn.create")
+        rp, err = _pk_client(cdj, "webauthn.create", host)
         if err:
             return False, err
         ao = cbor_load(att)[0]
@@ -2366,6 +2377,7 @@ def pk_register_finish(d):
             return False, err
         if not ad[32] & 0x40 or len(ad) < 55:
             return False, "沒有收到金鑰"
+        cnt = int.from_bytes(ad[33:37], "big")
         n = int.from_bytes(ad[53:55], "big")
         cid = ad[55:55 + n]
         key = cose_key(cbor_load(ad, 55 + n)[0])
@@ -2382,7 +2394,7 @@ def pk_register_finish(d):
             return False, "這支已經登記過了"
         if not pk_use(json.loads(cdj)["challenge"]):
             return False, "等太久了，請再試一次"
-        keys.append({"id": b64u(cid), "rp": rp, "key": key, "name": name, "added": int(time.time()), "used": None})
+        keys.append({"id": b64u(cid), "rp": rp, "key": key, "name": name, "cnt": cnt, "added": int(time.time()), "used": None})
         try:
             pk_save(keys)
         except OSError as e:
@@ -2392,13 +2404,13 @@ def pk_register_finish(d):
     return True, f"已登記「{name}」，下次可以直接用它登入"
 
 
-def pk_login_finish(d):
+def pk_login_finish(d, host=""):
     try:
         cid = str(d.get("id") or "")
         cdj, ad, sig = unb64u(d.get("clientDataJSON")), unb64u(d.get("authenticatorData")), unb64u(d.get("signature"))
     except (ValueError, TypeError, AttributeError):
         return False, "資料格式不對"
-    rp, err = _pk_client(cdj, "webauthn.get")
+    rp, err = _pk_client(cdj, "webauthn.get", host)
     if err:
         return False, err
     with PK_LOCK:
@@ -2411,8 +2423,14 @@ def pk_login_finish(d):
             return False, err
         if not pk_sig_ok(k["key"], ad + hashlib.sha256(cdj).digest(), sig):
             return False, "金鑰驗證失敗"
+        cnt = int.from_bytes(ad[33:37], "big")
+        prev = int(k.get("cnt") or 0)
+        if (cnt > 0 or prev > 0) and cnt <= prev:        # 依 WebAuthn 規範偵測金鑰複製（雲端同步金鑰兩邊皆 0 放行）
+            COL.add_event("warn", f"手機金鑰「{k.get('name') or '手機'}」計數異常，已拒絕登入")
+            return False, "這支金鑰計數異常，可能被複製過"
         if not pk_use(json.loads(cdj)["challenge"]):     # 同一次登入的資料被拿來再送一次：擋掉
             return False, "等太久了，請再試一次"
+        k["cnt"] = cnt
         k["used"] = int(time.time())
         try:
             pk_save(keys)
@@ -2570,18 +2588,18 @@ def recheck_need(path, d):
     act = d.get("action") if isinstance(d, dict) else None
     return (path == "/api/token" or (path == "/api/pin" and act in ("set", "off"))
             or (path == "/api/passkey" and act in ("begin", "delete")) or (path == "/api/telegram" and act == "save")
-            or (path == "/api/backup" and act == "key") or (path == "/api/pair-admin" and act == "code")
+            or (path == "/api/backup" and act in ("key", "show_key", "tg_pw")) or (path == "/api/pair-admin" and act == "code")
             or (path == "/api/sec" and act in ("fix", "undo", "key", "gen")) or (path == "/api/notes" and act in ("on", "show", "new", "wipe")))
 
 
-def recheck_ok(a):
+def recheck_ok(a, host=""):
     """a 是網頁送來的確認資料：{"pin": {nonce, proof}}、手機金鑰的簽章，或 {"pw": 存取密碼}"""
     if not isinstance(a, dict):
         return False, "要先確認是你"
     if isinstance(a.get("pin"), dict):
         return pin_login(a["pin"])
     if a.get("clientDataJSON"):
-        ok, msg = pk_login_finish(a)
+        ok, msg = pk_login_finish(a, host)
         return ok, "" if ok else msg
     pw = str(a.get("pw") or "")
     return bool(pw) and hmac.compare_digest(pw.encode(), TOKEN.encode()), "密碼不對"
@@ -4805,14 +4823,49 @@ class Handler(BaseHTTPRequestHandler):
         return self.send(401, json.dumps({"active": bool(rsw_state()), "ok": False, "error": msg, "message": msg}, ensure_ascii=False))
 
     sess = None                                       # 這次是哪一台裝置登入的（用自己的登入鑰匙時）
+    peer = None                                       # 這次是哪一台配對主機連進來的（用 vsk_ 鑰匙時）
+
+    def sess_cookie_tok(self):
+        for part in (self.headers.get("Cookie") or "").split(";"):
+            k, _, v = part.strip().partition("=")
+            if k == "vs_sess" and v.startswith("vss_"):
+                return v
+        return ""
+
+    def sess_cookie(self, tok, keep=True):
+        secure = "; Secure" if self.https() else ""
+        age = f"; Max-Age={SESS_DAYS * 86400}" if keep else ""
+        return ("Set-Cookie", f"vs_sess={tok}; Path=/; HttpOnly; SameSite=Strict{secure}{age}")
+
+    def sess_clear_cookie(self):
+        secure = "; Secure" if self.https() else ""
+        return ("Set-Cookie", f"vs_sess=; Path=/; Max-Age=0; HttpOnly; SameSite=Strict{secure}")
 
     def authed(self):
         given = self.headers.get("X-Token", "")
         self.sess = None                             # 同一條連線上一次的不能沿用
-        if given.startswith("vss_"):
-            self.sess = sess_find(given)
+        self.peer = None
+        if given and given != "cookie":
+            if given.startswith("vss_"):
+                self.sess = sess_find(given)
+                return bool(self.sess)
+            if hmac.compare_digest(given.encode(), TOKEN.encode()):
+                return True
+            self.peer = pair_key_find(given)
+            return bool(self.peer)
+        ctok = self.sess_cookie_tok()
+        if ctok:
+            if self.command not in ("GET", "HEAD"):
+                sfs = (self.headers.get("Sec-Fetch-Site") or "").strip().lower()
+                if given != "cookie" and self.headers.get("X-Requested-With") != "1" and sfs != "same-origin":
+                    return False
+                orig = (self.headers.get("Origin") or "").strip()
+                host = (self.headers.get("Host") or "").strip().lower()
+                if orig and host and urllib.parse.urlsplit(orig).netloc.lower() != host:
+                    return False
+            self.sess = sess_find(ctok)
             return bool(self.sess)
-        return bool(given) and (hmac.compare_digest(given.encode(), TOKEN.encode()) or pair_key_ok(given))
+        return False
 
     def recheck(self):
         """這台裝置 5 分鐘內確認過就放行；不然看 X-Recheck（base64 的 JSON），沒有或不對就回 403 要網頁先問"""
@@ -4826,7 +4879,7 @@ class Handler(BaseHTTPRequestHandler):
                 a = json.loads(base64.urlsafe_b64decode(raw + "=" * (-len(raw) % 4)))
             except (ValueError, TypeError):
                 a = None
-            ok, msg = recheck_ok(a)
+            ok, msg = recheck_ok(a, self.headers.get("Host") or "")
             if ok:
                 for k in [k for k, v in RECHECK.items() if v < now]:
                     del RECHECK[k]
@@ -5003,7 +5056,7 @@ class Handler(BaseHTTPRequestHandler):
             ok, out = pk_register_begin(self.headers.get("Host"))
             return self.send(200 if ok else 400, json.dumps({"ok": ok, **out}, ensure_ascii=False))
         if act == "finish":
-            ok, msg = pk_register_finish(d)
+            ok, msg = pk_register_finish(d, self.headers.get("Host") or "")
         elif act == "delete":
             ok, msg = pk_delete(str(d.get("id") or ""))
         else:
@@ -5012,7 +5065,7 @@ class Handler(BaseHTTPRequestHandler):
 
     def agh_open(self, body):
         d = self.jbody(body)
-        ok, msg = recheck_ok(d)
+        ok, msg = recheck_ok(d, self.headers.get("Host") or "")
         if not ok:
             time.sleep(1)
             return self.send(401, json.dumps({"ok": False, "message": msg or "驗證失敗"}, ensure_ascii=False))
@@ -5038,7 +5091,7 @@ class Handler(BaseHTTPRequestHandler):
 
     def cloud_open(self, body):
         d = self.jbody(body)
-        ok, msg = recheck_ok(d)
+        ok, msg = recheck_ok(d, self.headers.get("Host") or "")
         if not ok:
             time.sleep(1)
             return self.send(401, json.dumps({"ok": False, "message": msg or "驗證失敗"}, ensure_ascii=False))
@@ -5070,12 +5123,13 @@ class Handler(BaseHTTPRequestHandler):
             return self.send(200, json.dumps({"has": any(k.get("rp") == rp for k in pk_load()), "pin": bool(pin_load()), "temp": pin_temp()}))
         if act == "begin":
             return self.send(200, json.dumps({"challenge": pk_challenge("webauthn.get"), "rp": pk_rp(self.headers.get("Host"))}))
-        ok, res = pk_login_finish(d)
+        ok, res = pk_login_finish(d, self.headers.get("Host") or "")
         if not ok:
             time.sleep(1)
             return self.send(401, json.dumps({"ok": False, "message": res}, ensure_ascii=False))
         log(f"用手機金鑰「{res}」登入")
-        return self.send(200, json.dumps({"ok": True, "token": self.sess_give(d, "手機金鑰")}))
+        tok = self.sess_give(d, "手機金鑰")
+        return self.send(200, json.dumps({"ok": True, "token": tok}), extra=[self.sess_cookie(tok, d.get("keep", True))])
 
     def do_HEAD(self):
         if self.is_notes():
@@ -5103,12 +5157,14 @@ class Handler(BaseHTTPRequestHandler):
         if not self.must_pin():
             self.fly_gate(self.route_post)
 
-    PIN_FREE = ("/api/pin", "/api/pin-login", "/api/login", "/api/passkey-login", "/api/sessions")
+    PIN_FREE = ("/api/pin", "/api/pin-login", "/api/login", "/api/passkey-login", "/api/sessions", "/api/session-cookie")
 
     def must_pin(self):
         """還在用臨時 PIN 碼：登入的裝置只能先換 PIN 碼（或登出），其他 API 一律回 403 mustpin"""
         path = urllib.parse.urlsplit(self.path).path
         tok = self.headers.get("X-Token", "")
+        if tok in ("", "cookie"):
+            tok = self.sess_cookie_tok()
         if not path.startswith("/api/") or path in self.PIN_FREE or not tok.startswith("vss_") or not pin_temp() or not sess_find(tok):
             return False
         self.close_connection = True               # 沒讀的資料不要留在連線上
@@ -5298,7 +5354,7 @@ class Handler(BaseHTTPRequestHandler):
         if u.path.startswith("/a/") and alb_http(self, "POST"):   # 相簿分享：朋友輸入密碼
             return None
         if u.path not in ("/api/update", "/api/rename", "/api/traffic", "/api/telegram", "/api/links", "/api/self", "/api/cloud-open", "/api/cloud-ticket", "/api/cloud-revoke", "/api/peer",
-                          "/api/token", "/api/passkey", "/api/passkey-login", "/api/pin", "/api/pin-login", "/api/login", "/api/sessions", "/api/backup", "/api/backup-store",
+                          "/api/token", "/api/passkey", "/api/passkey-login", "/api/pin", "/api/pin-login", "/api/login", "/api/sessions", "/api/session-cookie", "/api/backup", "/api/backup-store",
                           "/api/restore-upload", "/api/restore-run", "/api/pair", "/api/pair-admin", "/api/reboot", "/api/keepalive", "/api/download", "/api/fly-share", "/api/fly-claim", "/api/opensky", "/api/sec", "/api/notes", "/api/adblock", "/api/adblock-profile", "/api/adguard-open", "/api/adguard-ticket", "/api/ab-probe", "/api/album"):
             return self.send(404, '{"error":"找不到"}')
         if u.path in ("/api/restore-upload", "/api/restore-run"):   # 網頁還原：要有安裝時給的代碼（或已經登入）
@@ -5349,10 +5405,15 @@ class Handler(BaseHTTPRequestHandler):
             q = urllib.parse.parse_qs(u.query)
             raw_len = (self.headers.get("Content-Length") or "0").strip()
             length = int(raw_len) if re.fullmatch(r"\d+", raw_len) else -1
-            was = (q.get("was") or [""])[0][:40]
+            if self.peer:                            # 配對鑰匙連進來：來源資料夾強制綁定配對紀錄中的主機名稱，不得用 was 搬移他台目錄
+                owner = (self.peer.get("name") or "其他主機")[:40]
+                aliases = ()
+            else:
+                owner = (q.get("from") or ["其他主機"])[0][:40]
+                was = (q.get("was") or [""])[0][:40]
+                aliases = (was,) if was else ()
             ok, msg, _ = ((False, "大小不對", None) if length < 0 else
-                          bk_store((q.get("from") or ["其他主機"])[0][:40], (q.get("file") or [""])[0], self.rfile, length,
-                                   aliases=(was,) if was else ()))
+                          bk_store(owner, (q.get("file") or [""])[0], self.rfile, length, aliases=aliases))
             if not ok:
                 self.close_connection = True       # 沒收完的資料不要留在連線上
             return self.send(200 if ok else 400, json.dumps({"ok": ok, "message": msg}, ensure_ascii=False))
@@ -5372,14 +5433,16 @@ class Handler(BaseHTTPRequestHandler):
                 time.sleep(1)
                 return self.send(401, json.dumps({"ok": False, "message": msg}, ensure_ascii=False))
             log("用 PIN 碼登入")
-            return self.send(200, json.dumps({"ok": True, "token": self.sess_give(d, "PIN 碼")}))
+            tok = self.sess_give(d, "PIN 碼")
+            return self.send(200, json.dumps({"ok": True, "token": tok}), extra=[self.sess_cookie(tok, d.get("keep", True))])
         if u.path == "/api/login":                   # 還沒登入：用存取密碼換到這台裝置自己的登入鑰匙（舊版存著密碼的也從這裡換）
             d = self.jbody(body)
             pw = str(d.get("pw") or "")
             if not (pw and hmac.compare_digest(pw.encode(), TOKEN.encode())):
                 time.sleep(1)
                 return self.send(401, json.dumps({"ok": False, "message": "密碼不對，再試一次"}, ensure_ascii=False))
-            return self.send(200, json.dumps({"ok": True, "token": self.sess_give(d, "密碼")}))
+            tok = self.sess_give(d, "密碼")
+            return self.send(200, json.dumps({"ok": True, "token": tok}), extra=[self.sess_cookie(tok, d.get("keep", True))])
         if u.path == "/api/pair":                    # 還沒登入：主要主機拿配對暗號來對（或主要主機移除這台時把鑰匙作廢）
             d = self.jbody(body)
             if d.get("action") == "unwatch":         # 被監看的那頁：用這台的密碼或 PIN 碼取消
@@ -5419,6 +5482,11 @@ class Handler(BaseHTTPRequestHandler):
         if not self.authed():
             time.sleep(1)
             return self.send(401, '{"error":"密碼錯誤"}')
+        if u.path == "/api/session-cookie":          # 舊版瀏覽器升級：把原本存在 localStorage 的 vss_ 鑰匙換成主機 HttpOnly Cookie
+            given = self.headers.get("X-Token", "")
+            if not (self.sess and given.startswith("vss_")):
+                return self.send(400, '{"ok":false}')
+            return self.send(200, '{"ok":true}', extra=[self.sess_cookie(given, self.sess.get("keep", True))])
         if u.path == "/api/adguard-open":           # 打開 AdGuard Home 管理頁：跟雲端硬碟一樣先驗證，過了才給登入票
             return self.agh_open(body)
         if u.path == "/api/cloud-open":             # 打開雲端硬碟：每次都在這台驗證 PIN 碼、手機金鑰或密碼，過了才發登入票
@@ -5492,6 +5560,15 @@ class Handler(BaseHTTPRequestHandler):
                     return self.send(200, json.dumps({"ok": True, "message": "正在備份中"}, ensure_ascii=False))
                 COL.bg("backup", lambda: backup_run(manual=True))
                 return self.send(200, json.dumps({"ok": True, "message": "開始備份"}, ensure_ascii=False))
+            if d.get("action") == "show_key":        # 查解開密碼（網頁裝置需通過 recheck；配對主機不能直接讀取）
+                if self.peer:
+                    return self.send(403, '{"ok":false}')
+                return self.send(200, json.dumps({"ok": True, "key": bk_key()}))
+            if d.get("action") == "tg_pw":           # Telegram 備份是否附帶單檔打碼密碼（預設關閉）
+                if self.peer:
+                    return self.send(403, '{"ok":false}')
+                ok, msg = set_backup_tg_pw(bool(d.get("on")))
+                return self.send(200 if ok else 500, json.dumps({"ok": ok, "message": msg}, ensure_ascii=False))
             if d.get("action") == "key":             # 換解開密碼（網頁上改：sync＝其他主機也一起改；主要那台同步過來的：不再往外傳）
                 if "tz" in d:
                     bk_set_tz(d["tz"])
@@ -5566,12 +5643,15 @@ class Handler(BaseHTTPRequestHandler):
             me = self.sess
             ok, msg, tok = change_token()
             out = {"ok": ok, "message": msg, "token": tok}
+            extra = []
             if ok and me:                              # 換密碼會登出所有裝置：這台直接換一把新的
                 out["sess"] = sess_new(me["dev"], me.get("keep"), me.get("how", ""), me.get("os"))
-            return self.send(200 if ok else 500, json.dumps(out, ensure_ascii=False))
+                extra = [self.sess_cookie(out["sess"], me.get("keep", True))]
+            return self.send(200 if ok else 500, json.dumps(out, ensure_ascii=False), extra=extra)
         if u.path == "/api/sessions":                # 登入的裝置：列出來、登出一台、登出自己
             d = self.jbody(body)
             act, me = d.get("action"), (self.sess or {}).get("id", "")
+            extra = []
             if act in ("del", "out"):
                 sid = me if act == "out" else str(d.get("id") or "")
                 gone = sess_del(sid) if sid else []
@@ -5580,9 +5660,11 @@ class Handler(BaseHTTPRequestHandler):
                     threading.Thread(target=peer_cloud_revoke, daemon=True).start()
                 if act == "del" and gone:
                     log(f"登出了「{gone[0]['dev']}」")
+                if act == "out":
+                    extra = [self.sess_clear_cookie()]
             if act == "list" and d.get("dev"):
                 sess_name(me, d.get("dev"), d.get("os"))
-            return self.send(200, json.dumps({"ok": True, "list": sess_list(me)}, ensure_ascii=False))
+            return self.send(200, json.dumps({"ok": True, "list": sess_list(me)}, ensure_ascii=False), extra=extra)
         if u.path == "/api/cloud-revoke":           # 主要主機登出了一台裝置：這台的雲端硬碟通行證也全部作廢
             cloud_revoke()
             return self.send(200, '{"ok":true}')

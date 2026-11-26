@@ -161,6 +161,84 @@ class HardeningTest(unittest.TestCase):
             S.SHARE_FILE = old_f
             S.SHARE_CACHE.update(old_c)
 
+    def test_passkey_origin_and_sign_count(self):
+        from test_passkey import FakePhone
+        phone = FakePhone("http://localhost:8080")
+        ok, reg = S.pk_register_begin("localhost:8080")
+        self.assertTrue(ok)
+        # 來源主機／連接埠不符會被拒
+        self.assertFalse(S.pk_register_finish(phone.create(reg["challenge"]), host="localhost:9999")[0])
+        ok, reg = S.pk_register_begin("localhost:8080")
+        self.assertTrue(S.pk_register_finish(phone.create(reg["challenge"]), host="localhost:8080")[0])
+        # 正常遞增計數可登入；重送相同或倒退的 signCount 會被偵測為複製金鑰而拒絕
+        c1 = S.pk_challenge("webauthn.get")
+        self.assertTrue(S.pk_login_finish(phone.get(c1, cnt=5), host="localhost:8080")[0])
+        c2 = S.pk_challenge("webauthn.get")
+        self.assertFalse(S.pk_login_finish(phone.get(c2, cnt=5), host="localhost:8080")[0])
+        c3 = S.pk_challenge("webauthn.get")
+        self.assertFalse(S.pk_login_finish(phone.get(c3, cnt=6), host="evil.example")[0])
+
+    def test_session_cookie_csrf_protection(self):
+        tok = S.sess_new("Chrome", True, "密碼")
+        h = S.Handler.__new__(S.Handler)
+        h.command = "POST"
+        h.headers = {"Cookie": f"vs_sess={tok}", "Host": "mon.example"}
+        self.assertFalse(h.authed())
+        h.headers = {"Cookie": f"vs_sess={tok}", "Host": "mon.example", "X-Token": "cookie", "Origin": "https://evil.example"}
+        self.assertFalse(h.authed())
+        h.headers = {"Cookie": f"vs_sess={tok}", "Host": "mon.example", "X-Token": "cookie", "Origin": "https://mon.example"}
+        self.assertTrue(h.authed())
+        self.assertIsNotNone(h.sess)
+        h.command = "GET"
+        h.headers = {"Cookie": f"vs_sess={tok}"}
+        self.assertTrue(h.authed())
+
+    def test_backup_show_key_requires_recheck_and_status_omits_key(self):
+        st = S.backup_status()
+        self.assertNotIn("key", st)
+        self.assertTrue(st["has_key"])
+        self.assertTrue(S.recheck_need("/api/backup", {"action": "show_key"}))
+        self.assertTrue(S.recheck_need("/api/backup", {"action": "tg_pw", "on": True}))
+
+    def test_adblock_checksum_and_unit_hardening(self):
+        tmp = tempfile.mkdtemp()
+        old_u, old_fake = S.AB_UNIT_PATH, S.AB_FAKE
+        S.AB_UNIT_PATH = os.path.join(tmp, "vps-adblock.service")
+        S.AB_FAKE = True
+        try:
+            S.ab_unit()
+            with open(S.AB_UNIT_PATH, encoding="utf-8") as f:
+                unit = f.read()
+            self.assertIn("ProtectSystem=strict", unit)
+            self.assertIn("NoNewPrivileges=yes", unit)
+            self.assertIn("ProtectHome=yes", unit)
+        finally:
+            S.AB_UNIT_PATH, S.AB_FAKE = old_u, old_fake
+        # 驗證 SHA-256 校驗不符會失敗
+        sample = os.path.join(tmp, "AdGuardHome_linux_amd64.tar.gz")
+        with open(sample, "wb") as f:
+            f.write(b"fake-archive")
+        good = hashlib.sha256(b"fake-archive").hexdigest()
+        bad = "0" * 64
+        class FakeResp:
+            def __init__(self, body):
+                self._b = body
+            def __enter__(self):
+                return self
+            def __exit__(self, *a):
+                return False
+            def read(self, n=-1):
+                return self._b
+        orig_open = S.urllib.request.urlopen
+        try:
+            S.urllib.request.urlopen = lambda req, timeout=30: FakeResp(f"{good}  ./AdGuardHome_linux_amd64.tar.gz\n".encode())
+            S._ab_verify_sha256("https://example.invalid/AdGuardHome_linux_amd64.tar.gz", "AdGuardHome_linux_amd64.tar.gz", sample)
+            S.urllib.request.urlopen = lambda req, timeout=30: FakeResp(f"{bad}  ./AdGuardHome_linux_amd64.tar.gz\n".encode())
+            with self.assertRaises(RuntimeError):
+                S._ab_verify_sha256("https://example.invalid/AdGuardHome_linux_amd64.tar.gz", "AdGuardHome_linux_amd64.tar.gz", sample)
+        finally:
+            S.urllib.request.urlopen = orig_open
+
 
 if __name__ == "__main__":
     unittest.main()

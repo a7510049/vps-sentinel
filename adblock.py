@@ -145,6 +145,29 @@ def ab_pick(t):
     return None
 
 
+def _ab_verify_sha256(base_url, fname, path):
+    """下載官方 checksums.txt 並核對壓縮檔的 SHA-256 指紋，防下載途中遭掉包"""
+    chk_url = base_url.rsplit("/", 1)[0] + "/checksums.txt"
+    with urllib.request.urlopen(urllib.request.Request(chk_url, headers={"User-Agent": f"vps-sentinel/{VERSION}"}), timeout=30) as r:
+        txt = r.read(256 << 10).decode("utf-8", "replace")
+    want = ""
+    for line in txt.splitlines():
+        parts = line.strip().split()
+        if len(parts) >= 2 and re.fullmatch(r"[0-9a-fA-F]{64}", parts[0]):
+            name = parts[-1].lstrip("*./")
+            if os.path.basename(name) == fname:
+                want = parts[0].lower()
+                break
+    if not want:
+        raise RuntimeError("官方校驗檔裡找不到對應的 SHA-256")
+    h = hashlib.sha256()
+    with open(path, "rb") as f:
+        for chunk in iter(lambda: f.read(1 << 20), b""):
+            h.update(chunk)
+    if not hmac.compare_digest(h.hexdigest().lower(), want):
+        raise RuntimeError("下載檔案的 SHA-256 驗證不符")
+
+
 def ab_download():
     arch = AB_ARCH.get(os.uname().machine)
     if not arch:
@@ -153,10 +176,13 @@ def ab_download():
     last = None
     for u in AB_URLS:
         try:
+            url = u.format(a=arch)
+            fname = os.path.basename(urllib.parse.urlsplit(url).path)
             with tempfile.TemporaryDirectory() as tmp:
                 tgz = os.path.join(tmp, "a.tgz")
-                with urllib.request.urlopen(urllib.request.Request(u.format(a=arch), headers={"User-Agent": f"vps-sentinel/{VERSION}"}), timeout=120) as r, open(tgz, "wb") as f:
+                with urllib.request.urlopen(urllib.request.Request(url, headers={"User-Agent": f"vps-sentinel/{VERSION}"}), timeout=120) as r, open(tgz, "wb") as f:
                     shutil.copyfileobj(r, f, 1 << 20)
+                _ab_verify_sha256(url, fname, tgz)
                 with tarfile.open(tgz) as t:
                     m = ab_pick(t)
                     if not m:
@@ -182,6 +208,18 @@ Wants=network-online.target
 ExecStart={AB_BIN} -c {AB_YAML} -w {AB_DIR} --web-addr {AB_WEB} --no-permcheck
 Restart=always
 RestartSec=5
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+PrivateDevices=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+RestrictSUIDSGID=yes
+LockPersonality=yes
+CapabilityBoundingSet=CAP_NET_BIND_SERVICE CAP_DAC_READ_SEARCH
+ReadWritePaths={AB_DIR}
 
 [Install]
 WantedBy=multi-user.target

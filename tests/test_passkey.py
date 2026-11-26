@@ -89,6 +89,7 @@ class FakePhone:
         self.d = secrets.randbelow(S._N - 1) + 1
         self.x, self.y = S._ec_mul(self.d, S._G)
         self.cid = secrets.token_bytes(16)
+        self.cnt = 0
 
     def sign(self, msg):
         e = int.from_bytes(hashlib.sha256(msg).digest(), "big")
@@ -110,9 +111,12 @@ class FakePhone:
         return {"action": "finish", "name": name, "clientDataJSON": b64u(self.client("webauthn.create", challenge)),
                 "attestationObject": b64u(att)}
 
-    def get(self, challenge, flags=0x05):
+    def get(self, challenge, flags=0x05, cnt=None):
+        if cnt is None:
+            self.cnt += 1
+            cnt = self.cnt
         cd = self.client("webauthn.get", challenge)
-        ad = hashlib.sha256(self.rp.encode()).digest() + bytes([flags]) + b"\0\0\0\1"
+        ad = hashlib.sha256(self.rp.encode()).digest() + bytes([flags]) + int(cnt).to_bytes(4, "big")
         return {"action": "finish", "id": b64u(self.cid), "clientDataJSON": b64u(cd), "authenticatorData": b64u(ad),
                 "signature": b64u(self.sign(ad + hashlib.sha256(cd).digest()))}
 

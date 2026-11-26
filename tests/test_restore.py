@@ -54,7 +54,8 @@ class RestoreTest(unittest.TestCase):
                 break
             time.sleep(0.5)
         self.assertTrue(st["last"]["ok"], st["last"])
-        key = st["key"]
+        self.assertNotIn("key", st)
+        key = self.call(port, "/api/backup", {"action": "show_key"})[1]["key"]
         f = glob.glob(os.path.join(self.h[2], "data", "backups", NAME, "*.vsbk"))[-1]
         with open(f, "rb") as fh:
             data = fh.read()
@@ -151,7 +152,7 @@ class WebRestoreTest(unittest.TestCase):
             if not st["running"] and st["last"] and st["last"]["t"] > t0:
                 break
             time.sleep(0.5)
-        key = st["key"]
+        key = self.call(port, "/api/backup", {"action": "show_key"})[1]["key"]
         with open(glob.glob(os.path.join(self.old[2], "data", "backups", NAME, "*.vsbk"))[-1], "rb") as f:
             data = f.read()
 

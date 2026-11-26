@@ -600,7 +600,7 @@ def bk_to_tg(path, owner=None):
     if n > TG_PARTS_MAX:
         return f"備份太大（{fmt_size(total)}），Telegram 放不下"
     cap = f"🗄 <b>{html.escape(owner)}</b>　每日備份（{fmt_size(total)}{f'，分 {n} 段' if n > 1 else ''}）\n"
-    pw = vsbk_pass_of(path, bk_key()) if tg_private() else ""
+    pw = vsbk_pass_of(path, bk_key()) if (tg_private() and BACKUP_TG_PW) else ""
     if pw and owner != NAME:                       # 別台做的：確定這組真的打得開才附（那台的總密碼可能還沒同步）
         try:
             vsbk_decrypt(path, None, pw)
@@ -797,7 +797,7 @@ def bk_copies():
 def backup_status():
     with COL.lock:
         last = BK["last"]
-    return {"on": BACKUP_ON, "hour": BACKUP_HOUR, "key": bk_key(), "running": BK["running"], "last": last,
+    return {"on": BACKUP_ON, "hour": BACKUP_HOUR, "has_key": True, "tg_pw": BACKUP_TG_PW, "running": BK["running"], "last": last,
             "copies": bk_copies(), "where": bk_where(), "tz": BACKUP_TZ, "folder": BK_CLOUD_SUB, "tg": bool(TG_BOT and TG_CHAT),
             "peers": [p["name"] for p in PEERS]}
 
@@ -810,6 +810,16 @@ def set_backup(on):
         return False, f"無法寫入設定檔：{e}"
     BACKUP_ON = bool(on)
     return True, "已開啟每日備份" if on else "已關閉每日備份"
+
+
+def set_backup_tg_pw(on):
+    global BACKUP_TG_PW
+    try:
+        write_conf({"BACKUP_TG_PW": "on" if on else "off"})
+    except OSError as e:
+        return False, f"無法寫入設定檔：{e}"
+    BACKUP_TG_PW = bool(on)
+    return True, "已開啟：Telegram 備份將附上打碼密碼" if on else "已關閉：Telegram 備份不再附帶密碼"
 
 
 BK_LINK_HOURS = 24

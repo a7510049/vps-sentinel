@@ -273,7 +273,25 @@ fi
 # ── 1. Docker ──
 if ! command -v docker >/dev/null; then
   echo "▶ 安裝 Docker…"
-  curl -fsSL https://get.docker.com | sh >/dev/null 2>&1 || { echo "❌ Docker 安裝失敗"; exit 1; }
+  export DEBIAN_FRONTEND=noninteractive
+  apt-get update -qq >/dev/null 2>&1 || true
+  apt-get install -y -qq ca-certificates curl gnupg >/dev/null 2>&1 || true
+  DISTRO="$(grep -E '^ID=' /etc/os-release 2>/dev/null | head -1 | cut -d= -f2 | tr -d '"'\''[:space:]' || true)"
+  CODENAME="$(grep -E '^VERSION_CODENAME=' /etc/os-release 2>/dev/null | head -1 | cut -d= -f2 | tr -d '"'\''[:space:]' || true)"
+  if [ -n "$CODENAME" ] && [[ "$DISTRO" =~ ^(ubuntu|debian)$ ]] \
+     && install -m 0755 -d /etc/apt/keyrings \
+     && curl -fsSL "https://download.docker.com/linux/${DISTRO}/gpg" | gpg --dearmor --yes -o /etc/apt/keyrings/docker.gpg 2>/dev/null \
+     && chmod a+r /etc/apt/keyrings/docker.gpg \
+     && printf 'deb [arch=%s signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/%s %s stable\n' \
+        "$(dpkg --print-architecture)" "$DISTRO" "$CODENAME" > /etc/apt/sources.list.d/docker.list \
+     && apt-get update -qq >/dev/null 2>&1 \
+     && apt-get install -y -qq docker-ce docker-ce-cli containerd.io >/dev/null 2>&1; then
+    true
+  else
+    rm -f /etc/apt/sources.list.d/docker.list
+    apt-get update -qq >/dev/null 2>&1 || true
+    apt-get install -y -qq docker.io >/dev/null 2>&1 || { echo "❌ Docker 安裝失敗"; exit 1; }
+  fi
 fi
 command -v resize2fs >/dev/null || { apt-get update -qq && apt-get install -y -qq e2fsprogs; }
 need_crypt || exit 1
