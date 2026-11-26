@@ -3760,8 +3760,18 @@ function bkSummaryHTML(d){
   if (L) {
     if (L.msg) h += `<div class="bkerr">${I("warn")}<span>${esc(L.msg)}</span></div>`;
     const to = L.to || [];
-    if (to.length) h += `<div class="bkto">${to.map(x => { const tg = /Telegram/.test(x.where), nm = (/「(.+?)」/.exec(x.where) || [])[1];
-      return `<span class="${x.ok ? "ok" : "bad"}" title="${esc(x.where)}">${I(tg ? "bell" : nm ? "net" : "disk")}<em>${esc(tg ? "Telegram" : nm || "這台")}</em><i>${I(x.ok ? "ok" : "x")}</i></span>`; }).join("")}</div>`;
+    if (to.length) {
+      const dest = [];
+      for (const x of to) {
+        const tg = /Telegram/.test(x.where), nm = (/「(.+?)」/.exec(x.where) || [])[1];
+        const k = tg ? "tg" : nm ? "p:" + nm : "me";
+        let g = dest.find(y => y.k === k);
+        if (!g) dest.push(g = {k, ic: tg ? "bell" : nm ? "net" : "disk", name: tg ? "Telegram" : nm || "這台", ok: true, wh: []});
+        if (!x.ok) g.ok = false;
+        if (x.where) g.wh.push(x.where);
+      }
+      h += `<div class="bkto">${dest.map(x => `<span class="${x.ok ? "ok" : "bad"}" title="${esc(x.wh.join("；"))}">${I(x.ic)}<em>${esc(x.name)}</em><i>${I(x.ok ? "chk" : "x")}</i></span>`).join("")}</div>`;
+    }
     to.filter(x => !x.ok).forEach(x => { h += `<div class="bkerr">${I("warn")}<span><b>${esc(x.where)}沒有成功</b>${x.msg ? `<small>${esc(x.msg)}</small>` : ""}</span></div>`; });
     if (L.items && L.items.length) h += `<div class="bktags">${L.items.map(x => `<span>${esc(x)}</span>`).join("")}</div>`;
     if (L.big && L.big.length) h += `<div class="ntst">${I("info")}<span>太大略過：${esc(L.big.map(p => p.split("/").pop()).join("、"))}</span></div>`;
