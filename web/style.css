@@ -683,7 +683,7 @@ html.dhid .dash>.view{content-visibility:hidden;contain-intrinsic-size:auto none
   transition:border-radius var(--sp-fast),transform var(--sp-fast),background-color var(--t-fast) var(--ease)}
 .group>.li:first-child{border-top-left-radius:var(--r-lg);border-top-right-radius:var(--r-lg)}
 .group>.li:last-child{border-bottom-left-radius:var(--r-lg);border-bottom-right-radius:var(--r-lg)}
-.group>:not(:last-child),.group>.selfbox>*,.selfbox>:not(:last-child),.evs>.ev:not(:last-child):not(:has(+.day)){box-shadow:var(--cseg)}
+.group>:where(:not(:last-child)),.group>.selfbox>*,.selfbox>:where(:not(:last-child)),.evs>.ev:where(:not(:last-child):not(:has(+.day))){box-shadow:var(--cseg)}
 button.li.prs,a.li.prs{border-radius:var(--r-lg);transform:scale(.98);background:var(--s2)}
 @media (hover:hover){button.li:hover,a.li:hover{background:color-mix(in oklab,var(--card) 94%,var(--tx))}}
 .li .lab{flex:1;min-width:0;font-size:var(--fs-l);overflow-wrap:anywhere}
