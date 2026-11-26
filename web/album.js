@@ -1124,16 +1124,20 @@ function dockSync(){
 }
 function dockSlide(nav, prev, next){
   if (!nav || !prev || !next || prev === next || !anim()) return;
-  const nr = nav.getBoundingClientRect(), a = prev.getBoundingClientRect(), b = next.getBoundingClientRect();
-  if (!a.width || !b.width) return;
+  if (!prev.offsetWidth || !next.offsetWidth) return;
   let pill = nav.querySelector(":scope > .slide");
-  let x0 = a.left - nr.left, w0 = a.width;
-  if (pill) { const pr = pill.getBoundingClientRect(); x0 = pr.left - nr.left; w0 = pr.width; pill.getAnimations().forEach(x => x.cancel()); }
-  else { pill = document.createElement("i"); pill.className = "slide"; pill.setAttribute("aria-hidden", "true"); nav.prepend(pill); }
-  const x1 = b.left - nr.left, w1 = b.width, tk = ++DOCK_TK;
+  let x0 = prev.offsetLeft, w0 = prev.offsetWidth;
+  if (pill) {
+    const nr = nav.getBoundingClientRect(), pr = pill.getBoundingClientRect();
+    x0 = pr.left - nr.left - nav.clientLeft; w0 = pr.width;
+    pill.getAnimations().forEach(x => x.cancel());
+  } else {
+    pill = document.createElement("i"); pill.className = "slide"; pill.setAttribute("aria-hidden", "true"); nav.prepend(pill);
+  }
+  const x1 = next.offsetLeft, w1 = next.offsetWidth, tk = ++DOCK_TK;
   nav.classList.add("sliding");
   const an = pill.animate([{transform:`translate3d(${x0.toFixed(1)}px,0,0)`, width:`${w0.toFixed(1)}px`}, {transform:`translate3d(${x1.toFixed(1)}px,0,0)`, width:`${w1.toFixed(1)}px`}],
-    {duration:400, easing:"cubic-bezier(.24,1.08,.52,1)"});
+    {duration:320, easing:"cubic-bezier(.22,1,.36,1)"});
   an.onfinish = () => { if (tk !== DOCK_TK) return; nav.classList.remove("sliding"); pill.remove(); };
 }
 function tabSync(){

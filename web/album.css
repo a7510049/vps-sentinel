@@ -1650,8 +1650,7 @@ html.shy #shyc{visibility:visible;opacity:1;scale:1;transition:opacity var(--t-f
   transition:transform var(--sp),opacity var(--t-mid) var(--ease)}
 .adock[hidden]{display:none}
 .adock>.slide{position:absolute;left:0;top:5px;bottom:5px;border-radius:var(--r-pill);background:var(--pill-bg);box-shadow:var(--pill-sh);pointer-events:none;z-index:0;will-change:transform,width}
-.adock>button{position:relative;z-index:1;height:44px;padding:0 16px;border-radius:var(--r-pill);display:inline-flex;align-items:center;gap:7px;font-size:var(--fs-s);font-weight:650;color:var(--tx2);white-space:nowrap;transition:color var(--t-fast) var(--ease),transform var(--sp-fast)}
-.adock>button:active{transform:scale(.95)}
+.adock>button{position:relative;z-index:1;height:44px;padding:0 16px;border-radius:var(--r-pill);display:inline-flex;align-items:center;gap:7px;font-size:var(--fs-s);font-weight:650;color:var(--tx2);white-space:nowrap;transition:color var(--t-fast) var(--ease)}
 .adock>button::before{content:"";position:absolute;inset:0;border-radius:inherit;background:var(--pill-bg);box-shadow:var(--pill-sh);opacity:0;z-index:-1}
 .adock>button.on{color:var(--tx)}
 .adock>button.on::before{opacity:1}
