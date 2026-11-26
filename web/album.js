@@ -869,30 +869,39 @@ function stats(){
   const days = new Set(), pl = new Set(), ct = new Set(), cc = new Set(), PS = PH.filter(p => !p.o);   // 截圖、網路圖片不算
   PS.forEach(p => { const d = pd(p.x.dt); if (d) days.add(d.k); if (p.p) { pl.add(p.p.n); if (cityKey(p)) ct.add(cityKey(p)); if (p.p.cc) cc.add(p.p.cc); } });
   const many = ct.size > 1;
-  const v = PS.filter(isVid).length, it = [[PS.length - v, "張照片"], [v, "段影片"], [days.size, "天"], [D.loc && cc.size > 1 ? cc.size : 0, "個地區"], [D.loc ? (many ? ct.size : pl.size) : 0, many ? "個城市" : "個地點"]].filter(x => x[0] > 0);
+  const v = PS.filter(isVid).length;
+  const it = [
+    [PS.length - v, "照片", "張", "ph"],
+    [v, "影片", "段", "vd"],
+    [days.size, "天數", "天", "dy"],
+    [D.loc && cc.size > 1 ? cc.size : 0, "地區", "個", "cc"],
+    [D.loc ? (many ? ct.size : pl.size) : 0, many ? "城市" : "地點", "個", "pl"]
+  ].filter(x => x[0] > 0);
   box.hidden = !!WHO || it.length < 2;
   const per = {}; PS.forEach(p => { const d = pd(p.x.dt); if (d) per[d.k] = (per[d.k] || 0) + 1; });
-  const ks = Object.keys(per).sort(), mx = Math.max(1, ...Object.values(per));
+  const ks = Object.keys(per).sort();
   const md = k => `${+k.slice(4, 6)}/${+k.slice(6, 8)}`, vt = PS.filter(isVid).reduce((a, p) => a + (p.vd || 0), 0);
   /* 每天幾張的小長條：最多 10 根，天數多時一根代表連續幾天（照日曆分段，中間沒拍的那段留一根很矮的） */
   const kd = k => Date.UTC(+k.slice(0, 4), +k.slice(4, 6) - 1, +k.slice(6, 8)) / 864e5, d0 = ks.length ? kd(ks[0]) : 0, span = ks.length ? kd(ks[ks.length - 1]) - d0 + 1 : 0;
   const sz = ks.length <= 10 ? 0 : Math.ceil(span / 10), bins = [];
   ks.forEach(k => { const j = sz ? Math.floor((kd(k) - d0) / sz) : bins.length; (bins[j] = bins[j] || {ks:[], n:0}).ks.push(k); bins[j].n += per[k]; });
   const bx = Math.max(1, ...bins.filter(Boolean).map(b => b.n));
-  const bar = (b, j) => { if (!b) return `<i style="height:2px"></i>`;   // 這幾天沒拍
+  const bar = b => { if (!b) return `<i style="height:3px"></i>`;   // 這幾天沒拍
     const t = b.ks.length > 1 ? `${md(b.ks[0])}–${md(b.ks[b.ks.length - 1])}・${b.n} 張` : `${md(b.ks[0])}・${b.n} 張`;
-    return `<button data-sday="${b.ks[0]}" data-t="${t}" aria-label="${t}" style="height:${Math.round(4 + b.n / bx * 14)}px"></button>`; };
-  const gfx = t => t === "天" && ks.length > 1   // 兩頭寫起訖日期，指著或點一根寫那幾天幾張、點了跳過去
-      ? `<span class="sgb">${Array.from({length:sz ? Math.ceil(span / sz) : bins.length}, (_, j) => bar(bins[j], j)).join("")}</span><span class="sgd num" data-sgd="${md(ks[0])}–${md(ks[ks.length - 1])}">${md(ks[0])}–${md(ks[ks.length - 1])}</span>`
-    : t === "個地區" ? `<span class="sgf" aria-hidden="true">${[...cc].slice(0, 5).map(flagImg).join("")}</span>`   // 去過的地區疊成一排旗子
-    : t === "段影片" && vt >= 1 ? `<span class="sgd num">共 ${((t, h, m) => h ? `${h} 小時${m ? ` ${m} 分` : ""}` : m ? `${m} 分${t % 60 ? ` ${t % 60} 秒` : ""}` : `${t} 秒`)(Math.round(vt), Math.floor(vt / 3600), Math.floor(vt % 3600 / 60))}</span>` : "";   // 影片加起來多長
+    return `<button data-sday="${b.ks[0]}" data-t="${t}" aria-label="${t}" style="height:${Math.round(5 + b.n / bx * 19)}px"></button>`; };
+  const acc = k => k === "dy" && ks.length > 1 ? `<span class="sgd num" data-sgd="${md(ks[0])}–${md(ks[ks.length - 1])}">${md(ks[0])}–${md(ks[ks.length - 1])}</span>`
+    : k === "cc" ? `<span class="sgf" aria-hidden="true">${[...cc].slice(0, 4).map(flagImg).join("")}</span>`
+    : k === "vd" && vt >= 1 ? `<span class="sgd num">共 ${((t, h, m) => h ? `${h} 小時${m ? ` ${m} 分` : ""}` : m ? `${m} 分${t % 60 ? ` ${t % 60} 秒` : ""}` : `${t} 秒`)(Math.round(vt), Math.floor(vt / 3600), Math.floor(vt % 3600 / 60))}</span>` : "";
+  const bars = k => k === "dy" && ks.length > 1 ? `<span class="sgb">${Array.from({length:sz ? Math.ceil(span / sz) : bins.length}, (_, j) => bar(bins[j])).join("")}</span>` : "";
   let tripKm = 0;
   if (D.loc && !WHO && isTrip()) {
     const gp = PS.filter(p => p.g && !p.broken);
     for (let k = 1; k < gp.length; k++) tripKm += gdist(gp[k - 1].g, gp[k].g) / 1000;
   }
-  box.innerHTML = it.map(([n, t]) => `<div class="st"><b class="num" data-n="${n}">${n}</b><small>${t}</small>${gfx(t)}</div>`).join("")
-    + (D.loc && !WHO ? `<div class="st" data-skm${tripKm >= 1 ? "" : " hidden"}><b class="num" data-n="${tripKm >= 1 ? (tripKm >= 100 ? Math.round(tripKm) : +tripKm.toFixed(1)) : 0}">${tripKm >= 1 ? (tripKm >= 100 ? Math.round(tripKm) : +tripKm.toFixed(1)) : 0}</b><small>公里</small></div>` : "");
+  const kmVal = tripKm >= 1 ? (tripKm >= 100 ? Math.round(tripKm) : +tripKm.toFixed(1)) : 0;
+  box.innerHTML = it.map(([n, lb, u, k]) => `<div class="st" data-sk="${k}"><div class="sth2"><small>${lb}</small>${acc(k)}</div><div class="stv"><b class="num" data-n="${n}">${n}</b><em>${u}</em>${bars(k)}</div></div>`).join("")
+    + (D.loc && !WHO ? `<div class="st" data-sk="km" data-skm${tripKm >= 1 ? "" : " hidden"}><div class="sth2"><small>距離</small></div><div class="stv"><b class="num" data-n="${kmVal}">${kmVal}</b><em>公里</em></div></div>` : "");
+  box.dataset.n = box.querySelectorAll(".st:not([hidden])").length;
   if (!anim() || !("IntersectionObserver" in window)) return;
   box.querySelectorAll("b").forEach(b => { b.textContent = "0"; });
   if (STIO) STIO.disconnect();
@@ -901,7 +910,7 @@ function stats(){
     const step = t => { const k = Math.min(1, (t - t0) / (T.slow * 2)), e = 1 - Math.pow(1 - k, 3);
       bs.forEach(b => { const n = +b.dataset.n, d = String(b.dataset.n).includes(".") ? 1 : 0; b.textContent = (n * e).toFixed(d); });
       if (k < 1) requestAnimationFrame(step); };
-    requestAnimationFrame(step); }, {threshold:.6});
+    requestAnimationFrame(step); }, {threshold:.35});
   STIO.observe(box);
   flagFix(box);
   stFit();
@@ -980,13 +989,10 @@ addEventListener("pointerout", e => { if (e.pointerType !== "mouse") return; con
 /* 數字太長（例如走了 1234 公里）格子放不下時字縮小一點：照最後的數字量，跑數字途中也不會超出畫面 */
 function stFit(){
   document.querySelectorAll(".stats [data-sgd]").forEach(sgdFit);
-  document.querySelectorAll(".stats .st:not([hidden]) b").forEach(b => {
-    const was = b.textContent, cs = getComputedStyle(b.parentNode);
-    b.style.fontSize = ""; b.textContent = b.dataset.n; b.style.width = "max-content";
-    const w = b.offsetWidth, room = b.parentNode.clientWidth - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight);
-    b.style.width = ""; b.textContent = was;
-    if (w > room && room > 0) b.style.fontSize = (parseFloat(getComputedStyle(b).fontSize) * room / w * .96).toFixed(1) + "px";
-  });
+  const box = $(".stats"); if (!box) return;
+  const vis = [...box.querySelectorAll(".st:not([hidden])")];
+  box.dataset.n = vis.length;
+  vis.forEach((c, i) => c.classList.toggle("wide", vis.length % 2 === 1 && i === vis.length - 1));
 }
 /* 結尾：三張照片疊成一疊（跟標誌一樣），點了播放 */
 function finCol(){
