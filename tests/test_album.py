@@ -150,25 +150,47 @@ class Album(Server):
         self.assertEqual(self.req("GET", "/a/AAAAAAAAAA/m")[0], 404)
 
         # 沒有 ffmpeg：瀏覽器看得了的原圖直接給；看的照片一律加密送出，直接抓網址拿到的是亂碼
+        s, b, h = self.req("GET", f"/a/{code}")
+        self.assertEqual(s, 200)
+        self.assertIn("default-src 'none'", h.get("Content-Security-Policy", ""))
+        self.assertNotIn("https:", h.get("Content-Security-Policy", ""))
         s, b, h = self.req("GET", f"/a/{code}/i/{p0['i']}/s")
         self.assertEqual(s, 200)
         self.assertNotEqual(b[:2], b"\xff\xd8")
-        self.assertEqual((h["Content-Type"], h["X-Alb-E"], h["X-Alb-T"]), ("application/octet-stream", "0", "image/jpeg"))
-        k = json.loads(self.req("GET", f"/a/{code}/k")[1])
+        self.assertEqual((h["Content-Type"], h["X-Alb-T"]), ("application/octet-stream", "image/jpeg"))
+        self.assertTrue(h["X-Alb-E"].startswith("0-"))
+        self.assertEqual(self.req("GET", f"/a/{code}/k", hdr={"Sec-Fetch-Dest": "document", "Sec-Fetch-Site": "none"})[0], 403)
+        k = json.loads(self.req("GET", f"/a/{code}/k", hdr={"Sec-Fetch-Site": "same-origin"})[1])
+        self.assertEqual(k["id"], h["X-Alb-E"])
         g = seal_mod(self.conf)
         self.assertTrue(g["_seal_lib"]())
-        plain = g["_gcm"](True, base64.b64decode(k["k"]), b[:12], b[12:], b"")
+        aad = f"/a/{code}/i/{p0['i']}/s".encode()
+        plain = g["_gcm"](True, base64.b64decode(k["k"]), b[:12], b[12:], aad)
         self.assertEqual(plain[:2], b"\xff\xd8")
-        c = http.client.HTTPConnection("127.0.0.1", self.port, timeout=20)             # 不能在背景解開的瀏覽器：登記時說一聲，照舊給一般圖片
-        c.request("GET", f"/a/{code}/m?pl=1")
+        # 一般瀏覽器或下載工具傳 ?pl=1 不能繞過加密
+        c = http.client.HTTPConnection("127.0.0.1", self.port, timeout=20)
+        c.request("GET", f"/a/{code}/m?pl=1", headers={"User-Agent": "Mozilla/5.0 Chrome/130.0"})
+        r = c.getresponse()
+        r.read()
+        ck_chr = "; ".join(x.split(";")[0] for x in r.msg.get_all("Set-Cookie"))
+        c.close()
+        self.assertNotIn("vsap_", ck_chr)
+        s, b, h = self.req("GET", f"/a/{code}/i/{p0['i']}/s", hdr={"Cookie": ck_chr, "User-Agent": "Mozilla/5.0 Chrome/130.0"})
+        self.assertEqual(h["Content-Type"], "application/octet-stream")
+        # 只有 LINE 等內建瀏覽器才允許 ?pl=1 降級為一般圖片；且把 cookie 搬去一般瀏覽器依然加密
+        line_ua = "Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) Mobile/15E148 Line/14.12.0"
+        c = http.client.HTTPConnection("127.0.0.1", self.port, timeout=20)
+        c.request("GET", f"/a/{code}/m?pl=1", headers={"User-Agent": line_ua})
         r = c.getresponse()
         r.read()
         ck = "; ".join(x.split(";")[0] for x in r.msg.get_all("Set-Cookie"))
         c.close()
         self.assertIn("vsap_", ck)
-        s, b, h = self.req("GET", f"/a/{code}/i/{p0['i']}/s", hdr={"Cookie": ck})
+        s, b, h = self.req("GET", f"/a/{code}/i/{p0['i']}/s", hdr={"Cookie": ck, "User-Agent": line_ua})
         self.assertEqual((b[:2], h["Content-Type"]), (b"\xff\xd8", "image/jpeg"))
-        k2 = json.loads(self.req("GET", f"/a/{code}/k", hdr={"Cookie": ck})[1])
+        s, b, h = self.req("GET", f"/a/{code}/i/{p0['i']}/s", hdr={"Cookie": ck, "User-Agent": "Mozilla/5.0 Chrome/130.0"})
+        self.assertEqual(h["Content-Type"], "application/octet-stream")
+        k2 = json.loads(self.req("GET", f"/a/{code}/k", hdr={"Cookie": ck, "Sec-Fetch-Site": "same-origin"})[1])
         self.assertNotEqual(k2["k"], k["k"])                                             # 每支手機的鑰匙不一樣
         s, b, h = self.req("GET", f"/a/{code}/i/{p0['i']}/o")
         self.assertIn("attachment", h["Content-Disposition"])
@@ -617,6 +639,25 @@ class AlbumThumbs(Server):
             if f.endswith(".bin"):
                 with open(os.path.join(self.tmp.name, "data", "album-cache", f), "rb") as fh:
                     self.assertEqual(fh.read(4), b"VSE1")                              # 影片也是加密存的
+        # 不開放下載時：擋掉直接開分頁下載影片／音樂，但相簿內播放器照常能播
+        c.request("POST", "/api/album", body=json.dumps({"action": "edit", "id": a["id"], "dl": 0}), headers={"X-Token": TOKEN})
+        self.assertEqual(c.getresponse().status, 200)
+        c.request("GET", f"/a/{code}/i/{v['i']}/v", headers={"Sec-Fetch-Dest": "document", "Sec-Fetch-Mode": "navigate", "Sec-Fetch-Site": "same-origin"})
+        r = c.getresponse()
+        r.read()
+        self.assertEqual(r.status, 403)
+        c.request("GET", f"/a/{code}/music", headers={"Sec-Fetch-Dest": "document", "Sec-Fetch-Mode": "navigate", "Sec-Fetch-Site": "same-origin"})
+        r = c.getresponse()
+        r.read()
+        self.assertEqual(r.status, 403)
+        c.request("GET", f"/a/{code}/i/{v['i']}/v", headers={"Sec-Fetch-Dest": "video", "Sec-Fetch-Site": "same-origin", "Range": "bytes=0-15"})
+        r = c.getresponse()
+        r.read()
+        self.assertEqual(r.status, 206)
+        c.request("GET", f"/a/{code}/music", headers={"Sec-Fetch-Dest": "audio", "Sec-Fetch-Site": "same-origin", "Range": "bytes=0-15"})
+        r = c.getresponse()
+        r.read()
+        self.assertEqual(r.status, 206)
 
 
 if __name__ == "__main__":

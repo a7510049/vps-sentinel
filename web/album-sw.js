@@ -1,6 +1,7 @@
 /* 相簿的照片是加密送來的：在看的人的瀏覽器裡解開，再交給網頁（直接抓網址、用下載工具拿到的是亂碼） */
 const KEYS = new Map();                                       // "相簿代碼|鑰匙代號" → 解密鑰匙（Promise）
 const b64 = s => Uint8Array.from(atob(s), c => c.charCodeAt(0));
+const ENC = new TextEncoder();
 
 self.addEventListener("install", () => self.skipWaiting());
 self.addEventListener("activate", e => e.waitUntil(self.clients.claim()));
@@ -11,11 +12,11 @@ function keyOf(code, kid, fresh){
   const p = fetch(`/a/${code}/k`, {credentials:"same-origin", cache:"no-store"}).then(r => r.ok ? r.json() : null).then(j => {
     if (!j || !j.k) return null;
     const k = crypto.subtle.importKey("raw", b64(j.k), "AES-GCM", false, ["decrypt"]);
-    if (j.id !== kid) { KEYS.set(code + "|" + j.id, k); return null; }
+    if (j.id !== kid) { KEYS.set(code + "|" + j.id, k); return "old"; }
     return k;
   }).catch(() => null);
   KEYS.set(id, p);
-  p.then(k => { if (!k) KEYS.delete(id); });
+  p.then(k => { if (!k || k === "old") KEYS.delete(id); });
   return p;
 }
 
@@ -37,13 +38,14 @@ async function fetchDec(req, code, again){
   if (!kid || !r.ok) return {raw:r};
   const b = await r.arrayBuffer();
   if (b.byteLength < 28) return {raw:new Response("", {status:502})};
-  const iv = new Uint8Array(b, 0, 12), ct = new Uint8Array(b, 12);
+  const iv = new Uint8Array(b, 0, 12), ct = new Uint8Array(b, 12), aad = ENC.encode(new URL(req.url).pathname);
   let keyErr = false;
   for (const fresh of [false, true]) {
     const k = await keyOf(code, kid, fresh);
     if (!k) { keyErr = true; break; }
+    if (k === "old") break;                                   // 鑰匙已輪換：跳出直接重抓一次新版密文
     try {
-      const p = await crypto.subtle.decrypt({name:"AES-GCM", iv}, k, ct);
+      const p = await crypto.subtle.decrypt({name:"AES-GCM", iv, additionalData:aad}, k, ct);
       const h = {buf:p, type:r.headers.get("X-Alb-T") || "image/jpeg"};
       memPut(req.url, p, h.type);
       return {h};

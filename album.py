@@ -270,11 +270,31 @@ def alb_dev_hash(tok):
 
 
 ALB_E = os.environ.get("SENTINEL_ALB_E", "1") != "0"     # 照片加密傳送（測試可關掉）
+ALB_KEY_ROT = 86400                                       # 照片解密鑰匙每天自動輪換一次（換密碼也會立刻失效）
+ALB_WEBVIEW_UA = re.compile(r"Line/|FBAN|FBAV|Instagram|MicroMessenger|Threads|Twitter|Snapchat|KAKAOTALK|BytedanceWebview|TikTok|;\s*wv\)", re.I)
+ALB_CSP = ("; default-src 'none'; script-src 'self'; style-src 'self' 'unsafe-inline'"
+           "; img-src 'self' data: blob:; media-src 'self' blob:; font-src 'self'"
+           "; connect-src 'self'; worker-src 'self'; form-action 'self'; object-src 'none'; base-uri 'none'")
 
 
-def alb_ekey(a, th):
-    """這支手機看這本相簿的照片鑰匙（AES-256-GCM）：主機不用記，每次照通行證算出來"""
-    return hmac.new((a["k"] + "|e").encode(), (a["id"] + "|" + th).encode(), hashlib.sha256).digest()
+def alb_webview(h):
+    """是不是不支援背景解密的 App 內建瀏覽器（像 LINE、FB、IG、微信）"""
+    return bool(ALB_WEBVIEW_UA.search(h.headers.get("User-Agent") or ""))
+
+
+def alb_key_ep():
+    return int(time.time() // ALB_KEY_ROT)
+
+
+def alb_kid(th, ep):
+    return f"{th[:8] or '0'}-{ep}"
+
+
+def alb_ekey(a, th, ep=None):
+    """這支手機看這本相簿的照片鑰匙（AES-256-GCM）：每天輪換、換密碼立即作廢"""
+    ep = alb_key_ep() if ep is None else ep
+    pw = (a.get("pw") or {}).get("h", "")[:16]
+    return hmac.new((a["k"] + "|e").encode(), f"{a['id']}|{th}|{ep}|{pw}".encode(), hashlib.sha256).digest()
 
 
 def alb_pl_val(a, th):
@@ -287,7 +307,9 @@ def alb_th(h, a):
 
 
 def alb_plain_ok(h, a, th):
-    """瀏覽器不能在背景解開照片（例如 LINE 裡面的瀏覽器）：這支手機登記時說過，就照舊給一般圖片"""
+    """只有真的不能在背景解開的 App 內建瀏覽器（例如 LINE）才允許明文傳圖，一般瀏覽器一律強制加密"""
+    if not alb_webview(h):
+        return False
     for part in (h.headers.get("Cookie") or "").split(";"):
         k, _, v = part.strip().partition("=")
         if k == f"vsap_{a['id']}":
@@ -295,15 +317,30 @@ def alb_plain_ok(h, a, th):
     return False
 
 
-def alb_img_out(h, a, b, ct, cache="private, max-age=604800, immutable", own=False):
+def alb_media_ok(h, a):
+    """影片、原況照片、背景音樂：擋掉跨站讀取；不開放下載的相簿也擋掉直接開分頁下載"""
+    sfs = h.headers.get("Sec-Fetch-Site") or ""
+    if sfs in ("cross-site", "same-site"):
+        return False
+    if alb_dl(a) == 0:
+        sfd = h.headers.get("Sec-Fetch-Dest") or ""
+        sfm = h.headers.get("Sec-Fetch-Mode") or ""
+        if sfd in ("document", "iframe", "object", "embed") or sfm == "navigate":
+            return False
+    return True
+
+
+def alb_img_out(h, a, b, ct, cache="private, max-age=86400", own=False):
     """看的照片一律加密送出（album-sw.js 在看的人的瀏覽器裡解開）；直接抓網址、用下載工具拿到的是亂碼"""
     extra = []
     if ALB_E and not own and _seal_lib():
         th = alb_th(h, a)
         if not alb_plain_ok(h, a, th):
+            ep = alb_key_ep()
             iv = secrets.token_bytes(12)
-            b = iv + _gcm(False, alb_ekey(a, th), iv, b, b"")
-            extra = [("X-Alb-E", th[:8] or "0"), ("X-Alb-T", ct)]
+            aad = urllib.parse.urlsplit(h.path).path.encode()
+            b = iv + _gcm(False, alb_ekey(a, th, ep), iv, b, aad)
+            extra = [("X-Alb-E", alb_kid(th, ep)), ("X-Alb-T", ct)]
             ct = "application/octet-stream"
     h.send_response(200)
     h.send_header("Content-Type", ct)
@@ -3381,7 +3418,7 @@ def alb_http(h, method):
         return False
     code, rest = m[1], m[2] or ""
     if rest == "" and method == "GET":
-        return h.send(200, alb_page(h, code), "text/html; charset=utf-8", etag=True) or True
+        return h.send(200, alb_page(h, code), "text/html; charset=utf-8", csp=ALB_CSP, etag=True) or True
     if method == "POST" and (h.headers.get("Sec-Fetch-Site") or "") in ("cross-site", "same-site"):
         return h.send(403, '{"ok":false,"message":"只能從相簿頁面送出"}') or True   # 別的網站假冒朋友送東西（通行證已經是 SameSite=Strict，這裡再擋一層）
     a = alb_find(code)
@@ -3470,15 +3507,22 @@ def alb_http(h, method):
         if rest == "/m":
             extra = [("Set-Cookie", f"vsad_{a['id']}={new}; Path=/a/{code}; Max-Age={400 * 86400}; HttpOnly; SameSite=Strict" + sec)] if new else []
             th = alb_dev_hash(new or alb_dev_tok(h, a))
-            if "pl=1" in (urllib.parse.urlsplit(h.path).query or ""):     # 這個瀏覽器不能在背景解開照片
+            if "pl=1" in (urllib.parse.urlsplit(h.path).query or "") and alb_webview(h):     # 只有真的不支援背景解密的 App 內建瀏覽器（像 LINE）才允許降級
                 extra.append(("Set-Cookie", f"vsap_{a['id']}={alb_pl_val(a, th)}; Path=/a/{code}; Max-Age={400 * 86400}; HttpOnly; SameSite=Strict" + sec))
             elif f"vsap_{a['id']}=" in (h.headers.get("Cookie") or ""):
                 extra.append(("Set-Cookie", f"vsap_{a['id']}=; Path=/a/{code}; Max-Age=0; HttpOnly; SameSite=Strict" + sec))
             return h.send(200, json.dumps(alb_manifest(a, th), ensure_ascii=False, separators=(",", ":")), extra=extra) or True
     if rest == "/k" and not own:                       # 這支手機解開照片的鑰匙（album-sw.js 來拿）
-        th = alb_th(h, a)
-        return h.send(200, json.dumps({"k": base64.b64encode(alb_ekey(a, th)).decode(), "id": th[:8] or "0"}), cache=False) or True
+        sfs = h.headers.get("Sec-Fetch-Site") or ""
+        sfd = h.headers.get("Sec-Fetch-Dest") or ""
+        sfm = h.headers.get("Sec-Fetch-Mode") or ""
+        if (sfs and sfs != "same-origin") or sfd == "document" or sfm == "navigate":
+            return h.send(403, '{"error":"不能直接存取"}', cache=False) or True
+        th, ep = alb_th(h, a), alb_key_ep()
+        return h.send(200, json.dumps({"k": base64.b64encode(alb_ekey(a, th, ep)).decode(), "id": alb_kid(th, ep)}), cache=False) or True
     if rest == "/music":                               # 幻燈片的背景音樂（資料夾裡的那首歌）
+        if not own and not alb_media_ok(h, a):
+            return h.send(403, '{"error":"只能在相簿頁面播放"}', cache=False) or True
         mu = alb_index(a, scan=False).get("mu")
         p = alb_path(a["dir"])
         src = os.path.join(p, mu["n"]) if mu and p else ""
@@ -3532,6 +3576,8 @@ def alb_http(h, method):
         if kind == "o" and meta.get("vid") and (dlm == 1 or not a["loc"] or alb_up_who(meta["n"])):   # 影片只給壓縮的（定位也一起拿掉了）
             vk = "v"
         if vk or kind in ("v", "m"):
+            if kind != "o" and not own and not alb_media_ok(h, a):
+                return h.send(403, '{"error":"只能在相簿頁面播放"}', cache=False) or True
             ck = alb_ckey(a, pid, meta)
             info = alb_vinfo(ck, vk) if vk else None
             if not info:
