@@ -1419,6 +1419,7 @@ function flyRows(f, d, list, n, byHr, tz, anim){
     rows = [...box.children].slice(0, want);
   }
   const io = flyObs(f), vh = innerHeight, offs = FLYSTILL ? [] : rows.map(r => { const rc = r.getBoundingClientRect(); return rc.bottom < 0 || rc.top > vh; });   // 先一次量好哪幾列在畫面外
+  let hasBx = false, hasTag = false;
   rows.forEach((r, i) => {
     const p = items[i], v = flyRowV(p, FLYS.tab, tz), off = offs[i] || FLYSTILL || fresh.has(r);   // 新長出來的列直接寫好字
     if (io && !r._obs) { r._obs = 1; io.observe(r); }
@@ -1426,7 +1427,7 @@ function flyRows(f, d, list, n, byHr, tz, anim){
     const sig = p ? [p.id, p.fids ? v.t : "", v.st, v.reg, v.m].join("|") : "";   // 同一班的時間、狀態、登機門、機型變了：整列淡淡亮一下（看得出哪一班剛變）
     if (p && r._sig && r._sig !== sig && r.dataset.id === p.id && !off && anim !== false && canAnim()) { r.classList.remove("chg"); void r.offsetWidth; r.classList.add("chg"); }
     r._sig = sig;
-    r.dataset.id = p ? p.id : ""; r.classList.toggle("bad", v.cls === "bad"); r.classList.toggle("hot", v.cls === "hot"); r.querySelector(".fk.t").classList.toggle("late", !!v.late); r.querySelector(".fk.t").classList.toggle("early", !!v.early); r.querySelector(".fk.reg").classList.toggle("gch", !!v.gch); r.querySelector(".fk.m").classList.toggle("gch", !!v.mch); r.classList.toggle("done", /已到|已飛/.test(v.st || "")); r.classList.toggle("empty", !p); r.classList.toggle("nopc", !!p && !v.pc); r.classList.toggle("nopl", !v.pl); r.classList.toggle("sel", !!p && p.id === FLYSEL);
+    r.dataset.id = p ? p.id : ""; r.classList.toggle("bad", v.cls === "bad"); r.classList.toggle("hot", v.cls === "hot"); r.querySelector(".fk.t").classList.toggle("late", !!v.late); r.querySelector(".fk.t").classList.toggle("early", !!v.early); r.querySelector(".fk.reg").classList.toggle("gch", !!v.gch); r.querySelector(".fk.m").classList.toggle("gch", !!v.mch); r.classList.toggle("done", /已到|已飛/.test(v.st || "")); r.classList.toggle("empty", !p); r.classList.toggle("nopc", !!p && !v.pc); r.classList.toggle("nopl", !v.pl); r.classList.toggle("no3", !v.reg && !v.bx && !v.m); r.classList.toggle("sel", !!p && p.id === FLYSEL);
     r.classList.toggle("onr", !!p && !!p.live && p.x != null && !flyDone(p) && (FLYS.tab === "arr" || FLYS.tab === "dep") && !!flyAl(p.fn));   // 雷達上看得到這班：標誌右下角一個點
     const g = (FLYS.tab === "gnd" || FLYS.tab === "cargo") && !!p, gh = g && (i === 0 || items[i - 1] && flyGo(items[i - 1], FLYS.tab) !== v.gout) ? (FLYS.tab === "gnd" ? v.gout ? "準備起飛" : "剛降落" : v.gout ? "起飛" : "降落") : "";   // 機坪、貨機：降落、起飛分兩段，每段第一列上面寫標題
     r.classList.toggle("gh", !!gh); if ((r.dataset.gh || "") !== gh) r.dataset.gh = gh;
@@ -1436,11 +1437,14 @@ function flyRows(f, d, list, n, byHr, tz, anim){
     if ((fl.dataset.c || "") !== v.cc) { fl.dataset.c = v.cc; fl.classList.remove("ok"); fl.style.visibility = ""; v.cc ? fl.src = `/api/fly-logo?k=@${v.cc}` : fl.removeAttribute("src"); fl.hidden = !v.cc; }
     flyLogoSet(r.querySelector(".fk.fal .alg"), p ? flyAl(p.fn) : "");
     const [tag, tk] = flyTags(p, v), tc = "ftag" + (tag ? " on" + (tk ? " " + tk : "") : ""), te = r.querySelector(".ftag");
+    if (v.bx) hasBx = true;
+    if (tag) hasTag = true;
     if (te.textContent !== tag || te.className !== tc) { const was = te.textContent; te.textContent = tag; te.className = tc;
       if (was && tag && canAnim() && !off) te.animate([{opacity:0, transform:"scale(.9)"}, {opacity:1, transform:"none"}], {duration:T.mid, easing:EASE}); }   // 換字（例如 12 分後 → 11 分後）：淡入
     put(r.querySelector(".fsh"), v.sh);
     const rg = r.querySelector(".fk.reg"); if ((rg.dataset.bx || "") !== v.bx) rg.dataset.bx = v.bx;   // 手機：轉盤／櫃台接在登機門後面
   });
+  const bd = f.querySelector(".board"); bd.classList.toggle("hasbx", hasBx); bd.classList.toggle("hastag", hasTag);
   const fr = [...fresh];
   if (!FLYSTEP) { clearTimeout(FLYDT); box.querySelectorAll(":scope>.fr.pend").forEach(r => r.classList.remove("pend")); }   // 一般更新：還沒放出來的直接放出來
   if (FLYSTEP) fr.forEach(r => r.classList.add("pend"));
