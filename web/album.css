@@ -1584,62 +1584,74 @@ html.shy #shyc{visibility:visible;opacity:1;scale:1;transition:opacity var(--t-f
 @media (hover:hover){.kmenu button:hover{background:var(--glass-sub)}}
 .bar [data-kind].on{background:var(--g2);color:#fff}
 
-/* ═════════ Apple Liquid Glass × 攝影畫廊改版：三層毛玻璃、懸浮分頁膠囊、雙端專屬版面 ═════════ */
+/* ═════════ Apple Liquid Glass × 攝影畫廊改版：液態光學折射、雙端懸浮膠囊、統一玻璃層次 ═════════ */
 :root{
-  --blur-card:blur(22px) saturate(185%);
-  --blur-float:blur(30px) saturate(210%);
-  --blur-modal:blur(36px) saturate(210%);
-  --glass:color-mix(in oklab,var(--s1) 52%,transparent);
-  --glass-card:color-mix(in oklab,var(--s1) 50%,transparent);
-  --glass-modal:color-mix(in oklab,var(--s1) 70%,transparent);
-  --glass-sub:rgba(255,255,255,.075);
-  --glass-b:rgba(255,255,255,.16);
-  --hl:inset 0 1px 0 rgba(255,255,255,.2),inset 0 -1px 0 rgba(0,0,0,.28);
-  --pill-bg:rgba(255,255,255,.15);
-  --pill-sh:0 4px 14px -2px rgba(0,0,0,.44),inset 0 1px 0 rgba(255,255,255,.26);
-  --sh-card:0 10px 32px -12px rgba(0,0,0,.52),0 1px 2px rgba(0,0,0,.28),var(--hl);
-  --sh-float:0 20px 52px -16px rgba(0,0,0,.68),0 2px 10px rgba(0,0,0,.38),var(--hl);
+  --blur-card:blur(24px) saturate(195%);
+  --blur-float:blur(28px) saturate(215%) brightness(1.06);
+  --blur-modal:blur(36px) saturate(210%) brightness(1.04);
+  --glass:color-mix(in oklab,var(--s1) 36%,transparent);
+  --glass-card:color-mix(in oklab,var(--s1) 42%,transparent);
+  --glass-modal:color-mix(in oklab,var(--s1) 58%,transparent);
+  --glass-sheen:linear-gradient(155deg,rgba(255,255,255,.16) 0%,rgba(255,255,255,.03) 44%,rgba(255,255,255,.07) 100%);
+  --glass-sub:rgba(255,255,255,.09);
+  --glass-b:rgba(255,255,255,.22);
+  --hl:inset 0 1px 0 rgba(255,255,255,.32),inset 0 -1px 1px rgba(255,255,255,.08),inset 1px 0 0 rgba(255,255,255,.08),inset -1px 0 0 rgba(255,255,255,.06);
+  --pill-bg:linear-gradient(180deg,rgba(255,255,255,.24) 0%,rgba(255,255,255,.12) 100%);
+  --pill-sh:0 4px 14px -2px rgba(0,0,0,.42),inset 0 1px 0 rgba(255,255,255,.42),inset 0 -1px 0 rgba(255,255,255,.08);
+  --sh-card:0 10px 32px -12px rgba(0,0,0,.48),0 1px 2px rgba(0,0,0,.24),var(--hl);
+  --sh-float:0 18px 46px -14px rgba(0,0,0,.62),0 2px 10px rgba(0,0,0,.32),var(--hl);
 }
-@media (max-width:899px){:root{--blur-card:blur(16px) saturate(175%);--blur-float:blur(22px) saturate(190%);--blur-modal:blur(24px) saturate(190%)}}
+@media (max-width:899px){:root{--blur-card:blur(18px) saturate(185%);--blur-float:blur(24px) saturate(205%) brightness(1.05);--blur-modal:blur(28px) saturate(200%) brightness(1.04)}}
 @media (prefers-color-scheme:light){:root:not([data-mode="dark"]){
-  --glass:rgba(255,255,255,.52);
-  --glass-card:rgba(255,255,255,.58);
-  --glass-modal:rgba(255,255,255,.78);
-  --glass-sub:rgba(15,23,42,.05);
-  --glass-b:rgba(255,255,255,.86);
-  --hl:inset 0 1px 0 rgba(255,255,255,.98),inset 0 -1px 0 rgba(15,23,42,.04);
-  --pill-bg:rgba(255,255,255,.88);
-  --pill-sh:0 3px 12px -2px rgba(15,23,42,.14),inset 0 1px 0 rgba(255,255,255,1);
+  --glass:rgba(255,255,255,.44);
+  --glass-card:rgba(255,255,255,.52);
+  --glass-modal:rgba(255,255,255,.68);
+  --glass-sheen:linear-gradient(155deg,rgba(255,255,255,.72) 0%,rgba(255,255,255,.14) 48%,rgba(255,255,255,.36) 100%);
+  --glass-sub:rgba(15,23,42,.06);
+  --glass-b:rgba(255,255,255,.88);
+  --hl:inset 0 1px 0 rgba(255,255,255,1),inset 0 -1px 1px rgba(15,23,42,.05),inset 1px 0 0 rgba(255,255,255,.72),inset -1px 0 0 rgba(255,255,255,.56);
+  --pill-bg:linear-gradient(180deg,rgba(255,255,255,.96) 0%,rgba(255,255,255,.78) 100%);
+  --pill-sh:0 4px 14px -3px rgba(15,23,42,.16),inset 0 1px 0 rgba(255,255,255,1),inset 0 -1px 0 rgba(15,23,42,.04);
   --sh-card:0 6px 24px -8px rgba(15,23,42,.10),0 1px 2px rgba(15,23,42,.04),var(--hl);
   --sh-float:0 16px 40px -14px rgba(15,23,42,.18),0 2px 8px -2px rgba(15,23,42,.06),var(--hl);
 }}
 @media (prefers-reduced-transparency:reduce){
-  :root{--blur-card:none;--blur-float:none;--blur-modal:none;--glass:var(--s1);--glass-card:var(--s1);--glass-modal:var(--s1)}
+  :root{--blur-card:none;--blur-float:none;--blur-modal:none;--glass:var(--s1);--glass-card:var(--s1);--glass-modal:var(--s1);--glass-sheen:none}
 }
 
 /* 封面：保留下方內容邊緣暗示，膠囊按鈕升級液態毛玻璃 */
 .hero{height:min(86svh,740px)}
 @media (min-width:900px){.hero{height:min(92svh,880px)}}
-.hero .chip{background:rgba(255,255,255,.16);border:1px solid rgba(255,255,255,.24);box-shadow:inset 0 1px 0 rgba(255,255,255,.28),0 8px 24px -10px rgba(0,0,0,.45);-webkit-backdrop-filter:var(--blur-card);backdrop-filter:var(--blur-card)}
-.hero .chip.go{border:0}
-@media (prefers-color-scheme:light){:root:not([data-mode="dark"]) .hero .chip{background:var(--glass);border:1px solid var(--glass-b);box-shadow:var(--sh-card)}}
+.hero .chip{background-color:rgba(255,255,255,.14);background-image:linear-gradient(155deg,rgba(255,255,255,.22),rgba(255,255,255,.04) 48%,rgba(255,255,255,.1));border:1px solid rgba(255,255,255,.26);
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.36),inset 0 -1px 0 rgba(255,255,255,.08),0 8px 24px -10px rgba(0,0,0,.45);-webkit-backdrop-filter:var(--blur-card);backdrop-filter:var(--blur-card)}
+.hero .chip.go,.bar .chip.go{background:var(--p);background-image:linear-gradient(180deg,rgba(255,255,255,.22),transparent 55%);border:0;
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.36),0 8px 24px -8px color-mix(in oklab,var(--p) 62%,transparent)}
+@media (prefers-color-scheme:light){:root:not([data-mode="dark"]) .hero .chip{background-color:var(--glass);background-image:var(--glass-sheen);border:1px solid var(--glass-b);box-shadow:var(--sh-card)}}
 
-/* 頂部懸浮列：手機全寬毛玻璃、電腦懸浮圓角膠囊 */
-.bar{background:var(--glass);-webkit-backdrop-filter:var(--blur-float);backdrop-filter:var(--blur-float);border-bottom:1px solid var(--line);box-shadow:var(--sh-card)}
+/* 頂部懸浮液態膠囊：手機與電腦皆為懸浮圓角膠囊，四周留白、搭配頂部漸層安全霧 */
+.bar{top:calc(env(safe-area-inset-top) + 8px);left:12px;right:12px;padding:7px 8px 7px 16px;border-radius:var(--r-pill);
+  background-color:var(--glass);background-image:var(--glass-sheen);-webkit-backdrop-filter:var(--blur-float);backdrop-filter:var(--blur-float);
+  border:1px solid var(--glass-b);box-shadow:var(--sh-float);overflow:hidden;
+  transform:translate3d(0,calc(-100% - env(safe-area-inset-top) - 24px),0);will-change:transform;backface-visibility:hidden;
+  transition:transform var(--sp),opacity var(--t-mid) var(--ease)}
+.bar.on{transform:translate3d(0,0,0)}
+.bar .chip:not(.go){background:transparent;border:0;box-shadow:none;transition:background var(--t-fast) var(--ease),transform var(--sp-fast)}
+.bar .chip:not(.go):active{background:var(--glass-sub);transform:scale(.92)}
+@media (hover:hover){.bar .chip:not(.go):hover{background:var(--glass-sub);filter:none}}
 @media (min-width:900px){
-  .bar{top:14px;left:max(var(--pad),calc(50% - var(--wmax) / 2));right:max(var(--pad),calc(50% - var(--wmax) / 2));padding:8px 10px 8px 20px;border-radius:var(--r-pill);border:1px solid var(--glass-b);box-shadow:var(--sh-float);transform:translateY(calc(-100% - 28px));overflow:hidden}
-  .bar .chip{background:var(--glass-sub);border:1px solid var(--line);box-shadow:none}
-  .bar .chip.go{border:0}
+  .bar{top:14px;left:max(var(--pad),calc(50% - var(--wmax) / 2));right:max(var(--pad),calc(50% - var(--wmax) / 2));padding:8px 10px 8px 20px;transform:translate3d(0,calc(-100% - 28px),0)}
+  .bar .chip:not(.go){background:var(--glass-sub);border:1px solid var(--line)}
 }
 
 /* ── 懸浮液態玻璃分頁膠囊（.adock）：圖示與文字靜止、僅底層玻璃氣泡以彈簧滑動 ── */
 .adock{position:fixed;left:50%;bottom:calc(16px + env(safe-area-inset-bottom));z-index:calc(var(--z-bar) + 1);transform:translate3d(-50%,0,0);will-change:transform;backface-visibility:hidden;
   display:inline-flex;align-items:center;gap:2px;padding:5px;border-radius:var(--r-pill);max-width:calc(100vw - 24px);
-  background:var(--glass);-webkit-backdrop-filter:var(--blur-float);backdrop-filter:var(--blur-float);border:1px solid var(--glass-b);box-shadow:var(--sh-float);
+  background-color:var(--glass);background-image:var(--glass-sheen);-webkit-backdrop-filter:var(--blur-float);backdrop-filter:var(--blur-float);border:1px solid var(--glass-b);box-shadow:var(--sh-float);
   transition:transform var(--sp),opacity var(--t-mid) var(--ease)}
 .adock[hidden]{display:none}
 .adock>.slide{position:absolute;left:0;top:5px;bottom:5px;border-radius:var(--r-pill);background:var(--pill-bg);box-shadow:var(--pill-sh);pointer-events:none;z-index:0;will-change:transform,width}
-.adock>button{position:relative;z-index:1;height:44px;padding:0 16px;border-radius:var(--r-pill);display:inline-flex;align-items:center;gap:7px;font-size:var(--fs-s);font-weight:650;color:var(--tx2);white-space:nowrap;transition:color var(--t-fast) var(--ease)}
+.adock>button{position:relative;z-index:1;height:44px;padding:0 16px;border-radius:var(--r-pill);display:inline-flex;align-items:center;gap:7px;font-size:var(--fs-s);font-weight:650;color:var(--tx2);white-space:nowrap;transition:color var(--t-fast) var(--ease),transform var(--sp-fast)}
+.adock>button:active{transform:scale(.95)}
 .adock>button::before{content:"";position:absolute;inset:0;border-radius:inherit;background:var(--pill-bg);box-shadow:var(--pill-sh);opacity:0;z-index:-1}
 .adock>button.on{color:var(--tx)}
 .adock>button.on::before{opacity:1}
@@ -1662,7 +1674,7 @@ html.has-dock .toast{bottom:calc(82px + env(safe-area-inset-bottom))}
 .tpane[data-pane="map"] .cities{margin-top:18px;margin-bottom:0}
 .tpane[data-pane="gear"] .stats{margin:clamp(18px,3vw,34px) auto 0;max-width:var(--wmax);padding:0 var(--pad);display:grid;grid-auto-flow:row;grid-template-columns:repeat(2,minmax(0,1fr));grid-auto-columns:auto;gap:10px;background:none;border:0;box-shadow:none;border-radius:0;-webkit-backdrop-filter:none;backdrop-filter:none}
 .tpane[data-pane="gear"] .stats .st{position:relative;display:flex;flex-direction:column;justify-content:space-between;gap:12px;min-height:92px;padding:14px 16px 15px;border-radius:var(--r-lg);
-  background:var(--glass-card);-webkit-backdrop-filter:var(--blur-card);backdrop-filter:var(--blur-card);border:1px solid var(--line);box-shadow:var(--sh-card);text-align:left;border-left:1px solid var(--line)}
+  background-color:var(--glass-card);background-image:var(--glass-sheen);-webkit-backdrop-filter:var(--blur-card);backdrop-filter:var(--blur-card);border:1px solid var(--line);box-shadow:var(--sh-card);text-align:left;border-left:1px solid var(--line)}
 .tpane[data-pane="gear"] .stats .st.wide{grid-column:1 / -1}
 .tpane[data-pane="gear"] .stats .sth2{display:flex;align-items:center;justify-content:space-between;gap:8px;min-height:18px}
 .tpane[data-pane="gear"] .stats .sth2 small{font-size:var(--fs-xs);font-weight:600;letter-spacing:.04em;color:var(--tx2);white-space:nowrap}
@@ -1687,12 +1699,12 @@ html.has-dock .toast{bottom:calc(82px + env(safe-area-inset-bottom))}
 @media (min-width:1200px){.smap{top:88px;height:calc(100svh - 116px);border:1px solid var(--line)}}
 
 /* 全站卡片與彈出面板統一升級 Apple Liquid Glass 材質 */
-.cty,.gbox,.gst,.gbc,.ibox{background:var(--glass-card);-webkit-backdrop-filter:var(--blur-card);backdrop-filter:var(--blur-card);border:1px solid var(--line);box-shadow:var(--sh-card)}
-.sh{background:var(--glass-modal);-webkit-backdrop-filter:var(--blur-modal);backdrop-filter:var(--blur-modal);border:1px solid var(--glass-b);box-shadow:var(--sh-float)}
+.cty,.gbox,.gst,.gbc,.ibox{background-color:var(--glass-card);background-image:var(--glass-sheen);-webkit-backdrop-filter:var(--blur-card);backdrop-filter:var(--blur-card);border:1px solid var(--line);box-shadow:var(--sh-card)}
+.sh,.kmenu{background-color:var(--glass-modal);background-image:var(--glass-sheen);-webkit-backdrop-filter:var(--blur-modal);backdrop-filter:var(--blur-modal);border:1px solid var(--glass-b);box-shadow:var(--sh-float)}
 .shbg{-webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px)}
-.mback,.smc,.selb,.upb{background:var(--glass);-webkit-backdrop-filter:var(--blur-float);backdrop-filter:var(--blur-float);border:1px solid var(--glass-b);box-shadow:var(--sh-float)}
-.who .chip,.cityf button.chip{background:var(--glass-sub);border:1px solid var(--line);box-shadow:var(--hl)}
-.who .chip.on,.cityf .chip.on{border-color:transparent}
+.mback,.smc,.selb,.upb{background-color:var(--glass);background-image:var(--glass-sheen);-webkit-backdrop-filter:var(--blur-float);backdrop-filter:var(--blur-float);border:1px solid var(--glass-b);box-shadow:var(--sh-float)}
+.who .chip,.cityf button.chip{background-color:var(--glass);background-image:var(--glass-sheen);-webkit-backdrop-filter:var(--blur-card);backdrop-filter:var(--blur-card);border:1px solid var(--glass-b);box-shadow:var(--hl)}
+.who .chip.on,.cityf .chip.on{border-color:transparent;background-image:linear-gradient(180deg,rgba(255,255,255,.22),transparent 55%)}
 
 /* 連拍疊：收合狀態加上細微堆疊層次感，一眼辨識是一疊照片 */
 .ph.stkc{box-shadow:0 -2px 0 -1px color-mix(in oklab,var(--tx) 28%,transparent),0 -5px 0 -3px color-mix(in oklab,var(--tx) 14%,transparent)}
@@ -1704,7 +1716,7 @@ html.has-dock .toast{bottom:calc(82px + env(safe-area-inset-bottom))}
 .bar .btl small{flex:none;margin:0;color:var(--tx3);font-size:var(--fs-s);font-weight:550;white-space:nowrap}
 .bar .bmore{display:none;width:36px;padding:0;justify-content:center}
 @media (max-width:699px){
-  .bar{gap:8px}
+  .bar{gap:4px}
   .bar .btl{flex-direction:column;align-items:flex-start;gap:1px;line-height:1.2}
   .bar .btl b{width:100%;font-size:var(--fs-m)}
   .bar .btl small{font-size:var(--fs-xs)}
@@ -1715,29 +1727,31 @@ html.has-dock .toast{bottom:calc(82px + env(safe-area-inset-bottom))}
 .kmenu hr{border:0;height:1px;background:var(--line);margin:4px 8px}
 .kmenu button:disabled{opacity:.35;pointer-events:none}
 
-/* ── 大圖按鈕與電腦側欄統一 Apple Liquid Glass 質感 ── */
-.lb .rb,.tbar{background:rgba(255,255,255,.14);-webkit-backdrop-filter:blur(22px) saturate(180%);backdrop-filter:blur(22px) saturate(180%);
-  box-shadow:inset 0 1px 0 rgba(255,255,255,.26),0 0 0 1px rgba(255,255,255,.1),0 8px 24px -8px rgba(0,0,0,.45)}
+/* ── 大圖按鈕、選單與電腦側欄統一 Apple Liquid Glass 質感 ── */
+.lb .rb,.tbar{background-color:rgba(255,255,255,.12);background-image:linear-gradient(155deg,rgba(255,255,255,.2),rgba(255,255,255,.03) 48%,rgba(255,255,255,.08));
+  -webkit-backdrop-filter:blur(24px) saturate(200%);backdrop-filter:blur(24px) saturate(200%);
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.32),inset 0 -1px 0 rgba(255,255,255,.08),0 0 0 1px rgba(255,255,255,.14),0 8px 24px -8px rgba(0,0,0,.45)}
 .lb .rb.on{background:#fff;color:#000;box-shadow:0 6px 20px -4px rgba(0,0,0,.45)}
+.lbm{background-color:rgba(24,26,32,.48);background-image:linear-gradient(155deg,rgba(255,255,255,.16),rgba(255,255,255,.03) 45%,rgba(255,255,255,.07));
+  -webkit-backdrop-filter:blur(28px) saturate(200%);backdrop-filter:blur(28px) saturate(200%);border:1px solid rgba(255,255,255,.2);
+  box-shadow:0 18px 46px -14px rgba(0,0,0,.62),inset 0 1px 0 rgba(255,255,255,.28)}
 @media (min-width:900px){
-  .inf{background:var(--glass-modal);-webkit-backdrop-filter:var(--blur-modal);backdrop-filter:var(--blur-modal);border-left:1px solid var(--glass-b);box-shadow:-16px 0 48px rgba(0,0,0,.38)}
+  .inf{background-color:var(--glass-modal);background-image:var(--glass-sheen);-webkit-backdrop-filter:var(--blur-modal);backdrop-filter:var(--blur-modal);border-left:1px solid var(--glass-b);box-shadow:-16px 0 48px rgba(0,0,0,.38)}
   .cmp .cform{background:transparent}
 }
 
 /* ── 上鎖相簿密碼頁：Apple Liquid Glass 登入卡與膠囊輸入框 ── */
-.gate .card{padding:36px 28px 30px;border-radius:var(--r-xl);background:var(--glass-modal);-webkit-backdrop-filter:var(--blur-modal);backdrop-filter:var(--blur-modal);border:1px solid var(--glass-b);box-shadow:var(--sh-float)}
+.gate .card{padding:36px 28px 30px;border-radius:var(--r-xl);background-color:var(--glass-modal);background-image:var(--glass-sheen);-webkit-backdrop-filter:var(--blur-modal);backdrop-filter:var(--blur-modal);border:1px solid var(--glass-b);box-shadow:var(--sh-float)}
 .gate .card .ic{width:64px;height:64px;border-radius:var(--r-lg);margin-bottom:20px;background:var(--glass-sub);border:1px solid var(--glass-b);box-shadow:var(--hl);color:var(--tx)}
 .gate .card .field{margin-top:24px;height:50px;padding:0 20px;border-radius:var(--r-pill);border:1px solid var(--line);background:var(--glass-sub);letter-spacing:.18em;transition:border-color var(--t-fast) var(--ease),box-shadow var(--t-fast) var(--ease)}
 .gate .card .field:focus{border-color:var(--g2);box-shadow:0 0 0 3px color-mix(in oklab,var(--g2) 24%,transparent)}
 .gate .card .btn{margin-top:16px;height:50px}
 
-/* ── 電腦捲動頂部安全漸層遮罩：讓照片從懸浮膠囊上方自然隱沒 ── */
-@media (min-width:900px){
-  body::before{content:"";position:fixed;left:0;right:0;top:0;height:68px;z-index:calc(var(--z-bar) - 1);pointer-events:none;opacity:0;
-    background:linear-gradient(180deg,color-mix(in oklab,var(--bg) 84%,transparent) 0%,color-mix(in oklab,var(--bg) 42%,transparent) 52%,transparent 100%);
-    transition:opacity var(--t-mid) var(--ease)}
-  html.bar-on body::before{opacity:1}
-}
+/* ── 捲動頂部安全漸層遮罩（手機與電腦皆適用）：讓照片從懸浮液態膠囊後方自然隱沒 ── */
+body::before{content:"";position:fixed;left:0;right:0;top:0;height:calc(env(safe-area-inset-top) + 64px);z-index:calc(var(--z-bar) - 1);pointer-events:none;opacity:0;
+  background:linear-gradient(180deg,color-mix(in oklab,var(--bg) 82%,transparent) 0%,color-mix(in oklab,var(--bg) 38%,transparent) 54%,transparent 100%);
+  transition:opacity var(--t-mid) var(--ease)}
+html.bar-on body::before{opacity:1}
 
 /* ── 首次轉檔與順暢載入：開場提示、回憶淡入、大圖解碼提示、幻燈片／動態無縫升級、頂部最佳化進度膠囊 ── */
 #spl .spt{position:absolute;left:50%;top:calc(50% + clamp(88px,24vmin,124px) * .62 + 38px);translate:-50% 0;font-size:var(--fs-xs);font-weight:550;letter-spacing:.04em;color:var(--tx3);white-space:nowrap;opacity:0;animation:spbIn var(--t-slow) var(--ease) 1.15s forwards}
@@ -1756,14 +1770,14 @@ html.splx #spl .spt{animation:none;opacity:0;transition:opacity var(--t-fast) va
 .sfg .sh.ok,.syf .sh.ok{opacity:1}
 .prepb{position:fixed;left:50%;top:calc(12px + env(safe-area-inset-top));z-index:calc(var(--z-bar) + 2);transform:translate3d(-50%,0,0);
   display:inline-flex;align-items:center;gap:8px;padding:7px 14px;border-radius:var(--r-pill);max-width:calc(100vw - 28px);
-  background:var(--glass);-webkit-backdrop-filter:var(--blur-float);backdrop-filter:var(--blur-float);border:1px solid var(--glass-b);box-shadow:var(--sh-float);
+  background-color:var(--glass);background-image:var(--glass-sheen);-webkit-backdrop-filter:var(--blur-float);backdrop-filter:var(--blur-float);border:1px solid var(--glass-b);box-shadow:var(--sh-float);
   font-size:var(--fs-xs);font-weight:600;color:var(--tx);pointer-events:none;transition:transform var(--sp),opacity var(--t-mid) var(--ease)}
 .prepb i.spin{width:13px;height:13px;border-width:1.8px;flex:none}
 .prepb .pb{width:46px;height:3px;border-radius:var(--r-pill);background:var(--line);overflow:hidden;flex:none}
 .prepb .pb b{display:block;height:100%;background:var(--grad);transform-origin:0 50%;transition:transform var(--t-mid) var(--dec)}
 .prepb.off{opacity:0;transform:translate3d(-50%,-18px,0)}
 html.dock-off .prepb{opacity:0;transform:translate3d(-50%,-18px,0)}
-html.bar-on .prepb{top:calc(68px + env(safe-area-inset-top))}
+html.bar-on .prepb{top:calc(70px + env(safe-area-inset-top))}
 @media (min-width:900px){html.bar-on .prepb{top:calc(74px + env(safe-area-inset-top))}}
 
 
