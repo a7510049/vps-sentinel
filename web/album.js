@@ -1147,7 +1147,7 @@ function covShade(sec, p){
   im.src = `data:image/jpeg;base64,${p.q}`;
 }
 let TINT = "";
-function tint(p){
+function tint(p, heroOnly){
   if (!p || p.broken || TINT === p.i) return;
   TINT = p.i;
   const im = new Image();
@@ -1156,11 +1156,11 @@ function tint(p){
     try {
       const c = document.createElement("canvas"); c.width = 24; c.height = Math.max(1, Math.round(24 * im.naturalHeight / im.naturalWidth));
       const x = c.getContext("2d", {willReadFrequently:true}); x.drawImage(im, 0, 0, c.width, c.height);
-      const [g1, g2, g3] = tintFrom(x.getImageData(0, 0, c.width, c.height).data), st = document.documentElement.style;
-      const now = !!document.getElementById("spl");          // 開場還蓋著：直接換好，不要慢慢變（整頁的漸層每一格都要重算，開場會掉格）
-      if (now) st.transition = "none";
+      const [g1, g2, g3] = tintFrom(x.getImageData(0, 0, c.width, c.height).data);
+      const tgt = heroOnly ? $(".hero") : document.documentElement;
+      if (!tgt) return;
+      const st = tgt.style;
       st.setProperty("--g1", g1); st.setProperty("--g2", g2); st.setProperty("--g3", g3);
-      if (now) { getComputedStyle(document.documentElement).getPropertyValue("--g1"); st.removeProperty("transition"); }
     } catch (e) {}
   };
   im.src = p.q ? `data:image/jpeg;base64,${p.q}` : src(p, "s");
@@ -1179,7 +1179,7 @@ function heroCycle(first){
     const im = new Image(); im.className = "hi cy"; im.alt = ""; im.src = src(p, "l");   // 新的一張慢慢淡入、一邊往前推近
     const show = () => { if (!im.isConnected) return;
       setTimeout(() => cv.querySelectorAll(".hi").forEach(x => { if (x !== im) x.remove(); }), 3200); };
-    im.decode ? im.decode().then(() => { cv.appendChild(im); show(); tint(p); }).catch(() => {}) : (im.onload = () => { cv.appendChild(im); show(); tint(p); });
+    im.decode ? im.decode().then(() => { cv.appendChild(im); show(); tint(p, true); }).catch(() => {}) : (im.onload = () => { cv.appendChild(im); show(); tint(p, true); });
   };
   HCT = setTimeout(next, 7000);
 }
@@ -1889,7 +1889,7 @@ function openLb(i, from){
       <div class="lbm" role="menu"><button role="menuitem" data-ssi>${I("play")}<span>從這張開始播放</span></button><button role="menuitem" data-cmpb hidden>${I("cmp")}<span>跟同一疊的比較</span></button>${D.dl ? `<a role="menuitem" data-dl download>${I("dl")}<span>${D.dl > 1 ? "下載原圖" : "下載"}</span></a>` : ""}<button role="menuitem" class="bad" data-del hidden>${I("trash")}<span>刪掉</span></button></div></div>
     <button class="rb nav l" aria-label="上一張">${I("l")}</button><button class="rb nav r" aria-label="下一張">${I("r")}</button>
     <div class="lbb"><div class="vbar"><button class="vpp" data-vpp aria-label="播放">${I("play")}</button><span class="vt0 num">0:00</span><div class="vtr" data-vseek><i><b></b></i></div><span class="vt1 num"></span><button class="vpp" data-vmu aria-label="聲音">${I("snd")}</button></div>
-      <div class="lbr"><div class="cap"><b></b><span></span></div><div class="tbar"><button class="sb" data-shr aria-label="分享這張">${I("shr")}</button>${D.talk ? `<button class="sb" data-lk aria-label="愛心（按住選其他表情）">${I("heart")}<span class="num"></span></button><button class="sb rxb" data-rx aria-label="其他表情" hidden>${I("smile")}<span class="num"></span></button><button class="sb" data-cm aria-label="留言">${I("chat")}<span class="num"></span></button>` : ""}<button class="sb" data-inf aria-label="照片資訊">${I("info")}</button></div></div></div><div class="infs"><div class="inf"></div></div>${D.talk ? `<div class="inf cmp"></div>` : ""}${STRIP ? `<div class="lbs"><div class="lbsr">${PH.map((p, k) => `<button class="lbst" data-go="${k}" aria-label="第 ${k + 1} 張"><img alt="" loading="lazy" draggable="false" src="${src(p, "s")}"></button>`).join("")}</div></div>` : ""}`;
+      <div class="lbr"><div class="cap"><b></b><span></span></div><div class="tbar"><button class="sb" data-shr aria-label="分享這張">${I("shr")}</button>${D.talk ? `<button class="sb" data-lk aria-label="愛心（按住選其他表情）">${I("heart")}<span class="num"></span></button><button class="sb rxb" data-rx aria-label="其他表情" hidden>${I("smile")}<span class="num"></span></button><button class="sb" data-cm aria-label="留言">${I("chat")}<span class="num"></span></button>` : ""}<button class="sb" data-inf aria-label="照片資訊">${I("info")}</button></div></div></div><div class="infs"><div class="inf"></div></div>${D.talk ? `<div class="inf cmp"></div>` : ""}${STRIP ? `<div class="lbs"><div class="lbsr"></div></div>` : ""}`;
   if (anim()) el.querySelectorAll(".lbt,.lbb,.nav,.lbs").forEach(x => { x.style.opacity = 0; });   // 上下兩排按鈕先藏好再放上畫面（以前放上去後才藏，會先閃一下）
   document.body.appendChild(el);
   const stage = $(".stage", el), track = $(".track", el), bg = $(".bg", el), inf = $(".inf", el), infs = $(".infs", el), cmp = $(".cmp", el) || document.createElement("div");
@@ -2145,10 +2145,27 @@ function openLb(i, from){
     };
     im.complete && im.naturalWidth ? go() : im.addEventListener("load", go, {once:true});
   }
+  let sLo = -1, sHi = -1;
+  function stripDraw(c){                                     // 只畫目前前後 40 張，上千張的大相簿開大圖也瞬間就出來
+    const r = $(".lbsr", el); if (!r) return;
+    const lo = Math.max(0, c - 40), hi = Math.min(PH.length - 1, c + 40);
+    if (sLo >= 0 && c >= sLo + 12 && c <= sHi - 12 && !(lo === 0 && sLo > 0) && !(hi === PH.length - 1 && sHi < hi)) return;
+    sLo = lo; sHi = hi;
+    let h = "";
+    for (let k = lo; k <= hi; k++) h += `<button class="lbst${k === S.i ? " on" : ""}" data-go="${k}" aria-label="第 ${k + 1} 張"><img alt="" loading="lazy" draggable="false" src="${src(PH[k], "s")}"></button>`;
+    r.style.paddingLeft = `${lo * 62}px`; r.style.paddingRight = `${(PH.length - 1 - hi) * 62}px`;
+    r.innerHTML = h;
+  }
+  if (STRIP) {
+    const lbs = $(".lbs", el);
+    let stT = 0;
+    lbs.addEventListener("scroll", () => { clearTimeout(stT); stT = setTimeout(() => stripDraw(Math.max(0, Math.min(PH.length - 1, Math.round((lbs.scrollLeft + lbs.clientWidth / 2) / 62)))), 80); }, {passive:true});
+  }
   function stripAt(){                                        // 下面那排小圖：這張亮起來、捲到中間
     const r = $(".lbsr", el); if (!r) return;
+    stripDraw(S.i);
     r.querySelectorAll(".on").forEach(x => x.classList.remove("on"));
-    const b = r.children[S.i]; if (!b) return;
+    const b = r.querySelector(`[data-go="${S.i}"]`); if (!b) return;
     b.classList.add("on");
     const box = r.parentNode, x = b.offsetLeft + b.offsetWidth / 2 - box.clientWidth / 2;
     box.scrollTo({left:x, behavior:S.at0 && anim() ? "smooth" : "auto"}); S.at0 = 1;
@@ -2361,37 +2378,62 @@ function openLb(i, from){
     if (!anim()) return;
     [...P.children].slice(0, 8).filter(c => !(keep && keep.has(c))).forEach((c, k) => c.animate([{opacity:.25, transform:`translateX(${dir * 22}px)`}, {opacity:1, transform:"none"}], {duration:T.mid, delay:k * 40, easing:DEC, fill:"backwards"}));
   }
-  function morph(q, p, k0, z0){                                  // 換張時光圈、快門、ISO、焦距、曝光、拍攝時間、色溫從上一張的數值轉到這一張（葉片收放、指針轉、數字跟著跳）
-    const a = q.x || {}, b = p.x || {}, keep = new Set(), done = new Set(), jobs = [];
+  function morph(q, p, k0, z0){                                  // 換張時光圈、快門、ISO、焦距、曝光、拍攝時間、色溫從上一張的數值轉到這一張（直接改 SVG 屬性，不每格重建元素）
+    const a = q.x || {}, b = p.x || {}, keep = new Set(), jobs = [];
     const box = c => c.closest(".ibox");
-    const add = (cell, v0, v1, svg, txt, log) => {
+    const add = (cell, v0, v1, upd, txt, log) => {
       if (!cell || v0 == null || v1 == null || !(v0 > 0 || !log) || !(v1 > 0 || !log) || v0 === v1) return;
       const sv = cell.querySelector("svg"), tb = cell.querySelector("b"), fin = tb ? tb.textContent : "";
       jobs.push(t => { const v = log ? Math.exp(Math.log(v0) + (Math.log(v1) - Math.log(v0)) * t) : v0 + (v1 - v0) * t;
-        if (sv && svg) { const n = document.createRange().createContextualFragment(svg(v)).firstChild; sv.replaceChildren(...n.childNodes); }
+        if (sv && upd) upd(sv, v);
         if (tb) tb.textContent = t < 1 && txt ? txt(v) : fin; });
-      keep.add(box(cell)); done.add(cell); cell.dataset.mv = 1;
+      keep.add(box(cell)); cell.dataset.mv = 1;
     };
     const G = k => inf.querySelector(`.iex [data-gk="${k}"]`);
-    add(G("f"), a.f, b.f, v => gIris(v), v => `ƒ${v.toFixed(1)}`, 1);
+    add(G("f"), a.f, b.f, (sv, v) => {
+      const k = 1 - lg(v, 1.2, 22), r = 2.6 + 8.2 * k, R = 13, P = [];
+      for (let i = 0; i < 6; i++) { const an = Math.PI / 3 * i - Math.PI / 2; P.push([16 + r * Math.cos(an), 16 + r * Math.sin(an)]); }
+      const poly = sv.querySelector("polygon"), bls = sv.querySelectorAll("path.gs");
+      if (poly) poly.setAttribute("points", P.map(q => q.map(x => x.toFixed(1)).join(",")).join(" "));
+      bls.forEach((el, i) => { const q0 = P[i], n = P[(i + 1) % 6], dx = n[0] - q0[0], dy = n[1] - q0[1], L = Math.hypot(dx, dy), ux = dx / L, uy = dy / L;
+        const ox = n[0] - 16, oy = n[1] - 16, bb = ox * ux + oy * uy, tt = -bb + Math.sqrt(Math.max(0, bb * bb - (ox * ox + oy * oy - R * R)));
+        el.setAttribute("d", `M${q0[0].toFixed(1)} ${q0[1].toFixed(1)}L${(n[0] + ux * tt).toFixed(1)} ${(n[1] + uy * tt).toFixed(1)}`); });
+    }, v => `ƒ${v.toFixed(1)}`, 1);
     const et = x => x.et ? x.et[0] / x.et[1] : null;
-    add(G("et"), et(a), et(b), v => gShut([v, 1]), v => v >= 1 ? `${v.toFixed(1)} s` : `1/${Math.round(1 / v)} s`, 1);
-    add(G("iso"), a.iso, b.iso, v => gIso(v), v => String(Math.round(v)), 1);
-    add(G("fl"), a.f35, b.f35, v => gFov(v), v => `${Math.round(v)} mm`, 1);
-    add(G("ev"), a.ev, b.ev, v => gEv(v), v => `${v > 0 ? "+" : ""}${v.toFixed(1)} ev`, 0);
+    add(G("et"), et(a), et(b), (sv, v) => {
+      const k = Math.max(.04, lg(v, 1 / 8000, 30)), an = k * 2 * Math.PI - Math.PI / 2, big = k > .5 ? 1 : 0;
+      const gf = sv.querySelector("path.gf");
+      if (gf) gf.setAttribute("d", `M16 18V7.5A10.5 10.5 0 ${big} 1 ${(16 + 10.5 * Math.cos(an)).toFixed(1)} ${(18 + 10.5 * Math.sin(an)).toFixed(1)}Z`);
+    }, v => v >= 1 ? `${v.toFixed(1)} s` : `1/${Math.round(1 / v)} s`, 1);
+    add(G("iso"), a.iso, b.iso, (sv, v) => {
+      const k = lg(v, 50, 12800), P = (u, r) => `${(16 + r * Math.cos(Math.PI * (1 + u))).toFixed(1)} ${(24 + r * Math.sin(Math.PI * (1 + u))).toFixed(1)}`;
+      const sk = sv.querySelector("path.gsk"), nd = sv.querySelector("path.gs");
+      if (sk) sk.setAttribute("d", k > .01 ? `M${P(0, 13.5)}A13.5 13.5 0 0 1 ${P(k, 13.5)}` : "");
+      if (nd) nd.setAttribute("d", `M16 24L${P(k, 10.5)}`);
+    }, v => String(Math.round(v)), 1);
+    add(G("fl"), a.f35, b.f35, (sv, v) => {
+      const k = Math.max(.24, Math.min(1, 1 - lg(v, 14, 400) * .76)), w = (26 * k).toFixed(1), h = (20 * k).toFixed(1), x = (16 - 13 * k).toFixed(1), y = (16 - 10 * k).toFixed(1), rx = (2.6 * k + .6).toFixed(1);
+      sv.querySelectorAll("clipPath:last-of-type rect,rect.gh,rect.gs").forEach(rc => { rc.setAttribute("x", x); rc.setAttribute("y", y); rc.setAttribute("width", w); rc.setAttribute("height", h); rc.setAttribute("rx", rx); });
+    }, v => `${Math.round(v)} mm`, 1);
+    add(G("ev"), a.ev, b.ev, (sv, v) => {
+      const x = 16 + Math.max(-3, Math.min(3, v)) * 4.3, tri = sv.querySelector("path.gd"), bar = sv.querySelector("rect.gd");
+      if (tri) tri.setAttribute("d", `M${x.toFixed(1)} 24l3.4 5.5h-6.8Z`);
+      if (bar) { bar.setAttribute("x", Math.min(16, x).toFixed(1)); bar.setAttribute("width", Math.abs(x - 16).toFixed(1)); }
+    }, v => `${v > 0 ? "+" : ""}${v.toFixed(1)} ev`, 0);
+    const slow = [];
     const l0 = lvOf(q), l1 = lvOf(p), lc = inf.querySelector('.iset [data-gk="lv"]');   // 光線：三角形沿著尺滑過去、LV 數字跟著跳
     if (lc && l0 != null && l1 != null && l0 !== l1) { const sv = lc.querySelector("svg"), sm = lc.querySelector("small"), fin = sm.textContent;
-      jobs.push(t => { const n = document.createRange().createContextualFragment(gLv(l0 + (l1 - l0) * t)).firstChild; sv.replaceChildren(...n.childNodes); sm.textContent = t < 1 ? `光線 LV ${Math.round(l0 + (l1 - l0) * t)}` : fin; });
+      slow.push(t => { const n = document.createRange().createContextualFragment(gLv(l0 + (l1 - l0) * t)).firstChild; sv.replaceChildren(...n.childNodes); sm.textContent = t < 1 ? `光線 LV ${Math.round(l0 + (l1 - l0) * t)}` : fin; });
       keep.add(box(lc)); }
     const d0 = dofOf(q), d1 = dofOf(p), dc = inf.querySelector('.iset [data-gk="dof"]');   // 景深：清楚的那段、對焦線從上一張的位置移過來
     if (dc && d0 && d1) { const P0 = dofX(d0), P1 = dofX(d1);
       if (P0.some((v, k) => Math.abs(v - P1[k]) > .05)) { const sv = dc.querySelector("svg");
-        jobs.push(t => { const n = document.createRange().createContextualFragment(gDof(d1, P0.map((v, k) => v + (P1[k] - v) * t))).firstChild; sv.replaceChildren(...n.childNodes); });
+        slow.push(t => { const n = document.createRange().createContextualFragment(gDof(d1, P0.map((v, k) => v + (P1[k] - v) * t))).firstChild; sv.replaceChildren(...n.childNodes); });
         keep.add(box(dc)); } }
     const da = pd(a.dt), db = pd(b.dt), sn = inf.querySelector(".icam .gsun");
     if (da && db && da.h != null && db.h != null && sn && !a.dtf && !b.dtf) {
       const h0 = da.h + da.mi / 60, h1 = db.h + db.mi / 60;
-      if (h0 !== h1) jobs.push(t => { const h = h0 + (h1 - h0) * t, n = document.createRange().createContextualFragment(gSun({h:Math.floor(h), mi:(h % 1) * 60})).firstChild; sn.replaceChildren(...n.childNodes); sn.setAttribute("class", n.getAttribute("class")); });
+      if (h0 !== h1) slow.push(t => { const h = h0 + (h1 - h0) * t, n = document.createRange().createContextualFragment(gSun({h:Math.floor(h), mi:(h % 1) * 60})).firstChild; sn.replaceChildren(...n.childNodes); sn.setAttribute("class", n.getAttribute("class")); });
     }
     const kl = inf.querySelector(".kbar i");
     if (kl && k0 && k0 !== kl.style.left) kl.animate([{left:k0}, {left:kl.style.left}], {duration:T.slow, easing:DEC});
@@ -2399,11 +2441,14 @@ function openLb(i, from){
     if (zk && zf && z0 && z0 !== zk.style.left) { const o = {duration:T.slow, easing:DEC}; zk.animate([{left:z0}, {left:zk.style.left}], o); zf.animate([{width:z0}, {width:zf.style.width}], o); keep.add(box(zk)); }
     const ga = inf.querySelector(".gar"), gw = (w, h) => Math.min(28, 16 * w / h);   // 照片橫豎的小框：從上一張的比例慢慢變過來
     if (ga && q.w && q.h && p.w && p.h && Math.abs(gw(q.w, q.h) - gw(p.w, p.h)) > .3) ga.animate([{width:`${gw(q.w, q.h)}px`}, {width:`${gw(p.w, p.h)}px`}], {duration:T.slow, easing:DEC});
-    if (!jobs.length) return keep;
-    const t0 = performance.now(), run = now => {
+    if (!jobs.length && !slow.length) return keep;
+    const t0 = performance.now(); let ls = 0;
+    const run = now => {
       if (LB !== S || !inf.isConnected || PH[S.i] !== p) return;
-      const t = Math.min(1, (now - t0) / T.slow), e = 1 - Math.pow(1 - t, 3);
-      jobs.forEach(j => j(t < 1 ? e : 1)); if (t < 1) requestAnimationFrame(run);
+      const t = Math.min(1, (now - t0) / T.slow), e = 1 - Math.pow(1 - t, 3), u = t < 1 ? e : 1;
+      jobs.forEach(j => j(u));
+      if (slow.length && (t >= 1 || now - ls >= 45)) { ls = now; slow.forEach(j => j(u)); }
+      if (t < 1) requestAnimationFrame(run);
     };
     run(t0); return keep;
   }
@@ -3550,9 +3595,10 @@ function gIso(iso){                      // 感光度儀表：ISO 越高指針�
   const ticks = [0, .25, .5, .75, 1].map(t => `<path d="M${P(t, 9.6)}L${P(t, 11.2)}" class="gl"/>`).join("");
   return SV(`${arc(0, 1, "gtk")}${k > .01 ? arc(0, k, "gsk") : ""}${ticks}<path d="M16 24L${P(k, 10.5)}" class="gs"/><circle cx="16" cy="24" r="2.3" class="gd"/>`);
 }
+let FVID = 0;
 function gFov(f35){                      // 取景框：外面淡淡的是超廣角看到的整片風景，亮框是這顆鏡頭拍到的範圍（望遠越小）
   const k = Math.max(.24, Math.min(1, 1 - lg(f35, 14, 400) * .76)), w = 26 * k, h = 20 * k, x = 16 - w / 2, y = 16 - h / 2, r = (2.6 * k + .6).toFixed(1);
-  const id = "fv" + Math.round(f35), box = `x="${x.toFixed(1)}" y="${y.toFixed(1)}" width="${w.toFixed(1)}" height="${h.toFixed(1)}" rx="${r}"`;
+  const id = "fv" + (++FVID), box = `x="${x.toFixed(1)}" y="${y.toFixed(1)}" width="${w.toFixed(1)}" height="${h.toFixed(1)}" rx="${r}"`;
   const scene = `<path d="M3 23l7-8 5 5 4-5 10 9v2H3Z" class="gf"/><circle cx="22" cy="11.5" r="2.4" class="gf"/>`;
   return SV(`<defs><clipPath id="${id}a"><rect x="3" y="6" width="26" height="20" rx="3"/></clipPath><clipPath id="${id}b"><rect ${box}/></clipPath></defs>
     <g clip-path="url(#${id}a)" class="gscn">${scene}</g><rect x="3" y="6" width="26" height="20" rx="3" class="gl"/>

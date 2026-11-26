@@ -239,8 +239,7 @@ button.chip:active,a.chip:active{transform:scale(.95)}
 .infs{display:contents}
 @media (max-width:899px){
   .infs{display:block;position:absolute;left:0;right:0;bottom:0;top:calc(env(safe-area-inset-top) + 60px);z-index:3;overflow-y:auto;overscroll-behavior:contain;-webkit-overflow-scrolling:touch;touch-action:pan-y;
-    visibility:hidden;scrollbar-width:none;transition:visibility 0s linear var(--t-mid)}
-  .infs::-webkit-scrollbar{display:none}
+    visibility:hidden;transition:visibility 0s linear var(--t-mid)}
   .infs::before{content:"";display:block;height:100%}
   .lb.info:not(.cmo) .infs{visibility:visible;transition:none}
   /* 資訊拉到快滿版：上面的日期時間變成資訊欄的標題列（同底色、細線），內容從它底下捲過去 */
@@ -550,8 +549,7 @@ html,body{touch-action:pan-x pan-y}
 
 .mems{max-width:var(--wmax);margin:0 auto;padding:clamp(8px,2vw,20px) 0 0}
 .mems[hidden]{display:none}
-.mrw{display:flex;gap:clamp(12px,2vw,20px);overflow-x:auto;padding:4px var(--pad) 6px;scroll-snap-type:x proximity;scrollbar-width:none}
-.mrw::-webkit-scrollbar{display:none}
+.mrw{display:flex;gap:clamp(12px,2vw,20px);overflow-x:auto;padding:4px var(--pad) 6px;scroll-snap-type:x proximity}
 .mem{flex:none;width:76px;display:grid;justify-items:center;gap:6px;scroll-snap-align:start;transition:transform var(--sp-fast)}
 .mem:active{transform:scale(.92)}
 .mring{position:relative;width:72px;height:72px;border-radius:50%;padding:3px;display:block;
@@ -603,8 +601,7 @@ html,body{touch-action:pan-x pan-y}
 /* ── 朋友放的：每個人一個分頁 ── */
 .who{max-width:var(--wmax);margin:0 auto;padding:clamp(12px,2vw,20px) 0 4px}
 .who[hidden],.msec[hidden]{display:none}
-.whr{display:flex;gap:8px;overflow-x:auto;padding:2px var(--pad) 6px;scrollbar-width:none}
-.whr::-webkit-scrollbar{display:none}
+.whr{display:flex;gap:8px;overflow-x:auto;padding:2px var(--pad) 6px}
 .who .chip{flex:none;-webkit-backdrop-filter:none;backdrop-filter:none;background:var(--s2);box-shadow:none;transition:background var(--t-mid) var(--ease),color var(--t-mid) var(--ease),transform var(--sp-fast)}
 .who .chip:active{transform:scale(.95)}
 .who .chip small{color:var(--tx3);font-weight:500}
@@ -664,7 +661,7 @@ html,body{touch-action:pan-x pan-y}
 @property --g1{syntax:"<color>";inherits:true;initial-value:#ffb36b}
 @property --g2{syntax:"<color>";inherits:true;initial-value:#ff5c86}
 @property --g3{syntax:"<color>";inherits:true;initial-value:#8b6cff}
-:root{transition:--g1 1.6s var(--ease),--g2 1.6s var(--ease),--g3 1.6s var(--ease)}
+.hero{transition:--g1 1.6s var(--ease),--g2 1.6s var(--ease),--g3 1.6s var(--ease)}
 :root{
   --seed:var(--g2); --g1:#ffb36b; --g2:#ff5c86; --g3:#8b6cff; --on-g:#fff;
   --grad:linear-gradient(120deg,var(--g1),var(--g2) 52%,var(--g3));
@@ -802,8 +799,7 @@ html,body{touch-action:pan-x pan-y}
 @media (min-width:900px){.stats{grid-template-columns:repeat(auto-fit,minmax(150px,200px))}}
 
 /* 去過的城市：一個城市一張卡（三張照片＋國旗、城市、日期、張數），點了只看那個城市 */
-.cities{display:grid;grid-auto-flow:column;grid-auto-columns:minmax(200px,240px);gap:12px;overflow-x:auto;scrollbar-width:none;margin:0 calc(-1 * var(--pad)) 14px;padding:4px var(--pad) 10px;scroll-snap-type:x mandatory;scroll-padding:0 var(--pad)}
-.cities::-webkit-scrollbar{display:none}
+.cities{display:grid;grid-auto-flow:column;grid-auto-columns:minmax(200px,240px);gap:12px;overflow-x:auto;margin:0 calc(-1 * var(--pad)) 14px;padding:4px var(--pad) 10px;scroll-snap-type:x mandatory;scroll-padding:0 var(--pad)}
 .cities[hidden]{display:none}
 .cty{display:flex;flex-direction:column;gap:10px;padding:8px 8px 12px;border-radius:var(--r-lg);background:var(--s1);box-shadow:var(--sh-card);text-align:left;color:inherit;scroll-snap-align:start;
   transition:transform var(--sp-fast);animation:memin var(--t-slow) var(--dec) both}
@@ -867,8 +863,6 @@ html,body{touch-action:pan-x pan-y}
 .iex b{display:block;font-weight:700;font-size:var(--fs-s)}
 .iex small{margin:2px 0 0}
 .iex .no .gx{opacity:.35}
-.ihd{display:flex;align-items:center;gap:12px}
-.ihd>div{flex:1;min-width:0}
 .gsun{width:58px;height:34px;flex:none;overflow:visible}
 .gsun .gd{filter:drop-shadow(0 0 4px color-mix(in oklab,var(--g2) 70%,transparent))}
 .gsun.night .gd{fill:color-mix(in oklab,var(--g3) 70%,var(--tx2))}
@@ -1013,8 +1007,7 @@ html,body{touch-action:pan-x pan-y}
 /* 電腦看大圖：下面一排小圖，點了直接跳過去 */
 .lb.strip .stage,.lb.strip.info .stage{bottom:88px}
 .lb.strip .lbb{bottom:88px}
-.lbs{position:absolute;left:0;right:0;bottom:0;height:88px;z-index:2;overflow-x:auto;scrollbar-width:none;padding:14px 20px 18px;transition:opacity var(--t-mid) var(--ease),transform var(--t-mid) var(--ease)}
-.lbs::-webkit-scrollbar{display:none}
+.lbs{position:absolute;left:0;right:0;bottom:0;height:88px;z-index:2;overflow-x:auto;padding:14px 20px 18px;transition:opacity var(--t-mid) var(--ease),transform var(--t-mid) var(--ease)}
 .lbsr{display:flex;gap:6px;width:max-content;margin:0 auto}
 .lbst{flex:none;width:56px;height:56px;border-radius:var(--r-xs);overflow:hidden;opacity:.42;transition:opacity var(--t-fast) var(--ease),transform var(--sp-fast),box-shadow var(--t-fast) var(--ease)}
 .lbst img{width:100%;height:100%;object-fit:cover;display:block}
@@ -1034,8 +1027,7 @@ html,body{touch-action:pan-x pan-y}
 .hla .rb svg{width:18px;height:18px;fill:none;stroke:currentColor;stroke-width:2.2}
 .hla .rb:disabled{opacity:.3;cursor:default}
 @media (pointer:fine){.hla{display:flex}.hla[hidden]{display:none}.hl .hlr{cursor:grab;scroll-snap-type:none}.hl .hlr.drag{cursor:grabbing;scroll-snap-type:none}.hl .hlr.drag .hlc{pointer-events:none}}
-.hlr{display:flex;gap:12px;overflow-x:auto;scrollbar-width:none;margin:12px calc(-1 * var(--pad)) 0;padding:6px var(--pad) 20px;scroll-snap-type:x mandatory;scroll-padding:0 var(--pad)}
-.hlr::-webkit-scrollbar{display:none}
+.hlr{display:flex;gap:12px;overflow-x:auto;margin:12px calc(-1 * var(--pad)) 0;padding:6px var(--pad) 20px;scroll-snap-type:x mandatory;scroll-padding:0 var(--pad)}
 .hlc{position:relative;flex:none;height:clamp(230px,58vw,440px);aspect-ratio:var(--ar);max-width:84vw;border-radius:var(--r-lg);overflow:hidden;overflow:clip;scroll-snap-align:start;background:var(--s2);
   box-shadow:var(--sh-card),0 24px 40px -26px color-mix(in oklab,var(--g2) 75%,transparent);animation:hlin var(--t-slow) var(--dec) both;transition:transform var(--sp-fast)}
 @keyframes hlin{from{opacity:0;translate:0 16px}}
@@ -1236,8 +1228,7 @@ html:has(.lb,.ss,.sy) .scrub{opacity:0;pointer-events:none}
 .inh{display:flex;align-items:baseline;justify-content:space-between;margin-bottom:10px}
 .inh b{font-size:var(--fs-s);font-weight:700}
 .inh span{font-size:var(--fs-xs);color:var(--tx3);font-weight:600}
-.inr{display:flex;gap:8px;overflow-x:auto;scrollbar-width:none;margin:0 -16px;padding:0 16px;scroll-snap-type:x proximity}
-.inr::-webkit-scrollbar{display:none}
+.inr{display:flex;gap:8px;overflow-x:auto;margin:0 -16px;padding:0 16px;scroll-snap-type:x proximity}
 .inp{flex:none;width:76px;display:grid;gap:5px;scroll-snap-align:start;transition:transform var(--sp-fast)}
 .inp img{width:76px;height:76px;object-fit:cover;border-radius:var(--r-sm);display:block;background:var(--s2)}
 .inp small{font-size:10px;color:var(--tx3);font-weight:600;text-align:center;white-space:nowrap}
@@ -1291,8 +1282,6 @@ button.dct:active{transform:scale(.92)}
 .gbn .av{width:24px;height:24px;border-radius:50%;flex:none;display:grid;place-items:center;font-style:normal;font-weight:700;font-size:var(--fs-xs);background:color-mix(in oklab,var(--seed) 22%,var(--s2));color:var(--p)}
 .gbn b{color:var(--tx2);font-weight:650;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .gbn .cx{margin-left:auto}
-.gbe{display:flex;align-items:center;gap:10px;padding:18px;border-radius:var(--r-lg);background:var(--s1);color:var(--tx3);font-size:var(--fs-m)}
-.gbe svg{width:22px;height:22px;flex:none;color:var(--p)}
 .gbf{max-width:560px;margin:16px auto 0}
 @keyframes gbin{from{opacity:0;transform:translateY(10px) scale(.98)}}
 
@@ -1309,13 +1298,6 @@ button.dct:active{transform:scale(.92)}
 @media (max-width:399px){.hmeta{gap:8px 6px}.hmeta .chip{padding:0 11px;gap:5px}}   /* 窄手機：四顆按鈕（有「放照片」時）也排得下一排 */
 .sct .dsum{color:rgba(255,255,255,.85);font-size:var(--fs-l);max-width:30em;margin-top:4px}
 
-/* 留言輸入框平常收著：只放一顆鈕 */
-.cform.fold{display:none}
-.cadd{margin-top:10px;display:inline-flex;align-items:center;gap:8px;height:40px;padding:0 16px;border-radius:var(--r-pill);background:var(--s2);color:var(--tx2);font:600 var(--fs-m)/1 var(--font);transition:transform var(--sp-fast),background var(--t-fast)}
-.cadd svg{width:17px;height:17px;color:var(--p)}
-.cadd:active{transform:scale(.95)}
-.gbk .cadd{display:flex;margin:16px auto 0}
-.gbk .cadd[hidden],.cadd[hidden]{display:none}
 /* 「回覆」平常藏著：點那則留言（電腦滑鼠指著）才出現 */
 .crep{display:block;max-height:0;opacity:0;overflow:hidden;padding:0;margin-top:0;transition:max-height var(--t-mid) var(--ease),opacity var(--t-fast) var(--ease),padding var(--t-mid) var(--ease)}
 .cmt.on .crep{max-height:28px;opacity:1;padding:4px 0}
@@ -1353,8 +1335,7 @@ button.dct:active{transform:scale(.92)}
 .sqn{display:flex;align-items:center;gap:6px;padding:14px 4px 10px;color:var(--tx3);font-size:var(--fs-s)}
 .sqn b{font-size:var(--fs-xl);color:var(--tx);font-weight:750}
 .btn.sm{width:auto;height:36px;margin:0 0 0 auto;padding:0 16px;font-size:var(--fs-s)}
-.sqt{display:flex;gap:4px;overflow-x:auto;scrollbar-width:none;padding-bottom:2px}
-.sqt::-webkit-scrollbar{display:none}
+.sqt{display:flex;gap:4px;overflow-x:auto;padding-bottom:2px}
 .sqt button{position:relative;flex:none;width:64px;height:64px;border-radius:var(--r-sm);overflow:hidden;background:var(--s2);animation:sqin var(--t-mid) var(--dec) both;animation-delay:calc(var(--i) * 24ms)}
 .sqt img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
 .sqt img.hi{opacity:0;transition:opacity var(--t-mid) var(--ease)}
@@ -1478,7 +1459,6 @@ button.dct:active{transform:scale(.92)}
   .cities .ctc{height:clamp(118px,11vw,200px)}
   .gbk{max-width:var(--wmax)}
   .gbk .gbf{max-width:720px;margin:16px auto 0}   /* 大螢幕：輸入框、留言都置中（使用者要置中，不要靠左） */
-  .gbk .cadd{margin:16px auto 0}
   .gbl{grid-template-columns:repeat(auto-fit,minmax(300px,360px));justify-content:center}
 }
 
@@ -1518,8 +1498,7 @@ button.dct:active{transform:scale(.92)}
 .cpl em{padding:4px 9px;border-radius:var(--r-pill);font-size:var(--fs-xs);font-weight:750;font-style:normal;background:rgba(0,0,0,.55)}
 .cpl em.good{background:var(--p);color:var(--on-p)}
 .cpl em.bad{background:color-mix(in oklab,var(--bad) 85%,#000);color:#fff}
-.cmps{display:flex;gap:6px;overflow-x:auto;padding:10px 12px calc(env(safe-area-inset-bottom) + 12px);scrollbar-width:none;justify-content:safe center}
-.cmps::-webkit-scrollbar{display:none}
+.cmps{display:flex;gap:6px;overflow-x:auto;padding:10px 12px calc(env(safe-area-inset-bottom) + 12px);justify-content:safe center}
 .cmpk{flex:none;width:56px;height:56px;padding:0;border:0;border-radius:var(--r-xs);overflow:hidden;background:#111;opacity:.55;box-shadow:inset 0 0 0 2px transparent;cursor:pointer;transition:opacity var(--t-fast),box-shadow var(--t-fast)}
 .cmpk img{width:100%;height:100%;object-fit:cover;display:block;pointer-events:none}
 .cmpk.in{opacity:1;box-shadow:inset 0 0 0 2px rgba(255,255,255,.7)}

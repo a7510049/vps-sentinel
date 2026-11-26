@@ -15,7 +15,7 @@ ALB_EXT2 = {".hif"} | PIC_RAW                                       # 只在雲�
 ALB_HEIF = {".heic", ".heif", ".hif", ".avif"}
 ALB_VV = 2                                                        # 影片轉檔的做法版本：轉不出來的影片換新做法後再試一次
 ALB_XL = 3840                                                     # 大螢幕看大圖的清晰版：長邊幾點（有人在大螢幕打開才做）
-ALB_MV = 8                                                        # 照片資訊的格式版本（舊的重讀一次：色彩空間、HDR、原始檔）
+ALB_MV = 9                                                        # 照片資訊的格式版本（舊的重讀一次：色彩空間、HDR、原始檔、XMP／PNG 定位）
 ALB_SHOW = {".jpg", ".jpeg", ".png", ".webp", ".gif", ".avif"}    # 做不出小圖時，瀏覽器直接看得了原圖的
 ALB_VID = {".mp4", ".mov", ".m4v", ".webm", ".3gp", ".mkv"}        # 影片（主機轉成 720p 的 H.264 給朋友看）
 ALB_AUD = {".mp3", ".m4a", ".aac", ".ogg", ".opus", ".flac", ".wav"}   # 資料夾裡放一首歌：幻燈片的背景音樂
@@ -1308,11 +1308,15 @@ def alb_exif_tidy(t):
     return x, g, ori if isinstance(ori, int) and 1 <= ori <= 8 else 1
 
 
+ALB_XMP_GPS = re.compile(rb'(?:exif:GPS\w+=(?:"[^"]*"|\'[^\']*\')|<exif:GPS\w+[^>]*>[^<]*</exif:GPS\w+>)')
+
+
 def alb_jpeg(f):
-    """JPEG：大小、EXIF（TIFF 在檔案裡的位置）"""
+    """JPEG：大小、EXIF（TIFF 在檔案裡的位置）、XMP 裡的定位片段"""
     f.seek(2)
     w = h = 0
     exif = None
+    xgs = []
     while True:
         b = f.read(1)
         if not b or b[0] != 0xFF:
@@ -1333,17 +1337,20 @@ def alb_jpeg(f):
         if ln < 2:
             break
         pos = f.tell()
-        if mk == 0xE1 and exif is None:
+        if mk == 0xE1:
             seg = f.read(ln - 2)
-            if seg[:6] == b"Exif\x00\x00":
+            if exif is None and seg[:6] == b"Exif\x00\x00":
                 exif = (pos + 6, seg[6:])
+            elif seg.startswith(b"http://ns.adobe.com/xap/1.0/\x00"):
+                for m in ALB_XMP_GPS.finditer(seg, 29):
+                    xgs.append([pos + m.start(), m.end() - m.start(), 1])
         elif mk in (0xC0, 0xC1, 0xC2, 0xC3, 0xC5, 0xC6, 0xC7, 0xC9, 0xCA, 0xCB, 0xCD, 0xCE, 0xCF):
             seg = f.read(5)
             if len(seg) == 5:
                 h, w = struct.unpack(">HH", seg[1:5])
             break
         f.seek(pos + ln - 2)
-    return w, h, exif
+    return w, h, exif, xgs
 
 
 def alb_boxes(f, start, end):
@@ -1367,112 +1374,26 @@ def alb_boxes(f, start, end):
 
 
 def alb_heic(f, size):
-    """HEIC／AVIF：主圖的大小、轉向，EXIF 在檔案裡的位置"""
+    """HEIC／AVIF：共用 pic_heif_meta 讀主圖的大小、轉向與 EXIF 位置"""
     meta = next(((s, e) for t, s, e in alb_boxes(f, 0, min(size, 1 << 26)) if t == "meta"), None)
-    if not meta:
-        return 0, 0, None, 0
-    s0, e0 = meta[0] + 4, meta[1]
-    kids = {t: (s, e) for t, s, e in alb_boxes(f, s0, e0)}
-
-    def rd(rng):
-        f.seek(rng[0])
-        return f.read(min(rng[1] - rng[0], 1 << 20))
-    prim = exif_id = None
-    if "pitm" in kids:
-        b = rd(kids["pitm"])
-        prim = struct.unpack(">H", b[4:6])[0] if b[0] == 0 else struct.unpack(">I", b[4:8])[0]
-    if "iinf" in kids:
-        s, e = kids["iinf"]
-        f.seek(s)
-        v = f.read(1)[0]
-        for t, bs, be in alb_boxes(f, s + (6 if v == 0 else 8), e):
-            if t != "infe":
-                continue
-            f.seek(bs)
-            b = f.read(min(be - bs, 64))
-            if b[0] >= 2:
-                iid, typ = (struct.unpack(">H", b[4:6])[0], b[8:12]) if b[0] == 2 else (struct.unpack(">I", b[4:8])[0], b[10:14])
-                if typ == b"Exif":
-                    exif_id = iid
-    loc = {}
-    if "iloc" in kids:
-        b = rd(kids["iloc"])
-        v = b[0]
-        osz, lsz, bsz, isz = b[4] >> 4, b[4] & 15, b[5] >> 4, b[5] & 15
-        p = 6
-        cnt = struct.unpack_from(">H" if v < 2 else ">I", b, p)[0]
-        p += 2 if v < 2 else 4
-
-        def num(n):
-            nonlocal p
-            if not n:
-                return 0
-            if p + n > len(b):
-                raise IndexError("iloc eof")
-            r = int.from_bytes(b[p:p + n], "big")
-            p += n
-            return r
-        try:
-            tot_ext = 0
-            for _ in range(min(cnt, 4096)):
-                if p >= len(b):
-                    break
-                iid = num(2 if v < 2 else 4)
-                if v in (1, 2):
-                    num(2)
-                num(2)
-                base = num(bsz)
-                ec = num(2)
-                if (osz == 0 and lsz == 0 and ec > 1) or tot_ext + ec > 4096:
-                    break
-                tot_ext += ec
-                ext = []
-                for _ in range(ec):
-                    if v in (1, 2) and isz:
-                        num(isz)
-                    ext.append((base + num(osz), num(lsz)))
-                loc[iid] = ext
-        except (IndexError, ValueError):
-            pass
+    if not meta or meta[1] - meta[0] > 8 << 20:
+        return 0, 0, None, 0, None
+    f.seek(meta[0])
+    H = pic_heif_meta(f.read(meta[1] - meta[0]))
+    if not H:
+        return 0, 0, None, 0, None
     w = h = rot = 0
-    if "iprp" in kids:
-        ip = {t: (s, e) for t, s, e in alb_boxes(f, *kids["iprp"])}
-        props = list(alb_boxes(f, *ip["ipco"])) if "ipco" in ip else []
-        mine = []
-        if "ipma" in ip:
-            b = rd(ip["ipma"])
-            v, fl = b[0], int.from_bytes(b[1:4], "big")
-            p = 4
-            n = struct.unpack_from(">I", b, p)[0]
-            p += 4
-            for _ in range(min(n, 4096)):
-                if p + 3 > len(b):
-                    break
-                iid = struct.unpack_from(">H" if v < 1 else ">I", b, p)[0]
-                p += 2 if v < 1 else 4
-                c = b[p]
-                p += 1
-                for _ in range(c):
-                    if fl & 1:
-                        ix = struct.unpack_from(">H", b, p)[0] & 0x7FFF
-                        p += 2
-                    else:
-                        ix = b[p] & 0x7F
-                        p += 1
-                    if iid == prim:
-                        mine.append(ix)
-        for ix in mine:
-            if 1 <= ix <= len(props):
-                t, s, e = props[ix - 1]
-                f.seek(s)
-                b = f.read(min(e - s, 16))
-                if t == "ispe" and len(b) >= 12:
-                    w, h = struct.unpack(">II", b[4:12])
-                elif t == "irot" and b:
-                    rot = b[0] & 3
+    prim = H["pitm"]
+    ispe = pic_heif_prop(H, prim, "ispe")
+    if ispe and len(ispe) >= 12:
+        w, h = struct.unpack(">II", ispe[4:12])
+    irot = pic_heif_prop(H, prim, "irot")
+    if irot:
+        rot = irot[0] & 3
     exif = None
-    if exif_id in loc and loc[exif_id]:
-        off, ln = loc[exif_id][0]
+    exif_id = next((iid for iid, it in H["it"].items() if it["t"] == "Exif" and it["ext"] and it["cm"] == 0), None)
+    if exif_id is not None:
+        off, ln = H["it"][exif_id]["ext"][0]
         f.seek(off)
         b = f.read(min(ln, 1 << 20))
         if len(b) > 4:
@@ -1480,7 +1401,7 @@ def alb_heic(f, size):
             if b[skip:skip + 6] == b"Exif\x00\x00":
                 skip += 6
             exif = (off + skip, b[skip:])
-    return w, h, exif, rot
+    return w, h, exif, rot, H
 
 
 def alb_vmeta(path):
@@ -1554,15 +1475,33 @@ def alb_meta(path):
         return alb_vmeta(path)
     w = h = 0
     exif = None
+    xgs = []
+    heif = None
     rot = 0
     try:
         size = os.path.getsize(path)
         with open(path, "rb") as f:
             head = f.read(32)
             if head[:2] == b"\xff\xd8":
-                w, h, exif = alb_jpeg(f)
+                w, h, exif, xgs = alb_jpeg(f)
             elif head[:8] == b"\x89PNG\r\n\x1a\n":
                 w, h = struct.unpack(">II", head[16:24])
+                p = 8
+                f.seek(p)
+                while p < min(size, 4 << 20):
+                    ch = f.read(8)
+                    if len(ch) < 8:
+                        break
+                    ln, ct = struct.unpack(">I4s", ch)
+                    if ct == b"eXIf" and ln <= 1 << 20:
+                        d = f.read(ln)
+                        skip = 6 if d[:6] == b"Exif\x00\x00" else 0
+                        exif = (p + 8 + skip, d[skip:])
+                        break
+                    if ct == b"IEND":
+                        break
+                    p += 12 + ln
+                    f.seek(p)
             elif head[:6] in (b"GIF87a", b"GIF89a"):
                 w, h = struct.unpack("<HH", head[6:10])
             elif head[:4] == b"RIFF" and head[8:12] == b"WEBP":
@@ -1586,7 +1525,7 @@ def alb_meta(path):
                     v = int.from_bytes(b[9:13], "little")
                     w, h = (v & 0x3FFF) + 1, ((v >> 14) & 0x3FFF) + 1
             elif head[4:8] == b"ftyp" and ext not in PIC_RAW:
-                w, h, exif, rot = alb_heic(f, size)
+                w, h, exif, rot, heif = alb_heic(f, size)
     except (OSError, struct.error, IndexError, ValueError):
         pass
     raw = None
@@ -1601,7 +1540,7 @@ def alb_meta(path):
     x, g, ori = alb_exif_tidy(t)
     more = pic_exif_more(exif[1]) if exif else {}
     hd = pic_apple_stops(more.get("a33"), more.get("a48"))
-    cs, hdr = alb_color_probe(path, ext, more, hd)
+    cs, hdr = alb_color_probe(path, ext, more, hd, heif=heif)
     ms = pic_maker(exif[1], more) if exif else {}
     afp = alb_afp(t, ms, ori, rot if ext in ALB_HEIF else 0, w, h)
     if afp:
@@ -1627,8 +1566,10 @@ def alb_meta(path):
         w, h = h, w
     if not (w and h):
         w, h = int(t.get("pw") or 0) or 4, int(t.get("ph") or 0) or 3
-    out = {"w": w, "h": h, "x": x, "g": g, "ori": ori, "mv": ALB_MV,
-           "gs": [[exif[0] + a, n] for a, n in spans] if exif and not raw else []}
+    gs = [[exif[0] + a, n] for a, n in spans] if exif and not raw else []
+    if xgs and not raw:
+        gs.extend(xgs)
+    out = {"w": w, "h": h, "x": x, "g": g, "ori": ori, "mv": ALB_MV, "gs": gs}
     if cs:
         out["cs"] = cs
     if hdr:
@@ -1668,7 +1609,7 @@ def alb_raw_meta(path):
     return {"w": w, "h": h, "exif": exif, "t": t}
 
 
-def alb_color_probe(path, ext, more, hd):
+def alb_color_probe(path, ext, more, hd, heif=None):
     """建清單時看一下：色彩空間名稱（sRGB 不寫）、HDR 最多亮幾級"""
     cs = hdr = None
     try:
@@ -1680,7 +1621,7 @@ def alb_color_probe(path, ext, more, hd):
         elif ext in PIC_RAW:
             cs = pic_cs(None, more)[1]
         elif ext in ALB_HEIF:
-            H = pic_heif(path)
+            H = heif if heif is not None else pic_heif(path)
             if H and H["pitm"] is not None:
                 icc, nclx = pic_heif_colr(H, H["pitm"])
                 cs = alb_heif_cs(icc, nclx)[1]
@@ -1870,6 +1811,39 @@ def alb_webp_clean(path):
         p += 8 + n + (n & 1)
     body = b"".join(out)
     return b"RIFF" + struct.pack("<I", 4 + len(body)) + b"WEBP" + body
+
+
+def alb_png_clean(path):
+    """PNG 藏起地點給朋友看：拿掉 eXIf 跟可能帶定位的 XMP／EXIF 文字區塊"""
+    with open(path, "rb") as f:
+        b = f.read(64 << 20)
+    if b[:8] != b"\x89PNG\r\n\x1a\n":
+        return b
+    out, p = [b[:8]], 8
+    while p + 12 <= len(b):
+        n = struct.unpack_from(">I", b, p)[0]
+        t = b[p + 4:p + 8]
+        end = p + 12 + n
+        if end > len(b):
+            out.append(b[p:])
+            break
+        if t == b"eXIf" or (t in (b"iTXt", b"tEXt", b"zTXt") and b[p + 8:p + 25].lower().startswith((b"xml:com.adobe.xmp", b"raw profile type "))):
+            p = end
+            continue
+        out.append(b[p:end])
+        p = end
+    return b"".join(out)
+
+
+def alb_clean_orig(src, ext, sz):
+    """藏起地點時需要重組容器拿掉中繼資料的格式（WebP／PNG）"""
+    if sz > 64 << 20:
+        return None
+    if ext == ".webp":
+        return alb_webp_clean(src)
+    if ext == ".png":
+        return alb_png_clean(src)
+    return None
 
 
 def alb_music_in(p):
@@ -2104,15 +2078,60 @@ def alb_make(a, pid, m, edge=2048):
         vf += (f",drawtext=fontfile='{alb_font(a['wm'])}':textfile='{tf.name}':expansion=none:fontcolor=white@0.6:fontsize='min(w,h)*0.042'"
                ":x='w-tw-min(w,h)*0.035':y='h-th-min(w,h)*0.035':shadowcolor=black@0.35:shadowx=2:shadowy=2")
     still = alb_webp_still(src) if m.get("anim") == 2 else None
+    big = small = tiny = qa_px = None
+    in_args = (["-f", "webp_pipe", "-i", "pipe:0"] if still else
+               ["-f", "hevc", "-i", "pipe:0"] if hv else
+               ["-noautorotate", "-f", "mjpeg", "-i", "pipe:0"] if rawb else
+               (["-noautorotate"] if jpg else []) + pre + ["-i", "{src}"])
+    in_data = still if still else hv["bs"] if hv else rawb if rawb else None
+    in_src = None if in_data is not None else src
+    tmo = 240 if hv else 180
+    ff = alb_ff()
     try:
-        if still:                                      # 會動的 WebP：拿第一格做
-            big = alb_run_ff(["-f", "webp_pipe", "-i", "pipe:0", "-vf", vf, *out, "-q:v", "4", "-"], data=still, timeout=180)
-        elif hv:
-            big = alb_run_ff(["-f", "hevc", "-i", "pipe:0", "-vf", vf, *out, "-q:v", "4", "-"], data=hv["bs"], timeout=240)
-        elif rawb:
-            big = alb_run_ff(["-noautorotate", "-f", "mjpeg", "-i", "pipe:0", "-vf", vf, *out, "-q:v", "4", "-"], data=rawb, timeout=180)
-        else:
-            big = alb_run_ff((["-noautorotate"] if jpg else []) + pre + ["-i", "{src}", "-vf", vf, *out, "-q:v", "4", "-"], src=src, timeout=180)
+        if not xl and ff and not ff[1]:                # 本機 ffmpeg：讀一次原圖同時產出大圖、小圖、模糊圖、畫質評分（省掉 3 次重複啟動與解碼）
+            tdir = tempfile.mkdtemp(prefix="vsalb-")
+            alb_ff_give(tdir)
+            try:
+                need_qa = not m.get("vid")
+                fc = (f"[0:v]{vf},split={4 if need_qa else 3}[b0][s0][q0]{'[a0]' if need_qa else ''};"
+                      f"[s0]scale=-2:'min(480,ih)':flags=lanczos[s];[q0]scale=24:-2:flags=area[q]"
+                      + (f";[a0]scale={ALB_QA_N}:{ALB_QA_N}:flags=area,format=gray[a]" if need_qa else ""))
+                fl, fs, fq, fa = (os.path.join(tdir, x) for x in ("l.jpg", "s.jpg", "q.jpg", "a.raw"))
+                jout = ["-map_metadata", "-1", "-frames:v", "1", "-c:v", "mjpeg", "-pix_fmt", "yuvj420p"]
+                margs = [*(a_ if a_ != "{src}" else "fd:" for a_ in in_args), "-filter_complex", fc,
+                         "-map", "[b0]", *jout, "-q:v", "4", fl,
+                         "-map", "[s]", *jout, "-q:v", "4", fs,
+                         "-map", "[q]", *jout, "-q:v", "6", fq,
+                         *(["-map", "[a]", "-frames:v", "1", "-f", "rawvideo", "-pix_fmt", "gray", fa] if need_qa else [])]
+                cmd_m = ["nice", "-n", "17", *ff[0], "-v", "error", "-nostdin", "-y", *margs]
+                if in_src:
+                    with open(in_src, "rb") as fin:
+                        r = subprocess.run(cmd_m, stdin=fin, capture_output=True, timeout=tmo, preexec_fn=alb_ff_pre())
+                else:
+                    r = subprocess.run(cmd_m, input=in_data, capture_output=True, timeout=tmo, preexec_fn=alb_ff_pre())
+                if r.returncode == 0 and os.path.exists(fl) and os.path.exists(fs):
+                    with open(fl, "rb") as f:
+                        b0 = f.read()
+                    with open(fs, "rb") as f:
+                        s0 = f.read()
+                    if b0.startswith(b"\xff\xd8") and s0.startswith(b"\xff\xd8"):
+                        big, small = b0, s0
+                        if os.path.exists(fq):
+                            with open(fq, "rb") as f:
+                                q0 = f.read()
+                            if q0.startswith(b"\xff\xd8"):
+                                tiny = q0
+                        if need_qa and os.path.exists(fa):
+                            with open(fa, "rb") as f:
+                                a0 = f.read()
+                            if len(a0) == ALB_QA_N * ALB_QA_N:
+                                qa_px = a0
+            except (OSError, subprocess.SubprocessError):
+                big = small = tiny = qa_px = None
+            finally:
+                shutil.rmtree(tdir, ignore_errors=True)
+        if not big:
+            big = alb_run_ff([*in_args, "-vf", vf, *out, "-q:v", "4", "-"], src=in_src, data=in_data, timeout=tmo)
     finally:
         if tf:
             try:
@@ -2132,8 +2151,10 @@ def alb_make(a, pid, m, edge=2048):
         os.makedirs(ALB_CACHE, mode=0o700, exist_ok=True)
         sec_write(alb_cfile(ck, "x"), big)
         return True
-    small = alb_run_ff(["-f", "mjpeg", "-i", "pipe:0", "-vf", "scale=-2:'min(480,ih)':flags=lanczos", *out, "-q:v", "4", "-"], data=big)
-    tiny = alb_run_ff(["-f", "mjpeg", "-i", "pipe:0", "-vf", "scale=24:-2:flags=area", *out, "-q:v", "6", "-"], data=small or big)
+    if not small:
+        small = alb_run_ff(["-f", "mjpeg", "-i", "pipe:0", "-vf", "scale=-2:'min(480,ih)':flags=lanczos", *out, "-q:v", "4", "-"], data=big)
+    if not tiny:
+        tiny = alb_run_ff(["-f", "mjpeg", "-i", "pipe:0", "-vf", "scale=24:-2:flags=area", *out, "-q:v", "6", "-"], data=small or big)
     if not small:
         return False
     if icc:                                            # 色彩描述檔照原樣放回去（像素沒動，瀏覽器才知道該怎麼顯示）
@@ -2148,7 +2169,7 @@ def alb_make(a, pid, m, edge=2048):
     for kind, b in (("l", big), ("q", tiny or b""), ("s", small)):   # 小圖最後寫：有小圖就代表三個都好了
         if b:
             sec_write(alb_cfile(ck, kind), b)
-    alb_qa_make(a, pid, m, sdr)
+    alb_qa_make(a, pid, m, sdr, px=qa_px)
     return True
 
 
@@ -2234,19 +2255,19 @@ def alb_hdr_put(big, src, ext, m, H, hv, rot, hdr_tm):
 
 
 def alb_hdr_from_hlg(big, hv, gw, gh, hdr_tm):
-    """HLG／PQ 的相機照片：同一張算 HDR（線性、203 尼特＝1）和底圖（線性）的亮度，比值就是增益圖"""
-    def lum(vf):
-        return alb_run_ff(["-f", "hevc", "-i", "pipe:0", "-vf", vf, "-frames:v", "1", "-f", "rawvideo", "-pix_fmt", "grayf32le", "-"],
-                          data=hv["bs"], timeout=240, raw=gw * gh * 4)
+    """HLG／PQ 的相機照片：一次解開 HEVC 同時算 HDR（線性、203 尼特＝1）和底圖（線性）的亮度，比值就是增益圖"""
     base = (hv["vf"] + "," if hv["vf"] else "")
     tin = "arib-std-b67" if "arib" in hdr_tm else "smpte2084"
-    hdr = lum(base + f"scale={gw}:{gh}:flags=bicubic,zscale=t=linear:npl=203:tin={tin}:pin=2020:min=2020_ncl,format=gbrpf32le,zscale=p=smpte432,"
-              "colorchannelmixer=.2289746:.6917385:.0792869:0:.2289746:.6917385:.0792869:0:.2289746:.6917385:.0792869,format=grayf32le")
-    sdr = lum(base + f"scale={gw}:{gh}:flags=bicubic,{hdr_tm}zscale=t=linear,format=gbrpf32le,"
-              "colorchannelmixer=.2289746:.6917385:.0792869:0:.2289746:.6917385:.0792869:0:.2289746:.6917385:.0792869,format=grayf32le")
-    if not (hdr and sdr):
-        return None
+    mix = "colorchannelmixer=.2289746:.6917385:.0792869:0:.2289746:.6917385:.0792869:0:.2289746:.6917385:.0792869,format=grayf32le"
+    fc = (f"[0:v]{base}scale={gw}:{gh}:flags=bicubic,split=2[h0][s0];"
+          f"[h0]zscale=t=linear:npl=203:tin={tin}:pin=2020:min=2020_ncl,format=gbrpf32le,zscale=p=smpte432,{mix}[hl];"
+          f"[s0]{hdr_tm}zscale=t=linear,format=gbrpf32le,{mix}[sl];[hl][sl]vstack=inputs=2[o]")
     n = gw * gh
+    both = alb_run_ff(["-f", "hevc", "-i", "pipe:0", "-filter_complex", fc, "-map", "[o]", "-frames:v", "1", "-f", "rawvideo", "-pix_fmt", "grayf32le", "-"],
+                      data=hv["bs"], timeout=240, raw=n * 8)
+    if not both:
+        return None
+    hdr, sdr = both[:n * 4], both[n * 4:]
     hv_, sv = struct.unpack(f"<{n}f", hdr), struct.unpack(f"<{n}f", sdr)
     off = 1 / 64
     lg = [math.log2((max(h, 0) + off) / (max(s, 0) + off)) for h, s in zip(hv_, sv)]
@@ -2267,10 +2288,11 @@ ALB_QA = {}                                       # 快取鍵 → {"s": 分數, 
 ALB_QAV = 2                                       # 分數的算法版本：2 起看對焦點（有對焦點的舊分數重算）
 
 
-def alb_qa_calc(big, afp=None):
+def alb_qa_calc(big, afp=None, px=None):
     """回傳 {"s": 0～100 分, "h": 16 碼指紋, "f": 對焦處清楚的程度 0～100（相機有記對焦點才有）}；算不出來回 None"""
     n = ALB_QA_N
-    px = alb_run_ff(["-f", "mjpeg", "-i", "pipe:0", "-vf", f"scale={n}:{n}:flags=area,format=gray", "-frames:v", "1", "-f", "rawvideo", "-pix_fmt", "gray", "-"], data=big, raw=n * n)
+    if px is None or len(px) != n * n:
+        px = alb_run_ff(["-f", "mjpeg", "-i", "pipe:0", "-vf", f"scale={n}:{n}:flags=area,format=gray", "-frames:v", "1", "-f", "rawvideo", "-pix_fmt", "gray", "-"], data=big, raw=n * n)
     if not px:
         return None
     rows = [px[y * n:(y + 1) * n] for y in range(n)]
@@ -2300,10 +2322,7 @@ def alb_qa_calc(big, afp=None):
                 cnt += 1
         if cnt > 100:
             fv = a2 / cnt - (a1 / cnt) ** 2
-    hist = [0] * 256
-    for r in rows:
-        for c in r:
-            hist[c] += 1
+    hist = [px.count(i) for i in range(256)]
     tot = n * n
     mean = sum(i * c for i, c in enumerate(hist)) / tot
     std = (sum(c * (i - mean) ** 2 for i, c in enumerate(hist)) / tot) ** .5
@@ -2345,7 +2364,7 @@ def alb_qa_get(ck):
     return q
 
 
-def alb_qa_make(a, pid, m, big=None):
+def alb_qa_make(a, pid, m, big=None, px=None):
     """算這張的分數、指紋（影片不算）；big 沒給就拿做好的大圖"""
     if m.get("vid") or m.get("bad"):
         return
@@ -2354,12 +2373,12 @@ def alb_qa_make(a, pid, m, big=None):
     afp = (m.get("x") or {}).get("afp")
     if os.path.exists(fn) and (not afp or (alb_qa_get(ck) or {}).get("v") == ALB_QAV):
         return
-    if big is None:
+    if big is None and px is None:
         try:
             big = sec_read(alb_cfile(ck, "l"))
         except (OSError, ValueError):
             return
-    q = alb_qa_calc(big, afp)
+    q = alb_qa_calc(big, afp, px=px)
     if q:
         sec_write(fn, json.dumps(q).encode())
         ALB_QA[ck] = q
@@ -3257,10 +3276,10 @@ def alb_cookie_ok(h, a):
 
 
 def alb_strip_gps(f, spans, out, total):
-    """送原圖：定位資料那幾段換成 0（檔案大小不變）"""
-    spans = sorted((int(s), int(n)) for s, n in spans if n > 0)
+    """送原圖：定位資料那幾段換成 0（XMP 換成空白，保持格式正常且檔案大小不變）"""
+    norm = sorted((int(sp[0]), int(sp[1]), int(sp[2]) if len(sp) > 2 else 0) for sp in spans if sp[1] > 0)
     pos = 0
-    for s, n in spans:
+    for s, n, kind in norm:
         e = min(s + n, total) if total else s + n
         if e <= pos:
             continue
@@ -3275,7 +3294,7 @@ def alb_strip_gps(f, spans, out, total):
         b = f.read(e - s)
         if not b:
             return
-        out.write(b"\x00" * len(b))
+        out.write((b" " if kind == 1 else b"\x00") * len(b))
         pos += len(b)
     shutil.copyfileobj(f, out, 1 << 20)
 
@@ -3543,8 +3562,9 @@ def alb_http(h, method):
                 if kind != "o" and ALB_E and not own and st.st_size <= 64 << 20 and ext in ALB_SHOW:   # 做不出小圖、直接看原圖：一樣加密
                     buf = io.BytesIO()
                     try:
-                        if strip_loc and ext == ".webp" and st.st_size <= 64 << 20:
-                            buf.write(alb_webp_clean(src))
+                        cleaned = alb_clean_orig(src, ext, st.st_size) if strip_loc else None
+                        if cleaned is not None:
+                            buf.write(cleaned)
                         elif not strip_loc or not meta.get("gs"):
                             shutil.copyfileobj(f, buf, 1 << 20)
                         else:
@@ -3556,10 +3576,10 @@ def alb_http(h, method):
                 ct = {".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".png": "image/png", ".webp": "image/webp", ".gif": "image/gif",
                       ".heic": "image/heic", ".heif": "image/heif", ".avif": "image/avif", ".mp4": "video/mp4", ".m4v": "video/mp4",
                       ".mov": "video/quicktime", ".webm": "video/webm"}.get(ext, "application/octet-stream")
-                clean_webp = alb_webp_clean(src) if strip_loc and ext == ".webp" and st.st_size <= 64 << 20 else None
+                cleaned = alb_clean_orig(src, ext, st.st_size) if strip_loc else None
                 h.send_response(200)
                 h.send_header("Content-Type", ct)
-                h.send_header("Content-Length", str(len(clean_webp) if clean_webp is not None else st.st_size))
+                h.send_header("Content-Length", str(len(cleaned) if cleaned is not None else st.st_size))
                 h.send_header("Cache-Control", "private, max-age=3600")
                 h.send_header("X-Content-Type-Options", "nosniff")
                 h.send_header("X-Frame-Options", "DENY")
@@ -3569,8 +3589,8 @@ def alb_http(h, method):
                     h.send_header("Content-Disposition", "attachment; filename*=UTF-8''" + urllib.parse.quote(os.path.basename(meta["n"])))
                 h.end_headers()
                 try:
-                    if clean_webp is not None:
-                        h.wfile.write(clean_webp)
+                    if cleaned is not None:
+                        h.wfile.write(cleaned)
                     elif not strip_loc or not meta.get("gs"):   # 朋友放的一律拿掉定位
                         shutil.copyfileobj(f, h.wfile, 1 << 20)
                     else:
@@ -3639,8 +3659,9 @@ def alb_http(h, method):
                             zi = zipfile.ZipInfo(meta["n"], time.localtime(meta["mt"])[:6])
                             ext = os.path.splitext(meta["n"])[1].lower()
                             with open(src, "rb") as f, z.open(zi, "w", force_zip64=True) as w:
-                                if strip_loc and ext == ".webp" and meta.get("sz", 0) <= 64 << 20:
-                                    w.write(alb_webp_clean(src))
+                                cleaned = alb_clean_orig(src, ext, meta.get("sz", 0)) if strip_loc else None
+                                if cleaned is not None:
+                                    w.write(cleaned)
                                 elif not strip_loc or not meta.get("gs"):   # 朋友放的一律拿掉定位
                                     shutil.copyfileobj(f, w, 1 << 20)
                                 else:
