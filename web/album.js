@@ -291,18 +291,26 @@ async function swOn(){                                       // 照片加密送�
 }
 const swClear = () => { try { navigator.serviceWorker?.controller?.postMessage({type:"clear", code:CODE}); } catch (e) {} };
 let SWOK = false;
+function albumRetry(){
+  const card = gate("off", "暫時無法載入相簿", '<button type="button" class="btn">再試一次</button>');
+  const button = card.querySelector("button");
+  button.onclick = () => { button.disabled = true; button.textContent = "讀取中…"; boot(); };
+}
 async function boot(){
   let r;
   SWOK = await swOn();                                       // 不能在背景解開的瀏覽器（例如 LINE 裡面的）跟主機說一聲，照舊給一般圖片
   try { r = await fetch(BASE + "/m" + (SWOK ? "" : "?pl=1"), {credentials:"same-origin", cache:"no-store"}); }
-  catch (e) { return gate("off", "連不上，等一下再試"); }
+  catch (e) { return albumRetry(); }
   if (r.status === 401) return askPw();
   if (r.status === 403) { swClear(); const x = await r.json().catch(() => ({}));
     if (x.lock) return gate("phone", "這台設備已被停用", "", "按了截圖，等主人解除");
     return gate("phone", x.ban ? "這台設備不能看這本相簿" : "名額已經滿了", "", x.ban ? "" : "這本相簿只給指定的設備看"); }
-  if (!r.ok) { if (r.status === 404 || r.status === 410) { swClear(); [NMK, "vsa-seen-" + CODE, "vsa-di-" + CODE].forEach(store.del); }   // 收回、過期：這台留下的名字、看過的回憶與背景快取一起清掉
+  if (r.status === 404 || r.status === 410) { swClear(); [NMK, "vsa-seen-" + CODE, "vsa-di-" + CODE].forEach(store.del);   // 收回、過期：這台留下的名字、看過的回憶與背景快取一起清掉
     return gate("off", "這本相簿已經看不到了", "", "連結已經收回或過期"); }
-  D = await r.json();
+  if (!r.ok) return albumRetry();
+  const manifest = await r.json().catch(() => null);
+  if (!manifest || !Array.isArray(manifest.photos)) return albumRetry();
+  D = manifest;
   splStep();
   devInfo();
   ALL = D.photos || [];
@@ -410,7 +418,7 @@ function gate(ic, title, form, sub){
   return $(".card");
 }
 function askPw(){
-  const f = gate("lock", "這本相簿上了鎖", `<input class="field" type="password" autocomplete="current-password" aria-label="密碼" placeholder="密碼" required><button class="btn">打開相簿</button><div class="msg"></div>`);
+  const f = gate("lock", "這本相簿上了鎖", `<input class="field" type="password" autocomplete="current-password" aria-label="密碼" placeholder="密碼" required><button class="btn">打開相簿</button><div class="msg" role="alert"></div>`);
   const inp = f.querySelector("input"), btn = f.querySelector("button"), msg = f.querySelector(".msg");
   setTimeout(() => inp.focus(), 300);
   f.addEventListener("submit", async e => {

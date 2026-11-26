@@ -1580,19 +1580,29 @@ function flyUnslim(d, pv){
 }
 async function flyLoad(anim){
   clearTimeout(FLYT);
-  if (!$("#fly")) return;
+  const panel = $("#fly");
+  if (!panel || panel._bye) return;
   FLYT = setTimeout(() => flyLoad(), FLYEV);
   if (document.hidden) return;
-  if (!["TPE", "TSA", "RMQ", "KHH"].includes(FLYS.ap)) { FLYS.ap = await flyNear() || "TPE"; flySave(); }   // 以前選過的國外機場也換回台灣的
-  const ap = FLYS.ap, seq = ++FLYSEQ, same = () => seq === FLYSEQ && ap === FLYS.ap && $("#fly");   // 換了機場：之前還沒回來的不要蓋掉新的
+  const seq = ++FLYSEQ, current = () => seq === FLYSEQ && panel.isConnected && !panel._bye;
+  if (!["TPE", "TSA", "RMQ", "KHH"].includes(FLYS.ap)) {
+    const near = await flyNear();
+    if (!current()) return;
+    FLYS.ap = near || "TPE"; flySave();
+  }
+  const ap = FLYS.ap, same = () => current() && ap === FLYS.ap;
   const mine = FLYD && FLYD.ap && FLYD.ap.code === ap;
   try {
     const pv = FLYSLIM.ap === ap ? FLYSLIM : null;
     const r = await api("/api/flights?ap=" + encodeURIComponent(ap) + (pv ? "&v=" + pv.v : ""), {headers:flyHdr()});
+    if (!same()) return;
     if (SHARE && r.status === 401) return shareGone("連結已經失效");
     let d = await r.json();
+    if (!same()) return;
     if (d.ok && d.v && !flyUnslim(d, pv)) {                  // 接不回來（不該發生）：整張重拿
-      FLYSLIM = {}; d = await (await api("/api/flights?ap=" + encodeURIComponent(ap), {headers:flyHdr()})).json(); if (d.ok && d.v) flyUnslim(d, null);
+      FLYSLIM = {}; d = await (await api("/api/flights?ap=" + encodeURIComponent(ap), {headers:flyHdr()})).json();
+      if (!same()) return;
+      if (d.ok && d.v) flyUnslim(d, null);
     }
     await FLYHOLD;
     if (!same()) return;
@@ -2216,10 +2226,11 @@ async function shareBoot(){
   const k = "vs-share:" + SHARE.slice(0, 12);
   try {
     const r = await api("/api/fly-claim", {method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({code:SHARE, dev:store(k)})}), d = await r.json();
-    if (!d.ok) return shareGone(d.error);
+    if (r.status === 403 || r.status === 404) return shareGone(d.error || "連結已經失效");
+    if (!r.ok || !d.ok) return shareGone("暫時無法載入機場看板", true);
     SHAREDEV = d.dev; store(k, d.dev); SHAREEND = Date.now() + d.left * 1000;
     if (d.ap) { SHAREAP = d.ap; FLYS.ap = d.ap; FLYS.name = ""; }      // 只分享一個機場：不能換
-  } catch(e) { return shareGone(e.message); }
+  } catch(e) { return shareGone("暫時無法載入機場看板", true); }
   endSplash(); flyOpen(); shareLeft();
 }
 /* 左上角：還剩幾分鐘 */
@@ -2230,11 +2241,12 @@ function shareLeft(){
   if (el) el.textContent = m > 90 ? shLeft(m * 60).replace("還有", "還能看") : `還能看 ${m} 分鐘`;
   SHARET = setTimeout(shareLeft, 15000);
 }
-function shareGone(msg){
+function shareGone(msg, retry = false){
   clearTimeout(SHARET); clearTimeout(FLYT); clearTimeout(FLYLATER); clearTimeout(FLYDT);
   const f = $("#fly"); if (f) { clearTimeout(f._spT); if (f._rv) f._rv.stop(); [f._ro, f._so, f._io].forEach(o => o && o.disconnect()); f.remove(); }
   if (FRAD) { if (FRAD.ro) FRAD.ro.disconnect(); FRAD.rv.stop(); FRAD.v.remove(); FRAD = null; }
   document.documentElement.classList.remove("lock", "flyon");
-  $("#app").innerHTML = `<div class="sgone"><span class="ico fly">${I("plane")}</span><b>${esc(msg)}</b><span class="sub">請朋友再分享一次</span></div>`;
+  $("#app").innerHTML = `<main class="sgone"><span class="ico fly">${I("plane")}</span><h1>${esc(msg)}</h1>${retry ? '<button class="ubtn">再試一次</button>' : '<span class="sub">請朋友再分享一次</span>'}</main>`;
+  if (retry) $("#app .sgone button").onclick = e => { e.currentTarget.disabled = true; shareBoot(); };
   endSplash();
 }

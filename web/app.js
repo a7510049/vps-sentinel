@@ -512,7 +512,7 @@ function issuesOf(list){
   }
   return out;
 }
-let LOST = false, LOST0 = 0;                  // 這個網頁連不上主機：從什麼時候開始
+let LOST = false, LOST0 = 0, lastUpdate = ""; // 最後成功讀到資料的時間，切換畫面時沿用
 function headline(list){
   if (LOST) return "連不上主機";
   const is = issuesOf(list), hosts = new Set(is.map(x => keyOf(x.s)));
@@ -523,7 +523,7 @@ function headline(list){
 }
 function hero(list, time){
   const lv = LOST || list.some(s => lvOf(s) === "bad") ? "bad" : list.some(s => lvOf(s) === "warn") || issuesOf(list).length ? "warn" : "ok", g = greet();
-  const sub = LOST ? "連不上主機，重試中…" : [g.hi, g.quote].filter(Boolean).join("・");
+  const sub = LOST ? "連線中斷，自動重試中…" : lv === "ok" ? [g.hi, g.quote].filter(Boolean).join("・") : `最近更新 ${time}`;
   return `<section class="hbanner ${lv}" data-key="hero"><span class="hbi ${lv}">${I({ok:"ok", warn:"alert", bad:"warn"}[lv])}</span><div class="hbt"><h1 class="headline" data-x>${esc(headline(list))}</h1>${sub ? `<p class="quote">${esc(sub)}</p>` : ""}</div>${g.wx ? `<div class="wxw">${g.wx}</div>` : ""}</section>`;
 }
 
@@ -541,10 +541,10 @@ function groupEv(ev){
   const out = [], open = new Map();
   for (const e of ev) {                          // 新的在前面
     const k = e.kind + ":" + e.text, g = open.get(k);
-    if (g && g.t0 - e.t <= 600 && !g.ks.includes(e.k)) { g.hs.push(e.h); g.ks.push(e.k); g.t0 = e.t; continue; }
-    const x = {...e, hs:[e.h], ks:[e.k], t0:e.t}; open.set(k, x); out.push(x);
+    if (g && g.t - e.t <= 600 && !g.ks.includes(e.k)) { g.hs.push(e.h); g.ks.push(e.k); continue; }
+    const x = {...e, hs:[e.h], ks:[e.k]}; open.set(k, x); out.push(x);
   }
-  return out.map(x => x.hs.length > 1 ? {...x, k:"*" + Math.round(x.t0), n:1} : x);
+  return out.map(x => x.hs.length > 1 ? {...x, k:JSON.stringify([x.kind, x.text, x.t]), n:1} : x);
 }
 const hm = t => new Date(t * 1000).toLocaleTimeString("zh-TW", {hour:"2-digit", minute:"2-digit", hour12:false});
 const EVOPEN = new Set();                   // 好幾台合成一筆的事件：點開列出是哪幾台（記住哪幾筆是打開的，自動更新不會收起來）
@@ -590,8 +590,8 @@ function hostLists(list, wallCls){
 function offBox(s){
   const d = s.last_seen ? Date.now()/1000 - s.last_seen : 1e9, span = d < 1800 ? [1800, "30 分前"] : d < 21600 ? [21600, "6 小時前"] : [86400, "24 小時前"];
   const g = Math.max(0, Math.min(1, 1 - d / span[0])).toFixed(3), err = s.error && s.error !== "連不上" ? `<div class="sub">${esc(s.error)}</div>` : "";
-  return `<div class="offline" data-key="off">${I("off")}<div class="ofm"><b>${s.last_seen ? esc(ago(s.last_seen)) : "連不上"}</b>`
-    + `<div class="otl" style="--g:${g}"><i></i></div><div class="otx"><span>${span[1]}</span><span>現在</span></div>${err}${peerBtn(s)}</div></div>`;
+  const timeline = s.last_seen ? `<div class="otl" style="--g:${g}"><i></i></div><div class="otx"><span>${span[1]}</span><span>現在</span></div>` : "";
+  return `<div class="offline" data-key="off">${I("off")}<div class="ofm"><b>${s.last_seen ? esc(ago(s.last_seen)) : "連不上"}</b>${timeline}${err}${peerBtn(s)}</div></div>`;
 }
 /* 主機列表最後的「新增主機」：貼上新主機的配對暗號 */
 const addHostBtn = cls => `<button class="${cls}" data-addhost data-key="+add">${I("plus")}<span>新增主機</span></button>`;
@@ -763,9 +763,11 @@ const TABS = [["home", "首頁", "home"], ["tools", "工具", "tools"], ["log", 
 let TABDIR = 0;                                // 手機換分頁的方向（-1 往左、+1 往右、0 原地淡換）
 function navBtns(rail, list){
   const nw = list.some(s => s.self_has), hasHost = rail && list.length > 1 && DSEL && list.some(x => keyOf(x) === DSEL);
-  return TABS.map(([k, l, ic]) => rail
-    ? `<button class="rb${TAB === k && (k !== "home" || !hasHost) ? " on" : ""}${k === "set" && nw ? " hasnew" : ""}" data-tab="${k}"><span class="ri">${I(ic)}</span><span class="rl">${k === "home" ? "總覽" : l}</span></button>`
-    : `<button class="tb${TAB === k ? " on" : ""}${k === "set" && nw ? " hasnew" : ""}" data-tab="${k}" title="${l}"><span class="tbi">${I(ic)}</span><span class="t">${l}</span></button>`).join("");
+  return TABS.map(([k, l, ic]) => {
+    const on = TAB === k && !(k === "home" && hasHost);
+    const cls = (rail ? "rb" : "tb") + (on ? " on" : "") + (k === "set" && nw ? " hasnew" : "");
+    return `<button class="${cls}" data-tab="${k}"${on ? ' aria-current="page"' : ""}><span class="${rail ? "ri" : "tbi"}">${I(ic)}</span><span class="${rail ? "rl" : "t"}">${rail && k === "home" ? "總覽" : l}</span></button>`;
+  }).join("");
 }
 function page(list, time){
   return TAB === "tools" ? toolsPage(list) : TAB === "log" ? logPage(list) : TAB === "set" ? setPage(list)
@@ -779,9 +781,9 @@ function renderPhone(list, time){
 /* 電腦：Apple Liquid Glass 極簡佈局 — 左側懸浮毛玻璃側欄（含方案 1 同心圓角天氣／快捷列）＋ 右側開放通透主畫布 */
 let DSEL = sstore("vs-dsel") || "";
 const deskSel = list => list.length <= 1 ? list[0] : (DSEL ? list.find(x => keyOf(x) === DSEL) || null : null);
-const railHost = (s, on) => `<button class="rh${on ? " on" : ""}" data-dsel="${esc(keyOf(s))}" data-key="rh:${esc(keyOf(s))}"><span class="dot ${s.online ? lvOf(s) : "bad"}"></span><b>${esc(s.name)}</b><small class="num">${s.online ? num(s.cpu) + "%" : I("off")}</small></button>`;
+const railHost = (s, on) => `<button class="rh${on ? " on" : ""}"${on ? ' aria-current="page"' : ""} data-dsel="${esc(keyOf(s))}" data-key="rh:${esc(keyOf(s))}"><span class="dot ${s.online ? lvOf(s) : "bad"}"></span><b>${esc(s.name)}</b><small class="num">${s.online ? num(s.cpu) + "%" : I("off")}</small></button>`;
 function renderDesk(list, time){
-  const sel = deskSel(list), k = sel && keyOf(sel), g = greet();
+  const sel = deskSel(list), k = sel && keyOf(sel);
   const dark = document.documentElement.dataset.mode === "dark";
   const sideWx = PREF.show.weather && WX
     ? `<div class="side-wx" data-key="swx"><span class="wi">${WX.icon}</span><b class="num">${WX.t}°</b><span>${esc(WX.word)}</span>${WX.tip ? `<small>${esc(WX.tip)}</small>` : ""}</div>`
@@ -803,7 +805,6 @@ function homePhone(list, time){
     <div class="lbl" data-key="le">最近發生${ev.length ? `<button data-tab="log">全部紀錄</button>` : ""}</div>${evList(ev, list.length > 1)}`;
 }
 /* 電腦版主機一律從總覽清單或側欄點入專頁 */
-const deskCols = () => 1;
 const cardMode = () => !DESK.matches;
 /* 主機總表的一列：名稱、三條進度條、網路、流量、開機、⋯；點一列進那台專頁 */
 function hostRowD(s, on){
@@ -812,7 +813,7 @@ function hostRowD(s, on){
   const bad = s.online ? (s.problems || []).filter(p => !tileKey(s, p)).map(p => alChip(noDup(s, String(p)), "bad", "b")) : [];
   const warn = s.online ? (s.notices || []).map(p => alChip(String(p), "warn", "w")) : [];
   const al = bad.concat(warn), sub = al.length ? `<small class="hal">${al[0]}${al.length > 1 ? `<i class="num">+${al.length - 1}</i>` : ""}</small>` : `<small>${esc(place(s) || osShort(s.os))}</small>`;
-  const nm = `<span class="hc hn">${avatar(s)}<span><b>${esc(s.name)}</b>${sub}</span></span>`;
+  const nm = `<button class="hc hn" aria-label="查看${esc(s.name)}的詳情">${avatar(s)}<span><b>${esc(s.name)}</b>${sub}</span></button>`;
   if (!s.online) return `<div class="htr off${on ? " on" : ""}" data-dsel="${k}" data-key="hr:${k}">${nm}<span class="hc hoff">${I("off")}連不上${s.last_seen ? `・${esc(seen(s))}` : ""}</span><span class="hc">${moreBtn(s)}</span></div>`;
   const d0 = disk0(s);
   return `<div class="htr ${lv}${on ? " on" : ""}" data-dsel="${k}" data-key="hr:${k}">${nm}${bar(s.cpu)}${bar(s.mem.pct)}${bar(d0.pct)}
@@ -829,9 +830,9 @@ function sumRow(list){
   const tr = list.filter(s => s.traffic), used = tr.reduce((t, s) => t + (s.traffic.used || 0), 0), pj = tr.reduce((t, s) => t + (s.traffic.projected || 0), 0);
   const cell = (k, ic, label, v, sub) => `<div class="sumc" data-key="sm:${k}"><span class="smk">${ic}<span>${label}</span></span><span class="smv">${v}</span><span class="sms">${sub}</span></div>`;
   return `<div class="sums" data-key="sums">`
-    + cell("h", IC("info", "sm"), "在線節點", `${num(on.length)}<small>／${list.length} 台</small>`, off ? `${off} 台離線` : ua == null ? "全部在線" : `30 天上線率 ${upPct(ua)}`)
-    + cell("n", IC("net", "sm"), "即時總網速", `<small class="dn">${I("down")}</small><b data-x>${rate(rx)}</b>`, `<span class="smu">${I("up")}<span data-x>${rate(tx)}</span> 上傳</span>`)
-    + cell("t", IC("month", "sm"), "本月總流量", `<b data-x>${size(used)}</b>`, pj ? `月底預估 ${size(pj)}` : `${tr.length} 台加總`)
+    + cell("h", IC("info", "sm"), "在線主機", `${num(on.length)}<small>／ ${list.length} 台</small>`, off ? `<span class="smoff">${off} 台離線</span>` : ua == null ? "全部在線" : `30 天上線率 ${upPct(ua)}`)
+    + cell("n", IC("net", "sm"), "即時總網速", `<small class="dn">${I("down")}</small><b data-x>${on.length ? rate(rx) : "—"}</b>`, on.length ? `<span class="smu">${I("up")}<span data-x>${rate(tx)}</span> 上傳</span>` : "沒有在線主機")
+    + cell("t", IC("month", "sm"), "本月總流量", `<b data-x>${tr.length ? size(used) : "—"}</b>`, !tr.length ? "尚無流量資料" : pj ? `月底預估 ${size(pj)}` : `${tr.length} 台加總`)
     + `</div>`;
 }
 function homeDesk(list, time){
@@ -845,7 +846,7 @@ function homeDesk(list, time){
   const ev = groupEv(allEvents(list)).slice(0, 5), g = greet();
   const lvs = list.map(s => s.online ? lvOf(s) : "bad"), lv = LOST || lvs.includes("bad") ? "bad" : lvs.includes("warn") || issuesOf(list).length ? "warn" : "ok";
   const ua = upAvg(list.flatMap(s => (s.up30 || []).filter(x => x != null)));
-  const sub = LOST ? "連線中斷，自動重試中…" : lv !== "ok" ? [g.hi, g.quote].filter(Boolean).join("・") : (ua != null ? `過去 30 天平均可用率 ${upPct(ua)}` : [g.hi, g.quote].filter(Boolean).join("・"));
+  const sub = LOST ? "連線中斷，自動重試中…" : lv !== "ok" ? `最近更新 ${time}` : (ua != null ? `過去 30 天平均可用率 ${upPct(ua)}` : [g.hi, g.quote].filter(Boolean).join("・"));
   const badge = `<span class="hbadge ${lv}">${I({ok:"ok", warn:"alert", bad:"warn"}[lv])}<span>${LOST ? "重連中" : lv === "ok" ? "全部在線" : lv === "warn" ? "請留意" : "偵測到異常"}</span></span>`;
   const hd = `<div class="dhero" data-key="dhero"><div class="dhero-t"><h1 class="dbt" data-x>${esc(headline(list))}</h1><div class="dhero-sub">${badge}${sub ? `<span>${esc(sub)}</span>` : ""}</div></div>${addHostBtn("ubtn ghost dadd")}</div>`;
   const tab = `<div class="lbl" data-key="lht">主機清單<small>點選任一台查看詳情</small></div><div class="htab" data-key="htab"><div class="hth"><span>主機</span><span>處理器</span><span>記憶體</span><span>磁碟</span><span>網路</span><span${list.some(s => s.traffic && s.traffic.limit) ? "" : ` class="hr"`}>本月流量</span><span>開機</span><span></span></div>
@@ -880,7 +881,7 @@ function toolsPage(list){
     : h + `<div class="calm">連不上任何主機</div><div class="lbl" data-key="ltf">不分主機</div>${fly}</div>`;
   const s = on.find(x => keyOf(x) === TOOLH) || on.find(x => !x.node) || on[0], k = esc(keyOf(s)), node = esc(s.node || ""), name = esc(s.name);
   const dot = x => lvOf(x) === "ok" ? "" : `<span class="dot ${lvOf(x)}"></span>`;
-  const pick = on.length > 1 ? hpick(on, s, dot) : "";
+  const pick = on.length > 1 ? hpick(on, s, dot) : `<span class="tool-host">${I("server")}<span>${name}</span></span>`;
   if (D) return `<div class="wide" data-key="tools">${dbar("工具", pick)}${toolsBody(s, k, node, name)}<div class="lbl" data-key="ltf">不分主機</div>${fly}</div>`;
   return h + pick + toolsBody(s, k, node, name) + `<div class="lbl" data-key="ltf">不分主機</div>${fly}</div>`;
 }
@@ -924,7 +925,7 @@ function toolsBody(s, k, node, name){
   return h + `</div>`;
 }
 /* 一排主機名稱選一台（工具、設定共用，選了哪台兩邊都記得）；dot：名稱前面的小圓點 */
-const hpick = (on, s, dot) => `<div class="hpick" data-key="hpick" data-keyed data-slide>${on.map(x => `<button class="fchip${x === s ? " on" : ""}" data-key="hp:${esc(keyOf(x))}" data-toolh="${esc(keyOf(x))}">${dot(x)}${esc(x.name)}</button>`).join("")}</div>`;
+const hpick = (on, s, dot) => `<div class="hpick" data-key="hpick" data-keyed data-slide>${on.map(x => `<button class="fchip${x === s ? " on" : ""}" aria-pressed="${x === s}" data-key="hp:${esc(keyOf(x))}" data-toolh="${esc(keyOf(x))}">${dot(x)}${esc(x.name)}</button>`).join("")}</div>`;
 /* 選到的主機名稱被擠到邊邊或看不到時，把那一排滑到它在中間（只滑那一排，頁面不動） */
 function pickShow(anim){
   const r = $(".hpick"), b = r && r.querySelector(".on"); if (!b || r.scrollWidth <= r.clientWidth) return;
@@ -1003,8 +1004,9 @@ function logPage(list){
   const fi = (k, ic) => `<span class="lfi ${k || "all"}">${I(ic)}</span>`, fn = k => (hk ? byH.filter(LOGK[k]) : groupEv(byH.filter(LOGK[k]))).length;
   let rows = "", day = "";
   for (const e of ev) { const d = dayOf(e.t); if (d !== day) { day = d; rows += `<div class="day" data-key="d:${d}">${d}</div>`; } rows += evRow(e, many, hm); }
-  const body = ev.length ? `<div class="evs" data-key="evs" data-keyed data-sw>${rows}</div>` : `<div class="calm" data-key="calm" data-sw>目前沒有事件</div>`;
-  const chip = (k, l, ic) => `<button class="fchip lfc${LOGF === k ? " on" : ""}" data-logf="${k}" data-key="lf:${k}" title="${l}">${fi(k, ic)}<span class="lfl">${l}</span><b class="lfn">${fn(k)}</b></button>`;
+  const empty = `<div class="calm log-empty" data-key="calm" data-sw>${I("log")}<span>${LOGF || hk ? "沒有符合篩選條件的紀錄" : "目前沒有事件"}</span>${(LOGF || hk) && all.length ? '<button class="ubtn ghost sm" data-logreset>查看全部紀錄</button>' : ""}</div>`;
+  const body = ev.length ? `<div class="evs" data-key="evs" data-keyed data-sw>${rows}</div>` : empty;
+  const chip = (k, l, ic) => `<button class="fchip lfc${LOGF === k ? " on" : ""}" data-logf="${k}" data-key="lf:${k}" aria-pressed="${LOGF === k}">${fi(k, ic)}<span class="lfl">${l}</span><b class="lfn">${fn(k)}</b></button>`;
   const hn = hk && list.find(x => keyOf(x) === hk);   // 好幾台時多一顆「全部主機 ▾」，點了選只看哪一台
   const hc = many ? `<button class="fchip hsel${hk ? " set" : ""}" data-loghm data-key="hsel" data-x>${esc(hn ? hn.name : "全部主機")}${I("chev")}</button>` : "";
   const fc = `<div class="fchips" data-key="lfc" data-slide>${F.map(([k, l, ic]) => chip(k, l, ic)).join("")}</div>`;
@@ -1012,7 +1014,7 @@ function logPage(list){
     let tr = "", dd = "";
     for (const e of ev) { const d = dayOf(e.t); if (d !== dd) { dd = d; tr += `<div class="day" data-key="d:${d}">${d}</div>`; } tr += evRowD(e, many); }
     const tb = ev.length ? `<div class="ltab${many ? "" : " one"}" data-key="ltab:${LOGF}:${hk}" data-sw><div class="lth"><span>時間</span>${many ? "<span>主機</span>" : ""}<span class="lev">事件</span></div><div class="evs" data-key="evs" data-keyed>${tr}</div></div>`
-      : `<div class="calm" data-key="calm" data-sw>目前沒有事件</div>`;
+      : empty;
     return `<div class="wide" data-key="log">${dbar("紀錄", fc + `<span class="sp"></span>` + hc)}${tb}</div>`;
   }
   return `<div class="narrow" data-key="log"><h1 class="ptitle wh"><span>紀錄</span>${hc}</h1>${fc}${body}</div>`;
@@ -2175,7 +2177,7 @@ function render(list){
   list = [...list].map(tidy).sort((a, b) => LVRANK[lvOf(a)] - LVRANK[lvOf(b)]);
   LIST = list;
   if (DET && (!cardMode(list) || !list.some(s => keyOf(s) === DET))) { DET = ""; DETX = false; showBack(); document.documentElement.classList.remove("lock"); }
-  const time = new Date().toLocaleTimeString("zh-TW", {hour12:false});
+  const time = lastUpdate;
   const alv = LOST || list.some(s => !s.online || lvOf(s) === "bad") ? "bad" : list.some(s => lvOf(s) === "warn") || issuesOf(list).length ? "warn" : "ok";
   document.documentElement.dataset.alert = alv;
   paint(DESK.matches ? renderDesk(list, time) : renderPhone(list, time));
@@ -2204,9 +2206,6 @@ function holdHeight(change){
 }
 let PSMOOTH = false;   // 點主機名稱換台時，那一排平順地滑到選到的那台
 DESK.addEventListener("change", () => { applyPrefs(); if (LIST.length) render(LIST); });
-/* 電腦版一次並排幾台：螢幕夠寬才放三台 */
-let WIDE = 0;
-addEventListener("resize", () => { const w = deskCols(); if (w !== WIDE) { WIDE = w; if (DESK.matches && LIST.length) render(LIST); } }, {passive:true});
 
 /* ═════════ 對話框、通知 ═════════ */
 function modal({icon, cls="box", title, text, input, ok="確定"}){
@@ -2358,7 +2357,6 @@ function endDet(){
 }
 addEventListener("popstate", () => { if (DET && !(history.state && history.state.det)) shutDet(); });
 document.addEventListener("keydown", e => {
-  if ((e.key === "Enter" || e.key === " ") && e.target.matches && e.target.matches("[data-open]")) { e.preventDefault(); openDet(e.target.dataset.open); }
   if (e.key === "Escape" && DET && !document.querySelector("#layer .veil") && !window._menu) closeDet();
 });
 /* 改了設定：馬上套用 */
@@ -3014,9 +3012,29 @@ new MutationObserver(ms => { for (const m of ms) {
       d.firstChild.addEventListener("click", e => { e.stopPropagation(); if (v._esc) v._esc(); });
     }
     histMark(v);
+    d.setAttribute("role", "dialog"); d.setAttribute("aria-modal", "true");
+    const title = d.querySelector("h3");
+    if (title) { if (!title.id) title.id = "dlg-title-" + v._dlg; d.setAttribute("aria-labelledby", title.id); }
+    d.tabIndex = -1;
+    v._opener = document.activeElement;
+    if (!d.contains(document.activeElement)) d.focus({preventScroll:true});
   }
-  for (const v of m.removedNodes) histDrop(v);
+  for (const v of m.removedNodes) {
+    histDrop(v);
+    if (document.activeElement === document.body && v._opener?.isConnected) v._opener.focus({preventScroll:true});
+  }
 } }).observe($("#layer"), {childList:true});
+document.addEventListener("keydown", e => {
+  if (e.key !== "Tab") return;
+  const d = [...document.querySelectorAll("#layer .veil .dialog")].pop();
+  if (!d) return;
+  const controls = [...d.querySelectorAll('button,a[href],input,select,textarea,[tabindex]')]
+    .filter(el => el.tabIndex >= 0 && !el.matches(":disabled") && el.getClientRects().length);
+  const first = controls[0], last = controls[controls.length - 1], active = document.activeElement;
+  if (!first || !d.contains(active) || (e.shiftKey ? active === first || active === d : active === last)) {
+    e.preventDefault(); (e.shiftKey ? last || d : first || d).focus();
+  }
+});
 const DLGEL = new Map();
 const histLive = el => el && (el === window._menu || (el.classList.contains("veil") && !el._d && !el.classList.contains("closing") && el.isConnected));
 function histMark(el){                         // 上一個正在關（例如選單點了就換成對話框）：沿用那一筆，不多一格
@@ -4028,15 +4046,15 @@ function bkRestore(){
 /* ═════════ 登入 ═════════ */
 const LOGO = LOGOSVG("lg").replace("<svg", '<svg class="logo"');
 function login(msg){
-  $("#app").innerHTML = `<div class="login ${msg?"shake":""}">${LOGO}<h1>哨站</h1>
-    <input id="tok" class="field" type="password" placeholder="存取密碼" autocomplete="current-password">
+  $("#app").innerHTML = `<main class="login ${msg?"shake":""}">${LOGO}<h1>登入哨站</h1><form>
+    <label class="tok-label" for="tok">存取密碼</label><input id="tok" class="field" type="password" required autocomplete="current-password" aria-describedby="login-err">
     <label class="remember"><input type="checkbox" id="rem" ${REM ? "checked" : ""}><span>30 天內不用再登入</span></label>
-    <div class="err">${msg||""}</div><button class="ubtn" data-login>進入</button>${PIN_ON ? pinBtn : ""}${PK_OK && store("vps-pk") ? pkBtn : ""}</div>`;
-  $("#tok").addEventListener("keydown",e=>{ if(e.key==="Enter") doLogin(); });
+    <div class="err" id="login-err" role="alert">${esc(msg || "")}</div><button class="ubtn" type="submit" data-login>登入</button></form>${PIN_ON ? pinBtn : ""}${PK_OK && store("vps-pk") ? pkBtn : ""}</main>`;
+  const box = $("#app .login");
+  box.querySelector("form").onsubmit = e => { e.preventDefault(); doLogin(); };
   $("#rem").addEventListener("change", e => { REM = e.target.checked; });
   pkCall("/api/passkey-login", {action:"has"}).then(d => {   // 問主機有沒有設定 PIN 碼、有沒有登記手機金鑰，有才顯示
-    const box = $("#app .login");
-    if (!box) return;
+    if (!box.isConnected) return;
     PIN_ON = !!d.pin;
     const add = h => { box.insertAdjacentHTML("beforeend", h); const b = box.lastElementChild;
       if (canAnim()) b.animate([{opacity:0, transform:"translateY(-4px)"}, {opacity:1, transform:"none"}], {duration:T.mid, easing:EASE}); };
@@ -4045,8 +4063,7 @@ function login(msg){
     if (d.temp && !window._tmpAsk) { window._tmpAsk = 1; pinLoginClick(); }   // 剛裝好：直接打開 PIN 碼鍵盤
   }).catch(() => {});
   fetch("/api/restore", {cache:"no-store"}).then(r => r.json()).then(d => {   // 剛裝好、正在等待還原：多一個入口
-    const box = $("#app .login");
-    if (d.active && box && !box.querySelector("[data-rsw]")) box.insertAdjacentHTML("beforeend", `<button class="linkish rswgo" data-rsw>從備份還原</button>`);
+    if (d.active && box.isConnected && !box.querySelector("[data-rsw]")) box.insertAdjacentHTML("beforeend", `<button class="linkish rswgo" data-rsw>從備份還原</button>`);
   }).catch(() => {});
 }
 
@@ -4166,16 +4183,20 @@ function rswEnd(body, pg, msg){
 let REM = true, PIN_ON = false;
 /* 輸入 4～8 位數字、主機又有設定 PIN 碼：當成 PIN 碼（一樣不原樣送出）；其他都當成存取密碼 */
 async function doLogin(){
-  const v = $("#tok").value.trim();
+  const inp = $("#tok"), b = $("#app [data-login]"), err = $("#login-err");
+  if (b.disabled) return;
+  const v = inp.value.trim();
   const pin = PIN_ON && /^\d{4,8}$/.test(v);
-  const b = $("#app [data-login]"); b.disabled = true;
+  b.disabled = true; b.textContent = "登入中…"; err.textContent = "";
   let d = {};
   try { const r = await fetch(pin ? "/api/pin-login" : "/api/login", {method:"POST", headers:{"Content-Type":"application/json"},
       body:JSON.stringify({[pin ? "pin" : "pw"]: pin ? await pinProof(v, () => pkCall("/api/pin-login", {action:"begin"})) : v, keep:REM, dev:devLabel(), os:devOs()})});
     d = await r.json().catch(() => ({})); }
   catch(e) { d = {message:"連線失敗，請稍後再試"}; }
+  if (!b.isConnected) return;
   if (d.ok && d.token) { if (!pin) window._fresh = true; setTok(d.token, REM); return tick(); }   // 用密碼登入才把 PIN 碼輸錯的次數歸零
-  login(d.message || (pin ? "PIN 碼不對" : "密碼不對，再試一次"));
+  err.textContent = d.message || (pin ? "PIN 碼不對" : "密碼不對，再試一次");
+  b.disabled = false; b.textContent = "登入"; inp.focus(); inp.select();
 }
 const pkBtn = `<button class="ubtn ghost pkbtn" data-pklogin>${I("finger")}用手機金鑰登入</button>`;
 const pinBtn = `<button class="ubtn ghost pkbtn" data-pinlogin>${I("pin")}用 PIN 碼登入</button>`;
@@ -4217,7 +4238,6 @@ async function pageClick(e){
   if (e.target.closest("#layer") || e.target.closest("#fly")) return;
   if (e.target.closest("[data-fly]")) return flyEnter(e.target.closest("[data-fly]"));
   const t = e.target;
-  if (t.closest("[data-login]")) return doLogin();
   if (t.closest("[data-pklogin]")) return pkLoginClick(t.closest("[data-pklogin]"));
   if (t.closest("[data-pinlogin]")) return pinLoginClick();
   if (t.closest("[data-rsw]")) return restoreScreen();
@@ -4246,6 +4266,7 @@ async function pageClick(e){
   const scg = t.closest("[data-setc]");
   if (scg) { if (SETC !== scg.dataset.setc) { SETC = scg.dataset.setc; store("vs-setc", SETC); slideSel(() => render(LIST)); } return; }
   const lf = t.closest("[data-logf]");
+  if (t.closest("[data-logreset]")) { LOGF = ""; LOGH = ""; slideSel(() => render(LIST)); return; }
   if (lf) { if (LOGF !== lf.dataset.logf) { LOGF = lf.dataset.logf; slideSel(() => render(LIST)); } return; }
   const ex = t.closest("[data-evx]");
   if (ex) { const k = ex.dataset.evx, on = !EVOPEN.has(k); on ? EVOPEN.add(k) : EVOPEN.delete(k);
@@ -4487,12 +4508,16 @@ async function tick(){
     if (!BOOTED) splashMsg("讀取主機狀態…");
     const since = Object.fromEntries(Object.entries(HIST).map(([k, h]) => [k, h.t[h.t.length - 1]]).filter(x => x[1]));
     const r = await fetch("/api/all" + (Object.keys(since).length ? "?since=" + encodeURIComponent(JSON.stringify(since)) : ""), {headers:{"X-Token":getTok()}, cache:"no-store", signal: AbortSignal.timeout ? AbortSignal.timeout(20000) : undefined});   // 網路卡住最多等 20 秒，不會一直轉
+    if (id !== TICKID || !getTok()) return true;
     if (r.status === 401) { const was = getTok(); setTok(""); LIST = []; for (const k in HIST) delete HIST[k]; endSplash(); return login(was === "cookie" || /^vss_/.test(was) ? "請重新登入" : "密碼不對，再試一次"); }
     if (r.status === 403 && (await r.clone().json().catch(() => ({}))).mustpin) {   // 還在用臨時 PIN 碼：先換掉
+      if (id !== TICKID || !getTok()) return true;
       endSplash(); if (window._mustPin) return true;
       window._mustPin = 1; await pinModal(true); window._mustPin = 0; return tick();
     }
+    if (!r.ok) throw new Error("無法讀取主機狀態");
     const data = await r.json();
+    if (!Array.isArray(data)) throw new Error("無法讀取主機狀態");
     if (id !== TICKID || !getTok()) return true;
     LOST0 = 0; if (LOST) { LOST = false; document.documentElement.classList.remove("lost"); }   // 又連上了：數字恢復、標題照實際狀況
     histJoin(data);
@@ -4536,6 +4561,7 @@ async function tick(){
     if (BOOTED) await settle();
     if (id !== TICKID || !getTok()) return true;  // 等的時候登出了，或已經有更新的一次
     if (document.hidden && BOOTED) return true;    // 抓到一半切到背景：先不畫（資料留到回來那次一起畫）
+    lastUpdate = new Date().toLocaleTimeString("zh-TW", {hour12:false});
     render(data);
   } catch(e) {
     if (id !== TICKID) return false;
