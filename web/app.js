@@ -2243,8 +2243,8 @@ function loadStatus(){
 let DET = "", DETX = false, OPENR = null;
 function cardRect(k){
   const c = [...document.querySelectorAll("#app .hcard")].find(x => x.dataset.open === k); if (!c) return null;
-  const z = ZM(), r = c.getBoundingClientRect(), x = DESK.matches ? 96 : 0;          // 電腦：整頁從分頁列右邊開始
-  return {t: Math.max(0, r.top / z), b: Math.max(0, (innerHeight - r.bottom) / z), l: Math.max(0, r.left / z - x), r: Math.max(0, (innerWidth - r.right) / z)};
+  const z = ZM(), r = c.getBoundingClientRect();
+  return {t: Math.max(0, r.top / z), b: Math.max(0, (innerHeight - r.bottom) / z), l: Math.max(0, r.left / z), r: Math.max(0, (innerWidth - r.right) / z)};
 }
 function openDet(k){
   if (!cardMode(LIST) || DET) return;
@@ -2252,19 +2252,22 @@ function openDet(k){
   history.pushState({det: k}, "");
   closeMenu(); document.documentElement.classList.add("lock");
   render(LIST);
-  clearTimeout(DETH); DETH = setTimeout(() => { if (DET && !DETX) document.documentElement.classList.add("dhid"); }, T.slow + 60);   // 展開完才藏
+  clearTimeout(DETH); DETH = setTimeout(() => { if (DET && !DETX) document.documentElement.classList.add("dhid"); }, T.mid + 80);   // 滑入完才藏底層
 }
 let DETH;
 const showBack = () => { clearTimeout(DETH); document.documentElement.classList.remove("dhid"); };
 function closeDet(){ if (!DET) return; if (history.state && history.state.det) history.back(); else shutDet(); }
 function shutDet(){
   if (!DET || DETX) return;
+  DETX = true;
   showBack();
-  const r = cardRect(DET); if (r) OPENR = r;
   closeMenu(); hideTip();
   if (!canAnim()) return endDet();
-  DETX = true; render(LIST);
-  setTimeout(endDet, T.mid);
+  requestAnimationFrame(() => {                   // 先讓底層主頁重繪完成再淡出，關閉不閃爍
+    if (!DET || !DETX) return;
+    render(LIST);
+    setTimeout(endDet, T.fast + 60);
+  });
 }
 function endDet(){ DET = ""; DETX = false; showBack(); document.documentElement.classList.remove("lock"); render(LIST); }
 addEventListener("popstate", () => { if (DET && !(history.state && history.state.det)) shutDet(); });
@@ -4156,7 +4159,7 @@ function preloadFlags(list){
 /* 背景讀到的資料（24 小時／7 天的曲線）：等畫面空下來再換上去 */
 async function whenIdle(){ await settle(); if (LIST.length) render(LIST); }
 /* 等介面動畫（收起、展開、移位）播完再更新畫面，最多等 0.9 秒，避免兩邊搶著動 */
-const UIIN = new Set(["through", "slideR", "slideL", "detIn", "detBody", "rise", "pop", "expand", "collapse"]);   // 換分頁、換主機、展開整頁時的 CSS 動畫
+const UIIN = new Set(["through", "slideR", "slideL", "sheetIn", "sheetOut", "rise", "pop"]);   // 換分頁、換主機、開啟／收合整頁時的 CSS 動畫
 function uiBusy(){ return document.getAnimations().some(a => (a.id === "ui" || UIIN.has(a.animationName)) && a.playState === "running"); }
 /* 手指還在畫面上、或頁面還在滑：新資料先等一下，滑停了才換上去，捲動時不會卡一下 */
 let SCRT = 0, TOUCH = 0;

@@ -243,7 +243,7 @@ function flySplashOff(f){
     if (sp) sp.animate([{opacity:1}, {opacity:0, transform:"scale(1.04)"}], {duration:T.mid, easing:EXIT, fill:"forwards"}).finished.then(() => sp.remove(), () => sp.remove());
     f.classList.remove("splash");
     flyRise(f, T.fast * .5);
-  }, Math.max(T.mid, T.long * 2 - (performance.now() - f._sp0)));   // 資料到了也多等一下：看板先在後面排好、長好
+  }, Math.max(T.fast, T.slow - (performance.now() - f._sp0)));   // 載入夠快也不拖泥帶水，看板排好後順順浮現
 }
 /* 打開、換機場資料到了：直接對各張毛玻璃卡片做進場動畫（不對 .fleft／.fmain 外層設 opacity，避免手機端毛玻璃閃一下） */
 function flyRise(f, d0){
@@ -1619,20 +1619,20 @@ function flyOpen(btn){
   if ($("#fly")) return;
   closeMenu();
   document.body.insertAdjacentHTML("beforeend", flyShell());
-  const f = $("#fly"), z = ZM(), r = btn && btn.getBoundingClientRect();
-  if (r) f.style.cssText = `--ct:${r.top / z}px;--cb:${(innerHeight - r.bottom) / z}px;--cl:${Math.max(0, r.left / z)}px;--cr:${(innerWidth - r.right) / z}px`;
+  const f = $("#fly");
   if (!canAnim()) f.style.animation = "none";
   flyStuck(f);
   if (!SHARE) history.pushState({fly:1}, "");          // 分享連結只有這一頁，不能返回
   document.documentElement.classList.add("lock");
-  setTimeout(() => { if (f.isConnected && !f._bye) document.documentElement.classList.add("flyon"); }, T.slow + 80);   // 很快又關掉的話不要加（不然關完後面的畫面會整個藏著）
+  setTimeout(() => { if (f.isConnected && !f._bye) document.documentElement.classList.add("flyon"); }, T.mid + 80);   // 滑入完才藏底層
   f._rv = radarView(f.querySelector(".rcv"), false); f._rv.range = flyR(); flyZoom(f, false);   // 雷達先建好：下面用現成資料畫的時候，底圖才放得上去
-  if (FLYD && FLYD.ap && FLYD.ap.code === FLYS.ap) {         // 有上次的資料：小飛機照樣飛一趟，看板在後面直接排好（不一格一格翻），飛完一塊一塊浮上來
-    flySplashOn(f);
+  if (FLYD && FLYD.ap && FLYD.ap.code === FLYS.ap && !FLYD.loading) {   // 已有快取資料：直接帶著完整看板與雷達順順滑入，不再多播一次載入雷達
+    const sp = f.querySelector(".fsplash"); if (sp) sp.remove();
     FLYSTILL = true; try { flyPaint(false); } finally { FLYSTILL = false; }
-    flyRadar(f, FLYD);                                        // 雷達也用上次的資料先畫好（不然要等下一次抓到資料才出現飛機）
-    flySplashOff(f);
-    FLYBZ = performance.now() + T.long * 2 + T.slow + T.fast * 3;   // 浮完才換上剛抓到的新資料
+    flyRadar(f, FLYD);
+    if (FLYGEO[FLYD.ap.code]) { f._geo = FLYD.ap.code; f._rv.setGeo(FLYGEO[FLYD.ap.code]); f._rv.gt = 0; f._rv.ga = 1; }
+    f._rv.resize(); f._rv.draw(performance.now());
+    FLYBZ = performance.now() + T.mid + 80;            // 等整頁滑入完再換上背景新資料
   } else { flySplashOn(f); flyWait(f, true); }
   flyLoad(false);
   f.querySelector(".rcv").addEventListener("click", e => {    // 點雷達打開整頁雷達；點到飛機就順便選好那一架
@@ -1651,9 +1651,14 @@ function flyShut(){
   [f._ro, f._so, f._io].forEach(o => o && o.disconnect());
   f._ro = f._so = f._io = null;
   document.documentElement.classList.remove("flyon");
-  const end = () => { f.remove(); if (!DET) document.documentElement.classList.remove("lock"); };
+  let done = 0;
+  const end = () => { if (done) return; done = 1; f.remove(); if (!DET) document.documentElement.classList.remove("lock"); };
   if (!canAnim()) return end();
-  f.classList.add("closing"); setTimeout(end, T.mid);
+  requestAnimationFrame(() => {                         // 先讓底層主頁重繪完成再淡出，關閉不閃爍
+    f.addEventListener("animationend", e => { if (e.target === f) end(); }, {once: true});
+    f.classList.add("closing");
+    setTimeout(end, T.fast + 80);
+  });
 }
 addEventListener("popstate", () => { if ($("#fly") && !SHARE && !(history.state && history.state.fly)) flyShut(); });
 document.addEventListener("visibilitychange", () => { if (!document.hidden && $("#fly")) flyLoad(); });
@@ -1842,9 +1847,7 @@ let FRAD = null, FRADF = "";                                // 開著的整頁�
 const FRADT = [["", "全部"], ["arr", "抵達"], ["dep", "出發"], ["over", "路過"]];
 function fradOpen(){
   const f = $("#fly"); if (!f || FRAD || !f._rv) return;
-  const r = f.querySelector(".rbox").getBoundingClientRect(), z = ZM();
   const v = document.createElement("div"); v.className = "frad"; v.id = "frad";
-  v.style.cssText = `--ct:${r.top / z}px;--cb:${(innerHeight - r.bottom) / z}px;--cl:${r.left / z}px;--cr:${(innerWidth - r.right) / z}px`;
   v.innerHTML = `<div class="frmap"><canvas aria-label="雷達"></canvas><div class="frsc"></div>
     <div class="frtop"><button class="icbtn" data-rback title="返回">${I("back")}</button><b class="frname"></b></div>
     <div class="frbar"><div class="seg frchips" data-slide>${FRADT.map(([k, l]) => `<button class="${FRADF === k ? "on" : ""}" data-rf="${k}">${l}</button>`).join("")}</div></div>
@@ -1857,25 +1860,28 @@ function fradOpen(){
   const cv = v.querySelector("canvas"), rv = radarView(cv, true);
   FRAD = {v, rv, sel:"", ro:null}; rv.rwd = f._rv.rwd; rv.onseq = fradList;
   const top = () => { const b = v.querySelector(".frbar").getBoundingClientRect(), m = cv.getBoundingClientRect(), z = ZM(); rv.top = (b.bottom - m.top) / z + 4; };
-  rv.resize(); top(); rv.view(0, 0, rv.fit(flyR() * .95));           // 一開始跟小雷達看到的範圍差不多，看起來就像它長大
-  if (f._geo) { rv.setGeo(FLYGEO[f._geo]); rv.setTrk(FLYTRK[f._geo] && FLYTRK[f._geo].d); }
+  rv.resize(); top(); rv.view(0, 0, rv.fit(flyR() * .95));
+  if (f._geo) { rv.setGeo(FLYGEO[f._geo]); rv.setTrk(FLYTRK[f._geo] && FLYTRK[f._geo].d); rv.gt = 0; rv.td = 0; }
   fradData();
+  rv.draw(performance.now());                                 // 第 0 格就先畫好地圖與飛機，滑入瞬間不閃黑幕
   if (window.ResizeObserver) { FRAD.ro = new ResizeObserver(() => { if (FRAD && FRAD.rv === rv) { rv.resize(); top(); } }); FRAD.ro.observe(cv); }
   fradGest(rv, cv);
-  setTimeout(() => { if (FRAD && FRAD.rv === rv) { f._rv.hide(true); f.classList.add("under"); } }, canAnim() ? T.slow + 80 : 0);   // 後面的看板也先藏起來   // 長大完：後面的小雷達被蓋住了，先不畫
+  setTimeout(() => { if (FRAD && FRAD.rv === rv && f._rv) f._rv.hide(true); }, canAnim() ? T.mid + 80 : 0);   // 蓋住後暫停小雷達省電，不藏看板免得關閉重繪閃爍
 }
 function fradClose(){ if (!FRAD) return; if (history.state && history.state.frad) history.back(); else fradShut(); }
 function fradShut(){
   const F = FRAD; if (!F) return; FRAD = null;
   if (F.ro) { F.ro.disconnect(); F.ro = null; }
-  const f = $("#fly"), b = f && f.querySelector(".rbox"), v = F.v, end = () => { F.rv.stop(); v.remove(); };
-  if (f) f.classList.remove("under");                        // 縮回去之前：後面的看板整個重畫
-  if (f && f._rv) f._rv.hide(false);                        // 縮回去之前小雷達先畫好
-  if (!canAnim() || !b) return end();
-  const r = b.getBoundingClientRect(), z = ZM();
-  v.style.cssText = `--ct:${r.top / z}px;--cb:${(innerHeight - r.bottom) / z}px;--cl:${r.left / z}px;--cr:${(innerWidth - r.right) / z}px`;
-  F.rv.view(0, 0, F.rv.fit(flyR() * .95), true);
-  v.classList.add("closing"); setTimeout(end, T.mid);
+  const f = $("#fly"), v = F.v;
+  let done = 0;
+  const end = () => { if (done) return; done = 1; F.rv.stop(); v.remove(); };
+  if (f && f._rv) { f._rv.hide(false); f._rv.draw(performance.now()); }   // 關閉前先同步重繪小雷達
+  if (!canAnim()) return end();
+  requestAnimationFrame(() => {                               // 等底層小雷達繪製完成再淡出，關閉零閃爍
+    v.addEventListener("animationend", e => { if (e.target === v) end(); }, {once: true});
+    v.classList.add("closing");
+    setTimeout(end, T.fast + 80);
+  });
 }
 addEventListener("popstate", () => { if (FRAD && !(history.state && history.state.frad)) fradShut(); });
 /* 新資料、換篩選、選飛機：重畫清單和小卡 */
