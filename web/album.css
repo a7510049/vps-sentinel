@@ -95,7 +95,7 @@ button.chip:active,a.chip:active{transform:scale(.95)}
 .dh b{font-size:var(--fs-xl);font-weight:750;letter-spacing:-.01em}
 .dh span{font-size:var(--fs-s);color:var(--tx3);font-weight:500}
 .row{display:flex;gap:var(--gap);margin-bottom:var(--gap)}
-.ph{position:relative;flex:none;overflow:hidden;border-radius:var(--r-xs);background:var(--s2);cursor:zoom-in;
+.ph{position:relative;flex:none;overflow:hidden;contain:layout paint;border-radius:var(--r-xs);background:var(--s2);cursor:zoom-in;
   opacity:0;transform:translateY(14px) scale(.985);transition:opacity var(--t-slow) var(--ease),transform var(--t-slow) var(--dec)}
 @media (min-width:700px){.ph{border-radius:var(--r-sm)}}
 .ph.in{opacity:1;transform:none}
@@ -1066,13 +1066,13 @@ html,body{touch-action:pan-x pan-y}
 /* 其他表情 */
 .sb .rxe{font-style:normal;font-size:18px;line-height:1}
 .sb.rxb.on{background:rgba(255,255,255,.22)}
-.rxp{position:fixed;z-index:6;display:flex;gap:4px;padding:6px;border-radius:var(--r-pill);background:rgba(28,29,36,.82);-webkit-backdrop-filter:blur(20px) saturate(1.6);backdrop-filter:blur(20px) saturate(1.6);box-shadow:0 12px 34px -10px rgba(0,0,0,.6),inset 0 1px 0 rgba(255,255,255,.1)}
+.rxp{position:fixed;z-index:6;display:flex;gap:4px;padding:6px;border-radius:var(--r-pill);background-color:rgba(24,26,32,.48);background-image:linear-gradient(155deg,rgba(255,255,255,.16),rgba(255,255,255,.03) 45%,rgba(255,255,255,.07));-webkit-backdrop-filter:blur(26px) saturate(200%);backdrop-filter:blur(26px) saturate(200%);border:1px solid rgba(255,255,255,.2);box-shadow:0 16px 40px -12px rgba(0,0,0,.62),inset 0 1px 0 rgba(255,255,255,.28)}
 .rxp button{width:46px;height:46px;border-radius:50%;font-size:28px;line-height:1;display:grid;place-items:center;transition:transform var(--sp-fast),background var(--t-fast) var(--ease);animation:rxin var(--t-mid) var(--dec) both;animation-delay:calc(var(--i) * 35ms)}
 .rxp button.on{background:rgba(255,255,255,.18)}
 .rxp button:active{transform:scale(1.25)}
 @media (hover:hover){.rxp button:hover{transform:translateY(-4px) scale(1.18)}}
 @keyframes rxin{from{opacity:0;transform:translateY(10px) scale(.6)}to{opacity:1;transform:none}}
-.rxfly{position:fixed;z-index:7;font-size:30px;font-style:normal;pointer-events:none;line-height:1}
+.rxfly{position:fixed;z-index:calc(var(--z-veil) + 3);font-size:30px;font-style:normal;pointer-events:none;line-height:1}
 .italk .th .rxe{font-style:normal;font-size:14px;margin-right:2px}
 
 /* 照片的主要顏色 */
@@ -1117,7 +1117,7 @@ html.scrubbing .ph .hi{filter:none;transform:none}
 .bar{transition:transform var(--t-mid) var(--ease),background-color var(--t-mid) var(--ease)}
 /* 封面、回憶圓圈捲出畫面時，裡面一直跑的動畫先停（字的光、流動的線每一格都要重畫；跟著捲動走的視差 .cv、.hcap 不停） */
 .hero.away :not(.cv,.hcap),.hero.away::before,.hero.away::after,.hero.away :not(.cv,.hcap)::before,.hero.away :not(.cv,.hcap)::after,.mems.away *,.mems.away *::before{animation-play-state:paused!important}
-html:has(.lb,.ss,.sy) .scrub{opacity:0;pointer-events:none}
+html.dock-off .scrub{opacity:0;pointer-events:none}
 
 /* 器材：用了哪幾台相機、哪幾顆鏡頭、常用焦段（點了只看那台拍的） */
 .gear{max-width:var(--wmax);margin:clamp(40px,8vw,96px) auto 0;padding:0 var(--pad)}
@@ -1633,7 +1633,7 @@ html.shy #shyc{visibility:visible;opacity:1;scale:1;transition:opacity var(--t-f
   background-color:var(--glass);background-image:var(--glass-sheen);-webkit-backdrop-filter:var(--blur-float);backdrop-filter:var(--blur-float);
   border:1px solid var(--glass-b);box-shadow:var(--sh-float);overflow:hidden;
   transform:translate3d(0,calc(-100% - env(safe-area-inset-top) - 24px),0);will-change:transform;backface-visibility:hidden;
-  transition:transform var(--sp),opacity var(--t-mid) var(--ease)}
+  transition:transform var(--t-mid) var(--dec),opacity var(--t-mid) var(--ease)}
 .bar.on{transform:translate3d(0,0,0)}
 .bar .chip:not(.go){background:transparent;border:0;box-shadow:none;transition:background var(--t-fast) var(--ease),transform var(--sp-fast)}
 .bar .chip:not(.go):active{background:var(--glass-sub);transform:scale(.92)}
@@ -1643,11 +1643,11 @@ html.shy #shyc{visibility:visible;opacity:1;scale:1;transition:opacity var(--t-f
   .bar .chip:not(.go){background:var(--glass-sub);border:1px solid var(--line)}
 }
 
-/* ── 懸浮液態玻璃分頁膠囊（.adock）：圖示與文字靜止、僅底層玻璃氣泡以彈簧滑動 ── */
+/* ── 懸浮液態玻璃分頁膠囊（.adock）：圖示與文字靜止、僅底層玻璃氣泡以流體滑動 ── */
 .adock{position:fixed;left:50%;bottom:calc(16px + env(safe-area-inset-bottom));z-index:calc(var(--z-bar) + 1);transform:translate3d(-50%,0,0);will-change:transform;backface-visibility:hidden;
   display:inline-flex;align-items:center;gap:2px;padding:5px;border-radius:var(--r-pill);max-width:calc(100vw - 24px);
   background-color:var(--glass);background-image:var(--glass-sheen);-webkit-backdrop-filter:var(--blur-float);backdrop-filter:var(--blur-float);border:1px solid var(--glass-b);box-shadow:var(--sh-float);
-  transition:transform var(--sp),opacity var(--t-mid) var(--ease)}
+  transition:transform var(--t-mid) var(--dec),opacity var(--t-mid) var(--ease)}
 .adock[hidden]{display:none}
 .adock>.slide{position:absolute;left:0;top:5px;bottom:5px;border-radius:var(--r-pill);background:var(--pill-bg);box-shadow:var(--pill-sh);pointer-events:none;z-index:0;will-change:transform,width}
 .adock>button{position:relative;z-index:1;height:44px;padding:0 16px;border-radius:var(--r-pill);display:inline-flex;align-items:center;gap:7px;font-size:var(--fs-s);font-weight:650;color:var(--tx2);white-space:nowrap;transition:color var(--t-fast) var(--ease)}
@@ -1701,7 +1701,7 @@ html.has-dock .toast{bottom:calc(82px + env(safe-area-inset-bottom))}
 .cty,.gbox,.gst,.gbc,.ibox{background-color:var(--glass-card);background-image:var(--glass-sheen);-webkit-backdrop-filter:var(--blur-card);backdrop-filter:var(--blur-card);border:1px solid var(--line);box-shadow:var(--sh-card)}
 .sh,.kmenu{background-color:var(--glass-modal);background-image:var(--glass-sheen);-webkit-backdrop-filter:var(--blur-modal);backdrop-filter:var(--blur-modal);border:1px solid var(--glass-b);box-shadow:var(--sh-float)}
 .shbg{-webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px)}
-.mback,.smc,.selb,.upb{background-color:var(--glass);background-image:var(--glass-sheen);-webkit-backdrop-filter:var(--blur-float);backdrop-filter:var(--blur-float);border:1px solid var(--glass-b);box-shadow:var(--sh-float)}
+.mback,.smc,.selb,.upb,.rplay{background-color:var(--glass);background-image:var(--glass-sheen);-webkit-backdrop-filter:var(--blur-float);backdrop-filter:var(--blur-float);border:1px solid var(--glass-b);box-shadow:var(--sh-float)}
 .who .chip,.cityf button.chip{background-color:var(--glass);background-image:var(--glass-sheen);-webkit-backdrop-filter:var(--blur-card);backdrop-filter:var(--blur-card);border:1px solid var(--glass-b);box-shadow:var(--hl)}
 .who .chip.on,.cityf .chip.on{border-color:transparent;background-image:linear-gradient(180deg,rgba(255,255,255,.22),transparent 55%)}
 

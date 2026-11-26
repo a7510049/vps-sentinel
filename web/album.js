@@ -1170,13 +1170,17 @@ function tabSet(id, silent){
     nav.querySelectorAll("button").forEach(b => { const on = b.dataset.tab === id; b.classList.toggle("on", on); if (on) b.setAttribute("aria-current", "page"); else b.removeAttribute("aria-current"); });
   }
   document.querySelectorAll(".tpane").forEach(p => { const on = p.dataset.pane === id; p.hidden = !on; p.classList.toggle("on", on); });
-  if (!silent && anim()) pane.animate([{opacity:0, transform:"translateY(10px)"}, {opacity:1, transform:"none"}], {duration:T.mid, easing:DEC});
-  const hero = $(".hero"), hy = hero ? hero.offsetHeight - 68 : 0;
-  if (!silent && hero && scrollY > hy + 40) scrollTo({top:Math.max(0, hy), behavior:anim() ? "smooth" : "auto"});
+  const hero = $(".hero"), hy = hero ? (HEROH || (HEROH = hero.offsetHeight)) - 68 : 0;
+  if (!silent && hero && scrollY > hy + 40) scrollTo(0, Math.max(0, hy));
+  if (!silent && anim()) {
+    pane.getAnimations().forEach(a => a.cancel());
+    pane.animate([{opacity:0, transform:"translate3d(0,8px,0)"}, {opacity:1, transform:"translate3d(0,0,0)"}], {duration:260, easing:DEC});
+  }
   if (id === "map") { const ms = $(".msec"); if (ms) ms.hidden = msHide(); requestAnimationFrame(() => bigMap()); }
   else if (id === "gear") { gear(); requestAnimationFrame(() => { stFit(); }); }
   else if (id === "photos") { requestAnimationFrame(() => { layout(); smapWatch(); onScroll(); }); }
   else if (id === "talk") { gbook(); }
+  onScroll();
   scrubSync();
 }
 /* 朋友放的：每個人一個分頁，不跟主人的照片混在一起 */
