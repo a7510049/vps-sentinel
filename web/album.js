@@ -2095,7 +2095,7 @@ function openLb(i, from){
     zw.innerHTML = `<img class="s1" alt="" draggable="false" src="${p.q ? `data:image/jpeg;base64,${p.q}` : src(p, "s")}"><img class="s1 s1b" alt="" draggable="false" src="${src(p, "s")}"><img class="s2" alt="" draggable="false" decoding="async" data-src="${src(p, "l")}">`
       + (p.x.afp && !isVid(p) && !afFace(p) ? `<i class="afb${p.fm ? " miss" : ""}" style="left:${(p.x.afp[0] * 100).toFixed(2)}%;top:${(p.x.afp[1] * 100).toFixed(2)}%;width:${(p.x.afp[2] * Math.min(p.w, p.h) / p.w * 100).toFixed(2)}%;height:${(p.x.afp[2] * Math.min(p.w, p.h) / p.h * 100).toFixed(2)}%"></i>` : "")
       + (p.x.fcs && !isVid(p) ? p.x.fcs.map((f, k) => `<i class="fcb${afFace(p) === k + 1 ? ` af${p.fm ? " miss" : ""}` : ""}" style="left:${(f[0] * 100).toFixed(2)}%;top:${(f[1] * 100).toFixed(2)}%;width:${(f[2] * 100).toFixed(2)}%;height:${(f[3] * 100).toFixed(2)}%"></i>`).join("") : "")
-      + (isVid(p) ? `<video class="vv" playsinline preload="none" disablepictureinpicture></video><i class="spin vbuf"></i><span class="vbig">${p.vr === 1 ? I("play") : p.vr === 0 ? I("x") : `<i class="spin"></i>`}</span>` : p.gf === 2 ? `<img class="awp" alt="" draggable="false" src="${src(p, "a")}">` : p.lv ? `<video class="lvv" muted playsinline preload="none"${p.gf ? " loop" : ""}></video>` : "");
+      + (isVid(p) ? `<video class="vv" playsinline preload="none" disablepictureinpicture></video><i class="spin vbuf"></i><span class="vbig">${p.vr === 1 ? I("play") : p.vr === 0 ? I("x") : `<i class="spin"></i>`}</span>${p.vr === -1 ? `<span class="vstat">主機正在轉檔最佳化影片，完成後即可播放</span>` : ""}` : p.gf === 2 ? `<img class="awp" alt="" draggable="false" src="${src(p, "a")}">` : p.lv ? `<video class="lvv" muted playsinline preload="none"${p.gf ? " loop" : ""}></video>` : "");
     const s1b = zw.querySelector(".s1b");
     if (s1b) {
       let s1t = 0;
@@ -2198,6 +2198,7 @@ function openLb(i, from){
     vPos(v, T0);
     if (pl && !vSync.raf) { const go = () => { const w = vid(); if (!w || w.paused || w.ended || !isVid(PH[S.i])) { vSync.raf = 0; return; } vPos(w, isFinite(w.duration) ? w.duration : PH[S.i].vd); vSync.raf = requestAnimationFrame(go); }; vSync.raf = requestAnimationFrame(go); }
     const big = cur().querySelector(".vbig"); if (big) big.innerHTML = p.vr === 1 ? I("play") : p.vr === 0 ? I("x") : `<i class="spin"></i>`;
+    const vst = cur().querySelector(".vstat"); if (vst && p.vr !== -1) vst.remove();
   }
   function vPos(v, T0){                                     // 進度條每格畫面照播放時間走（等速，不是一秒跳四下）
     const t = v && v.currentTime || 0, i = $(".vtr b", el);
@@ -2205,7 +2206,7 @@ function openLb(i, from){
   }
   function vToggle(){
     const v = vid(), p = PH[S.i]; if (!v || !isVid(p)) return;
-    if (p.vr !== 1) return toast(p.vr === 0 ? "這段影片放不出來" : "影片還在準備，等一下再看");
+    if (p.vr !== 1) return toast(p.vr === 0 ? "這段影片放不出來" : "主機正在將影片轉檔為串流格式，完成後將自動開放播放");
     if (!v.src) {
       v.src = src(p, "v");
       v.addEventListener("timeupdate", vSync); v.addEventListener("pause", vSync); v.addEventListener("play", vSync);
@@ -2470,7 +2471,7 @@ function openLb(i, from){
     if (bq > 0) { const bh = box.getBoundingClientRect().height; box.style.clipPath = `inset(0 0 ${Math.max(0, bh - bq).toFixed(1)}px 0)`; box.classList.remove("gone"); }
     const zw = cur(), f = box0(), now = getComputedStyle(zw).transform;
     stopAll();
-    zw.querySelectorAll(".vbig,.vbuf").forEach(x => { x.style.opacity = 0; });   // 影片中間的播放鈕跟著照片縮回去時淡掉（不然縮完才突然不見）
+    zw.querySelectorAll(".vbig,.vbuf,.vstat").forEach(x => { x.style.opacity = 0; });   // 影片中間的播放鈕跟著照片縮回去時淡掉（不然縮完才突然不見）
     let gone = false;
     const end = () => { if (gone) return; gone = true;
       el.querySelectorAll("video").forEach(v => { v.pause(); v.removeAttribute("src"); v.load(); });
@@ -3394,7 +3395,7 @@ function show(start, day){
     const where = p.p ? p.p.n : "", when = d ? `${d.y}年${d.mo}月${d.d}日` : "";
     const fill = Math.abs(Math.log((p.w / p.h) / (innerWidth / innerHeight))) < .22;   // 跟螢幕差不多比例就填滿
     L.innerHTML = `<img class="sbg" alt="" src="${src(p, "s")}"><div class="sfg${fill ? " cv" : ""}">${isVid(p) ? `<video muted playsinline preload="auto" src="${src(p, "v")}"></video>`
-      : `<img class="sl" alt="" src="${src(p, "s")}"><img class="sh" alt="" src="${src(p, "l")}">`}</div>${where || when ? `<div class="scap"><b>${esc(where || when)}</b>${where && when ? `<span class="num">${esc(when)}</span>` : ""}</div>` : ""}`;
+      : `<img class="sl" alt="" src="${src(p, "s")}"><img class="hi2" alt="" src="${src(p, "l")}">`}</div>${where || when ? `<div class="scap"><b>${esc(where || when)}</b>${where && when ? `<span class="num">${esc(when)}</span>` : ""}</div>` : ""}`;
     return L;
   }
   function preload(k){ const it = seq[k] && seq[k].ch ? seq[k + 1] : seq[k], i = it && it.i; if (i != null && !isVid(PH[i])) { const im = new Image(); im.src = src(PH[i], "l"); } }
@@ -3413,7 +3414,7 @@ function show(start, day){
     const p = PH[seq[at].i], v = L.querySelector("video");
     let ms = seq[at].ch ? SSCH : SSD;
     if (v) { ms = Math.min(15000, p.vd * 1000); v.play().catch(() => {}); }
-    const img = L.querySelector(".sfg .sl"), hi = L.querySelector(".sfg .sh"), me = at;
+    const img = L.querySelector(".sfg .sl"), hi = L.querySelector(".sfg .hi2"), me = at;
     if (hi) {
       const hok = () => (hi.decode ? hi.decode().catch(() => {}) : Promise.resolve()).then(() => { if (hi.isConnected) hi.classList.add("ok"); });
       if (hi.complete && hi.naturalWidth) hok(); else hi.addEventListener("load", hok, {once:true});
@@ -3577,8 +3578,8 @@ function story(n, from){
     view.querySelectorAll(".syl:not(.out) video").forEach(v => v.pause());
     const L = document.createElement("div"), fill = Math.abs(Math.log((p.w / p.h) / (innerWidth / innerHeight))) < .35;
     L.className = "syl";
-    L.innerHTML = `<img class="sbg" alt="" src="${p.q ? `data:image/jpeg;base64,${p.q}` : src(p, "s")}"><div class="syf${fill ? " cv" : ""}">${isVid(p) ? `<video playsinline preload="auto" src="${src(p, "v")}"></video>` : `<img class="sl" alt="" draggable="false" src="${src(p, "s")}"><img class="sh" alt="" draggable="false" src="${src(p, "l")}">`}</div>`;
-    const v = L.querySelector("video"), img = L.querySelector(".syf .sl"), hi = L.querySelector(".syf .sh");
+    L.innerHTML = `<img class="sbg" alt="" src="${p.q ? `data:image/jpeg;base64,${p.q}` : src(p, "s")}"><div class="syf${fill ? " cv" : ""}">${isVid(p) ? `<video playsinline preload="auto" src="${src(p, "v")}"></video>` : `<img class="sl" alt="" draggable="false" src="${src(p, "s")}"><img class="hi2" alt="" draggable="false" src="${src(p, "l")}">`}</div>`;
+    const v = L.querySelector("video"), img = L.querySelector(".syf .sl"), hi = L.querySelector(".syf .hi2");
     if (hi) {
       const hok = () => (hi.decode ? hi.decode().catch(() => {}) : Promise.resolve()).then(() => { if (hi.isConnected) hi.classList.add("ok"); });
       if (hi.complete && hi.naturalWidth) hok(); else hi.addEventListener("load", hok, {once:true});
