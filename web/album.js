@@ -802,8 +802,9 @@ function srchSugg(){                                         // 建議：這本�
   return out;
 }
 const SQL = {hdr:"HDR", raw:"RAW", gif:"GIF"};
-function sqChip(q, n){
+function sqChip(q, n, dot){
   const c = COLS.find(x => x[0] === q);
+  if (dot) return `<button class="chip dot" data-sq="${esc(q)}" aria-label="${esc(SQL[q] || q)}・${n} 張" title="${esc(SQL[q] || q)}・${n} 張">${c ? `<i class="cdot" style="background:${c[2]}"></i>` : `<i class="cdot bw"></i>`}</button>`;   // 顏色那組只放圓點（學照片 App）
   return `<button class="chip" data-sq="${esc(q)}">${c ? `<i class="cdot" style="background:${c[2]}"></i>` : q === "黑白" ? `<i class="cdot bw"></i>` : ""}<span>${esc(SQL[q] || q)}</span><small class="num">${n}</small></button>`;
 }
 function srchOpen(){
@@ -819,7 +820,7 @@ function srchOpen(){
   SH = {close(){ if (SH && SH.bg === bg) SH = null; bg.classList.remove("on"); bg.style.pointerEvents = "none"; inp.blur(); setTimeout(() => bg.remove(), T.mid + 50); }, bg};
   history.pushState({sh:1}, "");
   let hits = [], shown = "";
-  const sugg = () => { sqs.innerHTML = `<button class="sqhue${HUE ? " on" : ""}" data-hue><i class="rbw"></i><span><b>照顏色排</b><small>${HUE ? "正在照顏色排" : "紅、橘、黃…排成一條彩虹"}</small></span>${I(HUE ? "ck" : "r")}</button>` + srchSugg().map(([g, l]) => `<div class="sqg"><small>${g}</small><div>${l.map(([q, n]) => sqChip(q, n)).join("")}</div></div>`).join(""); };
+  const sugg = () => { sqs.innerHTML = `<button class="sqhue${HUE ? " on" : ""}" data-hue><i class="rbw"></i><span><b>照顏色排</b><small>${HUE ? "正在照顏色排" : "紅、橘、黃…排成一條彩虹"}</small></span>${I(HUE ? "ck" : "r")}</button>` + srchSugg().map(([g, l]) => `<div class="sqg${g === "顏色" ? " col" : ""}"><small>${g}</small><div>${l.map(([q, n]) => sqChip(q, n, g === "顏色")).join("")}</div></div>`).join(""); };
   const run = () => {
     const q = inp.value.trim(), terms = sqTerms(q);
     clr.hidden = !q;
@@ -827,7 +828,7 @@ function srchOpen(){
     hits = q ? base.filter(p => sqHit(p, terms)) : [];
     bg.classList.toggle("has", !!q);
     const key = hits.slice(0, 14).map(p => p.i).join();
-    sqr.querySelector(".sqn").innerHTML = q ? (hits.length ? `<b>${hits.length}</b> 張<button class="btn sm" data-sqgo>看這些</button>` : "找不到") : "";
+    sqr.querySelector(".sqn").innerHTML = q ? (hits.length ? `<b>${hits.length}</b> 張<button class="btn sm" data-sqgo>看這些</button>` : `<span class="sq0">找不到符合的照片</span>`) : "";
     if (key !== shown) {
       shown = key;
       sqr.querySelector(".sqt").innerHTML = hits.slice(0, 14).map((p, k) => `<button data-sqi="${esc(p.i)}" style="--i:${k}"><img alt="" draggable="false" src="${p.q ? `data:image/jpeg;base64,${p.q}` : src(p, "s")}"><img class="hi" alt="" loading="lazy" draggable="false" src="${src(p, "s")}"></button>`).join("");
@@ -1402,7 +1403,9 @@ function hvTxt(p){ const d = pd(p.x.dt); return [d ? `${d.mo}/${d.d} ${ftime(d)}
 function badgeEl(t, p, i){
   const b = t && t.querySelector(".bdg"); if (!b || !p) return;
   t.classList.toggle("stkc", STK.has(i) && !STKOPEN.has(i) && ZL < 2);
-  b.innerHTML = `${isVid(p) ? `<span class="vt num">${I("play")}${dur(p.vd)}</span>` : p.gf ? `<span class="vt">GIF</span>` : p.lv ? `<span class="lvt">${I("live")}</span>` : ""}${rxBadge(p)}${STK.has(i) ? `<span class="stk num${STKOPEN.has(i) ? " op" : ""}" data-stk="${i}" aria-label="${STKOPEN.has(i) ? "收起" : "攤開"}${STKB.has(i) ? "包圍曝光" : "連拍"}">${I("stk")}${STKB.has(i) ? `±${STKB.get(i)}` : STK.get(i).length}</span>` : ""}`;
+  const rxb = rxBadge(p);
+  b.classList.toggle("lo", !!(isVid(p) || p.gf || rxb));     // 底下有字（影片長度、愛心）才加淡淡的暗角
+  b.innerHTML = `${isVid(p) ? `<span class="vt num">${I("play")}${dur(p.vd)}</span>` : p.gf ? `<span class="vt">GIF</span>` : p.lv ? `<span class="lvt">${I("live")}</span>` : ""}${rxb}${STK.has(i) ? `<span class="stk num${STKOPEN.has(i) ? " op" : ""}" data-stk="${i}" aria-label="${STKOPEN.has(i) ? "收起" : "攤開"}${STKB.has(i) ? "包圍曝光" : "連拍"}">${I("stk")}${STKB.has(i) ? `±${STKB.get(i)}` : STK.get(i).length}</span>` : ""}`;
 }
 function badge(i){ badgeEl(TILES[i], PH[i], i); }
 function rxBadge(p){                                        // 愛心＋其他表情：最多的兩個表情疊在一起，後面是總數
@@ -3354,7 +3357,8 @@ let TT;
 function toast(t){
   let el = $(".toast");
   if (!el) { el = document.createElement("div"); el.className = "toast"; document.body.appendChild(el); }
-  el.textContent = t; el.classList.add("on");
+  const ok = /好了|刪掉了|開始下載/.test(t);                  // 做完的事打勾，其他（提醒、出錯）用 i 圖示
+  el.innerHTML = `${I(ok ? "ck" : "info")}<span>${esc(t)}</span>`; el.classList.toggle("ok", ok); el.classList.add("on");
   clearTimeout(TT); TT = setTimeout(() => el.classList.remove("on"), 2400);
 }
 

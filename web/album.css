@@ -1827,3 +1827,84 @@ html.bar-on .prepb{top:calc(70px + env(safe-area-inset-top))}
 
 
 
+/* ═════════ 5.58 第二輪液態玻璃統一：照片資訊抽屜、搜尋面板、照片牆角標、提示泡泡、日期氣泡、多選交接 ═════════ */
+/* 厚玻璃：放在純黑燈箱上的面板用不透明的「厚材質」（半透明玻璃疊在黑底上，淺色模式會變成髒灰色）；液態感靠斜向光澤、頂緣高光與裡面的玻璃卡片 */
+:root{--glass-thick:color-mix(in oklab,var(--s1) 72%,var(--bg));--glass-field:rgba(0,0,0,.26);--rim-top:rgba(255,255,255,.26);
+  --field-in:inset 0 1px 3px rgba(0,0,0,.32),inset 0 -1px 0 rgba(255,255,255,.07)}
+@media (prefers-color-scheme:light){:root:not([data-mode="dark"]){--glass-thick:var(--bg);--glass-field:rgba(15,23,42,.055);--rim-top:rgba(255,255,255,.95);
+  --field-in:inset 0 1px 2px rgba(15,23,42,.08),inset 0 -1px 0 rgba(255,255,255,.9)}}
+
+/* 1. 照片資訊抽屜：手機上滑的厚玻璃面板（拉桿、頂緣高光畫在圓角邊框區，邊框改透明讓底色透上來，拉桿才看得到） */
+@media (max-width:899px){
+  .inf{background-color:var(--glass-thick);border-top-color:transparent;
+    background-image:radial-gradient(circle,var(--s3) 2.5px,transparent 3px),radial-gradient(circle,var(--s3) 2.5px,transparent 3px),linear-gradient(var(--s3),var(--s3)),
+      linear-gradient(90deg,transparent 6%,var(--rim-top) 28%,var(--rim-top) 72%,transparent 94%),var(--glass-sheen);
+    background-size:6px 6px,6px 6px,34px 5px,100% 1px,100% 100%;
+    background-position:calc(50% - 17px) 11.5px,calc(50% + 17px) 11.5px,50% 12px,50% 0,0 0;background-repeat:no-repeat;background-origin:border-box}
+  .cmp .cform{background:var(--glass-thick)}
+  .infs.end{background:linear-gradient(transparent 55%,var(--glass-thick) 55%)}
+  /* 資訊拉到滿版時的標題列：真的液態玻璃，內容從底下捲過去會被模糊 */
+  .lbt::after{background-color:color-mix(in oklab,var(--glass-thick) 70%,transparent);background-image:var(--glass-sheen);-webkit-backdrop-filter:var(--blur-modal);backdrop-filter:var(--blur-modal);border-bottom-color:var(--glass-b)}
+}
+@media (min-width:900px){
+  .inf{background-color:var(--glass-thick);background-image:linear-gradient(180deg,var(--rim-top),transparent 1px),var(--glass-sheen);-webkit-backdrop-filter:none;backdrop-filter:none}
+}
+.inf .idt{letter-spacing:-.015em}
+/* 拍攝參數：一格一顆小玻璃磚，不再用細線切格子 */
+.iex{gap:6px;padding:10px;border-top:0}
+.iex div{border-radius:var(--r-md);background:var(--glass-sub);box-shadow:inset 0 1px 0 rgba(255,255,255,.06)}
+.iex div+div{box-shadow:inset 0 1px 0 rgba(255,255,255,.06)}
+/* 下載／分享：次要鈕改玻璃膠囊，主要鈕保留實色並加頂部光澤 */
+.idl{margin-top:18px}
+.idl a,.idl button{background:var(--glass-sub);border:1px solid var(--line);box-shadow:inset 0 1px 0 rgba(255,255,255,.08)}
+.idl .pr{border:0;background-image:linear-gradient(180deg,rgba(255,255,255,.22),transparent 60%);box-shadow:inset 0 1px 0 rgba(255,255,255,.32),0 8px 22px -10px color-mix(in oklab,var(--p) 70%,transparent)}
+
+/* 2. 搜尋面板：凹進去的玻璃搜尋框、分組小標加細線、建議晶片改玻璃、顏色只用圓點 */
+.sqf{background:var(--glass-field);box-shadow:var(--field-in);transition:box-shadow var(--t-fast) var(--ease),background var(--t-fast) var(--ease)}
+.sqf:focus-within{box-shadow:var(--field-in),0 0 0 1.5px var(--p),0 0 0 5px color-mix(in oklab,var(--p) 20%,transparent)}
+.sqc{background:var(--glass-sub)}
+.sqg>small{display:flex;align-items:center;gap:10px}
+.sqg>small::after{content:"";flex:1;height:1px;background:var(--line)}
+.sqg .chip{background:var(--glass-sub);border:1px solid var(--line);box-shadow:inset 0 1px 0 rgba(255,255,255,.07);transition:transform var(--t-fast) var(--ease),background var(--t-fast) var(--ease)}
+.sqg .chip:active{transform:scale(.95)}
+@media (hover:hover){.sqg .chip:hover{background:color-mix(in oklab,var(--tx) 10%,transparent)}}
+.sqg.col>div{gap:10px}
+.sqg .chip.dot{width:34px;height:34px;padding:0;justify-content:center;border-radius:50%}
+.sqg .chip.dot .cdot{width:22px;height:22px;box-shadow:inset 0 0 0 1px rgba(0,0,0,.14),inset 0 1px 0 rgba(255,255,255,.35)}
+.sqhue{background:var(--glass-sub);border:1px solid var(--line);box-shadow:inset 0 1px 0 rgba(255,255,255,.07)}
+.sqt button{border-radius:var(--r-md)}
+.sqn .sq0{color:var(--tx3)}
+
+/* 3. 照片牆角標：學「照片」App——不用黑色膠囊，白字配柔和陰影，底部加一層很淡的暗角讓字在亮照片上也看得清楚 */
+.bdg>span{height:18px;padding:0;background:none;box-shadow:none;font:600 12px/1 var(--font);letter-spacing:.01em;filter:drop-shadow(0 1px 2px rgba(0,0,0,.55))}
+.bdg.lo::before{content:"";position:absolute;left:0;right:0;bottom:0;height:40%;max-height:60px;background:linear-gradient(transparent,rgba(0,0,0,.34));border-radius:inherit}
+.bdg .vt{right:8px;bottom:6px}
+.bdg .vt svg{width:10px;height:10px;fill:currentColor}
+.bdg .lkt{left:8px;bottom:6px}
+.bdg .lvt{left:7px;top:7px;width:auto}
+.bdg .lvt svg{width:17px;height:17px}
+.wall[data-z="2"] .bdg .vt{right:5px;bottom:4px;height:16px;padding:0;font-size:11px}
+/* 連拍是按鈕，保留膠囊但改小顆玻璃 */
+.bdg .stk{background:rgba(0,0,0,.3);-webkit-backdrop-filter:blur(10px) saturate(160%);backdrop-filter:blur(10px) saturate(160%);border:1px solid rgba(255,255,255,.22);filter:none;box-shadow:inset 0 1px 0 rgba(255,255,255,.25)}
+.bdg .stk.op{background:var(--p);border-color:transparent}
+
+/* 5. 小浮動元件統一：提示泡泡改液態玻璃膠囊（帶圖示），日期氣泡改厚玻璃（拖動時底下一直換，不加模糊），多選列等工具欄先退場再浮上來 */
+.toast{display:inline-flex;align-items:center;gap:8px;max-width:calc(100vw - 32px);width:max-content;padding:11px 18px 11px 14px;text-align:left;line-height:1.35;
+  background-color:var(--glass);background-image:var(--glass-sheen);-webkit-backdrop-filter:var(--blur-float);backdrop-filter:var(--blur-float);border:1px solid var(--glass-b);box-shadow:var(--sh-float);color:var(--tx);
+  transform:translate(-50%,14px) scale(.96);transition:opacity var(--t-mid) var(--ease),transform var(--t-mid) var(--dec)}
+.toast.on{transform:translate(-50%,0) scale(1)}
+.toast svg{width:18px;height:18px;flex:none;color:var(--tx2)}
+.toast.ok svg{color:var(--g2,var(--p));stroke-width:2.6}
+.sbl{background-color:color-mix(in oklab,var(--s1) 94%,transparent);background-image:var(--glass-sheen);border:1px solid var(--glass-b);box-shadow:var(--sh-float)}
+.selb.on{transition:transform .46s var(--dec) .09s}
+.selb .chip:not(.go){background:var(--glass-sub);border:1px solid var(--line);box-shadow:inset 0 1px 0 rgba(255,255,255,.08)}
+
+@media (prefers-reduced-transparency:reduce){
+  :root{--glass-field:var(--s2)}
+  .lbt::after{background-color:var(--glass-thick);-webkit-backdrop-filter:none;backdrop-filter:none}
+  .bdg .stk{background:rgba(0,0,0,.6);-webkit-backdrop-filter:none;backdrop-filter:none}
+}
+@media (prefers-reduced-motion:reduce){
+  .toast,.toast.on{transform:translate(-50%,0)}
+  .selb.on{transition:none}
+}
