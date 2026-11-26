@@ -1372,6 +1372,7 @@ function albumModal(node, name){
       const sb = t.closest("[data-alms] button");
       if (sb) {
         const k = sb.parentNode.dataset.alms, val = +sb.dataset.v;
+        if (k !== "secs" && sb.classList.contains("on")) return;
         slideSel(() => sb.parentNode.querySelectorAll("button").forEach(x => x.classList.toggle("on", x === sb)));
         if (k === "dl") side("dl", dlSide(val));
         if (k === "up") { side("up", upSide(val)); const uq = v.querySelector("[data-almuq]"); if (uq) reveal(uq, val > 0); }
@@ -1656,7 +1657,7 @@ function abModal(node, name){
       if (m) { if (m.dataset.abmt === mt) return; mt = m.dataset.abmt; slideSel(() => v.querySelectorAll("[data-abmt]").forEach(x => x.classList.toggle("on", x === m)));
         last = view(); const bx = v.querySelector(".abbody"); swapPane(bx, () => { bx.innerHTML = mt === "stat" ? stats(D.stats) : setupTab(); }); return; }
       const o = t.closest("[data-abos]");
-      if (o) { os = o.dataset.abos; slideSel(() => v.querySelectorAll("[data-abos]").forEach(x => x.classList.toggle("on", x === o))); last = view(); const bx = v.querySelector(".abst"); swapPane(bx, () => { bx.innerHTML = steps(); }); return; }
+      if (o) { if (o.dataset.abos === os) return; os = o.dataset.abos; slideSel(() => v.querySelectorAll("[data-abos]").forEach(x => x.classList.toggle("on", x === o))); last = view(); const bx = v.querySelector(".abst"); swapPane(bx, () => { bx.innerHTML = steps(); }); return; }
       if (t.closest("[data-abcp]")) {
         try { await navigator.clipboard.writeText(D.dot); toast("已複製主機名稱"); }
         catch (_) { const r = document.createRange(); r.selectNodeContents(v.querySelector(".abst code")); getSelection().removeAllRanges(); getSelection().addRange(r); }
@@ -2477,16 +2478,36 @@ function swapHTML(el, html){
   fade(olds, [...el.children]);
   if (Math.abs(h1 - h0) > 1) el.animate([{height:h0 + "px", overflow:"hidden"}, {height:h1 + "px", overflow:"hidden"}], o);
 }
-/* 彈窗分頁切換（每日備份、相簿詳細設定、擋廣告）：整塊統一淡入＋高度滑動，不拆解子卡片避免外框閃爍 */
+/* 彈窗分頁切換（每日備份、相簿詳細設定、擋廣告）：舊畫面殘影平滑淡出同時新畫面淡入＋高度過渡，全程零空白閃爍 */
 function swapPane(box, update){
   if (!box) return;
   if (!canAnim() || !box.isConnected) return update();
+  const id = box._sw = (box._sw || 0) + 1;
+  box.querySelectorAll(":scope>.pane-ghost").forEach(g => g.remove());
   box.getAnimations({subtree:true}).forEach(a => { if (!a.animationName) a.cancel(); });
   const h0 = box.offsetHeight;
+  const ghost = box.cloneNode(true);
+  const srcIn = box.querySelectorAll("input,textarea,select"), dstIn = ghost.querySelectorAll("input,textarea,select");
+  srcIn.forEach((s, i) => { const d = dstIn[i]; if (!d) return; if (s.type === "checkbox" || s.type === "radio") d.checked = s.checked; else d.value = s.value; d.disabled = true; d.tabIndex = -1; });
+  ghost.querySelectorAll(".slide").forEach(x => x.remove());
+  ghost.querySelectorAll("[data-slide],[data-bkpane],[data-almtab],[data-alms],[data-abmt],[data-abos],[data-ablt],[id],[name]").forEach(x => {
+    ["data-slide", "data-bkpane", "data-almtab", "data-alms", "data-abmt", "data-abos", "data-ablt", "id", "name"].forEach(k => x.removeAttribute(k));
+  });
+  ghost.removeAttribute("id"); ghost.setAttribute("aria-hidden", "true");
+  ghost.classList.add("pane-ghost");
   update();
-  const h1 = box.offsetHeight, o = {duration:T.mid, easing:EASE, id:"ui"};
-  box.animate([{opacity:0, transform:"translateY(4px)"}, {opacity:1, transform:"none"}], o);
-  if (Math.abs(h1 - h0) > 1) box.animate([{height:h0 + "px", overflow:"hidden"}, {height:h1 + "px", overflow:"hidden"}], o);
+  const h1 = box.offsetHeight, kids = [...box.children].filter(c => !c.hidden);
+  if (box._pos === undefined) box._pos = box.style.position;
+  if (getComputedStyle(box).position === "static") box.style.position = "relative";
+  Object.assign(ghost.style, {position:"absolute", left:"0", top:"0", width:"100%", height:h0 + "px", margin:"0", overflow:"hidden", pointerEvents:"none", zIndex:"2", boxSizing:"border-box"});
+  box.appendChild(ghost);
+  const dur = Math.round(T.mid * .85), oIn = {duration:dur, easing:DEC, id:"ui"}, oH = {duration:dur, easing:EASE, id:"ui"};
+  kids.forEach(c => c.animate([{opacity:0, transform:"translateY(4px)"}, {opacity:1, transform:"none"}], oIn));
+  if (Math.abs(h1 - h0) > 1) box.animate([{height:h0 + "px", overflow:"hidden"}, {height:h1 + "px", overflow:"hidden"}], oH);
+  ghost.animate([{opacity:1}, {opacity:0}], {duration:Math.round(T.fast * .85), easing:EXIT, fill:"forwards", id:"ui"}).finished.catch(() => {}).then(() => {
+    ghost.remove();
+    if (box._sw === id && box.isConnected) { box.style.position = box._pos; delete box._pos; }
+  });
 }
 /* 顯示／收起一塊（取代直接改 hidden）：撐開後淡入；淡出後收起 */
 function reveal(el, on){
