@@ -28,26 +28,41 @@ function memPut(u, buf, type){
   MEM.set(u, {buf, type}); memSz += buf.byteLength;
   for (const [k, v] of MEM) { if (memSz <= MEMMAX) break; MEM.delete(k); memSz -= v.buf.byteLength; }
 }
-const memRes = h => new Response(h.buf.slice(0), {status:200, headers:{"Content-Type":h.type, "Cache-Control":"no-store"}});
+const memRes = h => new Response(h.buf, {status:200, headers:{"Content-Type":h.type, "Cache-Control":"no-store"}});
+const INFLIGHT = new Map();
 
-async function open(req, code, again){
-  const hit = MEM.get(req.url);
-  if (hit && !again) { MEM.delete(req.url); MEM.set(req.url, hit); return memRes(hit); }   // 最近用到的放最後，滿了先丟最久沒用的
+async function fetchDec(req, code, again){
   const r = await fetch(again ? new Request(req, {cache:"reload"}) : req);
   const kid = r.headers.get("X-Alb-E");
-  if (!kid || !r.ok) return r;
+  if (!kid || !r.ok) return {raw:r};
   const b = await r.arrayBuffer();
+  if (b.byteLength < 28) return {raw:new Response("", {status:502})};
+  const iv = new Uint8Array(b, 0, 12), ct = new Uint8Array(b, 12);
+  let keyErr = false;
   for (const fresh of [false, true]) {
+    const k = await keyOf(code, kid, fresh);
+    if (!k) { keyErr = true; break; }
     try {
-      const k = await keyOf(code, kid, fresh);
-      if (!k) continue;
-      const p = await crypto.subtle.decrypt({name:"AES-GCM", iv:b.slice(0, 12)}, k, b.slice(12));
+      const p = await crypto.subtle.decrypt({name:"AES-GCM", iv}, k, ct);
       const h = {buf:p, type:r.headers.get("X-Alb-T") || "image/jpeg"};
       memPut(req.url, p, h.type);
-      return memRes(h);
+      return {h};
     } catch (e) {}
   }
-  return again ? new Response("", {status:502}) : open(req, code, true);   // 存著的是舊鑰匙加密的：重拿一次
+  if (again || keyErr) return {raw:new Response("", {status:502})};
+  return fetchDec(req, code, true);                           // 存著的是舊鑰匙加密的：重拿一次
+}
+
+async function open(req, code){
+  const hit = MEM.get(req.url);
+  if (hit) { MEM.delete(req.url); MEM.set(req.url, hit); return memRes(hit); }   // 最近用到的放最後，滿了先丟最久沒用的
+  let p = INFLIGHT.get(req.url);
+  if (!p) {
+    p = fetchDec(req, code, false).finally(() => INFLIGHT.delete(req.url));
+    INFLIGHT.set(req.url, p);
+  }
+  const out = await p;
+  return out.h ? memRes(out.h) : out.raw.clone();
 }
 
 self.addEventListener("message", e => {
@@ -65,5 +80,5 @@ self.addEventListener("fetch", e => {
   if (u.origin !== self.location.origin) return;
   const m = u.pathname.match(/^\/a\/([A-Za-z0-9]{10})\/i\/[0-9a-f]{12}\/[slqxady]$/);
   if (!m) return;
-  e.respondWith(open(q, m[1], false));
+  e.respondWith(open(q, m[1]));
 });

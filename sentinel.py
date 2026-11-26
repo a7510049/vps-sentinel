@@ -46,7 +46,7 @@ from collections import deque
 from concurrent.futures import ThreadPoolExecutor
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
-VERSION = "5.41"
+VERSION = "5.42"
 
 # ───────────────────────── 哨兵備份檔（.vsbk）─────────────────────────
 # 哨兵專用的備份格式：外面是自己的檔案格式，裡面用的是成熟、標準的加密方法（不自己發明加密）：
@@ -5418,6 +5418,7 @@ class Handler(BaseHTTPRequestHandler):
                 self.close_connection = True       # 沒收完的資料不要留在連線上
             return self.send(200 if ok else 400, json.dumps({"ok": ok, "message": msg}, ensure_ascii=False))
         limit = (16384 if u.path.startswith("/api/passkey") or u.path in ("/api/cloud-open", "/api/adguard-open")
+                 else 131072 if u.path == "/api/album"
                  else 400000 if u.path == "/api/download" else 4096)
         body = self.read_body(limit)
         if body is None:

@@ -73,12 +73,15 @@ const kindsHere = () => { const n = {}; ALL.forEach(p => { if ((p.u || "") === W
 let HUE = 0;                                                  // 照顏色排：紅、橘、黃…一路排成彩虹
 
 /* ── 日期：EXIF 的「2026:11:03 14:22:10」是拍照當地的時間，照原樣顯示 ── */
-const WD = "日一二三四五六";
+const WD = "日一二三四五六", PD_C = new Map();
 function pd(s){
-  const m = /^(\d{4}):(\d\d):(\d\d) (\d\d):(\d\d)/.exec(s || "");
-  if (!m) return null;
-  const [y, mo, d, h, mi] = m.slice(1).map(Number);
-  return {y, mo, d, h, mi, wd: new Date(Date.UTC(y, mo - 1, d)).getUTCDay(), k: m[1] + m[2] + m[3]};
+  if (!s) return null;
+  if (PD_C.has(s)) return PD_C.get(s);
+  const m = /^(\d{4}):(\d\d):(\d\d) (\d\d):(\d\d)/.exec(s);
+  const r = m ? (() => { const [y, mo, d, h, mi] = m.slice(1).map(Number); return {y, mo, d, h, mi, wd: new Date(Date.UTC(y, mo - 1, d)).getUTCDay(), k: m[1] + m[2] + m[3]}; })() : null;
+  if (PD_C.size > 4000) PD_C.clear();
+  PD_C.set(s, r);
+  return r;
 }
 const fday = (d, yr) => `${yr ? d.y + "年" : ""}${d.mo}月${d.d}日 週${WD[d.wd]}`;
 const ftime = d => `${d.h < 12 ? "上午" : "下午"} ${d.h % 12 || 12}:${String(d.mi).padStart(2, "0")}`;
@@ -143,12 +146,20 @@ function series(x){
   if (mk.startsWith("ricoh") && /^GR\b/i.test(md)) return {m:"GR", c:"gr", n:md.replace(/^GR\s*/i, "") || "GR"};
   return null;
 }
+const CAM_C = new Map();
 function camName(x){
+  const k = `${x.mk || ""}\0${x.md || ""}`;
+  if (CAM_C.has(k)) return CAM_C.get(k);
   const mk = x.mk ? (ownGet(MKS, x.mk.toLowerCase()) || x.mk.replace(/\s+(corporation|corp\.?|co\.,? ?ltd\.?|imaging)$/i, "")) : "";
-  const sr = series(x); if (sr) return `${mk} ${sr.m}${sr.m === "α" ? "" : " "}${sr.n}`.trim();
-  const md = x.md || "";
-  if (!md) return mk;
-  return md.toLowerCase().startsWith(mk.toLowerCase()) || md.toLowerCase().startsWith((x.mk || "").toLowerCase()) ? md.replace(new RegExp("^" + (x.mk || "").replace(/[.*+?^${}()|[\]\\]/g, "\\$&") + "\\s*", "i"), mk + " ").trim() : `${mk} ${md}`.trim();
+  const sr = series(x);
+  let out;
+  if (sr) out = `${mk} ${sr.m}${sr.m === "α" ? "" : " "}${sr.n}`.trim();
+  else {
+    const md = x.md || "";
+    out = !md ? mk : md.toLowerCase().startsWith(mk.toLowerCase()) || md.toLowerCase().startsWith((x.mk || "").toLowerCase()) ? md.replace(new RegExp("^" + (x.mk || "").replace(/[.*+?^${}()|[\]\\]/g, "\\$&") + "\\s*", "i"), mk + " ").trim() : `${mk} ${md}`.trim();
+  }
+  CAM_C.set(k, out);
+  return out;
 }
 /* iPhone、iPad 的鏡頭照 Apple 相簿的叫法（主相機、超廣角相機、望遠相機、前置相機），不寫「後三鏡頭 6.765mm f/1.78」 */
 const PHONES = /^(apple|google|samsung|xiaomi|redmi|poco|huawei|honor|oneplus|oppo|vivo|realme|motorola|nothing)/i;
@@ -349,8 +360,9 @@ async function devInfo(){
 }
 let REF = 0;
 async function refresh(){                                  // 地名在主機背景慢慢查：查到了補上去
+  if (document.hidden) { document.addEventListener("visibilitychange", () => { if (!document.hidden) refresh(); }, {once:true}); return; }
   try {
-    const r = await fetch(BASE + "/m", {credentials:"same-origin", cache:"no-store"});
+    const r = await fetch(BASE + "/m" + (SWOK ? "" : "?pl=1"), {credentials:"same-origin", cache:"no-store"});
     if (!r.ok) return;
     const d = await r.json(), by = Object.fromEntries((d.photos || []).map(p => [p.i, p]));
     ALL.forEach(p => { const n = by[p.i]; if (!n) return; p.p = n.p; if (!p.q && n.q) p.q = n.q;
@@ -425,17 +437,19 @@ function stackCalc(){
   [...STKOPEN].forEach(c => { if (!STK.has(c)) STKOPEN.delete(c); });
 }
 const tileOf = i => TILES[i] && !TILES[i].isConnected && STKOF.has(i) ? TILES[STKOF.get(i)] : TILES[i];   // 收在一疊裡的：用那疊最上面那張
-let STKT = 0;
+let STKT = 0, STKBZ = 0;
 const stkTap = (i, el) => STK.has(i) && ZL < 2 && (!STKOPEN.has(i) || !!el.closest("[data-stk]"));   // 收著的整張點了攤開；攤開後點右上角收起
 const stkHid = i => STKOF.has(i) && STKOF.get(i) !== i && !STKOPEN.has(STKOF.get(i)) && ZL < 2;
 function stackToggle(c){                                    // 攤開／收起：照片從原本的位置滑到新位置（跟換大小一樣）
-  if (!STK.has(c)) return;
+  if (!STK.has(c) || STKBZ) return;
+  STKBZ = 1;
   const vis = wallRects(), h0 = new Map();
   document.querySelectorAll(".dh[data-k],.scn[data-k]").forEach(h => h0.set(h.dataset.k, h.getBoundingClientRect().top));
   const OUT = [".msec", ".foot"].map(q => $(q)).filter(Boolean), o0 = OUT.map(e => e.getBoundingClientRect().top);
   const open = !STKOPEN.has(c);
   if (open && vis.has(c)) STK.get(c).forEach(i => { if (!vis.has(i)) vis.set(i, vis.get(c)); });   // 攤開：從那一疊長出來
   const go = () => {
+    STKBZ = 0;
     if (open) STKOPEN.add(c); else STKOPEN.delete(c);
     STK.get(c).forEach(i => badge(i));
     layout(true);
@@ -480,7 +494,7 @@ function sections(){
   const w = $(".wall"); w.dataset.z = ZL;
   w.innerHTML = GROUPS.map((g, gi) => `<section class="day" data-g="${gi}">${g.c != null ? `<div class="dh hue" data-k="${g.k}"><b>${hueDot(g.c)}${HUEN(g.c)}</b><i class="dct num">${g.list.length}</i></div>` : g.o ? `<div class="dh oth" data-k="o"><b>其他圖片</b><span>截圖、沒有拍攝資訊的</span><i class="dct num">${g.list.length}</i></div>` : g.k && g.d ? g.m
     ? `<div class="dh" data-k="m${g.k}"><b>${g.d.y}年${g.d.mo}月</b><span class="num">${g.list.length}</span></div>`
-    : `<div class="dh" data-day="${g.k}" data-k="d${g.k}"><b>${fday(g.d, YR)}${wxTag(g.k)}</b>${((pl, sm) => `<span>${pl ? `${I("pin")}${esc(sm ? pl.split("・")[0] : pl)}` : ""}</span>${sm ? `<i class="dsum">${sumWrap(sm)}</i>` : ""}`)(dayPlaces(g.k), daySum(g.k))}${g.list.length > 1 ? `<button class="dct num" data-dplay="${g.k}" aria-label="播放這天">${I("play")}${g.list.length}</button>` : `<i class="dct num">${g.list.length}</i>`}${dayClock(g.list)}</div>` : ""}<div class="rows"></div></section>`).join("");
+    : `<div class="dh" data-day="${g.k}" data-k="d${g.k}"><b>${fday(g.d, YR)}${wxTag(g.k)}</b>${((pl, sm) => `<span>${pl ? `${I("pin")}${esc(sm ? pl.split("・")[0] : pl)}` : ""}</span>${sm ? `<i class="dsum">${sumWrap(sm)}</i>` : ""}`)(dayPlaces(g.k, g.list), daySum(g.k, g.list))}${g.list.length > 1 ? `<button class="dct num" data-dplay="${g.k}" aria-label="播放這天">${I("play")}${g.list.length}</button>` : `<i class="dct num">${g.list.length}</i>`}${dayClock(g.list)}</div>` : ""}<div class="rows"></div></section>`).join("");
 }
 const HUEN = c => c < COLS.length ? COLS[c][0] + "色" : ["淡色", "黑白", "其他"][c - COLS.length];
 const hueDot = c => c < COLS.length ? `<i class="cdot" style="background:${COLS[c][2]}"></i>` : `<i class="cdot ${["mu", "bw", "mu"][c - COLS.length]}"></i>`;
@@ -498,8 +512,8 @@ function dayClock(list){
   if (!ps.length) return "";
   const one = p => { const d = pd(p.x.dt), s = sunAlt(p), up = s ? s.a > -.83 : d.h >= 6 && d.h < 18; return `<span>${I(up ? "wsun" : "moon")}${ftod(p, d)}</span>`; };
   const a = ps[0], b = ps[ps.length - 1], same = pd(b.x.dt).h * 60 + pd(b.x.dt).mi - pd(a.x.dt).h * 60 - pd(a.x.dt).mi < 10;
-  let x = one(a), y = one(b); const w = s => s.match(/<\/svg>(\S+) /)[1];
-  if (w(x) === w(y)) y = y.replace(`${w(y)} `, "");          // 同一個時段只寫一次：「早上 10:00 → 10:28」
+  let x = one(a), y = one(b); const w = s => { const m = s.match(/<\/svg>(\S+) /); return m ? m[1] : ""; };
+  if (w(x) && w(x) === w(y)) y = y.replace(`${w(y)} `, "");  // 同一個時段只寫一次：「早上 10:00 → 10:28」
   return `<p class="dhr num">${x}${same ? "" : `<i>→</i>${y}`}</p>`;
 }
 function wallRects(){                                         // 現在畫面上每張的位置（動畫中、手指捏著的也算）
@@ -512,12 +526,15 @@ const zEase = t => 1 - Math.pow(1 - t, 3.2);                  // 跟手指放開
 const IOS = /iPhone|iPad|iPod/.test(navigator.userAgent) || (/Macintosh/.test(navigator.userAgent) && navigator.maxTouchPoints > 1);
 const ANDR = /Android/i.test(navigator.userAgent);
 function zbSync(){ document.querySelectorAll("[data-zb]").forEach(b => { b.disabled = ZL + +b.dataset.zb < 0 || ZL + +b.dataset.zb > 3; }); }
-function flyTiles(vis, dur){                                  // 每張從 vis 記的位置連續長大／縮小到現在的位置，照片反著縮回來所以不壓扁（以左上角為準縮放，第一格才剛好在原本的位置）
-  const H = innerHeight, N = 14, fr = Array.from({length:N + 1}, (_, k) => zEase(k / N));
+function flyTiles(vis, dur){                                  // 每張從 vis 記的位置連續長大／縮小到現在的位置，照片反著縮回來所以不壓扁（先一次量完位置再動樣式，不反覆重排）
+  const H = innerHeight, N = 14, fr = Array.from({length:N + 1}, (_, k) => zEase(k / N)), todo = [];
   TILES.forEach((t, i) => {
     if (!t.isConnected) return;
-    const r0 = vis.get(i), r1 = t.getBoundingClientRect();
+    const r1 = t.getBoundingClientRect();
     if (r1.bottom < -60 || r1.top > H + 60) return;
+    todo.push([t, vis.get(i), r1]);
+  });
+  todo.forEach(([t, r0, r1]) => {
     t.classList.add("in");
     if (!r0) { t.animate([{opacity:0, transform:"scale(.96)"}, {opacity:1, transform:"none"}], {duration:dur * .8, easing:DEC}); return; }
     const tk = [], ik = [];
@@ -533,9 +550,9 @@ function flyTiles(vis, dur){                                  // 每張從 vis �
   });
 }
 function zoomWall(z, fx, fy, pre){                            // 換大小：每張從現在的位置連續長大／縮小過去，照片不壓扁
-  setTimeout(() => TILES.forEach(t => { if (t && t.isConnected) { const q = t.getBoundingClientRect(); if (q.bottom > -innerHeight * .4 && q.top < innerHeight * 1.4) sharp(t, q.height); } }), ZDUR + 120);   // 放大後看得到的那幾格換清楚的
   z = Math.min(3, Math.max(0, z));
   if (z === ZL || !$(".wall")) return false;
+  setTimeout(() => TILES.forEach(t => { if (t && t.isConnected) { const q = t.getBoundingClientRect(); if (q.bottom > -innerHeight * .4 && q.top < innerHeight * 1.4) sharp(t, q.height); } }), ZDUR + 120);   // 放大後看得到的那幾格換清楚的
   const vis = pre || wallRects(), H = innerHeight;
   let anc = -1, best = 1e9;                                   // 手指下面那張留在手指下面
   vis.forEach((r, i) => { const d = Math.hypot(r.left + r.width / 2 - fx, r.top + r.height / 2 - fy); if (d < best) { best = d; anc = i; } });
@@ -569,11 +586,12 @@ function zoomWall(z, fx, fy, pre){                            // 換大小：每
 }
 /* 這天一句話：早上在哪、下午到哪、走了幾公里（照拍照的時間和地點自動寫） */
 const sumWrap = s => s.split("，").map(t => `<em>${esc(t)}</em>`).join("，");   // 一句話要換行時只斷在逗號，不會把「4.2 公里」拆開
-function daySum(k){
-  const ps = PH.filter(p => !p.x.dtf && p.p && (pd(p.x.dt) || {}).k === k);
+function daySum(k, list){
+  const src = list ? list.map(i => PH[i]) : PH;
+  const ps = src.filter(p => !p.x.dtf && p.p && (list || (pd(p.x.dt) || {}).k === k));
   if (ps.length < 3) return "";
   const SG = ["早上", "中午", "下午", "晚上"], by = [{}, {}, {}, {}];
-  ps.forEach(p => { const h = pd(p.x.dt).h, s = h < 5 ? 3 : h < 11 ? 0 : h < 14 ? 1 : h < 18 ? 2 : 3; by[s][p.p.n] = (by[s][p.p.n] || 0) + 1; });
+  ps.forEach(p => { const d = pd(p.x.dt); if (!d) return; const h = d.h, s = h < 5 ? 3 : h < 11 ? 0 : h < 14 ? 1 : h < 18 ? 2 : 3; by[s][p.p.n] = (by[s][p.p.n] || 0) + 1; });
   const parts = [];
   let last = "";
   by.forEach((o, s) => { const n = Object.keys(o).sort((a, b) => o[b] - o[a])[0]; if (!n || n === last) return; parts.push(`${SG[s]}${parts.length ? "到" : "在"}${n}`); last = n; });
@@ -583,9 +601,9 @@ function daySum(k){
   const km = m >= 1000 ? `${m < 30000 ? "走了" : "移動了"} ${m < 10000 ? (m / 1000).toFixed(1).replace(/\.0$/, "") : Math.round(m / 1000)} 公里` : "";
   return parts.length > 1 || (parts.length && km) ? [...parts, km].filter(Boolean).join("，") : "";
 }
-function dayPlaces(k){                                       // 這天的城市＋最常拍的地方，例如「阿雷佐・聖方濟各聖殿」
+function dayPlaces(k, list){                                 // 這天的城市＋最常拍的地方，例如「阿雷佐・聖方濟各聖殿」
   const c = {}, cc = {};
-  PH.forEach(p => { const d = pd(p.x.dt); if (d && d.k === k && p.p) { c[p.p.n] = (c[p.p.n] || 0) + 1; if (p.p.c) cc[p.p.c] = (cc[p.p.c] || 0) + 1; } });
+  (list ? list.map(i => PH[i]) : PH).forEach(p => { if (!p.p) return; if (!list) { const d = pd(p.x.dt); if (!d || d.k !== k) return; } c[p.p.n] = (c[p.p.n] || 0) + 1; if (p.p.c) cc[p.p.c] = (cc[p.p.c] || 0) + 1; });
   const city = Object.keys(cc).sort((a, b) => cc[b] - cc[a])[0] || "";
   return [city, ...Object.keys(c).filter(n => n !== city).sort((a, b) => c[b] - c[a]).slice(0, city ? 1 : 2)].filter(Boolean).join("・");
 }
@@ -892,10 +910,11 @@ function kmenu(btn){
   m.style.top = `${Math.round(r.bottom + 8)}px`; m.style.right = `${Math.round(innerWidth - r.right)}px`;
   document.body.appendChild(m);
   if (anim()) m.animate([{opacity:0, transform:"translateY(-6px) scale(.96)"}, {opacity:1, transform:"none"}], {duration:T.mid, easing:EASE});
-  setTimeout(() => addEventListener("pointerdown", kmenu.out = e => { if (!e.target.closest(".kmenu,[data-kind]")) kmenuOff(); }), 0);
+  kmenu.t = setTimeout(() => addEventListener("pointerdown", kmenu.out = e => { if (!e.target.closest(".kmenu,[data-kind]")) kmenuOff(); }), 0);
   addEventListener("scroll", kmenuOff, {passive:true, once:true});
 }
 function kmenuOff(){
+  clearTimeout(kmenu.t);
   const m = $(".kmenu"); if (!m || m.dataset.bye) return false;
   m.dataset.bye = 1; removeEventListener("pointerdown", kmenu.out); removeEventListener("scroll", kmenuOff);
   if (!anim()) { m.remove(); return true; }
@@ -903,7 +922,7 @@ function kmenuOff(){
   return true;
 }
 function kindSet(k){
-  if (k === KIND) return;
+  if (k === KIND || WHOBZ) return;
   KIND = k;
   whoSet(WHO, true).then(() => { const w = $(".cityf"); if (w && !w.hidden) scrollTo({top:w.getBoundingClientRect().top + scrollY - 70, behavior:anim() ? "smooth" : "auto"}); });
 }
@@ -994,8 +1013,9 @@ function draw(){
   const cov = new Promise(r => { if (hi.complete && hi.naturalWidth) return r(); hi.addEventListener("load", r, {once:true}); hi.addEventListener("error", r, {once:true}); })
     .then(() => { if (hi.naturalWidth) { hok(); return hi.decode ? hi.decode().catch(() => {}) : 0; } }).then(splStep);
   const fl = w => (document.fonts && document.fonts.load ? document.fonts.load(`${w} 16px "LINE Seed TW"`, D.name + "0") : Promise.resolve()).catch(() => {}).then(splStep);
-  const idle = () => new Promise(r => window.requestIdleCallback ? requestIdleCallback(r, {timeout:400}) : setTimeout(r, 80)).then(splStep);
-  Promise.race([Promise.all([cov, fl(400), fl(700)]).then(idle), new Promise(r => setTimeout(r, Math.max(1200, 4000 - performance.now())))]).then(rdy);
+  const fwait = Promise.race([Promise.all([fl(400), fl(700)]), new Promise(r => setTimeout(r, 600))]);
+  const idle = () => new Promise(r => window.requestIdleCallback ? requestIdleCallback(r, {timeout:300}) : setTimeout(r, 60)).then(splStep);
+  Promise.race([Promise.all([cov, fwait]).then(idle), new Promise(r => setTimeout(r, Math.max(1000, 3500 - performance.now())))]).then(rdy);
   heroCycle(cover); zbSync(); tint(cover); flagFix($(".hero"));
   awayWatch(hero); awayWatch($(".mems"));
   const hf = $(".hfl"); if (hf) hf.querySelectorAll("img").forEach(f => f.addEventListener("error", () => { if (!hf.querySelector("img")) hf.outerHTML = I("pin"); }));   // 國旗都抓不到就換回圖釘
@@ -1033,47 +1053,49 @@ async function hueSet(on){
   on = on ? 1 : 0;
   if (on === HUE || WHOBZ) return;
   WHOBZ = 1;
-  if (on) await colorsAll();
-  if (SEL.on) popBack();
-  const vis = wallRects(), dh = [...document.querySelectorAll(".wall .dh,.wall .scn")];
-  if (anim() && dh.length) await Promise.all(dh.map(h => h.animate([{opacity:1}, {opacity:0}], {duration:T.fast, easing:EXIT, fill:"forwards"}).finished.catch(() => {})));
-  HUE = on;
-  PH = pickW(); citybar(); stackCalc();
-  TILES.forEach(t => t.classList.remove("on"));
-  TILES = PH.map((p, i) => { const t = TM.get(p.i); if (t) { t.dataset.i = i; return t; } return tile(p, i); });
-  const ms = $(".msec"); if (ms) ms.hidden = msHide();
-  smapOn(); sections(); layout(true); SCR.rows = null; mems(); highlights();
-  if (!ms || !ms.hidden) bigMap();
-  smapWatch();
-  const cf = $(".cityf"), at = cf && !cf.hidden ? cf : $(".wwrap"), y = at ? at.getBoundingClientRect().top + scrollY - 70 : 0;
-  if (at && Math.abs(scrollY - y) > 4) {                     // 捲到照片牆最上面：照片從原本在畫面上的位置飛過去
-    scrollTo({top:y, behavior:"auto"});
-  }
-  if (anim()) {
-    flyTiles(vis, ZDUR * 1.5);
-    document.querySelectorAll(".wall .dh,.wall .scn").forEach((h, k) => h.animate([{opacity:0, transform:"translateY(8px)"}, {opacity:1, transform:"none"}], {duration:T.mid, delay:ZDUR * .5 + k * 40, easing:DEC, fill:"backwards"}));
-    if (cf) cf.animate([{opacity:0, transform:"translateY(6px)"}, {opacity:1, transform:"none"}], {duration:T.mid, easing:DEC});
-  }
-  WHOBZ = 0;
+  try {
+    if (on) await colorsAll();
+    if (SEL.on) popBack();
+    const vis = wallRects(), dh = [...document.querySelectorAll(".wall .dh,.wall .scn")];
+    if (anim() && dh.length) await Promise.all(dh.map(h => h.animate([{opacity:1}, {opacity:0}], {duration:T.fast, easing:EXIT, fill:"forwards"}).finished.catch(() => {})));
+    HUE = on;
+    PH = pickW(); citybar(); stackCalc();
+    TILES.forEach(t => t.classList.remove("on"));
+    TILES = PH.map((p, i) => { const t = TM.get(p.i); if (t) { t.dataset.i = i; return t; } return tile(p, i); });
+    const ms = $(".msec"); if (ms) ms.hidden = msHide();
+    smapOn(); sections(); layout(true); SCR.rows = null; mems(); highlights();
+    if (!ms || !ms.hidden) bigMap();
+    smapWatch();
+    const cf = $(".cityf"), at = cf && !cf.hidden ? cf : $(".wwrap"), y = at ? at.getBoundingClientRect().top + scrollY - 70 : 0;
+    if (at && Math.abs(scrollY - y) > 4) {                     // 捲到照片牆最上面：照片從原本在畫面上的位置飛過去
+      scrollTo({top:y, behavior:"auto"});
+    }
+    if (anim()) {
+      flyTiles(vis, ZDUR * 1.5);
+      document.querySelectorAll(".wall .dh,.wall .scn").forEach((h, k) => h.animate([{opacity:0, transform:"translateY(8px)"}, {opacity:1, transform:"none"}], {duration:T.mid, delay:ZDUR * .5 + k * 40, easing:DEC, fill:"backwards"}));
+      if (cf) cf.animate([{opacity:0, transform:"translateY(6px)"}, {opacity:1, transform:"none"}], {duration:T.mid, easing:DEC});
+    }
+  } finally { WHOBZ = 0; }
 }
 async function whoSet(w, keep){
   if (w === WHO && !keep) return;
   if (WHOBZ) return; WHOBZ = 1;
-  if (SEL.on) popBack();
-  const parts = [".mems", ".stats", ".hl", ".cityf", ".wall", ".gear", ".msec", ".smap", ".gbk"].map(q => $(q)).filter(Boolean);
-  if (anim()) await Promise.all(parts.map(x => x.animate([{opacity:1}, {opacity:0, transform:"translateY(6px)"}], {duration:T.fast, easing:EXIT, fill:"forwards"}).finished.catch(() => {})));
-  if (!keep || w !== WHO) { CITY = ""; GEAR = ""; SQ = ""; HUE = 0; KIND = ""; }
-  WHO = w; PH = pickW(); citybar(); stackCalc();
-  TILES.forEach(t => t.classList.remove("on"));
-  TILES = PH.map((p, i) => { const t = TM.get(p.i); if (t) { t.dataset.i = i; return t; } return tile(p, i); });
-  whoBar();
-  const ms = $(".msec"); if (ms) ms.hidden = msHide();   // 先決定要不要顯示，地圖才量得到大小（以前篩選完再回來，地圖還是篩選時那幾張）
-  smapOn(); sections(); layout(true); mems(); stats(); highlights(); bigMap(); gear(); gbook(); smapWatch();
-  document.querySelectorAll(".hmeta .chip .num, .bar small").forEach(x => { x.textContent = cntTxt(); });
-  const nav = $(".who"), top = nav && !nav.hidden ? nav.getBoundingClientRect().top + scrollY - 70 : 0;
-  if (nav && scrollY > top) scrollTo({top, behavior:"auto"});
-  parts.forEach(x => { x.getAnimations().forEach(a => a.cancel()); if (anim()) x.animate([{opacity:0, transform:"translateY(6px)"}, {opacity:1, transform:"none"}], {duration:T.mid, easing:DEC}); });
-  WHOBZ = 0;
+  try {
+    if (SEL.on) popBack();
+    const parts = [".mems", ".stats", ".hl", ".cityf", ".wall", ".gear", ".msec", ".smap", ".gbk"].map(q => $(q)).filter(Boolean);
+    if (anim()) await Promise.all(parts.map(x => x.animate([{opacity:1}, {opacity:0, transform:"translateY(6px)"}], {duration:T.fast, easing:EXIT, fill:"forwards"}).finished.catch(() => {})));
+    if (!keep || w !== WHO) { CITY = ""; GEAR = ""; SQ = ""; HUE = 0; KIND = ""; }
+    WHO = w; PH = pickW(); citybar(); stackCalc();
+    TILES.forEach(t => t.classList.remove("on"));
+    TILES = PH.map((p, i) => { const t = TM.get(p.i); if (t) { t.dataset.i = i; return t; } return tile(p, i); });
+    whoBar();
+    const ms = $(".msec"); if (ms) ms.hidden = msHide();   // 先決定要不要顯示，地圖才量得到大小（以前篩選完再回來，地圖還是篩選時那幾張）
+    smapOn(); sections(); layout(true); mems(); stats(); highlights(); bigMap(); gear(); gbook(); smapWatch();
+    document.querySelectorAll(".hmeta .chip .num, .bar small").forEach(x => { x.textContent = cntTxt(); });
+    const nav = $(".who"), top = nav && !nav.hidden ? nav.getBoundingClientRect().top + scrollY - 70 : 0;
+    if (nav && scrollY > top) scrollTo({top, behavior:"auto"});
+    parts.forEach(x => { x.getAnimations().forEach(a => a.cancel()); if (anim()) x.animate([{opacity:0, transform:"translateY(6px)"}, {opacity:1, transform:"none"}], {duration:T.mid, easing:DEC}); });
+  } finally { WHOBZ = 0; }
 }
 /* 封面每隔幾秒淡淡換成相簿裡隨機一張（捲走、看大圖、背景時先停） */
 let HCT = 0;
@@ -1192,7 +1214,7 @@ function sharp(el, h){
   if (!h || !hi || !p || p.broken || hi.dataset.sh || !hi.complete || !hi.naturalHeight) return;
   const dpr = Math.min(3, devicePixelRatio || 1); if (h * dpr < hi.naturalHeight * 1.2) return;
   hi.dataset.sh = 1; const u = src(p, "l"), im = new Image(); im.decoding = "async";
-  im.onload = () => { (im.decode ? im.decode() : Promise.resolve()).catch(() => {}).then(() => { if (hi.isConnected) hi.src = u; }); };
+  im.onload = () => { (im.decode ? im.decode() : Promise.resolve()).catch(() => {}).then(() => { if (hi.isConnected) { hi.src = u; if (SIO) SIO.unobserve(el); } }); };
   im.onerror = () => { delete hi.dataset.sh; }; im.src = u;
 }
 const SIO = "IntersectionObserver" in window ? new IntersectionObserver(es => es.forEach(e => { if (e.isIntersecting) sharp(e.target, e.boundingClientRect.height); }), {rootMargin:"40% 0px"}) : null;
@@ -1201,20 +1223,24 @@ function tile(p, i){
   el.className = p.q ? "ph" : "ph wt"; el.dataset.i = i; el.setAttribute("aria-label", p.n.split("/").pop());   // wt：主機還在做小圖，先跑一道光
   TM.set(p.i, el);
   el.innerHTML = `${p.q ? `<img class="lq" alt="" src="data:image/jpeg;base64,${p.q}">` : ""}<img class="hi" alt="" loading="lazy" decoding="async" draggable="false" src="${src(p, "s")}"><span class="bdg"></span><span class="ck">${I("ck")}</span>${hvTxt(p) ? `<span class="hv">${esc(hvTxt(p))}</span>` : ""}`;
-  setTimeout(() => badge(+el.dataset.i));
+  badgeEl(el, p, i);
   const hi = el.querySelector(".hi");
+  let retried = 0;
   hi.addEventListener("load", () => { el.classList.remove("wt"); hi.decoding = "sync";   /* 換大小時照片會被拿下來再放回去：載好的改同步解碼，放回去那一格不會空白 */ hi.classList.add("ok"); setTimeout(() => { const q = el.querySelector(".lq"); if (q) q.remove(); }, T.slow * 2); sharp(el); }, {once:true});
-  hi.addEventListener("error", () => { p.broken = 1; el.classList.remove("wt"); hi.remove(); el.insertAdjacentHTML("beforeend", `<span class="nope">${I("off")}</span>`); }, {once:true});
+  hi.addEventListener("error", () => {
+    if (!retried++) { setTimeout(() => { if (hi.isConnected && !hi.naturalWidth) hi.src = src(p, "s") + "&r=1"; }, 1500); return; }
+    p.broken = 1; el.classList.remove("wt"); if (SIO) SIO.unobserve(el); hi.remove(); el.insertAdjacentHTML("beforeend", `<span class="nope">${I("off")}</span>`);
+  });
   if (IO) IO.observe(el); else el.classList.add("in");
   if (SIO) SIO.observe(el);
   return el;
 }
 function hvTxt(p){ const d = pd(p.x.dt); return [d ? `${d.mo}/${d.d} ${ftime(d)}` : "", camName(p.x)].filter(Boolean).join("・"); }   // 電腦滑鼠指著：拍攝時間、相機
-function badge(i){                                          // 格子上的小標：影片長度、原況、愛心
-  const t = TILES[i], p = PH[i]; if (!t) return;
-  const b = t.querySelector(".bdg");
+function badgeEl(t, p, i){
+  const b = t && t.querySelector(".bdg"); if (!b || !p) return;
   b.innerHTML = `${isVid(p) ? `<span class="vt num">${I("play")}${dur(p.vd)}</span>` : p.gf ? `<span class="vt">GIF</span>` : p.lv ? `<span class="lvt">${I("live")}</span>` : ""}${rxBadge(p)}${STK.has(i) ? `<span class="stk num${STKOPEN.has(i) ? " op" : ""}" data-stk="${i}" aria-label="${STKOPEN.has(i) ? "收起" : "攤開"}${STKB.has(i) ? "包圍曝光" : "連拍"}">${I("stk")}${STKB.has(i) ? `±${STKB.get(i)}` : STK.get(i).length}</span>` : ""}`;
 }
+function badge(i){ badgeEl(TILES[i], PH[i], i); }
 function rxBadge(p){                                        // 愛心＋其他表情：最多的兩個表情疊在一起，後面是總數
   const rx = Object.entries(p.rx || {}).filter(r => r[1] > 0).sort((a, b) => b[1] - a[1]), n = (p.lk || 0) + rx.reduce((a, r) => a + r[1], 0);
   if (!n) return "";
@@ -1349,7 +1375,7 @@ function scrubLabel(y){                                      // 那個位置的�
   const t = y + innerHeight * .3; let best = SCR.rows[0];
   for (const r of SCR.rows) { if (r[0] > t) break; best = r; }
   const p = best && PH[best[1]], d = p && pd(p.x.dt);
-  SCR.p = p;
+  SCR.p = p; SCR.pi = best ? best[1] : -1;
   if (HUE) return p && p._hk ? HUEN(p._hk[0]) : "";
   if (p && p.o && GROUPS.some(g => g.o)) return "其他圖片";
   return d ? ZL === 3 ? `${d.y}年${d.mo}月` : `${YR ? d.y + "年" : ""}${d.mo}月${d.d}日` : "";
@@ -1365,7 +1391,7 @@ function scrubLabel(y){                                      // 那個位置的�
   const sblSet = (sc, tx) => { const l = sc.querySelector(".sbl"), b = l.querySelector("b"), im = l.querySelector(".sbi"), p = SCR.p;
     if (b.textContent !== tx) b.textContent = tx;
     l.classList.toggle("on", !!tx);
-    const k = p ? PH.indexOf(p) : -1, th = k >= 0 && TILES[k] ? TILES[k].querySelector("img.hi") : null;   // 用照片牆上那張清楚的小圖（瀏覽器已經有了），還沒有就先墊模糊的
+    const k = SCR.pi ?? -1, th = k >= 0 && TILES[k] ? TILES[k].querySelector("img.hi") : null;   // 用照片牆上那張清楚的小圖（瀏覽器已經有了），還沒有就先墊模糊的
     const u = !p || p.broken ? "" : th && th.complete && th.naturalWidth ? th.currentSrc : src(p, "s");
     if (im.dataset.u !== u) { im.dataset.u = u; im.style.backgroundImage = p && p.q ? `url(data:image/jpeg;base64,${p.q})` : ""; if (u) im.src = u; im.hidden = !u; } };
   const at = e => { SCR.y = e.clientY; if (!SCR.raf) SCR.raf = requestAnimationFrame(go); };
@@ -1742,14 +1768,16 @@ function route(el, pts, W, H){
     el.querySelectorAll(".mk").forEach(m => { m.style.animationName = ""; });
     requestAnimationFrame(() => requestAnimationFrame(go));
   });
+  if (el._rio) { el._rio.disconnect(); el._rio = null; }
   if (!anim() || !("IntersectionObserver" in window)) return go();
-  const io = new IntersectionObserver(es => { if (es.some(e => e.isIntersecting)) { io.disconnect(); go(); } }, {threshold:.35});
+  const io = el._rio = new IntersectionObserver(es => { if (es.some(e => e.isIntersecting)) { io.disconnect(); if (el._rio === io) el._rio = null; go(); } }, {threshold:.35});
   io.observe(el);
 }
 
 /* 旅程時光機：地圖下面一條時間軸，拖到哪路線就畫到哪、那時候拍的照片浮在地圖上；也可以按播放自己走一遍 */
 function tmac(el, pts, r, path, len){
   const sec = el.parentNode, n = pts.length;
+  if (sec._tro) { sec._tro.disconnect(); sec._tro = null; }
   sec.querySelectorAll(".tmac").forEach(x => x.remove());
   const svg = el.querySelector(".route"), seg = document.createElementNS("http://www.w3.org/2000/svg", "path"), cum = [0];
   svg.appendChild(seg);
@@ -1786,7 +1814,7 @@ function tmac(el, pts, r, path, len){
     lab.querySelector("span").textContent = p.p ? p.p.n : "";
   }
   const fitW = () => trk.style.setProperty("--bw", `${trk.clientWidth}px`);
-  fitW(); if (window.ResizeObserver) new ResizeObserver(() => { fitW(); seat(at); }).observe(bar);
+  fitW(); if (window.ResizeObserver) (sec._tro = new ResizeObserver(() => { fitW(); seat(at); })).observe(bar);
   const bub = el.querySelector(".tmb"), ims = bub.querySelectorAll("img");
   let at = n - 1, shown = -1, run = 0, flip = 0;
   function set(k, from){
@@ -2132,8 +2160,10 @@ function openLb(i, from){
     if (anim()) sl[1].animate([{opacity:0, transform:"scale(.97)"}, {opacity:1, transform:"none"}], {duration:T.mid, easing:DEC});
   }
   function goneSet(){                                        // 照片牆上這張的格子空著（大圖蓋在上面）；還沒露出來前格子照常顯示
-    const fromOb = S.ob && S.i === S.fi, on = !S.pre;
-    TILES.forEach((t, k) => t.classList.toggle("gone", on && k === S.i && !fromOb));
+    const fromOb = S.ob && S.i === S.fi, on = !S.pre, nx = on && !fromOb ? TILES[S.i] : null;
+    if (S.gone && S.gone !== nx) S.gone.classList.remove("gone");
+    if (nx) nx.classList.add("gone");
+    S.gone = nx;
     if (S.ob) S.ob.classList.toggle("lbo", on && fromOb);
   }
   S.hold = anim();                                           // 長大的動畫跑完才開始載大圖（iPhone 一邊解大圖一邊跑動畫會卡、一打開就跳到最大）
@@ -2221,6 +2251,7 @@ function openLb(i, from){
   }
   function close(){
     if (S.closing) return; S.closing = 1;
+    clearTimeout(S.bqT); clearTimeout(S.xlT); clearTimeout(S.infT); clearTimeout(S.palT); clearTimeout(S.lvT); clearTimeout(S.wt);
     if (S.pre) { S.pre = 0; el.style.visibility = ""; }
     finish();
     /* 縮回哪裡：同一張回到打開的地方；換過張就回到那張自己的格子，格子不在畫面上就先在大圖後面把照片牆捲到那裡（像手機相簿），再縮回去 */
@@ -2240,8 +2271,10 @@ function openLb(i, from){
     stopAll();
     zw.querySelectorAll(".vbig,.vbuf").forEach(x => { x.style.opacity = 0; });   // 影片中間的播放鈕跟著照片縮回去時淡掉（不然縮完才突然不見）
     let gone = false;
-    const end = () => { if (gone) return; gone = true; el.remove();
-      ovl.forEach(x => { x.style.opacity = ""; if (anim()) x.animate([{opacity:0}, {opacity:1}], {duration:T.mid, easing:EASE}); }); TILES.forEach(x => x.classList.remove("gone")); if (bq > 0) box.style.clipPath = ""; if (S.ob) S.ob.classList.remove("lbo"); if (LB === S) LB = null; onScroll(); };
+    const end = () => { if (gone) return; gone = true;
+      el.querySelectorAll("video").forEach(v => { v.pause(); v.removeAttribute("src"); v.load(); });
+      el.remove();
+      ovl.forEach(x => { x.style.opacity = ""; if (anim()) x.animate([{opacity:0}, {opacity:1}], {duration:T.mid, easing:EASE}); }); if (S.gone) { S.gone.classList.remove("gone"); S.gone = null; } if (bq > 0) box.style.clipPath = ""; if (S.ob) S.ob.classList.remove("lbo"); if (LB === S) LB = null; onScroll(); };
     S.kill = end; el.style.pointerEvents = "none";
     if (!anim()) return end();
     setTimeout(end, T.mid + 200);                              // 安卓返回手勢時動畫有時不會結束：時間到一定收掉
@@ -2411,8 +2444,8 @@ function openLb(i, from){
   stage.addEventListener("pointermove", e => {
     if (!ptr.has(e.pointerId) || !g) return;
     ptr.set(e.pointerId, {x:e.clientX, y:e.clientY});
-    const sr = stage.getBoundingClientRect(), f = L();
     if (g.type === "pinch" && ptr.size >= 2) {
+      const sr = stage.getBoundingClientRect(), f = L();
       const [a, b] = [...ptr.values()], d = Math.hypot(a.x - b.x, a.y - b.y), m = {x:(a.x + b.x) / 2, y:(a.y + b.y) / 2};
       let s = g.z0.s * d / g.d0; s = s < 1 ? Math.max(.45, 1 - (1 - s) * .8) : s > ZMAX ? ZMAX + (s - ZMAX) * .3 : s;   // 手指縮多少照片就縮多少；比原本小、比最大還大時有一點阻力，放開再彈回去
       const ux = (g.m0.x - sr.left - f.l - g.z0.x) / g.z0.s, uy = (g.m0.y - sr.top - f.t - g.z0.y) / g.z0.s;
@@ -2574,13 +2607,16 @@ function openLb(i, from){
     if (cm && !e.target.closest("button")) { cmp.querySelectorAll(".cmt.on").forEach(x => { if (x !== cm) x.classList.remove("on"); }); cm.classList.toggle("on"); return; }
     if (e.target.closest("[data-crex]")) return reOff(f);
     const del = e.target.closest("[data-cdel]");
-    if (del) talk(S.i, {del:del.dataset.cdel}).then(async ok => {    // 刪掉的那則（連同回覆）收起來，其他的滑過去
-      if (!ok) return;
-      const l = cmp.querySelector(".cml"); if (!l) return;
-      const gone = [...l.querySelectorAll(".cmt")].filter(c => !(PH[S.i].cm || []).some(x => x.id === c.dataset.cid));
-      if (anim() && gone.length) await Promise.all(gone.map(c => (c.style.overflow = "hidden", c).animate([{opacity:1, height:c.offsetHeight + "px"}, {opacity:0, height:"0px", paddingTop:0, paddingBottom:0}], {duration:T.mid, easing:EXIT, fill:"forwards"}).finished.catch(() => {})));
-      cmList(); social();
-    });
+    if (del) {
+      const p0 = PH[S.i];
+      talk(S.i, {del:del.dataset.cdel}).then(async ok => {      // 刪掉的那則（連同回覆）收起來，其他的滑過去
+        if (!ok || S.closing || PH[S.i] !== p0) return;
+        const l = cmp.querySelector(".cml"); if (!l) return;
+        const gone = [...l.querySelectorAll(".cmt")].filter(c => !(p0.cm || []).some(x => x.id === c.dataset.cid));
+        if (anim() && gone.length) await Promise.all(gone.map(c => (c.style.overflow = "hidden", c).animate([{opacity:1, height:c.offsetHeight + "px"}, {opacity:0, height:"0px", paddingTop:0, paddingBottom:0}], {duration:T.mid, easing:EXIT, fill:"forwards"}).finished.catch(() => {})));
+        if (!S.closing && PH[S.i] === p0) { cmList(); social(); }
+      });
+    }
   });
   function reOff(f){ delete f.dataset.re; $(".cre", f).hidden = true; f.querySelector("[name=s]").placeholder = "說點什麼…"; }
   function cmList(nw){                                       // 只換留言那幾則，輸入框不動
@@ -2643,12 +2679,13 @@ function openLb(i, from){
     store.set(NMK, name);
     const sb = f.querySelector(".csend"); if (sb.disabled) return;
     sb.disabled = true;
-    const re = f.dataset.re || "";
+    const re = f.dataset.re || "", p0 = PH[S.i];
     talk(S.i, re ? {s:tx.value, n:name, re} : {s:tx.value, n:name}).then(ok => {
       sb.disabled = false;
       if (!ok) return;
       tx.value = ""; reOff(f); if (nm) nm.remove();            // 剛留完：輸入框留著，可以接著寫
-      const cm = PH[S.i].cm || [], nw = cm[cm.length - 1];
+      if (S.closing || PH[S.i] !== p0) return;
+      const cm = p0.cm || [], nw = cm[cm.length - 1];
       cmList(nw && nw.id); social();
     });
   });
@@ -2662,7 +2699,7 @@ function openLb(i, from){
     if (e.key === "ArrowRight") go(1);
     else if (e.key === "ArrowLeft") go(-1);
     else if (e.key === "Escape") el.classList.contains("mo") ? lbMenu(false) : S.info ? setInfo(false) : lbBack(S);
-    else if (e.key === "i") setInfo(S.info !== "info");
+    else if (e.key === "i" || e.key === "I") setInfo(S.info !== "info");
   };
 }
 addEventListener("keydown", e => { if (SH) return e.key === "Escape" && popBack();
@@ -2676,12 +2713,14 @@ addEventListener("popstate", () => {
 
 /* ── 愛心、留言 ── */
 async function talk(i, body){
+  const p = PH[i]; if (!p) return false;
   try {
-    const r = await fetch(BASE + "/talk", {method:"POST", credentials:"same-origin", headers:{"Content-Type":"application/json"}, body:JSON.stringify({i:PH[i].i, ...body})});
+    const r = await fetch(BASE + "/talk", {method:"POST", credentials:"same-origin", headers:{"Content-Type":"application/json"}, body:JSON.stringify({i:p.i, ...body})});
     const d = await r.json().catch(() => ({}));
     if (!r.ok) { toast(d.message || "沒有送出去，等一下再試"); return false; }
-    Object.assign(PH[i], {lk:d.lk, me:d.me, cm:d.cm, rx:d.rx || {}, mr:d.mr || "", lkn:d.lkn || []});
-    badge(i);
+    Object.assign(p, {lk:d.lk, me:d.me, cm:d.cm, rx:d.rx || {}, mr:d.mr || "", lkn:d.lkn || []});
+    const k = PH.indexOf(p);
+    if (k >= 0) badge(k);
     return true;
   } catch (e) { toast("連不上，等一下再試"); return false; }
 }
@@ -2709,12 +2748,13 @@ function rxPick(i, btn, after){
   box.style.left = Math.max(8, Math.min(innerWidth - bw - 8, r.left + r.width / 2 - bw / 2)) + "px";
   box.style.top = Math.max(8, r.top - box.offsetHeight - 10) + "px";
   if (anim()) box.animate([{opacity:0, transform:"translateY(8px) scale(.9)"}, {opacity:1, transform:"none"}], {duration:T.mid, easing:DEC});
+  let at = 0;
   const away = e => { if (!box.contains(e.target)) close(); };
-  const close = () => { if (RXP !== o) return; RXP = null; document.removeEventListener("pointerdown", away, true);
+  const close = () => { if (RXP !== o) return; RXP = null; clearTimeout(at); document.removeEventListener("pointerdown", away, true);
     if (!anim()) return box.remove();
     box.animate([{opacity:1}, {opacity:0, transform:"translateY(6px) scale(.94)"}], {duration:T.fast, easing:EXIT, fill:"forwards"}).finished.then(() => box.remove(), () => box.remove()); };
   const o = RXP = {close, box};
-  setTimeout(() => document.addEventListener("pointerdown", away, true));
+  at = setTimeout(() => { if (RXP === o) document.addEventListener("pointerdown", away, true); });
   box.addEventListener("click", e => {
     const b = e.target.closest("[data-rxe]"); if (!b) return;
     const em = b.dataset.rxe, was = {rx:{...(p.rx || {})}, mr:p.mr || ""};
@@ -2725,7 +2765,7 @@ function rxPick(i, btn, after){
     if (p.mr && anim()) { const f = document.createElement("i"); f.className = "rxfly"; f.textContent = em; const r2 = b.getBoundingClientRect(); f.style.left = r2.left + r2.width / 2 + "px"; f.style.top = r2.top + "px"; document.body.appendChild(f);
       f.animate([{opacity:1, transform:"translate(-50%,0) scale(1)"}, {opacity:0, transform:"translate(-50%,-90px) scale(1.8)"}], {duration:T.slow * 1.4, easing:DEC}).finished.then(() => f.remove(), () => f.remove()); }
     close();
-    talk(i, {rx:em}).then(ok => { if (!ok) Object.assign(p, was); after(); badge(i); });
+    talk(i, {rx:em}).then(ok => { if (!ok) Object.assign(p, was); after(); const k = PH.indexOf(p); if (k >= 0) badge(k); });
   });
 }
 function lkWho(p){                                             // 「小明、小美 等 5 人」：沒留過名字的只算人數
@@ -2874,6 +2914,7 @@ function placeSheet(ids){                                     // 地圖上一顆
   });
 }
 function nameSheet(then){                                    // 第一次放照片先問名字（照片上會寫是誰放的）
+  if (SH) return;
   const bg = document.createElement("div");
   bg.className = "shbg";
   bg.innerHTML = `<form class="sh"><div class="ic">${I("up")}</div><h3>你的名字</h3><p>照片上會寫是你放的</p><input class="field" name="n" maxlength="20" autocomplete="nickname" aria-label="你的名字" required><button class="btn">好</button></form>`;
@@ -3263,8 +3304,9 @@ function story(n, from){
       bar(at); timer = setTimeout(() => show(at + 1), ms);
     };
     if (v) {
-      v.addEventListener("playing", go, {once:true});
-      v.addEventListener("error", () => { if (my === seq) show(at + 1); }, {once:true});
+      const vt = setTimeout(() => { if (my === seq && !ready) show(at + 1); }, 6000);   // iPhone 影片播不出來時不一直轉圈
+      v.addEventListener("playing", () => { clearTimeout(vt); go(); }, {once:true});
+      v.addEventListener("error", () => { clearTimeout(vt); if (my === seq) show(at + 1); }, {once:true});
       v.play().catch(() => { v.muted = true; v.play().catch(() => {}); });
     } else if (img.complete && img.naturalWidth) requestAnimationFrame(go);
     else { img.addEventListener("load", go, {once:true}); img.addEventListener("error", go, {once:true}); }
@@ -3294,7 +3336,7 @@ function story(n, from){
   function close(){
     if (S.closing) return; S.closing = 1;
     clearTimeout(timer); clearTimeout(waitT); seq++;
-    view.querySelectorAll("video").forEach(v => v.pause()); if (pend) pend.pause();
+    view.querySelectorAll("video").forEach(v => { v.pause(); v.removeAttribute("src"); v.load(); }); if (pend) { pend.pause(); pend.removeAttribute("src"); pend.load(); }
     const fin = () => { el.remove(); SY = null; };
     if (!anim()) return fin();
     const b = $(`.mem[data-mem="${g}"] .mring`), r = b && b.getBoundingClientRect();
@@ -3384,17 +3426,18 @@ function hlArrows(r){                                          // 電腦上的�
 function dragX(r){
   if (r.dataset.dx) return; r.dataset.dx = 1;
   let d = null;
-  r.addEventListener("pointerdown", e => { if (e.pointerType !== "mouse" || e.button) return; d = {x:e.clientX, l:r.scrollLeft, m:false}; });
-  addEventListener("pointermove", e => { if (!d) return; const dx = e.clientX - d.x;
+  const mv = e => { if (!d) return; const dx = e.clientX - d.x;
     if (!d.m && Math.abs(dx) > 5) { d.m = true; r.classList.add("drag"); }
-    if (d.m) r.scrollLeft = d.l - dx; });
-  addEventListener("pointerup", () => { if (!d) return; const m = d.m; d = null; r.classList.remove("drag");
-    if (m) { r.addEventListener("click", e => { e.stopPropagation(); e.preventDefault(); }, {capture:true, once:true}); setTimeout(() => r.style.scrollSnapType = "", 0); } });
+    if (d.m) r.scrollLeft = d.l - dx; };
+  const up = () => { if (!d) return; const m = d.m; d = null; r.classList.remove("drag");
+    removeEventListener("pointermove", mv); removeEventListener("pointerup", up); removeEventListener("pointercancel", up);
+    if (m) { r.addEventListener("click", e => { e.stopPropagation(); e.preventDefault(); }, {capture:true, once:true}); setTimeout(() => r.style.scrollSnapType = "", 0); } };
+  r.addEventListener("pointerdown", e => { r._tx = null; if (e.pointerType !== "mouse" || e.button) return;
+    d = {x:e.clientX, l:r.scrollLeft, m:false}; addEventListener("pointermove", mv); addEventListener("pointerup", up); addEventListener("pointercancel", up); });
   r.addEventListener("wheel", e => { if (Math.abs(e.deltaX) > Math.abs(e.deltaY)) return;
     const max = r.scrollWidth - r.clientWidth, cur = r._tx != null ? r._tx : r.scrollLeft;
     if ((e.deltaY < 0 && cur <= 0) || (e.deltaY > 0 && cur >= max - 1)) return;   // 捲到頭才捲整頁
     e.preventDefault(); glideX(r, cur + e.deltaY * (e.deltaMode === 1 ? 40 : 1.2)); }, {passive:false});
-  r.addEventListener("pointerdown", () => { r._tx = null; });
 }
 /* 橫的一排平順地滑到某個位置（滾輪一格一格的、左右鈕都走這裡）：每一格畫面往目標靠近一點，連續滾就接著滑，不會一頓一頓 */
 function glideX(r, x){
