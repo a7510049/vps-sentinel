@@ -51,7 +51,7 @@ ALB_LOCK = threading.Lock()
 ALB_IDX_LOCK = threading.Lock()
 ALB_FAILS = {}                                                    # (相簿, 來源) → [輸錯的時間…]
 ALB = {"d": None, "q": [], "again": set(), "ff": None, "geo_t": 0, "talk": None, "tpost": {}, "rx_t": {}, "di_t": {},
-       "upev": {}, "upfl": {}, "idx": {}, "qcache": {}, "assets": {}, "ap": None}
+       "upev": {}, "upfl": {}, "idx": {}, "qcache": {}, "assets": {}, "ap": None, "req": 0}
 ALB_GEN = threading.BoundedSemaphore(2)                           # 同時最多做兩張（另外一個背景慢慢做）
 ALB_ZIP_GATE = threading.BoundedSemaphore(2)                      # 同時最多兩個打包下載，避免把主機頻寬和硬碟塞爆
 ALB_KEY_RE = re.compile(r"[A-Za-z0-9]{10}")
@@ -1941,18 +1941,21 @@ def alb_q_b64(ck):
     return q
 
 
-def alb_ready(a, idx=None):
+def alb_ready_n(a, idx=None):
     idx = idx or alb_index(a, scan=False)
     ph = idx.get("ph") or {}
-    if not ph:
-        return 1
     order = idx.get("order") or []
-    if not order:
-        return 1
+    if not ph or not order:
+        return 0, 0
     root = alb_root() or ""
     wm = (a.get("wm") or "") if alb_wm_bake(a) else ""
     done = sum(1 for pid in order if ph[pid].get("bad") or os.path.exists(alb_cfile(alb_ckey(a, pid, ph[pid], root, wm), "s")))
-    return round(done / len(order), 2)
+    return done, len(order)
+
+
+def alb_ready(a, idx=None):
+    done, total = alb_ready_n(a, idx)
+    return 1 if not total else round(done / total, 2)
 
 
 # ── 小圖、大圖：交給 ffmpeg（主機上的，沒有就借雲端硬碟容器裡的） ──
@@ -2468,13 +2471,25 @@ def alb_get(a, pid, kind, meta=None):
     if kind == "x" and not os.path.exists(fn):
         if not os.path.exists(alb_cfile(ck, "s")):
             return alb_get(a, pid, "l", meta=m)
-        with ALB_GEN:
-            if not os.path.exists(fn) and not alb_make(a, pid, m, ALB_XL):
-                fn = alb_cfile(ck, "l")
+        with ALB_LOCK:
+            ALB["req"] += 1
+        try:
+            with ALB_GEN:
+                if not os.path.exists(fn) and not alb_make(a, pid, m, ALB_XL):
+                    fn = alb_cfile(ck, "l")
+        finally:
+            with ALB_LOCK:
+                ALB["req"] = max(0, ALB["req"] - 1)
     elif not os.path.exists(fn) and not m.get("bad"):
-        with ALB_GEN:
-            if not os.path.exists(fn) and not alb_make(a, pid, m):
-                alb_mark_bad(a, pid)
+        with ALB_LOCK:
+            ALB["req"] += 1
+        try:
+            with ALB_GEN:
+                if not os.path.exists(fn) and not alb_make(a, pid, m):
+                    alb_mark_bad(a, pid)
+        finally:
+            with ALB_LOCK:
+                ALB["req"] = max(0, ALB["req"] - 1)
     try:
         return sec_read(fn), m["n"]
     except (OSError, ValueError):
@@ -2668,11 +2683,21 @@ def alb_worker():
             a = alb_all().get(aid)
             if a:
                 idx = alb_index(a)
-                for pid in idx.get("order", []):
+                ph = idx.get("ph") or {}
+                order = list(idx.get("order", []))
+                cov = next((pid for pid in order if ph[pid]["w"] > ph[pid]["h"] * 1.15 and not ph[pid].get("bad") and not alb_other(ph[pid])), None)
+                if cov and cov != order[0]:
+                    order.remove(cov)
+                    order.insert(0, cov)
+                for pid in order:
                     if aid not in alb_all():
                         break
-                    m = idx["ph"][pid]
+                    m = ph[pid]
                     if not m.get("bad") and not os.path.exists(alb_cfile(alb_ckey(a, pid, m), "s")):
+                        for _ in range(40):
+                            if not ALB["req"]:
+                                break
+                            time.sleep(0.05)
                         with ALB_GEN:
                             ok = alb_make(a, pid, m)
                         if not ok:
@@ -3242,13 +3267,17 @@ def alb_manifest(a, th=""):
     qa_miss = any("qs" not in x and "vd" not in x and "raw" not in x for x in out) and time.time() - ALB_QAK.get(a["id"], 0) > 3600 and alb_ff()
     if qa_miss:                                        # 以前做好的照片還沒打分數（一小時最多補一次，算不出來的不一直重來）
         ALB_QAK[a["id"]] = time.time()
-    rdy = alb_ready(a, idx)
+    done_n, tot_n = alb_ready_n(a, idx)
+    rdy = 1 if not tot_n else round(done_n / tot_n, 2)
     if rdy < 1 or any(x.get("vr") == -1 for x in out) or qa_miss or (a["loc"] and (old_pl or wx_miss or any("g" in x and "p" not in x for x in out))):
         alb_kick(a["id"])
     wmo = a.get("wm") if a.get("wm") and not wm_bake else ""
-    return {"ok": True, "name": a["name"], "photos": out, "dl": alb_dl(a), "loc": a["loc"], "exp": a["exp"], "es": a.get("es") or a.get("t0", 0), "wmo": wmo, "wx": wx, "intro": a.get("intro", ""), "gb": talk.get(ALB_GB, {}).get("cm", []) if a.get("talk", True) else [],
-            "talk": a.get("talk", True), "shy": a.get("shy", True), "snap": bool(a.get("snap")), "mu": bool(idx.get("mu")), "up": alb_up(a),
-            "places": [k for k, _ in sorted(places.items(), key=lambda x: -x[1])][:6], "ready": rdy}
+    res = {"ok": True, "name": a["name"], "photos": out, "dl": alb_dl(a), "loc": a["loc"], "exp": a["exp"], "es": a.get("es") or a.get("t0", 0), "wmo": wmo, "wx": wx, "intro": a.get("intro", ""), "gb": talk.get(ALB_GB, {}).get("cm", []) if a.get("talk", True) else [],
+           "talk": a.get("talk", True), "shy": a.get("shy", True), "snap": bool(a.get("snap")), "mu": bool(idx.get("mu")), "up": alb_up(a),
+           "places": [k for k, _ in sorted(places.items(), key=lambda x: -x[1])][:6], "ready": rdy}
+    if tot_n and done_n < tot_n:
+        res["prep"] = [done_n, tot_n]
+    return res
 
 
 ALB_PHONE = ("apple", "google", "samsung", "xiaomi", "redmi", "poco", "huawei", "honor", "oneplus", "oppo", "vivo", "realme", "motorola", "nothing")

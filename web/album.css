@@ -1633,25 +1633,24 @@ html.shy #shyc{visibility:visible;opacity:1;scale:1;transition:opacity var(--t-f
 }
 
 /* ── 懸浮液態玻璃分頁膠囊（.adock）：圖示與文字靜止、僅底層玻璃氣泡以彈簧滑動 ── */
-.adock{position:fixed;left:50%;bottom:calc(16px + env(safe-area-inset-bottom));z-index:calc(var(--z-bar) + 1);transform:translateX(-50%);
+.adock{position:fixed;left:50%;bottom:calc(16px + env(safe-area-inset-bottom));z-index:calc(var(--z-bar) + 1);transform:translate3d(-50%,0,0);will-change:transform;backface-visibility:hidden;
   display:inline-flex;align-items:center;gap:2px;padding:5px;border-radius:var(--r-pill);max-width:calc(100vw - 24px);
   background:var(--glass);-webkit-backdrop-filter:var(--blur-float);backdrop-filter:var(--blur-float);border:1px solid var(--glass-b);box-shadow:var(--sh-float);
   transition:transform var(--sp),opacity var(--t-mid) var(--ease)}
 .adock[hidden]{display:none}
-.adock>.slide{position:absolute;left:0;top:5px;bottom:5px;border-radius:var(--r-pill);background:var(--pill-bg);box-shadow:var(--pill-sh);pointer-events:none;z-index:0}
+.adock>.slide{position:absolute;left:0;top:5px;bottom:5px;border-radius:var(--r-pill);background:var(--pill-bg);box-shadow:var(--pill-sh);pointer-events:none;z-index:0;will-change:transform,width}
 .adock>button{position:relative;z-index:1;height:44px;padding:0 16px;border-radius:var(--r-pill);display:inline-flex;align-items:center;gap:7px;font-size:var(--fs-s);font-weight:650;color:var(--tx2);white-space:nowrap;transition:color var(--t-fast) var(--ease)}
-.adock>button::before{content:"";position:absolute;inset:0;border-radius:inherit;background:var(--pill-bg);box-shadow:var(--pill-sh);opacity:0;z-index:-1;transition:opacity var(--t-fast) var(--ease)}
+.adock>button::before{content:"";position:absolute;inset:0;border-radius:inherit;background:var(--pill-bg);box-shadow:var(--pill-sh);opacity:0;z-index:-1}
 .adock>button.on{color:var(--tx)}
 .adock>button.on::before{opacity:1}
-.adock.sliding>button.on::before{opacity:0;transition:none}
-.adock.slid>button.on::before{transition:none}
+.adock.sliding>button.on::before{opacity:0}
 .adock>button svg{width:17px;height:17px;flex:none}
 .adock>button small{display:inline-grid;place-items:center;min-width:18px;height:18px;padding:0 5px;border-radius:var(--r-pill);background:color-mix(in oklab,var(--g2) 22%,var(--glass-sub));color:var(--tx);font-size:11px;font-weight:700;line-height:1}
 @media (hover:hover){.adock>button:not(.on):hover{color:var(--tx)}}
 @media (max-width:420px){.adock>button{padding:0 13px;gap:5px;height:42px;font-size:var(--fs-xs)}}
 @media (min-width:900px){.adock{bottom:22px;padding:6px}.adock>.slide{top:6px;bottom:6px}.adock>button{height:44px;padding:0 20px}}
-/* 大圖、幻燈片、限時動態、選取列、上傳列或快速捲動時自動收起分頁膠囊 */
-html:has(.lb,.ss,.sy,.upb.on) .adock,html.selm .adock,html.scrubbing .adock{transform:translate(-50%,calc(100% + 44px));opacity:0;pointer-events:none}
+/* 大圖、幻燈片、限時動態、選取列、上傳列或快速捲動時自動收起分頁膠囊（以明確 class 切換，避免手機 :has() 重繪閃爍） */
+html.dock-off .adock,html.selm .adock,html.scrubbing .adock{transform:translate3d(-50%,calc(100% + 44px),0);opacity:0;pointer-events:none}
 html.has-dock .foot{padding-bottom:calc(104px + env(safe-area-inset-bottom))}
 html.has-dock .tpane:not([data-pane="photos"]){padding-bottom:calc(108px + env(safe-area-inset-bottom))}
 html.has-dock .toast{bottom:calc(82px + env(safe-area-inset-bottom))}
@@ -1737,6 +1736,34 @@ html.has-dock .toast{bottom:calc(82px + env(safe-area-inset-bottom))}
   body::before{content:"";position:fixed;left:0;right:0;top:0;height:68px;z-index:calc(var(--z-bar) - 1);pointer-events:none;opacity:0;
     background:linear-gradient(180deg,color-mix(in oklab,var(--bg) 84%,transparent) 0%,color-mix(in oklab,var(--bg) 42%,transparent) 52%,transparent 100%);
     transition:opacity var(--t-mid) var(--ease)}
-  body:has(.bar.on)::before{opacity:1}
+  html.bar-on body::before{opacity:1}
 }
+
+/* ── 首次轉檔與順暢載入：開場提示、回憶淡入、大圖解碼提示、幻燈片／動態無縫升級、頂部最佳化進度膠囊 ── */
+#spl .spt{position:absolute;left:50%;top:calc(50% + clamp(88px,24vmin,124px) * .62 + 38px);translate:-50% 0;font-size:var(--fs-xs);font-weight:550;letter-spacing:.04em;color:var(--tx3);white-space:nowrap;opacity:0;animation:spbIn var(--t-slow) var(--ease) 1.15s forwards}
+html.splx #spl .spt{animation:none;opacity:0;transition:opacity var(--t-fast) var(--ease)}
+.mring img{opacity:0;transition:opacity var(--t-mid) var(--ease)}
+.mring img.ok{opacity:1}
+.mring.wt{overflow:hidden}
+.mring.wt::after{content:"";position:absolute;inset:3px;border-radius:50%;pointer-events:none;background:linear-gradient(100deg,transparent,color-mix(in oklab,var(--tx) 10%,transparent),transparent);transform:translateX(-100%);animation:wtshim 1.5s var(--ease) infinite}
+.zw .s1b{opacity:0;transition:opacity var(--t-fast) var(--ease)}
+.zw .s1b.ok{opacity:1}
+.zw .lbmsg{position:absolute;left:50%;top:calc(50% + 26px);transform:translateX(-50%);z-index:2;padding:5px 12px;border-radius:var(--r-pill);white-space:nowrap;pointer-events:none;
+  background:rgba(20,20,24,.68);-webkit-backdrop-filter:blur(18px) saturate(160%);backdrop-filter:blur(18px) saturate(160%);border:1px solid rgba(255,255,255,.14);
+  color:rgba(255,255,255,.88);font-size:var(--fs-xs);font-weight:600;letter-spacing:.02em;opacity:0;transition:opacity var(--t-mid) var(--ease)}
+.zw .lbmsg.on{opacity:1}
+.sfg .sh,.syf .sh{opacity:0;transition:opacity var(--t-mid) var(--ease)}
+.sfg .sh.ok,.syf .sh.ok{opacity:1}
+.prepb{position:fixed;left:50%;top:calc(12px + env(safe-area-inset-top));z-index:calc(var(--z-bar) + 2);transform:translate3d(-50%,0,0);
+  display:inline-flex;align-items:center;gap:8px;padding:7px 14px;border-radius:var(--r-pill);max-width:calc(100vw - 28px);
+  background:var(--glass);-webkit-backdrop-filter:var(--blur-float);backdrop-filter:var(--blur-float);border:1px solid var(--glass-b);box-shadow:var(--sh-float);
+  font-size:var(--fs-xs);font-weight:600;color:var(--tx);pointer-events:none;transition:transform var(--sp),opacity var(--t-mid) var(--ease)}
+.prepb i.spin{width:13px;height:13px;border-width:1.8px;flex:none}
+.prepb .pb{width:46px;height:3px;border-radius:var(--r-pill);background:var(--line);overflow:hidden;flex:none}
+.prepb .pb b{display:block;height:100%;background:var(--grad);transform-origin:0 50%;transition:transform var(--t-mid) var(--dec)}
+.prepb.off{opacity:0;transform:translate3d(-50%,-18px,0)}
+html.dock-off .prepb{opacity:0;transform:translate3d(-50%,-18px,0)}
+html.bar-on .prepb{top:calc(68px + env(safe-area-inset-top))}
+@media (min-width:900px){html.bar-on .prepb{top:calc(74px + env(safe-area-inset-top))}}
+
 
