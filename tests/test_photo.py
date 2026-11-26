@@ -452,6 +452,43 @@ class PhotoUnit(unittest.TestCase):
         self.assertEqual(oz("2026:07:01 10:00:00", "2026:07:01", [(1, 1), (22, 1), (30, 1)]), "")   # 差 8 小時 37 分半：相機時間沒對準，不算
         self.assertEqual(oz("2026:07:01 10:00:00", None, None), "")
 
+    def test_security_regressions(self):
+        """安全回歸測試：暫存檔不跟隨符號連結、上傳檔名保留副檔名、HEIF／EXIF／XMP 邊界防護"""
+        import io as _io
+        import re as _re
+        import secrets as _sec
+        import stat as _stat
+        import time as _time
+        with open(os.path.join(ROOT, "album.py"), encoding="utf-8") as fh:
+            tree = ast.parse(fh.read())
+        G = {"os": os, "stat": _stat, "re": _re, "time": _time, "secrets": _sec}
+        for n in tree.body:
+            if isinstance(n, ast.FunctionDef) and n.name in ("alb_safe_open", "alb_safe_read", "alb_up_name"):
+                exec(compile(ast.Module([n], []), "album.py", "exec"), G)   # noqa: S102
+        with tempfile.TemporaryDirectory() as td:
+            real = os.path.join(td, "real.bin")
+            with open(real, "wb") as f:
+                f.write(b"hello world")
+            link = os.path.join(td, "link.bin")
+            os.symlink(real, link)
+            with self.assertRaises(OSError):
+                G["alb_safe_open"](link)
+            self.assertEqual(G["alb_safe_read"](real, 32), b"hello world")
+            self.assertEqual(G["alb_safe_read"](real, 5), b"")
+            self.assertTrue(G["alb_up_name"](td, "..mp4", ".mp4").endswith(".mp4"))
+            self.assertTrue(G["alb_up_name"](td, "a" * 200 + ".jpg", ".jpg").endswith(".jpg"))
+        # HEIF 超大偏移與上限、hvcC 截斷、XMP 無限大數值、Apple stops 夾限
+        H = {"it": {1: {"t": "hvc1", "p": [], "ext": [(1 << 63, 10)], "cm": 0},
+                    2: {"t": "hvc1", "p": [], "ext": [(0, 1000)], "cm": 0}}, "idat": b""}
+        self.assertEqual(P["pic_heif_data"](_io.BytesIO(b"x" * 200), H, 1, cap=64), b"")
+        self.assertEqual(P["pic_heif_data"](_io.BytesIO(b"x" * 200), H, 2, cap=64), b"")
+        self.assertEqual(P["pic_hvcc_ps"](bytes([0] * 21 + [3, 1, 0, 0, 5, 0, 10]))[0], b"")
+        self.assertIsNone(P["pic_gm_xmp"]('hdrgm:Version="1.0" hdrgm:GainMapMax="1e400"'))
+        self.assertLessEqual(P["pic_apple_stops"](1.0, -1e9), 16.0)
+        # 畸形 TIFF SubIFDs (0x014A) 不得拋出 struct.error
+        bad_tiff = b"II*\x00\x08\x00\x00\x00\x01\x00\x4a\x01\x01\x00\x02\x00\x00\x00\x00\x00\x00\x00"
+        self.assertIsInstance(list(P["pic_tiff_walk"](bad_tiff)), list)
+
 
 def shot(c, code, want, timeout=90):
     deadline, ps = time.time() + timeout, {}

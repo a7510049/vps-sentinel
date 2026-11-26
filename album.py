@@ -363,9 +363,10 @@ def alb_dev_check(h, a, register):
     """這支手機能不能看；register＝打開相簿那一下（要記下來、可能佔一個名額）。回傳 (能不能看, 原因, 要給的新 cookie)"""
     tok, new = alb_dev_tok(h, a), ""
     lim = a.get("dev") or 0
+    strict = bool(lim or a.get("ban") or a.get("lock"))
     if not tok:
         if not register:
-            return lim == 0, "full", ""
+            return not strict, "full", ""
         tok = new = secrets.token_hex(16)
     th = alb_dev_hash(tok)
     if th in (a.get("ban") or []):
@@ -373,7 +374,7 @@ def alb_dev_check(h, a, register):
     if th in (a.get("lock") or {}):                    # 按了截圖鍵被鎖住：等主人解除
         return False, "lock", ""
     if not register:
-        return lim == 0 or th in (a.get("devs") or {}), "full", ""
+        return (not strict) or th in (a.get("devs") or {}), "full", ""
     now = time.time()
     with ALB_LOCK:
         all_ = alb_all()
@@ -595,11 +596,11 @@ def alb_sniff(head, ext):
     return False
 
 
-def alb_up_name(p, name):
-    """朋友上傳的檔名：拿掉怪字、不蓋掉原本的檔案"""
-    name = re.sub(r'[\x00-\x1f\x7f/\\:*?"<>|\u200b-\u200f\u202a-\u202e\u2066-\u2069]', "", os.path.basename(str(name or ""))).strip().lstrip(".")[:120]
-    stem, ext = os.path.splitext(name)
-    ext = ext.lower()
+def alb_up_name(p, name, ext=""):
+    """朋友上傳的檔名：拿掉怪字、保留驗證過的副檔名、不蓋掉原本的檔案"""
+    stem0, ext0 = os.path.splitext(os.path.basename(str(name or "")))
+    ext = (ext or ext0).lower()
+    stem = re.sub(r'[\x00-\x1f\x7f/\\:*?"<>|\u200b-\u200f\u202a-\u202e\u2066-\u2069]', "", stem0).strip().lstrip(".")[:110]
     stem = stem or time.strftime("上傳-%Y%m%d-%H%M%S")
     for k in range(1, 1000):
         n = f"{stem}{'' if k == 1 else f' ({k})'}{ext}"
@@ -791,7 +792,7 @@ def alb_upload_go(h, a, mode, th, who, n, p, name, ext, busy):
         if not alb_sniff(head, ext):
             raise ValueError("不是照片或影片")
         with ALB_LOCK:
-            final = alb_up_name(dst, name)
+            final = alb_up_name(dst, name, ext)
             os.rename(tmp, os.path.join(dst, final))
         final = f"{ALB_UPDIR}/{sub}/{final}"
     except ValueError as e:
@@ -1401,6 +1402,8 @@ def alb_boxes(f, start, end):
         sz, typ = struct.unpack(">I4s", hd[:8])
         hl = 8
         if sz == 1:
+            if len(hd) < 16:
+                return
             sz, hl = struct.unpack(">Q", hd[8:16])[0], 16
         elif sz == 0:
             sz = end - p
@@ -1431,13 +1434,14 @@ def alb_heic(f, size):
     exif_id = next((iid for iid, it in H["it"].items() if it["t"] == "Exif" and it["ext"] and it["cm"] == 0), None)
     if exif_id is not None:
         off, ln = H["it"][exif_id]["ext"][0]
-        f.seek(off)
-        b = f.read(min(ln, 1 << 20))
-        if len(b) > 4:
-            skip = struct.unpack(">I", b[:4])[0] + 4
-            if b[skip:skip + 6] == b"Exif\x00\x00":
-                skip += 6
-            exif = (off + skip, b[skip:])
+        if 0 <= off < size:
+            f.seek(off)
+            b = f.read(min(ln, 1 << 20))
+            if len(b) > 4:
+                skip = struct.unpack(">I", b[:4])[0] + 4
+                if b[skip:skip + 6] == b"Exif\x00\x00":
+                    skip += 6
+                exif = (off + skip, b[skip:])
     return w, h, exif, rot, H
 
 
@@ -1461,8 +1465,11 @@ def alb_vmeta(path):
     else:
         d = re.search(r"creation_time\s*:\s*(\d{4})-(\d\d)-(\d\d)T(\d\d):(\d\d):(\d\d)", info)
         if d and d[1] > "1971":                        # 這個是世界標準時間：換成主機的時區
-            t = datetime(*map(int, d.groups()), tzinfo=timezone.utc).astimezone()
-            x["dt"] = t.strftime("%Y:%m:%d %H:%M:%S")
+            try:
+                t = datetime(*map(int, d.groups()), tzinfo=timezone.utc).astimezone()
+                x["dt"] = t.strftime("%Y:%m:%d %H:%M:%S")
+            except (ValueError, OverflowError, OSError):
+                pass
     for k, pat in (("mk", r"com\.apple\.quicktime\.make\s*:\s*([^\n]+)"), ("md", r"com\.apple\.quicktime\.model\s*:\s*([^\n]+)"),
                    ("sw", r"com\.apple\.quicktime\.software\s*:\s*([^\n]+)")):
         mm = re.search(pat, info)
@@ -1471,9 +1478,12 @@ def alb_vmeta(path):
     g = None
     loc = re.search(r"(?:com\.apple\.quicktime\.location\.ISO6709|location)\s*:\s*([+-]\d+(?:\.\d+)?)([+-]\d+(?:\.\d+)?)([+-]\d+(?:\.\d+)?)?", info)
     if loc:
-        lat, lon = float(loc[1]), float(loc[2])
-        if -90 <= lat <= 90 and -180 <= lon <= 180 and (lat or lon):
-            g = [round(lat, 6), round(lon, 6), round(float(loc[3]), 1) if loc[3] else None, None]
+        try:
+            lat, lon = float(loc[1]), float(loc[2])
+            if -90 <= lat <= 90 and -180 <= lon <= 180 and (lat or lon):
+                g = [round(lat, 6), round(lon, 6), round(float(loc[3]), 1) if loc[3] else None, None]
+        except ValueError:
+            pass
     vl = re.search(r"Stream #[^\n]*Video: ([^\n]*)", info)
     if vl:                                             # 編碼、位元深度、色度取樣、格率、位元率（專業一點的人會看）
         vl = vl[1]
@@ -1485,8 +1495,13 @@ def alb_vmeta(path):
             pf = re.search(r"\byuv(4\d\d)p(\d\d)?", vl)
             x["vc"] = cn + (f" {pf[2]} bit" if pf and pf[2] else "") + (f" {pf[1][0]}:{pf[1][1]}:{pf[1][2]}" if pf and pf[1] != "420" else "")
         fps = re.search(r", ([\d.]+) fps", vl)
-        if fps and 0 < float(fps[1]) <= 1000:
-            x["fps"] = round(float(fps[1]), 3)
+        if fps:
+            try:
+                fv = float(fps[1])
+                if 0 < fv <= 1000:
+                    x["fps"] = round(fv, 3)
+            except ValueError:
+                pass
         br = re.search(r", (\d+) kb/s", vl) or re.search(r"bitrate: (\d+) kb/s", info)
         if br and int(br[1]) >= 100:
             x["vb"] = round(int(br[1]) / 1000, 1)
@@ -1563,7 +1578,7 @@ def alb_meta(path):
                     w, h = (v & 0x3FFF) + 1, ((v >> 14) & 0x3FFF) + 1
             elif head[4:8] == b"ftyp" and ext not in PIC_RAW:
                 w, h, exif, rot, heif = alb_heic(f, size)
-    except (OSError, struct.error, IndexError, ValueError):
+    except (OSError, struct.error, IndexError, ValueError, OverflowError):
         pass
     raw = None
     if ext in PIC_RAW:                                 # 相機原始檔：大小、EXIF 照相機放在裡面的預覽，再補上原始檔本身的
@@ -1575,10 +1590,16 @@ def alb_meta(path):
         t = {**t, **{k: v for k, v in raw["t"].items() if v not in (None, "", 0)}}
         spans = []                                     # 原始檔的定位不在預覽裡：不給下載原圖時本來就不給原始檔
     x, g, ori = alb_exif_tidy(t)
-    more = pic_exif_more(exif[1]) if exif else {}
+    try:
+        more = pic_exif_more(exif[1]) if exif else {}
+    except (struct.error, IndexError, ValueError, OverflowError):
+        more = {}
     hd = pic_apple_stops(more.get("a33"), more.get("a48"))
     cs, hdr = alb_color_probe(path, ext, more, hd, heif=heif)
-    ms = pic_maker(exif[1], more) if exif else {}
+    try:
+        ms = pic_maker(exif[1], more) if exif else {}
+    except (struct.error, IndexError, ValueError, OverflowError):
+        ms = {}
     afp = alb_afp(t, ms, ori, rot if ext in ALB_HEIF else 0, w, h)
     if afp:
         x["afp"] = afp
@@ -1841,7 +1862,7 @@ def alb_webp_clean(path):
     while p + 8 <= len(b):
         t, n = b[p:p + 4], struct.unpack("<I", b[p + 4:p + 8])[0]
         c = b[p:p + 8 + n + (n & 1)]
-        if t == b"VP8X":
+        if t == b"VP8X" and len(c) > 8:
             c = c[:8] + bytes([c[8] & ~0x0C]) + c[9:]  # 拿掉「有 EXIF、XMP」的旗子
         if t not in (b"EXIF", b"XMP "):
             out.append(c)
@@ -2059,6 +2080,24 @@ def alb_ff_info(src):
     return r.stderr.decode("utf-8", "replace")
 
 
+def alb_safe_open(path):
+    """安全打開降權暫存檔：不跟隨符號連結、只開一般檔案（避免被攻破的轉檔程式用捷徑偷讀主機檔案）"""
+    fd = os.open(path, os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0))
+    try:
+        if not stat.S_ISREG(os.fstat(fd).st_mode):
+            raise OSError("not a regular file")
+        return os.fdopen(fd, "rb")
+    except BaseException:
+        os.close(fd)
+        raise
+
+
+def alb_safe_read(path, limit):
+    with alb_safe_open(path) as f:
+        b = f.read(limit + 1)
+    return b if len(b) <= limit else b""
+
+
 def alb_make(a, pid, m, edge=2048):
     """做大圖（長邊 2048）、小圖（高 480）、模糊預覽（寬 24）；不留任何 EXIF，但照原樣留著色彩描述檔、HDR 增益圖
     edge=ALB_XL 時只做大螢幕用的清晰版 x（有人在大螢幕打開才做）"""
@@ -2146,21 +2185,17 @@ def alb_make(a, pid, m, edge=2048):
                         r = subprocess.run(cmd_m, stdin=fin, capture_output=True, timeout=tmo, preexec_fn=alb_ff_pre())
                 else:
                     r = subprocess.run(cmd_m, input=in_data, capture_output=True, timeout=tmo, preexec_fn=alb_ff_pre())
-                if r.returncode == 0 and os.path.exists(fl) and os.path.exists(fs):
-                    with open(fl, "rb") as f:
-                        b0 = f.read()
-                    with open(fs, "rb") as f:
-                        s0 = f.read()
+                if r.returncode == 0 and os.path.lexists(fl) and os.path.lexists(fs):
+                    b0 = alb_safe_read(fl, 32 << 20)
+                    s0 = alb_safe_read(fs, 32 << 20)
                     if b0.startswith(b"\xff\xd8") and s0.startswith(b"\xff\xd8"):
                         big, small = b0, s0
-                        if os.path.exists(fq):
-                            with open(fq, "rb") as f:
-                                q0 = f.read()
+                        if os.path.lexists(fq):
+                            q0 = alb_safe_read(fq, 1 << 20)
                             if q0.startswith(b"\xff\xd8"):
                                 tiny = q0
-                        if need_qa and os.path.exists(fa):
-                            with open(fa, "rb") as f:
-                                a0 = f.read()
+                        if need_qa and os.path.lexists(fa):
+                            a0 = alb_safe_read(fa, ALB_QA_N * ALB_QA_N)
                             if len(a0) == ALB_QA_N * ALB_QA_N:
                                 qa_px = a0
             except (OSError, subprocess.SubprocessError):
@@ -2183,7 +2218,7 @@ def alb_make(a, pid, m, edge=2048):
         if m.get("hdr"):
             try:
                 big = alb_hdr_put(big, src, ext, m, H, hv, rot, hdr_tm) or big
-            except (OSError, ValueError, struct.error, IndexError, ZeroDivisionError):
+            except (OSError, ValueError, struct.error, IndexError, ZeroDivisionError, OverflowError):
                 pass
         os.makedirs(ALB_CACHE, mode=0o700, exist_ok=True)
         sec_write(alb_cfile(ck, "x"), big)
@@ -2200,7 +2235,7 @@ def alb_make(a, pid, m, edge=2048):
     if m.get("hdr") and not m.get("vid"):              # HDR：增益圖跟著大圖一起放（HDR 螢幕上亮部照樣亮）
         try:
             big = alb_hdr_put(big, src, ext, m, H, hv, rot, hdr_tm) or big
-        except (OSError, ValueError, struct.error, IndexError, ZeroDivisionError):
+        except (OSError, ValueError, struct.error, IndexError, ZeroDivisionError, OverflowError):
             big = sdr
     os.makedirs(ALB_CACHE, mode=0o700, exist_ok=True)
     for kind, b in (("l", big), ("q", tiny or b""), ("s", small)):   # 小圖最後寫：有小圖就代表三個都好了
@@ -2550,7 +2585,7 @@ def alb_vrun(a, ck, p, name, kind, cmd, src, hdr, snd, lean, dur):
                         pr.kill()
                         pr.wait()
             else:
-                with open(tmp, "rb") as f:
+                with alb_safe_open(tmp) as f:
                     ok = alb_vstore(ck, kind, f)
     except (OSError, subprocess.SubprocessError, ValueError) as e:
         err = str(e)
@@ -2942,9 +2977,11 @@ ALB_WX_URL2 = os.environ.get("SENTINEL_ALB_WX2") or "https://api.open-meteo.com/
 
 
 def alb_wx_days(a, idx):
-    """每天第一張有定位的照片 → {日期: (緯度, 經度)}（朋友放的不算）"""
-    out = {}
+    """每天第一張有定位的照片 → {日期: (緯度, 經度)}（朋友放的不算，藏起來的也不算）"""
+    out, hid = {}, alb_hid(a)
     for pid in idx.get("order", []):
+        if pid in hid:
+            continue
         m = idx["ph"].get(pid) or {}
         dt, g = (m.get("x") or {}).get("dt", ""), m.get("g")
         if not g or alb_up_who(m.get("n", "")) or not re.match(r"\d{4}:\d\d:\d\d", dt):
@@ -3430,22 +3467,24 @@ def alb_http(h, method):
         key = (a["id"], ip)
         with ALB_LOCK:
             tries = [t for t in ALB_FAILS.get(key, []) if now - t < ALB_PW_TRY[1]]
+            if len(tries) >= ALB_PW_TRY[0]:
+                ALB_FAILS[key] = tries
+                left = int(ALB_PW_TRY[1] - (now - tries[0])) // 60 + 1
+                return h.send(429, json.dumps({"ok": False, "message": f"錯太多次，{left} 分鐘後再試"}, ensure_ascii=False)) or True
+            tries.append(now)                              # 先記一次再驗證：防止同一瞬間並發繞過 5 次上限
             ALB_FAILS[key] = tries
-        if len(tries) >= ALB_PW_TRY[0]:
-            left = int(ALB_PW_TRY[1] - (now - tries[0])) // 60 + 1
-            return h.send(429, json.dumps({"ok": False, "message": f"錯太多次，{left} 分鐘後再試"}, ensure_ascii=False)) or True
+            if len(ALB_FAILS) > 5000:
+                for k in [k for k, v in ALB_FAILS.items() if not v or now - v[-1] >= ALB_PW_TRY[1]]:
+                    ALB_FAILS.pop(k, None)
         raw = h.read_body(1024)
         if raw is None:
             return h.send(400, '{"ok":false,"message":"請求格式不對"}') or True
         pw = h.jbody(raw).get("pw")
         if not alb_pw_ok(a, pw):
-            with ALB_LOCK:
-                ALB_FAILS.setdefault(key, []).append(now)
-                if len(ALB_FAILS) > 5000:
-                    for k in [k for k, v in ALB_FAILS.items() if not v or now - v[-1] >= ALB_PW_TRY[1]]:
-                        ALB_FAILS.pop(k, None)
             time.sleep(1)
             return h.send(401, json.dumps({"ok": False, "message": "密碼不對"}, ensure_ascii=False)) or True
+        with ALB_LOCK:
+            ALB_FAILS.pop(key, None)
         exp = now + ALB_COOKIE_H * 3600
         if a.get("exp"):
             exp = min(exp, a["exp"])
@@ -3475,7 +3514,8 @@ def alb_http(h, method):
         return h.send(code2, json.dumps(out, ensure_ascii=False), cache=False) or True
     if rest == "/di" and method == "POST":             # 這台是什麼設備（型號、系統、瀏覽器、螢幕）
         tok = alb_dev_tok(h, a)
-        if not (tok and alb_cookie_ok(h, a)):
+        ok, _, _ = alb_dev_check(h, a, False)
+        if not (tok and alb_cookie_ok(h, a) and ok):
             return h.send(403, '{"ok":false}', cache=False) or True
         raw = h.read_body(1024)
         if raw is None:

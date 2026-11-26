@@ -289,16 +289,17 @@ async function swOn(){                                       // 照片加密送�
       sw.addEventListener("controllerchange", () => { clearTimeout(t); res(true); }, {once:true}); });
   } catch (e) { return false; }
 }
+const swClear = () => { try { navigator.serviceWorker?.controller?.postMessage({type:"clear", code:CODE}); } catch (e) {} };
 async function boot(){
   let r;
   const sw = await swOn();                                   // 不能在背景解開的瀏覽器（例如 LINE 裡面的）跟主機說一聲，照舊給一般圖片
   try { r = await fetch(BASE + "/m" + (sw ? "" : "?pl=1"), {credentials:"same-origin", cache:"no-store"}); }
   catch (e) { return gate("off", "連不上，等一下再試"); }
   if (r.status === 401) return askPw();
-  if (r.status === 403) { const x = await r.json().catch(() => ({}));
+  if (r.status === 403) { swClear(); const x = await r.json().catch(() => ({}));
     if (x.lock) return gate("phone", "這台設備已被停用", "", "按了截圖，等主人解除");
     return gate("phone", x.ban ? "這台設備不能看這本相簿" : "名額已經滿了", "", x.ban ? "" : "這本相簿只給指定的設備看"); }
-  if (!r.ok) { if (r.status === 404 || r.status === 410) [NMK, "vsa-seen-" + CODE, "vsa-di-" + CODE].forEach(store.del);   // 收回、過期：這台留下的名字、看過的回憶一起清掉
+  if (!r.ok) { if (r.status === 404 || r.status === 410) { swClear(); [NMK, "vsa-seen-" + CODE, "vsa-di-" + CODE].forEach(store.del); }   // 收回、過期：這台留下的名字、看過的回憶與背景快取一起清掉
     return gate("off", "這本相簿已經看不到了", "", "連結已經收回或過期"); }
   D = await r.json();
   splStep();
@@ -835,7 +836,7 @@ function memsOf(){
     gs = gs.map(g => ({...g, t:`第${dayNum(g.k)}天`, s:`${g.d.mo}月${g.d.d}日`}));
   else if (gs.length > 1) gs = gs.map(g => ({...g, t:`${g.d.mo}月${g.d.d}日`, s:YR ? `${g.d.y}` : dayPlaces(g.k).split("・")[0]}));
   else {                                                     // 只有一天：照地點分
-    const pl = {}, po = [];
+    const pl = Object.create(null), po = [];
     PH.forEach((p, i) => { if (!p.p) return; const n = p.p.n; if (!pl[n]) { pl[n] = {k:"p" + n, list:[], t:n, s:""}; po.push(n); } pl[n].list.push(i); });
     gs = po.length > 1 ? po.map(n => pl[n]) : [];
   }
@@ -1244,7 +1245,7 @@ function badge(i){ badgeEl(TILES[i], PH[i], i); }
 function rxBadge(p){                                        // 愛心＋其他表情：最多的兩個表情疊在一起，後面是總數
   const rx = Object.entries(p.rx || {}).filter(r => r[1] > 0).sort((a, b) => b[1] - a[1]), n = (p.lk || 0) + rx.reduce((a, r) => a + r[1], 0);
   if (!n) return "";
-  return `<span class="lkt num">${p.lk ? I("heart") : ""}${rx.slice(0, p.lk ? 1 : 2).map(r => `<i class="rxe">${r[0]}</i>`).join("")}${n}</span>`;
+  return `<span class="lkt num">${p.lk ? I("heart") : ""}${rx.slice(0, p.lk ? 1 : 2).map(r => `<i class="rxe">${esc(r[0])}</i>`).join("")}${n}</span>`;
 }
 let LW = 0;
 function layout(force){
@@ -1463,7 +1464,7 @@ let SNAPD = 0;
 function snapHit(){                                          // 主人開了「截圖就鎖住」：真的按到截圖鍵就鎖住這台設備
   if (!D || !D.snap || SNAPD) return;
   SNAPD = 1;
-  fetch(BASE + "/snap", {method:"POST", credentials:"same-origin"}).then(r => r.json()).then(j => { if (j.lock) location.reload(); else SNAPD = 0; }).catch(() => { SNAPD = 0; });
+  fetch(BASE + "/snap", {method:"POST", credentials:"same-origin"}).then(r => r.json()).then(j => { if (j.lock) { swClear(); location.reload(); } else SNAPD = 0; }).catch(() => { SNAPD = 0; });
 }
 const SNAPK = e => e.key === "PrintScreen" || (e.metaKey && e.shiftKey && /^(Digit[345]|KeyS)$/.test(e.code));
 addEventListener("keydown", e => {                            // PrintScreen、Mac 的 ⌘⇧3／4／5、Windows 的 Win+Shift+S：按下 ⌘／Win＋Shift 就先糊
@@ -1608,19 +1609,19 @@ const habLabel = g => `${HAB[g[0]].n} ${HAB[g[0]].l[+g.slice(2)]}`;
 const FOCB = [[0, 20, "超廣角"], [20, 35, "廣角"], [35, 70, "標準"], [70, 135, "中望遠"], [135, 1e9, "望遠"]];
 function gear(){
   const box = $(".gear"); if (!box) return;
-  const base = ALL.filter(p => (p.u || "") === WHO && (!CITY || cityKey(p) === CITY) && !isVid(p)), cams = {}, lens = {}, cl = {}, fb = FOCB.map(() => 0), fl = {};
+  const base = ALL.filter(p => (p.u || "") === WHO && (!CITY || cityKey(p) === CITY) && !isVid(p)), cams = new Map(), lens = new Map(), cl = new Map(), fb = FOCB.map(() => 0), fl = new Map();
   base.forEach(p => { const c = camName(p.x), l = lensName(p.x), f = p.x.f35 || 0;
-    if (c) cams[c] = (cams[c] || 0) + 1; if (l) lens[l] = (lens[l] || 0) + 1;
-    if (c && l) { const m = cl[c] || (cl[c] = {}); m[l] = (m[l] || 0) + 1; }   // 每台相機各用了哪幾顆鏡頭
-    if (f) { fb[FOCB.findIndex(b => f >= b[0] && f < b[1])]++; fl[f] = (fl[f] || 0) + 1; } });
-  const cs = Object.entries(cams).sort((a, b) => b[1] - a[1]), ls = Object.entries(lens).sort((a, b) => b[1] - a[1]).slice(0, 8);
-  const nf = fb.reduce((a, b) => a + b, 0), top = Object.entries(fl).sort((a, b) => b[1] - a[1])[0], mx = Math.max(1, ...fb);
+    if (c) cams.set(c, (cams.get(c) || 0) + 1); if (l) lens.set(l, (lens.get(l) || 0) + 1);
+    if (c && l) { let m = cl.get(c); if (!m) cl.set(c, m = new Map()); m.set(l, (m.get(l) || 0) + 1); }   // 每台相機各用了哪幾顆鏡頭
+    if (f) { fb[FOCB.findIndex(b => f >= b[0] && f < b[1])]++; fl.set(f, (fl.get(f) || 0) + 1); } });
+  const cs = [...cams].sort((a, b) => b[1] - a[1]), ls = [...lens].sort((a, b) => b[1] - a[1]).slice(0, 8);
+  const nf = fb.reduce((a, b) => a + b, 0), top = [...fl].sort((a, b) => b[1] - a[1])[0], mx = Math.max(1, ...fb);
   const hb = habits(base);
   box.hidden = cs.reduce((a, c) => a + c[1], 0) < 3 || (cs.length < 2 && ls.length < 2 && fb.filter(Boolean).length < 2 && !hb.length);   // 只有一台相機、一顆鏡頭、一種焦段、拍法都一樣：沒得選就不列
   if (box.hidden) { box.innerHTML = ""; return; }
   const n0 = cs[0][1];
-  box.innerHTML = `<div class="mh"><b>器材</b><span class="num">${cs.length} 台相機${ls.length ? `・${Object.keys(lens).length} 顆鏡頭` : ""}</span></div>
-    <div class="gcams">${cs.slice(0, 6).map(([c, n]) => { const lz = Object.entries(cl[c] || {}).sort((a, b) => b[1] - a[1]).slice(0, 6);
+  box.innerHTML = `<div class="mh"><b>器材</b><span class="num">${cs.length} 台相機${ls.length ? `・${lens.size} 顆鏡頭` : ""}</span></div>
+    <div class="gcams">${cs.slice(0, 6).map(([c, n]) => { const lz = [...(cl.get(c) || [])].sort((a, b) => b[1] - a[1]).slice(0, 6);
       return `<div class="gbox"><button class="gcam${GEAR === "c:" + c ? " on" : ""}" data-gear="c:${esc(c)}"><i class="gic">${I("cam")}</i><span class="gt2"><b>${esc(c)}</b><small class="num">${n} 張</small></span><span class="gbr"><i style="width:${(n / n0 * 100).toFixed(1)}%"></i></span></button>${lz.length ? `<div class="glz">${lz.map(([l, m]) => `<button class="glr${GEAR === "l:" + l ? " on" : ""}" data-gear="l:${esc(l)}">${I("lens")}<span>${esc(l)}</span><span class="gbr"><i style="width:${(m / n * 100).toFixed(1)}%"></i></span><small class="num">${m}</small></button>`).join("")}</div>` : ""}</div>`; }).join("")}</div>
     ${gstat(nf >= 3 ? {k:"f", n:"焦段", l:FOCB.map(b => b[2]), c:fb, t:top ? `${top[0]} mm` : ""} : null, hb)}`;
   box.classList.toggle("one", cs.length < 2);                 // 只有一台相機：相機一條橫的，拍攝習慣在下面撐滿（大螢幕不會右邊一小塊、左邊空一大片）
@@ -2072,7 +2073,7 @@ function openLb(i, from){
     if (rn || rb.hidden) {                                     // 正要收起來的那顆不換圖示、數字（以前收的同時先換成笑臉、數字消失，看起來閃一下）
       rb.classList.toggle("on", !!p.mr);
       const ic = rb.querySelector("svg, .rxe"), k = p.mr || "";
-      if ((ic.dataset.k || "") !== k) { ic.outerHTML = k ? `<i class="rxe" data-k="${k}">${k}</i>` : I("smile"); const n2 = rb.querySelector("svg, .rxe"); if (!rb.hidden && anim()) n2.animate([{opacity:0, transform:"scale(.5)"}, {opacity:1, transform:"none"}], {duration:T.mid, easing:DEC}); }
+      if ((ic.dataset.k || "") !== k) { ic.outerHTML = k ? `<i class="rxe" data-k="${esc(k)}">${esc(k)}</i>` : I("smile"); const n2 = rb.querySelector("svg, .rxe"); if (!rb.hidden && anim()) n2.animate([{opacity:0, transform:"scale(.5)"}, {opacity:1, transform:"none"}], {duration:T.mid, easing:DEC}); }
       rb.querySelector(".num").textContent = rn || "";
     }
     if (rb.hidden !== !rn && !(rb.out && !rn)) {              // 其他表情：有人按過才出現（平常按住愛心選），拿掉時縮小淡出
@@ -2869,7 +2870,7 @@ function talkOrder(cs){                                        // 回覆排在�
   top.forEach(c => { out.push(c); cs.forEach(x => { if (x.r === c.id) out.push(x); }); });
   return out;
 }
-const talkHead = p => `<b>留言</b>${p.lk ? `<span class="num lkw">${I("heart")}${lkWho(p)}</span>` : ""}${Object.entries(p.rx || {}).filter(r => r[1] > 0).map(([e, n]) => `<span class="num"><i class="rxe">${e}</i>${n}</span>`).join("")}`;
+const talkHead = p => `<b>留言</b>${p.lk ? `<span class="num lkw">${I("heart")}${lkWho(p)}</span>` : ""}${Object.entries(p.rx || {}).filter(r => r[1] > 0).map(([e, n]) => `<span class="num"><i class="rxe">${esc(e)}</i>${n}</span>`).join("")}`;
 const cmtHTML = c => `<div class="cmt${c.r ? " rep" : ""}" data-cid="${esc(c.id)}"><div class="av">${esc([...c.n][0] || "?")}</div><div class="cb"><div class="cn"><b>${esc(c.n)}</b><span>${ago(c.t)}</span></div><p>${esc(c.s)}</p><button class="crep" data-crep="${esc(c.id)}" data-cn="${esc(c.n)}">回覆</button></div>${c.me ? `<button class="cx" data-cdel="${esc(c.id)}" aria-label="刪掉">${I("x")}</button>` : ""}</div>`;
 const talkList = p => (p.cm || []).length ? talkOrder(p.cm).map(cmtHTML).join("") : `<div class="cme">${I("chat")}<span>還沒有留言</span></div>`;
 /* 留言：自己一個面板（像社群 App），上面誰按了愛心，中間留言，輸入框一直在最下面 */
@@ -2987,7 +2988,7 @@ function cmpOpen(list, a, b){
     if (k === best && list.length > 1 && p.qs != null) t.push(`<em class="good">最清楚</em>`);
     if (p.fm) t.push(`<em class="bad">可能跑焦</em>`); else if (shakeOf(p)) t.push(`<em class="bad">可能手震</em>`);
     const ex = [x.f ? `ƒ${+x.f.toFixed(1)}` : "", shutter(x.et).replace(" 秒", " s"), x.iso ? `ISO ${x.iso}` : "", x.ev != null ? `${x.ev > 0 ? "+" : x.ev < 0 ? "−" : "±"}${Math.abs(+x.ev.toFixed(1))} EV` : ""].filter(Boolean).join("・");
-    const d = pd(x.dt); return `${t.join("")}<span class="num">${esc(ex)}${d ? `${ex ? "・" : ""}${ftime(d)}${x.dt.slice(17, 19) ? `:${x.dt.slice(17, 19)}` : ""}` : ""}</span>`; };
+    const d = pd(x.dt), ss = /^\d\d$/.test(x.dt.slice(17, 19)) ? `:${x.dt.slice(17, 19)}` : ""; return `${t.join("")}<span class="num">${esc(ex)}${d ? `${ex ? "・" : ""}${ftime(d)}${ss}` : ""}</span>`; };
   bg.className = "cmpv";
   bg.innerHTML = `<div class="cmpt"><button class="rb" data-x aria-label="關閉">${I("x")}</button><b>比較</b><span class="num">${list.length} 張</span></div>
     <div class="cmpp">${[0, 1].map(j => `<div class="cp${j === act ? " on" : ""}" data-j="${j}"><div class="cz"><img alt="" draggable="false"></div><div class="cpl"></div></div>`).join("")}</div>
@@ -3854,7 +3855,7 @@ function infoHTML(p){
   const zh = zr ? `<div class="izr num" aria-label="變焦範圍 ${+zr[0]}–${+zr[1]} mm，這張 ${+x.fl.toFixed(1)} mm"><small>${+zr[0]}</small><span class="zt"><i class="zf" style="width:${(zp * 100).toFixed(1)}%"></i><i class="zk" style="left:${(zp * 100).toFixed(1)}%"></i></span><small>${+zr[1]} mm</small></div>` : "";
   const cells = [["光圈", x.f ? `ƒ${+x.f.toFixed(2)}` : manLens(x) ? "手動" : "", x.f ? gIris(x.f) : "", "f"], ["快門", shutter(x.et).replace(" 秒", " s"), x.et ? gShut(x.et) : "", "et"],
     ["ISO", x.iso || "", x.iso ? gIso(x.iso) : "", "iso"], ["焦距", fe ? `${fe} mm` : "", f35 ? gFov(f35) : "", "fl"], ["曝光", x.ev != null ? `${x.ev > 0 ? "+" : ""}${+x.ev.toFixed(1)} ev` : "", x.ev != null ? gEv(x.ev) : "", "ev"]];
-  h += `<div class="ibox"><div class="icam"><div class="t">${cam && !isVid(p) ? `<button class="igear" data-gear="c:${esc(cam)}">${brandSvg(x)}<b>${esc(brandSvg(x) ? cam.replace(new RegExp("^" + (MKS[(x.mk || "").toLowerCase()] || x.mk || "").replace(/[.*+?^${}()|[\]\\]/g, "\\$&") + "[\\s_]+", "i"), "") : cam)}</b>${I("r")}</button>` : `<b>${esc(cam || (isVid(p) ? "影片" : "相機資訊"))}</b>`}${hd}</div>
+  h += `<div class="ibox"><div class="icam"><div class="t">${cam && !isVid(p) ? `<button class="igear" data-gear="c:${esc(cam)}">${brandSvg(x)}<b>${esc(brandSvg(x) ? cam.replace(new RegExp("^" + (ownGet(MKS, (x.mk || "").toLowerCase()) || x.mk || "").replace(/[.*+?^${}()|[\]\\]/g, "\\$&") + "[\\s_]+", "i"), "") : cam)}</b>${I("r")}</button>` : `<b>${esc(cam || (isVid(p) ? "影片" : "相機資訊"))}</b>`}${hd}</div>
       ${appleLens(x) || phoneLens(x) ? `<div class="l"><button class="igear sm" data-gear="l:${esc(lens)}">${esc(lens)}</button>${f35 ? `・${f35} mm` : ""}</div>`
         : lens || f35 ? `<div class="l">${esc(f35 ? `${lensKind(f35)}・等效${x.f35e ? "約" : ""} ${f35} mm` : "")}${lens ? `${f35 ? "　" : ""}<button class="igear sm" data-gear="l:${esc(lens)}">${esc(lens)}</button>` : ""}</div>` : ""}${zh}
       <div class="l2 num">${p.w && p.h ? `<i class="gar" style="aspect-ratio:${p.w} / ${p.h}"></i>` : ""}<span>${isVid(p) ? `影片 ${dur(p.vd)}・${x.fps ? `${+x.fps.toFixed(2)} fps・` : ""}${x.vb ? `${x.vb >= 10 ? Math.round(x.vb) : x.vb} Mbps・` : ""}` : mp >= .1 ? `${mp >= 10 ? Math.round(mp) : mp.toFixed(1)} MP・` : ""}${p.w} × ${p.h}・${size(p.sz)}</span><span class="tgs"><span class="tag">${esc(ext)}</span>${p.rw && p.rw !== ext ? `<span class="tag">+${esc(p.rw)}</span>` : ""}${p.cs ? `<span class="tag">${esc(p.cs.replace("Display ", ""))}</span>` : ""}${p.hdr && !isVid(p) ? `<span class="tag hdr">HDR</span>` : ""}${isVid(p) && x.vc ? `<span class="tag">${esc(x.vc)}</span>` : ""}${isVid(p) && (x.gm || p.hdr) ? `<span class="tag hdr">${esc(x.gm || (p.hdr === "pq" ? "HDR PQ" : "HLG"))}</span>` : ""}</span></div></div>
@@ -3873,7 +3874,7 @@ function infoHTML(p){
   if (x.dtc) { const [sh, , oz0] = x.dtc, m = Math.round(Math.abs(sh) / 60);   // 相機時間照手機調過（主機 alb_clock）
     kv.push(["相機時間", [sh ? `相機${sh > 0 ? "慢" : "快"} ${m >= 60 ? `${Math.floor(m / 60)} 小時${m % 60 ? ` ${m % 60} 分` : ""}` : `${m} 分鐘`}` : "", oz0 && oz0 !== x.oz ? `相機設在 UTC${oz0.replace(":00", "")}` : ""].filter(Boolean).join("・") + "，已照手機調整"]); }
   if (x.fd && !isVid(p)) kv.push(["對焦距離", dofM(x.fd)]);
-  if (ms && (ms.af || ms.sub)) kv.push(["對焦", [AFZ[ms.af] || ms.af, ms.sub].filter(Boolean).join("・")]);   // 舊的資訊存的是 AF-S 這類英文，換成中文
+  if (ms && (ms.af || ms.sub)) kv.push(["對焦", [ownGet(AFZ, ms.af) || ms.af, ms.sub].filter(Boolean).join("・")]);   // 舊的資訊存的是 AF-S 這類英文，換成中文
   if (ms && ms.is) kv.push(["防手震", ms.is]);
   // 拍攝設定：一格一個小圖（模式轉盤、測光方式、閃光燈、白平衡、場景），不再一行一行寫字
   const st = [];
@@ -3886,7 +3887,7 @@ function infoHTML(p){
   if ((x.afp || x.fcs) && !isVid(p)) st.push([gAf(p), x.afp ? p.fm ? "可能跑焦" : p.fs >= 60 ? "清楚" : "標出位置" : `${x.fcs.length} 張臉`, x.afp ? x.fcs ? `對焦點・${x.fcs.length} 張臉` : "對焦點" : "臉部", ` class="iaf${AFON ? " on" : ""}${p.fm ? " miss" : ""}" data-af role="button" tabindex="0" aria-pressed="${AFON}"`]);
   { const dof = dofOf(p); if (dof) st.push([gDof(dof), dof.t, dof.k, ` data-gk="dof"`]); }
   { const lv = lvOf(p); if (lv != null) st.push([gLv(lv), lvName(lv), `光線 LV ${Math.round(lv)}`, ` data-gk="lv"`]); }
-  if (ms && SHT[ms.sh] && !isVid(p)) st.push([gShT(ms.sh), SHT[ms.sh], "快門方式"]);
+  if (ms && ownGet(SHT, ms.sh) && !isVid(p)) st.push([gShT(ms.sh), ownGet(SHT, ms.sh), "快門方式"]);
   { const sk = shakeOf(p); if (sk) st.push([gShake, "可能手震", `安全快門 1/${sk}`, ` class="warn"`]); }
   { const c = STKOF.get(PH.indexOf(p)); if (c != null && STKB.has(c)) { const ev = STK.get(c).map(i => PH[i].x.ev).sort((a, b) => a - b);
     kv.push(["包圍曝光", `${ev.length} 張・${ev.map(v => `${v > 0 ? "+" : v < 0 ? "−" : "±"}${Math.abs(+v.toFixed(1))}`).join(" / ")} EV`]); } }

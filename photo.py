@@ -161,6 +161,8 @@ def pic_jpeg_segs(b, limit=None):
             p += 2
             continue
         ln = struct.unpack(">H", b[p + 2:p + 4])[0]
+        if ln < 2:
+            return
         yield mk, p + 4, p + 2 + ln
         if mk == 0xDA:
             return
@@ -171,7 +173,7 @@ def pic_jpeg_icc(b):
     """JPEG 裡的 ICC（APP2 ICC_PROFILE，可能分好幾段）"""
     parts = {}
     for mk, s, e in pic_jpeg_segs(b):
-        if mk == 0xE2 and b[s:s + 12] == b"ICC_PROFILE\0":
+        if mk == 0xE2 and e >= s + 14 and s + 14 <= len(b) and b[s:s + 12] == b"ICC_PROFILE\0":
             parts[b[s + 12]] = b[s + 14:e]
     return b"".join(parts[k] for k in sorted(parts)) if parts else None
 
@@ -280,10 +282,11 @@ def pic_tiff_walk(b, base=0, e=None, off=None, depth=0, kind="0", _vis=None, _bu
             if sub and typ in (4, 13) and sub not in sub_done:
                 sub_done.add(sub)
                 yield from pic_tiff_walk(b, base, e, struct.unpack_from(e + "I", b, vo)[0], depth + 1, sub, _vis, _bud)
-            elif tag == 0x014A and kind == "0" and "s" not in sub_done:    # SubIFDs（相機原始檔的大圖在這裡）
+            elif tag == 0x014A and kind == "0" and typ in (4, 13) and "s" not in sub_done:    # SubIFDs（相機原始檔的大圖在這裡）
                 sub_done.add("s")
                 for j in range(min(cnt, 8)):
-                    yield from pic_tiff_walk(b, base, e, struct.unpack_from(e + "I", b, vo + 4 * j)[0], depth + 1, "s", _vis, _bud)
+                    if vo + 4 * j + 4 <= len(b):
+                        yield from pic_tiff_walk(b, base, e, struct.unpack_from(e + "I", b, vo + 4 * j)[0], depth + 1, "s", _vis, _bud)
         if kind != "0":
             return
         p = p0 + 2 + n * 12
@@ -611,7 +614,7 @@ def pic_heif(path):
                 return None
             f.seek(meta[0])
             mb = f.read(meta[1] - meta[0])
-    except OSError:
+    except (OSError, struct.error, OverflowError):
         return None
     return pic_heif_meta(mb)
 
@@ -725,18 +728,24 @@ def pic_heif_prop(H, iid, typ):
 
 def pic_heif_data(f, H, iid, cap=64 << 20):
     it = H["it"].get(iid)
-    if not it:
+    if not it or cap <= 0:
         return b""
-    out = b""
+    parts, tot = [], 0
     for off, ln in it["ext"]:
+        if off < 0 or off >= (1 << 63):
+            return b""
+        rem = cap - tot + 1
         if it["cm"] == 1:
-            out += H["idat"][off:off + ln] if ln else H["idat"][off:]
+            end = min(off + ln, off + rem) if ln else off + rem
+            chunk = H["idat"][off:end]
         else:
             f.seek(off)
-            out += f.read(ln if ln else cap)
-        if len(out) > cap:
+            chunk = f.read(min(ln, rem) if ln else rem)
+        tot += len(chunk)
+        if tot > cap:
             return b""
-    return out
+        parts.append(chunk)
+    return b"".join(parts)
 
 
 def pic_heif_target(H, iid):
@@ -755,17 +764,22 @@ def pic_hvcc_ps(hv):
     if not hv or len(hv) < 23:
         return b"", 4
     nl = (hv[21] & 3) + 1
-    p, out = 23, b""
+    p, parts, tot = 23, [], 0
     for _ in range(hv[22]):
         if p + 3 > len(hv):
             break
         n = struct.unpack_from(">H", hv, p + 1)[0]
         p += 3
         for _ in range(n):
+            if p + 2 > len(hv):
+                return b"".join(parts), nl
             ln = struct.unpack_from(">H", hv, p)[0]
-            out += b"\0\0\0\1" + hv[p + 2:p + 2 + ln]
+            if p + 2 + ln > len(hv) or tot + 4 + ln > (64 << 10):
+                return b"".join(parts), nl
+            parts.append(b"\0\0\0\1" + hv[p + 2:p + 2 + ln])
+            tot += 4 + ln
             p += 2 + ln
-    return out, nl
+    return b"".join(parts), nl
 
 
 def pic_annexb(data, nl):
@@ -792,12 +806,14 @@ def pic_heif_hevc(path, H, iid):
             if it["t"] == "hvc1":
                 tiles, cols, rows = [iid], 1, 1
                 isp = pic_heif_prop(H, iid, "ispe")
-                ow, oh = struct.unpack_from(">II", isp, 4) if isp else (0, 0)
+                ow, oh = struct.unpack_from(">II", isp, 4) if isp and len(isp) >= 12 else (0, 0)
             elif it["t"] == "grid":
                 g = pic_heif_data(f, H, iid, cap=64)
                 if len(g) < 8:
                     return None
                 big = g[1] & 1
+                if len(g) < (12 if big else 8):
+                    return None
                 rows, cols = g[2] + 1, g[3] + 1
                 if rows * cols > 1024:
                     return None
@@ -820,7 +836,7 @@ def pic_heif_hevc(path, H, iid):
                 if tot_b > (64 << 20):
                     return None
                 bs.append(chunk)
-    except OSError:
+    except (OSError, struct.error, OverflowError):
         return None
     vf = []
     if it["t"] == "grid" or len(tiles) == 1:
@@ -874,13 +890,13 @@ PIC_ISO = b"urn:iso:std:iso:ts:21496:-1\0"
 
 def pic_apple_stops(a33, a48):
     """Apple 公開的算法：MakerNote 33、48 → HDR 比 SDR 亮幾級"""
-    if a33 is None or a48 is None:
+    if a33 is None or a48 is None or not (_pm.isfinite(a33) and _pm.isfinite(a48)):
         return None
     if a33 < 1.0:
         st = -20.0 * a48 + 1.8 if a48 <= 0.01 else -0.101 * a48 + 1.601
     else:
         st = -70.0 * a48 + 3.0 if a48 <= 0.01 else -0.303 * a48 + 2.303
-    return max(st, 0.0)
+    return min(max(st, 0.0), 16.0)
 
 
 def pic_apple_lut(stops):
@@ -918,6 +934,8 @@ def pic_gm_xmp(xmp):
         return None
     if g["cx"] is None:
         g["cx"] = g["mx"]
+    if not all(_pm.isfinite(v) for v in g.values()):
+        return None
     return g if g["mx"] > g["mn"] and g["ga"] > 0 and g["cx"] > g["cn"] else None
 
 
@@ -1135,7 +1153,7 @@ def pic_raw_jpeg(path):
                         cands.append((o, lens[k]))
             good = []
             for o, n in cands:
-                if 0 < o and n > 512 and o + n <= size:
+                if 0 < o and 512 < n <= (64 << 20) and o + n <= size:
                     f.seek(o)
                     if f.read(3) == b"\xff\xd8\xff":
                         good.append((n, o))

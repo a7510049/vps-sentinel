@@ -32,6 +32,7 @@ function memPut(u, buf, type){
 const memRes = h => new Response(h.buf, {status:200, headers:{"Content-Type":h.type, "Cache-Control":"no-store"}});
 const INFLIGHT = new Map();
 
+const MIME_OK = /^image\/(jpeg|png|webp|gif|avif)$/;
 async function fetchDec(req, code, again){
   const r = await fetch(again ? new Request(req, {cache:"reload"}) : req);
   const kid = r.headers.get("X-Alb-E");
@@ -46,7 +47,8 @@ async function fetchDec(req, code, again){
     if (k === "old") break;                                   // 鑰匙已輪換：跳出直接重抓一次新版密文
     try {
       const p = await crypto.subtle.decrypt({name:"AES-GCM", iv, additionalData:aad}, k, ct);
-      const h = {buf:p, type:r.headers.get("X-Alb-T") || "image/jpeg"};
+      const t = r.headers.get("X-Alb-T") || "";
+      const h = {buf:p, type:MIME_OK.test(t) ? t : "image/jpeg"};
       memPut(req.url, p, h.type);
       return {h};
     } catch (e) {}
@@ -69,7 +71,8 @@ async function open(req, code){
 
 self.addEventListener("message", e => {
   const d = e.data;
-  if (!d || d.type !== "clear" || typeof d.code !== "string") return;
+  if (!d || d.type !== "clear" || typeof d.code !== "string" || !/^[A-Za-z0-9]{10}$/.test(d.code)) return;
+  if (e.source && e.source.url && new URL(e.source.url).origin !== self.location.origin) return;
   const pref = `${self.location.origin}/a/${d.code}/`;
   for (const [k, v] of MEM) { if (k.startsWith(pref)) { MEM.delete(k); memSz -= v.buf.byteLength; } }
   for (const k of [...KEYS.keys()]) { if (k.startsWith(d.code + "|")) KEYS.delete(k); }
