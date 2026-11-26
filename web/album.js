@@ -496,7 +496,7 @@ function sections(){
   const w = $(".wall"); w.dataset.z = ZL;
   w.innerHTML = GROUPS.map((g, gi) => `<section class="day" data-g="${gi}">${g.c != null ? `<div class="dh hue" data-k="${g.k}"><b>${hueDot(g.c)}${HUEN(g.c)}</b><i class="dct num">${g.list.length}</i></div>` : g.o ? `<div class="dh oth" data-k="o"><b>其他圖片</b><span>截圖、沒有拍攝資訊的</span><i class="dct num">${g.list.length}</i></div>` : g.k && g.d ? g.m
     ? `<div class="dh" data-k="m${g.k}"><b>${g.d.y}年${g.d.mo}月</b><span class="num">${g.list.length}</span></div>`
-    : `<div class="dh" data-day="${g.k}" data-k="d${g.k}"><b>${fday(g.d, YR)}${wxTag(g.k)}</b>${((pl, sm) => `<span>${pl ? `${I("pin")}${esc(sm ? pl.split("・")[0] : pl)}` : ""}</span>${sm ? `<i class="dsum">${sumWrap(sm)}</i>` : ""}`)(dayPlaces(g.k, g.list), daySum(g.k, g.list))}${g.list.length > 1 ? `<button class="dct num" data-dplay="${g.k}" aria-label="播放這天">${I("play")}${g.list.length}</button>` : `<i class="dct num">${g.list.length}</i>`}${dayClock(g.list)}</div>` : ""}<div class="rows"></div></section>`).join("");
+    : `<div class="dh" data-day="${g.k}" data-k="d${g.k}"><b>${fday(g.d, YR)}${wxTag(g.k)}</b>${((pl, sm) => `<span>${pl ? `${I("pin")}${esc(sm ? pl.split("・")[0] : pl)}` : ""}</span>${sm ? `<i class="dsum">${sumWrap(sm)}</i>` : ""}`)(dayPlaces(g.k, g.list), daySum(g.k, g.list))}${g.list.length > 1 ? `<button class="dct num" data-dplay="${g.k}" aria-label="播放這天">${I("play")}${g.list.length}</button>` : `<i class="dct num">${g.list.length}</i>`}</div>` : ""}<div class="rows"></div></section>`).join("");
 }
 const HUEN = c => c < COLS.length ? COLS[c][0] + "色" : ["淡色", "黑白", "其他"][c - COLS.length];
 const hueDot = c => c < COLS.length ? `<i class="cdot" style="background:${COLS[c][2]}"></i>` : `<i class="cdot ${["mu", "bw", "mu"][c - COLS.length]}"></i>`;
@@ -1014,17 +1014,15 @@ function draw(){
     <header class="hero"><div class="cv">${cover.q ? `<img class="lq" alt="" src="data:image/jpeg;base64,${cover.q}">` : ""}<img class="hi" alt="" src="${src(cover, "l")}"></div>
       <div class="hcap">${a ? `<div class="eyebrow num">${esc(frange(a, b))}</div>` : ""}<div class="htw"><i class="hglo" aria-hidden="true"></i><h1 style="--n:${[...D.name].length}">${[...D.name].map((c, k) => c === " " ? " " : `<span class="ch" style="--i:${k}">${esc(c)}</span>`).join("")}</h1></div>
         <div class="hmeta"><button class="chip go" data-ss>${I("play")}<span>播放</span></button>${FIND ? `<button class="chip" data-find aria-label="搜尋">${I("find")}<span>搜尋</span></button>` : ""}${pl ? `<span class="chip" data-pl>${heroFlags() || I("pin")}<span>${esc(pl)}</span></span>` : ""}
-        ${D.dl ? `<button class="chip" data-sel>${I("dl")}<span>下載</span></button>` : ""}${D.up ? `<button class="chip" data-up>${I("up")}<span>放照片</span></button>` : ""}</div></div>
-      <button class="cue" aria-label="往下看"><i></i></button></header>
+        ${D.dl ? `<button class="chip" data-sel>${I("dl")}<span>下載</span></button>` : ""}${D.up ? `<button class="chip" data-up>${I("up")}<span>放照片</span></button>` : ""}</div></div></header>
     <div class="bar"><b>${esc(D.name)}<small class="num">${cntTxt()}</small></b>${IOS ? `<span class="chip zb"><button data-zb="-1" aria-label="放大">${I("zin")}</button><button data-zb="1" aria-label="縮小">${I("zout")}</button></span>` : ""}<button class="chip" data-kind aria-label="種類" hidden>${I("flt")}</button>${FIND ? `<button class="chip" data-find aria-label="搜尋">${I("find")}</button>` : ""}${D.up ? `<button class="chip" data-up aria-label="放照片">${I("up")}</button>` : ""}${D.dl ? `<button class="chip" data-sel aria-label="下載">${I("dl")}</button>` : ""}<button class="chip go" data-ss aria-label="播放">${I("play")}</button></div>
     ${D.intro ? `<section class="intro"><p>${esc(D.intro).replace(/\n/g, "<br>")}</p></section>` : ""}<nav class="who" hidden></nav>
-    <div class="tpane on" data-pane="photos"><div class="mems"></div><section class="hl" hidden></section><div class="cityf" hidden></div><div class="wwrap"><main class="wall" data-z="${ZL}"></main><aside class="smap" hidden><div class="smv"></div><div class="smc"></div></aside></div></div>
+    <div class="tpane on" data-pane="photos"><div class="mems"></div><section class="hl" hidden></section><div class="cityf" hidden></div><div class="wwrap"><main class="wall" data-z="${ZL}"></main><aside class="smap" hidden><div class="smv"></div><div class="smc"></div></aside></div><footer class="foot">${finCol()}<div class="fin">${esc(D.name)}</div>${D.exp ? `<span class="fexp">${expRing()}${left(D.exp)}</span>` : ""}</footer></div>
     ${D.loc && ALL.some(p => p.g && !p.u) ? `<div class="tpane" data-pane="map" hidden><section class="msec"${WHO ? " hidden" : ""}><div class="mh"><b data-mt>旅程</b><span class="num" data-km></span></div><div class="map" data-map></div><div class="cities"></div></section></div>` : ""}
     <div class="tpane" data-pane="gear" hidden><div class="stats"></div><section class="gear" hidden></section></div>
     ${D.talk ? `<div class="tpane" data-pane="talk" hidden><section class="gbk"></section></div>` : ""}
     <nav class="adock" data-slide aria-label="相簿分頁" hidden></nav>
-    <div class="scrub" aria-hidden="true"><div class="stk2"></div><i class="sth"><span class="sbl num"><img class="sbi" alt="" hidden><b></b></span></i></div>
-    <footer class="foot">${finCol()}<div class="fin">${esc(D.name)}</div>${D.exp ? `<span class="fexp">${expRing()}${left(D.exp)}</span>` : ""}</footer>`;
+    <div class="scrub" aria-hidden="true"><div class="stk2"></div><i class="sth"><span class="sbl num"><img class="sbi" alt="" hidden><b></b></span></i></div>`;
   const hi = $(".hero .hi");
   const hero = $(".hero"), rdy = () => splGo(() => requestAnimationFrame(() => requestAnimationFrame(() => hero.classList.add("rdy"))));   // 開場：封面照片好了才淡入、片頭字才開始
   const hok = () => { hi.classList.add("ok"); setTimeout(() => { const q = $(".hero .lq"); if (q) q.remove(); }, T.slow + 100); };   // 糊的底圖拿掉，捲動時不用一直重畫模糊
@@ -3595,18 +3593,9 @@ const lg = (v, a, b) => Math.max(0, Math.min(1, (Math.log(v) - Math.log(a)) / (M
 function highlights(){
   const box = $(".hl"); if (!box) return;
   const ok = PH.map((p, i) => [p, i]).filter(([p]) => !p.broken && !p.raw && !p.o);
-  let pick = ok.filter(([p]) => p.lk > 0).sort((a, b) => b[0].lk - a[0].lk).slice(0, 8);
-  const liked = pick.length >= 3;
-  if (!liked && ok.length >= 10 && ok.some(([p]) => p.qs != null)) {   // 沒什麼人按愛心：挑拍得最好的（一疊只算一張、一天最多兩張）
-    const day = {}, n = Math.min(8, Math.max(3, Math.round(ok.length / 8)));
-    pick = ok.filter(([p, i]) => !isVid(p) && (!STKOF.has(i) || STKOF.get(i) === i)).sort((a, b) => (b[0].qs ?? 0) - (a[0].qs ?? 0))
-      .filter(([p]) => { const k = (pd(p.x.dt) || {}).k || ""; day[k] = (day[k] || 0) + 1; return day[k] <= 2; }).slice(0, n).sort((a, b) => a[1] - b[1]);
-  } else if (!liked && ok.length >= 10) {
-    const land = ok.filter(([p]) => p.w > p.h && !isVid(p)), from = land.length >= 6 ? land : ok, n = Math.min(6, from.length);
-    pick = Array.from({length:n}, (_, k) => from[Math.floor((k + .5) * from.length / n)]);
-  } else if (!liked) pick = [];
+  const pick = ok.filter(([p]) => p.lk > 0).sort((a, b) => b[0].lk - a[0].lk).slice(0, 8);
   box.hidden = !!WHO || !!CITY || pick.length < 3;
-  box.innerHTML = box.hidden ? "" : `<div class="hlh"><b>${I(liked ? "heart" : "star")}精選</b><span class="hla"><button class="rb" data-hlgo="-1" aria-label="往左" disabled>${I("l")}</button><button class="rb" data-hlgo="1" aria-label="往右">${I("r")}</button></span></div><div class="hlr">${pick.map(([p, i], k) =>
+  box.innerHTML = box.hidden ? "" : `<div class="hlh"><b>${I("heart")}大家最愛</b><span class="hla"><button class="rb" data-hlgo="-1" aria-label="往左" disabled>${I("l")}</button><button class="rb" data-hlgo="1" aria-label="往右">${I("r")}</button></span></div><div class="hlr">${pick.map(([p, i], k) =>
     `<button class="hlc" data-hl="${esc(p.i)}" style="--ar:${Math.max(.6, Math.min(1.8, p.w / p.h)).toFixed(3)};animation-delay:${k * 70}ms"><img alt="" loading="lazy" draggable="false" src="${src(p, "l")}">${p.lk ? `<i class="num">${I("heart")}${p.lk}</i>` : ""}${isVid(p) ? `<em>${I("play")}</em>` : ""}</button>`).join("")}</div>`;
   const r = box.querySelector(".hlr"); if (r) { requestAnimationFrame(() => { r.scrollLeft = 0; hlArrows(r); }); dragX(r); r.addEventListener("scroll", () => hlArrows(r), {passive:true}); }
 }
