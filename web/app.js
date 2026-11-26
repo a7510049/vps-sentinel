@@ -943,7 +943,7 @@ function slideSel(change){
   const z = ZM(), was = canAnim() ? [...document.querySelectorAll("[data-slide]")].map(b => {
     if (!b.offsetWidth || !b.offsetHeight) return null;
     const g = b.querySelector(":scope>.slide"), on = selOf(b);
-    return [b, b.dataset.key, g && !g._done ? g._now : on && boxIn(b, on, z)];
+    return [b, b.dataset.key, g ? g._now : on && boxIn(b, on, z)];
   }).filter(Boolean) : [];
   change();
   was.forEach(([b0, k, from]) => {
@@ -956,12 +956,11 @@ function slideSel(change){
     const dur = T.sp, t0 = performance.now(), lerp = (a, c, p) => a + (c - a) * p;
     g.animate([{opacity:1}, {opacity:1}], {duration:dur, id:"ui"});              // 滑完之前，自動更新先等一下
     const done = () => {
-      if (g._stop || g._done) return;
-      g._done = 1;
+      if (g._stop) return;
       b.classList.remove("sliding");
-      requestAnimationFrame(() => { if (g.isConnected) g.remove(); });           // 等按鈕 ::before 畫穩後下一幀再移除氣泡，徹底消除 iOS 交接瞬閃
+      g.remove();                                                                // 同幀切換：不疊雙層氣泡也不留空白幀
     };
-    const tr = c => `translate3d(${c.x}px,${c.y}px,0)`;
+    const tr = c => `translate(${c.x}px,${c.y}px)`;
     if (Math.abs(to0.w - from.w) < 1 && Math.abs(to0.h - from.h) < 1 && to0.r.every((r, i) => Math.abs(r - from.r[i]) < 1)) {
       // 大小一樣（例如分頁列、側欄、設定分類）：先就位再交給 GPU 滑動，不閃到原點也不抖動
       Object.assign(g.style, {width:to0.w + "px", height:to0.h + "px", borderRadius:to0.r.map(r => r + "px").join(" "), transform:tr(from)});
@@ -985,19 +984,11 @@ function slideSel(change){
 }
 /* 選到的那一個；data-slide="選擇器" 這種是底色在它裡面的那一塊 */
 const selOf = b => { const on = b.querySelector(":scope>.on"); return on && b.dataset.slide ? on.querySelector(b.dataset.slide) : on; };
-/* 元素在容器裡的位置（直接子層優先用 offset 座標，不受父層縮放動畫或 zoom 誤差影響） */
+/* 元素在容器裡的位置（使用次像素精度座標，避免交接時產生 1px 跳動） */
 function boxIn(b, el, z){
-  const cs = getComputedStyle(el);
-  let x, y, w, h;
-  if (el.offsetParent === b) { x = el.offsetLeft; y = el.offsetTop; w = el.offsetWidth; h = el.offsetHeight; }
-  else {
-    const R = b.getBoundingClientRect(), r = el.getBoundingClientRect();
-    w = r.width / z; h = r.height / z;
-    x = (r.left - R.left) / z - b.clientLeft + b.scrollLeft;
-    y = (r.top - R.top) / z - b.clientTop + b.scrollTop;
-  }
+  const R = b.getBoundingClientRect(), r = el.getBoundingClientRect(), cs = getComputedStyle(el), w = r.width / z, h = r.height / z;
   const rad = ["borderTopLeftRadius", "borderTopRightRadius", "borderBottomRightRadius", "borderBottomLeftRadius"].map(k => Math.min(parseFloat(cs[k]) || 0, w / 2, h / 2));
-  return {x, y, w, h, r:rad};
+  return {x:(r.left - R.left) / z - b.clientLeft + b.scrollLeft, y:(r.top - R.top) / z - b.clientTop + b.scrollTop, w, h, r:rad};
 }
 /* 紀錄：所有主機的事件，依日期分組 */
 let LOGF = "", LOGH = "";
