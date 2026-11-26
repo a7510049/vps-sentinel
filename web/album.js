@@ -393,9 +393,12 @@ async function refresh(){                                  // 地名、首次轉
       if (gotQ || (wasPrep && !D.prep)) { const el = TM.get(p.i); if (el) tileRevive(el, p); }
       if (n.vr !== p.vr || n.lv !== p.lv || n.gf !== p.gf) { p.vr = n.vr; p.lv = n.lv; p.gf = n.gf; const k = PH.indexOf(p); if (k >= 0) { badge(k); if (LB && LB.i === k) LB.chrome(); } } });
     D.places = d.places;
-    const ch = $(".hmeta [data-pl]");
+    const ch = $(".hsub [data-pl]");
     if (ch && D.places.length) ch.lastChild.textContent = D.places.slice(0, 3).join("・");
-    else if (!ch && D.places.length) $(".hmeta").insertAdjacentHTML("beforeend", `<span class="chip" data-pl>${I("pin")}<span>${esc(D.places.slice(0, 3).join("・"))}</span></span>`);
+    else if (!ch && D.places.length) {
+      const sub = $(".hsub"), cnt = sub && sub.querySelector(".hcnt");
+      if (sub) (cnt || sub).insertAdjacentHTML(cnt ? "beforebegin" : "beforeend", `<span class="hpl" data-pl>${heroFlags() || I("pin")}<span>${esc(D.places.slice(0, 3).join("・"))}</span></span>`);
+    }
     document.querySelectorAll(".dh[data-day]").forEach(h => { const s = h.querySelector("span"), t = dayPlaces(h.dataset.day); if (s && t) s.textContent = t; });
     if (D.prep ? ++REF < 120 : ALL.some(p => p.vr === -1) ? ++REF < 90 : ALL.some(p => p.g && !p.p) && ++REF < 5) setTimeout(refresh, D.prep ? 4000 : 8000);
   } catch (e) {}
@@ -1069,9 +1072,9 @@ function draw(){
   const pl = (D.places || []).slice(0, 3).join("・");
   $("#app").innerHTML = `
     <header class="hero"><div class="cv">${cover.q ? `<img class="lq" alt="" src="data:image/jpeg;base64,${cover.q}">` : ""}<img class="hi" alt="" src="${src(cover, "l")}"></div>
-      <div class="hcap">${a ? `<div class="eyebrow num">${esc(frange(a, b))}</div>` : ""}<div class="htw"><i class="hglo" aria-hidden="true"></i><h1 style="--n:${[...D.name].length}">${[...D.name].map((c, k) => c === " " ? " " : `<span class="ch" style="--i:${k}">${esc(c)}</span>`).join("")}</h1></div>
-        <div class="hmeta"><button class="chip go" data-ss>${I("play")}<span>播放</span></button>${FIND ? `<button class="chip" data-find aria-label="搜尋">${I("find")}<span>搜尋</span></button>` : ""}${pl ? `<span class="chip" data-pl>${heroFlags() || I("pin")}<span>${esc(pl)}</span></span>` : ""}
-        ${D.dl ? `<button class="chip" data-sel>${I("dl")}<span>下載</span></button>` : ""}${D.up ? `<button class="chip" data-up>${I("up")}<span>放照片</span></button>` : ""}</div></div></header>
+      <div class="hcap"><div class="hsub num">${a ? `<span>${esc(frange(a, b))}</span>` : ""}${pl ? `<span class="hpl" data-pl>${heroFlags() || I("pin")}<span>${esc(pl)}</span></span>` : ""}<span class="hcnt">${cntTxt()}</span></div>
+        <h1>${esc(D.name)}</h1>
+        <div class="hmeta"><button class="chip go" data-ss>${I("play")}<span>播放回憶</span></button>${FIND ? `<button class="chip ic" data-find aria-label="搜尋" title="搜尋">${I("find")}<span>搜尋</span></button>` : ""}${D.dl ? `<button class="chip ic" data-sel aria-label="下載" title="下載">${I("dl")}<span>下載</span></button>` : ""}${D.up ? `<button class="chip ic" data-up aria-label="放照片" title="放照片">${I("up")}<span>放照片</span></button>` : ""}</div></div></header>
     <div class="bar"><div class="btl"><b>${esc(D.name)}</b><small class="num">${cntTxt()}</small></div>${IOS ? `<span class="chip zb bact"><button data-zb="-1" aria-label="放大">${I("zin")}</button><button data-zb="1" aria-label="縮小">${I("zout")}</button></span>` : ""}<button class="chip bact" data-kind aria-label="種類" hidden>${I("flt")}</button>${FIND ? `<button class="chip" data-find aria-label="搜尋">${I("find")}</button>` : ""}${D.up ? `<button class="chip bact" data-up aria-label="放照片">${I("up")}</button>` : ""}${D.dl ? `<button class="chip bact" data-sel aria-label="下載">${I("dl")}</button>` : ""}<button class="chip go bact" data-ss aria-label="播放">${I("play")}</button><button class="chip bmore" data-bmore aria-label="更多" aria-expanded="false">${I("more")}</button></div>
     ${D.intro ? `<section class="intro"><p>${esc(D.intro).replace(/\n/g, "<br>")}</p></section>` : ""}<nav class="who" hidden></nav>
     <div class="tpane on" data-pane="photos"><div class="mems"></div><section class="hl" hidden></section><div class="cityf" hidden></div><div class="wwrap"><main class="wall" data-z="${ZL}"></main><aside class="smap" hidden><div class="smv"></div><div class="smc"></div></aside></div><footer class="foot">${finCol()}<div class="fin">${esc(D.name)}</div>${D.exp ? `<span class="fexp">${expRing()}${left(D.exp)}</span>` : ""}</footer></div>
@@ -1241,7 +1244,7 @@ async function whoSet(w, keep){
     whoBar();
     const ms = $(".msec"); if (ms) ms.hidden = msHide();   // 先決定要不要顯示，地圖才量得到大小（以前篩選完再回來，地圖還是篩選時那幾張）
     smapOn(); sections(); layout(true); mems(); stats(); highlights(); bigMap(); gear(); gbook(); tabSync(); smapWatch();
-    document.querySelectorAll(".hmeta .chip .num, .bar small").forEach(x => { x.textContent = cntTxt(); });
+    document.querySelectorAll(".hcnt, .bar small").forEach(x => { x.textContent = cntTxt(); });
     const nav = $(".who"), top = nav && !nav.hidden ? nav.getBoundingClientRect().top + scrollY - 70 : 0;
     if (nav && scrollY > top) scrollTo({top, behavior:"auto"});
     parts.forEach(x => { x.getAnimations().forEach(a => a.cancel()); if (anim()) x.animate([{opacity:0, transform:"translateY(6px)"}, {opacity:1, transform:"none"}], {duration:T.mid, easing:DEC}); });
@@ -3344,7 +3347,7 @@ async function reload(){
     if (Math.abs(dx) + Math.abs(dy) < 1 && Math.abs(sx - 1) + Math.abs(sy - 1) < .01) return;
     t.animate([{transformOrigin:"0 0", transform:`translate(${dx}px,${dy}px) scale(${sx},${sy})`}, {transformOrigin:"0 0", transform:"none"}], {duration:ZDUR, easing:DEC});
   });
-  document.querySelectorAll(".hmeta .chip .num, .bar small").forEach(x => { x.textContent = cntTxt(); });
+  document.querySelectorAll(".hcnt, .bar small").forEach(x => { x.textContent = cntTxt(); });
 }
 
 let TT;

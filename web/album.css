@@ -1784,4 +1784,46 @@ html.dock-off .prepb{opacity:0;transform:translate3d(-50%,-18px,0)}
 html.bar-on .prepb{top:calc(70px + env(safe-area-inset-top))}
 @media (min-width:900px){html.bar-on .prepb{top:calc(74px + env(safe-area-inset-top))}}
 
+/* ── Apple 編輯風格開屏首頁：照片為主角、無彩光干擾、左對齊階層、純白主鈕＋液態玻璃圓鈕 ── */
+.hero{height:min(78svh,680px);min-height:400px}
+@media (min-width:900px){.hero{height:min(86svh,820px)}}
+.hero::before{display:none}
+.hero::after{background:linear-gradient(180deg,rgba(0,0,0,.22) 0%,transparent 22%,transparent 42%,rgba(0,0,0,.46) 76%,rgba(0,0,0,.78) 100%)}
+@media (prefers-color-scheme:light){:root:not([data-mode="dark"]) .hero{border-radius:0 0 var(--r-xl) var(--r-xl);box-shadow:0 18px 44px -24px rgba(15,23,42,.32)}}
+.hero .hcap{text-align:left;padding:0 var(--pad) clamp(26px,4.5svh,52px);display:flex;flex-direction:column;align-items:flex-start}
+.hsub{display:flex;flex-wrap:wrap;align-items:center;gap:6px 0;margin:0 0 10px;font-size:var(--fs-s);font-weight:600;letter-spacing:.02em;color:rgba(255,255,255,.82);text-shadow:0 1px 12px rgba(0,0,0,.45);
+  opacity:0;transform:translate3d(0,12px,0);transition:opacity .48s var(--dec) .06s,transform .48s var(--dec) .06s}
+.hsub>*+*{display:inline-flex;align-items:center}
+.hsub>*+*::before{content:"·";margin:0 8px;opacity:.65}
+.hsub .hpl{display:inline-flex;align-items:center;gap:5px}
+.hsub .hpl svg{width:14px;height:14px;opacity:.85}
+.hsub .hfl{display:inline-flex;align-items:center}
+.hsub .hfl img{width:17px;height:12px;border-radius:2.5px;box-shadow:0 1px 4px rgba(0,0,0,.35)}
+.hero .hcap h1{margin:0;font-family:var(--font);font-weight:750;font-size:clamp(34px,8.2vw,74px);line-height:1.06;letter-spacing:-.028em;color:#fff;text-shadow:0 4px 28px rgba(0,0,0,.42);max-width:16ch;
+  opacity:0;transform:translate3d(0,14px,0);transition:opacity .52s var(--dec) .12s,transform .52s var(--dec) .12s}
+.hero .hmeta{justify-content:flex-start;flex-wrap:nowrap;align-items:center;gap:10px;margin-top:20px;animation:none;
+  opacity:0;transform:translate3d(0,14px,0);transition:opacity .52s var(--dec) .18s,transform .52s var(--dec) .18s}
+.hero.rdy .hsub,.hero.rdy .hcap h1,.hero.rdy .hmeta{opacity:1;transform:translate3d(0,0,0)}
+.hero .chip{height:44px;padding:0 18px;color:#fff;background-color:rgba(255,255,255,.15);background-image:linear-gradient(155deg,rgba(255,255,255,.24),rgba(255,255,255,.04) 48%,rgba(255,255,255,.1));
+  border:1px solid rgba(255,255,255,.28);box-shadow:inset 0 1px 0 rgba(255,255,255,.38),inset 0 -1px 0 rgba(255,255,255,.1),0 10px 28px -10px rgba(0,0,0,.5);
+  -webkit-backdrop-filter:blur(22px) saturate(190%);backdrop-filter:blur(22px) saturate(190%)}
+.hero .chip svg{width:17px;height:17px;color:#fff}
+.hero .chip.go{padding:0 22px;background:#fff;background-image:linear-gradient(180deg,#fff,#f2f3f7);color:#111;border:0;
+  box-shadow:0 12px 30px -10px rgba(0,0,0,.52),inset 0 1px 0 #fff}
+.hero .chip.go svg{color:#111}
+@media (prefers-color-scheme:light){
+  :root:not([data-mode="dark"]) .hero .chip{background-color:rgba(255,255,255,.2);background-image:linear-gradient(155deg,rgba(255,255,255,.3),rgba(255,255,255,.06) 48%,rgba(255,255,255,.14));color:#fff;border:1px solid rgba(255,255,255,.36);box-shadow:inset 0 1px 0 rgba(255,255,255,.45),0 10px 26px -10px rgba(0,0,0,.4)}
+  :root:not([data-mode="dark"]) .hero .chip svg{color:#fff}
+  :root:not([data-mode="dark"]) .hero .chip.go{background:#fff;background-image:linear-gradient(180deg,#fff,#f2f3f7);color:#111;border:0;box-shadow:0 12px 30px -10px rgba(0,0,0,.42)}
+  :root:not([data-mode="dark"]) .hero .chip.go svg{color:#111}
+}
+@media (max-width:699px){
+  .hero .chip.ic{width:44px;padding:0;justify-content:center}
+  .hero .chip.ic span{display:none}
+}
+@media (prefers-reduced-motion:reduce){
+  .hsub,.hero .hcap h1,.hero .hmeta{opacity:1;transform:none;transition:none}
+}
+
+
 
