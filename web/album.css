@@ -696,9 +696,10 @@ html,body{touch-action:pan-x pan-y}
 .who .chip.on svg,.who .chip.on small{color:var(--on-g)}
 .who .chip.on .av{background:rgba(255,255,255,.24);color:var(--on-g)}
 
-/* 回憶圓圈：還沒看的外圈三色慢慢轉（只轉外圈，照片不動） */
+/* 回憶圓圈：靜態柔光漸層細環，電腦滑過才微微流轉 */
 .mring{background:none;isolation:isolate}
-.mring::before{content:"";position:absolute;inset:0;z-index:-1;border-radius:50%;background:conic-gradient(var(--g1),var(--g2),var(--g3),var(--g2),var(--g1));animation:spin 7s linear infinite}
+.mring::before{content:"";position:absolute;inset:0;z-index:-1;border-radius:50%;background:conic-gradient(from 210deg,var(--g1),var(--g2),var(--g3),var(--g2),var(--g1))}
+@media (hover:hover){.mem:not(.seen):hover .mring::before{animation:spin 7s linear infinite}}
 .mem.seen .mring::before{animation:none;background:color-mix(in oklab,var(--tx) 16%,transparent)}
 .mem.seen .mring{background:none;box-shadow:none}
 @keyframes spin{to{transform:rotate(1turn)}}
@@ -707,8 +708,8 @@ html,body{touch-action:pan-x pan-y}
 .mems .mem:nth-child(2){animation-delay:.06s}.mems .mem:nth-child(3){animation-delay:.12s}.mems .mem:nth-child(4){animation-delay:.18s}
 .mems .mem:nth-child(5){animation-delay:.24s}.mems .mem:nth-child(n+6){animation-delay:.3s}
 
-/* 每一章：下面的細線從粉色淡出 */
-.dh,.mh{border-bottom:0;background:linear-gradient(90deg,color-mix(in oklab,var(--g2) 55%,transparent),var(--line) 45%,transparent) left bottom/100% 1px no-repeat}
+/* 每一章：極淡中性細線，讓視覺焦點留在照片上 */
+.dh,.mh{border-bottom:0;background:linear-gradient(90deg,var(--line),var(--line) 65%,transparent) left bottom/100% 1px no-repeat}
 @supports (animation-timeline:view()){
   .dh b,.dh span,.dh .dsum{animation:chb linear both;animation-timeline:view();animation-range:entry 10% entry 80%}
 }
@@ -1697,4 +1698,45 @@ html.has-dock .toast{bottom:calc(82px + env(safe-area-inset-bottom))}
 /* 連拍疊：收合狀態加上細微堆疊層次感，一眼辨識是一疊照片 */
 .ph.stkc{box-shadow:0 -2px 0 -1px color-mix(in oklab,var(--tx) 28%,transparent),0 -5px 0 -3px color-mix(in oklab,var(--tx) 14%,transparent)}
 @media (hover:hover){.ph.in.stkc:hover{box-shadow:0 -3px 0 -1px color-mix(in oklab,var(--tx) 36%,transparent),0 -6px 0 -3px color-mix(in oklab,var(--tx) 18%,transparent),0 14px 30px -14px color-mix(in oklab,var(--g2) 60%,transparent)}}
+
+/* ── 手機頂部列減壓：左側兩行寬敞標題＋日期，右側僅搜尋＋「⋯」選單 ── */
+.bar .btl{flex:1;min-width:0;display:flex;align-items:baseline;gap:8px;overflow:hidden}
+.bar .btl b{flex:0 1 auto;min-width:0;font-family:var(--serif);font-size:var(--fs-l);font-weight:650;letter-spacing:.03em;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.bar .btl small{flex:none;margin:0;color:var(--tx3);font-size:var(--fs-s);font-weight:550;white-space:nowrap}
+.bar .bmore{display:none;width:36px;padding:0;justify-content:center}
+@media (max-width:699px){
+  .bar{gap:8px}
+  .bar .btl{flex-direction:column;align-items:flex-start;gap:1px;line-height:1.2}
+  .bar .btl b{width:100%;font-size:var(--fs-m)}
+  .bar .btl small{font-size:var(--fs-xs)}
+  .bar .bact{display:none}
+  .bar .bmore{display:inline-flex}
+  .bar [data-find]{width:36px;padding:0;justify-content:center}
+}
+.kmenu hr{border:0;height:1px;background:var(--line);margin:4px 8px}
+.kmenu button:disabled{opacity:.35;pointer-events:none}
+
+/* ── 大圖按鈕與電腦側欄統一 Apple Liquid Glass 質感 ── */
+.lb .rb,.tbar{background:rgba(255,255,255,.14);-webkit-backdrop-filter:blur(22px) saturate(180%);backdrop-filter:blur(22px) saturate(180%);
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.26),0 0 0 1px rgba(255,255,255,.1),0 8px 24px -8px rgba(0,0,0,.45)}
+.lb .rb.on{background:#fff;color:#000;box-shadow:0 6px 20px -4px rgba(0,0,0,.45)}
+@media (min-width:900px){
+  .inf{background:var(--glass-modal);-webkit-backdrop-filter:var(--blur-modal);backdrop-filter:var(--blur-modal);border-left:1px solid var(--glass-b);box-shadow:-16px 0 48px rgba(0,0,0,.38)}
+  .cmp .cform{background:transparent}
+}
+
+/* ── 上鎖相簿密碼頁：Apple Liquid Glass 登入卡與膠囊輸入框 ── */
+.gate .card{padding:36px 28px 30px;border-radius:var(--r-xl);background:var(--glass-modal);-webkit-backdrop-filter:var(--blur-modal);backdrop-filter:var(--blur-modal);border:1px solid var(--glass-b);box-shadow:var(--sh-float)}
+.gate .card .ic{width:64px;height:64px;border-radius:var(--r-lg);margin-bottom:20px;background:var(--glass-sub);border:1px solid var(--glass-b);box-shadow:var(--hl);color:var(--tx)}
+.gate .card .field{margin-top:24px;height:50px;padding:0 20px;border-radius:var(--r-pill);border:1px solid var(--line);background:var(--glass-sub);letter-spacing:.18em;transition:border-color var(--t-fast) var(--ease),box-shadow var(--t-fast) var(--ease)}
+.gate .card .field:focus{border-color:var(--g2);box-shadow:0 0 0 3px color-mix(in oklab,var(--g2) 24%,transparent)}
+.gate .card .btn{margin-top:16px;height:50px}
+
+/* ── 電腦捲動頂部安全漸層遮罩：讓照片從懸浮膠囊上方自然隱沒 ── */
+@media (min-width:900px){
+  body::before{content:"";position:fixed;left:0;right:0;top:0;height:68px;z-index:calc(var(--z-bar) - 1);pointer-events:none;opacity:0;
+    background:linear-gradient(180deg,color-mix(in oklab,var(--bg) 84%,transparent) 0%,color-mix(in oklab,var(--bg) 42%,transparent) 52%,transparent 100%);
+    transition:opacity var(--t-mid) var(--ease)}
+  body:has(.bar.on)::before{opacity:1}
+}
 

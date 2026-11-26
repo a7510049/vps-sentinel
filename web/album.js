@@ -928,11 +928,31 @@ function kmenu(btn){
   m.style.top = `${Math.round(r.bottom + 8)}px`; m.style.right = `${Math.round(innerWidth - r.right)}px`;
   document.body.appendChild(m);
   if (anim()) m.animate([{opacity:0, transform:"translateY(-6px) scale(.96)"}, {opacity:1, transform:"none"}], {duration:T.mid, easing:EASE});
-  kmenu.t = setTimeout(() => addEventListener("pointerdown", kmenu.out = e => { if (!e.target.closest(".kmenu,[data-kind]")) kmenuOff(); }), 0);
+  kmenu.t = setTimeout(() => addEventListener("pointerdown", kmenu.out = e => { if (!e.target.closest(".kmenu,[data-kind],[data-bmore]")) kmenuOff(); }), 0);
+  addEventListener("scroll", kmenuOff, {passive:true, once:true});
+}
+function bmenu(btn){                                          // 手機頂部列「⋯」：收起不常用操作，保留寬敞標題與日期
+  if (kmenuOff()) return;
+  const ks = kindsHere(), all = ks.reduce((a, k) => a + k[3], 0), m = document.createElement("div"), r = btn.getBoundingClientRect();
+  m.className = "kmenu bmenu"; m.setAttribute("role", "menu");
+  const rows = [
+    `<button role="menuitem" data-ss>${I("play")}<span>播放幻燈片</span><small></small><i></i></button>`,
+    D.dl ? `<button role="menuitem" data-sel>${I("dl")}<span>選取下載</span><small></small><i></i></button>` : "",
+    D.up ? `<button role="menuitem" data-up>${I("up")}<span>放照片</span><small></small><i></i></button>` : "",
+    IOS ? `<button role="menuitem" data-zb="-1"${ZL <= 0 ? " disabled" : ""}>${I("zin")}<span>放大照片牆</span><small></small><i></i></button><button role="menuitem" data-zb="1"${ZL >= 3 ? " disabled" : ""}>${I("zout")}<span>縮小照片牆</span><small></small><i></i></button>` : ""
+  ].filter(Boolean);
+  if (ks.length >= 2 || KIND) rows.push(`<hr>`, ...[["", "全部種類", "stk", all], ...ks].map(([k, n, ic, c]) => `<button role="menuitemradio" aria-checked="${KIND === k}" data-kpick="${k}">${I(ic)}<span>${n}</span><small class="num">${c}</small>${KIND === k ? I("ck") : "<i></i>"}</button>`));
+  m.innerHTML = rows.join("");
+  m.style.top = `${Math.round(r.bottom + 8)}px`; m.style.right = `${Math.round(innerWidth - r.right)}px`;
+  document.body.appendChild(m);
+  btn.setAttribute("aria-expanded", "true");
+  if (anim()) m.animate([{opacity:0, transform:"translateY(-6px) scale(.96)"}, {opacity:1, transform:"none"}], {duration:T.mid, easing:EASE});
+  kmenu.t = setTimeout(() => addEventListener("pointerdown", kmenu.out = e => { if (!e.target.closest(".kmenu,[data-kind],[data-bmore]")) kmenuOff(); }), 0);
   addEventListener("scroll", kmenuOff, {passive:true, once:true});
 }
 function kmenuOff(){
   clearTimeout(kmenu.t);
+  const bm = $("[data-bmore]"); if (bm) bm.setAttribute("aria-expanded", "false");
   const m = $(".kmenu"); if (!m || m.dataset.bye) return false;
   m.dataset.bye = 1; removeEventListener("pointerdown", kmenu.out); removeEventListener("scroll", kmenuOff);
   if (!anim()) { m.remove(); return true; }
@@ -1015,7 +1035,7 @@ function draw(){
       <div class="hcap">${a ? `<div class="eyebrow num">${esc(frange(a, b))}</div>` : ""}<div class="htw"><i class="hglo" aria-hidden="true"></i><h1 style="--n:${[...D.name].length}">${[...D.name].map((c, k) => c === " " ? " " : `<span class="ch" style="--i:${k}">${esc(c)}</span>`).join("")}</h1></div>
         <div class="hmeta"><button class="chip go" data-ss>${I("play")}<span>播放</span></button>${FIND ? `<button class="chip" data-find aria-label="搜尋">${I("find")}<span>搜尋</span></button>` : ""}${pl ? `<span class="chip" data-pl>${heroFlags() || I("pin")}<span>${esc(pl)}</span></span>` : ""}
         ${D.dl ? `<button class="chip" data-sel>${I("dl")}<span>下載</span></button>` : ""}${D.up ? `<button class="chip" data-up>${I("up")}<span>放照片</span></button>` : ""}</div></div></header>
-    <div class="bar"><b>${esc(D.name)}<small class="num">${cntTxt()}</small></b>${IOS ? `<span class="chip zb"><button data-zb="-1" aria-label="放大">${I("zin")}</button><button data-zb="1" aria-label="縮小">${I("zout")}</button></span>` : ""}<button class="chip" data-kind aria-label="種類" hidden>${I("flt")}</button>${FIND ? `<button class="chip" data-find aria-label="搜尋">${I("find")}</button>` : ""}${D.up ? `<button class="chip" data-up aria-label="放照片">${I("up")}</button>` : ""}${D.dl ? `<button class="chip" data-sel aria-label="下載">${I("dl")}</button>` : ""}<button class="chip go" data-ss aria-label="播放">${I("play")}</button></div>
+    <div class="bar"><div class="btl"><b>${esc(D.name)}</b><small class="num">${cntTxt()}</small></div>${IOS ? `<span class="chip zb bact"><button data-zb="-1" aria-label="放大">${I("zin")}</button><button data-zb="1" aria-label="縮小">${I("zout")}</button></span>` : ""}<button class="chip bact" data-kind aria-label="種類" hidden>${I("flt")}</button>${FIND ? `<button class="chip" data-find aria-label="搜尋">${I("find")}</button>` : ""}${D.up ? `<button class="chip bact" data-up aria-label="放照片">${I("up")}</button>` : ""}${D.dl ? `<button class="chip bact" data-sel aria-label="下載">${I("dl")}</button>` : ""}<button class="chip go bact" data-ss aria-label="播放">${I("play")}</button><button class="chip bmore" data-bmore aria-label="更多" aria-expanded="false">${I("more")}</button></div>
     ${D.intro ? `<section class="intro"><p>${esc(D.intro).replace(/\n/g, "<br>")}</p></section>` : ""}<nav class="who" hidden></nav>
     <div class="tpane on" data-pane="photos"><div class="mems"></div><section class="hl" hidden></section><div class="cityf" hidden></div><div class="wwrap"><main class="wall" data-z="${ZL}"></main><aside class="smap" hidden><div class="smv"></div><div class="smc"></div></aside></div><footer class="foot">${finCol()}<div class="fin">${esc(D.name)}</div>${D.exp ? `<span class="fexp">${expRing()}${left(D.exp)}</span>` : ""}</footer></div>
     ${D.loc && ALL.some(p => p.g && !p.u) ? `<div class="tpane" data-pane="map" hidden><section class="msec"${WHO ? " hidden" : ""}><div class="mh"><b data-mt>旅程</b><span class="num" data-km></span></div><div class="map" data-map></div><div class="cities"></div></section></div>` : ""}
@@ -1575,12 +1595,13 @@ document.addEventListener("click", e => {
   if (t && performance.now() - STKT < 600) return;
   if (t && stkTap(+t.dataset.i, e.target)) return e.detail ? undefined : stackToggle(+t.dataset.i);   // 滑鼠、手指在 pointerup 已經處理
   if (t) return openLb(+t.dataset.i);
+  if (e.target.closest(".bmenu button")) kmenuOff();
+  if (e.target.closest("[data-bmore]")) return bmenu(e.target.closest("[data-bmore]"));
   if (e.target.closest("[data-up]")) return SEL.on || upPick();
   { const tb = e.target.closest("[data-tab]"); if (tb) return tabSet(tb.dataset.tab); }
   { const wb = e.target.closest("[data-who]"); if (wb) return whoSet(wb.dataset.who); }
   if (e.target.closest("[data-sel]")) return selOn();
   if (SEL.on && e.target.closest("[data-ss],[data-mem]")) return;
-  if (e.target.closest(".cue")) return scrollTo({top:$(".hero").offsetHeight - 8, behavior:anim() ? "smooth" : "auto"});
   { const sd = e.target.closest("[data-sday]"); if (sd) return sdayGo(sd); }
   { const km = e.target.closest("[data-kpick]"); if (km) { kmenuOff(); return kindSet(km.dataset.kpick); } }
   if (e.target.closest("[data-kind]")) return kmenu(e.target.closest("[data-kind]"));
