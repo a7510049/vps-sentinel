@@ -212,7 +212,7 @@ function flyShell(){
       <div class="fclock" title="當地時間">${flap("", 5, "lg")}</div></div>
     <div class="fmain"><div class="fleft">
       <div class="seg ftabs" data-slide>${FLYTAB.map(([k, l]) => `<button class="${FLYS.tab === k ? "on" : ""}" data-ftab="${k}">${flyTi(k)}${l}<span class="fnw"><span class="fnl" hidden>還有</span><span class="fn" data-k="n-${k}"></span></span></button>`).join("")}</div>
-      <div class="fterm" data-slide hidden></div><div class="fhrh"><span class="fhsel" hidden></span><div class="fsum sub" hidden></div></div><div class="fhrs" hidden></div>
+      <div class="fterm" hidden></div><div class="fhrh"><span class="fhsel" hidden></span><div class="fsum sub" hidden></div></div><div class="fhrs" hidden></div>
       <div class="board"><div class="fh">${FLYCOL.map(k => `<span class="fk ${k}"></span>`).join("")}</div><button class="fdone" data-fdone hidden><span></span>${I("chev").replace("<svg", '<svg class="chv"')}</button><div class="frows"></div><div class="fmsg sub" hidden></div><div class="fload"><i></i></div></div></div>
       <div class="radar"><div class="rin"><div class="rbox"><canvas class="rcv" aria-label="雷達"></canvas><i class="rsweep"></i><button class="icbtn rfull" data-rfull title="整頁雷達">${I("full")}</button></div>
         <div class="rq" hidden><div class="rqh"><span data-k="rq-t">進場排隊</span><b data-k="rq-nx"></b></div>
@@ -220,7 +220,7 @@ function flyShell(){
         <div class="rnote sub" hidden></div>
         <div class="rwx" hidden><div class="rah">${flap("", 1, "lg")}<div><b>塔台廣播</b><small data-k="wx-t"></small></div></div><div class="rad"></div></div>
         <div class="rleg"><span><i class="arr"></i>抵達</span><span><i class="dep"></i>出發</span><span><i class="gnd"></i>機坪</span><span><i class="ov"></i>路過</span>
-          <span class="rctl"><span class="rng fzm">${FLYZM.map(k => `<button data-fzm="${k}">${k}</button>`).join("")}</span></span></div></div></div>
+          <span class="rctl"><span class="rng fzm" data-slide>${FLYZM.map(k => `<button data-fzm="${k}">${k}</button>`).join("")}</span></span></div></div></div>
     </div>
     <div class="ffoot sub"></div></div></div>${flySplash()}</div>`;
 }
@@ -1148,7 +1148,7 @@ async function flySwitch(mode){   // mode："hr" 換時段、"tab" 換分頁、�
   const tabs = f.querySelector(".ftabs"), hb = f.querySelector(".fhrs"), tb = f.querySelector(".fterm"), sm = f.querySelector(".fsum");
   const next = !!(FLYD && FLYD.fids && flyFT(FLYS.tab));   // 換過去的分頁有沒有航廈、時段
   const shown = e => e && !e.hidden && !e.closest("[hidden]");
-  const els = [b, ...(tab && !next ? [hb, ...tb.querySelectorAll("[data-fterm]")] : [])].filter(shown);   // 會消失的按鈕先跟看板一起淡出
+  const els = [b, ...(tab && !next ? [hb, ...tb.querySelectorAll(".ftermg")] : [])].filter(shown);   // 會消失的膠囊先跟看板一起淡出
   const span = () => b.getBoundingClientRect().bottom - tabs.getBoundingClientRect().bottom;   // 分頁下面到看板底部的總高度
   (b._fo || []).forEach(a => a.cancel());
   FLYHUSH = performance.now() + T.fast + T.mid * 2;        // 切換動畫跑完前雷達先少畫幾張
@@ -1159,12 +1159,12 @@ async function flySwitch(mode){   // mode："hr" 換時段、"tab" 換分頁、�
   b.querySelectorAll(".frows>.fr").forEach(r => r.getAnimations().forEach(a => a.finish()));   // 上一次更新還在收起、長出、滑動的列直接到位
   b.getAnimations().forEach(a => { if (!fo.includes(a)) a.finish(); });
   const rd = f.querySelector(".radar"), wide = getComputedStyle(f.querySelector(".fleft")).display === "contents", rt0 = rd.getBoundingClientRect().top;   // 電腦：雷達跟看板同一張卡片，上面幾排變了它也會跟著移
-  const z = ZM(), s0 = span() / z, keys0 = hb._keys, was = new Set([hb, tb, sm, ...tb.querySelectorAll("[data-fterm]")].filter(shown));
+  const z = ZM(), s0 = span() / z, keys0 = hb._keys, was = new Set([hb, tb, sm, ...tb.querySelectorAll(".ftermg")].filter(shown));
   FLYSTILL = true; try { flyPaint(false); } finally { FLYSTILL = false; }
   b.classList.add("cvx"); const s1 = span() / z, bh = b.offsetHeight; b.classList.remove("cvx");   // 手機的列平常畫面外不排版（高度是估的），量的這一刻先排版
   fo.forEach(a => a.cancel()); b._fo = null;
   if (f._rv && f._rv.focus !== flyFocus()) { if (wide) FLYHUSH = 0; f._rv.focus = flyFocus(); f._rv.kick(); }   // 看板淡入的同時，雷達上的飛機也跟著換濃淡（電腦上同一張卡片，不能一邊動一邊停）
-  const ins = [b, ...[hb, tb, sm, ...tb.querySelectorAll("[data-fterm]")].filter(e => shown(e) && !was.has(e) && !(e.parentNode === tb && !was.has(tb)))];   // 新出現的（整排新出來的，裡面的按鈕跟著那排一起）
+  const ins = [b, ...[hb, tb, sm, ...tb.querySelectorAll(".ftermg")].filter(e => shown(e) && !was.has(e) && !(e.parentNode === tb && !was.has(tb)))];   // 新出現的（整排新出來的，裡面的按鈕跟著那排一起）
   if (!hr && shown(hb) && was.has(hb) && hb._keys !== keys0) ins.push(hb);   // 時段那排還在、但時段變了：整排淡入；只有班數變的話只換數字
   ins.forEach(e => e.animate([{opacity:0, transform:"translateY(8px)"}, {opacity:1, transform:"none"}], {duration:T.mid, easing:EASE}));
   const h0 = bh - (s1 - s0), o = {duration:T.mid, easing:EASE};   // 總高度變了：看板的底慢慢移到新的位置，雷達跟著滑一次
@@ -1180,7 +1180,7 @@ function flyNudge(s, b){
   const to = l < pad ? s.scrollLeft + l - pad : l + w > cw - pad ? s.scrollLeft + l + w - cw + pad : null;
   if (to != null) s.scrollTo({left: to, behavior: canAnim() ? "smooth" : "auto"});
 }
-/* 地點、航廈那一排：「地點 ▾」點了選只看哪裡來／去哪的班機；桃園官網表有兩個以上航廈時多「全部／第一航廈／第二航廈」；回傳有沒有在分航廈 */
+/* 地點、航廈那一排：「地點 ▾」點了選只看哪裡來／去哪的班機；桃園官網表有兩個以上航廈時多「全部／第一航廈／第二航廈」膠囊；回傳有沒有在分航廈 */
 let FLYPLC = null;                                          // 只看這個地點（換機場就清掉）
 function flyTerms(f, d){
   const tb = f.querySelector(".fterm"), src = d.loading ? [] : d[FLYS.tab] || [];
@@ -1199,11 +1199,15 @@ function flyTerms(f, d){
       b.querySelector(".fpn").animate([{opacity: 0}, {opacity: 1}], {duration: T.mid, easing: EASE}); }
   }
   const sig = on ? ts.join(",") : "";
-  if (tb._sig !== sig) { tb._sig = sig;                      // 航廈有變（換分頁、換機場）：只換航廈那幾顆，新的淡入
-    tb.querySelectorAll("[data-fterm]").forEach(x => x.remove());
-    b.insertAdjacentHTML("afterend", (on ? ["", ...ts] : []).map(t => `<button class="fchip" data-fterm="${esc(t)}">${t ? esc(t) : "全部"}</button>`).join(""));
-    if (canAnim() && !tb.hidden && !FLYSTILL) tb.querySelectorAll("[data-fterm]").forEach((x, i) => x.animate([{opacity: 0, transform: "scale(.9)"}, {opacity: 1, transform: "none"}], {duration: T.mid, delay: i * T.fast * .2, easing: EASE, fill: "backwards"})); }
-  tb.querySelectorAll("[data-fterm]").forEach(b => b.classList.toggle("on", b.dataset.fterm === (FLYS.term || "")));
+  if (tb._sig !== sig) { tb._sig = sig;                      // 航廈有變（換分頁、換機場）：換成獨立玻璃滑動膠囊
+    tb.querySelectorAll(".ftermg,[data-fterm]").forEach(x => x.remove());
+    if (on) {
+      b.insertAdjacentHTML("afterend", `<div class="ftermg" data-slide>${["", ...ts].map(t => `<button class="fchip" data-fterm="${esc(t)}">${t ? esc(t) : "全部"}</button>`).join("")}</div>`);
+      const tg = tb.querySelector(".ftermg");
+      if (tg && canAnim() && !tb.hidden && !FLYSTILL) tg.animate([{opacity: 0, transform: "scale(.95)"}, {opacity: 1, transform: "none"}], {duration: T.mid, easing: EASE, fill: "backwards"});
+    }
+  }
+  tb.querySelectorAll("[data-fterm]").forEach(x => x.classList.toggle("on", x.dataset.fterm === (FLYS.term || "")));
   return on;
 }
 /* 現在這個分頁（和航廈）有哪些地點、各幾班：同一國的放在一起（班機多的國家在前），城市由北到南 */
@@ -1620,20 +1624,21 @@ function flyOpen(btn){
   closeMenu();
   document.body.insertAdjacentHTML("beforeend", flyShell());
   const f = $("#fly");
-  if (!canAnim()) f.style.animation = "none";
+  if (canAnim()) f.classList.add("pre");
   flyStuck(f);
   if (!SHARE) history.pushState({fly:1}, "");          // 分享連結只有這一頁，不能返回
   document.documentElement.classList.add("lock");
-  setTimeout(() => { if (f.isConnected && !f._bye) document.documentElement.classList.add("flyon"); }, T.mid + 80);   // 滑入完才藏底層
+  setTimeout(() => { if (f.isConnected && !f._bye) document.documentElement.classList.add("flyon"); }, T.mid + 120);   // 滑入完才藏底層
   f._rv = radarView(f.querySelector(".rcv"), false); f._rv.range = flyR(); flyZoom(f, false);   // 雷達先建好：下面用現成資料畫的時候，底圖才放得上去
-  if (FLYD && FLYD.ap && FLYD.ap.code === FLYS.ap && !FLYD.loading) {   // 已有快取資料：直接帶著完整看板與雷達順順滑入，不再多播一次載入雷達
+  if (FLYD && FLYD.ap && FLYD.ap.code === FLYS.ap && !FLYD.loading) {   // 已有快取資料：先在不可見首幀排好看板與雷達，再由 GPU 順順滑入
     const sp = f.querySelector(".fsplash"); if (sp) sp.remove();
     FLYSTILL = true; try { flyPaint(false); } finally { FLYSTILL = false; }
     flyRadar(f, FLYD);
     if (FLYGEO[FLYD.ap.code]) { f._geo = FLYD.ap.code; f._rv.setGeo(FLYGEO[FLYD.ap.code]); f._rv.gt = 0; f._rv.ga = 1; }
     f._rv.resize(); f._rv.draw(performance.now());
-    FLYBZ = performance.now() + T.mid + 80;            // 等整頁滑入完再換上背景新資料
+    FLYBZ = performance.now() + T.mid + 120;           // 等整頁滑入完再換上背景新資料
   } else { flySplashOn(f); flyWait(f, true); }
+  if (canAnim()) requestAnimationFrame(() => requestAnimationFrame(() => { if (f.isConnected && !f._bye) f.classList.remove("pre"); }));
   flyLoad(false);
   f.querySelector(".rcv").addEventListener("click", e => {    // 點雷達打開整頁雷達；點到飛機就順便選好那一架
     const r = e.currentTarget.getBoundingClientRect(), z = ZM(), p = f._rv.hit((e.clientX - r.left) / z, (e.clientY - r.top) / z);
@@ -1655,8 +1660,8 @@ function flyShut(){
   const end = () => { if (done) return; done = 1; f.remove(); if (!DET) document.documentElement.classList.remove("lock"); };
   if (!canAnim()) return end();
   requestAnimationFrame(() => {                         // 先讓底層主頁重繪完成再淡出，關閉不閃爍
-    f.addEventListener("animationend", e => { if (e.target === f) end(); }, {once: true});
-    f.classList.add("closing");
+    f.addEventListener("transitionend", e => { if (e.target === f && e.propertyName === "opacity") end(); });
+    f.classList.remove("pre"); f.classList.add("closing");
     setTimeout(end, T.fast + 80);
   });
 }
@@ -1764,7 +1769,7 @@ function flyClick(e, f){
     slideSel(() => s.querySelectorAll("button").forEach(b => b.classList.toggle("on", b === tb))); flyMini(f); flySwitch("tab"); } return; }
   if (t.closest("[data-ftrk]")) return flyTrkSet(!FLYTRKON);
   const zb = t.closest("[data-fzm]");
-  if (zb) { if (+FLYS.zm !== +zb.dataset.fzm) { FLYS.zm = +zb.dataset.fzm; flySave(); flyZoom(f, true); } return; }
+  if (zb) { if (+FLYS.zm !== +zb.dataset.fzm) { FLYS.zm = +zb.dataset.fzm; flySave(); slideSel(() => flyZoom(f, true)); } return; }
   const tm = t.closest("[data-fterm]");
   if (tm) { if ((FLYS.term || "") !== tm.dataset.fterm) { FLYS.term = tm.dataset.fterm; FLYHR = ""; flySave(); const s = tm.parentNode;
     slideSel(() => s.querySelectorAll("button").forEach(b => b.classList.toggle("on", b === tm))); flySwitch(); } return; }
@@ -1847,7 +1852,7 @@ let FRAD = null, FRADF = "";                                // 開著的整頁�
 const FRADT = [["", "全部"], ["arr", "抵達"], ["dep", "出發"], ["over", "路過"]];
 function fradOpen(){
   const f = $("#fly"); if (!f || FRAD || !f._rv) return;
-  const v = document.createElement("div"); v.className = "frad"; v.id = "frad";
+  const v = document.createElement("div"); v.className = "frad" + (canAnim() ? " pre" : ""); v.id = "frad";
   v.innerHTML = `<div class="frmap"><canvas aria-label="雷達"></canvas><div class="frsc"></div>
     <div class="frtop"><button class="icbtn" data-rback title="返回">${I("back")}</button><b class="frname"></b></div>
     <div class="frbar"><div class="seg frchips" data-slide>${FRADT.map(([k, l]) => `<button class="${FRADF === k ? "on" : ""}" data-rf="${k}">${l}</button>`).join("")}</div></div>
@@ -1855,7 +1860,6 @@ function fradOpen(){
     <div class="frcard" hidden></div></div>
     <div class="frlist"><button class="frlh" data-rlist><span class="grow"></span><span class="chv">${I("chev")}</span></button><div class="frli"></div></div>`;
   document.body.appendChild(v);
-  if (!canAnim()) v.style.animation = "none";
   history.pushState({fly:1, frad:1}, "");
   const cv = v.querySelector("canvas"), rv = radarView(cv, true);
   FRAD = {v, rv, sel:"", ro:null}; rv.rwd = f._rv.rwd; rv.onseq = fradList;
@@ -1864,9 +1868,10 @@ function fradOpen(){
   if (f._geo) { rv.setGeo(FLYGEO[f._geo]); rv.setTrk(FLYTRK[f._geo] && FLYTRK[f._geo].d); rv.gt = 0; rv.td = 0; }
   fradData();
   rv.draw(performance.now());                                 // 第 0 格就先畫好地圖與飛機，滑入瞬間不閃黑幕
+  if (canAnim()) requestAnimationFrame(() => requestAnimationFrame(() => { if (FRAD && FRAD.v === v) v.classList.remove("pre"); }));
   if (window.ResizeObserver) { FRAD.ro = new ResizeObserver(() => { if (FRAD && FRAD.rv === rv) { rv.resize(); top(); } }); FRAD.ro.observe(cv); }
   fradGest(rv, cv);
-  setTimeout(() => { if (FRAD && FRAD.rv === rv && f._rv) f._rv.hide(true); }, canAnim() ? T.mid + 80 : 0);   // 蓋住後暫停小雷達省電，不藏看板免得關閉重繪閃爍
+  setTimeout(() => { if (FRAD && FRAD.rv === rv && f._rv) f._rv.hide(true); }, canAnim() ? T.mid + 120 : 0);   // 蓋住後暫停小雷達省電，不藏看板免得關閉重繪閃爍
 }
 function fradClose(){ if (!FRAD) return; if (history.state && history.state.frad) history.back(); else fradShut(); }
 function fradShut(){
@@ -1878,8 +1883,8 @@ function fradShut(){
   if (f && f._rv) { f._rv.hide(false); f._rv.draw(performance.now()); }   // 關閉前先同步重繪小雷達
   if (!canAnim()) return end();
   requestAnimationFrame(() => {                               // 等底層小雷達繪製完成再淡出，關閉零閃爍
-    v.addEventListener("animationend", e => { if (e.target === v) end(); }, {once: true});
-    v.classList.add("closing");
+    v.addEventListener("transitionend", e => { if (e.target === v && e.propertyName === "opacity") end(); });
+    v.classList.remove("pre"); v.classList.add("closing");
     setTimeout(end, T.fast + 80);
   });
 }
@@ -2147,7 +2152,7 @@ const shLeft = s => { const h = Math.ceil(s / 3600); return h >= 24 ? `還有 ${
 const shCall = body => api("/api/fly-share", {method:"POST", headers:{"X-Token":getTok(), "Content-Type":"application/json"}, body:JSON.stringify(body)}).then(r => r.json());
 async function flyShare(){
   const o = (() => { try { return {secs:3600, devs:1, one:0, ...JSON.parse(store("vs-shopt") || "{}")}; } catch(e) { return {secs:3600, devs:1, one:0}; } })();
-  const apn = FLYPLACE[FLYS.ap] || FLYS.ap, sg = (k, opts) => `<div class="seg" data-o="${k}">${opts.map(([v, l]) => `<button type="button" class="${o[k] === v ? "on" : ""}" data-v="${v}">${l}</button>`).join("")}</div>`;
+  const apn = FLYPLACE[FLYS.ap] || FLYS.ap, sg = (k, opts) => `<div class="seg" data-slide data-o="${k}">${opts.map(([v, l]) => `<button type="button" class="${o[k] === v ? "on" : ""}" data-v="${v}">${l}</button>`).join("")}</div>`;
   const v = document.createElement("div"); v.className = "veil";
   v.innerHTML = `<div class="dialog shd"><span class="ico big fly">${I("share")}</span><h3>分享機場起降</h3>
     <div class="form">
@@ -2165,7 +2170,7 @@ async function flyShare(){
       <button type="button" class="iconbtn" data-del="${esc(x.id)}" data-name="${esc(x.name || "")}" title="收回">${I("x")}</button></div>`).join("")); };
   shCall({op:"list"}).then(d => d.ok && v.isConnected && draw(d.list || []), () => {});
   v.querySelectorAll(".seg").forEach(g => g.addEventListener("click", e => { const b = e.target.closest("button"); if (!b) return;
-    o[g.dataset.o] = +b.dataset.v; g.querySelectorAll("button").forEach(x => x.classList.toggle("on", x === b)); }));
+    o[g.dataset.o] = +b.dataset.v; slideSel(() => g.querySelectorAll("button").forEach(x => x.classList.toggle("on", x === b))); }));
   let busy = false;
   return new Promise(res => {
     const done = () => { if (v._d) return; v._d = 1; v.classList.add("closing"); setTimeout(() => { v.remove(); res(); }, 360); };

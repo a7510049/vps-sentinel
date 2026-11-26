@@ -25,7 +25,7 @@
   --sp-slow:.6s linear(0,.0169 2.4%,.0928 6%,.2265 10.4%,.3926 15.4%,.5614 20.8%,.7104 26.6%,.8272 32.8%,.9095 39.2%,.9614 46%,.9901 53%,1.0033 60.3%,1.0075 67.8%,1.0072 75.6%,1.0053 83.5%,1.0033 91.7%,1)}}
 
 /* ═════════ 顏色：動態主題色 × Apple Liquid Glass 分層材質 ═════════ */
-@property --seed{syntax:"<color>";inherits:true;initial-value:#007aff}
+:root{--seed:#007aff}
 [data-accent="red"]{--seed:#ff3b30;--gh:-30}
 [data-accent="orange"]{--seed:#ff9500;--gh:-35}
 [data-accent="amber"]{--seed:#e5a000;--gh:-35}
@@ -46,7 +46,6 @@
 :root,[data-tone="soft"]{--vs:1; --vc:1; --mute:0%}
 [data-tone="vivid"]{--vs:2.1; --vc:1.35; --mute:0%}
 [data-tone="calm"]{--vs:.15; --vc:.55; --mute:55%}
-:root{transition:--seed var(--t-slow) var(--ease)}
 :root{--tseed:var(--seed)}
 @supports (color:oklch(from red l c h)){:root{--tseed:oklch(from var(--seed) l c calc(h + 48))}}
 
@@ -204,13 +203,14 @@ b,strong{font-weight:500}
 .rip{position:absolute;inset:0;border-radius:inherit;overflow:hidden;pointer-events:none}
 .rip i{position:absolute;border-radius:50%;background:currentColor;opacity:.12}
 /* 選到的底色（單選的一排、開關鈕）：按鈕裡一層 ::before 原地淡入／淡出，或由 [data-slide] 玻璃氣泡接手滑動 */
-:is(.seg button,.rng button,.chats button,.frzm .icbtn){position:relative;isolation:isolate;--tsel:calc(var(--t-mid) / 5) steps(1)}
+:is(.seg button,.rng button,.chats button,.frzm .icbtn){position:relative;z-index:1;--tsel:calc(var(--t-mid) / 5) steps(1)}
 :is(.seg button,.rng button,.chats button,.frzm .icbtn)::before{content:"";position:absolute;inset:0;z-index:-1;border-radius:inherit;pointer-events:none;
-  background:var(--pc);opacity:0;transform:scale(.88);transition:opacity var(--t-fast) var(--ease),transform var(--sp-fast)}
-:is(.seg button,.rng button,.chats button,.frzm .icbtn).on::before{opacity:1;transform:none}
-/* 滑鼠指著（只有電腦）：沒選到的底色微亮；選到的不變 */
-@media (hover:hover){:is(.seg button,.rng button,.chats button):not(.on,:disabled):hover{background-color:color-mix(in oklab,var(--chip) 90%,var(--tx))}}
-@media (hover:hover){.frchips button:not(.on,:disabled):hover{background-color:color-mix(in oklab,var(--s2) 93%,var(--tx))}}
+  background:var(--pill-bg);box-shadow:var(--pill-sh);opacity:0;transition:opacity var(--t-fast) var(--ease)}
+:is(.chats button,.frzm .icbtn)::before{background:var(--pc);box-shadow:none}
+:is(.seg button,.rng button,.chats button,.frzm .icbtn).on::before{opacity:1}
+/* 滑鼠指著（只有電腦）：文字變亮，不鋪實色底蓋掉滑動玻璃氣泡 */
+@media (hover:hover){:is(.seg button,.rng button):not(.on,:disabled):hover{color:var(--tx)}}
+@media (hover:hover){.chats button:not(.on,:disabled):hover{background-color:color-mix(in oklab,var(--chip) 90%,var(--tx))}}
 /* 按下瞬間快速收緊、放開時由各自元件的彈簧曲線自然回彈 */
 :is(.hcard,.li,.ubtn,.iconbtn,.icbtn,.hmenu button,.addhost,.trf,.sw button,.fapc,.tbx,.rh,.backbtn,.side-icbtn).prs{transition-duration:var(--t-fast);transition-timing-function:var(--ease)}
 
@@ -491,16 +491,17 @@ html:not(.full) .dock .tb.hasnew::after{top:7px;right:calc(50% - 26px)}
 .day:first-child{margin-top:0}
 .calm{color:var(--tx3);padding:22px 16px;background:var(--card);border:1px solid var(--line);box-shadow:var(--cs);border-radius:var(--r-lg);text-align:center}
 
-/* ═════════ 全螢幕液態玻璃視圖（主機整頁、機場起降、整頁雷達）：永久隔離避免毛玻璃閃爍，純 GPU 平順滑入淡出 ═════════ */
+/* ═════════ 全螢幕液態玻璃視圖（主機整頁、機場起降、整頁雷達）：先在不可見首幀完成排版與毛玻璃準備，再由 GPU 彈簧 60/120fps 滑入 ═════════ */
 .det{position:fixed;inset:0;z-index:var(--z-det);background-color:var(--bg);
   background-image:radial-gradient(circle at 12% 8%,color-mix(in oklab,var(--seed) 20%,transparent),transparent 50%),radial-gradient(circle at 88% 84%,color-mix(in oklab,var(--tseed) 18%,transparent),transparent 52%);
-  --gz:var(--zoom);isolation:isolate;contain:layout style paint;animation:sheetIn var(--t-mid) var(--dec) backwards}
+  --gz:var(--zoom);isolation:isolate;contain:layout style paint;
+  transition:transform var(--t-mid) var(--dec),opacity var(--t-fast) var(--dec)}
+.det.pre,.flyv.pre,.frad.pre{opacity:0;transform:translate3d(0,18px,0) scale(.988);will-change:transform,opacity;pointer-events:none}
+.det.closing,.flyv.closing,.frad.closing{opacity:0;transform:translate3d(0,12px,0) scale(.988);will-change:transform,opacity;pointer-events:none;
+  transition:transform var(--t-fast) var(--exit),opacity var(--t-fast) var(--exit)}
 .det .tile{animation:none}
 /* 整頁完全蓋住之後，後面那一頁先不畫（動畫、更新都停下來，捲動只要顧整頁）；收起前先恢復繪製再淡出 */
 html.dhid .dash>.view{content-visibility:hidden;contain-intrinsic-size:auto none}
-.det.closing{animation:sheetOut var(--t-fast) var(--exit) forwards;pointer-events:none}
-@keyframes sheetIn{from{opacity:0;transform:translateY(20px) scale(.98)}to{opacity:1;transform:none}}
-@keyframes sheetOut{from{opacity:1;transform:none}to{opacity:0;transform:translateY(14px) scale(.985)}}
 .dscroll{position:absolute;inset:0;overflow-y:auto;overscroll-behavior:contain;
   padding:calc(env(safe-area-inset-top) + 10px) 16px calc(env(safe-area-inset-bottom) + 40px)}
 .dscroll>*{max-width:760px;margin-left:auto;margin-right:auto}
@@ -595,14 +596,12 @@ html.dhid .dash>.view{content-visibility:hidden;contain-intrinsic-size:auto none
 .yax span{position:absolute;right:0;transform:translateY(-50%);font-size:var(--fs-xs);color:var(--tx3);white-space:nowrap;font-variant-numeric:tabular-nums}
 .cbox:has(.yax) .chart{width:calc(100% - 66px)}   /* 同一台的兩張圖右邊刻度一樣寬：曲線結尾對齊 */
 .wait{display:grid;place-items:center;color:var(--tx3);font-size:var(--fs-s)}
-/* 曲線的時間範圍：連在一起的分段小按鈕 */
-.rng{display:inline-flex;gap:2px;margin-left:auto;flex:none}
+/* 曲線的時間範圍：Apple Liquid Glass 膠囊軌道＋滑動玻璃氣泡 */
+.rng{display:inline-flex;gap:2px;margin-left:auto;flex:none;padding:3px;border-radius:var(--r-pill);background:var(--glass-sub);border:1px solid var(--line);box-shadow:var(--hl)}
 .rctl{display:inline-flex;gap:8px;margin-left:auto;flex:none}.rctl .rng{margin-left:0}   /* 雷達下面：路線開關和遠近放在一起 */
-.rng button{height:30px;padding:0 11px;font-size:var(--fs-xs);font-weight:500;background:var(--chip);color:var(--tx2);border-radius:var(--r-xs);white-space:nowrap;
-  transition:border-radius var(--sp),background-color var(--t-fast) var(--ease),color var(--tsel)}
-.rng button:first-child{border-radius:var(--r-full) var(--r-xs) var(--r-xs) var(--r-full)}
-.rng button:last-child{border-radius:var(--r-xs) var(--r-full) var(--r-full) var(--r-xs)}
-.rng button.on{color:var(--on-pc);font-weight:600;border-radius:var(--r-full)}
+.rng button{height:28px;padding:0 11px;font-size:var(--fs-xs);font-weight:500;background:transparent;color:var(--tx2);border-radius:var(--r-pill);white-space:nowrap;
+  transition:color var(--tsel)}
+.rng button.on{color:var(--tx)}
 /* 網路速度：兩格 */
 .nets{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin-bottom:10px}
 .nt{display:flex;gap:10px;align-items:center;min-width:0}
@@ -702,14 +701,15 @@ button.li.prs,a.li.prs{border-radius:var(--r-lg);transform:scale(.98);background
   transition:background-color var(--t-fast) var(--ease),box-shadow var(--t-fast) var(--ease),color var(--t-fast) var(--ease)}
 .fchip.on{background:var(--pc);border-color:transparent;color:var(--on-pc);font-weight:600}
 @media (hover:hover){.fchip:not(.on,.hsel.set,:disabled):hover{color:var(--tx)}}
-.fchips,.hpick{display:inline-flex;flex-wrap:nowrap;gap:2px;margin:0 0 16px;padding:4px;border-radius:var(--r-pill);
+.fchips,.hpick,.ftermg{display:inline-flex;flex-wrap:nowrap;gap:2px;margin:0 0 16px;padding:4px;border-radius:var(--r-pill);
   background:var(--glass-sub);border:1px solid var(--line);box-shadow:var(--hl);max-width:100%}
+.ftermg{margin:0;padding:3px;flex:none}
 .hpick{overflow-x:auto;scrollbar-width:none}
-:is(.fchips,.hpick) .fchip{position:relative;z-index:1;flex:none;display:inline-flex;align-items:center;gap:6px;border:0;background:transparent;box-shadow:none}
-:is(.fchips,.hpick) .fchip::before{content:"";position:absolute;inset:0;z-index:-1;border-radius:inherit;pointer-events:none;
+:is(.fchips,.hpick,.ftermg) .fchip{position:relative;z-index:1;flex:none;display:inline-flex;align-items:center;gap:6px;border:0;background:transparent;box-shadow:none;font-weight:500}
+:is(.fchips,.hpick,.ftermg) .fchip::before{content:"";position:absolute;inset:0;z-index:-1;border-radius:inherit;pointer-events:none;
   background:var(--pill-bg);box-shadow:var(--pill-sh);opacity:0;transition:opacity var(--t-fast) var(--ease)}
-:is(.fchips,.hpick) .fchip.on{background:transparent;color:var(--tx)}
-:is(.fchips,.hpick) .fchip.on::before{opacity:1}
+:is(.fchips,.hpick,.ftermg) .fchip.on{background:transparent;color:var(--tx);font-weight:500}
+:is(.fchips,.hpick,.ftermg) .fchip.on::before{opacity:1}
 @media (max-width:1023px){
   .v-log .fchips{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));width:100%}
   .v-log .fchips .fchip{justify-content:center;padding:0 8px}
@@ -721,20 +721,17 @@ button.li.prs,a.li.prs{border-radius:var(--r-lg);transform:scale(.98);background
 /* 單選液態玻璃滑動氣泡（slideSel）：僅毛玻璃氣泡平滑滑動，圖示與文字保持穩固不晃 */
 :where([data-slide]){position:relative;isolation:isolate}   /* :where：分頁列本來的 fixed／sticky 優先 */
 [data-slide]>.slide{position:absolute;left:0;top:0;z-index:0;border-radius:var(--r-pill);background:var(--pill-bg);box-shadow:var(--pill-sh);pointer-events:none}
-[data-slide].sliding>*::before{opacity:0;transition:none}
-[data-slide].slid>*::before{transition:none}
+[data-slide].sliding>*::before{opacity:0!important;transition:none!important}
+[data-slide].slid>*::before{transition:none!important}
 [data-slide].sliding>*{transition-property:color,box-shadow,transform,padding}
-[data-slide].sliding>.on{background:transparent;box-shadow:none}
+[data-slide].sliding>.on{background:transparent!important;box-shadow:none!important}
 
 /* ═════════ 設定的控制項 ═════════ */
-/* 連在一起的選項：分段切換 */
-.seg{display:flex;gap:3px;flex-wrap:wrap}
-.seg button{flex:1;height:40px;padding:0 12px;background:var(--chip);border-radius:var(--r-xs);font-size:var(--fs-s);font-weight:500;color:var(--tx2);white-space:nowrap;
-  display:flex;align-items:center;justify-content:center;gap:6px;
-  transition:border-radius var(--sp),background-color var(--t-fast) var(--ease),color var(--tsel)}
-.seg button:first-child{border-radius:var(--r-full) var(--r-xs) var(--r-xs) var(--r-full)}
-.seg button:last-child{border-radius:var(--r-xs) var(--r-full) var(--r-full) var(--r-xs)}
-.seg button.on{color:var(--on-pc);font-weight:600;border-radius:var(--r-full)}
+/* 連在一起的選項：Apple Liquid Glass 膠囊分段切換 */
+.seg{display:flex;gap:2px;flex-wrap:nowrap;padding:4px;border-radius:var(--r-pill);background:var(--glass-sub);border:1px solid var(--line);box-shadow:var(--hl)}
+.seg button{flex:1;height:36px;padding:0 12px;background:transparent;border-radius:var(--r-pill);font-size:var(--fs-s);font-weight:500;color:var(--tx2);white-space:nowrap;
+  display:flex;align-items:center;justify-content:center;gap:6px;transition:color var(--tsel)}
+.seg button.on{color:var(--tx)}
 /* 外觀的選項：小預覽圖＋底下小字；選到的預覽圖外圈主題色、右上角打勾 */
 .lks{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;width:100%}
 .lkb{display:flex;flex-direction:column;align-items:center;gap:6px;padding:0;background:none;color:var(--tx3);font-size:var(--fs-xs)}
@@ -830,7 +827,7 @@ button.li.prs,a.li.prs{border-radius:var(--r-lg);transform:scale(.98);background
 [data-accent="rainbow"] :is(.fchip.on,.seg button.on,.rng button.on,.chats button.on,.frzm .icbtn.on,.dsb.on,.dsb.on svg,.pane .li.on,.pane .li.on>svg,.dash.d .rb.on,.dash.d .rb.on .ri,.dash.d .rh.on){color:var(--on-rbw)}
 [data-accent="rainbow"] :is([data-slide]>.slide,.bkhosts .ubtn.on,
   .tog:checked,.remember input:checked,.sp-blob){background-image:var(--rbw);color:var(--on-rbw)}
-[data-accent="rainbow"] [data-slide].sliding>.on{background-image:none}
+[data-accent="rainbow"] [data-slide].sliding>.on{background-image:none!important}
 [data-accent="rainbow"] .tog{background-image:var(--rbw)}
 [data-accent="rainbow"] .tog:checked::after{background:#fff}
 [data-accent="rainbow"] .tog:checked::before{background:var(--on-rbw)}
@@ -1436,8 +1433,8 @@ html.flyon .dash>.view{content-visibility:hidden;contain-intrinsic-size:auto non
   background-image:radial-gradient(circle at 12% 8%,color-mix(in oklab,var(--seed) 20%,transparent),transparent 48%),
     radial-gradient(circle at 88% 20%,color-mix(in oklab,var(--tseed) 16%,transparent),transparent 46%),
     radial-gradient(circle at 50% 92%,color-mix(in oklab,var(--seed) 12%,transparent),transparent 50%);
-  --gz:var(--zoom);isolation:isolate;contain:layout style paint;animation:sheetIn var(--t-mid) var(--dec) backwards}
-.flyv.closing{animation:sheetOut var(--t-fast) var(--exit) forwards;pointer-events:none}
+  --gz:var(--zoom);isolation:isolate;contain:layout style paint;
+  transition:transform var(--t-mid) var(--dec),opacity var(--t-fast) var(--dec)}
 /* 第一次打開的載入畫面：小飛機沿著虛線航線飛，下面翻出機場代碼 */
 .fsplash{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px;pointer-events:none}
 .flyv:not(.splash) .fsplash{pointer-events:none}
@@ -1498,10 +1495,8 @@ html.flyon .dash>.view{content-visibility:hidden;contain-intrinsic-size:auto non
 .fhrs::-webkit-scrollbar,.fterm::-webkit-scrollbar{display:none}
 @media (hover:hover) and (pointer:fine){.fhrs,.fterm{cursor:grab}.fhrs.drag,.fterm.drag{cursor:grabbing;user-select:none}.fhrs.drag>*,.fterm.drag>*{pointer-events:none}}   /* 電腦：用滑鼠拖著捲 */
 .fhrs .fchip,.fterm .fchip{flex:none;display:inline-flex;align-items:center;gap:6px;white-space:nowrap}
-.fterm .fchip{position:relative;z-index:1;height:34px;padding:0 13px;font-size:var(--fs-s);background:var(--card);border:1px solid var(--line);box-shadow:var(--cs);color:var(--tx2)}
-.fterm .fchip::before{content:"";position:absolute;inset:0;z-index:-1;border-radius:inherit;pointer-events:none;background:var(--pill-bg);box-shadow:var(--pill-sh);opacity:0;transition:opacity var(--t-fast) var(--ease)}
-.fterm .fchip.on{background:transparent;border-color:transparent;box-shadow:none;color:var(--tx);font-weight:600}
-.fterm .fchip.on::before{opacity:1}
+.fterm>.fchip{height:34px;padding:0 13px;font-size:var(--fs-s);background:var(--card);border:1px solid var(--line);box-shadow:var(--cs);color:var(--tx2)}
+.ftermg .fchip{height:28px;padding:0 12px;font-size:var(--fs-s)}
 .fpn svg{width:15px;height:15px;margin-right:4px;vertical-align:-2px}
 .fhrs .n{font-size:var(--fs-s);opacity:.7}
 /* 時段長條圖：獨立毛玻璃卡片，每小時一根，高度是班數 */
@@ -1643,8 +1638,8 @@ html.flyon .dash>.view{content-visibility:hidden;contain-intrinsic-size:auto non
 .fzm button::before{background:var(--pill-bg);box-shadow:var(--pill-sh);transform:none}
 .fzm button.on{color:var(--tx);font-weight:600}
 /* 整頁雷達：深色塔台畫布＋懸浮 Apple Liquid Glass HUD */
-.frad{position:fixed;inset:0;z-index:var(--z-det);background:var(--tw-bg);display:flex;isolation:isolate;contain:layout style paint;animation:sheetIn var(--t-mid) var(--dec) backwards}
-.frad.closing{animation:sheetOut var(--t-fast) var(--exit) forwards;pointer-events:none}
+.frad{position:fixed;inset:0;z-index:var(--z-det);background:var(--tw-bg);display:flex;isolation:isolate;contain:layout style paint;
+  transition:transform var(--t-mid) var(--dec),opacity var(--t-fast) var(--dec)}
 .frmap{position:relative;flex:1;min-width:0;background:radial-gradient(circle at 50% 45%,var(--tw-bg2),var(--tw-bg) 75%)}
 .frmap canvas{position:absolute;inset:0;width:100%;height:100%;touch-action:none;cursor:grab}
 .frsc{position:absolute;left:0;right:0;top:0;height:calc(env(safe-area-inset-top) + 150px);background:linear-gradient(var(--tw-bg) 40%,transparent);pointer-events:none}

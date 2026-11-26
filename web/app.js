@@ -440,7 +440,7 @@ function chart(id, series, o={}){
 let RANGE = ["30m","24h","7d"].includes(store("vps-range")) ? store("vps-range") : "30m";
 const HCACHE = {}, SHOWN = {};
 function rangeSeg(){
-  return `<span class="rng" style="--k:${["30m","24h","7d"].indexOf(RANGE)}">${[["30m","30分"],["24h","24時"],["7d","7天"]].map(([v,l])=>`<button class="${RANGE===v?"on":""}" data-range="${v}">${l}</button>`).join("")}</span>`;
+  return `<span class="rng" data-slide style="--k:${["30m","24h","7d"].indexOf(RANGE)}">${[["30m","30分"],["24h","24時"],["7d","7天"]].map(([v,l])=>`<button class="${RANGE===v?"on":""}" data-range="${v}">${l}</button>`).join("")}</span>`;
 }
 /* 取得要畫的歷史：30 分鐘用即時資料；24 小時／7 天另外抓，快取 1 分鐘 */
 function histFor(s){
@@ -732,13 +732,13 @@ async function trafficModal(node, label){
     <div class="form">
       <label>每月流量上限（GB）<input class="field" type="number" inputmode="decimal" min="0" step="any" value="${t.limit ? +(t.limit/1073741824).toFixed(3) : ""}" placeholder="不限就留空"></label>
       <label>每月幾號重置<select class="field">${days}</select></label>
-      <label>怎麼計算<div class="seg">${Object.entries(CNT).map(([k,l])=>`<button type="button" class="${mode===k?"on":""}" data-m="${k}">${l}</button>`).join("")}</div>
+      <label>怎麼計算<div class="seg" data-slide>${Object.entries(CNT).map(([k,l])=>`<button type="button" class="${mode===k?"on":""}" data-m="${k}">${l}</button>`).join("")}</div>
         <small>不確定就選「上傳＋下載」</small></label>
     </div>
     <div class="btns"><button class="ubtn" data-r="1">儲存</button></div></div>`;
   $("#layer").appendChild(v);
   v.querySelectorAll(".seg").forEach(sg => sg.querySelectorAll("button").forEach(b => b.onclick = () => {
-    mode = b.dataset.m; sg.querySelectorAll("button").forEach(x => x.classList.toggle("on", x === b)); }));
+    mode = b.dataset.m; slideSel(() => sg.querySelectorAll("button").forEach(x => x.classList.toggle("on", x === b))); }));
   const ok = await new Promise(res => {
     const done = r => { if (v._d) return; v._d = 1; const val = r ? {limit_gb: +(v.querySelector("input").value || 0), reset_day: +v.querySelector("select").value, count: mode} : null;
       v.classList.add("closing"); setTimeout(() => { v.remove(); res(val); }, 360); };
@@ -852,7 +852,7 @@ function homeDesk(list, time){
 /* 那台主機的整頁（從卡片的位置展開；電腦上左邊的分頁列留著） */
 function detail(s){
   const r = OPENR || {t:0, b:0, l:0, r:0};
-  return `<div class="det${DETX ? " closing" : ""}" data-key="det:${esc(keyOf(s))}" style="--ct:${r.t}px;--cb:${r.b}px;--cl:${r.l}px;--cr:${r.r}px"><div class="dscroll">
+  return `<div class="det${DETP ? " pre" : ""}${DETX ? " closing" : ""}" data-key="det:${esc(keyOf(s))}" style="--ct:${r.t}px;--cb:${r.b}px;--cl:${r.l}px;--cr:${r.r}px"><div class="dscroll">
     <div class="dtop"><button class="icbtn" data-back title="返回">${I("back")}</button><span class="dtt">${esc(s.name)}</span><span class="hacts">${moreBtn(s).replace("iconbtn", "icbtn")}</span></div>
     ${hostBody(s, true)}</div></div>`;
 }
@@ -940,14 +940,15 @@ function springAt(t){
   return 1;
 }
 function slideSel(change){
-  const z = ZM(), was = canAnim() ? [...document.querySelectorAll(".pane[data-slide],.dock[data-slide],.rnav[data-slide],.rhosts[data-slide],.dseg[data-slide],.fchips[data-slide],.hpick[data-slide]")].map(b => {
+  const z = ZM(), was = canAnim() ? [...document.querySelectorAll("[data-slide]")].map(b => {
+    if (!b.offsetWidth || !b.offsetHeight) return null;
     const g = b.querySelector(":scope>.slide"), on = selOf(b);
-    return [b.dataset.key, g ? g._now : on && boxIn(b, on, z)];
-  }) : [];
+    return [b, b.dataset.key, g ? g._now : on && boxIn(b, on, z)];
+  }).filter(Boolean) : [];
   change();
-  was.forEach(([k, from]) => {
-    const b = document.querySelector(`[data-slide][data-key="${k}"]`), on = b && selOf(b);
-    if (!from || !on) return;
+  was.forEach(([b0, k, from]) => {
+    const b = b0.isConnected ? b0 : k && document.querySelector(`[data-slide][data-key="${CSS.escape(k)}"]`), on = b && selOf(b);
+    if (!from || !on || !b.offsetWidth) return;
     const old = b.querySelector(":scope>.slide"); if (old) { old._stop = 1; old.remove(); }
     const to0 = boxIn(b, on, z);
     if (Math.abs(to0.x - from.x) < 1 && Math.abs(to0.y - from.y) < 1) { if (old) b.classList.remove("sliding"); return; }   // 停在原地：換回它自己的底色
@@ -1015,7 +1016,7 @@ const ACCENTS = [["red", "紅"], ["orange", "橘"], ["amber", "琥珀"], ["lime"
 const SHOWS = [["trend", "歷史曲線圖", "chart"], ["net", "網路速度", "net"], ["box", "容器與服務", "items"], ["info", "連線數與 IP", "info"],
   ["flag", "國旗", "flag"], ["month", "每月流量", "traffic"], ["sun", "天氣", "weather", "用這台裝置的位置"], ["quote", "心情小語", "quote"]];
 const showSum = () => { const n = SHOWS.filter(x => PREF.show[x[2]]).length; return n === SHOWS.length ? "全部顯示" : n ? `顯示 ${n} 項` : "全部隱藏"; };
-const seg = (k, opts) => `<div class="seg">${opts.map(([v, l]) => `<button class="${String(getP(k)) === String(v) ? "on" : ""}" data-pref="${k}" data-val="${v}">${l}</button>`).join("")}</div>`;
+const seg = (k, opts) => `<div class="seg" data-slide>${opts.map(([v, l]) => `<button class="${String(getP(k)) === String(v) ? "on" : ""}" data-pref="${k}" data-val="${v}">${l}</button>`).join("")}</div>`;
 /* 外觀的選項用小預覽圖代替字：主題是迷你畫面、配色風格用那個風格算出來的顏色、文字大小是三種大小的「字」 */
 const lkMini = (m, tone) => `<i class="lkp" data-mode="${m}"${tone ? ` data-tone="${tone}"` : ""}><b></b><s></s><u></u></i>`;
 const lkPick = (k, opts, pic) => `<div class="lks">${opts.map(([v, l]) => `<button class="lkb${String(getP(k)) === String(v) ? " on" : ""}" data-pref="${k}" data-val="${v}" aria-label="${l}"><span class="lkf">${pic(v)}<i class="lkc">${I("check")}</i></span><small>${l}</small></button>`).join("")}</div>`;
@@ -1240,7 +1241,7 @@ function albumModal(node, name){
     finally { busy = false; }
   };
   const tg = (k, on, l, ic) => `<label class="almrw">${I(ic)}<span>${l}</span><input type="checkbox" class="tog" data-almo="${k}" aria-label="${l}"${on ? " checked" : ""}></label>`;
-  const sg = (k, list, val) => `<div class="seg" data-alms="${k}">${list.map(([s, l]) => `<button type="button" class="${val === s ? "on" : ""}" data-v="${s}">${l}</button>`).join("")}</div>`;
+  const sg = (k, list, val) => `<div class="seg" data-slide data-alms="${k}">${list.map(([s, l]) => `<button type="button" class="${val === s ? "on" : ""}" data-v="${s}">${l}</button>`).join("")}</div>`;
   const srow = (ic, l, k, list, val, side = "", extra = "") => `<div class="almrw col"${extra}><div class="almrh">${I(ic)}<span>${l}</span><small class="alms" data-side="${k}">${side}</small></div>${sg(k, list, val)}</div>`;
   const cover = a => a.cv ? `<img alt="" src="${esc(a.cv)}">` : `<i class="almph">${I("album")}</i>`;
   const meta = a => `${[a.n - (a.nv || 0) ? `${a.n - (a.nv || 0)} 張` : "", a.nv ? `${a.nv} 段影片` : ""].filter(Boolean).join("・")}${a.all > a.n ? `（共 ${a.all}）` : ""}・${almLeft(a)}`;
@@ -1304,7 +1305,7 @@ function albumModal(node, name){
         <button type="button" data-alm="photos">${I("album")}<span>挑照片</span><small class="num">${a.n}／${a.all - (a.npend || 0)}</small></button>
         <button type="button" data-alm="devs">${I("devices")}<span>看過的設備</span><small class="num">${a.nlock ? `${I("lock")}${a.nlock}・` : ""}${a.ndev}${a.dev ? `／${a.dev}` : ""}</small></button>
         <button type="button" data-alm="talk">${I("chat")}<span>留言</span><small class="num">${a.ncm}${a.nlk ? `・♥ ${a.nlk}` : ""}</small></button></div>
-      <div class="seg almtab"><button type="button" class="${tab === "basic" ? "on" : ""}" data-almtab="basic">基本與權限</button><button type="button" class="${tab === "more" ? "on" : ""}" data-almtab="more">互動與保護</button></div>
+      <div class="seg almtab" data-slide><button type="button" class="${tab === "basic" ? "on" : ""}" data-almtab="basic">基本與權限</button><button type="button" class="${tab === "more" ? "on" : ""}" data-almtab="more">互動與保護</button></div>
       <div class="almtbody">${oneTabBody(a)}</div>
       <div class="tfootbar almfoot"><button type="button" class="ubtn sm ghost bad ntwipe" data-alm="del">${I("trash")}收回分享連結</button></div>`; },
     photos: () => { const n = PK.photos.filter(p => !p.hid).length;
@@ -1354,7 +1355,7 @@ function albumModal(node, name){
       if (tb) {
         if (tb.dataset.almtab === tab) return;
         tab = tb.dataset.almtab;
-        v.querySelectorAll("[data-almtab]").forEach(x => x.classList.toggle("on", x === tb));
+        slideSel(() => v.querySelectorAll("[data-almtab]").forEach(x => x.classList.toggle("on", x === tb)));
         const a = curA(), box = v.querySelector(".almtbody");
         if (a && box) swapHTML(box, oneTabBody(a));
         return;
@@ -1362,7 +1363,7 @@ function albumModal(node, name){
       const sb = t.closest("[data-alms] button");
       if (sb) {
         const k = sb.parentNode.dataset.alms, val = +sb.dataset.v;
-        sb.parentNode.querySelectorAll("button").forEach(x => x.classList.toggle("on", x === sb));
+        slideSel(() => sb.parentNode.querySelectorAll("button").forEach(x => x.classList.toggle("on", x === sb)));
         if (k === "dl") side("dl", dlSide(val));
         if (k === "up") { side("up", upSide(val)); const uq = v.querySelector("[data-almuq]"); if (uq) reveal(uq, val > 0); }
         if (view === "opts") { o[k] = val; return; }
@@ -1582,7 +1583,7 @@ function abModal(node, name){
       <div class="abhaxis"><span>24 小時前</span><span>12 小時前</span><span>現在</span></div></div>` : "";
     return `<div class="abn"><div><b class="num">${num(x.q)}</b><small>總查詢</small></div><div><b class="num">${num(x.b)}</b><small>已擋掉</small></div><div><b class="num">${x.pct}%</b><small>攔截率</small></div></div>
       ${bars}
-      <div class="seg abtab"><button type="button" class="${lt === "top" ? "on" : ""}" data-ablt="top">最常擋的</button><button type="button" class="${lt === "new" ? "on" : ""}" data-ablt="new">最近擋的</button><button type="button" class="${lt === "allow" ? "on" : ""}" data-ablt="allow">已放行${aln ? ` (${aln})` : ""}</button></div>
+      <div class="seg abtab" data-slide><button type="button" class="${lt === "top" ? "on" : ""}" data-ablt="top">最常擋的</button><button type="button" class="${lt === "new" ? "on" : ""}" data-ablt="new">最近擋的</button><button type="button" class="${lt === "allow" ? "on" : ""}" data-ablt="allow">已放行${aln ? ` (${aln})` : ""}</button></div>
       <div class="abls">${abls(x)}</div>`;
   };
   const steps = () => os === "ios" ? (ios
@@ -1593,7 +1594,7 @@ function abModal(node, name){
       <ol class="ntsteps"><li><span>打開「設定」→「網路和網際網路」→「私人 DNS」</span></li><li><span>選擇「私人 DNS 供應商主機名稱」並貼上主機名稱</span></li></ol>`;
   const setupTab = () => `<div class="tcard">
       <div class="tcardh"><span>連線裝置設定</span><span class="abconn ${D.down || D.pub || D.ext ? "bad" : D.ext === "" ? "ok" : ""}">${I(D.down || D.pub || D.ext ? "warn" : "ok")}${D.down || D.pub || D.ext ? "連線受阻" : D.ext === "" ? `TCP ${D.port} 正常` : `TCP ${D.port}`}</span></div>
-      <div class="seg abos"><button type="button" class="${os === "ios" ? "on" : ""}" data-abos="ios">iPhone / iPad</button><button type="button" class="${os === "and" ? "on" : ""}" data-abos="and">Android</button></div>
+      <div class="seg abos" data-slide><button type="button" class="${os === "ios" ? "on" : ""}" data-abos="ios">iPhone / iPad</button><button type="button" class="${os === "and" ? "on" : ""}" data-abos="and">Android</button></div>
       <div class="abst">${steps()}</div>
       ${D.ext === "" || D.ext ? "" : `<div class="ntst">${I("info")}<span>若手機連不上，請到主機商防火牆打開 TCP ${D.port}</span></div>`}
     </div>`;
@@ -1610,7 +1611,7 @@ function abModal(node, name){
       : D.pub ? `<div class="bkerr">${I("warn")}<span>手機連不上：${esc(D.pub)}</span></div>`
       : D.ext ? `<div class="bkerr">${I("warn")}<span>從「${esc(D.ext_by)}」連不到：請到主機商防火牆打開 TCP ${D.port}</span></div>` : "";
     return `${alert}
-      <div class="seg abmain"><button type="button" class="${mt === "stat" ? "on" : ""}" data-abmt="stat">總覽與紀錄</button><button type="button" class="${mt === "setup" ? "on" : ""}" data-abmt="setup">手機設定</button></div>
+      <div class="seg abmain" data-slide><button type="button" class="${mt === "stat" ? "on" : ""}" data-abmt="stat">總覽與紀錄</button><button type="button" class="${mt === "setup" ? "on" : ""}" data-abmt="setup">手機設定</button></div>
       <div class="abbody">${mt === "stat" ? stats(D.stats) : setupTab()}</div>
       <div class="tfootbar"><button type="button" class="ubtn sm ghost" data-abweb>打開管理頁${EXT}</button><button type="button" class="ubtn sm ghost bad ntwipe" data-ab="off">關閉服務</button></div>`;
   };
@@ -1643,10 +1644,10 @@ function abModal(node, name){
       if (e.target === v) return done();
       const t = e.target;
       const m = t.closest("[data-abmt]");
-      if (m) { if (m.dataset.abmt === mt) return; mt = m.dataset.abmt; v.querySelectorAll("[data-abmt]").forEach(x => x.classList.toggle("on", x === m));
+      if (m) { if (m.dataset.abmt === mt) return; mt = m.dataset.abmt; slideSel(() => v.querySelectorAll("[data-abmt]").forEach(x => x.classList.toggle("on", x === m)));
         last = view(); swapHTML(v.querySelector(".abbody"), mt === "stat" ? stats(D.stats) : setupTab()); return; }
       const o = t.closest("[data-abos]");
-      if (o) { os = o.dataset.abos; v.querySelectorAll("[data-abos]").forEach(x => x.classList.toggle("on", x === o)); last = view(); swapHTML(v.querySelector(".abst"), steps()); return; }
+      if (o) { os = o.dataset.abos; slideSel(() => v.querySelectorAll("[data-abos]").forEach(x => x.classList.toggle("on", x === o))); last = view(); swapHTML(v.querySelector(".abst"), steps()); return; }
       if (t.closest("[data-abcp]")) {
         try { await navigator.clipboard.writeText(D.dot); toast("已複製主機名稱"); }
         catch (_) { const r = document.createRange(); r.selectNodeContents(v.querySelector(".abst code")); getSelection().removeAllRanges(); getSelection().addRange(r); }
@@ -1655,7 +1656,7 @@ function abModal(node, name){
       if (t.closest("[data-abweb]")) return openAgh(node, name);
       if (t.closest("[data-abadd]")) return addDom();
       const lb = t.closest("[data-ablt]");
-      if (lb) { if (lb.dataset.ablt === lt) return; lt = lb.dataset.ablt; v.querySelectorAll("[data-ablt]").forEach(x => x.classList.toggle("on", x === lb));
+      if (lb) { if (lb.dataset.ablt === lt) return; lt = lb.dataset.ablt; slideSel(() => v.querySelectorAll("[data-ablt]").forEach(x => x.classList.toggle("on", x === lb)));
         last = view(); swapHTML(v.querySelector(".abls"), abls(D.stats || {})); return; }
       const pq = t.closest("[data-abp],[data-abqr]");
       if (pq) {
@@ -1695,7 +1696,7 @@ function showsModal(){
   v.addEventListener("click", e => {
     if (e.target === v || e.target.closest("[data-r]")) return done();
     const b = e.target.closest("[data-val]"); if (!b) return;
-    setP(b.dataset.pref, +b.dataset.val); b.parentNode.querySelectorAll("button").forEach(x => x.classList.toggle("on", x === b)); changed(b.dataset.pref);
+    setP(b.dataset.pref, +b.dataset.val); slideSel(() => b.parentNode.querySelectorAll("button").forEach(x => x.classList.toggle("on", x === b))); changed(b.dataset.pref);
   });
 }
 
@@ -1914,7 +1915,7 @@ function swapIn(a, b){
     const inOpt = {duration:(sb || gh) ? T.fast : Math.round(T.mid * .8), easing:DEC, id:"ui"};
     animTargets(b).forEach(el => el.animate([{opacity:0, transform:inTf}, {opacity:1, transform:"none"}], inOpt));
   };
-  if (!sb && Math.abs(hEnd - h0) >= 2) b.animate([{height:h0 + "px", overflow:"hidden"}, {height:hEnd + "px", overflow:"hidden"}], {duration:T.mid, easing:EASE, id:"ui"});
+  if (!sb && !into && !back && Math.abs(hEnd - h0) >= 2) b.animate([{height:h0 + "px", overflow:"hidden"}, {height:hEnd + "px", overflow:"hidden"}], {duration:T.mid, easing:EASE, id:"ui"});
   if (!par || a.style.visibility === "hidden") return enter();
   b.style.visibility = "hidden";
   a._leaving = 1;
@@ -2240,7 +2241,7 @@ function loadStatus(){
   tgStatus(r); selfStatus(r); pkStatus(r); pinStatus(r); sessStatus(r); pairStatus(r); bkStatus(r); skyStatus(r);
 }
 /* 手機：點主機卡片，那台的整頁從卡片的位置長出來；返回時縮回卡片 */
-let DET = "", DETX = false, OPENR = null;
+let DET = "", DETX = false, DETP = false, OPENR = null;
 function cardRect(k){
   const c = [...document.querySelectorAll("#app .hcard")].find(x => x.dataset.open === k); if (!c) return null;
   const z = ZM(), r = c.getBoundingClientRect();
@@ -2248,18 +2249,23 @@ function cardRect(k){
 }
 function openDet(k){
   if (!cardMode(LIST) || DET) return;
-  OPENR = cardRect(k) || {t:0, b:0, l:0, r:0}; DET = k; DETX = false;
+  OPENR = cardRect(k) || {t:0, b:0, l:0, r:0}; DET = k; DETX = false; DETP = canAnim();
   history.pushState({det: k}, "");
   closeMenu(); document.documentElement.classList.add("lock");
   render(LIST);
-  clearTimeout(DETH); DETH = setTimeout(() => { if (DET && !DETX) document.documentElement.classList.add("dhid"); }, T.mid + 80);   // 滑入完才藏底層
+  if (DETP) requestAnimationFrame(() => requestAnimationFrame(() => {   // 等首幀排版與毛玻璃準備完成，再由 GPU 從 0% 順順彈入
+    DETP = false;
+    const el = document.querySelector("#app .det");
+    if (el && DET && !DETX) el.classList.remove("pre");
+  }));
+  clearTimeout(DETH); DETH = setTimeout(() => { if (DET && !DETX) document.documentElement.classList.add("dhid"); }, T.mid + 120);   // 滑入完才藏底層
 }
 let DETH;
 const showBack = () => { clearTimeout(DETH); document.documentElement.classList.remove("dhid"); };
 function closeDet(){ if (!DET) return; if (history.state && history.state.det) history.back(); else shutDet(); }
 function shutDet(){
   if (!DET || DETX) return;
-  DETX = true;
+  DETP = false; DETX = true;
   showBack();
   closeMenu(); hideTip();
   if (!canAnim()) return endDet();
@@ -2269,7 +2275,7 @@ function shutDet(){
     setTimeout(endDet, T.fast + 60);
   });
 }
-function endDet(){ DET = ""; DETX = false; showBack(); document.documentElement.classList.remove("lock"); render(LIST); }
+function endDet(){ DET = ""; DETX = false; DETP = false; showBack(); document.documentElement.classList.remove("lock"); render(LIST); }
 addEventListener("popstate", () => { if (DET && !(history.state && history.state.det)) shutDet(); });
 document.addEventListener("keydown", e => {
   if ((e.key === "Enter" || e.key === " ") && e.target.matches && e.target.matches("[data-open]")) { e.preventDefault(); openDet(e.target.dataset.open); }
@@ -2283,7 +2289,14 @@ function changed(k){
     const next = (PREF.theme === "dark" || (PREF.theme === "auto" && DARKQ.matches)) ? "dark" : "light";
     if (document.documentElement.dataset.mode !== next) smooth(run); else run();
   }
-  else if (k === "tone") smooth(run);            // 配色風格：整頁平順淡入淡出，避免毛玻璃逐幀重繪閃爍
+  else if (k === "accent" || k === "tone") smooth(() => {   // 主題色／配色風格：只改屬性與選取態，免整頁 diff 與重查狀態，交給 GPU 一次截圖順滑淡換
+    applyPrefs();
+    document.querySelectorAll(`#app [data-pref="${k}"]`).forEach(b => b.classList.toggle("on", b.dataset.val === String(PREF[k])));
+    if (k === "accent") {
+      const sv = document.querySelector("#app .sw-val"), lb = ACCENTS.find(x => x[0] === PREF.accent)?.[1] || (PREF.accent === "rainbow" ? "彩色" : "藍");
+      if (sv) sv.innerHTML = `<i></i>${esc(lb)}`;
+    }
+  });
   else run();
   if (k === "refresh") restart();
   if (k === "show.weather") { if (PREF.show.weather) store(WXK, JSON.stringify({...wxMem(), deny: 0})); wxRun(); }
@@ -2712,7 +2725,7 @@ async function tgModal(){
         <input class="field" data-k="chat" inputmode="text" autocomplete="off" placeholder="可以留空，會自動找" value="${esc(st.chat || "")}"></div>
       <div class="lbl">③ 通知保留多久
         <small>時間到自動刪掉，最多 2 天</small>
-        <div class="seg keep">${[[0,"不刪除"],[1,"1 小時"],[6,"6 小時"],[24,"1 天"],[47,"2 天"]].map(([h,l])=>`<button type="button" data-keep="${h}" class="${(+st.keep||0)===h?"on":""}">${l}</button>`).join("")}</div></div>
+        <div class="seg keep" data-slide>${[[0,"不刪除"],[1,"1 小時"],[6,"6 小時"],[24,"1 天"],[47,"2 天"]].map(([h,l])=>`<button type="button" data-keep="${h}" class="${(+st.keep||0)===h?"on":""}">${l}</button>`).join("")}</div></div>
       <div class="msg" aria-live="polite"></div>
     </div>
     <div class="btns three"><button class="ubtn ghost" data-test>測試</button><button class="ubtn" data-save>儲存</button></div>
@@ -2743,7 +2756,7 @@ async function tgModal(){
         say(d.chats.length > 1 ? `找到 ${d.chats.length} 個聊天，點一下要傳去哪裡` : `會傳到「${d.chats[0].name}」`, "ok");
       });
       const kp = t.closest("[data-keep]");
-      if (kp) { v.querySelectorAll("[data-keep]").forEach(x => x.classList.toggle("on", x === kp)); return; }
+      if (kp) { slideSel(() => v.querySelectorAll("[data-keep]").forEach(x => x.classList.toggle("on", x === kp))); return; }
       const c = t.closest("[data-chat]");
       if (c) { q("chat").value = c.dataset.chat; v.querySelectorAll("[data-chat]").forEach(x => x.classList.toggle("on", x === c)); return say(""); }
       const tb = t.closest("[data-test]");
@@ -3599,7 +3612,7 @@ async function bkModal(node, label){
   v.innerHTML = `<div class="dialog tdlg bkdlg">
     <div class="thead">${IC("archive", "")}<div class="thead-t"><h3>每日備份</h3><p>${esc(label)}</p></div><span class="tbadge bkmst${bc ? " " + bc : ""}">${bt}</span></div>
     <div class="form">
-      <div class="seg bktab"><button type="button" class="on" data-bktab="stat">備份狀態</button><button type="button" data-bktab="set">份數與設定</button></div>
+      <div class="seg bktab" data-slide><button type="button" class="on" data-bktab="stat">備份狀態</button><button type="button" data-bktab="set">份數與設定</button></div>
       <div class="bkpane" data-bkpane="stat">
         <div class="tcard bksum">${bkSummaryHTML(d)}</div>
         <div class="tcard bksch">
@@ -3661,7 +3674,7 @@ async function bkModal(node, label){
       if (bt2) {
         if (bt2.dataset.bktab === tab) return;
         tab = bt2.dataset.bktab;
-        v.querySelectorAll("[data-bktab]").forEach(x => x.classList.toggle("on", x === bt2));
+        slideSel(() => v.querySelectorAll("[data-bktab]").forEach(x => x.classList.toggle("on", x === bt2)));
         v.querySelectorAll("[data-bkpane]").forEach(x => { x.hidden = x.dataset.bkpane !== tab; });
         return;
       }
@@ -3978,7 +3991,7 @@ async function pageClick(e){
   if (t.closest("[data-back]")) return closeDet();
   if (t.closest("[data-addhost]")) return addHostModal();
   const rg = t.closest("[data-range]");
-  if (rg) { if (RANGE !== rg.dataset.range) { RANGE = rg.dataset.range; store("vps-range", RANGE); render(LIST); } return; }
+  if (rg) { if (RANGE !== rg.dataset.range) { RANGE = rg.dataset.range; store("vps-range", RANGE); slideSel(() => render(LIST)); } return; }
   const tf = t.closest("[data-traffic]");
   if (tf) return trafficModal(tf.dataset.traffic, tf.dataset.label);
   if (t.closest("[data-refresh]")) return refreshNow(t.closest("[data-refresh]"));
