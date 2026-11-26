@@ -1022,9 +1022,18 @@ const lkMini = (m, tone) => `<i class="lkp" data-mode="${m}"${tone ? ` data-tone
 const lkPick = (k, opts, pic) => `<div class="lks">${opts.map(([v, l]) => `<button class="lkb${String(getP(k)) === String(v) ? " on" : ""}" data-pref="${k}" data-val="${v}" aria-label="${l}"><span class="lkf">${pic(v)}<i class="lkc">${I("check")}</i></span><small>${l}</small></button>`).join("")}</div>`;
 const tog = (k, l) => `<input type="checkbox" class="tog" data-pref="${k}" aria-label="${l}" ${getP(k) ? "checked" : ""}>`;
 let SETC = store("vs-setc") || "";
+const STCACHE = {};   // 設定頁各列狀態快取：切到設定時第 0 幀就帶入正確字與徽章，避免整頁跳一下
+function selfSumHtml(){
+  const hosts = LIST.filter(x => x.online && SELFST[keyOf(x)]);
+  const pend = hosts.reduce((n, h) => { const d = SELFST[keyOf(h)]; return n + (d.has && !d.running ? 1 : 0) + (d.cloud && d.cloud.has && !d.cloud.running ? 1 : 0); }, 0);
+  return pend > 1 ? `<span>${pend} 項有新版</span><button class="ubtn sm" data-selfup="*">全部更新</button>` : "";
+}
 function setPage(list){
   const on = list.filter(s => s.online).sort((a, b) => ORDER.indexOf(keyOf(a)) - ORDER.indexOf(keyOf(b))), self = on.some(s => !s.node);
-  const go = (attr, ic, l, st) => `<button class="li" ${attr}>${IC(ic, "")}<span class="lab">${l}<small class="${st}" data-keep data-ld>讀取中…</small></span><span class="stb" data-keep hidden></span>${CHEV}</button>`;
+  const go = (attr, ic, l, st) => {
+    const c = STCACHE[st], v = c ? (!c.b ? "" : c.b === true ? "✓" : String(c.b)) : "", bh = c && c.b === true ? I("check") : v;
+    return `<button class="li" ${attr}>${IC(ic, "")}<span class="lab">${l}<small class="${st}${c && c.on ? " on" : ""}" data-keep data-ld>${c ? esc(c.t) : "讀取中…"}</small></span><span class="stb${c && typeof c.b === "number" ? " n" : ""}" data-keep${c && c.b ? ` data-v="${esc(v)}"` : " hidden"}>${bh}</span>${CHEV}</button>`;
+  };
   const accMap = Object.fromEntries([...ACCENTS, ["rainbow", "彩色"]]);
   const sw = ACCENTS.map(([v, l]) => `<button class="${PREF.accent === v ? "on" : ""}" data-pref="accent" data-val="${v}" data-accent="${v}" title="${l}" aria-label="${l}">${I("check")}</button>`).join("")
     + `<button class="rbsw${PREF.accent === "rainbow" ? " on" : ""}" data-pref="accent" data-val="rainbow" title="彩色" aria-label="彩色">${I("check")}</button>`;
@@ -1045,7 +1054,7 @@ function setPage(list){
   if (on.length) {
     const s = on.find(x => keyOf(x) === TOOLH) || on.find(x => !x.node) || on[0], k = esc(keyOf(s)), node = esc(s.node || "");
     hpk = on.length > 1 ? hpick(on, s, x => x.self_has ? `<span class="dot info"></span>` : "") : "";
-    h += (D ? "" : `<div class="lbl" data-key="lh">主機<button data-selfcheck>檢查新版</button></div>`) + `<div class="selfsum" data-key="selfsum" data-keep data-ld></div>` + (D ? "" : hpk);   // 電腦：選主機、檢查新版放上面的工具列，右邊第一張卡片跟左邊分類對齊
+    h += (D ? "" : `<div class="lbl" data-key="lh">主機<button data-selfcheck>檢查新版</button></div>`) + `<div class="selfsum" data-key="selfsum" data-keep data-ld>${selfSumHtml()}</div>` + (D ? "" : hpk);   // 電腦：選主機、檢查新版放上面的工具列，右邊第一張卡片跟左邊分類對齊
     h += `<div class="group" data-key="g-h" data-keyed><div class="selfbox" data-key="self" data-n="${node}"${SELFST[keyOf(s)] ? "" : " data-ld"}>${selfRowHtml(s)}</div>${sysRow(s)}${secRow(s)}<button class="li" data-key="pw" data-newtok="${node}" data-label="${esc(s.name)}">${IC("key", "")}<span class="lab">換一組新密碼<small>舊密碼會立刻失效</small></span>${CHEV}</button>`
       + (s.keep ? `<label class="li" data-key="keep">${IC("keep", "")}<span class="lab">Oracle 防回收${keepLine(s.keep)}</span><input type="checkbox" class="tog" data-keepalive="${node}" aria-label="Oracle 防回收" ${s.keep.on ? "checked" : ""}></label>` : "")
       + (s.node ? "" : go(`data-key="pair" data-pair`, "link", "配對暗號", "pairst")) + `</div>`;
@@ -1357,7 +1366,7 @@ function albumModal(node, name){
         tab = tb.dataset.almtab;
         slideSel(() => v.querySelectorAll("[data-almtab]").forEach(x => x.classList.toggle("on", x === tb)));
         const a = curA(), box = v.querySelector(".almtbody");
-        if (a && box) swapHTML(box, oneTabBody(a));
+        if (a && box) swapPane(box, () => { box.innerHTML = oneTabBody(a); });
         return;
       }
       const sb = t.closest("[data-alms] button");
@@ -1369,10 +1378,10 @@ function albumModal(node, name){
         if (view === "opts") { o[k] = val; return; }
         const x = await run({action:"edit", id:cur, [k]:val}); if (!x) return;
         const a = curA();
-        if (k === "secs") { toast(val ? `從現在起 ${sb.textContent}` : "不會過期了"); if (a) { side("secs", almLeft(a)); paintHead(); } }
+        if (k === "secs") { toast(val ? `從現在起 ${sb.textContent}` : "不會過期了"); if (a) { side("secs", almLeft(a)); const sp = head.querySelector(".thead-t p"); if (sp) txt(sp, meta(a)); } }
         if (k === "dev") { toast(val ? `只給 ${val} 台設備看` : "幾台設備都能看"); if (a) side("dev", val ? `${a.ndev} 台在看` : "不限"); }
         if (k === "dl") toast(["朋友不能下載了", "只能下載壓縮圖", "可以下載原圖"][val]);
-        if (k === "up") { toast(["朋友不能放照片了", "朋友放的要你確認", "朋友放的馬上出現"][val]); if (a && val === 2 && a.npend) draw(); }
+        if (k === "up") { toast(["朋友不能放照片了", "朋友放的要你確認", "朋友放的馬上出現"][val]); if (a && val === 2 && a.npend) { const nw = v.querySelector(".almnew"); if (nw) { nw.classList.remove("hot"); const sm = nw.querySelector("small"); if (sm) txt(sm, `共 ${a.nup} 個`); } } }
         if (k === "uq") toast(`朋友最多放 ${val} GB`);
         return;
       }
@@ -1645,9 +1654,9 @@ function abModal(node, name){
       const t = e.target;
       const m = t.closest("[data-abmt]");
       if (m) { if (m.dataset.abmt === mt) return; mt = m.dataset.abmt; slideSel(() => v.querySelectorAll("[data-abmt]").forEach(x => x.classList.toggle("on", x === m)));
-        last = view(); swapHTML(v.querySelector(".abbody"), mt === "stat" ? stats(D.stats) : setupTab()); return; }
+        last = view(); const bx = v.querySelector(".abbody"); swapPane(bx, () => { bx.innerHTML = mt === "stat" ? stats(D.stats) : setupTab(); }); return; }
       const o = t.closest("[data-abos]");
-      if (o) { os = o.dataset.abos; slideSel(() => v.querySelectorAll("[data-abos]").forEach(x => x.classList.toggle("on", x === o))); last = view(); swapHTML(v.querySelector(".abst"), steps()); return; }
+      if (o) { os = o.dataset.abos; slideSel(() => v.querySelectorAll("[data-abos]").forEach(x => x.classList.toggle("on", x === o))); last = view(); const bx = v.querySelector(".abst"); swapPane(bx, () => { bx.innerHTML = steps(); }); return; }
       if (t.closest("[data-abcp]")) {
         try { await navigator.clipboard.writeText(D.dot); toast("已複製主機名稱"); }
         catch (_) { const r = document.createRange(); r.selectNodeContents(v.querySelector(".abst code")); getSelection().removeAllRanges(); getSelection().addRange(r); }
@@ -1657,7 +1666,7 @@ function abModal(node, name){
       if (t.closest("[data-abadd]")) return addDom();
       const lb = t.closest("[data-ablt]");
       if (lb) { if (lb.dataset.ablt === lt) return; lt = lb.dataset.ablt; slideSel(() => v.querySelectorAll("[data-ablt]").forEach(x => x.classList.toggle("on", x === lb)));
-        last = view(); swapHTML(v.querySelector(".abls"), abls(D.stats || {})); return; }
+        last = view(); const bx = v.querySelector(".abls"); swapPane(bx, () => { bx.innerHTML = abls(D.stats || {}); }); return; }
       const pq = t.closest("[data-abp],[data-abqr]");
       if (pq) {
         try {
@@ -1874,6 +1883,7 @@ function through(a, b){
     Object.assign(a.style, {position:"absolute", left:(r.left - R.left) / z - par.clientLeft - tfX + "px", top:(top - sy) + "px", width:r.width / z + "px",
       height:h + "px", overflow:"hidden", margin:"0", pointerEvents:"none", animation:"none", clipPath:sy > 0 ? `inset(${sy}px 0 0 0)` : ""});
     b.after(a); still(a);
+    if (sy > 0) scrollTo(0, 0);
     const stride = r.width / z + 32, dur = Math.round(T.mid * Math.max(.55, 1 - Math.abs(curX) / stride));
     const opt = {duration:dur, easing:EASE, id:"ui"};
     a.animate([{transform:`translateX(${curX}px)`}, {transform:`translateX(${-TABDIR * stride}px)`}], {...opt, fill:"forwards"}).onfinish = () => a.remove();
@@ -2230,7 +2240,7 @@ function setTab(k){
   TAB = k; sstore("vs-tab", k);
   const hd = document.querySelector(".dock.hid"); if (hd) hd.classList.remove("hid");
   slideSel(() => render(LIST));
-  scrollTo(0, 0);
+  if (scrollY > 0) scrollTo(0, 0);
 }
 let TABID = 0;
 /* 工具、設定頁上「讀取中…」的狀態：換到那一頁時讀一次（之後自動更新不會蓋掉） */
@@ -2467,6 +2477,17 @@ function swapHTML(el, html){
   fade(olds, [...el.children]);
   if (Math.abs(h1 - h0) > 1) el.animate([{height:h0 + "px", overflow:"hidden"}, {height:h1 + "px", overflow:"hidden"}], o);
 }
+/* 彈窗分頁切換（每日備份、相簿詳細設定、擋廣告）：整塊統一淡入＋高度滑動，不拆解子卡片避免外框閃爍 */
+function swapPane(box, update){
+  if (!box) return;
+  if (!canAnim() || !box.isConnected) return update();
+  box.getAnimations({subtree:true}).forEach(a => { if (!a.animationName) a.cancel(); });
+  const h0 = box.offsetHeight;
+  update();
+  const h1 = box.offsetHeight, o = {duration:T.mid, easing:EASE, id:"ui"};
+  box.animate([{opacity:0, transform:"translateY(4px)"}, {opacity:1, transform:"none"}], o);
+  if (Math.abs(h1 - h0) > 1) box.animate([{height:h0 + "px", overflow:"hidden"}, {height:h1 + "px", overflow:"hidden"}], o);
+}
 /* 顯示／收起一塊（取代直接改 hidden）：撐開後淡入；淡出後收起 */
 function reveal(el, on){
   if (!el) return;
@@ -2499,12 +2520,30 @@ function selfRowHtml(h){
 }
 function selfPaint(root){
   const box = root.querySelector(".selfbox"), sum = root.querySelector(".selfsum"); if (!box) return;
-  const hosts = LIST.filter(x => x.online && SELFST[keyOf(x)]);
-  const pend = hosts.reduce((n, h) => { const d = SELFST[keyOf(h)]; return n + (d.has && !d.running ? 1 : 0) + (d.cloud && d.cloud.has && !d.cloud.running ? 1 : 0); }, 0);
-  if (sum) swapHTML(sum, pend > 1 ? `<span>${pend} 項有新版</span><button class="ubtn sm" data-selfup="*">全部更新</button>` : "");
+  if (sum) swapHTML(sum, selfSumHtml());
   const h = LIST.find(x => (x.node || "") === box.dataset.n);
   if (!h || !SELFST[keyOf(h)]) return;
   swapHTML(box, selfRowHtml(h));
+}
+/* 背景預先讀取設定頁狀態：第一次滑到設定時各列與更新狀態已就緒，整頁不跳動 */
+function prewarmSet(){
+  if (window._pw || SHARE || !getTok() || !LIST.length) return;
+  window._pw = 1;
+  const on = LIST.filter(x => x.online), self = on.some(x => !x.node);
+  if (on.length && on.some(h => !SELFST[keyOf(h)])) {
+    Promise.all(on.map(h => selfCall(h.node || "", "status").then(d => [h, d]).catch(e => [h, {err:e.message, old:true}]))).then(res => {
+      res.forEach(([h, d]) => SELFST[keyOf(h)] = d); SELFT = Date.now();
+      const r = view(); if (r && r.querySelector(".selfbox")) selfPaint(r);
+    });
+  }
+  tgCall({action:"status"}).then(d => { STCACHE.tgst = {t: d.on ? "" : d.has_token ? "還沒選要傳到哪裡" : "還沒設定", b: !!d.on, on: !!d.on}; }, () => {});
+  if (self) {
+    if (PK_OK) pkCall("/api/passkey", {action:"list"}, 1).then(d => { const n = d.keys && d.keys.length; STCACHE.pkst = {t: n ? "" : "還沒登記", b: n || false, on: !!n}; }, () => {});
+    pinCall({action:"status"}).then(d => { const ok = !!(d.on && !d.locked); STCACHE.pinst = {t: !d.on ? "還沒設定" : d.locked ? `輸錯太多次，暫停中（還有 ${Math.ceil(d.locked / 60)} 分鐘）` : "", b: ok, on: ok}; }, () => {});
+    sessCall({action:"list"}).then(d => { STCACHE.sessst = {t: "", b: (d.list || []).length || 1, on: false}; }, () => {});
+    pairCall({action:"status"}).then(d => { const n = (d.keys || []).length; STCACHE.pairst = {t: n ? "" : "還沒配對", b: n || false, on: n > 0}; }, () => {});
+    skyCall({action:"status"}).then(d => { STCACHE.skyst = {t: skyLine(d), b: false, on: !!d.on && !d.err}; }, () => {});
+  }
 }
 /* jobs：[{node, kind:"self"|"cloud"}]；不給就是「全部更新」 */
 async function selfUpdate(root, jobs){
@@ -2780,7 +2819,8 @@ const skyLine = d => d.on ? d.err ? d.err : d.out ? `今天的次數用完了，
   : d.out ? `今天的次數用完了，${flyHM(d.out * 1000)} 恢復` : "還沒設定";
 async function skyStatus(root){
   const el = root.querySelector(".skyst"); if (!el) return;
-  try { const d = await skyCall({action:"status"}); txt(el, skyLine(d)); el.classList.toggle("on", !!d.on && !d.err); }
+  try { const d = await skyCall({action:"status"}), s = skyLine(d), on = !!d.on && !d.err;
+    STCACHE.skyst = {t: s, b: false, on}; txt(el, s); el.classList.toggle("on", on); }
   catch(e) { txt(el, e.message); }
 }
 async function skyModal(){
@@ -3071,6 +3111,8 @@ async function pkModal(){
 
 /* 設定列表的狀態：設好了只在右邊放一個勾或數字，還沒設好（要你動手）才寫字 */
 function stSet(el, t, b){
+  const k = [...el.classList].find(c => /st$/.test(c));
+  if (k) STCACHE[k] = {t, b: b || false, on: !!b};
   const li = el.closest(".li"); txt(el, t);
   let g = li && li.querySelector(".stb");
   if (!g) return;
@@ -3613,6 +3655,7 @@ async function bkModal(node, label){
     <div class="thead">${IC("archive", "")}<div class="thead-t"><h3>每日備份</h3><p>${esc(label)}</p></div><span class="tbadge bkmst${bc ? " " + bc : ""}">${bt}</span></div>
     <div class="form">
       <div class="seg bktab" data-slide><button type="button" class="on" data-bktab="stat">備份狀態</button><button type="button" data-bktab="set">份數與設定</button></div>
+      <div class="bkpw">
       <div class="bkpane" data-bkpane="stat">
         <div class="tcard bksum">${bkSummaryHTML(d)}</div>
         <div class="tcard bksch">
@@ -3630,6 +3673,7 @@ async function bkModal(node, label){
           <small>還原備份時必須輸入這組密碼，請另外妥善保存</small>
           <span class="bknew" hidden><input class="field" type="password" maxlength="128" autocomplete="new-password" placeholder="輸入新密碼（至少 8 個字）"><button type="button" class="ubtn sm" data-setkey>儲存</button><button type="button" class="ubtn sm ghost" data-chgno>取消</button></span>
         </div>
+      </div>
       </div>
       <div class="msg"></div>
       <div class="tfootbar"><button type="button" class="ubtn ghost" data-dl>${I("dl")}下載最新</button><button type="button" class="ubtn" data-run>立即備份</button></div>
@@ -3675,7 +3719,7 @@ async function bkModal(node, label){
         if (bt2.dataset.bktab === tab) return;
         tab = bt2.dataset.bktab;
         slideSel(() => v.querySelectorAll("[data-bktab]").forEach(x => x.classList.toggle("on", x === bt2)));
-        v.querySelectorAll("[data-bkpane]").forEach(x => { x.hidden = x.dataset.bkpane !== tab; });
+        swapPane(v.querySelector(".bkpw"), () => v.querySelectorAll("[data-bkpane]").forEach(x => { x.hidden = x.dataset.bkpane !== tab; }));
         return;
       }
       if (e.target.closest("[data-restore]")) {     // 還原說明蓋在上面時，先把這個視窗藏起來
@@ -4002,7 +4046,7 @@ async function pageClick(e){
   const dsg = t.closest("[data-dseg]");
   if (dsg) { if (DSEG !== dsg.dataset.dseg) { DSEG = dsg.dataset.dseg; sstore("vs-dseg", DSEG); slideSel(() => render(LIST)); } return; }
   if (t.closest("[data-logout]")) {
-    if (await modal({icon:"logout", cls:"theme", title:"要登出嗎？", text:"", ok:"登出"})) { sessCall({action:"out"}).catch(() => {}); setTok(""); LIST = []; clearTimeout(timer); DET = ""; showBack(); document.documentElement.classList.remove("lock"); login(); }
+    if (await modal({icon:"logout", cls:"theme", title:"要登出嗎？", text:"", ok:"登出"})) { sessCall({action:"out"}).catch(() => {}); setTok(""); LIST = []; for (const k in STCACHE) delete STCACHE[k]; window._pw = 0; clearTimeout(timer); DET = ""; showBack(); document.documentElement.classList.remove("lock"); login(); }
     return;
   }
   const th = t.closest("[data-toolh]");
@@ -4285,6 +4329,7 @@ async function tick(){
       if (UPW.show && (UPW.jobs.length || UPW.wait.length)) setTimeout(upvOpen, 600);   // 還有別台在更新：進度視窗接著開
       else if (UPW.rows.length) { UPW.rows = []; UPW.show = false; upwSave(); }
       upwRun();
+      setTimeout(prewarmSet, 450);               // 背景預先抓好設定頁狀態，滑過去時整頁不跳一下
       setTimeout(wxRun, 1200);                   // 畫面出來後再問位置、抓天氣，不拖慢開啟
     }
     if (BOOTED) await settle();
