@@ -290,10 +290,11 @@ async function swOn(){                                       // 照片加密送�
   } catch (e) { return false; }
 }
 const swClear = () => { try { navigator.serviceWorker?.controller?.postMessage({type:"clear", code:CODE}); } catch (e) {} };
+let SWOK = false;
 async function boot(){
   let r;
-  const sw = await swOn();                                   // 不能在背景解開的瀏覽器（例如 LINE 裡面的）跟主機說一聲，照舊給一般圖片
-  try { r = await fetch(BASE + "/m" + (sw ? "" : "?pl=1"), {credentials:"same-origin", cache:"no-store"}); }
+  SWOK = await swOn();                                       // 不能在背景解開的瀏覽器（例如 LINE 裡面的）跟主機說一聲，照舊給一般圖片
+  try { r = await fetch(BASE + "/m" + (SWOK ? "" : "?pl=1"), {credentials:"same-origin", cache:"no-store"}); }
   catch (e) { return gate("off", "連不上，等一下再試"); }
   if (r.status === 401) return askPw();
   if (r.status === 403) { swClear(); const x = await r.json().catch(() => ({}));
@@ -560,7 +561,7 @@ function zoomWall(z, fx, fy, pre){                            // 換大小：每
   const a0 = anc >= 0 ? vis.get(anc) : null;
   TILES.forEach(t => { t.getAnimations().forEach(a => a.cancel()); t.querySelectorAll("img,.bdg").forEach(x => x.getAnimations().forEach(a => a.cancel())); });
   document.querySelectorAll(".dh,.scn").forEach(h => h.getAnimations().forEach(a => a.cancel()));
-  const OUT = [".mems", ".stats", ".msec", ".foot"].map(q => $(q)).filter(Boolean);       // 照片牆上下的回憶、地圖、結尾也跟著滑
+  const OUT = [".mems", ".stats", ".hl", ".gear", ".msec", ".gbk", ".foot"].map(q => $(q)).filter(Boolean);       // 照片牆上下的回憶、精選、器材、地圖、留言簿、結尾也跟著滑
   OUT.forEach(e => e.getAnimations().forEach(a => a.cancel()));
   const o0 = OUT.map(e => e.getBoundingClientRect().top), h0 = new Map();
   document.querySelectorAll(".dh[data-k]").forEach(h => h0.set(h.dataset.k, h.getBoundingClientRect().top));
@@ -1802,10 +1803,11 @@ function tmac(el, pts, r, path, len){
     <i class="tmh"></i><div class="tml"><b class="num"></b><span></span></div></div></div>`);
   const box = el.nextElementSibling, bar = box.querySelector(".tmt"), segs = [...box.querySelectorAll(".tms")], hd = box.querySelector(".tmh"), lab = box.querySelector(".tml"), play = box.querySelector(".tmp"), trk = box.querySelector(".tmr");
   const pos = k => n > 1 ? k / (n - 1) : 1;                   // 第一張在最左、最後一張在最右；每天第一張剛好落在那天那格裡（k/(n-1) 介於 k/n 和 (k+1)/n）
+  let barW = 0, trkL = 0, trkW = 0, labW = 0;                 // 寬度記著，播放時不每格讀取造成強制重排
   function seat(k){                                           // 指針、每格填到哪、說明泡泡（不超出兩頭）
-    const u = pos(k), W = bar.clientWidth, lw = lab.offsetWidth, x = trk.offsetLeft + u * trk.clientWidth;   // 兩頭留指針的半徑，不會壓到播放鈕、跑出畫面
-    const lx = Math.max(Math.min(0, x - 18), Math.min(Math.max(W - lw, x - lw + 18), x - lw / 2));       // 泡泡不超出兩頭，但箭頭不擠到圓角上
-    hd.style.left = `${x.toFixed(1)}px`;
+    const u = pos(k), x = trkL + u * trkW;                    // 兩頭留指針的半徑，不會壓到播放鈕、跑出畫面
+    const lx = Math.max(Math.min(0, x - 18), Math.min(Math.max(barW - labW, x - labW + 18), x - labW / 2));   // 泡泡不超出兩頭，但箭頭不擠到圓角上
+    hd.style.transform = `translateX(${x.toFixed(1)}px)`;
     lab.style.transform = `translateX(${lx.toFixed(1)}px)`; lab.style.setProperty("--ax", `${(x - lx).toFixed(1)}px`);
     days.forEach((x, j) => { const f = Math.max(0, Math.min(1, (u * n - x.k) / x.c)); segs[j].style.setProperty("--f", f.toFixed(4)); segs[j].classList.toggle("on", Math.round(k) >= x.k && Math.round(k) < x.k + x.c); });
   }
@@ -1813,8 +1815,9 @@ function tmac(el, pts, r, path, len){
     const p = PH[pts[idx].i], d = p.x.dtf ? null : pd(p.x.dt);
     lab.querySelector("b").textContent = d ? `${dayNum(d.k) ? `第 ${dayNum(d.k)} 天・` : ""}${ftod(p, d)}` : "";
     lab.querySelector("span").textContent = p.p ? p.p.n : "";
+    labW = lab.offsetWidth;
   }
-  const fitW = () => trk.style.setProperty("--bw", `${trk.clientWidth}px`);
+  const fitW = () => { barW = bar.clientWidth; trkL = trk.offsetLeft; trkW = trk.clientWidth; labW = lab.offsetWidth; trk.style.setProperty("--bw", `${trkW}px`); };
   fitW(); if (window.ResizeObserver) (sec._tro = new ResizeObserver(() => { fitW(); seat(at); })).observe(bar);
   const bub = el.querySelector(".tmb"), ims = bub.querySelectorAll("img");
   let at = n - 1, shown = -1, run = 0, flip = 0;
@@ -1828,9 +1831,9 @@ function tmac(el, pts, r, path, len){
     bar.setAttribute("aria-valuenow", idx + 1);
     if (idx !== shown) {
       shown = idx; flip ^= 1;
-      const nx = ims[flip], od = ims[flip ^ 1];
+      const my = shown, nx = ims[flip], od = ims[flip ^ 1];
       nx.classList.remove("ok"); nx.src = src(p, "s");
-      const on = () => { nx.classList.add("ok"); od.classList.remove("ok"); };
+      const on = () => { if (shown !== my) return; nx.classList.add("ok"); od.classList.remove("ok"); };
       nx.complete && nx.naturalWidth ? on() : nx.onload = on;
       mks.forEach(([m, o]) => m.classList.toggle("fut", o > idx));
       label(idx);
@@ -2034,7 +2037,8 @@ function openLb(i, from){
       v.addEventListener("waiting", () => buf(!v.paused));
       ["playing", "pause", "ended", "error", "emptied"].forEach(k => v.addEventListener(k, () => buf(false)));
     }
-    if (v.paused) { v.closest(".zw").classList.add("playing"); if (v.readyState < 3) v.closest(".zw").classList.add("buf"); v.play().catch(() => {}); setTimeout(() => { if (!v.paused) el.classList.add("bare"); }, 1200); }
+    clearTimeout(S.vbT);
+    if (v.paused) { v.closest(".zw").classList.add("playing"); if (v.readyState < 3) v.closest(".zw").classList.add("buf"); v.play().catch(() => {}); S.vbT = setTimeout(() => { if (LB === S && !S.closing && !v.paused) el.classList.add("bare"); }, 1200); }
     else v.pause();
     vSync();
   }
@@ -2236,8 +2240,8 @@ function openLb(i, from){
         if (LB !== S || S.closing) return;
         z.style.transform = ""; z.style.clipPath = ""; if (big) big.style.transition = ""; goneSet();
         z.animate([{transform:a0.t, clipPath:a0.c}, {transform:"translate(0px,0px) scale(1)", clipPath:NOCLIP}], {duration:T.mid + 60, easing:DEC});
-        bg.style.opacity = 1; bg.animate([{opacity:0}, {opacity:1}], {duration:T.mid, easing:EASE, fill:"forwards"});
-        el.querySelectorAll(".lbt,.lbb,.nav,.lbs").forEach(x => { x.style.opacity = ""; x.animate([{opacity:0}, {opacity:1}], {duration:T.mid, delay:T.fast, easing:EASE, fill:"backwards"}); });
+        bg.style.opacity = 1; bg.animate([{opacity:0}, {opacity:1}], {duration:T.mid, easing:EASE});
+        el.querySelectorAll(".lbt,.lbb,.nav,.lbs").forEach(x => { x.style.opacity = ""; if (!x.disabled) x.animate([{opacity:0}, {opacity:1}], {duration:T.mid, delay:T.fast, easing:EASE, fill:"backwards"}); });
         setTimeout(() => { S.hold = 0; bigQ(); }, T.mid + 90);
       }));
     };
@@ -2267,9 +2271,10 @@ function openLb(i, from){
     track.style.transform = "";
     if (from && anim()) track.animate([{transform:`translateX(${from}px)`}, {transform:"none"}], {duration:T.mid, easing:DEC});
   }
-  function close(){
+  function close(flick){
     if (S.closing) return; S.closing = 1;
-    clearTimeout(S.bqT); clearTimeout(S.xlT); clearTimeout(S.infT); clearTimeout(S.palT); clearTimeout(S.lvT); clearTimeout(S.wt);
+    clearTimeout(S.bqT); clearTimeout(S.xlT); clearTimeout(S.infT); clearTimeout(S.palT); clearTimeout(S.lvT); clearTimeout(S.wt); clearTimeout(S.vbT); clearTimeout(tapT);
+    if (wz.raf) { cancelAnimationFrame(wz.raf); wz.raf = 0; }
     if (S.pre) { S.pre = 0; el.style.visibility = ""; }
     finish();
     /* 縮回哪裡：同一張回到打開的地方；換過張就回到那張自己的格子，格子不在畫面上就先在大圖後面把照片牆捲到那裡（像手機相簿），再縮回去 */
@@ -2305,7 +2310,7 @@ function openLb(i, from){
     const bi = !ANDR && box && box.querySelector("img.hi,.hlc>img"), toHd = !!(bi && bi.currentSrc && bi.currentSrc === new URL(src(p, "l"), location.href).href);   // 縮回去的格子本身就是 HDR 大圖（精選、每天封面）：不先淡掉，不然會先變暗再變亮
     const hb = p.hdr && !toHd && zw.querySelector(".s2.ok"), sm = zw.querySelectorAll("img.s1")[1];
     if (hb && sm && sm.complete && sm.naturalWidth) hb.animate([{opacity:1}, {opacity:0}], {duration:T.mid, easing:EASE, fill:"forwards"});
-    if (r) { const a1 = toTile(r, f); zw.animate([{transform:n0, clipPath:NOCLIP}, {transform:a1.t, clipPath:a1.c}], {duration:T.mid, easing:EASE, fill:"forwards"}).onfinish = end; }
+    if (r) { const a1 = toTile(r, f); zw.animate([{transform:n0, clipPath:NOCLIP}, {transform:a1.t, clipPath:a1.c}], {duration:T.mid, easing:flick ? DEC : EASE, fill:"forwards"}).onfinish = end; }
     else zw.animate([{opacity:1}, {opacity:0, transform:`${n0} scale(.92)`}], {duration:T.mid, easing:EXIT, fill:"forwards"}).onfinish = end;
     bg.animate([{opacity:getComputedStyle(bg).opacity}, {opacity:0}], {duration:T.mid, easing:EASE, fill:"forwards"});
   }
@@ -2317,10 +2322,10 @@ function openLb(i, from){
     if (was === kind) return;
     const r0 = cur().getBoundingClientRect();                  // 開關前照片在螢幕上的位置（含放大），等一下從這裡縮放過去
     S.info = kind || false; el.classList.toggle("info", !!kind); el.classList.toggle("cmo", kind === "cm");
-    if (kind !== "info") stage.style.translate = "";
+    if (kind !== "info") { stage.style.translate = ""; el.classList.remove("up"); }
     $("[data-inf]", el).classList.toggle("on", kind === "info");
     const cb = $("[data-cm]", el); if (cb) cb.classList.toggle("on", kind === "cm");
-    if (kind === "info") { infSet(PH[S.i]); inf.scrollTop = 0; if (PHONE()) { infs.scrollTop = REST(); stage.style.translate = ""; } }
+    if (kind === "info") { infSet(PH[S.i]); inf.scrollTop = 0; if (PHONE()) { infs.scrollTop = REST(); stage.style.translate = ""; el.classList.remove("up"); } }
     if (kind === "cm") cmSet(PH[S.i]);
     if (!!was === !!kind) return;                              // 資訊換留言：畫面大小不變，照片不動
     [sl[0], sl[2]].forEach(s => { s.style.visibility = "hidden"; });   // 電腦上畫面變窄時，旁邊那張會被排到看得到的地方：換位置的這段先藏起來
@@ -2508,7 +2513,11 @@ function openLb(i, from){
       else if (Math.hypot(dx, dy) > 8) g.type = Math.abs(dx) > Math.abs(dy) ? "swipe" : dy > 0 ? "down" : "up";
       else return;
     }
-    if (g.type === "pan") return setZoom(S.z.s, g.z0.x + dx, g.z0.y + dy);
+    if (g.type === "pan") {
+      let nx = g.z0.x + dx, ny = g.z0.y + dy;
+      const [cx, cy] = zClip(S.z.s, nx, ny);                   // 超出邊界有橡皮筋阻力，放開再彈回
+      return setZoom(S.z.s, cx + (nx - cx) * .3, cy + (ny - cy) * .3);
+    }
     if (g.type === "swipe") {
       const edge = (dx > 0 && S.i === 0) || (dx < 0 && S.i === PH.length - 1);
       track.style.transform = `translateX(${edge ? dx * .3 : dx}px)`;
@@ -2540,8 +2549,10 @@ function openLb(i, from){
       return snap();
     }
     if (type === "down" && !S.info) {
-      if (dy > H() * .16 || vy > .6) return lbBack(S);
-      el.classList.remove("bare"); bg.style.opacity = 1;
+      if (dy > H() * .16 || vy > .6) return lbBack(S, 1);
+      el.classList.remove("bare");
+      const bg0 = getComputedStyle(bg).opacity; bg.style.opacity = 1;
+      if (anim()) bg.animate([{opacity:bg0}, {opacity:1}], {duration:T.mid, easing:DEC});
       const zw = cur(), now = zw.style.transform; zw.style.transform = "";
       if (anim()) zw.animate([{transform:now}, {transform:"none"}], {duration:T.mid, easing:DEC});
       return;
@@ -2549,20 +2560,26 @@ function openLb(i, from){
     if (type === "down" && S.info) { if (dy > 50) setInfo(false); return; }
     if (type === "up") { const zw = cur(), now = zw.style.transform; zw.style.transform = ""; if (now && anim()) zw.animate([{transform:now}, {transform:"none"}], {duration:T.fast, easing:DEC});
       if (dy < -40 || vy < -.5) setInfo(true); return; }
-    if (type === "pan") return clampZoom();
+    if (type === "pan") {
+      if (anim() && S.z.s > 1.02 && Math.hypot(vx, vy) > .15) {   // 放手後順著甩動方向慣性滑一段再停
+        const s = Math.min(ZMAX, S.z.s);
+        return zoomTo(s, ...zClip(s, S.z.x + vx * 180, S.z.y + vy * 180), DEC);
+      }
+      return clampZoom();
+    }
     if (!type && dt < 350) {                                   // 點一下：開關上下的按鈕；點兩下：放大縮小
       const now = performance.now();
       if (now - lastTap < 300) { clearTimeout(tapT); lastTap = 0; return S.z.s > 1.02 || !D.talk || PH[S.i].broken ? dbl(e.clientX, e.clientY) : heartAt(e.clientX, e.clientY); }
       lastTap = now;
-      tapT = setTimeout(() => { if (S.info) setInfo(false); else if (isVid(PH[S.i]) && vid()) { vToggle(); if (vid().paused) el.classList.remove("bare"); } else { el.classList.toggle("bare"); if (S.z.s < 1.02) S.fitAll(); } }, 300);
+      tapT = setTimeout(() => { if (S.closing || LB !== S) return; if (S.info) setInfo(false); else if (isVid(PH[S.i]) && vid()) { vToggle(); if (vid().paused) el.classList.remove("bare"); } else { el.classList.toggle("bare"); if (S.z.s < 1.02) S.fitAll(); } }, 300);
     }
   };
   stage.addEventListener("pointerup", up);
   stage.addEventListener("pointercancel", up);
-  function zoomTo(s, x, y){
+  function zoomTo(s, x, y, ease = EASE){
     const zw = cur(), from = zw.style.transform || "none";
     setZoom(s, x, y);
-    if (anim()) zw.animate([{transform:from}, {transform:zw.style.transform || "none"}], {duration:T.mid, easing:EASE});
+    if (anim()) zw.animate([{transform:from}, {transform:zw.style.transform || "none"}], {duration:T.mid, easing:ease});
   }
   /* 這個大小時照片該在的位置：比畫面小就以原本的中心為準（直的照片原本讓出上下的字，不在整個畫面正中間；以前照畫面置中，縮回原本大小最後一下會跳），比畫面大就不露出旁邊的空白 */
   const zClip = (s, x, y) => {
@@ -2593,9 +2610,9 @@ function openLb(i, from){
     }
     setZoom(s, x, y); };
   const wzStep = () => {
-    if (S.busy || !S.z) { wz.raf = 0; return; }               // 換張、關掉時停
+    if (S.busy || S.closing || LB !== S || !S.z) { wz.raf = 0; return; }   // 換張、關掉時停
     const d = wz.g - S.z.s;
-    if (Math.abs(d) < .004 * wz.g) { wzAt(wz.g); wz.raf = 0; clearTimeout(S.wt); S.wt = setTimeout(() => { if (!wz.raf && S.z.s > 1) clampZoom(); }, 120); return; }
+    if (Math.abs(d) < .004 * wz.g) { wzAt(wz.g); wz.raf = 0; clearTimeout(S.wt); S.wt = setTimeout(() => { if (!wz.raf && !S.closing && LB === S && S.z.s > 1) clampZoom(); }, 120); return; }
     wzAt(S.z.s + d * .24); wz.raf = requestAnimationFrame(wzStep);
   };
   stage.addEventListener("wheel", e => {
@@ -2752,7 +2769,7 @@ addEventListener("keydown", e => { if (SH) return e.key === "Escape" && popBack(
   if (SY) SY.key(e); else if (SS) SS.key(e); else if (LB) LB.key(e); else if (SEL.on && e.key === "Escape") popBack(); });
 /* 自己關大圖（×、往下滑、Esc）時馬上開始收，不等瀏覽器的返回（iPhone 上要等一下，這段時間點別張會沒反應） */
 let POPSKIP = 0;
-function lbBack(o){ if (o.closing) return; o.close(); POPSKIP++; history.back(); }
+function lbBack(o, f){ if (o.closing) return; o.close(f); POPSKIP++; history.back(); }
 addEventListener("popstate", () => {
   if (POPSKIP) { POPSKIP--; if (LB && LB.push) { LB.push = 0; history.pushState({lb:1}, ""); } return; }
   if (SH) SH.close(); else if (SY) SY.close(); else if (SS) SS.close(); else if (LB) LB.close(); else if (SEL.on) selOff(); });
@@ -2994,27 +3011,41 @@ function cmpOpen(list, a, b){
     <div class="cmpp">${[0, 1].map(j => `<div class="cp${j === act ? " on" : ""}" data-j="${j}"><div class="cz"><img alt="" draggable="false"></div><div class="cpl"></div></div>`).join("")}</div>
     <div class="cmps">${list.map(k => `<button class="cmpk" data-k="${k}" aria-label="換成這張"><img alt="" loading="lazy" draggable="false" src="${src(PH[k], "s")}"></button>`).join("")}</div>`;
   document.body.appendChild(bg);
-  const panes = [...bg.querySelectorAll(".cp")], wrap = bg.querySelector(".cmpp");
-  const put = j => { const k = sel[j], p = PH[k], im = panes[j].querySelector("img");
-    im.src = src(p, z.s > 1.5 && Math.max(p.w, p.h) >= 2700 ? "x" : "l"); panes[j].querySelector(".cpl").innerHTML = lab(k);
-    if (anim()) panes[j].animate([{opacity:.4}, {opacity:1}], {duration:T.mid, easing:DEC});
-    mark(); };
+  const panes = [...bg.querySelectorAll(".cp")], wrap = bg.querySelector(".cmpp"), seq = [0, 0];
+  const put = j => { const k = sel[j], p = PH[k], im = panes[j].querySelector("img"), my = ++seq[j];
+    const u = src(p, z.s > 1.5 && Math.max(p.w, p.h) >= 2700 ? "x" : "l");
+    panes[j].querySelector(".cpl").innerHTML = lab(k); mark();
+    const swap = () => { if (seq[j] !== my || !im.isConnected) return; im.src = u;
+      if (anim()) panes[j].animate([{opacity:.55}, {opacity:1}], {duration:T.mid, easing:DEC}); };
+    if (!im.getAttribute("src")) return swap();
+    const pre = new Image(); pre.decoding = "async"; pre.src = u;
+    (pre.decode ? pre.decode() : new Promise(r => { pre.onload = pre.onerror = r; })).then(swap, swap); };
   const mark = () => bg.querySelectorAll(".cmpk").forEach(t => { const kk = +t.dataset.k; t.classList.toggle("in", sel.includes(kk)); t.classList.toggle("act", kk === sel[act]); });
+  const cz = () => panes.map(pn => pn.querySelector(".cz"));
   const tz = () => { const w = panes[0].clientWidth, h = panes[0].clientHeight, mx = (z.s - 1) * w / 2, my = (z.s - 1) * h / 2;
     z.x = Math.max(-mx, Math.min(mx, z.x)); z.y = Math.max(-my, Math.min(my, z.y));
-    panes.forEach(pn => { pn.querySelector(".cz").style.transform = z.s === 1 ? "" : `translate(${z.x}px,${z.y}px) scale(${z.s})`; });
-    if (z.s > 1.5 && !bg.dataset.hi) { bg.dataset.hi = 1; [0, 1].forEach(j => { const p = PH[sel[j]]; if (Math.max(p.w, p.h) >= 2700) panes[j].querySelector("img").src = src(p, "x"); }); } };
-  const zoomAt = (s1, cx, cy) => {                              // 照指著的那一點放大（兩張同一個位置）
+    cz().forEach(c => { c.style.transform = z.s === 1 ? "" : `translate(${z.x}px,${z.y}px) scale(${z.s})`; });
+    if (z.s > 1.5 && !bg.dataset.hi) { bg.dataset.hi = 1; [0, 1].forEach(j => { const p = PH[sel[j]]; if (Math.max(p.w, p.h) >= 2700) { const u = src(p, "x"), pre = new Image(); pre.decoding = "async"; pre.src = u; (pre.decode ? pre.decode() : new Promise(r => { pre.onload = r; })).then(() => { if (bg.isConnected && sel[j] === PH.indexOf(p)) panes[j].querySelector("img").src = u; }).catch(() => {}); } }); } };
+  const zoomAt = (s1, cx, cy, smooth) => {                      // 照指著的那一點放大（兩張同一個位置）
     const pn = panes.find(x => { const r = x.getBoundingClientRect(); return cx >= r.left && cx <= r.right && cy >= r.top && cy <= r.bottom; }) || panes[0];
     const r = pn.getBoundingClientRect(), px = cx - r.left - r.width / 2, py = cy - r.top - r.height / 2, s0 = z.s;
+    const from = cz()[0].style.transform || "none";
     s1 = Math.max(1, Math.min(6, s1));
-    z.x = px - (px - z.x) * s1 / s0; z.y = py - (py - z.y) * s1 / s0; z.s = s1; tz(); };
+    z.x = px - (px - z.x) * s1 / s0; z.y = py - (py - z.y) * s1 / s0; z.s = s1; tz();
+    if (smooth && anim()) { const to = cz()[0].style.transform || "none"; cz().forEach(c => c.animate([{transform:from}, {transform:to}], {duration:T.mid, easing:DEC})); } };
+  const wz = {g:1, raf:0, cx:0, cy:0};
+  const wzStep = () => {
+    if (!bg.isConnected) { wz.raf = 0; return; }
+    const d = wz.g - z.s;
+    if (Math.abs(d) < .004 * wz.g) { zoomAt(wz.g, wz.cx, wz.cy); wz.raf = 0; return; }
+    zoomAt(z.s + d * .24, wz.cx, wz.cy); wz.raf = requestAnimationFrame(wzStep);
+  };
   [0, 1].forEach(put);
   void bg.offsetWidth; bg.classList.add("on");
-  SH = {close(){ if (SH && SH.bg === bg) SH = null; bg.classList.remove("on"); bg.style.pointerEvents = "none"; setTimeout(() => bg.remove(), T.mid + 50); }, bg};
+  SH = {close(){ if (SH && SH.bg === bg) SH = null; if (wz.raf) { cancelAnimationFrame(wz.raf); wz.raf = 0; } bg.classList.remove("on"); bg.style.pointerEvents = "none"; setTimeout(() => bg.remove(), T.mid + 50); }, bg};
   history.pushState({sh:1}, "");
   const pts = new Map(); let last = null, moved = 0;
-  wrap.addEventListener("pointerdown", e => { wrap.setPointerCapture(e.pointerId); pts.set(e.pointerId, [e.clientX, e.clientY]); last = null; moved = 0; });
+  wrap.addEventListener("pointerdown", e => { if (wz.raf) { cancelAnimationFrame(wz.raf); wz.raf = 0; } cz().forEach(c => c.getAnimations().forEach(a => a.cancel())); wrap.setPointerCapture(e.pointerId); pts.set(e.pointerId, [e.clientX, e.clientY]); last = null; moved = 0; });
   wrap.addEventListener("pointermove", e => {
     if (!pts.has(e.pointerId)) return;
     const p0 = pts.get(e.pointerId); pts.set(e.pointerId, [e.clientX, e.clientY]);
@@ -3025,8 +3056,12 @@ function cmpOpen(list, a, b){
   const up = e => { if (!pts.has(e.pointerId)) return; pts.delete(e.pointerId); last = null;
     if (!pts.size && moved < 6) { const pn = e.target.closest(".cp"); if (pn) { act = +pn.dataset.j; panes.forEach(x => x.classList.toggle("on", x === pn)); mark(); } } };
   wrap.addEventListener("pointerup", up); wrap.addEventListener("pointercancel", up);
-  wrap.addEventListener("dblclick", e => zoomAt(z.s > 1 ? 1 : 3, e.clientX, e.clientY));
-  wrap.addEventListener("wheel", e => { e.preventDefault(); zoomAt(z.s * Math.exp(-e.deltaY / 300), e.clientX, e.clientY); }, {passive:false});
+  wrap.addEventListener("dblclick", e => { if (wz.raf) { cancelAnimationFrame(wz.raf); wz.raf = 0; } zoomAt(z.s > 1 ? 1 : 3, e.clientX, e.clientY, true); });
+  wrap.addEventListener("wheel", e => { e.preventDefault(); const px = e.deltaMode === 1 ? 40 : 1, dy = e.deltaY * px;
+    cz().forEach(c => c.getAnimations().forEach(a => a.cancel()));
+    wz.cx = e.clientX; wz.cy = e.clientY; wz.g = Math.max(1, Math.min(6, (wz.raf ? wz.g : z.s) * Math.exp(-dy * .0025)));
+    if (!anim() || (Math.abs(dy) < 40 && !wz.raf)) return zoomAt(wz.g, wz.cx, wz.cy);
+    if (!wz.raf) wz.raf = requestAnimationFrame(wzStep); }, {passive:false});
   bg.addEventListener("click", e => {
     if (e.target.closest("[data-x]")) return popBack();
     const t = e.target.closest(".cmpk"); if (!t) return;
@@ -3181,7 +3216,7 @@ function show(start, day){
   function kb(L, ms){                                        // 慢慢推近，方向每張不同
     const f = L.querySelector(".sfg"); if (!anim()) return;
     const dirs = [[-1.5, -1], [1.5, 1], [1.5, -1], [-1.5, 1], [0, 0]], [x, y] = dirs[seq[at].i % dirs.length];
-    if (!f) { const t = L.querySelector(".sct"); if (t) t.animate([{opacity:0, transform:"translateY(14px)", filter:"blur(6px)"}, {opacity:1, transform:"none", filter:"none"}], {duration:T.slow * 1.6, delay:SSF * .4, easing:DEC, fill:"backwards"}); return; }
+    if (!f) { const t = L.querySelector(".sct"); if (t) t.animate([{opacity:0, transform:"translateY(14px) scale(.97)"}, {opacity:1, transform:"none"}], {duration:T.slow * 1.6, delay:SSF * .4, easing:DEC, fill:"backwards"}); return; }
     f.animate([{transform:"scale(1.02) translate(0,0)"}, {transform:`scale(1.12) translate(${x}%,${y}%)`}], {duration:ms + SSF, easing:"cubic-bezier(.4,0,.6,1)", fill:"forwards"});
   }
   function go(k, first){
@@ -3248,19 +3283,25 @@ function show(start, day){
     try { wake && wake.release(); } catch (e) {}
     try { document.fullscreenElement && document.exitFullscreen(); } catch (e) {}
     if (audio) fade(audio, 0, () => audio.pause());
-    const fin = () => { el.remove(); SS = null; };
+    let done = false;
+    const fin = () => { if (done) return; done = true; el.remove(); if (SS === S) SS = null; };
+    el.style.pointerEvents = "none";
     if (!anim()) return fin();
-    el.animate([{opacity:1}, {opacity:0}], {duration:T.mid, easing:EASE, fill:"forwards"}).onfinish = fin;
+    setTimeout(fin, T.mid + 200);
+    const t0 = getComputedStyle(el).transform;
+    el.animate([{transform:t0 === "none" ? "none" : t0, opacity:1}, {transform:t0 === "none" ? "none" : `${t0} translateY(18%) scale(.9)`, opacity:0}], {duration:T.mid, easing:EASE, fill:"forwards"}).onfinish = fin;
   }
   const S = {close, key:e => {
-    if (e.key === "Escape") history.back();
+    if (e.key === "Escape") lbBack(S);
     else if (e.key === " ") { e.preventDefault(); pause(!paused); }
     else if (e.key === "ArrowRight") { go(at + 1); poke(); }
     else if (e.key === "ArrowLeft") { go(at - 1); poke(); }
   }};
   SS = S;
+  let swipedAt = 0;
   el.addEventListener("click", e => {
-    if (e.target.closest("[data-sx]")) return history.back();
+    if (performance.now() - swipedAt < 350) return;
+    if (e.target.closest("[data-sx]")) return lbBack(S);
     if (e.target.closest("[data-spp]")) return pause(!paused);
     if (e.target.closest("[data-sn]")) { go(at + 1); return poke(); }
     if (e.target.closest("[data-sp]")) { go(at - 1); return poke(); }
@@ -3270,12 +3311,29 @@ function show(start, day){
   });
   el.addEventListener("pointermove", e => { if (e.pointerType === "mouse") poke(); });
   let sx = null;
-  el.addEventListener("pointerdown", e => { sx = {x:e.clientX, y:e.clientY}; });
-  el.addEventListener("pointerup", e => {
-    if (!sx) return; const dx = e.clientX - sx.x, dy = e.clientY - sx.y; sx = null;
-    if (Math.abs(dx) > 50 && Math.abs(dx) > Math.abs(dy)) { go(at + (dx < 0 ? 1 : -1)); poke(); }
-    else if (dy > 90) history.back();
+  el.addEventListener("pointerdown", e => { if (e.target.closest("button")) return; sx = {x:e.clientX, y:e.clientY, m:""}; });
+  el.addEventListener("pointermove", e => {
+    if (!sx) return;
+    const dx = e.clientX - sx.x, dy = e.clientY - sx.y;
+    if (!sx.m && Math.hypot(dx, dy) > 10) sx.m = Math.abs(dx) > Math.abs(dy) ? "x" : dy > 0 ? "y" : "n";
+    if (sx.m === "x") view.style.transform = `translateX(${(dx * .45).toFixed(1)}px)`;
+    else if (sx.m === "y") { const d = Math.max(0, dy); el.style.transform = `translateY(${d.toFixed(1)}px) scale(${(1 - Math.min(.18, d / innerHeight * .35)).toFixed(4)})`; el.style.borderRadius = `${Math.min(28, d * .22).toFixed(1)}px`; }
   });
+  const ssup = e => {
+    if (!sx) return; const q = sx, dx = e.clientX - q.x, dy = e.clientY - q.y; sx = null;
+    if (q.m === "x") {
+      swipedAt = performance.now();
+      const was = view.style.transform; view.style.transform = "";
+      if (was && anim()) view.animate([{transform:was}, {transform:"none"}], {duration:T.mid, easing:DEC});
+      if (Math.abs(dx) > 50) { go(at + (dx < 0 ? 1 : -1)); poke(); }
+    } else if (q.m === "y") {
+      swipedAt = performance.now();
+      if (dy > 90) return lbBack(S);
+      const was = el.style.transform, br0 = el.style.borderRadius || "0px"; el.style.transform = ""; el.style.borderRadius = "";
+      if (was && anim()) el.animate([{transform:was, borderRadius:br0}, {transform:"none", borderRadius:"0px"}], {duration:T.mid, easing:DEC});
+    }
+  };
+  el.addEventListener("pointerup", ssup); el.addEventListener("pointercancel", ssup);
   history.pushState({ss:1}, "");
   if (matchMedia("(pointer:fine)").matches && el.requestFullscreen) el.requestFullscreen().catch(() => {});
   if (anim()) el.animate([{opacity:0}, {opacity:1}], {duration:T.slow, easing:EASE});
@@ -3323,7 +3381,7 @@ function story(n, from){
   function show(k, dir){
     clearTimeout(timer); clearTimeout(waitT);
     const m = MEMS[g];
-    if (k >= m.list.length) return MEMS[g + 1] ? jump(g + 1, 1) : history.back();
+    if (k >= m.list.length) return MEMS[g + 1] ? jump(g + 1, 1) : lbBack(S);
     if (k < 0) return MEMS[g - 1] ? jump(g - 1, -1, true) : show(0);
     at = k; ready = false;
     const my = ++seq, i = m.list[at], p = PH[i], old = view.querySelector(".syl:not(.out)");
@@ -3381,19 +3439,22 @@ function story(n, from){
   }
   function close(){
     if (S.closing) return; S.closing = 1;
-    clearTimeout(timer); clearTimeout(waitT); seq++;
+    clearTimeout(timer); clearTimeout(waitT); clearTimeout(ht); seq++;
     view.querySelectorAll("video").forEach(v => { v.pause(); v.removeAttribute("src"); v.load(); }); if (pend) { pend.pause(); pend.removeAttribute("src"); pend.load(); }
-    const fin = () => { el.remove(); SY = null; };
+    let done = false;
+    const fin = () => { if (done) return; done = true; el.remove(); if (SY === S) SY = null; };
+    el.style.pointerEvents = "none";
     if (!anim()) return fin();
+    setTimeout(fin, T.mid + 200);
     const b = $(`.mem[data-mem="${g}"] .mring`), r = b && b.getBoundingClientRect();
     const cur = getComputedStyle(el).transform, t0 = cur === "none" ? "none" : cur;
     // 收回圓圈用裁切不用縮放：安卓縮放整頁大小的圖層，放回原大時會有一格下半部是空的（看得到後面的頁面）
     if (r && r.bottom > 0 && r.top < innerHeight && t0 === "none") el.animate([{clipPath:syClip(), opacity:1}, {clipPath:syClip(r), opacity:0}], {duration:T.mid, easing:EASE, fill:"forwards"}).onfinish = fin;
-    else el.animate([{transform:t0, opacity:1}, {transform:"translateY(30%) scale(.8)", opacity:0}], {duration:T.mid, easing:EASE, fill:"forwards"}).onfinish = fin;
+    else el.animate([{transform:t0, opacity:1}, {transform:"translateY(30%) scale(.8)", opacity:0}], {duration:T.mid, easing:DEC, fill:"forwards"}).onfinish = fin;
   }
   S.close = close;
   S.key = e => {
-    if (e.key === "Escape") history.back();
+    if (e.key === "Escape") lbBack(S);
     else if (e.key === "ArrowRight") show(at + 1, 1);
     else if (e.key === "ArrowLeft") show(at - 1, -1);
     else if (e.key === " ") { e.preventDefault(); hold(!held); }
@@ -3406,8 +3467,9 @@ function story(n, from){
   });
   el.addEventListener("pointermove", e => {
     if (!p0) return;
-    const dy = e.clientY - p0.y;
-    if (dy > 10 && Math.abs(dy) > Math.abs(e.clientX - p0.x)) { p0.dn = true; el.style.transform = `translateY(${dy}px) scale(${1 - Math.min(.2, dy / innerHeight * .4)})`; el.style.borderRadius = "24px"; }
+    const dx = e.clientX - p0.x, dy = e.clientY - p0.y;
+    if (Math.hypot(dx, dy) > 10) clearTimeout(ht);
+    if (dy > 10 && Math.abs(dy) > Math.abs(dx)) { p0.dn = true; el.style.transform = `translateY(${dy.toFixed(1)}px) scale(${(1 - Math.min(.2, dy / innerHeight * .4)).toFixed(4)})`; el.style.borderRadius = `${Math.min(28, dy * .22).toFixed(1)}px`; }
   });
   const up = e => {
     clearTimeout(ht);
@@ -3416,18 +3478,18 @@ function story(n, from){
     const dx = e.clientX - q.x, dy = e.clientY - q.y;
     if (q.h) hold(false);
     if (q.dn) {
-      if (dy > innerHeight * .14) return history.back();
-      const now = el.style.transform; el.style.transform = ""; el.style.borderRadius = "";
-      if (anim()) el.animate([{transform:now}, {transform:"none"}], {duration:T.mid, easing:DEC});
+      if (dy > innerHeight * .14) return lbBack(S);
+      const now = el.style.transform, br0 = el.style.borderRadius || "0px"; el.style.transform = ""; el.style.borderRadius = "";
+      if (anim()) el.animate([{transform:now, borderRadius:br0}, {transform:"none", borderRadius:"0px"}], {duration:T.mid, easing:DEC});
       return;
     }
-    if (Math.abs(dx) > 50 && Math.abs(dx) > Math.abs(dy)) return dx < 0 ? (MEMS[g + 1] ? jump(g + 1, 1) : history.back()) : MEMS[g - 1] && jump(g - 1, -1);
+    if (Math.abs(dx) > 50 && Math.abs(dx) > Math.abs(dy)) return dx < 0 ? (MEMS[g + 1] ? jump(g + 1, 1) : lbBack(S)) : MEMS[g - 1] && jump(g - 1, -1);
     if (q.h || e.type === "pointercancel" || Math.hypot(dx, dy) > 10) return;
     show(e.clientX < innerWidth * .3 ? at - 1 : at + 1, e.clientX < innerWidth * .3 ? -1 : 1);
   };
   el.addEventListener("pointerup", up); el.addEventListener("pointercancel", up);
   el.addEventListener("click", e => {
-    if (e.target.closest("[data-yx]")) return history.back();
+    if (e.target.closest("[data-yx]")) return lbBack(S);
     const lk = e.target.closest("[data-ylk]");
     if (lk) like(MEMS[g].list[at], lk, heart);
   });
