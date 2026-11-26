@@ -19,6 +19,7 @@
   --sh-2:0 12px 32px -12px rgba(0,0,0,.22),0 2px 8px rgba(0,0,0,.08);
   --sh-3:0 22px 56px -16px rgba(0,0,0,.32),0 4px 14px rgba(0,0,0,.12);
 }
+@media (max-width:899px){:root{--blur-card:blur(16px) saturate(175%);--blur-float:blur(22px) saturate(190%);--blur-modal:blur(24px) saturate(190%)}}
 @supports (transition-timing-function:linear(0,1)){:root{
   --sp-fast:.32s linear(0,.016 2.4%,.092 6%,.23 10.4%,.405 15.4%,.586 20.8%,.748 26.6%,.874 32.8%,.96 39.2%,1.008 46%,1.028 53%,1.031 60.3%,1.024 67.8%,1.015 75.6%,1.007 83.5%,1.002 91.7%,1);
   --sp:.44s linear(0,.017 2.4%,.094 6%,.23 10.4%,.401 15.4%,.575 20.8%,.729 26.6%,.849 32.8%,.931 39.2%,.981 46%,1.006 53%,1.014 60.3%,1.015 67.8%,1.011 75.6%,1.007 83.5%,1.004 91.7%,1);
@@ -123,16 +124,17 @@
 [data-mode="light"]{--me:oklch(.6 .17 250); --alt0:oklch(.72 .11 195); --alt1:oklch(.6 .15 240); --alt2:oklch(.52 .18 280); --alt3:oklch(.5 .2 320)}
 
 /* ═════════ 柔和背景環境光（三點式漸層光影，讓側欄、卡片與懸浮分頁列呈現真實毛玻璃折射） ═════════ */
-.amb{position:fixed;inset:0;z-index:0;pointer-events:none;overflow:hidden}
-.amb i{position:absolute;border-radius:50%;filter:blur(72px);opacity:var(--orb-op);transition:background var(--t-long) var(--ease),opacity var(--t-slow) var(--ease);will-change:transform}
-.amb i:nth-child(1){width:54vmax;height:54vmax;top:-16vmax;left:-10vmax;background:radial-gradient(circle,var(--seed) 0%,transparent 68%);animation:amb1 22s ease-in-out infinite alternate}
-.amb i:nth-child(2){width:48vmax;height:48vmax;top:18vh;right:-12vmax;background:radial-gradient(circle,var(--tseed) 0%,transparent 68%);animation:amb2 26s ease-in-out infinite alternate}
-.amb i:nth-child(3){width:44vmax;height:44vmax;bottom:-18vmax;left:22vw;background:radial-gradient(circle,color-mix(in oklab,var(--seed) 65%,var(--tseed)) 0%,transparent 70%);opacity:calc(var(--orb-op) * .72);animation:amb3 30s ease-in-out infinite alternate}
-[data-alert="warn"] .amb i:nth-child(1),[data-alert="bad"] .amb i:nth-child(1){background:radial-gradient(circle,var(--warn) 0%,transparent 68%)}
-[data-alert="bad"] .amb i:nth-child(2){background:radial-gradient(circle,var(--bad) 0%,transparent 68%)}
-@keyframes amb1{to{transform:translate(5vw,4vh) scale(1.08)}}
-@keyframes amb2{to{transform:translate(-5vw,-3vh) scale(1.06)}}
-@keyframes amb3{to{transform:translate(4vw,-4vh) scale(1.05)}}
+.amb{position:fixed;inset:0;z-index:0;pointer-events:none;overflow:hidden;contain:strict}
+.amb i{position:absolute;border-radius:50%;opacity:calc(var(--orb-op) * .72);will-change:transform}
+.amb i:nth-child(1){width:72vmax;height:72vmax;top:-24vmax;left:-18vmax;background:radial-gradient(circle,var(--seed) 0%,color-mix(in oklab,var(--seed) 46%,transparent) 28%,color-mix(in oklab,var(--seed) 14%,transparent) 52%,transparent 72%);animation:amb1 22s ease-in-out infinite alternate}
+.amb i:nth-child(2){width:64vmax;height:64vmax;top:12vh;right:-20vmax;background:radial-gradient(circle,var(--tseed) 0%,color-mix(in oklab,var(--tseed) 46%,transparent) 28%,color-mix(in oklab,var(--tseed) 14%,transparent) 52%,transparent 72%);animation:amb2 26s ease-in-out infinite alternate}
+.amb i:nth-child(3){width:60vmax;height:60vmax;bottom:-26vmax;left:14vw;background:radial-gradient(circle,color-mix(in oklab,var(--seed) 65%,var(--tseed)) 0%,color-mix(in oklab,var(--seed) 32%,transparent) 32%,transparent 72%);opacity:calc(var(--orb-op) * .56);animation:amb3 30s ease-in-out infinite alternate}
+[data-alert="warn"] .amb i:nth-child(1),[data-alert="bad"] .amb i:nth-child(1){background:radial-gradient(circle,var(--warn) 0%,color-mix(in oklab,var(--warn) 44%,transparent) 28%,transparent 72%)}
+[data-alert="bad"] .amb i:nth-child(2){background:radial-gradient(circle,var(--bad) 0%,color-mix(in oklab,var(--bad) 44%,transparent) 28%,transparent 72%)}
+@keyframes amb1{to{transform:translate3d(5vw,4vh,0) scale(1.06)}}
+@keyframes amb2{to{transform:translate3d(-5vw,-3vh,0) scale(1.05)}}
+@keyframes amb3{to{transform:translate3d(4vw,-4vh,0) scale(1.04)}}
+html.lock .amb i,body:has(#layer .veil) .amb i{animation-play-state:paused}
 [data-motion="off"] .amb i{animation:none!important}
 @media (prefers-reduced-motion:reduce){.amb i{animation:none!important}}
 
@@ -184,6 +186,7 @@ body{font:400 var(--fs-m)/1.5 var(--font);zoom:var(--zoom);min-height:100vh;-web
 [hidden]{display:none!important}
 ::selection{background:color-mix(in srgb,var(--p) 28%,transparent)}
 button{font:inherit;color:inherit;border:0;background:none;padding:0;cursor:pointer;text-align:inherit}
+button,a,[role="button"],label,input,select,[data-open],[data-dsel]{touch-action:manipulation}
 a{color:inherit}
 svg{display:block}
 b,strong{font-weight:500}
@@ -720,9 +723,9 @@ button.li.prs,a.li.prs{border-radius:var(--r-lg);transform:scale(.98);background
 .hpick .dot,.pane .dot{animation:pop var(--sp-fast) backwards}
 /* 單選液態玻璃滑動氣泡（slideSel）：僅毛玻璃氣泡平滑滑動，圖示與文字保持穩固不晃 */
 :where([data-slide]){position:relative;isolation:isolate}   /* :where：分頁列本來的 fixed／sticky 優先 */
-[data-slide]>.slide{position:absolute;left:0;top:0;z-index:0;border-radius:var(--r-pill);background:var(--pill-bg);box-shadow:var(--pill-sh);pointer-events:none}
+[data-slide]>*::before{transition:none!important}
+[data-slide]>.slide{position:absolute;left:0;top:0;z-index:0;border-radius:var(--r-pill);background:var(--pill-bg);box-shadow:var(--pill-sh);pointer-events:none;will-change:transform}
 [data-slide].sliding>*::before{opacity:0!important;transition:none!important}
-[data-slide].slid>*::before{transition:none!important}
 [data-slide].sliding>*{transition-property:color,box-shadow,transform,padding}
 [data-slide].sliding>.on{background:transparent!important;box-shadow:none!important}
 
@@ -1069,28 +1072,28 @@ body:has(.dash.d) .fwrap{max-width:var(--pw)}
 /* ═════════ 對話框 ═════════ */
 .veil{position:fixed;inset:0;z-index:var(--z-veil);display:flex;align-items:center;justify-content:center;padding:20px;touch-action:none}
 /* 只有後面那層暗色淡入淡出；視窗本身不跟著變透明（面板關掉時是整片滑下去，不是化開） */
-.veil::before{content:"";position:absolute;inset:0;z-index:-1;background:var(--scrim);animation:fadeIn var(--t-mid) var(--ease) backwards}
+.veil::before{content:"";position:absolute;inset:0;z-index:-1;background:var(--scrim);animation:fadeIn var(--t-fast) var(--dec) backwards}
 .veil.closing{pointer-events:none}
 .veil.closing::before{animation:fadeOut var(--t-fast) var(--ease) forwards}   /* 要在 360ms 移除前跑完 */
-.dialog{width:100%;max-width:380px;max-height:calc((100dvh - 40px) / var(--zoom));overflow-y:auto;overscroll-behavior:contain;touch-action:pan-y;
-  background:var(--glass-modal);border:1px solid var(--glass-b);box-shadow:var(--sh-float);border-radius:var(--r-xl);padding:24px;text-align:center;animation:dlgin var(--sp) backwards;
+.dialog{width:100%;max-width:380px;max-height:calc((100dvh - 40px) / var(--zoom));overflow-y:auto;overscroll-behavior:contain;touch-action:pan-y;isolation:isolate;
+  background:var(--glass-modal);border:1px solid var(--glass-b);box-shadow:var(--sh-float);border-radius:var(--r-xl);padding:24px;text-align:center;animation:dlgin calc(var(--t-fast) * 1.5) var(--dec) backwards;
   --card:var(--s2);--chip:var(--s2);--cs:none;--cseg:none}
 .closing .dialog{animation:dlgout var(--t-fast) var(--exit) forwards}
-@keyframes dlgin{from{opacity:0;transform:scale(.92) translateY(8px)}}
+@keyframes dlgin{from{opacity:0;transform:translate3d(0,10px,0) scale(.95)}}
 /* 手機：要填東西的視窗從下面滑上來（上面有拉桿，往下拉就關掉；減速滑入避免彈簧過衝在底邊露縫） */
 @media (max-width:599px){
   .dialog .btns>.ubtn:only-child{flex:1}
   .veil:has(.form){align-items:flex-end;padding:48px 0 0}
   .veil:has(.form) .dialog{max-width:none;max-height:calc((100dvh - 48px) / var(--zoom));border-radius:var(--r-xl) var(--r-xl) 0 0;border-bottom:0;
-    padding:30px 20px calc(env(safe-area-inset-bottom) + 20px);animation:sheetIn var(--t-mid) var(--dec) backwards;touch-action:pan-y}
+    padding:30px 20px calc(env(safe-area-inset-bottom) + 20px);animation:sheetIn calc(var(--t-fast) * 1.5) var(--dec) backwards;touch-action:pan-y}
   .veil:has(.form) .dialog::before{content:"";position:absolute;top:10px;left:50%;width:32px;height:4px;margin-left:-16px;border-radius:var(--r-pill);background:var(--tx3);opacity:.5}
   .veil:has(.form) .dialog{position:relative}
-  .veil.closing:has(.form) .dialog{animation:sheetOut calc(var(--t-fast) * 1.5) var(--exit) forwards}
+  .veil.closing:has(.form) .dialog{animation:sheetOut calc(var(--t-fast) * 1.35) var(--exit) forwards}
   .veil.closing.flung:has(.form) .dialog{animation-timing-function:var(--dec)}   /* 往下拉放手：順著手指的速度滑走，不會先停一下 */
 }
-@keyframes sheetIn{from{transform:translateY(100%)}}
-@keyframes sheetOut{to{transform:translateY(100%)}}
-@keyframes dlgout{to{opacity:0;transform:scale(.92)}}
+@keyframes sheetIn{from{transform:translate3d(0,100%,0)}}
+@keyframes sheetOut{to{transform:translate3d(0,100%,0)}}
+@keyframes dlgout{to{opacity:0;transform:scale(.95)}}
 .dialog .ico.big{margin:0 auto 14px}
 .dialog h3{font-size:var(--fs-2xl);font-weight:700;letter-spacing:-.01em;line-height:1.3}
 .dialog p{color:var(--tx3);font-size:var(--fs-m);margin-top:6px;white-space:pre-line}
@@ -1217,9 +1220,9 @@ textarea.field{height:auto;padding:12px 16px;resize:none}
 .addl{align-self:flex-start}
 /* 每日備份 */
 .bkdlg{max-width:580px}
-.bkpw{display:flex;flex-direction:column}
-.bkpane{display:flex;flex-direction:column;gap:12px}
-.bkpane[hidden]{display:none}
+.swgrid,.bkpw{display:grid;position:relative;overflow:hidden}
+.swpane,.bkpane{grid-area:1/1;display:flex;flex-direction:column;gap:12px;min-width:0;transform:translateZ(0)}
+.swpane.off,.bkpane.off{visibility:hidden;pointer-events:none}
 .bkcal{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:6px}
 .bkday{display:flex;flex-direction:column;align-items:center;gap:5px;padding:8px 4px;border-radius:var(--r-sm);background:var(--s1)}
 .bkday i{width:10px;height:10px;border-radius:var(--r-pill);background:var(--s4)}
@@ -2052,7 +2055,8 @@ html.flyon .dash>.view{content-visibility:hidden;contain-intrinsic-size:auto non
 .almacts svg{width:20px;height:20px;color:var(--p)}
 .almacts small{font-size:var(--fs-xs);color:var(--tx3);font-weight:500;display:inline-flex;align-items:center;gap:2px}
 .almacts small svg{width:12px;height:12px;color:var(--warn)}
-.almtbody{display:flex;flex-direction:column;gap:10px}
+.almtbody{display:grid;position:relative;overflow:hidden}
+.almtbody>.swpane{gap:10px}
 .almfoot{justify-content:flex-end}
 .almups{display:grid;gap:14px;max-height:min(56vh,520px);overflow-y:auto;border-radius:var(--r-md)}
 .almups .almpk{max-height:none;overflow:visible}
@@ -2113,7 +2117,9 @@ html.flyon .dash>.view{content-visibility:hidden;contain-intrinsic-size:auto non
 .almdirs .chev{width:18px;height:18px;flex:none;color:var(--tx3);transform:rotate(-90deg)}
 /* 擋廣告 DNS（AdGuard Home）：分頁總覽＋24 小時長條＋網域放行＋手機設定 */
 .abd{max-width:580px}
-.abbody{display:flex;flex-direction:column;gap:12px}
+.abbody{display:grid;position:relative;overflow:hidden}
+.abls{display:grid;position:relative;overflow:hidden}
+.abls>.swpane{gap:0}
 .abn{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
 .abn>div{display:flex;flex-direction:column;align-items:center;gap:2px;padding:12px 6px;border-radius:var(--r-md);background:var(--s2)}
 .abn b{font-size:var(--fs-xl);font-weight:600;color:var(--tx);font-variant-numeric:tabular-nums}
@@ -2139,8 +2145,9 @@ html.flyon .dash>.view{content-visibility:hidden;contain-intrinsic-size:auto non
 .abconn.ok{color:var(--ok)}.abconn.bad{color:var(--bad)}
 .abd .abqr{display:flex;justify-content:center;padding:12px;border-radius:var(--r-md);background:var(--s1)}
 .abd .qrc{width:196px;height:196px;border-radius:var(--r-sm)}
-.abd .abst{display:flex;flex-direction:column;gap:10px}
-.abd .abst>.ubtn{width:100%}
+.abd .abst{display:grid;position:relative;overflow:hidden}
+.abd .abst>.swpane{gap:10px}
+.abd .abst>.swpane>.ubtn{width:100%}
 .abd .abst .codebox{background:var(--s1)}
 .abd .abst .ubtn svg{width:16px;height:16px}
 .abjob{display:flex;align-items:center;justify-content:center;gap:10px;padding:18px;color:var(--tx2);font-size:var(--fs-m)}

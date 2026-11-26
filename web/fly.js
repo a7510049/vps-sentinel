@@ -1642,7 +1642,7 @@ function flyOpen(btn){
     f._rv.resize(); f._rv.draw(performance.now());
     FLYBZ = performance.now() + T.mid + 120;           // 等整頁滑入完再換上背景新資料
   } else { flySplashOn(f); flyWait(f, true); }
-  if (canAnim()) requestAnimationFrame(() => requestAnimationFrame(() => { if (f.isConnected && !f._bye) f.classList.remove("pre"); }));
+  if (canAnim()) { void f.offsetWidth; requestAnimationFrame(() => { if (f.isConnected && !f._bye) f.classList.remove("pre"); }); }
   flyLoad(false);
   f.querySelector(".rcv").addEventListener("click", e => {    // 點雷達打開整頁雷達；點到飛機就順便選好那一架
     const r = e.currentTarget.getBoundingClientRect(), z = ZM(), p = f._rv.hit((e.clientX - r.left) / z, (e.clientY - r.top) / z);
@@ -1872,7 +1872,7 @@ function fradOpen(){
   if (f._geo) { rv.setGeo(FLYGEO[f._geo]); rv.setTrk(FLYTRK[f._geo] && FLYTRK[f._geo].d); rv.gt = 0; rv.td = 0; }
   fradData();
   rv.draw(performance.now());                                 // 第 0 格就先畫好地圖與飛機，滑入瞬間不閃黑幕
-  if (canAnim()) requestAnimationFrame(() => requestAnimationFrame(() => { if (FRAD && FRAD.v === v) v.classList.remove("pre"); }));
+  if (canAnim()) { void v.offsetWidth; requestAnimationFrame(() => { if (FRAD && FRAD.v === v) v.classList.remove("pre"); }); }
   if (window.ResizeObserver) { FRAD.ro = new ResizeObserver(() => { if (FRAD && FRAD.rv === rv) { rv.resize(); top(); } }); FRAD.ro.observe(cv); }
   fradGest(rv, cv);
   setTimeout(() => { if (FRAD && FRAD.rv === rv && f._rv) f._rv.hide(true); }, canAnim() ? T.mid + 120 : 0);   // 蓋住後暫停小雷達省電，不藏看板免得關閉重繪閃爍

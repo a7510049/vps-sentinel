@@ -943,7 +943,7 @@ function slideSel(change){
   const z = ZM(), was = canAnim() ? [...document.querySelectorAll("[data-slide]")].map(b => {
     if (!b.offsetWidth || !b.offsetHeight) return null;
     const g = b.querySelector(":scope>.slide"), on = selOf(b);
-    return [b, b.dataset.key, g ? g._now : on && boxIn(b, on, z)];
+    return [b, b.dataset.key, g && !g._done ? g._now : on && boxIn(b, on, z)];
   }).filter(Boolean) : [];
   change();
   was.forEach(([b0, k, from]) => {
@@ -955,12 +955,18 @@ function slideSel(change){
     const g = document.createElement("i"); g.className = "slide"; g._leaving = 1; b.prepend(g); b.classList.add("sliding");   // _leaving：重畫時不要把它當成內容
     const dur = T.sp, t0 = performance.now(), lerp = (a, c, p) => a + (c - a) * p;
     g.animate([{opacity:1}, {opacity:1}], {duration:dur, id:"ui"});              // 滑完之前，自動更新先等一下
-    const done = () => { const on2 = selOf(b); b.classList.add("slid"); if (on2) on2.style.transition = "none"; b.classList.remove("sliding"); g.remove(); b.offsetWidth; if (on2) on2.style.transition = ""; b.classList.remove("slid"); };
+    const done = () => {
+      if (g._stop || g._done) return;
+      g._done = 1;
+      b.classList.remove("sliding");
+      requestAnimationFrame(() => { if (g.isConnected) g.remove(); });           // 等按鈕 ::before 畫穩後下一幀再移除氣泡，徹底消除 iOS 交接瞬閃
+    };
+    const tr = c => `translate3d(${c.x}px,${c.y}px,0)`;
     if (Math.abs(to0.w - from.w) < 1 && Math.abs(to0.h - from.h) < 1 && to0.r.every((r, i) => Math.abs(r - from.r[i]) < 1)) {
-      // 大小一樣（例如分頁列、側欄、設定分類）：只移位置交給顯示卡跑，完全不抖動
-      Object.assign(g.style, {width:to0.w + "px", height:to0.h + "px", borderRadius:to0.r.map(r => r + "px").join(" ")});
-      const tr = c => `translate(${c.x}px,${c.y}px)`, a = g.animate([{transform:tr(from)}, {transform:tr(to0)}], {duration:dur, easing:SPRING, fill:"forwards"});
-      a.onfinish = () => { if (!g._stop) done(); };
+      // 大小一樣（例如分頁列、側欄、設定分類）：先就位再交給 GPU 滑動，不閃到原點也不抖動
+      Object.assign(g.style, {width:to0.w + "px", height:to0.h + "px", borderRadius:to0.r.map(r => r + "px").join(" "), transform:tr(from)});
+      const a = g.animate([{transform:tr(from)}, {transform:tr(to0)}], {duration:dur, easing:SPRING, fill:"forwards"});
+      a.onfinish = done;
       Object.defineProperty(g, "_now", {get(){ const m = new DOMMatrix(getComputedStyle(g).transform); return {x:m.e, y:m.f, w:to0.w, h:to0.h, r:to0.r}; }});
       return;
     }
@@ -970,7 +976,7 @@ function slideSel(change){
       if (!on2 || !b.isConnected) return g.remove();
       const to = boxIn(b, on2, z), c = {x:lerp(from.x, to.x, e), y:lerp(from.y, to.y, e), w:lerp(from.w, to.w, e), h:lerp(from.h, to.h, e), r:from.r.map((r, i) => Math.max(0, lerp(r, to.r[i], e)))};
       g._now = c;
-      Object.assign(g.style, {transform:`translate(${c.x}px,${c.y}px)`, width:c.w + "px", height:c.h + "px", borderRadius:c.r.map(r => r + "px").join(" ")});
+      Object.assign(g.style, {transform:tr(c), width:c.w + "px", height:c.h + "px", borderRadius:c.r.map(r => r + "px").join(" ")});
       if (p < 1) return requestAnimationFrame(step);
       done();
     };
@@ -979,11 +985,19 @@ function slideSel(change){
 }
 /* 選到的那一個；data-slide="選擇器" 這種是底色在它裡面的那一塊 */
 const selOf = b => { const on = b.querySelector(":scope>.on"); return on && b.dataset.slide ? on.querySelector(b.dataset.slide) : on; };
-/* 元素在容器裡的位置（容器可以左右捲；圓角換成實際看得到的大小，999px 的膠囊不會讓變形慢半拍） */
+/* 元素在容器裡的位置（直接子層優先用 offset 座標，不受父層縮放動畫或 zoom 誤差影響） */
 function boxIn(b, el, z){
-  const R = b.getBoundingClientRect(), r = el.getBoundingClientRect(), cs = getComputedStyle(el), w = r.width / z, h = r.height / z;
+  const cs = getComputedStyle(el);
+  let x, y, w, h;
+  if (el.offsetParent === b) { x = el.offsetLeft; y = el.offsetTop; w = el.offsetWidth; h = el.offsetHeight; }
+  else {
+    const R = b.getBoundingClientRect(), r = el.getBoundingClientRect();
+    w = r.width / z; h = r.height / z;
+    x = (r.left - R.left) / z - b.clientLeft + b.scrollLeft;
+    y = (r.top - R.top) / z - b.clientTop + b.scrollTop;
+  }
   const rad = ["borderTopLeftRadius", "borderTopRightRadius", "borderBottomRightRadius", "borderBottomLeftRadius"].map(k => Math.min(parseFloat(cs[k]) || 0, w / 2, h / 2));
-  return {x:(r.left - R.left) / z - b.clientLeft + b.scrollLeft, y:(r.top - R.top) / z - b.clientTop + b.scrollTop, w, h, r:rad};
+  return {x, y, w, h, r:rad};
 }
 /* 紀錄：所有主機的事件，依日期分組 */
 let LOGF = "", LOGH = "";
@@ -1022,7 +1036,7 @@ const lkMini = (m, tone) => `<i class="lkp" data-mode="${m}"${tone ? ` data-tone
 const lkPick = (k, opts, pic) => `<div class="lks">${opts.map(([v, l]) => `<button class="lkb${String(getP(k)) === String(v) ? " on" : ""}" data-pref="${k}" data-val="${v}" aria-label="${l}"><span class="lkf">${pic(v)}<i class="lkc">${I("check")}</i></span><small>${l}</small></button>`).join("")}</div>`;
 const tog = (k, l) => `<input type="checkbox" class="tog" data-pref="${k}" aria-label="${l}" ${getP(k) ? "checked" : ""}>`;
 let SETC = store("vs-setc") || "";
-const STCACHE = {};   // 設定頁各列狀態快取：切到設定時第 0 幀就帶入正確字與徽章，避免整頁跳一下
+const STCACHE = {}, RAWCACHE = {}, TOOLCACHE = {};   // 設定頁與工具彈窗狀態快取：點開即時顯示，背景再靜默更新
 function selfSumHtml(){
   const hosts = LIST.filter(x => x.online && SELFST[keyOf(x)]);
   const pend = hosts.reduce((n, h) => { const d = SELFST[keyOf(h)]; return n + (d.has && !d.running ? 1 : 0) + (d.cloud && d.cloud.has && !d.cloud.running ? 1 : 0); }, 0);
@@ -1144,20 +1158,19 @@ function secModal(k){
 }
 /* 加密筆記：Joplin 用 WebDAV 同步到這台（筆記在手機上先加密，主機只存亂碼） */
 function notesModal(node, name){
-  const q = node ? `?node=${encodeURIComponent(node)}` : "";
-  let D = null, pw = "", ek = "", busy = false;
+  const q = node ? `?node=${encodeURIComponent(node)}` : "", ck = "nt:" + (node || "");
+  let D = TOOLCACHE[ck] || null, pw = "", ek = "", busy = false;
   const v = document.createElement("div"); v.className = "veil";
   v.innerHTML = `<div class="dialog tdlg ntd"><div class="thead">${IC("note", "")}<div class="thead-t"><h3>加密筆記</h3><p>${esc(name)}</p></div><span class="tbadge ntbdg"></span></div>
     <div class="form"><div class="ntb"><div class="abjob"><span class="spin"></span><span>讀取中…</span></div></div><div class="msg"></div></div></div>`;
-  $("#layer").appendChild(v);
   const body = v.querySelector(".ntb"), msg = v.querySelector(".msg"), bdg = v.querySelector(".ntbdg");
   const url = () => (D.base || location.origin.replace(/^http:/, "https:")) + D.path;   // 只收 https
   const row = (k, label, val, secret = false) => `<div class="ntrow"><span class="ntk">${label}</span><code${secret ? ' class="ipb" data-ntshow role="button" tabindex="0" title="點一下顯示"' : ""}>${esc(val)}</code><button type="button" class="ubtn sm ghost copybtn" data-ntcp="${k}">${I("copy")}複製</button></div>`;
-  const draw = () => {
+  const draw = init => {
     bdg.textContent = D.on ? "已開啟" : "未開啟";
     bdg.className = "tbadge ntbdg" + (D.on ? " ok" : "");
     const locked = !pw || !ek;
-    swapHTML(body, !D.on
+    const h = !D.on
       ? `<div class="tcard ntonb"><p class="ntx">在手機和電腦用 Joplin App 同步筆記，內容先在你的裝置端對端加密，主機只存亂碼。</p>
           <ul class="ntpts"><li>${I("lock")}<span>端對端加密，主機無法讀取內容</span></li><li>${I("archive")}<span>會自動納入每日備份</span></li><li>${I("devices")}<span>支援 iOS、Android、Mac、Windows</span></li></ul></div>
         <button type="button" class="ubtn" data-nt="on">開啟加密筆記</button>`
@@ -1174,8 +1187,11 @@ function notesModal(node, name){
           <div class="tcardh"><span>在 Joplin App 設定</span></div>
           <ol class="ntsteps"><li><span><b>啟用加密</b>：到「加密」填入上面的「加密密碼」（先做這步）</span></li><li><span><b>設定同步</b>：到「同步」選 WebDAV，填入網址、帳號、同步密碼</span></li>${D.self_signed ? "<li><span><b>略過憑證</b>：同步進階選項勾選「忽略 TLS 憑證錯誤」</span></li>" : ""}</ol>
         </div>
-        <div class="tfootbar"><button type="button" class="ubtn sm ghost" data-nt="new">換同步密碼</button><button type="button" class="ubtn sm ghost" data-nt="off">暫停同步</button><button type="button" class="ubtn sm ghost bad ntwipe" data-nt="wipe">${I("trash")}清除全部</button></div>`);
+        <div class="tfootbar"><button type="button" class="ubtn sm ghost" data-nt="new">換同步密碼</button><button type="button" class="ubtn sm ghost" data-nt="off">暫停同步</button><button type="button" class="ubtn sm ghost bad ntwipe" data-nt="wipe">${I("trash")}清除全部</button></div>`;
+    if (init) body.innerHTML = h; else swapHTML(body, h);
   };
+  if (D) draw(true);
+  $("#layer").appendChild(v);
   const call = async b => {
     const r = await api("/api/notes" + q, {method:"POST", headers:{"X-Token":getTok(), "Content-Type":"application/json"}, body:JSON.stringify(b)});
     const x = await r.json().catch(() => ({}));
@@ -1185,7 +1201,7 @@ function notesModal(node, name){
   };
   const run = async b => {
     if (busy) return null; busy = true; sayTo(msg, "");
-    try { const x = await call(b); D = x; if (x.pw) pw = x.pw; if (x.ek) ek = x.ek; if (b.action === "off") pw = ek = ""; draw(); return x; }
+    try { const x = await call(b); D = x; TOOLCACHE[ck] = {...x, pw:"", ek:""}; if (x.pw) pw = x.pw; if (x.ek) ek = x.ek; if (b.action === "off") pw = ek = ""; draw(); return x; }
     catch (e) { sayTo(msg, e.message); return null; }
     finally { busy = false; }
   };
@@ -1226,13 +1242,12 @@ const almGB = n => n >= 1e9 ? `${(n / 1e9).toFixed(1)} GB` : `${Math.max(n ? 1 :
 const almLeft = a => !a.exp ? "不會過期" : (s => s > 172800 ? `${Math.round(s / 86400)} 天後失效` : s > 3600 ? `${Math.round(s / 3600)} 小時後失效` : "快失效了")(a.exp - Date.now() / 1000);
 const almAgo = t => { const s = Date.now() / 1000 - t; return s < 120 ? "剛剛" : s < 3600 ? `${Math.round(s / 60)} 分鐘前` : s < 86400 ? `${Math.round(s / 3600)} 小時前` : `${Math.round(s / 86400)} 天前`; };
 function albumModal(node, name){
-  const q = node ? `?node=${encodeURIComponent(node)}` : "";
-  let D = null, view = "list", cur = null, dir = "", F = null, busy = false, PK = null, DV = null, TK = null, tab = "basic";
+  const q = node ? `?node=${encodeURIComponent(node)}` : "", ck = "alm:" + (node || "");
+  let D = TOOLCACHE[ck] || null, view = "list", cur = null, dir = "", F = null, busy = false, PK = null, DV = null, TK = null, tab = "basic";
   const o = {secs:604800, loc:true, dl:2, dev:0, talk:true, shy:true, snap:false, up:0, uq:1};
   const v = document.createElement("div"); v.className = "veil";
   v.innerHTML = `<div class="dialog tdlg wide almd"><div class="thead almhead">${IC("album", "")}<div class="thead-t"><h3>相簿分享</h3><p>${esc(name)}</p></div></div>
     <div class="form"><div class="almb"><div class="abjob"><span class="spin"></span><span>讀取中…</span></div></div><div class="msg"></div></div></div>`;
-  $("#layer").appendChild(v);
   const head = v.querySelector(".almhead"), body = v.querySelector(".almb"), msg = v.querySelector(".msg");
   const base = () => (D && D.base) || location.origin;
   const link = a => `${base()}/a/${a.code}`;
@@ -1245,7 +1260,7 @@ function albumModal(node, name){
   };
   const run = async b => {
     if (busy) return null; busy = true; sayTo(msg, "");
-    try { const x = await call(b); if (x.list) D = x; return x; }
+    try { const x = await call(b); if (x.list) { D = x; TOOLCACHE[ck] = x; } return x; }
     catch (e) { sayTo(msg, e.message); return null; }
     finally { busy = false; }
   };
@@ -1275,7 +1290,7 @@ function albumModal(node, name){
     }[view] || ["list", "相簿分享", name];
     head.innerHTML = `<button type="button" class="iconbtn almback" data-alm="${cfg[0]}" title="返回">${I("back")}</button><div class="thead-t"><h3>${esc(cfg[1])}</h3><p>${esc(cfg[2])}</p></div>`;
   };
-  const oneTabBody = a => tab === "basic"
+  const oneTabBody = (a, k) => k === "basic"
     ? `<div class="almsec"><h4>名稱與介紹</h4>
         <div class="almrw col"><div class="almrh">${I("edit")}<span>相簿名稱</span></div><input class="field" data-almk="name" maxlength="40" value="${esc(a.name)}"></div>
         <div class="almrw col"><div class="almrh">${I("quote")}<span>封面介紹</span><small class="alms">選填・最多 300 字</small></div><textarea class="field" data-almk="intro" rows="2" maxlength="300" placeholder="寫幾句話，放在封面下面">${esc(a.intro || "")}</textarea>
@@ -1315,7 +1330,10 @@ function albumModal(node, name){
         <button type="button" data-alm="devs">${I("devices")}<span>看過的設備</span><small class="num">${a.nlock ? `${I("lock")}${a.nlock}・` : ""}${a.ndev}${a.dev ? `／${a.dev}` : ""}</small></button>
         <button type="button" data-alm="talk">${I("chat")}<span>留言</span><small class="num">${a.ncm}${a.nlk ? `・♥ ${a.nlk}` : ""}</small></button></div>
       <div class="seg almtab" data-slide><button type="button" class="${tab === "basic" ? "on" : ""}" data-almtab="basic">基本與權限</button><button type="button" class="${tab === "more" ? "on" : ""}" data-almtab="more">互動與保護</button></div>
-      <div class="almtbody">${oneTabBody(a)}</div>
+      <div class="almtbody swgrid">
+        <div class="swpane${tab === "basic" ? "" : " off"}" data-sw="basic"${tab === "basic" ? "" : ' aria-hidden="true"'}>${oneTabBody(a, "basic")}</div>
+        <div class="swpane${tab === "more" ? "" : " off"}" data-sw="more"${tab === "more" ? "" : ' aria-hidden="true"'}>${oneTabBody(a, "more")}</div>
+      </div>
       <div class="tfootbar almfoot"><button type="button" class="ubtn sm ghost bad ntwipe" data-alm="del">${I("trash")}收回分享連結</button></div>`; },
     photos: () => { const n = PK.photos.filter(p => !p.hid).length;
       return `<div class="almpkh"><b>已選 <span class="num">${n}</span>／${PK.photos.length} 張</b><button type="button" class="ubtn sm ghost" data-alm="pkall">${n === PK.photos.length ? "全部不選" : "全選"}</button></div>
@@ -1337,7 +1355,7 @@ function albumModal(node, name){
       <div class="almpkh"><b>${TK.c.length ? `${TK.c.length} 則留言` : "還沒有人留言"}</b></div>
       ${TK.c.length ? `<div class="pklist almtk">${TK.c.map(c => `<div class="pkrow">${c.gb ? `<span class="almgb">${I("chat")}</span>` : `<img alt="" loading="lazy" src="${im(c.i, c.v)}">`}<span><b>${esc(c.n)}<small>${almAgo(c.t)}</small></b><small>${esc(c.s)}</small></span><button type="button" class="ubtn sm ghost bad" data-almtk="${esc(c.i)}|${esc(c.id)}" aria-label="刪掉">${I("trash")}</button></div>`).join("")}</div>`
         : `<div class="tcard dlempty">${I("chat")}<b>還沒有人留言</b><small>朋友在相簿按讚或留一句話會出現在這裡</small></div>`}`; };
-  const draw = () => { paintHead(); swapHTML(body, pane[view]()); };
+  const draw = init => { paintHead(); const h = pane[view](); if (init) body.innerHTML = h; else swapHTML(body, h); };
   const share = async a => {
     const url = link(a);
     if (navigator.share && matchMedia("(pointer:coarse)").matches) { try { await navigator.share({title:a.name, url}); } catch (e) { /* 取消分享 */ } return; }
@@ -1345,7 +1363,9 @@ function albumModal(node, name){
   };
   const goDir = async d => { const x = await run({action:"folders", dir:d}); if (x) { F = x; dir = x.dir; view = "pick"; draw(); } };
   const side = (k, t) => { const s = v.querySelector(`[data-side="${k}"]`); if (s) s.textContent = t; };
-  run({action:"list"}).then(x => { if (!x) return; if (!x.cloud) { paintHead(); swapHTML(body, `<p class="ntx">這台沒有雲端硬碟</p>`); return; } draw(); });
+  if (D && D.cloud) draw(true);
+  $("#layer").appendChild(v);
+  run({action:"list"}).then(x => { if (!x || v._d) return; if (!x.cloud) { paintHead(); swapHTML(body, `<p class="ntx">這台沒有雲端硬碟</p>`); return; } if (view === "list") draw(); });
   return new Promise(res => {
     const done = () => { if (v._d) return; v._d = 1; v.classList.add("closing"); setTimeout(() => { v.remove(); res(); }, 360); };
     v._esc = done;
@@ -1363,10 +1383,10 @@ function albumModal(node, name){
       const tb = t.closest("[data-almtab]");
       if (tb) {
         if (tb.dataset.almtab === tab) return;
+        const sd = tb.dataset.almtab === "more" ? 1 : -1;
         tab = tb.dataset.almtab;
         slideSel(() => v.querySelectorAll("[data-almtab]").forEach(x => x.classList.toggle("on", x === tb)));
-        const a = curA(), box = v.querySelector(".almtbody");
-        if (a && box) swapPane(box, () => { box.innerHTML = oneTabBody(a); });
+        slidePane(v.querySelector(".almtbody"), tab, sd);
         return;
       }
       const sb = t.closest("[data-alms] button");
@@ -1563,51 +1583,56 @@ const qrSvg = t => { const M = qrMat(t); if (!M) return ""; const n = M.length; 
   M.forEach((r, y) => r.forEach((x, c) => { if (x) d += `M${c + 4} ${y + 4}h1v1h-1z`; }));
   return `<svg class="qrc" viewBox="0 0 ${n + 8} ${n + 8}" shape-rendering="crispEdges" role="img" aria-label="QR 碼"><rect width="100%" height="100%" fill="#fff"/><path d="${d}" fill="#000"/></svg>`; };
 function abModal(node, name){
-  const q = node ? `?node=${encodeURIComponent(node)}` : "";
+  const q = node ? `?node=${encodeURIComponent(node)}` : "", ck = "ab:" + (node || "");
   const ios = /iPhone|iPad/.test(navigator.userAgent) || navigator.maxTouchPoints > 1 && /Macintosh/.test(navigator.userAgent);
-  let D = null, busy = false, os = ios || /Macintosh/.test(navigator.userAgent) ? "ios" : "and", tm = 0, last = "", mt = "stat", lt = "top", qrk = "";
+  let D = TOOLCACHE[ck] || null, busy = false, os = ios || /Macintosh/.test(navigator.userAgent) ? "ios" : "and", tm = 0, last = "", lastAlert = "", mt = "stat", lt = "top", qrk = "";
   const v = document.createElement("div"); v.className = "veil";
   v.innerHTML = `<div class="dialog tdlg ntd abd"><div class="thead">${IC("dnsf", "")}<div class="thead-t"><h3>AdGuard Home</h3><p>${esc(name)}</p></div><span class="tbadge abbdg"></span></div>
     <div class="form"><div class="ntb"><div class="abjob"><span class="spin"></span><span>讀取中…</span></div></div><div class="msg"></div></div></div>`;
-  $("#layer").appendChild(v);
   const body = v.querySelector(".ntb"), msg = v.querySelector(".msg"), bdg = v.querySelector(".abbdg");
   const num = n => n >= 1e6 ? (n / 1e6).toFixed(1) + "M" : n >= 1e4 ? Math.round(n / 1e3) + "K" : String(n);
   const alRow = (d, n, t) => { const ok = (D.allow || []).includes(d);
     return `<div${ok ? ' class="alok"' : ""}><span>${esc(d)}</span>${n == null ? "" : `<b>${num(n)}</b>`}${t ? `<small>${t}</small>` : ""}<button type="button" class="ubtn sm ghost" data-abal="${esc(d)}" data-on="${ok ? 0 : 1}">${ok ? "恢復擋" : "放行"}</button></div>`; };
-  const abls = x => {
-    if (lt === "allow") {
+  const abls = (x, k) => {
+    if (k === "allow") {
       const al = D.allow || [];
       return `<div class="abadd"><input class="field" data-abdom type="text" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="手動輸入要放行的網域（例如 shop.example.tw）"><button type="button" class="ubtn sm" data-abadd>放行</button></div>
         ${al.length ? `<div class="abtop">${al.map(d => alRow(d)).join("")}</div>` : `<div class="ntst">${I("info")}<span>目前沒有手動放行的網域</span></div>`}`;
     }
-    const r = lt === "top" ? (x.top || []).map(([d, n]) => alRow(d, n)) : (x.recent || []).map(([d, t]) => alRow(d, null, ago(t)));
+    const r = k === "top" ? (x.top || []).map(([d, n]) => alRow(d, n)) : (x.recent || []).map(([d, t]) => alRow(d, null, ago(t)));
     return r.length ? `<div class="abtop">${r.join("")}</div>` : `<div class="ntst">${I("info")}<span>目前沒有紀錄</span></div>`;
+  };
+  const barsHTML = x => {
+    const hrs = x.hrs || [], mx = Math.max(1, ...(hrs.length ? hrs : [0]));
+    return hrs.length ? `<div class="tcardh"><span>最近 24 小時攔截</span><small class="num">最高 ${num(mx)}／時</small></div>
+      <div class="abh">${hrs.map((n, i) => { const back = hrs.length - 1 - i; const lbl = back ? `${back} 小時前` : "這一小時";
+        return `<i style="--h:${Math.max(5, Math.round(n * 100 / mx))}%" title="${lbl}：攔截 ${n} 次"></i>`; }).join("")}</div>
+      <div class="abhaxis"><span>24 小時前</span><span>12 小時前</span><span>現在</span></div>` : "";
   };
   const stats = x => {
     if (!x) return `<div class="tcard abjob"><span class="spin"></span><span>統計讀取中…</span></div>`;
-    const mx = Math.max(1, ...(x.hrs || [0])), aln = (D.allow || []).length;
-    const hrs = x.hrs || [];
-    const bars = hrs.length ? `<div class="tcard"><div class="tcardh"><span>最近 24 小時攔截</span><small class="num">最高 ${num(mx)}／時</small></div>
-      <div class="abh">${hrs.map((n, i) => { const back = hrs.length - 1 - i; const lbl = back ? `${back} 小時前` : "這一小時";
-        return `<i style="--h:${Math.max(5, Math.round(n * 100 / mx))}%" title="${lbl}：攔截 ${n} 次"></i>`; }).join("")}</div>
-      <div class="abhaxis"><span>24 小時前</span><span>12 小時前</span><span>現在</span></div></div>` : "";
+    const aln = (D.allow || []).length, bh = barsHTML(x);
     return `<div class="abn"><div><b class="num">${num(x.q)}</b><small>總查詢</small></div><div><b class="num">${num(x.b)}</b><small>已擋掉</small></div><div><b class="num">${x.pct}%</b><small>攔截率</small></div></div>
-      ${bars}
+      ${bh ? `<div class="tcard abhrbox">${bh}</div>` : ""}
       <div class="seg abtab" data-slide><button type="button" class="${lt === "top" ? "on" : ""}" data-ablt="top">最常擋的</button><button type="button" class="${lt === "new" ? "on" : ""}" data-ablt="new">最近擋的</button><button type="button" class="${lt === "allow" ? "on" : ""}" data-ablt="allow">已放行${aln ? ` (${aln})` : ""}</button></div>
-      <div class="abls">${abls(x)}</div>`;
+      <div class="abls swgrid">${["top", "new", "allow"].map(k => `<div class="swpane${lt === k ? "" : " off"}" data-sw="${k}"${lt === k ? "" : ' aria-hidden="true"'}>${abls(x, k)}</div>`).join("")}</div>`;
   };
-  const steps = () => os === "ios" ? (ios
+  const steps = k => k === "ios" ? (ios
     ? `<button type="button" class="ubtn" data-abp>${I("dl")}安裝加密 DNS 描述檔</button><ol class="ntsteps"><li><span>點「允許」下載描述檔</span></li><li><span>打開「設定」→「已下載描述檔」→ 安裝</span></li></ol>`
     : qrk ? `<div class="abqr">${qrSvg(location.origin + "/dns.mobileconfig?k=" + encodeURIComponent(qrk))}</div><ol class="ntsteps"><li><span>用 iPhone 相機掃描上方 QR 碼並允許下載</span></li><li><span>打開「設定」→「已下載描述檔」→ 安裝</span></li></ol>`
     : `<button type="button" class="ubtn" data-abqr>${I("qr")}產生 iPhone 掃描用 QR 碼</button><ol class="ntsteps"><li><span>點擊按鈕產生一次性描述檔 QR 碼</span></li><li><span>用 iPhone 相機掃描後到「設定」安裝</span></li></ol>`)
     : `<div class="codebox ntr"><span class="ntk">主機</span><code>${esc(D.dot)}</code><button type="button" class="ubtn sm ghost copybtn" data-abcp>${I("copy")}複製</button></div>
       <ol class="ntsteps"><li><span>打開「設定」→「網路和網際網路」→「私人 DNS」</span></li><li><span>選擇「私人 DNS 供應商主機名稱」並貼上主機名稱</span></li></ol>`;
+  const connHTML = () => `${I(D.down || D.pub || D.ext ? "warn" : "ok")}${D.down || D.pub || D.ext ? "連線受阻" : D.ext === "" ? `TCP ${D.port} 正常` : `TCP ${D.port}`}`;
   const setupTab = () => `<div class="tcard">
-      <div class="tcardh"><span>連線裝置設定</span><span class="abconn ${D.down || D.pub || D.ext ? "bad" : D.ext === "" ? "ok" : ""}">${I(D.down || D.pub || D.ext ? "warn" : "ok")}${D.down || D.pub || D.ext ? "連線受阻" : D.ext === "" ? `TCP ${D.port} 正常` : `TCP ${D.port}`}</span></div>
+      <div class="tcardh"><span>連線裝置設定</span><span class="abconn ${D.down || D.pub || D.ext ? "bad" : D.ext === "" ? "ok" : ""}">${connHTML()}</span></div>
       <div class="seg abos" data-slide><button type="button" class="${os === "ios" ? "on" : ""}" data-abos="ios">iPhone / iPad</button><button type="button" class="${os === "and" ? "on" : ""}" data-abos="and">Android</button></div>
-      <div class="abst">${steps()}</div>
+      <div class="abst swgrid">${["ios", "and"].map(k => `<div class="swpane${os === k ? "" : " off"}" data-sw="${k}"${os === k ? "" : ' aria-hidden="true"'}>${steps(k)}</div>`).join("")}</div>
       ${D.ext === "" || D.ext ? "" : `<div class="ntst">${I("info")}<span>若手機連不上，請到主機商防火牆打開 TCP ${D.port}</span></div>`}
     </div>`;
+  const alertOf = () => D.down ? `<div class="bkerr">${I("warn")}<span>服務停了，正在自動重新啟動</span></div>`
+    : D.pub ? `<div class="bkerr">${I("warn")}<span>手機連不上：${esc(D.pub)}</span></div>`
+    : D.ext ? `<div class="bkerr">${I("warn")}<span>從「${esc(D.ext_by)}」連不到：請到主機商防火牆打開 TCP ${D.port}</span></div>` : "";
   const view = () => {
     const err = D.on && (D.down || D.pub || D.ext);
     bdg.textContent = D.job ? "設定中" : err ? "有狀況" : D.on ? "運作中" : "未開啟";
@@ -1617,15 +1642,46 @@ function abModal(node, name){
       <ul class="ntpts"><li>${I("shield")}<span>自動套用中文與惡意網址過濾清單</span></li><li>${I("lock")}<span>國際與大陸網域分流，不繞路</span></li><li>${I("devices")}<span>支援 iPhone 描述檔與 Android 私人 DNS</span></li></ul></div>
       ${D.cert ? "" : `<div class="ntst bad">${I("warn")}<span>這台還沒有網域的 TLS 憑證，無法開啟</span></div>`}
       <button type="button" class="ubtn" data-ab="on"${D.cert ? "" : " disabled"}>開啟 AdGuard Home</button>`;
-    const alert = D.down ? `<div class="bkerr">${I("warn")}<span>服務停了，正在自動重新啟動</span></div>`
-      : D.pub ? `<div class="bkerr">${I("warn")}<span>手機連不上：${esc(D.pub)}</span></div>`
-      : D.ext ? `<div class="bkerr">${I("warn")}<span>從「${esc(D.ext_by)}」連不到：請到主機商防火牆打開 TCP ${D.port}</span></div>` : "";
-    return `${alert}
+    return `${alertOf()}
       <div class="seg abmain" data-slide><button type="button" class="${mt === "stat" ? "on" : ""}" data-abmt="stat">總覽與紀錄</button><button type="button" class="${mt === "setup" ? "on" : ""}" data-abmt="setup">手機設定</button></div>
-      <div class="abbody">${mt === "stat" ? stats(D.stats) : setupTab()}</div>
+      <div class="abbody swgrid">
+        <div class="swpane${mt === "stat" ? "" : " off"}" data-sw="stat"${mt === "stat" ? "" : ' aria-hidden="true"'}>${stats(D.stats)}</div>
+        <div class="swpane${mt === "setup" ? "" : " off"}" data-sw="setup"${mt === "setup" ? "" : ' aria-hidden="true"'}>${setupTab()}</div>
+      </div>
       <div class="tfootbar"><button type="button" class="ubtn sm ghost" data-abweb>打開管理頁${EXT}</button><button type="button" class="ubtn sm ghost bad ntwipe" data-ab="off">關閉服務</button></div>`;
   };
-  const draw = () => { const h = view(); if (h !== last) { last = h; swapHTML(body, h); } };
+  const draw = init => {
+    const al = alertOf(), h = view();
+    if (h === last && !init) return;
+    last = h;
+    if (init) { lastAlert = al; body.innerHTML = h; return; }
+    // 運作中局部更新：保留所有 .swgrid 分頁結構與當前滑動狀態，只更新變動的數字與清單，零重繪零閃爍
+    if (D.on && !D.job && body.querySelector(".abmain") && al === lastAlert) {
+      const conn = body.querySelector(".abconn");
+      if (conn) { conn.className = "abconn " + (D.down || D.pub || D.ext ? "bad" : D.ext === "" ? "ok" : ""); conn.innerHTML = connHTML(); }
+      const stp = body.querySelector('.abbody > [data-sw="stat"]');
+      if (stp && D.stats) {
+        if (!stp.querySelector(".abls")) { stp.innerHTML = stats(D.stats); return; }
+        const abn = stp.querySelector(".abn"), nh = `<div><b class="num">${num(D.stats.q)}</b><small>總查詢</small></div><div><b class="num">${num(D.stats.b)}</b><small>已擋掉</small></div><div><b class="num">${D.stats.pct}%</b><small>攔截率</small></div>`;
+        if (abn && abn.innerHTML !== nh) abn.innerHTML = nh;
+        const hb = stp.querySelector(".abhrbox"), bh = barsHTML(D.stats);
+        if (hb && bh && hb.innerHTML !== bh) hb.innerHTML = bh;
+        const aln = (D.allow || []).length, alb = stp.querySelector('[data-ablt="allow"]');
+        if (alb) txt(alb, `已放行${aln ? ` (${aln})` : ""}`);
+        ["top", "new", "allow"].forEach(k => {
+          const p = stp.querySelector(`.abls > [data-sw="${k}"]`);
+          if (!p || (k === "allow" && document.activeElement === p.querySelector("[data-abdom]"))) return;
+          const lh = abls(D.stats, k);
+          if (p.innerHTML !== lh) p.innerHTML = lh;
+        });
+      }
+      return;
+    }
+    lastAlert = al;
+    swapHTML(body, h);
+  };
+  if (D) draw(true);
+  $("#layer").appendChild(v);
   const call = async b => {
     const r = await api("/api/adblock" + q, {method:"POST", headers:{"X-Token":getTok(), "Content-Type":"application/json"}, body:JSON.stringify(b)});
     const x = await r.json().catch(() => ({}));
@@ -1635,7 +1691,7 @@ function abModal(node, name){
   };
   const run = async b => {
     if (busy) return null; busy = true;
-    try { const x = await call(b); D = x; sayTo(msg, x.err || ""); draw(); return x; }
+    try { const x = await call(b); D = x; TOOLCACHE[ck] = x; sayTo(msg, x.err || ""); if (!v._d) draw(); return x; }
     catch (e) { sayTo(msg, e.message); return null; }
     finally { busy = false; clearTimeout(tm); if (D && !v._d) tm = setTimeout(() => run({action:"info"}), D.job ? 1500 : 30000); }
   };
@@ -1643,31 +1699,40 @@ function abModal(node, name){
     const inp = v.querySelector("[data-abdom]"); if (!inp) return;
     const dom = inp.value.trim(); if (!dom) return inp.focus();
     const x = await run({action:"allow", domain:dom});
-    if (x) { if (x.message) toast(x.message); }
+    if (x) {
+      if (x.message) toast(x.message);
+      const p = v.querySelector('.abls > [data-sw="allow"]');
+      if (p && D && D.stats) p.innerHTML = abls(D.stats, "allow");
+    }
   };
   run({action:"info"});
   return new Promise(res => {
     const done = () => { if (v._d) return; v._d = 1; clearTimeout(tm); v.classList.add("closing"); setTimeout(() => { v.remove(); res(); }, 360); };
     v._esc = done;
     v.addEventListener("keydown", e => { if (e.key === "Enter" && e.target.matches("[data-abdom]")) { e.preventDefault(); addDom(); } });
+    const LTO = ["top", "new", "allow"];
     v.addEventListener("click", async e => {
       if (e.target === v) return done();
       const t = e.target;
       const m = t.closest("[data-abmt]");
-      if (m) { if (m.dataset.abmt === mt) return; mt = m.dataset.abmt; slideSel(() => v.querySelectorAll("[data-abmt]").forEach(x => x.classList.toggle("on", x === m)));
-        last = view(); const bx = v.querySelector(".abbody"); swapPane(bx, () => { bx.innerHTML = mt === "stat" ? stats(D.stats) : setupTab(); }); return; }
+      if (m) { if (m.dataset.abmt === mt) return; const sd = m.dataset.abmt === "setup" ? 1 : -1; mt = m.dataset.abmt;
+        slideSel(() => v.querySelectorAll("[data-abmt]").forEach(x => x.classList.toggle("on", x === m)));
+        slidePane(v.querySelector(".abbody"), mt, sd); return; }
       const o = t.closest("[data-abos]");
-      if (o) { if (o.dataset.abos === os) return; os = o.dataset.abos; slideSel(() => v.querySelectorAll("[data-abos]").forEach(x => x.classList.toggle("on", x === o))); last = view(); const bx = v.querySelector(".abst"); swapPane(bx, () => { bx.innerHTML = steps(); }); return; }
+      if (o) { if (o.dataset.abos === os) return; const sd = o.dataset.abos === "and" ? 1 : -1; os = o.dataset.abos;
+        slideSel(() => v.querySelectorAll("[data-abos]").forEach(x => x.classList.toggle("on", x === o)));
+        slidePane(v.querySelector(".abst"), os, sd); return; }
       if (t.closest("[data-abcp]")) {
         try { await navigator.clipboard.writeText(D.dot); toast("已複製主機名稱"); }
-        catch (_) { const r = document.createRange(); r.selectNodeContents(v.querySelector(".abst code")); getSelection().removeAllRanges(); getSelection().addRange(r); }
+        catch (_) { const r = document.createRange(); r.selectNodeContents(v.querySelector('.abst [data-sw="and"] code')); getSelection().removeAllRanges(); getSelection().addRange(r); }
         return;
       }
       if (t.closest("[data-abweb]")) return openAgh(node, name);
       if (t.closest("[data-abadd]")) return addDom();
       const lb = t.closest("[data-ablt]");
-      if (lb) { if (lb.dataset.ablt === lt) return; lt = lb.dataset.ablt; slideSel(() => v.querySelectorAll("[data-ablt]").forEach(x => x.classList.toggle("on", x === lb)));
-        last = view(); const bx = v.querySelector(".abls"); swapPane(bx, () => { bx.innerHTML = abls(D.stats || {}); }); return; }
+      if (lb) { if (lb.dataset.ablt === lt) return; const sd = Math.sign(LTO.indexOf(lb.dataset.ablt) - LTO.indexOf(lt)) || 1; lt = lb.dataset.ablt;
+        slideSel(() => v.querySelectorAll("[data-ablt]").forEach(x => x.classList.toggle("on", x === lb)));
+        slidePane(v.querySelector(".abls"), lt, sd); return; }
       const pq = t.closest("[data-abp],[data-abqr]");
       if (pq) {
         try {
@@ -1675,8 +1740,8 @@ function abModal(node, name){
           const x = await r.json().catch(() => ({}));
           if (!r.ok || !x.k) throw new Error(x.message || "失敗了，請再試一次");
           if (pq.dataset.abqr == null) { location.href = "/dns.mobileconfig?k=" + encodeURIComponent(x.k); return; }
-          qrk = x.k; last = view(); swapHTML(v.querySelector(".abst"), steps());
-          setTimeout(() => { if (qrk === x.k) { qrk = ""; if (!v._d && mt === "setup" && os === "ios") { last = view(); swapHTML(v.querySelector(".abst"), steps()); } } }, 540000);
+          qrk = x.k; const ip = v.querySelector('.abst > [data-sw="ios"]'); if (ip) swapHTML(ip, steps("ios"));
+          setTimeout(() => { if (qrk === x.k) { qrk = ""; const ip2 = !v._d && v.querySelector('.abst > [data-sw="ios"]'); if (ip2) swapHTML(ip2, steps("ios")); } }, 540000);
         } catch (x) { sayTo(msg, x.message); }
         return;
       }
@@ -2260,15 +2325,21 @@ function cardRect(k){
 }
 function openDet(k){
   if (!cardMode(LIST) || DET) return;
+  const s = LIST.find(x => keyOf(x) === k), dash = document.querySelector("#app .dash.m");
+  if (!s || !dash) return;
   OPENR = cardRect(k) || {t:0, b:0, l:0, r:0}; DET = k; DETX = false; DETP = canAnim();
   history.pushState({det: k}, "");
   closeMenu(); document.documentElement.classList.add("lock");
-  render(LIST);
-  if (DETP) requestAnimationFrame(() => requestAnimationFrame(() => {   // 等首幀排版與毛玻璃準備完成，再由 GPU 從 0% 順順彈入
-    DETP = false;
-    const el = document.querySelector("#app .det");
-    if (el && DET && !DETX) el.classList.remove("pre");
-  }));
+  dash.querySelectorAll(":scope>.det").forEach(x => x.remove());
+  dash.insertAdjacentHTML("beforeend", detail(s));
+  const el = dash.querySelector(":scope>.det");
+  if (DETP && el) {
+    void el.offsetWidth;                                  // 同步完成首幀排版，單一 rAF 立刻啟動 GPU 滑入，iOS 不慢半拍
+    requestAnimationFrame(() => {
+      DETP = false;
+      if (el.isConnected && DET && !DETX) el.classList.remove("pre");
+    });
+  } else DETP = false;
   clearTimeout(DETH); DETH = setTimeout(() => { if (DET && !DETX) document.documentElement.classList.add("dhid"); }, T.mid + 120);   // 滑入完才藏底層
 }
 let DETH;
@@ -2280,13 +2351,17 @@ function shutDet(){
   showBack();
   closeMenu(); hideTip();
   if (!canAnim()) return endDet();
-  requestAnimationFrame(() => {                   // 先讓底層主頁重繪完成再淡出，關閉不閃爍
+  requestAnimationFrame(() => {                           // 先讓底層主頁重繪完成再淡出，不重 diff 整頁、關閉零閃爍
     if (!DET || !DETX) return;
-    render(LIST);
+    const el = document.querySelector("#app .det");
+    if (el) { el.classList.remove("pre"); el.classList.add("closing"); }
     setTimeout(endDet, T.fast + 60);
   });
 }
-function endDet(){ DET = ""; DETX = false; DETP = false; showBack(); document.documentElement.classList.remove("lock"); render(LIST); }
+function endDet(){
+  DET = ""; DETX = false; DETP = false; showBack(); document.documentElement.classList.remove("lock");
+  document.querySelectorAll("#app .det").forEach(x => x.remove());
+}
 addEventListener("popstate", () => { if (DET && !(history.state && history.state.det)) shutDet(); });
 document.addEventListener("keydown", e => {
   if ((e.key === "Enter" || e.key === " ") && e.target.matches && e.target.matches("[data-open]")) { e.preventDefault(); openDet(e.target.dataset.open); }
@@ -2478,35 +2553,35 @@ function swapHTML(el, html){
   fade(olds, [...el.children]);
   if (Math.abs(h1 - h0) > 1) el.animate([{height:h0 + "px", overflow:"hidden"}, {height:h1 + "px", overflow:"hidden"}], o);
 }
-/* 彈窗分頁切換（每日備份、相簿詳細設定、擋廣告）：舊畫面殘影平滑淡出同時新畫面淡入＋高度過渡，全程零空白閃爍 */
-function swapPane(box, update){
-  if (!box) return;
-  if (!canAnim() || !box.isConnected) return update();
-  const id = box._sw = (box._sw || 0) + 1;
-  box.querySelectorAll(":scope>.pane-ghost").forEach(g => g.remove());
-  box.getAnimations({subtree:true}).forEach(a => { if (!a.animationName) a.cancel(); });
-  const h0 = box.offsetHeight;
-  const ghost = box.cloneNode(true);
-  const srcIn = box.querySelectorAll("input,textarea,select"), dstIn = ghost.querySelectorAll("input,textarea,select");
-  srcIn.forEach((s, i) => { const d = dstIn[i]; if (!d) return; if (s.type === "checkbox" || s.type === "radio") d.checked = s.checked; else d.value = s.value; d.disabled = true; d.tabIndex = -1; });
-  ghost.querySelectorAll(".slide").forEach(x => x.remove());
-  ghost.querySelectorAll("[data-slide],[data-bkpane],[data-almtab],[data-alms],[data-abmt],[data-abos],[data-ablt],[id],[name]").forEach(x => {
-    ["data-slide", "data-bkpane", "data-almtab", "data-alms", "data-abmt", "data-abos", "data-ablt", "id", "name"].forEach(k => x.removeAttribute(k));
+/* 彈窗分頁切換（每日備份、擋廣告、相簿詳細設定）：同格 1×1 Grid 疊放所有分頁（.dialog 高度永不變動，徹底杜絕 iOS 毛玻璃重繪閃爍），純 GPU 水平滑換，零複製、零重疊、零空白 */
+function slidePane(wrap, nextKey, dir = 1){
+  if (!wrap) return;
+  const panes = [...wrap.children].filter(c => c.dataset.sw !== undefined);
+  const next = panes.find(c => c.dataset.sw === nextKey);
+  if (!next) return;
+  const prev = panes.find(c => c.dataset.sw === wrap._cur && c !== next) || panes.find(c => c !== next && !c.classList.contains("off")) || null;
+  wrap._cur = nextKey;
+  if (!canAnim() || !wrap.isConnected || !prev) {
+    panes.forEach(p => { const off = p !== next; p.classList.toggle("off", off); p.setAttribute("aria-hidden", off ? "true" : "false"); });
+    return;
+  }
+  const id = wrap._sw = (wrap._sw || 0) + 1;
+  const xOf = el => { const t = getComputedStyle(el).transform; return t && t !== "none" ? new DOMMatrix(t).m41 : 0; };
+  const fromPrev = xOf(prev), fromNext = next.classList.contains("off") ? null : xOf(next);
+  panes.forEach(p => {
+    p.getAnimations().forEach(a => a.cancel());
+    if (p !== prev && p !== next) { p.classList.add("off"); p.setAttribute("aria-hidden", "true"); }
   });
-  ghost.removeAttribute("id"); ghost.setAttribute("aria-hidden", "true");
-  ghost.classList.add("pane-ghost");
-  update();
-  const h1 = box.offsetHeight, kids = [...box.children].filter(c => !c.hidden);
-  if (box._pos === undefined) box._pos = box.style.position;
-  if (getComputedStyle(box).position === "static") box.style.position = "relative";
-  Object.assign(ghost.style, {position:"absolute", left:"0", top:"0", width:"100%", height:h0 + "px", margin:"0", overflow:"hidden", pointerEvents:"none", zIndex:"2", boxSizing:"border-box"});
-  box.appendChild(ghost);
-  const dur = Math.round(T.mid * .85), oIn = {duration:dur, easing:DEC, id:"ui"}, oH = {duration:dur, easing:EASE, id:"ui"};
-  kids.forEach(c => c.animate([{opacity:0, transform:"translateY(4px)"}, {opacity:1, transform:"none"}], oIn));
-  if (Math.abs(h1 - h0) > 1) box.animate([{height:h0 + "px", overflow:"hidden"}, {height:h1 + "px", overflow:"hidden"}], oH);
-  ghost.animate([{opacity:1}, {opacity:0}], {duration:Math.round(T.fast * .85), easing:EXIT, fill:"forwards", id:"ui"}).finished.catch(() => {}).then(() => {
-    ghost.remove();
-    if (box._sw === id && box.isConnected) { box.style.position = box._pos; delete box._pos; }
+  const w = (wrap.offsetWidth || 320) + 16, d = dir < 0 ? -1 : 1;
+  const o = {duration:Math.round(T.mid * .82), easing:DEC, id:"ui"};
+  prev.classList.remove("off"); prev.setAttribute("aria-hidden", "true");
+  next.classList.remove("off"); next.setAttribute("aria-hidden", "false");
+  const aPrev = prev.animate([{transform:`translate3d(${fromPrev}px,0,0)`}, {transform:`translate3d(${-d * w}px,0,0)`}], {...o, fill:"forwards"});
+  const aNext = next.animate([{transform:`translate3d(${fromNext !== null ? fromNext : d * w}px,0,0)`}, {transform:"translate3d(0,0,0)"}], o);
+  Promise.all([aPrev.finished, aNext.finished]).catch(() => {}).then(() => {
+    if (wrap._sw !== id || !wrap.isConnected) return;
+    panes.forEach(p => { if (p !== next) { p.classList.add("off"); p.setAttribute("aria-hidden", "true"); } });
+    aPrev.cancel();
   });
 }
 /* 顯示／收起一塊（取代直接改 hidden）：撐開後淡入；淡出後收起 */
@@ -2546,7 +2621,7 @@ function selfPaint(root){
   if (!h || !SELFST[keyOf(h)]) return;
   swapHTML(box, selfRowHtml(h));
 }
-/* 背景預先讀取設定頁狀態：第一次滑到設定時各列與更新狀態已就緒，整頁不跳動 */
+/* 背景預先讀取設定頁狀態：第一次滑到設定或點開設定視窗時已就緒，不慢半拍、整頁不跳動 */
 function prewarmSet(){
   if (window._pw || SHARE || !getTok() || !LIST.length) return;
   window._pw = 1;
@@ -2557,13 +2632,13 @@ function prewarmSet(){
       const r = view(); if (r && r.querySelector(".selfbox")) selfPaint(r);
     });
   }
-  tgCall({action:"status"}).then(d => { STCACHE.tgst = {t: d.on ? "" : d.has_token ? "還沒選要傳到哪裡" : "還沒設定", b: !!d.on, on: !!d.on}; }, () => {});
+  tgCall({action:"status"}).then(d => { RAWCACHE.tg = d; STCACHE.tgst = {t: d.on ? "" : d.has_token ? "還沒選要傳到哪裡" : "還沒設定", b: !!d.on, on: !!d.on}; }, () => {});
   if (self) {
-    if (PK_OK) pkCall("/api/passkey", {action:"list"}, 1).then(d => { const n = d.keys && d.keys.length; STCACHE.pkst = {t: n ? "" : "還沒登記", b: n || false, on: !!n}; }, () => {});
-    pinCall({action:"status"}).then(d => { const ok = !!(d.on && !d.locked); STCACHE.pinst = {t: !d.on ? "還沒設定" : d.locked ? `輸錯太多次，暫停中（還有 ${Math.ceil(d.locked / 60)} 分鐘）` : "", b: ok, on: ok}; }, () => {});
-    sessCall({action:"list"}).then(d => { STCACHE.sessst = {t: "", b: (d.list || []).length || 1, on: false}; }, () => {});
-    pairCall({action:"status"}).then(d => { const n = (d.keys || []).length; STCACHE.pairst = {t: n ? "" : "還沒配對", b: n || false, on: n > 0}; }, () => {});
-    skyCall({action:"status"}).then(d => { STCACHE.skyst = {t: skyLine(d), b: false, on: !!d.on && !d.err}; }, () => {});
+    if (PK_OK) pkCall("/api/passkey", {action:"list"}, 1).then(d => { RAWCACHE.pk = d; const n = d.keys && d.keys.length; STCACHE.pkst = {t: n ? "" : "還沒登記", b: n || false, on: !!n}; }, () => {});
+    pinCall({action:"status"}).then(d => { RAWCACHE.pin = d; const ok = !!(d.on && !d.locked); STCACHE.pinst = {t: !d.on ? "還沒設定" : d.locked ? `輸錯太多次，暫停中（還有 ${Math.ceil(d.locked / 60)} 分鐘）` : "", b: ok, on: ok}; }, () => {});
+    sessCall({action:"list"}).then(d => { RAWCACHE.sess = d; STCACHE.sessst = {t: "", b: (d.list || []).length || 1, on: false}; }, () => {});
+    pairCall({action:"status"}).then(d => { RAWCACHE.pair = d; const n = (d.keys || []).length; STCACHE.pairst = {t: n ? "" : "還沒配對", b: n || false, on: n > 0}; }, () => {});
+    skyCall({action:"status"}).then(d => { RAWCACHE.sky = d; STCACHE.skyst = {t: skyLine(d), b: false, on: !!d.on && !d.err}; }, () => {});
   }
 }
 /* jobs：[{node, kind:"self"|"cloud"}]；不給就是「全部更新」 */
@@ -2765,13 +2840,13 @@ async function tgCall(body){
 }
 async function tgStatus(root){
   const el = root.querySelector(".tgst"); if (!el) return;
-  try { const d = await tgCall({action:"status"});
+  try { const d = await tgCall({action:"status"}); RAWCACHE.tg = d;
     stSet(el, d.on ? "" : d.has_token ? "還沒選要傳到哪裡" : "還沒設定", !!d.on);
     el.classList.toggle("on", !!d.on);
   } catch(e) { txt(el, e.message); }
 }
 async function tgModal(){
-  const st = await tgCall({action:"status"}).catch(() => ({}));
+  const st = RAWCACHE.tg || {};
   const v = document.createElement("div"); v.className = "veil";
   v.innerHTML = `<div class="dialog tgd">${IC("bell","big")}<h3>Telegram 通知</h3>
     <p>主機有狀況時傳訊息給你</p>
@@ -2789,12 +2864,21 @@ async function tgModal(){
       <div class="msg" aria-live="polite"></div>
     </div>
     <div class="btns three"><button class="ubtn ghost" data-test>測試</button><button class="ubtn" data-save>儲存</button></div>
-    ${st.on ? `<button class="linkbtn" data-off>關閉 Telegram 通知</button>` : ""}</div>`;
+    <button class="linkbtn" data-off${st.on ? "" : " hidden"}>關閉 Telegram 通知</button></div>`;
   $("#layer").appendChild(v);
   const q = k => v.querySelector(`[data-k="${k}"]`), msg = v.querySelector(".msg");
   const say = (t, cls) => { sayTo(msg, t); msg.className = "msg " + (cls || ""); };
   const vals = () => ({token: q("token").value.trim(), chat: q("chat").value.trim(), keep: +((v.querySelector("[data-keep].on") || {}).dataset || {keep:0}).keep});
-  let busy = false;
+  let busy = false, dirty = false;
+  tgCall({action:"status"}).then(d => {
+    RAWCACHE.tg = d; if (v._d) return;
+    q("token").placeholder = d.has_token ? "已經設定過，不用改就留空" : "123456789:AAH…";
+    if (!dirty) {
+      if (!q("chat").value && d.chat) q("chat").value = d.chat;
+      v.querySelectorAll("[data-keep]").forEach(x => x.classList.toggle("on", +x.dataset.keep === (+d.keep || 0)));
+    }
+    const ob = v.querySelector("[data-off]"); if (ob) ob.hidden = !d.on;
+  }, () => {});
   const run = async (btn, label, fn) => {
     if (busy) return; busy = true; const old = btn.innerHTML;
     btn.disabled = true; btn.innerHTML = `<span class="spin"></span>${label}`; say("");
@@ -2816,9 +2900,9 @@ async function tgModal(){
         say(d.chats.length > 1 ? `找到 ${d.chats.length} 個聊天，點一下要傳去哪裡` : `會傳到「${d.chats[0].name}」`, "ok");
       });
       const kp = t.closest("[data-keep]");
-      if (kp) { slideSel(() => v.querySelectorAll("[data-keep]").forEach(x => x.classList.toggle("on", x === kp))); return; }
+      if (kp) { dirty = true; slideSel(() => v.querySelectorAll("[data-keep]").forEach(x => x.classList.toggle("on", x === kp))); return; }
       const c = t.closest("[data-chat]");
-      if (c) { q("chat").value = c.dataset.chat; v.querySelectorAll("[data-chat]").forEach(x => x.classList.toggle("on", x === c)); return say(""); }
+      if (c) { dirty = true; q("chat").value = c.dataset.chat; v.querySelectorAll("[data-chat]").forEach(x => x.classList.toggle("on", x === c)); return say(""); }
       const tb = t.closest("[data-test]");
       if (tb) return run(tb, "傳送中…", async () => { const d = await tgCall({action:"test", ...vals()}); if (d.chat) q("chat").value = d.chat; say(d.message, "ok"); });
       const sb = t.closest("[data-save]");
@@ -2826,7 +2910,7 @@ async function tgModal(){
       const ob = t.closest("[data-off]");
       if (ob) return run(ob, "關閉中…", async () => { const d = await tgCall({action:"save", off:true}); toast(d.message); done(); });
     });
-    q("chat").addEventListener("input", () => v.querySelectorAll("[data-chat]").forEach(x => x.classList.remove("on")));
+    q("chat").addEventListener("input", () => { dirty = true; v.querySelectorAll("[data-chat]").forEach(x => x.classList.remove("on")); });
   });
 }
 /* ═════════ OpenSky 帳號（機場起降：高雄、台中的飛機靠它補） ═════════ */
@@ -2841,11 +2925,11 @@ const skyLine = d => d.on ? d.err ? d.err : d.out ? `今天的次數用完了，
 async function skyStatus(root){
   const el = root.querySelector(".skyst"); if (!el) return;
   try { const d = await skyCall({action:"status"}), s = skyLine(d), on = !!d.on && !d.err;
-    STCACHE.skyst = {t: s, b: false, on}; txt(el, s); el.classList.toggle("on", on); }
+    RAWCACHE.sky = d; STCACHE.skyst = {t: s, b: false, on}; txt(el, s); el.classList.toggle("on", on); }
   catch(e) { txt(el, e.message); }
 }
 async function skyModal(){
-  const st = await skyCall({action:"status"}).catch(() => ({}));
+  const st = RAWCACHE.sky || {};
   const v = document.createElement("div"); v.className = "veil";
   v.innerHTML = `<div class="dialog skyd">${IC("sky","big")}<h3>OpenSky 帳號</h3>
     <p>填了每天可以查 4000 次（沒填 400 次）</p>
@@ -2857,9 +2941,15 @@ async function skyModal(){
       <div class="msg" aria-live="polite"></div>
     </div>
     <div class="btns"><button class="ubtn" data-save>儲存</button></div>
-    ${st.on ? `<button class="linkbtn" data-off>移除帳號</button>` : ""}</div>`;
+    <button class="linkbtn" data-off${st.on ? "" : " hidden"}>移除帳號</button></div>`;
   $("#layer").appendChild(v);
   const q = k => v.querySelector(`[data-k="${k}"]`), msg = v.querySelector(".msg"), file = v.querySelector("input[type=file]");
+  skyCall({action:"status"}).then(d => {
+    RAWCACHE.sky = d; if (v._d) return;
+    if (!q("id").value && d.id) q("id").value = d.id;
+    q("secret").placeholder = d.on ? "已經設定過" : "";
+    const ob = v.querySelector("[data-off]"); if (ob) ob.hidden = !d.on;
+  }, () => {});
   const say = (t, cls) => { sayTo(msg, t); msg.className = "msg " + (cls || ""); };
   const fill = text => {                     // 貼上或選了整個帳號檔：自動拆成兩格
     try { const j = JSON.parse(text); if (j && (j.clientId || j.client_id)) { q("id").value = j.clientId || j.client_id; q("secret").value = j.clientSecret || j.client_secret || ""; say(""); return true; } } catch(e) {}
@@ -2921,10 +3011,11 @@ addEventListener("keydown", e => { if (e.key === "Escape") { const v = [...docum
 /* 對話框：不放「取消」「關閉」鈕（點旁邊、往下滑、Esc 就關）；電腦上右上角一個 ×
    打開時記一筆瀏覽紀錄，返回手勢先關最上面的視窗，不會整頁退出（機場起降、主機細節也一樣） */
 let DLGN = 0, DLGSKIP = 0;
+const FINEP = matchMedia("(pointer:fine)");
 new MutationObserver(ms => { for (const m of ms) {
   for (const v of m.addedNodes) {
     const d = v.classList && v.classList.contains("veil") && v.querySelector(".dialog"); if (!d) continue;
-    if (!v.classList.contains("upv") && !v.classList.contains("stay") && !d.querySelector(".dx")) {
+    if (FINEP.matches && !v.classList.contains("upv") && !v.classList.contains("stay") && !d.querySelector(".dx")) {
       d.insertAdjacentHTML("afterbegin", `<button type="button" class="dx" aria-label="關閉">${I("x")}</button>`);
       d.firstChild.addEventListener("click", e => { e.stopPropagation(); if (v._esc) v._esc(); });
     }
@@ -3076,7 +3167,7 @@ async function pkLogin(){
 }
 async function pkStatus(root){
   const el = root.querySelector(".pkst"); if (!el) return;
-  try { const d = await pkCall("/api/passkey", {action:"list"}, 1);
+  try { const d = await pkCall("/api/passkey", {action:"list"}, 1); RAWCACHE.pk = d;
     stSet(el, d.keys && d.keys.length ? "" : "還沒登記", d.keys && d.keys.length);
     el.classList.toggle("on", !!(d.keys && d.keys.length));
   } catch(e) { txt(el, e.message); }
@@ -3091,19 +3182,20 @@ async function pkModal(){
         <small>最多 5 支，換密碼也照樣能用</small></label>
       <div class="msg"></div></div>
     <div class="btns"><button class="ubtn" data-add>登記${me}</button></div></div>`;
-  $("#layer").appendChild(v);
   const list = v.querySelector(".pklist"), msg = v.querySelector(".msg"), add = v.querySelector("[data-add]"), lab = v.querySelector(".pkadd");
   const day = t => { const d = new Date(t * 1000); return `${d.getMonth()+1}/${d.getDate()}`; };
-  let keys = [], max = 5, busy = false;
-  const draw = () => {
-    swapHTML(list, keys.map(k => `<div class="pkrow"><span>${esc(k.name)}<small>${day(k.added)} 登記${k.used ? `・${day(k.used)} 用過` : "・還沒用過"}</small></span>
-      <button type="button" class="iconbtn" data-del="${esc(k.id)}" data-name="${esc(k.name)}" title="刪掉這支">${I("x")}</button></div>`).join(""));
+  let keys = (RAWCACHE.pk && RAWCACHE.pk.keys) || [], max = (RAWCACHE.pk && RAWCACHE.pk.max) || 5, busy = false;
+  const draw = init => {
+    const h = keys.map(k => `<div class="pkrow"><span>${esc(k.name)}<small>${day(k.added)} 登記${k.used ? `・${day(k.used)} 用過` : "・還沒用過"}</small></span>
+      <button type="button" class="iconbtn" data-del="${esc(k.id)}" data-name="${esc(k.name)}" title="刪掉這支">${I("x")}</button></div>`).join("");
+    if (init) list.innerHTML = h; else swapHTML(list, h);
     const full = keys.length >= max;
     lab.style.display = full ? "none" : "";
     add.disabled = full; add.textContent = full ? `已經登記滿 ${max} 支` : `登記${me}`;
   };
-  try { const d = await pkCall("/api/passkey", {action:"list"}, 1); keys = d.keys || []; max = d.max || 5; draw(); }
-  catch(e) { msg.className = "msg bad"; msg.textContent = e.message; }
+  if (RAWCACHE.pk) draw(true);
+  $("#layer").appendChild(v);
+  pkCall("/api/passkey", {action:"list"}, 1).then(d => { RAWCACHE.pk = d; if (v._d) return; keys = d.keys || []; max = d.max || 5; draw(); }, e => { if (!v._d) { msg.className = "msg bad"; msg.textContent = e.message; } });
   return new Promise(res => {
     const done = () => { if (v._d) return; v._d = 1; v.classList.add("closing"); setTimeout(() => { v.remove(); res(); }, 360); };
     v._esc = done;
@@ -3116,14 +3208,14 @@ async function pkModal(){
         busy = true;
         const d = await pkCall("/api/passkey", {action:"delete", id:del.dataset.del}, 1).catch(err => ({message:err.message}));
         busy = false;
-        if (d.ok) { keys = d.keys || []; draw(); toast(d.message); } else toast(d.message || "刪除失敗", "bad");
+        if (d.ok) { RAWCACHE.pk = d; keys = d.keys || []; draw(); toast(d.message); } else toast(d.message || "刪除失敗", "bad");
         return;
       }
       if (!e.target.closest("[data-add]")) return;
       busy = true; add.disabled = true; add.innerHTML = `<span class="spin"></span>請在${me}上確認…`; msg.className = "msg"; msg.textContent = "";
       try {
         const d = await pkRegister(v.querySelector('[data-k="name"]').value.trim());
-        keys = d.keys || []; store("vps-pk", "1"); toast(d.message);
+        RAWCACHE.pk = d; keys = d.keys || []; store("vps-pk", "1"); toast(d.message);
       } catch(err) { msg.className = "msg bad"; msg.textContent = pkErr(err); }
       busy = false; draw();
     });
@@ -3146,7 +3238,7 @@ function stSet(el, t, b){
 const sessCall = body => pkCall("/api/sessions", body, 1);
 async function sessStatus(root){
   const el = root.querySelector(".sessst"); if (!el) return;
-  try { const d = await sessCall({action:"list"}); stSet(el, "", (d.list || []).length || 1); }
+  try { const d = await sessCall({action:"list"}); RAWCACHE.sess = d; stSet(el, "", (d.list || []).length || 1); }
   catch(e) { txt(el, e.message); }
 }
 async function sessModal(){
@@ -3154,13 +3246,16 @@ async function sessModal(){
   v.innerHTML = `<div class="dialog pkd">${IC("devices","big")}<h3>登入的裝置</h3>
     <div class="form"><div class="pklist"></div><div class="msg"></div></div>
     </div>`;
-  $("#layer").appendChild(v);
   const list = v.querySelector(".pklist"), msg = v.querySelector(".msg");
-  let rows = [], busy = false;
-  const draw = () => swapHTML(list, rows.map(x => `<div class="pkrow dvrow">${devIcon(x)}<span>${devRow(x)}</span>
-      ${x.me ? `<span class="dvme">這台</span>` : `<button type="button" class="iconbtn" data-del="${esc(x.id)}" data-name="${esc(x.dev)}" title="登出這台">${I("x")}</button>`}</div>`).join(""));
-  try { rows = (await sessCall({action:"list", dev:devLabel(), os:devOs()})).list || []; draw(); }
-  catch(e) { msg.className = "msg bad"; msg.textContent = e.message; }
+  let rows = (RAWCACHE.sess && RAWCACHE.sess.list) || [], busy = false;
+  const draw = init => {
+    const h = rows.map(x => `<div class="pkrow dvrow">${devIcon(x)}<span>${devRow(x)}</span>
+      ${x.me ? `<span class="dvme">這台</span>` : `<button type="button" class="iconbtn" data-del="${esc(x.id)}" data-name="${esc(x.dev)}" title="登出這台">${I("x")}</button>`}</div>`).join("");
+    if (init) list.innerHTML = h; else swapHTML(list, h);
+  };
+  if (RAWCACHE.sess) draw(true);
+  $("#layer").appendChild(v);
+  sessCall({action:"list", dev:devLabel(), os:devOs()}).then(d => { RAWCACHE.sess = d; if (v._d) return; rows = d.list || []; draw(); }, e => { if (!v._d) { msg.className = "msg bad"; msg.textContent = e.message; } });
   return new Promise(res => {
     const done = () => { if (v._d) return; v._d = 1; v.classList.add("closing"); setTimeout(() => { v.remove(); res(); }, 360); };
     v._esc = done;
@@ -3172,7 +3267,7 @@ async function sessModal(){
       busy = true;
       const d = await sessCall({action:"del", id:del.dataset.del}).catch(err => ({message:err.message}));
       busy = false;
-      if (d.ok) { rows = d.list || []; draw(); toast(`已登出「${del.dataset.name}」`); } else toast(d.message || "登出失敗", "bad");
+      if (d.ok) { RAWCACHE.sess = d; rows = d.list || []; draw(); toast(`已登出「${del.dataset.name}」`); } else toast(d.message || "登出失敗", "bad");
     });
   });
 }
@@ -3238,19 +3333,26 @@ const pinCall = body => pkCall("/api/pin", body, 1);
 async function pinStatus(root){
   const el = root.querySelector(".pinst"); if (!el) return;
   try { const d = await pinCall({action:"status"});
+    RAWCACHE.pin = d;
     stSet(el, !d.on ? "還沒設定" : d.locked ? `輸錯太多次，暫停中（還有 ${Math.ceil(d.locked / 60)} 分鐘）` : "", !!(d.on && !d.locked));
     el.classList.toggle("on", !!d.on && !d.locked);
   } catch(e) { txt(el, e.message); }
 }
 /* force：還在用安裝時給的臨時 PIN 碼，換好才能用（關不掉、沒有「關閉 PIN 碼」） */
-async function pinModal(force){
-  const st = await pinCall({action:"status"}).catch(() => ({}));
+function pinModal(force){
+  const st = RAWCACHE.pin || {};
   const v = document.createElement("div"); v.className = "veil" + (force ? " stay" : "");
   v.innerHTML = `<div class="dialog pindlg2">${IC("pin","big")}<h3>${force ? "換掉臨時 PIN 碼" : st.on ? "換一組 PIN 碼" : "設定 PIN 碼"}</h3>
     <p data-t>輸入 4～8 位數字</p><div class="ppbox"></div><div class="msg"></div>
-    <div class="btns">${st.on && !force ? `<button class="ubtn ghost" data-off>關閉 PIN 碼</button>` : ""}<button class="ubtn" data-ppgo>確定</button></div></div>`;
+    <div class="btns">${!force ? `<button class="ubtn ghost" data-off${st.on ? "" : " hidden"}>關閉 PIN 碼</button>` : ""}<button class="ubtn" data-ppgo>確定</button></div></div>`;
   $("#layer").appendChild(v);
   const msg = v.querySelector(".msg"), tip = v.querySelector("[data-t]");
+  pinCall({action:"status"}).then(d => {
+    RAWCACHE.pin = d;
+    if (v._d || force) return;
+    txt(v.querySelector("h3"), d.on ? "換一組 PIN 碼" : "設定 PIN 碼");
+    const ob = v.querySelector("[data-off]"); if (ob) ob.hidden = !d.on;
+  }, () => {});
   return new Promise(res => {
     let busy = false, first = "";
     const done = () => { if (v._d) return; v._d = 1; v.classList.add("closing"); setTimeout(() => { v.remove(); res(); }, 360); };
@@ -3265,7 +3367,7 @@ async function pinModal(force){
       busy = true; pad.busy(true);
       const d = await pinMake(p).then(x => pinCall({action:"set", pin:x})).catch(e => ({message:e.message}));
       busy = false; pad.busy(false);
-      if (d.ok) { toast(d.message); done(); } else { first = ""; txt(tip, "輸入 4～8 位數字"); bad(d.message || "設定失敗"); pad.again(); }
+      if (d.ok) { RAWCACHE.pin = {on:true, locked:0}; toast(d.message); done(); } else { first = ""; txt(tip, "輸入 4～8 位數字"); bad(d.message || "設定失敗"); pad.again(); }
     }});
     v.addEventListener("click", async e => {
       if (!force && (e.target === v || e.target.closest("[data-r]"))) return done();
@@ -3274,7 +3376,7 @@ async function pinModal(force){
         busy = true;
         const d = await pinCall({action:"off"}).catch(err => ({message:err.message}));
         busy = false;
-        if (d.ok) { toast(d.message); done(); } else bad(d.message || "關閉失敗");
+        if (d.ok) { RAWCACHE.pin = {on:false, locked:0}; toast(d.message); done(); } else bad(d.message || "關閉失敗");
       }
     });
   });
@@ -3286,11 +3388,12 @@ const pairDay = t => { const d = new Date(t * 1000); return `${d.getMonth()+1}/$
 async function pairStatus(root){
   const el = root.querySelector(".pairst"); if (!el) return;
   try { const d = await pairCall({action:"status"}), n = (d.keys || []).length;
+    RAWCACHE.pair = d;
     stSet(el, n ? "" : "還沒配對", n);
     el.classList.toggle("on", n > 0);
   } catch(e) { txt(el, e.message); }
 }
-async function pairModal(){
+function pairModal(){
   const v = document.createElement("div"); v.className = "veil";
   v.innerHTML = `<div class="dialog pkd pairdlg">${IC("link","big")}<h3>配對暗號</h3>
     <p>在主要主機按「新增主機」，貼上暗號</p>
@@ -3298,21 +3401,22 @@ async function pairModal(){
     <div class="btns"><button class="ubtn" data-gen>產生暗號</button></div></div>`;
   $("#layer").appendChild(v);
   const list = v.querySelector(".pklist"), box = v.querySelector(".pcode"), msg = v.querySelector(".msg"), gen = v.querySelector("[data-gen]");
-  let keys = [], code = "", busy = false;
-  const draw = () => {
-    swapHTML(list, keys.map(k => `<div class="pkrow"><span>${esc(k.name)}<small>${pairDay(k.t)} 配對${k.seen ? `・${ago(k.seen).replace(/\d$/, "$& ")}連過` : ""}</small></span>
-      <button type="button" class="iconbtn" data-del="${esc(k.id)}" data-name="${esc(k.name)}" title="解除配對">${I("x")}</button></div>`).join(""));
-    swapHTML(box, code ? `<div class="codebox" data-x><code>${esc(code)}</code><button type="button" class="ubtn sm" data-cp>複製</button></div>
-      <small>24 小時內有效，用一次就失效</small>` : "");
+  let keys = (RAWCACHE.pair && RAWCACHE.pair.keys) ? [...RAWCACHE.pair.keys] : [], code = "", busy = false;
+  const draw = init => {
+    const lh = keys.map(k => `<div class="pkrow"><span>${esc(k.name)}<small>${pairDay(k.t)} 配對${k.seen ? `・${ago(k.seen).replace(/\d$/, "$& ")}連過` : ""}</small></span>
+      <button type="button" class="iconbtn" data-del="${esc(k.id)}" data-name="${esc(k.name)}" title="解除配對">${I("x")}</button></div>`).join("");
+    const bh = code ? `<div class="codebox" data-x><code>${esc(code)}</code><button type="button" class="ubtn sm" data-cp>複製</button></div>
+      <small>24 小時內有效，用一次就失效</small>` : "";
+    if (init) { list.innerHTML = lh; box.innerHTML = bh; } else { swapHTML(list, lh); swapHTML(box, bh); }
     gen.textContent = code ? "重新產生" : "產生暗號";
   };
-  try { keys = (await pairCall({action:"status"})).keys || []; draw(); }
-  catch(e) { msg.className = "msg bad"; msg.textContent = e.message; }
+  if (keys.length) draw(true);
   // 暗號貼到主要主機、配對好了：這台改成被監看，重新載入換成被監看的那一頁
   let watch = 0;
   const check = async () => {
     const d = await pairCall({action:"status"}).catch(() => null);
     if (!d || v._d) return;
+    RAWCACHE.pair = d;
     const n = (d.keys || []).find(k => !keys.some(x => x.id === k.id));
     if (!n) return;
     clearInterval(watch); toast(`已和「${n.name}」配對好了`);
@@ -3322,6 +3426,11 @@ async function pairModal(){
   return new Promise(res => {
     const done = () => { if (v._d) return; v._d = 1; clearInterval(watch); v.classList.add("closing"); setTimeout(() => { v.remove(); res(); }, 360); };
     v._esc = done;
+    pairCall({action:"status"}).then(d => {
+      RAWCACHE.pair = d;
+      if (v._d) return;
+      keys = d.keys || []; draw();
+    }, e => { if (!v._d) { msg.className = "msg bad"; msg.textContent = e.message; } });
     v.addEventListener("click", async e => {
       if (e.target === v || e.target.closest("[data-r]")) return done();
       if (busy) return;
@@ -3337,7 +3446,7 @@ async function pairModal(){
         busy = true;
         const d = await pairCall({action:"revoke", id:del.dataset.del}).catch(err => ({message:err.message}));
         busy = false;
-        if (d.ok) { keys = d.keys || []; draw(); toast(d.message); } else toast(d.message || "解除失敗", "bad");
+        if (d.ok) { keys = d.keys || []; RAWCACHE.pair = {keys}; draw(); toast(d.message); } else toast(d.message || "解除失敗", "bad");
         return;
       }
       if (!e.target.closest("[data-gen]")) return;
@@ -3436,8 +3545,10 @@ function dlModal(node, name){
     : j.total ? `${Math.floor(j.done / j.total * 100)}%${j.bps ? `・${rate(j.bps)}・剩 ${left((j.total - j.done) / j.bps)}` : `・共 ${size(j.total)}`}`
     : `${size(j.done)}${j.bps ? `・${rate(j.bps)}` : ""}`;
   let timer = 0, busy = false, lastList = [];
+  const ck = "dl:" + (node || "");
   const draw = d => {
     if (!d || !Array.isArray(d.list)) return;
+    TOOLCACHE[ck] = d;
     lastList = d.list;
     if (!d.cloud) { inp.disabled = go.disabled = true; say("這台沒有雲端硬碟", 1); }
     room.textContent = d.cloud ? `可用 ${size(d.room)}` : "";
@@ -3535,6 +3646,7 @@ function dlModal(node, name){
       if (!d.ok) say(d.message || "沒有成功", 1);
       draw(d);
     });
+    if (TOOLCACHE[ck]) draw(TOOLCACHE[ck]);
     load();
     if (!matchMedia("(hover:none)").matches) setTimeout(() => inp.focus(), 60);   // 手機不自動跳出鍵盤
   });
@@ -3596,6 +3708,7 @@ async function bkGet(node){
   const r = await api("/api/backup" + bkQ(node), {headers:{"X-Token":getTok()}});
   const d = await r.json().catch(() => ({}));
   if (!r.ok) throw new Error(r.status === 404 ? "主機還沒更新到新版，先更新再試" : d.error || "讀取失敗");
+  TOOLCACHE["bk:" + (node || "")] = d;
   return d;
 }
 const bkSize = n => n >= 1048576 ? `${(n / 1048576).toFixed(1)} MB` : `${Math.max(1, Math.round(n / 1024))} KB`;
@@ -3664,43 +3777,43 @@ function bkSummaryHTML(d){
 }
 /* 這台存著哪些主機的備份（每台主機都存著每一台的） */
 const bkCopies = d => (d.copies || []).map(c => `<div class="bkcp">${I("archive")}<span class="bkcpi"><b>${esc(c.name)}${c.me ? "（這台）" : ""}</b><small>最新：${esc(when(c.t))}・${bkSize(c.size)}</small></span><span class="tbadge num">${+c.count || 0} 份</span></div>`).join("");
-async function bkModal(node, label){
-  let d = await bkGet(node).catch(e => ({err:e.message}));
-  if (d.err) return toast(d.err, "bad");
-  let tab = "stat";
+function bkModal(node, label){
+  const ck = "bk:" + (node || "");
+  let d = TOOLCACHE[ck] ? {...TOOLCACHE[ck]} : null, tab = "stat", watching = false;
   const v = document.createElement("div"); v.className = "veil";
-  const bdgOf = x => !x.on ? ["已關閉", ""] : x.running ? ["備份中", "act"] : x.last && !x.last.ok ? ["有問題", "bad"] : ["自動備份", "ok"];
+  const bdgOf = x => !x ? ["", ""] : !x.on ? ["已關閉", ""] : x.running ? ["備份中", "act"] : x.last && !x.last.ok ? ["有問題", "bad"] : ["自動備份", "ok"];
   const [bt, bc] = bdgOf(d);
-  const copiesHtml = bkCopies(d);
-  v.innerHTML = `<div class="dialog tdlg bkdlg">
-    <div class="thead">${IC("archive", "")}<div class="thead-t"><h3>每日備份</h3><p>${esc(label)}</p></div><span class="tbadge bkmst${bc ? " " + bc : ""}">${bt}</span></div>
-    <div class="form">
-      <div class="seg bktab" data-slide><button type="button" class="on" data-bktab="stat">備份狀態</button><button type="button" data-bktab="set">份數與設定</button></div>
-      <div class="bkpw">
-      <div class="bkpane" data-bkpane="stat">
-        <div class="tcard bksum">${bkSummaryHTML(d)}</div>
+  const cpHtml = x => bkCopies(x) || `<div class="ntst">${I("info")}<span>目前還沒有已存的備份檔</span></div>`;
+  const paneBody = x => `<div class="seg bktab" data-slide><button type="button" class="${tab === "stat" ? "on" : ""}" data-bktab="stat">備份狀態</button><button type="button" class="${tab === "set" ? "on" : ""}" data-bktab="set">份數與設定</button></div>
+      <div class="bkpw swgrid">
+      <div class="bkpane swpane${tab === "stat" ? "" : " off"}" data-bkpane="stat" data-sw="stat"${tab === "stat" ? "" : ' aria-hidden="true"'}>
+        <div class="tcard bksum">${bkSummaryHTML(x)}</div>
         <div class="tcard bksch">
-          <label class="bkon"><span class="bkat">${I("clock")}<span><b>每日自動備份</b><small>每天 <span class="num">${String(+d.hour || 0).padStart(2, "0")}:00</span> 自動執行</small></span></span><input type="checkbox" class="tog" ${d.on ? "checked" : ""}></label>
+          <label class="bkon"><span class="bkat">${I("clock")}<span><b>每日自動備份</b><small>每天 <span class="num bkhr">${String(+x.hour || 0).padStart(2, "0")}:00</span> 自動執行</small></span></span><input type="checkbox" class="tog" ${x.on ? "checked" : ""}></label>
         </div>
       </div>
-      <div class="bkpane" data-bkpane="set" hidden>
+      <div class="bkpane swpane${tab === "set" ? "" : " off"}" data-bkpane="set" data-sw="set"${tab === "set" ? "" : ' aria-hidden="true"'}>
         <div class="tcard">
-          <div class="tcardh"><span>${d.where === "雲端硬碟" ? `雲端硬碟「${esc(d.folder)}」` : "本機已存份數"}</span><button type="button" class="linkish" data-restore>怎麼還原？</button></div>
-          <div class="bkcopies">${copiesHtml || `<div class="ntst">${I("info")}<span>目前還沒有已存的備份檔</span></div>`}</div>
+          <div class="tcardh"><span class="bkwh">${x.where === "雲端硬碟" ? `雲端硬碟「${esc(x.folder)}」` : "本機已存份數"}</span><button type="button" class="linkish" data-restore>怎麼還原？</button></div>
+          <div class="bkcopies">${cpHtml(x)}</div>
         </div>
         <div class="tcard bkkeyblk">
           <div class="tcardh"><span>解開密碼（所有主機共用）</span><button type="button" class="linkish" data-chg>更換密碼</button></div>
-          <div class="codebox bkkeybox"><code class="bkkey" tabindex="0" role="button" title="點一下顯示">${esc(d.key)}</code><button type="button" class="ubtn sm ghost" data-bkshow>顯示</button><button type="button" class="ubtn sm ghost copybtn" data-bkcp>${I("copy")}複製</button></div>
+          <div class="codebox bkkeybox"><code class="bkkey" tabindex="0" role="button" title="點一下顯示">${esc(x.key)}</code><button type="button" class="ubtn sm ghost" data-bkshow>顯示</button><button type="button" class="ubtn sm ghost copybtn" data-bkcp>${I("copy")}複製</button></div>
           <small>還原備份時必須輸入這組密碼，請另外妥善保存</small>
           <span class="bknew" hidden><input class="field" type="password" maxlength="128" autocomplete="new-password" placeholder="輸入新密碼（至少 8 個字）"><button type="button" class="ubtn sm" data-setkey>儲存</button><button type="button" class="ubtn sm ghost" data-chgno>取消</button></span>
         </div>
       </div>
-      </div>
+      </div>`;
+  v.innerHTML = `<div class="dialog tdlg bkdlg">
+    <div class="thead">${IC("archive", "")}<div class="thead-t"><h3>每日備份</h3><p>${esc(label)}</p></div><span class="tbadge bkmst${bc ? " " + bc : ""}">${bt}</span></div>
+    <div class="form">
+      <div class="bkmbody">${d ? paneBody(d) : `<div class="abjob"><span class="spin"></span><span>讀取中…</span></div>`}</div>
       <div class="msg"></div>
-      <div class="tfootbar"><button type="button" class="ubtn ghost" data-dl>${I("dl")}下載最新</button><button type="button" class="ubtn" data-run>立即備份</button></div>
+      <div class="tfootbar"><button type="button" class="ubtn ghost" data-dl${d ? "" : " disabled"}>${I("dl")}下載最新</button><button type="button" class="ubtn" data-run${d ? "" : " disabled"}>立即備份</button></div>
     </div></div>`;
   $("#layer").appendChild(v);
-  const msg = v.querySelector(".msg"), sumBox = v.querySelector(".bksum"), runb = v.querySelector("[data-run]"), mst = v.querySelector(".bkmst");
+  const mbody = v.querySelector(".bkmbody"), msg = v.querySelector(".msg"), runb = v.querySelector("[data-run]"), dlb = v.querySelector("[data-dl]"), mst = v.querySelector(".bkmst");
   const say = (t, c = "") => { msg.className = "msg " + c; sayTo(msg, t); };
   const syncBdg = () => { const [t, c] = bdgOf(d); mst.textContent = t; mst.className = "tbadge bkmst" + (c ? " " + c : ""); };
   const post = async (body, here) => {           // here：送給目前開著的這台（換密碼由它負責通知其他台）
@@ -3711,26 +3824,53 @@ async function bkModal(node, label){
   };
   const busy = (b, t) => { b.disabled = !!t; b.innerHTML = t ? `<span class="spin"></span>${t}` : b._t; };
   v.querySelectorAll(".tfootbar button").forEach(b => b._t = b.innerHTML);
+  let lastSum = d ? bkSummaryHTML(d) : "", lastCp = d ? cpHtml(d) : "";
+  const syncData = x => {
+    d = x; syncBdg();
+    if (!v.querySelector(".bkpw")) {
+      lastSum = bkSummaryHTML(d); lastCp = cpHtml(d);
+      swapHTML(mbody, paneBody(d));
+      dlb.disabled = false; runb.disabled = false;
+      return;
+    }
+    const sh = bkSummaryHTML(d), sumBox = v.querySelector(".bksum");
+    if (sumBox && sh !== lastSum) { lastSum = sh; sumBox.innerHTML = sh; }
+    const ch = cpHtml(d), cpBox = v.querySelector(".bkcopies");
+    if (cpBox && ch !== lastCp) { lastCp = ch; cpBox.innerHTML = ch; }
+    const tog = v.querySelector(".bksch .tog"); if (tog) tog.checked = !!d.on;
+    const hr = v.querySelector(".bkhr"); if (hr) txt(hr, `${String(+d.hour || 0).padStart(2, "0")}:00`);
+    const wh = v.querySelector(".bkwh"); if (wh) txt(wh, d.where === "雲端硬碟" ? `雲端硬碟「${d.folder}」` : "本機已存份數");
+    const kb = v.querySelector(".bkkey"); if (kb && kb.textContent !== d.key) kb.textContent = d.key;
+  };
   return new Promise(res => {
     let live = true;
     const done = () => { if (v._d) return; v._d = 1; live = false; v.classList.add("closing"); setTimeout(() => { v.remove(); res(); }, 360); };
     v._esc = done;
     const watch = async () => {                    // 備份中：每 1.5 秒看一次，好了就更新上面的清單
+      if (watching || !d) return; watching = true;
       d.running = true; syncBdg(); busy(runb, "備份中…");
       while (live) {
         await new Promise(r => setTimeout(r, 1500));
         try { d = await bkGet(node); } catch(e) { continue; }
         if (!d.running) break;
       }
+      watching = false;
       if (!live) return;
-      busy(runb); syncBdg(); swapHTML(sumBox, bkSummaryHTML(d));
-      { const bc = v.querySelector(".bkcopies"); if (bc) swapHTML(bc, bkCopies(d) || `<div class="ntst">${I("info")}<span>目前還沒有已存的備份檔</span></div>`); }
+      busy(runb); syncData(d);
       d.last && d.last.ok ? say("備份好了", "ok") : say("有地方沒備份成功，看上面的說明", "bad");
     };
-    if (d.running) watch();
+    if (d && d.running) watch();
+    bkGet(node).then(fresh => {
+      if (!live) return;
+      syncData(fresh);
+      if (fresh.running) watch();
+    }, err => {
+      if (!live) return;
+      if (!d) { done(); toast(err.message, "bad"); }
+    });
     v.addEventListener("change", async e => {
-      const t = e.target; if (!t.classList.contains("tog")) return;
-      try { const x = await post({action:"set", on:t.checked}); d.on = t.checked; syncBdg(); toast(x.message); }
+      const t = e.target; if (!t.classList.contains("tog") || !d) return;
+      try { const x = await post({action:"set", on:t.checked}); d.on = t.checked; TOOLCACHE[ck] = d; syncBdg(); toast(x.message); }
       catch(err) { t.checked = !t.checked; say(err.message, "bad"); }
     });
     v.addEventListener("click", async e => {
@@ -3738,11 +3878,13 @@ async function bkModal(node, label){
       const bt2 = e.target.closest("[data-bktab]");
       if (bt2) {
         if (bt2.dataset.bktab === tab) return;
+        const sd = bt2.dataset.bktab === "set" ? 1 : -1;
         tab = bt2.dataset.bktab;
         slideSel(() => v.querySelectorAll("[data-bktab]").forEach(x => x.classList.toggle("on", x === bt2)));
-        swapPane(v.querySelector(".bkpw"), () => v.querySelectorAll("[data-bkpane]").forEach(x => { x.hidden = x.dataset.bkpane !== tab; }));
+        slidePane(v.querySelector(".bkpw"), tab, sd);
         return;
       }
+      if (!d) return;
       if (e.target.closest("[data-restore]")) {     // 還原說明蓋在上面時，先把這個視窗藏起來
         const box = v.querySelector(".dialog"); box.style.visibility = "hidden";
         await bkRestore(); box.style.visibility = "";
@@ -3763,7 +3905,7 @@ async function bkModal(node, label){
         if (!await modal({icon:"key", cls:"warn", title:"換成新的解開密碼？", text:"所有主機一起換。舊備份仍要用舊密碼，請留著。", ok:"換"})) return;
         busy(sk, "儲存中…");
         try {
-          const x = await post({action:"key", key, sync:true}, true); d.key = key;
+          const x = await post({action:"key", key, sync:true}, true); d.key = key; TOOLCACHE[ck] = d;
           const kb = v.querySelector(".bkkey"), sb = v.querySelector("[data-bkshow]");
           kb.textContent = key; kb.classList.add("on"); if (sb) sb.textContent = "隱藏";
           inp.value = ""; reveal(v.querySelector(".bknew"), false); reveal(v.querySelector("[data-chg]"), true); say(x.message, "ok");
@@ -3806,11 +3948,13 @@ async function bkModal(node, label){
 /* 還原：在這台上執行一行指令挑一份放回去；整台搬到新主機時，產生一個 24 小時內有效的下載連結，貼一段指令就好。
    連結一律由目前連線的這台產生（它存著每一台的備份） */
 const BK_REPO = "https://github.com/a7510049/vps-sentinel.git";
-async function bkRestore(){
-  const d = await bkGet("").catch(e => ({err:e.message}));
-  if (d.err) return toast(d.err, "bad");
+function bkRestore(){
+  const cached = TOOLCACHE["bk:"];
   const here = "sudo python3 ~/vps-sentinel/sentinel.py --restore";
-  const hosts = d.copies || [];
+  const hostsCard = hosts => hosts.length ? `<div class="tcard"><div class="tcardh"><span>整台搬遷到新主機</span></div>
+    <small>網域先指向新主機，選一台產生 24 小時內有效的搬遷指令：</small>
+    <div class="bkhosts">${hosts.map(h => `<button type="button" class="fchip" data-link="${esc(h.name)}">${esc(h.name)}</button>`).join("")}</div>
+    <div class="codebox bkcmdbox" data-newcmd hidden><code class="bkcmd"></code><button type="button" class="ubtn sm ghost copybtn" data-bkcmd="">${I("copy")}複製</button></div></div>` : "";
   const v = document.createElement("div"); v.className = "veil";
   v.innerHTML = `<div class="dialog tdlg bkdlg">
     <div class="thead">${IC("archive", "")}<div class="thead-t"><h3>還原備份</h3><p>還原前原本的檔案會先自動另存一份</p></div></div>
@@ -3818,14 +3962,17 @@ async function bkRestore(){
       <div class="tcard"><div class="tcardh"><span>原地還原到前幾天</span></div>
         <small>在原本那台主機的終端機執行：</small>
         <div class="codebox bkcmdbox"><code class="bkcmd">${esc(here)}</code><button type="button" class="ubtn sm ghost copybtn" data-bkcmd="${esc(here)}">${I("copy")}複製</button></div></div>
-      ${hosts.length ? `<div class="tcard"><div class="tcardh"><span>整台搬遷到新主機</span></div>
-        <small>網域先指向新主機，選一台產生 24 小時內有效的搬遷指令：</small>
-        <div class="bkhosts">${hosts.map(h => `<button type="button" class="fchip" data-link="${esc(h.name)}">${esc(h.name)}</button>`).join("")}</div>
-        <div class="codebox bkcmdbox" data-newcmd hidden><code class="bkcmd"></code><button type="button" class="ubtn sm ghost copybtn" data-bkcmd="">${I("copy")}複製</button></div></div>` : ""}
+      <div class="bkrhosts">${cached ? hostsCard(cached.copies || []) : ""}</div>
       <div class="msg"></div></div></div>`;
   $("#layer").appendChild(v);
-  const msg = v.querySelector(".msg");
+  const msg = v.querySelector(".msg"), hbox = v.querySelector(".bkrhosts");
   const say = (t, c = "") => { msg.className = "msg " + c; sayTo(msg, t); };
+  let lastH = cached ? (cached.copies || []).map(h => h.name).join("\n") : "";
+  bkGet("").then(d => {
+    if (v._d) return;
+    const names = (d.copies || []).map(h => h.name).join("\n");
+    if (names !== lastH) { lastH = names; swapHTML(hbox, hostsCard(d.copies || [])); }
+  }, err => { if (!v._d && !cached) say(err.message, "bad"); });
   return new Promise(res => {
     const done = () => { if (v._d) return; v._d = 1; v.classList.add("closing"); setTimeout(() => { v.remove(); res(); }, 360); };
     v._esc = done;
@@ -4035,7 +4182,9 @@ function onceClick(el, run){
   const L = $("#layer"), mo = new MutationObserver(() => free()), tm = setTimeout(() => free(), 10000);
   const free = () => { if (done) return; done = 1; ONCE.delete(el); mo.disconnect(); clearTimeout(tm); };
   if (L) mo.observe(L, {childList:true});
-  return Promise.resolve().then(run).finally(free);
+  let r;
+  try { r = run(); } catch(e) { free(); throw e; }
+  return r && typeof r.then === "function" ? r.finally(free) : (free(), r);
 }
 const ONCE_SEL = "button,a,[role=button],[data-open],[data-dsel]";
 document.addEventListener("click", e => {
@@ -4067,7 +4216,7 @@ async function pageClick(e){
   const dsg = t.closest("[data-dseg]");
   if (dsg) { if (DSEG !== dsg.dataset.dseg) { DSEG = dsg.dataset.dseg; sstore("vs-dseg", DSEG); slideSel(() => render(LIST)); } return; }
   if (t.closest("[data-logout]")) {
-    if (await modal({icon:"logout", cls:"theme", title:"要登出嗎？", text:"", ok:"登出"})) { sessCall({action:"out"}).catch(() => {}); setTok(""); LIST = []; for (const k in STCACHE) delete STCACHE[k]; window._pw = 0; clearTimeout(timer); DET = ""; showBack(); document.documentElement.classList.remove("lock"); login(); }
+    if (await modal({icon:"logout", cls:"theme", title:"要登出嗎？", text:"", ok:"登出"})) { sessCall({action:"out"}).catch(() => {}); setTok(""); LIST = []; for (const k in STCACHE) delete STCACHE[k]; for (const k in RAWCACHE) delete RAWCACHE[k]; for (const k in TOOLCACHE) delete TOOLCACHE[k]; window._pw = 0; clearTimeout(timer); DET = ""; showBack(); document.documentElement.classList.remove("lock"); login(); }
     return;
   }
   const th = t.closest("[data-toolh]");
@@ -4211,7 +4360,7 @@ function flyLib(){
     document.head.appendChild(s);
   }));
 }
-function flyEnter(btn){ return flyLib().then(() => flyOpen(btn), () => toast("機場起降打不開，請再試一次", "bad")); }
+function flyEnter(btn){ return typeof flyOpen === "function" ? flyOpen(btn) : flyLib().then(() => flyOpen(btn), () => toast("機場起降打不開，請再試一次", "bad")); }
 /* ═════════ 定時抓資料 ═════════ */
 let timer;
 const T0 = performance.now(), sleep = ms => new Promise(r => setTimeout(r, ms));
@@ -4219,7 +4368,7 @@ let BOOTED = false, REFRESHING = false;
 function splashMsg(t){ const m = document.querySelector(".sp-msg"); if (m && m.textContent !== t) m.innerHTML = `<span>${esc(t)}</span>`; }
 function endSplash(){
   if (BOOTED) return; BOOTED = true;
-  if (store(FLYK)) setTimeout(() => flyLib().catch(() => {}), 2000);   // 用過機場起降：先在背景下載，按下去就能打開
+  setTimeout(() => flyLib().catch(() => {}), 1200);   // 進站穩定後先在背景預載機場起降程式，點下去零等待秒開
   const sp = $("#splash"); document.documentElement.classList.remove("booting");
   if (!sp) return;
   if (!canAnim()) return sp.remove();
@@ -4444,55 +4593,65 @@ if (!CSS.supports("(animation-timeline:view()) and (timeline-scope:--a)")) {
     const top = s.querySelector(".dtop"); if (top) top.classList.toggle("stuck", s.scrollTop > 56);
   }, {passive:true, capture:true});
 }
-/* 手機：畫面中間左右滑，整頁跟手滑動並無縫接續換分頁（最左、最右邊緣留給瀏覽器的上一頁；圖表、會左右捲的那排、輸入框不算） */
+/* 手機：畫面中間左右滑，整頁跟手滑動並無縫接續換分頁（僅在有效觸控期間動態掛載 touchmove，平時不拖慢 iOS 捲動與點擊） */
 (function(){
-  let x0 = null, y0 = 0, t0 = 0, dx = 0, lock = 0, v = null;
+  let x0 = null, y0 = 0, t0 = 0, dx = 0, lock = 0, v = null, tgt = null, on = false;
+  const unbind = () => {
+    if (!on) return; on = false;
+    removeEventListener("touchmove", onMove); removeEventListener("touchend", onEnd); removeEventListener("touchcancel", onCancel);
+  };
   const reset = anim => {
-    const el = v, cur = dx; x0 = null; dx = 0; lock = 0; v = null;
+    unbind();
+    const el = v, cur = dx; x0 = null; dx = 0; lock = 0; v = null; tgt = null;
     if (!el) return;
     el.style.transform = "";
     if (anim && canAnim() && Math.abs(cur) > 1) el.animate([{transform:`translateX(${cur}px)`}, {transform:"none"}], {duration:T.spf, easing:SPRING_F});
   };
-  addEventListener("touchstart", e => {
-    reset(false);
-    if (DESK.matches || DET || $("#fly") || window._menu || e.touches.length > 1 || document.querySelector("#layer .veil") || !LIST.length) return;
-    const t = e.touches[0];
-    if (t.clientX < 28 || t.clientX > innerWidth - 28) return;
-    if (e.target.closest("input,textarea,select,canvas,.cbox,.dock,[data-noswipe],.fhrs,.fterm")) return;
-    for (let el = e.target; el && el !== document.body; el = el.parentElement) if (el.scrollWidth > el.clientWidth + 2 && /auto|scroll/.test(getComputedStyle(el).overflowX)) return;
-    x0 = t.clientX; y0 = t.clientY; t0 = performance.now(); v = view();
-  }, {passive:true});
-  addEventListener("touchmove", e => {
-    if (x0 === null || !v || e.touches.length > 1) return;
+  const onMove = e => {
+    if (x0 === null || !v || e.touches.length > 1) return reset(false);
     const t = e.touches[0], mx = (t.clientX - x0) / ZM(), my = (t.clientY - y0) / ZM();
     if (!lock) {
       if (Math.hypot(mx, my) < 10) return;
-      if (Math.abs(mx) > Math.abs(my) * 1.4) lock = 1;
-      else { x0 = null; v = null; lock = -1; return; }
+      if (Math.abs(mx) > Math.abs(my) * 1.4) {
+        for (let el = tgt; el && el !== document.body; el = el.parentElement) if (el.scrollWidth > el.clientWidth + 2 && /auto|scroll/.test(getComputedStyle(el).overflowX)) return reset(false);
+        lock = 1;
+      } else return reset(false);
     }
     if (e.cancelable) e.preventDefault();
     const ks = TABS.map(([k]) => k), idx = ks.indexOf(TAB);
     const edge = (mx > 0 && idx === 0) || (mx < 0 && idx === ks.length - 1);
     dx = edge ? mx * .18 : Math.sign(mx) * (88 * (1 - Math.exp(-Math.abs(mx) / 130)));
     v.style.transform = `translateX(${dx}px)`;
-  }, {passive:false});
-  addEventListener("touchend", e => {
-    if (x0 === null) return;
+  };
+  const onEnd = e => {
+    if (x0 === null) return unbind();
     const t = e.changedTouches[0], rawDx = (t.clientX - x0) / ZM(), rawDy = (t.clientY - y0) / ZM();
     const dt = Math.max(1, performance.now() - t0), vel = Math.abs(rawDx) / dt;
     const ks = TABS.map(([k]) => k), dir = rawDx < 0 ? 1 : -1, next = ks.indexOf(TAB) + dir;
     const go = next >= 0 && next < ks.length && (lock === 1 ? (Math.abs(rawDx) > 56 || (Math.abs(rawDx) > 24 && vel > .45)) : (Math.abs(rawDx) >= 60 && Math.abs(rawDx) >= Math.abs(rawDy) * 1.8 && dt < 700));
     if (go) {
+      unbind();
       SWIPEX = dx;
       if (v) v.style.transform = "";
-      x0 = null; dx = 0; lock = 0; v = null;
+      x0 = null; dx = 0; lock = 0; v = null; tgt = null;
       setTab(ks[next]);
       SWIPEX = 0;
     } else reset(true);
+  };
+  const onCancel = () => reset(true);
+  addEventListener("touchstart", e => {
+    if (on) reset(false);
+    if (DESK.matches || DET || $("#fly") || window._menu || e.touches.length > 1 || document.querySelector("#layer .veil") || !LIST.length) return;
+    const t = e.touches[0];
+    if (t.clientX < 28 || t.clientX > innerWidth - 28) return;
+    if (e.target.closest("input,textarea,select,canvas,.cbox,.dock,[data-noswipe],.fhrs,.fterm")) return;
+    x0 = t.clientX; y0 = t.clientY; t0 = performance.now(); tgt = e.target; v = view(); on = true;
+    addEventListener("touchmove", onMove, {passive:false});
+    addEventListener("touchend", onEnd, {passive:true});
+    addEventListener("touchcancel", onCancel, {passive:true});
   }, {passive:true});
-  addEventListener("touchcancel", () => reset(true), {passive:true});
 })();
-/* 按下去的水波紋與彈簧按壓回饋（Material 3 State Ripple＋微形變；捲動或橫滑超過 8px 立刻取消不誤觸） */
+/* 按下去的水波紋與彈簧按壓回饋（觸控快速輕點不阻塞 click 前強制排版；長按或滑鼠才疊水波紋） */
 (function(){
   const SEL = ".hcard,.li:not(div),.fapc,.ubtn,.iconbtn,.icbtn,.hmenu button,.addhost,.trf,.chats button,.sw button,.rh,.backbtn,.tbx,.side-icbtn";
   const PRESS_DESK = ".ubtn,.iconbtn,.icbtn,.rh,.backbtn,.tbx,.addhost,.fapc,.side-icbtn";
@@ -4502,11 +4661,11 @@ if (!CSS.supports("(animation-timeline:view()) and (timeline-scope:--a)")) {
     if (!el || el.disabled || el.closest(".pane")) return;
     const touch = e.pointerType !== "mouse", wantPrs = touch || el.matches(PRESS_DESK), pid = e.pointerId, x0 = e.clientX, y0 = e.clientY;
     let box = null, done = false, t0 = 0;
-    const press = () => { if (wantPrs) el.classList.add("prs"); t0 = performance.now(); };
-    const release = now => { if (wantPrs) setTimeout(() => el.classList.remove("prs"), now ? 0 : Math.max(0, 120 - (performance.now() - t0))); };
-    const start = () => {
+    const press = () => { if (t0) return; if (wantPrs) el.classList.add("prs"); t0 = performance.now(); };
+    const release = now => { if (wantPrs && t0) setTimeout(() => el.classList.remove("prs"), now ? 0 : Math.max(0, (touch ? 75 : 120) - (performance.now() - t0))); };
+    const ripple = () => {
       press();
-      if (el.closest(".sw") || el.classList.contains("side-icbtn")) return;   // 圓形色塊與側欄小圖示不疊大水波紋
+      if (box || el.closest(".sw") || el.classList.contains("side-icbtn")) return;   // 圓形色塊與側欄小圖示不疊大水波紋
       const r = el.getBoundingClientRect(), w = el.offsetWidth, h = el.offsetHeight;
       const x = (x0 - r.left) * w / (r.width || 1), y = (y0 - r.top) * h / (r.height || 1);
       const R = Math.hypot(Math.max(x, w - x), Math.max(y, h - y));
@@ -4516,51 +4675,61 @@ if (!CSS.supports("(animation-timeline:view()) and (timeline-scope:--a)")) {
       dot.animate([{transform:"scale(.18)"}, {transform:"scale(1)"}], {duration:T.slow, easing:EASE, fill:"forwards"});
     };
     const fade = () => box && box.animate([{opacity:1}, {opacity:0}], {duration:T.mid, delay:T.fast / 2, easing:EASE, fill:"forwards"}).finished.then(() => box.remove(), () => box.remove());
-    const t = !touch ? (start(), 0) : setTimeout(() => { if (!done) start(); }, 70);
-    const cleanup = () => { removeEventListener("pointerup", end); removeEventListener("pointercancel", end); removeEventListener("pointermove", move); };
-    const cancel = () => { if (done) return; done = true; clearTimeout(t); cleanup(); release(true); fade(); };
+    const tPrs = !touch ? (ripple(), 0) : setTimeout(() => { if (!done) press(); }, 20);
+    const tRip = !touch ? 0 : setTimeout(() => { if (!done) ripple(); }, 90);
+    const cleanup = () => { clearTimeout(tPrs); clearTimeout(tRip); removeEventListener("pointerup", end); removeEventListener("pointercancel", end); removeEventListener("pointermove", move); };
+    const cancel = () => { if (done) return; done = true; cleanup(); release(true); fade(); };
     const move = ev => { if (ev.pointerId === pid && Math.hypot(ev.clientX - x0, ev.clientY - y0) > 8) cancel(); };
     const end = ev => {
       if (ev.pointerId !== pid || done) return;
       done = true; cleanup();
-      if (ev.type === "pointercancel") { clearTimeout(t); release(true); if (!box) return; }
-      else { if (!t0) { clearTimeout(t); start(); } release(false); }
+      if (ev.type === "pointercancel") { release(true); if (!box) return; }
+      else release(false);
       fade();
     };
     addEventListener("pointerup", end); addEventListener("pointercancel", end);
     if (touch) addEventListener("pointermove", move, {passive:true});
   }, {passive:true});
 })();
-/* 手機：從下面滑上來的面板，從頂端往下拉就關掉（拉動時攔截原生下拉更新，中斷時彈回原位不卡半路） */
+/* 手機：從下面滑上來的面板，從頂端往下拉就關掉（綁在 #layer 且動態掛載 touchmove，平時不干擾全域捲動） */
 (function(){
-  const SHEET = matchMedia("(max-width:599px)");
-  let d = null;
+  const SHEET = matchMedia("(max-width:599px)"), L = $("#layer");
+  if (!L) return;
+  let d = null, on = false;
+  const unbind = () => {
+    if (!on) return; on = false;
+    removeEventListener("touchmove", onMove); removeEventListener("touchend", onEnd); removeEventListener("touchcancel", snap);
+  };
   const snap = () => {
-    if (!d) return; const {dl, dy, on} = d; d = null;
-    if (!on) return;
+    unbind();
+    if (!d) return; const {dl, dy, on:drag} = d; d = null;
+    if (!drag) return;
     dl.style.transform = "";
     if (canAnim() && dy > 0) dl.animate([{transform:`translateY(${dy}px)`}, {transform:"none"}], {duration:T.spf, easing:SPRING_F});
   };
-  addEventListener("touchstart", e => {
-    const dl = e.target.closest("#layer .veil .dialog"), v = dl && dl.parentNode;
-    if (!SHEET.matches || !dl || dl.scrollTop > 0 || !dl.querySelector(".form") || v.classList.contains("closing") || e.target.closest("input,textarea,select")) return;
-    d = {dl, v, y0:e.touches[0].clientY, t0:performance.now(), dy:0, on:false};
-  }, {passive:true});
-  addEventListener("touchmove", e => {
-    if (!d) return;
+  const onMove = e => {
+    if (!d) return unbind();
     d.dy = (e.touches[0].clientY - d.y0) / ZM();
-    if (!d.on && (d.dy < 0 || d.dl.scrollTop > 0)) { d = null; return; }      // 往上滑：是要捲動內容
+    if (!d.on && (d.dy < 0 || d.dl.scrollTop > 0)) { d = null; return unbind(); }      // 往上滑：是要捲動內容
     if (d.dy > 6) d.on = true;
     if (d.on) { if (e.cancelable) e.preventDefault(); d.dl.style.transform = `translateY(${Math.max(0, d.dy)}px)`; }
-  }, {passive:false});
-  addEventListener("touchend", () => {
-    if (!d) return; const {dl, v, dy, t0, on} = d; d = null;
-    if (!on) return;
+  };
+  const onEnd = () => {
+    unbind();
+    if (!d) return; const {dl, v, dy, t0, on:drag} = d; d = null;
+    if (!drag) return;
     if (dy > 110 || dy / (performance.now() - t0) > .6) { if (v._esc) { v.classList.add("flung"); return v._esc(); } }   // 拉得夠遠或甩得夠快：關掉
     dl.style.transform = "";
     if (canAnim()) dl.animate([{transform:`translateY(${dy}px)`}, {transform:"none"}], {duration:T.spf, easing:SPRING_F});
+  };
+  L.addEventListener("touchstart", e => {
+    const dl = e.target.closest("#layer .veil .dialog"), v = dl && dl.parentNode;
+    if (!SHEET.matches || !dl || dl.scrollTop > 0 || !dl.querySelector(".form") || v.classList.contains("closing") || e.target.closest("input,textarea,select")) return;
+    d = {dl, v, y0:e.touches[0].clientY, t0:performance.now(), dy:0, on:false}; on = true;
+    addEventListener("touchmove", onMove, {passive:false});
+    addEventListener("touchend", onEnd, {passive:true});
+    addEventListener("touchcancel", snap, {passive:true});
   }, {passive:true});
-  addEventListener("touchcancel", snap, {passive:true});
 })();
 document.addEventListener("visibilitychange",()=>{ if(!document.hidden && LIST.length && getTok()) tick(); });   // 登入、還原畫面不要重畫（打到一半的密碼、選好的檔案會不見）
 SHARE ? flyLib().then(() => shareBoot(), () => setTimeout(() => location.reload(), 3000)) : tick();
