@@ -943,20 +943,25 @@ function springAt(t){
   for (let i = 1; i < SPTS.length; i++) if (t <= SPTS[i][0]) { const [p0, v0] = SPTS[i - 1], [p1, v1] = SPTS[i]; return v0 + (v1 - v0) * (t - p0) / ((p1 - p0) || 1); }
   return 1;
 }
-function slideSel(change){
-  const z = ZM(), was = canAnim() ? [...document.querySelectorAll("[data-slide]")].map(b => {
+function slideSel(change, animate = canAnim()){
+  const z = ZM(), was = animate ? [...document.querySelectorAll("[data-slide]")].map(b => {
     if (!b.offsetWidth || !b.offsetHeight) return null;
     const g = b.querySelector(":scope>.slide"), on = selOf(b);
     return [b, b.dataset.key, g ? g._now : on && boxIn(b, on, z)];
   }).filter(Boolean) : [];
   change();
+  if (!animate) document.querySelectorAll("[data-slide].sliding").forEach(b => {
+    const g = b.querySelector(":scope>.slide");
+    if (g) { g._stop = 1; g.remove(); }
+    b.classList.remove("sliding");
+  });
   was.forEach(([b0, k, from]) => {
     const b = b0.isConnected ? b0 : k && document.querySelector(`[data-slide][data-key="${CSS.escape(k)}"]`), on = b && selOf(b);
     if (!from || !on || !b.offsetWidth) return;
     const old = b.querySelector(":scope>.slide"); if (old) { old._stop = 1; old.remove(); }
     const to0 = boxIn(b, on, z);
     if (Math.abs(to0.x - from.x) < 1 && Math.abs(to0.y - from.y) < 1) { if (old) b.classList.remove("sliding"); return; }   // 停在原地：換回它自己的底色
-    const g = document.createElement("i"); g.className = "slide"; g._leaving = 1; b.prepend(g); b.classList.add("sliding");   // _leaving：重畫時不要把它當成內容
+    const g = document.createElement("i"); g.className = "slide"; g.setAttribute("aria-hidden", "true"); g._leaving = 1; b.prepend(g); b.classList.add("sliding");   // _leaving：重畫時不要把它當成內容
     const dur = T.sp, t0 = performance.now(), lerp = (a, c, p) => a + (c - a) * p;
     g.animate([{opacity:1}, {opacity:1}], {duration:dur, id:"ui"});              // 滑完之前，自動更新先等一下
     const done = () => {
@@ -1928,75 +1933,43 @@ function animTargets(root){
   walk(root);
   return out;
 }
-/* 換分頁：電腦版先讓舊頁各卡片淡出移除、再讓新頁各毛玻璃卡片直接淡入（零重疊、不建 Backdrop Root、邊框不閃） */
-let SWIPEX = 0;
+/* 點擊立即換內容，只有跟手滑動時才保留離場頁。 */
+let SWIPEX = 0, TABQUIET = false;
 function through(a, b){
-  const par = a.offsetParent;
-  if (!canAnim() || !par) return a.replaceWith(b);
-  const z = ZM(), slide = !DESK.matches && TABDIR;
-  const tf = slide ? getComputedStyle(a).transform : "none", tfX = tf && tf !== "none" ? new DOMMatrix(tf).e : 0;
-  const curX = slide ? (SWIPEX || tfX) : 0;
+  const par = a.parentElement;
   par.querySelectorAll(":scope>.view").forEach(v => { if (v._leaving) v.remove(); });
+  b.classList.add("no-intro");
+  if (TABQUIET || !canAnim()) return a.replaceWith(b);
+  const slide = !DESK.matches && TABDIR && SWIPEX;
+  if (!slide) {
+    a.replaceWith(b);
+    animTargets(b).forEach(el => el.animate([{opacity:.68, transform:"translateY(4px)"}, {opacity:1, transform:"none"}], {duration:T.fast, easing:DEC, id:"ui"}));
+    return;
+  }
+  const z = ZM(), curX = SWIPEX;
   const r = a.getBoundingClientRect(), R = par.getBoundingClientRect(), sy = Math.max(0, scrollY) / z;
   const top = (r.top - R.top) / z - par.clientTop, h = Math.max(0, Math.min(r.height / z, sy + innerHeight / z - top));
   a.replaceWith(b);
-  if (slide) {
-    a._leaving = 1;
-    Object.assign(a.style, {position:"absolute", left:(r.left - R.left) / z - par.clientLeft - tfX + "px", top:(top - sy) + "px", width:r.width / z + "px",
-      height:h + "px", overflow:"hidden", margin:"0", pointerEvents:"none", animation:"none", clipPath:sy > 0 ? `inset(${sy}px 0 0 0)` : ""});
-    b.after(a); still(a);
-    if (sy > 0) scrollTo(0, 0);
-    const stride = r.width / z + 32, dur = Math.round(T.mid * Math.max(.55, 1 - Math.abs(curX) / stride));
-    const opt = {duration:dur, easing:EASE, id:"ui"};
-    a.animate([{transform:`translateX(${curX}px)`}, {transform:`translateX(${-TABDIR * stride}px)`}], {...opt, fill:"forwards"}).onfinish = () => a.remove();
-    b.animate([{transform:`translateX(${curX + TABDIR * stride}px)`}, {transform:"none"}], opt);
-    return;
-  }
-  b.classList.add("no-intro");
-  const enter = () => {
-    a.remove();
-    if (!b.isConnected) return;
-    b.style.visibility = "";
-    const inOpt = {duration:Math.round(T.mid * .75), easing:DEC, id:"ui"};
-    animTargets(b).forEach(el => el.animate([{opacity:0, transform:"translateY(5px)"}, {opacity:1, transform:"none"}], inOpt));
-  };
-  if (a.style.visibility === "hidden") return enter();
-  b.style.visibility = "hidden";
   a._leaving = 1;
+  a.inert = true;
   Object.assign(a.style, {position:"absolute", left:(r.left - R.left) / z - par.clientLeft + "px", top:(top - sy) + "px", width:r.width / z + "px",
-    height:h + "px", overflow:"hidden", margin:"0", pointerEvents:"none", animation:"none"});
+    height:h + "px", overflow:"hidden", margin:"0", pointerEvents:"none", animation:"none", clipPath:sy > 0 ? `inset(${sy}px 0 0 0)` : ""});
   b.after(a); still(a);
-  const outEls = animTargets(a), outOpt = {duration:Math.round(T.fast * .55), easing:EXIT, fill:"forwards", id:"ui"};
-  if (outEls.length) outEls.map(el => el.animate([{opacity:1}, {opacity:0}], outOpt))[0].onfinish = enter;
-  else enter();
+  if (sy > 0) scrollTo(0, 0);
+  const stride = r.width / z + 32, dur = Math.round(T.mid * Math.max(.55, 1 - Math.min(1, Math.abs(curX) / stride)));
+  const opt = {duration:dur, easing:DEC, id:"ui"};
+  const exit = a.animate([{transform:`translateX(${curX}px)`}, {transform:`translateX(${-TABDIR * stride}px)`}], {...opt, fill:"forwards"});
+  exit.onfinish = exit.oncancel = () => a.remove();
+  b.animate([{transform:`translateX(${curX + TABDIR * stride}px)`}, {transform:"none"}], opt);
 }
-/* 切換內容區塊（data-sw：總覽 ↔ 單台主機、換主機、換設定分類）：先淡出移除舊內容再淡入新毛玻璃卡片，零重疊不閃邊框 */
+
 function swapIn(a, b){
-  if (!canAnim() || !a.isConnected) return a.replaceWith(b);
-  const h0 = a.offsetHeight, par = a.offsetParent, x = a.offsetLeft, y = a.offsetTop, w = a.offsetWidth;
-  const k0 = a.dataset.key || "", k1 = b.dataset.key || "";
-  const into = k0 === "dh:all" && k1.startsWith("dh:h:"), back = k0.startsWith("dh:h:") && k1 === "dh:all", sb = k1.startsWith("sb:"), gh = k1.startsWith("g-h:");
   b.classList.add("no-intro");
   a.replaceWith(b);
-  const hEnd = sb ? h0 : b.offsetHeight;
-  const enter = () => {
-    a.remove();
-    if (!b.isConnected) return;
-    b.style.visibility = "";
-    const inTf = into ? "translateY(10px)" : back ? "translateY(-6px)" : gh ? "none" : sb ? "translateY(4px)" : "translateY(6px)";
-    const inOpt = {duration:(sb || gh) ? T.fast : Math.round(T.mid * .8), easing:DEC, id:"ui"};
-    animTargets(b).forEach(el => el.animate([{opacity:0, transform:inTf}, {opacity:1, transform:"none"}], inOpt));
-  };
-  if (!sb && !into && !back && Math.abs(hEnd - h0) >= 2) b.animate([{height:h0 + "px", overflow:"hidden"}, {height:hEnd + "px", overflow:"hidden"}], {duration:T.mid, easing:EASE, id:"ui"});
-  if (!par || a.style.visibility === "hidden") return enter();
-  b.style.visibility = "hidden";
-  a._leaving = 1;
-  Object.assign(a.style, {position:"absolute", left:x + "px", top:y + "px", width:w + "px", height:h0 + "px", margin:"0", pointerEvents:"none", overflow:"hidden", zIndex:1});
-  b.after(a); still(a);
-  const outTf = into ? "translateY(-5px)" : back ? "translateY(5px)" : (sb || gh) ? "none" : "translateY(-4px)";
-  const outEls = animTargets(a), outOpt = {duration:Math.round(T.fast * .55), easing:EXIT, fill:"forwards", id:"ui"};
-  if (outEls.length) outEls.map(el => el.animate([{opacity:1, transform:"none"}, {opacity:0, transform:outTf}], outOpt))[0].onfinish = enter;
-  else enter();
+  if (TABQUIET || !canAnim()) return;
+  const returning = b.dataset.key === "dh:all";
+  const y = returning ? -4 : 4;
+  animTargets(b).forEach(el => el.animate([{opacity:.68, transform:`translateY(${y}px)`}, {opacity:1, transform:"none"}], {duration:T.fast, easing:DEC, id:"ui"}));
 }
 function morph(a, b){
   if (a.nodeType === 1 && b.nodeType === 1 && a.matches("main.view") && b.matches("main.view") && a.getAttribute("data-key") !== b.getAttribute("data-key")) return through(a, b);
@@ -2281,7 +2254,7 @@ function toast(msg, type="ok"){
 
 /* ═════════ 分頁、主機整頁 ═════════ */
 let TAB = ["home", "tools", "log", "set"].includes(sstore("vs-tab")) ? sstore("vs-tab") : "home";
-function setTab(k){
+function setTab(k, keyboard = false){
   closeMenu(); hideTip();
   if (DET) {                                     // 手機開著主機整頁時按分頁列：同一頁就收起來，別頁直接換過去
     if (TAB === k) return closeDet();
@@ -2290,7 +2263,7 @@ function setTab(k){
   }
   if (TAB === k) {
     if (k === "home" && DESK.matches && DSEL && LIST.length > 1) { DSEL = ""; sstore("vs-dsel", ""); scrollTo(0, 0); return render(LIST); }
-    if (scrollY > 0) scrollTo({top:0, behavior: canAnim() ? "smooth" : "auto"});
+    if (scrollY > 0) scrollTo({top:0, behavior: !keyboard && canAnim() ? "smooth" : "auto"});
     return;
   }
   const ks = TABS.map(x => x[0]);
@@ -2298,7 +2271,8 @@ function setTab(k){
   if (k === "home" && DESK.matches && LIST.length > 1) { DSEL = ""; sstore("vs-dsel", ""); }
   TAB = k; sstore("vs-tab", k);
   const hd = document.querySelector(".dock.hid"); if (hd) hd.classList.remove("hid");
-  slideSel(() => render(LIST));
+  TABQUIET = keyboard;
+  try { slideSel(() => render(LIST), !keyboard && canAnim()); } finally { TABQUIET = false; }
   if (scrollY > 0) scrollTo(0, 0);
 }
 let TABID = 0;
@@ -4242,7 +4216,7 @@ async function pageClick(e){
   if (t.closest("[data-pinlogin]")) return pinLoginClick();
   if (t.closest("[data-rsw]")) return restoreScreen();
   const tb = t.closest("[data-tab]");
-  if (tb) { if ($("#fly") && !tb.closest("#fly")) { flyClose(); if (TAB === tb.dataset.tab) return; } return setTab(tb.dataset.tab); }   // 機場起降開著時按分頁列：先關掉
+  if (tb) { if ($("#fly") && !tb.closest("#fly")) { flyClose(); if (TAB === tb.dataset.tab) return; } return setTab(tb.dataset.tab, e.detail === 0); }   // 機場起降開著時按分頁列：先關掉
   if (t.closest("[data-settings]")) return setTab("set");
   if (t.closest("[data-back]")) return closeDet();
   if (t.closest("[data-addhost]")) return addHostModal();
@@ -4652,33 +4626,37 @@ if (!CSS.supports("(animation-timeline:view()) and (timeline-scope:--a)")) {
 }
 /* 手機：畫面中間左右滑，整頁跟手滑動並無縫接續換分頁（僅在有效觸控期間動態掛載 touchmove，平時不拖慢 iOS 捲動與點擊） */
 (function(){
-  let x0 = null, y0 = 0, t0 = 0, dx = 0, lock = 0, v = null, tgt = null, on = false;
+  let x0 = null, y0 = 0, t0 = 0, dx = 0, baseX = 0, lock = 0, v = null, tgt = null, on = false;
   const unbind = () => {
     if (!on) return; on = false;
     removeEventListener("touchmove", onMove); removeEventListener("touchend", onEnd); removeEventListener("touchcancel", onCancel);
   };
   const reset = anim => {
     unbind();
-    const el = v, cur = dx; x0 = null; dx = 0; lock = 0; v = null; tgt = null;
+    const el = v, cur = dx; x0 = null; dx = baseX = 0; lock = 0; v = null; tgt = null;
     if (!el) return;
     el.style.transform = "";
-    if (anim && canAnim() && Math.abs(cur) > 1) el.animate([{transform:`translateX(${cur}px)`}, {transform:"none"}], {duration:T.spf, easing:SPRING_F});
+    if (anim && canAnim() && Math.abs(cur) > 1) el.animate([{transform:`translateX(${cur}px)`}, {transform:"none"}], {duration:T.fast, easing:DEC, id:"tab-gesture"});
   };
   const onMove = e => {
     if (x0 === null || !v || e.touches.length > 1) return reset(false);
     const t = e.touches[0], mx = (t.clientX - x0) / ZM(), my = (t.clientY - y0) / ZM();
+    if (!v.isConnected) return reset(false);
     if (!lock) {
       if (Math.hypot(mx, my) < 10) return;
       if (Math.abs(mx) > Math.abs(my) * 1.4) {
         for (let el = tgt; el && el !== document.body; el = el.parentElement) if (el.scrollWidth > el.clientWidth + 2 && /auto|scroll/.test(getComputedStyle(el).overflowX)) return reset(false);
+        const transform = getComputedStyle(v).transform;
+        baseX = transform === "none" ? 0 : new DOMMatrix(transform).e;
+        v.getAnimations().filter(a => a.id === "ui" || a.id === "tab-gesture").forEach(a => a.cancel());
         lock = 1;
       } else return reset(false);
     }
     if (e.cancelable) e.preventDefault();
     const ks = TABS.map(([k]) => k), idx = ks.indexOf(TAB);
     const edge = (mx > 0 && idx === 0) || (mx < 0 && idx === ks.length - 1);
-    dx = edge ? mx * .18 : Math.sign(mx) * (88 * (1 - Math.exp(-Math.abs(mx) / 130)));
-    v.style.transform = `translateX(${dx}px)`;
+    dx = baseX + (edge ? mx * .18 : Math.sign(mx) * (88 * (1 - Math.exp(-Math.abs(mx) / 130))));
+    if (canAnim()) v.style.transform = `translateX(${dx}px)`;
   };
   const onEnd = e => {
     if (x0 === null) return unbind();
@@ -4690,7 +4668,7 @@ if (!CSS.supports("(animation-timeline:view()) and (timeline-scope:--a)")) {
       unbind();
       SWIPEX = dx;
       if (v) v.style.transform = "";
-      x0 = null; dx = 0; lock = 0; v = null; tgt = null;
+      x0 = null; dx = baseX = 0; lock = 0; v = null; tgt = null;
       setTab(ks[next]);
       SWIPEX = 0;
     } else reset(true);

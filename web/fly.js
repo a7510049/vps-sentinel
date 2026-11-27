@@ -1,6 +1,6 @@
 /* ═════════ 機場起降：像機場那種會翻牌的看板（飛機即時位置來自業餘接收站，主要主機去抓） ═════════ */
 const FLYEV = 10000;                                      // 每 10 秒更新
-let FLYD = null, FLYT = 0, FLYSEL = "", FLYHOV = "", FLYSEQ = 0, FLYHR = "", FLYSTILL = false, FLYSW = 0, FLYDONE = false, FLYHUSH = 0, FLYBZ = 0, FLYLATER = 0, FLYDT = 0;   // FLYBZ：切換動畫跑到什麼時候（這段時間新資料先等）   // FLYDONE：已到／已飛的班機展開   // FLYHR：看板現在看哪個時段（幾點）
+let FLYD = null, FLYT = 0, FLYSEL = "", FLYHOV = "", FLYSEQ = 0, FLYHR = "", FLYSTILL = false, FLYSW = 0, FLYDONE = false, FLYBZ = 0, FLYLATER = 0, FLYDT = 0;   // FLYBZ：切換動畫跑到什麼時候（這段時間新資料先等）   // FLYDONE：已到／已飛的班機展開   // FLYHR：看板現在看哪個時段（幾點）
 const flySave = () => store(FLYK, JSON.stringify({ap: FLYS.ap, tab: FLYS.tab, name: FLYS.name, term: FLYS.term || ""}));
 const FLYTAB = [["arr", "抵達"], ["dep", "出發"], ["gnd", "機坪"], ["cargo", "貨機"]];
 /* 分頁前面的小圖示（像機場指示牌）：降落、起飛、停機坪、貨物 */
@@ -211,7 +211,7 @@ function flyShell(){
     <div class="fhead"${SHAREAP ? "" : ` data-fpick role="button" tabindex="0" title="換機場"`}><div class="fcode">${flap("", 3, "xl")}</div><div class="fname"><span class="fnm"><b data-k="name"></b>${SHAREAP ? "" : I("chev").replace("<svg", '<svg class="chv"')}</span><span class="sub" data-k="city"></span></div>
       <div class="fclock" title="當地時間">${flap("", 5, "lg")}</div></div>
     <div class="fmain"><div class="fleft">
-      <div class="seg ftabs" data-slide>${FLYTAB.map(([k, l]) => `<button class="${FLYS.tab === k ? "on" : ""}" data-ftab="${k}">${flyTi(k)}${l}<span class="fnw"><span class="fnl" hidden>還有</span><span class="fn" data-k="n-${k}"></span></span></button>`).join("")}</div>
+      <div class="seg ftabs" data-slide>${FLYTAB.map(([k, l]) => `<button class="${FLYS.tab === k ? "on" : ""}" data-ftab="${k}" aria-pressed="${FLYS.tab === k}">${flyTi(k)}${l}<span class="fnw"><span class="fnl" hidden>還有</span><span class="fn" data-k="n-${k}"></span></span></button>`).join("")}</div>
       <div class="fterm" hidden></div><div class="fhrh"><span class="fhsel" hidden></span><div class="fsum sub" hidden></div></div><div class="fhrs" hidden></div>
       <div class="board"><div class="fh">${FLYCOL.map(k => `<span class="fk ${k}"></span>`).join("")}</div><button class="fdone" data-fdone hidden><span></span>${I("chev").replace("<svg", '<svg class="chv"')}</button><div class="frows"></div><div class="fmsg sub" hidden></div><div class="fload"><i></i></div></div></div>
       <div class="radar"><div class="rin"><div class="rbox"><canvas class="rcv" aria-label="雷達"></canvas><i class="rsweep"></i><button class="icbtn rfull" data-rfull title="整頁雷達">${I("full")}</button></div>
@@ -556,7 +556,7 @@ function radarView(cv, full){
     let v = 0;                                              // 照飛機在畫面上移動的快慢決定多久畫一次（移不到一點就不用重畫；整頁雷達拖曳、縮放時照樣每格都畫）
     if (!fade) pl.forEach(o => { if (o.vis && t - o.t0 < FLYEV) v = Math.max(v, Math.hypot(o.x1 - o.x0, o.y1 - o.y0)); });
     if (!fade && vk) VH.forEach(o => { if (t - o.t0 < FLYEV) v = Math.max(v, Math.hypot(o.x1 - o.x0, o.y1 - o.y0)); });
-    const gap = A.t || R.busy ? 0 : t < FLYHUSH ? T.mid : fade ? 30 : Math.min(250, Math.max(33, .7 * FLYEV / (v * V.s || 1e-6)));   // 看板切換時先讓給切換動畫
+    const gap = A.t || R.busy ? 0 : fade ? 30 : Math.min(250, Math.max(33, .7 * FLYEV / (v * V.s || 1e-6)));   // 看板切換時先讓給切換動畫
     if (gap && t - R.last < gap && moving) { R.tm = setTimeout(R.kick, gap - (t - R.last)); return; }   // 等的時候不佔每一格畫面（一直要畫面會讓整頁的動畫都跟著在主執行緒算）
     R.last = t;
     R.draw(t);
@@ -1137,40 +1137,25 @@ function flyRadar(f, d){
   if (!d.loading && d.ap && d.ap.code) flyTrk(f, d.ap.code);
   if (FRAD) fradData();
 }
-/* 換分頁、換時段：航廈、時段那兩排和看板一起淡出，看不到的時候一次換好（收起、長出來都不用動畫），再一起淡入；
-   下面的雷達只跟著總高度滑一次（以前每一排各自收起、長出來，整塊會上下跳好幾下） */
 const flyRv = (el, on) => { if (!FLYSTILL) return reveal(el, on); if (el.hidden === !on && !el._hiding) return; el.getAnimations().forEach(a => a.cancel()); el._hiding = false; el.style.overflow = ""; el.hidden = !on; };
 const flySet = (el, t) => { if (el.textContent !== t) el.textContent = t; };
-async function flySwitch(mode){   // mode："hr" 換時段、"tab" 換分頁、不給是換航廈或地點；按鈕那幾排切換後還在就不動，真的要出現、消失的才淡入淡出
-  const hr = mode === "hr", tab = mode === "tab";
-  const f = $("#fly"), b = f && f.querySelector(".board"), id = ++FLYSW;
-  if (!b || !canAnim()) return flyPaint();
-  const tabs = f.querySelector(".ftabs"), hb = f.querySelector(".fhrs"), tb = f.querySelector(".fterm"), sm = f.querySelector(".fsum");
-  const next = !!(FLYD && FLYD.fids && flyFT(FLYS.tab));   // 換過去的分頁有沒有航廈、時段
-  const shown = e => e && !e.hidden && !e.closest("[hidden]");
-  const els = [b, ...(tab && !next ? [hb, ...tb.querySelectorAll(".ftermg")] : [])].filter(shown);   // 會消失的膠囊先跟看板一起淡出
-  const span = () => b.getBoundingClientRect().bottom - tabs.getBoundingClientRect().bottom;   // 分頁下面到看板底部的總高度
-  (b._fo || []).forEach(a => a.cancel());
-  FLYHUSH = performance.now() + T.fast + T.mid * 2;        // 切換動畫跑完前雷達先少畫幾張
-  FLYBZ = performance.now() + T.fast * .6 + T.mid + 60;   // 淡出＋淡入跑完前，自動更新先等（不然舊的列還在收、新的列長出來會疊在一起）
-  const fo = b._fo = els.map(e => e.animate([{opacity:1}, {opacity:0}], {duration:T.fast * .6, easing:EXIT, fill:"forwards"}));
-  await Promise.all(fo.map(a => a.finished.catch(() => {})));
-  if (id !== FLYSW) return;
-  b.querySelectorAll(".frows>.fr").forEach(r => r.getAnimations().forEach(a => a.finish()));   // 上一次更新還在收起、長出、滑動的列直接到位
-  b.getAnimations().forEach(a => { if (!fo.includes(a)) a.finish(); });
-  const rd = f.querySelector(".radar"), wide = getComputedStyle(f.querySelector(".fleft")).display === "contents", rt0 = rd.getBoundingClientRect().top;   // 電腦：雷達跟看板同一張卡片，上面幾排變了它也會跟著移
-  const z = ZM(), s0 = span() / z, keys0 = hb._keys, was = new Set([hb, tb, sm, ...tb.querySelectorAll(".ftermg")].filter(shown));
-  FLYSTILL = true; try { flyPaint(false); } finally { FLYSTILL = false; }
-  b.classList.add("cvx"); const s1 = span() / z, bh = b.offsetHeight; b.classList.remove("cvx");   // 手機的列平常畫面外不排版（高度是估的），量的這一刻先排版
-  fo.forEach(a => a.cancel()); b._fo = null;
-  if (f._rv && f._rv.focus !== flyFocus()) { if (wide) FLYHUSH = 0; f._rv.focus = flyFocus(); f._rv.kick(); }   // 看板淡入的同時，雷達上的飛機也跟著換濃淡（電腦上同一張卡片，不能一邊動一邊停）
-  const ins = [b, ...[hb, tb, sm, ...tb.querySelectorAll(".ftermg")].filter(e => shown(e) && !was.has(e) && !(e.parentNode === tb && !was.has(tb)))];   // 新出現的（整排新出來的，裡面的按鈕跟著那排一起）
-  if (!hr && shown(hb) && was.has(hb) && hb._keys !== keys0) ins.push(hb);   // 時段那排還在、但時段變了：整排淡入；只有班數變的話只換數字
-  ins.forEach(e => e.animate([{opacity:0, transform:"translateY(8px)"}, {opacity:1, transform:"none"}], {duration:T.mid, easing:EASE}));
-  const h0 = bh - (s1 - s0), o = {duration:T.mid, easing:EASE};   // 總高度變了：看板的底慢慢移到新的位置，雷達跟著滑一次
-  if (Math.abs(s1 - s0) > 1) b.animate([{height:Math.max(0, h0) + "px", overflow:"hidden"}, {height:bh + "px", overflow:"hidden"}], o);
-  if (wide) { const dy = (rt0 - rd.getBoundingClientRect().top) / z; if (Math.abs(dy) > 1) rd.animate([{transform:`translateY(${dy}px)`}, {transform:"none"}], o); }
-  else if (h0 < 0) rd.animate([{transform:`translateY(${h0}px)`}, {transform:"none"}], o);   // 上面多出來的比看板原本還高：差的那段由雷達補（剛好蓋在正在淡入的那幾排上）
+/* 切換條件時同一幀更新選中狀態、看板和雷達，連按直接採用最新條件。 */
+function flySwitch(keyboard){
+  FLYSW++;
+  const b = $("#fly .board");
+  if (!b) return flyPaint();
+  const previous = b._switchMotion;
+  const animate = !keyboard && canAnim();
+  const current = previous && animate ? getComputedStyle(b) : null;
+  const from = current ? {opacity:current.opacity, transform:current.transform} : {opacity:.76, transform:"translateY(3px)"};
+  if (previous) previous.cancel();
+  b._switchMotion = null;
+  FLYSTILL = true;
+  try { flyPaint(false); } finally { FLYSTILL = false; }
+  if (!animate) return;
+  const motion = b._switchMotion = b.animate([from, {opacity:1, transform:"none"}],
+    {duration:T.fast, easing:DEC});
+  motion.onfinish = () => { if (b._switchMotion === motion) b._switchMotion = null; };
 }
 /* 點到被切掉一半的時段：那一排自己捲到剛好整格露出來（不置中；只捲這一排，整頁不會跟著左右動） */
 function flyNudge(s, b){
@@ -1780,17 +1765,17 @@ function flyClick(e, f){
   if (t.closest("[data-fmini]")) return flyMiniMenu(f, t.closest("[data-fmini]"));
   const tb = t.closest("[data-ftab]");
   if (tb) { if (FLYS.tab !== tb.dataset.ftab) { FLYS.tab = tb.dataset.ftab; FLYHR = ""; flySave(); const s = tb.parentNode;
-    slideSel(() => s.querySelectorAll("button").forEach(b => b.classList.toggle("on", b === tb))); flyMini(f); flySwitch("tab"); } return; }
+    slideSel(() => s.querySelectorAll("button").forEach(b => { b.classList.toggle("on", b === tb); b.setAttribute("aria-pressed", String(b === tb)); }), e.detail !== 0 && canAnim()); flyMini(f); flySwitch(e.detail === 0); } return; }
   if (t.closest("[data-ftrk]")) return flyTrkSet(!FLYTRKON);
   const zb = t.closest("[data-fzm]");
   if (zb) { if (+FLYS.zm !== +zb.dataset.fzm) { FLYS.zm = +zb.dataset.fzm; flySave(); slideSel(() => flyZoom(f, true)); } return; }
   const tm = t.closest("[data-fterm]");
   if (tm) { if ((FLYS.term || "") !== tm.dataset.fterm) { FLYS.term = tm.dataset.fterm; FLYHR = ""; flySave(); const s = tm.parentNode;
-    slideSel(() => s.querySelectorAll("button").forEach(b => b.classList.toggle("on", b === tm))); flySwitch(); } return; }
+    slideSel(() => s.querySelectorAll("button").forEach(b => b.classList.toggle("on", b === tm)), e.detail !== 0 && canAnim()); flySwitch(e.detail === 0); } return; }
   if (t.closest("[data-fdone]")) { FLYDONE = !FLYDONE; return flyDoneOpen(); }
   const hr = t.closest("[data-fhr]");
   if (hr) { if (FLYHR !== hr.dataset.fhr) { FLYHR = hr.dataset.fhr; const s = hr.parentNode;
-    slideSel(() => s.querySelectorAll("button").forEach(b => b.classList.toggle("on", b === hr))); flySwitch("hr");
+    slideSel(() => s.querySelectorAll("button").forEach(b => b.classList.toggle("on", b === hr)), e.detail !== 0 && canAnim()); flySwitch(e.detail === 0);
     flyNudge(s, hr); } return; }
   const r = t.closest(".fr[data-id]");
   if (r && r.dataset.id) return flyInfo(r.dataset.id);

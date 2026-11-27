@@ -1130,7 +1130,7 @@ function draw(){
   deepLink();
 }
 /* ── 分頁式懸浮液態玻璃膠囊（照片／旅程／器材／留言）：圖示靜止、僅玻璃氣泡以彈簧滑動 ── */
-let TAB = "photos", DOCK_TK = 0;
+let TAB = "photos";
 function dockSync(){
   document.documentElement.classList.toggle("dock-off", !!(LB || SS || SY || $(".upb.on")));
 }
@@ -1146,11 +1146,17 @@ function dockSlide(nav, prev, next){
   } else {
     pill = document.createElement("i"); pill.className = "slide"; pill.setAttribute("aria-hidden", "true"); nav.prepend(pill);
   }
-  const x1 = next.offsetLeft, w1 = next.offsetWidth, tk = ++DOCK_TK;
+  const x1 = next.offsetLeft, w1 = next.offsetWidth;
+  pill.style.width = w1 + "px";
   nav.classList.add("sliding");
-  const an = pill.animate([{transform:`translate3d(${x0.toFixed(1)}px,0,0)`, width:`${w0.toFixed(1)}px`}, {transform:`translate3d(${x1.toFixed(1)}px,0,0)`, width:`${w1.toFixed(1)}px`}],
-    {duration:320, easing:"cubic-bezier(.22,1,.36,1)"});
-  an.onfinish = () => { if (tk !== DOCK_TK) return; nav.classList.remove("sliding"); pill.remove(); };
+  const an = pill._motion = pill.animate([
+    {transform:`translate3d(${x0}px,0,0) scaleX(${w0 / w1})`},
+    {transform:`translate3d(${x1}px,0,0) scaleX(1)`}
+  ], {duration:240, easing:DEC});
+  an.onfinish = () => {
+    if (pill._motion !== an || !pill.isConnected) return;
+    nav.classList.remove("sliding"); pill.remove();
+  };
 }
 function tabSync(){
   const nav = $(".adock"); if (!nav) return;
@@ -1169,24 +1175,26 @@ function tabSync(){
   const sig = tabs.map(t => t.join(":")).join("|");
   if (nav.dataset.sig !== sig) {
     nav.dataset.sig = sig;
+    nav.classList.remove("sliding");
     nav.innerHTML = tabs.map(([id, lb, ic, n]) => `<button type="button" class="${TAB === id ? "on" : ""}" data-tab="${id}"${TAB === id ? ' aria-current="page"' : ""}>${I(ic)}<span>${lb}</span>${n ? `<small class="num">${n}</small>` : ""}</button>`).join("");
   }
 }
-function tabSet(id, silent){
+function tabSet(id, silent, keyboard = false){
   const pane = $(`.tpane[data-pane="${id}"]`); if (!pane) return;
   if (TAB === id && !pane.hidden) return;
   const nav = $(".adock"), prev = nav && nav.querySelector("button.on"), next = nav && nav.querySelector(`[data-tab="${id}"]`);
   TAB = id;
   if (nav) {
-    if (!silent) dockSlide(nav, prev, next);
+    if (!silent && !keyboard && anim()) dockSlide(nav, prev, next);
+    else { nav.querySelector(":scope > .slide")?.remove(); nav.classList.remove("sliding"); }
     nav.querySelectorAll("button").forEach(b => { const on = b.dataset.tab === id; b.classList.toggle("on", on); if (on) b.setAttribute("aria-current", "page"); else b.removeAttribute("aria-current"); });
   }
   document.querySelectorAll(".tpane").forEach(p => { const on = p.dataset.pane === id; p.hidden = !on; p.classList.toggle("on", on); });
   const hero = $(".hero"), hy = hero ? (HEROH || (HEROH = hero.offsetHeight)) - 68 : 0;
   if (!silent && hero && scrollY > hy + 40) scrollTo(0, Math.max(0, hy));
-  if (!silent && anim()) {
-    pane.getAnimations().forEach(a => a.cancel());
-    pane.animate([{opacity:0, transform:"translate3d(0,8px,0)"}, {opacity:1, transform:"translate3d(0,0,0)"}], {duration:260, easing:DEC});
+  document.querySelectorAll(".tpane").forEach(p => p.getAnimations().filter(a => a.id === "album-tab").forEach(a => a.cancel()));
+  if (!silent && !keyboard && anim()) {
+    pane.animate([{opacity:.7, transform:"translateY(4px)"}, {opacity:1, transform:"none"}], {duration:160, easing:DEC, id:"album-tab"});
   }
   if (id === "map") { const ms = $(".msec"); if (ms) ms.hidden = msHide(); requestAnimationFrame(() => bigMap()); }
   else if (id === "gear") { gear(); requestAnimationFrame(() => { stFit(); }); }
@@ -1429,6 +1437,7 @@ function layout(force){
   const W = wall.querySelector(".rows").clientWidth;
   if (!force && Math.abs(W - LW) < 1) return;
   LW = W;
+  const focused = document.activeElement?.closest(".wall .ph");
   GROUPS.forEach((g, gi) => {
     const box = wall.querySelector(`[data-g="${gi}"] .rows`), rows = [];
     let cur = [], sum = 0;
@@ -1470,6 +1479,7 @@ function layout(force){
     });
     box.replaceChildren(frag);
   });
+  if (focused?.isConnected && document.activeElement !== focused) focused.focus({preventScroll:true});
 }
 let RZ, WRO;
 function wallWatch(){                                         // 照片牆的寬度一變就重排（打開時量到的寬度偶爾不對，只靠視窗大小改變不夠）
@@ -1678,7 +1688,7 @@ document.addEventListener("click", e => {
   if (e.target.closest(".bmenu button")) kmenuOff();
   if (e.target.closest("[data-bmore]")) return bmenu(e.target.closest("[data-bmore]"));
   if (e.target.closest("[data-up]")) return SEL.on || upPick();
-  { const tb = e.target.closest("[data-tab]"); if (tb) return tabSet(tb.dataset.tab); }
+  { const tb = e.target.closest("[data-tab]"); if (tb) return tabSet(tb.dataset.tab, false, e.detail === 0); }
   { const wb = e.target.closest("[data-who]"); if (wb) return whoSet(wb.dataset.who); }
   if (e.target.closest("[data-sel]")) return selOn();
   if (SEL.on && e.target.closest("[data-ss],[data-mem]")) return;
@@ -2242,10 +2252,14 @@ function openLb(i, from){
   }
   function liveOff(){ const v = cur().querySelector(".lvv"); if (v) { v.pause(); v.closest(".zw").classList.remove("moving"); } }
   function heartAt(x, y){                                    // 點兩下：中間跳出大愛心、按讚
-    const p = PH[S.i], h = document.createElement("i");
-    h.className = "bigh"; h.innerHTML = I("heart");
-    h.style.left = x + "px"; h.style.top = y + "px";
-    el.appendChild(h); setTimeout(() => h.remove(), T.slow * 2);
+    const p = PH[S.i];
+    if (anim()) {
+      el.querySelector(".bigh")?.remove();
+      const h = document.createElement("i");
+      h.className = "bigh"; h.innerHTML = I("heart"); h.setAttribute("aria-hidden", "true");
+      h.style.left = x + "px"; h.style.top = y + "px";
+      el.appendChild(h); setTimeout(() => h.remove(), T.slow * 2);
+    }
     if (!p.me) like(S.i, $("[data-lk]", el), social);
   }
   function tbarFlip(){                                        // 下面那條工具列：數字、表情鈕出現消失時框框寬度慢慢變，按鈕滑過去（不一下子跳大跳小）
@@ -2442,7 +2456,7 @@ function openLb(i, from){
   } else { S.hold = 0; reveal(); goneSet(); bigQ(); bg.style.opacity = 1; el.querySelectorAll(".lbt,.lbb,.nav,.lbs").forEach(x => { x.style.opacity = ""; }); }
   if (POPSKIP) S.push = 1; else history.pushState({lb:1}, "");   // 上一張的返回還沒處理完：等它處理完再記
 
-  function go(d){
+  function go(d, keyboard = false){
     finish();                                                  // 上一張還在滑：先收好再算下一張（不然連按會白按一次）
     const n = S.i + d;
     stopAll();
@@ -2450,12 +2464,12 @@ function openLb(i, from){
     clearTimeout(S.infT); sl.forEach(s => { s.style.visibility = ""; });
     const from = curX(), to = -d * (W() + GAPX);
     setZoom(1, 0, 0);
-    const a = track.animate([{transform:`translateX(${from}px)`}, {transform:`translateX(${to}px)`}], {duration:anim() ? T.mid : 1, easing:DEC});
+    const a = !keyboard && anim() ? track.animate([{transform:`translateX(${from}px)`}, {transform:`translateX(${to}px)`}], {duration:T.fast, easing:DEC}) : null;
     track.style.transform = `translateX(${to}px)`;
-    S.busy = () => { a.cancel(); S.busy = null;
+    S.busy = () => { a?.cancel(); S.busy = null;
       if (d > 0) sl = [sl[1], sl[2], sl[0]]; else sl = [sl[2], sl[0], sl[1]];
       S.i = n; track.style.transform = ""; fill(sl[d > 0 ? 2 : 0], n + d); place(); chrome(); if (ZEB) zbMake(); bigQ(); };   // 過曝／死黑開著：換到的這張也標出來
-    a.onfinish = () => S.busy && S.busy();
+    if (a) a.onfinish = finish; else finish();
   }
   const finish = () => S.busy && S.busy();
   function curX(){ const m = /translateX\((-?[\d.]+)px\)/.exec(track.style.transform); return m ? +m[1] : 0; }
@@ -2733,16 +2747,17 @@ function openLb(i, from){
     }
     if (ptr.size) return;
     clearTimeout(S.lvT);
+    const canceled = e.type === "pointercancel";
     if (g.type === "live") { g = null; return liveOff(); }
     const dx = e.clientX - g.x0, dy = e.clientY - g.y0, dt = performance.now() - g.t0, type = g.type, vx = g.vx, vy = g.vy;
     g = null;
     if (type === "swipe") {
-      if ((dx < -W() * .2 || vx < -.45) && S.i < PH.length - 1) return go(1);
-      if ((dx > W() * .2 || vx > .45) && S.i > 0) return go(-1);
+      if (!canceled && (dx < -W() * .2 || vx < -.45) && S.i < PH.length - 1) return go(1);
+      if (!canceled && (dx > W() * .2 || vx > .45) && S.i > 0) return go(-1);
       return snap();
     }
     if (type === "down" && !S.info) {
-      if (dy > H() * .16 || vy > .6) return lbBack(S, 1);
+      if (!canceled && (dy > H() * .16 || vy > .6)) return lbBack(S, 1);
       el.classList.remove("bare");
       const bg0 = getComputedStyle(bg).opacity; bg.style.opacity = 1;
       if (anim()) bg.animate([{opacity:bg0}, {opacity:1}], {duration:T.mid, easing:DEC});
@@ -2750,17 +2765,17 @@ function openLb(i, from){
       if (anim()) zw.animate([{transform:now}, {transform:"none"}], {duration:T.mid, easing:DEC});
       return;
     }
-    if (type === "down" && S.info) { if (dy > 50) setInfo(false); return; }
+    if (type === "down" && S.info) { if (!canceled && dy > 50) setInfo(false); return; }
     if (type === "up") { const zw = cur(), now = zw.style.transform; zw.style.transform = ""; if (now && anim()) zw.animate([{transform:now}, {transform:"none"}], {duration:T.fast, easing:DEC});
-      if (dy < -40 || vy < -.5) setInfo(true); return; }
+      if (!canceled && (dy < -40 || vy < -.5)) setInfo(true); return; }
     if (type === "pan") {
-      if (anim() && S.z.s > 1.02 && Math.hypot(vx, vy) > .15) {   // 放手後順著甩動方向慣性滑一段再停
+      if (!canceled && anim() && S.z.s > 1.02 && Math.hypot(vx, vy) > .15) {   // 放手後順著甩動方向慣性滑一段再停
         const s = Math.min(ZMAX, S.z.s);
         return zoomTo(s, ...zClip(s, S.z.x + vx * 180, S.z.y + vy * 180), DEC);
       }
       return clampZoom();
     }
-    if (!type && dt < 350) {                                   // 點一下：開關上下的按鈕；滑鼠點兩下縮放、手機點兩下愛心
+    if (!canceled && !type && dt < 350) {                                   // 點一下：開關上下的按鈕；滑鼠點兩下縮放、手機點兩下愛心
       const now = performance.now();
       if (now - lastTap < 300) { clearTimeout(tapT); lastTap = 0; return e.pointerType === "mouse" || S.z.s > 1.02 || !D.talk || PH[S.i].broken ? dbl(e.clientX, e.clientY) : heartAt(e.clientX, e.clientY); }
       lastTap = now;
@@ -2958,8 +2973,8 @@ function openLb(i, from){
     if ((e.key === "f" || e.key === "F") && PH[S.i] && (PH[S.i].x.afp || PH[S.i].x.fcs)) return afSet(!AFON);
     if ((e.key === "z" || e.key === "Z") && PH[S.i] && !isVid(PH[S.i])) return zbSet(!ZEB);
     if ((e.key === "c" || e.key === "C") && !$("[data-cmpb]", el).hidden) return $("[data-cmpb]", el).click();
-    if (e.key === "ArrowRight") go(1);
-    else if (e.key === "ArrowLeft") go(-1);
+    if (e.key === "ArrowRight") go(1, true);
+    else if (e.key === "ArrowLeft") go(-1, true);
     else if (e.key === "Escape") el.classList.contains("mo") ? lbMenu(false) : S.info ? setInfo(false) : lbBack(S);
     else if (e.key === "i" || e.key === "I") setInfo(S.info !== "info");
   };
