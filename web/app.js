@@ -125,17 +125,25 @@ P.filter = '<path d="M4 6h16M7 12h10M10 18h4"/>';
 const I = n => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${P[n]}</svg>`;
 
 /* ═════════ 個人設定（存在這台裝置） ═════════ */
-const DEF = {theme:"auto", accent:"blue", tone:"soft", motion:true, size:"m", refresh:5,
+const DEF = {theme:"auto", accent:"blue", tone:"soft", motion:true, size:"m", refresh:5, plat:"auto",
   show:{chart:true, net:true, items:true, info:true, flag:true, traffic:true, weather:true, quote:true}};
 let PREF = (() => { try { const p = JSON.parse(store("vps-prefs") || "{}"); if (p.accent === "flag") p.accent = "rainbow";   /* 舊的「旗」換成彩虹 */ return {...DEF, ...p, show:{...DEF.show, ...(p.show||{})}}; } catch(e){ return JSON.parse(JSON.stringify(DEF)); } })();
 const getP = k => k.split(".").reduce((o,x)=>o && o[x], PREF);
 function setP(k, v){ const ks = k.split("."); let o = PREF; while (ks.length > 1) o = o[ks.shift()]; o[ks[0]] = v; store("vps-prefs", JSON.stringify(PREF)); }
 const DARKQ = matchMedia("(prefers-color-scheme: dark)");
+/* 平台介面（自動、iOS、Android、電腦）：照 Telegram 各平台原生版本的版面和手感；跟螢幕寬度分開管（iPad 也是 iOS、電腦視窗拉窄還是電腦）
+   自動：iPhone、iPad 用 iOS，安卓用 Android，其他用電腦。index.html 開頭有一份一樣的判斷，畫面出來前就套好，不會先閃一下別的平台 */
+const UAS = navigator.userAgent, IOSDEV = /iPhone|iPad|iPod/.test(UAS) || (/Macintosh/.test(UAS) && navigator.maxTouchPoints > 1), ANDDEV = /Android/.test(UAS);
+const platOf = p => ["ios", "android", "desktop"].includes(p) ? p : IOSDEV ? "ios" : ANDDEV ? "android" : "desktop";
+let PLAT = platOf(PREF.plat);
+const TABS = () => PLAT !== "desktop";            // iOS、Android：下面有分頁列（主機、紀錄、設定）；電腦：左上選單
+const ROOTS = ["list", "all", "set"];
 function applyPrefs(){
   const h = document.documentElement, dark = PREF.theme === "dark" || (PREF.theme === "auto" && DARKQ.matches);
+  PLAT = platOf(PREF.plat); h.dataset.plat = PLAT;
   h.dataset.mode = dark ? "dark" : "light"; h.dataset.accent = PREF.accent; h.dataset.tone = PREF.tone; h.dataset.motion = PREF.motion ? "on" : "off";
   h.style.setProperty("--zoom", {s:.92, m:1, l:1.1}[PREF.size] || 1);
-  document.querySelector('meta[name="theme-color"]').content = dark ? "#212121" : "#ffffff";
+  document.querySelector('meta[name="theme-color"]').content = {ios:dark ? "#000000" : "#f7f7f7", android:dark ? "#212121" : "#ffffff"}[PLAT] || (dark ? "#212121" : "#ffffff");
 }
 DARKQ.addEventListener("change", applyPrefs);
 applyPrefs();
@@ -722,7 +730,7 @@ let TAB = "home", TABDIR = 0;                     // 舊的分頁代號：留給
 let MAIN = sstore("vs-main") || "all";            // 電腦中間：all 或主機代號
 let LEFT = "list";                                // 電腦左欄：list 清單、set 設定
 let INFO = store("vs-info") ? store("vs-info") === "1" : innerWidth >= 1280;   // 電腦右欄：主機資訊開著（夠寬才預設打開）
-let STK = (() => { try { const a = JSON.parse(sstore("vs-stk") || "[]"); return Array.isArray(a) && a.length && a[0] === "list" ? a.map(String) : ["list"]; } catch(e) { return ["list"]; } })();
+let STK = (() => { try { const a = JSON.parse(sstore("vs-stk") || "[]"); return Array.isArray(a) && a.length && ROOTS.includes(a[0]) && (TABS() || a[0] === "list") ? a.map(String) : ["list"]; } catch(e) { return ["list"]; } })();   // iOS、Android 最底層可以是三個分頁之一
 let NAVDIR = 0, QF = "", QS = "";                 // 換畫面的方向（1 推進、-1 退回、0 原地換）；清單篩選、搜尋
 const scrHtml = (id, html, cls = "") => `<section class="scr${cls ? " " + cls : ""}" data-scr data-key="s:${esc(id)}">${html}</section>`;
 const stkSave = () => sstore("vs-stk", JSON.stringify(STK));
@@ -733,12 +741,20 @@ function navGo(id){
   closeMenu(); hideTip();
   if ($("#fly")) flyClose();
   if (DESK.matches) {
-    if (id === "set" || id === "list") { if (LEFT === id) return; NAVDIR = id === "set" ? 1 : -1; LEFT = id; }
+    if (id === "list" && LEFT === "set" && PLAT === "desktop") return setLayerOut();   // 電腦：設定是蓋在中間的一層，先收起來
+    if (id === "set" || id === "list") { if (LEFT === id) return; NAVDIR = TABS() ? 2 : id === "set" ? 1 : -1; LEFT = id; }   // iOS、Android 在左欄下面換分頁：不滑
+    else if (id === "all" && TABS() && LEFT === "set") { LEFT = "list"; MAIN = "all"; sstore("vs-main", "all"); }
     else if (id.startsWith("i:")) { const k = id.slice(2); if (MAIN !== k) { MAIN = k; sstore("vs-main", k); } INFO = !INFO || MAIN !== k ? true : false; store("vs-info", INFO ? "1" : "0"); }
     else { const m = id === "all" ? "all" : id.slice(2); if (MAIN === m) return; MAIN = m; sstore("vs-main", m); }
-    render(LIST); NAVDIR = 0; return;
+    render(LIST); NAVDIR = 0;
+    if (id === "set" && PLAT === "desktop") {   // 設定那一層：記一筆瀏覽紀錄（上一頁先收起來），鍵盤從 × 開始
+      try { history.pushState({...(history.state || {}), slay:1}, ""); } catch(e) {}
+      const x = $("#app .slbox [data-navback]"); if (x) x.focus({preventScroll:true});
+    }
+    return;
   }
   if (STK[STK.length - 1] === id) return;
+  if (TABS() && ROOTS.includes(id)) return tabGo(id);
   if (id === "list") { while (STK.length > 1) STK.pop(); NAVDIR = -1; stkSave(); render(LIST); NAVDIR = 0; return; }
   STK.push(id); stkSave();
   const {dlg, ...st} = history.state || {};                // 剛按選單裡的項目：選單那一筆直接拿來用（不然選單收起來時的「上一頁」會把這一層退掉）
@@ -761,15 +777,38 @@ function navBack(){
   navPop();
 }
 /* 自己退一層、不動瀏覽紀錄；紀錄上寫的層數等 popstate 時一起對齊 */
+/* iOS、Android：換分頁（像 Telegram 的 Tab Bar，不留瀏覽紀錄、不往旁邊滑，只把內容換掉） */
+function tabGo(id){
+  closeMenu(); hideTip();
+  if (DESK.matches) return navGo(id);
+  if (STK.length === 1 && STK[0] === id) { const sc = $("#app .stage>.scr:not(.gone,.under) :is(.lscroll,.mscroll,.rscroll)"); if (sc && sc.scrollTop) sc.scrollTo({top:0, behavior:canAnim() ? "smooth" : "auto"}); return; }   // 再點一次同一個分頁：捲回最上面
+  if (DLGSKIP) return addEventListener("popstate", () => tabGo(id), {once:true});   // 選單剛收起來、正在退它那一筆：退完再換
+  let hs = history.state || {}, mn = false;
+  if (hs.dlg && !histLive(DLGEL.get(hs.dlg))) { DLGEL.delete(hs.dlg); const {dlg, ...r} = hs; hs = r; mn = true; }   // 選單開著時點分頁：選單那筆要一起處理，不能多留一格
+  if (id === "list" && hs.tab) return history.go(mn ? -2 : -1);   // 回第一個分頁＝退掉換分頁時多的那一筆（下面 popstate 換回來）
+  STK = [id]; NAVBASE = 1; stkSave(); SRCH = false;
+  try {   // 不在第一個分頁時按返回先回「主機」（Android MainTabsActivity.onBackPressed；iPhone Safari 從左邊滑是上一頁，不能一滑就離開網站），所以離開「主機」時多記一筆
+    if (id !== "list" && !hs.tab) mn ? history.replaceState({...hs, scr:1, tab:1}, "") : history.pushState({scr:1, tab:1}, "");
+    else if (mn) { DLGSKIP++; history.back(); }   // 已經有換分頁那一筆：把選單那筆退掉就好
+    else history.replaceState({...hs, scr:1}, "");
+  } catch(e) {}
+  NAVDIR = 2; render(LIST); NAVDIR = 0;
+  const b = $("#app .tabbar .tbi.on");   // 分頁列是新畫的：選到的那塊底自己撐開（GlassTabView 的選取）
+  if (b && PLAT === "android" && canAnim()) try { b.animate([{opacity:0, transform:"scale(.7)"}, {opacity:1, transform:"none"}], {duration:T.mid, easing:DEC, pseudoElement:"::before"}); } catch(e) {}
+}
 function navLocal(){ navPop(); try { if (history.state && history.state.scr > STK.length) history.replaceState({...history.state, scr: STK.length}, ""); } catch(e) {} }
 function navPop(){ if (STK.length < 2) return; STK.pop(); NAVBASE = Math.min(NAVBASE, STK.length); stkSave(); NAVDIR = -1; render(LIST); NAVDIR = 0; }
 addEventListener("popstate", () => {
-  if (DESK.matches) return;
+  if (DLGSKIP) return;
+  if (DESK.matches) { if (LEFT === "set" && PLAT === "desktop" && !(history.state && history.state.slay)) setLayerOut(true); return; }   // 電腦：上一頁先收起設定那一層
+  if (TABS() && STK.length === 1 && STK[0] !== "list" && !(history.state && (history.state.tab || history.state.dlg))) { STK = ["list"]; stkSave(); NAVDIR = 2; render(LIST); NAVDIR = 0; return; }   // Android 在別的分頁按返回：回主機分頁   // 選單、對話框收起來時自己退掉的那一筆：不是要退一層（關掉動畫時，選單一關馬上點設定會被退回去）
   const d = Math.max(1, (history.state && history.state.scr) || 1);
   if (STK.length > d) { while (STK.length > d + 1) STK.pop(); navPop(); }
   else if (d > STK.length && !(history.state && history.state.dlg)) try { history.replaceState({...history.state, scr: STK.length}, ""); } catch(e) {}   // 剛自己退過一層：這筆紀錄的層數跟著改
 });
-let NAVBASE = STK.length, NAVSWT = 0;   // 打開網頁時就在第幾層（從暫存讀回來的）：這幾層沒有自己的瀏覽紀錄
+let NAVBASE = STK.length, NAVSWT = 0, SRCH = false;   // NAVBASE：打開網頁時就在第幾層（從暫存讀回來的），這幾層沒有自己的瀏覽紀錄；SRCH：Android 標題列換成搜尋框
+/* 推進一層時底下那層往左退多少、多暗（iOS NavigationTransitionCoordinator 退 30%、不變暗；telegram-tt 退 20%、.9；Android 往右滑返回時底下不動） */
+const UNDX = () => PLAT === "ios" ? 30 : PLAT === "android" ? 0 : 20, UNDO = () => PLAT === "desktop" ? .9 : 1;
 try { history.replaceState({...(history.state || {}), scr: STK.length}, ""); } catch(e) {}
 /* 換畫面：Telegram 的疊層（推進：新的從右邊整頁滑進來、舊的往左退 20% 並暗一點；退回反過來；原地換：淡入） */
 function scrSwap(a, b){
@@ -778,12 +817,20 @@ function scrSwap(a, b){
   if (st) st.querySelectorAll(":scope>.scr.under").forEach(u => u.remove());   // 往右滑時先畫好的上一層：真的上一層要換上來了，拿掉
   if (!canAnim() || !a.isConnected) return a.replaceWith(b);
   a.replaceWith(b);
+  if (dir === 2) { const c = b.querySelector(":scope>:is(.lscroll,.mscroll,.rscroll)"); if (c) c.animate([{opacity:0}, {opacity:1}], {duration:T.fast, easing:STD, id:"ui"}); return; }   // 換分頁：分頁列不動，只有內容淡入
   if (!dir) { b.animate([{opacity:0}, {opacity:1}], {duration:T.fast, easing:STD, id:"ui"}); return; }
+  if (PLAT === "android" && !sx) {               // Telegram Android ActionBarLayout：新的一層從右邊 48dp 淡入（150ms），退回時往右 48dp 淡出；底下那層不動
+    const top = dir > 0 ? b : a, o = {duration:T.fast, easing:dir > 0 ? DEC : EXIT, id:"ui"};
+    if (dir < 0) { a._leaving = 1; a.style.pointerEvents = "none"; a.classList.add("gone"); b.parentNode.insertBefore(a, b.nextSibling); skipIntro(b, true); }
+    const k = [{transform:"translateX(48px)", opacity:0}, {transform:"none", opacity:1}], an = top.animate(dir > 0 ? k : [...k].reverse(), {...o, fill:dir > 0 ? "none" : "forwards"});
+    if (dir < 0) { const bye = () => { if (a.isConnected) a.remove(); }; an.onfinish = bye; an.oncancel = bye; setTimeout(bye, T.fast + 400); }
+    return;
+  }
   a._leaving = 1; a.style.pointerEvents = "none"; a.classList.add("gone");
   b.parentNode.insertBefore(a, dir > 0 ? b : b.nextSibling);
   skipIntro(a, true); if (dir < 0) skipIntro(b, true);   // 搬動、退回來的那層：數字卡的進場動畫不要再播一次（會整排閃一下）
-  const o = {duration:T.mid, easing:DEC, id:"ui"}, top = dir > 0 ? b : a, under = dir > 0 ? a : b;
-  const tOut = [{transform:`translateX(${sx}px)`}, {transform:"translateX(100%)"}], uOut = [{transform:"none", opacity:1}, {transform:"translateX(-20%)", opacity:.9}];   // 用手指滑回去的：從手指放開的位置接著滑
+  const o = {duration:PLAT === "ios" ? T.slow : T.mid, easing:DEC, id:"ui"}, top = dir > 0 ? b : a, under = dir > 0 ? a : b;
+  const tOut = [{transform:`translateX(${sx}px)`}, {transform:"translateX(100%)"}], uOut = [{transform:"none", opacity:1}, {transform:`translateX(-${UNDX()}%)`, opacity:UNDO()}];   // 用手指滑回去的：從手指放開的位置接著滑
   /* 只有要拿掉的那一層停在最後的樣子；留下來的那一層不能 fill（會一直蓋過手指拖曳時寫的 transform，往右滑就滑不動） */
   top.animate(dir > 0 ? [...tOut].reverse() : tOut, {...o, fill:dir > 0 ? "none" : "forwards"});
   const ua = under.animate(dir > 0 ? uOut : [uf || uOut[1], uOut[0]], {...o, fill:dir > 0 ? "forwards" : "none"});
@@ -795,24 +842,58 @@ function scrSwap(a, b){
 function shell(list, time){ return DESK.matches ? deskShell(list, time) : phoneShell(list, time); }
 function deskShell(list, time){
   const s = MAIN !== "all" && list.find(x => keyOf(x) === MAIN), m = s ? MAIN : "all";
-  const left = LEFT === "set" ? scrHtml("set", setScreen(list)) : scrHtml("list", listScreen(list, m));
+  const lay = LEFT === "set" && PLAT === "desktop";   // 電腦（Telegram Desktop）：設定是蓋在整個視窗中間的一層（Info::LayerWidget），左欄照樣是清單
+  const left = LEFT === "set" && !lay ? scrHtml("set", setScreen(list)) : scrHtml("list", listScreen(list, m));
   const main = s ? scrHtml("h:" + m, hostScreen(s)) : scrHtml("all", allScreen(list, time));
   const info = s ? `<aside class="rcol${INFO ? " on" : ""}" data-key="rcol"><div class="rcin">${scrHtml("i:" + m, infoScreen(s))}</div></aside>` : "";
-  return `<div class="dash d app2" data-key="d"><aside class="lcol" data-key="lcol">${left}</aside><main class="mcol" data-key="mcol">${main}</main>${info}</div>`;
+  const tb = TABS() ? tabBar(list, LEFT === "set" ? "set" : m === "all" ? "all" : "list") : "";
+  const sl = lay ? `<div class="slayer" data-key="slayer"><button class="slbg" data-navback aria-label="關閉"></button><div class="slbox" data-key="slbox" role="dialog" aria-modal="true" aria-label="設定">${scrHtml("set", setScreen(list))}</div></div>` : "";
+  return `<div class="dash d app2" data-key="d"><aside class="lcol${tb ? " tabs" : ""}" data-key="lcol">${left}${tb}</aside><main class="mcol" data-key="mcol">${main}</main>${info}${sl}</div>`;
+}
+/* 電腦：收起設定那一層（淡出，Telegram Desktop 的圖層） */
+function setLayerOut(pop){
+  if (!pop && history.state && history.state.slay) { DLGSKIP++; history.back(); }   // 自己關（×、點旁邊、Esc）：把打開時記的那一筆退掉
+  const l = $("#app .slayer"), fin = () => { if (LEFT !== "set") return; LEFT = "list"; render(LIST); };
+  if (!l || !canAnim()) return fin();
+  if (l._out) return;
+  l._out = 1; l.style.pointerEvents = "none";
+  l.animate([{opacity:1}, {opacity:0}], {duration:T.fast, easing:EXIT, fill:"forwards"}).finished.then(fin, fin);
 }
 function phoneShell(list, time){
-  const ok = id => id === "list" || id === "all" || id === "set" || list.some(s => keyOf(s) === id.slice(2));
-  if (!STK.every(ok)) { STK = STK.filter(ok); if (STK[0] !== "list") STK.unshift("list"); stkSave(); }
-  const id = STK[STK.length - 1];
-  return `<div class="dash m app2" data-key="m"><div class="stage" data-key="stage">${scrHtml(id, phoneBody(id, list, time))}</div></div>`;
+  const ok = id => ROOTS.includes(id) || list.some(s => keyOf(s) === id.slice(2));
+  if (!STK.every(ok) || !ROOTS.includes(STK[0]) || (!TABS() && STK[0] !== "list") || STK.slice(1).some(x => ROOTS.includes(x) && TABS())) {
+    STK = STK.filter(ok);
+    if (TABS()) { const r = STK.map((x, i) => ROOTS.includes(x) ? i : 0).reduce((a, b) => Math.max(a, b), 0); STK = STK.slice(r); }   // 換成 iOS／Android：最後一個分頁當最底層（在設定裡換平台就留在設定）
+    if (!STK.length || !ROOTS.includes(STK[0]) || (!TABS() && STK[0] !== "list")) STK.unshift("list");
+    stkSave();
+  }
+  const id = STK[STK.length - 1], root = TABS() && STK.length === 1;
+  return `<div class="dash m app2" data-key="m"><div class="stage" data-key="stage">${scrHtml(id, phoneBody(id, list, time) + (root ? tabBar(list, id) : ""), root ? "root" : "")}</div></div>`;
 }
 function phoneBody(id, list, time){
   const s = /^[hi]:/.test(id) && list.find(x => keyOf(x) === id.slice(2));
   return id === "all" ? allScreen(list, time) : id === "set" ? setScreen(list) : s && id[0] === "h" ? hostScreen(s) : s ? infoScreen(s) : listScreen(list, "");
 }
-/* 每一層上面的標題列：返回（手機）、頭像、標題、副標、右邊的按鈕 */
-const backBtn = () => DESK.matches ? "" : `<button class="iconbtn" data-navback title="返回">${I("back")}</button>`;
-const topbar = (lead, title, sub, acts = "", attr = "") => `<header class="tbar" data-key="tbar">${lead}<div class="tbt"${attr}><b data-x>${title}</b>${sub != null ? `<small data-x>${sub}</small>` : ""}</div><span class="tba">${acts}</span></header>`;
+/* iOS、Android 下面的分頁列：主機（幾件事要留意的數字小圓）、紀錄、設定
+   iOS：TabBarNode（49 高、毛玻璃、圖示上字在下 10 號字）；Android：MainTabsActivity（56 高、四周留 8、浮起來的膠囊，選到的那格有一塊底） */
+function tabBar(list, cur){
+  const n = list.filter(isBad).length, lv = LOST || list.some(s => !s.online || lvOf(s) === "bad") ? "bad" : "warn";
+  const it = (id, ic, l, b = "") => `<button class="tbi${cur === id ? " on" : ""}" data-tab="${id}" data-key="t:${id}" aria-label="${l}${b ? `，${n} 件事要留意` : ""}"${cur === id ? ' aria-current="page"' : ""}><span class="tbg">${I(ic)}${b}</span><span class="tbn">${l}</span></button>`;
+  return `<nav class="tabbar" data-key="tabbar">${it("list", "home", "主機", n ? `<b class="cbg ${lv}" data-x>${n}</b>` : "")}${it("all", "log", "紀錄")}${it("set", "gear", "設定")}</nav>`;
+}
+/* 每一層上面的標題列
+   iOS（NavigationBar）：左邊「‹ 上一層的名字」、標題置中、頭像在右邊；Android（ActionBar）：← 、頭像、標題靠左、右邊圖示；電腦（tdesktop）：跟 Android 一樣靠左，沒有返回 */
+const SCRN = {list:"主機", all:"紀錄", set:"設定"};
+function prevName(){
+  const id = STK[STK.length - 2] || "list", s = /^[hi]:/.test(id) && LIST.find(x => keyOf(x) === id.slice(2));
+  return id[0] === "i" ? "資訊" : s ? s.name : (!TABS() && id === "list" ? "主機" : SCRN[id] || "返回");
+}
+const backBtn = () => DESK.matches || STK.length < 2 ? "" : PLAT === "ios" ? `<button class="nbk" data-navback title="返回">${I("chev")}<span>${esc(prevName())}</span></button>` : `<button class="iconbtn" data-navback title="返回">${I("back")}</button>`;
+function topbar(o){
+  const lead = o.lead != null ? o.lead : backBtn(), av = o.av || "", ios = PLAT === "ios";
+  const tt = `<div class="tbt"${o.attr || ""}><b data-x>${o.title}</b>${o.sub != null ? `<small data-x>${o.sub}</small>` : ""}</div>`;
+  return `<header class="tbar${o.cls ? " " + o.cls : ""}" data-key="tbar"><span class="tbl">${lead}${ios ? "" : av}</span>${tt}<span class="tba">${o.acts || ""}${ios ? av : ""}</span></header>`;
+}
 /* 圓形頭像：國旗或名字第一個字，右下角一個狀態點（Telegram 的上線小綠點） */
 function cav(s, big){
   const f = !big && PREF.show.flag && s.geo ? flag(s.geo.cc) : "", lv = s.online ? lvOf(s) : "bad";   // 大頭像不放國旗（國旗圖只有 80 寬，放大會糊），國旗改放在地點前面
@@ -823,16 +904,24 @@ function cav(s, big){
 function listScreen(list, sel){
   const bad = list.filter(isBad), q = QS.trim().toLowerCase();
   const rows = list.filter(s => (QF !== "bad" || bad.includes(s)) && (!q || String(s.name).toLowerCase().includes(q) || place(s).toLowerCase().includes(q)));
-  const head = `<header class="tbar lhd" data-key="lhd"><button class="iconbtn" data-mainmenu title="選單">${I("menu")}</button>
-    <label class="srch" data-key="srch">${I("search")}<input type="search" class="sin" data-search placeholder="搜尋主機" value="${esc(QS)}" autocomplete="off" enterkeyhint="search"></label></header>`;
+  const inp = `<input type="search" class="sin" data-search placeholder="搜尋" value="${esc(QS)}" autocomplete="off" enterkeyhint="search">`;
+  let head, top = "";
+  if (PLAT === "ios") {                              // Telegram iOS 聊天清單：標題置中、右上新增；搜尋框在清單最上面（36 高、灰底），打字時右邊出現「取消」
+    head = topbar({lead:"", title:"主機", acts:`<button class="iconbtn nbt" data-addhost title="新增主機">${I("plus")}</button>`, cls:"lhd"});
+    top = `<div class="isrch" data-key="isrch"><label class="srch" data-key="srch">${I("search")}${inp}</label><button class="scx" data-qsx tabindex="-1">取消</button></div>`;
+  } else if (PLAT === "android") {                   // Telegram Android DialogsActivity：標題靠左，右邊搜尋（點了整條換成搜尋框）、⋮
+    head = SRCH ? `<header class="tbar lhd asr" data-key="tbar"><span class="tbl"><button class="iconbtn" data-srchx title="返回">${I("back")}</button></span><label class="srch" data-key="srch">${inp}</label>${QS ? `<button class="iconbtn" data-qsx title="清除">${I("x")}</button>` : ""}</header>`
+      : topbar({lead:"", title:"哨站", acts:`<button class="iconbtn" data-srch title="搜尋">${I("search")}</button><button class="iconbtn" data-mainmenu title="更多">${I("more")}</button>`, cls:"lhd"});
+  } else head = `<header class="tbar lhd" data-key="lhd"><button class="iconbtn" data-mainmenu title="選單">${I("menu")}</button>
+    <label class="srch" data-key="srch">${I("search")}${inp.replace('placeholder="搜尋"', 'placeholder="搜尋主機"')}</label></header>`;
   const tabs = list.length > 1 ? `<div class="ltabs" data-key="ltabs" data-slide=".tbu">${[["", "全部"], ["bad", "有狀況"]].map(([k, l]) =>
     `<button class="ltb${QF === k ? " on" : ""}" data-qf="${k}" data-key="qf:${k}"><i class="tbu"></i><span>${l}</span>${k && bad.length ? `<b class="cbg ${list.some(s => !s.online || lvOf(s) === "bad") ? "bad" : "warn"}">${bad.length}</b>` : ""}</button>`).join("")}</div>` : "";
-  const all = !q && !QF ? allRow(list, sel === "all") + flyCRow() : "";
+  const all = !q && !QF ? (TABS() ? "" : allRow(list, sel === "all")) + flyCRow() : "";   // iOS、Android：「全部主機」就是下面的「紀錄」分頁，清單裡不再放一列
   const hint = !q && !QF && list.some(x => !x.node && x.tg_off) ? `<button class="crow tip" data-tg data-key="r:tg"><span class="cav ic">${I("bell")}</span><span class="cbd"><span class="ct1"><b>Telegram 通知</b></span><span class="ct2"><span class="cst">還沒設定，出事不會通知你</span></span></span></button>` : "";
   const hosts = rows.map(s => hostRow(s, sel === keyOf(s))).join("");
   const none = !rows.length ? `<div class="lnone" data-key="none">${q ? "找不到這台主機" : QF ? "每一台都正常" : ""}</div>` : "";
-  return head + `<div class="lscroll" data-key="ls">${tabs}<div class="clist" data-key="cl" data-keyed>${all}${hint}${hosts}</div>${none}</div>`
-    + `<button class="fab" data-addhost data-key="fab" title="新增主機">${I("plus")}</button>`;
+  return head + `<div class="lscroll" data-key="ls">${top}${tabs}<div class="clist" data-key="cl" data-keyed>${all}${hint}${hosts}</div>${none}</div>`
+    + (PLAT === "android" ? `<button class="fab" data-addhost data-key="fab" title="新增主機">${I("plus")}</button>` : "");   // 新增的圓鈕只有 Android 有（iOS 在右上角、電腦在左上選單）
 }
 function allRow(list, on){
   const ev = allEvents(list)[0], n = list.filter(isBad).length, lv = LOST || list.some(s => !s.online || lvOf(s) === "bad") ? "bad" : n ? "warn" : "ok";
@@ -852,18 +941,29 @@ function hostRow(s, on){
   const bg = iss.length ? `<b class="cbg ${lv}">${iss.length}</b>` : !s.online ? `<b class="cbg bad">${I("off")}</b>` : "";
   return `<button class="crow${on ? " on" : ""}" data-go="h:${esc(k)}" data-key="r:${esc(k)}">${cav(s)}<span class="cbd"><span class="ct1"><b>${esc(s.name)}</b>${meta}</span><span class="ct2">${line}${bg}</span></span></button>`;
 }
-/* 左上角的選單（Telegram 的主選單）：設定、機場起降、新增主機、夜間模式、重新整理 */
+/* 主選單
+   電腦（Telegram Desktop Window::MainMenu）：從左邊滑出來蓋在整個視窗上的一欄，上面主題色底寫名字和版本，下面一列一列、夜間模式是開關
+   Android（DialogsActivity 右上 ⋮）：從按鈕長出來的選單；iOS 沒有這個選單（東西都在分頁和右上角） */
 function mainMenu(btn){
   closeMenu();
   const dark = document.documentElement.dataset.mode === "dark", me = LIST.find(x => !x.node), v = me && me.version;
-  const m = document.createElement("div"); m.className = "lmenu hmenu mmenu";
-  m.innerHTML = `<button data-go="set">${I("gear")}<span>設定</span></button><button data-fly>${I("plane")}<span>機場起降</span></button><button data-addhost>${I("plus")}<span>新增主機</span></button>
-    <button data-qtheme>${I("moon")}<span>夜間模式</span><input type="checkbox" class="tog" tabindex="-1" aria-hidden="true" ${dark ? "checked" : ""}></button><button data-refresh>${I("upd")}<span>重新整理</span></button>
-    <div class="mfoot">哨站${v ? ` ${esc(v)}` : ""}</div>`;
-  document.body.appendChild(m);
-  placeMenu(m, btn, r => r.left);
-  menuIn(m); window._menu = m; window._menu._by = btn; histMark(m);
-  setTimeout(() => m.addEventListener("click", e => { if (!e.target.closest("[data-qtheme]")) closeMenu(); }), 0);
+  const items = (PLAT === "desktop" ? `<button data-go="set">${I("gear")}<span>設定</span></button>` : "") + `<button data-fly>${I("plane")}<span>機場起降</span></button>` + (PLAT === "desktop" ? `<button data-addhost>${I("plus")}<span>新增主機</span></button>` : "")
+    + `<button data-qtheme>${I("moon")}<span>夜間模式</span><input type="checkbox" class="tog" tabindex="-1" aria-hidden="true" ${dark ? "checked" : ""}></button><button data-refresh>${I("upd")}<span>重新整理</span></button>`;
+  const m = document.createElement("div");
+  if (PLAT === "desktop") {
+    m.className = "mdrw";
+    m.innerHTML = `<div class="mdbg"></div><div class="mdp"><div class="mdc"><span class="cav brand">${BRAND}</span><b>哨站</b><small>${v ? `版本 ${esc(v)}・` : ""}${LIST.length} 台主機</small></div><div class="lmenu hmenu mmenu">${items}</div></div>`;
+    document.body.appendChild(m);
+    if (canAnim()) { m.querySelector(".mdp").animate([{transform:"translateX(-100%)"}, {transform:"none"}], {duration:T.mid, easing:DEC}); m.querySelector(".mdbg").animate([{opacity:0}, {opacity:1}], {duration:T.mid, easing:DEC}); }
+  } else {
+    m.className = "lmenu hmenu mmenu";
+    m.innerHTML = items + `<div class="mfoot">哨站${v ? ` ${esc(v)}` : ""}</div>`;
+    document.body.appendChild(m);
+    placeMenu(m, btn, r => r.right - m.offsetWidth);
+    menuIn(m);
+  }
+  window._menu = m; window._menu._by = btn; histMark(m);
+  setTimeout(() => m.addEventListener("click", e => { if (!e.target.closest("[data-qtheme]") && (e.target.closest("button") || e.target.classList.contains("mdbg"))) closeMenu(); }), 0);
 }
 /* ── 中間：全部主機（重點數字＋所有主機的紀錄，像一個群組的訊息） ── */
 function allScreen(list, time){
@@ -871,7 +971,8 @@ function allScreen(list, time){
   const sub = LOST ? "連線中斷，重試中…" : `${on.length}／${list.length} 台在線${PREF.show.weather && WX ? `・${WX.icon} ${WX.t}°` : ""}`;
   const fl = LOGF || LOGH;
   const acts = `<button class="iconbtn${fl ? " act" : ""}" data-logmenu title="篩選紀錄">${I("filter")}</button>`;
-  const head = topbar(backBtn() + `<span class="cav brand sm">${BRAND}</span>`, "全部主機", sub, acts);
+  const root = TABS() && !DESK.matches;
+  const head = topbar({av:root ? "" : `<span class="cav brand sm">${BRAND}</span>`, title:root ? "紀錄" : "全部主機", sub, acts});
   const is = issuesOf(list), lv = LOST || list.some(s => !s.online || lvOf(s) === "bad") ? "bad" : is.length ? "warn" : "ok";
   const pin = is.length ? `<button class="pinb ${lv}" data-go="h:${esc(keyOf(is[0].s))}" data-key="pin"><i></i><span><b>${esc(LOST || is.length > 1 ? headline(list) : is[0].t ? "1 件事要留意" : "1 台主機連不上")}</b><small>${esc(is[0].t ? `${is[0].s.name}・${is[0].t}` : `${is[0].s.name} 連不上`)}${is.length > 1 ? `　還有 ${is.length - 1} 件` : ""}</small></span>${CHEV}</button>` : "";
   const ev0 = allEvents(list).filter(e => !LOGH || e.k === LOGH).filter(LOGK[LOGF] || LOGK[""]), ev = LOGH ? ev0 : groupEv(ev0);
@@ -918,7 +1019,7 @@ function hostScreen(s){
   const k = esc(keyOf(s)), D = DESK.matches;
   const sub = s.online ? `${esc(place(s) || osShort(s.os))}・開機 ${up(s.uptime)}` : `連不上${s.last_seen ? `・${esc(ago(s.last_seen))}` : ""}`;
   const acts = (D ? `<button class="iconbtn${INFO ? " act" : ""}" data-go="i:${k}" title="主機資訊">${I("info")}</button>` : "") + moreBtn(s);
-  const head = topbar(backBtn() + `<button class="tav" data-go="i:${k}" title="主機資訊">${cav(s)}</button>`, esc(s.name), sub, acts, ` data-go="i:${k}" role="button"`);
+  const head = topbar({av:`<button class="tav" data-go="i:${k}" title="主機資訊">${cav(s)}</button>`, title:esc(s.name), sub, acts, attr:` data-go="i:${k}" role="button"`});
   if (!s.online) return head + `<div class="mscroll" data-key="ms"><div class="mwrap" data-key="mw">${offBox(s)}${hostEvents(s)}</div></div>`;
   return head + `<div class="mscroll" data-key="ms"><div class="mwrap" data-key="mw">${alerts(s, 1)}${hostMain(s)}${hostEvents(s)}</div></div>`;
 }
@@ -939,7 +1040,7 @@ function hostEvents(s){
 function infoScreen(s){
   const k = esc(keyOf(s)), node = esc(s.node || ""), name = esc(s.name), D = DESK.matches;
   const lead = D ? `<button class="iconbtn" data-go="i:${k}" title="關閉">${I("x")}</button>` : backBtn();
-  const head = topbar(lead, "主機資訊", null, "");
+  const head = topbar({lead, title:"主機資訊"});
   const st = !s.online ? `連不上${s.last_seen ? `・${esc(ago(s.last_seen))}` : ""}` : lvOf(s) === "ok" && !issueN(s) ? "一切正常" : `${issueN(s)} 件事要留意`;
   const c = s.online && s.cloud && safeUrl(cloudHref(s.cloud)) ? s.cloud : null;
   const qa = [c ? `<a class="qa" href="${esc(cloudHref(c))}"${ssoAttr(s)} target="_blank" rel="noopener noreferrer">${I("cloud")}<span>雲端硬碟</span></a>` : "",
@@ -990,7 +1091,8 @@ const setRow = (attr, ic, l, st) => {
 /* ── 設定（電腦蓋在左欄上面一層、手機推進來一層） ── */
 function setScreen(list){
   const on = list.filter(s => s.online), self = on.some(s => !s.node), me = list.find(x => !x.node);
-  const head = topbar(`<button class="iconbtn" data-navback title="返回">${I("back")}</button>`, "設定", null, "");
+  const lay = DESK.matches && PLAT === "desktop", root = TABS() && (DESK.matches || STK.length === 1);
+  const head = topbar({lead:lay ? "" : root ? "" : DESK.matches ? `<button class="iconbtn" data-navback title="返回">${I("back")}</button>` : backBtn(), title:"設定", acts:lay ? `<button class="iconbtn" data-navback title="關閉">${I("x")}</button>` : ""});
   const accMap = Object.fromEntries([...ACCENTS, ["rainbow", "彩色"]]);
   const sw = ACCENTS.map(([v, l]) => `<button class="${PREF.accent === v ? "on" : ""}" data-pref="accent" data-val="${v}" data-accent="${v}" title="${l}" aria-label="${l}">${I("check")}</button>`).join("")
     + `<button class="rbsw${PREF.accent === "rainbow" ? " on" : ""}" data-pref="accent" data-val="rainbow" title="彩色" aria-label="彩色">${I("check")}</button>`;
@@ -1001,6 +1103,7 @@ function setScreen(list){
       <div class="li col"><span class="lab">主題</span>${lkPick("theme", [["auto", "自動"], ["light", "淺色"], ["dark", "深色"]], v => v === "auto" ? `<span class="lkh">${lkMini("light")}${lkMini("dark")}</span>` : lkMini(v))}</div>
       <div class="li col"><span class="lab sw-head"><span>主題色</span><span class="sw-val"><i></i>${esc(accMap[PREF.accent] || "藍")}</span></span><div class="sww"><div class="sw">${sw}</div></div></div>
       <div class="li col"><span class="lab">配色風格</span>${lkPick("tone", [["soft", "柔和"], ["vivid", "鮮明"], ["calm", "素雅"]], v => lkMini(document.documentElement.dataset.mode || "light", v))}</div>
+      <div class="li col"><span class="lab">介面</span>${lkPick("plat", [["auto", "自動"], ["ios", "iOS"], ["android", "Android"], ["desktop", "電腦"]], v => platMini(v === "auto" ? platOf("auto") : v), "l4")}</div>
       <div class="li col"><span class="lab">文字大小</span>${lkPick("size", [["s", "小"], ["m", "中"], ["l", "大"]], v => `<i class="lkz ${v}">字</i>`)}</div>
       <label class="li"><span class="lab">動畫</span>${tog("motion", "動畫")}</label>
       <button class="li" data-shows>${IC("trend", "")}<span class="lab">要顯示的內容<small class="showst">${showSum()}</small></span>${CHEV}</button></div>`;
@@ -1026,14 +1129,14 @@ let NAVSWIPE = 0;
       if (!(dx > 0 && dx > Math.abs(dy) * 1.5)) { drop(); return off(); }
       lock = 1;
       const st = top.parentNode;
-      under = document.createElement("section"); under.className = "scr under"; under._leaving = 1;   // 底下那一層（真的上一層），跟著手指出來
-      under.innerHTML = phoneBody(STK[STK.length - 2], LIST, ""); under.style.transform = "translateX(-20%)"; under.style.opacity = .9; st.insertBefore(under, top); skipIntro(under, true);
+      under = document.createElement("section"); const ur = TABS() && STK.length === 2; under.className = "scr under" + (ur ? " root" : ""); under._leaving = 1;   // 底下那一層（真的上一層），跟著手指出來；是分頁那層時連分頁列一起畫
+      under.innerHTML = phoneBody(STK[STK.length - 2], LIST, "") + (ur ? tabBar(LIST, STK[0]) : ""); under.style.transform = `translateX(-${UNDX()}%)`; under.style.opacity = UNDO(); st.insertBefore(under, top); skipIntro(under, true);
       top.getAnimations().forEach(a => a.cancel());   // 剛推進來的動畫還在：讓手指接手
     }
     if (e.cancelable) e.preventDefault();
     const w = top.offsetWidth, x = Math.max(0, dx);
     top.style.transform = `translateX(${x}px)`;
-    under.style.transform = `translateX(${(x / w - 1) * 20}%)`; under.style.opacity = .9 + .1 * x / w;
+    under.style.transform = `translateX(${(x / w - 1) * UNDX()}%)`; under.style.opacity = UNDO() + (1 - UNDO()) * x / w;
   };
   const end = e => {
     off(); if (!top || !lock) return drop();
@@ -1048,7 +1151,7 @@ let NAVSWIPE = 0;
     el.style.transform = "";
     if (canAnim()) {
       el.animate([{transform:`translateX(${dx}px)`}, {transform:"none"}], {duration:T.fast, easing:STD});
-      u.animate([{transform:u.style.transform, opacity:u.style.opacity}, {transform:"translateX(-20%)", opacity:.9}], {duration:T.fast, easing:STD}).onfinish = () => u.remove();
+      u.animate([{transform:u.style.transform, opacity:u.style.opacity}, {transform:`translateX(-${UNDX()}%)`, opacity:UNDO()}], {duration:T.fast, easing:STD}).onfinish = () => u.remove();
     } else u.remove();
   };
   addEventListener("touchstart", e => {
@@ -1148,7 +1251,9 @@ const showSum = () => { const n = SHOWS.filter(x => PREF.show[x[2]]).length; ret
 const seg = (k, opts) => `<div class="seg" data-slide>${opts.map(([v, l]) => `<button class="${String(getP(k)) === String(v) ? "on" : ""}" data-pref="${k}" data-val="${v}">${l}</button>`).join("")}</div>`;
 /* 外觀的選項用小預覽圖代替字：主題是迷你畫面、配色風格用那個風格算出來的顏色、文字大小是三種大小的「字」 */
 const lkMini = (m, tone) => `<i class="lkp" data-mode="${m}"${tone ? ` data-tone="${tone}"` : ""}><b></b><s></s><u></u></i>`;
-const lkPick = (k, opts, pic) => `<div class="lks">${opts.map(([v, l]) => `<button class="lkb${String(getP(k)) === String(v) ? " on" : ""}" data-pref="${k}" data-val="${v}" aria-label="${l}"><span class="lkf">${pic(v)}<i class="lkc">${I("check")}</i></span><small>${l}</small></button>`).join("")}</div>`;
+/* 介面的小預覽：iOS 標題置中＋下面整條分頁列；Android 標題靠左＋浮起來的分頁膠囊和圓鈕；電腦左右兩欄 */
+const platMini = v => `<span class="lkp pm ${v}"><b></b><s></s><u></u><i></i></span>`;
+const lkPick = (k, opts, pic, cls = "") => `<div class="lks${cls ? " " + cls : ""}">${opts.map(([v, l]) => `<button class="lkb${String(getP(k)) === String(v) ? " on" : ""}" data-pref="${k}" data-val="${v}" aria-label="${l}"><span class="lkf">${pic(v)}<i class="lkc">${I("check")}</i></span><small>${l}</small></button>`).join("")}</div>`;
 const tog = (k, l) => `<input type="checkbox" class="tog" data-pref="${k}" aria-label="${l}" ${getP(k) ? "checked" : ""}>`;
 let SETC = store("vs-setc") || "";
 const STCACHE = {}, RAWCACHE = {}, TOOLCACHE = {};   // 設定頁與工具彈窗狀態快取：點開即時顯示，背景再靜默更新
@@ -2232,7 +2337,7 @@ addEventListener("resize", () => { const w = deskCols(); if (w !== WIDE) { WIDE 
 function modal({icon, cls="box", title, text, input, ok="確定"}){
   return new Promise(res => {
     const v = document.createElement("div"); v.className = "veil";
-    v.innerHTML = `<div class="dialog">${icon?`<div class="ico big ${cls}">${I(icon)}</div>`:""}<h3>${esc(title)}</h3>${text?`<p>${esc(text)}</p>`:""}
+    v.innerHTML = `<div class="dialog dlga">${icon?`<div class="ico big ${cls}">${I(icon)}</div>`:""}<h3>${esc(title)}</h3>${text?`<p>${esc(text)}</p>`:""}
       ${input!==undefined?`<input class="field" maxlength="40" value="${esc(input)}">`:""}
       <div class="btns"><button class="ubtn ${cls === "bad" || cls === "warn" ? cls : ""}" data-r="1">${ok}</button></div></div>`;
     $("#layer").appendChild(v);
@@ -2321,7 +2426,8 @@ document.addEventListener("keydown", e => {
 });
 /* 改了設定：馬上套用 */
 function changed(k){
-  const run = () => { applyPrefs(); if (LIST.length) render(LIST); };
+  const run = () => { applyPrefs(); if (LIST.length) render(LIST);
+    if (k === "plat" && !DESK.matches && STK.length > ((history.state && history.state.scr) || 1)) try { history.pushState({...(history.state || {}), scr:STK.length}, ""); } catch(e) {} };   // 換成電腦介面時多了一層（清單＞設定）：補一筆，上一頁回清單
   if (k === "size") sizeShift(run);              // 文字大小：整頁平順地放大／縮小過去
   else if (k === "theme") {                      // 深淺模式：只有真的換了深淺才整頁淡入淡出（避免同色切「自動」也閃一下）
     const next = (PREF.theme === "dark" || (PREF.theme === "auto" && DARKQ.matches)) ? "dark" : "light";
@@ -2335,6 +2441,7 @@ function changed(k){
       if (sv) sv.innerHTML = `<i></i>${esc(lb)}`;
     }
   });
+  else if (k === "plat") { SRCH = false; closeMenu(); smooth(run); }   // 換平台：整頁淡入淡出換過去
   else run();
   if (k === "refresh") restart();
   if (k === "show.weather") { if (PREF.show.weather) store(WXK, JSON.stringify({...wxMem(), deny: 0})); wxRun(); }
@@ -2459,6 +2566,10 @@ function closeMenu(){
   const m = window._menu; if (!m) return; window._menu = null;
   if (!canAnim()) { m.remove(); return histDrop(m); }
   m.style.pointerEvents = "none";
+  if (m.classList.contains("mdrw")) {             // 電腦的主選單：整欄滑回左邊
+    m.querySelector(".mdbg").animate([{opacity:1}, {opacity:0}], {duration:T.fast, easing:EXIT, fill:"forwards"});
+    return m.querySelector(".mdp").animate([{transform:"none"}, {transform:"translateX(-100%)"}], {duration:T.fast, easing:EXIT, fill:"forwards"}).finished.then(() => { m.remove(); histDrop(m); });
+  }
   m.animate([{opacity:1, transform:"none"}, {opacity:0, transform:"scale(.85)"}], {duration:T.fast, easing:EXIT, fill:"forwards"}).finished.then(() => { m.remove(); histDrop(m); });
 }
 /* 選單打開：telegram-tt Menu（從按鈕那一角 .85 倍放大、同時淡入，.15 秒） */
@@ -4183,9 +4294,12 @@ async function pageClick(e){
   if (t.closest("[data-pinlogin]")) return pinLoginClick();
   if (t.closest("[data-rsw]")) return restoreScreen();
   const tb = t.closest("[data-tab]");
-  if (tb) { if ($("#fly") && !tb.closest("#fly")) { flyClose(); if (TAB === tb.dataset.tab) return; } return setTab(tb.dataset.tab); }   // 機場起降開著時按分頁列：先關掉
+  if (tb) { if ($("#fly") && !tb.closest("#fly")) flyClose(); return ROOTS.includes(tb.dataset.tab) ? tabGo(tb.dataset.tab) : setTab(tb.dataset.tab); }   // iOS、Android 的分頁列（機場起降開著時先關掉）
   if (t.closest("[data-settings]")) return navGo("set");
   if (t.closest("[data-back],[data-navback]")) return navBack();
+  if (t.closest("[data-srch]")) { SRCH = true; render(LIST); const i = $("#app [data-search]"); if (i) i.focus(); return; }   // Android：標題列換成搜尋框
+  if (t.closest("[data-srchx]")) { SRCH = false; QS = ""; return render(LIST); }
+  if (t.closest("[data-qsx]")) { QS = ""; const i = $("#app [data-search]"); if (i) { i.value = ""; if (PLAT === "ios") i.blur(); else i.focus(); } return render(LIST); }   // iOS「取消」：清掉、收鍵盤
   if (t.closest("[data-mainmenu]")) { const b = t.closest("[data-mainmenu]"); if (window._menu && window._menu._by === b) return closeMenu(); return mainMenu(b); }
   if (t.closest("[data-logmenu]")) { const b = t.closest("[data-logmenu]"); if (window._menu && window._menu._by === b) return closeMenu(); return logMenu(b); }
   if (t.closest("[data-logclear]")) { LOGF = ""; LOGH = ""; return render(LIST); }
@@ -4564,7 +4678,7 @@ document.addEventListener("input", e => { if (e.target.matches && e.target.match
 /* 按下去的水波紋（照 tweb components/ripple.ts 的做法）：從按下的點長出來，按住不放就停在那裡；
    放開後至少讓它長到一半才淡掉，快點一下也看得到。電腦約 .7 秒、手機約 .4 秒且從 .27 倍開始（用最接近的 T.long／T.slow） */
 (function(){
-  const SEL = ".hcard,.li:not(div),.fapc,.ubtn,.iconbtn,.icbtn,.hmenu button,.addhost,.trf,.chats button,.sw button,.rh,.rb,.backbtn,.tbx,.side-icbtn,.tb,.dsb,.lft .fchip,.lbl button";
+  const SEL = ".crow,.tbi,.nbk,.hcard,.li:not(div),.fapc,.ubtn,.iconbtn,.icbtn,.hmenu button,.addhost,.trf,.chats button,.sw button,.rh,.rb,.backbtn,.tbx,.side-icbtn,.tb,.dsb,.lft .fchip,.lbl button";
   addEventListener("pointerdown", e => {
     if (e.button || !canAnim()) return;
     const el = e.target.closest(SEL);
@@ -4575,7 +4689,7 @@ document.addEventListener("input", e => { if (e.target.matches && e.target.match
     const start = () => {
       if (box) return;
       if (touch) el.classList.add("prs");
-      if (el.closest(".sw")) return;                              // 主題色球：本身會縮一下，不疊水波紋
+      if (el.closest(".sw") || PLAT === "ios") return;              // 主題色球本身會縮一下；iOS 沒有水波紋，按下去只是底色變深（ListViewItemNode 的 highlight）
       const r = el.getBoundingClientRect(), z = ZM(), w = el.offsetWidth, h = el.offsetHeight;
       const x = (x0 - r.left) / z, y = (y0 - r.top) / z, R = Math.hypot(Math.max(x, w - x), Math.max(y, h - y));
       box = document.createElement("span"); box.className = "rip"; box._leaving = 1;

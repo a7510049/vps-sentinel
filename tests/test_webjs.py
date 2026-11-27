@@ -35,6 +35,25 @@ class WebJs(unittest.TestCase):
         self.assertFalse("createElement" in src[j:k], "touchstart 裡不能建立底下那一層")
         self.assertTrue(":not(.gone,.under)" in src[j:k], "拖的要是現在這一層，不是底下那層")
 
+    def test_platform_ui(self):
+        """三種平台介面：畫面出來前就判斷好平台（不閃別的平台）、三個平台都有樣式、確認視窗不能撞到主機頁的 .alert。"""
+        html = open(os.path.join(ROOT, "web", "index.html"), encoding="utf-8").read()
+        js = open(os.path.join(ROOT, "web", "app.js"), encoding="utf-8").read()
+        css = open(os.path.join(ROOT, "web", "style.css"), encoding="utf-8").read()
+        head = html[:html.index("/*@style.css*/")]
+        self.assertIn("dataset.plat", head, "index.html 要在樣式之前先設好 data-plat")
+        for p in ("ios", "android", "desktop"):
+            self.assertIn(f'"{p}"', head)
+            self.assertIn(f'[data-plat="{p}"]', css, f"style.css 少了 {p} 的樣式")
+        self.assertIn('plat:"auto"', js, "預設要是自動判斷")
+        self.assertNotIn(".dialog.alert", css, "確認視窗用 .dlga（.alert 是主機頁的告警）")
+        # 換分頁：只在離開第一個分頁時多記一筆（返回先回「主機」），不能每換一次就多一筆
+        i = js.index("function tabGo(")
+        body = js[i:js.index("\n}", i)]
+        for line in body.splitlines():
+            if "pushState" in line:
+                self.assertIn("!hs.tab", line)
+
 
 if __name__ == "__main__":
     unittest.main()
