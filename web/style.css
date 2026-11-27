@@ -2246,6 +2246,37 @@ html.flyon .dash>.view,html.flyon .dash.m>.stage{content-visibility:hidden;conta
 [data-plat="desktop"] .toast{border-radius:var(--r-box)}
 [data-plat="ios"] .toasts{bottom:calc(env(safe-area-inset-bottom) + 24px + var(--tabh))}
 [data-plat="android"] .toasts{bottom:calc(env(safe-area-inset-bottom) + 16px + var(--tabh))}
+/* 要填東西的視窗、工具視窗（全站）
+   iOS：灰底沒有框的輸入框、白色滑塊的分段控制（UISegmentedControl）、50 高的膠囊主要鈕；
+   Android：從下面滑上來的面板、標題靠左（BottomSheet）；
+   電腦：tdesktop 的方塊（BoxContent）：標題靠左、輸入框只有底線（defaultInputField）、按鈕是右下的主題色字 */
+[data-plat="ios"][data-mode="light"]{--seg-bg:#e3e3e8}
+[data-plat="ios"][data-mode="dark"]{--seg-bg:#2c2c2e}
+[data-plat="ios"] .dialog .field{background:var(--s2);box-shadow:none;border-radius:var(--r-md)}
+[data-plat="ios"] .dialog .field:focus{box-shadow:none}
+[data-plat="ios"] .seg{background:var(--seg-bg);border-radius:var(--r-sm);padding:2px}
+[data-plat="ios"] .seg button{border-radius:var(--r-xs);color:var(--tx);--pill-bg:var(--s1)}
+[data-plat="ios"] .seg button::before{box-shadow:0 3px 8px rgba(0,0,0,.12),0 3px 1px rgba(0,0,0,.04)}
+[data-plat="ios"] .seg button.on{color:var(--tx);font-weight:600}
+[data-plat="ios"][data-mode="dark"] .seg button{--pill-bg:#636366}
+[data-plat="ios"] .dialog:not(.dlga) h3{font-size:var(--fs-l2);font-weight:600}
+[data-plat="ios"] .dialog:not(.dlga) .btns .ubtn:not(.ghost){--h:50px;flex:1;font-size:var(--fs-l2)}
+[data-plat="ios"] .dialog:not(.dlga) .btns .ubtn.ghost{--h:50px;font-size:var(--fs-l2);font-weight:400}
+[data-plat="android"] .veil:has(.form) .dialog,[data-plat="android"] .dialog.tdlg{text-align:left}
+[data-plat="android"] .veil:has(.form) .dialog>.ico.big{margin:0 0 12px}
+[data-plat="android"] .veil:has(.form) .dialog h3{font-size:var(--fs-xl);font-weight:500}
+@media (max-width:599px){[data-plat="android"] .veil:has(.form) .dialog{border-radius:var(--r-lg) var(--r-lg) 0 0}}
+[data-plat="desktop"] .dialog:not(.dlga,.upd){text-align:left}
+[data-plat="desktop"] .dialog:not(.dlga,.tdlg)>.ico.big{display:none}
+[data-plat="desktop"] .dialog:not(.dlga) h3{font-size:var(--fs-l);font-weight:600}
+[data-plat="desktop"] .dialog .field:not(select){border-radius:0;padding-left:0;padding-right:0;background:none;box-shadow:inset 0 -1px 0 var(--in-b)}
+[data-plat="desktop"] .dialog textarea.field{padding:8px 0}
+[data-plat="desktop"] .dialog .field:not(select):focus{box-shadow:inset 0 -2px 0 var(--p)}
+@media (hover:hover){[data-plat="desktop"] .dialog .field:not(select):hover{box-shadow:inset 0 -1px 0 var(--p)}}
+[data-plat="desktop"] .dialog:not(.dlga) .btns{margin-right:-12px}
+[data-plat="desktop"] .dialog:not(.dlga) .btns .ubtn{--h:34px;background:none;color:var(--p);padding:0 12px}
+[data-plat="desktop"] .dialog:not(.dlga) .btns .ubtn.bad{color:var(--bad)}[data-plat="desktop"] .dialog:not(.dlga) .btns .ubtn.warn{color:var(--warn)}
+@media (hover:hover){[data-plat="desktop"] .dialog:not(.dlga) .btns .ubtn:hover{background:var(--hov)}}
 /* 手機、平板：輸入框字一律不小於 16px（iPhone 小於這個一點就自己放大畫面，放大後對話框的「儲存」「×」會被擠出畫面點不到）；
    放最後、一律套用，免得後面又有比較精確的規則把字改小 */
 @media (pointer:coarse){:is(input:not([type=checkbox],[type=radio],[type=range],[type=file],[type=color]),textarea,select){font-size:max(var(--fs-l),calc(var(--fs-input) / var(--zoom)))!important}}
