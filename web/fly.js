@@ -1624,7 +1624,8 @@ async function flyNear(){
   return FLYPIN.length ? FLYPIN.slice().sort((a, b) => dd(a) - dd(b))[0].code : "";
 }
 function flyOpen(btn){
-  if ($("#fly")) return;
+  const old = $("#fly"); if (old && !old._bye) return;
+  if (old) { clearTimeout(flyOpen._t); flyOpen._t = setTimeout(() => flyOpen(btn), T.fast + 120); return; }   // 剛關掉、還在淡出（返回的紀錄也還在退）：等淡完馬上打開，不要點了沒反應
   closeMenu();
   document.body.insertAdjacentHTML("beforeend", flyShell());
   const f = $("#fly");
@@ -1661,7 +1662,7 @@ function flyShut(){
   f._ro = f._so = f._io = null;
   document.documentElement.classList.remove("flyon");
   let done = 0;
-  const end = () => { if (done) return; done = 1; f.remove(); if (!DET) document.documentElement.classList.remove("lock"); };
+  const end = () => { if (done) return; done = 1; f.remove(); if (!DET && !$("#fly")) document.documentElement.classList.remove("lock"); };   // 已經又打開了：不要把新的那個的鎖拿掉
   if (!canAnim()) return end();
   requestAnimationFrame(() => {                         // 先讓底層主頁重繪完成再淡出，關閉不閃爍
     f.addEventListener("transitionend", e => { if (e.target === f && e.propertyName === "opacity") end(); });
@@ -1758,6 +1759,7 @@ function flyInfo(id){
 }
 document.addEventListener("click", e => {   // 同一顆按鈕還沒做完再按不理它（onceClick 在 app.js）
   const f = e.target.closest && e.target.closest("#fly"); if (!f) return;
+  if (window._menu && !e.target.closest(".lmenu,[data-fmini]")) closeMenu();   // 選單開著、點旁邊：關掉（app.js 那邊遇到 #fly 就不管了）
   return onceClick(e.target.closest(ONCE_SEL), () => flyClick(e, f));
 });
 function flyClick(e, f){

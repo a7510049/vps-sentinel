@@ -172,7 +172,8 @@
 *::-webkit-scrollbar{display:none}
 html{background:var(--bg);color:var(--tx);touch-action:manipulation;accent-color:var(--p);caret-color:var(--p);overflow-x:clip}
 html.lock{overflow:hidden}
-body{font:400 var(--fs-m)/1.5 var(--font);text-rendering:optimizeLegibility;zoom:var(--zoom);min-height:100vh;-webkit-font-smoothing:antialiased;overflow-x:hidden;overflow-x:clip}
+html:has(.dash.app2){overscroll-behavior:none}   /* 三欄／一層一層的版面：整頁本身不捲（安卓按著標題列拖會捲到整頁、網址列跟著縮放，整層重排、閃一下） */
+body{font:400 var(--fs-m)/1.5 var(--font);text-rendering:optimizeLegibility;zoom:var(--zoom);min-height:calc(100svh / var(--zoom));-webkit-font-smoothing:antialiased;overflow-x:hidden;overflow-x:clip}
 [hidden]{display:none!important}
 ::selection{background:color-mix(in srgb,var(--p) 28%,transparent)}
 button{font:inherit;color:inherit;border:0;background:none;padding:0;cursor:pointer;text-align:inherit}
@@ -371,7 +372,7 @@ html.lost :is(.view>:not(.hbanner,.dhome,.mtop),.det .dscroll>:not(.dtop)){filte
   transition:transform var(--t-fast) var(--exit),opacity var(--t-fast) var(--exit)}
 .det .tile{animation:none}
 /* 整頁完全蓋住之後，後面那一頁先不畫（動畫、更新都停下來，捲動只要顧整頁）；收起前先恢復繪製再淡出 */
-html.dhid .dash>.view{content-visibility:hidden;contain-intrinsic-size:auto none}
+html.dhid .dash>.view,html.dhid .dash.m>.stage{content-visibility:hidden;contain-intrinsic-size:auto none}
 .dscroll{position:absolute;inset:0;overflow-y:auto;overscroll-behavior:contain;
   padding:calc(env(safe-area-inset-top) + 10px) 16px calc(env(safe-area-inset-bottom) + 40px)}
 .dscroll>*{max-width:760px;margin-left:auto;margin-right:auto}
@@ -696,7 +697,7 @@ body:has(.dash.d) .fwrap{max-width:var(--pw)}
    中間：選到的那一個；灰底上放圓角區塊
    右欄、設定：一段一段的白色區段，中間 10px 灰色帶隔開（telegram-tt side-panel-section） */
 :root{--lw:clamp(320px,26vw,420px); --rw:clamp(340px,25vw,424px); --hh:56px}   /* 左欄、右欄寬度（機場起降的整頁也要用，所以放在最外層） */
-.dash.d.app2{display:flex;height:calc(100vh / var(--zoom));min-height:0;overflow:hidden;padding:0}
+.dash.d.app2{display:flex;height:calc(100vh / var(--zoom));height:calc(100dvh / var(--zoom));min-height:0;overflow:hidden;padding:0}
 .dash.m.app2{padding:0;overflow:visible}
 .app2 .lcol{position:relative;flex:none;width:var(--lw);background:var(--s1);box-shadow:1px 0 0 var(--line);z-index:2;overflow:hidden}
 .app2 .mcol{position:relative;flex:1;min-width:0;overflow:hidden}
@@ -892,12 +893,12 @@ body:has(.app2) .flyv{--pw:1280px}
 .msep{display:block;height:1px;margin:4px 0;background:var(--div)}
 
 /* ═════════ 對話框 ═════════ */
-.veil{position:fixed;inset:0;z-index:var(--z-veil);display:flex;align-items:center;justify-content:center;padding:20px;touch-action:none}
+.veil{position:fixed;inset:0;z-index:var(--z-veil);display:flex;align-items:center;justify-content:center;padding:max(20px,env(safe-area-inset-top)) 20px max(20px,env(safe-area-inset-bottom));touch-action:none}
 /* 只有後面那層暗色淡入淡出；視窗本身不跟著變透明（面板關掉時是整片滑下去，不是化開） */
 .veil::before{content:"";position:absolute;inset:0;z-index:-1;background:var(--scrim);animation:fadeIn var(--t-fast) var(--dec) backwards}
 .veil.closing{pointer-events:none}
 .veil.closing::before{animation:fadeOut var(--t-fast) var(--ease) forwards}   /* 要在 360ms 移除前跑完 */
-.dialog{width:100%;max-width:380px;max-height:calc((100dvh - 40px) / var(--zoom));overflow-y:auto;overscroll-behavior:contain;touch-action:pan-y;isolation:isolate;
+.dialog{width:100%;max-width:380px;max-height:calc((100dvh - 40px - env(safe-area-inset-top) - env(safe-area-inset-bottom)) / var(--zoom));overflow-y:auto;overscroll-behavior:contain;touch-action:pan-y pinch-zoom;isolation:isolate;
   background:var(--s1);box-shadow:var(--sh-float);border-radius:var(--r-2xl);padding:24px;text-align:center;animation:dlgin var(--t-fast) var(--std) backwards;
   --card:var(--s2);--chip:var(--s2);--cs:0 0 0 0 transparent;--cseg:none}
 .closing .dialog{animation:dlgout var(--t-fast) var(--std) forwards}
@@ -905,9 +906,9 @@ body:has(.app2) .flyv{--pw:1280px}
 /* 手機：要填東西的視窗從下面滑上來（上面有拉桿，往下拉就關掉；減速滑入避免彈簧過衝在底邊露縫） */
 @media (max-width:599px){
   .dialog .btns>.ubtn:only-child{flex:1}
-  .veil:has(.form){align-items:flex-end;padding:48px 0 0}
-  .veil:has(.form) .dialog{max-width:none;max-height:calc((100dvh - 48px) / var(--zoom));border-radius:var(--r-xl) var(--r-xl) 0 0;border-bottom:0;
-    padding:30px 20px calc(env(safe-area-inset-bottom) + 20px);animation:sheetIn var(--t-mid) var(--dec) backwards;touch-action:pan-y}
+  .veil:has(.form){align-items:flex-end;padding:max(48px,calc(env(safe-area-inset-top) + 8px)) 0 0}   /* 有動態島的 iPhone 從主畫面打開：拉桿不要落在狀態列裡 */
+  .veil:has(.form) .dialog{max-width:none;max-height:calc((100dvh - max(48px,calc(env(safe-area-inset-top) + 8px))) / var(--zoom));border-radius:var(--r-xl) var(--r-xl) 0 0;border-bottom:0;
+    padding:30px 20px calc(env(safe-area-inset-bottom) + 20px);animation:sheetIn var(--t-mid) var(--dec) backwards;touch-action:pan-y pinch-zoom}
   .veil:has(.form) .dialog::before{content:"";position:absolute;top:10px;left:50%;width:32px;height:4px;margin-left:-16px;border-radius:var(--r-pill);background:var(--tx3);opacity:.5}
   .veil:has(.form) .dialog{position:relative}
   .veil.closing:has(.form) .dialog{animation:sheetOut var(--t-fast) var(--exit) forwards}
@@ -1255,7 +1256,7 @@ textarea.field{height:auto;padding:12px 16px;resize:none}
 
 /* ═════════ 機場起降：Apple Liquid Glass × 機械翻牌看板 ═════════ */
 .ico.fly{background:var(--pc);color:var(--on-pc)}
-html.flyon .dash>.view{content-visibility:hidden;contain-intrinsic-size:auto none}
+html.flyon .dash>.view,html.flyon .dash.m>.stage{content-visibility:hidden;contain-intrinsic-size:auto none}
 .flyv{position:fixed;inset:0;z-index:var(--z-det);background-color:var(--bg);
   --gz:var(--zoom);isolation:isolate;contain:layout style paint;
   transition:transform var(--t-mid) var(--dec),opacity var(--t-fast) var(--dec)}
@@ -1970,4 +1971,6 @@ html.flyon .dash>.view{content-visibility:hidden;contain-intrinsic-size:auto non
 .abd .abst .codebox{background:var(--s1)}
 .abd .abst .ubtn svg{width:16px;height:16px}
 .abjob{display:flex;align-items:center;justify-content:center;gap:10px;padding:18px;color:var(--tx2);font-size:var(--fs-m)}
-
+/* 手機、平板：輸入框字一律不小於 16px（iPhone 小於這個一點就自己放大畫面，放大後對話框的「儲存」「×」會被擠出畫面點不到）；
+   放最後、一律套用，免得後面又有比較精確的規則把字改小 */
+@media (pointer:coarse){:is(input:not([type=checkbox],[type=radio],[type=range],[type=file],[type=color]),textarea,select){font-size:max(var(--fs-l),calc(var(--fs-input) / var(--zoom)))!important}}
