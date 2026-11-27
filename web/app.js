@@ -113,6 +113,8 @@ P.server = '<rect x="3" y="4" width="18" height="7" rx="2"/><rect x="3" y="13" w
 P.palette = '<path d="M12 3a9 9 0 1 0 0 18c1.1 0 2-.9 2-2 0-.5-.2-1-.5-1.3-.3-.4-.5-.8-.5-1.3 0-1.1.9-2 2-2h2.4A4.6 4.6 0 0 0 22 9.8C22 6 17.5 3 12 3z"/><circle cx="7.5" cy="10.5" r="1"/><circle cx="10.5" cy="7" r="1"/><circle cx="15.5" cy="7.5" r="1"/>';
 P.copy = '<rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>';
 P.moon = '<path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/>';
+P.menu = '<path d="M4 7h16M4 12h16M4 17h16"/>';
+P.filter = '<path d="M4 6h16M7 12h10M10 18h4"/>';
 const I = n => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${P[n]}</svg>`;
 
 /* ═════════ 個人設定（存在這台裝置） ═════════ */
@@ -521,12 +523,6 @@ function headline(list){
   if (hosts.size === 1) return `${is[0].s.name} 有 ${is.length} 件事要留意`;
   return `${hosts.size} 台主機要留意`;
 }
-function hero(list, time){
-  const lv = LOST || list.some(s => lvOf(s) === "bad") ? "bad" : list.some(s => lvOf(s) === "warn") || issuesOf(list).length ? "warn" : "ok", g = greet();
-  const sub = LOST ? "連不上主機，重試中…" : [g.hi, g.quote].filter(Boolean).join("・");
-  return `<section class="hbanner ${lv}" data-key="hero"><span class="hbi ${lv}">${I({ok:"ok", warn:"alert", bad:"warn"}[lv])}</span><div class="hbt"><h1 class="headline" data-x>${esc(headline(list))}</h1>${sub ? `<p class="quote">${esc(sub)}</p>` : ""}</div>${g.wx ? `<div class="wxw">${g.wx}</div>` : ""}</section>`;
-}
-
 /* ═════════ 事件 ═════════ */
 /* 同一件事反覆發生：只留最新一筆，標上次數 */
 function mergeEv(ev){
@@ -566,26 +562,6 @@ const evList = (ev, many) => ev.length ? `<div class="evs" data-key="evs" data-k
 const dayOf = t => { const d = new Date(t * 1000), n = new Date(), y = new Date(n); y.setDate(n.getDate() - 1);
   return d.toDateString() === n.toDateString() ? "今天" : d.toDateString() === y.toDateString() ? "昨天" : `${d.getMonth() + 1} 月 ${d.getDate()} 日`; };
 
-/* ═════════ 首頁的主機卡片（手機） ═════════ */
-const mrow = (l, p, ic) => `<div class="mr"><span class="ml${ic ? ` mi ${ic}" title="${l}">${I(ic)}` : `">${l}`}</span>${wave(p)}<span class="mv ${tier(p)}">${num(p)}%</span></div>`;
-function hostCard(s, i, mini){
-  const lv = lvOf(s), k = keyOf(s);
-  let b = `<div class="hcard ${lv}${mini ? " mini" : ""}" data-key="${esc(k)}" data-keyed data-open="${esc(k)}" role="button" tabindex="0" style="--i:${i}">
-    <div class="ct" data-key="ct">${avatar(s)}<div class="nm"><div class="cn">${esc(s.name)}</div><div class="cp">${esc(place(s) || osShort(s.os))}</div></div>${mini ? "" : I("chev")}</div>`;
-  if (!s.online) return b + offBox(s) + `</div>`;
-  const d0 = disk0(s), ft = [PREF.show.traffic && s.traffic ? `<span title="本月流量">${I("month")}${size(s.traffic.used)}</span>` : "", `<span title="開機多久">${I("power")}${up(s.uptime)}</span>`].join("");   // 圖示＋數字，不寫「本月」「開機」
-  const mr = `<div class="mrows" data-key="mr">${mrow("處理器", s.cpu, mini && "cpu")}${mrow("記憶體", s.mem.pct, mini && "mem")}${mrow("磁碟", d0.pct, mini && "disk")}</div>`;   // 一行的：字換成小圖示，名字才放得下
-  if (mini) return b + mr + `<span class="mch" data-key="ch">${I("chev")}</span></div>`;
-  return b + alerts(s, 1) + mr + `<div class="cfoot" data-key="cf">${ft}</div></div>`;   // 處理器、記憶體、磁碟下面那格已經變色，不再放膠囊
-}
-/* 主機很多時（4 台以上、而且是卡片模式）：正常的主機縮成一行（名稱＋三個數字），有狀況的照舊是大卡片 */
-const MININ = 4;
-function hostLists(list, wallCls){
-  const mini = cardMode(list) && list.length >= MININ, big = mini ? list.filter(s => !s.online || lvOf(s) !== "ok") : list, small = mini ? list.filter(s => !big.includes(s)) : [];
-  const add = list.length ? "" : addHostBtn("addhost");
-  return `<div class="hosts${wallCls}" data-key="hosts" data-keyed${wallCls ? " data-grid" : ""}>${big.map((s, i) => hostCard(s, i)).join("")}</div>`
-    + `<div class="minis" data-key="minis" data-keyed>${small.map((s, i) => hostCard(s, big.length + i, true)).join("")}${add}</div>`;
-}
 /* 連不上：最後連上的時間＋一條時間條（綠的是還連得上、紅斜線是斷掉之後；範圍照斷了多久換 30 分／6 小時／24 小時） */
 function offBox(s){
   const d = s.last_seen ? Date.now()/1000 - s.last_seen : 1e9, span = d < 1800 ? [1800, "30 分前"] : d < 21600 ? [21600, "6 小時前"] : [86400, "24 小時前"];
@@ -593,37 +569,10 @@ function offBox(s){
   return `<div class="offline" data-key="off">${I("off")}<div class="ofm"><b>${s.last_seen ? esc(ago(s.last_seen)) : "連不上"}</b>`
     + `<div class="otl" style="--g:${g}"><i></i></div><div class="otx"><span>${span[1]}</span><span>現在</span></div>${err}${peerBtn(s)}</div></div>`;
 }
-/* 主機列表最後的「新增主機」：貼上新主機的配對暗號 */
-const addHostBtn = cls => `<button class="${cls}" data-addhost data-key="+add">${I("plus")}<span>新增主機</span></button>`;
 
-/* ═════════ 一台主機的內容：電腦一次全展開、手機提供三段液態切換（概覽／效能趨勢／系統資訊） ═════════ */
-let DSEG = ["ov", "perf", "sys"].includes(sstore("vs-dseg")) ? sstore("vs-dseg") : "ov";
 const osShort = o => String(o || "").replace(/(\d+\.\d+)\.\d+/, "$1").replace(/\s*LTS$/, "");   // Ubuntu 24.04.5 LTS → Ubuntu 24.04（完整的放在提示）
 const subOf = s => s.online ? `<span title="${esc(s.os || "")}・核心版本 ${esc(s.kernel)}">${esc([place(s), osShort(s.os)].filter(Boolean).join("・"))}</span>・<span class="hup" title="開機多久">${I("power")}${up(s.uptime)}</span>`
   : esc(place(s) || "");   // 連不上寫在下面的時間條，這裡不再寫「離線」
-function hostBody(s, ph){
-  let h = `<div class="hb" data-key="hb" data-keyed><div class="hhead" data-key="hh">${avatar(s)}<div class="nm"><h2 class="hname">${esc(s.name)}</h2><div class="hsub">${subOf(s)}</div></div>${ph ? "" : `<span class="hacts">${moreBtn(s)}</span>`}</div>`;
-  if (!s.online) return h + offBox(s) + `</div>`;
-  h += alerts(s, 1);
-  const hs = PREF.show.chart ? histFor(s) : null;
-  const cpCard = PREF.show.chart ? `<div class="cc" data-key="cp"><div class="cch"><span class="lg"><i style="background:${COL.cpu}"></i>處理器</span><span class="lg"><i style="background:${COL.mem}"></i>記憶體</span>${rangeSeg()}</div>
-    <div class="cbox">${chartOr(hs, cid(s, ph ? "m" : "a"), x => [{data:x.cpu, color:COL.cpu, name:"處理器"}, {data:x.mem, color:COL.mem, name:"記憶體"}], {max:100, grid:1, fmt:v => Math.round(v) + "%", h: ph ? 130 : 148})}</div></div>` : "";
-  const npCard = PREF.show.net ? `<div class="cc" data-key="np"><div class="nets"><div class="nt">${IC("down")}<div class="nv" title="下載">${rate(s.net.rx)}</div></div><div class="nt">${IC("up")}<div class="nv" title="上傳">${rate(s.net.tx)}</div></div></div>
-    ${hs ? `<div class="cbox wide">${chartOr(hs, cid(s, ph ? "n" : "b"), x => [{data:x.rx, color:COL.rx, name:"下載"}, {data:x.tx, color:COL.tx, name:"上傳"}], {grid:1, bin:1, fmt:rate, h: ph ? 104 : 112})}</div>` : ""}</div>` : "";
-  const ioCard = PREF.show.chart && hs && !hs.err && hs.rd ? ioCards(s, hs, ph) : "";
-  if (ph) {
-    const segs = [["ov", "概覽", "gauge"], ...(PREF.show.chart || PREF.show.net ? [["perf", "效能趨勢", "trend"]] : []), ...(PREF.show.info ? [["sys", "系統資訊", "info"]] : [])];
-    const cur = segs.some(x => x[0] === DSEG) ? DSEG : "ov";
-    if (segs.length > 1) h += `<div class="dseg" data-key="dseg" data-slide=".tbu">${segs.map(([k, l, ic]) => `<button class="dsb${cur === k ? " on" : ""}" data-dseg="${k}" data-key="ds:${k}"><i class="tbu"></i>${I(ic)}<span>${l}</span></button>`).join("")}</div>`;
-    let body = "";
-    if (cur === "ov") body = tiles(s) + trafficCard(s) + itemsCard(s);
-    else if (cur === "perf") body = (cpCard || npCard || ioCard) ? (cpCard + npCard + ioCard) : `<div class="calm">目前沒有圖表資料</div>`;
-    else body = (topCard(s) + specCard(s)) || `<div class="calm">目前沒有系統資訊</div>`;
-    return h + `<div class="dsegb" data-key="dsb:${cur}" data-sw>${body}</div></div>`;
-  }
-  h += tiles(s) + cpCard + npCard + ioCard + trafficCard(s) + topCard(s) + specCard(s) + itemsCard(s);
-  return h + `</div>`;
-}
 /* 負載的半圓儀表：指針從左（輕鬆）轉到右（超載，每核 2 以上） */
 const lgauge = v => `<svg class="lgg" viewBox="0 0 64 36" aria-hidden="true"><path class="lgb" d="M6 32a26 26 0 0 1 52 0" pathLength="100"/><path class="lgv" d="M6 32a26 26 0 0 1 52 0" pathLength="100" style="stroke-dasharray:${v.toFixed(1)} 100"/><g class="lgn" style="transform:rotate(${(v * 1.8 - 90).toFixed(1)}deg)"><path d="M32 32V12"/><circle cx="32" cy="32" r="3.5"/></g></svg>`;
 /* 四格：處理器、記憶體、磁碟、負載 */
@@ -758,107 +707,324 @@ async function trafficModal(node, label){
   tick();
 }
 
-/* ═════════ 分頁：首頁、工具、紀錄、設定 ═════════ */
-const TABS = [["home", "首頁", "home"], ["tools", "工具", "tools"], ["log", "紀錄", "log"], ["set", "設定", "gear"]];
-let TABDIR = 0;                                // 手機換分頁的方向（-1 往左、+1 往右、0 原地淡換）
-function navBtns(rail, list){
-  const nw = list.some(s => s.self_has), hasHost = rail && list.length > 1 && DSEL && list.some(x => keyOf(x) === DSEL);
-  return TABS.map(([k, l, ic]) => rail
-    ? `<button class="rb${TAB === k && (k !== "home" || !hasHost) ? " on" : ""}${k === "set" && nw ? " hasnew" : ""}" data-tab="${k}"><span class="ri">${I(ic)}</span><span class="rl">${k === "home" ? "總覽" : l}</span></button>`
-    : `<button class="tb${TAB === k ? " on" : ""}${k === "set" && nw ? " hasnew" : ""}" data-tab="${k}" title="${l}"><i class="tbu"></i><span class="tbi">${I(ic)}</span><span class="t">${l}</span></button>`).join("");
+/* ═════════ 版面：Telegram 式的空間組織 ═════════
+   電腦：左欄是主機清單（像聊天清單）、中間是選到的那一個（全部主機＝總覽與紀錄；一台主機＝即時數字和圖表）、
+         右欄是那台的主機資訊（規格、工具、維護，像聊天的個人資料面板）；設定從左上角選單打開，蓋在左欄上面一層。
+   手機：一層一層推進去（清單 → 主機 → 主機資訊），返回鍵、往右滑都會退一層。 */
+let TAB = "home", TABDIR = 0;                     // 舊的分頁代號：留給還在用的地方（一律是首頁）
+let MAIN = sstore("vs-main") || "all";            // 電腦中間：all 或主機代號
+let LEFT = "list";                                // 電腦左欄：list 清單、set 設定
+let INFO = store("vs-info") ? store("vs-info") === "1" : innerWidth >= 1280;   // 電腦右欄：主機資訊開著（夠寬才預設打開）
+let STK = (() => { try { const a = JSON.parse(sstore("vs-stk") || "[]"); return Array.isArray(a) && a.length && a[0] === "list" ? a.map(String) : ["list"]; } catch(e) { return ["list"]; } })();
+let NAVDIR = 0, QF = "", QS = "";                 // 換畫面的方向（1 推進、-1 退回、0 原地換）；清單篩選、搜尋
+const scrHtml = (id, html, cls = "") => `<section class="scr${cls ? " " + cls : ""}" data-scr data-key="s:${esc(id)}">${html}</section>`;
+const stkSave = () => sstore("vs-stk", JSON.stringify(STK));
+const isBad = s => !s.online || lvOf(s) !== "ok" || (s.problems || []).length > 0 || (s.notices || []).length > 0;
+const issueN = s => s.online ? (s.problems || []).length + (s.notices || []).length : 1;
+/* 往哪裡去：all、set、list、h:主機、i:主機 */
+function navGo(id){
+  closeMenu(); hideTip();
+  if ($("#fly")) flyClose();
+  if (DESK.matches) {
+    if (id === "set" || id === "list") { if (LEFT === id) return; NAVDIR = id === "set" ? 1 : -1; LEFT = id; }
+    else if (id.startsWith("i:")) { const k = id.slice(2); if (MAIN !== k) { MAIN = k; sstore("vs-main", k); } INFO = !INFO || MAIN !== k ? true : false; store("vs-info", INFO ? "1" : "0"); }
+    else { const m = id === "all" ? "all" : id.slice(2); if (MAIN === m) return; MAIN = m; sstore("vs-main", m); }
+    render(LIST); NAVDIR = 0; return;
+  }
+  if (STK[STK.length - 1] === id) return;
+  if (id === "list") { while (STK.length > 1) STK.pop(); NAVDIR = -1; stkSave(); render(LIST); NAVDIR = 0; return; }
+  STK.push(id); stkSave();
+  const {dlg, ...st} = history.state || {};                // 剛按選單裡的項目：選單那一筆直接拿來用（不然選單收起來時的「上一頁」會把這一層退掉）
+  if (dlg && !histLive(DLGEL.get(dlg))) { DLGEL.delete(dlg); history.replaceState({...st, scr: STK.length}, ""); }
+  else history.pushState({...st, scr: STK.length}, "");
+  NAVDIR = 1; render(LIST); NAVDIR = 0;
 }
-function page(list, time){
-  return TAB === "tools" ? toolsPage(list) : TAB === "log" ? logPage(list) : TAB === "set" ? setPage(list)
-    : DESK.matches ? homeDesk(list, time) : homePhone(list, time);
+function navBack(){
+  closeMenu(); hideTip();
+  if (DESK.matches) { if (LEFT === "set") return navGo("list"); if (INFO && MAIN !== "all") { INFO = false; store("vs-info", "0"); return render(LIST); } return; }
+  if (STK.length < 2) return;
+  if (history.state && history.state.scr === STK.length) return history.back();   // 交給瀏覽器：下面 popstate 會退一層
+  navPop();
 }
-/* 手機：瀏覽器裡分頁列在頂部（往下捲藏，避開 iOS 底部網址列），主畫面／App 模式為底部導覽列；點主機卡片展開成整頁 */
-function renderPhone(list, time){
-  const s = DET && list.find(x => keyOf(x) === DET);
-  return `<div class="dash m" data-key="m"><nav class="dock" data-key="dock" data-slide=".tbu">${navBtns(false, list)}</nav><main class="view v-${TAB}" data-key="v:${TAB}" data-dir="${TABDIR}">${page(list, time)}</main>${s ? detail(s) : ""}</div>`;
+function navPop(){ if (STK.length < 2) return; STK.pop(); stkSave(); NAVDIR = -1; render(LIST); NAVDIR = 0; }
+addEventListener("popstate", () => {
+  if (DESK.matches) return;
+  const d = Math.max(1, (history.state && history.state.scr) || 1);
+  if (STK.length > d) { while (STK.length > d + 1) STK.pop(); navPop(); }
+});
+try { history.replaceState({...(history.state || {}), scr: STK.length}, ""); } catch(e) {}
+/* 換畫面：Telegram 的疊層（推進：新的從右邊整頁滑進來、舊的往左退 20% 並暗一點；退回反過來；原地換：淡入） */
+function scrSwap(a, b){
+  const dir = NAVDIR;
+  if (!canAnim() || !a.isConnected) return a.replaceWith(b);
+  a.replaceWith(b);
+  if (!dir) { b.animate([{opacity:0}, {opacity:1}], {duration:T.fast, easing:STD, id:"ui"}); return; }
+  a._leaving = 1; a.style.pointerEvents = "none"; a.classList.add("gone");
+  b.parentNode.insertBefore(a, dir > 0 ? b : b.nextSibling);
+  const o = {duration:T.mid, easing:DEC, id:"ui"}, top = dir > 0 ? b : a, under = dir > 0 ? a : b;
+  const sx = dir < 0 ? NAVSWIPE : 0, tOut = [{transform:`translateX(${sx}px)`}, {transform:"translateX(100%)"}], uOut = [{transform:"none", opacity:1}, {transform:"translateX(-20%)", opacity:.9}];   // 用手指滑回去的：從手指放開的位置接著滑
+  top.animate(dir > 0 ? [...tOut].reverse() : tOut, {...o, fill:"forwards"});
+  const ua = under.animate(dir > 0 ? uOut : [...uOut].reverse(), {...o, fill:dir > 0 ? "forwards" : "none"});
+  ua.onfinish = () => { a.remove(); if (dir < 0) top.getAnimations().forEach(x => x.cancel()); };
 }
-/* 電腦：Apple Liquid Glass 極簡佈局 — 左側懸浮毛玻璃側欄（含方案 1 同心圓角天氣／快捷列）＋ 右側開放通透主畫布 */
-let DSEL = sstore("vs-dsel") || "";
-const deskSel = list => list.length <= 1 ? list[0] : (DSEL ? list.find(x => keyOf(x) === DSEL) || null : null);
-const railHost = (s, on) => `<button class="rh${on ? " on" : ""}" data-dsel="${esc(keyOf(s))}" data-key="rh:${esc(keyOf(s))}"><span class="dot ${s.online ? lvOf(s) : "bad"}"></span><b>${esc(s.name)}</b><small class="num">${s.online ? num(s.cpu) + "%" : I("off")}</small></button>`;
-function renderDesk(list, time){
-  const sel = deskSel(list), k = sel && keyOf(sel), g = greet();
-  const dark = document.documentElement.dataset.mode === "dark";
-  const sideWx = PREF.show.weather && WX
-    ? `<div class="side-wx" data-key="swx"><span class="wi">${WX.icon}</span><b class="num">${WX.t}°</b><span>${esc(WX.word)}</span>${WX.tip ? `<small>${esc(WX.tip)}</small>` : ""}</div>`
-    : "";
-  const foot = `<div class="rfoot-box" data-key="rfoot">${sideWx}<div class="side-util"><span class="rtime"><span class="live${LOST ? " off" : ""}"></span><span data-x>${LOST ? "重連中" : time}</span></span><span class="side-acts"><button class="side-icbtn" data-refresh title="立即重新整理">${I("upd")}</button><button class="side-icbtn" data-qtheme title="${dark ? "切換淺色模式" : "切換深色模式"}">${I(dark ? "sun" : "moon")}</button></span></div></div>`;
-  const rail = `<nav class="rail" data-key="rail"><button class="brand" data-dhome title="回到總覽">${BRAND}<span class="bname">哨站</span><span class="bsub">Outpost</span></button><div class="rnav" data-key="rnav" data-slide>${navBtns(true, list)}</div>`
-    + (list.length > 1 ? `<div class="rsec">主機<small class="num">${list.length}</small></div><div class="rhosts" data-key="rhs" data-keyed data-slide>${list.map(s => railHost(s, TAB === "home" && keyOf(s) === k)).join("")}</div>` : "")
-    + foot + `</nav>`;
-  return `<div class="dash d" data-key="d">${rail}<main class="view v-${TAB}" data-key="v:${TAB}">${page(list, time)}</main></div>`;
+/* ── 整體 ── */
+function shell(list, time){ return DESK.matches ? deskShell(list, time) : phoneShell(list, time); }
+function deskShell(list, time){
+  const s = MAIN !== "all" && list.find(x => keyOf(x) === MAIN), m = s ? MAIN : "all";
+  const left = LEFT === "set" ? scrHtml("set", setScreen(list)) : scrHtml("list", listScreen(list, m));
+  const main = s ? scrHtml("h:" + m, hostScreen(s)) : scrHtml("all", allScreen(list, time));
+  const info = s ? `<aside class="rcol${INFO ? " on" : ""}" data-key="rcol"><div class="rcin">${scrHtml("i:" + m, infoScreen(s))}</div></aside>` : "";
+  return `<div class="dash d app2" data-key="d"><aside class="lcol" data-key="lcol">${left}</aside><main class="mcol" data-key="mcol">${main}</main>${info}</div>`;
 }
-/* 電腦每一頁上面同一條標題列：頁面名稱，後面接各頁自己的篩選或操作 */
-const dbar = (title, rest = "") => `<div class="dbar" data-key="dbar"><h1 class="dbt">${title}</h1>${rest}</div>`;
-/* 這台還沒設定 Telegram：主機下面提醒一行，點了直接設定 */
-const tgHint = list => list.some(x => !x.node && x.tg_off) ? `<div class="group tgh" data-key="tgh"><button class="li" data-tg>${IC("bell", "")}<span class="lab">Telegram 通知<small>還沒設定，出事不會通知你</small></span>${CHEV}</button></div>` : "";
-function homePhone(list, time){
-  const ev = groupEv(allEvents(list)).slice(0, 3);
-  const top = `<header class="mtop" data-key="mtop"><div class="mbrand">${BRAND}<b>哨站</b><span class="live${LOST ? " off" : ""}"></span></div><span class="grow"></span><button class="iconbtn" data-refresh title="重新整理">${I("upd")}</button>${addHostBtn("ubtn ghost sm madd")}</header>`;
-  return top + hero(list, time) + `<div class="lbl" data-key="lh">主機</div>${hostLists(list, "")}${tgHint(list)}
-    <div class="lbl" data-key="le">最近發生${ev.length ? `<button data-tab="log">全部紀錄</button>` : ""}</div>${evList(ev, list.length > 1)}`;
+function phoneShell(list, time){
+  const ok = id => id === "list" || id === "all" || id === "set" || list.some(s => keyOf(s) === id.slice(2));
+  if (!STK.every(ok)) { STK = STK.filter(ok); if (STK[0] !== "list") STK.unshift("list"); stkSave(); }
+  const id = STK[STK.length - 1];
+  return `<div class="dash m app2" data-key="m"><div class="stage" data-key="stage">${scrHtml(id, phoneBody(id, list, time))}</div></div>`;
 }
-/* 電腦版主機一律從總覽清單或側欄點入專頁 */
+function phoneBody(id, list, time){
+  const s = /^[hi]:/.test(id) && list.find(x => keyOf(x) === id.slice(2));
+  return id === "all" ? allScreen(list, time) : id === "set" ? setScreen(list) : s && id[0] === "h" ? hostScreen(s) : s ? infoScreen(s) : listScreen(list, "");
+}
+/* 每一層上面的標題列：返回（手機）、頭像、標題、副標、右邊的按鈕 */
+const backBtn = () => DESK.matches ? "" : `<button class="iconbtn" data-navback title="返回">${I("back")}</button>`;
+const topbar = (lead, title, sub, acts = "", attr = "") => `<header class="tbar" data-key="tbar">${lead}<div class="tbt"${attr}><b data-x>${title}</b>${sub != null ? `<small data-x>${sub}</small>` : ""}</div><span class="tba">${acts}</span></header>`;
+/* 圓形頭像：國旗或名字第一個字，右下角一個狀態點（Telegram 的上線小綠點） */
+function cav(s, big){
+  const f = !big && PREF.show.flag && s.geo ? flag(s.geo.cc) : "", lv = s.online ? lvOf(s) : "bad";   // 大頭像不放國旗（國旗圖只有 80 寬，放大會糊），國旗改放在地點前面
+  const h = [...String(s.name || "?")].reduce((a, c) => a + c.codePointAt(0), 0) % 7;
+  return `<span class="cav${big ? " big" : ""}${f ? " fl" : ` pk${h}`}">${f || `<i>${esc([...(s.name || "?")][0])}</i>`}<u class="cdot ${lv}"></u></span>`;
+}
+/* ── 左欄：主機清單 ── */
+function listScreen(list, sel){
+  const bad = list.filter(isBad), q = QS.trim().toLowerCase();
+  const rows = list.filter(s => (QF !== "bad" || bad.includes(s)) && (!q || String(s.name).toLowerCase().includes(q) || place(s).toLowerCase().includes(q)));
+  const head = `<header class="tbar lhd" data-key="lhd"><button class="iconbtn" data-mainmenu title="選單">${I("menu")}</button>
+    <label class="srch" data-key="srch">${I("search")}<input type="search" class="sin" data-search placeholder="搜尋主機" value="${esc(QS)}" autocomplete="off" enterkeyhint="search"></label></header>`;
+  const tabs = list.length > 1 ? `<div class="ltabs" data-key="ltabs" data-slide=".tbu">${[["", "全部"], ["bad", "有狀況"]].map(([k, l]) =>
+    `<button class="ltb${QF === k ? " on" : ""}" data-qf="${k}" data-key="qf:${k}"><i class="tbu"></i><span>${l}</span>${k && bad.length ? `<b class="cbg ${list.some(s => !s.online || lvOf(s) === "bad") ? "bad" : "warn"}">${bad.length}</b>` : ""}</button>`).join("")}</div>` : "";
+  const all = !q && !QF ? allRow(list, sel === "all") + flyCRow() : "";
+  const hint = !q && !QF && list.some(x => !x.node && x.tg_off) ? `<button class="crow tip" data-tg data-key="r:tg"><span class="cav ic">${I("bell")}</span><span class="cbd"><span class="ct1"><b>Telegram 通知</b></span><span class="ct2"><span class="cst">還沒設定，出事不會通知你</span></span></span></button>` : "";
+  const hosts = rows.map(s => hostRow(s, sel === keyOf(s))).join("");
+  const none = !rows.length ? `<div class="lnone" data-key="none">${q ? "找不到這台主機" : QF ? "每一台都正常" : ""}</div>` : "";
+  return head + `<div class="lscroll" data-key="ls">${tabs}<div class="clist" data-key="cl" data-keyed>${all}${hint}${hosts}</div>${none}</div>`
+    + `<button class="fab" data-addhost data-key="fab" title="新增主機">${I("plus")}</button>`;
+}
+function allRow(list, on){
+  const ev = allEvents(list)[0], n = list.filter(isBad).length, lv = LOST || list.some(s => !s.online || lvOf(s) === "bad") ? "bad" : n ? "warn" : "ok";
+  return `<button class="crow${on ? " on" : ""}" data-go="all" data-key="r:all"><span class="cav brand">${BRAND}</span><span class="cbd">
+    <span class="ct1"><b>全部主機</b>${ev ? `<time class="num">${esc(tsShort(ev.t))}</time>` : ""}</span>
+    <span class="ct2"><span class="cst${lv !== "ok" ? " " + lv : ""}" data-x>${esc(headline(list))}</span>${n ? `<b class="cbg ${lv}">${n}</b>` : ""}</span></span></button>`;
+}
+const flyCRow = () => `<button class="crow" data-fly data-key="r:fly"><span class="cav ic sky">${I("plane")}</span><span class="cbd"><span class="ct1"><b>機場起降</b></span>
+  <span class="ct2"><span class="cst">${FLYS.name ? `${esc(FLYS.name)}・看板與雷達` : "即時看板與塔台雷達"}</span></span></span></button>`;
+const tsShort = t => { const d = new Date(t * 1000), n = new Date(); return d.toDateString() === n.toDateString() ? hm(t) : `${d.getMonth() + 1}/${d.getDate()}`; };
+function hostRow(s, on){
+  const k = keyOf(s), lv = s.online ? lvOf(s) : "bad", iss = s.online ? [...(s.problems || []), ...(s.notices || [])] : [];
+  const line = !s.online ? `<span class="cst bad">連不上${s.last_seen ? `・${esc(ago(s.last_seen))}` : ""}</span>`
+    : iss.length ? `<span class="cst ${lv}">${esc(noDup(s, String(iss[0])))}</span>`
+    : `<span class="cst num">處理器 ${num(s.cpu)}%・記憶體 ${num(s.mem.pct)}%・磁碟 ${num(disk0(s).pct)}%</span>`;
+  const meta = s.online ? `<span class="cmt num" title="下載">${I("down")}${rate(s.net.rx)}</span>` : "";
+  const bg = iss.length ? `<b class="cbg ${lv}">${iss.length}</b>` : !s.online ? `<b class="cbg bad">${I("off")}</b>` : "";
+  return `<button class="crow${on ? " on" : ""}" data-go="h:${esc(k)}" data-key="r:${esc(k)}">${cav(s)}<span class="cbd"><span class="ct1"><b>${esc(s.name)}</b>${meta}</span><span class="ct2">${line}${bg}</span></span></button>`;
+}
+/* 左上角的選單（Telegram 的主選單）：設定、機場起降、新增主機、夜間模式、重新整理 */
+function mainMenu(btn){
+  closeMenu();
+  const dark = document.documentElement.dataset.mode === "dark", me = LIST.find(x => !x.node), v = me && me.version;
+  const m = document.createElement("div"); m.className = "lmenu hmenu mmenu";
+  m.innerHTML = `<button data-go="set">${I("gear")}<span>設定</span></button><button data-fly>${I("plane")}<span>機場起降</span></button><button data-addhost>${I("plus")}<span>新增主機</span></button>
+    <button data-qtheme>${I("moon")}<span>夜間模式</span><input type="checkbox" class="tog" tabindex="-1" aria-hidden="true" ${dark ? "checked" : ""}></button><button data-refresh>${I("upd")}<span>重新整理</span></button>
+    <div class="mfoot">哨站${v ? ` ${esc(v)}` : ""}</div>`;
+  document.body.appendChild(m);
+  placeMenu(m, btn, r => r.left);
+  menuIn(m); window._menu = m; window._menu._by = btn; histMark(m);
+  setTimeout(() => m.addEventListener("click", e => { if (!e.target.closest("[data-qtheme]")) closeMenu(); }), 0);
+}
+/* ── 中間：全部主機（重點數字＋所有主機的紀錄，像一個群組的訊息） ── */
+function allScreen(list, time){
+  const on = list.filter(s => s.online), g = greet();
+  const sub = LOST ? "連線中斷，重試中…" : `${on.length}／${list.length} 台在線${PREF.show.weather && WX ? `・${WX.icon} ${WX.t}°` : ""}`;
+  const fl = LOGF || LOGH;
+  const acts = `<button class="iconbtn${fl ? " act" : ""}" data-logmenu title="篩選紀錄">${I("filter")}</button>`;
+  const head = topbar(backBtn() + `<span class="cav brand sm">${BRAND}</span>`, "全部主機", sub, acts);
+  const is = issuesOf(list), lv = LOST || list.some(s => !s.online || lvOf(s) === "bad") ? "bad" : is.length ? "warn" : "ok";
+  const pin = is.length ? `<button class="pinb ${lv}" data-go="h:${esc(keyOf(is[0].s))}" data-key="pin"><i></i><span><b>${esc(headline(list))}</b><small>${esc(is[0].t ? `${is[0].s.name}・${is[0].t}` : `${is[0].s.name} 連不上`)}${is.length > 1 ? `　還有 ${is.length - 1} 件` : ""}</small></span>${CHEV}</button>` : "";
+  const ev0 = allEvents(list).filter(e => !LOGH || e.k === LOGH).filter(LOGK[LOGF] || LOGK[""]), ev = LOGH ? ev0 : groupEv(ev0);
+  const chip = fl ? `<div class="fchipbar" data-key="fcb"><button class="fpill" data-logclear>${esc([LOGF && {bad:"有狀況", other:"恢復與通知"}[LOGF], LOGH && (list.find(x => keyOf(x) === LOGH) || {}).name].filter(Boolean).join("・"))}${I("x")}</button></div>` : "";
+  return head + pin + `<div class="mscroll" data-key="ms"><div class="mwrap" data-key="mw">${fl ? "" : statStrip(list, g)}${chip}${timeline(ev, list.length > 1)}</div></div>`;
+}
+/* 重點數字：一條，不是一排卡片 */
+function statStrip(list, g){
+  const on = list.filter(s => s.online), ua = upAvg(list.flatMap(s => (s.up30 || []).filter(x => x != null)));
+  const rx = on.reduce((t, s) => t + (s.net.rx || 0), 0), tx = on.reduce((t, s) => t + (s.net.tx || 0), 0);
+  const tr = list.filter(s => s.traffic), used = tr.reduce((t, s) => t + (s.traffic.used || 0), 0), pj = tr.reduce((t, s) => t + (s.traffic.projected || 0), 0);
+  const cell = (k, v, l) => `<div class="stc" data-key="st:${k}"><b class="num" data-x>${v}</b><small>${l}</small></div>`;
+  return `<div class="stat" data-key="stat"><div class="sthi">${esc([g.hi, g.quote].filter(Boolean).join("・"))}</div><div class="stcs">`
+    + cell("on", `${on.length}<em>／${list.length}</em>`, "台在線") + cell("rx", `${rate(rx)}`, `下載・上傳 ${rate(tx)}`)
+    + cell("tr", size(used), pj ? `本月・預估 ${size(pj)}` : "本月流量") + (ua != null ? cell("up", upPct(ua), "30 天可用率") : "") + `</div></div>`;
+}
+/* 紀錄：照日期分段，每一筆是一個泡泡（哪一台說的、說了什麼、幾點） */
+function timeline(ev, many){
+  if (!ev.length) return `<div class="svc" data-key="none"><span>目前沒有事件</span></div>`;
+  let h = "", day = "";
+  for (const e of ev) { const d = dayOf(e.t); if (d !== day) { day = d; h += `<div class="svc day" data-key="d:${d}"><span>${d}</span></div>`; } h += evBubble(e, many); }
+  return `<div class="tl" data-key="tl" data-keyed>${h}</div>`;
+}
+function evBubble(e, many){
+  const s = many && !evMany(e) && LIST.find(x => keyOf(x) === e.k);
+  const who = many ? (evMany(e) ? `<span class="cav ic num"><i>${e.hs.length}</i></span>` : s ? cav(s) : `<span class="cav pk5"><i>${esc([...(e.h || "?")][0])}</i></span>`) : "";   // 好幾台同一件事：頭像是台數
+  return `<div class="ev eb ${e.kind}${many && evMany(e) && EVOPEN.has(e.k) ? " open" : ""}" data-key="${esc(e.k)}|${e.kind}:${esc(e.text)}">${who}<div class="ebb">${many ? `<div class="ebn">${evWho(e)}</div>` : ""}
+    <div class="ebt">${evIco(e)}<span>${evTx(e)}${e.n > 1 ? `<small class="lx num">×${e.n}</small>` : ""}</span><time class="num">${hm(e.t)}</time></div>${many && evMany(e) ? `<div class="ehs"><div><div>${esc(e.hs.join("、"))}</div></div></div>` : ""}</div></div>`;
+}
+/* 紀錄的篩選選單：看哪一種、看哪一台 */
+function logMenu(btn){
+  closeMenu();
+  const it = (a, v, on, l) => `<button ${a}="${esc(v)}"${on ? ` class="on"` : ""}>${on ? I("check") : `<span class="ckh"></span>`}<span>${l}</span></button>`;
+  const m = document.createElement("div"); m.className = "lmenu hmenu hlist";
+  m.innerHTML = it("data-logf", "", !LOGF, "全部") + it("data-logf", "bad", LOGF === "bad", "有狀況") + it("data-logf", "other", LOGF === "other", "恢復與通知")
+    + (LIST.length > 1 ? `<i class="msep"></i>` + it("data-logh", "", !LOGH, "全部主機") + LIST.map(x => it("data-logh", keyOf(x), LOGH === keyOf(x), esc(x.name))).join("") : "");
+  document.body.appendChild(m);
+  placeMenu(m, btn, r => r.right - m.offsetWidth);
+  menuIn(m); window._menu = m; window._menu._by = btn; histMark(m);
+  setTimeout(() => m.addEventListener("click", () => closeMenu()), 0);
+}
+/* ── 中間：一台主機（即時數字、圖表、這台的紀錄） ── */
+function hostScreen(s){
+  const k = esc(keyOf(s)), D = DESK.matches;
+  const sub = s.online ? `${esc(place(s) || osShort(s.os))}・開機 ${up(s.uptime)}` : `連不上${s.last_seen ? `・${esc(ago(s.last_seen))}` : ""}`;
+  const acts = (D ? `<button class="iconbtn${INFO ? " act" : ""}" data-go="i:${k}" title="主機資訊">${I("info")}</button>` : "") + moreBtn(s);
+  const head = topbar(backBtn() + `<button class="tav" data-go="i:${k}" title="主機資訊">${cav(s)}</button>`, esc(s.name), sub, acts, ` data-go="i:${k}" role="button"`);
+  if (!s.online) return head + `<div class="mscroll" data-key="ms"><div class="mwrap" data-key="mw">${offBox(s)}${hostEvents(s)}</div></div>`;
+  return head + `<div class="mscroll" data-key="ms"><div class="mwrap" data-key="mw">${alerts(s, 1)}${hostMain(s)}${hostEvents(s)}</div></div>`;
+}
+function hostMain(s){
+  const ph = !DESK.matches, hs = PREF.show.chart ? histFor(s) : null;
+  const cpCard = PREF.show.chart ? `<div class="cc" data-key="cp"><div class="cch"><span class="lg"><i style="background:${COL.cpu}"></i>處理器</span><span class="lg"><i style="background:${COL.mem}"></i>記憶體</span>${rangeSeg()}</div>
+    <div class="cbox">${chartOr(hs, cid(s, ph ? "m" : "a"), x => [{data:x.cpu, color:COL.cpu, name:"處理器"}, {data:x.mem, color:COL.mem, name:"記憶體"}], {max:100, grid:1, fmt:v => Math.round(v) + "%", h: ph ? 130 : 160})}</div></div>` : "";
+  const npCard = PREF.show.net ? `<div class="cc" data-key="np"><div class="nets"><div class="nt">${IC("down")}<div class="nv" title="下載">${rate(s.net.rx)}</div></div><div class="nt">${IC("up")}<div class="nv" title="上傳">${rate(s.net.tx)}</div></div></div>
+    ${hs ? `<div class="cbox wide">${chartOr(hs, cid(s, ph ? "n" : "b"), x => [{data:x.rx, color:COL.rx, name:"下載"}, {data:x.tx, color:COL.tx, name:"上傳"}], {grid:1, bin:1, fmt:rate, h: ph ? 104 : 120})}</div>` : ""}</div>` : "";
+  const ioCard = PREF.show.chart && hs && !hs.err && hs.rd ? ioCards(s, hs, ph) : "";
+  return tiles(s) + `<div class="cgrid" data-key="cg">${cpCard}${npCard}${ioCard}</div>` + trafficCard(s);
+}
+function hostEvents(s){
+  const ev = mergeEv(s.events || []).map(e => ({...e, h:s.name, k:keyOf(s)})).sort((a, b) => b.t - a.t);
+  return `<div class="lbl" data-key="lhe">這台的紀錄${ev.length > 6 ? `<button data-logall="${esc(keyOf(s))}">全部 ${ev.length} 筆</button>` : ""}</div>` + timeline(ev.slice(0, 6), false);
+}
+/* ── 右欄：主機資訊（像 Telegram 的個人資料：大頭像、快捷鍵、一段一段的資訊與工具） ── */
+function infoScreen(s){
+  const k = esc(keyOf(s)), node = esc(s.node || ""), name = esc(s.name), D = DESK.matches;
+  const lead = D ? `<button class="iconbtn" data-go="i:${k}" title="關閉">${I("x")}</button>` : backBtn();
+  const head = topbar(lead, "主機資訊", null, "");
+  const st = !s.online ? `連不上${s.last_seen ? `・${esc(ago(s.last_seen))}` : ""}` : lvOf(s) === "ok" && !issueN(s) ? "一切正常" : `${issueN(s)} 件事要留意`;
+  const c = s.online && s.cloud && safeUrl(cloudHref(s.cloud)) ? s.cloud : null;
+  const qa = [c ? `<a class="qa" href="${esc(cloudHref(c))}"${ssoAttr(s)} target="_blank" rel="noopener noreferrer">${I("cloud")}<span>雲端硬碟</span></a>` : "",
+    c ? `<button class="qa" data-dl="${node}" data-name="${name}">${I("dl")}<span>下載</span></button>` : "",
+    s.online ? `<button class="qa" data-rename="${node}" data-name="${name}">${I("edit")}<span>編輯</span></button>` : "",
+    s.online ? `<button class="qa warn" data-reboot="${node}" data-name="${name}">${I("power")}<span>重開機</span></button>` : ""].join("");
+  const pl = place(s), fl = PREF.show.flag && s.geo ? flag(s.geo.cc) : "";
+  const prof = `<div class="prof" data-key="prof">${cav(s, true)}<b class="pn">${name}</b>${pl ? `<span class="pl">${fl}${esc(pl)}</span>` : ""}<small class="ps ${s.online ? lvOf(s) : "bad"}" data-x>${st}</small>${qa ? `<div class="qas">${qa}</div>` : ""}</div>`;
+  if (!s.online) return head + `<div class="rscroll" data-key="rs">${prof}${s.node ? `<div class="group" data-key="g-x">${peerRow(s)}${rmRow(s)}</div>` : ""}</div>`;
+  const sec = (key, title, body, btn = "") => body ? `<div class="lbl" data-key="l${key}">${title}${btn}</div>${body}` : "";
+  const tools = toolRows(s, node, name);
+  const L = linksOf(s).filter(x => !x.fixed);
+  const maint = `<div class="group" data-key="g-h" data-keyed><div class="selfbox" data-key="self" data-n="${node}"${SELFST[keyOf(s)] ? "" : " data-ld"}>${selfRowHtml(s)}</div>${sysRow(s)}${secRow(s)}<button class="li" data-key="pw" data-newtok="${node}" data-label="${name}">${IC("key", "")}<span class="lab">換一組新密碼<small>舊密碼會立刻失效</small></span>${CHEV}</button>`
+    + (s.keep ? `<label class="li" data-key="keep">${IC("keep", "")}<span class="lab">Oracle 防回收${keepLine(s.keep)}</span><input type="checkbox" class="tog" data-keepalive="${node}" aria-label="Oracle 防回收" ${s.keep.on ? "checked" : ""}></label>` : "")
+    + (s.node ? "" : setRow(`data-key="pair" data-pair`, "link", "配對暗號", "pairst")) + `</div>`;
+  return head + `<div class="rscroll" data-key="rs">${prof}`
+    + sec("t", "工具", `<div class="group" data-key="g-t">${tools}</div>`)
+    + specCard(s) + itemsCard(s) + topCard(s)
+    + sec("m", "維護", `<div class="selfsum" data-key="selfsum" data-keep data-ld>${selfSumHtml()}</div>` + maint, `<button data-selfcheck>檢查新版</button>`)
+    + sec("k", "常用連結", L.length ? `<div class="group" data-key="g-lk">${L.map(x => linkRow(x, esc(linkSt(x)))).join("")}</div>` : "", `<button type="button" data-rename="${node}" data-name="${name}">編輯</button>`)
+    + (s.node ? `<div class="group gx" data-key="g-x">${rmRow(s)}</div>` : "") + `</div>`;
+}
+const rmRow = s => `<button class="li danger" data-rmhost="${esc(s.node)}" data-name="${esc(s.name)}"><span class="ico bad">${I("trash")}</span><span class="lab">移除主機</span></button>`;
+const peerRow = s => `<button class="li" data-peeredit="${esc(s.node)}">${IC("link", "")}<span class="lab">更改連線網址<small>${esc(s.error && s.error !== "連不上" ? s.error : "對方的網址或連接埠換了")}</small></span>${CHEV}</button>`;
+/* 工具：一列一個（雲端硬碟、下載在上面的快捷鍵） */
+function toolRows(s, node, name){
+  const row = (a, ic, t, sub, r = "") => `<button class="li" ${a}>${IC(ic, "")}<span class="lab">${t}<small data-x>${sub}</small></span>${r}${CHEV}</button>`;
+  const c = s.cloud && safeUrl(cloudHref(s.cloud)) ? s.cloud : null, out = [];
+  if (c) {
+    const pct = c.total ? Math.round(c.pct) : null;
+    out.push(`<a class="li" data-key="cl" href="${esc(cloudHref(c))}"${ssoAttr(s)} target="_blank" rel="noopener noreferrer">${IC("cloud", "")}<span class="lab">雲端硬碟<small data-x>${c.total ? `${size(c.used)} / ${size(c.total)}` : "加密儲存空間"}</small>${c.total ? wave(c.pct) : ""}</span>${pct != null ? tBadge(`${pct}%`, pct >= 90 ? "bad" : pct >= 75 ? "warn" : "") : ""}${EXT}</a>`);
+    const dl = dlTileState(s);
+    out.push(row(`data-key="dl" data-dl="${node}" data-name="${name}"`, "dl", "遠端下載", dl.sub, dl.b));
+  }
+  out.push(`<button class="li" data-key="bk" data-bk="${node}" data-label="${name}">${IC("archive", "")}<span class="lab">每日備份<small class="bkst" data-n="${node}" data-keep data-ld>讀取中…</small></span><span class="tbadge bkbdg" data-n="${node}" data-keep></span>${CHEV}</button>`);
+  out.push(row(`data-key="nt" data-notes="${node}" data-name="${name}"`, "note", "加密筆記", s.notes ? "Joplin 同步已開啟" : "Joplin 端對端加密同步", tBadge(s.notes ? "已開啟" : "", "ok")));
+  if (s.adblock) { const a = s.adblock, [bt, bc] = abSt(a); out.push(row(`data-key="ab" data-ab="${node}" data-name="${name}"`, "dnsf", "AdGuard Home", a.err ? "點進檢查連線與防火牆" : a.on ? "加密 DNS 擋廣告" : "啟用專屬擋廣告 DNS", tBadge(bt, bc))); }
+  if (c) { const pend = s.albums_pend || 0, n = s.albums || 0;
+    out.push(row(`data-key="alm" data-album="${node}" data-name="${name}"`, "album", "相簿分享", pend ? `朋友放了 ${pend} 張等你確認` : n ? `${n} 本分享中` : "加密照片牆與影片分享", pend ? tBadge(`${pend}`, "act") : "")); }
+  if (s.traffic) out.push(row(`data-key="tf" data-traffic="${node}" data-label="${name}"`, "month", "每月流量", s.traffic.limit ? `上限 ${size(s.traffic.limit)}・每月 ${s.traffic.reset_day} 號重置` : "設定上限與重置日"));
+  return out.join("");
+}
+/* 設定列：右邊是勾或數字（設好了），沒設好寫字 */
+const setRow = (attr, ic, l, st) => {
+  const c = STCACHE[st], v = c ? (!c.b ? "" : c.b === true ? "✓" : String(c.b)) : "", bh = c && c.b === true ? I("check") : v;
+  return `<button class="li" ${attr}>${IC(ic, "")}<span class="lab">${l}<small class="${st}${c && c.on ? " on" : ""}" data-keep data-ld>${c ? esc(c.t) : "讀取中…"}</small></span><span class="stb${c && typeof c.b === "number" ? " n" : ""}" data-keep${c && c.b ? ` data-v="${esc(v)}"` : " hidden"}>${bh}</span>${CHEV}</button>`;
+};
+/* ── 設定（電腦蓋在左欄上面一層、手機推進來一層） ── */
+function setScreen(list){
+  const on = list.filter(s => s.online), self = on.some(s => !s.node), me = list.find(x => !x.node);
+  const head = topbar(`<button class="iconbtn" data-navback title="返回">${I("back")}</button>`, "設定", null, "");
+  const accMap = Object.fromEntries([...ACCENTS, ["rainbow", "彩色"]]);
+  const sw = ACCENTS.map(([v, l]) => `<button class="${PREF.accent === v ? "on" : ""}" data-pref="accent" data-val="${v}" data-accent="${v}" title="${l}" aria-label="${l}">${I("check")}</button>`).join("")
+    + `<button class="rbsw${PREF.accent === "rainbow" ? " on" : ""}" data-pref="accent" data-val="rainbow" title="彩色" aria-label="彩色">${I("check")}</button>`;
+  const prof = `<div class="prof" data-key="prof"><span class="cav big brand">${BRAND}</span><b class="pn">哨站</b><small class="ps">${me && me.version ? `版本 ${esc(me.version)}・` : ""}${list.length} 台主機</small></div>`;
+  const secG = `<div class="group" data-key="g-sec">${setRow("data-tg", "bell", "Telegram 通知", "tgst")}${PK_OK && self ? setRow("data-pk", "finger", "手機金鑰登入", "pkst") : ""}${self ? setRow("data-pin", "pin", "PIN 碼登入", "pinst") + setRow("data-sess", "devices", "登入的裝置", "sessst") : ""}</div>`;
+  const skyG = self && !SHARE ? `<div class="lbl" data-key="lsky">機場起降</div><div class="group" data-key="g-sky">${setRow("data-sky", "sky", "OpenSky 帳號", "skyst")}</div>` : "";
+  const look = `<div class="lbl" data-key="llook">外觀</div><div class="group" data-key="g-look">
+      <div class="li col"><span class="lab">主題</span>${lkPick("theme", [["auto", "自動"], ["light", "淺色"], ["dark", "深色"]], v => v === "auto" ? `<span class="lkh">${lkMini("light")}${lkMini("dark")}</span>` : lkMini(v))}</div>
+      <div class="li col"><span class="lab sw-head"><span>主題色</span><span class="sw-val"><i></i>${esc(accMap[PREF.accent] || "藍")}</span></span><div class="sww"><div class="sw">${sw}</div></div></div>
+      <div class="li col"><span class="lab">配色風格</span>${lkPick("tone", [["soft", "柔和"], ["vivid", "鮮明"], ["calm", "素雅"]], v => lkMini(document.documentElement.dataset.mode || "light", v))}</div>
+      <div class="li col"><span class="lab">文字大小</span>${lkPick("size", [["s", "小"], ["m", "中"], ["l", "大"]], v => `<i class="lkz ${v}">字</i>`)}</div>
+      <label class="li"><span class="lab">動畫</span>${tog("motion", "動畫")}</label>
+      <button class="li" data-shows>${IC("trend", "")}<span class="lab">要顯示的內容<small class="showst">${showSum()}</small></span>${CHEV}</button></div>`;
+  const out = `<div class="group" data-key="g-out"><button class="li" data-logout><span class="ico info">${I("logout")}</span><span class="lab">登出</span></button>
+      <button class="li" data-reset><span class="ico info">${I("reset")}</span><span class="lab">恢復預設值</span></button></div>`;
+  return head + `<div class="rscroll" data-key="ss">${prof}<div class="lbl" data-key="lsec">通知與登入</div>${secG}${skyG}${look}<div class="lbl" data-key="lo"></div>${out}</div>`;
+}
+let NAVSWIPE = 0;
+/* 手機：往右滑退回上一層（畫面跟著手指走，放開超過三成或甩得夠快就退回） */
+(function(){
+  let x0 = 0, y0 = 0, t0 = 0, top = null, under = null, lock = 0, on = false;
+  const off = () => { removeEventListener("touchmove", mv); removeEventListener("touchend", end); removeEventListener("touchcancel", end); on = false; };
+  const mv = e => {
+    if (!top || e.touches.length > 1) return;
+    const t = e.touches[0], dx = (t.clientX - x0) / ZM(), dy = (t.clientY - y0) / ZM();
+    if (!lock) { if (Math.hypot(dx, dy) < 10) return; if (dx > 0 && dx > Math.abs(dy) * 1.5) lock = 1; else { top = null; return off(); } }
+    if (e.cancelable) e.preventDefault();
+    const w = top.offsetWidth, x = Math.max(0, dx);
+    top.style.transform = `translateX(${x}px)`;
+    if (under) { under.style.transform = `translateX(${(x / w - 1) * 20}%)`; under.style.opacity = .9 + .1 * x / w; }
+  };
+  const end = e => {
+    off(); if (!top || !lock) { top = null; return; }
+    const t = e.changedTouches && e.changedTouches[0], dx = t ? (t.clientX - x0) / ZM() : 0, v = dx / Math.max(1, performance.now() - t0), w = top.offsetWidth, el = top;
+    top = null;
+    if (dx > w * .3 || v > .5) { el.style.transform = ""; if (under) under.remove(); NAVSWIPE = dx; navBack(); NAVSWIPE = 0; return; }
+    el.animate([{transform:`translateX(${dx}px)`}, {transform:"none"}], {duration:T.fast, easing:STD}); el.style.transform = "";
+    if (under) under.remove();
+  };
+  addEventListener("touchstart", e => {
+    if (DESK.matches || STK.length < 2 || e.touches.length > 1 || $("#fly") || window._menu || document.querySelector("#layer .veil")) return;
+    const t = e.touches[0];
+    if (t.clientX < 16 || e.target.closest("input,textarea,canvas,.cbox,[data-noswipe],.hpick,.sw")) return;
+    const st = $("#app .stage"), cur = st && st.querySelector(":scope>.scr:not(.gone)"); if (!cur) return;
+    x0 = t.clientX; y0 = t.clientY; t0 = performance.now(); lock = 0; top = cur;
+    under = document.createElement("section"); under.className = "scr under"; under._leaving = 1;   // 底下那一層先畫好（真的上一層），跟著手指出來
+    under.innerHTML = phoneBody(STK[STK.length - 2], LIST, ""); under.style.transform = "translateX(-20%)"; under.style.opacity = .9; st.insertBefore(under, cur);
+    if (!on) { on = true; addEventListener("touchmove", mv, {passive:false}); addEventListener("touchend", end, {passive:true}); addEventListener("touchcancel", end, {passive:true}); }
+  }, {passive:true});
+})();
+
+/* 電腦版一次並排幾台（保留給視窗大小改變時判斷要不要重畫） */
 const deskCols = () => 1;
-const cardMode = () => !DESK.matches;
-/* 主機總表的一列：名稱、三條進度條、網路、流量、開機、⋯；點一列進那台專頁 */
-function hostRowD(s, on){
-  const k = esc(keyOf(s)), lv = s.online ? lvOf(s) : "bad", bar = p => `<span class="hc">${wave(p)}<b class="num ${tier(p)}">${num(p)}%</b></span>`;
-  /* 有狀況的：名字下面直接放那件事的小膠囊（處理器、記憶體、磁碟那格已經變紅的不再放），不用點進去才知道 */
-  const bad = s.online ? (s.problems || []).filter(p => !tileKey(s, p)).map(p => alChip(noDup(s, String(p)), "bad", "b")) : [];
-  const warn = s.online ? (s.notices || []).map(p => alChip(String(p), "warn", "w")) : [];
-  const al = bad.concat(warn), sub = al.length ? `<small class="hal">${al[0]}${al.length > 1 ? `<i class="num">+${al.length - 1}</i>` : ""}</small>` : `<small>${esc(place(s) || osShort(s.os))}</small>`;
-  const nm = `<span class="hc hn">${avatar(s)}<span><b>${esc(s.name)}</b>${sub}</span></span>`;
-  if (!s.online) return `<div class="htr off${on ? " on" : ""}" data-dsel="${k}" data-key="hr:${k}">${nm}<span class="hc hoff">${I("off")}連不上${s.last_seen ? `・${esc(seen(s))}` : ""}</span><span class="hc">${moreBtn(s)}</span></div>`;
-  const d0 = disk0(s);
-  return `<div class="htr ${lv}${on ? " on" : ""}" data-dsel="${k}" data-key="hr:${k}">${nm}${bar(s.cpu)}${bar(s.mem.pct)}${bar(d0.pct)}
-    <span class="hc num hnet">${I("down")}<span>${rate(s.net.rx)}</span>${I("up")}<span>${rate(s.net.tx)}</span></span>${s.traffic && s.traffic.limit ? `<span class="hc htf" title="${size(s.traffic.used)}／${size(s.traffic.limit)}">${wave(s.traffic.pct)}<b class="num ${tier(s.traffic.pct)}">${size(s.traffic.used)}</b></span>` : `<span class="hc htf"><span class="wv0"></span><b class="num nl">${s.traffic ? size(s.traffic.used) : "—"}</b></span>`}<span class="hc num">${up(s.uptime)}</span><span class="hc">${moreBtn(s)}</span></div>`;
-}
+const cardMode = () => false;
 /* 30 天上線紀錄計算 */
 const upAvg = a => { const v = (a || []).filter(x => x != null); return v.length ? v.reduce((x, y) => x + y, 0) / v.length : null; };
 const upPct = v => v == null ? "—" : v >= 99.995 ? "100%" : (Math.floor(v * 100) / 100).toFixed(2) + "%";
-/* 總覽精簡 3 格重點摘要（在線節點、即時總網速、本月總流量，去重不雜亂） */
-function sumRow(list){
-  const on = list.filter(s => s.online), off = list.length - on.length;
-  const ua = upAvg(list.flatMap(s => (s.up30 || []).filter(x => x != null)));
-  const rx = on.reduce((t, s) => t + (s.net.rx || 0), 0), tx = on.reduce((t, s) => t + (s.net.tx || 0), 0);
-  const tr = list.filter(s => s.traffic), used = tr.reduce((t, s) => t + (s.traffic.used || 0), 0), pj = tr.reduce((t, s) => t + (s.traffic.projected || 0), 0);
-  const cell = (k, ic, label, v, sub) => `<div class="sumc" data-key="sm:${k}"><span class="smk">${ic}<span>${label}</span></span><span class="smv">${v}</span><span class="sms">${sub}</span></div>`;
-  return `<div class="sums" data-key="sums">`
-    + cell("h", IC("info", "sm"), "在線節點", `${num(on.length)}<small>／${list.length} 台</small>`, off ? `${off} 台離線` : ua == null ? "全部在線" : `30 天上線率 ${upPct(ua)}`)
-    + cell("n", IC("net", "sm"), "即時總網速", `<small class="dn">${I("down")}</small><b data-x>${rate(rx)}</b>`, `<span class="smu">${I("up")}<span data-x>${rate(tx)}</span> 上傳</span>`)
-    + cell("t", IC("month", "sm"), "本月總流量", `<b data-x>${size(used)}</b>`, pj ? `月底預估 ${size(pj)}` : `${tr.length} 台加總`)
-    + `</div>`;
-}
-function homeDesk(list, time){
-  const sel = deskSel(list);
-  if (sel) {
-    const crumb = list.length > 1
-      ? `<div class="dcrumb" data-key="dcrumb"><button class="backbtn" data-dhome>${I("back")}<span>總覽</span></button><span class="csep">/</span><span class="cname">${esc(sel.name)}</span></div>`
-      : "";
-    return `<div class="dhome dhost" data-key="dh:h:${esc(keyOf(sel))}" data-sw>${crumb}<section class="hp ${lvOf(sel)}" data-key="hp:${esc(keyOf(sel))}">${hostBody(sel, false)}</section></div>`;
-  }
-  const ev = groupEv(allEvents(list)).slice(0, 5), g = greet();
-  const lvs = list.map(s => s.online ? lvOf(s) : "bad"), lv = LOST || lvs.includes("bad") ? "bad" : lvs.includes("warn") || issuesOf(list).length ? "warn" : "ok";
-  const ua = upAvg(list.flatMap(s => (s.up30 || []).filter(x => x != null)));
-  const sub = LOST ? "連線中斷，自動重試中…" : lv !== "ok" ? [g.hi, g.quote].filter(Boolean).join("・") : (ua != null ? `過去 30 天平均可用率 ${upPct(ua)}` : [g.hi, g.quote].filter(Boolean).join("・"));
-  const badge = `<span class="hbadge ${lv}">${I({ok:"ok", warn:"alert", bad:"warn"}[lv])}<span>${LOST ? "重連中" : lv === "ok" ? "全部在線" : lv === "warn" ? "請留意" : "偵測到異常"}</span></span>`;
-  const hd = `<div class="dhero" data-key="dhero"><div class="dhero-t"><h1 class="dbt" data-x>${esc(headline(list))}</h1><div class="dhero-sub">${badge}${sub ? `<span>${esc(sub)}</span>` : ""}</div></div>${addHostBtn("ubtn ghost dadd")}</div>`;
-  const tab = `<div class="lbl" data-key="lht">主機清單<small>點選任一台查看詳情</small></div><div class="htab" data-key="htab"><div class="hth"><span>主機</span><span>處理器</span><span>記憶體</span><span>磁碟</span><span>網路</span><span${list.some(s => s.traffic && s.traffic.limit) ? "" : ` class="hr"`}>本月流量</span><span>開機</span><span></span></div>
-    <div class="htb" data-key="htb" data-keyed>${list.map(s => hostRowD(s, false)).join("")}</div></div>`;
-  return `<div class="dhome" data-key="dh:all" data-sw>${hd}${sumRow(list)}${tab}${tgHint(list)}<div class="lbl" data-key="lev">最近發生${ev.length ? `<button data-tab="log">全部紀錄</button>` : ""}</div>${evList(ev, list.length > 1)}</div>`;
-}
-/* 那台主機的整頁（從卡片的位置展開；電腦上左邊的分頁列留著） */
-function detail(s){
-  const r = OPENR || {t:0, b:0, l:0, r:0};
-  return `<div class="det${DETP ? " pre" : ""}${DETX ? " closing" : ""}" data-key="det:${esc(keyOf(s))}" style="--ct:${r.t}px;--cb:${r.b}px;--cl:${r.l}px;--cr:${r.r}px"><div class="dscroll">
-    <div class="dtop"><button class="icbtn" data-back title="返回">${I("back")}</button><span class="dtt">${esc(s.name)}</span><span class="hacts">${moreBtn(s).replace("iconbtn", "icbtn")}</span></div>
-    ${hostBody(s, true)}</div></div>`;
-}
+
 /* 工具：雲端硬碟、遠端下載、每日備份、加密筆記、擋廣告 DNS、相簿分享、常用連結、機場起降 */
 let TOOLH = store("vs-toolh"), ORDER = [];
 const tBadge = (text, cls = "") => text ? `<span class="tbadge${cls ? " " + cls : ""}" data-x>${text}</span>` : "";
@@ -869,69 +1035,7 @@ function dlTileState(s){
   if (bad) return {b: tBadge(`失敗 ${bad}`, "bad"), sub: "有下載沒成功", foot: "點進重試或清除"};
   return {b: tBadge("待命"), sub: "檔案直連・影音網站", foot: "存到雲端硬碟「下載」"};
 }
-function toolsPage(list){
-  const on = list.filter(s => s.online).sort((a, b) => ORDER.indexOf(keyOf(a)) - ORDER.indexOf(keyOf(b)));
-  const D = DESK.matches;
-  let h = `<div class="${D ? "wide" : "narrow"}" data-key="tools"><h1 class="ptitle"><span>工具</span></h1>`;
-  const flySub = FLYS.name ? `${esc(FLYS.name)}・即時看板與塔台雷達` : "即時航班看板與塔台雷達";
-  const fly = `<div class="group fly1" data-key="g-fly"><button class="li" data-key="fly" data-fly>${IC("fly", "")}<span class="lab">機場起降<small>${flySub}</small></span>${CHEV}</button></div>`;
-  const flyT = `<button class="tbx" data-key="fly" data-fly><span class="ttop">${IC("fly", "")}<span class="tgo nx">${CHEV}</span></span><span class="tmeta"><b>機場起降</b><small class="tdesc">${flySub}</small></span></button>`;
-  if (!on.length) return D ? `<div class="wide" data-key="tools">${dbar("工具")}<div class="calm">連不上任何主機</div><div class="tgrid" data-key="g-tf" data-n="1">${flyT}</div></div>`
-    : h + `<div class="calm">連不上任何主機</div><div class="lbl" data-key="ltf">不分主機</div>${fly}</div>`;
-  const s = on.find(x => keyOf(x) === TOOLH) || on.find(x => !x.node) || on[0], k = esc(keyOf(s)), node = esc(s.node || ""), name = esc(s.name);
-  const dot = x => lvOf(x) === "ok" ? "" : `<span class="dot ${lvOf(x)}"></span>`;
-  const pick = on.length > 1 ? hpick(on, s, dot) : "";
-  if (D) return `<div class="wide" data-key="tools">${dbar("工具", pick)}${toolsBody(s, k, node, name)}<div class="lbl" data-key="ltf">不分主機</div>${fly}</div>`;
-  return h + pick + toolsBody(s, k, node, name) + `<div class="lbl" data-key="ltf">不分主機</div>${fly}</div>`;
-}
-function toolsBody(s, k, node, name){
-  const c = s.cloud && safeUrl(cloudHref(s.cloud)) ? s.cloud : null;
-  const tiles = [];
-  if (c) {
-    const pct = c.total ? Math.round(c.pct) : null;
-    const ccls = pct == null ? "" : pct >= 90 ? "bad" : pct >= 75 ? "warn" : "ok";
-    tiles.push(`<a class="tbx" data-key="cl" href="${esc(cloudHref(c))}"${ssoAttr(s)} target="_blank" rel="noopener noreferrer">
-      <span class="ttop">${IC("cloud", "")}<span class="trgt">${pct != null ? tBadge(`${pct}%`, ccls) : ""}<span class="tgo">${EXT}</span></span></span>
-      <span class="tmeta"><b>雲端硬碟</b><small class="tdesc" data-x>${c.total ? `${size(c.used)} / ${size(c.total)}` : "加密儲存空間"}</small></span>
-      <span class="tfoot">${c.total ? wave(c.pct) : `<span class="thint">驗證後直接開啟</span>`}</span></a>`);
-    const dl = dlTileState(s);
-    tiles.push(`<button class="tbx" data-key="dl" data-dl="${node}" data-name="${name}">
-      <span class="ttop">${IC("dl", "")}<span class="trgt">${dl.b}<span class="tgo nx">${CHEV}</span></span></span>
-      <span class="tmeta"><b>遠端下載</b><small class="tdesc" data-x>${dl.sub}</small></span>
-      <span class="tfoot"><span class="thint">${dl.foot}</span></span></button>`);
-  }
-  tiles.push(`<button class="tbx" data-key="bk" data-bk="${node}" data-label="${name}">
-    <span class="ttop">${IC("archive", "")}<span class="trgt"><span class="tbadge bkbdg" data-n="${node}" data-keep></span><span class="tgo nx">${CHEV}</span></span></span>
-    <span class="tmeta"><b>每日備份</b><small class="tdesc bkst" data-n="${node}" data-keep data-ld>讀取中…</small></span>
-    <span class="tfoot"><span class="bkdots" data-n="${node}" data-keep>${"<i></i>".repeat(7)}</span><span class="thint">近 7 天</span></span></button>`);
-  tiles.push(`<button class="tbx" data-key="nt" data-notes="${node}" data-name="${name}">
-    <span class="ttop">${IC("note", "")}<span class="trgt">${tBadge(s.notes ? "已開啟" : "未開啟", s.notes ? "ok" : "")}<span class="tgo nx">${CHEV}</span></span></span>
-    <span class="tmeta"><b>加密筆記</b><small class="tdesc">Joplin 端對端加密同步</small></span>
-    <span class="tfoot"><span class="thint">${s.notes ? "查看連線資訊與密碼" : "點進快速開啟"}</span></span></button>`);
-  const ab = abTile(s, node, name);
-  if (ab) tiles.push(ab);
-  if (c) {
-    const pend = s.albums_pend || 0, n = s.albums || 0;
-    const abdg = pend ? tBadge(`待確認 ${pend}`, "act") : n ? tBadge(`${n} 本分享中`, "ok") : tBadge("還沒分享");
-    tiles.push(`<button class="tbx" data-key="alm" data-album="${node}" data-name="${name}">
-      <span class="ttop">${IC("album", "")}<span class="trgt">${abdg}<span class="tgo nx">${CHEV}</span></span></span>
-      <span class="tmeta"><b>相簿分享</b><small class="tdesc">${pend ? `朋友放了 ${pend} 張等你確認` : "加密照片牆與影片分享"}</small></span>
-      <span class="tfoot"><span class="thint">${n ? "管理連結、權限與留言" : "挑個資料夾立即分享"}</span></span></button>`);
-  }
-  let h = `<div data-key="tb:${k}" data-sw><div class="tgrid" data-key="g-t:${k}" data-n="${tiles.length}">${tiles.join("")}</div>`;
-  const L = linksOf(s).filter(x => !x.fixed);
-  if (L.length) h += `<div class="lbl" data-key="ll">常用連結<button type="button" data-rename="${node}" data-name="${name}">編輯連結</button></div><div class="group lgrid" data-key="g-lk:${k}">${L.map(x => linkRow(x, esc(linkSt(x)))).join("")}</div>`;
-  return h + `</div>`;
-}
-/* 一排主機名稱選一台（工具、設定共用，選了哪台兩邊都記得）；dot：名稱前面的小圓點 */
-const hpick = (on, s, dot) => `<div class="hpick" data-key="hpick" data-keyed data-slide>${on.map(x => `<button class="fchip${x === s ? " on" : ""}" data-key="hp:${esc(keyOf(x))}" data-toolh="${esc(keyOf(x))}">${dot(x)}${esc(x.name)}</button>`).join("")}</div>`;
-/* 選到的主機名稱被擠到邊邊或看不到時，把那一排滑到它在中間（只滑那一排，頁面不動） */
-function pickShow(anim){
-  const r = $(".hpick"), b = r && r.querySelector(".on"); if (!b || r.scrollWidth <= r.clientWidth) return;
-  const z = ZM(), l = (b.getBoundingClientRect().left - r.getBoundingClientRect().left) / z + r.scrollLeft, pad = 40;
-  if (l < r.scrollLeft + pad || l + b.offsetWidth > r.scrollLeft + r.clientWidth - pad)        // 滑到正中間
-    r.scrollTo({left: l - (r.clientWidth - b.offsetWidth) / 2, behavior: anim && canAnim() ? "smooth" : "auto"});
-}
+
 /* 單選的指示器滑過去（data-slide）：
    導覽列（.dock 底線、.rnav）、設定分類（.pane）、手機主機三分頁（.dseg 底線）、紀錄篩選（.fchips 底線）、選主機（.hpick）
    照 Telegram 分頁底線：.3s、slide 曲線；圖示與文字不動，途中再按別顆從當下位置轉向 */
@@ -989,27 +1093,6 @@ function boxIn(b, el, z){
 /* 紀錄：所有主機的事件，依日期分組 */
 let LOGF = "", LOGH = "";
 const LOGK = {"": () => true, bad: e => e.kind === "bad" || e.kind === "warn", other: e => e.kind === "ok" || e.kind === "info"};
-function logPage(list){
-  const D = DESK.matches, many = list.length > 1, hk = many && list.some(x => keyOf(x) === LOGH) ? LOGH : "";
-  const all = allEvents(list), byH = all.filter(e => !hk || e.k === hk), ev0 = byH.filter(LOGK[LOGF] || LOGK[""]), ev = hk ? ev0 : groupEv(ev0);
-  const F = [["", "全部", "log"], ["bad", "有狀況", "warn"], ["other", "恢復與通知", "ok"]];   // 前面一個圖示，筆數是小徽章
-  const fi = (k, ic) => `<span class="lfi ${k || "all"}">${I(ic)}</span>`, fn = k => (hk ? byH.filter(LOGK[k]) : groupEv(byH.filter(LOGK[k]))).length;
-  let rows = "", day = "";
-  for (const e of ev) { const d = dayOf(e.t); if (d !== day) { day = d; rows += `<div class="day" data-key="d:${d}">${d}</div>`; } rows += evRow(e, many, hm); }
-  const body = ev.length ? `<div class="evs" data-key="evs" data-keyed data-sw>${rows}</div>` : `<div class="calm" data-key="calm" data-sw>目前沒有事件</div>`;
-  const chip = (k, l, ic) => `<button class="fchip lfc${LOGF === k ? " on" : ""}" data-logf="${k}" data-key="lf:${k}" title="${l}"><i class="tbu"></i>${fi(k, ic)}<span class="lfl">${l}</span><b class="lfn">${fn(k)}</b></button>`;
-  const hn = hk && list.find(x => keyOf(x) === hk);   // 好幾台時多一顆「全部主機 ▾」，點了選只看哪一台
-  const hc = many ? `<button class="fchip hsel${hk ? " set" : ""}" data-loghm data-key="hsel" data-x>${esc(hn ? hn.name : "全部主機")}${I("chev")}</button>` : "";
-  const fc = `<div class="fchips lft" data-key="lfc" data-slide=".tbu">${F.map(([k, l, ic]) => chip(k, l, ic)).join("")}</div>`;
-  if (D) {   // 電腦：篩選放工具列，事件是一張表（時間、主機、事件）
-    let tr = "", dd = "";
-    for (const e of ev) { const d = dayOf(e.t); if (d !== dd) { dd = d; tr += `<div class="day" data-key="d:${d}">${d}</div>`; } tr += evRowD(e, many); }
-    const tb = ev.length ? `<div class="ltab${many ? "" : " one"}" data-key="ltab:${LOGF}:${hk}" data-sw><div class="lth"><span>時間</span>${many ? "<span>主機</span>" : ""}<span class="lev">事件</span></div><div class="evs" data-key="evs" data-keyed>${tr}</div></div>`
-      : `<div class="calm" data-key="calm" data-sw>目前沒有事件</div>`;
-    return `<div class="wide" data-key="log">${dbar("紀錄", fc + `<span class="sp"></span>` + hc)}${tb}</div>`;
-  }
-  return `<div class="narrow" data-key="log"><h1 class="ptitle wh"><span>紀錄</span>${hc}</h1>${fc}${body}</div>`;
-}
 /* 主題色：照色相排一圈（色票本身用 style.css 的 [data-accent] 算出預覽） */
 const ACCENTS = [["red", "紅"], ["orange", "橘"], ["amber", "琥珀"], ["lime", "萊姆"], ["green", "綠"], ["teal", "青綠"],
   ["cyan", "天藍"], ["blue", "藍"], ["indigo", "靛藍"], ["purple", "紫"], ["pink", "粉紅"]];
@@ -1028,45 +1111,6 @@ function selfSumHtml(){
   const hosts = LIST.filter(x => x.online && SELFST[keyOf(x)]);
   const pend = hosts.reduce((n, h) => { const d = SELFST[keyOf(h)]; return n + (d.has && !d.running ? 1 : 0) + (d.cloud && d.cloud.has && !d.cloud.running ? 1 : 0); }, 0);
   return pend > 1 ? `<span>${pend} 項有新版</span><button class="ubtn sm" data-selfup="*">全部更新</button>` : "";
-}
-function setPage(list){
-  const on = list.filter(s => s.online).sort((a, b) => ORDER.indexOf(keyOf(a)) - ORDER.indexOf(keyOf(b))), self = on.some(s => !s.node);
-  const go = (attr, ic, l, st) => {
-    const c = STCACHE[st], v = c ? (!c.b ? "" : c.b === true ? "✓" : String(c.b)) : "", bh = c && c.b === true ? I("check") : v;
-    return `<button class="li" ${attr}>${IC(ic, "")}<span class="lab">${l}<small class="${st}${c && c.on ? " on" : ""}" data-keep data-ld>${c ? esc(c.t) : "讀取中…"}</small></span><span class="stb${c && typeof c.b === "number" ? " n" : ""}" data-keep${c && c.b ? ` data-v="${esc(v)}"` : " hidden"}>${bh}</span>${CHEV}</button>`;
-  };
-  const accMap = Object.fromEntries([...ACCENTS, ["rainbow", "彩色"]]);
-  const sw = ACCENTS.map(([v, l]) => `<button class="${PREF.accent === v ? "on" : ""}" data-pref="accent" data-val="${v}" data-accent="${v}" title="${l}" aria-label="${l}">${I("check")}</button>`).join("")
-    + `<button class="rbsw${PREF.accent === "rainbow" ? " on" : ""}" data-pref="accent" data-val="rainbow" title="彩色" aria-label="彩色">${I("check")}</button>`;
-  const D = DESK.matches;   // 電腦：左邊主機和通知，右邊欄是這台裝置的外觀
-  const look = `<div class="lbl" data-key="llook">外觀</div><div class="group" data-key="g-look">
-      <div class="li col"><span class="lab">主題</span>${lkPick("theme", [["auto", "自動"], ["light", "淺色"], ["dark", "深色"]], v => v === "auto" ? `<span class="lkh">${lkMini("light")}${lkMini("dark")}</span>` : lkMini(v))}</div>
-      <div class="li col"><span class="lab sw-head"><span>主題色</span><span class="sw-val"><i></i>${esc(accMap[PREF.accent] || "藍")}</span></span><div class="sww"><div class="sw">${sw}</div></div></div>
-      <div class="li col"><span class="lab">配色風格</span>${lkPick("tone", [["soft", "柔和"], ["vivid", "鮮明"], ["calm", "素雅"]], v => lkMini(document.documentElement.dataset.mode || "light", v))}</div>
-      <div class="li col"><span class="lab">文字大小</span>${lkPick("size", [["s", "小"], ["m", "中"], ["l", "大"]], v => `<i class="lkz ${v}">字</i>`)}</div>
-      <label class="li"><span class="lab">動畫</span>${tog("motion", "動畫")}</label>
-      <button class="li" data-shows>${IC("trend", "")}<span class="lab">要顯示的內容<small class="showst">${showSum()}</small></span>${CHEV}</button></div>`;
-  const secG = `<div class="group" data-key="g-sec">${go("data-tg", "bell", "Telegram 通知", "tgst")}${PK_OK && self ? go("data-pk", "finger", "手機金鑰登入", "pkst") : ""}${self ? go("data-pin", "pin", "PIN 碼登入", "pinst") + go("data-sess", "devices", "登入的裝置", "sessst") : ""}</div>`;
-  const skyG = self && !SHARE ? `<div class="group" data-key="g-sky">${go("data-sky", "sky", "OpenSky 帳號", "skyst")}</div>` : "";
-  const sec = `<div class="lbl" data-key="lsec">通知與登入</div>${secG}` + (skyG ? `<div class="lbl" data-key="lsky">機場起降</div>${skyG}` : "");
-  const out = `<div class="sp" data-key="sp"></div><div class="group" data-key="g-out"><button class="li" data-logout><span class="ico info">${I("logout")}</span><span class="lab">登出</span></button>
-      <button class="li" data-reset><span class="ico info">${I("reset")}</span><span class="lab">恢復預設值</span></button></div>`;
-  let h = "", hpk = "";
-  if (on.length) {
-    const s = on.find(x => keyOf(x) === TOOLH) || on.find(x => !x.node) || on[0], k = esc(keyOf(s)), node = esc(s.node || "");
-    hpk = on.length > 1 ? hpick(on, s, x => x.self_has ? `<span class="dot info"></span>` : "") : "";
-    h += (D ? "" : `<div class="lbl" data-key="lh">主機<button data-selfcheck>檢查新版</button></div>`) + `<div class="selfsum" data-key="selfsum" data-keep data-ld>${selfSumHtml()}</div>` + (D ? "" : hpk);   // 電腦：選主機、檢查新版放上面的工具列，右邊第一張卡片跟左邊分類對齊
-    h += `<div class="group" data-key="g-h" data-keyed><div class="selfbox" data-key="self" data-n="${node}"${SELFST[keyOf(s)] ? "" : " data-ld"}>${selfRowHtml(s)}</div>${sysRow(s)}${secRow(s)}<button class="li" data-key="pw" data-newtok="${node}" data-label="${esc(s.name)}">${IC("key", "")}<span class="lab">換一組新密碼<small>舊密碼會立刻失效</small></span>${CHEV}</button>`
-      + (s.keep ? `<label class="li" data-key="keep">${IC("keep", "")}<span class="lab">Oracle 防回收${keepLine(s.keep)}</span><input type="checkbox" class="tog" data-keepalive="${node}" aria-label="Oracle 防回收" ${s.keep.on ? "checked" : ""}></label>` : "")
-      + (s.node ? "" : go(`data-key="pair" data-pair`, "link", "配對暗號", "pairst")) + `</div>`;
-  }
-  if (D) {   // 電腦：左邊分類、右邊只放那一類（跟電腦上的設定程式一樣）
-    const C = [["sec", "通知與登入", "bell"], ...(skyG ? [["sky", "機場起降", "plane"]] : []), ...(h ? [["host", "主機", "server"]] : []), ["look", "外觀", "palette"]];
-    const c = C.some(x => x[0] === SETC) ? SETC : C[0][0], body = {sec:secG, sky:skyG, host:h, look:look.replace(/<div class="lbl"[^>]*>外觀<\/div>/, "")}[c];
-    return `<div class="wide" data-key="set">${dbar("設定", c === "host" ? `<div class="sbr" data-key="sbr">${hpk}<span class="sp"></span><button class="ubtn ghost dadd" data-selfcheck data-key="selfchk">檢查新版</button></div>` : "")}<div class="sgrid" data-key="sg"><nav class="scat" data-key="sct"><div class="pane group" data-key="scp" data-slide>${C.map(([k, l, ic]) => `<button class="li${c === k ? " on" : ""}" data-setc="${k}" data-key="sc:${k}">${I(ic)}<span class="lab">${l}</span></button>`).join("")}</div>${out}</nav>
-      <div class="sbody" data-key="sb:${c}" data-sw>${body}</div></div></div>`;
-  }
-  return `<div class="narrow" data-key="set"><h1 class="ptitle"><span>設定</span></h1>` + sec + h + look + out + `</div>`;   // 手機：常用的通知、登入放最上面，外觀設好就很少動，放最後
 }
 /* 安全檢查：存著的資料、網頁連線、雲端硬碟、備份、SSH 各自有沒有保護好 */
 /* 安全檢查：上面是自動做好的（只看），下面是可以自己開關的（SSH、封鎖、自動更新），最下面放 SSH 金鑰 */
@@ -1919,48 +1963,6 @@ function animTargets(root){
   walk(root);
   return out;
 }
-/* 換分頁：電腦版先讓舊頁各卡片淡出移除、再讓新頁各毛玻璃卡片直接淡入（零重疊、不建 Backdrop Root、邊框不閃） */
-let SWIPEX = 0;
-function through(a, b){
-  const par = a.offsetParent;
-  if (!canAnim() || !par) return a.replaceWith(b);
-  const z = ZM(), slide = !DESK.matches && TABDIR;
-  const tf = slide ? getComputedStyle(a).transform : "none", tfX = tf && tf !== "none" ? new DOMMatrix(tf).e : 0;
-  const curX = slide ? (SWIPEX || tfX) : 0;
-  par.querySelectorAll(":scope>.view").forEach(v => { if (v._leaving) v.remove(); });
-  const r = a.getBoundingClientRect(), R = par.getBoundingClientRect(), sy = Math.max(0, scrollY) / z;
-  const top = (r.top - R.top) / z - par.clientTop, h = Math.max(0, Math.min(r.height / z, sy + innerHeight / z - top));
-  a.replaceWith(b);
-  if (slide) {
-    a._leaving = 1;
-    Object.assign(a.style, {position:"absolute", left:(r.left - R.left) / z - par.clientLeft - tfX + "px", top:(top - sy) + "px", width:r.width / z + "px",
-      height:h + "px", overflow:"hidden", margin:"0", pointerEvents:"none", animation:"none", clipPath:sy > 0 ? `inset(${sy}px 0 0 0)` : ""});
-    b.after(a); still(a);
-    if (sy > 0) scrollTo(0, 0);
-    const stride = r.width / z + 32, dur = Math.round(T.mid * Math.max(.55, 1 - Math.abs(curX) / stride));
-    const opt = {duration:dur, easing:EASE, id:"ui"};
-    a.animate([{transform:`translateX(${curX}px)`}, {transform:`translateX(${-TABDIR * stride}px)`}], {...opt, fill:"forwards"}).onfinish = () => a.remove();
-    b.animate([{transform:`translateX(${curX + TABDIR * stride}px)`}, {transform:"none"}], opt);
-    return;
-  }
-  b.classList.add("no-intro");
-  const enter = () => {
-    a.remove();
-    if (!b.isConnected) return;
-    b.style.visibility = "";
-    const inOpt = {duration:T.mid, easing:EASE, id:"ui"}, dx = (TABDIR || 0) * 24;   // telegram-tt slide-fade：新的一頁從那一邊移 1.5rem 進來、同時淡入
-    animTargets(b).forEach(el => el.animate([{opacity:0, transform:dx ? `translateX(${dx}px)` : "translateY(6px)"}, {opacity:1, transform:"none"}], inOpt));
-  };
-  if (a.style.visibility === "hidden") return enter();
-  b.style.visibility = "hidden";
-  a._leaving = 1;
-  Object.assign(a.style, {position:"absolute", left:(r.left - R.left) / z - par.clientLeft + "px", top:(top - sy) + "px", width:r.width / z + "px",
-    height:h + "px", overflow:"hidden", margin:"0", pointerEvents:"none", animation:"none"});
-  b.after(a); still(a);
-  const outEls = animTargets(a), outOpt = {duration:Math.round(T.fast * .55), easing:EXIT, fill:"forwards", id:"ui"};
-  if (outEls.length) outEls.map(el => el.animate([{opacity:1}, {opacity:0}], outOpt))[0].onfinish = enter;
-  else enter();
-}
 /* 切換內容區塊（data-sw：總覽 ↔ 單台主機、換主機、換設定分類）：先淡出移除舊內容再淡入新毛玻璃卡片，零重疊不閃邊框 */
 function swapIn(a, b){
   if (!canAnim() || !a.isConnected) return a.replaceWith(b);
@@ -1990,7 +1992,7 @@ function swapIn(a, b){
   else enter();
 }
 function morph(a, b){
-  if (a.nodeType === 1 && b.nodeType === 1 && a.matches("main.view") && b.matches("main.view") && a.getAttribute("data-key") !== b.getAttribute("data-key")) return through(a, b);
+  if (a.nodeType === 1 && b.nodeType === 1 && a.hasAttribute("data-scr") && b.hasAttribute("data-scr") && a.getAttribute("data-key") !== b.getAttribute("data-key")) return scrSwap(a, b);
   if (a.nodeType===1 && b.nodeType===1 && (a.hasAttribute("data-sw") && b.hasAttribute("data-sw") && a.getAttribute("data-key") !== b.getAttribute("data-key")
       || a.nodeName !== b.nodeName && (a.classList.contains("wait") || b.classList.contains("wait")))) return swapIn(a, b);   // 曲線圖「讀取中」↔ 圖
   if (a.nodeType!==b.nodeType || a.nodeName!==b.nodeName ||
@@ -2167,35 +2169,13 @@ function render(list){
   if (list !== LIST) ORDER = list.map(keyOf);  // 原本的順序（工具的主機列不跟著告警重排，免得按到別台）；換分頁重畫時 LIST 已經排過，不能拿來當原本的順序
   list = [...list].map(tidy).sort((a, b) => LVRANK[lvOf(a)] - LVRANK[lvOf(b)]);
   LIST = list;
-  if (DET && (!cardMode(list) || !list.some(s => keyOf(s) === DET))) { DET = ""; DETX = false; showBack(); document.documentElement.classList.remove("lock"); }
   const time = new Date().toLocaleTimeString("zh-TW", {hour12:false});
   const alv = LOST || list.some(s => !s.online || lvOf(s) === "bad") ? "bad" : list.some(s => lvOf(s) === "warn") || issuesOf(list).length ? "warn" : "ok";
   document.documentElement.dataset.alert = alv;
-  paint(DESK.matches ? renderDesk(list, time) : renderPhone(list, time));
+  paint(shell(list, time));
   if (TIPX) drawTip(...TIPX);
-  loadStatus(); pickShow(PSMOOTH);
+  loadStatus();
 }
-/* 換主機時新的那台內容比較短：先撐住原本的高度，再順順地往上捲到新的底，最後才放開；
-   不然捲到下面時一換，頁面會一下子跳回上面（使用者回報） */
-let HOLDT = 0;
-function holdHeight(change){
-  const v = view(), se = document.scrollingElement, B = document.body;
-  if (!v || !se || se.scrollTop < 1) return change();
-  const bot = () => { const l = v.lastElementChild; return l ? l.getBoundingClientRect().bottom + se.scrollTop : 0; };
-  clearTimeout(HOLDT); B.style.minHeight = "";
-  const y0 = se.scrollTop, b0 = bot(); B.style.minHeight = se.scrollHeight / ZM() + "px";   // 撐住整頁原本的高度
-  change();
-  const tok = HOLDT = setTimeout(() => {}, 0);
-  const go = () => { if (HOLDT !== tok) return;                     // 舊的還在淡出時量不準：等換好再量、再捲
-    const y = se.scrollTop, cut = b0 - bot(); if (cut <= 1) { B.style.minHeight = ""; return; }
-    const top = Math.max(0, Math.min(y, se.scrollHeight - cut - innerHeight));
-    let done = 0; const free = () => { if (done) return; done = 1; removeEventListener("scrollend", free); if (HOLDT === tok) B.style.minHeight = ""; };
-    if (top < y && canAnim()) { addEventListener("scrollend", free); setTimeout(free, 900); se.scrollTo({top, behavior:"smooth"}); }
-    else { se.scrollTop = top; free(); } };
-  const an = v.getAnimations ? v.getAnimations({subtree:true}).filter(a => a.playState === "running" && isFinite(a.effect && a.effect.getComputedTiming().endTime)) : [];
-  Promise.race([Promise.all(an.map(a => a.finished.catch(() => {}))), new Promise(r => setTimeout(r, 700))]).then(go);
-}
-let PSMOOTH = false;   // 點主機名稱換台時，那一排平順地滑到選到的那台
 DESK.addEventListener("change", () => { applyPrefs(); if (LIST.length) render(LIST); });
 /* 電腦版一次並排幾台：螢幕夠寬才放三台 */
 let WIDE = 0;
@@ -2274,85 +2254,23 @@ function toast(msg, type="ok"){
 }
 
 /* ═════════ 分頁、主機整頁 ═════════ */
-let TAB = ["home", "tools", "log", "set"].includes(sstore("vs-tab")) ? sstore("vs-tab") : "home";
+/* 舊的分頁代號（別的地方還會用到）：紀錄＝全部主機、設定＝設定層、工具＝這台的主機資訊 */
 function setTab(k){
-  closeMenu(); hideTip();
-  if (DET) {                                     // 手機開著主機整頁時按分頁列：同一頁就收起來，別頁直接換過去
-    if (TAB === k) return closeDet();
-    DET = ""; DETX = false; showBack(); document.documentElement.classList.remove("lock");
-    if (history.state && history.state.det) history.replaceState(null, "");
-  }
-  if (TAB === k) {
-    if (k === "home" && DESK.matches && DSEL && LIST.length > 1) { DSEL = ""; sstore("vs-dsel", ""); scrollTo(0, 0); return render(LIST); }
-    if (scrollY > 0) scrollTo({top:0, behavior: canAnim() ? "smooth" : "auto"});
-    return;
-  }
-  const ks = TABS.map(x => x[0]);
-  TABDIR = Math.sign(ks.indexOf(k) - ks.indexOf(TAB));
-  if (k === "home" && DESK.matches && LIST.length > 1) { DSEL = ""; sstore("vs-dsel", ""); }
-  TAB = k; sstore("vs-tab", k);
-  const hd = document.querySelector(".dock.hid"); if (hd) hd.classList.remove("hid");
-  slideSel(() => render(LIST));
-  if (scrollY > 0) scrollTo(0, 0);
+  const me = LIST.find(x => !x.node) || LIST[0];
+  navGo(k === "log" ? "all" : k === "set" ? "set" : k === "tools" && me ? "i:" + keyOf(me) : DESK.matches ? "all" : "list");
 }
 let TABID = 0;
 /* 工具、設定頁上「讀取中…」的狀態：換到那一頁時讀一次（之後自動更新不會蓋掉） */
-const view = () => $("#app .view");
+const view = () => $("#app .dash");
 function loadStatus(){
   const r = view(); if (!r || !r.querySelector("[data-ld]")) return;
   r.querySelectorAll("[data-ld]").forEach(x => x.removeAttribute("data-ld"));
   tgStatus(r); selfStatus(r); pkStatus(r); pinStatus(r); sessStatus(r); pairStatus(r); bkStatus(r); skyStatus(r);
 }
-/* 手機：點主機卡片，那台的整頁從卡片的位置長出來；返回時縮回卡片 */
-let DET = "", DETX = false, DETP = false, OPENR = null;
-function cardRect(k){
-  const c = [...document.querySelectorAll("#app .hcard")].find(x => x.dataset.open === k); if (!c) return null;
-  const z = ZM(), r = c.getBoundingClientRect();
-  return {t: Math.max(0, r.top / z), b: Math.max(0, (innerHeight - r.bottom) / z), l: Math.max(0, r.left / z), r: Math.max(0, (innerWidth - r.right) / z)};
-}
-function openDet(k){
-  if (!cardMode(LIST) || DET) return;
-  const s = LIST.find(x => keyOf(x) === k), dash = document.querySelector("#app .dash.m");
-  if (!s || !dash) return;
-  OPENR = cardRect(k) || {t:0, b:0, l:0, r:0}; DET = k; DETX = false; DETP = canAnim();
-  history.pushState({det: k}, "");
-  closeMenu(); document.documentElement.classList.add("lock");
-  dash.querySelectorAll(":scope>.det").forEach(x => x.remove());
-  dash.insertAdjacentHTML("beforeend", detail(s));
-  const el = dash.querySelector(":scope>.det");
-  if (DETP && el) {
-    void el.offsetWidth;                                  // 同步完成首幀排版，單一 rAF 立刻啟動 GPU 滑入，iOS 不慢半拍
-    requestAnimationFrame(() => {
-      DETP = false;
-      if (el.isConnected && DET && !DETX) el.classList.remove("pre");
-    });
-  } else DETP = false;
-  clearTimeout(DETH); DETH = setTimeout(() => { if (DET && !DETX) document.documentElement.classList.add("dhid"); }, T.mid + 120);   // 滑入完才藏底層
-}
-let DETH;
-const showBack = () => { clearTimeout(DETH); document.documentElement.classList.remove("dhid"); };
-function closeDet(){ if (!DET) return; if (history.state && history.state.det) history.back(); else shutDet(); }
-function shutDet(){
-  if (!DET || DETX) return;
-  DETP = false; DETX = true;
-  showBack();
-  closeMenu(); hideTip();
-  if (!canAnim()) return endDet();
-  requestAnimationFrame(() => {                           // 先讓底層主頁重繪完成再淡出，不重 diff 整頁、關閉零閃爍
-    if (!DET || !DETX) return;
-    const el = document.querySelector("#app .det");
-    if (el) { el.classList.remove("pre"); el.classList.add("closing"); }
-    setTimeout(endDet, T.fast + 60);
-  });
-}
-function endDet(){
-  DET = ""; DETX = false; DETP = false; showBack(); document.documentElement.classList.remove("lock");
-  document.querySelectorAll("#app .det").forEach(x => x.remove());
-}
-addEventListener("popstate", () => { if (DET && !(history.state && history.state.det)) shutDet(); });
+let DET = "", DETX = false, DETP = false, OPENR = null;   // 舊的主機整頁：已經改成一層一層的畫面，留著給機場起降判斷
+const showBack = () => document.documentElement.classList.remove("dhid");
 document.addEventListener("keydown", e => {
-  if ((e.key === "Enter" || e.key === " ") && e.target.matches && e.target.matches("[data-open]")) { e.preventDefault(); openDet(e.target.dataset.open); }
-  if (e.key === "Escape" && DET && !document.querySelector("#layer .veil") && !window._menu) closeDet();
+  if (e.key === "Escape" && !document.querySelector("#layer .veil") && !window._menu && !$("#fly") && !(e.target.matches && e.target.matches("input,textarea"))) navBack();
 });
 /* 改了設定：馬上套用 */
 function changed(k){
@@ -2677,7 +2595,7 @@ const UPW = (() => { let o = {}; try { o = JSON.parse(sstore("vs-upw") || "{}");
   return {jobs: o.jobs || [], wait: o.wait || [], first: o.first || "", held: o.held || [], rows: o.rows || [], show: !!o.show, timer: 0}; })();
 function upwSave(){ const {jobs, wait, first, held, rows, show} = UPW;
   sstore("vs-upw", jobs.length || wait.length || held.length || show ? JSON.stringify({jobs, wait, first, held, rows, show}) : ""); }
-function upwPanel(){ const b = TAB === "set" && view(); if (b) selfStatus(b, "fresh"); }
+function upwPanel(){ const b = view(); if (b && b.querySelector(".selfbox")) selfStatus(b, "fresh"); }
 const upwSay = (list) => { const bad = list.filter(x => !x[1]), good = list.filter(x => x[1]);
   return [good.length ? (good.length > 1 ? `${good.length} 個項目都更新好了 ✨` : good[0][0]) : "", ...bad.map(x => x[0])].filter(Boolean).join("；"); };
 function upwReload(msg){
@@ -3711,7 +3629,7 @@ function bkLine(d){
 }
 async function bkStatus(root){
   await Promise.all([...root.querySelectorAll(".bkst")].map(async el => {
-    const box = el.closest(".tbx") || el.parentNode;
+    const box = el.closest(".tbx,.li") || el.parentNode;   // 工具方塊或主機資訊裡的一列
     const bdg = box && box.querySelector(".bkbdg");
     try {
       const d = await bkGet(el.dataset.n), [t, c] = bkLine(d);
@@ -4219,8 +4137,17 @@ async function pageClick(e){
   if (t.closest("[data-rsw]")) return restoreScreen();
   const tb = t.closest("[data-tab]");
   if (tb) { if ($("#fly") && !tb.closest("#fly")) { flyClose(); if (TAB === tb.dataset.tab) return; } return setTab(tb.dataset.tab); }   // 機場起降開著時按分頁列：先關掉
-  if (t.closest("[data-settings]")) return setTab("set");
-  if (t.closest("[data-back]")) return closeDet();
+  if (t.closest("[data-settings]")) return navGo("set");
+  if (t.closest("[data-back],[data-navback]")) return navBack();
+  if (t.closest("[data-mainmenu]")) { const b = t.closest("[data-mainmenu]"); if (window._menu && window._menu._by === b) return closeMenu(); return mainMenu(b); }
+  if (t.closest("[data-logmenu]")) { const b = t.closest("[data-logmenu]"); if (window._menu && window._menu._by === b) return closeMenu(); return logMenu(b); }
+  if (t.closest("[data-logclear]")) { LOGF = ""; LOGH = ""; return render(LIST); }
+  const la = t.closest("[data-logall]");
+  if (la) { LOGH = la.dataset.logall; LOGF = ""; return navGo("all"); }
+  const qf = t.closest("[data-qf]");
+  if (qf) { if (QF !== qf.dataset.qf) { QF = qf.dataset.qf; slideSel(() => render(LIST)); } return; }
+  const gt = t.closest("[data-go]");
+  if (gt && !t.closest("[data-more]")) return navGo(gt.dataset.go);
   if (t.closest("[data-addhost]")) return addHostModal();
   const rg = t.closest("[data-range]");
   if (rg) { if (RANGE !== rg.dataset.range) { RANGE = rg.dataset.range; store("vps-range", RANGE); slideSel(() => render(LIST)); } return; }
@@ -4228,28 +4155,27 @@ async function pageClick(e){
   if (tf) return trafficModal(tf.dataset.traffic, tf.dataset.label);
   if (t.closest("[data-refresh]")) return refreshNow(t.closest("[data-refresh]"));
   if (t.closest("[data-qtheme]")) {
-    const next = document.documentElement.dataset.mode === "dark" ? "light" : "dark";
+    const next = document.documentElement.dataset.mode === "dark" ? "light" : "dark", cb = t.closest("[data-qtheme]").querySelector(".tog");
+    if (cb) cb.checked = next === "dark";
     setP("theme", next); return changed("theme");
   }
-  const dsg = t.closest("[data-dseg]");
-  if (dsg) { if (DSEG !== dsg.dataset.dseg) { DSEG = dsg.dataset.dseg; sstore("vs-dseg", DSEG); slideSel(() => render(LIST)); } return; }
   if (t.closest("[data-logout]")) {
     if (await modal({icon:"logout", cls:"theme", title:"要登出嗎？", text:"", ok:"登出"})) { sessCall({action:"out"}).catch(() => {}); setTok(""); LIST = []; for (const k in STCACHE) delete STCACHE[k]; for (const k in RAWCACHE) delete RAWCACHE[k]; for (const k in TOOLCACHE) delete TOOLCACHE[k]; window._pw = 0; clearTimeout(timer); DET = ""; showBack(); document.documentElement.classList.remove("lock"); login(); }
     return;
   }
   const th = t.closest("[data-toolh]");
-  if (th) { if (TOOLH !== th.dataset.toolh) { TOOLH = th.dataset.toolh; store("vs-toolh", TOOLH); PSMOOTH = true; holdHeight(() => slideSel(() => render(LIST))); PSMOOTH = false; } pickShow(true); return; }
+  if (th) { if (TOOLH !== th.dataset.toolh) { TOOLH = th.dataset.toolh; store("vs-toolh", TOOLH); slideSel(() => render(LIST)); } return; }
   const scg = t.closest("[data-setc]");
   if (scg) { if (SETC !== scg.dataset.setc) { SETC = scg.dataset.setc; store("vs-setc", SETC); slideSel(() => render(LIST)); } return; }
   const lf = t.closest("[data-logf]");
-  if (lf) { if (LOGF !== lf.dataset.logf) { LOGF = lf.dataset.logf; slideSel(() => render(LIST)); } return; }
+  if (lf) { if (LOGF !== lf.dataset.logf) { LOGF = lf.dataset.logf; render(LIST); } return; }
   const ex = t.closest("[data-evx]");
   if (ex) { const k = ex.dataset.evx, on = !EVOPEN.has(k); on ? EVOPEN.add(k) : EVOPEN.delete(k);
     document.querySelectorAll("[data-evx]").forEach(b => { if (b.dataset.evx === k) { b.closest(".ev").classList.toggle("open", on); b.setAttribute("aria-expanded", on); } }); return; }
   const lhm = t.closest("[data-loghm]");
   if (lhm) return logHostMenu(lhm);
   const lh = t.closest("[data-logh]");
-  if (lh) { if (LOGH !== lh.dataset.logh) { LOGH = lh.dataset.logh; slideSel(() => render(LIST)); } return; }
+  if (lh) { if (LOGH !== lh.dataset.logh) { LOGH = lh.dataset.logh; render(LIST); } return; }
 
   const pe = t.closest("[data-peeredit]");
   if (pe) { const s = LIST.find(x => (x.node || "") === pe.dataset.peeredit); return s && peerModal(s); }
@@ -4346,19 +4272,7 @@ async function pageClick(e){
     smooth(() => { applyPrefs(); if (LIST.length) render(LIST); });
     restart(); return toast("已恢復預設值");
   }
-  if (t.closest("[data-dhome]")) {
-    DSEL = ""; sstore("vs-dsel", "");
-    if (TAB !== "home") return setTab("home");
-    scrollTo(0, 0); return render(LIST);
-  }
-  const ds = t.closest("[data-dsel]");
-  if (ds && !t.closest("[data-more]")) {
-    DSEL = ds.dataset.dsel; sstore("vs-dsel", DSEL);
-    if (TAB !== "home") { TABDIR = 0; TAB = "home"; sstore("vs-tab", "home"); }
-    scrollTo(0, 0); return slideSel(() => render(LIST));
-  }
-  const op = t.closest("[data-open]");
-  if (op) return openDet(op.dataset.open);
+  if (t.closest("[data-dhome]")) return navGo(DESK.matches ? "all" : "list");
 }
 
 /* ═════════ 機場起降：畫面程式在 web/fly.js，用到才下載（首頁打開比較快） ═════════ */
@@ -4598,86 +4512,8 @@ async function refreshNow(btn){
   try { const [ok] = await Promise.all([tick(), sleep(T.long)]); return ok; }
   finally { REFRESHING = false; stop(); }   // 出錯也一定要停下來，不然之後都不能再重新整理
 }
-/* 瀏覽器裡的手機頂部分頁列：往下捲藏起來、往上捲就出現（避開 iOS 底部網址列與上下回彈誤觸） */
-(function(){
-  let y = scrollY, acc = 0;
-  addEventListener("scroll", () => {
-    const d = document.querySelector(".dock"), now = scrollY, dy = now - y; y = now;
-    if (!d || DESK.matches || DET || document.documentElement.classList.contains("full") || document.documentElement.classList.contains("lock") || document.querySelector("#layer .veil")) return;
-    if (now <= 0) { acc = 0; if (d.classList.contains("hid")) d.classList.remove("hid"); return; }
-    if (now + innerHeight >= document.documentElement.scrollHeight - 8) return;   // 捲到底部彈性回彈時不亂跳出分頁列
-    acc = Math.sign(dy) === Math.sign(acc) ? acc + dy : dy;
-    const hid = d.classList.contains("hid");
-    if (now < d.offsetHeight) { if (hid) d.classList.remove("hid"); }
-    else if (acc > 24 && !hid) d.classList.add("hid");
-    else if (acc < -12 && hid) d.classList.remove("hid");
-  }, {passive:true});
-})();
-/* 主機整頁標題列捲動貼頂備援（給不支援 animation-timeline:view() 的 iOS Safari／Firefox） */
-if (!CSS.supports("(animation-timeline:view()) and (timeline-scope:--a)")) {
-  document.addEventListener("scroll", e => {
-    const s = e.target; if (!(s instanceof Element) || !s.classList.contains("dscroll")) return;
-    const top = s.querySelector(".dtop"); if (top) top.classList.toggle("stuck", s.scrollTop > 56);
-  }, {passive:true, capture:true});
-}
-/* 手機：畫面中間左右滑，整頁跟手滑動並無縫接續換分頁（僅在有效觸控期間動態掛載 touchmove，平時不拖慢 iOS 捲動與點擊） */
-(function(){
-  let x0 = null, y0 = 0, t0 = 0, dx = 0, lock = 0, v = null, tgt = null, on = false;
-  const unbind = () => {
-    if (!on) return; on = false;
-    removeEventListener("touchmove", onMove); removeEventListener("touchend", onEnd); removeEventListener("touchcancel", onCancel);
-  };
-  const reset = anim => {
-    unbind();
-    const el = v, cur = dx; x0 = null; dx = 0; lock = 0; v = null; tgt = null;
-    if (!el) return;
-    el.style.transform = "";
-    if (anim && canAnim() && Math.abs(cur) > 1) el.animate([{transform:`translateX(${cur}px)`}, {transform:"none"}], {duration:T.spf, easing:SPRING_F});
-  };
-  const onMove = e => {
-    if (x0 === null || !v || e.touches.length > 1) return reset(false);
-    const t = e.touches[0], mx = (t.clientX - x0) / ZM(), my = (t.clientY - y0) / ZM();
-    if (!lock) {
-      if (Math.hypot(mx, my) < 10) return;
-      if (Math.abs(mx) > Math.abs(my) * 1.4) {
-        for (let el = tgt; el && el !== document.body; el = el.parentElement) if (el.scrollWidth > el.clientWidth + 2 && /auto|scroll/.test(getComputedStyle(el).overflowX)) return reset(false);
-        lock = 1;
-      } else return reset(false);
-    }
-    if (e.cancelable) e.preventDefault();
-    const ks = TABS.map(([k]) => k), idx = ks.indexOf(TAB);
-    const edge = (mx > 0 && idx === 0) || (mx < 0 && idx === ks.length - 1);
-    dx = edge ? mx * .18 : Math.sign(mx) * (88 * (1 - Math.exp(-Math.abs(mx) / 130)));
-    v.style.transform = `translateX(${dx}px)`;
-  };
-  const onEnd = e => {
-    if (x0 === null) return unbind();
-    const t = e.changedTouches[0], rawDx = (t.clientX - x0) / ZM(), rawDy = (t.clientY - y0) / ZM();
-    const dt = Math.max(1, performance.now() - t0), vel = Math.abs(rawDx) / dt;
-    const ks = TABS.map(([k]) => k), dir = rawDx < 0 ? 1 : -1, next = ks.indexOf(TAB) + dir;
-    const go = next >= 0 && next < ks.length && (lock === 1 ? (Math.abs(rawDx) > 56 || (Math.abs(rawDx) > 24 && vel > .45)) : (Math.abs(rawDx) >= 60 && Math.abs(rawDx) >= Math.abs(rawDy) * 1.8 && dt < 700));
-    if (go) {
-      unbind();
-      SWIPEX = dx;
-      if (v) v.style.transform = "";
-      x0 = null; dx = 0; lock = 0; v = null; tgt = null;
-      setTab(ks[next]);
-      SWIPEX = 0;
-    } else reset(true);
-  };
-  const onCancel = () => reset(true);
-  addEventListener("touchstart", e => {
-    if (on) reset(false);
-    if (DESK.matches || DET || $("#fly") || window._menu || e.touches.length > 1 || document.querySelector("#layer .veil") || !LIST.length) return;
-    const t = e.touches[0];
-    if (t.clientX < 28 || t.clientX > innerWidth - 28) return;
-    if (e.target.closest("input,textarea,select,canvas,.cbox,.dock,[data-noswipe],.fhrs,.fterm")) return;
-    x0 = t.clientX; y0 = t.clientY; t0 = performance.now(); tgt = e.target; v = view(); on = true;
-    addEventListener("touchmove", onMove, {passive:false});
-    addEventListener("touchend", onEnd, {passive:true});
-    addEventListener("touchcancel", onCancel, {passive:true});
-  }, {passive:true});
-})();
+/* 搜尋主機：打字就篩選左邊的清單 */
+document.addEventListener("input", e => { if (e.target.matches && e.target.matches("[data-search]")) { QS = e.target.value; render(LIST); } });
 /* 按下去的水波紋（照 tweb components/ripple.ts 的做法）：從按下的點長出來，按住不放就停在那裡；
    放開後至少讓它長到一半才淡掉，快點一下也看得到。電腦約 .7 秒、手機約 .4 秒且從 .27 倍開始（用最接近的 T.long／T.slow） */
 (function(){
