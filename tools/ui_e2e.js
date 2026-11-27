@@ -86,7 +86,14 @@ async function phoneFlow(p, plat, engine, errs){
     const h0 = (await st(p)).hist;
     await tap(p, '[data-tab="all"]', true); await settle(p);
     await tap(p, '[data-tab="set"]', true); await settle(p);
-    s = await st(p); ok("換到設定分頁", s.stk === "set", s.stk); ok("換分頁不多瀏覽紀錄", s.hist === h0, `${h0}→${s.hist}`);
+    s = await st(p); ok("換到設定分頁", s.stk === "set", s.stk);
+    if (plat === "ios") ok("iOS 換分頁不留瀏覽紀錄", s.hist === h0, `${h0}→${s.hist}`);
+    else {   // Android（MainTabsActivity.onBackPressed）：不在第一個分頁時返回先回「主機」，而且不離開網站
+      ok("Android 換分頁最多多一筆紀錄", s.hist <= h0 + 1, `${h0}→${s.hist}`);
+      await p.goBack(); await settle(p); s = await st(p);
+      ok("Android 在別的分頁按返回：回主機分頁", s.stk === "list" && s.url.startsWith(URL0), JSON.stringify(s));
+      await tap(p, '[data-tab="set"]', true); await settle(p);
+    }
     await p.reload(); await p.waitForSelector(".tabbar"); await settle(p);
     s = await st(p); ok("重新整理後還在設定分頁", s.stk === "set", s.stk);
     // 換平台：在設定裡換成另一個，重新整理還記得

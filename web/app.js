@@ -746,7 +746,9 @@ function navGo(id){
     else if (id === "all" && TABS() && LEFT === "set") { LEFT = "list"; MAIN = "all"; sstore("vs-main", "all"); }
     else if (id.startsWith("i:")) { const k = id.slice(2); if (MAIN !== k) { MAIN = k; sstore("vs-main", k); } INFO = !INFO || MAIN !== k ? true : false; store("vs-info", INFO ? "1" : "0"); }
     else { const m = id === "all" ? "all" : id.slice(2); if (MAIN === m) return; MAIN = m; sstore("vs-main", m); }
-    render(LIST); NAVDIR = 0; return;
+    render(LIST); NAVDIR = 0;
+    if (id === "set" && PLAT === "desktop") { const x = $("#app .slbox [data-navback]"); if (x) x.focus({preventScroll:true}); }   // 設定那一層：鍵盤從 × 開始
+    return;
   }
   if (STK[STK.length - 1] === id) return;
   if (TABS() && ROOTS.includes(id)) return tabGo(id);
@@ -776,21 +778,29 @@ function navBack(){
 function tabGo(id){
   if (DESK.matches) return navGo(id);
   if (STK.length === 1 && STK[0] === id) { const sc = $("#app .stage>.scr:not(.gone,.under) :is(.lscroll,.mscroll,.rscroll)"); if (sc && sc.scrollTop) sc.scrollTo({top:0, behavior:canAnim() ? "smooth" : "auto"}); return; }   // 再點一次同一個分頁：捲回最上面
+  const hs = history.state || {};
+  if (PLAT === "android" && id === "list" && hs.tab) return history.back();   // Android：回第一個分頁＝退掉換分頁時多的那一筆（下面 popstate 換回來）
   STK = [id]; NAVBASE = 1; stkSave(); SRCH = false;
-  try { history.replaceState({...(history.state || {}), scr:1}, ""); } catch(e) {}
+  try {   // Android（MainTabsActivity.onBackPressed）：不在第一個分頁時按返回先回第一個分頁，所以離開「主機」時多記一筆；iOS 換分頁不留紀錄
+    if (PLAT === "android" && id !== "list" && !hs.tab) history.pushState({scr:1, tab:1}, "");
+    else history.replaceState({...hs, scr:1}, "");
+  } catch(e) {}
   NAVDIR = 2; render(LIST); NAVDIR = 0;
+  const b = $("#app .tabbar .tbi.on");   // 分頁列是新畫的：選到的那塊底自己撐開（GlassTabView 的選取）
+  if (b && PLAT === "android" && canAnim()) try { b.animate([{opacity:0, transform:"scale(.7)"}, {opacity:1, transform:"none"}], {duration:T.mid, easing:DEC, pseudoElement:"::before"}); } catch(e) {}
 }
 function navLocal(){ navPop(); try { if (history.state && history.state.scr > STK.length) history.replaceState({...history.state, scr: STK.length}, ""); } catch(e) {} }
 function navPop(){ if (STK.length < 2) return; STK.pop(); NAVBASE = Math.min(NAVBASE, STK.length); stkSave(); NAVDIR = -1; render(LIST); NAVDIR = 0; }
 addEventListener("popstate", () => {
-  if (DESK.matches || DLGSKIP) return;   // 選單、對話框收起來時自己退掉的那一筆：不是要退一層（關掉動畫時，選單一關馬上點設定會被退回去）
+  if (DESK.matches || DLGSKIP) return;
+  if (TABS() && STK.length === 1 && STK[0] !== "list" && !(history.state && (history.state.tab || history.state.dlg))) { STK = ["list"]; stkSave(); NAVDIR = 2; render(LIST); NAVDIR = 0; return; }   // Android 在別的分頁按返回：回主機分頁   // 選單、對話框收起來時自己退掉的那一筆：不是要退一層（關掉動畫時，選單一關馬上點設定會被退回去）
   const d = Math.max(1, (history.state && history.state.scr) || 1);
   if (STK.length > d) { while (STK.length > d + 1) STK.pop(); navPop(); }
   else if (d > STK.length && !(history.state && history.state.dlg)) try { history.replaceState({...history.state, scr: STK.length}, ""); } catch(e) {}   // 剛自己退過一層：這筆紀錄的層數跟著改
 });
-let NAVBASE = STK.length, NAVSWT = 0, SRCH = false;   // SRCH：Android 標題列換成搜尋框
+let NAVBASE = STK.length, NAVSWT = 0, SRCH = false;   // NAVBASE：打開網頁時就在第幾層（從暫存讀回來的），這幾層沒有自己的瀏覽紀錄；SRCH：Android 標題列換成搜尋框
 /* 推進一層時底下那層往左退多少、多暗（iOS NavigationTransitionCoordinator 退 30%、不變暗；telegram-tt 退 20%、.9；Android 往右滑返回時底下不動） */
-const UNDX = () => PLAT === "ios" ? 30 : PLAT === "android" ? 0 : 20, UNDO = () => PLAT === "desktop" ? .9 : 1;   // 打開網頁時就在第幾層（從暫存讀回來的）：這幾層沒有自己的瀏覽紀錄
+const UNDX = () => PLAT === "ios" ? 30 : PLAT === "android" ? 0 : 20, UNDO = () => PLAT === "desktop" ? .9 : 1;
 try { history.replaceState({...(history.state || {}), scr: STK.length}, ""); } catch(e) {}
 /* 換畫面：Telegram 的疊層（推進：新的從右邊整頁滑進來、舊的往左退 20% 並暗一點；退回反過來；原地換：淡入） */
 function scrSwap(a, b){
@@ -829,7 +839,7 @@ function deskShell(list, time){
   const main = s ? scrHtml("h:" + m, hostScreen(s)) : scrHtml("all", allScreen(list, time));
   const info = s ? `<aside class="rcol${INFO ? " on" : ""}" data-key="rcol"><div class="rcin">${scrHtml("i:" + m, infoScreen(s))}</div></aside>` : "";
   const tb = TABS() ? tabBar(list, LEFT === "set" ? "set" : m === "all" ? "all" : "list") : "";
-  const sl = lay ? `<div class="slayer" data-key="slayer"><button class="slbg" data-navback aria-label="關閉"></button><div class="slbox" data-key="slbox">${scrHtml("set", setScreen(list))}</div></div>` : "";
+  const sl = lay ? `<div class="slayer" data-key="slayer"><button class="slbg" data-navback aria-label="關閉"></button><div class="slbox" data-key="slbox" role="dialog" aria-modal="true" aria-label="設定">${scrHtml("set", setScreen(list))}</div></div>` : "";
   return `<div class="dash d app2" data-key="d"><aside class="lcol${tb ? " tabs" : ""}" data-key="lcol">${left}${tb}</aside><main class="mcol" data-key="mcol">${main}</main>${info}${sl}</div>`;
 }
 /* 電腦：收起設定那一層（淡出，Telegram Desktop 的圖層） */
@@ -859,7 +869,7 @@ function phoneBody(id, list, time){
    iOS：TabBarNode（49 高、毛玻璃、圖示上字在下 10 號字）；Android：MainTabsActivity（56 高、四周留 8、浮起來的膠囊，選到的那格有一塊底） */
 function tabBar(list, cur){
   const n = list.filter(isBad).length, lv = LOST || list.some(s => !s.online || lvOf(s) === "bad") ? "bad" : "warn";
-  const it = (id, ic, l, b = "") => `<button class="tbi${cur === id ? " on" : ""}" data-tab="${id}" data-key="t:${id}" aria-label="${l}"${cur === id ? ' aria-current="page"' : ""}><span class="tbg">${I(ic)}${b}</span><span class="tbn">${l}</span></button>`;
+  const it = (id, ic, l, b = "") => `<button class="tbi${cur === id ? " on" : ""}" data-tab="${id}" data-key="t:${id}" aria-label="${l}${b ? `，${n} 件事要留意` : ""}"${cur === id ? ' aria-current="page"' : ""}><span class="tbg">${I(ic)}${b}</span><span class="tbn">${l}</span></button>`;
   return `<nav class="tabbar" data-key="tabbar">${it("list", "home", "主機", n ? `<b class="cbg ${lv}" data-x>${n}</b>` : "")}${it("all", "log", "紀錄")}${it("set", "gear", "設定")}</nav>`;
 }
 /* 每一層上面的標題列
@@ -1110,8 +1120,8 @@ let NAVSWIPE = 0;
       if (!(dx > 0 && dx > Math.abs(dy) * 1.5)) { drop(); return off(); }
       lock = 1;
       const st = top.parentNode;
-      under = document.createElement("section"); under.className = "scr under"; under._leaving = 1;   // 底下那一層（真的上一層），跟著手指出來
-      under.innerHTML = phoneBody(STK[STK.length - 2], LIST, ""); under.style.transform = `translateX(-${UNDX()}%)`; under.style.opacity = UNDO(); st.insertBefore(under, top); skipIntro(under, true);
+      under = document.createElement("section"); const ur = TABS() && STK.length === 2; under.className = "scr under" + (ur ? " root" : ""); under._leaving = 1;   // 底下那一層（真的上一層），跟著手指出來；是分頁那層時連分頁列一起畫
+      under.innerHTML = phoneBody(STK[STK.length - 2], LIST, "") + (ur ? tabBar(LIST, STK[0]) : ""); under.style.transform = `translateX(-${UNDX()}%)`; under.style.opacity = UNDO(); st.insertBefore(under, top); skipIntro(under, true);
       top.getAnimations().forEach(a => a.cancel());   // 剛推進來的動畫還在：讓手指接手
     }
     if (e.cancelable) e.preventDefault();
@@ -4669,7 +4679,7 @@ document.addEventListener("input", e => { if (e.target.matches && e.target.match
     const start = () => {
       if (box) return;
       if (touch) el.classList.add("prs");
-      if (el.closest(".sw") || PLAT === "ios") return;              // 主題色球本身會縮一下；iOS 沒有水波紋，按下去只是底色變深（ListViewItemNode 的 highlight）                              // 主題色球：本身會縮一下，不疊水波紋
+      if (el.closest(".sw") || PLAT === "ios") return;              // 主題色球本身會縮一下；iOS 沒有水波紋，按下去只是底色變深（ListViewItemNode 的 highlight）
       const r = el.getBoundingClientRect(), z = ZM(), w = el.offsetWidth, h = el.offsetHeight;
       const x = (x0 - r.left) / z, y = (y0 - r.top) / z, R = Math.hypot(Math.max(x, w - x), Math.max(y, h - y));
       box = document.createElement("span"); box.className = "rip"; box._leaving = 1;
