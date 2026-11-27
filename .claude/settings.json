@@ -1,0 +1,112 @@
+{
+  "enabledPlugins": {
+    "superpowers@superpowers-marketplace": true,
+    "example-skills@anthropic-agent-skills": true
+  },
+  "extraKnownMarketplaces": {
+    "superpowers-marketplace": {
+      "source": {
+        "source": "github",
+        "repo": "obra/superpowers-marketplace"
+      }
+    },
+    "anthropic-agent-skills": {
+      "source": {
+        "source": "github",
+        "repo": "anthropics/skills"
+      }
+    }
+  },
+  "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \"$CLAUDE_PROJECT_DIR\"/.claude/hooks/session_start.py",
+            "timeout": 30
+          }
+        ],
+        "matcher": "startup|resume|clear|compact"
+      }
+    ],
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \"$CLAUDE_PROJECT_DIR\"/.claude/hooks/prompt_submit.py",
+            "timeout": 30
+          }
+        ]
+      }
+    ],
+    "PreToolUse": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \"$CLAUDE_PROJECT_DIR\"/.claude/hooks/pre_tool.py",
+            "timeout": 30
+          }
+        ],
+        "matcher": "Bash|Edit|Write|MultiEdit|NotebookEdit|mcp__github__.*"
+      }
+    ],
+    "PostToolUse": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \"$CLAUDE_PROJECT_DIR\"/.claude/hooks/post_tool.py",
+            "timeout": 120
+          }
+        ],
+        "matcher": "Edit|Write|MultiEdit|NotebookEdit|Skill|mcp__.*"
+      }
+    ],
+    "SubagentStop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \"$CLAUDE_PROJECT_DIR\"/.claude/hooks/subagent_stop.py",
+            "timeout": 30
+          }
+        ]
+      }
+    ],
+    "PreCompact": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \"$CLAUDE_PROJECT_DIR\"/.claude/hooks/pre_compact.py",
+            "timeout": 30
+          }
+        ],
+        "matcher": "manual|auto"
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \"$CLAUDE_PROJECT_DIR\"/.claude/hooks/stop.py",
+            "timeout": 1800
+          }
+        ]
+      }
+    ]
+  },
+  "permissions": {
+    "ask": [
+      "Bash(git push:*)",
+      "Bash(bash install.sh:*)",
+      "Bash(sudo bash install.sh:*)",
+      "Bash(bash cloud.sh:*)",
+      "Bash(sudo bash cloud.sh:*)"
+    ]
+  }
+}

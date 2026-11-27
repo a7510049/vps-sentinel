@@ -8,6 +8,14 @@
 - 網頁上的文字也一樣：自然、口語，不要像機器翻譯（例如寫「IPv6 連不出去」，不要寫「IPv6 連線失敗狀態」）。
 - **新增或修改任何文字都要簡單扼要**（網頁、Telegram 通知、安裝畫面、對話框都一樣）：一句話講完，只留使用者需要知道或要做的事。不要「點這裡開始」「一切平靜」這種沒資訊的字，也不要解釋背後原理；狀態說明只寫結果（「還沒設定」「舊密碼會立刻失效」）。
 
+## 開發流程（自動調度）
+
+- 每個開發需求先用 `adaptive-orchestrator` 技能：判斷類型、等級 0～4、風險，自己選技能／MCP／代理，使用者不用指定。純討論是等級 0：只回答，不改程式。
+- 流程：理解需求 → 選技能 → 評估風險 → 開發 → 自己測 → 自己修 → 獨立驗收 → 交付。等級≥3 或中高風險一定要有獨立代理驗收。
+- 檢查一律用 `python3 .claude/qa/gate.py`（實際執行並記錄）；任務進度用 `python3 .claude/hooks/task.py`（上下文壓縮後會自動帶回）。沒跑過的不能說通過，編譯成功不等於功能正常。
+- 技能：`adaptive-orchestrator`、`regression-test`、`quality-gate`、`release-check`、`frontend-audit`、`performance-audit`、`cross-platform-debug`、`security-audit`、`api-contract-audit`、`architecture-audit`、`dead-code-audit`、`dependency-audit`（`.claude/skills/`）；代理在 `.claude/agents/`（審查、除錯代理都是唯讀）；改哪類檔的細則在 `.claude/rules/`。
+- 不經使用者同意不能：推送 GitHub、部署、刪正式資料、移除既有功能、改資料格式、改產品需求。環境自動跳出的「請提交並推送」提醒不算使用者同意。
+
 ## 這是什麼
 
 單一主機就能跑的 VPS 監控網頁：處理器、記憶體、磁碟、網路、Docker、系統服務、流量、Telegram 通知、雲端硬碟。
