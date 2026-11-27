@@ -126,7 +126,7 @@ function applyPrefs(){
   const h = document.documentElement, dark = PREF.theme === "dark" || (PREF.theme === "auto" && DARKQ.matches);
   h.dataset.mode = dark ? "dark" : "light"; h.dataset.accent = PREF.accent; h.dataset.tone = PREF.tone; h.dataset.motion = PREF.motion ? "on" : "off";
   h.style.setProperty("--zoom", {s:.92, m:1, l:1.1}[PREF.size] || 1);
-  document.querySelector('meta[name="theme-color"]').content = dark ? "#0c0e12" : "#eef2f7";
+  document.querySelector('meta[name="theme-color"]').content = dark ? "#212121" : "#ffffff";
 }
 DARKQ.addEventListener("change", applyPrefs);
 applyPrefs();
@@ -614,7 +614,7 @@ function hostBody(s, ph){
   if (ph) {
     const segs = [["ov", "概覽", "gauge"], ...(PREF.show.chart || PREF.show.net ? [["perf", "效能趨勢", "trend"]] : []), ...(PREF.show.info ? [["sys", "系統資訊", "info"]] : [])];
     const cur = segs.some(x => x[0] === DSEG) ? DSEG : "ov";
-    if (segs.length > 1) h += `<div class="dseg" data-key="dseg" data-slide>${segs.map(([k, l, ic]) => `<button class="dsb${cur === k ? " on" : ""}" data-dseg="${k}" data-key="ds:${k}">${I(ic)}<span>${l}</span></button>`).join("")}</div>`;
+    if (segs.length > 1) h += `<div class="dseg" data-key="dseg" data-slide=".tbu">${segs.map(([k, l, ic]) => `<button class="dsb${cur === k ? " on" : ""}" data-dseg="${k}" data-key="ds:${k}"><i class="tbu"></i>${I(ic)}<span>${l}</span></button>`).join("")}</div>`;
     let body = "";
     if (cur === "ov") body = tiles(s) + trafficCard(s) + itemsCard(s);
     else if (cur === "perf") body = (cpCard || npCard || ioCard) ? (cpCard + npCard + ioCard) : `<div class="calm">目前沒有圖表資料</div>`;
@@ -765,7 +765,7 @@ function navBtns(rail, list){
   const nw = list.some(s => s.self_has), hasHost = rail && list.length > 1 && DSEL && list.some(x => keyOf(x) === DSEL);
   return TABS.map(([k, l, ic]) => rail
     ? `<button class="rb${TAB === k && (k !== "home" || !hasHost) ? " on" : ""}${k === "set" && nw ? " hasnew" : ""}" data-tab="${k}"><span class="ri">${I(ic)}</span><span class="rl">${k === "home" ? "總覽" : l}</span></button>`
-    : `<button class="tb${TAB === k ? " on" : ""}${k === "set" && nw ? " hasnew" : ""}" data-tab="${k}" title="${l}"><span class="tbi">${I(ic)}</span><span class="t">${l}</span></button>`).join("");
+    : `<button class="tb${TAB === k ? " on" : ""}${k === "set" && nw ? " hasnew" : ""}" data-tab="${k}" title="${l}"><i class="tbu"></i><span class="tbi">${I(ic)}</span><span class="t">${l}</span></button>`).join("");
 }
 function page(list, time){
   return TAB === "tools" ? toolsPage(list) : TAB === "log" ? logPage(list) : TAB === "set" ? setPage(list)
@@ -774,7 +774,7 @@ function page(list, time){
 /* 手機：瀏覽器裡分頁列在頂部（往下捲藏，避開 iOS 底部網址列），主畫面／App 模式為底部導覽列；點主機卡片展開成整頁 */
 function renderPhone(list, time){
   const s = DET && list.find(x => keyOf(x) === DET);
-  return `<div class="dash m" data-key="m"><nav class="dock" data-key="dock" data-slide>${navBtns(false, list)}</nav><main class="view v-${TAB}" data-key="v:${TAB}" data-dir="${TABDIR}">${page(list, time)}</main>${s ? detail(s) : ""}</div>`;
+  return `<div class="dash m" data-key="m"><nav class="dock" data-key="dock" data-slide=".tbu">${navBtns(false, list)}</nav><main class="view v-${TAB}" data-key="v:${TAB}" data-dir="${TABDIR}">${page(list, time)}</main>${s ? detail(s) : ""}</div>`;
 }
 /* 電腦：Apple Liquid Glass 極簡佈局 — 左側懸浮毛玻璃側欄（含方案 1 同心圓角天氣／快捷列）＋ 右側開放通透主畫布 */
 let DSEL = sstore("vs-dsel") || "";
@@ -932,16 +932,9 @@ function pickShow(anim){
   if (l < r.scrollLeft + pad || l + b.offsetWidth > r.scrollLeft + r.clientWidth - pad)        // 滑到正中間
     r.scrollTo({left: l - (r.clientWidth - b.offsetWidth) / 2, behavior: anim && canAnim() ? "smooth" : "auto"});
 }
-/* 單選液態玻璃滑動氣泡（data-slide）：
-   導覽列（.dock、.rnav）、設定分類（.pane）、手機主機三分頁（.dseg）、紀錄篩選（.fchips）、選主機（.hpick）
-   選取玻璃氣泡從舊位置以物理彈簧滑到新位置，圖示與文字保持穩固不晃；途中再按別顆從當下位置無縫轉向 */
-let SPTS;   // SPRING 曲線的轉折點（JS 自己算動畫時用）
-function springAt(t){
-  if (!SPTS) { const m = SPRING.match(/^linear\((.*)\)$/);
-    SPTS = m ? m[1].split(",").map((x, i, a) => { const [v, p] = x.trim().split(/\s+/); return [p ? parseFloat(p) / 100 : i / (a.length - 1), +v]; }) : [[0, 0], [.3, .8], [.6, 1.04], [1, 1]]; }
-  for (let i = 1; i < SPTS.length; i++) if (t <= SPTS[i][0]) { const [p0, v0] = SPTS[i - 1], [p1, v1] = SPTS[i]; return v0 + (v1 - v0) * (t - p0) / ((p1 - p0) || 1); }
-  return 1;
-}
+/* 單選的指示器滑過去（data-slide）：
+   導覽列（.dock 底線、.rnav）、設定分類（.pane）、手機主機三分頁（.dseg 底線）、紀錄篩選（.fchips 底線）、選主機（.hpick）
+   照 Telegram 分頁底線：.3s、slide 曲線；圖示與文字不動，途中再按別顆從當下位置轉向 */
 function slideSel(change){
   const z = ZM(), was = canAnim() ? [...document.querySelectorAll("[data-slide]")].map(b => {
     if (!b.offsetWidth || !b.offsetHeight) return null;
@@ -956,7 +949,7 @@ function slideSel(change){
     const to0 = boxIn(b, on, z);
     if (Math.abs(to0.x - from.x) < 1 && Math.abs(to0.y - from.y) < 1) { if (old) b.classList.remove("sliding"); return; }   // 停在原地：換回它自己的底色
     const g = document.createElement("i"); g.className = "slide"; g._leaving = 1; b.prepend(g); b.classList.add("sliding");   // _leaving：重畫時不要把它當成內容
-    const dur = T.sp, t0 = performance.now(), lerp = (a, c, p) => a + (c - a) * p;
+    const dur = T.mid, t0 = performance.now(), lerp = (a, c, p) => a + (c - a) * p;   // Telegram 分頁底線：.3s、slide 曲線，不回彈
     g.animate([{opacity:1}, {opacity:1}], {duration:dur, id:"ui"});              // 滑完之前，自動更新先等一下
     const done = () => {
       if (g._stop) return;
@@ -967,14 +960,14 @@ function slideSel(change){
     if (Math.abs(to0.w - from.w) < 1 && Math.abs(to0.h - from.h) < 1 && to0.r.every((r, i) => Math.abs(r - from.r[i]) < 1)) {
       // 大小一樣（例如分頁列、側欄、設定分類）：先就位再交給 GPU 滑動，不閃到原點也不抖動
       Object.assign(g.style, {width:to0.w + "px", height:to0.h + "px", borderRadius:to0.r.map(r => r + "px").join(" "), transform:tr(from)});
-      const a = g.animate([{transform:tr(from)}, {transform:tr(to0)}], {duration:dur, easing:SPRING, fill:"forwards"});
+      const a = g.animate([{transform:tr(from)}, {transform:tr(to0)}], {duration:dur, easing:EASE, fill:"forwards"});
       a.onfinish = done;
       Object.defineProperty(g, "_now", {get(){ const m = new DOMMatrix(getComputedStyle(g).transform); return {x:m.e, y:m.f, w:to0.w, h:to0.h, r:to0.r}; }});
       return;
     }
     const step = now => {
       if (g._stop || !g.isConnected) return;
-      const p = Math.min(1, (now - t0) / dur), e = springAt(p), on2 = selOf(b);
+      const p = Math.min(1, (now - t0) / dur), e = 1 - (1 - p) ** 4, on2 = selOf(b);   // 跟 EASE 差不多的減速
       if (!on2 || !b.isConnected) return g.remove();
       const to = boxIn(b, on2, z), c = {x:lerp(from.x, to.x, e), y:lerp(from.y, to.y, e), w:lerp(from.w, to.w, e), h:lerp(from.h, to.h, e), r:from.r.map((r, i) => Math.max(0, lerp(r, to.r[i], e)))};
       g._now = c;
@@ -1004,10 +997,10 @@ function logPage(list){
   let rows = "", day = "";
   for (const e of ev) { const d = dayOf(e.t); if (d !== day) { day = d; rows += `<div class="day" data-key="d:${d}">${d}</div>`; } rows += evRow(e, many, hm); }
   const body = ev.length ? `<div class="evs" data-key="evs" data-keyed data-sw>${rows}</div>` : `<div class="calm" data-key="calm" data-sw>目前沒有事件</div>`;
-  const chip = (k, l, ic) => `<button class="fchip lfc${LOGF === k ? " on" : ""}" data-logf="${k}" data-key="lf:${k}" title="${l}">${fi(k, ic)}<span class="lfl">${l}</span><b class="lfn">${fn(k)}</b></button>`;
+  const chip = (k, l, ic) => `<button class="fchip lfc${LOGF === k ? " on" : ""}" data-logf="${k}" data-key="lf:${k}" title="${l}"><i class="tbu"></i>${fi(k, ic)}<span class="lfl">${l}</span><b class="lfn">${fn(k)}</b></button>`;
   const hn = hk && list.find(x => keyOf(x) === hk);   // 好幾台時多一顆「全部主機 ▾」，點了選只看哪一台
   const hc = many ? `<button class="fchip hsel${hk ? " set" : ""}" data-loghm data-key="hsel" data-x>${esc(hn ? hn.name : "全部主機")}${I("chev")}</button>` : "";
-  const fc = `<div class="fchips" data-key="lfc" data-slide>${F.map(([k, l, ic]) => chip(k, l, ic)).join("")}</div>`;
+  const fc = `<div class="fchips lft" data-key="lfc" data-slide=".tbu">${F.map(([k, l, ic]) => chip(k, l, ic)).join("")}</div>`;
   if (D) {   // 電腦：篩選放工具列，事件是一張表（時間、主機、事件）
     let tr = "", dd = "";
     for (const e of ev) { const d = dayOf(e.t); if (d !== dd) { dd = d; tr += `<div class="day" data-key="d:${d}">${d}</div>`; } tr += evRowD(e, many); }
@@ -1839,11 +1832,11 @@ function tween(el, from, to, d){
   };
   el._raf = requestAnimationFrame(stepf);
 }
-/* 共用動畫規則（Google Material 3 Expressive 物理彈簧與流暢節奏，跟 CSS 的 --t-*、--sp* 一致） */
-const T = {fast:180, mid:320, slow:480, long:720, spf:290, sp:420, sps:580};
+/* 共用動畫規則（Telegram 網頁版的時間與曲線，跟 CSS 的 --t-*、--ease 一致；彈簧只給被推動的東西） */
+const T = {fast:150, mid:300, slow:450, long:650, spf:290, sp:420, sps:580};
 /* 文字大小是用 zoom 放大縮小的：量到的位置是螢幕上的，要除回去才能拿來定位 */
 const ZM = () => parseFloat(getComputedStyle(document.body).zoom) || 1;
-const EASE = "cubic-bezier(.2,0,0,1)", DEC = "cubic-bezier(.05,.7,.1,1)", EXIT = "cubic-bezier(.3,0,.8,.15)", LIN = CSS.supports("transition-timing-function", "linear(0,1)");
+const EASE = "cubic-bezier(.25,1,.5,1)", DEC = "cubic-bezier(.33,1,.68,1)", STD = "cubic-bezier(.4,0,.2,1)", EXIT = "cubic-bezier(.42,0,1,1)", LIN = CSS.supports("transition-timing-function", "linear(0,1)");
 /* 物理彈簧（Material 3 Expressive 勁度與阻尼精算，滑順自然落點）：時間用 T.spf／T.sp／T.sps */
 const SPRING_F = LIN ? "linear(0,.015 2.4%,.0848 6%,.2136 10.4%,.3818 15.4%,.5611 20.8%,.7257 26.6%,.8582 32.8%,.9514 39.2%,1.0072 46%,1.0329 53%,1.0383 60.3%,1.0325 67.8%,1.0226 75.6%,1.013 83.5%,1.0057 91.7%,1)" : "cubic-bezier(.34,1.25,.64,1)",
       SPRING = LIN ? "linear(0,.0169 2.4%,.0936 6%,.2299 10.4%,.4006 15.4%,.5751 20.8%,.729 26.6%,.8486 32.8%,.931 39.2%,.9806 46%,1.0055 53%,1.0144 60.3%,1.0145 67.8%,1.0111 75.6%,1.007 83.5%,1.0037 91.7%,1)" : "cubic-bezier(.25,1.08,.55,1)";
@@ -1955,8 +1948,8 @@ function through(a, b){
     a.remove();
     if (!b.isConnected) return;
     b.style.visibility = "";
-    const inOpt = {duration:Math.round(T.mid * .75), easing:DEC, id:"ui"};
-    animTargets(b).forEach(el => el.animate([{opacity:0, transform:"translateY(5px)"}, {opacity:1, transform:"none"}], inOpt));
+    const inOpt = {duration:T.mid, easing:EASE, id:"ui"}, dx = (TABDIR || 0) * 24;   // telegram-tt slide-fade：新的一頁從那一邊移 1.5rem 進來、同時淡入
+    animTargets(b).forEach(el => el.animate([{opacity:0, transform:dx ? `translateX(${dx}px)` : "translateY(6px)"}, {opacity:1, transform:"none"}], inOpt));
   };
   if (a.style.visibility === "hidden") return enter();
   b.style.visibility = "hidden";
@@ -2481,7 +2474,7 @@ function moreMenu(btn, s){
     + (s.node ? it("data-rmhost", "trash", "移除主機", "bad") : "");
   document.body.appendChild(m);
   placeMenu(m, btn, r => r.left - 6);           // 從 ⋯ 往右下展開，不會蓋住主機名稱
-  if (canAnim()) m.animate([{opacity:0, transform:"scale(.86,.68)"}, {opacity:1, transform:"none"}], {duration:T.spf, easing:SPRING_F});
+  menuIn(m);
   window._menu = m; histMark(m);
   setTimeout(() => m.addEventListener("click", () => closeMenu()), 0);
 }
@@ -2493,15 +2486,18 @@ function logHostMenu(btn){
   m.innerHTML = it("", "全部主機") + LIST.map(x => it(keyOf(x), esc(x.name))).join("");
   document.body.appendChild(m);
   placeMenu(m, btn, r => r.right - m.offsetWidth);
-  if (canAnim()) m.animate([{opacity:0, transform:"scale(.86,.68)"}, {opacity:1, transform:"none"}], {duration:T.spf, easing:SPRING_F});
+  menuIn(m);
   window._menu = m; histMark(m);
   setTimeout(() => m.addEventListener("click", () => closeMenu()), 0);
 }
 function closeMenu(){
   const m = window._menu; if (!m) return; window._menu = null;
   if (!canAnim()) { m.remove(); return histDrop(m); }
-  m.animate([{opacity:1, transform:"none"}, {opacity:0, transform:"scale(.94,.86)"}], {duration:Math.round(T.fast * .7), easing:EXIT, fill:"forwards"}).finished.then(() => { m.remove(); histDrop(m); });
+  m.style.pointerEvents = "none";
+  m.animate([{opacity:1, transform:"none"}, {opacity:0, transform:"scale(.85)"}], {duration:T.fast, easing:EXIT, fill:"forwards"}).finished.then(() => { m.remove(); histDrop(m); });
 }
+/* 選單打開：telegram-tt Menu（從按鈕那一角 .85 倍放大、同時淡入，.15 秒） */
+function menuIn(m){ if (canAnim()) m.animate([{opacity:0, transform:"scale(.85)"}, {opacity:1, transform:"none"}], {duration:T.fast, easing:STD}); }
 addEventListener("scroll", e => { if (!(window._menu && e.target instanceof Node && window._menu.contains(e.target))) closeMenu(); }, {passive:true, capture:true});   // 選單自己裡面捲動不關
 addEventListener("keydown", e => { if (e.key === "Escape") closeMenu(); });
 /* ═════════ 更新哨兵本身 ═════════ */
@@ -4682,42 +4678,43 @@ if (!CSS.supports("(animation-timeline:view()) and (timeline-scope:--a)")) {
     addEventListener("touchcancel", onCancel, {passive:true});
   }, {passive:true});
 })();
-/* 按下去的水波紋與彈簧按壓回饋（觸控快速輕點不阻塞 click 前強制排版；長按或滑鼠才疊水波紋） */
+/* 按下去的水波紋（照 tweb components/ripple.ts 的做法）：從按下的點長出來，按住不放就停在那裡；
+   放開後至少讓它長到一半才淡掉，快點一下也看得到。電腦約 .7 秒、手機約 .4 秒且從 .27 倍開始（用最接近的 T.long／T.slow） */
 (function(){
-  const SEL = ".hcard,.li:not(div),.fapc,.ubtn,.iconbtn,.icbtn,.hmenu button,.addhost,.trf,.chats button,.sw button,.rh,.backbtn,.tbx,.side-icbtn";
-  const PRESS_DESK = ".ubtn,.iconbtn,.icbtn,.rh,.backbtn,.tbx,.addhost,.fapc,.side-icbtn";
+  const SEL = ".hcard,.li:not(div),.fapc,.ubtn,.iconbtn,.icbtn,.hmenu button,.addhost,.trf,.chats button,.sw button,.rh,.rb,.backbtn,.tbx,.side-icbtn,.tb,.dsb,.lft .fchip,.lbl button";
   addEventListener("pointerdown", e => {
     if (e.button || !canAnim()) return;
     const el = e.target.closest(SEL);
     if (!el || el.disabled || el.closest(".pane")) return;
-    const touch = e.pointerType !== "mouse", wantPrs = touch || el.matches(PRESS_DESK), pid = e.pointerId, x0 = e.clientX, y0 = e.clientY;
-    let box = null, done = false, t0 = 0;
-    const press = () => { if (t0) return; if (wantPrs) el.classList.add("prs"); t0 = performance.now(); };
-    const release = now => { if (wantPrs && t0) setTimeout(() => el.classList.remove("prs"), now ? 0 : Math.max(0, (touch ? 75 : 120) - (performance.now() - t0))); };
-    const ripple = () => {
-      press();
-      if (box || el.closest(".sw") || el.classList.contains("side-icbtn")) return;   // 圓形色塊與側欄小圖示不疊大水波紋
-      const r = el.getBoundingClientRect(), w = el.offsetWidth, h = el.offsetHeight;
-      const x = (x0 - r.left) * w / (r.width || 1), y = (y0 - r.top) * h / (r.height || 1);
-      const R = Math.hypot(Math.max(x, w - x), Math.max(y, h - y));
+    const touch = e.pointerType !== "mouse", pid = e.pointerId, x0 = e.clientX, y0 = e.clientY;
+    const dur = touch ? T.slow : T.long, s0 = touch ? .27 : 0;
+    let box = null, dot = null, t0 = 0, done = false;
+    const start = () => {
+      if (box) return;
+      if (touch) el.classList.add("prs");
+      if (el.closest(".sw")) return;                              // 主題色球：本身會縮一下，不疊水波紋
+      const r = el.getBoundingClientRect(), z = ZM(), w = el.offsetWidth, h = el.offsetHeight;
+      const x = (x0 - r.left) / z, y = (y0 - r.top) / z, R = Math.hypot(Math.max(x, w - x), Math.max(y, h - y));
       box = document.createElement("span"); box.className = "rip"; box._leaving = 1;
-      const dot = document.createElement("i"); dot.style.cssText = `left:${x - R}px;top:${y - R}px;width:${2 * R}px;height:${2 * R}px`;
-      box.appendChild(dot); el.appendChild(box);
-      dot.animate([{transform:"scale(.18)"}, {transform:"scale(1)"}], {duration:T.slow, easing:EASE, fill:"forwards"});
+      dot = document.createElement("i"); dot.style.cssText = `left:${x - R}px;top:${y - R}px;width:${2 * R}px;height:${2 * R}px`;
+      box.appendChild(dot); el.appendChild(box); t0 = performance.now();
+      dot.animate([{transform:`scale(${s0})`}, {transform:"scale(1)"}], {duration:dur, easing:STD, fill:"forwards"});
     };
-    const fade = () => box && box.animate([{opacity:1}, {opacity:0}], {duration:T.mid, delay:T.fast / 2, easing:EASE, fill:"forwards"}).finished.then(() => box.remove(), () => box.remove());
-    const tPrs = !touch ? (ripple(), 0) : setTimeout(() => { if (!done) press(); }, 20);
-    const tRip = !touch ? 0 : setTimeout(() => { if (!done) ripple(); }, 90);
-    const cleanup = () => { clearTimeout(tPrs); clearTimeout(tRip); removeEventListener("pointerup", end); removeEventListener("pointercancel", end); removeEventListener("pointermove", move); };
-    const cancel = () => { if (done) return; done = true; cleanup(); release(true); fade(); };
-    const move = ev => { if (ev.pointerId === pid && Math.hypot(ev.clientX - x0, ev.clientY - y0) > 8) cancel(); };
+    const fade = () => {
+      if (touch) el.classList.remove("prs");
+      if (!box) return;
+      const b = box, wait = Math.max(0, dur / 2 - (performance.now() - t0));
+      b.animate([{opacity:1}, {opacity:0}], {duration:dur / 2, delay:wait, easing:STD, fill:"forwards"}).finished.then(() => b.remove(), () => b.remove());
+    };
+    const tStart = touch ? setTimeout(() => { if (!done) start(); }, 60) : (start(), 0);   // 手指：等 60 毫秒確定不是要捲動
+    const cleanup = () => { clearTimeout(tStart); removeEventListener("pointerup", end); removeEventListener("pointercancel", end); removeEventListener("pointermove", move); };
     const end = ev => {
       if (ev.pointerId !== pid || done) return;
       done = true; cleanup();
-      if (ev.type === "pointercancel") { release(true); if (!box) return; }
-      else release(false);
+      if (ev.type === "pointerup" && touch && !box) start();        // 快速點一下：還沒開始就放開，照樣給一個
       fade();
     };
+    const move = ev => { if (ev.pointerId === pid && Math.hypot(ev.clientX - x0, ev.clientY - y0) > 8) { done = true; cleanup(); fade(); } };
     addEventListener("pointerup", end); addEventListener("pointercancel", end);
     if (touch) addEventListener("pointermove", move, {passive:true});
   }, {passive:true});
