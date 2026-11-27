@@ -47,10 +47,13 @@ class WebJs(unittest.TestCase):
             self.assertIn(f'[data-plat="{p}"]', css, f"style.css 少了 {p} 的樣式")
         self.assertIn('plat:"auto"', js, "預設要是自動判斷")
         self.assertNotIn(".dialog.alert", css, "確認視窗用 .dlga（.alert 是主機頁的告警）")
-        # 換分頁不能留瀏覽紀錄（返回鍵會在分頁之間跳來跳去）
+        # 換分頁：iOS 不留瀏覽紀錄；Android 只在離開第一個分頁時多記一筆（返回先回「主機」），不能每換一次就多一筆
         i = js.index("function tabGo(")
         body = js[i:js.index("\n}", i)]
-        self.assertNotIn("pushState", body)
+        for line in body.splitlines():
+            if "pushState" in line:
+                self.assertIn('PLAT === "android"', line)
+                self.assertIn("!hs.tab", line)
 
 
 if __name__ == "__main__":
