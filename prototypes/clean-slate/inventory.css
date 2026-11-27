@@ -1,0 +1,104 @@
+.inventory {
+  --bg: #f4f5fa; --surface: #fff; --ink: #18223c; --muted: #525f77; --line: #dae0eb;
+  --soft: #eff1f9; --selected: #fff; --accent: #384b98; --accent-hover: #293973; --on-accent: #fff;
+  --focus: #4c62bc; --selection: #dce3ff; --mark: #24376e; --mark-ink: #fff;
+  --ok: #17654d; --warn: #895016; --down: #a2334c;
+  --font: "Microsoft JhengHei", "PingFang TC", "Segoe UI", sans-serif;
+}
+.inv-width { width: min(1280px, calc(100% - 96px)); margin-inline: auto }
+.inv-header { background: var(--surface); border-bottom: 1px solid var(--line) }
+.inv-header > div { display: flex; min-height: 70px; align-items: stretch; gap: 46px }
+.inv-header nav { display: flex; gap: 25px }
+.inv-header nav button { display: flex; gap: 7px; align-items: center; color: var(--muted); padding: 2px 1px 0; border-bottom: 3px solid transparent; white-space: nowrap }
+.inv-header nav button:hover, .inv-header nav button[aria-pressed="true"] { color: var(--accent) }
+.inv-header nav button[aria-pressed="true"] { border-color: var(--accent); font-weight: 750 }
+.inv-header .shell-end { margin-left: auto }
+.inv-main { padding-top: 42px }
+.inv-intro { display: flex; justify-content: space-between; align-items: center; gap: 16px; margin-bottom: 27px }
+.inv-intro h1 { font-size: 40px }
+.inv-intro p { margin-top: 9px; color: var(--muted) }
+.inv-intro .primary { min-height: 44px; padding-inline: 17px }
+.inv-summary { display: grid; grid-template-columns: repeat(4, 1fr); margin-bottom: 27px; border: 1px solid var(--line); border-radius: 12px; background: var(--surface); overflow: hidden }
+.inv-summary button { display: flex; justify-content: space-between; align-items: center; text-align: left; padding: 16px 20px; min-width: 0; border-right: 1px solid var(--line) }
+.inv-summary button:last-child { border-right: 0 }
+.inv-summary button:hover, .inv-summary button[aria-pressed="true"] { background: #e9edff }
+.inv-summary button:focus-visible { outline-offset: -4px }
+.inv-summary button span { display: flex; align-items: center; gap: 8px; color: var(--muted) }
+.inv-summary button strong { font: 680 27px/1.1 "Segoe UI", sans-serif; font-variant-numeric: tabular-nums }
+.inv-work { display: grid; grid-template-columns: minmax(0, 1fr) 315px; gap: 22px; align-items: start }
+.inventory-list, .inspector { min-width: 0; background: var(--surface); border: 1px solid var(--line); border-radius: 13px }
+.table-tools { display: flex; align-items: center; justify-content: space-between; padding: 19px 20px; gap: 10px }
+.table-tools h2, .inspector h2 { font-size: 20px }
+.search { display: flex; align-items: center; gap: 7px; min-height: 38px; border: 1px solid var(--line); border-radius: 7px; padding: 0 9px; color: var(--muted); background: #fbfcff }
+.search:focus-within { outline: 2px solid var(--focus); outline-offset: 2px }
+.search input { outline: none; border: 0; background: transparent; width: 178px; min-width: 0; padding: 6px 0 }
+.inventory table { border-collapse: collapse; width: 100%; text-align: left; font-size: 13px }
+.inventory thead { background: #f6f7fc; color: var(--muted) }
+.inventory th, .inventory td { padding: 11px 9px; border-top: 1px solid var(--line) }
+.inventory :is(th,td):first-child { padding-left: 18px }
+.inventory td:last-child { padding-right: 14px }
+.inventory tbody tr.selected { background: #eef1ff }
+.host-link { padding: 3px 0; display: flex; align-items: center; gap: 10px; text-align: left; font-weight: 750; min-height: 48px }
+.host-link:hover { color: var(--accent) }
+.server-icon { display: grid; place-items: center; width: 34px; height: 34px; flex: none; color: #40519b; background: #e9edfb; border-radius: 8px }
+.server-icon svg { width: 18px; height: 18px }
+.host-link small, .location small { margin-top: 3px; font: 11px Consolas, monospace; color: var(--muted) }
+.location strong { font-weight: 650 }
+.meter-cell { min-width: 63px; color: var(--muted); font-variant-numeric: tabular-nums }
+.meter-cell meter { display: block; width: 56px; height: 8px; margin-top: 4px }
+.meter-cell meter::-webkit-meter-bar { border: 0; background: #e1e6f4; height: 4px }
+.meter-cell meter::-webkit-meter-optimum-value { background: #5266b3 }
+.row-arrow { color: #6472aa }
+.row-arrow button { display: grid; place-items: center; width: 38px; height: 44px; margin-left: auto; border-radius: 6px }
+.row-arrow button:hover { background: #e1e7fc; color: var(--accent) }
+.row-arrow svg { width: 15px; height: 15px }
+.inspector { padding: 18px; scroll-margin-top: 16px }
+.inspector-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px }
+.inspector-head .server-icon { width: 42px; height: 42px }
+.inspector .subtle { margin-top: 4px; font-size: 12px }
+.inspector-chart { position: relative; margin: 16px 0; padding-block: 12px; border-block: 1px solid var(--line) }
+.inspector-chart h3 { font-size: 14px; padding-bottom: 7px }
+.inspector-chart > strong { position: absolute; top: 10px; right: 0; color: var(--accent); font: 700 19px Consolas, monospace }
+.inspector-chart canvas { height: 110px; margin-bottom: 5px }
+.inspector-chart .no-signal { margin-bottom: 10px }
+.inspector .host-facts { font-size: 12px }
+.mobile-resources { display: none }
+.inspector-actions { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 16px }
+.inv-foot { display: flex; align-items: center; gap: 8px; margin-top: 20px; padding-bottom: 20px; color: var(--muted); font-size: 12px }
+.inv-foot svg { width: 15px; height: 15px }
+.inv-foot span { margin-left: auto }
+@media (max-width: 1120px) {
+  .inv-width { width: calc(100% - 48px) }
+  .inv-work { grid-template-columns: minmax(0,1fr) 285px; gap: 14px }
+  .inventory .location { display: none }
+}
+@media (max-width: 840px) {
+  .inv-width { width: calc(100% - 32px) }
+  .inv-header > div { min-height: 0; flex-wrap: wrap; column-gap: 12px; row-gap: 0; padding-top: 10px }
+  .inv-header .brand { min-height: 44px }
+  .inv-header nav { order: 3; flex: 1 0 100%; gap: 22px; min-height: 48px }
+  .inv-main { padding-top: 24px }
+  .inv-intro { margin-bottom: 17px }
+  .inv-intro h1 { font-size: 32px }
+  .inv-summary { margin-bottom: 16px }
+  .inv-summary button { padding: 10px; display: grid; gap: 7px }
+  .inv-summary button span { font-size: 12px; white-space: nowrap; gap: 5px }
+  .inv-summary button strong { font-size: 22px }
+  .inv-work { grid-template-columns: minmax(0, 1fr) }
+  .inventory .location { display: table-cell }
+  .inventory .meter-cell { display: none }
+  .mobile-resources { display: flex; justify-content: space-between; gap: 8px; margin: 0 0 14px; padding-bottom: 12px; border-bottom: 1px solid var(--line); color: var(--muted); font-size: 12px }
+  .mobile-resources dd { margin: 3px 0 0; color: var(--ink); font: 650 17px Consolas, monospace }
+  .inventory .status { min-width: 42px }
+  .inventory tr > :is(th,td):first-child { padding-left: 12px }
+  .inventory tr > :is(th,td) { padding-inline: 5px }
+  .table-tools { padding: 12px; flex-wrap: wrap }
+  .table-tools h2 { font-size: 17px }
+  .search { min-height: 42px }
+  .search input { width: 145px; font-size: 12px }
+}
+@media (max-width: 380px) {
+  .inventory .location small, .inv-header .settings-link svg { display: none }
+  .inv-intro p { font-size: 12px }
+  .inv-intro .primary { padding-inline: 8px }
+}
