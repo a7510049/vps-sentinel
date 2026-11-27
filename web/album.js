@@ -241,41 +241,23 @@ function tiles(el, cx, cy, z, W, H){
   if (cs && cs.position !== "static" && /hidden|clip/.test(cs.overflow)) el.classList.add("tld");
 }
 
-/* ═════════ 開場動畫：一疊照片攤開（album.css 的 #spl），封面好了就像光圈打開一樣露出來 ═════════
-   光圈是六片葉片（.iris i）邊轉邊往外移，只動位移、旋轉，交給顯示卡；以前裁切整頁（clip-path），每一格都要重畫整頁，手機會掉格 */
+/* 相簿載入進度 */
 let SPLQ = [], SPLN = 0;
 const SPLT = 5;                                               // 開場要等的：照片清單、封面、兩個中文字型、主執行緒閒下來
 function splStep(){                                           // 進度線往前一格
   const b = document.querySelector("#spl .spb i"); SPLN = Math.min(SPLT, SPLN + 1);
   if (b) b.style.transform = `scaleX(${SPLN / SPLT})`;
-  const s = document.getElementById("spl"); if (s) s.style.setProperty("--spk", (.25 + .75 * SPLN / SPLT).toFixed(2));   // 後面的光跟著進度亮起來
 }
 function afterSpl(fn){                                        // 畫面外的東西等開場跑完、閒下來才做，不跟開場動畫搶
   const go = () => (window.requestIdleCallback ? requestIdleCallback(fn, {timeout:600}) : setTimeout(fn, 60));
   document.getElementById("spl") ? SPLQ.push(go) : go();
 }
 function splGo(fn){
-  const s = document.getElementById("spl");
-  if (!s || s.dataset.go) return fn && fn();
-  s.dataset.go = 1;
-  setTimeout(() => {                                          // 開場那段至少放完（約 1 秒），之後照片好了就開
-    let done = 0;
-    const end = () => { if (done++) return; s.remove(); const q = SPLQ; SPLQ = []; q.forEach(f => f()); };
-    fn && fn();
-    document.documentElement.classList.add("splx");
-    if (matchMedia("(prefers-reduced-motion: reduce)").matches || !s.animate) return s.animate ? (s.animate([{opacity:1}, {opacity:0}], {duration:T.mid, fill:"forwards"}).onfinish = end) : end();
-    const R = Math.ceil(Math.hypot(innerWidth, innerHeight) / 2) + 4, ir = document.createElement("div");
-    ir.className = "iris"; ir.innerHTML = "<i></i>".repeat(6);
-    let a;
-    [...ir.children].forEach((b, j) => {                      // 每片是半邊的大方塊，六片合起來蓋滿；往外移 R 就整個打開
-      const r0 = 60 * j + 90;
-      b.style.width = 2 * R + "px"; b.style.height = R + "px";
-      a = b.animate([{transform:`rotate(${r0}deg) translate(-50%,-100%)`}, {transform:`rotate(${r0 + 70}deg) translate(-50%,calc(-100% - ${R}px))`}],
-        {duration:T.long, delay:T.fast * .6, easing:DEC, fill:"both"});
-    });
-    s.prepend(ir); s.classList.add("open");
-    a.onfinish = end; setTimeout(end, T.long + 800);
-  }, Math.max(0, 1050 - performance.now()));
+  document.getElementById("spl")?.remove();
+  if (fn) fn();
+  const queue = SPLQ;
+  SPLQ = [];
+  queue.forEach(run => run());
 }
 
 /* ═════════ 進場：讀照片清單（要密碼就先問） ═════════ */
@@ -292,7 +274,7 @@ async function swOn(){                                       // 照片加密送�
 const swClear = () => { try { navigator.serviceWorker?.controller?.postMessage({type:"clear", code:CODE}); } catch (e) {} };
 let SWOK = false;
 function albumRetry(){
-  const card = gate("off", "暫時無法載入相簿", '<button type="button" class="btn">再試一次</button>');
+  const card = gate("暫時無法載入相簿", '<button type="button" class="btn">再試一次</button>');
   const button = card.querySelector("button");
   button.onclick = () => { button.disabled = true; button.textContent = "讀取中…"; boot(); };
 }
@@ -303,10 +285,10 @@ async function boot(){
   catch (e) { return albumRetry(); }
   if (r.status === 401) return askPw();
   if (r.status === 403) { swClear(); const x = await r.json().catch(() => ({}));
-    if (x.lock) return gate("phone", "這台設備已被停用", "", "按了截圖，等主人解除");
-    return gate("phone", x.ban ? "這台設備不能看這本相簿" : "名額已經滿了", "", x.ban ? "" : "這本相簿只給指定的設備看"); }
+    if (x.lock) return gate("這台設備已被停用", "", "按了截圖，等主人解除");
+    return gate(x.ban ? "這台設備不能看這本相簿" : "名額已經滿了", "", x.ban ? "" : "這本相簿只給指定的設備看"); }
   if (r.status === 404 || r.status === 410) { swClear(); [NMK, "vsa-seen-" + CODE, "vsa-di-" + CODE].forEach(store.del);   // 收回、過期：這台留下的名字、看過的回憶與背景快取一起清掉
-    return gate("off", "這本相簿已經看不到了", "", "連結已經收回或過期"); }
+    return gate("相簿連結已失效", "", "連結已經收回或過期"); }
   if (!r.ok) return albumRetry();
   const manifest = await r.json().catch(() => null);
   if (!manifest || !Array.isArray(manifest.photos)) return albumRetry();
@@ -317,7 +299,7 @@ async function boot(){
   if (!ALL.some(p => !p.u) && ALL.length) WHO = ALL[0].u;
   PH = pickW();
   document.title = D.name;
-  if (!PH.length) return gate("photo", "這本相簿還沒有照片", D.up ? `<button type="button" class="btn" data-up>放照片</button>` : "");
+  if (!PH.length) return gate("這本相簿還沒有照片", D.up ? `<button type="button" class="btn" data-up>上傳照片</button>` : "");
   draw();
   if (D.prep || (D.loc && ALL.some(p => p.g && !p.p)) || ALL.some(p => p.vr === -1)) setTimeout(refresh, D.prep ? 4000 : 6000);
 }
@@ -411,14 +393,14 @@ async function refresh(){                                  // 地名、首次轉
     if (D.prep ? ++REF < 120 : ALL.some(p => p.vr === -1) ? ++REF < 90 : ALL.some(p => p.g && !p.p) && ++REF < 5) setTimeout(refresh, D.prep ? 4000 : 8000);
   } catch (e) {}
 }
-function gate(ic, title, form, sub){
+function gate(title, form, sub){
   document.title = title;
-  $("#app").innerHTML = `<div class="gate"><div class="glow"></div><form class="card"><div class="ic">${I(ic)}</div><h2>${esc(title)}</h2>${sub ? `<p>${esc(sub)}</p>` : ""}${form || ""}</form></div>`;
+  $("#app").innerHTML = `<main class="gate"><form class="card"><h1>${esc(title)}</h1>${sub ? `<p>${esc(sub)}</p>` : ""}${form || ""}</form></main>`;
   splGo();
   return $(".card");
 }
 function askPw(){
-  const f = gate("lock", "這本相簿上了鎖", `<input class="field" type="password" autocomplete="current-password" aria-label="密碼" placeholder="密碼" required><button class="btn">打開相簿</button><div class="msg" role="alert"></div>`);
+  const f = gate("輸入相簿密碼", `<input class="field" type="password" autocomplete="current-password" aria-label="密碼" placeholder="密碼" required><button class="btn">開啟相簿</button><div class="msg" role="alert"></div>`);
   const inp = f.querySelector("input"), btn = f.querySelector("button"), msg = f.querySelector(".msg");
   setTimeout(() => inp.focus(), 300);
   f.addEventListener("submit", async e => {
@@ -819,7 +801,7 @@ function srchOpen(){
   if (SH) return;
   const bg = document.createElement("div");
   bg.className = "shbg top";
-  bg.innerHTML = `<div class="sh srh"><label class="sqf">${I("find")}<input type="search" enterkeyhint="search" placeholder="地點、日期、黃金時刻、晴天、紅色…" aria-label="搜尋照片" value="${esc(SQ)}"><button class="sqc" type="button" aria-label="清掉"${SQ ? "" : " hidden"}>${I("x")}</button></label>
+  bg.innerHTML = `<div class="sh srh"><label class="sqf">${I("find")}<input type="search" enterkeyhint="search" placeholder="依日期、地點或顏色搜尋" aria-label="搜尋照片" value="${esc(SQ)}"><button class="sqc" type="button" aria-label="清掉"${SQ ? "" : " hidden"}>${I("x")}</button></label>
     <div class="sqr"><div><div class="sqn num"></div><div class="sqt"></div></div></div><div class="sqs"></div></div>`;
   document.body.appendChild(bg);
   const inp = bg.querySelector("input"), sqs = bg.querySelector(".sqs"), sqr = bg.querySelector(".sqr"), clr = bg.querySelector(".sqc");
@@ -987,7 +969,7 @@ function bmenu(btn){                                          // 手機頂部列
   const rows = [
     `<button role="menuitem" data-ss>${I("play")}<span>播放幻燈片</span><small></small><i></i></button>`,
     D.dl ? `<button role="menuitem" data-sel>${I("dl")}<span>選取下載</span><small></small><i></i></button>` : "",
-    D.up ? `<button role="menuitem" data-up>${I("up")}<span>放照片</span><small></small><i></i></button>` : "",
+    D.up ? `<button role="menuitem" data-up>${I("up")}<span>上傳照片</span><small></small><i></i></button>` : "",
     IOS ? `<button role="menuitem" data-zb="-1"${ZL <= 0 ? " disabled" : ""}>${I("zin")}<span>放大照片牆</span><small></small><i></i></button><button role="menuitem" data-zb="1"${ZL >= 3 ? " disabled" : ""}>${I("zout")}<span>縮小照片牆</span><small></small><i></i></button>` : ""
   ].filter(Boolean);
   if (ks.length >= 2 || KIND) rows.push(`<hr>`, ...[["", "全部種類", "stk", all], ...ks].map(([k, n, ic, c]) => `<button role="menuitemradio" aria-checked="${KIND === k}" data-kpick="${k}">${I(ic)}<span>${n}</span><small class="num">${c}</small>${KIND === k ? I("ck") : "<i></i>"}</button>`));
@@ -1069,7 +1051,7 @@ function finCol(){
   if (ok.length < 3) return "";
   const liked = ok.slice().sort((a, b) => (b.lk || 0) - (a.lk || 0));
   const pick = liked[0].lk ? [liked[0], liked[1], liked[2]] : [ok[0], ok[Math.floor(ok.length / 2)], ok[ok.length - 1]];
-  return `<button class="fcol" data-ss aria-label="播放">${pick.map(p => `<span><img alt="" loading="lazy" draggable="false" src="${src(p, "s")}"></span>`).join("")}<i>${I("play")}</i></button>`;
+  return `<button class="fcol" data-ss aria-label="播放幻燈片">${pick.map(p => `<span><img alt="" loading="lazy" draggable="false" src="${src(p, "s")}"></span>`).join("")}<i>${I("play")}</i></button>`;
 }
 function draw(){
   const ds = PH.map(p => pd(p.x.dt)).filter(Boolean), real = PH.filter(p => !p.x.dtf).map(p => pd(p.x.dt)).filter(Boolean);
@@ -1083,14 +1065,14 @@ function draw(){
     <header class="hero"><div class="cv">${cover.q ? `<img class="lq" alt="" src="data:image/jpeg;base64,${cover.q}">` : ""}<img class="hi" alt="" src="${src(cover, "l")}"></div>
       <div class="hcap"><div class="hsub num">${a ? `<span>${esc(frange(a, b))}</span>` : ""}${pl ? `<span class="hpl" data-pl>${heroFlags() || I("pin")}<span>${esc(pl)}</span></span>` : ""}<span class="hcnt">${cntTxt()}</span></div>
         <h1>${esc(D.name)}</h1>
-        <div class="hmeta"><button class="chip go" data-ss>${I("play")}<span>播放回憶</span></button>${FIND ? `<button class="chip ic" data-find aria-label="搜尋" title="搜尋">${I("find")}<span>搜尋</span></button>` : ""}${D.dl ? `<button class="chip ic" data-sel aria-label="下載" title="下載">${I("dl")}<span>下載</span></button>` : ""}${D.up ? `<button class="chip ic" data-up aria-label="放照片" title="放照片">${I("up")}<span>放照片</span></button>` : ""}</div></div></header>
-    <div class="bar"><div class="btl"><b>${esc(D.name)}</b><small class="num">${cntTxt()}</small></div>${IOS ? `<span class="chip zb bact"><button data-zb="-1" aria-label="放大">${I("zin")}</button><button data-zb="1" aria-label="縮小">${I("zout")}</button></span>` : ""}<button class="chip bact" data-kind aria-label="種類" hidden>${I("flt")}</button>${FIND ? `<button class="chip" data-find aria-label="搜尋">${I("find")}</button>` : ""}${D.up ? `<button class="chip bact" data-up aria-label="放照片">${I("up")}</button>` : ""}${D.dl ? `<button class="chip bact" data-sel aria-label="下載">${I("dl")}</button>` : ""}<button class="chip go bact" data-ss aria-label="播放">${I("play")}</button><button class="chip bmore" data-bmore aria-label="更多" aria-expanded="false">${I("more")}</button></div>
+        <div class="hmeta"><button class="chip go" data-ss>${I("play")}<span>播放幻燈片</span></button>${FIND ? `<button class="chip ic" data-find aria-label="搜尋" title="搜尋">${I("find")}<span>搜尋</span></button>` : ""}${D.dl ? `<button class="chip ic" data-sel aria-label="下載" title="下載">${I("dl")}<span>下載</span></button>` : ""}${D.up ? `<button class="chip ic" data-up aria-label="上傳照片" title="上傳照片">${I("up")}<span>上傳照片</span></button>` : ""}</div></div></header>
+    <nav class="adock" aria-label="相簿分頁" hidden></nav>
+    <div class="bar" aria-label="相簿操作"><div class="btl"><b>${esc(D.name)}</b><small class="num">${cntTxt()}</small></div>${IOS ? `<span class="chip zb bact"><button data-zb="-1" aria-label="放大">${I("zin")}</button><button data-zb="1" aria-label="縮小">${I("zout")}</button></span>` : ""}<button class="chip bact" data-kind aria-label="篩選媒體類型" hidden>${I("flt")}</button>${FIND ? `<button class="chip" data-find aria-label="搜尋">${I("find")}</button>` : ""}${D.up ? `<button class="chip bact" data-up aria-label="上傳照片">${I("up")}</button>` : ""}${D.dl ? `<button class="chip bact" data-sel aria-label="下載">${I("dl")}</button>` : ""}<button class="chip go bact" data-ss aria-label="播放">${I("play")}</button><button class="chip bmore" data-bmore aria-label="更多" aria-expanded="false">${I("more")}</button></div>
     ${D.intro ? `<section class="intro"><p>${esc(D.intro).replace(/\n/g, "<br>")}</p></section>` : ""}<nav class="who" hidden></nav>
-    <div class="tpane on" data-pane="photos"><div class="mems"></div><section class="hl" hidden></section><div class="cityf" hidden></div><div class="wwrap"><main class="wall" data-z="${ZL}"></main><aside class="smap" hidden><div class="smv"></div><div class="smc"></div></aside></div><footer class="foot">${finCol()}<div class="fin">${esc(D.name)}</div>${D.exp ? `<span class="fexp">${expRing()}${left(D.exp)}</span>` : ""}</footer></div>
+    <div class="tpane on" data-pane="photos"><div class="mems"></div><section class="hl" hidden></section><div class="cityf" hidden></div><div class="wwrap"><main class="wall" data-z="${ZL}"></main><aside class="smap" hidden><div class="smv"></div><div class="smc"></div></aside></div><footer class="foot">${finCol()}${D.exp ? `<span class="fexp">${expRing()}${left(D.exp)}</span>` : ""}</footer></div>
     ${D.loc && ALL.some(p => p.g && !p.u) ? `<div class="tpane" data-pane="map" hidden><section class="msec"${WHO ? " hidden" : ""}><div class="mh"><b data-mt>旅程</b><span class="num" data-km></span></div><div class="map" data-map></div><div class="cities"></div></section></div>` : ""}
     <div class="tpane" data-pane="gear" hidden><div class="stats"></div><section class="gear" hidden></section></div>
     ${D.talk ? `<div class="tpane" data-pane="talk" hidden><section class="gbk"></section></div>` : ""}
-    <nav class="adock" data-slide aria-label="相簿分頁" hidden></nav>
     <div class="scrub" aria-hidden="true"><div class="stk2"></div><i class="sth"><span class="sbl num"><img class="sbi" alt="" hidden><b></b></span></i></div>`;
   const hi = $(".hero .hi");
   const hero = $(".hero"), rdy = () => splGo(() => requestAnimationFrame(() => requestAnimationFrame(() => hero.classList.add("rdy"))));   // 開場：封面照片好了才淡入、片頭字才開始
@@ -1129,34 +1111,10 @@ function draw(){
   onScroll();
   deepLink();
 }
-/* ── 分頁式懸浮液態玻璃膠囊（照片／旅程／器材／留言）：圖示靜止、僅玻璃氣泡以彈簧滑動 ── */
+/* 相簿分頁 */
 let TAB = "photos";
 function dockSync(){
   document.documentElement.classList.toggle("dock-off", !!(LB || SS || SY || $(".upb.on")));
-}
-function dockSlide(nav, prev, next){
-  if (!nav || !prev || !next || prev === next || !anim()) return;
-  if (!prev.offsetWidth || !next.offsetWidth) return;
-  let pill = nav.querySelector(":scope > .slide");
-  let x0 = prev.offsetLeft, w0 = prev.offsetWidth;
-  if (pill) {
-    const nr = nav.getBoundingClientRect(), pr = pill.getBoundingClientRect();
-    x0 = pr.left - nr.left - nav.clientLeft; w0 = pr.width;
-    pill.getAnimations().forEach(x => x.cancel());
-  } else {
-    pill = document.createElement("i"); pill.className = "slide"; pill.setAttribute("aria-hidden", "true"); nav.prepend(pill);
-  }
-  const x1 = next.offsetLeft, w1 = next.offsetWidth;
-  pill.style.width = w1 + "px";
-  nav.classList.add("sliding");
-  const an = pill._motion = pill.animate([
-    {transform:`translate3d(${x0}px,0,0) scaleX(${w0 / w1})`},
-    {transform:`translate3d(${x1}px,0,0) scaleX(1)`}
-  ], {duration:240, easing:DEC});
-  an.onfinish = () => {
-    if (pill._motion !== an || !pill.isConnected) return;
-    nav.classList.remove("sliding"); pill.remove();
-  };
 }
 function tabSync(){
   const nav = $(".adock"); if (!nav) return;
@@ -1175,18 +1133,15 @@ function tabSync(){
   const sig = tabs.map(t => t.join(":")).join("|");
   if (nav.dataset.sig !== sig) {
     nav.dataset.sig = sig;
-    nav.classList.remove("sliding");
     nav.innerHTML = tabs.map(([id, lb, ic, n]) => `<button type="button" class="${TAB === id ? "on" : ""}" data-tab="${id}"${TAB === id ? ' aria-current="page"' : ""}>${I(ic)}<span>${lb}</span>${n ? `<small class="num">${n}</small>` : ""}</button>`).join("");
   }
 }
 function tabSet(id, silent, keyboard = false){
   const pane = $(`.tpane[data-pane="${id}"]`); if (!pane) return;
   if (TAB === id && !pane.hidden) return;
-  const nav = $(".adock"), prev = nav && nav.querySelector("button.on"), next = nav && nav.querySelector(`[data-tab="${id}"]`);
+  const nav = $(".adock");
   TAB = id;
   if (nav) {
-    if (!silent && !keyboard && anim()) dockSlide(nav, prev, next);
-    else { nav.querySelector(":scope > .slide")?.remove(); nav.classList.remove("sliding"); }
     nav.querySelectorAll("button").forEach(b => { const on = b.dataset.tab === id; b.classList.toggle("on", on); if (on) b.setAttribute("aria-current", "page"); else b.removeAttribute("aria-current"); });
   }
   document.querySelectorAll(".tpane").forEach(p => { const on = p.dataset.pane === id; p.hidden = !on; p.classList.toggle("on", on); });
@@ -1496,7 +1451,6 @@ addEventListener("resize", () => { clearTimeout(RZ); RZ = setTimeout(() => {
 
 /* 捲動：封面慢一點往上（視差）、標題淡掉，捲過封面上面浮出一條 */
 let SCQ = 0;
-const CSSPAR = window.CSS && CSS.supports && CSS.supports("animation-timeline:scroll()");
 /* 捲出畫面的區塊（封面、回憶圓圈）加 .away，裡面一直跑的動畫先停 */
 const AWIO = "IntersectionObserver" in window ? new IntersectionObserver(es => es.forEach(e => e.target.classList.toggle("away", !e.isIntersecting)), {rootMargin:"200px 0px"}) : null;
 function awayWatch(el){ if (el && AWIO) AWIO.observe(el); }
@@ -1508,11 +1462,7 @@ function onScroll(){
     SCQ = 0;
     const hero = $(".hero"); if (!hero) return;
     const y = scrollY, H = HEROH || (HEROH = hero.offsetHeight);   // 封面高度記著，不每一格逼瀏覽器重排
-    if (y < H && anim() && !CSSPAR) {
-      $(".hero .cv").style.transform = `translate3d(0,${(y * .38).toFixed(1)}px,0)`;
-      const c = $(".hcap"); c.style.opacity = Math.max(0, 1 - y / (H * .55)).toFixed(3); c.style.transform = `translate3d(0,${(y * .18).toFixed(1)}px,0)`;
-    }
-    const barOn = y > H - 90;
+    const barOn = y >= H;
     $(".bar").classList.toggle("on", barOn);
     document.documentElement.classList.toggle("bar-on", barOn);
     scrubSync();
@@ -3061,7 +3011,7 @@ function gbook(){
   const r0 = new Map([...box.querySelectorAll(".gbc[data-id]")].map(c => [c.dataset.id, c.getBoundingClientRect()]));   // 換之前每張卡的位置（刪一張時其他的滑過去）
   box.innerHTML = `<div class="mh"><b>留言簿</b><span class="num">${cs.length ? `${cs.length} 則` : ""}</span></div>
     <div class="gbl">${cs.length ? cs.slice().reverse().map((c, k) => `<div class="gbc${GBSEEN.has(c.id) ? " old" : ""}" data-id="${esc(c.id)}" style="--i:${Math.min(k, 8)}"><p>${esc(c.s)}</p><div class="gbn"><i class="av">${esc([...c.n][0] || "?")}</i><b>${esc(c.n)}</b><span>${ago(c.t)}</span>${c.me ? `<button class="cx" data-gbdel="${esc(c.id)}" aria-label="刪掉">${I("x")}</button>` : ""}</div></div>`).join("") : ""}</div>
-    <form class="cform gbf">${nm ? "" : `<input class="cin nm" name="n" maxlength="20" placeholder="你的名字" autocomplete="nickname">`}<div class="crow"><input class="cin" name="s" maxlength="300" placeholder="${cs.length ? "寫一句話…" : `留一句話給${esc(D.name)}…`}" autocomplete="off"><button class="csend" aria-label="送出">${I("send")}</button></div></form>`;
+    <form class="cform gbf">${nm ? "" : `<label>你的名字<input class="cin nm" name="n" maxlength="20" autocomplete="nickname" required></label>`}<label>留言<input class="cin" name="s" maxlength="300" autocomplete="off" required></label><button class="csend" type="submit">送出留言</button></form>`;
   cs.forEach(c => GBSEEN.add(c.id));
   tabSync();
   if (!anim() || !r0.size) return;
@@ -3172,7 +3122,7 @@ function selBar(){
   b.querySelector("[data-seldl]").disabled = !n;
 }
 
-/* ═════════ 朋友一起放照片 ═════════ */
+/* ═════════ 朋友一起上傳照片 ═════════ */
 let SH = null, UPING = 0;
 function placeSheet(ids){                                     // 地圖上一顆泡泡裡的全部照片
   if (SH) return;
@@ -3191,7 +3141,7 @@ function placeSheet(ids){                                     // 地圖上一顆
     popBack(); setTimeout(() => openLb(+b.dataset.shi), anim() ? T.mid : 0);
   });
 }
-function nameSheet(then){                                    // 第一次放照片先問名字（照片上會寫是誰放的）
+function nameSheet(then){                                    // 第一次上傳照片先問名字（照片上會寫是誰放的）
   if (SH) return;
   const bg = document.createElement("div");
   bg.className = "shbg";

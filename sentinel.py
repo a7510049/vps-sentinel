@@ -4113,16 +4113,16 @@ def watch_page(names):
     return f"""<!doctype html><html lang="zh-Hant"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>{html.escape(NAME)}・哨站</title><link rel="icon" href="/icon.svg"><link rel="apple-touch-icon" href="/apple-touch-icon.png">
 <style>
-:root{{color-scheme:light dark;--bg:#f0f4f9;--card:#ffffff;--field:#edf0f5;--line:#dce1e8;--text:#1f1f1f;--sub:#5f6368;--p:#1a73e8;--on-p:#fff;--bad:#b3261e}}
-@media (prefers-color-scheme:dark){{:root{{--bg:#131314;--card:#1e1f20;--field:#26282b;--line:#33363b;--text:#e3e3e3;--sub:#8e918f;--p:#a8c7fa;--on-p:#062e6f;--bad:#f2b8b5}}}}
+:root{{color-scheme:light dark;--bg:#f3f5f6;--card:#ffffff;--field:#edf0f5;--line:#ccd4da;--text:#19242b;--sub:#53616d;--p:#226485;--on-p:#fff;--bad:#b3261e}}
+@media (prefers-color-scheme:dark){{:root{{--bg:#161e24;--card:#1d272f;--field:#262f36;--line:#424d56;--text:#f3f4f6;--sub:#a1acb7;--p:#a0cde3;--on-p:#062e6f;--bad:#f2b8b5}}}}
 *{{box-sizing:border-box;scrollbar-width:none}}*::-webkit-scrollbar{{display:none}}
 body{{margin:0;min-height:100vh;display:grid;place-items:center;padding:16px;background:var(--bg);color:var(--text);
   font:15px/1.6 -apple-system,BlinkMacSystemFont,"PingFang TC","Noto Sans TC","Microsoft JhengHei",sans-serif}}
-.c{{width:100%;max-width:360px;padding:32px 24px 24px;border-radius:24px;background:var(--card);border:1px solid var(--line);text-align:center}}
+.c{{width:100%;max-width:360px;padding:32px 24px 24px;border-radius:8px;background:var(--card);border:1px solid var(--line);text-align:left}}
 h1{{margin:14px 0 4px;font-size:26px;font-weight:500}}p{{margin:0;color:var(--sub)}}
-details{{margin-top:22px}}summary{{cursor:pointer;color:var(--p);font-size:14px;font-weight:500;list-style:none}}
+details{{margin-top:22px}}form{{margin-top:16px}}summary{{cursor:pointer;color:var(--p);font-size:14px;font-weight:500;list-style:none}}
 input,button{{width:100%;font:inherit;font-size:16px;border:0;padding:14px 16px;margin-top:10px}}
-input{{background:var(--field);color:var(--text);border-radius:16px}}button{{cursor:pointer;font-weight:500;color:var(--on-p);background:var(--p);border-radius:999px}}
+input{{background:var(--field);color:var(--text);border-radius:5px}}button{{cursor:pointer;font-weight:500;color:var(--on-p);background:var(--p);border-radius:5px}}
 .tg{{display:inline-block;margin-top:12px;color:var(--p);font-size:14px;font-weight:500;text-decoration:none}}
 .m{{min-height:20px;margin-top:8px;font-size:13.5px;color:var(--bad)}}
 .pl{{display:inline-block;margin:12px 10px 0;color:var(--p);font-size:14px;font-weight:500;text-decoration:none}}
@@ -4130,13 +4130,15 @@ input{{background:var(--field);color:var(--text);border-radius:16px}}button{{cur
 .ppad.ppbad{{animation:sh .3s}}@keyframes sh{{25%,75%{{transform:translateX(-8px)}}50%{{transform:translateX(8px)}}}}
 .ppdots{{display:flex;gap:12px;min-height:12px}}.ppdots i{{width:12px;height:12px;border-radius:50%;background:var(--field)}}.ppdots i.on{{background:var(--p)}}
 .ppkeys{{display:grid;grid-template-columns:repeat(3,64px);gap:12px 16px}}
-.ppkeys button{{margin:0;padding:0;height:64px;border-radius:50%;background:var(--field);color:var(--text);font-size:22px;font-weight:600;display:grid;place-items:center}}
+.ppkeys button{{margin:0;padding:0;height:64px;border-radius:5px;background:var(--field);color:var(--text);font-size:22px;font-weight:600;display:grid;place-items:center}}
 .ppkeys .ppfn{{background:none}}.ppgo{{margin:0}}.ppgo:disabled{{background:var(--field);color:var(--sub)}}
 .ppkeys svg{{width:26px;height:26px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}}
-</style></head><body><div class="c"><img src="/icon.svg" width="60" height="60" alt="">
-<h1>{html.escape(NAME)}</h1><p>由「{who}」監看中，請到那邊看這台</p>
-<details><summary>取消被監看</summary><form><input type="password" placeholder="{"密碼或 Telegram 驗證碼" if reboot_tg() else "這台的密碼"}" autocomplete="current-password" required>
-<button>取消被監看</button>{'<a class="tg" href="#">傳驗證碼到 Telegram</a>' if reboot_tg() else ""}{'<a class="pl" href="#">用 PIN 碼</a>' if pin_load() else ""}<div class="m"></div></form><div class="pp"></div></details></div>
+:focus-visible{{outline:2px solid var(--p);outline-offset:2px}}
+@media (prefers-reduced-motion:reduce){{.ppad.ppbad{{animation:none}}}}
+</style></head><body><main class="c"><img src="/icon.svg" width="36" height="36" alt="">
+<h1>{html.escape(NAME)}</h1><p>由「{who}」監看。到該主機查看詳情。</p>
+<details><summary>停止由其他主機監看</summary><form><label for="watch-secret">{"密碼或 Telegram 驗證碼" if reboot_tg() else "這台的密碼"}</label><input id="watch-secret" type="password" autocomplete="current-password" required>
+<button>取消被監看</button>{'<a class="tg" href="#">傳驗證碼到 Telegram</a>' if reboot_tg() else ""}{'<a class="pl" href="#">用 PIN 碼</a>' if pin_load() else ""}<div class="m" role="status"></div></form><div class="pp"></div></details></main>
 <script src="/pin.js"></script>
 <script>
 const unwatch = async body => {{
@@ -5767,7 +5769,7 @@ def share_page():
     h = re.sub(r'<link rel="(?:manifest|icon|apple-touch-icon)"[^>]*>\n?', "", h)
     h = h.replace("<title>哨站</title>", '<title>機場起降</title>\n<meta name="referrer" content="no-referrer">')
     h = h.replace('content="哨站"', 'content="機場起降"')
-    return re.sub(r'<div id="splash">.*?</div></div>\n', "", h, count=1, flags=re.S)
+    return re.sub(r'<div id="splash"[^>]*>.*?</div></div>\n', "", h, count=1, flags=re.S)
 
 
 def main():

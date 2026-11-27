@@ -206,9 +206,9 @@ const FLYHEADF = {arr:["抵達", "航班", "出發地", "", "", "航空公司", 
 const flyRow = i => `<div class="fr" data-i="${i}" role="button" tabindex="0">${FLYCOL.map(k => `<span class="fk ${k}">${FLYW[k] ? flap("", FLYW[k], k === "st" ? "zh" : "") + (k === "fn" ? `<span class="fsh"></span>` : "") : k === "fal" ? `<i class="alg none" data-c=""></i>` : k === "pl" ? `<img class="flg at" alt="" hidden><span class="plt"></span>` : ""}</span>`).join("")}<span class="ftag"></span><i class="br b1"></i><i class="br b2"></i></div>`;
 function flyShell(){
   return `<div class="flyv" id="fly"><button class="fmini" data-fmini tabindex="-1"><span data-k="mini-l"></span><b data-k="mini-n"></b>${I("chev").replace("<svg", '<svg class="chv"')}</button><div class="fscroll"><div class="fwrap">
-    <div class="ftop">${SHARE ? `<span class="fexp sub" data-k="left"></span>` : `<button class="icbtn" data-fback title="返回">${I("back")}</button>`}<span class="grow"></span>
+    <div class="ftop">${SHARE ? `<span class="fexp sub" data-k="left"></span>` : `<button class="icbtn" data-fback title="返回">${I("back")}</button>`}<h1 class="flight-title">機場起降</h1><span class="grow"></span>
       ${SHARE ? "" : `<button class="fchip fap" data-fshare>${I("share")}<span>分享</span></button>`}</div>
-    <div class="fhead"${SHAREAP ? "" : ` data-fpick role="button" tabindex="0" title="換機場"`}><div class="fcode">${flap("", 3, "xl")}</div><div class="fname"><span class="fnm"><b data-k="name"></b>${SHAREAP ? "" : I("chev").replace("<svg", '<svg class="chv"')}</span><span class="sub" data-k="city"></span></div>
+    <div class="fhead"${SHAREAP ? "" : ` data-fpick role="button" tabindex="0" title="換機場" aria-label="選擇機場"`}><div class="fcode">${flap("", 3, "xl")}</div><div class="fname"><span class="fnm"><b data-k="name"></b>${SHAREAP ? "" : I("chev").replace("<svg", '<svg class="chv"')}</span><span class="sub" data-k="city"></span></div>
       <div class="fclock" title="當地時間">${flap("", 5, "lg")}</div></div>
     <div class="fmain"><div class="fleft">
       <div class="seg ftabs" data-slide>${FLYTAB.map(([k, l]) => `<button class="${FLYS.tab === k ? "on" : ""}" data-ftab="${k}" aria-pressed="${FLYS.tab === k}">${flyTi(k)}${l}<span class="fnw"><span class="fnl" hidden>還有</span><span class="fn" data-k="n-${k}"></span></span></button>`).join("")}</div>
@@ -224,58 +224,23 @@ function flyShell(){
     </div>
     <div class="ffoot sub"></div></div></div>${flySplash()}</div>`;
 }
-/* 載入畫面：小雷達掃描，一架飛機沿著進場線降落到跑道上，下面翻出機場代碼 */
-const flySplash = () => `<div class="fsplash" aria-hidden="true"><div class="fsp"><i class="fsw"></i><i class="fsb b1"></i><i class="fsb b2"></i><i class="fsb b3"></i>
-    <div class="fsap"><i class="fsln"></i><i class="fsrw"></i><i class="fspl">${I("plane")}</i></div></div>
-  <div class="fspc">${flap("", 3, "xl")}</div><div class="fspn sub"></div></div>`;
+const flySplash = () => '<div class="fsplash" role="status"><span class="spin" aria-hidden="true"></span>正在載入航班</div>';
 function flySplashOn(f){
-  if (!canAnim()) return f.querySelector(".fsplash").remove();
-  f.classList.add("splash"); f._sp0 = performance.now();
-  setTimeout(() => { if (f.classList.contains("splash")) { flapSet(f.querySelector(".fspc .sf"), FLYS.ap); txt(f.querySelector(".fspn"), FLYS.name || ""); } }, T.mid);
-}
-/* 資料到了：載入畫面淡掉，上面到下面一塊一塊浮上來（至少讓飛機飛一段，不會一閃就不見） */
-function flySplashOff(f){
-  if (!f || !f.classList.contains("splash") || f._spOff) return;
-  f._spOff = 1;
-  f._spT = setTimeout(() => {
-    if (!f.isConnected || f._bye) return;
-    const sp = f.querySelector(".fsplash");
-    if (sp) sp.animate([{opacity:1}, {opacity:0, transform:"scale(1.04)"}], {duration:T.mid, easing:EXIT, fill:"forwards"}).finished.then(() => sp.remove(), () => sp.remove());
-    f.classList.remove("splash");
-    flyRise(f, T.fast * .5);
-  }, Math.max(T.fast, T.slow - (performance.now() - f._sp0)));   // 載入夠快也不拖泥帶水，看板排好後順順浮現
-}
-/* 打開、換機場資料到了：直接對各張毛玻璃卡片做進場動畫（不對 .fleft／.fmain 外層設 opacity，避免手機端毛玻璃閃一下） */
-function flyRise(f, d0){
-  if (!f || !canAnim()) return;
-  const wide = getComputedStyle(f.querySelector(".fleft")).display === "contents", gs = [];
-  [...f.querySelectorAll(".fwrap>:not(.ftop):not(.fmain), .fmain>*")].forEach(e => {
-    if (e.classList.contains("fleft")) [...e.children].forEach(c => wide && c.classList.contains("board") ? gs.push([c, f.querySelector(".radar")]) : gs.push([c]));
-    else if (!(wide && e.classList.contains("radar"))) gs.push([e]);
-  });
-  gs.filter(g => g.some(e => !e.hidden)).forEach((g, i) => g.forEach(e => e.animate([{opacity:0, transform:"translateY(16px)"}, {opacity:1, transform:"none"}], {duration:T.slow, delay:d0 + i * T.fast * .35, easing:EASE, fill:"backwards"})));
-}
-/* 換機場：看板、雷達先淡掉，換成小飛機的載入畫面（翻出新機場代碼），資料在後面準備好才一塊一塊浮上來 */
-function flySplashSwap(f){
-  if (!f || !f.isConnected || !canAnim()) return;
-  clearTimeout(f._spT); f._spOff = 0; f._sp0 = performance.now();
-  const set = () => { flapSet(f.querySelector(".fspc .sf"), FLYS.ap); txt(f.querySelector(".fspn"), FLYS.name || ""); };
-  if (f.classList.contains("splash")) return set();         // 載入畫面還在：只換代碼
-  f.querySelectorAll(".fsplash").forEach(e => e.remove());
-  const els = [...f.querySelectorAll(".fwrap>:not(.ftop):not(.fmain), .fleft>*, .fmain>.radar")];
-  els.forEach(e => e.getAnimations().forEach(a => a.cancel()));
-  els.forEach(e => e.animate([{opacity:1}, {opacity:0}], {duration:T.fast, easing:EXIT, fill:"forwards", id:"fsw"}));
-  f.insertAdjacentHTML("beforeend", flySplash());
-  const sp = f.querySelector(".fsplash");
   f.classList.add("splash");
-  sp.animate([{opacity:0, transform:"scale(.96)"}, {opacity:1, transform:"none"}], {duration:T.mid, delay:T.fast * .5, easing:EASE, fill:"backwards"});
-  setTimeout(() => {                                          // 淡完：捲回最上面，拿掉淡出（splash 本身會藏著）
-    if (!f.isConnected) return;
-    els.forEach(e => e.getAnimations().forEach(a => { if (a.id === "fsw") a.cancel(); }));
-    const sc = f.querySelector(".fscroll"); if (sc) sc.scrollTop = 0;
-    if (f.classList.contains("splash")) set();
-  }, T.fast + 20);
 }
+function flySplashOff(f){
+  if (!f || !f.classList.contains("splash")) return;
+  f.classList.remove("splash");
+  f.querySelector(".fsplash")?.remove();
+}
+function flySplashSwap(f){
+  if (!f || !f.isConnected) return;
+  if (!f.querySelector(".fsplash")) f.insertAdjacentHTML("beforeend", flySplash());
+  flySplashOn(f);
+  const sc = f.querySelector(".fscroll");
+  if (sc) sc.scrollTop = 0;
+}
+
 const FLYZM = [60, 30, 15], FLYGEO = {};                  // 雷達看多遠（公里）；底圖（海岸線、地名）每個機場抓一次
 const flyR = () => FLYZM.includes(+FLYS.zm) ? +FLYS.zm : 60;
 let FLYTRKON = store("vs-flytrk") !== "0";                 // 雷達上的常走路線：開關，記在這台瀏覽器
@@ -1363,10 +1328,11 @@ function flyPaint(anim){
   txt(msg, !d.ok ? d.error || "航班資料暫時拿不到" : d.loading ? "" : n ? "" : FLYPLC ? `沒有${FLYPLC.name}的班機` : d.night ? `現在不起降${d.first ? `，下一班 ${flyHM(d.first * 1000, d.ap.tz)}` : ""}` : d.fids && flyFT(FLYS.tab) ? `接下來沒有${FLYS.tab === "arr" ? "抵達" : "出發"}的班機` : FLYS.tab === "cargo" ? "目前沒有貨機" : FLYS.tab === "gnd" ? "目前沒有客機" : `附近現在沒有${FLYS.tab === "arr" ? "要降落" : "剛起飛"}的飛機`);
   const tz = d.ap.tz;
   flapSet(f.querySelector(".fcode .sf"), d.ap.code);
-  txt(f.querySelector('[data-k="name"]'), d.ap.name); txt(f.querySelector('[data-k="city"]'), d.ap.city);
+  txt(f.querySelector('[data-k="name"]'), d.ap.name || (SHAREAP ? "" : "選擇機場")); txt(f.querySelector('[data-k="city"]'), d.ap.city);
+  if (!SHAREAP) f.querySelector(".fhead").setAttribute("aria-label", `切換機場，目前為${d.ap.name || d.ap.code}`);
   flapSet(f.querySelector(".fclock .sf"), flyHM(Date.now(), tz));
-  FLYTAB.forEach(([k]) => { const e = f.querySelector(`[data-k="n-${k}"]`), left = d.fids && flyFT(k), n = d.loading ? "" : String((d[k] || []).filter(p => !left || !flyDone(p)).length), was = e.dataset.n ?? e.textContent; if (was === n) return; e.dataset.n = n;
-    e.previousSibling.hidden = !left;                       // 抵達、出發：只數還沒到／還沒飛的（已到的在「已到 N 班」）
+  FLYTAB.forEach(([k]) => { const e = f.querySelector(`[data-k="n-${k}"]`), left = d.fids && flyFT(k), n = !d.ok || d.loading ? "" : String((d[k] || []).filter(p => !left || !flyDone(p)).length), was = e.dataset.n ?? e.textContent; if (was === n) return; e.dataset.n = n;
+    e.previousSibling.hidden = !left || !n;                       // 抵達、出發：只數還沒到／還沒飛的（已到的在「已到 N 班」）
     if (was && n && !FLYSTILL && canAnim()) flyRoll(e, was, n); else e.textContent = n; });
   flyMini(f);   // 班數變了：有變的那幾位數像翻牌一樣上下翻過去；不淡入：手機上淡入中剛好換分頁，數字會留著選到時的深色
   f.querySelectorAll(".fh .fk").forEach((h, i) => (FLYSTILL ? (e, t) => { e.textContent = t; } : txt)(h, (d.fids && FLYHEADF[FLYS.tab] || FLYHEAD[FLYS.tab])[i]));
