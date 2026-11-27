@@ -6,6 +6,8 @@
   /* 圓角（telegram-tt _variables.scss）：tiny .375rem、small .625rem、compact 選單項 .75rem、清單列／選單／通知 1rem、區塊 island 1.5rem、對話框 2rem */
   --r-xs:6px; --r-sm:10px; --r-md:12px; --r-lg:16px; --r-xl:24px; --r-2xl:32px; --r-pill:999px; --r-full:20px;
   --fs-xs:12px; --fs-s:13px; --fs-m:14px; --fs-l:16px; --fs-xl:20px; --fs-2xl:24px; --fs-3xl:28px; --fs-4xl:32px;
+  --fs-2xs:10px; --fs-m2:15px; --fs-l2:17px; --fs-l3:18px;   /* 平台介面用：iOS 分頁字 10、內文 15、標題 17；Android 清單名字 17、標題 18 */
+  --r-btn:4px; --r-box:8px; --r-ico:7px; --r-alert:14px; --r-glass:26px; --r-and:28px;   /* 電腦按鈕 4、對話框與選單 8；iOS 設定圖示 7、提示框 14、清單區塊 26；Android 選單 28 */
   --fs-input:16px;                                       /* 手機輸入框最小字級：小於這個 iPhone 一點輸入框就會自己放大畫面 */
   /* 時間：.15s 淡入淡出（.opacity-transition）、.3s 換頁滑動（--slide-transition）、.45s 疊層（--top-stack-transition）、.65s iOS 疊層 */
   --t-fast:.15s; --t-mid:.3s; --t-slow:.45s; --t-long:.65s;
@@ -1971,6 +1973,276 @@ html.flyon .dash>.view,html.flyon .dash.m>.stage{content-visibility:hidden;conta
 .abd .abst .codebox{background:var(--s1)}
 .abd .abst .ubtn svg{width:16px;height:16px}
 .abjob{display:flex;align-items:center;justify-content:center;gap:10px;padding:18px;color:var(--tx2);font-size:var(--fs-m)}
+/* ═════════ 平台介面：iOS／Android／電腦各照 Telegram 原生版本（html 的 data-plat；數值出處見 DESIGN.md 第 15 節） ═════════ */
+/* 共用：分頁列（iOS、Android 的主機／紀錄／設定）、設定那一層、主選單側欄 */
+.tabbar{position:absolute;z-index:2;display:flex}
+.tbi{position:relative;flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;min-width:0;color:var(--tx3);overflow:hidden;transition:color var(--t-fast) var(--ease)}
+.tbi.on{color:var(--p)}
+.tbg{position:relative;display:grid;place-items:center}
+.tbg svg{width:26px;height:26px}
+.tbg .cbg{position:absolute;top:-4px;left:calc(100% - 8px);min-width:18px;height:18px;padding:0 5px;font-size:var(--fs-s);box-shadow:0 0 0 2px var(--tbar-bg,var(--s1))}
+.tbn{font-size:var(--fs-2xs);font-weight:500;line-height:1.2;white-space:nowrap}
+.tbl,.tba{display:flex;align-items:center;gap:2px;flex:none}
+.tbl:empty{display:none}
+.lcol.tabs>.scr .lscroll{padding-bottom:var(--tabh)}
+.scr.root>:is(.lscroll,.mscroll,.rscroll){padding-bottom:calc(var(--tabh) + env(safe-area-inset-bottom))}
+.isrch{display:flex;align-items:center;gap:0;padding:8px 16px}
+.scx{flex:none;width:0;padding:0;overflow:hidden;color:var(--p);font-size:var(--fs-l2);white-space:nowrap;opacity:0;transition:width var(--t-mid) var(--dec),padding var(--t-mid) var(--dec),opacity var(--t-fast) var(--ease)}
+.isrch:focus-within .scx,.isrch:has(.sin:not(:placeholder-shown)) .scx{width:auto;padding-left:12px;opacity:1}
+.nbk{display:inline-flex;align-items:center;gap:0;height:44px;padding:0 8px 0 2px;max-width:140px;color:var(--p);font-size:var(--fs-l2);white-space:nowrap;transition:opacity var(--t-fast) var(--ease)}
+.nbk svg{width:28px;height:28px;flex:none;transform:rotate(90deg);stroke-width:2.4}
+.nbk span{overflow:hidden;text-overflow:ellipsis}
+.nbk.prs,.nbk:active{opacity:.4}
+/* 電腦（Telegram Desktop）：設定蓋在整個視窗中間（Info::LayerWidget：寬 392、上下留 40、標題列 56），後面暗 50% */
+.slayer{position:fixed;inset:0;z-index:var(--z-veil);display:flex;justify-content:center;align-items:flex-start;padding:40px 16px;animation:fadeIn var(--t-fast) var(--dec) backwards}
+.slbg{position:absolute;inset:0;background:var(--layer-bg);cursor:default}
+.slbox{position:relative;width:392px;max-width:100%;height:min(760px,calc(100% - 0px));border-radius:var(--r-box);overflow:hidden;background:var(--s1);box-shadow:var(--sh-float);animation:dlgin var(--t-fast) var(--std) backwards}
+.slbox>.scr .tbar{min-height:56px;padding:0 8px 0 12px}
+.slbox>.scr .tbt b{font-size:var(--fs-l);font-weight:600}
+/* 電腦：左上選單從左邊滑出來的一欄（Window::MainMenu：上面主題色底的名字，下面一列一列，頭像 48） */
+.mdrw{position:fixed;inset:0;z-index:var(--z-menu)}
+.mdbg{position:absolute;inset:0;background:var(--layer-bg)}
+.mdp{position:absolute;top:0;bottom:0;left:0;width:280px;max-width:86vw;display:flex;flex-direction:column;background:var(--s1);box-shadow:var(--sh-float);overflow-y:auto}
+.mdc{display:flex;flex-direction:column;align-items:flex-start;gap:2px;padding:20px 20px 16px;background:var(--pf);color:var(--on-p)}
+.mdc .cav{width:48px;height:48px;margin-bottom:12px}
+.mdc b{font-size:var(--fs-m);font-weight:600}
+.mdc small{font-size:var(--fs-s);opacity:.8}
+.mdp .lmenu{position:static;min-width:0;max-width:none;padding:6px 0;border-radius:0;background:none;box-shadow:none;-webkit-backdrop-filter:none;backdrop-filter:none}
+.mdp .hmenu button{min-height:42px;margin:0;padding:0 20px 0 21px;gap:20px;border-radius:0;font-weight:600;font-size:var(--fs-s)}
+.mdp .hmenu button:active,.mdp .hmenu button.prs{transform:none}
+/* 外觀的「介面」預覽圖 */
+.lks.l4{grid-template-columns:repeat(4,minmax(0,1fr))}
+.lkp.pm b{left:0;right:0;top:0;height:22%;border-radius:0}
+.lkp.pm s{left:auto;right:auto;top:6%;width:34%;height:10%;aspect-ratio:auto;border-radius:var(--r-pill);background:var(--tx3);opacity:.6}
+.lkp.pm s::after{display:none}
+.lkp.pm u,.lkp.pm i{position:absolute;display:block}
+.lkp.pm.ios s{left:33%}
+.lkp.pm.ios u{left:0;right:0;bottom:0;width:auto;height:18%;border-radius:0;background:var(--s1);box-shadow:0 -1px 0 var(--line)}
+.lkp.pm.ios i{left:44%;bottom:5%;width:12%;height:8%;border-radius:var(--r-pill);background:var(--p)}
+.lkp.pm.android s{left:10%}
+.lkp.pm.android u{left:8%;right:8%;bottom:7%;width:auto;height:18%;border-radius:var(--r-pill);background:var(--s1);box-shadow:var(--sh-2)}
+.lkp.pm.android i{right:10%;bottom:31%;width:18%;aspect-ratio:1;border-radius:50%;background:var(--p)}
+.lkp.pm.desktop b{right:auto;width:34%;height:100%;box-shadow:1px 0 0 var(--line)}
+.lkp.pm.desktop s{left:44%;top:12%}
+.lkp.pm.desktop u{left:44%;right:8%;top:32%;bottom:auto;width:auto;height:24%;border-radius:var(--r-xs);background:var(--s1)}
+.lkp.pm.desktop i{left:6%;top:30%;width:22%;height:12%;border-radius:var(--r-xs);background:var(--p)}
+/* 設定、主機資訊裡的圖示方塊：三個平台的 Telegram 都是實心彩色方塊配白圖案（iOS SettingsController、Android TextCell.setColorfulIcon、tdesktop settingsIconRadius）
+   用同一套角色（主題色、配角色、灰、注意、異常），只把淡底換成實心 */
+.rscroll .li>.ico,.mdrw .ico{--pc:var(--seed);--on-pc:#fff;--tc-bg:var(--tseed);--on-tc:#fff;--sc:var(--ico-gray);--on-sc:#fff;--warnc:var(--warn);--on-warnc:#fff;--badc:var(--bad);--on-badc:#fff}
+:root{--ico-gray:#8e8e93; --layer-bg:rgba(0,0,0,.5)}
+
+/* ── iOS（Telegram-iOS）── */
+[data-plat="ios"]{--tabh:49px; --hh:44px}
+[data-plat="ios"][data-mode="light"]{--bg:#efeff4; --s2:#f2f2f7; --div:#c8c7cc; --line:#c8c7cc; --tx3:#6d6d72; --hov:#e5e5ea; --act:#d1d1d6; --rip:transparent; --sw-on:#35c759; --sw-off:#e9e9ea; --bar-bg:rgba(247,247,247,.82); --disc:#bab9be; --ios-sub:#8e8e93}
+[data-plat="ios"][data-mode="dark"]{--bg:#000; --s1:#1c1c1d; --s2:#2c2c2e; --div:rgba(84,84,88,.55); --line:rgba(84,84,88,.55); --tx3:#98989e; --hov:#313135; --act:#3a3a3c; --rip:transparent; --sw-on:#67ce67; --sw-off:#39393d; --bar-bg:rgba(29,29,29,.82); --disc:rgba(255,255,255,.28); --ios-sub:#98989e}
+[data-plat="ios"] body{font-family:-apple-system,"SF Pro Text",BlinkMacSystemFont,"PingFang TC","Helvetica Neue",sans-serif}
+/* 標題列（NavigationBar）：44 高、毛玻璃、標題 17 粗體置中；左邊「‹ 上一層」主題色字；頭像在右邊 */
+[data-plat="ios"] .tbar{display:grid;grid-template-columns:1fr minmax(0,max-content) 1fr;align-items:center;gap:4px;min-height:44px;padding-left:4px;padding-right:8px;background:var(--bar-bg);-webkit-backdrop-filter:var(--blur-bar);backdrop-filter:var(--blur-bar);box-shadow:0 .5px 0 var(--line)}
+[data-plat="ios"] .tbl{justify-self:start;min-width:0}
+[data-plat="ios"] .tbl:empty{display:flex}
+[data-plat="ios"] .tba{justify-self:end}
+[data-plat="ios"] .tbt{align-items:center;text-align:center;padding:0}
+[data-plat="ios"] .tbt b{font-size:var(--fs-l2);font-weight:600}
+[data-plat="ios"] .tbt small{font-size:var(--fs-s);color:var(--ios-sub)}
+[data-plat="ios"] .tbar .iconbtn{color:var(--p)}
+[data-plat="ios"] .tbar .iconbtn.act{background:none}
+[data-plat="ios"] .tav .cav{width:37px;height:37px;font-size:var(--fs-m)}
+[data-plat="ios"] .tav .cav img.flag{width:37px;height:37px}
+[data-plat="ios"] .tav .cdot{width:11px;height:11px}
+[data-plat="ios"] .lhd .srch{display:none}
+/* 搜尋框（SearchBarNode）：36 高、17 字、灰底；打字時右邊「取消」 */
+[data-plat="ios"] .srch{height:36px;padding:0 8px;gap:6px;border-radius:var(--r-md);background:var(--s2);color:var(--ios-sub);box-shadow:none}
+[data-plat="ios"] .srch:focus-within{background:var(--s2);box-shadow:none;color:var(--ios-sub)}
+[data-plat="ios"] .srch svg{width:18px;height:18px}
+[data-plat="ios"] .sin{font-size:var(--fs-l2)}
+[data-plat="ios"] .ltabs{padding:0 8px;background:var(--s1);box-shadow:inset 0 -.5px 0 var(--line)}
+[data-plat="ios"] .ltb{height:40px;font-size:var(--fs-m2);font-weight:600}
+[data-plat="ios"] .lscroll{background:var(--s1)}
+/* 聊天清單的列（ChatListItem）：76 高、頭像 60、字從 84 開始、名字 16 粗、狀態 15、時間 14；按下去灰底，沒有水波紋，分隔線從字開頭畫到最右邊 */
+[data-plat="ios"] .clist{padding:0 0 24px}
+[data-plat="ios"] .crow{min-height:76px;padding:0 16px 0 10px;gap:14px;border-radius:0;transition:background-color var(--t-fast) var(--ease)}
+[data-plat="ios"] .crow+.crow::after{content:"";position:absolute;top:0;left:84px;right:0;height:.5px;background:var(--div)}
+[data-plat="ios"] .crow .cav{width:60px;height:60px;font-size:var(--fs-2xl)}
+[data-plat="ios"] .crow .cav img.flag{width:60px;height:60px}
+[data-plat="ios"] .crow .cav.ic svg{width:30px;height:30px}
+[data-plat="ios"] .ct1 b{font-size:var(--fs-l);font-weight:600}
+[data-plat="ios"] .ct1 time,[data-plat="ios"] .cmt{font-size:var(--fs-m);color:var(--ios-sub)}
+[data-plat="ios"] .cst{font-size:var(--fs-m2);color:var(--ios-sub)}
+[data-plat="ios"] .cbg{min-width:20px;height:20px;padding:0 6px;font-size:var(--fs-xs);font-weight:600}
+[data-plat="ios"] .crow.prs,[data-plat="ios"] .crow:active{background:var(--hov)}
+[data-plat="ios"] .crow.on{background:var(--hov);color:var(--tx)}
+[data-plat="ios"] .crow.on :is(.ct1 time,.cmt,.cst){color:var(--ios-sub)}
+[data-plat="ios"] .crow.on .cst.bad{color:var(--bad)}[data-plat="ios"] .crow.on .cst.warn{color:var(--warn)}
+[data-plat="ios"] .crow.on .cbg{background:var(--s4);color:var(--s1)}
+[data-plat="ios"] .crow.on .cbg.bad{background:var(--bad);color:var(--on-bad)}[data-plat="ios"] .crow.on .cbg.warn{background:var(--warn);color:var(--on-warn)}
+[data-plat="ios"] .crow.on .cdot{box-shadow:0 0 0 2px var(--hov)}
+/* 下面的分頁列（TabBarNode）：49 高＋底部安全區、毛玻璃、上面一條細線；圖示上、字 10 在下 */
+[data-plat="ios"] .tabbar{left:0;right:0;bottom:0;height:calc(49px + env(safe-area-inset-bottom));padding-bottom:env(safe-area-inset-bottom);background:var(--bar-bg);-webkit-backdrop-filter:var(--blur-bar);backdrop-filter:var(--blur-bar);box-shadow:0 -.5px 0 var(--line);--tbar-bg:var(--s1)}
+[data-plat="ios"] .lcol.tabs .tabbar{padding-bottom:0;height:49px}
+[data-plat="ios"] .tbi.prs,[data-plat="ios"] .tbi:active{opacity:.5}
+/* 設定、主機資訊（ItemListUI 的 blocks 樣式、iOS 26 玻璃版）：灰底上左右留 16 的圓角區塊（26），列 52 高、17 字，
+   段落標題 13 灰字在區塊外面，分隔線從字開頭到離右邊 16 */
+[data-plat="ios"] .rscroll{background:var(--bg);padding:0 0 24px}
+[data-plat="ios"] .rscroll>.prof{background:none;padding:20px 16px 8px}
+[data-plat="ios"] .rscroll>.lbl{margin:0;padding:24px 32px 7px;border:0;background:none;color:var(--tx3);font-size:var(--fs-s);font-weight:400}
+[data-plat="ios"] .rscroll>.lbl:empty{padding:16px 0 0}
+[data-plat="ios"] .rscroll>.lbl button{color:var(--p);font-size:var(--fs-s)}
+[data-plat="ios"] .rscroll>:is(.group,.cc,.selfsum,.gx){margin:0 16px;border:0;border-radius:var(--r-glass);background:var(--s1);box-shadow:none}
+[data-plat="ios"] .rscroll>.group{padding:0}
+[data-plat="ios"] .rscroll>.cc,[data-plat="ios"] .rscroll>.gx,[data-plat="ios"] .rscroll>.prof+.group{margin-top:16px}
+[data-plat="ios"] .rscroll>.selfsum+.group{margin-top:8px}
+[data-plat="ios"] .rscroll .li{min-height:52px;padding:6px 16px;gap:13px}
+[data-plat="ios"] .rscroll .li .lab{font-size:var(--fs-l2)}
+[data-plat="ios"] .rscroll .li .lab small{font-size:var(--fs-m2);color:var(--ios-sub)}
+[data-plat="ios"] .rscroll .group:not(.pane)>*+*::before{left:var(--dx,16px);right:16px;height:.5px}
+[data-plat="ios"] .rscroll .group:not(.pane)>:has(>.ico)+*,[data-plat="ios"] .rscroll .group:not(.pane)>*+:has(>.ico){--dx:59px}
+[data-plat="ios"] .rscroll .li>.ico{width:30px;height:30px;border-radius:var(--r-ico)}
+[data-plat="ios"] .rscroll .li>.ico svg{width:18px;height:18px}
+[data-plat="ios"] .rscroll .li>.chev{width:22px;height:22px;color:var(--disc)}
+[data-plat="ios"] button.li.prs,[data-plat="ios"] a.li.prs,[data-plat="ios"] button.li:active{background:var(--hov)}
+[data-plat="ios"] .cav.big{width:100px;height:100px}
+[data-plat="ios"] .cav.big img.flag{width:100px;height:100px}
+[data-plat="ios"] .pn{font-size:var(--fs-2xl);font-weight:600}
+/* 主機資訊的快捷鍵（PeerInfoHeader 的按鈕）：一格一格白色圓角塊，圖示和字都是主題色 */
+[data-plat="ios"] .qas{gap:8px;max-width:none;margin-top:18px}
+[data-plat="ios"] .qa{height:58px;border-radius:var(--r-md);background:var(--s1);font-size:var(--fs-xs)}
+[data-plat="ios"] .qa span{color:var(--p)}
+[data-plat="ios"] .qa.warn span{color:var(--warn)}
+[data-plat="ios"] .qa.prs,[data-plat="ios"] .qa:active{opacity:.6}
+/* 開關（UISwitch，Telegram 的 switch 顏色：綠）51×31 */
+[data-plat="ios"] .tog{width:51px;height:31px;margin:0;background:var(--sw-off);transition:background-color var(--t-mid) var(--ease)}
+[data-plat="ios"] .tog::after{top:2px;left:2px;width:27px;height:27px;border:0;background:#fff;box-shadow:0 3px 8px rgba(0,0,0,.15),0 1px 1px rgba(0,0,0,.16);transition:transform var(--t-mid) var(--sp-fast)}
+[data-plat="ios"] .tog:checked{background:var(--sw-on)}
+[data-plat="ios"] .tog:checked::after{transform:translateX(20px);border:0}
+[data-plat="ios"] .rbsw,[data-plat="ios"] [data-accent="rainbow"] .tog:checked{background-image:none}
+/* 選單（ContextControllerActionsStackNode）：玻璃、圓角 26、每一項 44 高 17 字，圖示在右邊；按下去整列一塊圓角底 */
+[data-plat="ios"] .lmenu{min-width:250px;max-width:280px;padding:6px 0;border-radius:var(--r-glass)}
+[data-plat="ios"] .hmenu button{flex-direction:row-reverse;justify-content:space-between;gap:16px;min-height:44px;margin:0 6px;padding:0 14px;border-radius:var(--r-full);font-size:var(--fs-l2);font-weight:400}
+[data-plat="ios"] .hmenu button span{flex:1}
+[data-plat="ios"] .hmenu button svg{color:var(--tx)}
+[data-plat="ios"] .hmenu button:active,[data-plat="ios"] .hmenu button.prs{transform:none;background:var(--act)}
+[data-plat="ios"] .mmenu button .tog{margin:0;transform:scale(.8)}
+/* 確認視窗（TextAlertController）：寬 270、圓角 14、毛玻璃；標題 17 粗、說明 13 置中；按鈕 44 高整排、上面一條細線 */
+[data-plat="ios"] .dialog.dlga{max-width:270px;padding:0;border-radius:var(--r-alert);background:var(--menu-bg);-webkit-backdrop-filter:var(--blur-bar);backdrop-filter:var(--blur-bar);animation:iosAlert var(--t-mid) var(--sp-fast) backwards}
+[data-plat="ios"] .closing .dialog.dlga{animation:fadeOut var(--t-fast) var(--ease) forwards}
+@keyframes iosAlert{from{opacity:0;transform:scale(1.15)}}
+[data-plat="ios"] .dialog.dlga>.ico.big{display:none}
+[data-plat="ios"] .dialog.dlga h3{padding:19px 16px 0;font-size:var(--fs-l2);font-weight:600}
+[data-plat="ios"] .dialog.dlga p{padding:0 16px;margin-top:2px;font-size:var(--fs-s);color:var(--tx)}
+[data-plat="ios"] .dialog.dlga>.field{width:calc(100% - 32px);margin:14px 16px 0;height:36px;border-radius:var(--r-xs);font-size:var(--fs-s)}
+[data-plat="ios"] .dialog.dlga .btns{margin-top:19px;gap:0;box-shadow:inset 0 .5px 0 var(--line)}
+[data-plat="ios"] .dialog.dlga .btns .ubtn{flex:1;height:44px;border-radius:0;background:none;color:var(--p);font-size:var(--fs-l2);font-weight:600}
+[data-plat="ios"] .dialog.dlga .btns .ubtn.bad{color:var(--bad)}[data-plat="ios"] .dialog.dlga .btns .ubtn.warn{color:var(--warn)}
+[data-plat="ios"] .dialog.dlga .btns .ubtn:active{background:var(--hov)}
+[data-plat="ios"] .dialog.dlga .dx{display:none}
+/* 其他視窗：手機上一律從下面滑上來的面板（圓角 26，上面拉桿） */
+[data-plat="ios"] .dialog:not(.dlga){border-radius:var(--r-glass)}
+@media (max-width:599px){[data-plat="ios"] .veil:has(.form) .dialog{border-radius:var(--r-glass) var(--r-glass) 0 0}}
+/* 主要按鈕：iOS 26 的膠囊按鈕，按下去變淡（沒有水波紋） */
+[data-plat="ios"] .ubtn{font-weight:600}
+[data-plat="ios"] :is(.ubtn,.iconbtn,.icbtn,.fab).prs,[data-plat="ios"] :is(.ubtn,.iconbtn,.icbtn):active{opacity:.6}
+[data-plat="ios"] .mscroll{background:var(--bg)}
+
+/* ── Android（Telegram for Android）── */
+[data-plat="android"]{--tabh:72px; --hh:56px}
+[data-plat="android"][data-mode="light"]{--bg:#f1f1f3; --div:#d9d9d9; --rip:rgba(0,0,0,.06)}
+[data-plat="android"] body{font-family:Roboto,"Noto Sans TC","Noto Sans CJK TC",system-ui,sans-serif}
+/* 標題列（ActionBar）：56 高、白底；標題靠左 20、粗；返回是 ← */
+[data-plat="android"] .tbar{min-height:56px;padding-left:4px;padding-right:4px;gap:2px;box-shadow:none}
+[data-plat="android"] .scr:not(.root) .tbar,[data-plat="android"] .lhd:not(:has(+.lscroll .ltabs)){box-shadow:0 1px 0 var(--line)}
+[data-plat="android"] .tbt{padding:0 12px}
+[data-plat="android"] .tbl:empty+.tbt{padding-left:16px}
+[data-plat="android"] .tbt b{font-size:var(--fs-xl);font-weight:500}
+[data-plat="android"] .tbar:has(.tav) .tbt b{font-size:var(--fs-l3)}
+[data-plat="android"] .tbar .iconbtn{width:48px;height:48px}
+[data-plat="android"] .asr .srch{flex:1;height:48px;padding:0 4px;background:none;box-shadow:none}
+[data-plat="android"] .asr .sin{font-size:var(--fs-l3)}
+[data-plat="android"] .ltabs{padding:0 6px;box-shadow:0 1px 0 var(--line)}
+[data-plat="android"] .ltb{height:44px;font-size:var(--fs-m);font-weight:500}
+/* 聊天清單的列（DialogCell）：70 高、頭像 56、字從 72 開始、名字 17 粗、狀態 16、時間 13；按下去水波紋（6% 黑） */
+[data-plat="android"] .clist{padding:0 0 calc(var(--tabh) + 80px)}
+[data-plat="android"] .crow{min-height:70px;padding:0 16px 0 10px;gap:8px;border-radius:0}
+[data-plat="android"] .crow+.crow::after{content:"";position:absolute;top:0;left:72px;right:0;height:1px;background:var(--div);transform:scaleY(.5);transform-origin:top}
+[data-plat="android"] .crow .cav{width:54px;height:54px}
+[data-plat="android"] .crow .cav img.flag{width:54px;height:54px}
+[data-plat="android"] .ct1 b{font-size:var(--fs-l2);font-weight:500}
+[data-plat="android"] .cst{font-size:var(--fs-l)}
+[data-plat="android"] .ct1 time,[data-plat="android"] .cmt{font-size:var(--fs-s)}
+[data-plat="android"] .cbg{min-width:24px;height:24px;font-size:var(--fs-xs);font-weight:500}
+/* 下面的分頁（MainTabsActivity、GlassTabView）：浮起來的膠囊 56 高、四周留 8，字 12 粗，選到的那一格一塊淡底 */
+[data-plat="android"] .tabbar{left:8px;right:8px;bottom:calc(8px + env(safe-area-inset-bottom));height:56px;padding:4px;border-radius:var(--r-pill);background:color-mix(in srgb,var(--s1) 86%,transparent);-webkit-backdrop-filter:var(--blur-bar);backdrop-filter:var(--blur-bar);box-shadow:0 1px 6px rgba(0,0,0,.15),0 0 0 .5px var(--line);--tbar-bg:var(--s1)}
+[data-plat="android"] .lcol.tabs .tabbar{bottom:8px}
+[data-plat="android"] .tbi{border-radius:var(--r-pill);color:var(--tx2);gap:0}
+[data-plat="android"] .tbi::before{content:"";position:absolute;inset:0;border-radius:inherit;background:var(--pc);opacity:0;transform:scale(.7);transition:opacity var(--t-fast) var(--ease),transform var(--t-mid) var(--dec)}
+[data-plat="android"] .tbi.on{color:var(--on-pc)}
+[data-plat="android"] .tbi.on::before{opacity:1;transform:none}
+[data-plat="android"] .tbi>*{position:relative}
+[data-plat="android"] .tbg svg{width:24px;height:24px}
+[data-plat="android"] .tbn{font-size:var(--fs-xs);font-weight:600}
+[data-plat="android"] .tbi.on .tbn{font-weight:700}
+[data-plat="android"] .fab{right:16px;bottom:calc(16px + var(--tabh) + env(safe-area-inset-bottom));background:var(--pf);border-radius:var(--r-lg)}
+[data-plat="android"] .lcol .fab{bottom:calc(16px + var(--tabh))}
+/* 設定、主機資訊（ProfileActivity）：整片白色段落，段落之間一條灰帶；段落標題主題色 15 粗，列 50 高、16 字 */
+[data-plat="android"] .rscroll>.lbl{padding:15px 21px 4px;font-size:var(--fs-m2);font-weight:500;border-top-width:12px}
+[data-plat="android"] .rscroll .li{min-height:50px;padding:6px 21px;gap:24px}
+[data-plat="android"] .rscroll .group:not(.pane)>*+*::before{left:var(--dx,21px)}
+[data-plat="android"] .rscroll .group:not(.pane)>:has(>.ico)+*,[data-plat="android"] .rscroll .group:not(.pane)>*+:has(>.ico){--dx:73px}
+[data-plat="android"] .rscroll .li>.ico{width:28px;height:28px;border-radius:var(--r-box)}
+[data-plat="android"] .rscroll .li>.ico svg{width:17px;height:17px}
+[data-plat="android"] .rscroll .li .lab{font-size:var(--fs-l)}
+[data-plat="android"] .rscroll .li .lab small{font-size:var(--fs-s)}
+[data-plat="android"] .rscroll .li>.chev{display:none}
+/* 選單（ItemOptions）：圓角 28、每一項 48 高 16 字，圖示在左 */
+[data-plat="android"] .lmenu{padding:8px 0;border-radius:var(--r-and);background:var(--s1);-webkit-backdrop-filter:none;backdrop-filter:none;box-shadow:0 1px 6px rgba(0,0,0,.15),0 0 0 .5px var(--line)}
+[data-plat="android"] .hmenu button{min-height:48px;margin:0;padding:0 18px;gap:20px;border-radius:0;font-size:var(--fs-l);font-weight:400}
+[data-plat="android"] .hmenu button:active,[data-plat="android"] .hmenu button.prs{transform:none}
+[data-plat="android"] .hmenu button svg{width:24px;height:24px}
+/* 確認視窗（AlertDialog）：靠左，標題 20、說明 16，按鈕是靠右的主題色文字 */
+[data-plat="android"] .dialog.dlga{max-width:320px;padding:24px 24px 8px;border-radius:var(--r-xl);text-align:left}
+[data-plat="android"] .dialog.dlga>.ico.big{margin:0 0 16px;width:48px;height:48px;border-radius:var(--r-sm)}
+[data-plat="android"] .dialog.dlga p{font-size:var(--fs-l);color:var(--tx2)}
+[data-plat="android"] .dialog.dlga .btns{margin:20px -16px 0 0}
+[data-plat="android"] .dialog.dlga .btns .ubtn{flex:none;height:44px;padding:0 16px;background:none;color:var(--p);border-radius:var(--r-sm);font-size:var(--fs-l)}
+[data-plat="android"] .dialog.dlga .btns .ubtn.bad{color:var(--bad)}[data-plat="android"] .dialog.dlga .btns .ubtn.warn{color:var(--warn)}
+@media (max-width:599px){[data-plat="android"] .dialog.dlga .btns>.ubtn:only-child{flex:none}}
+
+/* ── 電腦（Telegram Desktop）── */
+[data-plat="desktop"]{--tabh:0px}
+[data-plat="desktop"][data-mode="light"]{--rip:rgba(0,0,0,.1)}
+/* 聊天清單的列（defaultDialogRow）：62 高、頭像 46、字從 68 開始、名字和內容 13、選到的整列主題色 */
+[data-plat="desktop"] .clist{padding:0 0 16px}
+[data-plat="desktop"] .crow{min-height:62px;padding:0 10px;gap:12px;border-radius:0}
+[data-plat="desktop"] .crow .cav{width:46px;height:46px;font-size:var(--fs-l)}
+[data-plat="desktop"] .crow .cav img.flag{width:46px;height:46px}
+[data-plat="desktop"] .crow .cav.ic svg{width:22px;height:22px}
+[data-plat="desktop"] .crow .cdot{width:10px;height:10px}
+[data-plat="desktop"] .ct1 b{font-size:var(--fs-s);font-weight:600}
+[data-plat="desktop"] .cst,[data-plat="desktop"] .ct1 time,[data-plat="desktop"] .cmt{font-size:var(--fs-s)}
+[data-plat="desktop"] .cbg{min-width:19px;height:19px;padding:0 6px;font-size:var(--fs-xs);font-weight:600}
+[data-plat="desktop"] .tbt b{font-weight:600}
+/* 對話框（BoxContent）：寬 320、圓角 8、標題 16 粗在左上，按鈕是靠右的主題色字、圓角 4 */
+[data-plat="desktop"] .dialog.dlga{max-width:320px;padding:13px 24px 8px;border-radius:var(--r-box);text-align:left}
+[data-plat="desktop"] .dialog.dlga>.ico.big{display:none}
+[data-plat="desktop"] .dialog.dlga h3{font-size:var(--fs-l);font-weight:600;line-height:22px;padding:0 0 8px}
+[data-plat="desktop"] .dialog.dlga p{font-size:var(--fs-m);color:var(--tx);margin-top:4px}
+[data-plat="desktop"] .dialog.dlga .btns{margin:22px -16px 0 0;gap:4px}
+[data-plat="desktop"] .dialog.dlga .btns .ubtn{flex:none;--h:34px;min-width:0;padding:0 14px;border-radius:var(--r-btn);background:none;color:var(--p);font-weight:600;font-size:var(--fs-m)}
+[data-plat="desktop"] .dialog.dlga .btns .ubtn.bad{color:var(--bad)}[data-plat="desktop"] .dialog.dlga .btns .ubtn.warn{color:var(--warn)}
+@media (hover:hover){[data-plat="desktop"] .dialog.dlga .btns .ubtn:hover{background:var(--hov)}}
+[data-plat="desktop"] .dialog.dlga .dx{display:none}
+[data-plat="desktop"] .dialog:not(.dlga){border-radius:var(--r-box)}
+@media (max-width:599px){[data-plat="desktop"] .veil:has(.form) .dialog{border-radius:var(--r-box) var(--r-box) 0 0}}
+/* 選單（defaultPopupMenu）：圓角 8、項目左右 17、上下 8，最窄 156 */
+[data-plat="desktop"] .lmenu:not(.mdp .lmenu){min-width:180px;padding:8px 0;border-radius:var(--r-box)}
+[data-plat="desktop"] .hmenu:not(.mdp .lmenu) button{min-height:34px;margin:0;padding:0 17px;gap:16px;border-radius:0;font-size:var(--fs-m);font-weight:400}
+[data-plat="desktop"] .hmenu button:active{transform:none}
+[data-plat="desktop"] .ubtn{border-radius:var(--r-btn);font-weight:600}
+/* 底部通知：iOS UndoOverlay 圓角 14、Android Bulletin 圓角 12、電腦 toast 圓角 8 */
+[data-plat="ios"] .toast{border-radius:var(--r-alert)}
+[data-plat="android"] .toast{border-radius:var(--r-md)}
+[data-plat="desktop"] .toast{border-radius:var(--r-box)}
+[data-plat="ios"] .toasts{bottom:calc(env(safe-area-inset-bottom) + 24px + var(--tabh))}
+[data-plat="android"] .toasts{bottom:calc(env(safe-area-inset-bottom) + 16px + var(--tabh))}
 /* 手機、平板：輸入框字一律不小於 16px（iPhone 小於這個一點就自己放大畫面，放大後對話框的「儲存」「×」會被擠出畫面點不到）；
    放最後、一律套用，免得後面又有比較精確的規則把字改小 */
 @media (pointer:coarse){:is(input:not([type=checkbox],[type=radio],[type=range],[type=file],[type=color]),textarea,select){font-size:max(var(--fs-l),calc(var(--fs-input) / var(--zoom)))!important}}

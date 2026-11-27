@@ -57,6 +57,7 @@ tools/airports_zh.py  幫 data/airports.tsv 補中文城市名（維基數據，
 tools/fly_db_audit.py 用真實飛機訊號核對航空公司表、機型表，列出對不上的（跟 fly_audit 一起在 fly-audit 跑）
 tools/fly_perf.py     量機場起降會不會拖慢監控（GitHub Actions 手動執行 fly-perf，ARM 主機；2026-11-13 量的：整個程式處理器 1%、監控定時工作最多晚 7 毫秒，不用搬成獨立程式）
 tools/fly_audit.py    機場起降：用真實資料把四個機場跑一遍、列出不合理的地方（這台連不到，到 GitHub Actions 手動執行 fly-audit）
+tools/ui_e2e.js       跨平台操作測試（開發用，要 Node＋Playwright）：iOS／Android／電腦三種介面 × Chromium、WebKit，真的點、滑、返回、等自動更新（用法寫在檔案開頭；只連測試用的哨兵）
 tests/             基本功能測試（只用 Python 內建模組；test_project_rules 查只用內建模組、網頁呼叫的 API 後端都有）
 ```
 
@@ -147,6 +148,11 @@ tests/             基本功能測試（只用 Python 內建模組；test_projec
 
 ## 網頁的設計規則（不能破壞）
 
+- **三種平台介面**（使用者要求，V4.0）：`<html data-plat="ios|android|desktop">`，照 Telegram 各自的原生版本（Telegram-iOS、Telegram for Android、Telegram Desktop），不是同一套手機介面換顏色。設定 → 外觀 →「介面」選自動／iOS／Android／電腦（`PREF.plat`、`platOf`、`PLAT`；`index.html` 開頭同一套判斷，畫面出來前就套好）。平台管長相和操作，螢幕寬度（`DESK`）管幾欄，兩個分開。
+  - iOS、Android：下面分頁列 主機・紀錄・設定（`tabBar`、`tabGo`、`TABS()`、`ROOTS`；`STK[0]` 可以是三個分頁之一；只在最底層出現，換分頁不留瀏覽紀錄）；iOS 標題置中、左邊「‹ 上一層名字」（`.nbk`）、頭像在右、搜尋框在清單最上面（「取消」`data-qsx`）、沒有水波紋；Android 標題靠左、搜尋是標題列的放大鏡（`SRCH`、`data-srch`）、右下新增圓鈕、換頁從右邊 48 淡入。
+  - 電腦：☰ 主選單從左邊滑出（`.mdrw`）、寬螢幕的設定是蓋在中間的一層（`.slayer`、`setLayerOut`），沒有分頁列和圓鈕。
+  - 平台的樣式都在 style.css 最後「平台介面」那段，用 `[data-plat="…"]` 開頭；只有真的不一樣才分平台寫。確認視窗是 `.dialog.dlga`（**不能用 `.alert`，主機頁的告警已經用了**）。數值和出處在 DESIGN.md 第 0、15 節。
+  - Telegram 的原始碼都是 GPL：只讀數值和流程自己寫，不能複製程式或圖示。
 - **完整的美術設計規範在 `DESIGN.md`**（顏色、文字、圓角、間距、陰影、圖示、控制項、動畫、深淺模式），改網頁前先看。
 - **共用設計規則**都在 `web/style.css` 開頭的 `:root`：
   - 圓角：`--r-xs/sm/md/lg/xl/2xl/pill`
@@ -158,7 +164,7 @@ tests/             基本功能測試（只用 Python 內建模組；test_projec
   - 顏色全部從主題色 `--seed` 算出來（`--bg`、`--s1`～`--s4`、`--p`、`--pc`、狀態色 `--warnc/--badc`…），深淺模式在 `[data-mode]` 換值
 
   不要寫死 px 圓角、px 字級、cubic-bezier、linear()、毫秒數、z-index 或顏色（顏色只能寫在 `--變數:` 和 `.ico.名稱` 裡，白色、黑色例外）。
-- **圖示顏色**（`python3 tools/style_check.py` 會檢查圓形圖示有沒有用規定的顏色）：
+- **圖示顏色**（`python3 tools/style_check.py` 會檢查圓形圖示有沒有用規定的顏色；設定、主機資訊、電腦主選單裡的圖示方塊在三個平台都換成實心彩色方塊（同一套角色，只是 `--pc` 這些在那裡改成實心色），其他地方照下面）：
   - 圓形圖示：**統一使用 Google Material You 同色系柔和底色**（從 `--seed` 算出的三個角色：`--pc`／`--on-pc` 主色柔和底、`--sc`／`--on-sc` 中性柔和底、`--tc-bg`／`--on-tc` 配角色柔和底），讓整頁安靜協調，不再每個圖示各自一種彩虹色；只有警告與異常保留橘紅（`--warnc`、`--badc`）。**每個概念的線條圖案仍不能重複**（`ICO` 第二個值，檢查會擋）。新增圖示時挑合適的角色（`--pc`／`--sc`／`--tc-bg`）加一個 `.ico.名稱`。
   - 確認視窗的圖示和確定鈕看「動作」：一般用主題色；要小心的（重新開機、換密碼）用 `warn` 橘色；刪除、移除、解除配對用 `bad` 紅色（`modal({cls:"bad"})` 會連確定鈕一起變紅）。
   - 線條圖示：一般灰色；連結和重點用 `var(--p)`；選單裡有風險的項目，圖示和文字一起變色。
@@ -171,7 +177,7 @@ tests/             基本功能測試（只用 Python 內建模組；test_projec
 - **對齊**：清單、看板同一種資料每一列都要在同一條線上（規則在 `DESIGN.md` 第 5 節「對齊」，使用者要求必須遵守）。
 - **畫面更新**是比對差異（`data-key`／`data-keyed`／`data-x`／`data-keep`），不是整塊重畫。新增區塊要給 key，不然自動更新時會閃。判斷「有沒有變」不要拿 `innerHTML` 跟 `I()` 圖示字串比（瀏覽器存的寫法不一樣，永遠不同，會一直重播進場動畫；`stSet` 改記 `data-v`）。切換（換分頁、換主機、換時段）的動畫還在跑時，自動更新要先等（主畫面 `settle()`／`uiBusy()`，機場看板 `FLYBZ`／`flyLater`），不然舊的還在收、新的長出來會疊在一起。
 - **自動更新的動畫要省力**（每 5 秒一次，主機多時最吃電）：數字跳動 `tween()` 只在顯示的數字真的變時才寫（變幾下就用計時器換，不每格都跑）；波浪條 `.wv` 的長短用位移（`.wf` 往左、`.wq` 往右移回來，`.wr` 同理）不用 width／clip-path；30 分鐘圖表照時間放點，新資料進來整條往左滑（`chart()` 給 `data-tf`、`slidePath()`，每條固定 2N 個點，前 N 個是滑出左邊的舊資料，換時間範圍才能變形）；選取底色用 WAAPI 位移／縮放，交給顯示卡跑（手機上方分頁底線滑過去；電腦左邊分頁、浮在下面的膠囊分頁用 `::before` 原地撐開；其他有底色的按鈕在 `slideSel` 裡原地撐開 `.grow`，不從別的按鈕上滑過去）；網頁在背景時 `tick()` 不抓不畫。
-- 版面（Telegram 式空間組織，`web/app.js` 的「版面」那段，細節在 `DESIGN.md` 第 0-1 節）：電腦三欄＝左欄主機清單（`listScreen`：左上選單 `mainMenu`、搜尋 `QS`、「全部／有狀況」`QF`、置頂的「全部主機」「機場起降」、每台一列 `hostRow`、右下新增圓鈕）＋中間（`MAIN`：`allScreen` 重點數字 `statStrip`＋所有主機紀錄 `timeline`／`evBubble`、置頂狀況條；或 `hostScreen` 一台的數字、圖表、這台的紀錄）＋右欄主機資訊（`infoScreen`：快捷鍵、工具 `toolRows`、規格、容器、程式、維護（軟體更新、系統更新、安全檢查、換密碼、防回收、配對暗號）、常用連結、移除；`INFO` 開關記在 `vs-info`，1280 以下蓋在中間上面）；設定 `setScreen` 從選單打開，電腦蓋在左欄上（`LEFT`）。手機一層一層（`STK`，記在 `vs-stk`）：清單 → 全部主機／主機 → 主機資訊、設定；`navGo`／`navBack`，推進時寫一筆瀏覽紀錄（`{scr}`，剛按選單項目時沿用選單那一筆），返回鍵、上一頁、往右滑都退一層（`scrSwap` 疊層轉場，往右滑時底下那層真的畫好）。舊的分頁代號 `setTab("log"/"set"/"tools")` 換成對應的去處。
+- 版面（Telegram 式空間組織，`web/app.js` 的「版面」那段，細節在 `DESIGN.md` 第 0-1 節；iOS、Android 的分頁列和各平台標題列見上面「三種平台介面」）：電腦三欄＝左欄主機清單（`listScreen`：左上選單 `mainMenu`、搜尋 `QS`、「全部／有狀況」`QF`、置頂的「全部主機」「機場起降」、每台一列 `hostRow`、右下新增圓鈕）＋中間（`MAIN`：`allScreen` 重點數字 `statStrip`＋所有主機紀錄 `timeline`／`evBubble`、置頂狀況條；或 `hostScreen` 一台的數字、圖表、這台的紀錄）＋右欄主機資訊（`infoScreen`：快捷鍵、工具 `toolRows`、規格、容器、程式、維護（軟體更新、系統更新、安全檢查、換密碼、防回收、配對暗號）、常用連結、移除；`INFO` 開關記在 `vs-info`，1280 以下蓋在中間上面）；設定 `setScreen` 從選單打開，電腦蓋在左欄上（`LEFT`）。手機一層一層（`STK`，記在 `vs-stk`）：清單 → 全部主機／主機 → 主機資訊、設定；`navGo`／`navBack`，推進時寫一筆瀏覽紀錄（`{scr}`，剛按選單項目時沿用選單那一筆），返回鍵、上一頁、往右滑都退一層（`scrSwap` 疊層轉場，往右滑時底下那層真的畫好）。舊的分頁代號 `setTab("log"/"set"/"tools")` 換成對應的去處。
 
 ## 使用者明確要求過的事（不要改回去）
 
@@ -212,7 +218,7 @@ tests/             基本功能測試（只用 Python 內建模組；test_projec
    - `SENTINEL_TG_API`：假的 Telegram 伺服器
    - `SENTINEL_IF_INET6`：假的 IPv6 資料
 
-   有 Playwright 的話，用電腦（1440 寬）和手機（375 寬）兩種尺寸各截圖看一次，並確認瀏覽器主控台沒有錯誤。
+   有 Playwright 的話，用電腦（1440 寬）和手機（375 寬）兩種尺寸各截圖看一次，並確認瀏覽器主控台沒有錯誤；改到版面、導覽、對話框時三個平台（iOS、Android、電腦）都要看，並跑 `SENTINEL_TOKEN=測試密碼 node tools/ui_e2e.js`（Chromium＋WebKit 都跑；WebKit 不等於 iPhone Safari、Chromium 手機模擬不等於安卓實機）。
 4. 碰到網頁更新邏輯時，要確認自動更新兩次後畫面沒有東西跳動或閃爍。
 
 ## 提交

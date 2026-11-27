@@ -24,7 +24,10 @@ document.documentElement.classList.add("booting");
 (function(){ try {
   var p = JSON.parse(localStorage.getItem("vps-prefs") || "{}"), h = document.documentElement;
   var t = p.theme || "auto", dark = t === "dark" || (t === "auto" && matchMedia("(prefers-color-scheme: dark)").matches);
-  h.dataset.mode = dark ? "dark" : "light"; h.dataset.accent = p.accent || "blue"; h.dataset.motion = p.motion === false ? "off" : "on";
+  h.dataset.mode = dark ? "dark" : "light";
+  var ua = navigator.userAgent, pl = p.plat;   /* 平台介面：跟 app.js 的 platOf 同一套 */
+  if (pl !== "ios" && pl !== "android" && pl !== "desktop") pl = /iPhone|iPad|iPod/.test(ua) || (/Macintosh/.test(ua) && navigator.maxTouchPoints > 1) ? "ios" : /Android/.test(ua) ? "android" : "desktop";
+  h.dataset.plat = pl; h.dataset.accent = p.accent || "blue"; h.dataset.motion = p.motion === false ? "off" : "on";
 } catch(e){} })();
 </script>
 <style>

@@ -7,16 +7,35 @@
 
 ---
 
-## 0. 設計理念
+## 0. 設計理念：三個平台各照 Telegram 自己的原生版本
 
-整個網頁照 **Telegram 網頁版的設計語言**：不是學它的藍色和聊天畫面，是學它的做法。
+**不再用同一套介面套所有平台。** iPhone、iPad 看到的是 Telegram iOS 的樣子和手感，安卓看到 Telegram Android 的，電腦看到 Telegram Desktop 的。
+`<html data-plat="ios|android|desktop">` 決定平台；設定 → 外觀 →「介面」可以選「自動、iOS、Android、電腦」（記在瀏覽器的 `vps-prefs.plat`），自動是照裝置判斷（`platOf`）。
+`index.html` 開頭有一份一樣的判斷，畫面出來前就套好，不會先閃一下別的平台。
 
-1. **內容是實色，浮起來的才透明。** 灰色底上放白色（深色模式是深灰）的區段；只有選單、通知、浮在雷達上的按鈕用半透明毛玻璃，因為它們真的蓋在別的東西上面。
-2. **一份清單就是一塊。** 同一組的列放在同一個區段裡，列跟列之間一條細線，線從文字開頭畫起（不是每列一張卡片）。
-3. **選到的東西要一眼看到。** 左欄選到的那一列整列主題色、白字；分頁選到的字變主題色、底下一條線滑過去。
-4. **按下去馬上有反應。** 每個能按的東西都有從手指位置長出來的水波紋，按住就停著，放開才淡掉。
-5. **動畫說明發生了什麼。** 換頁往那一邊滑、選單從按鈕長出來、對話框從上面落下；不做一張一張卡片排隊進場這種裝飾。
-6. **字只用兩種粗細。** 400 一般、500 強調，標題不壓字距。
+**平台和螢幕寬度分開管**：平台決定長相和操作（標題列、分頁列、選單、對話框、按下去的回饋、換頁動畫）；寬度決定幾欄（1024 以上左中右三欄，以下一層一層）。所以 iPad 是 iOS 的長相配三欄、電腦視窗拉窄還是電腦的長相。
+
+| | iOS（Telegram-iOS） | Android（Telegram for Android） | 電腦（Telegram Desktop） |
+|---|---|---|---|
+| 最上層的導覽 | 下面一整條分頁列：主機、紀錄、設定 | 下面浮起來的膠囊分頁：主機、紀錄、設定；右下新增圓鈕 | 左上 ☰ 從左邊滑出主選單；沒有分頁、沒有圓鈕 |
+| 標題列 | 44 高、毛玻璃、標題置中 17 粗，左邊「‹ 上一層的名字」、頭像在右邊 | 56 高、標題靠左 20，左邊 ←、頭像在標題前面，右邊搜尋、⋮ | 跟 Android 一樣靠左，沒有返回 |
+| 搜尋 | 清單最上面的灰色搜尋框，打字時右邊出現「取消」 | 標題列的放大鏡，點了整條換成搜尋框 | 左上 ☰ 旁邊一直開著的搜尋框 |
+| 清單一列 | 76 高、頭像 60、名字 16 粗 | 70 高、頭像 54、名字 17 | 62 高、頭像 46、名字 13 粗 |
+| 設定、主機資訊 | 灰底上左右留 16 的圓角區塊（26），段落標題 13 灰字在區塊外 | 整片白色段落、中間灰帶，段落標題主題色 | 設定是蓋在視窗中間的一層（寬 392）；主機資訊在右欄 |
+| 按下去 | 底色變深（灰），沒有水波紋；按鈕變淡 | 水波紋 | 水波紋（.65 秒長、.2 秒淡） |
+| 換頁 | 新的一層從右邊整頁滑進來、底下往左退 30% | 新的一層從右邊 48 淡入（.15 秒），底下不動 | 新的一層從右邊滑進來、底下退 20%（窄視窗時） |
+| 選單 | 玻璃、圓角 26、項目 44 高 17 字、圖示在右邊 | 圓角 28、項目 48 高 16 字、圖示在左邊 | 圓角 8、項目 34 高 |
+| 確認視窗 | 寬 270、圓角 14、字置中、按鈕整排在下面 | 靠左、標題 20、按鈕是右下的主題色字 | 寬 320、圓角 8、標題 16 粗靠左、按鈕是右下的主題色字 |
+| 開關 | 51×31、開的時候綠色（Telegram iOS 的開關顏色） | 細軌道＋圓，主題色 | 細軌道＋圓，主題色 |
+
+只有真的不一樣的地方才分平台寫，其他（顏色角色、字級變數、圖示、對齊、差異更新）三個平台共用。
+
+共用的做法（三個平台都一樣）：
+1. **內容是實色，浮起來的才透明。** 只有選單、通知、iOS 的標題列和分頁列（它們真的蓋在內容上面）用毛玻璃。
+2. **一份清單就是一塊。** 同一組的列放在同一塊裡，列跟列之間一條細線，線從文字開頭畫起。
+3. **選到的東西要一眼看到。**
+4. **按下去馬上有反應**（每個平台用它自己的方式，見上表）。
+5. **動畫說明發生了什麼**，不做一張一張卡片排隊進場這種裝飾。
 
 不要做的（看起來像通用範本）：每塊都是一樣的卡片加同一種灰陰影、背景漂浮光球、漸層當裝飾、每個標題上面一行全大寫小字、每塊捲進來就往上淡入。
 
@@ -24,7 +43,7 @@
 
 ## 0-1. 空間組織與資訊架構
 
-不是「後台 Dashboard」，是照 Telegram 的空間組織：**主機就像聊天對象**。
+不是「後台 Dashboard」，是照 Telegram 的空間組織：**主機就像聊天對象**。下面寫的是寬螢幕（三欄）的排法；各平台的差異見第 0 節的表和第 15 節。
 
 | 位置 | 放什麼 | 對應 Telegram |
 |---|---|---|
@@ -39,11 +58,18 @@
 
 ### 手機：一層一層
 
-清單 → 全部主機／一台主機 → 主機資訊；設定也是一層。推進時新的一層從右邊整頁滑進來、底下那層往左退 20% 並暗一點（telegram-tt 的疊層轉場）；返回鍵、瀏覽器上一頁、往右滑都退一層，往右滑時畫面跟著手指走，底下那層真的畫好在後面。
+- iOS、Android：最底層是三個分頁之一（主機、紀錄、設定，`STK[0]`），在分頁上點主機推進一層、點頭像再推進一層；分頁列只在最底層出現（推進時跟著底下那層一起退走，跟 Telegram 一樣）。換分頁不留瀏覽紀錄（`tabGo`），再點一次同一個分頁捲回最上面。
+- 電腦（窄視窗）：清單 → 全部主機／一台主機 → 主機資訊；設定也是一層（從 ☰ 主選單進去）。
+- 返回鍵、瀏覽器上一頁、往右滑都退一層，往右滑時畫面跟著手指走，底下那層真的畫好在後面（各平台底下那層退多少見第 0 節）。
 
 ### 1280 以下
 
 右欄不擠中間，改成從右邊滑出來蓋在內容上（telegram-tt 1276 以下也是疊上去），預設關著。
+
+### 寬螢幕的平台差異
+
+- 電腦：設定是蓋在整個視窗中間的一層（`.slayer`，Telegram Desktop 的 Info::LayerWidget），點旁邊、×、Esc 關；☰ 主選單從左邊滑出來（`.mdrw`）。
+- iOS（iPad）、Android（平板）：左欄下面有分頁列，「設定」換掉左欄、「紀錄」把中間換成全部主機。
 
 ---
 
@@ -108,7 +134,7 @@
 ## 3. 字體
 
 - 字型：系統字（`-apple-system`、`Segoe UI`、`Roboto`…＋蘋方／Noto Sans TC／微軟正黑體），跟 Telegram 網頁版一樣用各平台自己的字。
-- 粗細：只用 400 和 500（Telegram 的 `--font-weight-medium`）。
+- 粗細：共用元件只用 400 和 500（Telegram 的 `--font-weight-medium`）；平台介面照各自原生版本：iOS、電腦的標題和名字用 600（semibold），Android 用 500（Roboto Medium）。
 - 不壓字距、不用全大寫小標。
 - 數字一律等寬（`.num`、`font-variant-numeric:tabular-nums`）。
 
@@ -123,6 +149,10 @@
 | `--fs-3xl` | 28 | 主機頁名稱、四格數字 |
 | `--fs-4xl` | 32 | 少數特大數字 |
 | `--fs-input` | 16 | 手機輸入框最小字級（避免 iPhone 自己放大） |
+| `--fs-2xs` | 10 | iOS 分頁列的字 |
+| `--fs-m2` | 15 | iOS 清單第二行、Android 段落標題 |
+| `--fs-l2` | 17 | iOS 標題、設定列；Android 清單名字 |
+| `--fs-l3` | 18 | Android 主機頁標題、搜尋框 |
 
 ---
 
@@ -156,6 +186,12 @@
 | `--r-xl` | 24 | 區段、卡片、清單、表格（最外層的內容） |
 | `--r-2xl` | 32 | 對話框、登入卡 |
 | `--r-pill` | 999 | 按鈕、膠囊、開關 |
+| `--r-btn` | 4 | 電腦（tdesktop）按鈕 |
+| `--r-box` | 8 | 電腦的對話框、選單、設定那一層；Android 設定圖示 |
+| `--r-ico` | 7 | iOS 設定圖示 |
+| `--r-alert` | 14 | iOS 確認視窗 |
+| `--r-glass` | 26 | iOS 設定區塊、選單、面板 |
+| `--r-and` | 28 | Android 選單 |
 
 層級越外面圓角越大；同一塊裡面的東西用小一號，不要全部同一個圓角。
 
@@ -292,7 +328,7 @@
 
 ---
 
-## 14. 出處（Telegram 網頁版原始碼）
+## 14. 出處（Telegram 網頁版原始碼：共用的變數和電腦版的基準）
 
 只參考數值，程式一行都沒有拿（兩個專案都是 GPL-3.0，哨站是 MIT）。研究的版本：telegram-tt（Telegram A）commit 4566a14、tweb（Telegram K）commit 4cef169。
 
@@ -321,3 +357,67 @@
 | 粗細只用 400／500 | telegram-tt `--font-weight-medium`、tweb `--font-weight-bold: 500` |
 
 不是從 Telegram 來、我們自己定的：`--tx2`、淺色狀態色和主題色加深的比例（為了對比）、深色 `--pf`、`--div` 深色值、左欄 272 寬、手機 App 模式選到圖示後面的淡底、對話框按鈕的實心主要鈕（使用者要求手機上撐滿）。水波紋時間用最接近的共用時間 .65／.45 秒，不是 tweb 的 .7／.4 秒。
+
+---
+
+## 15. 平台介面的數值與出處（Telegram 原生版本原始碼）
+
+**授權**：Telegram-iOS、Telegram for Android、Telegram Desktop（含 lib_ui）都是 GPL，哨站是 MIT。所以**一行程式、一個圖示都沒有拿**，只讀原始碼裡的尺寸、顏色、時間和操作流程，自己用網頁重寫；圖示一律用哨站自己的 `P`。不把參考的倉庫放進專案。
+
+研究的版本（2026-11-27）：
+
+| 平台 | 倉庫 | commit |
+|---|---|---|
+| iOS | TelegramMessenger/Telegram-iOS | 24638bc69bd083981b178dd1e7f921eebbf7fc46 |
+| Android | DrKLO/Telegram | 21f7d109da6ab3506c9e9577f98c6a38771ab335（2026-11-12） |
+| 電腦 | telegramdesktop/tdesktop | fca0d08b6852df2195e11db91f7a4e3be2cbc4a4 |
+| 電腦（元件庫） | desktop-app/lib_ui | b635328ff739f38c495601b5fc5e03688210143d |
+| 網頁實作參考 | telegram-tt 4566a14、tweb 4cef169 | 見第 14 節 |
+
+### iOS
+
+| 我們的 | 數值 | 來源 |
+|---|---|---|
+| 清單一列 `.crow` | 頭像 60、字從 84 開始、名字 16 粗、狀態 15、時間 14、數字小圓 20 高 12 粗 | `submodules/ChatListUI/Sources/Node/ChatListItem.swift`（avatarDiameter、avatarLeftInset 24+60、titleFont、textFont、dateFont、badgeDiameter） |
+| 設定區塊 | 左右 16、圓角 26（iOS 26 玻璃版；舊版 11）、列 52 高（上下 15）、17 字、有圖示時分隔線從 59 開始、右邊留 16 | `ItemListUI/Sources/ItemListItem.swift`、`Items/ItemListDisclosureItem.swift`（verticalInset、leftInset 16+43、separatorRightInset）、`TelegramPresentationData/Sources/Resources/PresentationResourcesItemList.swift`（cornersImage 26／11） |
+| 段落標題 | 13、區塊外面、上面留 24／28 | `Items/ItemListSectionHeaderItem.swift` |
+| 顏色 | 底 #EFEFF4／#000、區塊 #FFF／#1C1C1D、分隔線 #C8C7CC／#545458 55%、按下 #E5E5EA／#313135、箭頭 #BAB9BE、開關綠 #35C759／#67CE67（關 #E9E9EA／#39393D）、主題色預設 #0088FF | `DefaultDayPresentationTheme.swift`、`DefaultDarkPresentationTheme.swift` |
+| 分頁列 | 圖示上、字 10 粗、整條全寬、上面一條細線 | `TabBarUI/Sources/TabBarNode.swift` |
+| 換頁 | 底下那層退 30%，跟著手指 | `Display/Source/NavigationTransitionCoordinator.swift`（`(position - 1) * width * 0.3`） |
+| 確認視窗 | 寬 270、圓角 14、後面暗 50%、標題 17 粗、說明 13、按鈕 44 高 | `Display/Source/TextAlertController.swift`、`AlertControllerNode.swift` |
+| 選單 | 玻璃、圓角 min(30, 高/2)、按下的底圓角 20 | `TelegramUI/Components/ContextControllerImpl/Sources/ContextControllerActionsStackNode.swift` |
+| 搜尋框 | 36 高、17 字、「取消」主題色 | `SearchBarNode/Sources/SearchBarNode.swift` |
+
+### Android
+
+| 我們的 | 數值 | 來源 |
+|---|---|---|
+| 最上層導覽 | 下面浮起來的分頁：56 高、四周留 8；新增圓鈕在分頁上面 | `TMessagesProj/.../ui/MainTabsActivity.java`、`DialogsActivity.java`（MAIN_TABS_HEIGHT 56、MAIN_TABS_MARGIN 8、additionFloatingButtonOffset）；側邊抽屜（DrawerProfileCell）在這版已經拿掉 |
+| 分頁字 | 12 粗、選到的更粗、選到的那格一塊底 | `Components/glass/GlassTabView.java` |
+| 清單一列 | 70 高、字從 72 開始、名字 17 粗、內容 16、數字 12 粗 | `Cells/DialogCell.java`（heightDefault、messagePaddingStart）、`ActionBar/Theme.java` |
+| 顏色 | 標題列白底、灰底 #F1F1F3、分隔線 #D9D9D9、按下 6% 黑、主題色 #229AF0 | `ActionBar/ThemeColors.java` |
+| 換頁 | 新的一層從右邊 48dp 淡入，.15 秒 | `ActionBar/ActionBarLayout.java`（`dp(48) * (1 - interpolated)`、duration 150） |
+| 設定列 | 50 高、16 字、彩色圖示方塊；段落標題主題色粗體 | `Cells/TextCell.java`（heightDp 50、setColorfulIcon）、`Cells/HeaderCell.java` |
+| 確認視窗 | 標題 20、說明 16、按鈕 16 | `ActionBar/AlertDialog.java` |
+| 選單 | 圓角 28、陰影 6dp、項目 16 字、圖示在左 | `MainTabsActivity.java`（ItemOptions 的 createRoundRectDrawable(dp(28))）、`ActionBar/ActionBarMenuSubItem.java` |
+
+### 電腦（Telegram Desktop）
+
+| 我們的 | 數值 | 來源 |
+|---|---|---|
+| 清單一列 | 62 高、頭像 46、字從 68 開始、13 字、時間 13、數字 19 高 12 粗 | `Telegram/SourceFiles/dialogs/dialogs.style`（defaultDialogRow、dialogsUnread*）、lib_ui `ui/basic.style`（fsize 13） |
+| 欄寬 | 左欄最少 260、中間 380、右欄 292 | `window/window.style`（columnMinimalWidth*） |
+| 主選單 | 從左邊滑出、上面主題色底、頭像 48、項目粗體圖示在左 | `window/window.style`（mainMenuUserpic、mainMenuButton）、lib_ui `colors.palette`（mainMenuCoverBg） |
+| 設定 | 蓋在中間的一層：寬 392、上下留 20～40、標題列 56；設定圖示圓角 6 | `info/info.style`（infoDesiredWidth、infoLayerTop*）、`settings/settings.style`（settingsButton、settingsIconRadius） |
+| 對話框 | 圓角 8、寬 320、標題 16 粗在 (24,13)、按鈕 34 高圓角 4 | lib_ui `ui/layers/layers.style`（boxRadius、boxWidth、boxTitle*）、`ui/widgets/widgets.style`（buttonRadius、defaultActiveButton） |
+| 選單 | 圓角 8、項目左右 17 上下 8、最窄 156 | lib_ui `ui/widgets/widgets.style`（defaultMenu、defaultPopupMenu） |
+| 水波紋 | 長出來 .65 秒、淡掉 .2 秒、#E5E5E5 | lib_ui `ui/widgets/widgets.style`（defaultRippleAnimation） |
+| 後面那層暗色 | 黑 50% | lib_ui `colors.palette`（layerBg #0000007F） |
+
+### 跟原生版本不一樣的地方（刻意的）
+
+- 對話框不放「取消」：使用者要求過（點旁邊、往下滑、Esc 就關），所以 iOS 的確認視窗只有一顆按鈕整排。
+- 次要字顏色：iOS 原本是 #8E8E93，在白底上對比不到 4.5，清單的時間、狀態維持原色（`--ios-sub`），其他說明字改用段落標題那個比較深的 #6D6D72（`--tx3`）。
+- 字型：網頁拿不到 SF Pro、Roboto、Open Sans 的授權字檔時就用系統字；Telegram Desktop 自帶 Open Sans，這裡用系統字。
+- 設定裡的圖示：三個平台都是實心彩色方塊，但顏色照哨站的角色（主題色、配角色、灰、注意、異常），不是 Telegram 每一項各自固定的顏色。
+- 分頁的內容：Telegram 是聊天、聯絡人、通話、設定；哨站是主機、紀錄、設定。
