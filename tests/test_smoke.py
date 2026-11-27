@@ -4,7 +4,7 @@
 """
 import json
 import os
-import shutil
+import re
 import socket
 import subprocess
 import sys
@@ -31,7 +31,6 @@ class Server(unittest.TestCase):
     STATE = None                                   # 啟動前先放好的存檔內容
     EXTRA = ""                                     # 額外的設定（每行一個）
     ENV = {}                                       # 額外的環境變數
-    CAPE_WORKER = False
 
     @classmethod
     def setUpClass(cls):
@@ -48,9 +47,6 @@ class Server(unittest.TestCase):
         env = {k: v for k, v in os.environ.items() if not k.startswith("SENTINEL_")}
         env["SENTINEL_CONF"] = conf
         env.update(cls.ENV)
-        if cls.CAPE_WORKER:
-            env["SENTINEL_CAPE_SOCKET"] = os.path.join(cls.tmp.name, "cape", "cape.sock")
-            env["SENTINEL_CAPE_NODE"] = shutil.which("node") or "node"
         cls.log = open(os.path.join(cls.tmp.name, "server.log"), "w+", encoding="utf-8")
         cls.proc = subprocess.Popen([sys.executable, os.path.join(ROOT, "sentinel.py")], cwd=cls.tmp.name,
                                     env=env, stdout=cls.log, stderr=subprocess.STDOUT)
@@ -83,8 +79,8 @@ class Server(unittest.TestCase):
         cls.log.close()
         cls.tmp.cleanup()
 
-    def request(self, path, token=None, method="GET", data=None, headers=None):
-        headers = {**(headers or {}), **({"X-Token": token} if token else {})}
+    def request(self, path, token=None, method="GET", data=None):
+        headers = {"X-Token": token} if token else {}
         req = urllib.request.Request(f"http://127.0.0.1:{self.port}{path}", data=data, method=method, headers=headers)
         try:
             with urllib.request.urlopen(req, timeout=15) as r:
@@ -94,53 +90,36 @@ class Server(unittest.TestCase):
 
 
 class SmokeTest(Server):
-    CAPE_WORKER = True
-
     def test_page(self):
         code, headers, body = self.request("/")
         self.assertEqual(code, 200)
         self.assertIn("text/html", headers["Content-Type"])
         html = body.decode("utf-8")
-        self.assertIn('href="./styles.css"', html)
-        self.assertIn('src="./app.js"', html)
-        self.assertEqual(headers["X-Frame-Options"], "DENY")
-        self.assertIn("frame-ancestors 'none'", headers["Content-Security-Policy"])
-        code, headers, body = self.request("/cape/app.js")
+        self.assertIn("<html", html.lower())
+        # 樣式和畫面程式要已經塞進網頁裡，不能留下記號
+        self.assertNotIn("/*@style.css*/", html)
+        self.assertNotIn("/*@app.js*/", html)
+        self.assertNotIn("/*@fly.js*/", html)
+        self.assertNotIn("/*@flyv*/", html)
+        # 機場起降的 fly.js 不放在首頁，另外下載（網址帶版本）
+        with open(os.path.join(ROOT, "web", "fly.js"), encoding="utf-8") as f:
+            fly = f.read()
+        self.assertNotIn(fly.splitlines()[1], html)
+        v = re.search(r'const FLYV = "([0-9a-f]{12})"', html).group(1)
+        code, headers, body = self.request("/fly.js?v=" + v)
         self.assertEqual(code, 200)
         self.assertIn("javascript", headers["Content-Type"])
-        with open(os.path.join(ROOT, "cape", "app.js"), "rb") as f:
-            self.assertEqual(body, f.read())
-        self.assertEqual(self.request("/cape/app.js", headers={"If-None-Match": headers["ETag"]})[0], 304)
-        for path in ("/fly.js", "/cape/server.mjs", "/cape/package.json"):
-            self.assertEqual(self.request(path)[0], 404)
-        with urllib.request.urlopen(f"http://127.0.0.1:{self.port}/s/Ab123cd4", timeout=10) as response:
-            self.assertTrue(response.url.endswith("/cape/#/flight-share/fs_Ab123cd4"))
-
-    def test_cape_worker(self):
-        for _ in range(50):
-            status, _, _ = self.request("/api/cape/health")
-            if status == 200:
-                break
-            time.sleep(0.2)
-        self.assertEqual(status, 200)
-        self.assertEqual(self.request("/api/cape/workspace", TOKEN)[0], 401)
-        post = {"Content-Type": "application/json", "X-Requested-With": "1"}
-        status, headers, _ = self.request("/api/login", method="POST",
-                                          data=json.dumps({"pw": TOKEN}).encode(), headers=post)
-        self.assertEqual(status, 200)
-        cookie = headers["Set-Cookie"]
-        self.assertIn("HttpOnly", cookie)
-        auth = {"Cookie": cookie.split(";", 1)[0]}
-        self.assertEqual(self.request("/api/cape/workspace", headers=auth)[0], 200)
-        rule = json.dumps({"action": "save", "name": "煙霧測試", "metric": "cpu",
-                           "threshold": 85, "duration": 5, "serverId": "@self"}).encode()
-        self.assertEqual(self.request("/api/cape/rules", method="POST", data=rule,
-                                      headers={**auth, **post, "Sec-Fetch-Site": "cross-site"})[0], 403)
-        status, _, body = self.request("/api/cape/rules", method="POST", data=rule, headers={**auth, **post})
-        self.assertEqual(status, 200, body)
-        self.assertEqual(json.loads(body)["rules"][0]["name"], "煙霧測試")
-        with open(os.path.join(self.tmp.name, "data", "cape", "workspace.json"), encoding="utf-8") as file:
-            self.assertEqual(json.load(file)["rules"][0]["name"], "煙霧測試")
+        self.assertEqual(body.decode("utf-8"), fly)
+        req = urllib.request.Request(f"http://127.0.0.1:{self.port}/fly.js?v={v}", headers={"If-None-Match": headers["ETag"]})
+        with self.assertRaises(urllib.error.HTTPError) as e:   # 沒改：瀏覽器用存的那份
+            urllib.request.urlopen(req, timeout=15)
+        self.assertEqual(e.exception.code, 304)
+        with open(os.path.join(ROOT, "web", "app.js"), encoding="utf-8") as f:
+            first_line = next(line for line in f if line.strip())
+        self.assertIn(first_line.strip(), html)
+        # 不讓別的網站把哨兵嵌進去
+        self.assertEqual(headers["X-Frame-Options"], "DENY")
+        self.assertIn("frame-ancestors 'none'", headers["Content-Security-Policy"])
 
     def test_static_files(self):
         for path, ctype in [("/manifest.webmanifest", "application/manifest+json"),

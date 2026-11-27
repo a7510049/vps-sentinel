@@ -119,6 +119,11 @@ def pair_key_find(given):
     return None
 
 
+def pair_key_ok(given):
+    """其他主機用配對鑰匙連進來"""
+    return bool(pair_key_find(given))
+
+
 def pair_status():
     d = pair_load()
     p = d.get("pending") or {}

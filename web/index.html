@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="zh-Hant-TW" data-mode="dark" data-accent="blue">
+<head>
+<meta charset="utf-8">
+<script>
+/* 安裝時給的網址（#t=密碼）：一打開就把密碼從網址拿掉，網址列和瀏覽紀錄都不會留著 */
+(function(){ try {
+  var u = new URL(location.href), h = new URLSearchParams(location.hash.slice(1)), t = h.get("t") || u.searchParams.get("t");
+  if (t) { window._t0 = t; u.searchParams.delete("t"); h.delete("t"); history.replaceState(null, "", u.pathname + (u.search.length > 1 ? u.search : "") + (h.toString() ? "#" + h : "")); }
+} catch(e){} })();
+</script>
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>哨站</title>
+<link rel="manifest" href="/manifest.webmanifest?v=2">
+<link rel="icon" href="/icon.svg?v=2">
+<link rel="apple-touch-icon" href="/apple-touch-icon.png?v=2">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="哨站">
+<meta name="theme-color" content="#0c0e12">
+<link rel="preload" href="/font.woff2" as="font" type="font/woff2" crossorigin>
+<script>
+/* 先套用設定，避免畫面閃一下 */
+document.documentElement.classList.add("booting");
+(function(){ try {
+  var p = JSON.parse(localStorage.getItem("vps-prefs") || "{}"), h = document.documentElement;
+  var t = p.theme || "auto", dark = t === "dark" || (t === "auto" && matchMedia("(prefers-color-scheme: dark)").matches);
+  h.dataset.mode = dark ? "dark" : "light"; h.dataset.accent = p.accent || "blue"; h.dataset.motion = p.motion === false ? "off" : "on";
+} catch(e){} })();
+</script>
+<style>
+/*@style.css*/
+</style>
+</head>
+<body>
+<div class="amb" aria-hidden="true"><i></i><i></i><i></i></div>
+<div id="splash"><div class="sp-blob"></div>
+<div class="sp-title">哨站</div><div class="sp-msg"><span>正在連線…</span></div></div>
+<div class="wrap" id="app"></div>
+<div id="layer"></div>
+<div class="toasts" id="toasts"></div>
+<script>
+/*@app.js*/
+</script>
+</body>
+</html>

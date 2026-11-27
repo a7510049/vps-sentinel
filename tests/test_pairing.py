@@ -210,7 +210,7 @@ class Pairing(unittest.TestCase):
 
         # 新主機進入被監看模式：網頁只剩說明頁，主要主機照樣拿得到資料
         _, _, page = self.b.request("/")
-        self.assertIn("取消被監看", page.decode())
+        self.assertIn("監看中", page.decode())
         self.assertNotIn("/*@app.js*/", page.decode())
         self.assertLess(len(page), 20000)
         peers = self.peers()
@@ -247,7 +247,7 @@ class Pairing(unittest.TestCase):
         code2, _, _ = self.b.request("/api/status", token=key)
         self.assertEqual(code2, 401)
         _, _, page = self.b.request("/")
-        self.assertNotIn("取消被監看", page.decode())            # 移除後網頁恢復
+        self.assertNotIn("監看中", page.decode())                # 移除後網頁恢復
 
     def test_2_wrong_secret(self):
         code = self.new_code()
@@ -282,7 +282,7 @@ class Pairing(unittest.TestCase):
         self.assertEqual(self.b.request("/api/pair", token=key, method="POST", data=beat)[0], 200)
         self.assertEqual(json.loads(read_text(self.B.conf, os.path.join(self.B.tmp.name, "data", "pairing.json")))["tg"], {"bot": "1:x", "chat": "9"})
         # 被監看的主機不提供機場起降（不會在背景抓）
-        self.assertIn("取消被監看", self.b.request("/")[2].decode())
+        self.assertIn("監看中", self.b.request("/")[2].decode())
         self.assertEqual(self.b.request("/api/flights?ap=TPE", token=self.btok)[0], 404)
         # 在新主機上取消被監看：密碼不對不行
         bad = json.dumps({"action": "unwatch", "pw": "nope"}).encode()
@@ -291,7 +291,7 @@ class Pairing(unittest.TestCase):
         code, _, body = self.b.request("/api/pair", method="POST", data=good)
         self.assertEqual(code, 200, body)
         self.assertEqual(self.b.request("/api/status", token=key)[0], 401)
-        self.assertNotIn("取消被監看", self.b.request("/")[2].decode())
+        self.assertNotIn("監看中", self.b.request("/")[2].decode())
         self.post(self.a, "/api/peer", {"action": "remove", "name": json.loads(self.a.request("/api/all", token=TOKEN)[2])[1]["node"]})
 
 

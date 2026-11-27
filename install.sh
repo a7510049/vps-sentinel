@@ -40,7 +40,6 @@ spin() {   # spin 說明 指令…：比較久的步驟顯示轉圈圈，做完�
 [ "$(id -u)" = 0 ] || die "請用 sudo 執行" "sudo bash install.sh"
 command -v systemctl >/dev/null || die "這台主機沒有 systemd，無法自動安裝"
 command -v python3 >/dev/null || { apt-get update -qq && apt-get install -y -qq python3; }
-command -v curl >/dev/null || { apt-get update -qq && apt-get install -y -qq curl ca-certificates; }
 
 MODE=""
 DOMAIN=""
@@ -200,45 +199,16 @@ if ! command -v caddy >/dev/null && [ -f /etc/apt/sources.list.d/caddy-stable.li
   rm -f /etc/apt/sources.list.d/caddy-stable.list
 fi
 
-install_cape_node() (
-  set -e
-  local runtime=/opt/vps-cape-node-24 version=v24.22.3 arch sum temp file
-  if [ -x "$runtime/bin/node" ] && [ "$("$runtime/bin/node" --version)" = "$version" ]; then return 0; fi
-  case "$(uname -m)" in
-    x86_64) arch=x64; sum=061ec3e3062115705b56b51fa9cc330ab50d34b6969387d4e4b1a50c6809acc2 ;;
-    aarch64|arm64) arch=arm64; sum=261af2af250dfd7e9f25cf151d1b2713a0adf8f10a9ad116c4947f68627affe8 ;;
-    ppc64le) arch=ppc64le; sum=ba4b26ade1f7b3f5ba6756856815de58e353746004e7e46cc838243a6cbf3299 ;;
-    s390x) arch=s390x; sum=d8f84397c1478c0ed0c1b29343626ed0f5f1a0985df0c5975c30f0c03836631f ;;
-    *) echo "這個架構沒有 Cape 的 Node.js 24 套件。" >&2; return 1 ;;
-  esac
-  temp="$(mktemp -d)"
-  trap 'rm -rf -- "$temp"' EXIT
-  file="node-$version-linux-$arch.tar.gz"
-  curl --proto '=https' --proto-redir '=https' -fsSL --retry 2 --max-time 120 \
-    "https://nodejs.org/dist/$version/$file" -o "$temp/$file" || return 1
-  printf '%s  %s\n' "$sum" "$temp/$file" | sha256sum -c >/dev/null || return 1
-  tar -xzf "$temp/$file" -C "$temp" "node-$version-linux-$arch/bin/node" || return 1
-  [ "$("$temp/node-$version-linux-$arch/bin/node" --version)" = "$version" ] || return 1
-  install -d -m 755 "$runtime/bin" || return 1
-  install -m 755 "$temp/node-$version-linux-$arch/bin/node" "$runtime/bin/node.new" || return 1
-  mv -f -- "$runtime/bin/node.new" "$runtime/bin/node"
-)
-
 # ── 1. 安裝主程式 ──
 step "安裝主程式"
-spin "安裝 Cape 執行環境" install_cape_node || die "無法安裝 Cape 的 Node.js 執行環境" "請確認主機能連到 nodejs.org，且 Node.js 可在本機執行"
 rm -rf "$DIR.prev"
 [ -f "$DIR/sentinel.py" ] && cp -a "$DIR" "$DIR.prev"   # 留一份舊版：新版啟動失敗就換回來
 install -d "$DIR"
 install -m 755 "$HERE/sentinel.py" "$DIR/sentinel.py"
-for f in cape_deploy.py install.sh pair.py download.py backup.py guard.py notes.py adblock.py photo.py album.py fly.py; do install -m 644 "$HERE/$f" "$DIR/$f"; done
+for f in pair.py download.py backup.py guard.py notes.py adblock.py photo.py album.py fly.py; do install -m 644 "$HERE/$f" "$DIR/$f"; done
+rm -rf -- "$DIR/cape" "$DIR/cape_deploy.py" "$DIR/install.sh"   # 5.59～5.60 的 Cape 網頁已經不用了
 install -d "$DIR/web"
-install -m 644 "$HERE"/web/pin.js "$HERE"/web/font.woff2 "$HERE"/web/album-sw.js "$DIR/web/"
-rm -f -- "$DIR"/web/{index.html,style.css,app.js,fly.js,seed-rg.woff2,seed-bd.woff2,album.html,album.css,album.js}
-install -d "$DIR/cape"
-for f in index.html album-guest.html app.js chart.js data.js icons.js outpost.js album-guest.js styles.css package.json rules-store.mjs server.mjs; do
-  install -m 644 "$HERE/cape/$f" "$DIR/cape/$f"
-done
+install -m 644 "$HERE"/web/index.html "$HERE"/web/style.css "$HERE"/web/app.js "$HERE"/web/pin.js "$HERE"/web/fly.js "$HERE"/web/font.woff2 "$HERE"/web/seed-rg.woff2 "$HERE"/web/seed-bd.woff2 "$HERE"/web/album.html "$HERE"/web/album.css "$HERE"/web/album.js "$HERE"/web/album-sw.js "$DIR/web/"
 install -d "$DIR/data"
 install -m 644 "$HERE/data/airports.tsv" "$HERE/data/coast.tsv" "$HERE/data/terrain.bin" "$HERE/data/actypes.tsv" "$HERE/data/apmap.tsv" "$DIR/data/"
 ok "放在 $DIR"
@@ -510,10 +480,9 @@ alive() {
   local port bind
   port="$(grep -E '^PORT=' "$CONF" | cut -d= -f2)"
   bind="$(grep -E '^BIND=' "$CONF" | cut -d= -f2)"
-  case "$bind" in ""|0.0.0.0) bind=127.0.0.1 ;; ::) bind=::1 ;; esac
-  case "$bind" in *:*) bind="[$bind]" ;; esac
+  case "$bind" in ""|0.0.0.0|::) bind=127.0.0.1 ;; esac
   systemctl is-active --quiet vps-sentinel-lite &&
-    python3 -c 'import json,sys,urllib.request; assert json.load(urllib.request.urlopen(sys.argv[1],timeout=3)).get("ok") is True' "http://$bind:${port:-8787}/api/cape/health" >/dev/null 2>&1
+    python3 -c 'import sys,urllib.request;urllib.request.urlopen(sys.argv[1],timeout=3).read(64)' "http://$bind:${port:-8787}/" >/dev/null 2>&1
 }
 UP=""
 for _ in $(seq 1 20); do
@@ -536,6 +505,7 @@ if [ -z "$UP" ]; then
   die "啟動失敗" "請看：journalctl -u vps-sentinel-lite -n 30"
 fi
 ok "已啟動，開機也會自動啟動"
+rm -rf /opt/vps-cape-node-24   # 5.59～5.60 另外裝的 Node.js，已經不用了
 
 # 有裝雲端硬碟的話，順便整理一下：容量補足到設定的大小、修好刪不掉的檔案（沒裝就跳過）
 if [ -f /opt/vps-cloud/data/config.yaml ] && [ -f "$HERE/cloud.sh" ]; then
@@ -604,8 +574,7 @@ else
     printf '  第一次登入的 PIN 碼：%s%s%s（登入後要換一組）\n' "$B$C" "$TPIN" "$N"
     printf '  %s忘了 PIN 碼：sudo python3 %s/sentinel.py --new-pin%s\n\n' "$D" "$DIR" "$N"
   elif [ -n "$NEWCONF" ] && [ -n "$TOKEN" ]; then
-    printf '  用手機打開這個網址：\n     %s%s%s\n\n' "$B$C" "$BASE" "$N"
-    printf '  選擇「哨站密碼」後輸入：%s%s%s\n\n' "$B$C" "$TOKEN" "$N"
+    printf '  用手機打開這個網址（第一次會自動記住密碼）：\n     %s%s#t=%s%s\n\n' "$B$C" "$BASE" "$TOKEN" "$N"
   else
     printf '  網址：%s%s%s\n' "$B$C" "$BASE" "$N"
     printf '  %s（已略過密碼輸出，避免寫入更新紀錄；忘了 PIN 碼可執行 sudo python3 %s/sentinel.py --new-pin）%s\n\n' "$D" "$DIR" "$N"

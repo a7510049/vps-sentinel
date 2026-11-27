@@ -1,6 +1,5 @@
 """雲端硬碟更新中不能拿舊版去比對：不然更新完還會一直說「有新版」。只用 Python 內建模組。"""
 import unittest
-from unittest.mock import patch
 
 from test_passkey import load_sentinel
 
@@ -11,9 +10,7 @@ class CloudCheckTest(unittest.TestCase):
     def setUp(self):
         self.calls = 0
         S.CLOUD_URL = "http://127.0.0.1/cloud/"
-        which = patch.object(S.shutil, "which", side_effect=lambda n: "/usr/bin/" + n)
-        which.start()
-        self.addCleanup(which.stop)
+        S.shutil.which = lambda n: "/usr/bin/" + n
         S.cloud_local = lambda: (["sha256:old"], "v2.0.0")
 
         def remote():
