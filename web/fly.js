@@ -1622,7 +1622,7 @@ function flyShut(){
   f._ro = f._so = f._io = null;
   document.documentElement.classList.remove("flyon");
   let done = 0;
-  const end = () => { if (done) return; done = 1; f.remove(); if (!DET) document.documentElement.classList.remove("lock"); };
+  const end = () => { if (done) return; done = 1; f.remove(); document.documentElement.classList.remove("lock"); };
   if (!canAnim()) return end();
   requestAnimationFrame(() => {                         // 先讓底層主頁重繪完成再淡出，關閉不閃爍
     f.addEventListener("transitionend", e => { if (e.target === f && e.propertyName === "opacity") end(); });
