@@ -12,7 +12,7 @@
         "--executable-path",
         "${SENTINEL_QA_CHROME:-/opt/pw-browsers/chromium}",
         "--output-dir",
-        ".claude/qa/test-results/mcp"
+        "${TMPDIR:-/tmp}/vps-sentinel-mcp"
       ]
     },
     "chrome-devtools": {

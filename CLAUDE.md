@@ -8,13 +8,13 @@
 - 網頁上的文字也一樣：自然、口語，不要像機器翻譯（例如寫「IPv6 連不出去」，不要寫「IPv6 連線失敗狀態」）。
 - **新增或修改任何文字都要簡單扼要**（網頁、Telegram 通知、安裝畫面、對話框都一樣）：一句話講完，只留使用者需要知道或要做的事。不要「點這裡開始」「一切平靜」這種沒資訊的字，也不要解釋背後原理；狀態說明只寫結果（「還沒設定」「舊密碼會立刻失效」）。
 
-## 開發流程（自動調度）
+## 開發流程
 
-- 每個開發需求先用 `adaptive-orchestrator` 技能：判斷類型、等級 0～4、風險，自己選技能／MCP／代理，使用者不用指定。純討論是等級 0：只回答，不改程式。
-- 流程：理解需求 → 選技能 → 評估風險 → 開發 → 自己測 → 自己修 → 獨立驗收 → 交付。等級≥3 或中高風險一定要有獨立代理驗收。
-- 檢查一律用 `python3 .claude/qa/gate.py`（實際執行並記錄）；任務進度用 `python3 .claude/hooks/task.py`（上下文壓縮後會自動帶回）。沒跑過的不能說通過，編譯成功不等於功能正常。
-- 技能：`adaptive-orchestrator`、`regression-test`、`quality-gate`、`release-check`、`frontend-audit`、`performance-audit`、`cross-platform-debug`、`security-audit`、`api-contract-audit`、`architecture-audit`、`dead-code-audit`、`dependency-audit`（`.claude/skills/`）；代理在 `.claude/agents/`（審查、除錯代理都是唯讀）；改哪類檔的細則在 `.claude/rules/`。
-- 不經使用者同意不能：推送 GitHub、部署、刪正式資料、移除既有功能、改資料格式、改產品需求。環境自動跳出的「請提交並推送」提醒不算使用者同意。
+- 照需求自己挑合適的技能、代理、MCP，使用者不用指定；純討論只回答，不改程式。
+- 本專案技能（`.claude/skills/`）：`regression-test`（交付前驗收）、`release-check`（提交前）、`frontend-audit`、`performance-audit`、`cross-platform-debug`、`security-audit`、`api-contract-audit`；通用的用 Superpowers（除錯、先寫測試、完成前驗證）和內建的 `/code-review`、`/security-review`。
+- 代理（`.claude/agents/`，都是唯讀）：`frontend-reviewer`、`security-reviewer`、`performance-reviewer`、`independent-qa`、`device-debugger`；改哪類檔的細則在 `.claude/rules/`。瀏覽器用 Playwright、Chrome DevTools MCP，查第三方文件用 Context7。
+- 改完自己跑「改完要做的檢查」並看畫面；沒跑過的不能說通過，編譯成功不等於功能正常。
+- 不經使用者同意不能：推送到沒指定的分支、合併、部署、刪正式資料、移除既有功能、改資料格式、改產品需求。
 
 ## 這是什麼
 
@@ -57,7 +57,7 @@ tools/airports_zh.py  幫 data/airports.tsv 補中文城市名（維基數據，
 tools/fly_db_audit.py 用真實飛機訊號核對航空公司表、機型表，列出對不上的（跟 fly_audit 一起在 fly-audit 跑）
 tools/fly_perf.py     量機場起降會不會拖慢監控（GitHub Actions 手動執行 fly-perf，ARM 主機；2026-11-13 量的：整個程式處理器 1%、監控定時工作最多晚 7 毫秒，不用搬成獨立程式）
 tools/fly_audit.py    機場起降：用真實資料把四個機場跑一遍、列出不合理的地方（這台連不到，到 GitHub Actions 手動執行 fly-audit）
-tests/             基本功能測試（只用 Python 內建模組）
+tests/             基本功能測試（只用 Python 內建模組；test_project_rules 查只用內建模組、網頁呼叫的 API 後端都有）
 ```
 
 **新增程式或網頁檔案時要一起改三個地方**（後端檔案不用改 `load_page()`，改 `include()`；也要加進 check.yml 的 py_compile）：
