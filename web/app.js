@@ -5,6 +5,13 @@ const KEY = "vps-sentinel-token";
 /* 從主畫面打開（沒有網址列）：手機分頁列浮在下面；瀏覽器裡放上面（style.css 的 .full） */
 if (navigator.standalone || matchMedia("(display-mode: standalone)").matches)
   document.documentElement.classList.add("full");
+/* iPhone、iPad：點到不是按鈕的東西（例如標題列、IP）時，Safari 只在「上面有人在聽點擊」才送 click，
+   掛在 document 上的不算（WebKit 實測：點主機標題列打不開主機資訊）。所以每個直接放在 body 下的區塊都掛一個空的 */
+(function(){
+  const nop = () => {}, tag = el => { if (el.nodeType === 1 && !el._tapOk) { el._tapOk = 1; el.addEventListener("click", nop); } };
+  const go = () => { [...document.body.children].forEach(tag); new MutationObserver(ms => ms.forEach(m => m.addedNodes.forEach(tag))).observe(document.body, {childList:true}); };
+  document.body ? go() : addEventListener("DOMContentLoaded", go);
+})();
 /* 登入狀態：勾「30 天內不用再登入」存在這台裝置 30 天；沒勾的話關掉瀏覽器（或 App）就要重新登入 */
 const DAY30 = 30 * 86400000;
 function sstore(k, v){ try { if (v === undefined) return sessionStorage.getItem(k) || ""; v ? sessionStorage.setItem(k, v) : sessionStorage.removeItem(k); } catch(e){ return ""; } }
@@ -639,8 +646,8 @@ function ioCards(s, hs, ph){
 function topCard(s){
   const t = s.top; if (!PREF.show.info || !t || !t.length) return "";
   const mx = Math.max(5, ...t.map(x => x.c));
-  return `<div class="cc tops" data-key="pr"><div class="cch"><span class="ct2">最吃資源的程式</span></div><div class="prl" data-key="prs" data-keyed>${t.map(x =>
-    `<div class="pr" data-key="p:${esc(x.n)}"><b>${esc(x.n)}</b><span class="pbar"><i style="--k:${Math.min(1, x.c / mx).toFixed(3)}"></i></span><span class="num" title="處理器">${x.c < 10 ? (+x.c).toFixed(1) : Math.round(x.c)}%</span><span class="num" title="記憶體">${size(x.m)}</span></div>`).join("")}</div></div>`;
+  return `<div class="cc tops" data-key="pr"><div class="cch"><span class="ct2">最吃資源的程式</span></div><div class="prl" data-key="prs">${t.map((x, i) =>   // 照名次原地換字（常常換人：以前整列消失、跳位、空一格才淡出來）
+    `<div class="pr" data-key="p${i}"><b>${esc(x.n)}</b><span class="pbar"><i style="--k:${Math.min(1, x.c / mx).toFixed(3)}"></i></span><span class="num" title="處理器">${x.c < 10 ? (+x.c).toFixed(1) : Math.round(x.c)}%</span><span class="num" title="記憶體">${size(x.m)}</span></div>`).join("")}</div></div>`;
 }
 /* 這台主機的規格：處理器型號、記憶體、核心版本、IP（霧化，點一下顯示）、IPv6、主機商、其他磁碟 */
 function specCard(s){
@@ -743,29 +750,46 @@ function navBack(){
   closeMenu(); hideTip();
   if (DESK.matches) { if (LEFT === "set") return navGo("list"); if (INFO && MAIN !== "all") { INFO = false; store("vs-info", "0"); return render(LIST); } return; }
   if (STK.length < 2) return;
-  if (history.state && history.state.scr === STK.length) return history.back();   // 交給瀏覽器：下面 popstate 會退一層
+  const hs = history.state || {}, dl = hs.dlg && DLGEL.get(hs.dlg), own = STK.length > NAVBASE;   // own：這一層是打開網頁之後才推進來的，有自己的瀏覽紀錄
+  if (dl && !histLive(dl) && hs.scr === STK.length) {   // 對話框剛關、它那筆紀錄還沒退掉（以前關掉後馬上按返回沒反應）
+    dl._popped = 1; DLGEL.delete(hs.dlg);
+    if (own) return history.go(-2);                       // 一次退兩格：對話框那筆＋這一層
+    DLGSKIP++; history.back(); return navLocal();        // 這一層的紀錄不是這一頁的：只退掉對話框那筆，這層自己退
+  }
+  if (hs.scr === STK.length && own) return history.back();   // 交給瀏覽器：下面 popstate 會退一層
+  if (hs.scr === STK.length) return navLocal();           // 重新整理前推進來的層：退回會整頁重新載入或離開網站，自己退
   navPop();
 }
-function navPop(){ if (STK.length < 2) return; STK.pop(); stkSave(); NAVDIR = -1; render(LIST); NAVDIR = 0; }
+/* 自己退一層、不動瀏覽紀錄；紀錄上寫的層數等 popstate 時一起對齊 */
+function navLocal(){ navPop(); try { if (history.state && history.state.scr > STK.length) history.replaceState({...history.state, scr: STK.length}, ""); } catch(e) {} }
+function navPop(){ if (STK.length < 2) return; STK.pop(); NAVBASE = Math.min(NAVBASE, STK.length); stkSave(); NAVDIR = -1; render(LIST); NAVDIR = 0; }
 addEventListener("popstate", () => {
   if (DESK.matches) return;
   const d = Math.max(1, (history.state && history.state.scr) || 1);
   if (STK.length > d) { while (STK.length > d + 1) STK.pop(); navPop(); }
+  else if (d > STK.length && !(history.state && history.state.dlg)) try { history.replaceState({...history.state, scr: STK.length}, ""); } catch(e) {}   // 剛自己退過一層：這筆紀錄的層數跟著改
 });
+let NAVBASE = STK.length, NAVSWT = 0;   // 打開網頁時就在第幾層（從暫存讀回來的）：這幾層沒有自己的瀏覽紀錄
 try { history.replaceState({...(history.state || {}), scr: STK.length}, ""); } catch(e) {}
 /* 換畫面：Telegram 的疊層（推進：新的從右邊整頁滑進來、舊的往左退 20% 並暗一點；退回反過來；原地換：淡入） */
 function scrSwap(a, b){
-  const dir = NAVDIR;
+  const dir = NAVDIR, sx = dir < 0 ? NAVSWIPE : 0; NAVSWIPE = 0; clearTimeout(NAVSWT);
+  const st = a.parentNode, u0 = st && st.querySelector(":scope>.scr.under"), uf = u0 && {transform:u0.style.transform, opacity:u0.style.opacity};   // 手指拖到哪：真的上一層從那裡接著滑，不跳回去
+  if (st) st.querySelectorAll(":scope>.scr.under").forEach(u => u.remove());   // 往右滑時先畫好的上一層：真的上一層要換上來了，拿掉
   if (!canAnim() || !a.isConnected) return a.replaceWith(b);
   a.replaceWith(b);
   if (!dir) { b.animate([{opacity:0}, {opacity:1}], {duration:T.fast, easing:STD, id:"ui"}); return; }
   a._leaving = 1; a.style.pointerEvents = "none"; a.classList.add("gone");
   b.parentNode.insertBefore(a, dir > 0 ? b : b.nextSibling);
+  skipIntro(a, true); if (dir < 0) skipIntro(b, true);   // 搬動、退回來的那層：數字卡的進場動畫不要再播一次（會整排閃一下）
   const o = {duration:T.mid, easing:DEC, id:"ui"}, top = dir > 0 ? b : a, under = dir > 0 ? a : b;
-  const sx = dir < 0 ? NAVSWIPE : 0, tOut = [{transform:`translateX(${sx}px)`}, {transform:"translateX(100%)"}], uOut = [{transform:"none", opacity:1}, {transform:"translateX(-20%)", opacity:.9}];   // 用手指滑回去的：從手指放開的位置接著滑
-  top.animate(dir > 0 ? [...tOut].reverse() : tOut, {...o, fill:"forwards"});
-  const ua = under.animate(dir > 0 ? uOut : [...uOut].reverse(), {...o, fill:dir > 0 ? "forwards" : "none"});
-  ua.onfinish = () => { a.remove(); if (dir < 0) top.getAnimations().forEach(x => x.cancel()); };
+  const tOut = [{transform:`translateX(${sx}px)`}, {transform:"translateX(100%)"}], uOut = [{transform:"none", opacity:1}, {transform:"translateX(-20%)", opacity:.9}];   // 用手指滑回去的：從手指放開的位置接著滑
+  /* 只有要拿掉的那一層停在最後的樣子；留下來的那一層不能 fill（會一直蓋過手指拖曳時寫的 transform，往右滑就滑不動） */
+  top.animate(dir > 0 ? [...tOut].reverse() : tOut, {...o, fill:dir > 0 ? "none" : "forwards"});
+  const ua = under.animate(dir > 0 ? uOut : [uf || uOut[1], uOut[0]], {...o, fill:dir > 0 ? "forwards" : "none"});
+  const bye = () => { if (a.isConnected) a.remove(); };
+  ua.onfinish = bye; ua.oncancel = bye;
+  setTimeout(bye, T.mid + 400);   // 背景分頁動畫不跑：時間到一定拿掉，不留一層看不見的畫面
 }
 /* ── 整體 ── */
 function shell(list, time){ return DESK.matches ? deskShell(list, time) : phoneShell(list, time); }
@@ -849,7 +873,7 @@ function allScreen(list, time){
   const acts = `<button class="iconbtn${fl ? " act" : ""}" data-logmenu title="篩選紀錄">${I("filter")}</button>`;
   const head = topbar(backBtn() + `<span class="cav brand sm">${BRAND}</span>`, "全部主機", sub, acts);
   const is = issuesOf(list), lv = LOST || list.some(s => !s.online || lvOf(s) === "bad") ? "bad" : is.length ? "warn" : "ok";
-  const pin = is.length ? `<button class="pinb ${lv}" data-go="h:${esc(keyOf(is[0].s))}" data-key="pin"><i></i><span><b>${esc(headline(list))}</b><small>${esc(is[0].t ? `${is[0].s.name}・${is[0].t}` : `${is[0].s.name} 連不上`)}${is.length > 1 ? `　還有 ${is.length - 1} 件` : ""}</small></span>${CHEV}</button>` : "";
+  const pin = is.length ? `<button class="pinb ${lv}" data-go="h:${esc(keyOf(is[0].s))}" data-key="pin"><i></i><span><b>${esc(LOST || is.length > 1 ? headline(list) : is[0].t ? "1 件事要留意" : "1 台主機連不上")}</b><small>${esc(is[0].t ? `${is[0].s.name}・${is[0].t}` : `${is[0].s.name} 連不上`)}${is.length > 1 ? `　還有 ${is.length - 1} 件` : ""}</small></span>${CHEV}</button>` : "";
   const ev0 = allEvents(list).filter(e => !LOGH || e.k === LOGH).filter(LOGK[LOGF] || LOGK[""]), ev = LOGH ? ev0 : groupEv(ev0);
   const chip = fl ? `<div class="fchipbar" data-key="fcb"><button class="fpill" data-logclear>${esc([LOGF && {bad:"有狀況", other:"恢復與通知"}[LOGF], LOGH && (list.find(x => keyOf(x) === LOGH) || {}).name].filter(Boolean).join("・"))}${I("x")}</button></div>` : "";
   return head + pin + `<div class="mscroll" data-key="ms"><div class="mwrap" data-key="mw">${fl ? "" : statStrip(list, g)}${chip}${timeline(ev, list.length > 1)}</div></div>`;
@@ -985,37 +1009,58 @@ function setScreen(list){
   return head + `<div class="rscroll" data-key="ss">${prof}<div class="lbl" data-key="lsec">通知與登入</div>${secG}${skyG}${look}<div class="lbl" data-key="lo"></div>${out}</div>`;
 }
 let NAVSWIPE = 0;
-/* 手機：往右滑退回上一層（畫面跟著手指走，放開超過三成或甩得夠快就退回） */
+/* 手機：往右滑退回上一層（畫面跟著手指走，放開超過三成或甩得夠快就退回）
+   手指按下時什麼都不做；確定是往右滑才把上一層畫在底下（以前每點一下都偷偷多畫一整層、而且沒拿掉，
+   越點越多，往右滑時拖到的是看不見的那層，iPhone 上像是手勢沒反應、安卓一直重畫） */
 (function(){
   let x0 = 0, y0 = 0, t0 = 0, top = null, under = null, lock = 0, on = false;
-  const off = () => { removeEventListener("touchmove", mv); removeEventListener("touchend", end); removeEventListener("touchcancel", end); on = false; };
+  /* iPhone、iPad：按下去那一刻才掛的 touchmove 擋不住捲動（Safari 在按下時就決定了），往右滑時底下會跟著上下捲；所以一開始就掛在 #app 上 */
+  const IOSW = /iPhone|iPad|iPod/.test(navigator.userAgent) || (/Macintosh/.test(navigator.userAgent) && navigator.maxTouchPoints > 1);
+  const off = () => { if (!IOSW) removeEventListener("touchmove", mv); removeEventListener("touchend", end); removeEventListener("touchcancel", end); on = false; };
+  const drop = () => { if (under) under.remove(); under = null; top = null; lock = 0; };
   const mv = e => {
-    if (!top || e.touches.length > 1) return;
+    if (!top || e.touches.length > 1 || !top.isConnected) { drop(); return off(); }
     const t = e.touches[0], dx = (t.clientX - x0) / ZM(), dy = (t.clientY - y0) / ZM();
-    if (!lock) { if (Math.hypot(dx, dy) < 10) return; if (dx > 0 && dx > Math.abs(dy) * 1.5) lock = 1; else { top = null; return off(); } }
+    if (!lock) {
+      if (Math.hypot(dx, dy) < 10) return;
+      if (!(dx > 0 && dx > Math.abs(dy) * 1.5)) { drop(); return off(); }
+      lock = 1;
+      const st = top.parentNode;
+      under = document.createElement("section"); under.className = "scr under"; under._leaving = 1;   // 底下那一層（真的上一層），跟著手指出來
+      under.innerHTML = phoneBody(STK[STK.length - 2], LIST, ""); under.style.transform = "translateX(-20%)"; under.style.opacity = .9; st.insertBefore(under, top); skipIntro(under, true);
+      top.getAnimations().forEach(a => a.cancel());   // 剛推進來的動畫還在：讓手指接手
+    }
     if (e.cancelable) e.preventDefault();
     const w = top.offsetWidth, x = Math.max(0, dx);
     top.style.transform = `translateX(${x}px)`;
-    if (under) { under.style.transform = `translateX(${(x / w - 1) * 20}%)`; under.style.opacity = .9 + .1 * x / w; }
+    under.style.transform = `translateX(${(x / w - 1) * 20}%)`; under.style.opacity = .9 + .1 * x / w;
   };
   const end = e => {
-    off(); if (!top || !lock) { top = null; return; }
-    const t = e.changedTouches && e.changedTouches[0], dx = t ? (t.clientX - x0) / ZM() : 0, v = dx / Math.max(1, performance.now() - t0), w = top.offsetWidth, el = top;
-    top = null;
-    if (dx > w * .3 || v > .5) { el.style.transform = ""; if (under) under.remove(); NAVSWIPE = dx; navBack(); NAVSWIPE = 0; return; }
-    el.animate([{transform:`translateX(${dx}px)`}, {transform:"none"}], {duration:T.fast, easing:STD}); el.style.transform = "";
-    if (under) under.remove();
+    off(); if (!top || !lock) return drop();
+    const t = e.changedTouches && e.changedTouches[0], dx = t ? Math.max(0, (t.clientX - x0) / ZM()) : 0, v = dx / Math.max(1, performance.now() - t0), w = top.offsetWidth, el = top;
+    if (e.type === "touchend" && (dx > w * .3 || v > .5)) {
+      top = null; under = null; lock = 0;   // 底下那層留著，等真的上一層換上來（scrSwap 會拿掉），中間不會閃一下空白
+      NAVSWIPE = dx; navBack();
+      clearTimeout(NAVSWT); NAVSWT = setTimeout(() => { if (el.isConnected && !el.classList.contains("gone")) { el.style.transform = ""; NAVSWIPE = 0; document.querySelectorAll(".stage>.scr.under").forEach(u => u.remove()); } }, T.long * 2);   // 保險：真的沒退成功才放回原位（scrSwap 換上時會取消）
+      return;
+    }
+    const u = under; top = null; under = null; lock = 0;
+    el.style.transform = "";
+    if (canAnim()) {
+      el.animate([{transform:`translateX(${dx}px)`}, {transform:"none"}], {duration:T.fast, easing:STD});
+      u.animate([{transform:u.style.transform, opacity:u.style.opacity}, {transform:"translateX(-20%)", opacity:.9}], {duration:T.fast, easing:STD}).onfinish = () => u.remove();
+    } else u.remove();
   };
   addEventListener("touchstart", e => {
     if (DESK.matches || STK.length < 2 || e.touches.length > 1 || $("#fly") || window._menu || document.querySelector("#layer .veil")) return;
     const t = e.touches[0];
     if (t.clientX < 16 || e.target.closest("input,textarea,canvas,.cbox,[data-noswipe],.hpick,.sw")) return;
-    const st = $("#app .stage"), cur = st && st.querySelector(":scope>.scr:not(.gone)"); if (!cur) return;
-    x0 = t.clientX; y0 = t.clientY; t0 = performance.now(); lock = 0; top = cur;
-    under = document.createElement("section"); under.className = "scr under"; under._leaving = 1;   // 底下那一層先畫好（真的上一層），跟著手指出來
-    under.innerHTML = phoneBody(STK[STK.length - 2], LIST, ""); under.style.transform = "translateX(-20%)"; under.style.opacity = .9; st.insertBefore(under, cur);
-    if (!on) { on = true; addEventListener("touchmove", mv, {passive:false}); addEventListener("touchend", end, {passive:true}); addEventListener("touchcancel", end, {passive:true}); }
+    const st = $("#app .stage"), cur = st && st.querySelector(":scope>.scr:not(.gone,.under)"); if (!cur) return;
+    if (under) under.remove();
+    x0 = t.clientX; y0 = t.clientY; t0 = performance.now(); lock = 0; top = cur; under = null;
+    if (!on) { on = true; if (!IOSW) addEventListener("touchmove", mv, {passive:false}); addEventListener("touchend", end, {passive:true}); addEventListener("touchcancel", end, {passive:true}); }
   }, {passive:true});
+  if (IOSW) { const app = $("#app"); if (app) app.addEventListener("touchmove", e => { if (on) mv(e); }, {passive:false}); }
 })();
 
 /* 電腦版一次並排幾台（保留給視窗大小改變時判斷要不要重畫） */
@@ -1813,7 +1858,7 @@ const NUM = /-?\d+(?:\.\d+)?/g;
 const SEEN = new WeakMap();
 const seenIO = window.IntersectionObserver ? new IntersectionObserver(es => es.forEach(e => SEEN.set(e.target, e.isIntersecting))) : null;
 /* 主機整頁打開時，後面那一頁看不到：不用動畫，直接換成新的值 */
-const behind = el => !!DET && !el.closest(".det");
+const behind = el => (!!DET && !el.closest(".det")) || (!DESK.matches && !!document.querySelector("#fly") && !el.closest("#fly"));   // 被整頁蓋住（手機的機場起降）：數字、曲線直接換好，不跑動畫
 function onScreen(el){
   const svg = el.ownerSVGElement || el;
   if (behind(svg)) return false;
@@ -1843,7 +1888,7 @@ function morphPath(el, from, to){
 /* 曲線往左滑：直接換成新的形狀，再從「舊的位置和高度比例」移回來（只動 transform，不用每格重算路徑） */
 function slidePath(el, tf, to){
   cancelAnimationFrame(el._praf); el._pcur = null;
-  if (!onScreen(el) || !canAnim()) return false;
+  if (!onScreen(el) || !canAnim() || behind(el) || scrolling()) return false;   // 手指在捲、被蓋住：直接換線，不每格重畫整層
   const [a, c, b, e] = tf.split(",").map(Number);
   if (![a, c, b, e].every(isFinite) || a <= 0 || c <= 0) return false;
   let m = new DOMMatrix([a, 0, 0, c, b, e]);
@@ -2017,7 +2062,9 @@ function morph(a, b){
     return;
   }
   if (a.hasAttribute("data-x") && a.innerHTML !== b.innerHTML) {
-    if (!canAnim() || !a.isConnected) return patch(a, b);
+    const bone = x => x.textContent.replace(/[\d.,:%\s]/g, "");   // 只有數字變（網速、開機幾分鐘、讀寫量）：直接換字，不要每 5 秒整塊淡出再淡入（安卓上看起來一直在閃）
+    if (a._xing) { a._xb = b; return; }                  // 正在淡出：換成最新的那份，淡完一起換（不然會換回舊的）
+    if (!canAnim() || !a.isConnected || (bone(a) === bone(b) && a.children.length === b.children.length)) return patch(a, b);
     a._xb = b;                                    // 先淡出舊字、再換上新字淡入；高度跟著平順變化
     if (a._xing) return;
     a._xing = true;
@@ -4560,9 +4607,10 @@ document.addEventListener("input", e => { if (e.target.matches && e.target.match
   const SHEET = matchMedia("(max-width:599px)"), L = $("#layer");
   if (!L) return;
   let d = null, on = false;
+  const IOSW = /iPhone|iPad|iPod/.test(navigator.userAgent) || (/Macintosh/.test(navigator.userAgent) && navigator.maxTouchPoints > 1);   // iPhone：一開始就掛好（按下才掛的擋不住捲動）
   const unbind = () => {
     if (!on) return; on = false;
-    removeEventListener("touchmove", onMove); removeEventListener("touchend", onEnd); removeEventListener("touchcancel", snap);
+    if (!IOSW) removeEventListener("touchmove", onMove); removeEventListener("touchend", onEnd); removeEventListener("touchcancel", snap);
   };
   const snap = () => {
     unbind();
@@ -4590,10 +4638,11 @@ document.addEventListener("input", e => { if (e.target.matches && e.target.match
     const dl = e.target.closest("#layer .veil .dialog"), v = dl && dl.parentNode;
     if (!SHEET.matches || !dl || dl.scrollTop > 0 || !dl.querySelector(".form") || v.classList.contains("closing") || e.target.closest("input,textarea,select")) return;
     d = {dl, v, y0:e.touches[0].clientY, t0:performance.now(), dy:0, on:false}; on = true;
-    addEventListener("touchmove", onMove, {passive:false});
+    if (!IOSW) addEventListener("touchmove", onMove, {passive:false});
     addEventListener("touchend", onEnd, {passive:true});
     addEventListener("touchcancel", snap, {passive:true});
   }, {passive:true});
+  if (IOSW) L.addEventListener("touchmove", e => { if (on) onMove(e); }, {passive:false});
 })();
 document.addEventListener("visibilitychange",()=>{ if(!document.hidden && LIST.length && getTok()) tick(); });   // 登入、還原畫面不要重畫（打到一半的密碼、選好的檔案會不見）
 SHARE ? flyLib().then(() => shareBoot(), () => setTimeout(() => location.reload(), 3000)) : tick();

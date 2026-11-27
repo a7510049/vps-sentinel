@@ -4,6 +4,12 @@ const T = {fast:200, mid:380, slow:620, long:900};
 const EASE = "cubic-bezier(.2,0,0,1)", DEC = "cubic-bezier(.05,.7,.1,1)", EXIT = "cubic-bezier(.3,0,.8,.15)";
 const CODE = location.pathname.split("/")[2] || "", BASE = `/a/${CODE}`;
 const NMK = "vsa-name-" + CODE;                                  // 名字每本相簿各記各的（使用者要求：開新的相簿要重新填，不帶上一本的名字）
+/* iPhone、iPad：點到不是按鈕的東西時，Safari 只在「上面有人在聽點擊」才送 click，掛在 document 上的不算；body 下每個區塊掛一個空的 */
+(function(){
+  const nop = () => {}, tag = el => { if (el.nodeType === 1 && !el._tapOk) { el._tapOk = 1; el.addEventListener("click", nop); } };
+  const go = () => { [...document.body.children].forEach(tag); new MutationObserver(ms => ms.forEach(m => m.addedNodes.forEach(tag))).observe(document.body, {childList:true}); };
+  document.body ? go() : addEventListener("DOMContentLoaded", go);
+})();
 const $ = (s, r = document) => r.querySelector(s);
 const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;", "<":"&lt;", ">":"&gt;", '"':"&quot;", "'":"&#39;"}[c]));
 const RM = matchMedia("(prefers-reduced-motion: reduce)");

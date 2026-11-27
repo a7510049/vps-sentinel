@@ -18,6 +18,23 @@ class WebJs(unittest.TestCase):
         dup = [n for n, c in collections.Counter(names).items() if c > 1]
         self.assertEqual(dup, [], f"重複的名字：{dup}")
 
+    def test_ios_tap_delegation(self):
+        """iPhone 點到不是按鈕的東西（標題列、IP）：document 上的 click 委派收不到，body 下每個區塊要掛一個空的點擊監聽。"""
+        for name in ("app.js", "album.js"):
+            with open(os.path.join(ROOT, "web", name), encoding="utf-8") as f:
+                src = f.read()
+            self.assertTrue("_tapOk" in src, f"{name} 少了給 iPhone 的點擊監聽")
+
+    def test_swipe_back_no_layer_per_touch(self):
+        """往右滑退回：手指按下時不能先畫上一層（以前每點一下多一層沒拿掉，iPhone 手勢沒反應、安卓一直重畫）。"""
+        with open(os.path.join(ROOT, "web", "app.js"), encoding="utf-8") as f:
+            src = f.read()
+        i = src.index("let NAVSWIPE = 0;")
+        j = src.index('addEventListener("touchstart"', i)
+        k = src.index("}, {passive:true});", j)
+        self.assertFalse("createElement" in src[j:k], "touchstart 裡不能建立底下那一層")
+        self.assertTrue(":not(.gone,.under)" in src[j:k], "拖的要是現在這一層，不是底下那層")
+
 
 if __name__ == "__main__":
     unittest.main()
