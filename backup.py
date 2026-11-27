@@ -172,6 +172,16 @@ def bk_dir(name, aliases=()):
     return d
 
 
+def bk_own(path):
+    if bk_cloud():
+        try:
+            os.lchown(path, 1000, 1000)
+        except OSError:
+            pass
+    else:
+        os.chmod(path, 0o600)
+
+
 def bk_open_dir(folder):
     """安全開啟備份資料夾（拒絕捷徑，避免 root 誤操作系統目錄）"""
     return os.open(folder, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)

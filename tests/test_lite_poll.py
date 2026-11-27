@@ -61,11 +61,11 @@ class LitePoll(Server):
         self.assertEqual(h["t"], [])
         _, body, _ = self.get("/api/all?since=%7Bbad")                     # 看不懂的就當沒給
         self.assertNotIn("part", json.loads(body)[0]["hist"])
-        hd, page, n = self.get("/cape/app.js", gz=True)
+        hd, page, n = self.get("/", gz=True)
         self.assertEqual(hd.get("Content-Encoding"), "gzip")
-        self.assertIn(b"import ", page)
+        self.assertIn(b"<html", page)
         self.assertLess(n, len(page) / 2)
-        hd, _, _ = self.get("/cape/app.js")
+        hd, _, _ = self.get("/")
         self.assertIsNone(hd.get("Content-Encoding"))                       # 沒說看得懂壓縮就不壓
 
 

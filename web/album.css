@@ -1,0 +1,1910 @@
+/* ═════════ 相簿分享（朋友打開的那一頁）：數值跟 style.css 的共用規則一樣，深淺照手機設定 ═════════ */
+@font-face{font-family:"LINE Seed TW";font-style:normal;font-weight:100 549;font-display:swap;src:url(/a/seed-rg.woff2) format("woff2")}
+@font-face{font-family:"LINE Seed TW";font-style:normal;font-weight:550 900;font-display:swap;src:url(/a/seed-bd.woff2) format("woff2")}
+@font-face{font-family:"Plus Jakarta Sans";font-style:normal;font-weight:200 800;font-display:swap;src:url(/font.woff2) format("woff2");unicode-range:U+0000-00FF,U+2000-206F,U+2122,U+2212}
+:root{
+  --serif:var(--font);                       /* 標題也用 LINE Seed（使用者要求整本同一套字） */
+  --font:"LINE Seed TW","Plus Jakarta Sans",-apple-system,BlinkMacSystemFont,"PingFang TC","Noto Sans TC","Microsoft JhengHei",sans-serif;
+  --r-xs:6px; --r-sm:12px; --r-md:16px; --r-lg:24px; --r-xl:28px; --r-pill:999px;
+  --fs-xs:12px; --fs-s:13px; --fs-m:14.5px; --fs-l:16px; --fs-xl:19px; --fs-2xl:23px; --fs-3xl:30px; --fs-4xl:36px; --fs-hero:clamp(36px,6.4vw,76px);
+  --t-fast:.2s; --t-mid:.38s; --t-slow:.62s; --t-long:.9s;
+  --ease:cubic-bezier(.2,0,0,1); --dec:cubic-bezier(.05,.7,.1,1); --exit:cubic-bezier(.3,0,.8,.15);
+  --sp:.38s cubic-bezier(.3,1.1,.55,1); --sp-fast:.33s cubic-bezier(.34,1.4,.64,1);
+  --z-bar:5; --z-veil:50; --z-toast:60; --z-spl:70; --z-shy:80;
+  --seed:#4a7dff; --gap:3px; --pad:16px; --rh:150px; --wmax:1600px;
+  color-scheme:dark;
+  --bg:#08090c; --s1:#121318; --s2:#1a1b22; --s3:#24262e; --tx:#f1f2f6; --tx2:#b9bcc8; --tx3:#7f8392; --line:rgba(255,255,255,.08);
+  --p:color-mix(in oklab,var(--seed) 55%,#fff); --on-p:#06091a; --bad:#ffb4ab;
+  --glass:rgba(18,19,24,.62); --glass-solid:rgba(18,19,24,.94); --glass2:rgba(255,255,255,.1); --hl:inset 0 1px 0 rgba(255,255,255,.07);
+  --sh-card:0 18px 48px -22px rgba(0,0,0,.85); --sh-pop:0 10px 30px -8px rgba(0,0,0,.5);
+  --map-f:invert(1) hue-rotate(180deg) brightness(.92) contrast(.88) saturate(.55);
+}
+@supports (transition-timing-function:linear(0,1)){:root{
+  --sp-fast:.33s linear(0,.022 2%,.088 5%,.221 8%,.658 18%,.821 22%,.94 26%,1.024 31%,1.075 36%,1.093 41%,1.069 51%,1.006 68%,.991 84%,1);
+  --sp:.38s linear(0,.022 3%,.093 7%,.259 12%,.554 22%,.713 28%,.83 35%,.917 42%,.976 50%,1.009 61%,1.011 83%,1)}}
+@media (prefers-color-scheme:light){:root:not([data-mode="dark"]){
+  color-scheme:light;
+  --bg:#f6f6f8; --s1:#fff; --s2:#eeeff3; --s3:#e2e4ea; --tx:#15161c; --tx2:#4a4d5c; --tx3:#7a7d8c; --line:rgba(20,24,40,.08);
+  --p:color-mix(in oklab,var(--seed) 85%,#000); --on-p:#fff; --bad:#ba1a1a;
+  --glass:rgba(255,255,255,.7); --glass-solid:rgba(255,255,255,.95); --glass2:rgba(20,24,40,.06); --hl:inset 0 1px 0 rgba(255,255,255,.6);
+  --sh-card:0 1px 2px rgba(30,40,90,.05),0 16px 40px -20px rgba(30,40,90,.28); --sh-pop:0 10px 30px -10px rgba(30,40,90,.3); --map-f:saturate(.7) contrast(.95)}}
+@media (min-width:700px){:root{--gap:6px; --pad:28px; --rh:220px}}
+@media (min-width:1200px){:root{--gap:8px; --pad:clamp(32px,2.6vw,56px); --rh:260px; --wmax:2400px}}
+
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html{-webkit-text-size-adjust:100%;text-size-adjust:100%}
+/* 整頁不能選取、複製（輸入框例外）：長按、拖過去不會出現選取框 */
+html{-webkit-user-select:none;user-select:none;-webkit-touch-callout:none}
+input,textarea,[contenteditable]{-webkit-user-select:text;user-select:text;-webkit-touch-callout:default}
+html{background:var(--bg)}
+body{margin:0;background:var(--bg);color:var(--tx);font:400 var(--fs-m)/1.5 var(--font);-webkit-font-smoothing:antialiased;min-height:100svh;overflow-x:hidden}
+button{font:inherit;color:inherit;border:0;background:none;padding:0;cursor:pointer}
+a{color:inherit;text-decoration:none}
+svg{display:block}
+[hidden]{display:none!important}
+.num{font-variant-numeric:tabular-nums}
+
+/* ── 開頭的大封面 ── */
+.hero{position:relative;height:min(78svh,760px);min-height:420px;overflow:hidden;background:var(--s1)}
+.hero .cv{position:absolute;inset:-6% 0 0;will-change:transform}
+.hero .cv img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
+.hero .cv .lq{filter:blur(24px);transform:scale(1.15)}
+.hero .cv .hi{opacity:0;transition:opacity var(--t-slow) var(--ease)}
+.hero .cv .hi.ok{opacity:1}
+/* 開場：封面照片還沒好時一道光掃過，好了整張淡入、片頭字接著出來 */
+.hero .cv{transition:opacity var(--t-long) var(--ease)}
+.hero:not(.rdy) .cv{opacity:0}
+.hero:not(.rdy){background:linear-gradient(100deg,var(--s1) 30%,var(--s2) 50%,var(--s1) 70%);background-size:300% 100%;animation:shim 1.4s linear infinite}
+.hero:not(.rdy) .hcap,.hero:not(.rdy) .hcap *,.hero:not(.rdy) .hcap .hglo,.hero:not(.rdy) .hcap h1::after,.hero:not(.rdy) .cue,.hero:not(.rdy) .cv .hi{animation-play-state:paused}
+/* 封面下緣的霧、極光：封面照片淡入時一起慢慢出來（以前開場一打開就整片在那裡） */
+.hero::before,.hero::after{transition:opacity var(--t-long) var(--ease)}
+.hero:not(.rdy)::before,.hero:not(.rdy)::after{opacity:0}
+.hero::after{content:"";position:absolute;inset:0;background:linear-gradient(180deg,rgba(0,0,0,.28) 0,transparent 26%,transparent 46%,color-mix(in oklab,var(--bg) 70%,transparent) 82%,var(--bg) 100%);pointer-events:none}
+.hcap{position:absolute;left:0;right:0;bottom:0;z-index:1;padding:0 var(--pad) clamp(28px,6vh,64px);max-width:var(--wmax);margin:0 auto;will-change:transform,opacity}
+.eyebrow{font-size:var(--fs-s);font-weight:600;letter-spacing:.04em;color:var(--tx2);margin-bottom:10px;opacity:0;animation:up var(--t-slow) var(--dec) .1s forwards}
+.hcap h1{margin:0;font-size:var(--fs-hero);line-height:1.04;font-weight:800;letter-spacing:-.025em;text-wrap:balance;opacity:0;animation:up var(--t-slow) var(--dec) .16s forwards}
+.hmeta{display:flex;flex-wrap:wrap;gap:8px;margin-top:18px;opacity:0;animation:up var(--t-slow) var(--dec) .24s forwards}
+.chip{display:inline-flex;align-items:center;gap:7px;height:36px;padding:0 14px;border-radius:var(--r-pill);background:var(--glass);box-shadow:var(--hl);
+  -webkit-backdrop-filter:blur(18px) saturate(1.6);backdrop-filter:blur(18px) saturate(1.6);font-size:var(--fs-s);font-weight:600;color:var(--tx);white-space:nowrap}
+.chip svg{width:16px;height:16px;color:var(--tx2)}
+.chip.go{background:var(--p);color:var(--on-p);box-shadow:none}
+.chip.go svg{color:var(--on-p)}
+button.chip,a.chip{transition:transform var(--sp-fast),filter var(--t-fast) var(--ease)}
+button.chip:active,a.chip:active{transform:scale(.95)}
+@media (hover:hover){button.chip:hover,a.chip:hover{filter:brightness(1.12)}}
+@keyframes up{from{opacity:0;transform:translateY(16px)}to{opacity:1;transform:none}}
+
+/* ── 捲過封面後上面浮出一條 ── */
+.bar{position:fixed;top:0;left:0;right:0;z-index:var(--z-bar);display:flex;align-items:center;gap:12px;padding:calc(env(safe-area-inset-top) + 10px) var(--pad) 10px;
+  background:var(--glass);-webkit-backdrop-filter:blur(22px) saturate(1.7);backdrop-filter:blur(22px) saturate(1.7);box-shadow:0 1px 0 var(--line);
+  transform:translateY(-105%);transition:transform var(--t-mid) var(--ease)}
+.bar.on{transform:none}
+.bar b{flex:1;min-width:0;font-size:var(--fs-l);font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.bar small{color:var(--tx3);font-weight:500;margin-left:8px;font-size:var(--fs-s)}
+.bar .chip{height:34px;-webkit-backdrop-filter:none;backdrop-filter:none}
+.chip.zb{padding:0 4px;gap:0}                                     /* iPhone 的大小鈕：放大、縮小兩顆合成一顆膠囊 */
+.zb button{display:grid;place-items:center;width:34px;height:100%;color:var(--tx);transition:opacity var(--t-fast) var(--ease),transform var(--sp-fast)}
+.zb button:active{transform:scale(.88)}
+.zb button:disabled{opacity:.3}
+.zb svg{width:18px;height:18px;color:currentColor}
+
+/* ── 照片牆：每一列等高、左右剛好對齊 ── */
+.wall{max-width:var(--wmax);margin:0 auto;padding:0 var(--pad) 40px}
+.day{margin-top:clamp(22px,4vw,44px)}
+.day:first-child{margin-top:6px}
+.dh{display:flex;align-items:baseline;gap:10px;margin:0 2px 12px;flex-wrap:wrap}
+.dh b{font-size:var(--fs-xl);font-weight:750;letter-spacing:-.01em}
+.dh span{font-size:var(--fs-s);color:var(--tx3);font-weight:500}
+.row{display:flex;gap:var(--gap);margin-bottom:var(--gap)}
+.ph{position:relative;flex:none;overflow:hidden;contain:layout paint;border-radius:var(--r-xs);background:var(--s2);cursor:zoom-in;
+  opacity:0;transform:translateY(14px) scale(.985);transition:opacity var(--t-slow) var(--ease),transform var(--t-slow) var(--dec)}
+@media (min-width:700px){.ph{border-radius:var(--r-sm)}}
+.ph.in{opacity:1;transform:none}
+.ph img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;user-select:none;-webkit-user-drag:none}
+.ph .lq{filter:blur(12px);transform:scale(1.12)}
+.ph .hi{opacity:0;transition:opacity var(--t-mid) var(--ease),transform var(--t-slow) var(--ease)}
+.ph .hi.ok{opacity:1}
+.ph.gone,.lbo{visibility:hidden}
+.ph.wt::after{content:"";position:absolute;top:0;bottom:0;left:0;width:60%;background:linear-gradient(100deg,transparent,color-mix(in oklab,var(--tx) 9%,transparent),transparent);transform:translateX(-100%);animation:wtshim 1.5s var(--ease) infinite}
+@keyframes wtshim{to{transform:translateX(270%)}}
+.zw .lbw{position:absolute;left:50%;top:50%;margin:-13px 0 0 -13px;z-index:2;transition:opacity var(--t-mid) var(--ease)}
+.zw .lbw.off{opacity:0}
+.ph .nope{position:absolute;inset:0;display:grid;place-items:center;color:var(--tx3)}
+.ph .nope svg{width:28px;height:28px}
+@media (hover:hover){.ph:hover .hi{transform:scale(1.035)}}
+.ph:focus-visible{outline:2px solid var(--p);outline-offset:2px}
+
+/* ── 拍攝地點地圖 ── */
+.msec{max-width:var(--wmax);margin:0 auto;padding:12px var(--pad) 8px}
+.mh{display:flex;align-items:baseline;gap:10px;margin:0 2px 12px}
+.mh b{font-size:var(--fs-xl);font-weight:750}
+.mh span{font-size:var(--fs-s);color:var(--tx3)}
+.map{position:relative;height:clamp(260px,42vw,460px);border-radius:var(--r-xl);overflow:hidden;background:var(--s2);box-shadow:var(--sh-card);isolation:isolate}
+.map .tl{position:absolute;opacity:0;transition:opacity var(--t-slow) var(--ease);filter:var(--map-f);user-select:none;-webkit-user-drag:none}
+.map .tl.ok{opacity:1}
+.tld::before{content:"";position:absolute;inset:0;pointer-events:none;background:linear-gradient(100deg,transparent 30%,color-mix(in oklab,var(--tx) 7%,transparent) 50%,transparent 70%);transform:translateX(-100%);animation:tld 1.4s var(--ease) infinite}
+@keyframes tld{to{transform:translateX(100%)}}
+.mk{position:absolute;width:48px;height:48px;margin:-24px 0 0 -24px;border-radius:50%;border:3px solid #fff;box-shadow:var(--sh-pop);overflow:hidden;background:var(--s3);z-index:1;
+  transition:transform var(--sp-fast);animation:pop var(--sp-fast) both}
+.mk img{width:100%;height:100%;object-fit:cover}
+.mk i{position:absolute;right:-2px;top:-2px;min-width:22px;height:22px;padding:0 6px;border-radius:var(--r-pill);background:var(--p);color:var(--on-p);font:700 var(--fs-xs)/22px var(--font);font-style:normal;text-align:center;box-shadow:var(--sh-pop)}
+.mk{overflow:visible}
+.mk img{border-radius:50%}
+@media (hover:hover){.mk:hover{transform:scale(1.12)}}
+@keyframes pop{from{transform:scale(.3);opacity:0}to{transform:none;opacity:1}}
+.attr{position:absolute;right:10px;bottom:8px;font-size:10px;color:var(--tx3);background:var(--glass);padding:2px 8px;border-radius:var(--r-pill);z-index:2}
+
+.foot{max-width:var(--wmax);margin:0 auto;padding:28px var(--pad) calc(36px + env(safe-area-inset-bottom));color:var(--tx3);font-size:var(--fs-s);display:flex;gap:14px;flex-wrap:wrap;align-items:center}
+.foot>span svg,.foot>div svg{width:15px;height:15px;display:inline-block;vertical-align:-2px;margin-right:6px}
+
+/* ── 等待、密碼、失效 ── */
+.gate{min-height:100svh;display:grid;place-items:center;padding:24px;position:relative;overflow:hidden}
+.gate::before{content:"";position:absolute;inset:-30%;background:radial-gradient(40% 40% at 30% 30%,color-mix(in oklab,var(--seed) 34%,transparent),transparent 70%),
+  radial-gradient(36% 36% at 72% 66%,color-mix(in oklab,var(--seed) 22%,transparent),transparent 70%);filter:blur(30px);animation:drift 18s var(--ease) infinite alternate}
+@keyframes drift{to{transform:translate(4%,-3%) rotate(8deg)}}
+.card{position:relative;width:min(380px,100%);padding:32px 26px 26px;border-radius:var(--r-xl);background:var(--glass);box-shadow:var(--sh-card),var(--hl);text-align:center;
+  -webkit-backdrop-filter:blur(30px) saturate(1.6);backdrop-filter:blur(30px) saturate(1.6);animation:up var(--t-slow) var(--dec) both}
+.card .ic{width:64px;height:64px;margin:0 auto 16px;border-radius:50%;display:grid;place-items:center;background:color-mix(in oklab,var(--seed) 24%,var(--s2));color:var(--p)}
+.card .ic svg{width:28px;height:28px}
+.card h2{margin:0 0 6px;font-size:var(--fs-2xl);font-weight:750}
+.card p{margin:0 0 20px;color:var(--tx2)}
+.field{width:100%;height:52px;border-radius:var(--r-md);border:1.5px solid var(--line);background:var(--s1);color:var(--tx);padding:0 16px;font:500 var(--fs-input,16px)/1 var(--font);outline:0;text-align:center;letter-spacing:.06em;
+  transition:border-color var(--t-fast) var(--ease)}
+.field:focus{border-color:var(--p)}
+.btn{width:100%;height:52px;margin-top:12px;border-radius:var(--r-pill);background:var(--p);color:var(--on-p);font-weight:700;font-size:var(--fs-l);transition:transform var(--sp-fast),opacity var(--t-fast)}
+.btn:active{transform:scale(.97)}
+.btn:disabled{opacity:.6}
+.msg{min-height:22px;margin-top:10px;color:var(--bad);font-size:var(--fs-s)}
+.shake{animation:shake var(--t-mid) var(--ease)}
+@keyframes shake{20%,60%{transform:translateX(-8px)}40%,80%{transform:translateX(8px)}}
+.sk{background:linear-gradient(100deg,var(--s1) 30%,var(--s2) 50%,var(--s1) 70%);background-size:300% 100%;animation:shim 1.4s linear infinite}
+@keyframes shim{to{background-position:-150% 0}}
+.skw{max-width:var(--wmax);margin:0 auto;padding:20px var(--pad);display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:var(--gap)}
+.skw i{aspect-ratio:4/3;border-radius:var(--r-sm)}
+
+/* ═════════ 看大圖：全黑、左右滑、兩指放大、往下滑關掉 ═════════ */
+.lb{position:fixed;inset:0;z-index:var(--z-veil);touch-action:none;user-select:none;-webkit-user-select:none;color:#fff;overscroll-behavior:contain}
+.lb .bg{position:absolute;inset:0;background:#000;opacity:0}
+.stage{position:absolute;inset:0}
+.track{position:absolute;inset:0;will-change:transform}
+.slide{position:absolute;inset:0}
+.zw{position:absolute;left:0;top:0;transform-origin:0 0;will-change:transform}
+.zw img{position:absolute;inset:0;width:100%;height:100%;object-fit:contain;-webkit-user-drag:none}
+.zw .s2{opacity:0;transition:opacity var(--t-mid) var(--ease)}
+.zw .s2.ok{opacity:1}
+.zw .nope{position:absolute;inset:0;display:grid;place-items:center;color:rgba(255,255,255,.5);text-align:center;font-size:var(--fs-m)}
+.lbt,.lbb{position:absolute;left:0;right:0;display:flex;align-items:center;gap:10px;padding:0 14px;transition:opacity var(--t-mid) var(--ease),transform var(--t-mid) var(--ease),right var(--t-mid) var(--ease);z-index:2}
+.lbt{top:0;padding-top:calc(env(safe-area-inset-top) + 10px);padding-bottom:30px}
+.lbb{bottom:0;padding-bottom:calc(env(safe-area-inset-bottom) + 12px);padding-top:34px}
+.lbt::before,.lbb::before{content:"";position:absolute;inset:0;z-index:-1;pointer-events:none;background:linear-gradient(rgba(0,0,0,.5),transparent);transition:opacity var(--t-slow) var(--ease)}
+.lbb::before{background:linear-gradient(transparent,rgba(0,0,0,.55))}
+.lb.ng .lbt::before,.lb.ng .lbb::before{opacity:0}
+.lb.bare .lbt{opacity:0;transform:translateY(-12px);pointer-events:none}
+.lbt .rb{transition:opacity var(--t-mid) var(--ease),transform var(--sp-fast),background var(--t-fast) var(--ease)}
+.lb.up.info .lbt .rb{opacity:0;transform:scale(.8);pointer-events:none}
+.lb.bare .lbb{opacity:0;transform:translateY(12px);pointer-events:none}
+/* 上面中間：日期、時間兩行（學 iOS／Google，取代張數） */
+.lbt .ttl{flex:1;min-width:0;display:grid;justify-items:center;line-height:1.25;text-align:center}
+.lbt .ttl b{max-width:100%;font-size:var(--fs-m);font-weight:650;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.lbt .ttl small{max-width:100%;font-size:var(--fs-xs);color:rgba(255,255,255,.72);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.lbt .ttl small:empty{display:none}
+/* 右上角「⋯」的選單：不常用的放這裡 */
+.lbm{position:absolute;top:calc(100% - 22px);right:14px;min-width:210px;padding:6px;border-radius:var(--r-lg);background:rgba(30,30,34,.82);-webkit-backdrop-filter:blur(24px) saturate(1.4);backdrop-filter:blur(24px) saturate(1.4);
+  box-shadow:0 12px 40px rgba(0,0,0,.4),inset 0 0 0 1px rgba(255,255,255,.1);transform-origin:top right;opacity:0;visibility:hidden;pointer-events:none;transition:visibility 0s var(--t-fast)}
+.lb.mo .lbm{opacity:1;visibility:visible;pointer-events:auto;transition:none}
+.lbm>*{display:grid;grid-template-columns:20px 1fr;align-items:center;gap:12px;width:100%;min-height:44px;padding:0 12px;border-radius:var(--r-md);color:#fff;font-size:var(--fs-m);text-align:left;text-decoration:none}
+.lbm>[hidden]{display:none}
+.lbm svg{width:20px;height:20px}
+.lbm .bad{color:#ff7b7b}
+.lbm .bad.arm{background:rgba(255,80,80,.22)}
+@media (hover:hover){.lbm>*:hover{background:rgba(255,255,255,.1)}}
+.lbm>*:active{background:rgba(255,255,255,.14)}
+/* 下面一顆玻璃膠囊：分享、愛心、留言、資訊（大拇指按得到） */
+.tbar{display:flex;align-items:center;gap:2px;padding:4px;box-sizing:border-box;flex:none;border-radius:var(--r-pill);background:rgba(255,255,255,.12);-webkit-backdrop-filter:blur(16px);backdrop-filter:blur(16px);box-shadow:inset 0 0 0 1px rgba(255,255,255,.12)}
+.tbar>*{flex:none}
+.tbar .sb{background:none;-webkit-backdrop-filter:none;backdrop-filter:none;min-width:44px;justify-content:center;padding:0 10px}
+.tbar .sb[data-inf].on{background:#fff;color:#000}
+.tbar .sb[data-inf].on svg{fill:none;stroke:currentColor}
+.lbb .cap b:empty{display:none}
+@media (max-width:599px){.lbr{flex-direction:column;align-items:stretch;gap:10px}.lbr .tbar{align-self:center}}
+.lbb .cap{flex:1;min-width:0;line-height:1.3}
+.lbb .cap b{display:block;font-size:var(--fs-m);font-weight:650;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.lbb .cap span{display:block;font-size:var(--fs-s);color:rgba(255,255,255,.7)}
+.lbb .cap span em{display:block;font-style:normal;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.lbb .cap span em[hidden]{display:none}
+.rb{width:44px;height:44px;border-radius:50%;display:grid;place-items:center;background:rgba(255,255,255,.12);-webkit-backdrop-filter:blur(16px);backdrop-filter:blur(16px);flex:none;
+  transition:transform var(--sp-fast),background var(--t-fast) var(--ease)}
+.rb svg{width:22px;height:22px}
+.rb:active{transform:scale(.9)}
+.rb.on{background:#fff;color:#000}
+@media (hover:hover){.rb:hover{background:rgba(255,255,255,.22)}.rb.on:hover{background:#fff}}
+.nav{position:absolute;top:50%;margin-top:-26px;width:52px;height:52px;z-index:2;display:none;transition:transform var(--sp-fast),background var(--t-fast) var(--ease),opacity var(--t-mid) var(--ease),right var(--t-mid) var(--ease)}
+.nav.l{left:18px}.nav.r{right:18px}
+@media (hover:hover) and (min-width:700px){.nav{display:grid}}
+.lb.bare .nav{opacity:0;pointer-events:none}
+.nav:disabled{opacity:0;pointer-events:none}
+
+/* 照片資訊：手機從下面滑上來，電腦在右邊 */
+.inf{position:absolute;left:0;right:0;bottom:0;height:62%;z-index:3;background:var(--bg);color:var(--tx);border-radius:var(--r-xl) var(--r-xl) 0 0;box-shadow:0 -10px 40px rgba(0,0,0,.35);
+  transform:translateY(102%);transition:transform var(--t-mid) var(--ease);overflow-y:auto;overscroll-behavior:none;touch-action:pan-y;padding:10px 18px calc(24px + env(safe-area-inset-bottom))}
+/* 手機：上面的圓角那段做成邊框，裡面捲動的內容永遠到不了圓角（安卓捲動時圓角常常切不住，clip-path 也時好時壞）；拉桿畫在邊框上 */
+@media (max-width:899px){
+  .inf{box-shadow:none;border-top:var(--r-xl) solid var(--bg);padding-top:0;
+    background-image:radial-gradient(circle,var(--s3) 2.5px,transparent 3px),radial-gradient(circle,var(--s3) 2.5px,transparent 3px),linear-gradient(var(--s3),var(--s3));
+    background-size:6px 6px,6px 6px,34px 5px;background-position:calc(50% - 17px) 11.5px,calc(50% + 17px) 11.5px,50% 12px;background-repeat:no-repeat;background-origin:border-box}
+  .inf::before{display:none}
+}
+/* 手機的照片資訊：照片和資訊同一頁往上捲（學 iPhone 相簿）。.infs 是整個畫面的捲動頁，上面空一段（::before）讓照片露出來，資訊接在下面；
+   只有一個捲動的地方，iOS 不會跟下拉重整、拉面板搶手勢；照片那段也是這一頁（往上滑一樣捲資訊，左右滑換張、點一下收起來由 album.js 處理）；
+   .infs 不能用 pointer-events:none 讓手指穿過去：iPhone 的 Safari 這樣整頁就捲不動（5.06 犯過）；電腦上 .infs 不存在（display:contents） */
+.infs{display:contents}
+@media (max-width:899px){
+  .infs{display:block;position:absolute;left:0;right:0;bottom:0;top:calc(env(safe-area-inset-top) + 60px);z-index:3;overflow-y:auto;overscroll-behavior:contain;-webkit-overflow-scrolling:touch;touch-action:pan-y;
+    visibility:hidden;transition:visibility 0s linear var(--t-mid)}
+  .infs::before{content:"";display:block;height:100%}
+  .lb.info:not(.cmo) .infs{visibility:visible;transition:none}
+  /* 資訊拉到快滿版：上面的日期時間變成資訊欄的標題列（同底色、細線），內容從它底下捲過去 */
+  .lbt::after{content:"";position:absolute;left:0;right:0;top:0;bottom:24px;z-index:-1;pointer-events:none;background:var(--bg);border-bottom:1px solid var(--line);opacity:0;transition:opacity var(--t-mid) var(--ease)}
+  .lbt .ttl b,.lbt .ttl small{transition:color var(--t-mid) var(--ease)}
+  .lb.up.info .lbt::after{opacity:1}
+  /* 資訊、留言打開時下面那排（地點、分享、資訊鈕）淡掉：以前只是被資訊蓋住，iPhone 快速滑動、回彈露出縫時會跑出來 */
+  .lb.info .lbb{opacity:0;pointer-events:none}
+  .lb.up.info .lbt::before{opacity:0}
+  .lb.up.info .lbt .ttl b{color:var(--tx)}
+  .lb.up.info .lbt .ttl small{color:var(--tx2)}
+  /* 捲到底時 iPhone 還會往上回彈一段：捲動頁本身下半截先墊同色底，回彈露出來的不是後面的照片（回彈本身照留） */
+  .infs.end{background:linear-gradient(transparent 55%,var(--bg) 55%)}
+  .infs>.inf{position:relative;left:auto;right:auto;bottom:auto;height:auto;min-height:62vh;min-height:62dvh;overflow:visible;overscroll-behavior:auto;touch-action:auto}
+}
+.inf::before{content:"";display:block;width:40px;height:5px;border-radius:var(--r-pill);background:var(--s3);margin:0 auto 12px}
+.lb.info:not(.cmo) .inf:not(.cmp),.lb.cmo .cmp{transform:none}
+/* 留言面板：上面誰按了愛心，中間留言自己捲，輸入框一直在最下面 */
+.cmp{display:flex;flex-direction:column;overflow:hidden;padding-bottom:0}
+.cmp .italk{flex:1;min-height:0;display:flex;flex-direction:column;padding:0}
+.cmp .th{flex:none;padding:0 0 10px;margin:0;box-shadow:0 1px 0 var(--line)}
+.cml{flex:1;min-height:0;overflow-y:auto;overscroll-behavior:none;touch-action:pan-y;padding:2px 0 8px}
+.cmp .cform{flex:none;margin:0 -18px;padding:10px 18px calc(12px + env(safe-area-inset-bottom));box-shadow:0 -1px 0 var(--line);background:var(--bg)}
+.cme{display:grid;justify-items:center;gap:8px;padding:48px 0;color:var(--tx3);font-size:var(--fs-s)}
+.cme svg{width:28px;height:28px}
+@media (min-width:900px){.cmp .cform{margin:0 -22px;padding:12px 22px 20px}}
+.lb.info .stage{bottom:calc(62% + var(--r-xl))}
+@media (max-width:899px){.lb.info .stage{top:calc(env(safe-area-inset-top) + 64px);bottom:calc(62% + 12px)}}   /* 手機開資訊：照片縮在上面那排按鈕、日期下面，不被蓋住 */
+@media (min-width:900px){
+  .inf{left:auto;top:0;height:auto;width:380px;border-radius:0;transform:translateX(102%);padding:calc(env(safe-area-inset-top) + 24px) 22px 28px;box-shadow:-10px 0 40px rgba(0,0,0,.3)}
+  .inf::before{display:none}
+  .lb.info .stage{bottom:0;right:380px}
+  .lb.info .lbt,.lb.info .lbb{right:380px}
+  .lb.info .nav.r{right:398px}
+}
+.idt{font-size:var(--fs-xl);font-weight:750;letter-spacing:-.01em}
+.itm{color:var(--tx3);font-size:var(--fs-s);margin-top:2px}
+.ibox{margin-top:16px;border-radius:var(--r-lg);background:var(--s1);box-shadow:var(--sh-card);overflow:hidden}
+.ipl{display:flex;gap:12px;align-items:center;padding:14px 16px}
+.ipl .pi{width:40px;height:40px;border-radius:50%;display:grid;place-items:center;background:color-mix(in oklab,var(--seed) 22%,var(--s2));color:var(--p);flex:none}
+.ipl .pi svg{width:20px;height:20px}
+.ipl b{display:block;font-weight:700}
+.ipl span{display:block;color:var(--tx3);font-size:var(--fs-s)}
+.ipl .go{margin-left:auto;color:var(--p);flex:none}
+.ipl .go svg{width:20px;height:20px}
+.imap{position:relative;height:160px;overflow:hidden;background:var(--s2);display:block}
+.imap .tl{position:absolute;opacity:0;transition:opacity var(--t-mid) var(--ease);filter:var(--map-f)}
+.imap .tl.ok{opacity:1}
+.imap .pin{position:absolute;left:50%;top:50%;width:22px;height:22px;margin:-11px 0 0 -11px;border-radius:50%;background:var(--p);border:3px solid #fff;box-shadow:var(--sh-pop);z-index:1}
+.imap .pin::after{content:"";position:absolute;inset:-12px;border-radius:50%;background:var(--p);opacity:.25;animation:ring 2.4s var(--ease) infinite}
+.imap .cone{position:absolute;left:50%;top:50%;width:90px;height:90px;margin:-90px 0 0 -45px;transform-origin:50% 100%;background:conic-gradient(from -25deg at 50% 100%,color-mix(in oklab,var(--p) 45%,transparent) 0 50deg,transparent 0);clip-path:polygon(50% 100%,0 0,100% 0);opacity:.8}
+@keyframes ring{0%{transform:scale(.4);opacity:.5}100%{transform:scale(1.6);opacity:0}}
+.icam{padding:16px}
+.icam .t{display:flex;align-items:center;gap:8px}
+.icam .t .gsun{margin-left:auto;width:48px;height:28px}
+.icam .t b{font-weight:750;font-size:var(--fs-l);flex:1;min-width:0}
+.icam .tgs{display:flex;flex-wrap:wrap;gap:4px;flex:1 0 100%}   /* 格式標籤固定自己一排（使用者選的：以前有 HDR 時會被擠到第二排、時有時無） */
+.tag{font-size:var(--fs-xs);font-weight:700;letter-spacing:.04em;padding:3px 8px;border-radius:var(--r-xs);background:var(--s2);color:var(--tx2)}
+.tag.hdr{background:linear-gradient(120deg,#ffd76a,#ff8a5c);color:#3a1c00}
+.isty{display:flex;flex-wrap:wrap;align-items:center;gap:8px 10px;padding:14px 16px}
+.isty>i{width:34px;height:34px;border-radius:50%;flex:none;background:var(--grad);box-shadow:inset 0 0 0 3px color-mix(in oklab,#fff 35%,transparent)}
+.isty>i.mono{background:linear-gradient(135deg,#f4f4f4,#1c1c1c)}
+.isty>div{flex:1;min-width:0}
+.isty small{display:block;font-size:10px;font-weight:600;color:var(--tx3);letter-spacing:.05em}
+.isty b{font-weight:750;font-size:var(--fs-m);overflow-wrap:anywhere}
+.isty .tag{flex:none}
+.icam .l{color:var(--tx2);margin-top:4px;font-size:var(--fs-s)}
+.icam .l2{color:var(--tx3);margin-top:2px;font-size:var(--fs-s)}
+.izr{display:flex;align-items:center;gap:8px;margin-top:8px;max-width:260px;color:var(--tx3)}
+.izr small{font-size:var(--fs-xs);font-weight:650}
+.izr .zt{position:relative;flex:1;height:4px;border-radius:var(--r-pill);background:var(--line)}
+.izr .zf{position:absolute;inset:0 auto 0 0;border-radius:inherit;background:var(--grad)}
+.izr .zk{position:absolute;top:50%;width:10px;height:10px;margin:-5px 0 0 -5px;border-radius:50%;background:var(--tx);box-shadow:0 0 0 2px var(--s1)}
+.iex{display:grid;grid-auto-flow:column;grid-auto-columns:minmax(0,1fr);border-top:1px solid var(--line)}
+.iex div{padding:12px 2px;text-align:center;font-size:var(--fs-s);font-weight:650;white-space:nowrap}
+.iex div+div{box-shadow:-1px 0 0 var(--line)}
+.iex small{display:block;font-size:10px;font-weight:600;color:var(--tx3);letter-spacing:.05em;margin-bottom:2px}
+.ikv{padding:6px 16px}
+.ikv div{display:flex;justify-content:space-between;gap:16px;padding:10px 0;font-size:var(--fs-s)}
+.ikv div+div{box-shadow:0 -1px 0 var(--line)}
+.ikv span{color:var(--tx3);flex:none}
+.ikv b{font-weight:600;text-align:right;min-width:0;overflow-wrap:anywhere}
+.idl{display:flex;gap:10px;margin-top:16px}
+.idl a,.idl button{flex:1;height:48px;border-radius:var(--r-pill);display:flex;align-items:center;justify-content:center;gap:8px;background:var(--s2);font-weight:650;transition:transform var(--sp-fast)}
+.idl a:active,.idl button:active{transform:scale(.96)}
+.idl svg{width:18px;height:18px}
+.idl .pr{background:var(--p);color:var(--on-p)}
+
+.toast{position:fixed;left:50%;bottom:calc(24px + env(safe-area-inset-bottom));z-index:var(--z-toast);transform:translate(-50%,20px);opacity:0;padding:12px 18px;border-radius:var(--r-pill);
+  background:var(--tx);color:var(--bg);font-weight:600;font-size:var(--fs-s);transition:opacity var(--t-mid) var(--ease),transform var(--t-mid) var(--ease);pointer-events:none}
+.toast.on{opacity:1;transform:translate(-50%,0)}
+
+/* ═════════ 藝術感：書本、雜誌的排版（襯線標題、細線、整排的主角照片） ═════════ */
+.hero{height:100svh;min-height:520px}
+.hero .cv .hi.ok{animation:kb 26s var(--ease) both}
+/* 底部接到頁面：照片先淡淡壓暗，最後一段照緩和曲線接到底色（多幾個點，不會看得出哪裡開始變暗）；四周壓暗的那層放在下面，最底下一定是頁面底色，沒有接縫 */
+.hero::after{background:linear-gradient(180deg,transparent 40%,color-mix(in oklab,var(--bg) 8%,transparent) 50%,color-mix(in oklab,var(--bg) 22%,transparent) 59%,color-mix(in oklab,var(--bg) 40%,transparent) 67%,
+    color-mix(in oklab,var(--bg) 60%,transparent) 75%,color-mix(in oklab,var(--bg) 78%,transparent) 83%,color-mix(in oklab,var(--bg) 92%,transparent) 91%,var(--bg) 98%),
+  linear-gradient(180deg,rgba(0,0,0,.32) 0,rgba(0,0,0,.14) 11%,transparent 24%),
+  radial-gradient(120% 80% at 50% 36%,transparent 50%,rgba(0,0,0,.3) 100%)}
+.hcap{text-align:center;padding-bottom:calc(clamp(64px,13vh,140px) + env(safe-area-inset-bottom))}
+.eyebrow{display:inline-flex;align-items:center;gap:14px;font-size:var(--fs-xs);font-weight:600;letter-spacing:.16em;color:rgba(255,255,255,.82);margin-bottom:18px;text-shadow:0 1px 12px rgba(0,0,0,.4)}
+.eyebrow::before,.eyebrow::after{content:"";width:clamp(20px,6vw,56px);height:1px;background:currentColor;opacity:.6}
+.hcap h1{font-family:var(--serif);font-weight:600;letter-spacing:.06em;line-height:1.12;font-size:clamp(38px,9vw,104px);color:#fff;text-shadow:0 2px 30px rgba(0,0,0,.35)}
+.hmeta{justify-content:center;margin-top:26px}
+.hero .chip{background:rgba(255,255,255,.14);color:#fff;box-shadow:inset 0 0 0 1px rgba(255,255,255,.26);-webkit-backdrop-filter:none;backdrop-filter:none}
+.hero .chip svg{color:rgba(255,255,255,.85)}
+.hero .chip.go{background:#fff;color:#111;box-shadow:none}
+.hero .chip.go svg{color:#111}
+.cue{position:absolute;left:50%;bottom:calc(18px + env(safe-area-inset-bottom));z-index:1;width:44px;height:56px;margin-left:-22px;display:grid;place-items:center;opacity:0;animation:up var(--t-slow) var(--dec) .5s forwards}
+.cue i{position:relative;width:1px;height:38px;background:rgba(255,255,255,.3);overflow:hidden}
+.cue i::after{content:"";position:absolute;left:0;top:0;width:1px;height:40%;background:#fff;animation:fall 2.2s var(--ease) infinite}
+@keyframes fall{from{transform:translateY(-100%)}to{transform:translateY(250%)}}   /* 用位移不用 top：不用每一格重新排版 */
+@media (prefers-color-scheme:light){
+  .eyebrow{color:var(--tx2);text-shadow:none}
+  .hcap h1{color:var(--tx);text-shadow:0 1px 24px color-mix(in oklab,var(--bg) 60%,transparent)}
+  .hero .chip{background:var(--glass);color:var(--tx);box-shadow:inset 0 0 0 1px var(--line)}
+  .hero .chip svg{color:var(--tx2)}
+  .hero .chip.go{background:var(--tx);color:var(--bg)}
+  .hero .chip.go svg{color:var(--bg)}
+  .cue i{background:color-mix(in oklab,var(--tx) 25%,transparent)}
+  .cue i::after{background:var(--tx)}
+}
+.bar b{font-family:var(--serif);font-weight:600;letter-spacing:.04em}
+
+/* 每一天是一章：襯線日期、細線 */
+.day{margin-top:clamp(40px,8vw,96px)}
+.day:first-child{margin-top:clamp(20px,4vw,40px)}
+.dh{display:grid;grid-template-columns:1fr auto;align-items:end;column-gap:16px;row-gap:2px;margin:0 2px clamp(14px,2.4vw,24px);padding-bottom:12px;border-bottom:1px solid var(--line)}
+.dh b{font-family:var(--serif);font-weight:600;font-size:clamp(19px,2.6vw,26px);letter-spacing:.03em}
+.dh span{font-size:var(--fs-s);color:var(--tx3);letter-spacing:.06em}
+.dh span:empty{display:none}
+.row.feat{margin-bottom:calc(var(--gap) * 2 + 6px)}
+.row.feat .ph{border-radius:var(--r-sm)}
+@media (min-width:700px){.row.feat .ph{border-radius:var(--r-md)}}
+
+.msec{margin-top:clamp(40px,8vw,96px)}
+.mh{padding-bottom:12px;border-bottom:1px solid var(--line);margin-bottom:clamp(14px,2.4vw,24px)}
+.mh b{font-family:var(--serif);font-weight:600;letter-spacing:.03em;font-size:clamp(19px,2.6vw,26px)}
+.foot{flex-direction:column;text-align:center;justify-content:center;gap:10px;padding-top:clamp(56px,10vw,120px)}
+.fin{display:flex;align-items:center;gap:16px;font-family:var(--serif);font-size:var(--fs-xl);font-weight:600;letter-spacing:.08em;color:var(--tx2)}
+.fin::before,.fin::after{content:"";width:40px;height:1px;background:var(--line);box-shadow:0 0 0 .5px var(--tx3);opacity:.6}
+
+/* 等待、密碼、看不到：跟相簿同一套（襯線標題、細線框、柔光） */
+.gate::before{display:none}
+.gate .glow{position:absolute;inset:-20%;background:radial-gradient(38% 34% at 28% 30%,color-mix(in oklab,var(--seed) 30%,transparent),transparent 70%),
+  radial-gradient(34% 30% at 74% 70%,color-mix(in oklab,#d9a066 26%,transparent),transparent 70%);filter:blur(40px);animation:drift 20s var(--ease) infinite alternate}
+.card{background:transparent;box-shadow:none;-webkit-backdrop-filter:none;backdrop-filter:none;width:min(360px,100%);padding:8px 8px 0}
+.card .ic{width:72px;height:72px;margin-bottom:26px;background:transparent;color:var(--tx);box-shadow:inset 0 0 0 1px var(--line),0 0 0 10px color-mix(in oklab,var(--tx) 3%,transparent)}
+.card .ic svg{width:26px;height:26px;stroke-width:1.5}
+.card h2{font-family:var(--serif);font-weight:600;font-size:clamp(26px,6vw,34px);letter-spacing:.06em;margin-bottom:10px}
+.card p{color:var(--tx3);letter-spacing:.04em;margin-bottom:0}
+.card .field{margin-top:30px;height:54px;border:0;border-bottom:1px solid color-mix(in oklab,var(--tx) 28%,transparent);border-radius:0;background:transparent;font-size:var(--fs-input,18px);letter-spacing:.3em}
+.card .field::placeholder{color:var(--tx3);letter-spacing:.2em;font-size:var(--fs-m)}
+.card .field:focus{border-color:var(--tx)}
+.card .btn{margin-top:26px;background:var(--tx);color:var(--bg);letter-spacing:.12em}
+
+/* 照片不能長按另存；主機印不了浮水印時，畫面上蓋一層字 */
+img,video,.ph img,.zw img,.mk img,.hero img{-webkit-touch-callout:none;-webkit-user-select:none;user-select:none;-webkit-user-drag:none}
+.wmo .ph::after,.wmo .zw::after{content:var(--wm);position:absolute;right:4%;bottom:4%;color:rgba(255,255,255,.62);font-weight:700;letter-spacing:.06em;
+  text-shadow:0 1px 3px rgba(0,0,0,.45);pointer-events:none;font-size:clamp(10px,3.4cqmin,28px)}
+.wmo .ph,.zw{container-type:size}
+
+/* ═════════ 回憶與分享：影片、原況、旅程路線、愛心留言、幻燈片 ═════════ */
+.bdg{position:absolute;inset:0;pointer-events:none;z-index:1}
+.bdg>span{position:absolute;display:inline-flex;align-items:center;gap:4px;height:22px;padding:0 8px;border-radius:var(--r-pill);background:rgba(0,0,0,.58);color:#fff;
+  box-shadow:inset 0 0 0 1px rgba(255,255,255,.12);font:650 11px/1 var(--font);transition:opacity var(--t-fast) var(--ease)}
+.bdg svg{width:12px;height:12px}
+.bdg .vt{right:6px;bottom:6px}
+.bdg .vt svg{width:9px;height:9px}
+.bdg .lvt{left:6px;top:6px;width:24px;padding:0;justify-content:center}
+.bdg .lvt svg{width:15px;height:15px}
+.bdg .lkt{left:6px;bottom:6px}
+.bdg .lkt svg{fill:currentColor;stroke:none}
+
+/* 旅程：照時間連起來的路線 */
+.route{position:absolute;inset:0;width:100%;height:100%;z-index:1;pointer-events:none;overflow:visible}
+.route path{fill:none;stroke-linecap:round;stroke-linejoin:round}
+.route .rt0{stroke:rgba(0,0,0,.25);stroke-width:7;opacity:0;transition:opacity var(--t-slow) var(--ease)}
+.route .rt{stroke:var(--p);stroke-width:3.5;stroke-dasharray:var(--len) var(--len);stroke-dashoffset:var(--len)}
+.drawn .route .rt{stroke-dashoffset:0;transition:stroke-dashoffset 2.4s cubic-bezier(.45,0,.2,1)}
+.drawn .route .rt0{opacity:1}
+.route .rdot{fill:#fff;stroke:var(--p);stroke-width:3;opacity:0;transition:opacity var(--t-slow) var(--ease) 2.4s;filter:drop-shadow(0 0 6px var(--p))}
+.drawn .route .rdot{opacity:1}
+.dayn{position:absolute;z-index:2;height:20px;padding:0 8px;border-radius:var(--r-pill);display:grid;place-items:center;background:var(--tx);color:var(--bg);white-space:nowrap;
+  font:700 11px/1 var(--font);box-shadow:var(--sh-pop);opacity:0;transform:translate(-50%,24px) scale(.4);transition:opacity var(--t-mid) var(--ease),transform var(--sp-fast)}
+.drawn .dayn{opacity:1;transform:translate(-50%,30px)}
+.drawn .dayn:nth-of-type(2){transition-delay:.5s}.drawn .dayn:nth-of-type(3){transition-delay:1s}.drawn .dayn:nth-of-type(n+4){transition-delay:1.5s}
+
+/* 看大圖：影片、原況、愛心留言 */
+.lvb{display:none}
+.lvb.show{display:grid}
+.lbb{flex-direction:column;align-items:stretch;gap:10px}
+.lbr{display:flex;align-items:center;gap:8px}
+.sb{display:inline-flex;align-items:center;gap:6px;height:40px;padding:0 12px;border-radius:var(--r-pill);background:rgba(255,255,255,.12);-webkit-backdrop-filter:blur(16px);backdrop-filter:blur(16px);
+  font-weight:650;font-size:var(--fs-s);position:relative;transition:transform var(--sp-fast),background var(--t-fast) var(--ease)}
+.sb svg{width:20px;height:20px}
+.sb span:empty{display:none}
+.sb:active{transform:scale(.92)}
+.sb.on svg{fill:#ff4d6a;stroke:#ff4d6a}
+.sb[data-cm].on svg{fill:currentColor;stroke:currentColor}
+.burst{position:absolute;left:50%;top:50%;width:20px;height:20px;margin:-10px 0 0 -10px;border-radius:50%;box-shadow:0 0 0 2px #ff4d6a;pointer-events:none;animation:burst var(--t-slow) var(--dec) forwards}
+@keyframes burst{from{transform:scale(.6);opacity:1}to{transform:scale(2.4);opacity:0}}
+.vbar{display:none;align-items:center;gap:10px}
+.lb.isv .vbar{display:flex}
+.vpp{width:36px;height:36px;display:grid;place-items:center;flex:none}
+.vpp svg{width:20px;height:20px}
+.vtr{flex:1;height:22px;position:relative;cursor:pointer}
+.vtr i{position:absolute;left:0;right:0;top:50%;height:4px;margin-top:-2px;border-radius:var(--r-pill);overflow:hidden;background:rgba(255,255,255,.28)}
+.vtr b{position:absolute;inset:0;border-radius:inherit;background:#fff;transform:translateX(-100%)}
+.vt0,.vt1{font-size:var(--fs-xs);color:rgba(255,255,255,.8);min-width:32px}
+.zw video{position:absolute;inset:0;width:100%;height:100%;object-fit:contain;opacity:0;transition:opacity var(--t-mid) var(--ease);pointer-events:none}
+.zw.playing .vv,.zw.moving .lvv{opacity:1}
+.zw .awp{position:absolute;inset:0;width:100%;height:100%;object-fit:contain;opacity:0;transition:opacity var(--t-mid) var(--ease);pointer-events:none}
+.zw .awp.ok{opacity:1}
+.vbig{position:absolute;left:50%;top:50%;width:72px;height:72px;margin:-36px 0 0 -36px;border-radius:50%;display:grid;place-items:center;background:rgba(0,0,0,.38);
+  -webkit-backdrop-filter:blur(14px);backdrop-filter:blur(14px);color:#fff;box-shadow:inset 0 0 0 1px rgba(255,255,255,.25);transition:opacity var(--t-mid) var(--ease),transform var(--t-mid) var(--ease);pointer-events:none}
+.vbig svg{width:30px;height:30px}
+.zw.playing .vbig{opacity:0;transform:scale(1.2)}
+.zw .vbuf{position:absolute;left:50%;top:50%;margin:-13px 0 0 -13px;z-index:2;opacity:0;pointer-events:none;transition:opacity var(--t-fast) var(--ease)}
+.zw.buf .vbuf{opacity:1;transition-delay:var(--t-mid)}
+.zw:not(.buf) .vbuf{animation-play-state:paused}
+.spin{width:26px;height:26px;border-radius:50%;border:3px solid rgba(255,255,255,.3);border-top-color:#fff;animation:rot .9s linear infinite}
+@keyframes rot{to{transform:rotate(1turn)}}
+
+.italk{padding:14px 16px 12px}
+.italk .th{display:flex;align-items:center;justify-content:space-between;margin-bottom:4px}
+.italk .th b{font-family:var(--serif);font-weight:600;font-size:var(--fs-l);letter-spacing:.04em}
+.italk .th span{display:inline-flex;align-items:center;gap:5px;color:var(--tx3);font-size:var(--fs-s);font-weight:600}
+.italk .th svg{width:15px;height:15px;fill:#ff4d6a;stroke:#ff4d6a}
+.cmt{display:flex;gap:10px;padding:10px 0;align-items:flex-start}
+.cmt+.cmt{box-shadow:0 -1px 0 var(--line)}
+.cmt .av{width:32px;height:32px;border-radius:50%;flex:none;display:grid;place-items:center;font-weight:700;font-size:var(--fs-s);background:color-mix(in oklab,var(--seed) 22%,var(--s2));color:var(--p)}
+.cb{flex:1;min-width:0}
+.cn{display:flex;gap:8px;align-items:baseline}
+.cn b{font-weight:700;font-size:var(--fs-s)}
+.cn span{color:var(--tx3);font-size:var(--fs-xs)}
+.cb p{margin:2px 0 0;overflow-wrap:anywhere;line-height:1.45}
+.cx{width:28px;height:28px;display:grid;place-items:center;color:var(--tx3);flex:none;border-radius:50%}
+.cx svg{width:14px;height:14px}
+.cform{margin-top:8px;display:grid;grid-template-columns:minmax(0,1fr);gap:8px}   /* 欄寬不跟著輸入框的預設寬度撐開（安卓會超出右邊） */
+.crow{display:flex;gap:8px}
+.cin{flex:1;min-width:0;width:100%;box-sizing:border-box;height:44px;border-radius:var(--r-pill);border:0;background:var(--s2);color:var(--tx);padding:0 16px;font:500 16px/1 var(--font);outline:0;box-shadow:inset 0 0 0 1.5px transparent;transition:box-shadow var(--t-fast) var(--ease)}
+.cin:focus{box-shadow:inset 0 0 0 1.5px var(--p)}
+.csend{width:44px;height:44px;border-radius:50%;display:grid;place-items:center;background:var(--p);color:var(--on-p);flex:none;transition:transform var(--sp-fast),opacity var(--t-fast)}
+.csend svg{width:20px;height:20px}
+.csend:active{transform:scale(.9)}
+.csend:disabled{opacity:.5}
+
+/* 幻燈片：整個畫面、後面是糊掉的同一張、慢慢推近 */
+.ss{position:fixed;inset:0;z-index:var(--z-veil);background:#000;color:#fff;touch-action:none;user-select:none;-webkit-user-select:none;overflow:hidden;cursor:none}
+.ss .ssw{position:absolute;left:50%;top:50%;margin:-13px 0 0 -13px;z-index:3;opacity:0;pointer-events:none;transition:opacity var(--t-fast) var(--ease);animation-play-state:paused}
+.ss.wait .ssw{opacity:1;transition-delay:var(--t-mid);animation-play-state:running}
+.ss:not(.bare){cursor:auto}
+.ssv{position:absolute;inset:0}
+.ssl{position:absolute;inset:0;opacity:0;transition:opacity 1.4s cubic-bezier(.4,0,.2,1)}
+.ssl.in{opacity:1}
+.ssl.out{opacity:0}
+/* 後面的模糊底：放大到邊緣都超出畫面（模糊邊緣會透出黑色），亮一點、顏色濃一點，慢慢飄 */
+.sbg{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;transform:scale(1.5);filter:blur(26px) brightness(.64) saturate(1.35);will-change:transform;
+  animation:sbg 14s ease-in-out infinite alternate}
+@keyframes sbg{from{transform:scale(1.5) translate3d(-3%,-2%,0)}to{transform:scale(1.62) translate3d(3%,2%,0)}}
+@media (prefers-reduced-motion:reduce){.sbg{animation:none}}
+.sfg{position:absolute;inset:0;will-change:transform}
+.sfg img,.sfg video{position:absolute;inset:0;width:100%;height:100%;object-fit:contain;-webkit-touch-callout:none}
+.sfg.cv img{object-fit:cover}
+.scap{position:absolute;left:0;right:0;bottom:0;padding:80px max(var(--pad),5vw) calc(46px + env(safe-area-inset-bottom));background:linear-gradient(transparent,rgba(0,0,0,.5));
+  opacity:0;transform:translateY(10px);transition:opacity var(--t-slow) var(--ease) .8s,transform var(--t-slow) var(--dec) .8s}
+.ssl.in .scap{opacity:1;transform:none}
+.scap b{display:block;font-family:var(--serif);font-weight:600;font-size:clamp(22px,4vw,40px);letter-spacing:.06em;text-shadow:0 2px 20px rgba(0,0,0,.4)}
+.scap span{display:block;margin-top:4px;font-size:var(--fs-s);letter-spacing:.14em;color:rgba(255,255,255,.75)}
+.ssp{position:absolute;left:0;right:0;top:0;height:2px;background:rgba(255,255,255,.18);z-index:2;transition:opacity var(--t-mid) var(--ease)}
+.ssp i{position:absolute;inset:0;background:#fff;transform-origin:0 50%;transform:scaleX(0)}
+.ssc{position:absolute;left:0;right:0;top:0;display:flex;align-items:center;gap:10px;padding:calc(env(safe-area-inset-top) + 14px) 14px 30px;z-index:2;background:linear-gradient(rgba(0,0,0,.45),transparent);
+  transition:opacity var(--t-mid) var(--ease),transform var(--t-mid) var(--ease)}
+.ssc span{flex:1;text-align:center;font-weight:600;font-size:var(--fs-s);color:rgba(255,255,255,.8)}
+.ssn{position:absolute;left:0;right:0;top:50%;margin-top:-26px;display:none;justify-content:space-between;padding:0 18px;z-index:2;pointer-events:none;transition:opacity var(--t-mid) var(--ease)}
+.ssn .rb{width:52px;height:52px;pointer-events:auto}
+@media (hover:hover) and (min-width:700px){.ssn{display:flex}}
+.ss.bare .ssc{opacity:0;transform:translateY(-12px);pointer-events:none}
+.ss.bare .ssn{opacity:0}
+.ss.bare .ssn .rb{pointer-events:none}
+.ss.bare .ssp{opacity:.5}
+.ssend{position:absolute;inset:0;display:grid;place-content:center;justify-items:center;gap:26px;animation:up var(--t-slow) var(--dec) .8s both}
+.ssend .fin{color:#fff;font-size:clamp(24px,4vw,40px)}
+.ssend .fin::before,.ssend .fin::after{background:rgba(255,255,255,.5);box-shadow:none}
+.ssend .chip.go{background:#fff;color:#111}
+.ssend .chip.go svg{color:#111}
+
+/* ═════════ 更好玩：照片牆兩指縮放、回憶圓圈、限時動態、點兩下愛心 ═════════ */
+.wall{transform-origin:50% 0;touch-action:pan-x pan-y}
+html,body{touch-action:pan-x pan-y}
+*{scrollbar-width:none}
+*::-webkit-scrollbar{display:none;width:0;height:0}   /* 所有捲軸都藏起來（整頁、看大圖的資訊、搜尋、選單…），比較沉浸 */
+.wall[data-z="0"] .ph{border-radius:var(--r-sm)}
+.row.sq{gap:2px;margin-bottom:2px}
+.row.sq .ph{border-radius:0}
+.wall[data-z="2"] .day,.wall[data-z="3"] .day{margin-top:clamp(22px,4vw,44px)}
+.wall[data-z="2"] .day:first-child,.wall[data-z="3"] .day:first-child{margin-top:12px}
+.wall[data-z="2"] .dh,.wall[data-z="3"] .dh{grid-template-columns:auto 1fr auto;align-items:baseline;padding-bottom:8px;margin-bottom:10px}
+.wall[data-z="2"] .dh::before,.wall[data-z="3"] .dh::before{font-size:var(--fs-2xl);grid-row:auto}
+.wall[data-z="2"] .dh b,.wall[data-z="3"] .dh b{font-size:var(--fs-l)}
+.wall[data-z="3"] .dh span{justify-self:end}
+.wall[data-z="3"] .dh span.num{grid-column:2;grid-row:1}
+.wall[data-z="2"] .bdg .lkt,.wall[data-z="3"] .bdg>span{display:none}
+.wall[data-z="2"] .bdg .vt{right:3px;bottom:3px;height:18px;padding:0 5px}
+
+.mems{max-width:var(--wmax);margin:0 auto;padding:clamp(8px,2vw,20px) 0 0}
+.mems[hidden]{display:none}
+.mrw{display:flex;gap:clamp(12px,2vw,20px);overflow-x:auto;padding:4px var(--pad) 6px;scroll-snap-type:x proximity}
+.mem{flex:none;width:76px;display:grid;justify-items:center;gap:6px;scroll-snap-align:start;transition:transform var(--sp-fast)}
+.mem:active{transform:scale(.92)}
+.mring{position:relative;width:72px;height:72px;border-radius:50%;padding:3px;display:block;
+  background:conic-gradient(from 210deg,color-mix(in oklab,var(--seed) 80%,#fff),#ff6a88,#ffb36b,color-mix(in oklab,var(--seed) 80%,#fff))}
+.mring img{width:100%;height:100%;border-radius:50%;object-fit:cover;display:block;box-shadow:0 0 0 2.5px var(--bg);background:var(--s2);-webkit-touch-callout:none}
+.mem.seen .mring{background:var(--line);box-shadow:inset 0 0 0 1.5px color-mix(in oklab,var(--tx) 18%,transparent)}
+.mem b{font-family:var(--serif);font-weight:600;font-size:var(--fs-s);letter-spacing:.04em;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.mem small{margin-top:-6px;font-size:11px;color:var(--tx3)}
+@media (min-width:700px){.mem{width:92px}.mring{width:86px;height:86px}}
+
+.sy{position:fixed;inset:0;z-index:var(--z-veil);background:#000;color:#fff;touch-action:none;user-select:none;-webkit-user-select:none;overflow:hidden}
+.syv{position:absolute;inset:0}
+.syl{position:absolute;inset:0;opacity:0;transition:opacity var(--t-mid) var(--ease)}
+.syl.in{opacity:1}
+.sy::after{content:"";position:absolute;left:50%;top:50%;width:34px;height:34px;margin:-17px 0 0 -17px;border-radius:50%;border:3px solid rgba(255,255,255,.25);border-top-color:#fff;
+  opacity:0;transition:opacity var(--t-mid) var(--ease);animation:rot .9s linear infinite;pointer-events:none;z-index:1}
+.sy.wait::after{opacity:1}
+.syf{position:absolute;inset:0;will-change:transform}
+.syf img,.syf video{position:absolute;inset:0;width:100%;height:100%;object-fit:contain;-webkit-touch-callout:none;pointer-events:none}
+.syf.cv img,.syf.cv video{object-fit:cover}
+.syt{position:absolute;left:0;right:0;top:0;z-index:2;padding:calc(env(safe-area-inset-top) + 10px) 12px 40px;background:linear-gradient(rgba(0,0,0,.5),transparent);transition:opacity var(--t-mid) var(--ease)}
+.syp{display:flex;gap:4px}
+.syp i{flex:1;height:2.5px;border-radius:var(--r-pill);background:rgba(255,255,255,.32);overflow:hidden}
+.syp b{display:block;height:100%;background:#fff;transform-origin:0 50%;transform:scaleX(0)}
+.syh{display:flex;align-items:center;gap:10px;margin-top:12px}
+.syh .mring{width:38px;height:38px;padding:2px;flex:none}
+.syh .mring img{box-shadow:0 0 0 2px #000}
+.syh div{flex:1;min-width:0;display:flex;align-items:baseline;gap:8px}
+.syh b{font-family:var(--serif);font-weight:600;letter-spacing:.04em;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.syh small{color:rgba(255,255,255,.7);font-size:var(--fs-s)}
+.syb{position:absolute;right:14px;bottom:calc(18px + env(safe-area-inset-bottom));z-index:2;transition:opacity var(--t-mid) var(--ease)}
+.sy.held .syt,.sy.held .syb{opacity:0}
+
+.bigh{position:absolute;z-index:3;width:110px;height:110px;margin:-55px 0 0 -55px;pointer-events:none;color:#ff4d6a;filter:drop-shadow(0 6px 24px rgba(255,77,106,.55));
+  animation:bigh 1.1s var(--ease) forwards}
+.bigh svg{width:100%;height:100%;fill:currentColor;stroke:none}
+@keyframes bigh{0%{transform:scale(.2) rotate(-12deg);opacity:0}18%{transform:scale(1.15) rotate(4deg);opacity:1}32%{transform:scale(.95) rotate(0)}70%{transform:scale(1);opacity:1}100%{transform:translateY(-60px) scale(.7);opacity:0}}
+
+.hero .cv .hi{transition:opacity var(--t-long) var(--ease)}
+.hero .cv .hi.cy{opacity:1;animation:hcy 9s ease-in-out both}
+@keyframes hcy{0%{opacity:0;transform:scale(1.14)}28%{opacity:1}100%{opacity:1;transform:scale(1.02)}}
+/* 封面視差交給瀏覽器自己跑（不用每格算），手機捲起來才順；不支援的才用 JS */
+@supports (animation-timeline:scroll()){
+  .hero .cv{animation:hpar linear both;animation-timeline:scroll(root);animation-range:0 100svh}
+  .hcap{animation:hcap linear both;animation-timeline:scroll(root);animation-range:0 55svh}
+  @keyframes hpar{to{transform:translate3d(0,38svh,0)}}
+  @keyframes hcap{to{opacity:0;transform:translate3d(0,10svh,0)}}
+}
+/* ── 朋友放的：每個人一個分頁 ── */
+.who{max-width:var(--wmax);margin:0 auto;padding:clamp(12px,2vw,20px) 0 4px}
+.who[hidden],.msec[hidden]{display:none}
+.whr{display:flex;gap:8px;overflow-x:auto;padding:2px var(--pad) 6px}
+.who .chip{flex:none;-webkit-backdrop-filter:none;backdrop-filter:none;background:var(--s2);box-shadow:none;transition:background var(--t-mid) var(--ease),color var(--t-mid) var(--ease),transform var(--sp-fast)}
+.who .chip:active{transform:scale(.95)}
+.who .chip small{color:var(--tx3);font-weight:500}
+.who .chip.on{background:var(--p);color:var(--on-p)}
+.who .chip.on svg,.who .chip.on small{color:var(--on-p)}
+.who .av{width:20px;height:20px;margin-left:-6px;border-radius:50%;display:grid;place-items:center;font-style:normal;font-size:var(--fs-xs);font-weight:700;background:color-mix(in oklab,var(--p) 22%,var(--s3));color:var(--tx)}
+.who .chip.on .av{background:color-mix(in oklab,var(--on-p) 22%,transparent);color:var(--on-p)}
+
+/* ── 選幾張一起下載：按住照片或按「選取」，右上角打勾、照片縮一點 ── */
+.ph{-webkit-user-select:none;user-select:none}
+.ph .ck{position:absolute;top:7px;right:7px;z-index:2;width:24px;height:24px;border-radius:50%;display:grid;place-items:center;border:2px solid #fff;background:rgba(0,0,0,.22);color:transparent;
+  opacity:0;transform:scale(.5);transition:opacity var(--t-fast) var(--ease),transform var(--sp-fast),background var(--t-fast) var(--ease),border-color var(--t-fast) var(--ease);pointer-events:none;box-shadow:0 1px 4px rgba(0,0,0,.3)}
+.ph .ck svg{width:14px;height:14px;stroke-width:3}
+.selm .ph{cursor:pointer}
+.selm .ph .ck{opacity:1;transform:none}
+.ph.on .ck{background:var(--p);border-color:var(--p);color:var(--on-p)}
+.ph.on .hi,.ph.on .lq{transform:scale(.86);border-radius:var(--r-xs)}
+.selm .bdg{opacity:0;transition:opacity var(--t-fast) var(--ease)}
+.selb{position:fixed;left:50%;bottom:calc(16px + env(safe-area-inset-bottom));z-index:var(--z-bar);display:flex;align-items:center;gap:6px;padding:6px;border-radius:var(--r-pill);
+  background:var(--glass);-webkit-backdrop-filter:blur(22px) saturate(1.7);backdrop-filter:blur(22px) saturate(1.7);box-shadow:var(--sh-pop),var(--hl);
+  max-width:calc(100% - var(--pad) * 2);transform:translate(-50%,calc(100% + 40px));transition:transform var(--t-mid) var(--ease)}
+.selb.on{transform:translate(-50%,0);transition:transform var(--sp)}
+.selb b{padding:0 8px 0 2px;font-size:var(--fs-m);font-weight:700;white-space:nowrap;min-width:6.5em}
+.selb .sx{width:36px;height:36px;border-radius:50%;display:grid;place-items:center;flex:none;color:var(--tx2)}
+.selb .sx svg{width:20px;height:20px}
+.selb .chip{flex:none;-webkit-backdrop-filter:none;backdrop-filter:none;white-space:nowrap;transition:opacity var(--t-fast) var(--ease),transform var(--sp-fast)}
+.selb .chip:active{transform:scale(.95)}
+.selb .chip:disabled{opacity:.4}
+.selb .chip.busy{pointer-events:none}
+.selb .chip .spin{width:16px;height:16px;border-width:2px;border-color:color-mix(in oklab,currentColor 30%,transparent);border-top-color:currentColor}
+.selm .toast{bottom:calc(84px + env(safe-area-inset-bottom))}
+
+/* ── 朋友一起放照片：先問名字、下面一條進度 ── */
+.shbg{position:fixed;inset:0;z-index:var(--z-veil);display:grid;place-items:end center;background:rgba(0,0,0,.45);opacity:0;transition:opacity var(--t-mid) var(--ease)}
+.shbg.on{opacity:1}
+.sh{width:min(420px,100%);padding:26px 22px calc(22px + env(safe-area-inset-bottom));border-radius:var(--r-xl) var(--r-xl) 0 0;background:var(--s1);box-shadow:var(--sh-card);text-align:center;
+  transform:translateY(100%);transition:transform var(--t-mid) var(--ease)}
+.shbg.on .sh{transform:none;transition:transform var(--t-mid) var(--dec)}
+@media (min-width:600px){.shbg{place-items:center}.sh{border-radius:var(--r-xl);padding-bottom:22px;transform:translateY(24px) scale(.96)}}
+.sh .ic{width:48px;height:48px;margin:0 auto 12px;border-radius:50%;display:grid;place-items:center;background:color-mix(in oklab,var(--p) 18%,transparent);color:var(--p)}
+.sh .ic svg{width:24px;height:24px}
+.sh h3{font-size:var(--fs-xl);font-weight:700}
+.sh p{margin:6px 0 16px;color:var(--tx3);font-size:var(--fs-s)}
+.upb{position:fixed;left:50%;bottom:calc(16px + env(safe-area-inset-bottom));z-index:var(--z-toast);width:min(320px,calc(100% - var(--pad) * 2));padding:12px 16px 14px;border-radius:var(--r-lg);
+  background:var(--glass);-webkit-backdrop-filter:blur(22px) saturate(1.7);backdrop-filter:blur(22px) saturate(1.7);box-shadow:var(--sh-pop),var(--hl);
+  transform:translate(-50%,calc(100% + 40px));transition:transform var(--t-mid) var(--ease)}
+.upb.on{transform:translate(-50%,0);transition:transform var(--sp)}
+.upb .ut{display:flex;justify-content:space-between;font-size:var(--fs-s);margin-bottom:8px}
+.upb .ut span{color:var(--tx3)}
+.ubar{height:6px;border-radius:var(--r-pill);background:var(--glass2);overflow:hidden}
+.ubar i{display:block;height:100%;background:var(--p);transform-origin:0 50%;transform:scaleX(0);transition:transform var(--t-mid) var(--ease)}
+.rb[hidden]{display:none}
+.rb.arm{background:var(--bad);color:#fff}
+@media (prefers-reduced-motion:reduce){.hero .cv,.hcap{animation:none}*,*::before,*::after{animation-duration:.001s!important;transition-duration:.001s!important}}
+
+/* ═════════ 相簿自己的樣子：三個顏色從封面照片抓（album.js 的 tint），換封面時慢慢變過去；還沒抓到前先用標誌的顏色 ═════════ */
+@property --g1{syntax:"<color>";inherits:true;initial-value:#ffb36b}
+@property --g2{syntax:"<color>";inherits:true;initial-value:#ff5c86}
+@property --g3{syntax:"<color>";inherits:true;initial-value:#8b6cff}
+.hero{transition:--g1 1.6s var(--ease),--g2 1.6s var(--ease),--g3 1.6s var(--ease)}
+:root{
+  --seed:var(--g2); --g1:#ffb36b; --g2:#ff5c86; --g3:#8b6cff; --on-g:#fff;
+  --grad:linear-gradient(120deg,var(--g1),var(--g2) 52%,var(--g3));
+  --glow:0 8px 26px -8px color-mix(in oklab,var(--g2) 70%,transparent);
+  --bg:#0c0a0f; --s1:#16131b; --s2:#1f1b25; --s3:#2a2531; --on-p:#2b0613;
+}
+@media (prefers-color-scheme:light){:root:not([data-mode="dark"]){
+  --bg:#fbf7f6; --s1:#fff; --s2:#f4eef0; --s3:#ebe2e6; --tx:#1a1418; --tx2:#4e4550; --tx3:#857a84; --line:rgba(60,20,40,.09);
+  --p:color-mix(in oklab,var(--g2) 78%,#000); --on-p:#fff; --glow:0 8px 24px -8px color-mix(in oklab,var(--g2) 55%,transparent)}}
+
+/* 封面下緣三色極光，慢慢飄（只動位置，交給顯示卡） */
+.hero::before{content:"";position:absolute;left:-20%;right:-20%;bottom:0;height:70%;-webkit-mask-image:linear-gradient(transparent,#000 35%,#000 62%,transparent 92%);mask-image:linear-gradient(transparent,#000 35%,#000 62%,transparent 92%);z-index:1;pointer-events:none;mix-blend-mode:screen;opacity:.95;
+  background:radial-gradient(40% 52% at 22% 70%,color-mix(in oklab,var(--g2) 72%,transparent),transparent 70%),
+    radial-gradient(36% 48% at 78% 64%,color-mix(in oklab,var(--g3) 72%,transparent),transparent 70%),
+    radial-gradient(32% 40% at 50% 84%,color-mix(in oklab,var(--g1) 66%,transparent),transparent 70%);
+  animation:aur 11s ease-in-out infinite alternate}
+@keyframes aur{0%{transform:translate3d(-6%,2%,0) scale(1)}50%{transform:translate3d(4%,-5%,0) scale(1.12)}100%{transform:translate3d(7%,1%,0) scale(.96)}}
+.hcap{z-index:2}
+.eyebrow::before{background:linear-gradient(90deg,transparent,var(--g1));opacity:1}
+.eyebrow::after{background:linear-gradient(90deg,var(--g3),transparent);opacity:1}
+@media (prefers-color-scheme:light){:root:not([data-mode="dark"]) .hero::before{mix-blend-mode:normal;opacity:.66}}
+
+/* 主要的鈕：漸層底 */
+.chip.go,.hero .chip.go,.bar .chip.go{position:relative;overflow:hidden;background:var(--grad);color:var(--on-g);box-shadow:var(--glow)}
+.chip.go svg,.hero .chip.go svg{color:var(--on-g)}
+@media (prefers-color-scheme:light){:root:not([data-mode="dark"]) .hero .chip.go{background:var(--grad);color:var(--on-g)}
+  :root:not([data-mode="dark"]) .hero .chip.go svg{color:var(--on-g)}}
+.btn,.card .btn,.csend{background:var(--grad);color:var(--on-g);box-shadow:var(--glow)}
+
+/* 誰放的分頁：選到的是漸層 */
+.who .chip.on{background:var(--grad);color:var(--on-g);box-shadow:var(--glow)}
+.who .chip.on svg,.who .chip.on small{color:var(--on-g)}
+.who .chip.on .av{background:rgba(255,255,255,.24);color:var(--on-g)}
+
+/* 回憶圓圈：靜態柔光漸層細環，電腦滑過才微微流轉 */
+.mring{background:none;isolation:isolate}
+.mring::before{content:"";position:absolute;inset:0;z-index:-1;border-radius:50%;background:conic-gradient(from 210deg,var(--g1),var(--g2),var(--g3),var(--g2),var(--g1))}
+@media (hover:hover){.mem:not(.seen):hover .mring::before{animation:spin 7s linear infinite}}
+.mem.seen .mring::before{animation:none;background:color-mix(in oklab,var(--tx) 16%,transparent)}
+.mem.seen .mring{background:none;box-shadow:none}
+@keyframes spin{to{transform:rotate(1turn)}}
+.mems .mem{animation:memin var(--t-slow) var(--dec) both}
+@keyframes memin{from{opacity:0;translate:0 14px;scale:.9}to{opacity:1;translate:0 0;scale:1}}
+.mems .mem:nth-child(2){animation-delay:.06s}.mems .mem:nth-child(3){animation-delay:.12s}.mems .mem:nth-child(4){animation-delay:.18s}
+.mems .mem:nth-child(5){animation-delay:.24s}.mems .mem:nth-child(n+6){animation-delay:.3s}
+
+/* 每一章：極淡中性細線，讓視覺焦點留在照片上 */
+.dh,.mh{border-bottom:0;background:linear-gradient(90deg,var(--line),var(--line) 65%,transparent) left bottom/100% 1px no-repeat}
+@supports (animation-timeline:view()){
+  .dh b,.dh span,.dh .dsum{animation:chb linear both;animation-timeline:view();animation-range:entry 10% entry 80%}
+}
+@keyframes chb{from{opacity:0;translate:0 10px}to{opacity:1;translate:0 0}}
+
+/* 地圖、選取、上傳、限時動態：同一組顏色 */
+.route .rt{stroke:var(--g2)}
+.route .rdot{stroke:var(--g2);filter:drop-shadow(0 0 6px var(--g2))}
+.mk i{background:var(--grad);color:var(--on-g)}
+.ph.on .ck{background:var(--grad);border-color:#fff;color:var(--on-g)}
+.ubar i{background:var(--grad)}
+.syp b{background:var(--grad)}
+.ph:focus-visible{outline-color:var(--g2)}
+
+/* 結尾：標誌當作句點 */
+.foot::before{content:"";width:44px;height:44px;border-radius:12px;background:url(/a/icon.svg) center/cover;box-shadow:var(--glow);margin-bottom:6px}
+.fin::before{background:linear-gradient(90deg,transparent,var(--g1));box-shadow:none;opacity:1}
+.fin::after{background:linear-gradient(90deg,var(--g3),transparent);box-shadow:none;opacity:1}
+
+@media (prefers-reduced-motion:reduce){.hero::before,.mring::before{animation:none}}
+
+/* ═════════ 畫布背景保持純淨安靜，讓照片本身成為視覺主角 ═════════ */
+
+/* 數字卡：幾張、幾天、幾個地點、幾公里 */
+.stats{max-width:var(--wmax);margin:clamp(18px,3vw,32px) auto 0;padding:0 var(--pad);display:grid;grid-template-columns:repeat(auto-fit,minmax(72px,1fr));justify-content:start;gap:clamp(8px,1.4vw,14px)}
+.stats[hidden],.st[hidden]{display:none}
+.st{position:relative;overflow:hidden;padding:clamp(12px,2vw,18px) clamp(12px,2vw,20px);border-radius:var(--r-lg);background:color-mix(in oklab,var(--g2) 9%,var(--s1));
+  box-shadow:inset 0 0 0 1px color-mix(in oklab,var(--g2) 18%,transparent),var(--sh-card);display:grid;gap:2px;animation:memin var(--t-slow) var(--dec) both}
+.st:nth-child(2){animation-delay:.06s}.st:nth-child(3){animation-delay:.12s}.st:nth-child(4){animation-delay:.18s}.st:nth-child(5){animation-delay:.24s}
+.st::after{content:"";position:absolute;right:-30%;top:-60%;width:90%;height:160%;background:radial-gradient(closest-side,color-mix(in oklab,var(--g3) 22%,transparent),transparent);pointer-events:none}
+.st b{font-family:var(--serif);font-weight:600;font-size:clamp(26px,6.4vw,44px);line-height:1;letter-spacing:-.01em;background:var(--grad);-webkit-background-clip:text;background-clip:text;color:transparent;padding-bottom:2px}
+.st small{font-size:var(--fs-xs);color:var(--tx3);letter-spacing:.08em;font-weight:600}
+
+/* 章節：地點前面一個小圖釘、右邊幾張（前面不放 01、02 編號，使用者說有日期就夠） */
+.dh::before{content:none;display:none}
+.dh,.wall[data-z="2"] .dh,.wall[data-z="3"] .dh{grid-template-columns:1fr auto}
+.dh b,.dh span{grid-column:1}
+.dh span{display:inline-flex;align-items:center;gap:4px}
+.dh span svg{width:13px;height:13px;color:var(--g2);flex:none}
+.dct{grid-column:2;grid-row:1 / span 2;align-self:end;font-style:normal;font-size:var(--fs-xs);font-weight:700;color:var(--tx2);height:24px;min-width:24px;padding:0 9px;border-radius:var(--r-pill);
+  display:grid;place-items:center;background:color-mix(in oklab,var(--g2) 14%,var(--s2))}
+
+/* 照片：圓角大一點、電腦上指著時浮起來、帶照片顏色的影子 */
+.ph{border-radius:var(--r-sm)}
+@media (min-width:700px){.ph{border-radius:var(--r-md)}}
+.wall[data-z="2"] .ph,.wall[data-z="3"] .ph{border-radius:var(--r-xs)}
+@media (hover:hover){.ph{transition:opacity var(--t-slow) var(--ease),transform var(--t-slow) var(--dec),box-shadow var(--t-mid) var(--ease)}
+  .ph.in:hover{transform:translateY(-3px);box-shadow:0 14px 30px -14px color-mix(in oklab,var(--g2) 60%,transparent)}}
+
+/* 結尾：三張照片疊成一疊，點了播放 */
+.fcol{position:relative;width:min(240px,56vw);aspect-ratio:1.15;margin:0 auto 18px;display:block}
+.fcol span{position:absolute;left:18%;top:8%;width:64%;height:84%;padding:5px;border-radius:var(--r-md);background:#fff;box-shadow:var(--sh-card),0 18px 40px -18px color-mix(in oklab,var(--g2) 70%,transparent);
+  transition:transform var(--sp),rotate var(--sp),translate var(--sp)}
+.fcol span img{width:100%;height:100%;object-fit:cover;border-radius:var(--r-sm);display:block}
+.fcol span:nth-child(1){rotate:-12deg;translate:-18% 4%}
+.fcol span:nth-child(2){rotate:10deg;translate:18% 2%}
+.fcol span:nth-child(3){rotate:-1deg}
+.fcol i{position:absolute;left:50%;top:50%;width:52px;height:52px;margin:-26px 0 0 -26px;border-radius:50%;display:grid;place-items:center;background:var(--grad);color:var(--on-g);box-shadow:var(--glow);z-index:1}
+.fcol i svg{width:22px;height:22px}
+@media (hover:hover){.fcol:hover span:nth-child(1){rotate:-16deg;translate:-26% 2%}.fcol:hover span:nth-child(2){rotate:14deg;translate:26% 0}}
+.fcol:active i{transform:scale(.92)}
+@supports (animation-timeline:view()){
+  .fcol span{animation:fan linear both;animation-timeline:view();animation-range:entry 10% entry 90%}
+  @keyframes fan{from{rotate:0deg;translate:0 20%;opacity:0}}
+}
+.foot:has(.fcol)::before{display:none}
+@media (min-width:900px){.stats{grid-template-columns:repeat(auto-fit,minmax(150px,200px))}}
+/* 去過的城市：一個城市一張卡（三張照片＋國旗、城市、日期、張數），點了只看那個城市 */
+.cities{display:grid;grid-auto-flow:column;grid-auto-columns:minmax(200px,240px);gap:12px;overflow-x:auto;margin:0 calc(-1 * var(--pad)) 14px;padding:4px var(--pad) 10px;scroll-snap-type:x mandatory;scroll-padding:0 var(--pad)}
+.cities[hidden]{display:none}
+.cty{display:flex;flex-direction:column;gap:10px;padding:8px 8px 12px;border-radius:var(--r-lg);background:var(--s1);box-shadow:var(--sh-card);text-align:left;color:inherit;scroll-snap-align:start;
+  transition:transform var(--sp-fast);animation:memin var(--t-slow) var(--dec) both}
+.cty:nth-child(2){animation-delay:60ms}.cty:nth-child(3){animation-delay:120ms}.cty:nth-child(n+4){animation-delay:180ms}
+.cty:active{transform:scale(.97)}
+@media (hover:hover){.cty:hover{transform:translateY(-3px)}}
+.ctc{display:grid;gap:3px;height:118px;border-radius:var(--r-md);overflow:hidden;background:var(--s2)}
+.ctc.n2{grid-template-columns:1fr 1fr}
+.ctc.n3{grid-template-columns:1.4fr 1fr;grid-template-rows:1fr 1fr}
+.ctc.n3 img:first-child{grid-row:1 / span 2}
+.ctc img{width:100%;height:100%;object-fit:cover;display:block;min-height:0}
+.ctt{display:flex;flex-direction:column;gap:3px;padding:0 4px}
+.ctt b{display:flex;align-items:center;gap:7px;font-size:var(--fs-l);font-weight:750;min-width:0}
+.ctt b span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.ctt small{font-size:var(--fs-xs);color:var(--tx3)}
+.flg{width:20px;height:14px;border-radius:3px;object-fit:cover;flex:none;box-shadow:0 0 0 1px rgba(0,0,0,.08)}
+
+/* 只看一個城市時照片牆上面那排 */
+.cityf{max-width:var(--wmax);margin:0 auto;padding:clamp(12px,2vw,20px) var(--pad) 4px;display:flex;gap:8px;flex-wrap:wrap;animation:memin var(--t-mid) var(--dec) both}
+.cityf[hidden]{display:none}
+.cityf .chip{-webkit-backdrop-filter:none;backdrop-filter:none;box-shadow:none}
+.cityf .chip.on{background:var(--grad);color:var(--on-g)}
+.cityf .chip.on small{opacity:.8;font-weight:500}
+.cityf button.chip{background:var(--s2)}
+
+/* 地圖：底圖去掉顏色、蓋一層照片的顏色，比較安靜；城市是一顆照片泡泡＋名字 */
+.map .tl{filter:var(--map-f) grayscale(.85)}
+.map::after{content:"";position:absolute;inset:0;pointer-events:none;background:color-mix(in oklab,var(--g2) 12%,transparent)}   /* 不用混色模式：手機捲動時整張地圖要重算，會閃 */
+.mk.cmk{width:58px;height:58px;margin:-29px 0 0 -29px}
+.mk.cmk em{position:absolute;left:50%;top:calc(100% + 6px);translate:-50% 0;white-space:nowrap;font-style:normal;font-size:var(--fs-xs);font-weight:700;padding:3px 9px;border-radius:var(--r-pill);
+  background:var(--s1);color:var(--tx);box-shadow:var(--sh-pop);max-width:120px;overflow:hidden;text-overflow:ellipsis}
+.ctc{position:relative}
+.ctc i{position:absolute;right:8px;top:8px;display:inline-flex;align-items:center;gap:4px;height:24px;padding:0 9px;border-radius:var(--r-pill);font-style:normal;font-size:var(--fs-xs);font-weight:700;color:#fff;background:rgba(0,0,0,.42);box-shadow:inset 0 0 0 1px rgba(255,255,255,.18)}
+.ctc i svg{width:12px;height:12px}
+.ctc img{transition:transform var(--t-slow) var(--dec)}
+@media (hover:hover){.cty:hover .ctc img{transform:scale(1.04)}}
+.mk.cmk em{-webkit-backdrop-filter:none;backdrop-filter:none;border:1px solid color-mix(in oklab,var(--g2) 30%,transparent)}
+.mk.cmk em{max-width:150px}
+.mk.cmg::before{content:"";position:absolute;inset:-3px;border-radius:50%;border:3px solid #fff;translate:5px -4px;z-index:-1;background:var(--s3);box-shadow:var(--sh-pop)}
+.mback{position:absolute;left:12px;top:12px;z-index:3;display:inline-flex;align-items:center;gap:6px;height:36px;padding:0 14px 0 10px;border-radius:var(--r-pill);background:var(--s1);color:var(--tx);font-size:var(--fs-s);font-weight:700;box-shadow:var(--sh-pop);transition:transform var(--sp-fast);animation:pop var(--sp-fast) both}
+.mback svg{width:16px;height:16px}
+.mback:active{transform:scale(.94)}
+.ctt small{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+
+/* 照片資訊圖形化：光圈、快門、ISO、焦距、曝光各一個小圖；拍攝時間的太陽弧線；方向、海拔、閃光燈的小圖示 */
+.gx{width:30px;height:30px;display:block;margin:0 auto 6px;overflow:visible}
+.gx .gt,.gsun .gt,.gin .gt{fill:none;stroke:var(--line);stroke-width:2}
+.gx .gf,.gin .gf{fill:color-mix(in oklab,var(--g2) 78%,transparent)}
+.gx .gd,.gsun .gd,.gin .gd{fill:var(--g2)}
+.gx .gs,.gin .gs{fill:none;stroke:var(--g2);stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
+.gx .gk{fill:none;stroke:var(--s1);stroke-width:1.1}
+.gx g .gs{stroke-width:1.3}
+.gx .gtk{fill:none;stroke:color-mix(in oklab,var(--g2) 18%,transparent);stroke-width:3.4;stroke-linecap:round}
+.gx .gsk{fill:none;stroke:var(--g2);stroke-width:3.4;stroke-linecap:round}
+.gx .gscn{opacity:.28}
+.gx .gw{fill:color-mix(in oklab,var(--g2) 13%,transparent)}
+.gx .gh{fill:color-mix(in oklab,var(--g2) 34%,var(--s1))}
+.iex .no .gx .gs{stroke:var(--tx3)}
+.gx .gl,.gsun .gl,.gin .gl{fill:none;stroke:color-mix(in oklab,var(--tx3) 60%,transparent);stroke-width:1.6;stroke-linecap:round}
+.iex div{padding:14px 2px 12px}
+.iex b{display:block;font-weight:700;font-size:var(--fs-s)}
+.iex small{margin:2px 0 0}
+.iex .no .gx{opacity:.35}
+.gsun{width:58px;height:34px;flex:none;overflow:visible}
+.gsun .gd{filter:drop-shadow(0 0 4px color-mix(in oklab,var(--g2) 70%,transparent))}
+.gsun.night .gd{fill:color-mix(in oklab,var(--g3) 70%,var(--tx2))}
+.icam .l2{display:flex;flex-wrap:wrap;align-items:center;gap:6px 8px}
+.gar{display:block;height:16px;max-width:28px;border-radius:3px;border:1.5px solid color-mix(in oklab,var(--g2) 70%,transparent);background:color-mix(in oklab,var(--g2) 14%,transparent);flex:none}
+.ikv b{display:inline-flex;align-items:center;justify-content:flex-end;gap:6px}
+.gin{width:18px;height:18px;flex:none}
+.gin.off .gd{fill:var(--tx3);opacity:.5}
+.iset{display:grid;grid-template-columns:repeat(60,minmax(0,1fr))}
+.iset div[data-r2]{box-shadow:-1px 0 0 var(--line),0 -1px 0 var(--line)}
+.iset div{padding:14px 6px 12px;text-align:center;box-shadow:-1px 0 0 var(--line)}
+.iset .gin.gb{width:28px;height:28px;display:block;margin:0 auto 6px}
+.iset b{display:block;font-size:var(--fs-s);font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;line-height:20px}
+.iset b.sm{font-size:var(--fs-xs);letter-spacing:-.02em}
+.iset small{display:block;font-size:10px;font-weight:600;color:var(--tx3);letter-spacing:.05em;margin-top:2px}
+.gin .gtx{fill:var(--on-g);font:800 10px/1 var(--font)}
+.gin .gtx.sm{font-size:6.5px;letter-spacing:.02em}
+.gin.gb .gf{fill:color-mix(in oklab,var(--g2) 80%,transparent)}
+.gin.gb .gd{fill:var(--g1)}
+.iset .gin.off .gd{fill:var(--tx3)}
+.iset .iaf{cursor:pointer;transition:background var(--t-fast)}
+.iset .iaf .gaf{stroke:var(--tx2);stroke-width:1.6;fill:none}
+.iset .iaf .gafr{fill:none;stroke:var(--tx3);stroke-width:1.2}
+.iset .iaf.miss .gaf{stroke:var(--bad)}
+.iset .iaf.on{background:color-mix(in oklab,var(--g2) 14%,transparent)}
+.iset .iaf.on .gaf{stroke:var(--g2)}
+.iset .iaf .gfc{stroke:var(--tx3);stroke-width:1;fill:none}
+.iset .iaf.on .gfc{stroke:var(--tx2)}
+.iset .iaf.miss b{color:var(--bad)}
+/* 對焦框：相機對焦的位置（四個角的框，跟著照片縮放） */
+.lb .zw:has(.afb,.fcb){overflow:clip}
+.lb .afb{position:absolute;transform:translate(-50%,-50%) scale(1.25);opacity:0;pointer-events:none;transition:opacity var(--t-mid),transform var(--t-mid) var(--ease);
+  --c:#fff;--w:clamp(2px,.45cqmin,4px);--l:max(12px,24%);
+  background:linear-gradient(var(--c),var(--c)) 0 0/var(--l) var(--w),linear-gradient(var(--c),var(--c)) 0 0/var(--w) var(--l),linear-gradient(var(--c),var(--c)) 100% 0/var(--l) var(--w),linear-gradient(var(--c),var(--c)) 100% 0/var(--w) var(--l),
+  linear-gradient(var(--c),var(--c)) 0 100%/var(--l) var(--w),linear-gradient(var(--c),var(--c)) 0 100%/var(--w) var(--l),linear-gradient(var(--c),var(--c)) 100% 100%/var(--l) var(--w),linear-gradient(var(--c),var(--c)) 100% 100%/var(--w) var(--l);
+  background-repeat:no-repeat;filter:drop-shadow(0 0 .6px rgba(0,0,0,.9)) drop-shadow(0 0 3px rgba(0,0,0,.55));min-width:28px;min-height:28px;
+  box-shadow:0 0 0 200vmax rgba(0,0,0,.3)}   /* 框外面整張壓暗：照片顏色跟框很像（白牆、天空）時也看得出對焦在哪 */
+.lb.afon .afb{opacity:1;transform:translate(-50%,-50%) scale(1)}
+/* 相機偵測到的臉：細的圓角框，跟對焦框一起開關 */
+.lb .fcb{position:absolute;transform:translate(-50%,-50%) scale(1.15);opacity:0;pointer-events:none;border:clamp(1px,.3cqmin,2px) solid rgba(255,255,255,.85);border-radius:min(var(--r-md),22%);filter:drop-shadow(0 0 2px rgba(0,0,0,.6));transition:opacity var(--t-mid),transform var(--t-mid) var(--ease)}
+.lb.afon .fcb{opacity:1;transform:translate(-50%,-50%) scale(1)}
+.lb .fcb.af{border-width:clamp(2px,.45cqmin,3px);border-color:#fff;box-shadow:0 0 0 200vmax rgba(0,0,0,.3)}   /* 對焦在這張臉：粗一點、框外壓暗（跟對焦框一樣） */
+.lb .fcb.af.miss{border-color:var(--bad)}
+.lb .afb.miss{--c:var(--bad)}
+
+/* 更多圖形：每天的 24 小時時間條、數字卡的小圖、城市在整趟的哪幾天、期限圈、封面國旗 */
+.dhr{grid-column:1;display:flex;align-items:center;gap:6px;margin:4px 0 0;font-size:var(--fs-xs);color:var(--tx2);white-space:nowrap}
+.dhr span{display:inline-flex;align-items:center;gap:4px}
+.dhr svg{width:14px;height:14px;opacity:.8}
+.dhr i{font-style:normal;opacity:.5}
+.wall[data-z="2"] .dhr,.wall[data-z="3"] .dhr{display:none}
+.st .sgb{display:flex;align-items:flex-end;gap:3px;height:18px;margin-top:6px}
+.st .sgb button{position:relative;flex:none;width:6px;padding:0;border-radius:var(--r-xs) var(--r-xs) 0 0;background:var(--grad);background-size:100% 18px;background-position:bottom;opacity:.55;cursor:pointer;transition:opacity var(--t-fast) var(--ease)}
+.st .sgb button::before{content:"";position:absolute;inset:-12px -2px -10px}   /* 長條很細：按的範圍放大一點 */
+.st .sgb>i{flex:none;width:6px;border-radius:var(--r-xs) var(--r-xs) 0 0;background:var(--line)}
+.st .sgb button.on,.st .sgb:not(:has(.on)) button{opacity:1}
+.st .sgd{display:block;margin-top:4px;font-size:var(--fs-xs);color:var(--tx3);white-space:nowrap}
+.stats>.st{min-width:0}   /* 格子比字窄時不會被撐寬（以前「天」那格整格往右歪） */
+.st .sgf{display:flex;margin-top:6px}
+.st .sgf img{width:22px;height:16px;object-fit:cover;border-radius:3px;box-shadow:0 0 0 1.5px var(--s1);margin-right:-6px}
+.ctl{position:relative;display:block;height:4px;margin-top:5px;border-radius:var(--r-pill);background:color-mix(in oklab,var(--g2) 14%,var(--s2))}
+.ctl em{position:absolute;top:0;bottom:0;min-width:4px;border-radius:inherit;background:var(--grad)}
+.fexp{display:inline-flex;align-items:center;gap:8px}
+.foot .ring{width:18px;height:18px;margin:0;vertical-align:0;rotate:-90deg;flex:none}
+.ring circle{fill:none;stroke:color-mix(in oklab,var(--g2) 20%,var(--s3));stroke-width:3}
+.ring .rk{stroke:var(--g2);stroke-linecap:round}
+.hfl{display:inline-flex;flex:none}
+.hfl img{width:20px;height:14px;object-fit:cover;border-radius:3px;box-shadow:0 0 0 1.5px var(--glass);margin-right:-5px}
+.hfl img:last-child{margin-right:0}
+
+/* 數字那排不用框框（使用者說四個框框沒質感）：像雜誌一樣一排大數字，中間細線隔開，上下一條漸層細線 */
+.stats,.stats:is(*){display:grid;grid-auto-flow:column;grid-auto-columns:minmax(0,1fr);grid-template-columns:none;gap:0;padding-top:clamp(14px,2.4vw,22px);padding-bottom:clamp(14px,2.4vw,22px);
+  background:linear-gradient(90deg,transparent,color-mix(in oklab,var(--g2) 45%,transparent) 20%,color-mix(in oklab,var(--g3) 45%,transparent) 80%,transparent) top/calc(100% - 2 * var(--pad)) 1px no-repeat,
+    linear-gradient(90deg,transparent,var(--line) 20%,var(--line) 80%,transparent) bottom/calc(100% - 2 * var(--pad)) 1px no-repeat}
+.st{background:none;box-shadow:none;border-radius:0;padding:2px clamp(6px,2vw,22px);justify-items:center;text-align:center;align-content:start;gap:4px}
+.st::after{content:none}
+.st+.st{border-left:1px solid var(--line)}
+.st b{font-size:clamp(28px,7.4vw,52px);font-variant-numeric:tabular-nums;white-space:nowrap}
+.st small{letter-spacing:.12em;white-space:nowrap}
+.st .sgb{max-width:100%;justify-content:center;margin-top:4px}
+.st .sgf{margin-top:4px}
+@media (min-width:900px){.stats,.stats:is(*){grid-template-columns:none;grid-auto-columns:minmax(0,1fr)}}
+
+
+/* ── 參考 Exposure、Pic-Time、Glass、Polarsteps 加的 ── */
+/* 開場片頭：封面從放大慢慢退回來，相簿名稱一個字一個字浮出 */
+.hcap h1{opacity:1;animation:none}
+/* 相簿名稱一個字一個字浮出：透明度用前後都慢的曲線（以前跟著 --dec，第一成時間就到七成，iPhone 上看起來是直接跳出來） */
+.hcap h1 .ch{display:inline-block;opacity:0}
+/* 不用模糊（filter）：iPhone 上字在跑模糊時，後面那團光整個畫不出來，字跑完光才突然出現 */
+@keyframes chin{from{transform:translateY(.45em) scale(.94)}to{transform:none}}
+@keyframes chfa{from{opacity:0}to{opacity:1}}
+/* 大標題：後面一團照片顏色的光慢慢呼吸，字每隔幾秒有一道光從左到右掠過（字微微浮起、發光） */
+/* 後面那團光是 h1 旁邊自己一個元素（.hglo），不放在 h1 裡面當 z-index:-1 的 ::before：iPhone 上字在動的時候，h1 裡面墊在後面的東西整個畫不出來，字動完光才突然冒出來（5.11 錄影） */
+.htw{position:relative}
+.hcap h1{position:relative;z-index:1}
+.hglo{position:absolute;left:50%;top:50%;width:min(130%,900px);height:260%;translate:-50% -56%;z-index:0;pointer-events:none;border-radius:50%;
+  background:radial-gradient(closest-side,color-mix(in oklab,var(--g2) 46%,transparent),color-mix(in oklab,var(--g3) 22%,transparent) 55%,transparent);
+  opacity:0}
+/* 開場的動畫等 .rdy 加上去才掛上（不用先暫停再放開：iPhone 上暫停過的動畫常常不會接著跑，等別的東西變了才一下子跳到最後，後面那團光就突然出現） */
+.hero.rdy .hglo{animation:hglo 1.4s ease-out .5s forwards,hbre 6s ease-in-out 1.9s infinite alternate}
+@keyframes hglo{from{opacity:0;scale:.6}to{opacity:.9;scale:1}}
+@keyframes hbre{from{opacity:.9;scale:1}to{opacity:.55;scale:1.14}}
+/* 字的陰影很糊（30px），掠過時的光暈更大（1.4em）：每個字外面留一圈夠大的空間（padding 加回負的 margin，排版不變），iPhone 把在動的字單獨畫時光暈才不會被切成一個方框 */
+.hcap h1 .ch{--hs:0 2px 30px rgba(0,0,0,.35);text-shadow:var(--hs)}
+.hero.rdy .hcap h1 .ch{animation:chin 1.4s ease-out calc(.4s + var(--i) * .1s) forwards,chfa 1.2s ease-in-out calc(.4s + var(--i) * .1s) forwards}
+@media (prefers-color-scheme:light){:root:not([data-mode="dark"]) .hcap h1 .ch{--hs:0 1px 24px color-mix(in oklab,var(--bg) 60%,transparent)}}
+.hmeta{animation-delay:1.2s}
+@keyframes kb{0%{transform:scale(1.3)}14%{transform:scale(1.07)}100%{transform:none}}
+
+/* 每天一張大圖開章：這天第一張橫的放整排，日期、地點疊在上面，捲動時照片慢一點（視差） */
+.day.cov{position:relative}
+.day.cov .dh{position:absolute;left:0;right:0;top:0;height:var(--fh);margin:0;padding:clamp(18px,3.2vw,40px);z-index:2;pointer-events:none;align-content:end;
+  border-radius:var(--r-sm);color:#fff;--a:calc(.5 + var(--cs,.5) * .35);
+  background:linear-gradient(180deg,transparent 12%,rgba(0,0,0,calc(var(--a) * .55)) 45%,rgba(0,0,0,var(--a))),linear-gradient(90deg,rgba(0,0,0,calc(var(--a) * .45)),transparent 72%)}
+.day.cov .dh b,.day.cov .dh span,.day.cov .dh .dsum{animation:none}
+@media (min-width:700px){.day.cov .dh{border-radius:var(--r-md)}}
+.day.cov .dh b{color:#fff;font-size:clamp(24px,3.8vw,44px);text-shadow:0 1px 3px rgba(0,0,0,.35),0 2px 18px rgba(0,0,0,.4)}
+.day.cov .dh span{color:rgba(255,255,255,.92);text-shadow:0 1px 3px rgba(0,0,0,.4)}
+.day.cov .dh span svg{color:#fff}
+.day.cov .dct{background:rgba(255,255,255,.22);color:#fff;align-self:end}
+.day.cov .dhr{color:rgba(255,255,255,.9);text-shadow:0 1px 3px rgba(0,0,0,.4)}
+.day.cov .row.feat .ph img{top:-7%;bottom:auto;height:114%}
+@supports (animation-timeline:view()){
+  .day.cov .row.feat .ph img{animation:fpar linear both;animation-timeline:view()}
+  @keyframes fpar{from{translate:0 -6%}to{translate:0 6%}}
+}
+
+/* 照片慢慢顯影：從淡淡、稍微放大慢慢變清楚（只動合成層屬性，捲動不掉幀） */
+.ph .hi:not(.ok){transform:scale(1.05)}
+.ph .hi.ok{transition:opacity var(--t-slow) var(--ease),transform .9s var(--dec)}
+.selm .ph .hi,.selm .ph .lq{transition:opacity var(--t-mid) var(--ease),transform var(--sp-fast),border-radius var(--t-fast) var(--ease)}
+
+/* 看大圖：後面透出這張照片的顏色 */
+.lb .bg{overflow:hidden;isolation:isolate}
+.lb .bg .amb{position:absolute;inset:-12%;width:124%;height:124%;object-fit:cover;filter:blur(24px) saturate(1.6);opacity:0;will-change:opacity;transform:translateZ(0)}
+.lb .bg::after{content:"";position:absolute;inset:0;background:radial-gradient(120% 90% at 50% 45%,rgba(0,0,0,.2),rgba(0,0,0,.7))}
+
+/* 電腦看大圖：下面一排小圖，點了直接跳過去 */
+.lb.strip .stage,.lb.strip.info .stage{bottom:88px}
+.lb.strip .lbb{bottom:88px}
+.lbs{position:absolute;left:0;right:0;bottom:0;height:88px;z-index:2;overflow-x:auto;padding:14px 20px 18px;transition:opacity var(--t-mid) var(--ease),transform var(--t-mid) var(--ease),right var(--t-mid) var(--ease)}
+.lbsr{display:flex;gap:6px;width:max-content;margin:0 auto}
+.lbst{flex:none;width:56px;height:56px;border-radius:var(--r-xs);overflow:hidden;opacity:.42;transition:opacity var(--t-fast) var(--ease),transform var(--sp-fast),box-shadow var(--t-fast) var(--ease)}
+.lbst img{width:100%;height:100%;object-fit:cover;display:block}
+.lbst:hover{opacity:.85}
+.lbst.on{opacity:1;transform:scale(1.1);box-shadow:0 0 0 2px #fff}
+.lb.bare .lbs{opacity:0;transform:translateY(12px);pointer-events:none}
+@media (min-width:900px){.lb.info .lbs{right:380px}}
+
+/* 精選：最多愛心的幾張，大圖左右滑 */
+.hl{max-width:var(--wmax);margin:clamp(24px,3.6vw,44px) auto 0;padding:0 var(--pad)}
+.hl[hidden]{display:none}
+.hlh b{display:inline-flex;align-items:center;gap:8px;font-family:var(--serif);font-size:var(--fs-2xl);font-weight:600;letter-spacing:.04em}
+.hlh svg{width:18px;height:18px;color:var(--g2);fill:currentColor}
+.hlh{display:flex;align-items:center;justify-content:space-between}
+.hla{display:none;gap:8px}
+.hla .rb{width:38px;height:38px;border-radius:50%;display:grid;place-items:center;background:var(--s2);color:var(--tx);border:0;cursor:pointer;transition:opacity var(--t-fast) var(--ease),background var(--t-fast) var(--ease)}
+.hla .rb svg{width:18px;height:18px;fill:none;stroke:currentColor;stroke-width:2.2}
+.hla .rb:disabled{opacity:.3;cursor:default}
+@media (pointer:fine){.hla{display:flex}.hla[hidden]{display:none}.hl .hlr{cursor:grab;scroll-snap-type:none}.hl .hlr.drag{cursor:grabbing;scroll-snap-type:none}.hl .hlr.drag .hlc{pointer-events:none}}
+.hlr{display:flex;gap:12px;overflow-x:auto;margin:12px calc(-1 * var(--pad)) 0;padding:6px var(--pad) 20px;scroll-snap-type:x mandatory;scroll-padding:0 var(--pad)}
+.hlc{position:relative;flex:none;height:clamp(230px,58vw,440px);aspect-ratio:var(--ar);max-width:84vw;border-radius:var(--r-lg);overflow:hidden;overflow:clip;scroll-snap-align:start;background:var(--s2);
+  box-shadow:var(--sh-card),0 24px 40px -26px color-mix(in oklab,var(--g2) 75%,transparent);animation:hlin var(--t-slow) var(--dec) both;transition:transform var(--sp-fast)}
+@keyframes hlin{from{opacity:0;translate:0 16px}}
+.hlc img{width:100%;height:100%;object-fit:cover;display:block;transition:transform var(--t-long) var(--dec)}
+@media (hover:hover){.hlc:hover img{transform:scale(1.04)}}
+.hlc:active{transform:scale(.98)}
+.hlc i,.hlc em{position:absolute;display:inline-flex;align-items:center;gap:5px;height:28px;padding:0 11px;border-radius:var(--r-pill);background:rgba(0,0,0,.58);color:#fff;font:700 var(--fs-xs)/1 var(--font);font-style:normal;box-shadow:inset 0 0 0 1px rgba(255,255,255,.12)}
+.hlc i{left:12px;bottom:12px}
+.hlc em{right:12px;top:12px;width:28px;padding:0;justify-content:center}
+.hlc i svg,.hlc em svg{width:13px;height:13px;fill:currentColor}
+
+/* 電腦上地圖跟著捲動：照片牆右邊固定一張地圖 */
+.smap[hidden]{display:none}
+@media (min-width:1200px){
+  .wwrap.side{display:grid;grid-template-columns:minmax(0,1fr) clamp(320px,28vw,440px);gap:clamp(20px,2vw,36px);max-width:var(--wmax);margin:0 auto;padding-right:var(--pad);align-items:start}
+  .wwrap.side .wall{max-width:none;margin:0;padding-right:0}
+  .smap{position:sticky;top:84px;height:calc(100svh - 108px);margin-top:clamp(40px,8vw,96px);border-radius:var(--r-xl);overflow:hidden;background:var(--s2);box-shadow:var(--sh-card);isolation:isolate}
+}
+.smv,.sml{position:absolute;inset:0}
+.sml .tl{position:absolute;opacity:0;transition:opacity var(--t-slow) var(--ease);filter:var(--map-f) grayscale(.85);user-select:none;-webkit-user-drag:none}
+.sml .tl.ok{opacity:1}
+.sml::after{content:"";position:absolute;inset:0;background:color-mix(in oklab,var(--g2) 10%,transparent);pointer-events:none}
+.smr{position:absolute;inset:0;width:100%;height:100%;z-index:1;pointer-events:none;overflow:visible}
+.smr polyline{fill:none;stroke:var(--g2);stroke-width:3;stroke-linecap:round;stroke-linejoin:round;stroke-dasharray:1 9;opacity:.9}
+.sml .mk{z-index:2}
+.smc{position:absolute;left:14px;right:14px;top:14px;z-index:3;padding:12px 16px;border-radius:var(--r-lg);background:var(--glass);-webkit-backdrop-filter:blur(14px);backdrop-filter:blur(14px);box-shadow:var(--sh-pop);display:grid;gap:3px}
+.smc:empty{display:none}
+.smc i{font-style:normal;font-size:var(--fs-xs);font-weight:700;letter-spacing:.12em;background:var(--grad);-webkit-background-clip:text;background-clip:text;color:transparent;justify-self:start}
+.smc b{font-family:var(--serif);font-size:var(--fs-xl);font-weight:600}
+.smc span{display:flex;align-items:center;gap:4px;color:var(--tx3);font-size:var(--fs-s);min-width:0}
+.smc span svg{width:13px;height:13px;color:var(--g2);flex:none}
+.day.cov .row.feat .bdg .lkt{left:auto;right:12px;top:12px;bottom:auto}
+.day.cov .row.feat .bdg .lvt{left:12px;top:12px}
+
+/* 那天的天氣：日期後面一個小圖＋最高／最低溫 */
+.dwx{display:inline-flex;align-items:center;gap:4px;margin-left:.55em;vertical-align:.12em;font:700 var(--fs-s)/1 var(--font);font-style:normal;letter-spacing:0;color:var(--tx2);white-space:nowrap}
+.dwx svg{width:17px;height:17px;flex:none}
+.dwx small{font-size:var(--fs-xs);font-weight:600;color:var(--tx3);margin-left:3px}
+.dwx.wsun svg{color:#f5a524}
+.dwx.wpart svg{color:#e3a43a}
+.dwx.wcld svg,.dwx.wfog svg{color:var(--tx3)}
+.dwx.wrain svg{color:#4f9cf0}
+.dwx.wsnow svg{color:#8fc6ff}
+.dwx.wstorm svg{color:#a07cff}
+.day.cov .dh .dwx{display:flex;width:max-content;margin:8px 0 2px}
+.day.cov .dh .dwx,.day.cov .dh .dwx small{color:#fff;text-shadow:0 1px 3px rgba(0,0,0,.4)}
+.day.cov .dh .dwx svg{color:#fff;filter:drop-shadow(0 1px 6px rgba(0,0,0,.35))}
+.smc b .dwx{font-size:var(--fs-xs)}
+.wall[data-z="2"] .dwx,.wall[data-z="3"] .dwx{display:none}
+
+/* 連拍：一疊只放第一張，右上角寫幾張 */
+.bdg .stk{right:6px;top:6px;pointer-events:auto;cursor:pointer;height:24px;padding:0 8px 0 6px;transition:background var(--t-fast) var(--ease),transform var(--sp-fast)}
+.bdg .stk svg{width:14px;height:14px}
+.bdg .stk.op{background:var(--p);color:var(--on-p)}
+.bdg .stk:active{transform:scale(.9)}
+.wall[data-z="2"] .bdg .stk,.wall[data-z="3"] .bdg .stk{display:none}
+.bdg .lkt .rxe{font-style:normal;font-size:12px;line-height:1;margin-right:-2px}
+.bdg .lkt svg+.rxe{margin-left:-1px}
+
+/* 其他表情 */
+.sb .rxe{font-style:normal;font-size:18px;line-height:1}
+.sb.rxb.on{background:rgba(255,255,255,.22)}
+.rxp{position:fixed;z-index:6;display:flex;gap:4px;padding:6px;border-radius:var(--r-pill);background-color:rgba(24,26,32,.48);background-image:linear-gradient(155deg,rgba(255,255,255,.16),rgba(255,255,255,.03) 45%,rgba(255,255,255,.07));-webkit-backdrop-filter:blur(26px) saturate(200%);backdrop-filter:blur(26px) saturate(200%);border:1px solid rgba(255,255,255,.2);box-shadow:0 16px 40px -12px rgba(0,0,0,.62),inset 0 1px 0 rgba(255,255,255,.28)}
+.rxp button{width:46px;height:46px;border-radius:50%;font-size:28px;line-height:1;display:grid;place-items:center;transition:transform var(--sp-fast),background var(--t-fast) var(--ease);animation:rxin var(--t-mid) var(--dec) both;animation-delay:calc(var(--i) * 35ms)}
+.rxp button.on{background:rgba(255,255,255,.18)}
+.rxp button:active{transform:scale(1.25)}
+@media (hover:hover){.rxp button:hover{transform:translateY(-4px) scale(1.18)}}
+@keyframes rxin{from{opacity:0;transform:translateY(10px) scale(.6)}to{opacity:1;transform:none}}
+.rxfly{position:fixed;z-index:calc(var(--z-veil) + 3);font-size:30px;font-style:normal;pointer-events:none;line-height:1}
+.italk .th .rxe{font-style:normal;font-size:14px;margin-right:2px}
+
+/* 照片的主要顏色 */
+.ipal{padding:14px 16px;display:grid;gap:10px}
+.ipal:empty{display:none}
+.pbar{display:flex;height:40px;border-radius:var(--r-sm);overflow:hidden;gap:2px}
+.pbar i{min-width:10px;transform-origin:left}
+.pbar.wait{background:linear-gradient(90deg,var(--s2),var(--s3),var(--s2));background-size:200% 100%;animation:pw 1.2s linear infinite}
+@keyframes pw{to{background-position:-200% 0}}
+
+/* 電腦滑鼠指著照片：下面淡淡寫拍攝時間、相機 */
+.ph .hv{position:absolute;left:0;right:0;bottom:0;z-index:1;text-align:left;padding:26px 10px 8px;font-size:var(--fs-xs);font-weight:600;color:#fff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+  background:linear-gradient(transparent,rgba(0,0,0,.55));opacity:0;transform:translateY(4px);transition:opacity var(--t-fast) var(--ease),transform var(--t-fast) var(--ease);pointer-events:none}
+@media (hover:hover) and (pointer:fine){.wall:not([data-z="2"]):not([data-z="3"]) .ph:hover .hv{opacity:1;transform:none}
+  .ph:hover .bdg .lkt,.ph:hover .bdg .vt{opacity:0}}
+@media not ((hover:hover) and (pointer:fine)){.ph .hv{display:none}}
+.selm .ph .hv{display:none}
+
+/* 右邊的日期捲軸 */
+.scrub{position:fixed;right:0;top:84px;bottom:28px;width:30px;z-index:var(--z-bar);pointer-events:none;opacity:0;transition:opacity var(--t-mid) var(--ease)}
+.scrub.on{opacity:1}
+.scrub .stk2{position:absolute;right:8px;top:0;bottom:0;width:6px;opacity:0;transition:opacity var(--t-mid) var(--ease)}
+.scrub.drag .stk2{opacity:1}   /* 每個月的小點只在拖的時候出現 */
+.scrub .stk2 b{position:absolute;left:1px;width:4px;height:4px;border-radius:50%;background:color-mix(in oklab,var(--tx) 35%,transparent)}
+.sth{position:absolute;right:4px;width:8px;height:44px;top:0;transform:translateY(calc(var(--f,0) * (var(--th,600px) - 44px)));will-change:transform;border-radius:var(--r-pill);background:var(--s1,var(--bg));box-shadow:var(--sh-pop),var(--hl);
+  touch-action:none;cursor:grab;transition:width var(--sp-fast),right var(--sp-fast)}
+.sth::before{content:"";position:absolute;inset:14px 3px;border-radius:var(--r-pill);background:var(--grad,var(--p))}
+.sth::after{content:"";position:absolute;inset:-6px -14px -6px -24px}
+.scrub.on .sth{pointer-events:auto}
+.scrub.drag .sth{width:14px;right:4px;cursor:grabbing}
+/* 捲軸不用毛玻璃（拖的時候底下的照片每一格都在換，手機重算模糊很吃力，切換時還會閃）；拖的時候新出現的照片直接出現，不跑顯影動畫 */
+html.scrubbing .ph,html.scrubbing .ph .hi{transition:none;animation:none}
+.sbl{position:absolute;right:calc(100% + 12px);top:50%;transform:translate(8px,-50%) scale(.9);transform-origin:right center;opacity:0;white-space:nowrap;padding:9px 16px;border-radius:var(--r-pill);
+  background:var(--s1,var(--bg));box-shadow:var(--sh-pop),var(--hl);font:600 var(--fs-l)/1 var(--serif);color:var(--tx);transition:opacity var(--t-fast) var(--ease),transform var(--sp-fast);pointer-events:none}
+.scrub.drag .sbl.on{opacity:1;transform:translate(0,-50%)}
+.sbl{display:flex;align-items:center;gap:10px}
+.sbl:has(.sbi:not([hidden])){padding:6px 16px 6px 6px;border-radius:var(--r-lg)}   /* 有小圖時外框改圓角方形，小圖整張收在框裡（以前角落超出膠囊） */
+.sbl .sbi{width:48px;height:48px;flex:none;border-radius:var(--r-md);object-fit:cover;background:center/cover no-repeat var(--s2)}
+.sbl .sbi[hidden]{display:none}
+html.scrubbing .ph .lq{filter:none;transform:none}
+html.scrubbing .ph .hi{filter:none;transform:none}
+.bar{transition:transform var(--t-mid) var(--ease),background-color var(--t-mid) var(--ease)}
+/* 封面、回憶圓圈捲出畫面時，裡面一直跑的動畫先停（字的光、流動的線每一格都要重畫；跟著捲動走的視差 .cv、.hcap 不停） */
+.hero.away :not(.cv,.hcap),.hero.away::before,.hero.away::after,.hero.away :not(.cv,.hcap)::before,.hero.away :not(.cv,.hcap)::after,.mems.away *,.mems.away *::before{animation-play-state:paused!important}
+html.dock-off .scrub{opacity:0;pointer-events:none}
+
+/* 器材：用了哪幾台相機、哪幾顆鏡頭、常用焦段（點了只看那台拍的） */
+.gear{max-width:var(--wmax);margin:clamp(40px,8vw,96px) auto 0;padding:0 var(--pad)}
+.gear[hidden]{display:none}
+.gcams{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:12px;align-content:start}
+.gbox{border-radius:var(--r-lg);background:var(--s1);box-shadow:var(--sh-card);overflow:hidden}
+.gbox .gcam{width:100%;box-shadow:none;background:none}
+.gcams{align-items:start}
+.gbox .gcam.on{box-shadow:inset 0 0 0 2px var(--g2)}
+.glz{display:grid;gap:2px;padding:0 10px 10px;position:relative}
+.glz::before{content:"";position:absolute;left:36px;top:0;bottom:22px;width:2px;border-radius:var(--r-pill);background:var(--s2)}
+.glr{display:grid;grid-template-columns:20px minmax(0,1fr) minmax(48px,120px) 32px;align-items:center;gap:10px;padding:8px 10px 8px 46px;border-radius:var(--r-md);text-align:left;font-size:var(--fs-s);position:relative;transition:background var(--t-fast) var(--ease)}
+.glr::before{content:"";position:absolute;left:26px;top:50%;width:14px;height:2px;border-radius:var(--r-pill);background:var(--s2)}
+.glr svg{width:20px;height:20px;stroke-width:2.4;color:var(--g2)}   /* 20 寬、線 2 像素整：不糊 */
+.glr>span:first-of-type{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-weight:600}
+.glr small{color:var(--tx3);font-weight:600;text-align:right}
+@media (hover:hover){.glr:hover{background:var(--s2)}}
+.glr.on{background:color-mix(in oklab,var(--g2) 16%,transparent)}
+@media (max-width:560px){.glr{grid-template-columns:20px minmax(0,1fr) 28px}.glr .gbr{display:none}}
+.gcam{display:grid;grid-template-columns:auto 1fr;grid-template-rows:auto auto;column-gap:12px;row-gap:8px;align-items:center;padding:14px 16px;border-radius:var(--r-lg);background:var(--s1);box-shadow:var(--sh-card);text-align:left;
+  transition:transform var(--sp-fast),box-shadow var(--t-fast) var(--ease)}
+.gcam:active{transform:scale(.98)}
+.gcam.on{box-shadow:0 0 0 2px var(--g2),var(--sh-card)}
+.gic{grid-row:1 / span 2;width:42px;height:42px;border-radius:var(--r-md);display:grid;place-items:center;background:color-mix(in oklab,var(--g2) 16%,transparent);color:var(--g2)}
+.gic svg{width:22px;height:22px}
+.gt2{display:flex;align-items:baseline;gap:8px;min-width:0}
+.gt2 b{font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.gt2 small{color:var(--tx3);font-size:var(--fs-xs);font-weight:600;flex:none;margin-left:auto}
+.gbr{height:4px;border-radius:var(--r-pill);background:var(--s2);overflow:hidden}
+.gbr i{display:block;height:100%;border-radius:inherit;background:var(--grad,var(--g2))}
+
+/* 看大圖：點相機、鏡頭名稱 */
+.igear{display:inline-flex;align-items:center;gap:4px;min-width:0;flex:1;text-align:left}
+.igear b{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.igear svg{width:15px;height:15px;color:var(--tx3);flex:none}
+.igear .brd{display:inline-flex;align-items:center;flex:none;margin-right:5px;position:relative;top:-.05em}   /* 置中到英文大寫字母的中間（字的方框中間偏低一點，以前標誌看起來往下歪） */
+.igear .brd svg{width:auto;height:auto;color:var(--tx);fill:currentColor;stroke:none}
+.igear.sm{display:inline;flex:none;color:var(--p);font-weight:600}
+.icam .t .igear b{flex:0 1 auto;min-width:0}
+
+/* 直方圖 */
+.ihist{display:grid;gap:4px}
+.ihist svg{width:100%;height:64px;display:block;border-radius:var(--r-sm);background:color-mix(in oklab,var(--tx) 4%,transparent);transform-origin:bottom}
+.ihist .hg{stroke:var(--line);stroke-width:1;vector-effect:non-scaling-stroke}
+.ihist .hl0{fill:color-mix(in oklab,var(--tx) 16%,transparent)}
+.ihist polyline{fill:none;stroke-width:1.4;vector-effect:non-scaling-stroke;stroke-linejoin:round;mix-blend-mode:normal;opacity:.85}
+.ihist .hr{stroke:#ff5a5f}
+.ihist .hgr{stroke:#3ecf6a}
+.ihist .hb{stroke:#4d8dff}
+.ihl{display:flex;justify-content:space-between;align-items:center;font-size:10px;color:var(--tx3);font-weight:600;height:16px}   /* 固定高度：「暗部有一片全黑」有時有、有時沒有，下面的不會跟著跳 */
+.ihl b{font-size:var(--fs-xs);color:var(--tx2);font-weight:650;line-height:1}
+@media (min-width:900px){
+  .gear{display:grid;grid-template-columns:minmax(0,1fr) minmax(340px,440px);column-gap:16px;align-items:stretch}
+  .gear .mh{grid-column:1 / -1}
+  .gear .gcams{grid-column:1}
+  .gear .gcams:last-child{grid-column:1 / -1}
+  .gear .gfoc{grid-column:2;grid-row:2;margin-top:0;display:flex;flex-direction:column}
+  .gear .gfoc .gfc{flex:1;align-items:end}
+}
+
+/* 旅程路線：照片、第幾天等線畫到那裡才跳出來；右下角重播 */
+.map.trip .mk{animation-play-state:paused}
+.map.trip.drawn .mk{animation-play-state:running}
+.map.trip:not(.drawn) .dayn{transition:none!important}
+.rplay{position:absolute;right:12px;bottom:28px;z-index:3;width:40px;height:40px;border-radius:50%;display:grid;place-items:center;background:var(--glass);-webkit-backdrop-filter:blur(14px);backdrop-filter:blur(14px);box-shadow:var(--sh-pop);color:var(--tx);
+  opacity:0;transition:opacity var(--t-mid) var(--ease) 2.6s,transform var(--sp-fast)}
+.drawn .rplay{opacity:1}
+.rplay:active{transform:scale(.9)}
+.rplay svg{width:18px;height:18px}
+
+/* 留言回覆：縮排在那一則下面 */
+.cmt.rep{padding-left:42px}
+.cmt+.cmt.rep{box-shadow:none;padding-top:2px}
+.cmt.rep .av{width:24px;height:24px;font-size:var(--fs-xs)}
+.crep{margin-top:2px;font-size:var(--fs-xs);font-weight:650;color:var(--tx3);padding:4px 0}
+.crep:active{color:var(--p)}
+.cre{display:flex;align-items:center;gap:6px;justify-self:start;height:28px;padding:0 4px 0 12px;border-radius:var(--r-pill);background:var(--s2);font-size:var(--fs-xs);font-weight:650;color:var(--tx2)}
+.cre[hidden]{display:none}
+.cre button{width:22px;height:22px;display:grid;place-items:center;border-radius:50%}
+.cre svg{width:13px;height:13px}
+
+/* 看大圖：在這附近拍的其他照片 */
+.inear{padding:12px 16px 14px;border-top:1px solid var(--line)}
+.inh{display:flex;align-items:baseline;justify-content:space-between;margin-bottom:10px}
+.inh b{font-size:var(--fs-s);font-weight:700}
+.inh span{font-size:var(--fs-xs);color:var(--tx3);font-weight:600}
+.inr{display:flex;gap:8px;overflow-x:auto;margin:0 -16px;padding:0 16px;scroll-snap-type:x proximity}
+.inp{flex:none;width:76px;display:grid;gap:5px;scroll-snap-align:start;transition:transform var(--sp-fast)}
+.inp img{width:76px;height:76px;object-fit:cover;border-radius:var(--r-sm);display:block;background:var(--s2)}
+.inp small{font-size:10px;color:var(--tx3);font-weight:600;text-align:center;white-space:nowrap}
+.inp:active{transform:scale(.95)}
+
+/* 幻燈片的章節卡：換天時先放一張（第幾天、日期、城市、天氣） */
+.ssl.sch .sbg{filter:blur(28px) brightness(.55) saturate(1.3)}
+.sct{position:absolute;inset:0;display:grid;place-content:center;justify-items:center;gap:12px;padding:0 var(--pad);text-align:center;color:#fff}
+.sct>i:not(.dwx){font-style:normal;font-size:var(--fs-s);font-weight:700;letter-spacing:.3em;color:rgba(255,255,255,.75)}
+.sct b{font-family:var(--serif);font-weight:600;font-size:clamp(30px,6vw,64px);letter-spacing:.04em;line-height:1.15;text-shadow:0 4px 30px rgba(0,0,0,.35)}
+.sct>span{display:inline-flex;align-items:center;gap:6px;font-size:var(--fs-l);color:rgba(255,255,255,.88)}
+.sct>span svg{width:17px;height:17px}
+.sct .dwx{margin:4px 0 0;font-size:var(--fs-l);color:#fff}
+.sct .dwx svg{width:22px;height:22px;color:#fff}
+.sct .dwx small{color:rgba(255,255,255,.7);font-size:var(--fs-s)}
+
+/* 每天標題右邊：播放這天 */
+button.dct{display:inline-flex;align-items:center;gap:4px;padding:0 9px 0 7px;cursor:pointer;transition:transform var(--sp-fast),background var(--t-fast) var(--ease)}
+button.dct svg{width:10px;height:10px;fill:currentColor;stroke:none}
+button.dct:active{transform:scale(.92)}
+.day.cov button.dct{pointer-events:auto}
+@media (hover:hover){button.dct:hover{background:var(--grad);color:var(--on-g)}}
+
+/* 地圖泡泡：那裡拍的全部照片 */
+.sh.shp{width:min(640px,100%);text-align:left;padding:18px 16px calc(16px + env(safe-area-inset-bottom));max-height:78svh;display:flex;flex-direction:column}
+.shh{display:flex;align-items:baseline;gap:10px;padding:2px 4px 14px}
+.shh b{font-family:var(--serif);font-size:var(--fs-xl);font-weight:600;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.shh span{font-size:var(--fs-s);color:var(--tx3);flex:none}
+.shg{display:grid;grid-template-columns:repeat(auto-fill,minmax(96px,1fr));gap:4px;overflow-y:auto;border-radius:var(--r-md);overscroll-behavior:contain}
+/* 照方塊比例排的格子用 overflow:clip（hidden 會讓安卓 Chrome 把格子算矮、上下疊在一起；不支援的瀏覽器照舊用 hidden） */
+.shg button{position:relative;aspect-ratio:1;overflow:hidden;overflow:clip;border-radius:var(--r-xs);background:var(--s2);transition:transform var(--sp-fast);animation:up var(--t-mid) var(--dec) both;animation-delay:calc(var(--i) * 25ms)}
+.shg img{width:100%;height:100%;object-fit:cover;display:block}
+.shg i{position:absolute;right:6px;bottom:6px;width:22px;height:22px;border-radius:50%;display:grid;place-items:center;background:rgba(0,0,0,.45);color:#fff}
+.shg i svg{width:10px;height:10px;fill:currentColor;stroke:none}
+.shg button:active{transform:scale(.96)}
+
+/* 相簿介紹（主人寫的一段話，封面下面） */
+.intro{max-width:680px;margin:clamp(28px,5vw,56px) auto 0;padding:0 var(--pad);text-align:center}
+.intro p{font-family:var(--serif);font-size:clamp(16px,2vw,19px);line-height:1.9;letter-spacing:.04em;color:var(--tx2);text-wrap:pretty;animation:intro var(--t-long) var(--dec) both}
+.intro p::before,.intro p::after{content:"";display:block;width:28px;height:1px;margin:0 auto 18px;background:var(--grad);opacity:.7}
+.intro p::after{margin:18px auto 0}
+@keyframes intro{from{opacity:0;transform:translateY(10px)}}
+
+/* 留言簿（結尾給整本留一句話） */
+.gbk{max-width:1100px;margin:clamp(48px,8vw,96px) auto 0;padding:0 var(--pad)}
+.gbl{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:12px}
+.gbl:empty{display:none}
+.gbc{background:var(--s1);border-radius:var(--r-lg);padding:16px 16px 12px;box-shadow:var(--sh-card);display:flex;flex-direction:column;gap:12px;animation:gbin var(--t-slow) var(--dec) both;animation-delay:calc(var(--i) * 50ms)}
+.gbc p{font-family:var(--serif);font-size:var(--fs-m);line-height:1.7;color:var(--tx);word-break:break-word;margin:0}
+.gbn{display:flex;align-items:center;gap:8px;margin-top:auto;font-size:var(--fs-s);color:var(--tx3)}
+.gbn .av{width:24px;height:24px;border-radius:50%;flex:none;display:grid;place-items:center;font-style:normal;font-weight:700;font-size:var(--fs-xs);background:color-mix(in oklab,var(--seed) 22%,var(--s2));color:var(--p)}
+.gbn b{color:var(--tx2);font-weight:650;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.gbn .cx{margin-left:auto}
+.gbf{max-width:560px;margin:16px auto 0}
+@keyframes gbin{from{opacity:0;transform:translateY(10px) scale(.98)}}
+
+/* 誰按了愛心 */
+.lkw{display:inline-flex;align-items:center;gap:4px;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+
+/* 每天一句話（早上在哪、下午到哪、走了幾公里） */
+.dsum{grid-column:1;font-style:normal;font-family:var(--serif);font-size:var(--fs-m);line-height:1.6;color:var(--tx2);letter-spacing:.02em;margin-top:2px;text-wrap:pretty}
+.day.cov .dsum{color:rgba(255,255,255,.94);text-shadow:0 1px 3px rgba(0,0,0,.4),0 1px 10px rgba(0,0,0,.4)}
+.wall[data-z="2"] .dsum,.wall[data-z="3"] .dsum{display:none}
+.dsum em{font-style:normal;white-space:nowrap}
+.hmeta [data-pl]{order:-1}                                     /* 地點固定自己一排在上面，按鈕一排在下面（以前照字數有時 2＋2、有時 3＋1） */
+.hmeta:has([data-pl])::before{content:"";flex-basis:100%;order:0}
+@media (max-width:399px){.hmeta{gap:8px 6px}.hmeta .chip{padding:0 11px;gap:5px}}   /* 窄手機：四顆按鈕（有「放照片」時）也排得下一排 */
+.sct .dsum{color:rgba(255,255,255,.85);font-size:var(--fs-l);max-width:30em;margin-top:4px}
+
+/* 「回覆」平常藏著：點那則留言（電腦滑鼠指著）才出現 */
+.crep{display:block;max-height:0;opacity:0;overflow:hidden;padding:0;margin-top:0;transition:max-height var(--t-mid) var(--ease),opacity var(--t-fast) var(--ease),padding var(--t-mid) var(--ease)}
+.cmt.on .crep{max-height:28px;opacity:1;padding:4px 0}
+@media (hover:hover){.cmt:hover .crep{max-height:28px;opacity:1;padding:4px 0}}
+.cmt{cursor:default;-webkit-tap-highlight-color:transparent}
+.sb[hidden]{display:none}
+.gbc.old{animation:none}
+
+/* ── 智慧：一天分場景、搜尋 ── */
+.scn{display:flex;align-items:center;gap:8px;margin:18px 2px 10px;font-size:var(--fs-s);color:var(--tx3);animation:memin var(--t-mid) var(--dec) both}
+.rows>.scn:first-child{margin-top:4px}
+.row.feat+.scn{margin-top:14px}
+.scn .sdot{width:8px;height:8px;border-radius:50%;background:var(--tx3);opacity:.6;flex:none}
+.scn .sdot.gold{background:linear-gradient(135deg,#ffd76a,#ff8a5c);opacity:1;box-shadow:0 0 0 4px color-mix(in oklab,#ffb35c 22%,transparent)}
+.scn .sdot.blue{background:linear-gradient(135deg,#6b8cff,#2b3f9e);opacity:1;box-shadow:0 0 0 4px color-mix(in oklab,#4a6bff 22%,transparent)}
+.scn em.blue{background:color-mix(in oklab,#4a6bff 16%,transparent);color:color-mix(in oklab,#4a6bff 75%,var(--tx))}
+.scn b{font-weight:700;color:var(--tx2)}
+.scn span{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.scn em{font-style:normal;font-weight:650;font-size:var(--fs-xs);padding:2px 8px;border-radius:var(--r-pill);background:color-mix(in oklab,#ffb35c 18%,transparent);color:color-mix(in oklab,#ff9a3c 70%,var(--tx));flex:none}
+.scn small{margin-left:auto;font-size:var(--fs-xs);flex:none}
+.shbg.top{place-items:start center}
+.sh.srh{text-align:left;width:min(640px,100%);padding:calc(env(safe-area-inset-top) + 14px) 16px 18px;border-radius:0 0 var(--r-xl) var(--r-xl);transform:translateY(-100%);max-height:88svh;overflow:auto;overscroll-behavior:contain}
+@media (min-width:600px){.shbg.top{padding-top:9svh}.sh.srh{border-radius:var(--r-xl);transform:translateY(-16px) scale(.97)}}
+.sqf{display:flex;align-items:center;gap:10px;height:50px;padding:0 6px 0 16px;border-radius:var(--r-pill);background:var(--s2);color:var(--tx3);transition:box-shadow var(--t-fast) var(--ease)}
+.sqf:focus-within{box-shadow:inset 0 0 0 1.5px var(--p)}
+.sqf>svg{width:20px;height:20px;flex:none}
+.sqf input{flex:1;min-width:0;height:100%;border:0;outline:0;background:none;color:var(--tx);font:500 var(--fs-input,16px)/1 var(--font)}
+.sqf input::-webkit-search-cancel-button{display:none}
+.sqc[hidden]{display:none}
+.sqc{width:38px;height:38px;border-radius:50%;display:grid;place-items:center;color:var(--tx3);flex:none}
+.sqc svg{width:18px;height:18px}
+.sqr{display:grid;grid-template-rows:0fr;transition:grid-template-rows var(--t-mid) var(--dec)}
+.shbg.has .sqr{grid-template-rows:1fr}
+.sqr>*{min-height:0;overflow:hidden}
+.sqn{display:flex;align-items:center;gap:6px;padding:14px 4px 10px;color:var(--tx3);font-size:var(--fs-s)}
+.sqn b{font-size:var(--fs-xl);color:var(--tx);font-weight:750}
+.btn.sm{width:auto;height:36px;margin:0 0 0 auto;padding:0 16px;font-size:var(--fs-s)}
+.sqt{display:flex;gap:4px;overflow-x:auto;padding-bottom:2px}
+.sqt button{position:relative;flex:none;width:64px;height:64px;border-radius:var(--r-sm);overflow:hidden;background:var(--s2);animation:sqin var(--t-mid) var(--dec) both;animation-delay:calc(var(--i) * 24ms)}
+.sqt img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
+.sqt img.hi{opacity:0;transition:opacity var(--t-mid) var(--ease)}
+.sqt img.hi.ok{opacity:1}
+@keyframes sqin{from{opacity:0;transform:scale(.86)}}
+.sqs{padding-top:6px}
+.shbg.has .sqs{display:none}
+.sqg{margin-top:14px;animation:memin var(--t-mid) var(--dec) both}
+.sqg>small{display:block;font-size:var(--fs-xs);font-weight:650;color:var(--tx3);letter-spacing:.05em;margin:0 4px 8px}
+.sqg>div{display:flex;flex-wrap:wrap;gap:6px}
+.sqg .chip{height:34px;padding:0 12px;background:var(--s2);box-shadow:none;-webkit-backdrop-filter:none;backdrop-filter:none;font-size:var(--fs-s)}
+.sqg .chip small{color:var(--tx3);font-size:var(--fs-xs)}
+.cdot{width:12px;height:12px;border-radius:50%;flex:none;box-shadow:inset 0 0 0 1px rgba(0,0,0,.12)}
+.cdot.bw{background:linear-gradient(90deg,#111 50%,#eee 50%)}
+/* 旅程時光機 */
+.map.tm .route .rt{transition:none!important}
+.map.tm .route .rdot{opacity:0!important;transition:opacity var(--t-fast) var(--ease)}
+.map .mk{transition:transform var(--sp-fast),opacity var(--t-mid) var(--ease),filter var(--t-mid) var(--ease)}
+.map.tm .mk.fut{opacity:.28;filter:grayscale(1)}
+.tmb{position:absolute;left:0;top:0;z-index:3;width:64px;height:64px;margin:-78px 0 0 -32px;border-radius:var(--r-md);overflow:hidden;background:var(--s2);border:3px solid #fff;box-shadow:var(--sh-pop);
+  opacity:0;scale:.6;transition:opacity var(--t-mid) var(--ease),scale var(--sp);pointer-events:none}
+.tmb::after{content:"";position:absolute;left:50%;bottom:-9px;width:12px;height:12px;margin-left:-6px;background:#fff;rotate:45deg;z-index:-1}
+.map.tm .tmb{opacity:1;scale:1;pointer-events:auto}
+.tmb img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;opacity:0;transition:opacity var(--t-fast) var(--ease)}
+.tmb img.ok{opacity:1}
+.tmac{display:flex;align-items:flex-start;gap:12px;margin-top:12px;animation:memin var(--t-mid) var(--dec) both}
+.tmp{width:44px;height:44px;margin-top:9px;border-radius:50%;flex:none;display:grid;place-items:center;background:var(--p);color:var(--on-p);transition:transform var(--sp-fast)}
+.tmp:active{transform:scale(.92)}
+.tmp svg{width:18px;height:18px}
+/* 每天一格（使用者選的）：寬度照那天幾張，走過的填上漸層，現在這天框起來；說明泡泡在下面跟著指針 */
+.tmt{position:relative;flex:1;min-width:0;padding:0 13px 62px;touch-action:none;cursor:pointer;outline:0}
+.tmr{display:flex}
+.tms{position:relative;flex:none;min-width:0;padding:0 2px;container-type:inline-size}
+.tms:first-child{padding-left:0}.tms:last-child{padding-right:0}
+.tmx{display:flex;align-items:baseline;gap:5px;height:20px;padding-left:1px;white-space:nowrap;overflow:hidden;font-size:var(--fs-xs);line-height:20px;color:var(--tx3);transition:color var(--t-fast) var(--ease)}
+.tmx b{font-weight:700;color:var(--tx2);transition:color var(--t-fast) var(--ease)}
+.tmx span{overflow:hidden;text-overflow:ellipsis}
+.tms.on .tmx{color:var(--tx2)}.tms.on .tmx b{color:var(--tx)}
+@container (max-width:76px){.tmx span{display:none}}
+@container (max-width:28px){.tmx{visibility:hidden}}
+.tmg{position:relative;height:6px;margin-top:8px;border-radius:var(--r-pill);background:color-mix(in oklab,var(--tx3) 28%,transparent);overflow:hidden}
+.tmf{position:absolute;inset:0;background:var(--grad,var(--p));background-size:var(--bw,100%) 100%;background-position:calc(var(--o,0) * var(--bw,0px) * -1) 0;clip-path:inset(0 calc((1 - var(--f,1)) * 100%) 0 0)}
+.tmh{position:absolute;z-index:2;top:31px;left:0;width:18px;height:18px;margin:-9px 0 0 -9px;border-radius:50%;background:#fff;box-shadow:var(--sh-pop),0 0 0 3px var(--p);will-change:transform;transition:scale var(--sp-fast);pointer-events:none}
+.tmac.drag .tmh,.tmt:focus-visible .tmh{scale:1.2}
+.tml{position:absolute;left:0;top:52px;max-width:100%;padding:6px 12px;border-radius:var(--r-md);background:var(--s3);box-shadow:var(--sh-pop);line-height:1.3;pointer-events:none;white-space:nowrap}
+.tml::before{content:"";position:absolute;top:-5px;left:var(--ax,50%);width:10px;height:10px;margin-left:-5px;rotate:45deg;background:inherit;border-radius:2px}
+.tml:not(:has(b:not(:empty))){opacity:0}
+.tml b{position:relative;display:block;font-size:var(--fs-s);font-weight:700}
+.tml span{position:relative;display:block;font-size:var(--fs-xs);color:var(--tx3);overflow:hidden;text-overflow:ellipsis}
+.map.tm .route .rt0{opacity:.45}
+/* 色域圖、螢幕、白平衡 */
+.igam{display:flex;align-items:center;gap:14px;margin-top:14px;padding-top:14px;border-top:1px solid var(--line)}
+.igam svg{width:118px;height:auto;flex:none;overflow:visible}
+.igam .glc{fill:color-mix(in oklab,var(--tx) 5%,transparent);stroke:color-mix(in oklab,var(--tx) 22%,transparent);stroke-width:.5}
+.igam .gsr{fill:none;stroke:var(--tx2);stroke-width:.6}
+.igam .gp3{fill:none;stroke:var(--p);stroke-width:.6;stroke-dasharray:1.6 1.2}
+.igam circle.go{stroke:#fff;stroke-width:.18}
+.igt{min-width:0;line-height:1.35}
+.igt small,.kel small{display:block;font-size:10px;font-weight:600;color:var(--tx3);letter-spacing:.05em}
+.igt b{display:block;font-size:var(--fs-s);font-weight:700;margin:2px 0 6px}
+.gk{display:flex;align-items:center;gap:5px;font-size:var(--fs-xs);color:var(--tx3)}
+.gk i{width:14px;height:0;border-top:1.5px solid var(--tx2);margin-left:6px}
+.gk i:first-child{margin-left:0}
+.gk i.k2{border-top:1.5px dashed var(--p)}
+.scr{display:flex;align-items:center;gap:6px;margin-top:8px;font-size:var(--fs-xs);font-weight:650;color:var(--goodc,#2e9e5b)}
+.scr.no{color:var(--tx3)}
+.scr svg{width:15px;height:15px;flex:none}
+.iscr{margin-top:6px}
+.kel{flex-basis:100%;display:grid;grid-template-columns:auto 1fr;align-items:center;column-gap:12px}
+.isty>i+div~.kel{margin-top:6px;padding-top:12px;border-top:1px solid var(--line)}
+.kel small{grid-column:1/3}
+.kel b{font-size:var(--fs-m);font-weight:750}
+.kbar{position:relative;height:8px;border-radius:var(--r-pill);background:linear-gradient(90deg,#ff8a2a,#ffc27a 28%,#fff4e0 52%,#dfe9ff 70%,#9cc0ff)}
+.kbar i{position:absolute;top:50%;width:14px;height:14px;margin:-7px 0 0 -7px;border-radius:50%;background:#fff;box-shadow:var(--sh-pop),0 0 0 2px var(--tx2)}
+.isty>.kel{flex:1 1 100%}
+/* 白平衡微調方格 */
+.wbs{flex:1 1 100%;display:flex;align-items:center;gap:12px}
+.isty>:is(i+div,.kel)~.wbs{margin-top:6px;padding-top:12px;border-top:1px solid var(--line)}
+.wbs svg{width:72px;height:72px;flex:none;overflow:visible}
+.wbs small{display:block;font-size:10px;font-weight:600;color:var(--tx3);letter-spacing:.05em}
+.wbs b{font-size:var(--fs-m);font-weight:750}
+.wbf{fill:var(--s2)}
+.wbg{stroke:var(--line);stroke-width:.6}
+.wbg.z{stroke:var(--tx3);stroke-width:.8;opacity:.6}
+.wbl{font-size:6px;font-weight:700;fill:var(--tx3);text-anchor:middle}
+.wbd{fill:#fff;stroke:var(--p);stroke-width:1.6}
+.isty>i+div{min-width:min(50%,180px)}
+
+/* 中性灰背景：看顏色用（後面不透出照片的顏色、四周不壓暗） */
+:root{--ngc:#777}
+.lb .bg::before{content:"";position:absolute;inset:0;z-index:2;background:var(--ngc);opacity:0;transition:opacity var(--t-slow) var(--ease)}
+.lb.ng .bg::before{opacity:1}
+.ipw{display:grid;gap:10px}
+.ipw:empty{display:none}
+.ngb{display:flex;align-items:center;gap:10px;width:100%;min-height:44px;margin-top:2px;padding:0;color:var(--tx);font-size:var(--fs-s);font-weight:650;text-align:left;cursor:pointer}
+.ipw:not(:empty)+.ngb{padding-top:12px;border-top:1px solid var(--line)}
+.ngb svg{width:18px;height:18px;flex:none;color:var(--tx2)}
+.ngb span{flex:1}
+.ngb .sw{position:relative;width:40px;height:24px;flex:none;border-radius:var(--r-pill);background:var(--s3);transition:background var(--t-mid) var(--ease)}
+.ngb .sw::after{content:"";position:absolute;left:3px;top:3px;width:18px;height:18px;border-radius:50%;background:#fff;box-shadow:var(--sh-1,0 1px 2px rgba(0,0,0,.2));transition:transform var(--sp-fast)}
+.ngb[aria-pressed="true"] .sw{background:var(--p)}
+.ngb[aria-pressed="true"] .sw::after{transform:translateX(16px)}
+/* 照顏色排 */
+.sqhue{display:flex;align-items:center;gap:12px;width:100%;margin-top:8px;padding:10px 14px 10px 10px;border-radius:var(--r-md);background:var(--s2);text-align:left;cursor:pointer;transition:transform var(--sp-fast);animation:memin var(--t-mid) var(--dec) both}
+.sqhue:active{transform:scale(.98)}
+.sqhue .rbw{width:40px;height:40px;flex:none;border-radius:var(--r-sm);background:conic-gradient(from -90deg,#e5484d,#f08a3c,#f2c94c,#46a758,#30b5c4,#3e7bfa,#8e5cf7,#f076b8,#e5484d)}
+.sqhue span{flex:1;min-width:0;display:grid;gap:1px}
+.sqhue b{font-size:var(--fs-m);font-weight:700}
+.sqhue small{font-size:var(--fs-xs);color:var(--tx3)}
+.sqhue svg{width:18px;height:18px;color:var(--tx3);flex:none}
+.sqhue.on svg{color:var(--p)}
+.dh.hue b{display:inline-flex;align-items:center;gap:10px}
+.dh.hue .cdot{width:16px;height:16px}
+.cdot.mu{background:linear-gradient(135deg,#d9c7b8,#b9c3cc)}
+
+/* 電腦大螢幕（使用者說左右留白太多、看起來是手機排法）：各段撐滿同一個寬度、左右對齊 */
+@media (min-width:900px){
+  .stats,.stats:is(*){grid-auto-columns:minmax(0,1fr)}
+  .mrw{justify-content:safe center}
+  .cities{grid-auto-flow:row;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));overflow:visible;margin:0 0 14px;padding:4px 0 10px}
+  .cities .ctc{height:clamp(118px,11vw,200px)}
+  .gbk{max-width:var(--wmax)}
+  .gbk .gbf{max-width:720px;margin:16px auto 0}   /* 大螢幕：輸入框、留言都置中（使用者要置中，不要靠左） */
+  .gbl{grid-template-columns:repeat(auto-fit,minmax(300px,360px));justify-content:center}
+}
+
+/* 過曝／死黑：照片上蓋一層斜紋（紅＝過曝、藍＝死黑，跟修圖軟體一樣），斜紋慢慢移動像相機的斑馬紋 */
+:root{--zbh:#ff3b3b; --zbs:#2f7bff; --warn:#ffb870}
+@media (prefers-color-scheme:light){:root:not([data-mode="dark"]){--warn:#9a5200}}
+.lb .zb{position:absolute;inset:0;pointer-events:none;opacity:0;transition:opacity var(--t-mid) var(--ease);
+  filter:drop-shadow(0 0 2px var(--c)) drop-shadow(0 0 5px var(--c))}   /* 只描邊＋光暈，像相機的對焦峰值（光暈放外層，遮罩會切掉自己的濾鏡） */
+.lb .zb>i{position:absolute;inset:0;background:var(--c);
+  -webkit-mask-size:100% 100%;mask-size:100% 100%;-webkit-mask-repeat:no-repeat;mask-repeat:no-repeat}
+.lb .zbh{--c:var(--zbh)}
+.lb .zbs{--c:var(--zbs)}
+.lb.zbon .zb{opacity:1}
+.ngb small{color:var(--tx3);font-weight:650;margin-right:2px}
+
+/* 光線、手震：拍攝設定那排的格子 */
+.iset div.warn b{color:var(--warn)}
+.iset div.warn .gin .gf{fill:color-mix(in oklab,var(--warn) 70%,transparent)}
+.iset div.warn .gin .gs{stroke:var(--warn)}
+
+/* 拍攝習慣：光圈、快門、ISO 各一張小長條圖，點一段只看那樣拍的 */
+
+/* 兩張並排比較 */
+.cmpv{position:fixed;inset:0;z-index:calc(var(--z-veil) + 2);display:grid;grid-template-rows:auto minmax(0,1fr) auto;background:#000;color:#fff;opacity:0;transition:opacity var(--t-mid) var(--ease);touch-action:none;user-select:none;-webkit-user-select:none}
+.cmpv.on{opacity:1}
+.cmpt{display:flex;align-items:center;gap:10px;padding:calc(env(safe-area-inset-top) + 10px) 14px 8px}
+.cmpt b{font-size:var(--fs-l);font-weight:750}
+.cmpt span{color:rgba(255,255,255,.6);font-size:var(--fs-s)}
+.cmpp{display:grid;grid-template-columns:1fr 1fr;gap:4px;min-height:0;padding:0 4px}
+@media (orientation:portrait){.cmpp{grid-template-columns:none;grid-template-rows:1fr 1fr}}
+.cp{position:relative;overflow:hidden;min-height:0;border-radius:var(--r-sm);background:#0b0b0d;box-shadow:inset 0 0 0 2px transparent;transition:box-shadow var(--t-fast) var(--ease)}
+.cp.on{box-shadow:inset 0 0 0 2px var(--p)}
+.cz{position:absolute;inset:0;transform-origin:50% 50%;will-change:transform}
+.cz img{width:100%;height:100%;object-fit:contain;display:block}
+.cpl{position:absolute;left:8px;right:8px;bottom:8px;display:flex;flex-wrap:wrap;align-items:center;gap:6px;pointer-events:none}
+.cpl span{padding:4px 9px;border-radius:var(--r-pill);background:rgba(0,0,0,.55);font-size:var(--fs-xs);font-weight:650}
+.cpl em{padding:4px 9px;border-radius:var(--r-pill);font-size:var(--fs-xs);font-weight:750;font-style:normal;background:rgba(0,0,0,.55)}
+.cpl em.good{background:var(--p);color:var(--on-p)}
+.cpl em.bad{background:color-mix(in oklab,var(--bad) 85%,#000);color:#fff}
+.cmps{display:flex;gap:6px;overflow-x:auto;padding:10px 12px calc(env(safe-area-inset-bottom) + 12px);justify-content:safe center}
+.cmpk{flex:none;width:56px;height:56px;padding:0;border:0;border-radius:var(--r-xs);overflow:hidden;background:#111;opacity:.55;box-shadow:inset 0 0 0 2px transparent;cursor:pointer;transition:opacity var(--t-fast),box-shadow var(--t-fast)}
+.cmpk img{width:100%;height:100%;object-fit:cover;display:block;pointer-events:none}
+.cmpk.in{opacity:1;box-shadow:inset 0 0 0 2px rgba(255,255,255,.7)}
+.cmpk.act{box-shadow:inset 0 0 0 2px var(--p)}
+@media (max-width:440px){.lbt{gap:6px;padding-left:10px;padding-right:10px}}
+
+/* 拍攝習慣：一張卡、一種一行（左邊名稱＋最常用，右邊細長條，長條下面小字） */
+.gst{margin-top:12px;padding:6px 16px;border-radius:var(--r-lg);background:var(--s1);box-shadow:var(--sh-card)}
+.gsr{display:grid;grid-template-columns:64px minmax(0,1fr);align-items:center;gap:12px;padding:10px 0}
+.gsr+.gsr{border-top:1px solid var(--line)}
+.gsl{display:grid;gap:2px;min-width:0}
+.gsl small{color:var(--tx3);font-size:var(--fs-xs);font-weight:700;letter-spacing:.06em}
+.gsl b{font-weight:750;font-size:var(--fs-m);white-space:nowrap;display:grid}
+.gsl b small{letter-spacing:0;font-weight:600}
+.gsb{display:grid;grid-template-columns:repeat(var(--n),minmax(0,1fr));gap:4px}
+.gsb>*{display:grid;justify-items:center;gap:3px;padding:0;border:0;background:none;color:inherit;font:inherit;min-width:0;-webkit-tap-highlight-color:transparent}
+.gsb>button{cursor:pointer}
+.gsb>button:disabled{cursor:default}
+.gsb span{width:100%;height:26px;display:flex;align-items:flex-end;border-radius:4px;background:var(--s2);overflow:hidden;transition:box-shadow var(--t-fast) var(--ease)}
+.gsb span i{display:block;width:100%;background:color-mix(in oklab,var(--g2) 45%,transparent);border-radius:3px 3px 0 0}
+.gsb .top span i{background:var(--grad,var(--g2))}
+.gsb>*{container-type:inline-size}
+.gsb small{font-size:min(9px,27cqi);color:var(--tx3);font-weight:600;white-space:nowrap;max-width:100%;overflow:hidden;letter-spacing:-.02em}   /* 格子太窄（手機）時字跟著縮，「6400+」「1/1000」不會被切掉 */
+.gsb .on span{box-shadow:inset 0 0 0 2px var(--p)}
+.gsb .on small{color:var(--p)}
+@media (hover:hover){.gsb>button:not(:disabled):hover span{box-shadow:inset 0 0 0 2px var(--line)}}
+@media (min-width:900px){.gear .gst{grid-column:2;grid-row:2;margin-top:0;align-self:start}.gsb small{font-size:min(10px,27cqi)}
+  .gear.one .gst{grid-column:1 / -1;grid-row:auto;margin-top:12px;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));column-gap:40px}
+  .gear.one .gsr:nth-child(2){border-top:0}
+  .gear.one .gcams{grid-column:1 / -1}}
+@media (min-width:1400px){   /* 大螢幕：相機一排在上面撐滿，拍攝習慣在下面分兩欄（不會右邊一小塊、左邊空一大片） */
+  .gear .gst{grid-column:1 / -1;grid-row:auto;margin-top:12px;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));column-gap:40px}
+  .gear .gsr:nth-child(2){border-top:0}
+  .gear .gcams{grid-column:1 / -1}}
+
+/* ── 打開相簿的開場：一疊照片攤開、照片顯影、一道光掃過，好了就像光圈打開一樣露出封面（album.js 的 splGo） ── */
+#spl{position:fixed;inset:0;z-index:var(--z-spl);display:grid;place-items:center;overflow:hidden;background:var(--bg);animation:splSafe var(--t-mid) 12s forwards}
+@keyframes splSafe{to{opacity:0;visibility:hidden}}
+#spl>svg{grid-area:1/1}
+#spl svg{width:clamp(88px,24vmin,124px);height:auto;overflow:visible;filter:drop-shadow(0 18px 28px rgba(0,0,0,.32)) drop-shadow(0 0 22px rgba(255,120,150,.38))}
+/* 標誌後面的三色光：跟著載入進度慢慢亮起來（--spk，0～1），不是一開始就整團出現；光圈打開時跟葉片同時開始，往外散開、淡掉（像光從光圈透出去，交接給封面） */
+#spl::before{content:"";position:absolute;left:50%;top:50%;translate:-50% -50%;width:min(120vmin,760px);aspect-ratio:1;pointer-events:none;
+  background:radial-gradient(30% 30% at 38% 42%,rgba(255,143,163,.55),transparent),radial-gradient(28% 28% at 64% 40%,rgba(255,180,120,.45),transparent),radial-gradient(32% 32% at 50% 62%,rgba(124,108,240,.55),transparent);
+  opacity:calc(var(--spk,0) * .9);scale:calc(.3 + var(--spk,0) * .7);transition:opacity var(--t-slow) var(--dec),scale var(--t-slow) var(--dec);
+  animation:splR 10s linear infinite,splP 3.2s ease-in-out 1.3s infinite alternate}
+@keyframes splR{to{rotate:360deg}}
+@keyframes splP{to{transform:scale(1.12)}}
+html.splx #spl::before{opacity:0;scale:2.4;transition:opacity var(--t-slow) var(--ease) calc(var(--t-fast) * .6),scale var(--t-long) var(--dec) calc(var(--t-fast) * .6)}
+#spl .c1,#spl .c2,#spl .c3,#spl .mt,#spl .gl{transform-box:view-box}
+#spl .c1{transform-origin:50px 56px;animation:splIn var(--t-slow) var(--dec) both}
+@keyframes splIn{from{opacity:0;transform:translateY(10px) scale(.72)}}
+#spl .c3{transform-origin:41px 52px;transform:rotate(-14deg);animation:splF3 var(--sp) .3s both}
+@keyframes splF3{from{opacity:0;transform:rotate(0) translate(8px,4px)}}
+#spl .c2{transform-origin:59px 48px;transform:rotate(12deg);animation:splF2 var(--sp) .38s both}
+@keyframes splF2{from{opacity:0;transform:rotate(0) translate(-10px,8px)}}
+#spl .mt{animation:splMt var(--t-slow) var(--dec) .42s both}
+@keyframes splMt{from{transform:translateY(24px)}}
+#spl .sun{transform-box:fill-box;transform-origin:center;animation:splSun var(--sp-fast) .58s both}
+@keyframes splSun{from{transform:scale(0)}}
+#spl .gl{transform:translateX(0) skewX(-18deg);animation:splGl 1.8s var(--ease) .78s infinite}
+@keyframes splGl{0%{transform:translateX(0) skewX(-18deg)}45%,100%{transform:translateX(140px) skewX(-18deg)}}
+html.splx #spl svg{animation:splOut var(--t-mid) var(--ease) forwards}
+html.splx .hero .cv{transition-duration:var(--t-fast)}
+@keyframes splOut{to{opacity:0;transform:scale(1.14)}}
+@media (prefers-color-scheme:light){:root:not([data-mode="dark"]) #spl svg{filter:drop-shadow(0 14px 24px rgba(30,40,90,.22))}}
+/* 進度線：照片清單、封面、字型到了一格一格往前；光圈：六片葉片邊轉邊移開（只動 transform，交給顯示卡） */
+#spl .spb{position:absolute;left:50%;top:calc(50% + clamp(88px,24vmin,124px) * .62 + 24px);translate:-50% 0;width:clamp(72px,18vmin,104px);height:2px;border-radius:var(--r-pill);overflow:hidden;background:var(--line);opacity:0;animation:spbIn var(--t-mid) var(--ease) .9s forwards}
+#spl .spb i{display:block;height:100%;background:var(--grad);transform:scaleX(0);transform-origin:0 50%;transition:transform var(--t-mid) var(--dec)}
+@keyframes spbIn{to{opacity:1}}
+html.splx #spl .spb{animation:none;opacity:0;transition:opacity var(--t-fast) var(--ease)}
+#spl.open{background:transparent}
+#spl .iris{position:absolute;inset:0;z-index:-1;pointer-events:none}
+#spl .iris i{position:absolute;left:50%;top:50%;transform-origin:0 0;background:var(--bg)}
+
+/* 離開畫面、按截圖快速鍵時照片先糊掉（album.js 的 shy）：一下子蓋上，回來慢慢淡掉 */
+body::after{content:"";position:fixed;inset:0;z-index:var(--z-shy);pointer-events:none;visibility:hidden;opacity:0;
+  -webkit-backdrop-filter:blur(40px) saturate(.6);backdrop-filter:blur(40px) saturate(.6);background:color-mix(in oklab,var(--bg) 35%,transparent);
+  transition:opacity var(--t-mid) var(--ease),visibility 0s linear var(--t-mid)}
+html.shy body::after{visibility:visible;opacity:1;transition:none}
+html.shy,html.shy body{overflow:hidden}
+#shyc{position:fixed;inset:0;z-index:calc(var(--z-shy) + 1);display:grid;place-content:center;justify-items:center;gap:6px;pointer-events:none;text-align:center;color:var(--tx);
+  visibility:hidden;opacity:0;scale:.94;transition:opacity var(--t-mid) var(--ease),scale var(--t-mid) var(--ease),visibility 0s linear var(--t-mid)}
+html.shy #shyc{visibility:visible;opacity:1;scale:1;transition:opacity var(--t-fast) var(--dec),scale var(--t-fast) var(--dec)}
+#shyc svg{width:56px;height:56px;padding:14px;margin-bottom:6px;border-radius:50%;background:color-mix(in oklab,var(--bg) 70%,transparent);box-shadow:var(--sh-pop);fill:none;stroke:currentColor;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
+#shyc b{font-size:var(--fs-l)}
+#shyc small{font-size:var(--fs-s);color:var(--tx2)}
+
+/* 圓角裡的進度條、長條：裡面那條在動（位移、縮放）時，有些瀏覽器只照方框切、不照圓角切，顏色會從圓角溢出去；用 clip-path 照圓角切 */
+.ubar,.syp i,.vtr i,#spl .spb{clip-path:inset(0 round var(--r-pill))}
+.gsb span{clip-path:inset(0 round 4px)}
+.gsb span i{border-radius:inherit}
+.ph.wt{clip-path:inset(0 round var(--r-sm))}
+@media (min-width:700px){.ph.wt{clip-path:inset(0 round var(--r-md))}}
+.wall[data-z="2"] .ph.wt,.wall[data-z="3"] .ph.wt{clip-path:inset(0 round var(--r-xs))}
+.row.sq .ph.wt{clip-path:none}
+.map.tld{clip-path:inset(0 round var(--r-xl))}
+
+/* 種類篩選的選單（上面那條的篩選鈕） */
+.kmenu{position:fixed;z-index:calc(var(--z-bar) + 2);min-width:196px;padding:6px;border-radius:var(--r-lg);background:var(--glass-modal);-webkit-backdrop-filter:var(--blur-modal);backdrop-filter:var(--blur-modal);color:var(--tx);border:1px solid var(--glass-b);box-shadow:var(--sh-float);transform-origin:top right}
+.kmenu button{display:grid;grid-template-columns:20px 1fr auto 18px;align-items:center;gap:10px;width:100%;min-height:42px;padding:0 12px;border-radius:var(--r-md);text-align:left;font-size:var(--fs-m);color:var(--tx);transition:background var(--t-fast) var(--ease),transform var(--sp-fast)}
+.kmenu button:active{transform:scale(.97)}
+.kmenu button svg{width:18px;height:18px;color:var(--tx2)}
+.kmenu button small{color:var(--tx3);font-size:var(--fs-s)}
+.kmenu button>i{width:18px}
+.kmenu button[aria-checked="true"]{color:var(--g2);font-weight:650}
+.kmenu button[aria-checked="true"] svg{color:var(--g2)}
+@media (hover:hover){.kmenu button:hover{background:var(--glass-sub)}}
+.bar [data-kind].on{background:var(--g2);color:#fff}
+
+/* ═════════ Apple Liquid Glass × 攝影畫廊改版：液態光學折射、雙端懸浮膠囊、統一玻璃層次 ═════════ */
+:root{
+  --blur-card:blur(24px) saturate(195%);
+  --blur-float:blur(28px) saturate(215%) brightness(1.06);
+  --blur-modal:blur(36px) saturate(210%) brightness(1.04);
+  --glass:color-mix(in oklab,var(--s1) 36%,transparent);
+  --glass-card:color-mix(in oklab,var(--s1) 42%,transparent);
+  --glass-modal:color-mix(in oklab,var(--s1) 58%,transparent);
+  --glass-sheen:linear-gradient(155deg,rgba(255,255,255,.16) 0%,rgba(255,255,255,.03) 44%,rgba(255,255,255,.07) 100%);
+  --glass-sub:rgba(255,255,255,.09);
+  --glass-b:rgba(255,255,255,.22);
+  --hl:inset 0 1px 0 rgba(255,255,255,.32),inset 0 -1px 1px rgba(255,255,255,.08),inset 1px 0 0 rgba(255,255,255,.08),inset -1px 0 0 rgba(255,255,255,.06);
+  --pill-bg:linear-gradient(180deg,rgba(255,255,255,.24) 0%,rgba(255,255,255,.12) 100%);
+  --pill-sh:0 4px 14px -2px rgba(0,0,0,.42),inset 0 1px 0 rgba(255,255,255,.42),inset 0 -1px 0 rgba(255,255,255,.08);
+  --sh-card:0 10px 32px -12px rgba(0,0,0,.48),0 1px 2px rgba(0,0,0,.24),var(--hl);
+  --sh-float:0 18px 46px -14px rgba(0,0,0,.62),0 2px 10px rgba(0,0,0,.32),var(--hl);
+}
+@media (max-width:899px){:root{--blur-card:blur(18px) saturate(185%);--blur-float:blur(24px) saturate(205%) brightness(1.05);--blur-modal:blur(28px) saturate(200%) brightness(1.04)}}
+@media (prefers-color-scheme:light){:root:not([data-mode="dark"]){
+  --glass:rgba(255,255,255,.44);
+  --glass-card:rgba(255,255,255,.52);
+  --glass-modal:rgba(255,255,255,.68);
+  --glass-sheen:linear-gradient(155deg,rgba(255,255,255,.72) 0%,rgba(255,255,255,.14) 48%,rgba(255,255,255,.36) 100%);
+  --glass-sub:rgba(15,23,42,.06);
+  --glass-b:rgba(255,255,255,.88);
+  --hl:inset 0 1px 0 rgba(255,255,255,1),inset 0 -1px 1px rgba(15,23,42,.05),inset 1px 0 0 rgba(255,255,255,.72),inset -1px 0 0 rgba(255,255,255,.56);
+  --pill-bg:linear-gradient(180deg,rgba(255,255,255,.96) 0%,rgba(255,255,255,.78) 100%);
+  --pill-sh:0 4px 14px -3px rgba(15,23,42,.16),inset 0 1px 0 rgba(255,255,255,1),inset 0 -1px 0 rgba(15,23,42,.04);
+  --sh-card:0 6px 24px -8px rgba(15,23,42,.10),0 1px 2px rgba(15,23,42,.04),var(--hl);
+  --sh-float:0 16px 40px -14px rgba(15,23,42,.18),0 2px 8px -2px rgba(15,23,42,.06),var(--hl);
+}}
+@media (prefers-reduced-transparency:reduce){
+  :root{--blur-card:none;--blur-float:none;--blur-modal:none;--glass:var(--s1);--glass-card:var(--s1);--glass-modal:var(--s1);--glass-sheen:none}
+}
+
+/* 封面：保留下方內容邊緣暗示，膠囊按鈕升級液態毛玻璃 */
+.hero{height:min(86svh,740px)}
+@media (min-width:900px){.hero{height:min(92svh,880px)}}
+.hero .chip{background-color:rgba(255,255,255,.14);background-image:linear-gradient(155deg,rgba(255,255,255,.22),rgba(255,255,255,.04) 48%,rgba(255,255,255,.1));border:1px solid rgba(255,255,255,.26);
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.36),inset 0 -1px 0 rgba(255,255,255,.08),0 8px 24px -10px rgba(0,0,0,.45);-webkit-backdrop-filter:var(--blur-card);backdrop-filter:var(--blur-card)}
+.hero .chip.go,.bar .chip.go{background:var(--p);background-image:linear-gradient(180deg,rgba(255,255,255,.22),transparent 55%);border:0;
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.36),0 8px 24px -8px color-mix(in oklab,var(--p) 62%,transparent)}
+@media (prefers-color-scheme:light){:root:not([data-mode="dark"]) .hero .chip{background-color:var(--glass);background-image:var(--glass-sheen);border:1px solid var(--glass-b);box-shadow:var(--sh-card)}}
+
+/* 頂部懸浮液態膠囊：手機與電腦皆為懸浮圓角膠囊，四周留白、搭配頂部漸層安全霧 */
+.bar{top:calc(env(safe-area-inset-top) + 8px);left:12px;right:12px;padding:7px 8px 7px 16px;border-radius:var(--r-pill);
+  background-color:var(--glass);background-image:var(--glass-sheen);-webkit-backdrop-filter:var(--blur-float);backdrop-filter:var(--blur-float);
+  border:1px solid var(--glass-b);box-shadow:var(--sh-float);overflow:hidden;
+  transform:translate3d(0,calc(-100% - env(safe-area-inset-top) - 24px),0);will-change:transform;backface-visibility:hidden;
+  transition:transform var(--t-mid) var(--dec),opacity var(--t-mid) var(--ease)}
+.bar.on{transform:translate3d(0,0,0)}
+.bar .chip:not(.go){background:transparent;border:0;box-shadow:none;transition:background var(--t-fast) var(--ease),transform var(--sp-fast)}
+.bar .chip:not(.go):active{background:var(--glass-sub);transform:scale(.92)}
+@media (hover:hover){.bar .chip:not(.go):hover{background:var(--glass-sub);filter:none}}
+@media (min-width:900px){
+  .bar{top:14px;left:max(var(--pad),calc(50% - var(--wmax) / 2));right:max(var(--pad),calc(50% - var(--wmax) / 2));padding:8px 10px 8px 20px;transform:translate3d(0,calc(-100% - 28px),0)}
+  .bar .chip:not(.go){background:var(--glass-sub);border:1px solid var(--line)}
+}
+
+/* ── 懸浮液態玻璃分頁膠囊（.adock）：圖示與文字靜止、僅底層玻璃氣泡以流體滑動 ── */
+.adock{position:fixed;left:50%;bottom:calc(16px + env(safe-area-inset-bottom));z-index:calc(var(--z-bar) + 1);transform:translate3d(-50%,0,0);will-change:transform;backface-visibility:hidden;
+  display:inline-flex;align-items:center;gap:2px;padding:5px;border-radius:var(--r-pill);max-width:calc(100vw - 24px);
+  background-color:var(--glass);background-image:var(--glass-sheen);-webkit-backdrop-filter:var(--blur-float);backdrop-filter:var(--blur-float);border:1px solid var(--glass-b);box-shadow:var(--sh-float);
+  transition:transform var(--t-mid) var(--dec),opacity var(--t-mid) var(--ease)}
+.adock[hidden]{display:none}
+.adock>.slide{position:absolute;left:0;top:5px;bottom:5px;border-radius:var(--r-pill);background:var(--pill-bg);box-shadow:var(--pill-sh);pointer-events:none;z-index:0;will-change:transform,width}
+.adock>button{position:relative;z-index:1;height:44px;padding:0 16px;border-radius:var(--r-pill);display:inline-flex;align-items:center;gap:7px;font-size:var(--fs-s);font-weight:650;color:var(--tx2);white-space:nowrap;transition:color var(--t-fast) var(--ease)}
+.adock>button::before{content:"";position:absolute;inset:0;border-radius:inherit;background:var(--pill-bg);box-shadow:var(--pill-sh);opacity:0;z-index:-1}
+.adock>button.on{color:var(--tx)}
+.adock>button.on::before{opacity:1}
+.adock.sliding>button.on::before{opacity:0}
+.adock>button svg{width:17px;height:17px;flex:none}
+.adock>button small{display:inline-grid;place-items:center;min-width:18px;height:18px;padding:0 5px;border-radius:var(--r-pill);background:color-mix(in oklab,var(--g2) 22%,var(--glass-sub));color:var(--tx);font-size:11px;font-weight:700;line-height:1}
+@media (hover:hover){.adock>button:not(.on):hover{color:var(--tx)}}
+@media (max-width:420px){.adock>button{padding:0 13px;gap:5px;height:42px;font-size:var(--fs-xs)}}
+@media (min-width:900px){.adock{bottom:22px;padding:6px}.adock>.slide{top:6px;bottom:6px}.adock>button{height:44px;padding:0 20px}}
+/* 大圖、幻燈片、限時動態、選取列、上傳列或快速捲動時自動收起分頁膠囊（以明確 class 切換，避免手機 :has() 重繪閃爍） */
+html.dock-off .adock,html.selm .adock,html.scrubbing .adock{transform:translate3d(-50%,calc(100% + 44px),0);opacity:0;pointer-events:none}
+html.has-dock .foot{padding-bottom:calc(104px + env(safe-area-inset-bottom))}
+html.has-dock .tpane:not([data-pane="photos"]){padding-bottom:calc(108px + env(safe-area-inset-bottom))}
+html.has-dock .toast{bottom:calc(82px + env(safe-area-inset-bottom))}
+
+/* 分頁容器：各分頁獨立舞台、乾淨不擁擠 */
+.tpane[hidden]{display:none}
+.tpane[data-pane="map"] .msec{margin-top:clamp(16px,3vw,32px)}
+.tpane[data-pane="map"] .map{height:clamp(340px,54svh,580px);border:1px solid var(--line)}
+.tpane[data-pane="map"] .cities{margin-top:18px;margin-bottom:0}
+.tpane[data-pane="gear"] .stats{margin:clamp(18px,3vw,34px) auto 0;max-width:var(--wmax);padding:0 var(--pad);display:grid;grid-auto-flow:row;grid-template-columns:repeat(2,minmax(0,1fr));grid-auto-columns:auto;gap:10px;background:none;border:0;box-shadow:none;border-radius:0;-webkit-backdrop-filter:none;backdrop-filter:none}
+.tpane[data-pane="gear"] .stats .st{position:relative;display:flex;flex-direction:column;justify-content:space-between;gap:12px;min-height:92px;padding:14px 16px 15px;border-radius:var(--r-lg);
+  background-color:var(--glass-card);background-image:var(--glass-sheen);-webkit-backdrop-filter:var(--blur-card);backdrop-filter:var(--blur-card);border:1px solid var(--line);box-shadow:var(--sh-card);text-align:left;border-left:1px solid var(--line)}
+.tpane[data-pane="gear"] .stats .st.wide{grid-column:1 / -1}
+.tpane[data-pane="gear"] .stats .sth2{display:flex;align-items:center;justify-content:space-between;gap:8px;min-height:18px}
+.tpane[data-pane="gear"] .stats .sth2 small{font-size:var(--fs-xs);font-weight:600;letter-spacing:.04em;color:var(--tx2);white-space:nowrap}
+.tpane[data-pane="gear"] .stats .sth2 .sgd{margin:0;font-size:var(--fs-xs);font-weight:600;color:var(--tx3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.tpane[data-pane="gear"] .stats .sth2 .sgf{margin:0;display:inline-flex;align-items:center;gap:4px}
+.tpane[data-pane="gear"] .stats .sth2 .sgf img{width:20px;height:14px;border-radius:3px;margin:0;box-shadow:0 0 0 1px rgba(0,0,0,.12)}
+.tpane[data-pane="gear"] .stats .stv{display:flex;align-items:baseline;gap:5px;min-width:0}
+.tpane[data-pane="gear"] .stats .stv b{font-family:var(--font);font-size:clamp(26px,6.4vw,32px);font-weight:700;line-height:1;letter-spacing:-.02em;background:none;-webkit-background-clip:border-box;background-clip:border-box;color:var(--tx);padding:0}
+.tpane[data-pane="gear"] .stats .stv em{font-style:normal;font-size:var(--fs-s);font-weight:600;color:var(--tx3);white-space:nowrap}
+.tpane[data-pane="gear"] .stats .stv .sgb{margin:0 0 0 auto;height:24px;gap:3px;align-items:flex-end;align-self:flex-end;justify-content:flex-end}
+.tpane[data-pane="gear"] .stats .stv .sgb button,.tpane[data-pane="gear"] .stats .stv .sgb>i{width:5px;border-radius:var(--r-pill);background:var(--p)}
+.tpane[data-pane="gear"] .stats .stv .sgb>i{background:var(--line)}
+@media (min-width:700px){
+  .tpane[data-pane="gear"] .stats{grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}
+  .tpane[data-pane="gear"] .stats[data-n="2"]{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .tpane[data-pane="gear"] .stats[data-n="4"]{grid-template-columns:repeat(4,minmax(0,1fr))}
+  .tpane[data-pane="gear"] .stats .st.wide{grid-column:auto}
+  .tpane[data-pane="gear"] .stats .st{min-height:102px;padding:16px 18px 17px}
+}
+.tpane[data-pane="gear"] .gear{margin-top:clamp(24px,4vw,44px)}
+.tpane[data-pane="talk"] .gbk{margin-top:clamp(18px,3vw,34px)}
+@media (min-width:1200px){.smap{top:88px;height:calc(100svh - 116px);border:1px solid var(--line)}}
+
+/* 全站卡片與彈出面板統一升級 Apple Liquid Glass 材質 */
+.cty,.gbox,.gst,.gbc,.ibox{background-color:var(--glass-card);background-image:var(--glass-sheen);-webkit-backdrop-filter:var(--blur-card);backdrop-filter:var(--blur-card);border:1px solid var(--line);box-shadow:var(--sh-card)}
+.sh,.kmenu{background-color:var(--glass-modal);background-image:var(--glass-sheen);-webkit-backdrop-filter:var(--blur-modal);backdrop-filter:var(--blur-modal);border:1px solid var(--glass-b);box-shadow:var(--sh-float)}
+.shbg{-webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px)}
+.mback,.smc,.selb,.upb,.rplay{background-color:var(--glass);background-image:var(--glass-sheen);-webkit-backdrop-filter:var(--blur-float);backdrop-filter:var(--blur-float);border:1px solid var(--glass-b);box-shadow:var(--sh-float)}
+.who .chip,.cityf button.chip{background-color:var(--glass);background-image:var(--glass-sheen);-webkit-backdrop-filter:var(--blur-card);backdrop-filter:var(--blur-card);border:1px solid var(--glass-b);box-shadow:var(--hl)}
+.who .chip.on,.cityf .chip.on{border-color:transparent;background-image:linear-gradient(180deg,rgba(255,255,255,.22),transparent 55%)}
+
+/* 連拍疊：收合狀態加上細微堆疊層次感，一眼辨識是一疊照片 */
+.ph.stkc{box-shadow:0 -2px 0 -1px color-mix(in oklab,var(--tx) 28%,transparent),0 -5px 0 -3px color-mix(in oklab,var(--tx) 14%,transparent)}
+@media (hover:hover){.ph.in.stkc:hover{box-shadow:0 -3px 0 -1px color-mix(in oklab,var(--tx) 36%,transparent),0 -6px 0 -3px color-mix(in oklab,var(--tx) 18%,transparent),0 14px 30px -14px color-mix(in oklab,var(--g2) 60%,transparent)}}
+
+/* ── 手機頂部列減壓：左側兩行寬敞標題＋日期，右側僅搜尋＋「⋯」選單 ── */
+.bar .btl{flex:1;min-width:0;display:flex;align-items:baseline;gap:8px;overflow:hidden}
+.bar .btl b{flex:0 1 auto;min-width:0;font-family:var(--serif);font-size:var(--fs-l);font-weight:650;letter-spacing:.03em;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.bar .btl small{flex:none;margin:0;color:var(--tx3);font-size:var(--fs-s);font-weight:550;white-space:nowrap}
+.bar .bmore{display:none;width:36px;padding:0;justify-content:center}
+@media (max-width:699px){
+  .bar{gap:4px}
+  .bar .btl{flex-direction:column;align-items:flex-start;gap:1px;line-height:1.2}
+  .bar .btl b{width:100%;font-size:var(--fs-m)}
+  .bar .btl small{font-size:var(--fs-xs)}
+  .bar .bact{display:none}
+  .bar .bmore{display:inline-flex}
+  .bar [data-find]{width:36px;padding:0;justify-content:center}
+}
+.kmenu hr{border:0;height:1px;background:var(--line);margin:4px 8px}
+.kmenu button:disabled{opacity:.35;pointer-events:none}
+
+/* ── 大圖按鈕、選單與電腦側欄統一 Apple Liquid Glass 質感 ── */
+.lb .rb,.tbar{background-color:rgba(255,255,255,.12);background-image:linear-gradient(155deg,rgba(255,255,255,.2),rgba(255,255,255,.03) 48%,rgba(255,255,255,.08));
+  -webkit-backdrop-filter:blur(24px) saturate(200%);backdrop-filter:blur(24px) saturate(200%);
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.32),inset 0 -1px 0 rgba(255,255,255,.08),0 0 0 1px rgba(255,255,255,.14),0 8px 24px -8px rgba(0,0,0,.45)}
+.lb .rb.on{background:#fff;color:#000;box-shadow:0 6px 20px -4px rgba(0,0,0,.45)}
+.lbm{background-color:rgba(24,26,32,.48);background-image:linear-gradient(155deg,rgba(255,255,255,.16),rgba(255,255,255,.03) 45%,rgba(255,255,255,.07));
+  -webkit-backdrop-filter:blur(28px) saturate(200%);backdrop-filter:blur(28px) saturate(200%);border:1px solid rgba(255,255,255,.2);
+  box-shadow:0 18px 46px -14px rgba(0,0,0,.62),inset 0 1px 0 rgba(255,255,255,.28)}
+@media (min-width:900px){
+  .inf{background-color:var(--glass-modal);background-image:var(--glass-sheen);-webkit-backdrop-filter:var(--blur-modal);backdrop-filter:var(--blur-modal);border-left:1px solid var(--glass-b);box-shadow:-16px 0 48px rgba(0,0,0,.38)}
+  .cmp .cform{background:transparent}
+}
+
+/* ── 上鎖相簿密碼頁：Apple Liquid Glass 登入卡與膠囊輸入框 ── */
+.gate .card{padding:36px 28px 30px;border-radius:var(--r-xl);background-color:var(--glass-modal);background-image:var(--glass-sheen);-webkit-backdrop-filter:var(--blur-modal);backdrop-filter:var(--blur-modal);border:1px solid var(--glass-b);box-shadow:var(--sh-float)}
+.gate .card .ic{width:64px;height:64px;border-radius:var(--r-lg);margin-bottom:20px;background:var(--glass-sub);border:1px solid var(--glass-b);box-shadow:var(--hl);color:var(--tx)}
+.gate .card .field{margin-top:24px;height:50px;padding:0 20px;border-radius:var(--r-pill);border:1px solid var(--line);background:var(--glass-sub);letter-spacing:.18em;transition:border-color var(--t-fast) var(--ease),box-shadow var(--t-fast) var(--ease)}
+.gate .card .field:focus{border-color:var(--g2);box-shadow:0 0 0 3px color-mix(in oklab,var(--g2) 24%,transparent)}
+.gate .card .btn{margin-top:16px;height:50px}
+
+/* ── 捲動頂部安全漸層遮罩（手機與電腦皆適用）：讓照片從懸浮液態膠囊後方自然隱沒 ── */
+body::before{content:"";position:fixed;left:0;right:0;top:0;height:calc(env(safe-area-inset-top) + 64px);z-index:calc(var(--z-bar) - 1);pointer-events:none;opacity:0;
+  background:linear-gradient(180deg,color-mix(in oklab,var(--bg) 82%,transparent) 0%,color-mix(in oklab,var(--bg) 38%,transparent) 54%,transparent 100%);
+  transition:opacity var(--t-mid) var(--ease)}
+html.bar-on body::before{opacity:1}
+
+/* ── 首次轉檔與順暢載入：開場提示、回憶淡入、大圖解碼提示、幻燈片／動態無縫升級、頂部最佳化進度膠囊 ── */
+#spl .spt{position:absolute;left:50%;top:calc(50% + clamp(88px,24vmin,124px) * .62 + 38px);translate:-50% 0;font-size:var(--fs-xs);font-weight:550;letter-spacing:.04em;color:var(--tx3);white-space:nowrap;opacity:0;animation:spbIn var(--t-slow) var(--ease) 1.15s forwards}
+html.splx #spl .spt{animation:none;opacity:0;transition:opacity var(--t-fast) var(--ease)}
+.mems .mring img{opacity:0;transition:opacity var(--t-mid) var(--ease)}
+.mems .mring img.ok{opacity:1}
+.mems .mring.wt{overflow:hidden}
+.mems .mring.wt::after{content:"";position:absolute;inset:3px;border-radius:50%;pointer-events:none;background:linear-gradient(100deg,transparent,color-mix(in oklab,var(--tx) 10%,transparent),transparent);transform:translateX(-100%);animation:wtshim 1.5s var(--ease) infinite}
+.zw .s1b{opacity:0;transition:opacity var(--t-fast) var(--ease)}
+.zw .s1b.ok{opacity:1}
+.zw .lbmsg,.zw .vstat{position:absolute;left:50%;top:calc(50% + 26px);transform:translateX(-50%);z-index:2;padding:6px 14px;border-radius:var(--r-pill);white-space:nowrap;pointer-events:none;
+  background-color:rgba(20,22,28,.56);background-image:linear-gradient(155deg,rgba(255,255,255,.16),rgba(255,255,255,.03) 45%,rgba(255,255,255,.07));
+  -webkit-backdrop-filter:blur(22px) saturate(190%);backdrop-filter:blur(22px) saturate(190%);border:1px solid rgba(255,255,255,.18);
+  box-shadow:0 12px 30px -10px rgba(0,0,0,.55),inset 0 1px 0 rgba(255,255,255,.26);
+  color:rgba(255,255,255,.92);font-size:var(--fs-xs);font-weight:600;letter-spacing:.02em;opacity:0;transition:opacity var(--t-mid) var(--ease)}
+.zw .lbmsg.on,.zw .vstat{opacity:1}
+.zw .vstat{top:calc(50% + 48px)}
+.zw.playing .vstat{opacity:0}
+.sfg .hi2,.syf .hi2{opacity:0;transition:opacity var(--t-mid) var(--ease)}
+.sfg .hi2.ok,.syf .hi2.ok{opacity:1}
+.prepb{position:fixed;left:50%;top:calc(12px + env(safe-area-inset-top));z-index:calc(var(--z-bar) + 2);transform:translate3d(-50%,0,0);
+  display:inline-flex;align-items:center;gap:8px;padding:7px 14px;border-radius:var(--r-pill);max-width:calc(100vw - 28px);
+  background-color:var(--glass);background-image:var(--glass-sheen);-webkit-backdrop-filter:var(--blur-float);backdrop-filter:var(--blur-float);border:1px solid var(--glass-b);box-shadow:var(--sh-float);
+  font-size:var(--fs-xs);font-weight:600;color:var(--tx);pointer-events:none;transition:transform var(--sp),opacity var(--t-mid) var(--ease)}
+.prepb i.spin{width:13px;height:13px;border-width:1.8px;flex:none}
+.prepb .pb{width:46px;height:3px;border-radius:var(--r-pill);background:var(--line);overflow:hidden;flex:none}
+.prepb .pb b{display:block;height:100%;background:var(--grad);transform-origin:0 50%;transition:transform var(--t-mid) var(--dec)}
+.prepb.off{opacity:0;transform:translate3d(-50%,-18px,0)}
+html.dock-off .prepb{opacity:0;transform:translate3d(-50%,-18px,0)}
+html.bar-on .prepb{top:calc(70px + env(safe-area-inset-top))}
+@media (min-width:900px){html.bar-on .prepb{top:calc(74px + env(safe-area-inset-top))}}
+
+/* ── Apple 編輯風格開屏首頁：照片為主角、無彩光干擾、左對齊階層、純白主鈕＋液態玻璃圓鈕 ── */
+.hero{height:min(78svh,680px);min-height:400px}
+@media (min-width:900px){.hero{height:min(86svh,820px)}}
+.hero::before{display:none}
+.hero::after{background:linear-gradient(180deg,rgba(0,0,0,.22) 0%,transparent 22%,transparent 42%,rgba(0,0,0,.46) 76%,rgba(0,0,0,.78) 100%)}
+@media (prefers-color-scheme:light){:root:not([data-mode="dark"]) .hero{border-radius:0 0 var(--r-xl) var(--r-xl);box-shadow:0 18px 44px -24px rgba(15,23,42,.32)}}
+.hero .hcap{text-align:left;padding:0 var(--pad) clamp(26px,4.5svh,52px);display:flex;flex-direction:column;align-items:flex-start}
+.hsub{display:flex;flex-wrap:wrap;align-items:center;gap:6px 0;margin:0 0 10px;font-size:var(--fs-s);font-weight:600;letter-spacing:.02em;color:rgba(255,255,255,.82);text-shadow:0 1px 12px rgba(0,0,0,.45);
+  opacity:0;transform:translate3d(0,12px,0);transition:opacity .48s var(--dec) .06s,transform .48s var(--dec) .06s}
+.hsub>*+*{display:inline-flex;align-items:center}
+.hsub>*+*::before{content:"·";margin:0 8px;opacity:.65}
+.hsub .hpl{display:inline-flex;align-items:center;gap:5px}
+.hsub .hpl svg{width:14px;height:14px;opacity:.85}
+.hsub .hfl{display:inline-flex;align-items:center}
+.hsub .hfl img{width:17px;height:12px;border-radius:2.5px;box-shadow:0 1px 4px rgba(0,0,0,.35)}
+.hero .hcap h1{margin:0;font-family:var(--font);font-weight:750;font-size:clamp(34px,8.2vw,74px);line-height:1.06;letter-spacing:-.028em;color:#fff;text-shadow:0 4px 28px rgba(0,0,0,.42);max-width:16ch;
+  opacity:0;transform:translate3d(0,14px,0);transition:opacity .52s var(--dec) .12s,transform .52s var(--dec) .12s}
+.hero .hmeta{justify-content:flex-start;flex-wrap:nowrap;align-items:center;gap:10px;margin-top:20px;animation:none;
+  opacity:0;transform:translate3d(0,14px,0);transition:opacity .52s var(--dec) .18s,transform .52s var(--dec) .18s}
+.hero.rdy .hsub,.hero.rdy .hcap h1,.hero.rdy .hmeta{opacity:1;transform:translate3d(0,0,0)}
+.hero .chip{height:44px;padding:0 18px;color:#fff;background-color:rgba(255,255,255,.15);background-image:linear-gradient(155deg,rgba(255,255,255,.24),rgba(255,255,255,.04) 48%,rgba(255,255,255,.1));
+  border:1px solid rgba(255,255,255,.28);box-shadow:inset 0 1px 0 rgba(255,255,255,.38),inset 0 -1px 0 rgba(255,255,255,.1),0 10px 28px -10px rgba(0,0,0,.5);
+  -webkit-backdrop-filter:blur(22px) saturate(190%);backdrop-filter:blur(22px) saturate(190%)}
+.hero .chip svg{width:17px;height:17px;color:#fff}
+.hero .chip.go{padding:0 22px;background:#fff;background-image:linear-gradient(180deg,#fff,#f2f3f7);color:#111;border:0;
+  box-shadow:0 12px 30px -10px rgba(0,0,0,.52),inset 0 1px 0 #fff}
+.hero .chip.go svg{color:#111}
+@media (prefers-color-scheme:light){
+  :root:not([data-mode="dark"]) .hero .chip{background-color:rgba(255,255,255,.2);background-image:linear-gradient(155deg,rgba(255,255,255,.3),rgba(255,255,255,.06) 48%,rgba(255,255,255,.14));color:#fff;border:1px solid rgba(255,255,255,.36);box-shadow:inset 0 1px 0 rgba(255,255,255,.45),0 10px 26px -10px rgba(0,0,0,.4)}
+  :root:not([data-mode="dark"]) .hero .chip svg{color:#fff}
+  :root:not([data-mode="dark"]) .hero .chip.go{background:#fff;background-image:linear-gradient(180deg,#fff,#f2f3f7);color:#111;border:0;box-shadow:0 12px 30px -10px rgba(0,0,0,.42)}
+  :root:not([data-mode="dark"]) .hero .chip.go svg{color:#111}
+}
+@media (max-width:699px){
+  .hero .chip.ic{width:44px;padding:0;justify-content:center}
+  .hero .chip.ic span{display:none}
+}
+@media (prefers-reduced-motion:reduce){
+  .hsub,.hero .hcap h1,.hero .hmeta{opacity:1;transform:none;transition:none}
+}
+
+
+
+/* ═════════ 5.58 第二輪液態玻璃統一：照片資訊抽屜、搜尋面板、照片牆角標、提示泡泡、日期氣泡、多選交接 ═════════ */
+/* 厚玻璃：放在純黑燈箱上的面板用不透明的「厚材質」（半透明玻璃疊在黑底上，淺色模式會變成髒灰色）；液態感靠斜向光澤、頂緣高光與裡面的玻璃卡片 */
+:root{--glass-thick:color-mix(in oklab,var(--s1) 72%,var(--bg));--glass-field:rgba(0,0,0,.26);--rim-top:rgba(255,255,255,.26);
+  --field-in:inset 0 1px 3px rgba(0,0,0,.32),inset 0 -1px 0 rgba(255,255,255,.07)}
+@media (prefers-color-scheme:light){:root:not([data-mode="dark"]){--glass-thick:var(--bg);--glass-field:rgba(15,23,42,.055);--rim-top:rgba(255,255,255,.95);
+  --field-in:inset 0 1px 2px rgba(15,23,42,.08),inset 0 -1px 0 rgba(255,255,255,.9)}}
+
+/* 1. 照片資訊抽屜：手機上滑的厚玻璃面板（拉桿、頂緣高光畫在圓角邊框區，邊框改透明讓底色透上來，拉桿才看得到） */
+@media (max-width:899px){
+  .inf{background-color:var(--glass-thick);border-top-color:transparent;
+    background-image:radial-gradient(circle,var(--s3) 2.5px,transparent 3px),radial-gradient(circle,var(--s3) 2.5px,transparent 3px),linear-gradient(var(--s3),var(--s3)),
+      linear-gradient(90deg,transparent 6%,var(--rim-top) 28%,var(--rim-top) 72%,transparent 94%),var(--glass-sheen);
+    background-size:6px 6px,6px 6px,34px 5px,100% 1px,100% 100%;
+    background-position:calc(50% - 17px) 11.5px,calc(50% + 17px) 11.5px,50% 12px,50% 0,0 0;background-repeat:no-repeat;background-origin:border-box}
+  .cmp .cform{background:var(--glass-thick)}
+  .infs.end{background:linear-gradient(transparent 55%,var(--glass-thick) 55%)}
+  /* 資訊拉到滿版時的標題列：真的液態玻璃，內容從底下捲過去會被模糊 */
+  .lbt::after{background-color:color-mix(in oklab,var(--glass-thick) 70%,transparent);background-image:var(--glass-sheen);-webkit-backdrop-filter:var(--blur-modal);backdrop-filter:var(--blur-modal);border-bottom-color:var(--glass-b)}
+}
+@media (min-width:900px){
+  .inf{background-color:var(--glass-thick);background-image:linear-gradient(180deg,var(--rim-top),transparent 1px),var(--glass-sheen);-webkit-backdrop-filter:none;backdrop-filter:none}
+}
+.inf .idt{letter-spacing:-.015em}
+/* 拍攝參數：一格一顆小玻璃磚，不再用細線切格子 */
+.iex{gap:6px;padding:10px;border-top:0}
+.iex div{border-radius:var(--r-md);background:var(--glass-sub);box-shadow:inset 0 1px 0 rgba(255,255,255,.06)}
+.iex div+div{box-shadow:inset 0 1px 0 rgba(255,255,255,.06)}
+/* 下載／分享：次要鈕改玻璃膠囊，主要鈕保留實色並加頂部光澤 */
+.idl{margin-top:18px}
+.idl a,.idl button{background:var(--glass-sub);border:1px solid var(--line);box-shadow:inset 0 1px 0 rgba(255,255,255,.08)}
+.idl .pr{border:0;background-image:linear-gradient(180deg,rgba(255,255,255,.22),transparent 60%);box-shadow:inset 0 1px 0 rgba(255,255,255,.32),0 8px 22px -10px color-mix(in oklab,var(--p) 70%,transparent)}
+
+/* 2. 搜尋面板：凹進去的玻璃搜尋框、分組小標加細線、建議晶片改玻璃、顏色只用圓點 */
+.sqf{background:var(--glass-field);box-shadow:var(--field-in);transition:box-shadow var(--t-fast) var(--ease),background var(--t-fast) var(--ease)}
+.sqf:focus-within{box-shadow:var(--field-in),0 0 0 1.5px var(--p),0 0 0 5px color-mix(in oklab,var(--p) 20%,transparent)}
+.sqc{background:var(--glass-sub)}
+.sqg>small{display:flex;align-items:center;gap:10px}
+.sqg>small::after{content:"";flex:1;height:1px;background:var(--line)}
+.sqg .chip{background:var(--glass-sub);border:1px solid var(--line);box-shadow:inset 0 1px 0 rgba(255,255,255,.07);transition:transform var(--t-fast) var(--ease),background var(--t-fast) var(--ease)}
+.sqg .chip:active{transform:scale(.95)}
+@media (hover:hover){.sqg .chip:hover{background:color-mix(in oklab,var(--tx) 10%,transparent)}}
+.sqg.col>div{gap:10px}
+.sqg .chip.dot{width:34px;height:34px;padding:0;justify-content:center;border-radius:50%}
+.sqg .chip.dot .cdot{width:22px;height:22px;box-shadow:inset 0 0 0 1px rgba(0,0,0,.14),inset 0 1px 0 rgba(255,255,255,.35)}
+.sqhue{background:var(--glass-sub);border:1px solid var(--line);box-shadow:inset 0 1px 0 rgba(255,255,255,.07)}
+.sqt button{border-radius:var(--r-md)}
+.sqn .sq0{color:var(--tx3)}
+
+/* 3. 照片牆角標：學「照片」App——不用黑色膠囊，白字配柔和陰影，底部加一層很淡的暗角讓字在亮照片上也看得清楚 */
+.bdg>span{height:18px;padding:0;background:none;box-shadow:none;font:600 12px/1 var(--font);letter-spacing:.01em;filter:drop-shadow(0 1px 2px rgba(0,0,0,.55))}
+.bdg.lo::before{content:"";position:absolute;left:0;right:0;bottom:0;height:40%;max-height:60px;background:linear-gradient(transparent,rgba(0,0,0,.34));border-radius:inherit}
+.bdg .vt{right:8px;bottom:6px}
+.bdg .vt svg{width:10px;height:10px;fill:currentColor}
+.bdg .lkt{left:8px;bottom:6px}
+.bdg .lvt{left:7px;top:7px;width:auto}
+.bdg .lvt svg{width:17px;height:17px}
+.wall[data-z="2"] .bdg .vt{right:5px;bottom:4px;height:16px;padding:0;font-size:11px}
+/* 連拍是按鈕，保留膠囊但改小顆玻璃 */
+.bdg .stk{background:rgba(0,0,0,.3);-webkit-backdrop-filter:blur(10px) saturate(160%);backdrop-filter:blur(10px) saturate(160%);border:1px solid rgba(255,255,255,.22);filter:none;box-shadow:inset 0 1px 0 rgba(255,255,255,.25)}
+.bdg .stk.op{background:var(--p);border-color:transparent}
+
+/* 5. 小浮動元件統一：提示泡泡改液態玻璃膠囊（帶圖示），日期氣泡改厚玻璃（拖動時底下一直換，不加模糊），多選列等工具欄先退場再浮上來 */
+.toast{display:inline-flex;align-items:center;gap:8px;max-width:calc(100vw - 32px);width:max-content;padding:11px 18px 11px 14px;text-align:left;line-height:1.35;
+  background-color:var(--glass);background-image:var(--glass-sheen);-webkit-backdrop-filter:var(--blur-float);backdrop-filter:var(--blur-float);border:1px solid var(--glass-b);box-shadow:var(--sh-float);color:var(--tx);
+  transform:translate(-50%,14px) scale(.96);transition:opacity var(--t-mid) var(--ease),transform var(--t-mid) var(--dec)}
+.toast.on{transform:translate(-50%,0) scale(1)}
+.toast svg{width:18px;height:18px;flex:none;color:var(--tx2)}
+.toast.ok svg{color:var(--g2,var(--p));stroke-width:2.6}
+.sbl{background-color:color-mix(in oklab,var(--s1) 94%,transparent);background-image:var(--glass-sheen);border:1px solid var(--glass-b);box-shadow:var(--sh-float)}
+.selb.on{transition:transform .46s var(--dec) .09s}
+.selb .chip:not(.go){background:var(--glass-sub);border:1px solid var(--line);box-shadow:inset 0 1px 0 rgba(255,255,255,.08)}
+
+@media (prefers-reduced-transparency:reduce){
+  :root{--glass-field:var(--s2)}
+  .lbt::after{background-color:var(--glass-thick);-webkit-backdrop-filter:none;backdrop-filter:none}
+  .bdg .stk{background:rgba(0,0,0,.6);-webkit-backdrop-filter:none;backdrop-filter:none}
+}
+@media (prefers-reduced-motion:reduce){
+  .toast,.toast.on{transform:translate(-50%,0)}
+  .selb.on{transition:none}
+}

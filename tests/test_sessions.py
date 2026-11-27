@@ -104,15 +104,17 @@ class RecheckTest(Server):
 
 class PageGuardTest(Server):
     def test_csp(self):
-        """Cape 只載入同源的外部模組，頁面內嵌的程式不會執行。"""
+        """網頁的每一段程式都有登記指紋，別的程式（例如名稱裡夾帶的）瀏覽器不會跑"""
         code, headers, body = self.request("/")
         self.assertEqual(code, 200)
         csp = headers["Content-Security-Policy"]
-        self.assertIn("script-src 'self';", csp)
+        self.assertIn("script-src 'self' 'sha256-", csp)
         self.assertNotIn("unsafe-inline' 'self'", csp)
         self.assertNotRegex(csp.split("script-src")[1].split(";")[0], "unsafe")
-        self.assertIn(b'<script type="module" src="./app.js"></script>', body)
-        self.assertEqual(body.count(b"<script"), 1)
+        scripts = re.findall(rb"<script>(.*?)</script>", body, re.S)
+        self.assertGreaterEqual(len(scripts), 3)
+        for s in scripts:
+            self.assertIn("'sha256-" + base64.b64encode(hashlib.sha256(s).digest()).decode() + "'", csp)
         self.assertNotRegex(body.decode("utf-8"), r"""\son(error|click|load)=["']""")   # 寫在標籤上的程式會被擋
 
     def test_tg_hint(self):

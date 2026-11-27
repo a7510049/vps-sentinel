@@ -50,12 +50,12 @@ class TlsSelf(Server):
         code, body, fp = tls_get(self.port, "/api/status")
         self.assertEqual(code, 200)
         self.assertEqual(json.loads(body)["tlsfp"], fp)                     # 回報的指紋就是這張憑證
-        self.assertEqual(tls_get(self.port, "/cape/")[0], 200)
+        self.assertEqual(tls_get(self.port, "/")[0], 200)
         with self.assertRaises(ssl.SSLError):                                # TLS 1.2 不收
             tls_get(self.port, "/", ssl.TLSVersion.TLSv1_2)
         # 本機用 http 照舊（安裝畫面的檢查、Caddy）
         c = http.client.HTTPConnection("127.0.0.1", self.port, timeout=10)
-        c.request("GET", "/cape/")
+        c.request("GET", "/")
         self.assertEqual(c.getresponse().status, 200)
         ip = outside_ip()
         if ip:                                                               # 從外面用 http 開網頁：轉到 https

@@ -1,29 +1,22 @@
-"""Syntax and contract checks for the deployed Cape modules."""
-from pathlib import Path
-import shutil
-import subprocess
+"""網頁程式檢查：最外層的函式不能取一樣的名字（後面的會蓋掉前面的，畫面會卡在「讀取中…」）。"""
+import collections
+import os
+import re
 import unittest
 
-ROOT = Path(__file__).resolve().parents[1]
-CAPE = ROOT / "cape"
+ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 
 class WebJs(unittest.TestCase):
-    def run_node(self, *args):
-        node = shutil.which("node")
-        self.assertIsNotNone(node, "Cape checks require Node.js")
-        result = subprocess.run([node, *args], cwd=CAPE, capture_output=True,
-                                encoding="utf-8", timeout=45)
-        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
-
-    def test_module_syntax(self):
-        for source in (*sorted(CAPE.glob("*.js")), *sorted(CAPE.glob("*.mjs")),
-                       ROOT / "web" / "pin.js", ROOT / "web" / "album-sw.js"):
-            with self.subTest(source=source.name):
-                self.run_node("--check", str(source))
-
-    def test_cape_contract(self):
-        self.run_node("--test", "tests/integration.test.mjs")
+    def test_no_duplicate_top_level_names(self):
+        src = ""
+        for name in ("app.js", "pin.js", "fly.js"):       # fly.js 用到才載入，但跟 app.js 共用同一組名字
+            with open(os.path.join(ROOT, "web", name), encoding="utf-8") as f:
+                src += f.read() + "\n"
+        names = re.findall(r"^(?:async\s+)?function\s+(\w+)\s*\(", src, re.M)
+        names += re.findall(r"^(?:const|let|var)\s+(\w+)\s*=", src, re.M)
+        dup = [n for n, c in collections.Counter(names).items() if c > 1]
+        self.assertEqual(dup, [], f"重複的名字：{dup}")
 
 
 if __name__ == "__main__":

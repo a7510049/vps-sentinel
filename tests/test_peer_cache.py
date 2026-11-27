@@ -60,19 +60,19 @@ class PeerCacheTest(Server):
         self.assertLessEqual(len(HITS) - n, 3)    # 同一台不會同時被問好幾次
 
     def test_page_not_modified(self):
-        code, h, body = self.request("/cape/")
+        code, h, body = self.request("/")
         self.assertEqual(code, 200)
         tag = h.get("ETag")
         self.assertTrue(tag and body)
         self.assertEqual(h.get("Cache-Control"), "no-cache")
-        req = urllib.request.Request(f"http://127.0.0.1:{self.port}/cape/", headers={"If-None-Match": tag[2:-1] + '-gzip"'})
+        req = urllib.request.Request(f"http://127.0.0.1:{self.port}/", headers={"If-None-Match": tag[2:-1] + '-gzip"'})
         try:
             urllib.request.urlopen(req, timeout=10)
             self.fail("網頁沒改應該回 304")
         except urllib.error.HTTPError as e:
             self.assertEqual(e.code, 304)
             self.assertEqual(e.read(), b"")
-        req = urllib.request.Request(f"http://127.0.0.1:{self.port}/cape/", headers={"If-None-Match": 'W/"old"'})
+        req = urllib.request.Request(f"http://127.0.0.1:{self.port}/", headers={"If-None-Match": 'W/"old"'})
         with urllib.request.urlopen(req, timeout=10) as r:
             self.assertEqual(r.status, 200)
 

@@ -466,6 +466,12 @@ def ab_probe_ips(host):
     return host, ips
 
 
+def ab_probe_ok(host):
+    """別台叫我幫忙測的網域：要是正常網域、而且指到公開的位址（不能拿來掃內部網路）"""
+    h, _ = ab_probe_ips(host)
+    return h
+
+
 def ab_dot_probe(dom, ips=None):
     """用 853（DNS-over-TLS）問 dom 一次；回傳空字串是通的，不然是哪裡壞"""
     if ips is None:
