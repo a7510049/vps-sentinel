@@ -1763,7 +1763,8 @@ def self_update():
 echo "=== 開始更新哨兵 $(date '+%F %T') ==="
 res=fail
 cd {q} && git -c safe.directory='*' fetch origin && git -c safe.directory='*' reset --hard '@{{u}}' && echo "__STEP__ inst" && bash install.sh && res=ok
-echo "__RESULT__ $res $(date +%s)"""
+echo "__RESULT__ $res $(date +%s)"
+"""
     try:
         if os.path.getsize(SELF_LOG) > 1_000_000:
             open(SELF_LOG, "w").close()
