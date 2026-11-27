@@ -583,7 +583,7 @@ if [ "$BIND" = "127.0.0.1" ] && [ -n "$SAVED_DOMAIN" ]; then
   fi
 else
   IP="$(curl -s4 --max-time 4 https://ifconfig.me || hostname -I | awk '{print $1}')"
-  DDIR="$(grep -E '^DATA_DIR=' "$CONF" | cut -d= -f2)"
+  DDIR="$(grep -E '^DATA_DIR=' "$CONF" | cut -d= -f2 || true)"
   if [ -f "${DDIR:-/var/lib/vps-sentinel-lite}/tls/cert.pem" ]; then BASE="https://$IP:$PORT/"; else BASE="http://$IP:$PORT/"; fi
   [ -n "$NEWCONF" ] && CLOUD_NOTE="記得到雲端主機網站的防火牆（安全清單）新增 TCP $PORT"
 fi
