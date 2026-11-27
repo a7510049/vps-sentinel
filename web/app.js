@@ -747,7 +747,10 @@ function navGo(id){
     else if (id.startsWith("i:")) { const k = id.slice(2); if (MAIN !== k) { MAIN = k; sstore("vs-main", k); } INFO = !INFO || MAIN !== k ? true : false; store("vs-info", INFO ? "1" : "0"); }
     else { const m = id === "all" ? "all" : id.slice(2); if (MAIN === m) return; MAIN = m; sstore("vs-main", m); }
     render(LIST); NAVDIR = 0;
-    if (id === "set" && PLAT === "desktop") { const x = $("#app .slbox [data-navback]"); if (x) x.focus({preventScroll:true}); }   // 設定那一層：鍵盤從 × 開始
+    if (id === "set" && PLAT === "desktop") {   // 設定那一層：記一筆瀏覽紀錄（上一頁先收起來），鍵盤從 × 開始
+      try { history.pushState({...(history.state || {}), slay:1}, ""); } catch(e) {}
+      const x = $("#app .slbox [data-navback]"); if (x) x.focus({preventScroll:true});
+    }
     return;
   }
   if (STK[STK.length - 1] === id) return;
@@ -776,13 +779,15 @@ function navBack(){
 /* 自己退一層、不動瀏覽紀錄；紀錄上寫的層數等 popstate 時一起對齊 */
 /* iOS、Android：換分頁（像 Telegram 的 Tab Bar，不留瀏覽紀錄、不往旁邊滑，只把內容換掉） */
 function tabGo(id){
+  closeMenu(); hideTip();
   if (DESK.matches) return navGo(id);
   if (STK.length === 1 && STK[0] === id) { const sc = $("#app .stage>.scr:not(.gone,.under) :is(.lscroll,.mscroll,.rscroll)"); if (sc && sc.scrollTop) sc.scrollTo({top:0, behavior:canAnim() ? "smooth" : "auto"}); return; }   // 再點一次同一個分頁：捲回最上面
-  const hs = history.state || {};
-  if (PLAT === "android" && id === "list" && hs.tab) return history.back();   // Android：回第一個分頁＝退掉換分頁時多的那一筆（下面 popstate 換回來）
+  let hs = history.state || {};
+  if (hs.dlg && !histLive(DLGEL.get(hs.dlg))) { DLGEL.delete(hs.dlg); const {dlg, ...r} = hs; hs = r; try { history.replaceState(r, ""); } catch(e) {} }   // 選單開著時點分頁：選單那筆直接拿來用，不跟選單收起來的「上一頁」搶
+  if (id === "list" && hs.tab) return history.back();   // 回第一個分頁＝退掉換分頁時多的那一筆（下面 popstate 換回來）
   STK = [id]; NAVBASE = 1; stkSave(); SRCH = false;
-  try {   // Android（MainTabsActivity.onBackPressed）：不在第一個分頁時按返回先回第一個分頁，所以離開「主機」時多記一筆；iOS 換分頁不留紀錄
-    if (PLAT === "android" && id !== "list" && !hs.tab) history.pushState({scr:1, tab:1}, "");
+  try {   // 不在第一個分頁時按返回先回「主機」（Android MainTabsActivity.onBackPressed；iPhone Safari 從左邊滑是上一頁，不能一滑就離開網站），所以離開「主機」時多記一筆
+    if (id !== "list" && !hs.tab) history.pushState({scr:1, tab:1}, "");
     else history.replaceState({...hs, scr:1}, "");
   } catch(e) {}
   NAVDIR = 2; render(LIST); NAVDIR = 0;
@@ -792,7 +797,8 @@ function tabGo(id){
 function navLocal(){ navPop(); try { if (history.state && history.state.scr > STK.length) history.replaceState({...history.state, scr: STK.length}, ""); } catch(e) {} }
 function navPop(){ if (STK.length < 2) return; STK.pop(); NAVBASE = Math.min(NAVBASE, STK.length); stkSave(); NAVDIR = -1; render(LIST); NAVDIR = 0; }
 addEventListener("popstate", () => {
-  if (DESK.matches || DLGSKIP) return;
+  if (DLGSKIP) return;
+  if (DESK.matches) { if (LEFT === "set" && PLAT === "desktop" && !(history.state && history.state.slay)) setLayerOut(true); return; }   // 電腦：上一頁先收起設定那一層
   if (TABS() && STK.length === 1 && STK[0] !== "list" && !(history.state && (history.state.tab || history.state.dlg))) { STK = ["list"]; stkSave(); NAVDIR = 2; render(LIST); NAVDIR = 0; return; }   // Android 在別的分頁按返回：回主機分頁   // 選單、對話框收起來時自己退掉的那一筆：不是要退一層（關掉動畫時，選單一關馬上點設定會被退回去）
   const d = Math.max(1, (history.state && history.state.scr) || 1);
   if (STK.length > d) { while (STK.length > d + 1) STK.pop(); navPop(); }
@@ -843,7 +849,8 @@ function deskShell(list, time){
   return `<div class="dash d app2" data-key="d"><aside class="lcol${tb ? " tabs" : ""}" data-key="lcol">${left}${tb}</aside><main class="mcol" data-key="mcol">${main}</main>${info}${sl}</div>`;
 }
 /* 電腦：收起設定那一層（淡出，Telegram Desktop 的圖層） */
-function setLayerOut(){
+function setLayerOut(pop){
+  if (!pop && history.state && history.state.slay) { DLGSKIP++; history.back(); }   // 自己關（×、點旁邊、Esc）：把打開時記的那一筆退掉
   const l = $("#app .slayer"), fin = () => { if (LEFT !== "set") return; LEFT = "list"; render(LIST); };
   if (!l || !canAnim()) return fin();
   if (l._out) return;
@@ -2417,7 +2424,8 @@ document.addEventListener("keydown", e => {
 });
 /* 改了設定：馬上套用 */
 function changed(k){
-  const run = () => { applyPrefs(); if (LIST.length) render(LIST); };
+  const run = () => { applyPrefs(); if (LIST.length) render(LIST);
+    if (k === "plat" && !DESK.matches && STK.length > ((history.state && history.state.scr) || 1)) try { history.pushState({...(history.state || {}), scr:STK.length}, ""); } catch(e) {} };   // 換成電腦介面時多了一層（清單＞設定）：補一筆，上一頁回清單
   if (k === "size") sizeShift(run);              // 文字大小：整頁平順地放大／縮小過去
   else if (k === "theme") {                      // 深淺模式：只有真的換了深淺才整頁淡入淡出（避免同色切「自動」也閃一下）
     const next = (PREF.theme === "dark" || (PREF.theme === "auto" && DARKQ.matches)) ? "dark" : "light";

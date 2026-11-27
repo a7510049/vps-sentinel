@@ -2050,6 +2050,7 @@ html.flyon .dash>.view,html.flyon .dash.m>.stage{content-visibility:hidden;conta
 [data-plat="ios"] .tav .cav{width:37px;height:37px;font-size:var(--fs-m)}
 [data-plat="ios"] .tav .cav img.flag{width:37px;height:37px}
 [data-plat="ios"] .tav .cdot{width:11px;height:11px}
+[data-plat="ios"] .tbar .cav.brand.sm{width:37px;height:37px;margin:0}
 [data-plat="ios"] .lhd .srch{display:none}
 /* 搜尋框（SearchBarNode）：36 高、17 字、灰底；打字時右邊「取消」 */
 [data-plat="ios"] .srch{height:36px;padding:0 8px;gap:6px;border-radius:var(--r-md);background:var(--s2);color:var(--ios-sub);box-shadow:none}

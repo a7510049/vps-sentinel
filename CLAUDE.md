@@ -149,8 +149,8 @@ tests/             基本功能測試（只用 Python 內建模組；test_projec
 ## 網頁的設計規則（不能破壞）
 
 - **三種平台介面**（使用者要求，V4.0）：`<html data-plat="ios|android|desktop">`，照 Telegram 各自的原生版本（Telegram-iOS、Telegram for Android、Telegram Desktop），不是同一套手機介面換顏色。設定 → 外觀 →「介面」選自動／iOS／Android／電腦（`PREF.plat`、`platOf`、`PLAT`；`index.html` 開頭同一套判斷，畫面出來前就套好）。平台管長相和操作，螢幕寬度（`DESK`）管幾欄，兩個分開。
-  - iOS、Android：下面分頁列 主機・紀錄・設定（`tabBar`、`tabGo`、`TABS()`、`ROOTS`；`STK[0]` 可以是三個分頁之一；只在最底層出現，換分頁不留瀏覽紀錄）；iOS 標題置中、左邊「‹ 上一層名字」（`.nbk`）、頭像在右、搜尋框在清單最上面（「取消」`data-qsx`）、沒有水波紋；Android 標題靠左、搜尋是標題列的放大鏡（`SRCH`、`data-srch`）、右下新增圓鈕、換頁從右邊 48 淡入。
-  - 電腦：☰ 主選單從左邊滑出（`.mdrw`）、寬螢幕的設定是蓋在中間的一層（`.slayer`、`setLayerOut`），沒有分頁列和圓鈕。
+  - iOS、Android：下面分頁列 主機・紀錄・設定（`tabBar`、`tabGo`、`TABS()`、`ROOTS`；`STK[0]` 可以是三個分頁之一；只在最底層出現；離開「主機」分頁時多記一筆瀏覽紀錄，返回先回「主機」不離開網站，再換別的分頁不再多記）；iOS 標題置中、左邊「‹ 上一層名字」（`.nbk`）、頭像在右、搜尋框在清單最上面（「取消」`data-qsx`）、沒有水波紋；Android 標題靠左、搜尋是標題列的放大鏡（`SRCH`、`data-srch`）、右下新增圓鈕、換頁從右邊 48 淡入。
+  - 電腦：☰ 主選單從左邊滑出（`.mdrw`）、寬螢幕的設定是蓋在中間的一層（`.slayer`、`setLayerOut`；打開時記一筆瀏覽紀錄 `slay`，上一頁先收起來），沒有分頁列和圓鈕。
   - 平台的樣式都在 style.css 最後「平台介面」那段，用 `[data-plat="…"]` 開頭；只有真的不一樣才分平台寫。確認視窗是 `.dialog.dlga`（**不能用 `.alert`，主機頁的告警已經用了**）。數值和出處在 DESIGN.md 第 0、15 節。
   - Telegram 的原始碼都是 GPL：只讀數值和流程自己寫，不能複製程式或圖示。
 - **完整的美術設計規範在 `DESIGN.md`**（顏色、文字、圓角、間距、陰影、圖示、控制項、動畫、深淺模式），改網頁前先看。

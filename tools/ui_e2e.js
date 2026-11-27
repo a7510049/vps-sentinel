@@ -87,13 +87,22 @@ async function phoneFlow(p, plat, engine, errs){
     await tap(p, '[data-tab="all"]', true); await settle(p);
     await tap(p, '[data-tab="set"]', true); await settle(p);
     s = await st(p); ok("換到設定分頁", s.stk === "set", s.stk);
-    if (plat === "ios") ok("iOS 換分頁不留瀏覽紀錄", s.hist === h0, `${h0}→${s.hist}`);
-    else {   // Android（MainTabsActivity.onBackPressed）：不在第一個分頁時返回先回「主機」，而且不離開網站
-      ok("Android 換分頁最多多一筆紀錄", s.hist <= h0 + 1, `${h0}→${s.hist}`);
+    {   // 不在第一個分頁時返回先回「主機」（Android MainTabsActivity.onBackPressed；iPhone 從左邊滑是上一頁），而且不離開網站
+      ok("換分頁最多多一筆紀錄", s.hist <= h0 + 1, `${h0}→${s.hist}`);
       await p.goBack(); await settle(p); s = await st(p);
-      ok("Android 在別的分頁按返回：回主機分頁", s.stk === "list" && s.url.startsWith(URL0), JSON.stringify(s));
+      ok("在別的分頁按返回：回主機分頁", s.stk === "list" && s.url.startsWith(URL0), JSON.stringify(s));
       await tap(p, '[data-tab="set"]', true); await settle(p);
     }
+    // 選單開著時點分頁列：選單關掉、換到那個分頁，上一頁一次就回主機
+    await tap(p, '[data-tab="list"]', true); await settle(p);
+    if (plat === "android") { await tap(p, "[data-mainmenu]", true); await p.waitForTimeout(300); }
+    else { await tap(p, '[data-tab="all"]', true); await settle(p); await tap(p, "[data-logmenu]", true); await p.waitForTimeout(300); }
+    ok("選單打開", await p.locator(".lmenu").count() === 1);
+    await tap(p, '[data-tab="set"]', true); await p.waitForTimeout(600);
+    s = await st(p); ok("點分頁列：選單關掉、換到設定", (await p.locator(".lmenu").count()) === 0 && s.stk === "set", JSON.stringify(s));
+    await p.goBack(); await settle(p); s = await st(p);
+    ok("接著上一頁一次就回主機", s.stk === "list" && (await p.locator(".lmenu").count()) === 0 && s.url.startsWith(URL0), JSON.stringify(s));
+    await tap(p, '[data-tab="set"]', true); await settle(p);
     await p.reload(); await p.waitForSelector(".tabbar"); await settle(p);
     s = await st(p); ok("重新整理後還在設定分頁", s.stk === "set", s.stk);
     // 換平台：在設定裡換成另一個，重新整理還記得
@@ -134,6 +143,9 @@ async function deskFlow(p, plat){
     ok("設定是蓋在中間的一層", await p.locator(".slayer .slbox").count() === 1);
     await p.keyboard.press("Escape"); await p.waitForTimeout(500);
     ok("Esc 關掉設定那層", await p.locator(".slayer").count() === 0);
+    await p.click("[data-mainmenu]"); await p.waitForTimeout(400); await p.click('.mdrw [data-go="set"]'); await settle(p);
+    await p.goBack(); await p.waitForTimeout(600);
+    ok("上一頁先收起設定那層、不離開網站", (await p.locator(".slayer").count()) === 0 && p.url().startsWith(URL0), p.url());
     await p.click("[data-mainmenu]"); await p.waitForTimeout(400);
     await p.mouse.click(1300, 450); await p.waitForTimeout(400);
     ok("點旁邊關掉主選單", await p.locator(".mdrw").count() === 0);
