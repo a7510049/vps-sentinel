@@ -143,7 +143,7 @@ function flyMiniMenu(f, btn){
   m.innerHTML = FLYTAB.map(([k, l]) => `<button data-fmi="${k}"${FLYS.tab === k ? ` class="on"` : ""}>${FLYS.tab === k ? I("check") : `<span class="ckh"></span>`}<span>${l}</span><b>${esc(flyNum(f, k))}</b></button>`).join("");
   document.body.appendChild(m);
   placeMenu(m, btn, r => r.left + r.width / 2 - m.offsetWidth / 2);
-  if (canAnim()) m.animate([{opacity:0, transform:"scale(.85,.4)"}, {opacity:1, transform:"none"}], {duration:T.spf, easing:SPRING_F});
+  menuIn(m);
   window._menu = m; histMark(m);
   setTimeout(() => m.addEventListener("click", e => {
     const b = e.target.closest("[data-fmi]"); closeMenu(); if (!b) return;
@@ -294,7 +294,7 @@ function flyLayMenu(btn){
   m.innerHTML = it("trk", "常走路線", FLYTRKON) + it("veh", "地勤車", FLYVEHON);
   document.body.appendChild(m);
   placeMenu(m, btn, r => r.right - m.offsetWidth);
-  if (canAnim()) m.animate([{opacity:0, transform:"scale(.85,.4)"}, {opacity:1, transform:"none"}], {duration:T.spf, easing:SPRING_F});
+  menuIn(m);
   window._menu = m; histMark(m);
   m.addEventListener("click", e => { const b = e.target.closest("[data-flay]"); if (!b) return; b.dataset.flay === "trk" ? flyTrkSet(!FLYTRKON) : flyVehSet(!FLYVEHON); closeMenu(); });
 }
