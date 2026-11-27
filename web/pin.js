@@ -1,6 +1,6 @@
 /* ═════════ PIN 碼：自己做的數字鍵盤（每次打開數字位置都打亂），PIN 碼不原樣送出 ═════════
    主機給鹽、次數、一次性題目 → 這裡算 PBKDF2(PIN 碼) 再對題目算 HMAC，只送答案；主機只存 PBKDF2 的結果，對得上就過。
-   首頁（塞進 app.js 前面）和被監看那頁（/pin.js）共用 */
+   被監看狀態頁透過 /pin.js 載入此鍵盤。 */
 const PINENC = new TextEncoder();
 const pinHex = b => [...new Uint8Array(b)].map(x => x.toString(16).padStart(2, "0")).join("");
 const pinUnhex = h => new Uint8Array((h.match(/../g) || []).map(x => parseInt(x, 16)));
@@ -57,37 +57,28 @@ async function pinProof(pin, begin){
   const h = await pinKdf(pin, b.salt, b.n);
   return {nonce: b.nonce, proof: pinHex(await pinHmac(PINENC.encode(h), PINENC.encode(b.nonce)))};
 }
-/* 設定新的 PIN 碼：鹽在這裡產生，只送 PBKDF2 的結果 */
-async function pinMake(pin){
-  const salt = pinHex(crypto.getRandomValues(new Uint8Array(16))), n = 200000;
-  return {salt, n, hash: await pinKdf(pin, salt, n)};
-}
-const pinWeak = p => new Set(p).size === 1 || "0123456789".includes(p) || "9876543210".includes(p);
 /* 打亂數字的順序（用瀏覽器的亂數，不用 Math.random） */
 function pinShuffle(){
   const a = [..."0123456789"], r = crypto.getRandomValues(new Uint32Array(10));
   for (let i = 9; i > 0; i--) { const j = r[i] % (i + 1); [a[i], a[j]] = [a[j], a[i]]; }
   return a;
 }
-/* 數字鍵盤：box 裡畫上圓點和 12 顆鍵（9 顆數字、左下 opt.left（例如手機金鑰，沒有就空著）、1 顆數字、刪除），每次打開、輸錯都重新打亂
-   確定鈕是 opt.okBtn（視窗下面那顆），沒給就在鍵盤下面放一顆；opt.ok(pin) 按確定（或打滿 8 碼）時呼叫；回傳 {clear, again, busy}；電腦上也可以直接按鍵盤的數字 */
+/* 打開鍵盤或輸錯時重新打亂。按確定或輸滿 8 碼時呼叫 opt.ok(pin)，也可用實體鍵盤輸入。 */
 function pinPad(box, opt){
   let pin = "", busy = false;
   const ico = {del:'<svg viewBox="0 0 24 24"><path d="M21 5H9l-6 7 6 7h12zM12.5 9.5l5 5m0-5-5 5"/></svg>'};
-  const L = opt.left;
   const draw = () => {
     const d = pinShuffle();
     box.innerHTML = `<div class="ppdots" aria-live="polite"></div><div class="ppkeys">${d.slice(0, 9).map(x => `<button type="button" data-pk="${x}">${x}</button>`).join("")}`
-      + (L ? `<button type="button" class="ppfn ppl" data-pleft aria-label="${L.label}">${L.html}</button>` : `<i></i>`)
-      + `<button type="button" data-pk="${d[9]}">${d[9]}</button><button type="button" class="ppfn" data-pdel aria-label="刪除">${ico.del}</button></div>`
-      + (opt.okBtn ? "" : `<button type="button" class="ppgo" data-pok>確定</button>`);
+      + `<i></i><button type="button" data-pk="${d[9]}">${d[9]}</button><button type="button" class="ppfn" data-pdel aria-label="刪除">${ico.del}</button></div>`
+      + `<button type="button" class="ppgo" data-pok>確定</button>`;
     dots();
   };
   const dots = () => {
     const el = box.querySelector(".ppdots"); if (!el) return;
     el.innerHTML = Array.from({length: Math.max(4, pin.length)}, (_, i) => `<i${i < pin.length ? ' class="on"' : ""}></i>`).join("");
     el.setAttribute("aria-label", `已輸入 ${pin.length} 碼`);
-    const ok = opt.okBtn || box.querySelector("[data-pok]"); if (ok) ok.disabled = pin.length < 4 || busy;
+    box.querySelector("[data-pok]").disabled = pin.length < 4 || busy;
   };
   const go = () => { if (pin.length >= 4 && !busy) opt.ok(pin); };
   const key = ch => {
@@ -100,7 +91,7 @@ function pinPad(box, opt){
   box.addEventListener("click", e => {
     const b = e.target.closest("button"); if (!b || !box.contains(b)) return;
     e.preventDefault();
-    if (b.hasAttribute("data-pdel")) key("del"); else if (b.hasAttribute("data-pok")) go(); else if (b.hasAttribute("data-pleft")) { if (!busy) L.on(); } else if (b.dataset.pk) key(b.dataset.pk);
+    if (b.hasAttribute("data-pdel")) key("del"); else if (b.hasAttribute("data-pok")) go(); else if (b.dataset.pk) key(b.dataset.pk);
   });
   const kd = e => {
     if (!box.isConnected) return document.removeEventListener("keydown", kd);
@@ -110,11 +101,9 @@ function pinPad(box, opt){
     else if (e.key === "Enter") { e.preventDefault(); go(); }
   };
   document.addEventListener("keydown", kd);
-  if (opt.okBtn) opt.okBtn.addEventListener("click", e => { e.preventDefault(); go(); });
   box.classList.add("ppad");
   draw();
   return {
-    clear(){ pin = ""; dots(); },
     again(){ pin = ""; draw(); box.classList.remove("ppbad"); void box.offsetWidth; box.classList.add("ppbad"); },   // 輸錯：清掉、重新打亂、晃一下
     busy(v){ busy = v; box.classList.toggle("ppwait", v); dots(); },
   };

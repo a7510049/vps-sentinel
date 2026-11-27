@@ -4,7 +4,7 @@
 
 哨站把你的 VPS 變成一座完整的個人據點。即時監控每一台主機，異常第一時間透過 Telegram 通知；同一個入口，還有雲端硬碟、相簿分享、加密筆記、廣告攔截與即時航班。
 
-Cape 5.59 使用原有哨站 Python 服務和資料目錄。下方包含原有後端功能及主機操作說明，Cape 介面的支援範圍請見 [PRODUCT.md](PRODUCT.md)。
+Cape 使用原有哨站 Python 服務和資料目錄。下方包含原有後端功能及主機操作說明。Cape 的產品範圍見 [PRODUCT.md](PRODUCT.md)，移植與驗證進度見 [STATUS.md](STATUS.md)。
 
 ---
 
