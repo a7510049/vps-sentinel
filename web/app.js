@@ -782,12 +782,14 @@ function tabGo(id){
   closeMenu(); hideTip();
   if (DESK.matches) return navGo(id);
   if (STK.length === 1 && STK[0] === id) { const sc = $("#app .stage>.scr:not(.gone,.under) :is(.lscroll,.mscroll,.rscroll)"); if (sc && sc.scrollTop) sc.scrollTo({top:0, behavior:canAnim() ? "smooth" : "auto"}); return; }   // 再點一次同一個分頁：捲回最上面
-  let hs = history.state || {};
-  if (hs.dlg && !histLive(DLGEL.get(hs.dlg))) { DLGEL.delete(hs.dlg); const {dlg, ...r} = hs; hs = r; try { history.replaceState(r, ""); } catch(e) {} }   // 選單開著時點分頁：選單那筆直接拿來用，不跟選單收起來的「上一頁」搶
-  if (id === "list" && hs.tab) return history.back();   // 回第一個分頁＝退掉換分頁時多的那一筆（下面 popstate 換回來）
+  if (DLGSKIP) return addEventListener("popstate", () => tabGo(id), {once:true});   // 選單剛收起來、正在退它那一筆：退完再換
+  let hs = history.state || {}, mn = false;
+  if (hs.dlg && !histLive(DLGEL.get(hs.dlg))) { DLGEL.delete(hs.dlg); const {dlg, ...r} = hs; hs = r; mn = true; }   // 選單開著時點分頁：選單那筆要一起處理，不能多留一格
+  if (id === "list" && hs.tab) return history.go(mn ? -2 : -1);   // 回第一個分頁＝退掉換分頁時多的那一筆（下面 popstate 換回來）
   STK = [id]; NAVBASE = 1; stkSave(); SRCH = false;
   try {   // 不在第一個分頁時按返回先回「主機」（Android MainTabsActivity.onBackPressed；iPhone Safari 從左邊滑是上一頁，不能一滑就離開網站），所以離開「主機」時多記一筆
-    if (id !== "list" && !hs.tab) history.pushState({scr:1, tab:1}, "");
+    if (id !== "list" && !hs.tab) mn ? history.replaceState({...hs, scr:1, tab:1}, "") : history.pushState({scr:1, tab:1}, "");
+    else if (mn) { DLGSKIP++; history.back(); }   // 已經有換分頁那一筆：把選單那筆退掉就好
     else history.replaceState({...hs, scr:1}, "");
   } catch(e) {}
   NAVDIR = 2; render(LIST); NAVDIR = 0;
