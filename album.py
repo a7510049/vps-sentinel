@@ -3162,10 +3162,8 @@ def alb_asset(rel):
 
 def alb_page(h=None, code=""):
     """朋友那頁；h 是這次的連線：傳到聊天室的預覽圖要完整網址"""
-    hb, _ = alb_asset("web/album.html")
-    _, cv = alb_asset("web/album.css")
-    _, jv = alb_asset("web/album.js")
-    if not hb or not cv or not jv:
+    hb, _ = alb_asset("cape/album-guest.html")
+    if not hb:
         return "<meta charset=utf-8><p>找不到相簿的網頁檔案，請重新執行 bash install.sh</p>"
     page = hb.decode("utf-8")
     og = ""
@@ -3175,8 +3173,8 @@ def alb_page(h=None, code=""):
     a = alb_find(code) if code else None             # 預覽標題：沒密碼、沒過期才寫相簿名稱（有密碼的不洩漏）
     if a and not a.get("pw") and not (a.get("exp") and a["exp"] < time.time()):
         nm = html.escape(a["name"])
-        page = page.replace("<title>相簿</title>", f"<title>{nm}</title>").replace('<meta property="og:title" content="相簿">', f'<meta property="og:title" content="{nm}">')
-    return page.replace("<!--@og-->\n", og).replace("/*@cssv*/", cv).replace("/*@jsv*/", jv)
+        og += f'<meta property="og:title" content="{nm}">\n'
+    return page.replace("</head>", og + "</head>", 1)
 
 
 # 截圖的檔名：安卓、小米／華為、Windows、Mac、iPhone 存出來的（大小寫不分）
@@ -3451,28 +3449,11 @@ def alb_send_part(h, total, read, ctype, extra=()):
     return True
 
 
-ALB_FONTS = {"/a/seed-rg.woff2": "web/seed-rg.woff2", "/a/seed-bd.woff2": "web/seed-bd.woff2"}   # 相簿用的 LINE Seed TW（SIL OFL，常用字），主機自己給
-ALB_FONTB = {}
 
 
 def alb_http(h, method):
     """/a/十碼 開頭的網址；回傳 True 表示處理好了"""
     path = urllib.parse.urlsplit(h.path).path
-    if path in ALB_FONTS and method == "GET":
-        if path not in ALB_FONTB:
-            try:
-                with open(os.path.join(HERE, ALB_FONTS[path]), "rb") as fh:
-                    ALB_FONTB[path] = fh.read()
-            except OSError:
-                ALB_FONTB[path] = b""
-        b = ALB_FONTB[path]
-        return (h.send(200, b, "font/woff2", cache=30 * 86400) if b else h.send(404, '{"error":"找不到"}')) or True
-    if path == "/a/album.css" and method == "GET":
-        b, _ = alb_asset("web/album.css")
-        return (h.send(200, b, "text/css; charset=utf-8", cache=30 * 86400, etag=True) if b else h.send(404, '{"error":"找不到"}')) or True
-    if path == "/a/album.js" and method == "GET":
-        b, _ = alb_asset("web/album.js")
-        return (h.send(200, b, "text/javascript; charset=utf-8", cache=30 * 86400, etag=True) if b else h.send(404, '{"error":"找不到"}')) or True
     if path == "/a/sw.js" and method == "GET":         # 在看的人的瀏覽器裡解開加密的照片
         b, _ = alb_asset("web/album-sw.js")
         return (h.send(200, b, "text/javascript; charset=utf-8", etag=True) if b else h.send(404, '{"error":"找不到"}')) or True

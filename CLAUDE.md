@@ -1,3 +1,7 @@
+# Cape 5.59
+
+Cape 的前端位於 `cape/`，介面規則見 [DESIGN.md](DESIGN.md)，部署方式見 [README.md](README.md)。以下舊版開發筆記可作為後端參考，其中的舊前端檔案和畫面實作已由 Cape 取代。
+
 # 哨站 Outpost：給 Claude 的專案說明
 
 ## 跟使用者溝通

@@ -1,15 +1,10 @@
-# 🛡️ 哨站 Outpost
+# 岬角 Cape
 
 **屬於你的私人雲，從一台 VPS 開始。**
 
 哨站把你的 VPS 變成一座完整的個人據點。即時監控每一台主機，異常第一時間透過 Telegram 通知；同一個入口，還有雲端硬碟、相簿分享、加密筆記、廣告攔截與即時航班。
 
-輕巧，卻無所不能。完全以 Python 內建功能打造，無需資料庫，無需額外安裝任何軟體。
-
-<p align="center">
-  <img src="docs/desktop.png" alt="桌面主機清冊，使用示範資料" width="72%">
-  <img src="docs/phone.png" alt="手機主機清冊，使用示範資料" width="22%">
-</p>
+Cape 5.59 使用原有哨站 Python 服務和資料目錄。下方包含原有後端功能及主機操作說明，Cape 介面的支援範圍請見 [PRODUCT.md](PRODUCT.md)。
 
 ---
 
@@ -114,6 +109,8 @@ git clone https://github.com/a7510049/vps-sentinel.git ~/vps-sentinel
 cd ~/vps-sentinel && bash install.sh
 ```
 
+部署環境為使用 systemd 的 Linux。安裝程式會從 Node.js 官方來源下載並驗證專用執行檔，保留既有系統的 Node.js。執行環境支援 x86_64、arm64、ppc64le 和 s390x，須具備 Node.js 24 所需的 Linux 系統函式庫。
+
 安裝程式只會問你兩件事：
 
 1. **全新安裝**，或**從備份還原**
@@ -171,10 +168,10 @@ Oracle、AWS、GCP 等雲端主機，請到主機商的控制台開放以下 TCP
 也可以在主機上手動更新：
 
 ```bash
-cd ~/vps-sentinel && git pull && bash install.sh
+cd ~/vps-sentinel && git pull --ff-only origin main && sudo bash install.sh
 ```
 
-所有設定（密碼、名稱、網域等）都會完整保留。
+更新會沿用 `/etc/vps-sentinel-lite.conf`、其指定的資料目錄及既有服務設定。原有主機、認證、使用者設定與加密資料會繼續使用原路徑，Cape 規則另存在該資料目錄下的 `cape/`。安裝程式會檢查主服務和 Cape 規則服務是否就緒，並沿用既有的程式檔回復機制。
 
 ---
 

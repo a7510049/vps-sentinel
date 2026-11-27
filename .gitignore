@@ -1,2 +1,7 @@
 __pycache__/
 *.pyc
+.cape-data/
+.env
+.env.*
+node_modules/
+output/

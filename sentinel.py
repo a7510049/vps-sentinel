@@ -46,7 +46,7 @@ from collections import deque
 from concurrent.futures import ThreadPoolExecutor
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
-VERSION = "5.58"
+VERSION = "5.59"
 
 # ───────────────────────── 哨兵備份檔（.vsbk）─────────────────────────
 # 哨兵專用的備份格式：外面是自己的檔案格式，裡面用的是成熟、標準的加密方法（不自己發明加密）：
@@ -1586,7 +1586,15 @@ def include(name):
         exec(compile(f.read(), path, "exec"), globals())   # noqa: S102
 
 
-SRC_FILES = ["sentinel.py", "pair.py", "download.py", "backup.py", "guard.py", "fly.py", "notes.py", "adblock.py", "photo.py", "album.py", "web/index.html", "web/style.css", "web/app.js", "web/pin.js", "web/fly.js", "web/font.woff2", "web/seed-rg.woff2", "web/seed-bd.woff2", "web/album.html", "web/album.css", "web/album.js", "web/album-sw.js", "data/airports.tsv", "data/coast.tsv", "data/terrain.bin", "data/actypes.tsv", "data/apmap.tsv"]   # 程式本體（含機場起降）＋網頁三個檔＋機場資料、海岸線、地形、機型分類
+from cape_deploy import CAPE_CSP, CAPE_FILES, CapeDeployment  # noqa: E402
+
+CAPE = CapeDeployment(HERE, DATA_DIR, BIND, PORT, TOKEN, log)
+SRC_FILES = [
+    "sentinel.py", "cape_deploy.py", "install.sh", "pair.py", "download.py", "backup.py", "guard.py", "fly.py",
+    "notes.py", "adblock.py", "photo.py", "album.py", "web/pin.js", "web/font.woff2", "web/album-sw.js",
+    "data/airports.tsv", "data/coast.tsv", "data/terrain.bin", "data/actypes.tsv", "data/apmap.tsv",
+    *("cape/" + name for name in (*CAPE_FILES, "server.mjs", "rules-store.mjs", "package.json")),
+]
 
 
 def build_of(blobs):
@@ -1600,9 +1608,6 @@ def build_of(blobs):
 def page_tag(data):
     """網頁內容的指紋：內容一樣，指紋就一樣"""
     return hashlib.sha256(data).hexdigest()[:20]
-
-
-FLY_JS = {"js": None, "v": ""}                  # 機場起降的畫面程式：另外下載（首頁不用等它）
 
 
 FONT = {"b": b""}                                # 英數字型檔（啟動時讀進來）
@@ -1638,27 +1643,6 @@ def flag_img(cc):
         return old
 
 
-def load_page():
-    """網頁放在 web/ 資料夾：啟動時把樣式和程式塞回 index.html；機場起降的 fly.js 另外給，網頁用到才下載"""
-    def rd(p):
-        with open(os.path.join(HERE, p), encoding="utf-8") as f:
-            return f.read()
-    try:
-        html = rd("web/index.html").rstrip("\n")
-        fly = rd("web/fly.js").encode("utf-8")
-        FLY_JS.update(js=fly, v=page_tag(fly)[:12])
-        try:                                       # 英數字型（Plus Jakarta Sans 拉丁字母那一份，SIL OFL）：自己給，不用等 Google
-            with open(os.path.join(HERE, "web/font.woff2"), "rb") as f:
-                FONT["b"] = f.read()
-        except OSError:
-            FONT["b"] = b""
-        js = rd("web/pin.js") + "\n" + rd("web/app.js").replace("/*@flyv*/", FLY_JS["v"])   # PIN 碼鍵盤放在最前面（被監看那頁另外用 /pin.js）
-        return html.replace("/*@style.css*/\n", rd("web/style.css")).replace("/*@app.js*/\n", js)
-    except OSError as e:
-        log(f"找不到網頁檔案（{e}）：請重新執行 bash install.sh")
-        return "<meta charset=utf-8><p style='font:16px sans-serif;padding:24px'>找不到網頁檔案，請在主機上重新執行 <b>bash install.sh</b></p>"
-
-
 def _read_bytes(p):
     try:
         with open(os.path.join(HERE, p), "rb") as f:
@@ -1667,6 +1651,7 @@ def _read_bytes(p):
         return b""
 
 
+FONT["b"] = _read_bytes("web/font.woff2")
 BUILD = build_of(_read_bytes(p) for p in SRC_FILES)
 SELF_UNIT = "vps-sentinel-selfupdate"
 SELF_LOG = "/var/log/vps-sentinel-selfupdate.log"
@@ -5186,23 +5171,83 @@ class Handler(BaseHTTPRequestHandler):
         finally:
             fly_leave()
 
+    def cape_asset(self, name):
+        if name not in CAPE_FILES:
+            return self.send(404, '{"error":"找不到"}')
+        try:
+            data = CAPE.read_file(name)
+        except OSError:
+            return self.send(503, '{"error":"請重新執行安裝。"}')
+        if not data:
+            return self.send(503, '{"error":"請重新執行安裝。"}')
+        mime = CAPE_FILES[name] + "; charset=utf-8"
+        return self.send(200, data, mime, csp=CAPE_CSP if mime.startswith("text/html") else "", etag=True)
+
+    def cape_api(self, url):
+        if self.headers.get("X-Token", "") not in ("", "cookie") or not self.authed() or not self.sess:
+            if self.command == "POST":
+                self.close_connection = True
+            return self.send(401, '{"error":"請先登入。"}')
+        if self.command == "POST":
+            site = (self.headers.get("Sec-Fetch-Site") or "").strip().lower()
+            if self.headers.get("X-Requested-With") != "1" or site in ("cross-site", "same-site"):
+                self.close_connection = True
+                return self.send(403, '{"error":"請從 Cape 工作區送出操作。"}')
+            if not (self.headers.get("Content-Type") or "").lower().startswith("application/json"):
+                self.close_connection = True
+                return self.send(415, '{"error":"請求需使用 JSON。"}')
+            size = (self.headers.get("Content-Length") or "").strip()
+            if not re.fullmatch(r"\d{1,4}", size) or int(size) > 8192:
+                self.close_connection = True
+                return self.send(413, '{"error":"請求大小不合法。"}')
+            body = self.read_body(8192)
+            if body is None:
+                return self.send(413, '{"error":"請求大小不合法。"}')
+        else:
+            body = None
+        try:
+            status, data = CAPE.request(self.command, url.path + ("?" + url.query if url.query else ""),
+                                        self.sess_cookie_tok(), body)
+            return self.send(status, data)
+        except (OSError, http.client.HTTPException):
+            return self.send(503, '{"error":"Cape 規則服務暫時無法連線。"}')
+
     def route_get(self):
         if self.is_cloud():
             return self.proxy_cloud()
-        path = urllib.parse.urlsplit(self.path).path
+        url = urllib.parse.urlsplit(self.path)
+        path = url.path
+        if path in ("/api/cape/workspace", "/api/cape/disk-history"):
+            return self.cape_api(url)
+        if path == "/api/cape/health":
+            if self.client_address[0] not in ("127.0.0.1", "::1", "::ffff:127.0.0.1", BIND):
+                return self.send(404, '{"error":"找不到"}')
+            try:
+                status, _ = CAPE.request("GET", "/cape/")
+                if status != 200 or not all(CAPE.read_file(name) for name in CAPE_FILES):
+                    raise OSError("Cape is not ready")
+                return self.send(200, '{"ok":true}')
+            except (OSError, http.client.HTTPException):
+                return self.send(503, '{"error":"Cape 尚未就緒。"}')
+        if path == "/cape":
+            return self.send(302, b"", extra=[("Location", "/cape/")])
+        if path.startswith("/cape/"):
+            return self.cape_asset(path[6:] or "index.html")
         if path.startswith("/a/") and alb_http(self, "GET"):   # 相簿分享連結（不用登入，靠連結上的代碼和密碼）
             return None
-        if path == "/fly" or re.fullmatch(r"/s/[A-Za-z0-9]{8}", path):   # 機場起降分享連結：只給網頁，資料要靠連結上的代碼
-            return self.send(200, share_page(), "text/html; charset=utf-8", etag=True)
+        if path == "/fly" or re.fullmatch(r"/s/[A-Za-z0-9]{8}", path):
+            target = "/cape/?go=flights" if path == "/fly" else "/cape/#/flight-share/fs_" + path[3:]
+            return self.send(302, b"", extra=[("Location", target)])
         if path == "/":
             rs = rsw_state()
             busy = rs and (rs.get("stage") == "wait" or rs.get("stage") == "running" and time.time() - rs.get("start_t", 0) < 7200)
             w = [] if busy else watchers()        # 等著網頁還原、還原中：照樣給完整網頁
-            return self.send(200, watch_page(w) if w else page(), "text/html; charset=utf-8", etag=True)
-        if path == "/pin.js":                      # PIN 碼鍵盤（被監看那頁用；首頁已經塞在網頁裡）
+            if w:
+                return self.send(200, watch_page(w), "text/html; charset=utf-8", etag=True)
+            query = urllib.parse.urlencode(urllib.parse.parse_qsl(url.query))
+            return self.send(302, b"", extra=[("Location", "/cape/" + ("?" + query if query else ""))])
+        if path == "/pin.js":                      # 被監看狀態頁的 PIN 碼鍵盤
             return self.send(200, _read_bytes("web/pin.js"), "text/javascript; charset=utf-8", etag=True)
-        if path == "/fly.js":                      # 機場起降的畫面程式（公開的程式碼，不用登入；分享連結也要用）
-            return self.send(200, fly_js(), "text/javascript; charset=utf-8", cache=True, etag=True)
         if path == "/manifest.webmanifest":
             return self.send(200, MANIFEST, "application/manifest+json", cache=True)
         if path == "/apple-touch-icon.png":
@@ -5353,6 +5398,8 @@ class Handler(BaseHTTPRequestHandler):
         if self.is_cloud():
             return self.proxy_cloud()
         u = urllib.parse.urlsplit(self.path)
+        if u.path == "/api/cape/rules":
+            return self.cape_api(u)
         if u.path.startswith("/a/") and alb_http(self, "POST"):   # 相簿分享：朋友輸入密碼
             return None
         if u.path not in ("/api/update", "/api/rename", "/api/traffic", "/api/telegram", "/api/links", "/api/self", "/api/cloud-open", "/api/cloud-ticket", "/api/cloud-revoke", "/api/peer",
@@ -5747,33 +5794,9 @@ class Handler(BaseHTTPRequestHandler):
         self.send(200 if ok else 400, json.dumps({"ok": ok, "message": msg}, ensure_ascii=False))
 
 
-PAGE = None if watchers() else load_page()       # 被監看的主機不載入完整網頁
-
-
-def page():
-    global PAGE
-    if PAGE is None:                              # 取消被監看後第一次打開才載入
-        PAGE = load_page()
-    return PAGE
-
-
-def fly_js():
-    page()                                        # 跟網頁一起讀，版本才對得上
-    return FLY_JS["js"] or b""
-
-
-def share_page():
-    """分享連結打開的網頁：直接是機場起降，不出現哨兵的名字、圖示和開場畫面"""
-    h = page()
-    h = h.replace("</title>", f'</title>\n<link rel="preload" as="script" href="/fly.js?v={FLY_JS["v"]}">', 1)   # 一打開就開始下載機場起降
-    h = re.sub(r'<link rel="(?:manifest|icon|apple-touch-icon)"[^>]*>\n?', "", h)
-    h = h.replace("<title>哨站</title>", '<title>機場起降</title>\n<meta name="referrer" content="no-referrer">')
-    h = h.replace('content="哨站"', 'content="機場起降"')
-    return re.sub(r'<div id="splash"[^>]*>.*?</div></div>\n', "", h, count=1, flags=re.S)
-
-
 def main():
     def stop(*_):
+        CAPE.close()
         keep_stop()
         COL.save()
         peer_cache_save()
@@ -5800,6 +5823,8 @@ def main():
     tls_pins_load()
     tls_self_load()
     srv = Server((BIND, PORT), Handler)
+    if HERE == "/opt/vps-sentinel-lite" or os.environ.get("SENTINEL_CAPE_SOCKET"):
+        CAPE.start()
     log(f"哨站 {VERSION} 已啟動：{'https' if TLS['ctx'] else 'http'}://{BIND}:{PORT}  名稱={NAME}  其他主機={len(PEERS)} 台  "
         f"Telegram={'開' if TG_BOT and TG_CHAT else '關'}")
     srv.serve_forever()

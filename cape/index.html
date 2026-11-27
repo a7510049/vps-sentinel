@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="description" content="岬角 Cape VPS 管理與監控">
+  <meta name="color-scheme" content="light dark">
+  <title>基礎架構總覽 | 岬角 Cape</title>
+  <link rel="stylesheet" href="./styles.css">
+  <script type="module" src="./app.js"></script>
+</head>
+<body>
+  <a class="skip" href="#content">跳到主要內容</a>
+  <div class="shell">
+    <aside class="sidebar" id="sidebar" aria-label="側邊導覽"></aside>
+    <div class="workspace">
+      <header class="topbar" id="topbar"></header>
+      <main id="content" tabindex="-1" aria-busy="true">
+        <div class="skeleton" aria-label="正在載入"></div>
+      </main>
+    </div>
+  </div>
+  <nav class="mobile-nav" id="mobile-nav" aria-label="主要導覽"></nav>
+  <dialog id="dialog" aria-labelledby="dialog-title"></dialog>
+  <div id="menu" class="menu" popover="auto"></div>
+  <div class="toast-slot" id="toast" role="status" aria-live="polite"></div>
+</body>
+</html>
