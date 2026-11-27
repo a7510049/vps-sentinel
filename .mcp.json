@@ -1,0 +1,42 @@
+{
+  "mcpServers": {
+    "playwright": {
+      "type": "stdio",
+      "command": "npx",
+      "args": [
+        "-y",
+        "@playwright/mcp@0.0.86",
+        "--headless",
+        "--isolated",
+        "--no-sandbox",
+        "--executable-path",
+        "${SENTINEL_QA_CHROME:-/opt/pw-browsers/chromium}",
+        "--output-dir",
+        "${TMPDIR:-/tmp}/vps-sentinel-mcp"
+      ]
+    },
+    "chrome-devtools": {
+      "type": "stdio",
+      "command": "npx",
+      "args": [
+        "-y",
+        "chrome-devtools-mcp@1.14.0",
+        "--headless",
+        "--isolated",
+        "--no-usage-statistics",
+        "--no-performance-crux",
+        "--executablePath",
+        "${SENTINEL_QA_CHROME:-/opt/pw-browsers/chromium}",
+        "--chromeArg=--no-sandbox"
+      ]
+    },
+    "context7": {
+      "type": "stdio",
+      "command": "npx",
+      "args": [
+        "-y",
+        "@upstash/context7-mcp@4.9.1"
+      ]
+    }
+  }
+}

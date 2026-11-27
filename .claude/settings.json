@@ -1,0 +1,37 @@
+{
+  "enabledPlugins": {
+    "superpowers@superpowers-marketplace": true,
+    "example-skills@anthropic-agent-skills": true
+  },
+  "extraKnownMarketplaces": {
+    "superpowers-marketplace": {
+      "source": {
+        "source": "github",
+        "repo": "obra/superpowers-marketplace"
+      }
+    },
+    "anthropic-agent-skills": {
+      "source": {
+        "source": "github",
+        "repo": "anthropics/skills"
+      }
+    }
+  },
+  "permissions": {
+    "ask": [
+      "Bash(bash install.sh:*)",
+      "Bash(sudo bash install.sh:*)",
+      "Bash(bash cloud.sh:*)",
+      "Bash(sudo bash cloud.sh:*)"
+    ],
+    "deny": [
+      "Bash(git push --force:*)",
+      "Bash(git push -f:*)"
+    ]
+  },
+  "enabledMcpjsonServers": [
+    "playwright",
+    "chrome-devtools",
+    "context7"
+  ]
+}
