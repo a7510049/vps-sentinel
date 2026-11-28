@@ -1,40 +1,41 @@
 /* ═════════ 導覽：現在在哪一頁、瀏覽紀錄、浮在上面的選單和對話框 ═════════
    這個檔案只管「在哪裡」，畫面怎麼畫在 app.js。三種介面、手機和電腦寬度共用同一份位置：
 
-   STK：一層一層，第一個是最底層（list 主機清單、all 紀錄、set 設定），後面是推進來的
-        h:主機、i:主機資訊、set:分類（設定裡的一頁）。電腦寬度的左中右三欄也是從 STK 算出來（navDerive），
+   STK：一層一層，第一個是最底層（四個分頁：home 首頁、list 主機、all 紀錄、set 設定），後面是推進來的
+        h:主機、i:主機資訊、set:分類（設定裡的一頁）。電腦寬度的欄也是從 STK 算出來（navDerive）：
+        中間是最上面那個不是主機的（分頁或設定裡的一頁），右邊是最上面那台主機（沒有就是上次選的），
         所以寬窄互換、換介面時，選到的主機和打開的頁面都留著。
    瀏覽紀錄：每一筆都存一整份位置（vs:1、nv:{s:STK, m:SEL}），上一頁、下一頁、重新整理都照那一筆還原，
         不再靠「第幾層」去猜。u＝這一筆底下連著幾筆是它的上一層（app 裡的返回鈕能不能直接交給瀏覽器退）。
    浮層（選單、對話框、Android 搜尋列）：打開時記一筆 ov:代號，上一頁先關最上面的；自己關掉時把那筆退掉。
         關掉的同一刻又打開別的（選單點了開對話框、跳到別頁），直接沿用那一筆，不會多一格也不會被退回去。
    瀏覽器的上一頁是非同步的：自己退的那一下還沒回來之前，後面要改紀錄的動作先排隊（hNow），不會互相踩到。 */
-let STK = ["list"];                 // 現在的位置（見上面）
-let SEL = "all";                    // 電腦中間最後選的（設定蓋上來、換到別的分頁時中間照樣是它）
-let MAIN = "all", LEFT = "list";    // 電腦寬度：中間是 all 或主機代號、左欄是清單或設定的哪一頁；由 STK 算出來
+let STK = ["home"];                 // 現在的位置（見上面）
+let SEL = "";                       // 電腦寬度右邊最後選的主機（換分頁時右邊照樣是它）
+let MAIN = "", LEFT = "home";       // 電腦寬度：右邊那台主機的代號、中間那一頁；由 STK 算出來
 let NAVDIR = 0, NAVK = 0;           // 換畫面的方向（1 推進、-1 退回、0 原地換、2 換分頁）；現在這筆紀錄的編號
 const isSetId = x => x === "set" || /^set:/.test(x);
 const isHostId = x => /^[hi]:./.test(x);
 const navSnap = () => ({s: STK.slice(), m: SEL});
 const stkSave = () => { sstore("vs-stk", JSON.stringify(STK)); sstore("vs-main", SEL); };
 
-/* 整理成這個介面合理的樣子：不存在的主機拿掉、分頁介面最底層是最後一個分頁、電腦介面最底層一定是清單 */
+/* 整理成合理的樣子：不存在的主機拿掉、最底層是最後一個分頁、主機資訊前面一定是那台主機 */
 function navNorm(a){
   a = (Array.isArray(a) ? a : []).map(String).filter(x => ROOTS.includes(x) || isHostId(x) || /^set:\w+$/.test(x));
   if (LIST.length) a = a.filter(x => !isHostId(x) || LIST.some(s => keyOf(s) === x.slice(2)));
   a = a.filter((x, i) => !/^set:/.test(x) || (i > 0 && isSetId(a[i - 1])));
-  if (TABS()) { let r = 0; a.forEach((x, i) => { if (ROOTS.includes(x)) r = i; }); a = a.slice(r); }
-  else { a = a.filter((x, i) => i === 0 || x !== "list"); if (a[0] !== "list") a.unshift("list"); }
-  if (!a.length || !ROOTS.includes(a[0])) a.unshift("list");
+  let r = -1; a.forEach((x, i) => { if (ROOTS.includes(x)) r = i; });
+  a = r < 0 ? ["home", ...a] : a.slice(r);
+  a = a.filter((x, i) => x[0] !== "i" || a[i - 1] === "h:" + x.slice(2));
   return a.filter((x, i) => x !== a[i - 1]);
 }
-/* 電腦寬度：中間、左欄照 STK 算；最上面是主機資訊時右欄打開 */
+/* 電腦寬度：中間、右邊照 STK 算；右邊一定有一台（上次選的，沒有就是這台主機），自動更新時不會跳到別台 */
 function navDerive(){
   const hk = [...STK].reverse().find(isHostId);
-  if (hk) SEL = hk.slice(2); else if (STK.includes("all")) SEL = "all";
-  if (DESK.matches && hk && hk[0] === "i" && STK[STK.length - 1] === hk && !INFO) { INFO = true; store("vs-info", "1"); }
-  MAIN = SEL !== "all" && LIST.some(s => keyOf(s) === SEL) ? SEL : "all";
-  LEFT = [...STK].reverse().find(isSetId) || "list";
+  if (hk) SEL = hk.slice(2);
+  if (LIST.length && !LIST.some(s => keyOf(s) === SEL)) SEL = keyOf(LIST.find(s => !s.node) || LIST[0]);
+  MAIN = SEL;
+  LEFT = [...STK].reverse().find(x => !isHostId(x)) || "home";
 }
 /* 兩份位置一不一樣 */
 const navSame = (a, b) => !!a && !!b && a.m === b.m && (a.s || []).join("\n") === (b.s || []).join("\n");
@@ -78,12 +79,6 @@ function hMark(extra){ hNow(() => hPush(extra)); }
 /* ── 換位置 ── */
 function navPaint(dir){
   navDerive();
-  const lay = $("#app .slayer");
-  if (lay && DESK.matches && PLAT === "desktop" && !isSetId(LEFT) && canAnim() && !lay._out) {   // 電腦：設定那一層淡出後再換
-    lay._out = 1; lay.style.pointerEvents = "none";
-    const fin = () => { NAVDIR = 0; if (LIST.length) render(LIST); };
-    return lay.animate([{opacity:1}, {opacity:0}], {duration:T.fast, easing:EXIT, fill:"forwards"}).finished.then(fin, fin);
-  }
   NAVDIR = dir; if (LIST.length) render(LIST); NAVDIR = 0;
 }
 /* 換到 a（how：push 推進一層、replace 原地換）；排在還沒回來的上一頁後面 */
@@ -108,60 +103,56 @@ function navUp(n, target){
     navTo(target, "replace", -1);
   });
 }
-/* 往哪裡去：list、all、set、set:分類、h:主機、i:主機 */
+/* 往哪裡去：home、list、all、set、set:分類、h:主機、i:主機 */
 function navGo(id){
   closeMenu(); hideTip();
   if ($("#fly")) flyClose();
-  if (TABS() && ROOTS.includes(id)) return tabGo(id);
+  if (ROOTS.includes(id)) return tabGo(id);
   if (DESK.matches) return deskGo(id);
-  if (id === "list") return STK.length > 1 && navUp(STK.length - 1, ["list"]);
   if (STK[STK.length - 1] === id) return;
   navTo([...STK, id], "push", 1);
 }
-/* 電腦寬度：點主機是換中間（原地換）、設定和設定裡的分類是推進一層、主機資訊是右欄開關 */
+/* 電腦寬度：點主機是換右邊那台（原地換，不記紀錄）；設定裡的分類推進中間一層；主機資訊推進右邊一層（再點一次收回） */
 function deskGo(id){
   navDerive();
-  const top = STK[STK.length - 1];
-  if (id === "list") { const n = STK.length - STK.findIndex(isSetId); return isSetId(top) && navUp(n, STK.filter(x => !isSetId(x))); }
-  if (isSetId(id)) return top !== id && navTo([...STK, id], "push", 1);
-  if (id.startsWith("i:")) {
-    const k = id.slice(2);
-    INFO = MAIN !== k || !INFO; store("vs-info", INFO ? "1" : "0");
-    if (MAIN !== k) return navTo([STK[0] === "set" ? "list" : STK[0], "h:" + k], "replace", 0);
-    return render(LIST);
-  }
-  const m = id === "all" ? "all" : id.slice(2);
-  if (MAIN === m && !isSetId(LEFT)) return;
-  navTo(m === "all" ? [STK[0] === "set" ? "list" : STK[0], "all"] : ["list", "h:" + m], "replace", 0);
+  const top = STK[STK.length - 1], page = STK.filter(x => !isHostId(x));
+  if (isSetId(id)) return top !== id && navTo([...page, id], "push", 1);
+  if (id.startsWith("i:")) return top === id ? navBack() : navTo([...page, "h:" + id.slice(2), id], top === "h:" + id.slice(2) ? "push" : "replace", top === "h:" + id.slice(2) ? 1 : 0);
+  if (top === id) return;
+  navTo([...page, id], "replace", 0);
 }
-/* 返回鈕、Esc、往右滑：退一層（電腦寬度：先關設定，再收右欄） */
-function navBack(){
+/* 返回鈕、Esc、往右滑：退一層
+   夠寬時只退看得到「返回」的那一欄（col p：中間的設定頁；col d：右邊的主機資訊；沒給就是最上面那個）：
+   要退的剛好在最上面交給瀏覽器退，不是的話原地拿掉那一層 */
+function navBack(col){
   closeMenu(); hideTip();
   if (DESK.matches) {
     navDerive();
-    if (STK.length > 1 && isSetId(STK[STK.length - 1])) return navUp(1, STK.slice(0, -1));
-    if (INFO && MAIN !== "all") { INFO = false; store("vs-info", "0"); return render(LIST); }
-    return;
+    const want = x => col === "d" ? x[0] === "i" : col === "p" ? /^set:/.test(x) : /^set:/.test(x) || x[0] === "i";
+    let i = -1; STK.forEach((x, j) => { if (j && want(x)) i = j; });
+    if (i < 1) return;
+    if (i === STK.length - 1) return navUp(1, STK.slice(0, -1));
+    return navTo(STK.filter((x, j) => j !== i), "replace", -1);
   }
   if (STK.length > 1) navUp(1, STK.slice(0, -1));
 }
-/* iOS、Android：換分頁（像 Telegram 的分頁列）。離開「主機」記一筆（返回先回主機，不會一下就離開網站），
-   分頁之間互換只改那一筆；回到「主機」＝退掉那一筆 */
+/* 換分頁（手機下面的分頁列、電腦左邊的側欄）。離開「首頁」記一筆（返回先回首頁，不會一下就離開網站），
+   分頁之間互換只改那一筆；回到「首頁」＝退掉那一筆 */
 function tabGo(id){
   closeMenu(); hideTip();
   if (STK.length === 1 && STK[0] === id) {   // 再點一次同一個分頁：捲回最上面（紀錄是最新的在最下面：捲到最下面）
-    const sc = $("#app .scr:not(.gone,.under) :is(.lscroll,.mscroll,.rscroll)");
+    const sc = $("#app :is(.stage,.pcol)>.scr:not(.gone,.under) :is(.lscroll,.mscroll,.rscroll)");
     if (sc) sc.scrollTo({top:sc.classList.contains("tlb") ? sc.scrollHeight : 0, behavior:canAnim() ? "smooth" : "auto"});
     return;
   }
   hNow(function go(){
     const st = hCur();
     if (deadEntry(st)) { hBack(); return hNow(go); }
-    srchDrop();
-    if (id === "list" && st.tb) return hBack();
+    srchDrop(); QS = ""; PINED = false;
+    if (id === "home" && st.tb) return hBack();
     const was = STK;
     STK = navNorm([id]); navDerive(); stkSave();
-    if (id !== "list" && !st.tb) hPush({tb:1}); else hReplace();
+    if (id !== "home" && !st.tb) hPush({tb:1}); else hReplace();
     navPaint(navDirOf(was, STK));
     const b = $("#app .tabbar .tbi.on");   // 分頁列是新畫的：選到的那塊底自己撐開（Android 的選取）
     if (b && PLAT === "android" && canAnim()) try { b.animate([{opacity:0, transform:"scale(.7)"}, {opacity:1, transform:"none"}], {duration:T.mid, easing:DEC, pseudoElement:"::before"}); } catch(e) {}
@@ -196,10 +187,10 @@ function navBoot(){
   const st = history.state;
   let s;
   try { s = st && st.vs && st.nv ? st.nv.s : JSON.parse(sstore("vs-stk") || "null"); } catch(e) {}
-  SEL = (st && st.vs && st.nv && st.nv.m) || sstore("vs-main") || "all";
-  STK = navNorm(s || ["list"]); navDerive(); stkSave();
+  SEL = (st && st.vs && st.nv && st.nv.m) || sstore("vs-main") || "";
+  STK = navNorm(s || ["home"]); navDerive(); stkSave();
   if (st && st.vs) { NAVK = st.k || 0; if (st.ov || st.fly || st.frad) hReplace({ov:0, fly:0, frad:0}); return; }   // 重新整理：浮層、機場起降不會還在
-  const all = STK, root = TABS() && all[0] !== "list" ? ["list", all[0]] : [all[0]];
+  const all = STK, root = all[0] !== "home" ? ["home", all[0]] : [all[0]];
   try {
     STK = [root[0]]; history.replaceState({...(st || {}), vs:1, nv:navSnap(), k:0, u:0}, "");
     let k = 0;

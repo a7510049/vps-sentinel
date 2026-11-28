@@ -67,27 +67,26 @@ async function open(br, engine, plat, phone, theme, url, extra = {}){
   await p.waitForSelector(".crow", {timeout: 30000}); await p.waitForTimeout(900);
   return {ctx, p, errs, reqs};
 }
-/* 畫面上看得到的：最上面那一層的標題、有幾層、開著的選單和視窗 */
+/* 畫面上看得到的：最上面那一層的標題（首頁是大字「哨站」）、有幾層、開著的選單和視窗；夠寬時 title 是右邊主機那欄、left 是中間那欄 */
 const look = p => p.evaluate(() => {
-  const vis = el => !!el && !!(el.offsetWidth || el.offsetHeight);
   const t = sel => { const e = document.querySelector(sel); return e ? e.textContent.trim() : ""; };
   const ph = !!document.querySelector(".dash.m");
-  const lay = document.querySelector(".slayer:not([style*='pointer-events: none'])");
+  const tt = scr => t(scr + " .tbar .tbt b") || t(scr + " .hhd .hbr b");
   return {
     plat: document.documentElement.dataset.plat, phone: ph, url: location.href, hist: history.length,
-    title: ph ? (t(".stage>.scr:not(.gone,.under) .tbar .tbt b") || (document.querySelector(".stage>.scr:not(.gone,.under) .lhd") ? "主機" : "")) : lay ? t(".slayer .tbar .tbt b") : t(".mcol .scr .tbar .tbt b"),
-    left: ph ? "" : t(".lcol .scr .tbar .tbt b"), layer: !!lay,
+    title: ph ? tt(".stage>.scr:not(.gone,.under)") : tt(".dcol>.scr:not(.gone)"),
+    left: ph ? "" : tt(".pcol>.scr:not(.gone)"), side: !!document.querySelector(".sbar"),
     layers: document.querySelectorAll(".stage>.scr:not(.under)").length,
     tabs: !!document.querySelector(".tabbar"), dialogs: document.querySelectorAll("#layer .veil:not(.closing)").length,
-    menus: [...document.querySelectorAll("body>.lmenu,body>.mdrw")].filter(m => m.style.pointerEvents !== "none").length,
-    info: !!document.querySelector(".rcol.on"), hv: (document.querySelector("#app [data-hv].on") || {}).dataset?.hv || "",
+    menus: [...document.querySelectorAll("body>.lmenu")].filter(m => m.style.pointerEvents !== "none").length,
+    info: !!document.querySelector(".dcol>.scr:not(.gone)[data-key^='s:i:']"), hv: (document.querySelector("#app [data-hv].on") || {}).dataset?.hv || "",
     seg: (document.querySelector(".scr:not(.gone,.under) .mscroll[data-seg]") || {}).dataset?.seg || "",
   };
 });
 const settle = p => p.waitForTimeout(750);
 /* 版面：最上面那一層的清單不能貼著標題列、兩塊清單之間要留空（看實際畫出來的位置，不看程式） */
 const gaps = p => p.evaluate(() => {
-  const scr = document.querySelector(".slayer .scr") || [...document.querySelectorAll(".stage>.scr:not(.gone,.under), .lcol>.scr")].pop();
+  const scr = [...document.querySelectorAll(".stage>.scr:not(.gone,.under), .pcol>.scr:not(.gone)")].pop();
   const sc = scr && scr.querySelector(":scope>.rscroll"), hd = scr && scr.querySelector(":scope>.tbar"); if (!sc || !hd) return {ok: true, why: "沒有清單頁"};
   const kids = [...sc.children].filter(e => e.offsetHeight > 0), bad = [];
   const box = e => { const r = e.getBoundingClientRect(), cs = getComputedStyle(e); return {top: r.top + parseFloat(cs.borderTopWidth), bot: r.bottom}; };
@@ -131,7 +130,7 @@ const hostSel = name => `.crow[data-go^="h:"]:has-text("${name}")`;
 async function phoneFlow(o, engine, plat, url){
   const {p} = o;
   let s = await look(p);
-  ok("N04", "畫面是這個平台、一開始在清單", s.plat === plat && s.layers === 1 && (s.title === "主機" || s.title === "哨站"), JSON.stringify(s));
+  ok("N04", "畫面是這個平台、一開始在首頁", s.plat === plat && s.layers === 1 && s.title === "哨站" && s.tabs, JSON.stringify(s));
   const listTitle = s.title;
   if (want("N01")) {
     await tap(p, hostSel("東京"), true); await settle(p); s = await look(p);
@@ -169,10 +168,9 @@ async function phoneFlow(o, engine, plat, url){
     await p.goBack(); await settle(p); await p.goBack(); await settle(p); s = await look(p);
     ok("N03", "再上一頁兩次回到清單（對話框那筆沒有留著）", s.title === listTitle, s.title);
     await tap(p, '[data-tab="all"]', true); await settle(p);
-    await tap(p, ".scr:not(.gone) [data-logmenu]", true); await p.waitForTimeout(120);
-    ok("N03", "紀錄的篩選選單打開", (await look(p)).menus === 1);
-    await tap(p, '[data-tab="list"]', true); await settle(p); s = await look(p);
-    ok("N03", "選單開著點分頁列：選單關、回到清單、沒有殘留", s.title === listTitle && s.menus === 0 && s.layers === 1, JSON.stringify(s));
+    ok("N03", "手機的紀錄篩選是系統選擇器（不是網頁選單）", await p.locator(".scr:not(.gone) select[data-logsel]").count() === 1 && await p.locator(".scr:not(.gone) [data-logmenu]").count() === 0);
+    await tap(p, '[data-tab="home"]', true); await settle(p); s = await look(p);
+    ok("N03", "回到首頁、沒有殘留", s.title === listTitle && s.menus === 0 && s.layers === 1, JSON.stringify(s));
   }
   if (want("N03") && plat !== "ios") {
     await tap(p, hostSel("東京"), true); await settle(p);
@@ -235,7 +233,7 @@ async function phoneFlow(o, engine, plat, url){
     await tap(p, '[data-tab="set"]', true); await settle(p); s = await look(p);
     ok("N06", "換到設定分頁、最多多一筆紀錄", s.title === "設定" && s.hist <= h0 + 1, `${s.title} ${h0}→${s.hist}`);
     await p.goBack(); await settle(p); s = await look(p);
-    ok("N06", "別的分頁按返回：回主機分頁、沒離開網站", s.title === listTitle && p.url().startsWith(url), JSON.stringify(s));
+    ok("N06", "別的分頁按返回：回首頁、沒離開網站", s.title === listTitle && p.url().startsWith(url), JSON.stringify(s));
     await p.locator(".lscroll").evaluate(e => e.scrollTo(0, 0));
     await tap(p, '[data-tab="all"]', true); await settle(p);
     await p.locator(".scr:not(.gone) .mscroll").evaluate(e => e.scrollTo(0, 0)); await p.waitForTimeout(200);
@@ -243,13 +241,12 @@ async function phoneFlow(o, engine, plat, url){
     await tap(p, '[data-tab="all"]', true); await p.waitForTimeout(900);
     const y = await p.locator(".scr:not(.gone) .mscroll").evaluate(e => e.scrollHeight - e.scrollTop - e.clientHeight);
     ok("N06", "再點同一個分頁：回到最新（最下面）", y < 5, String(y));
-    await tap(p, '[data-tab="list"]', true); await settle(p);
+    await tap(p, '[data-tab="home"]', true); await settle(p);
   }
   if (want("U02") && plat !== "desktop") {
     await tap(p, '[data-tab="all"]', true); await settle(p);
-    await tap(p, ".scr:not(.gone) [data-logmenu]", true); await p.waitForTimeout(350);
-    await tap(p, '.lmenu [data-logf="bad"]', true); await settle(p);
-    ok("U02", "紀錄篩選「有狀況」", await p.locator(".scr:not(.gone) .fchipbar").isVisible());
+    await p.locator(".scr:not(.gone) select[data-logsel]").selectOption("f:bad"); await settle(p);   // 手機是系統選擇器：系統畫面測不到，直接選
+    ok("U02", "紀錄篩選（系統選擇器）選「有狀況」", await p.locator(".scr:not(.gone) .fchipbar").isVisible());
     const sc = p.locator(".scr:not(.gone) .mscroll");
     await sc.evaluate(e => e.scrollTo(0, 300)); await p.waitForTimeout(250);
     const y0 = await sc.evaluate(e => e.scrollTop);
@@ -261,20 +258,47 @@ async function phoneFlow(o, engine, plat, url){
     const y2 = await p.locator(".scr:not(.gone) .mscroll").evaluate(e => e.scrollTop);
     ok("U02", "返回：篩選還在、捲到的位置還在", s.title === "紀錄" && await p.locator(".scr:not(.gone) .fchipbar").isVisible() && Math.abs(y2 - y1) < 40, `${s.title} ${y0}/${y1}→${y2}`);
     await tap(p, ".scr:not(.gone) [data-logclear]", true); await settle(p);
-    await tap(p, '[data-tab="list"]', true); await settle(p);
+    await tap(p, '[data-tab="home"]', true); await settle(p);
   }
   if (want("U03")) {
     const lab = await p.evaluate(() => { const b = document.querySelector('.tabbar [data-tab="list"]'); return b ? b.getAttribute("aria-label") : ""; });
-    const rows = await p.evaluate(() => [...document.querySelectorAll('.crow[data-go^="h:"]')].map(r => ({n: r.querySelector("b").textContent, badge: (r.querySelector(".cbg") || {}).textContent || "", off: !!r.querySelector(".cbg.bad svg")})));
-    const osaka = rows.find(r => r.n === "大阪");
-    ok("U03", "連不上的主機：標成連不上（不是數字）", osaka && osaka.off, JSON.stringify(rows));
-    if (plat !== "desktop") ok("U03", "分頁列的數字寫清楚是幾台主機", /台主機/.test(lab || ""), lab);
+    const rows = await p.evaluate(() => [...document.querySelectorAll('.crow[data-go^="h:"]')].map(r => ({n: r.querySelector("b").textContent, badge: (r.querySelector(".cbg") || {}).textContent || "", off: !!r.querySelector(".cbg.bad svg"),
+      bars: [...r.querySelectorAll(".mb .num")].map(x => x.textContent)})));
+    const osaka = rows.find(r => r.n === "大阪"), tokyo = rows.find(r => r.n === "東京測試主機");
+    ok("U03", "連不上的主機：標成連不上（不是數字）、三條都是「—」", osaka && osaka.off && osaka.bars.join() === "—,—,—", JSON.stringify(rows));
+    ok("U03", "在線的主機：處理器、記憶體、磁碟三條是真的數字", tokyo && tokyo.bars.length === 3 && tokyo.bars.every(x => /^\d+%$/.test(x)), JSON.stringify(tokyo));
+    ok("U03", "分頁列四個：首頁、主機、紀錄、設定", (await p.locator(".tabbar .tbi .tbn").allTextContents()).join() === "首頁,主機,紀錄,設定");
+    ok("U03", "分頁列的數字寫清楚是幾台主機", /台主機/.test(lab || ""), lab);
+    const hl = await p.locator(".hlth").first().textContent();
+    ok("U03", "連線摘要：只講連線（1 台連不上、2／3 在線），點了到那台", /1 台連不上/.test(hl) && /2／3/.test(hl) && await p.locator(".hlth[data-go]").count() === 1, hl);
     ok("U03", "Telegram 還沒設定是一條提醒，不是一台主機", await p.locator(".lban[data-tg]").count() === 1 && await p.locator(".crow[data-tg]").count() === 0);
-    ok("U03", "工具（機場起降）跟主機分開", await p.locator('.lsec[data-key="sec:tools"]').count() === 1);
+    ok("U03", "所有工具（每日備份、加密筆記、機場起降）跟主機分開", await p.locator('.hsec[data-key="hs:s"]').count() === 1 && await p.locator(".svr[data-bk]").count() === 1 && await p.locator(".svr[data-fly]").count() === 1);
+    await tap(p, '[data-tab="list"]', true); await settle(p); s = await look(p);
+    ok("U03", "主機分頁：全部主機、沒有工具", s.title === "主機" && await p.locator('.scr:not(.gone) .crow[data-go^="h:"]').count() === 3 && await p.locator(".scr:not(.gone) .svr").count() === 0, JSON.stringify(s));
+    await tap(p, '[data-tab="home"]', true); await settle(p);
+  }
+  if (want("P01")) {   // 常用工具：最多 4 個、可以調順序、記在這台裝置；所有工具照樣在下面
+    const pins = () => p.locator(".scr:not(.gone) .qgrid .qkn").allTextContents();
+    const p0 = await pins();
+    ok("P01", "常用工具預設放好（最多 4 個）", p0.length >= 1 && p0.length <= 4, p0.join());
+    await tap(p, ".scr:not(.gone) [data-pinedit]", true); await settle(p);
+    const first = p0[0];
+    await p.locator(`.scr:not(.gone) .pinr:has-text("${first}") .tog`).first().click(); await settle(p);
+    await tap(p, ".scr:not(.gone) [data-pinedit]", true); await settle(p);
+    const p1 = await pins();
+    ok("P01", "取消一個：常用工具少一個、所有工具裡還在", !p1.includes(first) && await p.locator(`.scr:not(.gone) .svr:has-text("${first}")`).count() === 1, p1.join());
+    await tap(p, ".scr:not(.gone) [data-pinedit]", true); await settle(p);
+    await p.locator(`.scr:not(.gone) .pinr:has-text("${first}") .tog`).first().click(); await settle(p);
+    await p.locator(`.scr:not(.gone) .pinr:has-text("${first}") [data-pinup]`).first().click().catch(() => {}); await settle(p);
+    await tap(p, ".scr:not(.gone) [data-pinedit]", true); await settle(p);
+    const p2 = await pins();
+    await p.reload(); await p.waitForSelector(".qgrid"); await settle(p);
+    const p3 = await pins();
+    ok("P01", "加回來、往前移一格，重新整理後順序還在", p2.includes(first) && p2.indexOf(first) < p2.length - 1 && p3.join() === p2.join(), `${p2.join()} → ${p3.join()}`);
+    await p.evaluate(() => localStorage.removeItem("vs-pins")); await p.reload(); await p.waitForSelector(".qgrid"); await settle(p);
   }
   if (want("U04")) {
-    if (plat === "desktop") { await tap(p, "[data-mainmenu]", true); await p.waitForTimeout(450); await tap(p, '.mdrw [data-go="set"]', true); }
-    else await tap(p, '[data-tab="set"]', true);
+    await tap(p, '[data-tab="set"]', true);
     await settle(p);
     const cats = await p.locator(".scr:not(.gone) [data-go^='set:']").count();
     ok("U04", "設定首頁是分類", cats >= 3, String(cats));
@@ -295,19 +319,26 @@ async function phoneFlow(o, engine, plat, url){
     }
     await p.goBack(); await settle(p); s = await look(p);
     ok("U04", "上一頁從外觀回到設定首頁", s.title === "設定", s.title);
-    if (plat === "desktop") { await p.goBack(); await settle(p); } else { await tap(p, '[data-tab="list"]', true); await settle(p); }
-    s = await look(p); ok("U04", "回到清單", s.title === listTitle, s.title);
+    await tap(p, '[data-tab="home"]', true); await settle(p);
+    s = await look(p); ok("U04", "回到首頁", s.title === listTitle, s.title);
   }
-  if (want("N06")) {   // 搜尋：打字篩選、取消；Android 返回先收起搜尋
-    if (plat === "android") { await tap(p, "[data-srch]", true); await settle(p); }
+  if (want("N06")) {   // 搜尋：首頁主機和工具一起找、返回先收起搜尋；主機分頁各平台自己的寫法
+    await tap(p, ".scr:not(.gone) [data-srch]", true); await settle(p);
     const fs = await p.evaluate(() => { const i = document.querySelector("#app [data-search]"); return i ? parseFloat(getComputedStyle(i).fontSize) : 0; });
     ok("N06", "搜尋框字不小於 16（iPhone 不會自己放大）", fs >= 16, String(fs));
-    await p.locator("#app [data-search]").first().fill("大");
-    await settle(p);
-    ok("N06", "打字就篩選", await p.locator('.crow[data-go^="h:"]').count() === 1);
+    await p.locator("#app [data-search]").first().fill("大"); await settle(p);
+    ok("N06", "首頁打字就篩選主機", await p.locator('.crow[data-go^="h:"]').count() === 1 && await p.locator(".svr").count() === 0);
+    await p.locator("#app [data-search]").first().fill("備份"); await settle(p);
+    ok("N06", "首頁也找得到工具", await p.locator('.crow[data-go^="h:"]').count() === 0 && await p.locator(".svr[data-bk]").count() === 1);
+    await p.goBack(); await settle(p); s = await look(p);
+    ok("N06", "搜尋時按返回：先收起搜尋、清掉字、沒離開", !(await p.locator(".hsr").count()) && await p.locator('.crow[data-go^="h:"]').count() === 3 && p.url().startsWith(url), JSON.stringify(s));
+    await tap(p, '[data-tab="list"]', true); await settle(p);
+    if (plat === "android") { await tap(p, ".scr:not(.gone) [data-srch]", true); await settle(p); }
+    await p.locator("#app [data-search]").first().fill("大"); await settle(p);
+    ok("N06", "主機分頁打字就篩選", await p.locator('.crow[data-go^="h:"]').count() === 1);
     if (plat === "android") {
       await p.goBack(); await settle(p); s = await look(p);
-      ok("N06", "Android 搜尋時按返回：先收起搜尋、清掉字、沒離開", !(await p.locator(".lhd.asr").count()) && await p.locator('.crow[data-go^="h:"]').count() === 3 && p.url().startsWith(url), JSON.stringify(s));
+      ok("N06", "Android 搜尋時按返回：先收起搜尋、清掉字、還在主機分頁", !(await p.locator(".lhd.asr").count()) && await p.locator('.crow[data-go^="h:"]').count() === 3 && s.title === "主機", JSON.stringify(s));
     } else if (plat === "ios") {
       await tap(p, "[data-qsx]", true); await settle(p);
       ok("N06", "iOS 按「取消」清掉搜尋", await p.locator('.crow[data-go^="h:"]').count() === 3);
@@ -315,6 +346,7 @@ async function phoneFlow(o, engine, plat, url){
       await p.locator("#app [data-search]").first().press("Escape"); await settle(p);
       ok("N06", "電腦介面按 Esc 清掉搜尋", await p.locator('.crow[data-go^="h:"]').count() === 3);
     }
+    await tap(p, '[data-tab="home"]', true); await settle(p);
   }
 }
 
@@ -322,85 +354,91 @@ async function phoneFlow(o, engine, plat, url){
 async function deskFlow(o, engine, plat, url){
   const {p} = o;
   let s = await look(p);
-  ok("N04", "畫面是這個平台", s.plat === plat, s.plat);
+  ok("N04", "畫面是這個平台：中間首頁、右邊一台主機", s.plat === plat && s.left === "哨站" && !!s.title, JSON.stringify(s));
+  if (plat === "desktop") ok("D01", "電腦介面：左邊側欄四個分頁、沒有下面的分頁列", s.side && !s.tabs && (await p.locator(".sbar .sbl .sbi>span").allTextContents()).join() === "首頁,主機,紀錄,設定", JSON.stringify(s));
+  else ok("D01", `${plat} 夠寬：分頁列在中間那欄下面、沒有側欄`, !s.side && await p.locator(".pcol .tabbar").count() === 1, JSON.stringify(s));
   if (want("N01")) {
     await p.locator(hostSel("東京")).first().click(); await settle(p); s = await look(p);
-    ok("N01", "點主機：中間換成那台", s.title === "東京測試主機", s.title);
-    const i0 = s.info;
-    await p.locator(".mcol .tbar [data-go^='i:']").first().click(); await settle(p); s = await look(p);
-    ok("N01", "資訊鈕開關右欄", s.info !== i0, `${i0}→${s.info}`);
-    if (!s.info) { await p.locator(".mcol .tbar [data-go^='i:']").first().click(); await settle(p); }
+    ok("N01", "點主機：右邊換成那台、選到的那列標起來", s.title === "東京測試主機" && await p.locator(`${hostSel("東京")}.on`).count() === 1, s.title);
+    const h0 = s.hist;
     await p.locator(hostSel("大阪")).first().click(); await settle(p); s = await look(p);
-    ok("N01", "換一台主機：中間跟著換、右欄還開著", s.title === "大阪" && s.info, JSON.stringify(s));
+    ok("N01", "換一台主機：右邊跟著換、不多記瀏覽紀錄", s.title === "大阪" && s.hist === h0, JSON.stringify(s));
+    await p.locator(".dcol .tbar [data-go^='i:']").first().click(); await settle(p); s = await look(p);
+    ok("N01", "資訊鈕：右邊推進主機資訊", s.info && s.title === "主機資訊", JSON.stringify(s));
     await p.keyboard.press("Escape"); await settle(p); s = await look(p);
-    ok("A01", "Esc 收起右欄", !s.info, JSON.stringify(s));
+    ok("A01", "Esc 退回那台主機", !s.info && s.title === "大阪", JSON.stringify(s));
+    await p.locator(".dcol .tbar [data-go^='i:']").first().click(); await settle(p);
+    await p.locator(hostSel("東京")).first().click(); await settle(p); s = await look(p);
+    ok("N01", "主機資訊開著時點別台：右邊換成那台主機", !s.info && s.title === "東京測試主機", JSON.stringify(s));
   }
   if (want("U01")) {
     await p.locator(hostSel("東京")).first().click(); await settle(p);
-    const ov = await p.locator(".mcol .mscroll").evaluate(e => e.scrollWidth - e.clientWidth);
+    const ov = await p.locator(".dcol .mscroll").evaluate(e => e.scrollWidth - e.clientWidth);
     ok("U01", "電腦：主機頁不能左右捲", ov <= 0, String(ov));
-    if (!(await look(p)).info) { await p.locator(".mcol .tbar [data-go^='i:']").first().click(); await settle(p); }
-    await p.click(".rcol .qa[data-logall]"); await settle(p);
-    ok("U01", "電腦：主機資訊「紀錄」到紀錄、只看這台", await p.locator(".mcol .fchipbar").isVisible() && await p.locator(".mcol .tl .ev").count() > 6);
-    await p.locator(".mcol [data-logclear]").click(); await settle(p);
-    await p.locator(hostSel("東京")).first().click(); await settle(p);
+    await p.locator(".dcol .tbar [data-go^='i:']").first().click(); await settle(p);
+    await p.click(".dcol .qa[data-logall]"); await settle(p); s = await look(p);
+    ok("U01", "電腦：主機資訊「紀錄」到紀錄、只看這台", s.left === "紀錄" && await p.locator(".pcol .fchipbar").isVisible() && await p.locator(".pcol .tl .ev").count() > 6, JSON.stringify(s));
+    await p.locator(".pcol [data-logclear]").click(); await settle(p);
+    await p.click('[data-tab="home"]'); await settle(p);
+    await p.keyboard.press("Escape"); await settle(p);
   }
   if (want("N02") || want("A01")) {
-    if (plat === "desktop") {
-      await p.click("[data-mainmenu]"); await p.waitForTimeout(450);
-      ok("N03", "主選單從左邊滑出來", (await look(p)).menus === 1);
-      await p.click('.mdrw [data-go="set"]'); await settle(p); s = await look(p);
-      ok("N02", "設定是蓋在中間的一層", s.layer && s.title === "設定" && s.menus === 0, JSON.stringify(s));
-      await p.click('.slayer [data-go="set:look"]'); await settle(p); s = await look(p);
-      ok("N02", "設定裡點分類：同一層裡推進去", s.layer && s.title === "外觀", s.title);
-      await p.goBack(); await settle(p); s = await look(p);
-      ok("N02", "上一頁回設定首頁", s.layer && s.title === "設定", s.title);
-      await p.goForward(); await settle(p); s = await look(p);
-      ok("N02", "下一頁又到外觀", s.layer && s.title === "外觀", s.title);
-      await p.keyboard.press("Escape"); await settle(p); s = await look(p);
-      ok("A01", "Esc 退一層（外觀 → 設定）", s.layer && s.title === "設定", s.title);
-      await p.keyboard.press("Escape"); await p.waitForTimeout(700); s = await look(p);
-      ok("A01", "再 Esc 關掉設定、回到原本那台主機", !s.layer && s.title === "東京測試主機", JSON.stringify(s));
-      await p.click("[data-mainmenu]"); await p.waitForTimeout(450);
-      await p.mouse.click(1300, 450); await p.waitForTimeout(450);
-      ok("N03", "點旁邊關掉主選單", (await look(p)).menus === 0);
-    } else {
-      await p.click('[data-tab="set"]'); await settle(p);
-      ok("N02", "左欄換成設定", (await look(p)).left === "設定");
-      await p.click('.lcol [data-go="set:look"]'); await settle(p);
-      ok("N02", "左欄推進到外觀", (await look(p)).left === "外觀");
-      await p.goBack(); await settle(p);
-      ok("N02", "上一頁回設定", (await look(p)).left === "設定");
-      await p.click('[data-tab="list"]'); await settle(p);
-      ok("N02", "回到主機清單、中間還是那台", (await look(p)).title === "東京測試主機");
-    }
+    await p.locator(hostSel("東京")).first().click(); await settle(p);
+    await p.click('[data-tab="set"]'); await settle(p); s = await look(p);
+    ok("N02", "中間換成設定、右邊還是那台", s.left === "設定" && s.title === "東京測試主機", JSON.stringify(s));
+    await p.click('.pcol [data-go="set:look"]'); await settle(p); s = await look(p);
+    ok("N02", "設定裡點分類：中間推進去", s.left === "外觀", s.left);
+    await p.goBack(); await settle(p); s = await look(p);
+    ok("N02", "上一頁回設定首頁", s.left === "設定", s.left);
+    await p.goForward(); await settle(p); s = await look(p);
+    ok("N02", "下一頁又到外觀", s.left === "外觀", s.left);
+    await p.locator(".dcol .tbar [data-go^='i:']").first().click(); await settle(p); s = await look(p);
+    ok("N02", "外觀開著時右邊推進主機資訊：兩欄各自一層", s.info && s.left === "外觀", JSON.stringify(s));
+    await p.click(".pcol [data-navback]"); await settle(p); s = await look(p);
+    ok("N02", "中間的返回只退中間、右邊主機資訊還在", s.left === "設定" && s.info, JSON.stringify(s));
+    await p.click(".dcol [data-navback]"); await settle(p); s = await look(p);
+    ok("N02", "右邊的返回只退右邊", s.left === "設定" && !s.info && s.title === "東京測試主機", JSON.stringify(s));
+    await p.click('.pcol [data-go="set:look"]'); await settle(p);
+    await p.keyboard.press("Escape"); await settle(p); s = await look(p);
+    ok("A01", "Esc 退一層（外觀 → 設定）", s.left === "設定", s.left);
+    await p.click('[data-tab="home"]'); await settle(p); s = await look(p);
+    ok("N02", "回到首頁、右邊還是那台", s.left === "哨站" && s.title === "東京測試主機", JSON.stringify(s));
+  }
+  if (want("D01") && plat === "desktop") {   // 1280 以下側欄只剩圖示
+    await p.setViewportSize({width: 1100, height: 900}); await settle(p);
+    const lab = await p.locator(".sbar .sbi[data-tab='home'] span").isVisible();
+    const w = await p.locator(".sbar").evaluate(e => e.offsetWidth);
+    ok("D01", "1100 寬：側欄只剩圖示（滑鼠指著有名字）", !lab && w < 100 && await p.locator(".sbar .sbi[data-tab='home'][title='首頁']").count() === 1, String(w));
+    await p.setViewportSize({width: 1440, height: 900}); await settle(p);
   }
   if (want("N05")) {   // 寬窄互換：選的主機、打開的視窗和打到一半的字都還在
     await p.locator(hostSel("東京")).first().click(); await settle(p);
-    if (!(await look(p)).info) { await p.locator(".mcol .tbar [data-go^='i:']").first().click(); await settle(p); }
-    await p.click(".rcol .qa[data-rename]"); await p.waitForTimeout(600);
+    await p.locator(".dcol .tbar [data-go^='i:']").first().click(); await settle(p);
+    await p.click(".dcol .qa[data-rename]"); await p.waitForTimeout(600);
     const inp = p.locator("#layer .veil input").first();
     await inp.fill("打到一半的名字");
     await p.setViewportSize({width: 1023, height: 900}); await p.waitForTimeout(900);
     s = await look(p);
-    ok("N05", "1440→1023：還是那台、視窗還開著、字還在", s.phone && s.title === "東京測試主機" && s.dialogs === 1 && await inp.inputValue() === "打到一半的名字", JSON.stringify(s));
+    ok("N05", "1440→1023：一欄、還在那台的主機資訊、視窗還開著、字還在", s.phone && s.title === "主機資訊" && s.dialogs === 1 && await inp.inputValue() === "打到一半的名字", JSON.stringify(s));
     await p.setViewportSize({width: 1024, height: 900}); await p.waitForTimeout(900); s = await look(p);
-    ok("N05", "1023→1024：回到三欄、還是那台、視窗還開著", !s.phone && s.title === "東京測試主機" && s.dialogs === 1, JSON.stringify(s));
+    ok("N05", "1023→1024：回到多欄、還是那台、視窗還開著", !s.phone && s.title === "主機資訊" && s.dialogs === 1, JSON.stringify(s));
     await p.keyboard.press("Escape"); await p.waitForTimeout(600);
     ok("N05", "Esc 關掉、名字沒有被改", (await look(p)).dialogs === 0 && await p.locator(hostSel("東京")).count() === 1);
     await p.setViewportSize({width: 1440, height: 900}); await settle(p);
+    await p.keyboard.press("Escape"); await settle(p);
   }
   if (want("U02")) {
-    await p.locator(".crow[data-go='all']").click().catch(() => p.click('[data-tab="all"]')); await settle(p);
-    const ev = p.locator('.mcol .ev.eb.go[data-go="h:首爾-名字特別長的一台測試主機"]').first();
+    await p.click('[data-tab="all"]'); await settle(p);
+    const ev = p.locator('.pcol .ev.eb.go[data-go="h:首爾-名字特別長的一台測試主機"]').first();
     if (await ev.count()) { await ev.click(); await settle(p); s = await look(p);
-      ok("U02", "電腦：點一則紀錄到那台主機", /首爾/.test(s.title), JSON.stringify(s)); }
+      ok("U02", "電腦：點一則紀錄，右邊換成那台主機、中間還是紀錄", /首爾/.test(s.title) && s.left === "紀錄", JSON.stringify(s)); }
     else skip("U02", "電腦：點紀錄到主機", "畫面上沒有那台的紀錄");
+    await p.click('[data-tab="home"]'); await settle(p);
   }
   if (want("A01")) {   // 鍵盤：Tab 在視窗裡轉、Esc 關、焦點回到按鈕
     await p.locator(hostSel("大阪")).first().click(); await settle(p);
-    if (!(await look(p)).info) { await p.locator(".mcol .tbar [data-go^='i:']").first().click(); await settle(p); }
-    const rm = p.locator(".rcol [data-rmhost]").first();
+    await p.locator(".dcol .tbar [data-go^='i:']").first().click(); await settle(p);
+    const rm = p.locator(".dcol [data-rmhost]").first();
     await rm.focus(); await p.keyboard.press("Enter"); await p.waitForTimeout(600);
     const f1 = await p.evaluate(() => document.activeElement && document.activeElement.textContent.trim());
     ok("A01", "危險動作的視窗：焦點先放在「取消」", f1 === "取消", f1);
@@ -410,6 +448,10 @@ async function deskFlow(o, engine, plat, url){
     await p.keyboard.press("Escape"); await p.waitForTimeout(600);
     const back = await p.evaluate(() => document.activeElement && document.activeElement.matches("[data-rmhost]"));
     ok("A01", "Esc 關掉後焦點回到原本的按鈕", back);
+    await p.keyboard.press("Escape"); await settle(p);
+    await p.locator('[data-tab="list"]').first().focus(); await p.keyboard.press("Tab"); await p.keyboard.press("Shift+Tab");
+    const fv = await p.evaluate(() => { const b = document.activeElement, c = getComputedStyle(b); return b.matches("[data-tab]") && (c.outlineStyle !== "none" && parseFloat(c.outlineWidth) > 0); });
+    ok("A01", "鍵盤焦點看得到（分頁鈕有框）", fv);
   }
 }
 
@@ -418,13 +460,15 @@ async function refreshFlow(o, engine, plat, phone){
   const {p} = o;
   if (phone) { await tap(p, hostSel("東京"), true); await settle(p); }
   else { await p.locator(hostSel("東京")).first().click(); await settle(p); }
+  await p.waitForFunction(() => document.querySelectorAll("#app .scr:not(.gone) .cbox svg").length >= 2, null, {timeout: 20000}).catch(() => {});   // 剛開的測試主機還沒有圖表資料：等圖表畫出來才開始量（不然量到的是圖表出現，不是自動更新）
+  await p.waitForTimeout(1500);
   const n0 = (await p.evaluate(() => performance.getEntriesByType("resource").filter(e => /\/api\/all/.test(e.name)).length));
   await p.evaluate(() => {
     window._e2e = {scr: document.querySelector("#app .scr[data-key^='s:h:']"), muts: 0, adds: 0};
     new MutationObserver(ms => { for (const m of ms) { window._e2e.muts++; window._e2e.adds += m.addedNodes.length; } }).observe(document.querySelector("#app"), {childList: true, subtree: true});
   });
   if (!phone) {
-    if (!(await p.locator("#app [data-search]").count())) { await p.click("[data-srch]"); await settle(p); }
+    if (!(await p.locator("#app [data-search]").count())) { await p.click(".pcol [data-srch]"); await settle(p); }
     await p.locator("#app [data-search]").first().fill("東"); await p.locator("#app [data-search]").first().focus(); await settle(p);
   }
   const nodes0 = await p.evaluate(() => { window._e2e.adds = 0; window._e2e.muts = 0; return document.querySelectorAll("*").length; });
@@ -439,15 +483,15 @@ async function refreshFlow(o, engine, plat, phone){
   if (phone) ok("R01", "自動更新後還是一層", r.layers === 1, String(r.layers));
   if (!phone) { await p.locator("#app [data-search]").first().fill(""); await p.keyboard.press("Escape"); await settle(p); }
   if (want("R03")) {
-    const h0 = await p.evaluate(() => history.length);
+    const h0 = await p.evaluate(() => history.length), base = await p.evaluate(() => document.querySelectorAll("*").length);   // 搜尋清掉之後的元素數（電腦寬度搜尋時首頁比較短）
     for (let i = 0; i < 15; i++) {
       if (phone) { await p.goBack(); await p.waitForTimeout(260); await p.locator(hostSel(i % 2 ? "大阪" : "東京")).first().tap(); await p.waitForTimeout(260); }
       else { await p.locator(hostSel(i % 2 ? "大阪" : "東京")).first().click(); await p.waitForTimeout(220); }
     }
     await settle(p);
-    const r2 = await p.evaluate(() => ({n: document.querySelectorAll("*").length, layers: document.querySelectorAll(".stage>.scr:not(.under)").length, menus: document.querySelectorAll(".lmenu,.mdrw").length, veils: document.querySelectorAll("#layer .veil").length, hist: history.length}));
+    const r2 = await p.evaluate(() => ({n: document.querySelectorAll("*").length, layers: document.querySelectorAll(".stage>.scr:not(.under)").length, menus: document.querySelectorAll(".lmenu").length, veils: document.querySelectorAll("#layer .veil").length, hist: history.length}));
     ok("R03", "來回 15 次：只剩一層、沒有殘留選單和視窗", (phone ? r2.layers === 1 : true) && r2.menus === 0 && r2.veils === 0, JSON.stringify(r2));
-    ok("R03", "來回 15 次：元素數沒有一直變多", r2.n < nodes0 * 1.3, `${nodes0}→${r2.n}`);
+    ok("R03", "來回 15 次：元素數沒有一直變多", r2.n < base * 1.3, `${base}→${r2.n}`);
     ok("R03", "來回 15 次：瀏覽紀錄沒有一直變長", r2.hist - h0 <= (phone ? 2 : 1), `${h0}→${r2.hist}`);
   }
 }
@@ -488,7 +532,7 @@ async function safetyFlow(br, url, own){
       await p.waitForTimeout(2500); s = await look(p);
       const rq = rmReq();
       ok("S01", "按移除（連按兩下）：只送一次、送的是大阪", rq.length === 1 && /大阪/.test(rq[0] ? rq[0].body : ""), JSON.stringify(rq));
-      ok("S01", "移除後自己回到清單、大阪不見了", s.title === "主機" && await p.locator(hostSel("大阪")).count() === 0, JSON.stringify(s));
+      ok("S01", "移除後自己回到首頁、大阪不見了", s.title === "哨站" && await p.locator(hostSel("大阪")).count() === 0, JSON.stringify(s));
     } else skip("S01", "真的移除一台", "用的是外面的哨兵，不改資料");
     ok("S01", "主控台沒有錯誤", !o.errs.length, o.errs.join(" | ").slice(0, 300));
     await o.ctx.close();
@@ -500,13 +544,13 @@ async function safetyFlow(br, url, own){
     await p.locator(hostSel("東京")).first().click(); await settle(p);
     await p.route("**/api/all*", r => r.fulfill({status: 502, body: "bad gateway"}));
     await p.waitForTimeout(21000);
-    let st = await p.evaluate(() => ({lost: document.documentElement.classList.contains("lost"), t: (document.querySelector(".mcol .tbar .tbt b") || {}).textContent}));
+    let st = await p.evaluate(() => ({lost: document.documentElement.classList.contains("lost"), t: (document.querySelector(".dcol .tbar .tbt b") || {}).textContent}));
     ok("F03", "主機 502 超過 15 秒：標出連線中斷、畫面還在原本那台", st.lost && st.t === "東京測試主機", JSON.stringify(st));
     await p.unroute("**/api/all*"); await p.waitForTimeout(6500);
-    st = await p.evaluate(() => ({lost: document.documentElement.classList.contains("lost"), t: (document.querySelector(".mcol .tbar .tbt b") || {}).textContent}));
+    st = await p.evaluate(() => ({lost: document.documentElement.classList.contains("lost"), t: (document.querySelector(".dcol .tbar .tbt b") || {}).textContent}));
     ok("F03", "恢復後自己接回來、還在原本那台", !st.lost && st.t === "東京測試主機", JSON.stringify(st));
     await p.route("**/api/all*", r => r.abort("connectionrefused")); await p.waitForTimeout(4000);
-    ok("F03", "斷線時沒有跳錯誤、畫面還在", await p.locator(".mcol .tbar").count() === 1);
+    ok("F03", "斷線時沒有跳錯誤、畫面還在", await p.locator(".dcol .tbar").count() === 1);
     await p.unroute("**/api/all*");
     await p.route("**/api/all*", r => r.fulfill({status: 401, body: "{}"})); await p.waitForTimeout(7000);
     ok("F03", "登入過期（401）：換成登入畫面", await p.locator("#tok").count() === 1);

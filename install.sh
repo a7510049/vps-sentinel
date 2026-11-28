@@ -208,7 +208,7 @@ install -m 755 "$HERE/sentinel.py" "$DIR/sentinel.py"
 for f in pair.py download.py backup.py guard.py notes.py adblock.py photo.py album.py fly.py; do install -m 644 "$HERE/$f" "$DIR/$f"; done
 rm -rf -- "$DIR/cape" "$DIR/cape_deploy.py" "$DIR/install.sh"   # 5.59～5.60 的 Cape 網頁已經不用了
 install -d "$DIR/web"
-install -m 644 "$HERE"/web/index.html "$HERE"/web/style.css "$HERE"/web/app.js "$HERE"/web/nav.js "$HERE"/web/pin.js "$HERE"/web/fly.js "$HERE"/web/font.woff2 "$HERE"/web/seed-rg.woff2 "$HERE"/web/seed-bd.woff2 "$HERE"/web/album.html "$HERE"/web/album.css "$HERE"/web/album.js "$HERE"/web/album-sw.js "$DIR/web/"
+install -m 644 "$HERE"/web/index.html "$HERE"/web/style.css "$HERE"/web/app.js "$HERE"/web/nav.js "$HERE"/web/pin.js "$HERE"/web/icons.js "$HERE"/web/fly.js "$HERE"/web/font.woff2 "$HERE"/web/seed-rg.woff2 "$HERE"/web/seed-bd.woff2 "$HERE"/web/album.html "$HERE"/web/album.css "$HERE"/web/album.js "$HERE"/web/album-sw.js "$DIR/web/"
 install -d "$DIR/data"
 install -m 644 "$HERE/data/airports.tsv" "$HERE/data/coast.tsv" "$HERE/data/terrain.bin" "$HERE/data/actypes.tsv" "$HERE/data/apmap.tsv" "$DIR/data/"
 ok "放在 $DIR"
