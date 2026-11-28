@@ -899,7 +899,9 @@ function allScreen(list, time){
   const on = list.filter(s => s.online);
   const sub = LOST ? "連線中斷，重試中…" : `${on.length}／${list.length} 台在線`;   // 跟 Telegram 群組一樣只寫在線幾個；天氣移到下面的總覽那排
   const fl = LOGF || LOGH;
-  const acts = `<button class="iconbtn${fl ? " act" : ""}" data-logmenu title="篩選紀錄">${I("filter")}</button>`;
+  const acts = COARSE.matches   // 手機：用系統自己的選擇器（iPhone 的選項清單、安卓的對話框）；電腦照舊用網頁選單
+    ? `<label class="iconbtn natsel${fl ? " act" : ""}" title="篩選紀錄">${I("filter")}<select data-logsel data-keep aria-label="篩選紀錄"></select></label>`
+    : `<button class="iconbtn${fl ? " act" : ""}" data-logmenu title="篩選紀錄">${I("filter")}</button>`;
   const root = TABS() && !DESK.matches;
   const head = topbar({av:root ? "" : `<span class="cav brand sm">${BRAND}</span>`, title:root ? "紀錄" : "全部主機", sub, acts});
   const is = issuesOf(list), lv = LOST || list.some(s => !s.online || lvOf(s) === "bad") ? "bad" : is.length ? "warn" : "ok";
@@ -928,6 +930,19 @@ function statStrip(list){
   return `<div class="stat" data-key="stat"><div class="stcs">`
     + cell("on", `${on.length}<em>／${list.length}</em>`, "台在線") + cell("rx", `${rate(rx)}`, `下載・上傳 ${rate(tx)}`)
     + cell("tr", size(used), pj ? `本月・預估 ${size(pj)}` : "本月流量") + (ua != null ? cell("up", upPct(ua), "30 天可用率") : "") + `</div></div>`;
+}
+/* 紀錄篩選的系統選擇器：選項跟網頁選單一樣（種類、哪一台）；選擇器打開時不動它 */
+const COARSE = matchMedia("(pointer:coarse)");
+function logSelSync(){
+  document.querySelectorAll("#app select[data-logsel]").forEach(sel => {
+    if (sel === document.activeElement) return;
+    const o = (v, l) => `<option value="${esc(v)}">${esc(l)}</option>`;
+    const html = `<optgroup label="種類">${o("f:", "全部")}${o("f:bad", "有狀況")}${o("f:other", "恢復與通知")}</optgroup>`
+      + (LIST.length > 1 ? `<optgroup label="主機">${o("h:", "全部主機")}${LIST.map(x => o("h:" + keyOf(x), x.name)).join("")}</optgroup>` : "");
+    if (sel._h !== html) { sel._h = html; sel.innerHTML = html; }
+    sel.value = LOGH ? "h:" + LOGH : "f:" + LOGF;
+    if (!sel._on) { sel._on = 1; sel.addEventListener("change", () => { const v = sel.value; if (v[0] === "h") LOGH = v.slice(2); else LOGF = v.slice(2); sel.blur(); render(LIST); }); }
+  });
 }
 /* 紀錄捲動：第一次打開停在最下面（最新的）；本來就在最下面的，新的進來跟著到底；不在最下面時右下角出現「↓」 */
 function tlStick(prev){
@@ -2334,7 +2349,7 @@ function render(list){
   navFix();                                       // 主機被移除了：那一層拿掉
   const tl0 = [...document.querySelectorAll("#app .mscroll.tlb")].map(sc => [sc, sc.scrollHeight - sc.scrollTop - sc.clientHeight < 48]);   // 紀錄停在最新的：新的來了照樣停在最下面
   paint(shell(list, time));
-  tlStick(tl0);
+  tlStick(tl0); logSelSync();
   if (TIPX) drawTip(...TIPX);
   loadStatus();
 }

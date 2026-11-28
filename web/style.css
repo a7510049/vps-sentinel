@@ -852,6 +852,11 @@ a.crow{text-decoration:none;color:inherit}   /* 雲端硬碟那列是連結（�
 .ovx .stat{margin:0 12px 12px;box-shadow:none;background:var(--s2)}
 @media (hover:hover){.ovl:hover{background:var(--hov)}}
 .ovl:focus-visible{outline:2px solid var(--p);outline-offset:-2px}
+/* 手機的紀錄篩選：透明的系統選擇器蓋在篩選圖示上，點了跳出手機自己的選項清單 */
+.natsel{position:relative;overflow:hidden}
+.natsel select{position:absolute;inset:0;width:100%;height:100%;opacity:0;font-size:var(--fs-l);cursor:pointer;-webkit-appearance:none;appearance:none}
+/* 網頁選單裡的名字不拆行 */
+.hmenu.hlist button span{white-space:nowrap}
 /* 紀錄：不在最下面（最新的）時右下角「↓」跳回最新 */
 .tldn{position:sticky;bottom:16px;margin:-60px 16px 16px auto;z-index:var(--z-bar);width:44px;height:44px;border-radius:var(--r-pill);display:grid;place-items:center;background:var(--s1);color:var(--tx2);box-shadow:var(--sh-2);opacity:0;transform:scale(.8);pointer-events:none;transition:opacity var(--t-fast) var(--ease),transform var(--t-fast) var(--ease)}
 .tldn svg{width:22px;height:22px}

@@ -169,10 +169,9 @@ async function phoneFlow(o, engine, plat, url){
     await p.goBack(); await settle(p); await p.goBack(); await settle(p); s = await look(p);
     ok("N03", "再上一頁兩次回到清單（對話框那筆沒有留著）", s.title === listTitle, s.title);
     await tap(p, '[data-tab="all"]', true); await settle(p);
-    await tap(p, ".scr:not(.gone) [data-logmenu]", true); await p.waitForTimeout(120);
-    ok("N03", "紀錄的篩選選單打開", (await look(p)).menus === 1);
+    ok("N03", "手機的紀錄篩選是系統選擇器（不是網頁選單）", await p.locator(".scr:not(.gone) select[data-logsel]").count() === 1 && await p.locator(".scr:not(.gone) [data-logmenu]").count() === 0);
     await tap(p, '[data-tab="list"]', true); await settle(p); s = await look(p);
-    ok("N03", "選單開著點分頁列：選單關、回到清單、沒有殘留", s.title === listTitle && s.menus === 0 && s.layers === 1, JSON.stringify(s));
+    ok("N03", "回到清單、沒有殘留", s.title === listTitle && s.menus === 0 && s.layers === 1, JSON.stringify(s));
   }
   if (want("N03") && plat !== "ios") {
     await tap(p, hostSel("東京"), true); await settle(p);
@@ -247,9 +246,8 @@ async function phoneFlow(o, engine, plat, url){
   }
   if (want("U02") && plat !== "desktop") {
     await tap(p, '[data-tab="all"]', true); await settle(p);
-    await tap(p, ".scr:not(.gone) [data-logmenu]", true); await p.waitForTimeout(350);
-    await tap(p, '.lmenu [data-logf="bad"]', true); await settle(p);
-    ok("U02", "紀錄篩選「有狀況」", await p.locator(".scr:not(.gone) .fchipbar").isVisible());
+    await p.locator(".scr:not(.gone) select[data-logsel]").selectOption("f:bad"); await settle(p);   // 手機是系統選擇器：系統畫面測不到，直接選
+    ok("U02", "紀錄篩選（系統選擇器）選「有狀況」", await p.locator(".scr:not(.gone) .fchipbar").isVisible());
     const sc = p.locator(".scr:not(.gone) .mscroll");
     await sc.evaluate(e => e.scrollTo(0, 300)); await p.waitForTimeout(250);
     const y0 = await sc.evaluate(e => e.scrollTop);
