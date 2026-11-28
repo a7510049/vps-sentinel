@@ -703,25 +703,45 @@ body:has(.dash.d) .fwrap{max-width:var(--pw)}
    左欄：主機清單（聊天清單的寫法：圓頭像＋名字＋一行狀態＋右邊時間或數字小圓）
    中間：選到的那一個；灰底上放圓角區塊
    右欄、設定：一段一段的白色區段，中間 10px 灰色帶隔開（telegram-tt side-panel-section） */
-:root{--lw:clamp(320px,26vw,420px); --rw:clamp(340px,25vw,424px); --hh:56px}   /* 左欄、右欄寬度（機場起降的整頁也要用，所以放在最外層） */
+/* 夠寬（1024 以上）：中間一欄是現在的分頁、右邊一欄是選到的主機；電腦介面左邊多一條側欄（1280 以下只剩圖示） */
+:root{--lw:clamp(340px,30vw,460px); --sbw:224px; --hh:56px}   /* 中間一欄、側欄寬度（機場起降的整頁也要用，所以放在最外層） */
 .dash.d.app2{display:flex;height:calc(100vh / var(--zoom));height:calc(100dvh / var(--zoom));min-height:0;overflow:hidden;padding:0}
 .dash.m.app2{padding:0;overflow:visible}
-.app2 .lcol{position:relative;flex:none;width:var(--lw);background:var(--s1);box-shadow:1px 0 0 var(--line);z-index:2;overflow:hidden}
-.app2 .mcol{position:relative;flex:1;min-width:0;overflow:hidden}
-.app2 .rcol{position:relative;flex:none;width:0;overflow:hidden;background:var(--s1);box-shadow:-1px 0 0 var(--line);transition:width var(--t-mid) var(--dec)}
-.app2 .rcol.on{width:var(--rw)}
-.rcin{position:absolute;top:0;bottom:0;left:0;width:var(--rw)}
-/* 1280 以下：右欄蓋在內容上面滑出來，不擠中間（telegram-tt 1276 以下右欄也是疊上去） */
+.app2 .pcol{position:relative;flex:none;width:var(--lw);background:var(--s1);box-shadow:1px 0 0 var(--line);z-index:2;overflow:hidden}
+.app2 .dcol{position:relative;flex:1;min-width:0;overflow:hidden}
+.dnone{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;color:var(--tx3)}
+.dnone svg{width:40px;height:40px}
+/* 側欄：上面名字，中間四個分頁，最下面夜間模式、重新整理、版本 */
+.sbar{position:relative;z-index:2;flex:none;width:var(--sbw);display:flex;flex-direction:column;gap:2px;padding:18px 12px 14px;background:var(--bg);box-shadow:1px 0 0 var(--line);overflow:hidden auto}
+.sbh{display:flex;align-items:center;gap:12px;padding:2px 8px 22px}
+.sbh .cav{width:40px;height:40px}
+.sbt{display:flex;flex-direction:column;min-width:0}
+.sbt small{font-size:var(--fs-2xs);font-weight:600;letter-spacing:.16em;color:var(--tx3)}
+.sbt b{font-size:var(--fs-xl);font-weight:700;line-height:1.2}
+.sbl,.sbf{display:flex;flex-direction:column;gap:2px}
+.sbf{margin-top:auto;padding-top:10px;box-shadow:0 -1px 0 var(--line)}
+.sbi{position:relative;z-index:1;display:flex;align-items:center;gap:14px;min-height:44px;padding:0 12px;border-radius:var(--r-md);color:var(--tx2);font-size:var(--fs-m);font-weight:500;text-align:left;transition:color var(--t-fast) var(--ease)}
+.sbi::before{content:"";position:absolute;inset:0;z-index:-1;border-radius:inherit;background:var(--pc);opacity:0;pointer-events:none;transition:opacity var(--t-fast) var(--ease)}
+.sbi.on{color:var(--on-pc)}
+.sbi.on::before{opacity:1}
+.sbi svg{flex:none;width:22px;height:22px}
+.sbi>span{flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+@media (hover:hover){.sbi:not(.on):hover{background:var(--hov);color:var(--tx)}}
+.sbi:focus-visible{outline:2px solid var(--p);outline-offset:-2px}
+.sbv{padding:8px 12px 0;font-size:var(--fs-xs);color:var(--tx3)}
 @media (max-width:1279px){
-  .app2 .rcol{position:absolute;top:0;right:0;bottom:0;z-index:var(--z-bar);width:var(--rw);transform:translateX(100%);opacity:0;pointer-events:none;box-shadow:var(--sh-float);
-    transition:transform var(--t-mid) var(--dec),opacity var(--t-fast) var(--ease)}
-  .app2 .rcol.on{transform:none;opacity:1;pointer-events:auto}
+  :root{--sbw:76px}
+  .sbt,.sbi>span,.sbv{display:none}
+  .sbh{justify-content:center;padding:2px 0 22px}
+  .sbi{justify-content:center;padding:0}
+  .sbi .cbg{position:absolute;top:3px;right:6px;min-width:18px;height:18px;padding:0 5px;font-size:var(--fs-2xs)}
 }
-.dash.d.app2 .det,body:has(.dash.d.app2) .flyv{left:var(--lw);--gx:var(--lw)}
+body:has(.dash.d.side) .flyv{left:var(--sbw);--gx:var(--sbw)}
+body:has(.dash.d.app2:not(.side)) .flyv{left:var(--lw);--gx:var(--lw)}
 body:has(.app2) .flyv{--pw:1280px}
 /* 每一層畫面：自己捲動，標題列固定在上面 */
 .scr{position:absolute;inset:0;display:flex;flex-direction:column;min-height:0;background:var(--bg);will-change:auto}
-.lcol>.scr,.rcin>.scr,.scr:has(>.lhd){background:var(--s1)}
+.pcol>.scr,.scr:has(>:is(.lhd,.hhd)){background:var(--s1)}
 .scr.gone{z-index:0}
 .stage{position:fixed;inset:0;overflow:hidden;background:var(--bg)}
 .stage>.scr.under{z-index:0;pointer-events:none}
@@ -814,7 +834,7 @@ a.crow{text-decoration:none;color:inherit}   /* 雲端硬碟那列是連結（�
 .cdot{position:absolute;right:0;bottom:0;width:14px;height:14px;border-radius:50%;background:var(--ok);box-shadow:0 0 0 2px var(--s1)}
 .cdot.warn{background:var(--warn)}.cdot.bad{background:var(--bad)}
 .crow.on .cdot{box-shadow:0 0 0 2px var(--pf)}
-.mcol .cdot,.tav .cdot{box-shadow:0 0 0 2px var(--s1)}
+.dcol .cdot,.tav .cdot{box-shadow:0 0 0 2px var(--s1)}
 /* 右下角的圓形按鈕（Telegram 的新增鈕） */
 .fab{position:absolute;right:20px;bottom:calc(20px + env(safe-area-inset-bottom));z-index:2;display:grid;place-items:center;width:56px;height:56px;border-radius:50%;background:var(--pf);color:var(--on-p);box-shadow:var(--sh-3);overflow:hidden;
   transition:background-color var(--t-fast) var(--ease),transform var(--t-fast) var(--ease)}
@@ -2052,7 +2072,7 @@ html.flyon .dash>.view,html.flyon .dash.m>.stage{content-visibility:hidden;conta
 .tbn{font-size:var(--fs-2xs);font-weight:500;line-height:1.2;white-space:nowrap}
 .tbl,.tba{display:flex;align-items:center;gap:2px;flex:none}
 .tbl:empty{display:none}
-.lcol.tabs>.scr :is(.lscroll,.rscroll){padding-bottom:calc(var(--tabh) + 24px + env(safe-area-inset-bottom))}
+.pcol.tabs>.scr :is(.lscroll,.mscroll,.rscroll){padding-bottom:calc(var(--tabh) + 24px + env(safe-area-inset-bottom))}
 .scr.root>:is(.lscroll,.mscroll,.rscroll){padding-bottom:calc(var(--tabh) + env(safe-area-inset-bottom))}
 .isrch{display:flex;align-items:center;gap:0;padding:8px 16px}
 .scx{flex:none;width:0;height:44px;margin:-4px 0;padding:0;overflow:hidden;color:var(--p);font-size:var(--fs-l2);white-space:nowrap;opacity:0;transition:width var(--t-mid) var(--dec),padding var(--t-mid) var(--dec),opacity var(--t-fast) var(--ease)}
@@ -2061,23 +2081,6 @@ html.flyon .dash>.view,html.flyon .dash.m>.stage{content-visibility:hidden;conta
 .nbk svg{width:28px;height:28px;flex:none;transform:rotate(90deg);stroke-width:2.4}
 .nbk span{overflow:hidden;text-overflow:ellipsis}
 .nbk.prs,.nbk:active{opacity:.4}
-/* 電腦（Telegram Desktop）：設定蓋在整個視窗中間（Info::LayerWidget：寬 392、上下留 40、標題列 56），後面暗 50% */
-.slayer{position:fixed;inset:0;z-index:var(--z-veil);display:flex;justify-content:center;align-items:flex-start;padding:40px 16px;animation:fadeIn var(--t-fast) var(--dec) backwards}
-.slbg{position:absolute;inset:0;background:var(--layer-bg);cursor:default}
-.slbox{position:relative;width:392px;max-width:100%;height:min(760px,calc(100% - 0px));border-radius:var(--r-box);overflow:hidden;background:var(--s1);box-shadow:var(--sh-float);animation:dlgin var(--t-fast) var(--std) backwards}
-.slbox>.scr .tbar{min-height:56px;padding:0 8px 0 12px}
-.slbox>.scr .tbt b{font-size:var(--fs-l);font-weight:600}
-/* 電腦：左上選單從左邊滑出來的一欄（Window::MainMenu：上面主題色底的名字，下面一列一列，頭像 48） */
-.mdrw{position:fixed;inset:0;z-index:var(--z-menu)}
-.mdbg{position:absolute;inset:0;background:var(--layer-bg)}
-.mdp{position:absolute;top:0;bottom:0;left:0;width:280px;max-width:86vw;display:flex;flex-direction:column;background:var(--s1);box-shadow:var(--sh-float);overflow-y:auto}
-.mdc{display:flex;flex-direction:column;align-items:flex-start;gap:2px;padding:20px 20px 16px;background:var(--pf);color:var(--on-p)}
-.mdc .cav{width:48px;height:48px;margin-bottom:12px}
-.mdc b{font-size:var(--fs-m);font-weight:600}
-.mdc small{font-size:var(--fs-s);opacity:.8}
-.mdp .lmenu{position:static;min-width:0;max-width:none;padding:6px 0;border-radius:0;background:none;box-shadow:none;-webkit-backdrop-filter:none;backdrop-filter:none}
-.mdp .hmenu button{min-height:42px;margin:0;padding:0 20px 0 21px;gap:20px;border-radius:0;font-weight:600;font-size:var(--fs-s)}
-.mdp .hmenu button:active,.mdp .hmenu button.prs{transform:none}
 /* 外觀的「介面」預覽圖 */
 .lks.l4{grid-template-columns:repeat(4,minmax(0,1fr))}
 .lkp.pm b{left:0;right:0;top:0;height:22%;border-radius:0}
@@ -2096,7 +2099,7 @@ html.flyon .dash>.view,html.flyon .dash.m>.stage{content-visibility:hidden;conta
 .lkp.pm.desktop i{left:6%;top:30%;width:22%;height:12%;border-radius:var(--r-xs);background:var(--p)}
 /* 設定、主機資訊裡的圖示方塊：三個平台的 Telegram 都是實心彩色方塊配白圖案（iOS SettingsController、Android TextCell.setColorfulIcon、tdesktop settingsIconRadius）
    用同一套角色（主題色、配角色、灰、注意、異常），只把淡底換成實心 */
-.rscroll .li>.ico,.mdrw .ico{--pc:var(--pf);--on-pc:#fff;--tc-bg:color-mix(in oklab,var(--tseed) 72%,#000);--on-tc:#fff;--sc:var(--ico-gray);--on-sc:#fff;--warnc:var(--warn);--on-warnc:#fff;--badc:var(--bad);--on-badc:#fff}
+.rscroll .li>.ico,.sbar .ico{--pc:var(--pf);--on-pc:#fff;--tc-bg:color-mix(in oklab,var(--tseed) 72%,#000);--on-tc:#fff;--sc:var(--ico-gray);--on-sc:#fff;--warnc:var(--warn);--on-warnc:#fff;--badc:var(--bad);--on-badc:#fff}
 
 /* ── iOS（Telegram-iOS）── */
 [data-plat="ios"]{--tabh:49px; --hh:44px}
@@ -2126,7 +2129,7 @@ html.flyon .dash>.view,html.flyon .dash.m>.stage{content-visibility:hidden;conta
 [data-plat="ios"] .sin{font-size:var(--fs-l2)}
 [data-plat="ios"] .ltabs{padding:0 8px;background:var(--s1);box-shadow:inset 0 -.5px 0 var(--line)}
 [data-plat="ios"] .ltb{height:44px;font-size:var(--fs-m2);font-weight:600}
-[data-plat="ios"] .lscroll,[data-plat="ios"] .lcol>.scr:has(>.lscroll),[data-plat="ios"] .stage>.scr:has(>.lscroll){background:var(--lbg)}
+[data-plat="ios"] .lscroll,[data-plat="ios"] .pcol>.scr:has(>.lscroll),[data-plat="ios"] .stage>.scr:has(>.lscroll){background:var(--lbg)}
 [data-plat="ios"] .ltabs{background:var(--lbg)}
 [data-plat="ios"] .crow .cdot{box-shadow:0 0 0 2px var(--lbg)}
 /* 聊天清單的列（ChatListItem）：76 高、頭像 60、字從 84 開始、名字 16 粗、狀態 15、時間 14；按下去灰底，沒有水波紋，分隔線從字開頭畫到最右邊 */
@@ -2149,7 +2152,7 @@ html.flyon .dash>.view,html.flyon .dash.m>.stage{content-visibility:hidden;conta
 [data-plat="ios"] .crow.on .cdot{box-shadow:0 0 0 2px var(--hov)}
 /* 下面的分頁列（TabBarNode）：49 高＋底部安全區、毛玻璃、上面一條細線；圖示上、字 10 在下 */
 [data-plat="ios"] .tabbar{left:0;right:0;bottom:0;height:calc(49px + env(safe-area-inset-bottom));padding-bottom:env(safe-area-inset-bottom);background:var(--bar-bg);-webkit-backdrop-filter:var(--blur-bar);backdrop-filter:var(--blur-bar);box-shadow:0 -.5px 0 var(--line);--tbar-bg:var(--s1)}
-[data-plat="ios"] .lcol.tabs .tabbar{height:calc(49px + env(safe-area-inset-bottom))}
+[data-plat="ios"] .pcol.tabs .tabbar{height:calc(49px + env(safe-area-inset-bottom))}
 [data-plat="ios"] .tbi.prs,[data-plat="ios"] .tbi:active{opacity:.5}
 /* 設定、主機資訊（ItemListUI 的 blocks 樣式、iOS 26 玻璃版）：灰底上左右留 16 的圓角區塊（26），列 52 高、17 字，
    段落標題 13 灰字在區塊外面，分隔線從字開頭到離右邊 16 */
@@ -2244,7 +2247,7 @@ html.flyon .dash>.view,html.flyon .dash.m>.stage{content-visibility:hidden;conta
 [data-plat="android"] .cbg{min-width:24px;height:24px;font-size:var(--fs-xs);font-weight:500}
 /* 下面的分頁（MainTabsActivity、GlassTabView）：浮起來的膠囊 56 高、四周留 8，字 12 粗，選到的那一格一塊淡底 */
 [data-plat="android"] .tabbar{left:8px;right:8px;bottom:calc(8px + env(safe-area-inset-bottom));height:56px;padding:4px;border-radius:var(--r-pill);background:color-mix(in srgb,var(--s1) 86%,transparent);-webkit-backdrop-filter:var(--blur-bar);backdrop-filter:var(--blur-bar);box-shadow:0 1px 6px rgba(0,0,0,.15),0 0 0 .5px var(--line);--tbar-bg:var(--s1)}
-[data-plat="android"] .lcol.tabs .tabbar{bottom:calc(8px + env(safe-area-inset-bottom))}
+[data-plat="android"] .pcol.tabs .tabbar{bottom:calc(8px + env(safe-area-inset-bottom))}
 [data-plat="android"] .tbi{border-radius:var(--r-pill);color:var(--tx2);gap:0}
 [data-plat="android"] .tbi::before{content:"";position:absolute;inset:0;border-radius:inherit;background:var(--pc);opacity:0;transform:scale(.7);transition:opacity var(--t-fast) var(--ease),transform var(--t-mid) var(--dec)}
 [data-plat="android"] .tbi.on{color:var(--on-pc);--tbar-bg:var(--pc)}
@@ -2254,7 +2257,7 @@ html.flyon .dash>.view,html.flyon .dash.m>.stage{content-visibility:hidden;conta
 [data-plat="android"] .tbn{font-size:var(--fs-xs);font-weight:600}
 [data-plat="android"] .tbi.on .tbn{font-weight:700}
 [data-plat="android"] .fab{right:16px;bottom:calc(16px + var(--tabh) + env(safe-area-inset-bottom));background:var(--pf);border-radius:var(--r-lg)}
-[data-plat="android"] .lcol .fab{bottom:calc(16px + var(--tabh) + env(safe-area-inset-bottom))}
+[data-plat="android"] .pcol .fab{bottom:calc(16px + var(--tabh) + env(safe-area-inset-bottom))}
 /* 設定、主機資訊（ProfileActivity）：整片白色段落，段落之間一條灰帶；段落標題主題色 15 粗，列 50 高、16 字 */
 [data-plat="android"] .rscroll>.lbl{padding:15px 21px 4px;font-size:var(--fs-m2);font-weight:500;border-top-width:12px}
 [data-plat="android"] .rscroll>.group:first-child,[data-plat="android"] .rscroll>.group+.group{border-top-width:12px}
@@ -2307,8 +2310,8 @@ html.flyon .dash>.view,html.flyon .dash.m>.stage{content-visibility:hidden;conta
 [data-plat="desktop"] .dialog:not(.dlga){border-radius:var(--r-box)}
 @media (max-width:599px){[data-plat="desktop"] .veil:has(.form) .dialog{border-radius:var(--r-box) var(--r-box) 0 0}}
 /* 選單（defaultPopupMenu）：圓角 8、項目左右 17、上下 8，最窄 156 */
-[data-plat="desktop"] .lmenu:not(.mdp .lmenu){min-width:180px;padding:8px 0;border-radius:var(--r-box)}
-[data-plat="desktop"] .hmenu:not(.mdp .lmenu) button{min-height:34px;margin:0;padding:0 17px;gap:16px;border-radius:0;font-size:var(--fs-m);font-weight:400}
+[data-plat="desktop"] .lmenu{min-width:180px;padding:8px 0;border-radius:var(--r-box)}
+[data-plat="desktop"] .hmenu button{min-height:34px;margin:0;padding:0 17px;gap:16px;border-radius:0;font-size:var(--fs-m);font-weight:400}
 [data-plat="desktop"] .hmenu button:active{transform:none}
 [data-plat="desktop"] .ubtn{border-radius:var(--r-btn);font-weight:600}
 /* 底部通知：iOS UndoOverlay 圓角 14、Android Bulletin 圓角 12、電腦 toast 圓角 8 */
@@ -2351,3 +2354,133 @@ html.flyon .dash>.view,html.flyon .dash.m>.stage{content-visibility:hidden;conta
 /* 手機、平板：輸入框字一律不小於 16px（iPhone 小於這個一點就自己放大畫面，放大後對話框的「儲存」「×」會被擠出畫面點不到）；
    放最後、一律套用，免得後面又有比較精確的規則把字改小 */
 @media (pointer:coarse){:is(input:not([type=checkbox],[type=radio],[type=range],[type=file],[type=color]),textarea,select){font-size:max(var(--fs-l),calc(var(--fs-input) / var(--zoom)))!important}}
+
+/* ═════════ 首頁、主機分頁（三個平台共用的骨架；平台差異在下面各自一段） ═════════ */
+/* 首頁標題：小字 SENTINEL、大字「哨站」，右邊搜尋、新增 */
+.app2 .tbar.hhd{display:flex;align-items:flex-end;justify-content:space-between;gap:8px;min-height:auto;padding:calc(env(safe-area-inset-top) * var(--sa,1) + 10px) 8px 8px 16px;box-shadow:none}
+.hbr{display:flex;flex-direction:column;min-width:0}
+.hbr small{font-size:var(--fs-2xs);font-weight:600;letter-spacing:.16em;color:var(--tx3)}
+.hbr b{font-size:var(--fs-3xl);font-weight:700;line-height:1.15}
+.app2 .hhd .iconbtn{color:var(--p)}
+.hsr{flex:none;padding:2px 12px 10px;background:var(--s1);box-shadow:0 1px 0 var(--line);position:relative;z-index:1}
+.hscr{padding-bottom:24px}
+.hscr .clist{padding:0 8px}
+/* 連線摘要（只講連不連得上；有事要留意另外一行，點了到那台） */
+.hlth{display:flex;align-items:center;gap:12px;margin:8px 12px 0;padding:12px 14px;border-radius:var(--r-lg);background:var(--okc)}
+.hlth.warn{background:var(--warnc)}.hlth.bad{background:var(--badc)}
+.hlth[data-go]{cursor:pointer}
+.hlth:focus-visible{outline:2px solid var(--p);outline-offset:2px}
+.hld{flex:none;width:10px;height:10px;border-radius:50%;background:var(--ok);box-shadow:0 0 0 4px var(--okc)}
+.hlth.warn .hld{background:var(--warn);box-shadow:0 0 0 4px var(--warnc)}.hlth.bad .hld{background:var(--bad);box-shadow:0 0 0 4px var(--badc)}
+.hlt{flex:1;min-width:0;display:flex;flex-direction:column;gap:1px}
+.hlt b{font-size:var(--fs-m);font-weight:600;color:var(--on-okc)}
+.hlth.warn .hlt b{color:var(--on-warnc)}.hlth.bad .hlt b{color:var(--on-badc)}
+.hlt small{font-size:var(--fs-xs);color:var(--tx2)}
+.hlr{flex:none;display:flex;flex-direction:column;align-items:flex-end}
+.hlr b{font-size:var(--fs-xl);font-weight:700;line-height:1.1}
+.hlr em{font-style:normal;font-size:var(--fs-s);font-weight:500;color:var(--tx3)}
+.hlr small{font-size:var(--fs-xs);color:var(--tx3)}
+.hlth>.chev{flex:none;width:18px;height:18px;margin-right:-4px;color:var(--tx3);transform:rotate(-90deg)}
+/* 一段的標題（我的主機、常用工具、所有工具）：右邊「全部」「編輯」 */
+.hsec{display:flex;align-items:center;justify-content:space-between;gap:8px;min-height:40px;padding:14px 16px 2px}
+.hsec h2{margin:0;font-size:var(--fs-s);font-weight:600;color:var(--tx3)}
+.hsb{display:inline-flex;align-items:center;gap:2px;min-height:40px;margin-right:-8px;padding:0 8px;border-radius:var(--r-sm);color:var(--p);font-size:var(--fs-s);font-weight:500}
+.hsb .chev{width:14px;height:14px;transform:rotate(-90deg)}
+@media (hover:hover){.hsb:hover{background:var(--hov)}}
+.hsb:focus-visible{outline:2px solid var(--p);outline-offset:-2px}
+.hsn{font-size:var(--fs-xs);color:var(--tx3)}
+.hnote{margin:0;padding:4px 16px 2px;font-size:var(--fs-xs);color:var(--tx3)}
+/* 主機列：名字、下載速度，下面處理器／記憶體／磁碟三條（不知道的寫「—」，條是空的） */
+.crow.hrw{align-items:flex-start;padding-top:10px;padding-bottom:10px}
+.hrw .cbd{gap:3px}
+.mbs{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;margin-top:5px}
+.mb{display:flex;flex-direction:column;gap:4px;min-width:0}
+.mbl{display:flex;justify-content:space-between;gap:4px;font-size:var(--fs-2xs);line-height:1.2;color:var(--tx3);white-space:nowrap}
+.mbl .num{font-weight:600;color:var(--tx2)}
+.mb.w .mbl .num{color:var(--warn)}.mb.b .mbl .num{color:var(--bad)}
+.mbt{position:relative;display:block;height:4px;border-radius:var(--r-pill);background:var(--s3);overflow:hidden}
+.mbt>i{position:absolute;inset:0;border-radius:inherit;background:var(--p);transform-origin:left center;transition:transform var(--t-mid) var(--dec)}
+.mb.w .mbt>i{background:var(--warn)}.mb.b .mbt>i{background:var(--bad)}
+.crow.on .mbl,.crow.on .mbl .num{color:color-mix(in srgb,var(--on-p) 85%,transparent)}
+.crow.on .mbt{background:color-mix(in srgb,var(--on-p) 25%,transparent)}
+.crow.on .mbt>i{background:var(--on-p)}
+/* 工具列：圓角方塊圖示、名字、一行狀態；雲端硬碟是開新分頁的連結 */
+.svi{flex:none;display:grid;place-items:center;width:40px;height:40px;border-radius:var(--r-md);background:var(--pc);color:var(--on-pc)}
+.svi.sky{background:var(--tc-bg);color:var(--on-tc)}.svi.mu{background:var(--sc);color:var(--on-sc)}
+.svi svg{width:22px;height:22px}
+.crow.svr{min-height:60px}
+.svr>:is(.chev,.ext){flex:none;width:18px;height:18px;color:var(--tx3)}
+.svr>.chev{transform:rotate(-90deg)}
+/* 常用工具：一排四格，大圖示＋名字 */
+.qgrid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:4px;padding:4px 8px 2px}
+.qk{display:flex;flex-direction:column;align-items:center;gap:7px;min-width:0;min-height:84px;padding:10px 2px 8px;border-radius:var(--r-lg);color:var(--tx);text-decoration:none;transition:background-color var(--t-fast) var(--ease)}
+.qk .svi{width:50px;height:50px;border-radius:var(--r-lg)}
+.qk .svi svg{width:24px;height:24px}
+.qkn{max-width:100%;font-size:var(--fs-xs);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+@media (hover:hover){.qk:hover{background:var(--hov)}}
+.qk:active,.qk.prs{background:var(--act)}
+.qk:focus-visible{outline:2px solid var(--p);outline-offset:-2px}
+/* 編輯常用工具：每一項一個開關，放進去的排前面、可以往前移 */
+.pinl{display:flex;flex-direction:column;padding:0 8px}
+.pinr{display:flex;align-items:center;gap:12px;min-height:56px;padding:6px 8px}
+.pinr .lab{flex:1;min-width:0;display:flex;flex-direction:column;font-size:var(--fs-m);cursor:pointer}
+.pinr .lab small{font-size:var(--fs-xs);color:var(--tx3)}
+.pinr .iconbtn{color:var(--p)}
+.pinr+.pinr{box-shadow:inset 0 1px 0 var(--div)}
+
+/* ── 首頁、主機分頁：iOS（密集清單、分隔線，頭像小一點放得下三條） ── */
+[data-plat="ios"] .hbr b{font-size:var(--fs-4xl)}
+[data-plat="ios"] .app2 .tbar.hhd{background:var(--lbg);-webkit-backdrop-filter:none;backdrop-filter:none}
+[data-plat="ios"] .hsr{background:var(--lbg);box-shadow:none}
+[data-plat="ios"] .hscr .clist{padding:0}
+[data-plat="ios"] .crow.hrw .cav{width:52px;height:52px}
+[data-plat="ios"] .crow.hrw .cav img.flag{width:52px;height:52px}
+[data-plat="ios"] .crow.hrw{min-height:0;padding-top:12px;padding-bottom:12px}
+[data-plat="ios"] .crow.hrw+.crow::after{left:76px}
+[data-plat="ios"] .crow.svr{min-height:60px}
+[data-plat="ios"] .crow.svr+.crow::after{left:64px}
+[data-plat="ios"] .svi{width:36px;height:36px;border-radius:var(--r-sm)}
+[data-plat="ios"] .hsec{padding-left:20px;padding-right:20px}
+[data-plat="ios"] .hsec h2{text-transform:none;font-size:var(--fs-s);font-weight:400}
+[data-plat="ios"] .hlth{margin-left:16px;margin-right:16px}
+[data-plat="ios"] .qk:active,[data-plat="ios"] .qk.prs{background:none;opacity:.5}
+/* ── Android（Material：主機一張一張卡片、圓角大一點，選到的分頁一塊膠囊底） ── */
+[data-plat="android"] .hscr,[data-plat="android"] .pcol>.scr:has(>.lscroll) .lscroll,[data-plat="android"] .stage>.scr>.lscroll{background:var(--bg)}
+[data-plat="android"] .app2 .tbar.hhd{background:var(--bg)}
+[data-plat="android"] .hsr{background:var(--bg);box-shadow:none}
+[data-plat="android"] .hbr b{font-size:var(--fs-3xl);font-weight:500}
+[data-plat="android"] .clist .crow.hrw{margin:0 0 8px;border-radius:var(--r-xl);background:var(--s1);padding:14px 14px 14px 12px}
+[data-plat="android"] .clist .crow.hrw::after{display:none}
+[data-plat="android"] .clist .crow.hrw.on{background:var(--pc);color:var(--on-pc)}
+[data-plat="android"] .hscr .clist,[data-plat="android"] .lscroll>.clist{padding:0 12px}
+[data-plat="android"] .lscroll>.clist{padding-bottom:calc(var(--tabh) + 88px)}
+[data-plat="android"] .slist{margin:0 12px;border-radius:var(--r-xl);background:var(--s1);overflow:hidden}
+[data-plat="android"] .hscr .slist{padding:4px 0}
+[data-plat="android"] .crow.svr{padding-left:14px}
+[data-plat="android"] .crow.svr+.crow::after{left:68px}
+[data-plat="android"] .svi{border-radius:var(--r-lg)}
+[data-plat="android"] .hlth{border-radius:var(--r-xl)}
+[data-plat="android"] .pinl{margin:0 12px;border-radius:var(--r-xl);background:var(--s1);padding:4px 8px}
+/* ── 電腦（側欄、清單、右邊主機）：清單列跟 Telegram Desktop 一樣緊湊 ── */
+[data-plat="desktop"] .hbr b{font-size:var(--fs-2xl)}
+[data-plat="desktop"] .crow.hrw{min-height:0;padding-top:10px;padding-bottom:10px;border-radius:var(--r-md)}
+[data-plat="desktop"] .hscr .clist,[data-plat="desktop"] .lscroll>.clist{padding:0 8px}
+[data-plat="desktop"] .crow.svr{border-radius:var(--r-md)}
+[data-plat="desktop"] .svi{width:36px;height:36px;border-radius:var(--r-sm)}
+[data-plat="desktop"] .svi svg{width:20px;height:20px}
+.hscr>.lban{width:calc(100% - 24px);margin:8px 12px 0;border-radius:var(--r-lg)}
+[data-plat="ios"] .hscr>.lban{width:calc(100% - 32px);margin:8px 16px 0}
+[data-plat="android"] .hscr>.lban{border-radius:var(--r-xl)}
+/* 電腦介面但視窗不夠寬（1024 以下）：跟手機一樣一欄，下面一條分頁列 */
+@media (max-width:1023px){[data-plat="desktop"]{--tabh:56px}}
+[data-plat="desktop"] .tabbar{left:0;right:0;bottom:0;height:calc(56px + env(safe-area-inset-bottom));padding:0 8px env(safe-area-inset-bottom);background:var(--s1);box-shadow:0 -1px 0 var(--line);--tbar-bg:var(--s1)}
+[data-plat="desktop"] .tbi{margin:6px 4px;border-radius:var(--r-md)}
+[data-plat="desktop"] .tbg svg{width:22px;height:22px}
+[data-plat="desktop"] .tbn{font-size:var(--fs-xs)}
+@media (hover:hover){[data-plat="desktop"] .tbi:not(.on):hover{background:var(--hov);color:var(--tx)}}
+/* iOS 選到的那台只是淡灰底：三條照平常的顏色 */
+[data-plat="ios"] .crow.on .mbl{color:var(--tx3)}[data-plat="ios"] .crow.on .mbl .num{color:var(--tx2)}
+[data-plat="ios"] .crow.on .mbt{background:var(--s3)}[data-plat="ios"] .crow.on .mbt>i{background:var(--p)}
+[data-plat="ios"] .crow.on .mb.w .mbt>i{background:var(--warn)}[data-plat="ios"] .crow.on .mb.b .mbt>i{background:var(--bad)}
+.tbi:focus-visible{outline:2px solid var(--p);outline-offset:-4px}
+@media (pointer:coarse){.rng button{min-height:36px}}   /* 平板手指點：時間範圍鈕不要太矮 */
