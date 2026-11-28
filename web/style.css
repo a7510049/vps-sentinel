@@ -770,6 +770,7 @@ body:has(.app2) .flyv{--pw:1280px}
 @media (hover:hover){.ltb:not(.on):hover{background:var(--hov)}}
 /* 一列（主機、全部主機、機場起降）：54 圓頭像、名字 16/500、右上時間或網速、下面一行狀態，右下數字小圓 */
 .clist{display:flex;flex-direction:column;padding:6px 8px 88px}
+a.crow{text-decoration:none;color:inherit}   /* 雲端硬碟那列是連結（開新分頁）：不要瀏覽器的底線 */
 .crow{position:relative;display:flex;align-items:center;gap:12px;width:100%;min-height:72px;padding:6px 9px;border-radius:var(--r-md);text-align:left;overflow:hidden;
   transition:background-color var(--t-fast) var(--ease)}
 @media (hover:hover){.crow:not(.on):hover{background:var(--hov)}}
@@ -838,6 +839,24 @@ body:has(.app2) .flyv{--pw:1280px}
 @media (min-width:600px){.mwrap .tiles{grid-template-columns:repeat(4,minmax(0,1fr))}}
 .mwrap .alerts:not(:empty){margin:0}
 /* 重點數字：一條，不是一排卡片 */
+/* 紀錄頁的總覽：標題列下面固定一排（Telegram 的置頂訊息），點了往下展開完整數字 */
+.ovbar{flex:none;position:relative;z-index:1;background:var(--s1);box-shadow:inset 0 -1px 0 var(--line)}
+.ovl{display:flex;align-items:center;gap:10px;width:100%;min-height:40px;padding:6px 12px 6px 16px;text-align:left;color:var(--tx2);font-size:var(--fs-s)}
+.ovt{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.ovw{flex:none;color:var(--tx)}
+.ovl>.chev{flex:none;width:18px;height:18px;color:var(--tx3);transition:transform var(--t-mid) var(--ease)}
+.ovbar.open .ovl>.chev{transform:rotate(180deg)}
+.ovx{display:grid;grid-template-rows:0fr;transition:grid-template-rows var(--t-mid) var(--ease)}
+.ovx>div{overflow:hidden;min-height:0}
+.ovbar.open .ovx{grid-template-rows:1fr}
+.ovx .stat{margin:0 12px 12px;box-shadow:none;background:var(--s2)}
+@media (hover:hover){.ovl:hover{background:var(--hov)}}
+.ovl:focus-visible{outline:2px solid var(--p);outline-offset:-2px}
+/* 紀錄：不在最下面（最新的）時右下角「↓」跳回最新 */
+.tldn{position:sticky;bottom:16px;margin:-60px 16px 16px auto;z-index:var(--z-bar);width:44px;height:44px;border-radius:var(--r-pill);display:grid;place-items:center;background:var(--s1);color:var(--tx2);box-shadow:var(--sh-2);opacity:0;transform:scale(.8);pointer-events:none;transition:opacity var(--t-fast) var(--ease),transform var(--t-fast) var(--ease)}
+.tldn svg{width:22px;height:22px}
+.tlup .tldn{opacity:1;transform:none;pointer-events:auto}
+.scr.root .tldn{bottom:calc(var(--tabh) + env(safe-area-inset-bottom) + 12px)}   /* 分頁列蓋在捲動區上面：鈕放在它上方 */
 .stat{background:var(--s1);border-radius:var(--r-xl);box-shadow:var(--cs);padding:14px 16px 16px}
 .sthi{font-size:var(--fs-m);color:var(--tx3);margin-bottom:10px}
 .sthi:empty{display:none}
@@ -922,6 +941,7 @@ body:has(.app2) .flyv{--pw:1280px}
 .rscroll>.group,.rscroll>.cc{border-radius:0;box-shadow:none;background:var(--s1)}
 .rscroll>.group{padding:4px 0 8px}
 .rscroll>.lbl+.group{padding-top:0}
+.rscroll>.group:first-child,.rscroll>.group+.group{border-top:10px solid var(--bg)}   /* 第一塊就是清單、兩塊清單相連：一律留空（iOS 在平台介面那段另外寫） */
 .rscroll>.cc{border-top:10px solid var(--bg);padding:14px 16px 12px}
 .rscroll>.cc .cch{margin-bottom:6px}
 .rscroll>.cc .cch .ct2{font-size:var(--fs-l);color:var(--p)}
@@ -2137,6 +2157,7 @@ html.flyon .dash>.view,html.flyon .dash.m>.stage{content-visibility:hidden;conta
 [data-plat="ios"] .rscroll>.group{padding:0}
 [data-plat="ios"] .rscroll>.cc,[data-plat="ios"] .rscroll>.gx,[data-plat="ios"] .rscroll>.prof+.group{margin-top:16px}
 [data-plat="ios"] .rscroll>.selfsum+.group{margin-top:8px}
+[data-plat="ios"] .rscroll>.group:first-child,[data-plat="ios"] .rscroll>.group+.group{margin-top:16px}   /* 第一塊就是清單、兩塊清單相連：一律留空，不貼著標題列（不靠每頁自己補） */
 [data-plat="ios"] .rscroll .li{min-height:52px;padding:6px 16px;gap:13px}
 [data-plat="ios"] .rscroll .li .lab{font-size:var(--fs-l2)}
 [data-plat="ios"] .rscroll .li .lab small{font-size:var(--fs-m2);color:var(--tx3)}
@@ -2231,6 +2252,7 @@ html.flyon .dash>.view,html.flyon .dash.m>.stage{content-visibility:hidden;conta
 [data-plat="android"] .lcol .fab{bottom:calc(16px + var(--tabh) + env(safe-area-inset-bottom))}
 /* 設定、主機資訊（ProfileActivity）：整片白色段落，段落之間一條灰帶；段落標題主題色 15 粗，列 50 高、16 字 */
 [data-plat="android"] .rscroll>.lbl{padding:15px 21px 4px;font-size:var(--fs-m2);font-weight:500;border-top-width:12px}
+[data-plat="android"] .rscroll>.group:first-child,[data-plat="android"] .rscroll>.group+.group{border-top-width:12px}
 [data-plat="android"] .rscroll .li{min-height:50px;padding:6px 21px;gap:24px}
 [data-plat="android"] .rscroll .group:not(.pane)>*+*::before{left:var(--dx,21px)}
 [data-plat="android"] .rscroll .group:not(.pane)>:has(>.ico)+*,[data-plat="android"] .rscroll .group:not(.pane)>*+:has(>.ico){--dx:73px}

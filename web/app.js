@@ -745,7 +745,7 @@ const UNDX = () => PLAT === "ios" ? 30 : PLAT === "android" ? 0 : 20, UNDO = () 
 const SCRY = new Map();
 const scrBox = sc => sc && sc.querySelector(":scope>:is(.lscroll,.mscroll,.rscroll)");
 function scrKeep(sc){ const c = scrBox(sc); if (c && sc.dataset.key) SCRY.set(sc.dataset.key + "|" + (c.dataset.seg || ""), c.scrollTop); }
-function scrBack(sc){ const c = scrBox(sc), y = c && SCRY.get(sc.dataset.key + "|" + (c.dataset.seg || "")); if (y) c.scrollTop = y; }
+function scrBack(sc){ const c = scrBox(sc), y = c && SCRY.get(sc.dataset.key + "|" + (c.dataset.seg || "")); if (y != null) { c.scrollTop = y; if (c._tl) tlAway(c); } }   // 0 也算（紀錄停在最上面時返回不能跳到最下面）
 function scrSwap(a, b){
   scrKeep(a);
   const dir = NAVDIR, sx = dir < 0 ? NAVSWIPE : 0; NAVSWIPE = 0; clearTimeout(NAVSWT);
@@ -896,28 +896,48 @@ function mainMenu(btn){
 }
 /* ── 中間：全部主機（重點數字＋所有主機的紀錄，像一個群組的訊息） ── */
 function allScreen(list, time){
-  const on = list.filter(s => s.online), g = greet();
-  const sub = LOST ? "連線中斷，重試中…" : `${on.length}／${list.length} 台在線${PREF.show.weather && WX ? `・${WX.icon} ${WX.t}°` : ""}`;
+  const on = list.filter(s => s.online);
+  const sub = LOST ? "連線中斷，重試中…" : `${on.length}／${list.length} 台在線`;   // 跟 Telegram 群組一樣只寫在線幾個；天氣移到下面的總覽那排
   const fl = LOGF || LOGH;
   const acts = `<button class="iconbtn${fl ? " act" : ""}" data-logmenu title="篩選紀錄">${I("filter")}</button>`;
   const root = TABS() && !DESK.matches;
   const head = topbar({av:root ? "" : `<span class="cav brand sm">${BRAND}</span>`, title:root ? "紀錄" : "全部主機", sub, acts});
   const is = issuesOf(list), lv = LOST || list.some(s => !s.online || lvOf(s) === "bad") ? "bad" : is.length ? "warn" : "ok";
   const pin = is.length ? `<button class="pinb ${lv}" data-go="h:${esc(keyOf(is[0].s))}" data-key="pin"><i></i><span><b>${esc(LOST || is.length > 1 ? headline(list) : is[0].t ? "1 件事要留意" : "1 台主機連不上")}</b><small>${esc(is[0].t ? `${is[0].s.name}・${is[0].t}` : `${is[0].s.name} 連不上`)}${is.length > 1 ? `　還有 ${is.length - 1} 件` : ""}</small></span>${CHEV}</button>` : "";
-  const ev0 = allEvents(list).filter(e => !LOGH || e.k === LOGH).filter(LOGK[LOGF] || LOGK[""]), ev = LOGH ? ev0 : groupEv(ev0);
+  const ev0 = allEvents(list).filter(e => !LOGH || e.k === LOGH).filter(LOGK[LOGF] || LOGK[""]), ev = (LOGH ? ev0 : groupEv(ev0)).slice().reverse();   // 跟 Telegram 聊天一樣舊的在上、最新的在最下面
   const chip = fl ? `<div class="fchipbar" data-key="fcb"><button class="fpill" data-logclear>${esc([LOGF && {bad:"有狀況", other:"恢復與通知"}[LOGF], LOGH && (list.find(x => keyOf(x) === LOGH) || {}).name].filter(Boolean).join("・"))}${I("x")}</button></div>` : "";
-  return head + pin + `<div class="mscroll" data-key="ms"><div class="mwrap" data-key="mw">${fl ? "" : statStrip(list, g)}${chip}${timeline(ev, list.length > 1)}</div></div>`;
+  return head + pin + (fl ? "" : ovBar(list)) + `<div class="mscroll tlb" data-key="ms"><div class="mwrap" data-key="mw">${chip}${timeline(ev, list.length > 1)}</div>`
+    + `<button class="tldn" data-tlend data-key="tldn" aria-label="跳到最新" tabindex="-1">${I("down")}</button></div>`;   // 黏在捲動區右下角（不會壓到分頁列）
+}
+/* 總覽：像 Telegram 的置頂訊息，標題列下面固定一排小字，點了展開完整的數字（天氣在最右邊） */
+let OVOPEN = false;
+function ovBar(list){
+  const on = list.filter(s => s.online), ua = upAvg(list.flatMap(s => (s.up30 || []).filter(x => x != null)));
+  const rx = on.reduce((t, s) => t + (s.net.rx || 0), 0), used = list.filter(s => s.traffic).reduce((t, s) => t + (s.traffic.used || 0), 0);
+  const wx = PREF.show.weather && WX ? `<span class="ovw">${WX.icon} ${WX.t}°</span>` : "";
+  const line = [`${on.length}/${list.length} 在線`, `↓${rate(rx)}`, `本月 ${size(used)}`, ua != null ? upPct(ua) : ""].filter(Boolean).join("・");
+  return `<div class="ovbar${OVOPEN ? " open" : ""}" data-key="ovbar"><button class="ovl" data-ovt aria-expanded="${OVOPEN}"><span class="ovt num" data-x>${line}</span>${wx}${CHEV}</button>`
+    + `<div class="ovx"><div>${statStrip(list)}</div></div></div>`;
 }
 /* 重點數字：一條，不是一排卡片 */
-function statStrip(list, g){
+function statStrip(list){
   const on = list.filter(s => s.online), ua = upAvg(list.flatMap(s => (s.up30 || []).filter(x => x != null)));
   const rx = on.reduce((t, s) => t + (s.net.rx || 0), 0), tx = on.reduce((t, s) => t + (s.net.tx || 0), 0);
   const tr = list.filter(s => s.traffic), used = tr.reduce((t, s) => t + (s.traffic.used || 0), 0), pj = tr.reduce((t, s) => t + (s.traffic.projected || 0), 0);
   const cell = (k, v, l) => `<div class="stc" data-key="st:${k}"><b class="num" data-x>${v}</b><small>${l}</small></div>`;
-  return `<div class="stat" data-key="stat"><div class="sthi">${esc([g.hi, g.quote].filter(Boolean).join("・"))}</div><div class="stcs">`
+  return `<div class="stat" data-key="stat"><div class="stcs">`
     + cell("on", `${on.length}<em>／${list.length}</em>`, "台在線") + cell("rx", `${rate(rx)}`, `下載・上傳 ${rate(tx)}`)
     + cell("tr", size(used), pj ? `本月・預估 ${size(pj)}` : "本月流量") + (ua != null ? cell("up", upPct(ua), "30 天可用率") : "") + `</div></div>`;
 }
+/* 紀錄捲動：第一次打開停在最下面（最新的）；本來就在最下面的，新的進來跟著到底；不在最下面時右下角出現「↓」 */
+function tlStick(prev){
+  for (const [sc, bot] of prev) if (sc.isConnected && bot) sc.scrollTop = sc.scrollHeight;
+  document.querySelectorAll("#app .mscroll.tlb").forEach(sc => {
+    if (!sc._tl) { sc._tl = 1; sc.scrollTop = sc.scrollHeight; sc.addEventListener("scroll", () => tlAway(sc), {passive:true}); }
+    tlAway(sc);
+  });
+}
+function tlAway(sc){ const s = sc.closest("[data-scr]"); if (s) s.classList.toggle("tlup", sc.scrollHeight - sc.scrollTop - sc.clientHeight > 160); }
 /* 紀錄：照日期分段，每一筆是一個泡泡（哪一台說的、說了什麼、幾點） */
 function timeline(ev, many){
   if (!ev.length) return `<div class="svc" data-key="none"><span>目前沒有事件</span></div>`;
@@ -1006,7 +1026,7 @@ function infoScreen(s){
     + (s.keep ? `<label class="li" data-key="keep">${IC("keep", "")}<span class="lab">Oracle 防回收${keepLine(s.keep)}</span><input type="checkbox" class="tog" data-keepalive="${node}" aria-label="Oracle 防回收" ${s.keep.on ? "checked" : ""}></label>` : "")
     + (s.node ? "" : setRow(`data-key="pair" data-pair`, "link", "配對暗號", "pairst")) + `</div>`;
   return head + `<div class="rscroll" data-key="rs">${prof}`
-    + sec("t", "工具", `<div class="group" data-key="g-t">${tools}</div>`)
+    + (tools ? sec("t", !DESK.matches && !s.node ? "" : "工具", `<div class="group" data-key="g-t">${tools}</div>`) : "")
     + specCard(s) + itemsCard(s) + topCard(s)
     + sec("m", "維護", `<div class="selfsum" data-key="selfsum" data-keep data-ld>${selfSumHtml()}</div>` + maint, `<button data-selfcheck>檢查新版</button>`)
     + sec("k", "常用連結", L.length ? `<div class="group" data-key="g-lk">${L.map(x => linkRow(x, esc(linkSt(x)))).join("")}</div>` : "", `<button type="button" data-rename="${node}" data-name="${name}">編輯</button>`)
@@ -1016,8 +1036,10 @@ const rmRow = s => `<button class="li danger" data-rmhost="${esc(s.node)}" data-
 const peerRow = s => `<button class="li" data-peeredit="${esc(s.node)}">${IC("link", "")}<span class="lab">更改連線網址<small>${esc(s.error && s.error !== "連不上" ? s.error : "對方的網址或連接埠換了")}</small></span>${CHEV}</button>`;
 /* 工具：一列一個（雲端硬碟、下載在上面的快捷鍵） */
 function toolRows(s, node, name){
+  const home = !DESK.matches && !s.node;   // 手機上主要主機的工具已經在首頁「工具」裡（toolCRows），這裡只留首頁沒有的（每月流量）
   const row = (a, ic, t, sub, r = "") => `<button class="li" ${a}>${IC(ic, "")}<span class="lab">${t}<small data-x>${sub}</small></span>${r}${CHEV}</button>`;
   const c = s.cloud && safeUrl(cloudHref(s.cloud)) ? s.cloud : null, out = [];
+  if (home) return s.traffic ? row(`data-key="tf" data-traffic="${node}" data-label="${name}"`, "month", "每月流量", s.traffic.limit ? `上限 ${size(s.traffic.limit)}・每月 ${s.traffic.reset_day} 號重置` : "設定上限與重置日") : "";
   if (c) {
     const pct = c.total ? Math.round(c.pct) : null;
     out.push(`<a class="li" data-key="cl" href="${esc(cloudHref(c))}"${ssoAttr(s)} target="_blank" rel="noopener noreferrer">${IC("cloud", "")}<span class="lab">雲端硬碟<small data-x>${c.total ? `${size(c.used)} / ${size(c.total)}` : "加密儲存空間"}</small>${c.total ? wave(c.pct) : ""}</span>${pct != null ? tBadge(`${pct}%`, pct >= 90 ? "bad" : pct >= 75 ? "warn" : "") : ""}${EXT}</a>`);
@@ -2310,7 +2332,9 @@ function render(list){
   const alv = LOST || list.some(s => !s.online || lvOf(s) === "bad") ? "bad" : list.some(s => lvOf(s) === "warn") || issuesOf(list).length ? "warn" : "ok";
   document.documentElement.dataset.alert = alv;
   navFix();                                       // 主機被移除了：那一層拿掉
+  const tl0 = [...document.querySelectorAll("#app .mscroll.tlb")].map(sc => [sc, sc.scrollHeight - sc.scrollTop - sc.clientHeight < 48]);   // 紀錄停在最新的：新的來了照樣停在最下面
   paint(shell(list, time));
+  tlStick(tl0);
   if (TIPX) drawTip(...TIPX);
   loadStatus();
 }
@@ -4313,6 +4337,8 @@ async function pageClick(e){
   if (la) { LOGH = la.dataset.logall; LOGF = ""; return navGo("all"); }
   const qf = t.closest("[data-qf]");
   if (qf) { if (QF !== qf.dataset.qf) { QF = qf.dataset.qf; slideSel(() => render(LIST)); } return; }
+  if (t.closest("[data-ovt]")) { OVOPEN = !OVOPEN; return render(LIST); }
+  if (t.closest("[data-tlend]")) { const sc = $("#app .scr:not(.gone) .mscroll.tlb"); if (sc) sc.scrollTo({top:sc.scrollHeight, behavior:canAnim() ? "smooth" : "auto"}); return; }
   const gt = t.closest("[data-go]");
   if (gt && !t.closest("[data-more]")) {
     return navGo(gt.dataset.go);

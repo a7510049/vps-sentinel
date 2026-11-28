@@ -85,6 +85,16 @@ const look = p => p.evaluate(() => {
   };
 });
 const settle = p => p.waitForTimeout(750);
+/* 版面：最上面那一層的清單不能貼著標題列、兩塊清單之間要留空（看實際畫出來的位置，不看程式） */
+const gaps = p => p.evaluate(() => {
+  const scr = document.querySelector(".slayer .scr") || [...document.querySelectorAll(".stage>.scr:not(.gone,.under), .lcol>.scr")].pop();
+  const sc = scr && scr.querySelector(":scope>.rscroll"), hd = scr && scr.querySelector(":scope>.tbar"); if (!sc || !hd) return {ok: true, why: "沒有清單頁"};
+  const kids = [...sc.children].filter(e => e.offsetHeight > 0), bad = [];
+  const box = e => { const r = e.getBoundingClientRect(), cs = getComputedStyle(e); return {top: r.top + parseFloat(cs.borderTopWidth), bot: r.bottom}; };
+  if (kids[0] && kids[0].matches(".group") && box(kids[0]).top - hd.getBoundingClientRect().bottom < 8) bad.push("第一塊貼著標題列");
+  kids.forEach((e, i) => { const n = kids[i + 1]; if (e.matches(".group") && n && n.matches(".group") && box(n).top - e.getBoundingClientRect().bottom < 8) bad.push("兩塊清單黏在一起"); });
+  return {ok: !bad.length, why: bad.join("、")};
+});
 async function tap(p, sel, phone){ const el = p.locator(sel).first(); await el.waitFor({state: "visible", timeout: 8000}); if (phone) await el.tap(); else await el.click(); }
 /* 真的觸控（Chromium 用 CDP 送，WebKit、Firefox 在網頁裡送模擬事件） */
 async function touch(p, engine, pts, hold = 0){
@@ -228,10 +238,11 @@ async function phoneFlow(o, engine, plat, url){
     ok("N06", "別的分頁按返回：回主機分頁、沒離開網站", s.title === listTitle && p.url().startsWith(url), JSON.stringify(s));
     await p.locator(".lscroll").evaluate(e => e.scrollTo(0, 0));
     await tap(p, '[data-tab="all"]', true); await settle(p);
-    await p.locator(".scr:not(.gone) .mscroll").evaluate(e => e.scrollTo(0, 500)); await p.waitForTimeout(200);
+    await p.locator(".scr:not(.gone) .mscroll").evaluate(e => e.scrollTo(0, 0)); await p.waitForTimeout(200);
+    ok("N06", "紀錄是最新的在最下面：捲上去後右下角出現「↓」", await p.locator(".scr:not(.gone).tlup .tldn").count() === 1);
     await tap(p, '[data-tab="all"]', true); await p.waitForTimeout(900);
-    const y = await p.locator(".scr:not(.gone) .mscroll").evaluate(e => e.scrollTop);
-    ok("N06", "再點同一個分頁：捲回最上面", y < 5, String(y));
+    const y = await p.locator(".scr:not(.gone) .mscroll").evaluate(e => e.scrollHeight - e.scrollTop - e.clientHeight);
+    ok("N06", "再點同一個分頁：回到最新（最下面）", y < 5, String(y));
     await tap(p, '[data-tab="list"]', true); await settle(p);
   }
   if (want("U02") && plat !== "desktop") {
@@ -270,6 +281,7 @@ async function phoneFlow(o, engine, plat, url){
     for (const [k, sel, nm] of [["int", "[data-tg]", "Telegram"], ["sec", "[data-pin]", "PIN 碼"], ["look", '[data-pref="plat"]', "介面"]]) {
       await tap(p, `.scr:not(.gone) [data-go="set:${k}"]`, true); await settle(p);
       ok("U04", `設定「${k}」裡找得到${nm}`, await p.locator(`.scr:not(.gone) ${sel}`).count() > 0);
+      const g = await gaps(p); ok("U04", `設定「${k}」清單沒有貼著標題列、沒有黏在一起`, g.ok, g.why);
       if (k !== "look") { await tap(p, ".scr:not(.gone) [data-navback]", true); await settle(p); }
     }
     if (want("N04")) {
