@@ -163,6 +163,9 @@
 .ico.sky{background:var(--sc);color:var(--on-sc)}
 .ico.safe{background:var(--pc);color:var(--on-pc)}
 .ico.devices{background:var(--sc);color:var(--on-sc)}
+.ico.intg{background:var(--tc-bg);color:var(--on-tc)}
+.ico.acct{background:var(--pc);color:var(--on-pc)}
+.ico.look{background:var(--tc-bg);color:var(--on-tc)}
 .ico.note{background:var(--sc);color:var(--on-sc)}
 .ico.dnsf{background:var(--tc-bg);color:var(--on-tc)}
 .ico.album{background:var(--tc-bg);color:var(--on-tc)}
@@ -304,6 +307,7 @@ html.lost :is(.view>:not(.hbanner,.dhome,.mtop),.det .dscroll>:not(.dtop)){filte
 /* 設定列右邊的勾或數字 */
 .li .lab small:empty{display:none}
 .stb{flex:none;display:grid;place-items:center;min-width:24px;height:24px;padding:0 8px;border-radius:var(--r-pill);background:var(--pf);color:var(--on-p);font-size:var(--fs-s);font-weight:500;font-variant-numeric:tabular-nums}
+.stb.warn{background:var(--warn);color:var(--on-warn)}
 .stb:not(.n){padding:0}
 .stb svg{width:15px;height:15px;stroke-width:2.6}
 .offline{display:flex;align-items:flex-start;gap:12px;margin-top:12px;padding:14px;border-radius:var(--r-md);background:var(--badc);color:var(--on-badc)}
@@ -776,6 +780,16 @@ body:has(.app2) .flyv{--pw:1280px}
 .crow.on .cbg{background:var(--on-p);color:var(--pf)}
 .crow.tip .cst{color:var(--p)}
 .lnone{padding:40px 24px;text-align:center;color:var(--tx3)}
+/* 清單的分段標題（主機、工具）和「還沒設定」的提醒橫幅（不是一台主機，長得也不一樣） */
+.lsec{padding:14px 12px 4px;font-size:var(--fs-xs);font-weight:600;color:var(--tx3)}
+.lban{display:flex;align-items:center;gap:12px;width:calc(100% - 16px);margin:8px 8px 0;padding:10px 12px;border-radius:var(--r-md);background:var(--pc);color:var(--on-pc);text-align:left}
+.lban>svg:first-child{flex:none;width:22px;height:22px}
+.lban>span{flex:1;min-width:0;display:flex;flex-direction:column}
+.lban b{font-size:var(--fs-s);font-weight:600}
+.lban small{font-size:var(--fs-xs);opacity:.8}
+.lban>.chev{flex:none;width:18px;height:18px;opacity:.7;transform:rotate(-90deg)}
+@media (hover:hover){.lban:hover{background:color-mix(in oklab,var(--pc),var(--on-pc) 8%)}}
+.lban:focus-visible{outline:2px solid var(--p);outline-offset:2px}
 /* 圓頭像：國旗整片填滿、沒有國旗是名字第一個字（七種顏色，跟 Telegram 的頭像一樣照名字分），右下角狀態點 */
 .cav{position:relative;flex:none;display:grid;place-items:center;width:54px;height:54px;border-radius:50%;font-size:var(--fs-xl);font-weight:500;color:#fff}
 .cav>i{font-style:normal}
@@ -850,6 +864,17 @@ body:has(.app2) .flyv{--pw:1280px}
 .ebt .evi svg{width:13px;height:13px}
 .ebt time{flex:none;align-self:flex-end;margin:0 0 -2px 6px;font-size:var(--fs-xs);color:var(--tx3)}
 .eb.bad .ebb{box-shadow:0 1px 2px rgba(16,16,16,.08),inset 3px 0 0 var(--bad)}
+/* 主機頁的「監控／紀錄」分頁：黏在上面，捲到哪都能換；紀錄有異常、注意的，數字是橘色 */
+.hseg{position:sticky;top:0;z-index:var(--z-bar);margin:0 -16px;padding:6px 16px;background:var(--bg)}
+.hseg .seg button b{margin-left:4px;font-weight:600;color:var(--tx3)}
+.hseg .seg button b.hv{color:var(--warn)}
+.hseg .seg button.on b{color:inherit}
+.hev{display:flex;flex-direction:column;gap:12px}
+/* 全部主機的紀錄：一則一則點了到那台主機 */
+.eb.go{cursor:pointer}
+.eb.go:focus-visible .ebb{outline:2px solid var(--p);outline-offset:2px}
+@media (hover:hover){.eb.go:hover .ebb{background:var(--s2)}}
+.eb.go:active .ebb{background:var(--s2)}
 .eb.warn .ebb{box-shadow:0 1px 2px rgba(16,16,16,.08),inset 3px 0 0 var(--warn)}
 .eb .ehs{display:grid;grid-template-rows:0fr;opacity:0;transition:grid-template-rows var(--t-mid) var(--ease),opacity var(--t-mid) var(--ease)}
 .eb .ehs>div{overflow:hidden;min-height:0}
@@ -2138,6 +2163,7 @@ html.flyon .dash>.view,html.flyon .dash.m>.stage{content-visibility:hidden;conta
 [data-plat="ios"] .dialog.dlga .btns .ubtn{flex:1;height:44px;border-radius:0;background:none;color:var(--p);font-size:var(--fs-l2);font-weight:600}
 [data-plat="ios"] .dialog.dlga .btns .ubtn.bad{color:var(--bad)}[data-plat="ios"] .dialog.dlga .btns .ubtn.warn{color:var(--warn)}
 [data-plat="ios"] .dialog.dlga .btns .ubtn:active{background:var(--hov)}
+[data-plat="ios"] .dialog.dlga .btns .ubtn+.ubtn{box-shadow:inset .5px 0 0 var(--line)}[data-plat="ios"] .dialog.dlga .btns .ubtn.ghost{font-weight:400}   /* 取消在左、動作在右，中間一條線（UIAlertController） */
 [data-plat="ios"] .dialog.dlga .dx{display:none}
 /* 其他視窗：手機上一律從下面滑上來的面板（圓角 26，上面拉桿） */
 [data-plat="ios"] .dialog:not(.dlga){border-radius:var(--r-glass)}

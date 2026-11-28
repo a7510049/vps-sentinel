@@ -21,7 +21,7 @@ shellcheck *.sh
 
 1. 暫存資料夾放測試設定檔（`PORT=`、`TOKEN=`、`NAME=`、`DATA_DIR=` 都指到暫存位置），`SENTINEL_CONF=設定檔 python3 sentinel.py` 放背景跑。
 2. 用 Playwright MCP（或 Node 的 `require('playwright')`）開電腦 1440 寬、手機 375 寬：主控台沒有錯誤、截圖看一次。**三種平台介面都要看**：瀏覽器 localStorage 的 `vps-prefs` 設 `{"plat":"ios"}`／`"android"`／`"desktop"`。
-2-1. 跨平台操作測試：`SENTINEL_URL=http://127.0.0.1:埠/ SENTINEL_TOKEN=測試密碼 node tools/ui_e2e.js`（Chromium＋WebKit：點、連點、長按、往右滑、上一頁、選單開關、換分頁、換平台、重新整理、自動更新兩次、來回 15 次的元素數）。WebKit 沒裝的話：`node /opt/node-tools/node_modules/playwright/cli.js install webkit && … install-deps webkit`。
+2-1. 跨平台操作測試：`node tools/ui_e2e.js`（自己在暫存資料夾開東京、首爾、大阪（連不上）三台測試主機，不連正式主機；三平台×手機 390／電腦 1440×深淺色×Chromium、WebKit，ID 對應交接驗收表 N01～A01：真的點、連點、長按、往右滑、上一頁／下一頁、重新整理、寬窄互換、轉橫、選單和對話框、取消不送請求、連線出錯、自動更新、來回 15 次）。結果看畫面和送出的請求，不改程式裡的變數。WebKit、Firefox 沒裝的話裝到別的資料夾再用 `PLAYWRIGHT_BROWSERS_PATH` 指過去（`npx playwright install webkit firefox`＋`install-deps webkit`）。交付前那一次不要用 `ONLY` 跳過項目。
 3. 等自動更新兩次（至少 10 秒），前後比對沒有跳動、閃爍。
 4. 關掉哨兵、刪掉暫存資料。
 

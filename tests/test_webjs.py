@@ -10,7 +10,7 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 class WebJs(unittest.TestCase):
     def test_no_duplicate_top_level_names(self):
         src = ""
-        for name in ("app.js", "pin.js", "fly.js"):       # fly.js 用到才載入，但跟 app.js 共用同一組名字
+        for name in ("app.js", "nav.js", "pin.js", "fly.js"):       # fly.js 用到才載入，但跟 app.js 共用同一組名字
             with open(os.path.join(ROOT, "web", name), encoding="utf-8") as f:
                 src += f.read() + "\n"
         names = re.findall(r"^(?:async\s+)?function\s+(\w+)\s*\(", src, re.M)
@@ -48,11 +48,13 @@ class WebJs(unittest.TestCase):
         self.assertIn('plat:"auto"', js, "預設要是自動判斷")
         self.assertNotIn(".dialog.alert", css, "確認視窗用 .dlga（.alert 是主機頁的告警）")
         # 換分頁：只在離開第一個分頁時多記一筆（返回先回「主機」），不能每換一次就多一筆
-        i = js.index("function tabGo(")
-        body = js[i:js.index("\n}", i)]
-        for line in body.splitlines():
-            if "pushState" in line:
-                self.assertIn("!hs.tab", line)
+        nav = open(os.path.join(ROOT, "web", "nav.js"), encoding="utf-8").read()
+        i = nav.index("function tabGo(")
+        body = nav[i:nav.index("\n}", i)]
+        pushes = [line for line in body.splitlines() if "hPush" in line]
+        self.assertTrue(pushes)
+        for line in pushes:
+            self.assertIn("!st.tb", line)
 
 
 if __name__ == "__main__":
