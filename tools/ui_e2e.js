@@ -238,10 +238,11 @@ async function phoneFlow(o, engine, plat, url){
     ok("N06", "別的分頁按返回：回主機分頁、沒離開網站", s.title === listTitle && p.url().startsWith(url), JSON.stringify(s));
     await p.locator(".lscroll").evaluate(e => e.scrollTo(0, 0));
     await tap(p, '[data-tab="all"]', true); await settle(p);
-    await p.locator(".scr:not(.gone) .mscroll").evaluate(e => e.scrollTo(0, 500)); await p.waitForTimeout(200);
+    await p.locator(".scr:not(.gone) .mscroll").evaluate(e => e.scrollTo(0, 0)); await p.waitForTimeout(200);
+    ok("N06", "紀錄是最新的在最下面：捲上去後右下角出現「↓」", await p.locator(".scr:not(.gone).tlup .tldn").count() === 1);
     await tap(p, '[data-tab="all"]', true); await p.waitForTimeout(900);
-    const y = await p.locator(".scr:not(.gone) .mscroll").evaluate(e => e.scrollTop);
-    ok("N06", "再點同一個分頁：捲回最上面", y < 5, String(y));
+    const y = await p.locator(".scr:not(.gone) .mscroll").evaluate(e => e.scrollHeight - e.scrollTop - e.clientHeight);
+    ok("N06", "再點同一個分頁：回到最新（最下面）", y < 5, String(y));
     await tap(p, '[data-tab="list"]', true); await settle(p);
   }
   if (want("U02") && plat !== "desktop") {

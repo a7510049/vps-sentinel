@@ -149,9 +149,9 @@ function navBack(){
    分頁之間互換只改那一筆；回到「主機」＝退掉那一筆 */
 function tabGo(id){
   closeMenu(); hideTip();
-  if (STK.length === 1 && STK[0] === id) {   // 再點一次同一個分頁：捲回最上面
+  if (STK.length === 1 && STK[0] === id) {   // 再點一次同一個分頁：捲回最上面（紀錄是最新的在最下面：捲到最下面）
     const sc = $("#app .scr:not(.gone,.under) :is(.lscroll,.mscroll,.rscroll)");
-    if (sc && sc.scrollTop) sc.scrollTo({top:0, behavior:canAnim() ? "smooth" : "auto"});
+    if (sc) sc.scrollTo({top:sc.classList.contains("tlb") ? sc.scrollHeight : 0, behavior:canAnim() ? "smooth" : "auto"});
     return;
   }
   hNow(function go(){
