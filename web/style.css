@@ -727,7 +727,7 @@ body:has(.app2) .flyv{--pw:1280px}
 .stage>.scr.under{z-index:0;pointer-events:none}
 .stage>.scr:not(.under,.gone){z-index:1}
 .stage>.scr:not(.under){box-shadow:-1px 0 0 var(--line)}
-.lscroll,.mscroll,.rscroll{flex:1;min-height:0;overflow-y:auto;overscroll-behavior:contain;-webkit-overflow-scrolling:touch}
+.lscroll,.mscroll,.rscroll{flex:1;min-height:0;overflow-x:hidden;overflow-y:auto;overscroll-behavior:contain;-webkit-overflow-scrolling:touch}   /* 只能上下捲：裡面有東西超出也不會整頁左右滑 */
 .dash.m .lscroll,.dash.m .mscroll,.dash.m .rscroll{padding-bottom:env(safe-area-inset-bottom)}
 /* 標題列：56 高，左邊返回／頭像，中間標題和一行小字，右邊幾顆圖示 */
 .tbar{flex:none;display:flex;align-items:center;gap:6px;min-height:var(--hh);padding:calc(env(safe-area-inset-top) * var(--sa,1)) 8px 0;background:var(--s1);box-shadow:0 1px 0 var(--line);position:relative;z-index:2}
@@ -878,12 +878,6 @@ body:has(.app2) .flyv{--pw:1280px}
 .erx b{font-weight:600;font-size:var(--fs-s)}
 .erx .hsa{width:22px;height:22px;box-shadow:0 0 0 2px var(--bad)}
 .erx.warn .hsa{box-shadow:0 0 0 2px var(--warn)}
-/* 主機頁的「監控／紀錄」分頁：黏在上面，捲到哪都能換；紀錄有異常、注意的，數字是橘色 */
-.hseg{position:sticky;top:0;z-index:var(--z-bar);margin:0 -16px;padding:6px 16px;background:var(--bg)}
-.hseg .seg button b{margin-left:4px;font-weight:600;color:var(--tx3)}
-.hseg .seg button b.hv{color:var(--warn)}
-.hseg .seg button.on b{color:inherit}
-.hev{display:flex;flex-direction:column;gap:12px}
 /* 全部主機的紀錄：一則一則點了到那台主機 */
 .eb.go{cursor:pointer}
 .eb.go:focus-visible .ebb{outline:2px solid var(--p);outline-offset:2px}

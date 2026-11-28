@@ -943,7 +943,7 @@ function evEmo(e){
 function evBubble(e, many, top = true, bot = true){
   const s = many && !evMany(e) && LIST.find(x => keyOf(x) === e.k);
   const av = !many ? "" : !bot ? `<span class="eba"></span>` : evMany(e) ? `<span class="cav ic num"><i>${e.hs.length}</i></span>` : s ? cav(s) : `<span class="cav pk5"><i>${esc([...(e.h || "?")][0])}</i></span>`;   // 好幾台同一件事：頭像是台數
-  const go = many && s ? ` data-go="h:${esc(e.k)}" data-hvgo="ev" role="button" tabindex="0" aria-label="${esc(s.name)}：${esc(e.text)}"` : "";   // 點了到那台主機的「紀錄」
+  const go = many && s ? ` data-go="h:${esc(e.k)}" role="button" tabindex="0" aria-label="${esc(s.name)}：${esc(e.text)}"` : "";   // 點了到那台主機
   const hot = e.kind === "bad" || e.kind === "warn";   // 要注意的（異常、注意）：表情符號改成泡泡下面一顆小膠囊（像 Telegram 的心情回應），一眼看得出來
   const meta = `<span class="ebm num">${e.n > 1 && !hot ? `×${e.n} ` : ""}<time>${hm(e.t)}</time></span>`;   // 時間跟在最後一行右下角（Telegram 的寫法）
   const hs = many ? (evMany(e) ? e.hs : [e.h]) : [];
@@ -963,24 +963,14 @@ function logMenu(btn){
   menuIn(m); window._menu = m; window._menu._by = btn; histMark(m);
   setTimeout(() => m.addEventListener("click", () => closeMenu()), 0);
 }
-/* ── 中間：一台主機 ──
-   上面：名字、狀態、要留意的事、四格即時數字（一直都在）；下面分兩頁「監控」「紀錄」：
-   監控是圖表和流量、紀錄是這台全部的事件（不用滑過一堆圖表才看得到）。分頁黏在上面，捲到哪都能一下換過去；
-   每台各自記得看哪一頁、捲到哪。 */
-const HV = (() => { try { const o = JSON.parse(sstore("vs-hv") || "{}"); return o && typeof o === "object" ? o : {}; } catch(e) { return {}; } })();
-const hvOf = s => HV[keyOf(s)] === "ev" ? "ev" : "mon";
-const hostEvList = s => mergeEv(s.events || []).map(e => ({...e, h:s.name, k:keyOf(s)})).sort((a, b) => b.t - a.t);
+/* ── 中間：一台主機：名字、狀態、要留意的事、四格即時數字、圖表、流量（這台的紀錄在「紀錄」那頁用 ⋯ 選單篩出來，不在這裡重複） ── */
 function hostScreen(s){
-  const k = esc(keyOf(s)), D = DESK.matches, v = hvOf(s), evs = hostEvList(s);
+  const k = esc(keyOf(s)), D = DESK.matches;
   const sub = s.online ? `${esc(place(s) || osShort(s.os))}・開機 ${up(s.uptime)}` : `連不上${s.last_seen ? `・${esc(ago(s.last_seen))}` : ""}`;
   const acts = (D ? `<button class="iconbtn${INFO ? " act" : ""}" data-go="i:${k}" title="主機資訊" aria-pressed="${!!INFO}">${I("info")}</button>` : "") + moreBtn(s);
   const head = topbar({av:`<button class="tav" data-go="i:${k}" title="主機資訊">${cav(s)}</button>`, title:esc(s.name), sub, acts, attr:` data-go="i:${k}" role="button" tabindex="0" aria-label="${esc(s.name)} 主機資訊"`});
-  const bad = evs.filter(e => e.kind === "bad" || e.kind === "warn").length;
-  const tab = (id, l, n = "") => `<button class="${v === id ? "on" : ""}" role="tab" aria-selected="${v === id}" data-hv="${id}" data-k="${k}" data-key="hv:${id}">${l}${n}</button>`;
-  const seg = `<div class="hseg" data-key="hseg"><div class="seg" role="tablist" aria-label="看哪一頁" data-slide>${tab("mon", "監控")}${tab("ev", "紀錄", evs.length ? ` <b class="num${bad ? " hv" : ""}" data-x>${evs.length}</b>` : "")}</div></div>`;
-  const top = s.online ? alerts(s, 1) + tiles(s) : offBox(s);
-  const body = v === "ev" ? `<div class="hev" data-key="hev">${timeline(evs, false)}</div>` : s.online ? hostMain(s) : "";
-  return head + `<div class="mscroll" data-key="ms" data-seg="${v}"><div class="mwrap" data-key="mw">${top}${seg}${body}</div></div>`;
+  const body = s.online ? alerts(s, 1) + tiles(s) + hostMain(s) : offBox(s);
+  return head + `<div class="mscroll" data-key="ms"><div class="mwrap" data-key="mw">${body}</div></div>`;
 }
 function hostMain(s){
   const ph = !DESK.matches, hs = PREF.show.chart ? histFor(s) : null;
@@ -2519,7 +2509,7 @@ function moreMenu(btn, s){
   const node = esc(s.node || ""), name = esc(s.name);
   const it = (attr, icon, label, cls="") => `<button class="${cls}" ${attr}="${node}" data-name="${name}">${I(icon)}<span>${label}</span></button>`;
   const m = document.createElement("div"); m.className = "lmenu hmenu";
-  m.innerHTML = (s.online ? it("data-rename", "edit", "編輯名稱與連結")
+  m.innerHTML = `<button data-logall="${esc(keyOf(s))}">${I("log")}<span>這台的紀錄</span></button>` + (s.online ? it("data-rename", "edit", "編輯名稱與連結")
     + it("data-reboot", "power", "重新開機", "warn") : "")
     + (s.node ? it("data-rmhost", "trash", "移除主機", "bad") : "");
   document.body.appendChild(m);
@@ -4277,17 +4267,6 @@ document.addEventListener("click", e => {
   if (!e.target.closest || e.target.closest("#layer") || e.target.closest("#fly")) return;
   return onceClick(e.target.closest(ONCE_SEL), () => pageClick(e));
 });
-/* 主機頁換「監控」「紀錄」：各自記得捲到哪；沒看過的那頁接在分頁列下面（分頁列留在原本的位置） */
-function hvSet(b){
-  const k = b.dataset.k, v = b.dataset.hv; if ((HV[k] === "ev" ? "ev" : "mon") === v) return;
-  const scr = b.closest("[data-scr]"), sc = scrBox(scr), bar = b.closest(".hseg");
-  scrKeep(scr);
-  const keep = sc && bar ? Math.min(sc.scrollTop, bar.offsetTop) : 0;
-  HV[k] = v; sstore("vs-hv", JSON.stringify(HV));
-  slideSel(() => render(LIST));
-  const sc2 = scrBox($(`#app [data-scr][data-key="${CSS.escape(scr.dataset.key)}"]`)), y = SCRY.get(scr.dataset.key + "|" + v);
-  if (sc2) sc2.scrollTop = y != null ? y : keep;
-}
 async function pageClick(e){
   if (e.target.closest("#layer") || e.target.closest("#fly")) return;
   if (e.target.closest("[data-fly]")) return flyEnter(e.target.closest("[data-fly]"));
@@ -4311,11 +4290,8 @@ async function pageClick(e){
   if (la) { LOGH = la.dataset.logall; LOGF = ""; return navGo("all"); }
   const qf = t.closest("[data-qf]");
   if (qf) { if (QF !== qf.dataset.qf) { QF = qf.dataset.qf; slideSel(() => render(LIST)); } return; }
-  const hv = t.closest("[data-hv]");
-  if (hv) return hvSet(hv);
   const gt = t.closest("[data-go]");
   if (gt && !t.closest("[data-more]")) {
-    if (gt.dataset.hvgo) { HV[gt.dataset.go.slice(2)] = gt.dataset.hvgo; sstore("vs-hv", JSON.stringify(HV)); }
     return navGo(gt.dataset.go);
   }
   if (t.closest("[data-addhost]")) return addHostModal();
