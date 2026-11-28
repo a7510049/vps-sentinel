@@ -117,6 +117,9 @@ class SmokeTest(Server):
         with open(os.path.join(ROOT, "web", "app.js"), encoding="utf-8") as f:
             first_line = next(line for line in f if line.strip())
         self.assertIn(first_line.strip(), html)
+        # 導覽（nav.js）也要塞進去，而且排在畫面程式前面（app.js 一開始就會用到）
+        self.assertIn("function navBoot(", html)
+        self.assertLess(html.index("function navBoot("), html.index(first_line.strip()))
         # 不讓別的網站把哨兵嵌進去
         self.assertEqual(headers["X-Frame-Options"], "DENY")
         self.assertIn("frame-ancestors 'none'", headers["Content-Security-Policy"])

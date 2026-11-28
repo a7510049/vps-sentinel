@@ -1631,7 +1631,7 @@ function flyOpen(btn){
   const f = $("#fly");
   if (canAnim()) f.classList.add("pre");
   flyStuck(f);
-  if (!SHARE) history.pushState({fly:1}, "");          // 分享連結只有這一頁，不能返回
+  if (!SHARE) hMark({fly:1});          // 分享連結只有這一頁，不能返回
   document.documentElement.classList.add("lock");
   setTimeout(() => { if (f.isConnected && !f._bye) document.documentElement.classList.add("flyon"); }, T.mid + 120);   // 滑入完才藏底層
   f._rv = radarView(f.querySelector(".rcv"), false); f._rv.range = flyR(); flyZoom(f, false);   // 雷達先建好：下面用現成資料畫的時候，底圖才放得上去
@@ -1651,7 +1651,7 @@ function flyOpen(btn){
   });
   if (window.ResizeObserver) { f._ro = new ResizeObserver(() => f._rv.resize()); f._ro.observe(f.querySelector(".rbox")); }   // 雷達變大變小：畫布跟著重設
 }
-function flyClose(){ if (!$("#fly") || SHARE) return; if (history.state && history.state.fly) history.back(); else flyShut(); }
+function flyClose(){ if (!$("#fly") || SHARE) return; hNow(function c(){ const st = hCur(); if (st.ov && deadEntry(st)) { hBack(); return hNow(c); } if (st.fly && $("#fly")) hBack(); else flyShut(); }); }   // 瀏覽紀錄見 nav.js
 function flyShut(){
   const f = $("#fly"); if (!f || f._bye) return; f._bye = 1;
   clearTimeout(FLYT); clearTimeout(FLYLATER); clearTimeout(FLYDT); clearTimeout(f._spT);
@@ -1866,7 +1866,7 @@ function fradOpen(){
     <div class="frcard" hidden></div></div>
     <div class="frlist"><button class="frlh" data-rlist><span class="grow"></span><span class="chv">${I("chev")}</span></button><div class="frli"></div></div>`;
   document.body.appendChild(v);
-  history.pushState({fly:1, frad:1}, "");
+  hMark({fly:1, frad:1});
   const cv = v.querySelector("canvas"), rv = radarView(cv, true);
   FRAD = {v, rv, sel:"", ro:null}; rv.rwd = f._rv.rwd; rv.onseq = fradList;
   const top = () => { const b = v.querySelector(".frbar").getBoundingClientRect(), m = cv.getBoundingClientRect(), z = ZM(); rv.top = (b.bottom - m.top) / z + 4; };
@@ -1879,7 +1879,7 @@ function fradOpen(){
   fradGest(rv, cv);
   setTimeout(() => { if (FRAD && FRAD.rv === rv && f._rv) f._rv.hide(true); }, canAnim() ? T.mid + 120 : 0);   // 蓋住後暫停小雷達省電，不藏看板免得關閉重繪閃爍
 }
-function fradClose(){ if (!FRAD) return; if (history.state && history.state.frad) history.back(); else fradShut(); }
+function fradClose(){ if (!FRAD) return; hNow(function c(){ const st = hCur(); if (st.ov && deadEntry(st)) { hBack(); return hNow(c); } if (st.frad && FRAD) hBack(); else fradShut(); }); }
 function fradShut(){
   const F = FRAD; if (!F) return; FRAD = null;
   if (F.ro) { F.ro.disconnect(); F.ro = null; }

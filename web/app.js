@@ -112,6 +112,7 @@ const P = {
   folder:'<path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>',
   chat:'<path d="M20 12a8 8 0 0 1-11.7 7.1L4 20l.9-4.1A8 8 0 1 1 20 12Z"/>',
   heart:'<path d="M12 20.5S3.5 15.3 3.5 9.2A4.7 4.7 0 0 1 12 6.6a4.7 4.7 0 0 1 8.5 2.6c0 6.1-8.5 11.3-8.5 11.3Z"/>',
+  look:'<path d="M12 3a9 9 0 1 0 0 18c1.1 0 1.7-.8 1.7-1.7 0-.4-.2-.8-.5-1.1-.3-.3-.5-.7-.5-1.2 0-.9.7-1.6 1.6-1.6H16a5 5 0 0 0 5-5c0-4.1-4-7.4-9-7.4z"/><circle cx="7.5" cy="11.5" r="1"/><circle cx="10" cy="7.5" r="1"/><circle cx="14.5" cy="7.5" r="1"/>',
   music:'<path d="M9 18V5l11-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="17" cy="16" r="3"/>',
   note:'<path d="M13.4 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-7.4"/><path d="M2 6h4M2 10h4M2 14h4M2 18h4"/><path d="M21.4 5.6a2.1 2.1 0 1 0-3-3L13 8l-1 4 4-1z"/>',
   off:'<path d="M12 20h.01M8.5 16.43a5 5 0 0 1 7 0M2 8.82a15 15 0 0 1 4.17-2.65M10.66 5c4.01-.36 8.14.9 11.34 3.76M16.85 11.25a10 10 0 0 1 2.22 1.68M5 13a10 10 0 0 1 5.24-2.76M2 2l20 20"/>',
@@ -493,7 +494,7 @@ const COL = {cpu:"var(--c-cpu)", mem:"var(--c-mem)", rx:"var(--c-rx)", tx:"var(-
 /* 概念 → [顏色樣式, 圖示] */
 const ICO = {cpu:["cpu","cpu"], mem:["mem","mem"], disk:["disk","disk"], load:["load","gauge"], down:["down","down"], up:["up","up"],
   net:["net","net"], trend:["trend","trend"], month:["month","month"], box:["box","box"], bell:["bell","bell"], info:["info","info"],
-  flag:["flag","flag"], keep:["keep","shield"], key:["key","key"], finger:["finger","finger"], pin:["pin","pin"], link:["link","link"], archive:["archive","archive"], sun:["sun","sun"], quote:["quote","quote"], dl:["dl","dl"], cloud:["cloud","cloud"], fly:["fly","plane"], devices:["devices","devices"], safe:["safe","lockok"], sky:["sky","radar"], note:["note","note"], dnsf:["dnsf","noad"], album:["album","album"]};
+  flag:["flag","flag"], keep:["keep","shield"], key:["key","key"], finger:["finger","finger"], pin:["pin","pin"], link:["link","link"], archive:["archive","archive"], sun:["sun","sun"], quote:["quote","quote"], dl:["dl","dl"], cloud:["cloud","cloud"], fly:["fly","plane"], devices:["devices","devices"], safe:["safe","lockok"], sky:["sky","radar"], note:["note","note"], dnsf:["dnsf","noad"], album:["album","album"], intg:["intg","plug"], acct:["acct","user"], look:["look","look"]};
 const IC = (k, cls="sm") => `<span class="ico ${cls} ${ICO[k][0]}">${I(ICO[k][1])}</span>`;
 
 /* ═════════ 共用的小元件 ═════════ */
@@ -727,92 +728,28 @@ async function trafficModal(node, label){
          右欄是那台的主機資訊（規格、工具、維護，像聊天的個人資料面板）；設定從左上角選單打開，蓋在左欄上面一層。
    手機：一層一層推進去（清單 → 主機 → 主機資訊），返回鍵、往右滑都會退一層。 */
 let TAB = "home", TABDIR = 0;                     // 舊的分頁代號：留給還在用的地方（一律是首頁）
-let MAIN = sstore("vs-main") || "all";            // 電腦中間：all 或主機代號
-let LEFT = "list";                                // 電腦左欄：list 清單、set 設定
 let INFO = store("vs-info") ? store("vs-info") === "1" : innerWidth >= 1280;   // 電腦右欄：主機資訊開著（夠寬才預設打開）
-let STK = (() => { try { const a = JSON.parse(sstore("vs-stk") || "[]"); return Array.isArray(a) && a.length && ROOTS.includes(a[0]) && (TABS() || a[0] === "list") ? a.map(String) : ["list"]; } catch(e) { return ["list"]; } })();   // iOS、Android 最底層可以是三個分頁之一
-let NAVDIR = 0, QF = "", QS = "";                 // 換畫面的方向（1 推進、-1 退回、0 原地換）；清單篩選、搜尋
+let QF = "", QS = "";                             // 清單篩選、搜尋
 const scrHtml = (id, html, cls = "") => `<section class="scr${cls ? " " + cls : ""}" data-scr data-key="s:${esc(id)}">${html}</section>`;
-const stkSave = () => sstore("vs-stk", JSON.stringify(STK));
 const isBad = s => !s.online || lvOf(s) !== "ok" || (s.problems || []).length > 0 || (s.notices || []).length > 0;
 const issueN = s => s.online ? (s.problems || []).length + (s.notices || []).length : 1;
-/* 往哪裡去：all、set、list、h:主機、i:主機 */
-function navGo(id){
-  closeMenu(); hideTip();
-  if ($("#fly")) flyClose();
-  if (DESK.matches) {
-    if (id === "list" && LEFT === "set" && PLAT === "desktop") return setLayerOut();   // 電腦：設定是蓋在中間的一層，先收起來
-    if (id === "set" || id === "list") { if (LEFT === id) return; NAVDIR = TABS() ? 2 : id === "set" ? 1 : -1; LEFT = id; }   // iOS、Android 在左欄下面換分頁：不滑
-    else if (id === "all" && TABS() && LEFT === "set") { LEFT = "list"; MAIN = "all"; sstore("vs-main", "all"); }
-    else if (id.startsWith("i:")) { const k = id.slice(2); if (MAIN !== k) { MAIN = k; sstore("vs-main", k); } INFO = !INFO || MAIN !== k ? true : false; store("vs-info", INFO ? "1" : "0"); }
-    else { const m = id === "all" ? "all" : id.slice(2); if (MAIN === m) return; MAIN = m; sstore("vs-main", m); }
-    render(LIST); NAVDIR = 0;
-    if (id === "set" && PLAT === "desktop") {   // 設定那一層：記一筆瀏覽紀錄（上一頁先收起來），鍵盤從 × 開始
-      try { history.pushState({...(history.state || {}), slay:1}, ""); } catch(e) {}
-      const x = $("#app .slbox [data-navback]"); if (x) x.focus({preventScroll:true});
-    }
-    return;
-  }
-  if (STK[STK.length - 1] === id) return;
-  if (TABS() && ROOTS.includes(id)) return tabGo(id);
-  if (id === "list") { while (STK.length > 1) STK.pop(); NAVDIR = -1; stkSave(); render(LIST); NAVDIR = 0; return; }
-  STK.push(id); stkSave();
-  const {dlg, ...st} = history.state || {};                // 剛按選單裡的項目：選單那一筆直接拿來用（不然選單收起來時的「上一頁」會把這一層退掉）
-  if (dlg && !histLive(DLGEL.get(dlg))) { DLGEL.delete(dlg); history.replaceState({...st, scr: STK.length}, ""); }
-  else history.pushState({...st, scr: STK.length}, "");
-  NAVDIR = 1; render(LIST); NAVDIR = 0;
-}
-function navBack(){
-  closeMenu(); hideTip();
-  if (DESK.matches) { if (LEFT === "set") return navGo("list"); if (INFO && MAIN !== "all") { INFO = false; store("vs-info", "0"); return render(LIST); } return; }
-  if (STK.length < 2) return;
-  const hs = history.state || {}, dl = hs.dlg && DLGEL.get(hs.dlg), own = STK.length > NAVBASE;   // own：這一層是打開網頁之後才推進來的，有自己的瀏覽紀錄
-  if (dl && !histLive(dl) && hs.scr === STK.length) {   // 對話框剛關、它那筆紀錄還沒退掉（以前關掉後馬上按返回沒反應）
-    dl._popped = 1; DLGEL.delete(hs.dlg);
-    if (own) return history.go(-2);                       // 一次退兩格：對話框那筆＋這一層
-    DLGSKIP++; history.back(); return navLocal();        // 這一層的紀錄不是這一頁的：只退掉對話框那筆，這層自己退
-  }
-  if (hs.scr === STK.length && own) return history.back();   // 交給瀏覽器：下面 popstate 會退一層
-  if (hs.scr === STK.length) return navLocal();           // 重新整理前推進來的層：退回會整頁重新載入或離開網站，自己退
-  navPop();
-}
-/* 自己退一層、不動瀏覽紀錄；紀錄上寫的層數等 popstate 時一起對齊 */
-/* iOS、Android：換分頁（像 Telegram 的 Tab Bar，不留瀏覽紀錄、不往旁邊滑，只把內容換掉） */
-function tabGo(id){
-  closeMenu(); hideTip();
-  if (DESK.matches) return navGo(id);
-  if (STK.length === 1 && STK[0] === id) { const sc = $("#app .stage>.scr:not(.gone,.under) :is(.lscroll,.mscroll,.rscroll)"); if (sc && sc.scrollTop) sc.scrollTo({top:0, behavior:canAnim() ? "smooth" : "auto"}); return; }   // 再點一次同一個分頁：捲回最上面
-  if (DLGSKIP) return addEventListener("popstate", () => tabGo(id), {once:true});   // 選單剛收起來、正在退它那一筆：退完再換
-  let hs = history.state || {}, mn = false;
-  if (hs.dlg && !histLive(DLGEL.get(hs.dlg))) { DLGEL.delete(hs.dlg); const {dlg, ...r} = hs; hs = r; mn = true; }   // 選單開著時點分頁：選單那筆要一起處理，不能多留一格
-  if (id === "list" && hs.tab) return history.go(mn ? -2 : -1);   // 回第一個分頁＝退掉換分頁時多的那一筆（下面 popstate 換回來）
-  STK = [id]; NAVBASE = 1; stkSave(); SRCH = false;
-  try {   // 不在第一個分頁時按返回先回「主機」（Android MainTabsActivity.onBackPressed；iPhone Safari 從左邊滑是上一頁，不能一滑就離開網站），所以離開「主機」時多記一筆
-    if (id !== "list" && !hs.tab) mn ? history.replaceState({...hs, scr:1, tab:1}, "") : history.pushState({scr:1, tab:1}, "");
-    else if (mn) { DLGSKIP++; history.back(); }   // 已經有換分頁那一筆：把選單那筆退掉就好
-    else history.replaceState({...hs, scr:1}, "");
-  } catch(e) {}
-  NAVDIR = 2; render(LIST); NAVDIR = 0;
-  const b = $("#app .tabbar .tbi.on");   // 分頁列是新畫的：選到的那塊底自己撐開（GlassTabView 的選取）
-  if (b && PLAT === "android" && canAnim()) try { b.animate([{opacity:0, transform:"scale(.7)"}, {opacity:1, transform:"none"}], {duration:T.mid, easing:DEC, pseudoElement:"::before"}); } catch(e) {}
-}
-function navLocal(){ navPop(); try { if (history.state && history.state.scr > STK.length) history.replaceState({...history.state, scr: STK.length}, ""); } catch(e) {} }
-function navPop(){ if (STK.length < 2) return; STK.pop(); NAVBASE = Math.min(NAVBASE, STK.length); stkSave(); NAVDIR = -1; render(LIST); NAVDIR = 0; }
-addEventListener("popstate", () => {
-  if (DLGSKIP) return;
-  if (DESK.matches) { if (LEFT === "set" && PLAT === "desktop" && !(history.state && history.state.slay)) setLayerOut(true); return; }   // 電腦：上一頁先收起設定那一層
-  if (TABS() && STK.length === 1 && STK[0] !== "list" && !(history.state && (history.state.tab || history.state.dlg))) { STK = ["list"]; stkSave(); NAVDIR = 2; render(LIST); NAVDIR = 0; return; }   // Android 在別的分頁按返回：回主機分頁   // 選單、對話框收起來時自己退掉的那一筆：不是要退一層（關掉動畫時，選單一關馬上點設定會被退回去）
-  const d = Math.max(1, (history.state && history.state.scr) || 1);
-  if (STK.length > d) { while (STK.length > d + 1) STK.pop(); navPop(); }
-  else if (d > STK.length && !(history.state && history.state.dlg)) try { history.replaceState({...history.state, scr: STK.length}, ""); } catch(e) {}   // 剛自己退過一層：這筆紀錄的層數跟著改
-});
-let NAVBASE = STK.length, NAVSWT = 0, SRCH = false;   // NAVBASE：打開網頁時就在第幾層（從暫存讀回來的），這幾層沒有自己的瀏覽紀錄；SRCH：Android 標題列換成搜尋框
+let NAVSWT = 0, SRCH = false, SRCHO = null;       // SRCH：Android 標題列換成搜尋框（當成一個浮層，返回先收起來）
+navBoot();
+function srchOpen(){ if (SRCH) return; SRCH = true; SRCHO = {}; histMark(SRCHO, () => srchShut(true)); render(LIST); const i = $("#app [data-search]"); if (i) i.focus(); }
+function srchDrop(pop){ if (!SRCH) return false; SRCH = false; QS = ""; if (!pop && SRCHO) histDrop(SRCHO); SRCHO = null; return true; }
+function srchShut(pop){ if (srchDrop(pop)) render(LIST); }
 /* 推進一層時底下那層往左退多少、多暗（iOS NavigationTransitionCoordinator 退 30%、不變暗；telegram-tt 退 20%、.9；Android 往右滑返回時底下不動） */
 const UNDX = () => PLAT === "ios" ? 30 : PLAT === "android" ? 0 : 20, UNDO = () => PLAT === "desktop" ? .9 : 1;
-try { history.replaceState({...(history.state || {}), scr: STK.length}, ""); } catch(e) {}
 /* 換畫面：Telegram 的疊層（推進：新的從右邊整頁滑進來、舊的往左退 20% 並暗一點；退回反過來；原地換：淡入） */
+/* 每一層捲到哪：退回來、換回這個分頁、電腦換回這台時照原本的位置（推進新的一層從最上面開始） */
+const SCRY = new Map();
+const scrBox = sc => sc && sc.querySelector(":scope>:is(.lscroll,.mscroll,.rscroll)");
+function scrKeep(sc){ const c = scrBox(sc); if (c && sc.dataset.key) SCRY.set(sc.dataset.key + "|" + (c.dataset.seg || ""), c.scrollTop); }
+function scrBack(sc){ const c = scrBox(sc), y = c && SCRY.get(sc.dataset.key + "|" + (c.dataset.seg || "")); if (y) c.scrollTop = y; }
 function scrSwap(a, b){
+  scrKeep(a);
   const dir = NAVDIR, sx = dir < 0 ? NAVSWIPE : 0; NAVSWIPE = 0; clearTimeout(NAVSWT);
+  if (dir !== 1) requestAnimationFrame(() => { if (b.isConnected) scrBack(b); });
   const st = a.parentNode, u0 = st && st.querySelector(":scope>.scr.under"), uf = u0 && {transform:u0.style.transform, opacity:u0.style.opacity};   // 手指拖到哪：真的上一層從那裡接著滑，不跳回去
   if (st) st.querySelectorAll(":scope>.scr.under").forEach(u => u.remove());   // 往右滑時先畫好的上一層：真的上一層要換上來了，拿掉
   if (!canAnim() || !a.isConnected) return a.replaceWith(b);
@@ -842,51 +779,35 @@ function scrSwap(a, b){
 function shell(list, time){ return DESK.matches ? deskShell(list, time) : phoneShell(list, time); }
 function deskShell(list, time){
   const s = MAIN !== "all" && list.find(x => keyOf(x) === MAIN), m = s ? MAIN : "all";
-  const lay = LEFT === "set" && PLAT === "desktop";   // 電腦（Telegram Desktop）：設定是蓋在整個視窗中間的一層（Info::LayerWidget），左欄照樣是清單
-  const left = LEFT === "set" && !lay ? scrHtml("set", setScreen(list)) : scrHtml("list", listScreen(list, m));
+  const lay = isSetId(LEFT) && PLAT === "desktop";   // 電腦（Telegram Desktop）：設定是蓋在整個視窗中間的一層（Info::LayerWidget），左欄照樣是清單
+  const left = isSetId(LEFT) && !lay ? scrHtml(LEFT, setScreen(list, LEFT)) : scrHtml("list", listScreen(list, m));
   const main = s ? scrHtml("h:" + m, hostScreen(s)) : scrHtml("all", allScreen(list, time));
   const info = s ? `<aside class="rcol${INFO ? " on" : ""}" data-key="rcol"><div class="rcin">${scrHtml("i:" + m, infoScreen(s))}</div></aside>` : "";
-  const tb = TABS() ? tabBar(list, LEFT === "set" ? "set" : m === "all" ? "all" : "list") : "";
-  const sl = lay ? `<div class="slayer" data-key="slayer"><button class="slbg" data-navback aria-label="關閉"></button><div class="slbox" data-key="slbox" role="dialog" aria-modal="true" aria-label="設定">${scrHtml("set", setScreen(list))}</div></div>` : "";
+  const tb = TABS() ? tabBar(list, isSetId(LEFT) ? "set" : STK[0] === "all" || (m === "all" && STK.includes("all")) ? "all" : "list") : "";
+  const sl = lay ? `<div class="slayer" data-key="slayer"><button class="slbg" data-navclose aria-label="關閉設定"></button><div class="slbox" data-key="slbox" role="dialog" aria-modal="true" aria-label="設定">${scrHtml(LEFT, setScreen(list, LEFT))}</div></div>` : "";
   return `<div class="dash d app2" data-key="d"><aside class="lcol${tb ? " tabs" : ""}" data-key="lcol">${left}${tb}</aside><main class="mcol" data-key="mcol">${main}</main>${info}${sl}</div>`;
 }
-/* 電腦：收起設定那一層（淡出，Telegram Desktop 的圖層） */
-function setLayerOut(pop){
-  if (!pop && history.state && history.state.slay) { DLGSKIP++; history.back(); }   // 自己關（×、點旁邊、Esc）：把打開時記的那一筆退掉
-  const l = $("#app .slayer"), fin = () => { if (LEFT !== "set") return; LEFT = "list"; render(LIST); };
-  if (!l || !canAnim()) return fin();
-  if (l._out) return;
-  l._out = 1; l.style.pointerEvents = "none";
-  l.animate([{opacity:1}, {opacity:0}], {duration:T.fast, easing:EXIT, fill:"forwards"}).finished.then(fin, fin);
-}
 function phoneShell(list, time){
-  const ok = id => ROOTS.includes(id) || list.some(s => keyOf(s) === id.slice(2));
-  if (!STK.every(ok) || !ROOTS.includes(STK[0]) || (!TABS() && STK[0] !== "list") || STK.slice(1).some(x => ROOTS.includes(x) && TABS())) {
-    STK = STK.filter(ok);
-    if (TABS()) { const r = STK.map((x, i) => ROOTS.includes(x) ? i : 0).reduce((a, b) => Math.max(a, b), 0); STK = STK.slice(r); }   // 換成 iOS／Android：最後一個分頁當最底層（在設定裡換平台就留在設定）
-    if (!STK.length || !ROOTS.includes(STK[0]) || (!TABS() && STK[0] !== "list")) STK.unshift("list");
-    stkSave();
-  }
   const id = STK[STK.length - 1], root = TABS() && STK.length === 1;
   return `<div class="dash m app2" data-key="m"><div class="stage" data-key="stage">${scrHtml(id, phoneBody(id, list, time) + (root ? tabBar(list, id) : ""), root ? "root" : "")}</div></div>`;
 }
 function phoneBody(id, list, time){
-  const s = /^[hi]:/.test(id) && list.find(x => keyOf(x) === id.slice(2));
-  return id === "all" ? allScreen(list, time) : id === "set" ? setScreen(list) : s && id[0] === "h" ? hostScreen(s) : s ? infoScreen(s) : listScreen(list, "");
+  const s = isHostId(id) && list.find(x => keyOf(x) === id.slice(2));
+  return id === "all" ? allScreen(list, time) : isSetId(id) ? setScreen(list, id) : s && id[0] === "h" ? hostScreen(s) : s ? infoScreen(s) : listScreen(list, "");
 }
 /* iOS、Android 下面的分頁列：主機（幾件事要留意的數字小圓）、紀錄、設定
    iOS：TabBarNode（49 高、毛玻璃、圖示上字在下 10 號字）；Android：MainTabsActivity（56 高、四周留 8、浮起來的膠囊，選到的那格有一塊底） */
 function tabBar(list, cur){
   const n = list.filter(isBad).length, lv = LOST || list.some(s => !s.online || lvOf(s) === "bad") ? "bad" : "warn";
-  const it = (id, ic, l, b = "") => `<button class="tbi${cur === id ? " on" : ""}" data-tab="${id}" data-key="t:${id}" aria-label="${l}${b ? `，${n} 件事要留意` : ""}"${cur === id ? ' aria-current="page"' : ""}><span class="tbg">${I(ic)}${b}</span><span class="tbn">${l}</span></button>`;
+  const it = (id, ic, l, b = "") => `<button class="tbi${cur === id ? " on" : ""}" data-tab="${id}" data-key="t:${id}" aria-label="${l}${b ? `，${n} 台主機有狀況` : ""}"${cur === id ? ' aria-current="page"' : ""}><span class="tbg">${I(ic)}${b}</span><span class="tbn">${l}</span></button>`;
   return `<nav class="tabbar" data-key="tabbar">${it("list", "home", "主機", n ? `<b class="cbg ${lv}" data-x>${n}</b>` : "")}${it("all", "log", "紀錄")}${it("set", "gear", "設定")}</nav>`;
 }
 /* 每一層上面的標題列
    iOS（NavigationBar）：左邊「‹ 上一層的名字」、標題置中、頭像在右邊；Android（ActionBar）：← 、頭像、標題靠左、右邊圖示；電腦（tdesktop）：跟 Android 一樣靠左，沒有返回 */
 const SCRN = {list:"主機", all:"紀錄", set:"設定"};
 function prevName(){
-  const id = STK[STK.length - 2] || "list", s = /^[hi]:/.test(id) && LIST.find(x => keyOf(x) === id.slice(2));
-  return id[0] === "i" ? "資訊" : s ? s.name : (!TABS() && id === "list" ? "主機" : SCRN[id] || "返回");
+  const id = STK[STK.length - 2] || "list", s = isHostId(id) && LIST.find(x => keyOf(x) === id.slice(2));
+  return id[0] === "i" ? "資訊" : s ? s.name : (!TABS() && id === "list" ? "主機" : SCRN[id] || (SETP[id.slice(4)] || [])[0] || "返回");
 }
 const backBtn = () => DESK.matches || STK.length < 2 ? "" : PLAT === "ios" ? `<button class="nbk" data-navback title="返回">${I("chev")}<span>${esc(prevName())}</span></button>` : `<button class="iconbtn" data-navback title="返回">${I("back")}</button>`;
 function topbar(o){
@@ -902,8 +823,8 @@ function cav(s, big){
 }
 /* ── 左欄：主機清單 ── */
 function listScreen(list, sel){
-  const bad = list.filter(isBad), q = QS.trim().toLowerCase();
-  const rows = list.filter(s => (QF !== "bad" || bad.includes(s)) && (!q || String(s.name).toLowerCase().includes(q) || place(s).toLowerCase().includes(q)));
+  const bad = list.filter(isBad), q = QS.trim().toLowerCase(), at = s => { const i = ORDER.indexOf(keyOf(s)); return i < 0 ? 1e9 : i; };
+  const rows = [...list].sort((a, b) => at(a) - at(b)).filter(s => (QF !== "bad" || bad.includes(s)) && (!q || String(s.name).toLowerCase().includes(q) || place(s).toLowerCase().includes(q)));
   const inp = `<input type="search" class="sin" data-search placeholder="搜尋" value="${esc(QS)}" autocomplete="off" enterkeyhint="search">`;
   let head, top = "";
   if (PLAT === "ios") {                              // Telegram iOS 聊天清單：標題置中、右上新增；搜尋框在清單最上面（36 高、灰底），打字時右邊出現「取消」
@@ -916,11 +837,15 @@ function listScreen(list, sel){
     <label class="srch" data-key="srch">${I("search")}${inp.replace('placeholder="搜尋"', 'placeholder="搜尋主機"')}</label></header>`;
   const tabs = list.length > 1 ? `<div class="ltabs" data-key="ltabs" data-slide=".tbu">${[["", "全部"], ["bad", "有狀況"]].map(([k, l]) =>
     `<button class="ltb${QF === k ? " on" : ""}" data-qf="${k}" data-key="qf:${k}"><i class="tbu"></i><span>${l}</span>${k && bad.length ? `<b class="cbg ${list.some(s => !s.online || lvOf(s) === "bad") ? "bad" : "warn"}">${bad.length}</b>` : ""}</button>`).join("")}</div>` : "";
-  const all = !q && !QF ? (TABS() ? "" : allRow(list, sel === "all")) + flyCRow() : "";   // iOS、Android：「全部主機」就是下面的「紀錄」分頁，清單裡不再放一列
-  const hint = !q && !QF && list.some(x => !x.node && x.tg_off) ? `<button class="crow tip" data-tg data-key="r:tg"><span class="cav ic">${I("bell")}</span><span class="cbd"><span class="ct1"><b>Telegram 通知</b></span><span class="ct2"><span class="cst">還沒設定，出事不會通知你</span></span></span></button>` : "";
+  /* 分清楚四種東西：提醒（還沒設定 Telegram，一條橫幅，不是一台主機）、總覽（全部主機）、主機、工具（機場起降） */
+  const plain = !q && !QF;
+  const all = plain && !TABS() ? allRow(list, sel === "all") : "";   // iOS、Android：「全部主機」就是下面的「紀錄」分頁，清單裡不再放一列
+  const hint = plain && list.some(x => !x.node && x.tg_off) ? `<button class="lban" data-tg data-key="ban:tg">${I("bell")}<span><b>Telegram 通知還沒設定</b><small>出事不會通知你</small></span>${CHEV}</button>` : "";
+  const sec = (k, t) => `<div class="lsec" data-key="sec:${k}" role="heading" aria-level="2">${t}</div>`;
   const hosts = rows.map(s => hostRow(s, sel === keyOf(s))).join("");
+  const tools = plain ? sec("tools", "工具") + flyCRow() : "";
   const none = !rows.length ? `<div class="lnone" data-key="none">${q ? "找不到這台主機" : QF ? "每一台都正常" : ""}</div>` : "";
-  return head + `<div class="lscroll" data-key="ls">${top}${tabs}<div class="clist" data-key="cl" data-keyed>${all}${hint}${hosts}</div>${none}</div>`
+  return head + `<div class="lscroll" data-key="ls">${top}${hint}${tabs}<div class="clist" data-key="cl" data-keyed>${all}${plain && list.length > 1 ? sec("hosts", `主機・${list.length}`) : ""}${hosts}${rows.length ? tools : ""}</div>${none}${rows.length ? "" : tools}</div>`
     + (PLAT === "android" ? `<button class="fab" data-addhost data-key="fab" title="新增主機">${I("plus")}</button>` : "");   // 新增的圓鈕只有 Android 有（iOS 在右上角、電腦在左上選單）
 }
 function allRow(list, on){
@@ -999,7 +924,8 @@ function timeline(ev, many){
 function evBubble(e, many){
   const s = many && !evMany(e) && LIST.find(x => keyOf(x) === e.k);
   const who = many ? (evMany(e) ? `<span class="cav ic num"><i>${e.hs.length}</i></span>` : s ? cav(s) : `<span class="cav pk5"><i>${esc([...(e.h || "?")][0])}</i></span>`) : "";   // 好幾台同一件事：頭像是台數
-  return `<div class="ev eb ${e.kind}${many && evMany(e) && EVOPEN.has(e.k) ? " open" : ""}" data-key="${esc(e.k)}|${e.kind}:${esc(e.text)}">${who}<div class="ebb">${many ? `<div class="ebn">${evWho(e)}</div>` : ""}
+  const go = many && s ? ` data-go="h:${esc(e.k)}" data-hvgo="ev" role="button" tabindex="0" aria-label="${esc(s.name)}：${esc(e.text)}"` : "";   // 點了到那台主機的「紀錄」
+  return `<div class="ev eb ${e.kind}${go ? " go" : ""}${many && evMany(e) && EVOPEN.has(e.k) ? " open" : ""}" data-key="${esc(e.k)}|${e.kind}:${esc(e.text)}"${go}>${who}<div class="ebb">${many ? `<div class="ebn">${evWho(e)}</div>` : ""}
     <div class="ebt">${evIco(e)}<span>${evTx(e)}${e.n > 1 ? `<small class="lx num">×${e.n}</small>` : ""}</span><time class="num">${hm(e.t)}</time></div>${many && evMany(e) ? `<div class="ehs"><div><div>${esc(e.hs.join("、"))}</div></div></div>` : ""}</div></div>`;
 }
 /* 紀錄的篩選選單：看哪一種、看哪一台 */
@@ -1014,14 +940,24 @@ function logMenu(btn){
   menuIn(m); window._menu = m; window._menu._by = btn; histMark(m);
   setTimeout(() => m.addEventListener("click", () => closeMenu()), 0);
 }
-/* ── 中間：一台主機（即時數字、圖表、這台的紀錄） ── */
+/* ── 中間：一台主機 ──
+   上面：名字、狀態、要留意的事、四格即時數字（一直都在）；下面分兩頁「監控」「紀錄」：
+   監控是圖表和流量、紀錄是這台全部的事件（不用滑過一堆圖表才看得到）。分頁黏在上面，捲到哪都能一下換過去；
+   每台各自記得看哪一頁、捲到哪。 */
+const HV = (() => { try { const o = JSON.parse(sstore("vs-hv") || "{}"); return o && typeof o === "object" ? o : {}; } catch(e) { return {}; } })();
+const hvOf = s => HV[keyOf(s)] === "ev" ? "ev" : "mon";
+const hostEvList = s => mergeEv(s.events || []).map(e => ({...e, h:s.name, k:keyOf(s)})).sort((a, b) => b.t - a.t);
 function hostScreen(s){
-  const k = esc(keyOf(s)), D = DESK.matches;
+  const k = esc(keyOf(s)), D = DESK.matches, v = hvOf(s), evs = hostEvList(s);
   const sub = s.online ? `${esc(place(s) || osShort(s.os))}・開機 ${up(s.uptime)}` : `連不上${s.last_seen ? `・${esc(ago(s.last_seen))}` : ""}`;
-  const acts = (D ? `<button class="iconbtn${INFO ? " act" : ""}" data-go="i:${k}" title="主機資訊">${I("info")}</button>` : "") + moreBtn(s);
-  const head = topbar({av:`<button class="tav" data-go="i:${k}" title="主機資訊">${cav(s)}</button>`, title:esc(s.name), sub, acts, attr:` data-go="i:${k}" role="button"`});
-  if (!s.online) return head + `<div class="mscroll" data-key="ms"><div class="mwrap" data-key="mw">${offBox(s)}${hostEvents(s)}</div></div>`;
-  return head + `<div class="mscroll" data-key="ms"><div class="mwrap" data-key="mw">${alerts(s, 1)}${hostMain(s)}${hostEvents(s)}</div></div>`;
+  const acts = (D ? `<button class="iconbtn${INFO ? " act" : ""}" data-go="i:${k}" title="主機資訊" aria-pressed="${!!INFO}">${I("info")}</button>` : "") + moreBtn(s);
+  const head = topbar({av:`<button class="tav" data-go="i:${k}" title="主機資訊">${cav(s)}</button>`, title:esc(s.name), sub, acts, attr:` data-go="i:${k}" role="button" tabindex="0" aria-label="${esc(s.name)} 主機資訊"`});
+  const bad = evs.filter(e => e.kind === "bad" || e.kind === "warn").length;
+  const tab = (id, l, n = "") => `<button class="${v === id ? "on" : ""}" role="tab" aria-selected="${v === id}" data-hv="${id}" data-k="${k}" data-key="hv:${id}">${l}${n}</button>`;
+  const seg = `<div class="hseg" data-key="hseg"><div class="seg" role="tablist" aria-label="看哪一頁" data-slide>${tab("mon", "監控")}${tab("ev", "紀錄", evs.length ? ` <b class="num${bad ? " hv" : ""}" data-x>${evs.length}</b>` : "")}</div></div>`;
+  const top = s.online ? alerts(s, 1) + tiles(s) : offBox(s);
+  const body = v === "ev" ? `<div class="hev" data-key="hev">${timeline(evs, false)}</div>` : s.online ? hostMain(s) : "";
+  return head + `<div class="mscroll" data-key="ms" data-seg="${v}"><div class="mwrap" data-key="mw">${top}${seg}${body}</div></div>`;
 }
 function hostMain(s){
   const ph = !DESK.matches, hs = PREF.show.chart ? histFor(s) : null;
@@ -1030,11 +966,7 @@ function hostMain(s){
   const npCard = PREF.show.net ? `<div class="cc" data-key="np"><div class="nets"><div class="nt">${IC("down")}<div class="nv" title="下載">${rate(s.net.rx)}</div></div><div class="nt">${IC("up")}<div class="nv" title="上傳">${rate(s.net.tx)}</div></div></div>
     ${hs ? `<div class="cbox wide">${chartOr(hs, cid(s, ph ? "n" : "b"), x => [{data:x.rx, color:COL.rx, name:"下載"}, {data:x.tx, color:COL.tx, name:"上傳"}], {grid:1, bin:1, fmt:rate, h: ph ? 104 : 120})}</div>` : ""}</div>` : "";
   const ioCard = PREF.show.chart && hs && !hs.err && hs.rd ? ioCards(s, hs, ph) : "";
-  return tiles(s) + `<div class="cgrid" data-key="cg">${cpCard}${npCard}${ioCard}</div>` + trafficCard(s);
-}
-function hostEvents(s){
-  const ev = mergeEv(s.events || []).map(e => ({...e, h:s.name, k:keyOf(s)})).sort((a, b) => b.t - a.t);
-  return `<div class="lbl" data-key="lhe">這台的紀錄${ev.length > 6 ? `<button data-logall="${esc(keyOf(s))}">全部 ${ev.length} 筆</button>` : ""}</div>` + timeline(ev.slice(0, 6), false);
+  return `<div class="cgrid" data-key="cg">${cpCard}${npCard}${ioCard}</div>` + trafficCard(s);
 }
 /* ── 右欄：主機資訊（像 Telegram 的個人資料：大頭像、快捷鍵、一段一段的資訊與工具） ── */
 function infoScreen(s){
@@ -1088,28 +1020,45 @@ const setRow = (attr, ic, l, st) => {
   const c = STCACHE[st], v = c ? (!c.b ? "" : c.b === true ? "✓" : String(c.b)) : "", bh = c && c.b === true ? I("check") : v;
   return `<button class="li" ${attr}>${IC(ic, "")}<span class="lab">${l}<small class="${st}${c && c.on ? " on" : ""}" data-keep data-ld>${c ? esc(c.t) : "讀取中…"}</small></span><span class="stb${c && typeof c.b === "number" ? " n" : ""}" data-keep${c && c.b ? ` data-v="${esc(v)}"` : " hidden"}>${bh}</span>${CHEV}</button>`;
 };
-/* ── 設定（電腦蓋在左欄上面一層、手機推進來一層） ── */
-function setScreen(list){
+/* ── 設定：首頁是分類（通知與整合、帳號與安全、外觀），點進去才是細項；登出自己一段放最下面
+   電腦介面蓋在中間一層、iOS／Android 是分頁（電腦寬度在左欄）、手機電腦介面推進來一層 ── */
+const SETP = {int:["通知與整合", "intg"], sec:["帳號與安全", "acct"], look:["外觀", "look"]};
+function setScreen(list, id = "set"){
   const on = list.filter(s => s.online), self = on.some(s => !s.node), me = list.find(x => !x.node);
-  const lay = DESK.matches && PLAT === "desktop", root = TABS() && (DESK.matches || STK.length === 1);
-  const head = topbar({lead:lay ? "" : root ? "" : DESK.matches ? `<button class="iconbtn" data-navback title="返回">${I("back")}</button>` : backBtn(), title:"設定", acts:lay ? `<button class="iconbtn" data-navback title="關閉">${I("x")}</button>` : ""});
-  const accMap = Object.fromEntries([...ACCENTS, ["rainbow", "彩色"]]);
-  const sw = ACCENTS.map(([v, l]) => `<button class="${PREF.accent === v ? "on" : ""}" data-pref="accent" data-val="${v}" data-accent="${v}" title="${l}" aria-label="${l}">${I("check")}</button>`).join("")
-    + `<button class="rbsw${PREF.accent === "rainbow" ? " on" : ""}" data-pref="accent" data-val="rainbow" title="彩色" aria-label="彩色">${I("check")}</button>`;
-  const prof = `<div class="prof" data-key="prof"><span class="cav big brand">${BRAND}</span><b class="pn">哨站</b><small class="ps">${me && me.version ? `版本 ${esc(me.version)}・` : ""}${list.length} 台主機</small></div>`;
-  const secG = `<div class="group" data-key="g-sec">${setRow("data-tg", "bell", "Telegram 通知", "tgst")}${PK_OK && self ? setRow("data-pk", "finger", "手機金鑰登入", "pkst") : ""}${self ? setRow("data-pin", "pin", "PIN 碼登入", "pinst") + setRow("data-sess", "devices", "登入的裝置", "sessst") : ""}</div>`;
-  const skyG = self && !SHARE ? `<div class="lbl" data-key="lsky">機場起降</div><div class="group" data-key="g-sky">${setRow("data-sky", "sky", "OpenSky 帳號", "skyst")}</div>` : "";
-  const look = `<div class="lbl" data-key="llook">外觀</div><div class="group" data-key="g-look">
+  const sub = id.startsWith("set:") ? id.slice(4) : "", page = SETP[sub];
+  const lay = DESK.matches && PLAT === "desktop", root = !sub && TABS() && (DESK.matches || STK.length === 1);
+  const back = `<button class="iconbtn" data-navback title="返回" aria-label="返回">${I("back")}</button>`;
+  const lead = sub ? (lay || DESK.matches ? back : backBtn()) : lay || root ? "" : DESK.matches ? back : backBtn();
+  const head = topbar({lead, title:page ? page[0] : "設定", acts:lay ? `<button class="iconbtn" data-navclose title="關閉設定" aria-label="關閉設定">${I("x")}</button>` : ""});
+  const pk = PK_OK && self, sky = self && !SHARE;
+  if (sub === "int") return head + `<div class="rscroll" data-key="ss">`
+    + `<div class="group" data-key="g-tg">${setRow("data-tg", "bell", "Telegram 通知", "tgst")}</div>`
+    + (sky ? `<div class="lbl" data-key="lsky">機場起降</div><div class="group" data-key="g-sky">${setRow("data-sky", "sky", "OpenSky 帳號", "skyst")}</div>` : "") + `</div>`;
+  if (sub === "sec") return head + `<div class="rscroll" data-key="ss">`
+    + (pk || self ? `<div class="group" data-key="g-sec">${pk ? setRow("data-pk", "finger", "手機金鑰登入", "pkst") : ""}${self ? setRow("data-pin", "pin", "PIN 碼登入", "pinst") + setRow("data-sess", "devices", "登入的裝置", "sessst") : ""}</div>` : `<div class="lnone" data-key="none">這台連不上，等一下再來</div>`) + `</div>`;
+  if (sub === "look") {
+    const accMap = Object.fromEntries([...ACCENTS, ["rainbow", "彩色"]]);
+    const sw = ACCENTS.map(([v, l]) => `<button class="${PREF.accent === v ? "on" : ""}" data-pref="accent" data-val="${v}" data-accent="${v}" title="${l}" aria-label="${l}">${I("check")}</button>`).join("")
+      + `<button class="rbsw${PREF.accent === "rainbow" ? " on" : ""}" data-pref="accent" data-val="rainbow" title="彩色" aria-label="彩色">${I("check")}</button>`;
+    return head + `<div class="rscroll" data-key="ss"><div class="group" data-key="g-look">
       <div class="li col"><span class="lab">主題</span>${lkPick("theme", [["auto", "自動"], ["light", "淺色"], ["dark", "深色"]], v => v === "auto" ? `<span class="lkh">${lkMini("light")}${lkMini("dark")}</span>` : lkMini(v))}</div>
       <div class="li col"><span class="lab sw-head"><span>主題色</span><span class="sw-val"><i></i>${esc(accMap[PREF.accent] || "藍")}</span></span><div class="sww"><div class="sw">${sw}</div></div></div>
       <div class="li col"><span class="lab">配色風格</span>${lkPick("tone", [["soft", "柔和"], ["vivid", "鮮明"], ["calm", "素雅"]], v => lkMini(document.documentElement.dataset.mode || "light", v))}</div>
       <div class="li col"><span class="lab">介面</span>${lkPick("plat", [["auto", "自動"], ["ios", "iOS"], ["android", "Android"], ["desktop", "電腦"]], v => platMini(v === "auto" ? platOf("auto") : v), "l4")}</div>
       <div class="li col"><span class="lab">文字大小</span>${lkPick("size", [["s", "小"], ["m", "中"], ["l", "大"]], v => `<i class="lkz ${v}">字</i>`)}</div>
       <label class="li"><span class="lab">動畫</span>${tog("motion", "動畫")}</label>
-      <button class="li" data-shows>${IC("trend", "")}<span class="lab">要顯示的內容<small class="showst">${showSum()}</small></span>${CHEV}</button></div>`;
-  const out = `<div class="group" data-key="g-out"><button class="li" data-logout><span class="ico info">${I("logout")}</span><span class="lab">登出</span></button>
-      <button class="li" data-reset><span class="ico info">${I("reset")}</span><span class="lab">恢復預設值</span></button></div>`;
-  return head + `<div class="rscroll" data-key="ss">${prof}<div class="lbl" data-key="lsec">通知與登入</div>${secG}${skyG}${look}<div class="lbl" data-key="lo"></div>${out}</div>`;
+      <button class="li" data-shows>${IC("trend", "")}<span class="lab">要顯示的內容<small class="showst">${showSum()}</small></span>${CHEV}</button></div>
+      <div class="group" data-key="g-rst"><button class="li" data-reset><span class="ico info">${I("reset")}</span><span class="lab">恢復預設值</span></button></div></div>`;
+  }
+  const prof = `<div class="prof" data-key="prof"><span class="cav big brand">${BRAND}</span><b class="pn">哨站</b><small class="ps">${me && me.version ? `版本 ${esc(me.version)}・` : ""}${list.length} 台主機</small></div>`;
+  const tgOff = list.some(x => !x.node && x.tg_off);
+  const cat = (k, small, badge = "") => `<button class="li" data-go="set:${k}" data-key="c:${k}">${IC(SETP[k][1], "")}<span class="lab">${SETP[k][0]}<small>${small}</small></span>${badge}${CHEV}</button>`;
+  const PLN = {auto:"自動", ios:"iOS", android:"Android", desktop:"電腦"}, THN = {auto:"自動", light:"淺色", dark:"深色"};
+  const cats = cat("int", tgOff ? "Telegram 還沒設定" : sky ? "Telegram・OpenSky" : "Telegram", tgOff ? `<span class="stb n warn" aria-label="還沒設定">!</span>` : "")
+    + (pk || self ? cat("sec", [pk && "手機金鑰", self && "PIN 碼", self && "登入的裝置"].filter(Boolean).join("・")) : "")
+    + cat("look", `${THN[PREF.theme] || "自動"}・${PLN[PREF.plat] || "自動"}`);
+  const out = `<div class="group" data-key="g-out"><button class="li danger" data-logout><span class="ico bad">${I("logout")}</span><span class="lab">登出</span></button></div>`;
+  return head + `<div class="rscroll" data-key="ss">${prof}<div class="group" data-key="g-cat">${cats}</div>${out}</div>`;
 }
 let NAVSWIPE = 0;
 /* 手機：往右滑退回上一層（畫面跟著手指走，放開超過三成或甩得夠快就退回）
@@ -2324,22 +2273,25 @@ function render(list){
   const time = new Date().toLocaleTimeString("zh-TW", {hour12:false});
   const alv = LOST || list.some(s => !s.online || lvOf(s) === "bad") ? "bad" : list.some(s => lvOf(s) === "warn") || issuesOf(list).length ? "warn" : "ok";
   document.documentElement.dataset.alert = alv;
+  navFix();                                       // 主機被移除了：那一層拿掉
   paint(shell(list, time));
   if (TIPX) drawTip(...TIPX);
   loadStatus();
 }
-DESK.addEventListener("change", () => { applyPrefs(); if (LIST.length) render(LIST); });
+DESK.addEventListener("change", () => { applyPrefs(); closeMenu(); navFix(); if (LIST.length) render(LIST); });   // 寬窄互換：同一份位置換一種排法
 /* 電腦版一次並排幾台：螢幕夠寬才放三台 */
 let WIDE = 0;
 addEventListener("resize", () => { const w = deskCols(); if (w !== WIDE) { WIDE = w; if (DESK.matches && LIST.length) render(LIST); } }, {passive:true});
 
 /* ═════════ 對話框、通知 ═════════ */
-function modal({icon, cls="box", title, text, input, ok="確定"}){
+/* 確認視窗：問句（標題是「？」結尾）和要小心的動作一定有「取消」；要小心的動作焦點先放在「取消」，按 Enter 不會誤按 */
+function modal({icon, cls="box", title, text, input, ok="確定", cancel}){
+  if (cancel === undefined) cancel = cls === "bad" || cls === "warn" || /？$/.test(title) ? "取消" : "";
   return new Promise(res => {
     const v = document.createElement("div"); v.className = "veil";
     v.innerHTML = `<div class="dialog dlga">${icon?`<div class="ico big ${cls}">${I(icon)}</div>`:""}<h3>${esc(title)}</h3>${text?`<p>${esc(text)}</p>`:""}
       ${input!==undefined?`<input class="field" maxlength="40" value="${esc(input)}">`:""}
-      <div class="btns"><button class="ubtn ${cls === "bad" || cls === "warn" ? cls : ""}" data-r="1">${ok}</button></div></div>`;
+      <div class="btns">${cancel ? `<button type="button" class="ubtn ghost" data-r="0">${esc(cancel)}</button>` : ""}<button type="button" class="ubtn ${cls === "bad" || cls === "warn" ? cls : ""}" data-r="1">${ok}</button></div></div>`;
     $("#layer").appendChild(v);
     const inp = v.querySelector("input");
     const done = r => { if (v._d) return; v._d = 1; v.classList.add("closing"); const val = r ? (inp ? inp.value : true) : null;
@@ -2422,12 +2374,15 @@ function loadStatus(){
 let DET = "", DETX = false, DETP = false, OPENR = null;   // 舊的主機整頁：已經改成一層一層的畫面，留著給機場起降判斷
 const showBack = () => document.documentElement.classList.remove("dhid");
 document.addEventListener("keydown", e => {
+  if (e.key === "Escape" && e.target.matches && e.target.matches("#app [data-search]") && !document.querySelector("#layer .veil") && !window._menu) {   // 搜尋框按 Esc：有字先清掉，沒字就離開搜尋框
+    if (e.target.value) { e.target.value = ""; QS = ""; render(LIST); } else if (SRCH) srchShut(); else e.target.blur();
+    return;
+  }
   if (e.key === "Escape" && !document.querySelector("#layer .veil") && !window._menu && !$("#fly") && !(e.target.matches && e.target.matches("input,textarea"))) navBack();
 });
 /* 改了設定：馬上套用 */
 function changed(k){
-  const run = () => { applyPrefs(); if (LIST.length) render(LIST);
-    if (k === "plat" && !DESK.matches && STK.length > ((history.state && history.state.scr) || 1)) try { history.pushState({...(history.state || {}), scr:STK.length}, ""); } catch(e) {} };   // 換成電腦介面時多了一層（清單＞設定）：補一筆，上一頁回清單
+  const run = () => { applyPrefs(); if (k === "plat") navFix(); if (LIST.length) render(LIST); };   // 換介面：位置照新介面整理（例如電腦介面的設定底下多一層清單）
   if (k === "size") sizeShift(run);              // 文字大小：整頁平順地放大／縮小過去
   else if (k === "theme") {                      // 深淺模式：只有真的換了深淺才整頁淡入淡出（避免同色切「自動」也閃一下）
     const next = (PREF.theme === "dark" || (PREF.theme === "auto" && DARKQ.matches)) ? "dark" : "light";
@@ -2441,7 +2396,7 @@ function changed(k){
       if (sv) sv.innerHTML = `<i></i>${esc(lb)}`;
     }
   });
-  else if (k === "plat") { SRCH = false; closeMenu(); smooth(run); }   // 換平台：整頁淡入淡出換過去
+  else if (k === "plat") { srchDrop(); closeMenu(); smooth(run); }   // 換平台：整頁淡入淡出換過去
   else run();
   if (k === "refresh") restart();
   if (k === "show.weather") { if (PREF.show.weather) store(WXK, JSON.stringify({...wxMem(), deny: 0})); wxRun(); }
@@ -2564,13 +2519,15 @@ function logHostMenu(btn){
 }
 function closeMenu(){
   const m = window._menu; if (!m) return; window._menu = null;
-  if (!canAnim()) { m.remove(); return histDrop(m); }
+  histDrop(m);                                   // 開始關就把它那筆退掉（同一刻打開別的會直接沿用）
+  if (m._by && m.contains(document.activeElement) && m._by.isConnected) try { m._by.focus({preventScroll:true}); } catch(e) {}
+  if (!canAnim()) return m.remove();
   m.style.pointerEvents = "none";
   if (m.classList.contains("mdrw")) {             // 電腦的主選單：整欄滑回左邊
     m.querySelector(".mdbg").animate([{opacity:1}, {opacity:0}], {duration:T.fast, easing:EXIT, fill:"forwards"});
-    return m.querySelector(".mdp").animate([{transform:"none"}, {transform:"translateX(-100%)"}], {duration:T.fast, easing:EXIT, fill:"forwards"}).finished.then(() => { m.remove(); histDrop(m); });
+    return m.querySelector(".mdp").animate([{transform:"none"}, {transform:"translateX(-100%)"}], {duration:T.fast, easing:EXIT, fill:"forwards"}).finished.then(() => m.remove());
   }
-  m.animate([{opacity:1, transform:"none"}, {opacity:0, transform:"scale(.85)"}], {duration:T.fast, easing:EXIT, fill:"forwards"}).finished.then(() => { m.remove(); histDrop(m); });
+  m.animate([{opacity:1, transform:"none"}, {opacity:0, transform:"scale(.85)"}], {duration:T.fast, easing:EXIT, fill:"forwards"}).finished.then(() => m.remove());
 }
 /* 選單打開：telegram-tt Menu（從按鈕那一角 .85 倍放大、同時淡入，.15 秒） */
 function menuIn(m){ if (canAnim()) m.animate([{opacity:0, transform:"scale(.85)"}, {opacity:1, transform:"none"}], {duration:T.fast, easing:STD}); }
@@ -3074,37 +3031,49 @@ async function newToken(node, label){
 }
 function restart(){ clearTimeout(timer); timer = setTimeout(tick, (PREF.refresh || 5) * 1000); }
 addEventListener("keydown", e => { if (e.key === "Escape") { const v = [...document.querySelectorAll("#layer .veil")].pop(); if (v && v._esc) v._esc(); } });
-/* 對話框：不放「取消」「關閉」鈕（點旁邊、往下滑、Esc 就關）；電腦上右上角一個 ×
-   打開時記一筆瀏覽紀錄，返回手勢先關最上面的視窗，不會整頁退出（機場起降、主機細節也一樣） */
-let DLGN = 0, DLGSKIP = 0;
+/* 對話框：點旁邊、往下滑、Esc 都會關；電腦上右上角一個 ×；要小心的動作（刪除、重開機、換密碼）另外有「取消」鈕。
+   打開時記一筆瀏覽紀錄（nav.js 的 histMark），返回手勢先關最上面的視窗，不會整頁退出；
+   鍵盤：焦點放進視窗、Tab 只在視窗裡面轉、關掉後回到打開它的那顆按鈕。 */
 const FINEP = matchMedia("(pointer:fine)");
-new MutationObserver(ms => { for (const m of ms) {
-  for (const v of m.addedNodes) {
-    const d = v.classList && v.classList.contains("veil") && v.querySelector(".dialog"); if (!d) continue;
-    if (FINEP.matches && !v.classList.contains("upv") && !v.classList.contains("stay") && !d.querySelector(".dx")) {
-      d.insertAdjacentHTML("afterbegin", `<button type="button" class="dx" aria-label="關閉">${I("x")}</button>`);
-      d.firstChild.addEventListener("click", e => { e.stopPropagation(); if (v._esc) v._esc(); });
-    }
-    histMark(v);
+const FOCUSABLE = "button:not([disabled]),[href],input:not([disabled]):not([type=hidden]),select:not([disabled]),textarea:not([disabled]),[tabindex]:not([tabindex='-1'])";
+let DLGID = 0;
+function dlgIn(v){
+  const d = v.querySelector(".dialog"); if (!d) return;
+  v._ret = document.activeElement && document.activeElement !== document.body ? document.activeElement : null;
+  d.setAttribute("role", v.classList.contains("dlga") || d.classList.contains("dlga") ? "alertdialog" : "dialog"); d.setAttribute("aria-modal", "true");
+  const h = d.querySelector("h3"); if (h) { h.id = h.id || "dlgt" + (++DLGID); d.setAttribute("aria-labelledby", h.id); }
+  if (!d.hasAttribute("tabindex")) d.tabIndex = -1;
+  if (FINEP.matches && !v.classList.contains("upv") && !v.classList.contains("stay") && !d.querySelector(".dx")) {
+    d.insertAdjacentHTML("afterbegin", `<button type="button" class="dx" aria-label="關閉">${I("x")}</button>`);
+    d.firstChild.addEventListener("click", e => { e.stopPropagation(); if (v._esc) v._esc(); });
   }
-  for (const v of m.removedNodes) histDrop(v);
-} }).observe($("#layer"), {childList:true});
-const DLGEL = new Map();
-const histLive = el => el && (el === window._menu || (el.classList.contains("veil") && !el._d && !el.classList.contains("closing") && el.isConnected));
-function histMark(el){                         // 上一個正在關（例如選單點了就換成對話框）：沿用那一筆，不多一格
-  const st = history.state || {}, cur = st.dlg;
-  el._dlg = ++DLGN; DLGEL.set(el._dlg, el);
-  if (cur && !histLive(DLGEL.get(cur))) { DLGEL.delete(cur); history.replaceState({...st, dlg: el._dlg}, ""); }
-  else history.pushState({...st, dlg: el._dlg}, "");
+  if (!v.classList.contains("stay")) histMark(v);   // 一定要先做完的（例如換掉臨時 PIN 碼）不記，返回也關不掉
+  requestAnimationFrame(() => {                   // 自己會把焦點放到輸入框的（例如改名字）不搶
+    if (!v.isConnected || d.contains(document.activeElement)) return;
+    const f = d.querySelector("[data-autofocus]") || (d.querySelector(".ubtn.bad,.ubtn.warn") && d.querySelector("[data-r='0']")) || d;
+    try { f.focus({preventScroll:true}); } catch(e) {}
+  });
 }
-function histDrop(el){ DLGEL.delete(el._dlg); if (el._dlg && !el._popped && history.state && history.state.dlg === el._dlg) { DLGSKIP++; history.back(); } }
-addEventListener("popstate", () => {
-  if (DLGSKIP) { DLGSKIP--; return; }
-  const at = (history.state && history.state.dlg) || 0, mn = window._menu;
-  if (mn && mn._dlg > at) { mn._popped = 1; return closeMenu(); }
-  const top = [...document.querySelectorAll("#layer .veil")].filter(v => v._dlg && !v._d && !v._popped).pop();
-  if (top && top._dlg > at) { top._popped = 1; if (top._esc) top._esc(); }
-  else if (at && !(mn && mn._dlg === at) && ![...document.querySelectorAll("#layer .veil")].some(v => v._dlg === at)) { DLGSKIP++; history.back(); }   // 這筆的視窗早就關了：再退一格
+function dlgOut(v){
+  histDrop(v);
+  const r = v._ret; v._ret = null;
+  if (r && r.isConnected && (!document.activeElement || document.activeElement === document.body || !document.activeElement.isConnected || v.contains(document.activeElement)))
+    setTimeout(() => { if (r.isConnected && !document.querySelector("#layer .veil:not(.closing)")) try { r.focus({preventScroll:true}); } catch(e) {} }, 0);
+}
+new MutationObserver(ms => { for (const m of ms) {
+  if (m.type === "attributes") { const v = m.target; if (v.parentNode && v.parentNode.id === "layer" && v.classList.contains("veil") && v.classList.contains("closing")) dlgOut(v); continue; }
+  for (const v of m.addedNodes) if (v.classList && v.classList.contains("veil")) dlgIn(v);
+  for (const v of m.removedNodes) if (v.classList && v.classList.contains("veil")) dlgOut(v);
+} }).observe($("#layer"), {childList:true, attributes:true, attributeFilter:["class"], subtree:true});
+/* Tab 只在最上面的視窗裡轉 */
+document.addEventListener("keydown", e => {
+  if (e.key !== "Tab") return;
+  const v = [...document.querySelectorAll("#layer .veil:not(.closing)")].pop(), d = v && v.querySelector(".dialog"); if (!d) return;
+  const f = [...d.querySelectorAll(FOCUSABLE)].filter(x => x.offsetParent !== null || x === document.activeElement);
+  if (!f.length) { e.preventDefault(); return d.focus(); }
+  const i = f.indexOf(document.activeElement);
+  if (e.shiftKey && i <= 0) { e.preventDefault(); f[f.length - 1].focus(); }
+  else if (!e.shiftKey && (i === f.length - 1 || i < 0)) { e.preventDefault(); f[0].focus(); }
 });
 
 /* ═════════ 手機金鑰登入：用指紋、臉部辨識代替輸入密碼（要用 https 網址打開才能用） ═════════ */
@@ -3537,7 +3506,7 @@ function rebootModal(node, name){
   v.innerHTML = `<div class="dialog"><div class="ico big warn">${I("power")}</div><h3>重新開機「${esc(name)}」？</h3>
     <p data-t>要先確認是你本人</p>
     <div class="form" hidden><input class="field" data-k="code" autocomplete="one-time-code" autocapitalize="off" spellcheck="false"><div class="msg"></div></div>
-    <div class="btns"><button class="ubtn warn" data-go>繼續</button></div></div>`;
+    <div class="btns"><button type="button" class="ubtn ghost" data-r="0">取消</button><button class="ubtn warn" data-go>繼續</button></div></div>`;
   $("#layer").appendChild(v);
   const form = v.querySelector(".form"), inp = v.querySelector("input"), msg = v.querySelector(".msg"), go = v.querySelector("[data-go]"), txt = v.querySelector("[data-t]");
   const call = body => pkCall("/api/reboot" + (node ? "?node=" + encodeURIComponent(node) : ""), body, 1).catch(err => ({message:err.message}));
@@ -4285,6 +4254,17 @@ document.addEventListener("click", e => {
   if (!e.target.closest || e.target.closest("#layer") || e.target.closest("#fly")) return;
   return onceClick(e.target.closest(ONCE_SEL), () => pageClick(e));
 });
+/* 主機頁換「監控」「紀錄」：各自記得捲到哪；沒看過的那頁接在分頁列下面（分頁列留在原本的位置） */
+function hvSet(b){
+  const k = b.dataset.k, v = b.dataset.hv; if ((HV[k] === "ev" ? "ev" : "mon") === v) return;
+  const scr = b.closest("[data-scr]"), sc = scrBox(scr), bar = b.closest(".hseg");
+  scrKeep(scr);
+  const keep = sc && bar ? Math.min(sc.scrollTop, bar.offsetTop) : 0;
+  HV[k] = v; sstore("vs-hv", JSON.stringify(HV));
+  slideSel(() => render(LIST));
+  const sc2 = scrBox($(`#app [data-scr][data-key="${CSS.escape(scr.dataset.key)}"]`)), y = SCRY.get(scr.dataset.key + "|" + v);
+  if (sc2) sc2.scrollTop = y != null ? y : keep;
+}
 async function pageClick(e){
   if (e.target.closest("#layer") || e.target.closest("#fly")) return;
   if (e.target.closest("[data-fly]")) return flyEnter(e.target.closest("[data-fly]"));
@@ -4297,8 +4277,9 @@ async function pageClick(e){
   if (tb) { if ($("#fly") && !tb.closest("#fly")) flyClose(); return ROOTS.includes(tb.dataset.tab) ? tabGo(tb.dataset.tab) : setTab(tb.dataset.tab); }   // iOS、Android 的分頁列（機場起降開著時先關掉）
   if (t.closest("[data-settings]")) return navGo("set");
   if (t.closest("[data-back],[data-navback]")) return navBack();
-  if (t.closest("[data-srch]")) { SRCH = true; render(LIST); const i = $("#app [data-search]"); if (i) i.focus(); return; }   // Android：標題列換成搜尋框
-  if (t.closest("[data-srchx]")) { SRCH = false; QS = ""; return render(LIST); }
+  if (t.closest("[data-srch]")) return srchOpen();   // Android：標題列換成搜尋框（返回先收起來）
+  if (t.closest("[data-srchx]")) return srchShut();
+  if (t.closest("[data-navclose]")) return navGo("list");   // 電腦：點設定那一層旁邊＝整個關掉
   if (t.closest("[data-qsx]")) { QS = ""; const i = $("#app [data-search]"); if (i) { i.value = ""; if (PLAT === "ios") i.blur(); else i.focus(); } return render(LIST); }   // iOS「取消」：清掉、收鍵盤
   if (t.closest("[data-mainmenu]")) { const b = t.closest("[data-mainmenu]"); if (window._menu && window._menu._by === b) return closeMenu(); return mainMenu(b); }
   if (t.closest("[data-logmenu]")) { const b = t.closest("[data-logmenu]"); if (window._menu && window._menu._by === b) return closeMenu(); return logMenu(b); }
@@ -4307,8 +4288,13 @@ async function pageClick(e){
   if (la) { LOGH = la.dataset.logall; LOGF = ""; return navGo("all"); }
   const qf = t.closest("[data-qf]");
   if (qf) { if (QF !== qf.dataset.qf) { QF = qf.dataset.qf; slideSel(() => render(LIST)); } return; }
+  const hv = t.closest("[data-hv]");
+  if (hv) return hvSet(hv);
   const gt = t.closest("[data-go]");
-  if (gt && !t.closest("[data-more]")) return navGo(gt.dataset.go);
+  if (gt && !t.closest("[data-more]")) {
+    if (gt.dataset.hvgo) { HV[gt.dataset.go.slice(2)] = gt.dataset.hvgo; sstore("vs-hv", JSON.stringify(HV)); }
+    return navGo(gt.dataset.go);
+  }
   if (t.closest("[data-addhost]")) return addHostModal();
   const rg = t.closest("[data-range]");
   if (rg) { if (RANGE !== rg.dataset.range) { RANGE = rg.dataset.range; store("vps-range", RANGE); slideSel(() => render(LIST)); } return; }
@@ -4429,6 +4415,7 @@ async function pageClick(e){
     return changed(k);
   }
   if (t.closest("[data-reset]")) {
+    if (!await modal({icon:"reset", cls:"warn", title:"恢復預設值？", text:"外觀和顯示的內容換回原本的樣子，登入和通知不動。", ok:"恢復"})) return;
     PREF = JSON.parse(JSON.stringify(DEF)); store("vps-prefs", JSON.stringify(PREF));
     smooth(() => { applyPrefs(); if (LIST.length) render(LIST); });
     restart(); return toast("已恢復預設值");
