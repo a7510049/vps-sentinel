@@ -770,6 +770,7 @@ body:has(.app2) .flyv{--pw:1280px}
 @media (hover:hover){.ltb:not(.on):hover{background:var(--hov)}}
 /* 一列（主機、全部主機、機場起降）：54 圓頭像、名字 16/500、右上時間或網速、下面一行狀態，右下數字小圓 */
 .clist{display:flex;flex-direction:column;padding:6px 8px 88px}
+a.crow{text-decoration:none;color:inherit}   /* 雲端硬碟那列是連結（開新分頁）：不要瀏覽器的底線 */
 .crow{position:relative;display:flex;align-items:center;gap:12px;width:100%;min-height:72px;padding:6px 9px;border-radius:var(--r-md);text-align:left;overflow:hidden;
   transition:background-color var(--t-fast) var(--ease)}
 @media (hover:hover){.crow:not(.on):hover{background:var(--hov)}}

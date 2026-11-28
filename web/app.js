@@ -1006,7 +1006,7 @@ function infoScreen(s){
     + (s.keep ? `<label class="li" data-key="keep">${IC("keep", "")}<span class="lab">Oracle 防回收${keepLine(s.keep)}</span><input type="checkbox" class="tog" data-keepalive="${node}" aria-label="Oracle 防回收" ${s.keep.on ? "checked" : ""}></label>` : "")
     + (s.node ? "" : setRow(`data-key="pair" data-pair`, "link", "配對暗號", "pairst")) + `</div>`;
   return head + `<div class="rscroll" data-key="rs">${prof}`
-    + sec("t", "工具", `<div class="group" data-key="g-t">${tools}</div>`)
+    + (tools ? sec("t", !DESK.matches && !s.node ? "" : "工具", `<div class="group" data-key="g-t">${tools}</div>`) : "")
     + specCard(s) + itemsCard(s) + topCard(s)
     + sec("m", "維護", `<div class="selfsum" data-key="selfsum" data-keep data-ld>${selfSumHtml()}</div>` + maint, `<button data-selfcheck>檢查新版</button>`)
     + sec("k", "常用連結", L.length ? `<div class="group" data-key="g-lk">${L.map(x => linkRow(x, esc(linkSt(x)))).join("")}</div>` : "", `<button type="button" data-rename="${node}" data-name="${name}">編輯</button>`)
@@ -1016,8 +1016,10 @@ const rmRow = s => `<button class="li danger" data-rmhost="${esc(s.node)}" data-
 const peerRow = s => `<button class="li" data-peeredit="${esc(s.node)}">${IC("link", "")}<span class="lab">更改連線網址<small>${esc(s.error && s.error !== "連不上" ? s.error : "對方的網址或連接埠換了")}</small></span>${CHEV}</button>`;
 /* 工具：一列一個（雲端硬碟、下載在上面的快捷鍵） */
 function toolRows(s, node, name){
+  const home = !DESK.matches && !s.node;   // 手機上主要主機的工具已經在首頁「工具」裡（toolCRows），這裡只留首頁沒有的（每月流量）
   const row = (a, ic, t, sub, r = "") => `<button class="li" ${a}>${IC(ic, "")}<span class="lab">${t}<small data-x>${sub}</small></span>${r}${CHEV}</button>`;
   const c = s.cloud && safeUrl(cloudHref(s.cloud)) ? s.cloud : null, out = [];
+  if (home) return s.traffic ? row(`data-key="tf" data-traffic="${node}" data-label="${name}"`, "month", "每月流量", s.traffic.limit ? `上限 ${size(s.traffic.limit)}・每月 ${s.traffic.reset_day} 號重置` : "設定上限與重置日") : "";
   if (c) {
     const pct = c.total ? Math.round(c.pct) : null;
     out.push(`<a class="li" data-key="cl" href="${esc(cloudHref(c))}"${ssoAttr(s)} target="_blank" rel="noopener noreferrer">${IC("cloud", "")}<span class="lab">雲端硬碟<small data-x>${c.total ? `${size(c.used)} / ${size(c.total)}` : "加密儲存空間"}</small>${c.total ? wave(c.pct) : ""}</span>${pct != null ? tBadge(`${pct}%`, pct >= 90 ? "bad" : pct >= 75 ? "warn" : "") : ""}${EXT}</a>`);
