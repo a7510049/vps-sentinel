@@ -841,7 +841,7 @@ body:has(.app2) .flyv{--pw:1280px}
 .fpill{display:inline-flex;align-items:center;gap:6px;height:32px;padding:0 10px 0 14px;border-radius:var(--r-pill);background:var(--pc);color:var(--on-pc);font-size:var(--fs-m);font-weight:500}
 .fpill svg{width:16px;height:16px}
 /* 紀錄：日期是置中的小膠囊（Telegram 的日期提示，捲動時停在上面），每一筆是泡泡 */
-.tl{display:flex;flex-direction:column;gap:6px}
+.tl{display:flex;flex-direction:column;gap:10px}
 .svc{display:flex;justify-content:center;padding:4px 0}
 .svc>span{padding:4px 12px;border-radius:var(--r-pill);background:var(--act);color:var(--tx2);font-size:var(--fs-s);font-weight:500}
 .tl>.svc.day{position:sticky;top:8px;z-index:1}
@@ -854,16 +854,20 @@ body:has(.app2) .flyv{--pw:1280px}
 .eb>.cav .cdot{display:none}
 .eba{flex:none;display:inline-flex;align-items:center;justify-content:center}
 .eba .hsa{width:24px;height:24px}
-.ebb{position:relative;min-width:0;max-width:min(640px,100%);padding:6px 10px 6px 12px;border-radius:var(--r-lg) var(--r-lg) var(--r-lg) var(--r-xs);background:var(--s1);box-shadow:0 1px 2px rgba(16,16,16,.08)}
-.tl:not(:has(.eb>.cav,.eb>.eba)) .ebb{border-radius:var(--r-lg)}
-.ebn{font-size:var(--fs-m);font-weight:500;color:var(--p);margin-bottom:2px}
+/* 一則紀錄＝Telegram 的對話泡泡：同一台連著說的疊在一起（中間 2、組跟組 8），名字寫在第一則、頭像和左下的尾巴在最後一則；
+   開頭是狀態表情符號（🔴🟠✅ℹ️…，跟 Telegram 通知一樣），時間跟在最後一行右下角 */
+.ebb{position:relative;min-width:0;max-width:min(560px,calc(100% - 8px));padding:6px 10px 6px 12px;border-radius:var(--r-lg);background:var(--s1);box-shadow:0 1px 1px rgba(16,16,16,.08)}
+.tl>.ev.eb:not(.top){margin-top:-8px}
+.tl>.ev.eb:not(.top) .ebb{border-top-left-radius:var(--r-xs)}
+.tl>.ev.eb:not(.bot) .ebb{border-bottom-left-radius:var(--r-xs)}
+.tl>.ev.eb.bot .ebb{border-bottom-left-radius:0;margin-left:6px}
+.tl>.ev.eb:not(.bot) .ebb{margin-left:6px}
+.tl>.ev.eb.bot .ebb::after{content:"";position:absolute;left:-7px;bottom:0;width:8px;height:12px;background:inherit;-webkit-mask:radial-gradient(circle at 0 0,transparent 11.5px,#000 12px);mask:radial-gradient(circle at 0 0,transparent 11.5px,#000 12px)}
+.ebn{font-size:var(--fs-m);font-weight:600;color:var(--p);margin-bottom:1px}
 .ebn .eh{color:inherit;margin:0}
-.ebt{display:flex;align-items:flex-start;gap:8px;font-size:var(--fs-l);line-height:1.4}
-.ebt>span:not(.evi){flex:1;min-width:0;overflow-wrap:anywhere}
-.ebt .evi{width:22px;height:22px;margin-top:1px}
-.ebt .evi svg{width:13px;height:13px}
-.ebt time{flex:none;align-self:flex-end;margin:0 0 -2px 6px;font-size:var(--fs-xs);color:var(--tx3)}
-.eb.bad .ebb{box-shadow:0 1px 2px rgba(16,16,16,.08),inset 3px 0 0 var(--bad)}
+.ebt{font-size:var(--fs-l);line-height:1.35;overflow-wrap:anywhere}
+.ebt .emo{font-size:1.05em}
+.ebm{float:right;position:relative;top:7px;margin:0 -2px 0 10px;font-size:var(--fs-xs);color:var(--tx3);white-space:nowrap;line-height:1}
 /* 主機頁的「監控／紀錄」分頁：黏在上面，捲到哪都能換；紀錄有異常、注意的，數字是橘色 */
 .hseg{position:sticky;top:0;z-index:var(--z-bar);margin:0 -16px;padding:6px 16px;background:var(--bg)}
 .hseg .seg button b{margin-left:4px;font-weight:600;color:var(--tx3)}
@@ -875,7 +879,6 @@ body:has(.app2) .flyv{--pw:1280px}
 .eb.go:focus-visible .ebb{outline:2px solid var(--p);outline-offset:2px}
 @media (hover:hover){.eb.go:hover .ebb{background:var(--s2)}}
 .eb.go:active .ebb{background:var(--s2)}
-.eb.warn .ebb{box-shadow:0 1px 2px rgba(16,16,16,.08),inset 3px 0 0 var(--warn)}
 .eb .ehs{display:grid;grid-template-rows:0fr;opacity:0;transition:grid-template-rows var(--t-mid) var(--ease),opacity var(--t-mid) var(--ease)}
 .eb .ehs>div{overflow:hidden;min-height:0}
 .eb.open .ehs{grid-template-rows:1fr;opacity:1}

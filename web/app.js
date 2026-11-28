@@ -918,15 +918,35 @@ function statStrip(list, g){
 function timeline(ev, many){
   if (!ev.length) return `<div class="svc" data-key="none"><span>目前沒有事件</span></div>`;
   let h = "", day = "";
-  for (const e of ev) { const d = dayOf(e.t); if (d !== day) { day = d; h += `<div class="svc day" data-key="d:${d}"><span>${d}</span></div>`; } h += evBubble(e, many); }
+  const who = e => evMany(e) ? "*" + e.k : e.k, sameAs = (a, b) => !!a && !!b && who(a) === who(b) && dayOf(a.t) === dayOf(b.t);
+  ev.forEach((e, i) => {
+    const d = dayOf(e.t); if (d !== day) { day = d; h += `<div class="svc day" data-key="d:${d}"><span>${d}</span></div>`; }
+    h += evBubble(e, many, !sameAs(ev[i - 1], e), !sameAs(e, ev[i + 1]));   // 同一台連著說的：名字只寫第一則、頭像和尾巴只在最後一則（Telegram 的訊息分組）
+  });
   return `<div class="tl" data-key="tl" data-keyed>${h}</div>`;
 }
-function evBubble(e, many){
+/* 每一則前面的表情符號：跟 Telegram 通知同一套（sentinel.py 的 ev_line），代替以前的圓形小圖示 */
+function evEmo(e){
+  const t = String(e.text || ""), k = e.kind;
+  if (/^(系統更新完成|已恢復：|下載好了：)/.test(t)) return "✅";
+  if (/^(系統更新失敗|重新開機失敗|下載失敗：)/.test(t) || (/^哨兵更新/.test(t) && /失敗/.test(t))) return "❌";
+  if (/自動續期/.test(t)) return k === "ok" ? "✅" : "❌";
+  if (/^主機重新開機了|^從網頁重新開機/.test(t)) return "🔄";
+  if (/^相簿上傳：/.test(t)) return "📥";
+  if (/^相簿截圖：/.test(t)) return "🔒";
+  if (/^安全檢查：/.test(t)) return "🔐";
+  if (k === "info" && /登入了主機|SSH 登入/.test(t)) return "🔑";
+  if (k === "info" && /配對|監看/.test(t)) return "🔗";
+  if (k === "info" && /密碼|手機金鑰|PIN/.test(t)) return "🔐";
+  return {bad:"🔴", warn:"🟠", ok:"✅"}[k] || "ℹ️";
+}
+function evBubble(e, many, top = true, bot = true){
   const s = many && !evMany(e) && LIST.find(x => keyOf(x) === e.k);
-  const who = many ? (evMany(e) ? `<span class="cav ic num"><i>${e.hs.length}</i></span>` : s ? cav(s) : `<span class="cav pk5"><i>${esc([...(e.h || "?")][0])}</i></span>`) : "";   // 好幾台同一件事：頭像是台數
+  const av = !many ? "" : !bot ? `<span class="eba"></span>` : evMany(e) ? `<span class="cav ic num"><i>${e.hs.length}</i></span>` : s ? cav(s) : `<span class="cav pk5"><i>${esc([...(e.h || "?")][0])}</i></span>`;   // 好幾台同一件事：頭像是台數
   const go = many && s ? ` data-go="h:${esc(e.k)}" data-hvgo="ev" role="button" tabindex="0" aria-label="${esc(s.name)}：${esc(e.text)}"` : "";   // 點了到那台主機的「紀錄」
-  return `<div class="ev eb ${e.kind}${go ? " go" : ""}${many && evMany(e) && EVOPEN.has(e.k) ? " open" : ""}" data-key="${esc(e.k)}|${e.kind}:${esc(e.text)}"${go}>${who}<div class="ebb">${many ? `<div class="ebn">${evWho(e)}</div>` : ""}
-    <div class="ebt">${evIco(e)}<span>${evTx(e)}${e.n > 1 ? `<small class="lx num">×${e.n}</small>` : ""}</span><time class="num">${hm(e.t)}</time></div>${many && evMany(e) ? `<div class="ehs"><div><div>${esc(e.hs.join("、"))}</div></div></div>` : ""}</div></div>`;
+  const meta = `<span class="ebm num">${e.n > 1 ? `×${e.n} ` : ""}<time>${hm(e.t)}</time></span>`;   // 時間跟在最後一行右下角（Telegram 的寫法）
+  return `<div class="ev eb ${e.kind}${top ? " top" : ""}${bot ? " bot" : ""}${go ? " go" : ""}${many && evMany(e) && EVOPEN.has(e.k) ? " open" : ""}" data-key="${esc(e.k)}|${e.kind}:${esc(e.text)}"${go}>${av}<div class="ebb">${many && top ? `<div class="ebn">${evWho(e)}</div>` : ""}
+    <div class="ebt"><span class="emo" aria-hidden="true">${evEmo(e)}</span> ${evTx(e)}${meta}</div>${many && evMany(e) ? `<div class="ehs"><div><div>${esc(e.hs.join("、"))}</div></div></div>` : ""}</div></div>`;
 }
 /* 紀錄的篩選選單：看哪一種、看哪一台 */
 function logMenu(btn){
