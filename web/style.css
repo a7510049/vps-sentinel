@@ -907,6 +907,7 @@ body:has(.app2) .flyv{--pw:1280px}
 .ps{font-size:var(--fs-m);color:var(--tx3)}
 .pl{display:inline-flex;align-items:center;gap:6px;font-size:var(--fs-m);color:var(--tx3)}
 .pl img.flag{width:20px;height:15px;border-radius:var(--r-xs)}
+.tbt small img.flag{width:16px;height:12px;margin:0 4px 0 0;border-radius:var(--r-xs);vertical-align:-1px;object-fit:cover}   /* 主機頁標題下面那行：地點前的小國旗 */
 .ps.ok{color:var(--p)}.ps.warn{color:var(--warn)}.ps.bad{color:var(--bad)}
 .qas{display:grid;grid-auto-flow:column;grid-auto-columns:minmax(0,1fr);gap:8px;width:100%;max-width:400px;margin-top:16px}
 .qa{position:relative;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;height:60px;border-radius:var(--r-md);background:var(--hov);color:var(--p);font-size:var(--fs-s);font-weight:500;text-decoration:none;overflow:hidden;

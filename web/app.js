@@ -816,8 +816,8 @@ function topbar(o){
   return `<header class="tbar${o.cls ? " " + o.cls : ""}" data-key="tbar"><span class="tbl">${lead}${ios ? "" : av}</span>${tt}<span class="tba">${o.acts || ""}${ios ? av : ""}</span></header>`;
 }
 /* 圓形頭像：國旗或名字第一個字，右下角一個狀態點（Telegram 的上線小綠點） */
-function cav(s, big){
-  const f = !big && PREF.show.flag && s.geo ? flag(s.geo.cc) : "", lv = s.online ? lvOf(s) : "bad";   // 大頭像不放國旗（國旗圖只有 80 寬，放大會糊），國旗改放在地點前面
+function cav(s, big, nofl){
+  const f = !big && !nofl && PREF.show.flag && s.geo ? flag(s.geo.cc) : "", lv = s.online ? lvOf(s) : "bad";   // 大頭像不放國旗（國旗圖只有 80 寬，放大會糊），國旗改放在地點前面
   const h = [...String(s.name || "?")].reduce((a, c) => a + c.codePointAt(0), 0) % 7;
   return `<span class="cav${big ? " big" : ""}${f ? " fl" : ` pk${h}`}">${f || `<i>${esc([...(s.name || "?")][0])}</i>`}<u class="cdot ${lv}"></u></span>`;
 }
@@ -970,9 +970,10 @@ function logMenu(btn){
 /* ── 中間：一台主機：名字、狀態、要留意的事、四格即時數字、圖表、流量（這台的紀錄在「紀錄」那頁用 ⋯ 選單篩出來，不在這裡重複） ── */
 function hostScreen(s){
   const k = esc(keyOf(s)), D = DESK.matches;
-  const sub = s.online ? `${esc(place(s) || osShort(s.os))}・開機 ${up(s.uptime)}` : `連不上${s.last_seen ? `・${esc(ago(s.last_seen))}` : ""}`;
-  const acts = (D ? `<button class="iconbtn${INFO ? " act" : ""}" data-go="i:${k}" title="主機資訊" aria-pressed="${!!INFO}">${I("info")}</button>` : "") + moreBtn(s);
-  const head = topbar({av:`<button class="tav" data-go="i:${k}" title="主機資訊">${cav(s)}</button>`, title:esc(s.name), sub, acts, attr:` data-go="i:${k}" role="button" tabindex="0" aria-label="${esc(s.name)} 主機資訊"`});
+  const fl = PREF.show.flag && s.geo && place(s) ? flag(s.geo.cc) : "";   // 國旗縮小放在地點前面；頭像用名字第一個字（國旗塞進圓圈很突兀，日本只剩一個白圓）
+  const sub = s.online ? `${fl}${esc(place(s) || osShort(s.os))}・開機 ${up(s.uptime)}` : `連不上${s.last_seen ? `・${esc(ago(s.last_seen))}` : ""}`;
+  const acts = (D ? `<button class="iconbtn${INFO ? " act" : ""}" data-go="i:${k}" title="主機資訊" aria-pressed="${!!INFO}">${I("info")}</button>` : "") + (PLAT === "ios" ? "" : moreBtn(s));   // iOS 跟 Telegram 一樣只有頭像（功能都在主機資訊裡），不放 ⋯
+  const head = topbar({av:`<button class="tav" data-go="i:${k}" title="主機資訊">${cav(s, false, true)}</button>`, title:esc(s.name), sub, acts, attr:` data-go="i:${k}" role="button" tabindex="0" aria-label="${esc(s.name)} 主機資訊"`});
   const body = s.online ? alerts(s, 1) + tiles(s) + hostMain(s) : offBox(s);
   return head + `<div class="mscroll" data-key="ms"><div class="mwrap" data-key="mw">${body}</div></div>`;
 }
@@ -992,8 +993,7 @@ function infoScreen(s){
   const head = topbar({lead, title:"主機資訊"});
   const st = !s.online ? `連不上${s.last_seen ? `・${esc(ago(s.last_seen))}` : ""}` : lvOf(s) === "ok" && !issueN(s) ? "一切正常" : `${issueN(s)} 件事要留意`;
   const c = s.online && s.cloud && safeUrl(cloudHref(s.cloud)) ? s.cloud : null;
-  const qa = [c ? `<a class="qa" href="${esc(cloudHref(c))}"${ssoAttr(s)} target="_blank" rel="noopener noreferrer">${I("cloud")}<span>雲端硬碟</span></a>` : "",
-    c ? `<button class="qa" data-dl="${node}" data-name="${name}">${I("dl")}<span>下載</span></button>` : "",
+  const qa = [`<button class="qa" data-logall="${k}">${I("log")}<span>紀錄</span></button>`,   // 雲端硬碟、下載在下面「工具」裡，這排不重複
     s.online ? `<button class="qa" data-rename="${node}" data-name="${name}">${I("edit")}<span>編輯</span></button>` : "",
     s.online ? `<button class="qa warn" data-reboot="${node}" data-name="${name}">${I("power")}<span>重開機</span></button>` : ""].join("");
   const pl = place(s), fl = PREF.show.flag && s.geo ? flag(s.geo.cc) : "";
