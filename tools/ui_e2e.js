@@ -148,7 +148,23 @@ async function phoneFlow(o, engine, plat, url){
     ok("N02", "清單再上一頁可以正常離開網站", p.url() === "about:blank", p.url());
     await p.goForward(); await p.waitForSelector(".crow", {timeout: 20000}); await settle(p);
   }
-  if (want("N03")) {
+  if (want("N03") && plat === "ios") {   // iOS 主機頁沒有 ⋯（跟 Telegram 一樣只有頭像）：從主機資訊開對話框、從紀錄的篩選開選單
+    await tap(p, hostSel("東京"), true); await settle(p);
+    ok("N03", "iOS 主機頁沒有 ⋯", await p.locator(".scr:not(.gone) .tbar [data-more]").count() === 0);
+    await tap(p, ".scr:not(.gone) .tbar .tav", true); await settle(p);
+    await tap(p, ".scr:not(.gone) .qa[data-reboot]", true); await p.waitForTimeout(500); s = await look(p);
+    ok("N03", "主機資訊點重開機：對話框打開", s.dialogs === 1, JSON.stringify(s));
+    await p.goBack(); await p.waitForTimeout(600); s = await look(p);
+    ok("N03", "上一頁先關對話框、還在主機資訊", s.dialogs === 0 && s.title === "主機資訊", JSON.stringify(s));
+    await p.goBack(); await settle(p); await p.goBack(); await settle(p); s = await look(p);
+    ok("N03", "再上一頁兩次回到清單（對話框那筆沒有留著）", s.title === listTitle, s.title);
+    await tap(p, '[data-tab="all"]', true); await settle(p);
+    await tap(p, ".scr:not(.gone) [data-logmenu]", true); await p.waitForTimeout(120);
+    ok("N03", "紀錄的篩選選單打開", (await look(p)).menus === 1);
+    await tap(p, '[data-tab="list"]', true); await settle(p); s = await look(p);
+    ok("N03", "選單開著點分頁列：選單關、回到清單、沒有殘留", s.title === listTitle && s.menus === 0 && s.layers === 1, JSON.stringify(s));
+  }
+  if (want("N03") && plat !== "ios") {
     await tap(p, hostSel("東京"), true); await settle(p);
     await tap(p, ".scr:not(.gone) .tbar [data-more]", true); await p.waitForTimeout(350);
     ok("N03", "⋯ 選單打開", (await look(p)).menus === 1);
@@ -189,20 +205,19 @@ async function phoneFlow(o, engine, plat, url){
   }
   if (want("U01")) {
     await tap(p, hostSel("東京"), true); await settle(p);
-    ok("U01", "主機頁直接看得到「監控／紀錄」分頁", await p.locator(".scr:not(.gone) [data-hv='ev']").isVisible());
-    await tap(p, ".scr:not(.gone) [data-hv='ev']", true); await settle(p);
-    const n = await p.locator(".scr:not(.gone) .hev .ev").count(); s = await look(p);
-    ok("U01", "點一下就是這台全部的紀錄（不只 6 筆）", s.seg === "ev" && n > 6, `${s.seg} ${n}`);
-    await p.locator(".scr:not(.gone) .mscroll").evaluate(e => e.scrollTo(0, 400)); await p.waitForTimeout(200);
-    await tap(p, ".scr:not(.gone) [data-hv='mon']", true); await settle(p);
-    await tap(p, ".scr:not(.gone) [data-hv='ev']", true); await settle(p);
-    const y = await p.locator(".scr:not(.gone) .mscroll").evaluate(e => e.scrollTop);
-    ok("U01", "換回紀錄：捲到的位置還在", Math.abs(y - 400) < 40, String(y));
-    await tap(p, ".scr:not(.gone) [data-navback]", true); await settle(p);
-    await tap(p, hostSel("東京"), true); await settle(p); s = await look(p);
-    ok("U01", "再點進來還是上次看的那一頁", s.seg === "ev", s.seg);
-    await tap(p, ".scr:not(.gone) [data-hv='mon']", true); await settle(p);
-    await tap(p, ".scr:not(.gone) [data-navback]", true); await settle(p);
+    ok("U01", "主機頁沒有重複的紀錄", await p.locator(".scr:not(.gone) .mscroll .tl").count() === 0);
+    const sc = p.locator(".scr:not(.gone) .mscroll");
+    const ov = await sc.evaluate(e => { e.scrollLeft = 60; return {w: e.scrollWidth - e.clientWidth, x: e.scrollLeft}; });
+    ok("U01", "主機頁不能左右捲", ov.w <= 0 && ov.x === 0, JSON.stringify(ov));
+    const how = await touch(p, engine, [[300, 500], ...Array.from({length: 6}, (_, i) => [300 - 30 * (i + 1), 502])]); await settle(p);
+    const x2 = await sc.evaluate(e => e.scrollLeft); s = await look(p);
+    ok("U01", `手指往左滑：畫面不會跟著左右跑（${how}）`, x2 === 0 && s.title === "東京測試主機", `${x2} ${s.title}`);
+    await tap(p, ".scr:not(.gone) .tbar .tav", true); await settle(p);
+    await tap(p, ".scr:not(.gone) .qa[data-logall]", true); await settle(p); s = await look(p);
+    ok("U01", "主機資訊「紀錄」：到紀錄、只看這台", await p.locator(".scr:not(.gone) .fchipbar").isVisible() && await p.locator(".scr:not(.gone) .tl .ev").count() > 6, s.title);
+    await tap(p, ".scr:not(.gone) [data-logclear]", true); await settle(p);
+    for (let i = 0; i < 3 && (await look(p)).title !== listTitle; i++) { await p.goBack(); await settle(p); }
+    ok("U01", "上一頁回到清單", (await look(p)).title === listTitle);
   }
   if (plat !== "desktop" && want("N06")) {
     const h0 = (await look(p)).hist;
@@ -230,7 +245,7 @@ async function phoneFlow(o, engine, plat, url){
     const ev = p.locator('.scr:not(.gone) .ev.eb.go[data-go="h:@self"]').first();
     await ev.scrollIntoViewIfNeeded(); const y1 = await sc.evaluate(e => e.scrollTop);
     await ev.tap(); await settle(p); s = await look(p);
-    ok("U02", "點一則紀錄：到那台主機的「紀錄」", s.title === "東京測試主機" && s.seg === "ev", JSON.stringify(s));
+    ok("U02", "點一則紀錄：到那台主機", s.title === "東京測試主機", JSON.stringify(s));
     await tap(p, ".scr:not(.gone) [data-navback]", true); await settle(p); s = await look(p);
     const y2 = await p.locator(".scr:not(.gone) .mscroll").evaluate(e => e.scrollTop);
     ok("U02", "返回：篩選還在、捲到的位置還在", s.title === "紀錄" && await p.locator(".scr:not(.gone) .fchipbar").isVisible() && Math.abs(y2 - y1) < 40, `${s.title} ${y0}/${y1}→${y2}`);
@@ -310,9 +325,13 @@ async function deskFlow(o, engine, plat, url){
   }
   if (want("U01")) {
     await p.locator(hostSel("東京")).first().click(); await settle(p);
-    await p.locator(".mcol [data-hv='ev']").click(); await settle(p);
-    ok("U01", "電腦也是一下就到這台的紀錄", (await look(p)).seg === "ev" && await p.locator(".mcol .hev .ev").count() > 6);
-    await p.locator(".mcol [data-hv='mon']").click(); await settle(p);
+    const ov = await p.locator(".mcol .mscroll").evaluate(e => e.scrollWidth - e.clientWidth);
+    ok("U01", "電腦：主機頁不能左右捲", ov <= 0, String(ov));
+    if (!(await look(p)).info) { await p.locator(".mcol .tbar [data-go^='i:']").first().click(); await settle(p); }
+    await p.click(".rcol .qa[data-logall]"); await settle(p);
+    ok("U01", "電腦：主機資訊「紀錄」到紀錄、只看這台", await p.locator(".mcol .fchipbar").isVisible() && await p.locator(".mcol .tl .ev").count() > 6);
+    await p.locator(".mcol [data-logclear]").click(); await settle(p);
+    await p.locator(hostSel("東京")).first().click(); await settle(p);
   }
   if (want("N02") || want("A01")) {
     if (plat === "desktop") {
@@ -346,8 +365,8 @@ async function deskFlow(o, engine, plat, url){
   }
   if (want("N05")) {   // 寬窄互換：選的主機、打開的視窗和打到一半的字都還在
     await p.locator(hostSel("東京")).first().click(); await settle(p);
-    await p.locator(".mcol .tbar [data-more]").click(); await p.waitForTimeout(350);
-    await p.click(".lmenu [data-rename]"); await p.waitForTimeout(600);
+    if (!(await look(p)).info) { await p.locator(".mcol .tbar [data-go^='i:']").first().click(); await settle(p); }
+    await p.click(".rcol .qa[data-rename]"); await p.waitForTimeout(600);
     const inp = p.locator("#layer .veil input").first();
     await inp.fill("打到一半的名字");
     await p.setViewportSize({width: 1023, height: 900}); await p.waitForTimeout(900);
@@ -363,7 +382,7 @@ async function deskFlow(o, engine, plat, url){
     await p.locator(".crow[data-go='all']").click().catch(() => p.click('[data-tab="all"]')); await settle(p);
     const ev = p.locator('.mcol .ev.eb.go[data-go="h:首爾-名字特別長的一台測試主機"]').first();
     if (await ev.count()) { await ev.click(); await settle(p); s = await look(p);
-      ok("U02", "電腦：點一則紀錄到那台主機的紀錄", /首爾/.test(s.title) && s.seg === "ev", JSON.stringify(s)); }
+      ok("U02", "電腦：點一則紀錄到那台主機", /首爾/.test(s.title), JSON.stringify(s)); }
     else skip("U02", "電腦：點紀錄到主機", "畫面上沒有那台的紀錄");
   }
   if (want("A01")) {   // 鍵盤：Tab 在視窗裡轉、Esc 關、焦點回到按鈕

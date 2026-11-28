@@ -165,7 +165,7 @@
 .ico.devices{background:var(--sc);color:var(--on-sc)}
 .ico.intg{background:var(--tc-bg);color:var(--on-tc)}
 .ico.acct{background:var(--pc);color:var(--on-pc)}
-.ico.look{background:var(--tc-bg);color:var(--on-tc)}
+.ico.look{background:var(--sc);color:var(--on-sc)}
 .ico.note{background:var(--sc);color:var(--on-sc)}
 .ico.dnsf{background:var(--tc-bg);color:var(--on-tc)}
 .ico.album{background:var(--tc-bg);color:var(--on-tc)}
@@ -727,7 +727,7 @@ body:has(.app2) .flyv{--pw:1280px}
 .stage>.scr.under{z-index:0;pointer-events:none}
 .stage>.scr:not(.under,.gone){z-index:1}
 .stage>.scr:not(.under){box-shadow:-1px 0 0 var(--line)}
-.lscroll,.mscroll,.rscroll{flex:1;min-height:0;overflow-y:auto;overscroll-behavior:contain;-webkit-overflow-scrolling:touch}
+.lscroll,.mscroll,.rscroll{flex:1;min-height:0;overflow-x:hidden;overflow-y:auto;overscroll-behavior:contain;-webkit-overflow-scrolling:touch}   /* 只能上下捲：裡面有東西超出也不會整頁左右滑 */
 .dash.m .lscroll,.dash.m .mscroll,.dash.m .rscroll{padding-bottom:env(safe-area-inset-bottom)}
 /* 標題列：56 高，左邊返回／頭像，中間標題和一行小字，右邊幾顆圖示 */
 .tbar{flex:none;display:flex;align-items:center;gap:6px;min-height:var(--hh);padding:calc(env(safe-area-inset-top) * var(--sa,1)) 8px 0;background:var(--s1);box-shadow:0 1px 0 var(--line);position:relative;z-index:2}
@@ -753,6 +753,14 @@ body:has(.app2) .flyv{--pw:1280px}
 .sin::-webkit-search-cancel-button{display:none}
 @media (pointer:coarse){.sin{font-size:max(var(--fs-l),calc(var(--fs-input) / var(--zoom)))}}
 /* 清單上面的分頁（全部／有狀況） */
+/* 主機多時才有的狀況小膠囊（跟紀錄裡的同一種紅、橘）：點了只看那幾台，選到的實心 */
+.lfcs{display:flex;flex-wrap:wrap;gap:8px;padding:10px 12px 2px}
+.lfc{display:inline-flex;align-items:center;gap:5px;height:32px;padding:0 12px 0 10px;border-radius:var(--r-pill);font-size:var(--fs-s);box-shadow:inset 0 0 0 1px var(--line);color:var(--tx);transition:background var(--t-fast) var(--ease),color var(--t-fast) var(--ease)}
+.lfc b{font-weight:600}
+.lfc.bad.on{background:var(--bad);color:var(--on-bad);box-shadow:none}
+.lfc.warn.on{background:var(--warn);color:var(--on-warn);box-shadow:none}
+@media (hover:hover){.lfc:not(.on):hover{background:var(--hov)}}
+.lfc:focus-visible{outline:2px solid var(--p);outline-offset:2px}
 .ltabs{display:flex;padding:0 8px;box-shadow:inset 0 -1px 0 var(--line);position:sticky;top:0;z-index:1;background:var(--s1)}
 .ltb{position:relative;z-index:1;display:inline-flex;align-items:center;gap:6px;height:44px;padding:0 14px;color:var(--tx3);font-weight:500;overflow:hidden;transition:color var(--t-fast) var(--ease)}
 .ltb .tbu{position:absolute;z-index:-1;left:10px;right:10px;bottom:0;height:3px;border-radius:var(--r-xs) var(--r-xs) 0 0;background:var(--p);opacity:0;pointer-events:none}
@@ -801,6 +809,7 @@ body:has(.app2) .flyv{--pw:1280px}
 .cav.ic{background:var(--pc);color:var(--on-pc)}
 .cav.ic svg{width:26px;height:26px}
 .cav.ic.sky{background:var(--tc-bg);color:var(--on-tc)}
+.cav.ic.mu{background:var(--sc);color:var(--on-sc)}
 .cdot{position:absolute;right:0;bottom:0;width:14px;height:14px;border-radius:50%;background:var(--ok);box-shadow:0 0 0 2px var(--s1)}
 .cdot.warn{background:var(--warn)}.cdot.bad{background:var(--bad)}
 .crow.on .cdot{box-shadow:0 0 0 2px var(--pf)}
@@ -841,7 +850,7 @@ body:has(.app2) .flyv{--pw:1280px}
 .fpill{display:inline-flex;align-items:center;gap:6px;height:32px;padding:0 10px 0 14px;border-radius:var(--r-pill);background:var(--pc);color:var(--on-pc);font-size:var(--fs-m);font-weight:500}
 .fpill svg{width:16px;height:16px}
 /* 紀錄：日期是置中的小膠囊（Telegram 的日期提示，捲動時停在上面），每一筆是泡泡 */
-.tl{display:flex;flex-direction:column;gap:6px}
+.tl{display:flex;flex-direction:column;gap:10px}
 .svc{display:flex;justify-content:center;padding:4px 0}
 .svc>span{padding:4px 12px;border-radius:var(--r-pill);background:var(--act);color:var(--tx2);font-size:var(--fs-s);font-weight:500}
 .tl>.svc.day{position:sticky;top:8px;z-index:1}
@@ -854,28 +863,35 @@ body:has(.app2) .flyv{--pw:1280px}
 .eb>.cav .cdot{display:none}
 .eba{flex:none;display:inline-flex;align-items:center;justify-content:center}
 .eba .hsa{width:24px;height:24px}
-.ebb{position:relative;min-width:0;max-width:min(640px,100%);padding:6px 10px 6px 12px;border-radius:var(--r-lg) var(--r-lg) var(--r-lg) var(--r-xs);background:var(--s1);box-shadow:0 1px 2px rgba(16,16,16,.08)}
-.tl:not(:has(.eb>.cav,.eb>.eba)) .ebb{border-radius:var(--r-lg)}
-.ebn{font-size:var(--fs-m);font-weight:500;color:var(--p);margin-bottom:2px}
+/* 一則紀錄＝Telegram 的對話泡泡：同一台連著說的疊在一起（中間 2、組跟組 8），名字寫在第一則、頭像和左下的尾巴在最後一則；
+   開頭是狀態表情符號（🔴🟠✅ℹ️…，跟 Telegram 通知一樣），時間跟在最後一行右下角 */
+.ebb{position:relative;min-width:0;max-width:min(560px,calc(100% - 8px));padding:6px 10px 6px 12px;border-radius:var(--r-lg);background:var(--s1);box-shadow:0 1px 1px rgba(16,16,16,.08)}
+.tl>.ev.eb:not(.top){margin-top:-8px}
+.tl>.ev.eb:not(.top) .ebb{border-top-left-radius:var(--r-xs)}
+.tl>.ev.eb:not(.bot) .ebb{border-bottom-left-radius:var(--r-xs)}
+.tl>.ev.eb.bot .ebb{border-bottom-left-radius:0;margin-left:6px}
+.tl>.ev.eb:not(.bot) .ebb{margin-left:6px}
+.tl>.ev.eb.bot .ebb::after{content:"";position:absolute;left:-7px;bottom:0;width:8px;height:12px;background:inherit;-webkit-mask:radial-gradient(circle at 0 0,transparent 11.5px,#000 12px);mask:radial-gradient(circle at 0 0,transparent 11.5px,#000 12px)}
+.ebn{font-size:var(--fs-m);font-weight:600;color:var(--p);margin-bottom:1px}
 .ebn .eh{color:inherit;margin:0}
-.ebt{display:flex;align-items:flex-start;gap:8px;font-size:var(--fs-l);line-height:1.4}
-.ebt>span:not(.evi){flex:1;min-width:0;overflow-wrap:anywhere}
-.ebt .evi{width:22px;height:22px;margin-top:1px}
-.ebt .evi svg{width:13px;height:13px}
-.ebt time{flex:none;align-self:flex-end;margin:0 0 -2px 6px;font-size:var(--fs-xs);color:var(--tx3)}
-.eb.bad .ebb{box-shadow:0 1px 2px rgba(16,16,16,.08),inset 3px 0 0 var(--bad)}
-/* 主機頁的「監控／紀錄」分頁：黏在上面，捲到哪都能換；紀錄有異常、注意的，數字是橘色 */
-.hseg{position:sticky;top:0;z-index:var(--z-bar);margin:0 -16px;padding:6px 16px;background:var(--bg)}
-.hseg .seg button b{margin-left:4px;font-weight:600;color:var(--tx3)}
-.hseg .seg button b.hv{color:var(--warn)}
-.hseg .seg button.on b{color:inherit}
-.hev{display:flex;flex-direction:column;gap:12px}
+.ebt{font-size:var(--fs-l);line-height:1.35;overflow-wrap:anywhere}
+.ebt .emo{font-size:1.05em}
+.ebm{float:right;position:relative;top:7px;margin:0 -2px 0 10px;font-size:var(--fs-xs);color:var(--tx3);white-space:nowrap;line-height:1}
+/* 要注意的那幾則：泡泡下面一顆小膠囊（表情＋次數＋哪幾台），時間在同一排右邊 */
+.erw{display:flex;align-items:flex-end;justify-content:space-between;gap:10px;margin-top:5px}
+.erw .ebm{float:none;top:2px;margin:0 -2px 0 0}
+.erx{display:inline-flex;align-items:center;gap:5px;height:30px;padding:0 6px 0 9px;border-radius:var(--r-pill);font-size:var(--fs-m)}
+.erx:not(:has(.hst)){padding-right:10px}
+.erx.bad{background:var(--bad);color:var(--on-bad)}
+.erx.warn{background:var(--warn);color:var(--on-warn)}
+.erx b{font-weight:600;font-size:var(--fs-s)}
+.erx .hsa{width:22px;height:22px;box-shadow:0 0 0 2px var(--bad)}
+.erx.warn .hsa{box-shadow:0 0 0 2px var(--warn)}
 /* 全部主機的紀錄：一則一則點了到那台主機 */
 .eb.go{cursor:pointer}
 .eb.go:focus-visible .ebb{outline:2px solid var(--p);outline-offset:2px}
 @media (hover:hover){.eb.go:hover .ebb{background:var(--s2)}}
 .eb.go:active .ebb{background:var(--s2)}
-.eb.warn .ebb{box-shadow:0 1px 2px rgba(16,16,16,.08),inset 3px 0 0 var(--warn)}
 .eb .ehs{display:grid;grid-template-rows:0fr;opacity:0;transition:grid-template-rows var(--t-mid) var(--ease),opacity var(--t-mid) var(--ease)}
 .eb .ehs>div{overflow:hidden;min-height:0}
 .eb.open .ehs{grid-template-rows:1fr;opacity:1}
@@ -891,6 +907,7 @@ body:has(.app2) .flyv{--pw:1280px}
 .ps{font-size:var(--fs-m);color:var(--tx3)}
 .pl{display:inline-flex;align-items:center;gap:6px;font-size:var(--fs-m);color:var(--tx3)}
 .pl img.flag{width:20px;height:15px;border-radius:var(--r-xs)}
+.tbt small img.flag{width:16px;height:12px;margin:0 4px 0 0;border-radius:var(--r-xs);vertical-align:-1px;object-fit:cover}   /* 主機頁標題下面那行：地點前的小國旗 */
 .ps.ok{color:var(--p)}.ps.warn{color:var(--warn)}.ps.bad{color:var(--bad)}
 .qas{display:grid;grid-auto-flow:column;grid-auto-columns:minmax(0,1fr);gap:8px;width:100%;max-width:400px;margin-top:16px}
 .qa{position:relative;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;height:60px;border-radius:var(--r-md);background:var(--hov);color:var(--p);font-size:var(--fs-s);font-weight:500;text-decoration:none;overflow:hidden;

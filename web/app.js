@@ -816,15 +816,18 @@ function topbar(o){
   return `<header class="tbar${o.cls ? " " + o.cls : ""}" data-key="tbar"><span class="tbl">${lead}${ios ? "" : av}</span>${tt}<span class="tba">${o.acts || ""}${ios ? av : ""}</span></header>`;
 }
 /* 圓形頭像：國旗或名字第一個字，右下角一個狀態點（Telegram 的上線小綠點） */
-function cav(s, big){
-  const f = !big && PREF.show.flag && s.geo ? flag(s.geo.cc) : "", lv = s.online ? lvOf(s) : "bad";   // 大頭像不放國旗（國旗圖只有 80 寬，放大會糊），國旗改放在地點前面
+function cav(s, big, nofl){
+  const f = !big && !nofl && PREF.show.flag && s.geo ? flag(s.geo.cc) : "", lv = s.online ? lvOf(s) : "bad";   // 大頭像不放國旗（國旗圖只有 80 寬，放大會糊），國旗改放在地點前面
   const h = [...String(s.name || "?")].reduce((a, c) => a + c.codePointAt(0), 0) % 7;
   return `<span class="cav${big ? " big" : ""}${f ? " fl" : ` pk${h}`}">${f || `<i>${esc([...(s.name || "?")][0])}</i>`}<u class="cdot ${lv}"></u></span>`;
 }
 /* ── 左欄：主機清單 ── */
 function listScreen(list, sel){
-  const bad = list.filter(isBad), q = QS.trim().toLowerCase(), at = s => { const i = ORDER.indexOf(keyOf(s)); return i < 0 ? 1e9 : i; };
-  const rows = [...list].sort((a, b) => at(a) - at(b)).filter(s => (QF !== "bad" || bad.includes(s)) && (!q || String(s.name).toLowerCase().includes(q) || place(s).toLowerCase().includes(q)));
+  const q = QS.trim().toLowerCase(), at = s => { const i = ORDER.indexOf(keyOf(s)); return i < 0 ? 1e9 : i; };
+  const sev = s => !s.online || lvOf(s) === "bad" ? "bad" : isBad(s) ? "warn" : "";   // 紅：連不上或異常；橘：要注意
+  const many = list.length > 5, nb = list.filter(s => sev(s) === "bad").length, nw = list.filter(s => sev(s) === "warn").length;
+  if (QF && (!many || !list.some(s => sev(s) === QF))) QF = "";   // 主機變少、那一種都好了：篩選自己拿掉
+  const rows = [...list].sort((a, b) => at(a) - at(b)).filter(s => (!QF || sev(s) === QF) && (!q || String(s.name).toLowerCase().includes(q) || place(s).toLowerCase().includes(q)));
   const inp = `<input type="search" class="sin" data-search placeholder="搜尋" value="${esc(QS)}" autocomplete="off" enterkeyhint="search">`;
   let head, top = "";
   if (PLAT === "ios") {                              // Telegram iOS 聊天清單：標題置中、右上新增；搜尋框在清單最上面（36 高、灰底），打字時右邊出現「取消」
@@ -835,16 +838,17 @@ function listScreen(list, sel){
       : topbar({lead:"", title:"哨站", acts:`<button class="iconbtn" data-srch title="搜尋">${I("search")}</button><button class="iconbtn" data-mainmenu title="更多">${I("more")}</button>`, cls:"lhd"});
   } else head = `<header class="tbar lhd" data-key="lhd"><button class="iconbtn" data-mainmenu title="選單">${I("menu")}</button>
     <label class="srch" data-key="srch">${I("search")}${inp.replace('placeholder="搜尋"', 'placeholder="搜尋主機"')}</label></header>`;
-  const tabs = list.length > 1 ? `<div class="ltabs" data-key="ltabs" data-slide=".tbu">${[["", "全部"], ["bad", "有狀況"]].map(([k, l]) =>
-    `<button class="ltb${QF === k ? " on" : ""}" data-qf="${k}" data-key="qf:${k}"><i class="tbu"></i><span>${l}</span>${k && bad.length ? `<b class="cbg ${list.some(s => !s.online || lvOf(s) === "bad") ? "bad" : "warn"}">${bad.length}</b>` : ""}</button>`).join("")}</div>` : "";
+  /* 有狀況的主機：5 台以下不放（每台旁邊的數字就夠了）；多的時候一排小膠囊「🔴 1 異常」「🟠 2 要注意」，點了只看那幾台、再點一次回到全部；都正常不放 */
+  const chip = (k, emo, n, l) => n ? `<button class="lfc ${k}${QF === k ? " on" : ""}" data-qf="${QF === k ? "" : k}" data-key="qf:${k}" aria-pressed="${QF === k}">${emo}<b class="num">${n}</b><span>${l}</span></button>` : "";
+  const tabs = many && (nb || nw) ? `<div class="lfcs" data-key="lfcs">${chip("bad", "🔴", nb, "異常")}${chip("warn", "🟠", nw, "要注意")}</div>` : "";
   /* 分清楚四種東西：提醒（還沒設定 Telegram，一條橫幅，不是一台主機）、總覽（全部主機）、主機、工具（機場起降） */
   const plain = !q && !QF;
   const all = plain && !TABS() ? allRow(list, sel === "all") : "";   // iOS、Android：「全部主機」就是下面的「紀錄」分頁，清單裡不再放一列
   const hint = plain && list.some(x => !x.node && x.tg_off) ? `<button class="lban" data-tg data-key="ban:tg">${I("bell")}<span><b>Telegram 通知還沒設定</b><small>出事不會通知你</small></span>${CHEV}</button>` : "";
   const sec = (k, t) => `<div class="lsec" data-key="sec:${k}" role="heading" aria-level="2">${t}</div>`;
   const hosts = rows.map(s => hostRow(s, sel === keyOf(s))).join("");
-  const tools = plain ? sec("tools", "工具") + flyCRow() : "";
-  const none = !rows.length ? `<div class="lnone" data-key="none">${q ? "找不到這台主機" : QF ? "每一台都正常" : ""}</div>` : "";
+  const tools = plain ? sec("tools", "工具") + (DESK.matches ? "" : toolCRows(list.find(x => !x.node))) + flyCRow() : "";
+  const none = !rows.length ? `<div class="lnone" data-key="none">${q ? "找不到這台主機" : ""}</div>` : "";
   return head + `<div class="lscroll" data-key="ls">${top}${hint}${tabs}<div class="clist" data-key="cl" data-keyed>${all}${plain && list.length > 1 ? sec("hosts", `主機・${list.length}`) : ""}${hosts}${rows.length ? tools : ""}</div>${none}${rows.length ? "" : tools}</div>`
     + (PLAT === "android" ? `<button class="fab" data-addhost data-key="fab" title="新增主機">${I("plus")}</button>` : "");   // 新增的圓鈕只有 Android 有（iOS 在右上角、電腦在左上選單）
 }
@@ -918,15 +922,38 @@ function statStrip(list, g){
 function timeline(ev, many){
   if (!ev.length) return `<div class="svc" data-key="none"><span>目前沒有事件</span></div>`;
   let h = "", day = "";
-  for (const e of ev) { const d = dayOf(e.t); if (d !== day) { day = d; h += `<div class="svc day" data-key="d:${d}"><span>${d}</span></div>`; } h += evBubble(e, many); }
+  const who = e => evMany(e) ? "*" + e.k : e.k, sameAs = (a, b) => !!a && !!b && who(a) === who(b) && dayOf(a.t) === dayOf(b.t);
+  ev.forEach((e, i) => {
+    const d = dayOf(e.t); if (d !== day) { day = d; h += `<div class="svc day" data-key="d:${d}"><span>${d}</span></div>`; }
+    h += evBubble(e, many, !sameAs(ev[i - 1], e), !sameAs(e, ev[i + 1]));   // 同一台連著說的：名字只寫第一則、頭像和尾巴只在最後一則（Telegram 的訊息分組）
+  });
   return `<div class="tl" data-key="tl" data-keyed>${h}</div>`;
 }
-function evBubble(e, many){
+/* 每一則前面的表情符號：跟 Telegram 通知同一套（sentinel.py 的 ev_line），代替以前的圓形小圖示 */
+function evEmo(e){
+  const t = String(e.text || ""), k = e.kind;
+  if (/^(系統更新完成|已恢復：|下載好了：)/.test(t)) return "✅";
+  if (/^(系統更新失敗|重新開機失敗|下載失敗：)/.test(t) || (/^哨兵更新/.test(t) && /失敗/.test(t))) return "❌";
+  if (/自動續期/.test(t)) return k === "ok" ? "✅" : "❌";
+  if (/^主機重新開機了|^從網頁重新開機/.test(t)) return "🔄";
+  if (/^相簿上傳：/.test(t)) return "📥";
+  if (/^相簿截圖：/.test(t)) return "🔒";
+  if (/^安全檢查：/.test(t)) return "🔐";
+  if (k === "info" && /登入了主機|SSH 登入/.test(t)) return "🔑";
+  if (k === "info" && /配對|監看/.test(t)) return "🔗";
+  if (k === "info" && /密碼|手機金鑰|PIN/.test(t)) return "🔐";
+  return {bad:"🔴", warn:"🟠", ok:"✅"}[k] || "ℹ️";
+}
+function evBubble(e, many, top = true, bot = true){
   const s = many && !evMany(e) && LIST.find(x => keyOf(x) === e.k);
-  const who = many ? (evMany(e) ? `<span class="cav ic num"><i>${e.hs.length}</i></span>` : s ? cav(s) : `<span class="cav pk5"><i>${esc([...(e.h || "?")][0])}</i></span>`) : "";   // 好幾台同一件事：頭像是台數
-  const go = many && s ? ` data-go="h:${esc(e.k)}" data-hvgo="ev" role="button" tabindex="0" aria-label="${esc(s.name)}：${esc(e.text)}"` : "";   // 點了到那台主機的「紀錄」
-  return `<div class="ev eb ${e.kind}${go ? " go" : ""}${many && evMany(e) && EVOPEN.has(e.k) ? " open" : ""}" data-key="${esc(e.k)}|${e.kind}:${esc(e.text)}"${go}>${who}<div class="ebb">${many ? `<div class="ebn">${evWho(e)}</div>` : ""}
-    <div class="ebt">${evIco(e)}<span>${evTx(e)}${e.n > 1 ? `<small class="lx num">×${e.n}</small>` : ""}</span><time class="num">${hm(e.t)}</time></div>${many && evMany(e) ? `<div class="ehs"><div><div>${esc(e.hs.join("、"))}</div></div></div>` : ""}</div></div>`;
+  const av = !many ? "" : !bot ? `<span class="eba"></span>` : evMany(e) ? `<span class="cav ic num"><i>${e.hs.length}</i></span>` : s ? cav(s) : `<span class="cav pk5"><i>${esc([...(e.h || "?")][0])}</i></span>`;   // 好幾台同一件事：頭像是台數
+  const go = many && s ? ` data-go="h:${esc(e.k)}" role="button" tabindex="0" aria-label="${esc(s.name)}：${esc(e.text)}"` : "";   // 點了到那台主機
+  const hot = e.kind === "bad" || e.kind === "warn";   // 要注意的（異常、注意）：表情符號改成泡泡下面一顆小膠囊（像 Telegram 的心情回應），一眼看得出來
+  const meta = `<span class="ebm num">${e.n > 1 && !hot ? `×${e.n} ` : ""}<time>${hm(e.t)}</time></span>`;   // 時間跟在最後一行右下角（Telegram 的寫法）
+  const hs = many ? (evMany(e) ? e.hs : [e.h]) : [];
+  const chip = hot ? `<div class="erw"><span class="erx ${e.kind}" title="${e.kind === "bad" ? "異常" : "注意"}">${evEmo(e)}${e.n > 1 ? `<b class="num">${e.n}</b>` : ""}${hs.length ? `<span class="hst">${hs.slice(0, 3).map(hsMini).join("")}</span>` : ""}</span>${meta}</div>` : "";
+  return `<div class="ev eb ${e.kind}${top ? " top" : ""}${bot ? " bot" : ""}${go ? " go" : ""}${many && evMany(e) && EVOPEN.has(e.k) ? " open" : ""}" data-key="${esc(e.k)}|${e.kind}:${esc(e.text)}"${go}>${av}<div class="ebb">${many && top ? `<div class="ebn">${evWho(e)}</div>` : ""}
+    <div class="ebt">${hot ? evTx(e) : `<span class="emo" aria-hidden="true">${evEmo(e)}</span> ${evTx(e)}${meta}`}</div>${chip}${many && evMany(e) ? `<div class="ehs"><div><div>${esc(e.hs.join("、"))}</div></div></div>` : ""}</div></div>`;
 }
 /* 紀錄的篩選選單：看哪一種、看哪一台 */
 function logMenu(btn){
@@ -940,24 +967,15 @@ function logMenu(btn){
   menuIn(m); window._menu = m; window._menu._by = btn; histMark(m);
   setTimeout(() => m.addEventListener("click", () => closeMenu()), 0);
 }
-/* ── 中間：一台主機 ──
-   上面：名字、狀態、要留意的事、四格即時數字（一直都在）；下面分兩頁「監控」「紀錄」：
-   監控是圖表和流量、紀錄是這台全部的事件（不用滑過一堆圖表才看得到）。分頁黏在上面，捲到哪都能一下換過去；
-   每台各自記得看哪一頁、捲到哪。 */
-const HV = (() => { try { const o = JSON.parse(sstore("vs-hv") || "{}"); return o && typeof o === "object" ? o : {}; } catch(e) { return {}; } })();
-const hvOf = s => HV[keyOf(s)] === "ev" ? "ev" : "mon";
-const hostEvList = s => mergeEv(s.events || []).map(e => ({...e, h:s.name, k:keyOf(s)})).sort((a, b) => b.t - a.t);
+/* ── 中間：一台主機：名字、狀態、要留意的事、四格即時數字、圖表、流量（這台的紀錄在「紀錄」那頁用 ⋯ 選單篩出來，不在這裡重複） ── */
 function hostScreen(s){
-  const k = esc(keyOf(s)), D = DESK.matches, v = hvOf(s), evs = hostEvList(s);
-  const sub = s.online ? `${esc(place(s) || osShort(s.os))}・開機 ${up(s.uptime)}` : `連不上${s.last_seen ? `・${esc(ago(s.last_seen))}` : ""}`;
-  const acts = (D ? `<button class="iconbtn${INFO ? " act" : ""}" data-go="i:${k}" title="主機資訊" aria-pressed="${!!INFO}">${I("info")}</button>` : "") + moreBtn(s);
-  const head = topbar({av:`<button class="tav" data-go="i:${k}" title="主機資訊">${cav(s)}</button>`, title:esc(s.name), sub, acts, attr:` data-go="i:${k}" role="button" tabindex="0" aria-label="${esc(s.name)} 主機資訊"`});
-  const bad = evs.filter(e => e.kind === "bad" || e.kind === "warn").length;
-  const tab = (id, l, n = "") => `<button class="${v === id ? "on" : ""}" role="tab" aria-selected="${v === id}" data-hv="${id}" data-k="${k}" data-key="hv:${id}">${l}${n}</button>`;
-  const seg = `<div class="hseg" data-key="hseg"><div class="seg" role="tablist" aria-label="看哪一頁" data-slide>${tab("mon", "監控")}${tab("ev", "紀錄", evs.length ? ` <b class="num${bad ? " hv" : ""}" data-x>${evs.length}</b>` : "")}</div></div>`;
-  const top = s.online ? alerts(s, 1) + tiles(s) : offBox(s);
-  const body = v === "ev" ? `<div class="hev" data-key="hev">${timeline(evs, false)}</div>` : s.online ? hostMain(s) : "";
-  return head + `<div class="mscroll" data-key="ms" data-seg="${v}"><div class="mwrap" data-key="mw">${top}${seg}${body}</div></div>`;
+  const k = esc(keyOf(s)), D = DESK.matches;
+  const fl = PREF.show.flag && s.geo && place(s) ? flag(s.geo.cc) : "";   // 國旗縮小放在地點前面；頭像用名字第一個字（國旗塞進圓圈很突兀，日本只剩一個白圓）
+  const sub = s.online ? `${fl}${esc(place(s) || osShort(s.os))}・開機 ${up(s.uptime)}` : `連不上${s.last_seen ? `・${esc(ago(s.last_seen))}` : ""}`;
+  const acts = (D ? `<button class="iconbtn${INFO ? " act" : ""}" data-go="i:${k}" title="主機資訊" aria-pressed="${!!INFO}">${I("info")}</button>` : "") + (PLAT === "ios" ? "" : moreBtn(s));   // iOS 跟 Telegram 一樣只有頭像（功能都在主機資訊裡），不放 ⋯
+  const head = topbar({av:`<button class="tav" data-go="i:${k}" title="主機資訊">${cav(s, false, true)}</button>`, title:esc(s.name), sub, acts, attr:` data-go="i:${k}" role="button" tabindex="0" aria-label="${esc(s.name)} 主機資訊"`});
+  const body = s.online ? alerts(s, 1) + tiles(s) + hostMain(s) : offBox(s);
+  return head + `<div class="mscroll" data-key="ms"><div class="mwrap" data-key="mw">${body}</div></div>`;
 }
 function hostMain(s){
   const ph = !DESK.matches, hs = PREF.show.chart ? histFor(s) : null;
@@ -975,8 +993,7 @@ function infoScreen(s){
   const head = topbar({lead, title:"主機資訊"});
   const st = !s.online ? `連不上${s.last_seen ? `・${esc(ago(s.last_seen))}` : ""}` : lvOf(s) === "ok" && !issueN(s) ? "一切正常" : `${issueN(s)} 件事要留意`;
   const c = s.online && s.cloud && safeUrl(cloudHref(s.cloud)) ? s.cloud : null;
-  const qa = [c ? `<a class="qa" href="${esc(cloudHref(c))}"${ssoAttr(s)} target="_blank" rel="noopener noreferrer">${I("cloud")}<span>雲端硬碟</span></a>` : "",
-    c ? `<button class="qa" data-dl="${node}" data-name="${name}">${I("dl")}<span>下載</span></button>` : "",
+  const qa = [`<button class="qa" data-logall="${k}">${I("log")}<span>紀錄</span></button>`,   // 雲端硬碟、下載在下面「工具」裡，這排不重複
     s.online ? `<button class="qa" data-rename="${node}" data-name="${name}">${I("edit")}<span>編輯</span></button>` : "",
     s.online ? `<button class="qa warn" data-reboot="${node}" data-name="${name}">${I("power")}<span>重開機</span></button>` : ""].join("");
   const pl = place(s), fl = PREF.show.flag && s.geo ? flag(s.geo.cc) : "";
@@ -1015,6 +1032,25 @@ function toolRows(s, node, name){
   if (s.traffic) out.push(row(`data-key="tf" data-traffic="${node}" data-label="${name}"`, "month", "每月流量", s.traffic.limit ? `上限 ${size(s.traffic.limit)}・每月 ${s.traffic.reset_day} 號重置` : "設定上限與重置日"));
   return out.join("");
 }
+/* 手機首頁「工具」：主要主機的工具直接列在清單裡，點一下就到（以前要 清單 → 主機 → 主機資訊 三層；使用者選的）
+   跟主機資訊裡的工具用同一組按鈕（data-dl、data-bk…），電腦寬度右欄就看得到，不放 */
+function toolCRows(s){
+  if (!s || !s.online) return "";
+  const node = esc(s.node || ""), name = esc(s.name), c = s.cloud && safeUrl(cloudHref(s.cloud)) ? s.cloud : null, out = [];
+  const row = (tag, a, key, ic, cls, t, sub, meta = "") => `<${tag} class="crow" ${a} data-key="r:t:${key}"><span class="cav ic ${cls}">${I(ic)}</span><span class="cbd"><span class="ct1"><b>${t}</b>${meta ? `<span class="cmt" data-x>${meta}</span>` : ""}</span><span class="ct2">${sub}</span></span></${tag}>`;
+  const st = t => `<span class="cst" data-x>${t}</span>`;
+  if (c) {
+    out.push(row("a", `href="${esc(cloudHref(c))}"${ssoAttr(s)} target="_blank" rel="noopener noreferrer"`, "cl", "cloud", "", "雲端硬碟", st(c.total ? `${size(c.used)} / ${size(c.total)}` : "加密儲存空間"), c.total ? `${Math.round(c.pct)}%` : ""));
+    const dl = dlTileState(s);
+    out.push(row("button", `data-dl="${node}" data-name="${name}"`, "dl", "dl", "mu", "遠端下載", st(dl.sub)));
+  }
+  out.push(row("button", `data-bk="${node}" data-label="${name}"`, "bk", "archive", "sky", "每日備份", `<span class="cst bkst" data-n="${node}" data-keep data-ld>讀取中…</span>`));
+  out.push(row("button", `data-notes="${node}" data-name="${name}"`, "nt", "note", "mu", "加密筆記", st(s.notes ? "Joplin 同步已開啟" : "Joplin 端對端加密同步")));
+  if (s.adblock) { const a = s.adblock, [bt] = abSt(a); out.push(row("button", `data-ab="${node}" data-name="${name}"`, "ab", "noad", "", "AdGuard Home", st(a.err ? "點進檢查連線與防火牆" : "加密 DNS 擋廣告"), bt)); }
+  if (c) { const pend = s.albums_pend || 0, n = s.albums || 0;
+    out.push(row("button", `data-album="${node}" data-name="${name}"`, "alm", "album", "sky", "相簿分享", st(pend ? `朋友放了 ${pend} 張等你確認` : n ? `${n} 本分享中` : "加密照片牆與影片分享"))); }
+  return out.join("");
+}
 /* 設定列：右邊是勾或數字（設好了），沒設好寫字 */
 const setRow = (attr, ic, l, st) => {
   const c = STCACHE[st], v = c ? (!c.b ? "" : c.b === true ? "✓" : String(c.b)) : "", bh = c && c.b === true ? I("check") : v;
@@ -1048,17 +1084,17 @@ function setScreen(list, id = "set"){
       <div class="li col"><span class="lab">文字大小</span>${lkPick("size", [["s", "小"], ["m", "中"], ["l", "大"]], v => `<i class="lkz ${v}">字</i>`)}</div>
       <label class="li"><span class="lab">動畫</span>${tog("motion", "動畫")}</label>
       <button class="li" data-shows>${IC("trend", "")}<span class="lab">要顯示的內容<small class="showst">${showSum()}</small></span>${CHEV}</button></div>
-      <div class="group" data-key="g-rst"><button class="li" data-reset><span class="ico info">${I("reset")}</span><span class="lab">恢復預設值</span></button></div></div>`;
+      <div class="lbl" data-key="lrst"></div><div class="group" data-key="g-rst"><button class="li" data-reset><span class="ico info">${I("reset")}</span><span class="lab">恢復預設值</span></button></div></div>`;
   }
   const prof = `<div class="prof" data-key="prof"><span class="cav big brand">${BRAND}</span><b class="pn">哨站</b><small class="ps">${me && me.version ? `版本 ${esc(me.version)}・` : ""}${list.length} 台主機</small></div>`;
   const tgOff = list.some(x => !x.node && x.tg_off);
   const cat = (k, small, badge = "") => `<button class="li" data-go="set:${k}" data-key="c:${k}">${IC(SETP[k][1], "")}<span class="lab">${SETP[k][0]}<small>${small}</small></span>${badge}${CHEV}</button>`;
-  const PLN = {auto:"自動", ios:"iOS", android:"Android", desktop:"電腦"}, THN = {auto:"自動", light:"淺色", dark:"深色"};
+  const PLN = {ios:"iOS", android:"Android", desktop:"電腦"}, THN = {light:"淺色", dark:"深色"};
   const cats = cat("int", tgOff ? "Telegram 還沒設定" : sky ? "Telegram・OpenSky" : "Telegram", tgOff ? `<span class="stb n warn" aria-label="還沒設定">!</span>` : "")
     + (pk || self ? cat("sec", [pk && "手機金鑰", self && "PIN 碼", self && "登入的裝置"].filter(Boolean).join("・")) : "")
-    + cat("look", `${THN[PREF.theme] || "自動"}・${PLN[PREF.plat] || "自動"}`);
+    + cat("look", `${PREF.theme === "auto" ? "跟著系統" : THN[PREF.theme]}・${PLN[PLAT]}`);   // 寫實際用的介面，不寫兩個「自動」
   const out = `<div class="group" data-key="g-out"><button class="li danger" data-logout><span class="ico bad">${I("logout")}</span><span class="lab">登出</span></button></div>`;
-  return head + `<div class="rscroll" data-key="ss">${prof}<div class="group" data-key="g-cat">${cats}</div>${out}</div>`;
+  return head + `<div class="rscroll" data-key="ss">${prof}<div class="group" data-key="g-cat">${cats}</div><div class="lbl" data-key="lo"></div>${out}</div>`;
 }
 let NAVSWIPE = 0;
 /* 手機：往右滑退回上一層（畫面跟著手指走，放開超過三成或甩得夠快就退回）
@@ -2496,7 +2532,7 @@ function moreMenu(btn, s){
   const node = esc(s.node || ""), name = esc(s.name);
   const it = (attr, icon, label, cls="") => `<button class="${cls}" ${attr}="${node}" data-name="${name}">${I(icon)}<span>${label}</span></button>`;
   const m = document.createElement("div"); m.className = "lmenu hmenu";
-  m.innerHTML = (s.online ? it("data-rename", "edit", "編輯名稱與連結")
+  m.innerHTML = `<button data-logall="${esc(keyOf(s))}">${I("log")}<span>這台的紀錄</span></button>` + (s.online ? it("data-rename", "edit", "編輯名稱與連結")
     + it("data-reboot", "power", "重新開機", "warn") : "")
     + (s.node ? it("data-rmhost", "trash", "移除主機", "bad") : "");
   document.body.appendChild(m);
@@ -3761,7 +3797,7 @@ async function bkStatus(root){
     try {
       const d = await bkGet(el.dataset.n), [t, c] = bkLine(d);
       txt(el, el.closest(".tbx") ? t.replace(/^上次備份：/, "").replace(/（.*）$/, "") : t);
-      el.className = (el.closest(".tbx") ? "tdesc " : "") + "bkst " + c;
+      el.className = (el.closest(".tbx") ? "tdesc " : "") + (el.closest(".crow") ? "cst " : "") + "bkst " + c;
       if (bdg) {
         const [bt, bc] = !d.on ? ["已關閉", ""] : d.running ? ["備份中", "act"] : d.last && !d.last.ok ? ["有問題", "bad"] : ["自動", "ok"];
         txt(bdg, bt); bdg.className = "tbadge bkbdg" + (bc ? " " + bc : "");
@@ -4254,17 +4290,6 @@ document.addEventListener("click", e => {
   if (!e.target.closest || e.target.closest("#layer") || e.target.closest("#fly")) return;
   return onceClick(e.target.closest(ONCE_SEL), () => pageClick(e));
 });
-/* 主機頁換「監控」「紀錄」：各自記得捲到哪；沒看過的那頁接在分頁列下面（分頁列留在原本的位置） */
-function hvSet(b){
-  const k = b.dataset.k, v = b.dataset.hv; if ((HV[k] === "ev" ? "ev" : "mon") === v) return;
-  const scr = b.closest("[data-scr]"), sc = scrBox(scr), bar = b.closest(".hseg");
-  scrKeep(scr);
-  const keep = sc && bar ? Math.min(sc.scrollTop, bar.offsetTop) : 0;
-  HV[k] = v; sstore("vs-hv", JSON.stringify(HV));
-  slideSel(() => render(LIST));
-  const sc2 = scrBox($(`#app [data-scr][data-key="${CSS.escape(scr.dataset.key)}"]`)), y = SCRY.get(scr.dataset.key + "|" + v);
-  if (sc2) sc2.scrollTop = y != null ? y : keep;
-}
 async function pageClick(e){
   if (e.target.closest("#layer") || e.target.closest("#fly")) return;
   if (e.target.closest("[data-fly]")) return flyEnter(e.target.closest("[data-fly]"));
@@ -4288,11 +4313,8 @@ async function pageClick(e){
   if (la) { LOGH = la.dataset.logall; LOGF = ""; return navGo("all"); }
   const qf = t.closest("[data-qf]");
   if (qf) { if (QF !== qf.dataset.qf) { QF = qf.dataset.qf; slideSel(() => render(LIST)); } return; }
-  const hv = t.closest("[data-hv]");
-  if (hv) return hvSet(hv);
   const gt = t.closest("[data-go]");
   if (gt && !t.closest("[data-more]")) {
-    if (gt.dataset.hvgo) { HV[gt.dataset.go.slice(2)] = gt.dataset.hvgo; sstore("vs-hv", JSON.stringify(HV)); }
     return navGo(gt.dataset.go);
   }
   if (t.closest("[data-addhost]")) return addHostModal();
