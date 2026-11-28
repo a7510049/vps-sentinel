@@ -753,6 +753,14 @@ body:has(.app2) .flyv{--pw:1280px}
 .sin::-webkit-search-cancel-button{display:none}
 @media (pointer:coarse){.sin{font-size:max(var(--fs-l),calc(var(--fs-input) / var(--zoom)))}}
 /* 清單上面的分頁（全部／有狀況） */
+/* 主機多時才有的狀況小膠囊（跟紀錄裡的同一種紅、橘）：點了只看那幾台，選到的實心 */
+.lfcs{display:flex;flex-wrap:wrap;gap:8px;padding:10px 12px 2px}
+.lfc{display:inline-flex;align-items:center;gap:5px;height:32px;padding:0 12px 0 10px;border-radius:var(--r-pill);font-size:var(--fs-s);box-shadow:inset 0 0 0 1px var(--line);color:var(--tx);transition:background var(--t-fast) var(--ease),color var(--t-fast) var(--ease)}
+.lfc b{font-weight:600}
+.lfc.bad.on{background:var(--bad);color:var(--on-bad);box-shadow:none}
+.lfc.warn.on{background:var(--warn);color:var(--on-warn);box-shadow:none}
+@media (hover:hover){.lfc:not(.on):hover{background:var(--hov)}}
+.lfc:focus-visible{outline:2px solid var(--p);outline-offset:2px}
 .ltabs{display:flex;padding:0 8px;box-shadow:inset 0 -1px 0 var(--line);position:sticky;top:0;z-index:1;background:var(--s1)}
 .ltb{position:relative;z-index:1;display:inline-flex;align-items:center;gap:6px;height:44px;padding:0 14px;color:var(--tx3);font-weight:500;overflow:hidden;transition:color var(--t-fast) var(--ease)}
 .ltb .tbu{position:absolute;z-index:-1;left:10px;right:10px;bottom:0;height:3px;border-radius:var(--r-xs) var(--r-xs) 0 0;background:var(--p);opacity:0;pointer-events:none}

@@ -823,8 +823,11 @@ function cav(s, big){
 }
 /* ── 左欄：主機清單 ── */
 function listScreen(list, sel){
-  const bad = list.filter(isBad), q = QS.trim().toLowerCase(), at = s => { const i = ORDER.indexOf(keyOf(s)); return i < 0 ? 1e9 : i; };
-  const rows = [...list].sort((a, b) => at(a) - at(b)).filter(s => (QF !== "bad" || bad.includes(s)) && (!q || String(s.name).toLowerCase().includes(q) || place(s).toLowerCase().includes(q)));
+  const q = QS.trim().toLowerCase(), at = s => { const i = ORDER.indexOf(keyOf(s)); return i < 0 ? 1e9 : i; };
+  const sev = s => !s.online || lvOf(s) === "bad" ? "bad" : isBad(s) ? "warn" : "";   // 紅：連不上或異常；橘：要注意
+  const many = list.length > 5, nb = list.filter(s => sev(s) === "bad").length, nw = list.filter(s => sev(s) === "warn").length;
+  if (QF && (!many || !list.some(s => sev(s) === QF))) QF = "";   // 主機變少、那一種都好了：篩選自己拿掉
+  const rows = [...list].sort((a, b) => at(a) - at(b)).filter(s => (!QF || sev(s) === QF) && (!q || String(s.name).toLowerCase().includes(q) || place(s).toLowerCase().includes(q)));
   const inp = `<input type="search" class="sin" data-search placeholder="搜尋" value="${esc(QS)}" autocomplete="off" enterkeyhint="search">`;
   let head, top = "";
   if (PLAT === "ios") {                              // Telegram iOS 聊天清單：標題置中、右上新增；搜尋框在清單最上面（36 高、灰底），打字時右邊出現「取消」
@@ -835,8 +838,9 @@ function listScreen(list, sel){
       : topbar({lead:"", title:"哨站", acts:`<button class="iconbtn" data-srch title="搜尋">${I("search")}</button><button class="iconbtn" data-mainmenu title="更多">${I("more")}</button>`, cls:"lhd"});
   } else head = `<header class="tbar lhd" data-key="lhd"><button class="iconbtn" data-mainmenu title="選單">${I("menu")}</button>
     <label class="srch" data-key="srch">${I("search")}${inp.replace('placeholder="搜尋"', 'placeholder="搜尋主機"')}</label></header>`;
-  const tabs = list.length > 1 ? `<div class="ltabs" data-key="ltabs" data-slide=".tbu">${[["", "全部"], ["bad", "有狀況"]].map(([k, l]) =>
-    `<button class="ltb${QF === k ? " on" : ""}" data-qf="${k}" data-key="qf:${k}"><i class="tbu"></i><span>${l}</span>${k && bad.length ? `<b class="cbg ${list.some(s => !s.online || lvOf(s) === "bad") ? "bad" : "warn"}">${bad.length}</b>` : ""}</button>`).join("")}</div>` : "";
+  /* 有狀況的主機：5 台以下不放（每台旁邊的數字就夠了）；多的時候一排小膠囊「🔴 1 異常」「🟠 2 要注意」，點了只看那幾台、再點一次回到全部；都正常不放 */
+  const chip = (k, emo, n, l) => n ? `<button class="lfc ${k}${QF === k ? " on" : ""}" data-qf="${QF === k ? "" : k}" data-key="qf:${k}" aria-pressed="${QF === k}">${emo}<b class="num">${n}</b><span>${l}</span></button>` : "";
+  const tabs = many && (nb || nw) ? `<div class="lfcs" data-key="lfcs">${chip("bad", "🔴", nb, "異常")}${chip("warn", "🟠", nw, "要注意")}</div>` : "";
   /* 分清楚四種東西：提醒（還沒設定 Telegram，一條橫幅，不是一台主機）、總覽（全部主機）、主機、工具（機場起降） */
   const plain = !q && !QF;
   const all = plain && !TABS() ? allRow(list, sel === "all") : "";   // iOS、Android：「全部主機」就是下面的「紀錄」分頁，清單裡不再放一列
@@ -844,7 +848,7 @@ function listScreen(list, sel){
   const sec = (k, t) => `<div class="lsec" data-key="sec:${k}" role="heading" aria-level="2">${t}</div>`;
   const hosts = rows.map(s => hostRow(s, sel === keyOf(s))).join("");
   const tools = plain ? sec("tools", "工具") + flyCRow() : "";
-  const none = !rows.length ? `<div class="lnone" data-key="none">${q ? "找不到這台主機" : QF ? "每一台都正常" : ""}</div>` : "";
+  const none = !rows.length ? `<div class="lnone" data-key="none">${q ? "找不到這台主機" : ""}</div>` : "";
   return head + `<div class="lscroll" data-key="ls">${top}${hint}${tabs}<div class="clist" data-key="cl" data-keyed>${all}${plain && list.length > 1 ? sec("hosts", `主機・${list.length}`) : ""}${hosts}${rows.length ? tools : ""}</div>${none}${rows.length ? "" : tools}</div>`
     + (PLAT === "android" ? `<button class="fab" data-addhost data-key="fab" title="新增主機">${I("plus")}</button>` : "");   // 新增的圓鈕只有 Android 有（iOS 在右上角、電腦在左上選單）
 }
