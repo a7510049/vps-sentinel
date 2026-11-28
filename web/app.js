@@ -847,7 +847,7 @@ function listScreen(list, sel){
   const hint = plain && list.some(x => !x.node && x.tg_off) ? `<button class="lban" data-tg data-key="ban:tg">${I("bell")}<span><b>Telegram 通知還沒設定</b><small>出事不會通知你</small></span>${CHEV}</button>` : "";
   const sec = (k, t) => `<div class="lsec" data-key="sec:${k}" role="heading" aria-level="2">${t}</div>`;
   const hosts = rows.map(s => hostRow(s, sel === keyOf(s))).join("");
-  const tools = plain ? sec("tools", "工具") + flyCRow() : "";
+  const tools = plain ? sec("tools", "工具") + (DESK.matches ? "" : toolCRows(list.find(x => !x.node))) + flyCRow() : "";
   const none = !rows.length ? `<div class="lnone" data-key="none">${q ? "找不到這台主機" : ""}</div>` : "";
   return head + `<div class="lscroll" data-key="ls">${top}${hint}${tabs}<div class="clist" data-key="cl" data-keyed>${all}${plain && list.length > 1 ? sec("hosts", `主機・${list.length}`) : ""}${hosts}${rows.length ? tools : ""}</div>${none}${rows.length ? "" : tools}</div>`
     + (PLAT === "android" ? `<button class="fab" data-addhost data-key="fab" title="新增主機">${I("plus")}</button>` : "");   // 新增的圓鈕只有 Android 有（iOS 在右上角、電腦在左上選單）
@@ -1030,6 +1030,25 @@ function toolRows(s, node, name){
   if (c) { const pend = s.albums_pend || 0, n = s.albums || 0;
     out.push(row(`data-key="alm" data-album="${node}" data-name="${name}"`, "album", "相簿分享", pend ? `朋友放了 ${pend} 張等你確認` : n ? `${n} 本分享中` : "加密照片牆與影片分享", pend ? tBadge(`${pend}`, "act") : "")); }
   if (s.traffic) out.push(row(`data-key="tf" data-traffic="${node}" data-label="${name}"`, "month", "每月流量", s.traffic.limit ? `上限 ${size(s.traffic.limit)}・每月 ${s.traffic.reset_day} 號重置` : "設定上限與重置日"));
+  return out.join("");
+}
+/* 手機首頁「工具」：主要主機的工具直接列在清單裡，點一下就到（以前要 清單 → 主機 → 主機資訊 三層；使用者選的）
+   跟主機資訊裡的工具用同一組按鈕（data-dl、data-bk…），電腦寬度右欄就看得到，不放 */
+function toolCRows(s){
+  if (!s || !s.online) return "";
+  const node = esc(s.node || ""), name = esc(s.name), c = s.cloud && safeUrl(cloudHref(s.cloud)) ? s.cloud : null, out = [];
+  const row = (tag, a, key, ic, cls, t, sub, meta = "") => `<${tag} class="crow" ${a} data-key="r:t:${key}"><span class="cav ic ${cls}">${I(ic)}</span><span class="cbd"><span class="ct1"><b>${t}</b>${meta ? `<span class="cmt" data-x>${meta}</span>` : ""}</span><span class="ct2">${sub}</span></span></${tag}>`;
+  const st = t => `<span class="cst" data-x>${t}</span>`;
+  if (c) {
+    out.push(row("a", `href="${esc(cloudHref(c))}"${ssoAttr(s)} target="_blank" rel="noopener noreferrer"`, "cl", "cloud", "", "雲端硬碟", st(c.total ? `${size(c.used)} / ${size(c.total)}` : "加密儲存空間"), c.total ? `${Math.round(c.pct)}%` : ""));
+    const dl = dlTileState(s);
+    out.push(row("button", `data-dl="${node}" data-name="${name}"`, "dl", "dl", "mu", "遠端下載", st(dl.sub)));
+  }
+  out.push(row("button", `data-bk="${node}" data-label="${name}"`, "bk", "archive", "sky", "每日備份", `<span class="cst bkst" data-n="${node}" data-keep data-ld>讀取中…</span>`));
+  out.push(row("button", `data-notes="${node}" data-name="${name}"`, "nt", "note", "mu", "加密筆記", st(s.notes ? "Joplin 同步已開啟" : "Joplin 端對端加密同步")));
+  if (s.adblock) { const a = s.adblock, [bt] = abSt(a); out.push(row("button", `data-ab="${node}" data-name="${name}"`, "ab", "noad", "", "AdGuard Home", st(a.err ? "點進檢查連線與防火牆" : "加密 DNS 擋廣告"), bt)); }
+  if (c) { const pend = s.albums_pend || 0, n = s.albums || 0;
+    out.push(row("button", `data-album="${node}" data-name="${name}"`, "alm", "album", "sky", "相簿分享", st(pend ? `朋友放了 ${pend} 張等你確認` : n ? `${n} 本分享中` : "加密照片牆與影片分享"))); }
   return out.join("");
 }
 /* 設定列：右邊是勾或數字（設好了），沒設好寫字 */
@@ -3778,7 +3797,7 @@ async function bkStatus(root){
     try {
       const d = await bkGet(el.dataset.n), [t, c] = bkLine(d);
       txt(el, el.closest(".tbx") ? t.replace(/^上次備份：/, "").replace(/（.*）$/, "") : t);
-      el.className = (el.closest(".tbx") ? "tdesc " : "") + "bkst " + c;
+      el.className = (el.closest(".tbx") ? "tdesc " : "") + (el.closest(".crow") ? "cst " : "") + "bkst " + c;
       if (bdg) {
         const [bt, bc] = !d.on ? ["已關閉", ""] : d.running ? ["備份中", "act"] : d.last && !d.last.ok ? ["有問題", "bad"] : ["自動", "ok"];
         txt(bdg, bt); bdg.className = "tbadge bkbdg" + (bc ? " " + bc : "");

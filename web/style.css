@@ -809,6 +809,7 @@ body:has(.app2) .flyv{--pw:1280px}
 .cav.ic{background:var(--pc);color:var(--on-pc)}
 .cav.ic svg{width:26px;height:26px}
 .cav.ic.sky{background:var(--tc-bg);color:var(--on-tc)}
+.cav.ic.mu{background:var(--sc);color:var(--on-sc)}
 .cdot{position:absolute;right:0;bottom:0;width:14px;height:14px;border-radius:50%;background:var(--ok);box-shadow:0 0 0 2px var(--s1)}
 .cdot.warn{background:var(--warn)}.cdot.bad{background:var(--bad)}
 .crow.on .cdot{box-shadow:0 0 0 2px var(--pf)}
