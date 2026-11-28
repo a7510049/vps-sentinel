@@ -944,9 +944,12 @@ function evBubble(e, many, top = true, bot = true){
   const s = many && !evMany(e) && LIST.find(x => keyOf(x) === e.k);
   const av = !many ? "" : !bot ? `<span class="eba"></span>` : evMany(e) ? `<span class="cav ic num"><i>${e.hs.length}</i></span>` : s ? cav(s) : `<span class="cav pk5"><i>${esc([...(e.h || "?")][0])}</i></span>`;   // 好幾台同一件事：頭像是台數
   const go = many && s ? ` data-go="h:${esc(e.k)}" data-hvgo="ev" role="button" tabindex="0" aria-label="${esc(s.name)}：${esc(e.text)}"` : "";   // 點了到那台主機的「紀錄」
-  const meta = `<span class="ebm num">${e.n > 1 ? `×${e.n} ` : ""}<time>${hm(e.t)}</time></span>`;   // 時間跟在最後一行右下角（Telegram 的寫法）
+  const hot = e.kind === "bad" || e.kind === "warn";   // 要注意的（異常、注意）：表情符號改成泡泡下面一顆小膠囊（像 Telegram 的心情回應），一眼看得出來
+  const meta = `<span class="ebm num">${e.n > 1 && !hot ? `×${e.n} ` : ""}<time>${hm(e.t)}</time></span>`;   // 時間跟在最後一行右下角（Telegram 的寫法）
+  const hs = many ? (evMany(e) ? e.hs : [e.h]) : [];
+  const chip = hot ? `<div class="erw"><span class="erx ${e.kind}" title="${e.kind === "bad" ? "異常" : "注意"}">${evEmo(e)}${e.n > 1 ? `<b class="num">${e.n}</b>` : ""}${hs.length ? `<span class="hst">${hs.slice(0, 3).map(hsMini).join("")}</span>` : ""}</span>${meta}</div>` : "";
   return `<div class="ev eb ${e.kind}${top ? " top" : ""}${bot ? " bot" : ""}${go ? " go" : ""}${many && evMany(e) && EVOPEN.has(e.k) ? " open" : ""}" data-key="${esc(e.k)}|${e.kind}:${esc(e.text)}"${go}>${av}<div class="ebb">${many && top ? `<div class="ebn">${evWho(e)}</div>` : ""}
-    <div class="ebt"><span class="emo" aria-hidden="true">${evEmo(e)}</span> ${evTx(e)}${meta}</div>${many && evMany(e) ? `<div class="ehs"><div><div>${esc(e.hs.join("、"))}</div></div></div>` : ""}</div></div>`;
+    <div class="ebt">${hot ? evTx(e) : `<span class="emo" aria-hidden="true">${evEmo(e)}</span> ${evTx(e)}${meta}`}</div>${chip}${many && evMany(e) ? `<div class="ehs"><div><div>${esc(e.hs.join("、"))}</div></div></div>` : ""}</div></div>`;
 }
 /* 紀錄的篩選選單：看哪一種、看哪一台 */
 function logMenu(btn){

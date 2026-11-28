@@ -868,6 +868,16 @@ body:has(.app2) .flyv{--pw:1280px}
 .ebt{font-size:var(--fs-l);line-height:1.35;overflow-wrap:anywhere}
 .ebt .emo{font-size:1.05em}
 .ebm{float:right;position:relative;top:7px;margin:0 -2px 0 10px;font-size:var(--fs-xs);color:var(--tx3);white-space:nowrap;line-height:1}
+/* 要注意的那幾則：泡泡下面一顆小膠囊（表情＋次數＋哪幾台），時間在同一排右邊 */
+.erw{display:flex;align-items:flex-end;justify-content:space-between;gap:10px;margin-top:5px}
+.erw .ebm{float:none;top:2px;margin:0 -2px 0 0}
+.erx{display:inline-flex;align-items:center;gap:5px;height:30px;padding:0 6px 0 9px;border-radius:var(--r-pill);font-size:var(--fs-m)}
+.erx:not(:has(.hst)){padding-right:10px}
+.erx.bad{background:var(--bad);color:var(--on-bad)}
+.erx.warn{background:var(--warn);color:var(--on-warn)}
+.erx b{font-weight:600;font-size:var(--fs-s)}
+.erx .hsa{width:22px;height:22px;box-shadow:0 0 0 2px var(--bad)}
+.erx.warn .hsa{box-shadow:0 0 0 2px var(--warn)}
 /* 主機頁的「監控／紀錄」分頁：黏在上面，捲到哪都能換；紀錄有異常、注意的，數字是橘色 */
 .hseg{position:sticky;top:0;z-index:var(--z-bar);margin:0 -16px;padding:6px 16px;background:var(--bg)}
 .hseg .seg button b{margin-left:4px;font-weight:600;color:var(--tx3)}
