@@ -1048,17 +1048,17 @@ function setScreen(list, id = "set"){
       <div class="li col"><span class="lab">文字大小</span>${lkPick("size", [["s", "小"], ["m", "中"], ["l", "大"]], v => `<i class="lkz ${v}">字</i>`)}</div>
       <label class="li"><span class="lab">動畫</span>${tog("motion", "動畫")}</label>
       <button class="li" data-shows>${IC("trend", "")}<span class="lab">要顯示的內容<small class="showst">${showSum()}</small></span>${CHEV}</button></div>
-      <div class="group" data-key="g-rst"><button class="li" data-reset><span class="ico info">${I("reset")}</span><span class="lab">恢復預設值</span></button></div></div>`;
+      <div class="lbl" data-key="lrst"></div><div class="group" data-key="g-rst"><button class="li" data-reset><span class="ico info">${I("reset")}</span><span class="lab">恢復預設值</span></button></div></div>`;
   }
   const prof = `<div class="prof" data-key="prof"><span class="cav big brand">${BRAND}</span><b class="pn">哨站</b><small class="ps">${me && me.version ? `版本 ${esc(me.version)}・` : ""}${list.length} 台主機</small></div>`;
   const tgOff = list.some(x => !x.node && x.tg_off);
   const cat = (k, small, badge = "") => `<button class="li" data-go="set:${k}" data-key="c:${k}">${IC(SETP[k][1], "")}<span class="lab">${SETP[k][0]}<small>${small}</small></span>${badge}${CHEV}</button>`;
-  const PLN = {auto:"自動", ios:"iOS", android:"Android", desktop:"電腦"}, THN = {auto:"自動", light:"淺色", dark:"深色"};
+  const PLN = {ios:"iOS", android:"Android", desktop:"電腦"}, THN = {light:"淺色", dark:"深色"};
   const cats = cat("int", tgOff ? "Telegram 還沒設定" : sky ? "Telegram・OpenSky" : "Telegram", tgOff ? `<span class="stb n warn" aria-label="還沒設定">!</span>` : "")
     + (pk || self ? cat("sec", [pk && "手機金鑰", self && "PIN 碼", self && "登入的裝置"].filter(Boolean).join("・")) : "")
-    + cat("look", `${THN[PREF.theme] || "自動"}・${PLN[PREF.plat] || "自動"}`);
+    + cat("look", `${PREF.theme === "auto" ? "跟著系統" : THN[PREF.theme]}・${PLN[PLAT]}`);   // 寫實際用的介面，不寫兩個「自動」
   const out = `<div class="group" data-key="g-out"><button class="li danger" data-logout><span class="ico bad">${I("logout")}</span><span class="lab">登出</span></button></div>`;
-  return head + `<div class="rscroll" data-key="ss">${prof}<div class="group" data-key="g-cat">${cats}</div>${out}</div>`;
+  return head + `<div class="rscroll" data-key="ss">${prof}<div class="group" data-key="g-cat">${cats}</div><div class="lbl" data-key="lo"></div>${out}</div>`;
 }
 let NAVSWIPE = 0;
 /* 手機：往右滑退回上一層（畫面跟著手指走，放開超過三成或甩得夠快就退回）
