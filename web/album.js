@@ -14,33 +14,34 @@ const $ = (s, r = document) => r.querySelector(s);
 const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;", "<":"&lt;", ">":"&gt;", '"':"&quot;", "'":"&#39;"}[c]));
 const RM = matchMedia("(prefers-reduced-motion: reduce)");
 const DARK = matchMedia("(prefers-color-scheme: dark)");
+/* 圖示：功能圖示一律用共用圖示系統（web/icons.js，主機給 album.js 時接在前面）；天氣、相機、光圈這類資訊圖是相簿自己畫的 */
 const P = {
-  more:'<circle cx="5" cy="12" r="1.4" fill="currentColor"/><circle cx="12" cy="12" r="1.4" fill="currentColor"/><circle cx="19" cy="12" r="1.4" fill="currentColor"/>',
-  flt:'<path d="M4 6h16M7 12h10M10 18h4"/>',
-  zin:'<circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5M8 11h6M11 8v6"/>', zout:'<circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5M8 11h6"/>',
-  x:'<path d="M18 6 6 18M6 6l12 12"/>', shr:'<circle cx="18" cy="5" r="2.5"/><circle cx="6" cy="12" r="2.5"/><circle cx="18" cy="19" r="2.5"/><path d="m8.2 10.8 7.6-4.4M8.2 13.2l7.6 4.4"/>',
-  star:'<path d="m12 3.5 2.6 5.3 5.9.9-4.3 4.1 1 5.8-5.2-2.7-5.2 2.7 1-5.8-4.3-4.1 5.9-.9z"/>', info:'<circle cx="12" cy="12" r="9"/><path d="M12 16v-4M12 8h.01"/>',
-  dl:'<path d="M12 4v11M7 10l5 5 5-5M5 20h14"/>', l:'<path d="m15 18-6-6 6-6"/>', r:'<path d="m9 18 6-6-6-6"/>',
-  pin:'<path d="M12 21s-7-6.2-7-11.5A7 7 0 0 1 19 9.5C19 14.8 12 21 12 21Z"/><circle cx="12" cy="9.5" r="2.5"/>',
-  phone:'<rect x="7" y="3" width="10" height="18" rx="2.5"/><path d="M11 17.5h2"/>',
-  lock:'<rect x="4" y="10.5" width="16" height="10.5" rx="3"/><path d="M8 10.5V7.5a4 4 0 0 1 8 0v3"/>',
-  photo:'<rect x="3" y="4" width="18" height="16" rx="3"/><circle cx="9" cy="10" r="2"/><path d="m21 16-5-5-9 9"/>',
-  off:'<path d="M3 3l18 18M10.6 5H18a3 3 0 0 1 3 3v8.4M3 7.8V17a3 3 0 0 0 3 3h11.2"/><path d="m21 16-4-4M14 17l-4-4-7 7"/>',
-  clock:'<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>', ext:'<path d="M14 4h6v6M20 4l-9 9M18 14v4a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4"/>',
-  zip:'<path d="M12 4v11M7 10l5 5 5-5M5 20h14"/>',
-  play:'<path d="M6 4.8v14.4a1 1 0 0 0 1.5.86l12-7.2a1 1 0 0 0 0-1.72l-12-7.2A1 1 0 0 0 6 4.8Z" fill="currentColor" stroke="none"/>',   // 三角形往左一點：看起來置中
-  pause:'<rect x="6" y="4.5" width="4" height="15" rx="1.2" fill="currentColor" stroke="none"/><rect x="14" y="4.5" width="4" height="15" rx="1.2" fill="currentColor" stroke="none"/>',
-  heart:'<path d="M12 20.5S3.5 15.3 3.5 9.2A4.7 4.7 0 0 1 12 6.6a4.7 4.7 0 0 1 8.5 2.6c0 6.1-8.5 11.3-8.5 11.3Z"/>',
-  chat:'<path d="M20 12a8 8 0 0 1-11.7 7.1L4 20l.9-4.1A8 8 0 1 1 20 12Z"/>',
-  live:'<circle cx="12" cy="12" r="2.6" fill="currentColor" stroke="none"/><circle cx="12" cy="12" r="5.8"/><circle cx="12" cy="12" r="9.2" stroke-dasharray="1.6 2.4"/>',
-  snd:'<path d="M4 9.5v5h3.5L12 18.5v-13L7.5 9.5H4Z"/><path d="M15.5 9a4 4 0 0 1 0 6M18.3 6.5a7.5 7.5 0 0 1 0 11"/>',
-  mute:'<path d="M4 9.5v5h3.5L12 18.5v-13L7.5 9.5H4Z"/><path d="m16 9.5 5 5M21 9.5l-5 5"/>',
-  up:'<path d="M12 15V4M7 9l5-5 5 5M5 20h14"/>', sel:'<circle cx="12" cy="12" r="9"/><path d="m8 12.3 2.7 2.7L16 9.5"/>', ck:'<path d="m6 12.5 4 4 8-9"/>',
-  trash:'<path d="M4 7h16M10 11v6M14 11v6M6 7l1 12a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2l1-12M9 7V4h6v3"/>',
-  stk:'<rect x="7" y="7" width="13" height="13" rx="2.5"/><path d="M4 16V6.5A2.5 2.5 0 0 1 6.5 4H16"/>',
-  smile:'<circle cx="12" cy="12" r="9"/><path d="M8.5 14.5a4.5 4.5 0 0 0 7 0M9 9.5h.01M15 9.5h.01"/>',
-  moon:'<path d="M20 14.5A8 8 0 1 1 9.5 4a6.5 6.5 0 0 0 10.5 10.5z"/>',
-  wsun:'<circle cx="12" cy="12" r="4"/><path d="M12 2.5v2M12 19.5v2M2.5 12h2M19.5 12h2M5.3 5.3l1.4 1.4M17.3 17.3l1.4 1.4M5.3 18.7l1.4-1.4M17.3 6.7l1.4-1.4"/>',
+  more:ICONS["more"],
+  flt:ICONS["filter"],
+  zin:ICONS["zoom-in"], zout:ICONS["zoom-out"],
+  x:ICONS["close"], shr:ICONS["share"],
+  star:ICONS["star"], info:ICONS["info"],
+  dl:ICONS["remote-download"], l:ICONS["chevron-left"], r:ICONS["chevron-right"],
+  pin:ICONS["map-pin"],
+  phone:ICONS["phone"],
+  lock:ICONS["lock"],
+  photo:ICONS["photo"],
+  off:ICONS["photo-off"],
+  clock:ICONS["clock"], ext:ICONS["external"],
+  zip:ICONS["remote-download"],
+  play:ICONS["play"],   // 三角形往左一點：看起來置中
+  pause:ICONS["pause"],
+  heart:ICONS["heart"],
+  chat:ICONS["chat"],
+  live:ICONS["live"],
+  snd:ICONS["volume"],
+  mute:ICONS["volume-off"],
+  up:ICONS["upload"], sel:ICONS["select"], ck:ICONS["check"],
+  trash:ICONS["delete"],
+  stk:ICONS["stack"],
+  smile:ICONS["smile"],
+  moon:ICONS["moon"],
+  wsun:ICONS["sun"],
   wpart:'<path d="M8 4.5v1.2M3.8 9H5M4.9 5.9l.9.9M11.1 5.9l-.9.9"/><path d="M5.6 11.2a3.2 3.2 0 1 1 5.6-3"/><path d="M8 20h9.5a3.5 3.5 0 0 0 .4-7 5 5 0 0 0-9.6 1.2A3 3 0 0 0 8 20Z"/>',
   wcld:'<path d="M7 19h10.5a4 4 0 0 0 .5-8 6 6 0 0 0-11.4 1.6A3.3 3.3 0 0 0 7 19Z"/>',
   wfog:'<path d="M4 9h16M3 13h18M5 17h14"/>',
@@ -50,7 +51,7 @@ const P = {
   cam:'<path d="M3.5 8.5a2 2 0 0 1 2-2h2.3l1.5-2.2h5.4l1.5 2.2h2.3a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2h-13a2 2 0 0 1-2-2Z"/><circle cx="12" cy="13" r="3.6"/>',
   dial:'<circle cx="12" cy="12" r="8.5"/><path d="M12 12l4.5-4.5M12 3.5v2M20.5 12h-2M12 20.5v-2M3.5 12h2"/>',
   lens:'<circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5.5"/><circle cx="12" cy="12" r="2" fill="currentColor" stroke="none"/><path d="M8.6 10.2a4 4 0 0 1 1.6-1.7"/>',     // 鏡頭正面：外框、兩層玻璃、一道反光（使用者選的，以前的像光圈）
-  send:'<path d="M4.5 12h13M12.5 6l6 6-6 6"/>', find:'<circle cx="11" cy="11" r="6.5"/><path d="m20 20-4.4-4.4"/>', ng:'<rect x="3.5" y="3.5" width="17" height="17" rx="3"/><rect x="8" y="8" width="8" height="8" rx="1.2"/>', hue:'<circle cx="12" cy="12" r="8.5"/><path d="M12 3.5v17M3.5 12h17M6 6l12 12M18 6 6 18"/>', scr:'<rect x="3" y="4.5" width="18" height="12" rx="2"/><path d="M9 20h6M12 16.5V20"/>', pen:'<path d="M4 20h4L19 9a2.8 2.8 0 0 0-4-4L4 16v4Z"/><path d="m13.5 6.5 4 4"/>', again:'<path d="M4 12a8 8 0 1 0 2.4-5.7L4 8.5M4 4v4.5h4.5"/>', zeb:'<rect x="3.5" y="3.5" width="17" height="17" rx="3"/><path d="M3.5 13 13 3.5M7 20.5 20.5 7M13.5 20.5l7-7"/>', cmp:'<rect x="3" y="5" width="7.5" height="14" rx="1.5"/><rect x="13.5" y="5" width="7.5" height="14" rx="1.5"/><path d="M12 2.5v19"/>'
+  send:ICONS["send"], find:ICONS["search"], ng:'<rect x="3.5" y="3.5" width="17" height="17" rx="3"/><rect x="8" y="8" width="8" height="8" rx="1.2"/>', hue:'<circle cx="12" cy="12" r="8.5"/><path d="M12 3.5v17M3.5 12h17M6 6l12 12M18 6 6 18"/>', scr:ICONS["screen"], pen:ICONS["edit"], again:ICONS["reset"], zeb:'<rect x="3.5" y="3.5" width="17" height="17" rx="3"/><path d="M3.5 13 13 3.5M7 20.5 20.5 7M13.5 20.5l7-7"/>', cmp:'<rect x="3" y="5" width="7.5" height="14" rx="1.5"/><rect x="13.5" y="5" width="7.5" height="14" rx="1.5"/><path d="M12 2.5v19"/>'
 };
 const I = n => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${P[n]}</svg>`;
 /* 安卓完全不用 HDR（使用者決定）：HDR 照片一律拿不帶增益圖的大圖（d／y）。Chrome 畫面上一出現增益圖，整頁就重畫、閃一下 */

@@ -3141,18 +3141,22 @@ ALB_ICONS = {"/a/icon.svg": (ALB_ICON, "image/svg+xml"), "/a/icon-180.png": (ALB
 
 
 def alb_asset(rel):
-    """快取靜態網頁檔（依修改時間更新）：回傳 (bytes, 短版號)"""
-    fp = os.path.join(HERE, rel)
+    """快取靜態網頁檔（依修改時間更新）：回傳 (bytes, 短版號)；album.js 前面接上共用圖示系統 web/icons.js"""
+    parts = ["web/icons.js", rel] if rel == "web/album.js" else [rel]
+    fps = [os.path.join(HERE, x) for x in parts]
     try:
-        mt = os.stat(fp).st_mtime_ns
+        mt = tuple(os.stat(fp).st_mtime_ns for fp in fps)
     except OSError:
         return b"", ""
     cur = ALB["assets"].get(rel)
     if cur and cur[0] == mt:
         return cur[1], cur[2]
     try:
-        with open(fp, "rb") as f:
-            b = f.read()
+        bs = []
+        for fp in fps:
+            with open(fp, "rb") as f:
+                bs.append(f.read())
+        b = b"\n".join(bs)
     except OSError:
         return b"", ""
     v = hashlib.sha256(b).hexdigest()[:10]

@@ -46,7 +46,7 @@ from collections import deque
 from concurrent.futures import ThreadPoolExecutor
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
-VERSION = "5.67"
+VERSION = "5.68"
 
 # ───────────────────────── 哨兵備份檔（.vsbk）─────────────────────────
 # 哨兵專用的備份格式：外面是自己的檔案格式，裡面用的是成熟、標準的加密方法（不自己發明加密）：
@@ -1586,7 +1586,7 @@ def include(name):
         exec(compile(f.read(), path, "exec"), globals())   # noqa: S102
 
 
-SRC_FILES = ["sentinel.py", "pair.py", "download.py", "backup.py", "guard.py", "fly.py", "notes.py", "adblock.py", "photo.py", "album.py", "web/index.html", "web/style.css", "web/app.js", "web/nav.js", "web/pin.js", "web/fly.js", "web/font.woff2", "web/seed-rg.woff2", "web/seed-bd.woff2", "web/album.html", "web/album.css", "web/album.js", "web/album-sw.js", "data/airports.tsv", "data/coast.tsv", "data/terrain.bin", "data/actypes.tsv", "data/apmap.tsv"]   # 程式本體（含機場起降）＋網頁三個檔＋機場資料、海岸線、地形、機型分類
+SRC_FILES = ["sentinel.py", "pair.py", "download.py", "backup.py", "guard.py", "fly.py", "notes.py", "adblock.py", "photo.py", "album.py", "web/index.html", "web/style.css", "web/app.js", "web/nav.js", "web/pin.js", "web/icons.js", "web/fly.js", "web/font.woff2", "web/seed-rg.woff2", "web/seed-bd.woff2", "web/album.html", "web/album.css", "web/album.js", "web/album-sw.js", "data/airports.tsv", "data/coast.tsv", "data/terrain.bin", "data/actypes.tsv", "data/apmap.tsv"]   # 程式本體（含機場起降）＋網頁三個檔＋機場資料、海岸線、地形、機型分類
 
 
 def build_of(blobs):
@@ -1652,7 +1652,7 @@ def load_page():
                 FONT["b"] = f.read()
         except OSError:
             FONT["b"] = b""
-        js = rd("web/pin.js") + "\n" + rd("web/nav.js") + "\n" + rd("web/app.js").replace("/*@flyv*/", FLY_JS["v"])   # PIN 碼鍵盤、導覽放在最前面（被監看那頁另外用 /pin.js）
+        js = rd("web/icons.js") + "\n" + rd("web/pin.js") + "\n" + rd("web/nav.js") + "\n" + rd("web/app.js").replace("/*@flyv*/", FLY_JS["v"])   # 共用圖示、PIN 碼鍵盤、導覽放在最前面（被監看那頁另外用 /pin.js）
         return html.replace("/*@style.css*/\n", rd("web/style.css")).replace("/*@app.js*/\n", js)
     except OSError as e:
         log(f"找不到網頁檔案（{e}）：請重新執行 bash install.sh")

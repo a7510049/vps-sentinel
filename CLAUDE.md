@@ -38,6 +38,7 @@ fly.py             機場起降、分享的後端；sentinel.py 用 include("fly
 web/index.html     網頁骨架；/*@style.css*/ 和 /*@app.js*/ 兩個記號會在啟動時被換成對應檔案的內容
 web/style.css      所有樣式，最前面的 :root 是共用設計規則
 web/app.js         所有畫面邏輯與動畫；機場起降的 web/fly.js 用到才下載（`flyLib`／`flyEnter`，`/fly.js?v=` 版本由主機換掉 /*@flyv*/；用過機場起降的首頁好了就先在背景下載；跟 app.js 共用名字，最外層不能重複）
+web/icons.js       共用圖示系統（Sentinel Icon Kit：`ICONS`、`icon()`；24 格、2px 圓頭線條、不填色）：首頁塞在最前面（`load_page()`），相簿由 album.py 的 `alb_asset` 接在 album.js 前面；app.js 用 `PMAP` 短名字對照、album.js 的 `P` 也指到這裡；規則在 DESIGN.md 第 8 節
 web/pin.js         PIN 碼數字鍵盤（每次打亂）和 PIN 碼答案的算法（`pinPad`／`pinProof`／`pinMake`）；首頁塞在 app.js 前面，被監看那頁用 /pin.js
 web/nav.js         導覽：現在在哪一頁（`STK`，手機、電腦寬度、三種介面共用一份）、瀏覽紀錄（每筆存整份位置，上一頁／下一頁／重新整理照那筆還原；`hNow` 排隊，自己退的那一下回來前不改紀錄）、浮層（選單、對話框、Android 搜尋列：`histMark`／`histDrop`／`ovSync`）；首頁塞在 pin.js 後面、app.js 前面（`load_page()`），`navBoot()` 在 app.js 裡呼叫；機場起降的 fly.js 用 `hMark`／`hBack` 記、退
 web/font.woff2     英數字型（Plus Jakarta Sans 拉丁字母那份，SIL OFL；主機給 /font.woff2，不用等 Google）
@@ -165,6 +166,7 @@ tests/             基本功能測試（只用 Python 內建模組；test_projec
   - 顏色全部從主題色 `--seed` 算出來（`--bg`、`--s1`～`--s4`、`--p`、`--pc`、狀態色 `--warnc/--badc`…），深淺模式在 `[data-mode]` 換值
 
   不要寫死 px 圓角、px 字級、cubic-bezier、linear()、毫秒數、z-index 或顏色（顏色只能寫在 `--變數:` 和 `.ico.名稱` 裡，白色、黑色例外）。
+- **圖示一律用共用圖示系統 `web/icons.js`**（使用者給的 Sentinel Icon Kit；不能混用別的圖示庫或另外畫一套，缺的照 DESIGN.md 第 8 節的規格補進 `ICONS`）。
 - **圖示顏色**（`python3 tools/style_check.py` 會檢查圓形圖示有沒有用規定的顏色；設定、主機資訊、電腦側欄裡的圖示方塊在三個平台都換成實心彩色方塊（同一套角色，只是 `--pc` 這些在那裡改成實心色），其他地方照下面）：
   - 圓形圖示：**統一使用 Google Material You 同色系柔和底色**（從 `--seed` 算出的三個角色：`--pc`／`--on-pc` 主色柔和底、`--sc`／`--on-sc` 中性柔和底、`--tc-bg`／`--on-tc` 配角色柔和底），讓整頁安靜協調，不再每個圖示各自一種彩虹色；只有警告與異常保留橘紅（`--warnc`、`--badc`）。**每個概念的線條圖案仍不能重複**（`ICO` 第二個值，檢查會擋）。新增圖示時挑合適的角色（`--pc`／`--sc`／`--tc-bg`）加一個 `.ico.名稱`。
   - 確認視窗的圖示和確定鈕看「動作」：一般用主題色；要小心的（重新開機、換密碼）用 `warn` 橘色；刪除、移除、解除配對用 `bad` 紅色（`modal({cls:"bad"})` 會連確定鈕一起變紅）。iOS、電腦介面的確認視窗照原生版本不放圖示，只靠確定鈕的顏色；Android 放在左上。

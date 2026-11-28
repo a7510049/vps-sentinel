@@ -73,7 +73,7 @@ function pinShuffle(){
    確定鈕是 opt.okBtn（視窗下面那顆），沒給就在鍵盤下面放一顆；opt.ok(pin) 按確定（或打滿 8 碼）時呼叫；回傳 {clear, again, busy}；電腦上也可以直接按鍵盤的數字 */
 function pinPad(box, opt){
   let pin = "", busy = false;
-  const ico = {del:'<svg viewBox="0 0 24 24"><path d="M21 5H9l-6 7 6 7h12zM12.5 9.5l5 5m0-5-5 5"/></svg>'};
+  const ico = {del:'<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 5H9l-6 7 6 7h11a1 1 0 0 0 1-1V6a1 1 0 0 0-1-1Z"/><path d="m12 9 6 6m0-6-6 6"/></svg>'};   // 退格鍵：共用圖示系統的 backspace（被監看那頁沒有 icons.js，這裡抄一份同樣的線條）
   const L = opt.left;
   const draw = () => {
     const d = pinShuffle();
