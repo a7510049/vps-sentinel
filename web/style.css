@@ -923,6 +923,7 @@ a.crow{text-decoration:none;color:inherit}   /* 雲端硬碟那列是連結（�
 .rscroll>.group,.rscroll>.cc{border-radius:0;box-shadow:none;background:var(--s1)}
 .rscroll>.group{padding:4px 0 8px}
 .rscroll>.lbl+.group{padding-top:0}
+.rscroll>.group:first-child,.rscroll>.group+.group{border-top:10px solid var(--bg)}   /* 第一塊就是清單、兩塊清單相連：一律留空（iOS 在平台介面那段另外寫） */
 .rscroll>.cc{border-top:10px solid var(--bg);padding:14px 16px 12px}
 .rscroll>.cc .cch{margin-bottom:6px}
 .rscroll>.cc .cch .ct2{font-size:var(--fs-l);color:var(--p)}
@@ -2138,6 +2139,7 @@ html.flyon .dash>.view,html.flyon .dash.m>.stage{content-visibility:hidden;conta
 [data-plat="ios"] .rscroll>.group{padding:0}
 [data-plat="ios"] .rscroll>.cc,[data-plat="ios"] .rscroll>.gx,[data-plat="ios"] .rscroll>.prof+.group{margin-top:16px}
 [data-plat="ios"] .rscroll>.selfsum+.group{margin-top:8px}
+[data-plat="ios"] .rscroll>.group:first-child,[data-plat="ios"] .rscroll>.group+.group{margin-top:16px}   /* 第一塊就是清單、兩塊清單相連：一律留空，不貼著標題列（不靠每頁自己補） */
 [data-plat="ios"] .rscroll .li{min-height:52px;padding:6px 16px;gap:13px}
 [data-plat="ios"] .rscroll .li .lab{font-size:var(--fs-l2)}
 [data-plat="ios"] .rscroll .li .lab small{font-size:var(--fs-m2);color:var(--tx3)}
@@ -2232,6 +2234,7 @@ html.flyon .dash>.view,html.flyon .dash.m>.stage{content-visibility:hidden;conta
 [data-plat="android"] .lcol .fab{bottom:calc(16px + var(--tabh) + env(safe-area-inset-bottom))}
 /* 設定、主機資訊（ProfileActivity）：整片白色段落，段落之間一條灰帶；段落標題主題色 15 粗，列 50 高、16 字 */
 [data-plat="android"] .rscroll>.lbl{padding:15px 21px 4px;font-size:var(--fs-m2);font-weight:500;border-top-width:12px}
+[data-plat="android"] .rscroll>.group:first-child,[data-plat="android"] .rscroll>.group+.group{border-top-width:12px}
 [data-plat="android"] .rscroll .li{min-height:50px;padding:6px 21px;gap:24px}
 [data-plat="android"] .rscroll .group:not(.pane)>*+*::before{left:var(--dx,21px)}
 [data-plat="android"] .rscroll .group:not(.pane)>:has(>.ico)+*,[data-plat="android"] .rscroll .group:not(.pane)>*+:has(>.ico){--dx:73px}
